@@ -34,9 +34,13 @@ pub struct Ann<Tm, Ty> {
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Hole;
 
-/// `field = inner` labels a type, term, or pattern.
+/// `field = inner` introduces a term carrying `field`.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Named<Tag, Inner>(pub Tag, pub Inner);
+
+/// `field :: inner` classifies a term carrying `field`.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct Label<Tag, Inner>(pub Tag, pub Inner);
 
 /// any binding structure
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

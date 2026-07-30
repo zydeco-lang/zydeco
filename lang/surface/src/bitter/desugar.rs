@@ -344,6 +344,11 @@ impl Desugar for t::TermId {
                 let inner = inner.desugar(desugarer)?;
                 Alloc::alloc(desugarer, b::Named(name, inner).into(), self.into())
             }
+            | Tm::Label(term) => {
+                let t::Label(name, inner) = term;
+                let inner = inner.desugar(desugarer)?;
+                Alloc::alloc(desugarer, b::Label(name, inner).into(), self.into())
+            }
             | Tm::Paren(term) => {
                 let t::Paren(terms) = term;
                 let mut terms = terms.desugar(desugarer)?;

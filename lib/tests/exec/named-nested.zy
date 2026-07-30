@@ -1,15 +1,15 @@
 -- Explicit product nesting remains significant, while directly nested Named
 -- wrappers support chained patterns and projections.
 alias Inner =
-  (x = Int) * Int
+  (x :: Int) * Int
 end
 
 alias Outer =
-  Inner * (z = Int)
+  Inner * (z :: Int)
 end
 
 alias Wrapped =
-  (outer = inner = Int)
+  (outer :: inner :: Int)
 end
 
 def nested : Outer = (

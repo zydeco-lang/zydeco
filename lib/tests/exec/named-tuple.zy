@@ -1,7 +1,7 @@
 -- Flat products may freely mix named and unnamed components. Projection skips
 -- unnamed components but preserves their physical positions.
 alias Mixed =
-  (left = Int) * (Int * (right = Int))
+  (left :: Int) * (Int * (right :: Int))
 end
 
 def mixed : Mixed = (

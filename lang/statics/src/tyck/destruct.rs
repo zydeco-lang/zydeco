@@ -2,6 +2,36 @@
 
 use super::{syntax::*, *};
 
+impl TypeBinder {
+    /// Reconstruct the ordinary, whole-argument pattern used by internal
+    /// binders that were created from an abstract type directly.
+    pub fn with_witness(tycker: &mut Tycker<'_>, witness: AbstId, env: &TyEnv) -> Self {
+        use zydeco_utils::arena::ArenaAccess;
+
+        let kind = tycker.statics.annotations_abst[&witness];
+        let hint = tycker.statics.abst_hints.get(&witness).copied();
+        let pattern = match hint {
+            | Some(def) => Alloc::alloc(tycker, def, kind, env),
+            | None => Alloc::alloc(tycker, Hole, kind, env),
+        };
+        Self { pattern, witness }
+    }
+
+    pub fn domain_kind<Arena>(&self, arena: &Arena) -> KindId
+    where
+        Arena: AsRef<StaticsArena>,
+    {
+        arena.as_ref().annotations_tpat[&self.pattern]
+    }
+
+    pub fn payload_kind<Arena>(&self, arena: &Arena) -> KindId
+    where
+        Arena: AsRef<StaticsArena>,
+    {
+        arena.as_ref().annotations_abst[&self.witness]
+    }
+}
+
 impl KindId {
     pub fn destruct_arrow(&self, tycker: &mut Tycker) -> Option<(KindId, KindId)> {
         let kind = tycker.kind_filled(self).ok()?;
@@ -22,6 +52,7 @@ impl TPatId {
         match arena.as_ref().tpats[self].to_owned() {
             | TPat::Hole(Hole) => (None, kd),
             | TPat::Var(def) => (Some(def), kd),
+            | TPat::Named(Named(_, inner)) => inner.try_destruct_def(arena),
         }
     }
     pub fn destruct_def(&self, tycker: &mut Tycker) -> (DefId, KindId) {
@@ -43,11 +74,111 @@ impl TPatId {
                 unreachable!("type pattern hole can't be reified")
             }
             | TPat::Var(def) => Alloc::alloc(tycker, def, kd, &env),
+            | TPat::Named(Named(name, inner)) => {
+                let inner = inner.reify(tycker);
+                Alloc::alloc(tycker, Named(name, inner), kd, &env)
+            }
+        }
+    }
+
+    /// Extract the payload bound by this pattern from a checked type argument.
+    ///
+    /// A variable or hole binds the whole argument. A named pattern instead
+    /// removes its matching name introduction before continuing recursively.
+    pub fn bind_argument_k(&self, tycker: &mut Tycker<'_>, argument: TypeId) -> ResultKont<TypeId> {
+        let result = self.bind_argument(tycker, argument);
+        tycker.err_p_to_k(result)
+    }
+
+    pub fn bind_argument(&self, tycker: &mut Tycker<'_>, argument: TypeId) -> Result<TypeId> {
+        match tycker.statics.tpats[self].to_owned() {
+            | TypePattern::Hole(_) | TypePattern::Var(_) => Ok(argument),
+            | TypePattern::Named(Named(name, inner)) => {
+                let payload_kind = tycker.statics.annotations_tpat[&inner];
+                let payload = argument.project_named(tycker, &name, payload_kind)?;
+                inner.bind_argument(tycker, payload)
+            }
+        }
+    }
+
+    /// Rebuild a complete argument for this pattern from the payload represented
+    /// by its abstract witness.
+    pub fn introduce_payload(&self, tycker: &mut Tycker<'_>, payload: TypeId) -> Result<TypeId> {
+        let domain_kind = tycker.statics.annotations_tpat[self];
+        match tycker.statics.tpats[self].to_owned() {
+            | TypePattern::Hole(_) | TypePattern::Var(_) => {
+                let payload_kind = tycker.statics.annotations_type[&payload];
+                Lub::lub(domain_kind, payload_kind, tycker)?;
+                Ok(payload)
+            }
+            | TypePattern::Named(Named(name, inner)) => {
+                let inner = inner.introduce_payload(tycker, payload)?;
+                let env = tycker.statics.env_tpat[self].clone();
+                Ok(Alloc::alloc(tycker, Named(name, inner), domain_kind, &env))
+            }
+        }
+    }
+
+    /// Copy this pattern's named shape while replacing its payload binder.
+    pub fn rebind_payload(
+        &self, tycker: &mut Tycker<'_>, payload: Option<DefId>, env: &TyEnv,
+    ) -> TPatId {
+        let domain_kind = tycker.statics.annotations_tpat[self];
+        match tycker.statics.tpats[self].to_owned() {
+            | TypePattern::Hole(_) | TypePattern::Var(_) => match payload {
+                | Some(def) => Alloc::alloc(tycker, def, domain_kind, env),
+                | None => Alloc::alloc(tycker, Hole, domain_kind, env),
+            },
+            | TypePattern::Named(Named(name, inner)) => {
+                let inner = inner.rebind_payload(tycker, payload, env);
+                Alloc::alloc(tycker, Named(name, inner), domain_kind, env)
+            }
         }
     }
 }
 
 impl TypeId {
+    /// Eliminate one statically named type layer.
+    ///
+    /// Concrete introductions reduce immediately. Abstract terms retain a
+    /// typed projection, which normalization can reduce after substitution.
+    pub fn project_named(
+        &self, tycker: &mut Tycker<'_>, expected: &FieldName, payload_kind: KindId,
+    ) -> Result<TypeId> {
+        let kind = tycker.statics.annotations_type[self];
+        match tycker.kind_filled(&kind)?.to_owned() {
+            | Kind::Label(Label(found, inner_kind)) => {
+                if &found != expected {
+                    return tycker.err(
+                        TyckError::NamedLabelMismatch { expected: expected.clone(), found },
+                        std::panic::Location::caller(),
+                    );
+                }
+                Lub::lub(inner_kind, payload_kind, tycker)?;
+            }
+            | _ => {
+                return tycker.err(TyckError::KindMismatch, std::panic::Location::caller());
+            }
+        }
+
+        match tycker.type_filled(self)?.to_owned() {
+            | Type::Named(Named(found, inner)) => {
+                if &found == expected {
+                    Ok(inner)
+                } else {
+                    tycker.err(
+                        TyckError::NamedLabelMismatch { expected: expected.clone(), found },
+                        std::panic::Location::caller(),
+                    )
+                }
+            }
+            | _ => {
+                let env = tycker.statics.env_type[self].clone();
+                Ok(Alloc::alloc(tycker, Proj(*self, expected.clone()), payload_kind, &env))
+            }
+        }
+    }
+
     pub fn destruct_type_app_nf_k(&self, tycker: &mut Tycker) -> ResultKont<(TypeId, Vec<TypeId>)> {
         let res = self.destruct_type_app_nf(tycker);
         tycker.err_p_to_k(res)
@@ -66,6 +197,8 @@ impl TypeId {
             | Type::Abst(_)
             | Type::Abs(_)
             | Type::Named(_)
+            | Type::Label(_)
+            | Type::Proj(_)
             | Type::Thk(_)
             | Type::Ret(_)
             | Type::Unit(_)
@@ -133,11 +266,14 @@ impl TypeId {
         };
         Some(res)
     }
-    pub fn destruct_forall(&self, tycker: &mut Tycker) -> Option<(AbstId, TypeId)> {
+    pub fn destruct_forall_binder(&self, tycker: &mut Tycker) -> Option<(TypeBinder, TypeId)> {
         match tycker.type_filled(self).ok()?.to_owned() {
-            | Type::Forall(Forall(abst, ty)) => Some((abst, ty)),
+            | Type::Forall(Forall(binder, ty)) => Some((binder, ty)),
             | _ => None,
         }
+    }
+    pub fn destruct_forall(&self, tycker: &mut Tycker) -> Option<(AbstId, TypeId)> {
+        self.destruct_forall_binder(tycker).map(|(binder, ty)| (binder.witness, ty))
     }
     pub fn destruct_pack_pi(&self, tycker: &mut Tycker) -> Option<PackPi> {
         match tycker.type_filled(self).ok()?.to_owned() {
@@ -147,7 +283,7 @@ impl TypeId {
     }
     pub fn destruct_exists(&self, tycker: &mut Tycker) -> Option<(AbstId, TypeId)> {
         match tycker.type_filled(self).ok()?.to_owned() {
-            | Type::Exists(Exists(abst, ty)) => Some((abst, ty)),
+            | Type::Exists(Exists(binder, ty)) => Some((binder.witness, ty)),
             | _ => None,
         }
     }

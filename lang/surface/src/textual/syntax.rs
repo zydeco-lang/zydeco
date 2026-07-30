@@ -138,6 +138,7 @@ pub enum Term {
     Hole(Hole),
     Var(VarName),
     Named(Named<FieldName, TermId>),
+    Label(Label<FieldName, TermId>),
     Paren(Paren<TermId>),
     Abs(Abs<CoPatId, TermId>),
     App(Appli<TermId>),

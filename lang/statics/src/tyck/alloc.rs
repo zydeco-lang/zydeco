@@ -197,6 +197,7 @@ AllocKind! {
     VType
     CType
     ArrowU<KindId>
+    Label<FieldName, KindId>
 }
 
 /* ------------------------------- TypePattern ------------------------------ */
@@ -234,6 +235,7 @@ macro_rules! AllocTypePattern {
 AllocTypePattern! {
     Hole
     DefId
+    Named<FieldName, TPatId>
 }
 
 /* ---------------------------------- Type ---------------------------------- */
@@ -292,6 +294,8 @@ AllocType! {
     Abs<TPatId, TypeId>
     App<TypeId, TypeId>
     Named<FieldName, TypeId>
+    Label<FieldName, TypeId>
+    Proj<TypeId, FieldName>
     ThkTy
     RetTy
     UnitTy

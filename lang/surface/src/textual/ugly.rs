@@ -67,6 +67,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
             | Term::Hole(t) => s += &t.ugly(f),
             | Term::Var(t) => s += &t.ugly(f),
             | Term::Named(t) => s += &t.ugly(f),
+            | Term::Label(t) => s += &t.ugly(f),
             | Term::Paren(t) => s += &t.ugly(f),
             | Term::Abs(t) => s += &t.ugly(f),
             | Term::App(t) => s += &t.ugly(f),
@@ -178,6 +179,16 @@ where
     fn ugly(&self, f: &'a Formatter) -> String {
         let Named(name, inner) = self;
         format!("{} = {}", name.ugly(f), inner.ugly(f))
+    }
+}
+
+impl<'a, T> Ugly<'a, Formatter<'a>> for Label<FieldName, T>
+where
+    T: Ugly<'a, Formatter<'a>>,
+{
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let Label(name, inner) = self;
+        format!("{} :: {}", name.ugly(f), inner.ugly(f))
     }
 }
 

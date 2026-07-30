@@ -360,6 +360,11 @@ impl Resolve for TermId {
                 let () = inner.resolve(resolver, (local, global))?;
                 term.into()
             }
+            | Term::Label(term) => {
+                let Label(_name, inner) = &term;
+                let () = inner.resolve(resolver, (local, global))?;
+                term.into()
+            }
             | Term::Triv(term) => {
                 let Triv = &term;
                 term.into()

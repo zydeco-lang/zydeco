@@ -562,7 +562,8 @@ where
         let abst = abst.build(tycker, env);
         let ty = ty(abst).build(tycker, env);
         let vtype = VType.build(tycker, env);
-        Alloc::alloc(tycker, Exists(abst, ty), vtype, env)
+        let binder = TypeBinder::with_witness(tycker, abst, env);
+        Alloc::alloc(tycker, Exists(binder, ty), vtype, env)
     }
 }
 impl<'a> Construct<Tycker<'a>, TypeId> for OSTy {
@@ -628,7 +629,8 @@ where
         let abst = abst.build(tycker, env);
         let ty = ty(abst).build(tycker, env);
         let ctype = CType.build(tycker, env);
-        Alloc::alloc(tycker, Forall(abst, ty), ctype, env)
+        let binder = TypeBinder::with_witness(tycker, abst, env);
+        Alloc::alloc(tycker, Forall(binder, ty), ctype, env)
     }
 }
 impl<'a> Construct<Tycker<'a>, TypeId> for RetTy {
@@ -922,7 +924,8 @@ where
         let body = body.build(tycker, env);
         let body_ty = tycker.statics.annotations_compu[&body];
         let ctype = CType.build(tycker, env);
-        let ty = Alloc::alloc(tycker, Forall(abst, body_ty), ctype, env);
+        let binder = TypeBinder { pattern: tpat, witness: abst };
+        let ty = Alloc::alloc(tycker, Forall(binder, body_ty), ctype, env);
         Alloc::alloc(tycker, Abs(tpat, body), ty, env)
     }
 }
@@ -941,7 +944,8 @@ where
         let body = body(def, abst).build(tycker, env);
         let body_ty = tycker.statics.annotations_compu[&body];
         let ctype = CType.build(tycker, env);
-        let ty = Alloc::alloc(tycker, Forall(abst, body_ty), ctype, env);
+        let binder = TypeBinder { pattern: tpat, witness: abst };
+        let ty = Alloc::alloc(tycker, Forall(binder, body_ty), ctype, env);
         Alloc::alloc(tycker, Abs(tpat, body), ty, env)
     }
 }
@@ -972,12 +976,13 @@ where
         let App(abs, cs::Ty(arg)) = self;
         let abs = abs.build(tycker, env);
         let abs_ty = tycker.statics.annotations_compu[&abs];
-        let Some((abst, body_ty)) = abs_ty.destruct_forall(tycker) else { unreachable!() };
-        let param_kd = tycker.statics.annotations_abst[&abst];
+        let Some((binder, body_ty)) = abs_ty.destruct_forall_binder(tycker) else { unreachable!() };
         let arg = arg.build(tycker, env);
+        let domain_kd = binder.domain_kind(tycker);
         let arg_kd = tycker.statics.annotations_type[&arg];
-        let Ok(_) = Lub::lub(param_kd, arg_kd, tycker) else { unreachable!() };
-        let Ok(ty) = body_ty.subst_abst(tycker, (abst, arg)) else { unreachable!() };
+        let Ok(_) = Lub::lub(domain_kd, arg_kd, tycker) else { unreachable!() };
+        let Ok(payload) = binder.pattern.bind_argument(tycker, arg) else { unreachable!() };
+        let Ok(ty) = body_ty.subst_abst(tycker, (binder.witness, payload)) else { unreachable!() };
         Alloc::alloc(tycker, App(abs, arg), ty, env)
     }
 }

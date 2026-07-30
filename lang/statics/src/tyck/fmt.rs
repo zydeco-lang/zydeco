@@ -41,6 +41,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for KindId {
                 | Kind::VType(VType) => "VType".to_string(),
                 | Kind::CType(CType) => "CType".to_string(),
                 | Kind::Arrow(kd) => kd.ugly(f),
+                | Kind::Label(kd) => kd.ugly(f),
             },
         }
     }
@@ -52,6 +53,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for TPatId {
         match tpat {
             | TypePattern::Hole(tpat) => tpat.ugly(f),
             | TypePattern::Var(def) => def.ugly(f),
+            | TypePattern::Named(tpat) => tpat.ugly(f),
         }
     }
 }
@@ -69,6 +71,8 @@ impl<'a> Ugly<'a, Formatter<'a>> for TypeId {
                 | Type::Abs(ty) => ty.ugly(f),
                 | Type::App(ty) => ty.ugly(f),
                 | Type::Named(ty) => ty.ugly(f),
+                | Type::Label(ty) => ty.ugly(f),
+                | Type::Proj(ty) => ty.ugly(f),
                 | Type::Thk(ThkTy) => "Thk".to_string(),
                 | Type::Ret(RetTy) => "Ret".to_string(),
                 | Type::Unit(UnitTy) => "Unit".to_string(),
@@ -277,6 +281,23 @@ where
     }
 }
 
+impl<'a, T> Ugly<'a, Formatter<'a>> for Label<FieldName, T>
+where
+    T: Ugly<'a, Formatter<'a>>,
+{
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let Label(name, inner) = self;
+        format!("{} :: {}", name.ugly(f), inner.ugly(f))
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for Proj<TypeId, FieldName> {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let Proj(head, name) = self;
+        format!("{}/{}", head.ugly(f), name.ugly(f))
+    }
+}
+
 impl<'a, S, T> Ugly<'a, Formatter<'a>> for Arrow<S, T>
 where
     S: Ugly<'a, Formatter<'a>>,
@@ -442,6 +463,13 @@ impl<'a> Ugly<'a, Formatter<'a>> for Literal {
     }
 }
 
+impl<'a> Ugly<'a, Formatter<'a>> for TypeBinder {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let kind = f.statics.annotations_tpat[&self.pattern];
+        format!("({} : {})", self.pattern.ugly(f), kind.ugly(f))
+    }
+}
+
 impl<'a> Ugly<'a, Formatter<'a>> for Forall {
     fn ugly(&self, f: &'a Formatter) -> String {
         let Forall(abst, ty) = self;
@@ -547,6 +575,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for KindId {
                 | Kind::VType(VType) => RcDoc::text("VType"),
                 | Kind::CType(CType) => RcDoc::text("CType"),
                 | Kind::Arrow(kd) => kd.pretty(f),
+                | Kind::Label(kd) => kd.pretty(f),
             },
         }
     }
@@ -558,6 +587,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for TPatId {
         match tpat {
             | TypePattern::Hole(tpat) => tpat.pretty(f),
             | TypePattern::Var(def) => def.pretty(f),
+            | TypePattern::Named(tpat) => tpat.pretty(f),
         }
     }
 }
@@ -573,6 +603,8 @@ impl<'a> Pretty<'a, Formatter<'a>> for TypeId {
                 | Type::Abs(ty) => ty.pretty(f),
                 | Type::App(ty) => ty.pretty(f),
                 | Type::Named(ty) => ty.pretty(f),
+                | Type::Label(ty) => ty.pretty(f),
+                | Type::Proj(ty) => ty.pretty(f),
                 | Type::Thk(ThkTy) => RcDoc::text("Thk"),
                 | Type::Ret(RetTy) => RcDoc::text("Ret"),
                 | Type::Unit(UnitTy) => RcDoc::text("Unit"),
@@ -832,6 +864,23 @@ where
     }
 }
 
+impl<'a, T> Pretty<'a, Formatter<'a>> for Label<FieldName, T>
+where
+    T: Pretty<'a, Formatter<'a>>,
+{
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let Label(name, inner) = self;
+        name.pretty(f).append(RcDoc::text(" :: ")).append(inner.pretty(f))
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Proj<TypeId, FieldName> {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let Proj(head, name) = self;
+        head.pretty(f).append(RcDoc::text("/")).append(name.pretty(f))
+    }
+}
+
 impl<'a> Pretty<'a, Formatter<'a>> for Triv {
     fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
         RcDoc::text("()")
@@ -1022,6 +1071,20 @@ where
 impl<'a> Pretty<'a, Formatter<'a>> for Literal {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         RcDoc::text(self.ugly(f))
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for TypeBinder {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let kind = f.statics.annotations_tpat[&self.pattern];
+        RcDoc::concat([
+            RcDoc::text("("),
+            self.pattern.pretty(f),
+            RcDoc::text(" :"),
+            RcDoc::space(),
+            kind.pretty(f),
+            RcDoc::text(")"),
+        ])
     }
 }
 

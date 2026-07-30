@@ -1,8 +1,8 @@
 use crate::textual::{
     arena::TextualScope,
     syntax::{
-        Ann, Appli, CoPatId, DeclId, DefId, Dtor, EntityId, Hole, Literal, Named, Paren, Parser,
-        PatId, Pattern, Prod, Proj, Term, TermId,
+        Ann, Appli, CoPatId, DeclId, DefId, Dtor, EntityId, Hole, Label, Literal, Named, Paren,
+        Parser, PatId, Pattern, Prod, Proj, Term, TermId,
     },
 };
 use zydeco_utils::{arena::IdAllocator, span::LocationCtx};
@@ -102,8 +102,8 @@ fn parses_comma_separated_named_terms_without_early_sorting() {
 }
 
 #[test]
-fn parses_named_product_type() {
-    let source = "(x = Int) * (y = String)";
+fn parses_labeled_product_type() {
+    let source = "(x :: Int) * (y :: String)";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
@@ -116,8 +116,8 @@ fn parses_named_product_type() {
         panic!("expected a parenthesized left component")
     };
     let [left_field] = left_fields.as_slice() else { panic!("expected one left component") };
-    let Term::Named(Named(left_name, left_body)) = &parser.arena.terms[left_field] else {
-        panic!("expected a named left component")
+    let Term::Label(Label(left_name, left_body)) = &parser.arena.terms[left_field] else {
+        panic!("expected a labeled left component")
     };
     let Term::Var(left_type) = &parser.arena.terms[left_body] else {
         panic!("expected a left component type")
@@ -127,8 +127,8 @@ fn parses_named_product_type() {
         panic!("expected a parenthesized right component")
     };
     let [right_field] = right_fields.as_slice() else { panic!("expected one right component") };
-    let Term::Named(Named(right_name, right_body)) = &parser.arena.terms[right_field] else {
-        panic!("expected a named right component")
+    let Term::Label(Label(right_name, right_body)) = &parser.arena.terms[right_field] else {
+        panic!("expected a labeled right component")
     };
     let Term::Var(right_type) = &parser.arena.terms[right_body] else {
         panic!("expected a right component type")
@@ -138,6 +138,128 @@ fn parses_named_product_type() {
     assert_eq!(left_type.plain(), "Int");
     assert_eq!(right_name.plain(), "y");
     assert_eq!(right_type.plain(), "String");
+}
+
+#[test]
+fn parses_chained_labels_right_associatively() {
+    let source = "(outer :: inner :: Int)";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
+        panic!("expected a parenthesized labeled term")
+    };
+    let [field] = fields.as_slice() else { panic!("expected one labeled term") };
+    let Term::Label(Label(outer, body)) = &parser.arena.terms[field] else {
+        panic!("expected an outer label")
+    };
+    let Term::Label(Label(inner, body)) = &parser.arena.terms[body] else {
+        panic!("expected an inner label")
+    };
+    let Term::Var(payload) = &parser.arena.terms[body] else { panic!("expected a label payload") };
+
+    assert_eq!(outer.plain(), "outer");
+    assert_eq!(inner.plain(), "inner");
+    assert_eq!(payload.plain(), "Int");
+}
+
+#[test]
+fn annotation_binds_inside_a_named_classifier() {
+    let source = "(field :: A : K)";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
+        panic!("expected a parenthesized labeled term")
+    };
+    let [field] = fields.as_slice() else { panic!("expected one labeled term") };
+    let Term::Label(Label(name, body)) = &parser.arena.terms[field] else {
+        panic!("expected a label")
+    };
+    let Term::Ann(Ann { tm, ty }) = &parser.arena.terms[body] else {
+        panic!("expected the classifier payload to be annotated")
+    };
+    let Term::Var(payload) = &parser.arena.terms[tm] else {
+        panic!("expected a classifier payload")
+    };
+    let Term::Var(kind) = &parser.arena.terms[ty] else { panic!("expected a kind annotation") };
+
+    assert_eq!(name.plain(), "field");
+    assert_eq!(payload.plain(), "A");
+    assert_eq!(kind.plain(), "K");
+}
+
+#[test]
+fn parses_mixed_named_and_labeled_terms_right_associatively() {
+    let source = "(outer = inner :: Int)";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
+        panic!("expected a parenthesized named term")
+    };
+    let [field] = fields.as_slice() else { panic!("expected one named term") };
+    let Term::Named(Named(outer, body)) = &parser.arena.terms[field] else {
+        panic!("expected an outer named term")
+    };
+    let Term::Label(Label(inner, body)) = &parser.arena.terms[body] else {
+        panic!("expected an inner label")
+    };
+    let Term::Var(payload) = &parser.arena.terms[body] else { panic!("expected a label payload") };
+
+    assert_eq!(outer.plain(), "outer");
+    assert_eq!(inner.plain(), "inner");
+    assert_eq!(payload.plain(), "Int");
+}
+
+#[test]
+fn parentheses_classify_the_whole_named_introduction() {
+    let source = "((field = value) : (field :: classifier))";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::Paren(Paren(annotations)) = &parser.arena.terms[&term] else {
+        panic!("expected a parenthesized annotation")
+    };
+    let [annotation] = annotations.as_slice() else { panic!("expected one annotation") };
+    let Term::Ann(Ann { tm, ty }) = &parser.arena.terms[annotation] else {
+        panic!("expected an annotation around the named introduction")
+    };
+    let Term::Paren(Paren(introductions)) = &parser.arena.terms[tm] else {
+        panic!("expected a parenthesized named introduction")
+    };
+    let [introduction] = introductions.as_slice() else {
+        panic!("expected one named introduction")
+    };
+    let Term::Named(Named(introduced, value)) = &parser.arena.terms[introduction] else {
+        panic!("expected a named introduction")
+    };
+    let Term::Var(value) = &parser.arena.terms[value] else {
+        panic!("expected an introduced payload")
+    };
+    let Term::Paren(Paren(classifiers)) = &parser.arena.terms[ty] else {
+        panic!("expected a parenthesized named classifier")
+    };
+    let [classifier] = classifiers.as_slice() else { panic!("expected one named classifier") };
+    let Term::Label(Label(classified, classifier)) = &parser.arena.terms[classifier] else {
+        panic!("expected a named classifier")
+    };
+    let Term::Var(classifier) = &parser.arena.terms[classifier] else {
+        panic!("expected a classifier payload")
+    };
+
+    assert_eq!(introduced.plain(), "field");
+    assert_eq!(value.plain(), "value");
+    assert_eq!(classified.plain(), "field");
+    assert_eq!(classifier.plain(), "classifier");
 }
 
 #[test]

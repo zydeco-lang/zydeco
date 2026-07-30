@@ -208,6 +208,11 @@ impl LocalFoldScoped<Context> for Collector {
                 let co_inner = self.coctxs_term_local[&inner].to_owned();
                 self.coctxs_term_local.insert_new(term, co_inner);
             }
+            | Term::Label(inner) => {
+                let Label(_name, inner) = inner;
+                let co_inner = self.coctxs_term_local[&inner].to_owned();
+                self.coctxs_term_local.insert_new(term, co_inner);
+            }
             | Term::Triv(Triv) => {
                 self.coctxs_term_local.insert_new(term, CoContext::new());
             }
@@ -451,6 +456,10 @@ mod impl_obverse_local_post {
                 }
                 | Term::Named(inner) => {
                     let Named(_name, inner) = inner;
+                    inner.obverse_local_post(f, ctx);
+                }
+                | Term::Label(inner) => {
+                    let Label(_name, inner) = inner;
                     inner.obverse_local_post(f, ctx);
                 }
                 | Term::Triv(Triv) => {}

@@ -2,11 +2,11 @@
 -- unnamed components, nested explicitly, and destructured by ordinary tuple
 -- patterns.
 alias FlatMixed =
-  (first = Int) * (Int * (third = Int))
+  (first :: Int) * (Int * (third :: Int))
 end
 
 alias NestedMixed =
-  ((left = Int) * Int) * (right = Int)
+  ((left :: Int) * Int) * (right :: Int)
 end
 
 def flat_mixed : FlatMixed = (
@@ -23,7 +23,7 @@ def nested_mixed : NestedMixed = (
 -- Data constructors do not interpret field names. Their payload may simply be
 -- a mixed product, whose labels are checked when its pattern is checked.
 data Packet where
-  | +Packet : (kind = Int) * (Int * (payload = Int))
+  | +Packet : (kind :: Int) * (Int * (payload :: Int))
   | +Empty : Unit
 end
 
@@ -36,15 +36,15 @@ def packet : Packet = +Packet(
 -- Named value types may contain thunked arrows. The arrow itself is unchanged:
 -- its parameter and result are merely ordinary value types containing names.
 alias FunctionInput =
-  (lhs = Int) * Int
+  (lhs :: Int) * Int
 end
 
 alias FunctionOutput =
-  Int * (result = Int)
+  Int * (result :: Int)
 end
 
 alias FunctionBox =
-  (apply = Thunk (FunctionInput -> Ret FunctionOutput)) * Int
+  (apply :: Thunk (FunctionInput -> Ret FunctionOutput)) * Int
 end
 
 def transform : Thunk (FunctionInput -> Ret FunctionOutput) = {
@@ -61,12 +61,12 @@ def function_box : FunctionBox = (
 -- Codata also remains unchanged. A destructor may accept or return named value
 -- types, and a thunked codata object may itself occupy a named product field.
 codata Gauge where
-  | .read : Ret ((reading = Int) * Int)
-  | .shift : (delta = Int) -> Ret (reading = Int)
+  | .read : Ret ((reading :: Int) * Int)
+  | .shift : (delta :: Int) -> Ret (reading :: Int)
 end
 
 alias GaugeBox =
-  Int * (gauge = Thunk Gauge)
+  Int * (gauge :: Thunk Gauge)
 end
 
 def gauge : Thunk Gauge = {
@@ -103,11 +103,11 @@ main
   -- A variable pattern may bind a named component opaquely. It can then be
   -- opened by either a whole-pattern annotation or a payload annotation.
   let (
-    first_field : (first = Int),
+    first_field : (first :: Int),
     opaque_middle : Int,
-    third_field : (third = Int)
+    third_field : (third :: Int)
   ) = flat_mixed in
-  let ((first = opaque_first) : (first = Int)) = first_field in
+  let ((first = opaque_first) : (first :: Int)) = first_field in
   let (third = opaque_third : Int) = third_field in
   do opaque_checksum <- ! checksum3 opaque_first opaque_middle opaque_third;
   do opaque_check <- ! sub opaque_checksum 321;

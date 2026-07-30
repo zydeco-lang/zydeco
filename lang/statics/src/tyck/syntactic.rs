@@ -45,6 +45,7 @@ impl SyntacticallyUsed for ss::TPatId {
                 false
             }
             | Pat::Var(def) => def.syntactically_used(tycker),
+            | Pat::Named(ss::Named(_, inner)) => inner.syntactically_used(tycker),
         }
     }
 }
@@ -123,6 +124,7 @@ impl SyntacticallyAnnotated for su::TermId {
             | Tm::Abs(_)
             | Tm::Var(_)
             | Tm::Named(_)
+            | Tm::Label(_)
             | Tm::Hole(_)
             | Tm::Triv(_)
             | Tm::Cons(_)
@@ -171,6 +173,7 @@ impl SyntacticallySealed for su::TermId {
             | Tm::Hole(_)
             | Tm::Var(_)
             | Tm::Named(_)
+            | Tm::Label(_)
             | Tm::Triv(_)
             | Tm::Cons(_)
             | Tm::Abs(_)

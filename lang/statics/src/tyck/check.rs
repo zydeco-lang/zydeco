@@ -866,26 +866,74 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                         let checked = self
                             .mk(inner)
                             .tyck_k(tycker, PatternAction::syn().with_skolems(skolems.clone()))?;
-                        let (inner, inner_ty) = checked.try_as_value(
+                        match checked.annotation {
+                            | PatAnnId::Type(inner, inner_kind) => {
+                                let named_kind = Alloc::alloc(
+                                    tycker,
+                                    ss::Label(name.clone(), inner_kind),
+                                    (),
+                                    &(),
+                                );
+                                let named = Alloc::alloc(
+                                    tycker,
+                                    ss::Named(name, inner),
+                                    named_kind,
+                                    &self.info,
+                                );
+                                checked.with_annotation(PatAnnId::Type(named, named_kind))
+                            }
+                            | PatAnnId::Value(inner, inner_ty) => {
+                                let inner_kind = tycker.statics.annotations_type[&inner_ty];
+                                let vtype = ss::VType.build(tycker, &self.info);
+                                Lub::lub_k(vtype, inner_kind, tycker)?;
+                                let named_ty = Alloc::alloc(
+                                    tycker,
+                                    ss::Label(name.clone(), inner_ty),
+                                    vtype,
+                                    &self.info,
+                                );
+                                let named = Alloc::alloc(
+                                    tycker,
+                                    ss::Named(name, inner),
+                                    named_ty,
+                                    &self.info,
+                                );
+                                checked.with_annotation(PatAnnId::Value(named, named_ty))
+                            }
+                        }
+                    }
+                    | Switch::Ana(AnnId::Kind(expected)) => {
+                        let ss::Kind::Label(ss::Label(expected_name, inner_kind)) =
+                            tycker.kind_filled_k(&expected)?.to_owned()
+                        else {
+                            tycker.err_k(TyckError::KindMismatch, std::panic::Location::caller())?
+                        };
+                        if name != expected_name {
+                            tycker.err_k(
+                                TyckError::NamedLabelMismatch {
+                                    expected: expected_name,
+                                    found: name.clone(),
+                                },
+                                std::panic::Location::caller(),
+                            )?
+                        }
+                        let checked = self.mk(inner).tyck_k(
+                            tycker,
+                            PatternAction::ana(inner_kind.into()).with_skolems(skolems.clone()),
+                        )?;
+                        let (inner, _) = checked.try_as_type(
                             tycker,
                             TyckError::SortMismatch,
                             std::panic::Location::caller(),
                         )?;
-                        let vtype = ss::VType.build(tycker, &self.info);
-                        let named_ty = Alloc::alloc(
-                            tycker,
-                            ss::Named(name.clone(), inner_ty),
-                            vtype,
-                            &self.info,
-                        );
                         let named =
-                            Alloc::alloc(tycker, ss::Named(name, inner), named_ty, &self.info);
-                        checked.with_annotation(PatAnnId::Value(named, named_ty))
+                            Alloc::alloc(tycker, ss::Named(name, inner), expected, &self.info);
+                        checked.with_annotation(PatAnnId::Type(named, expected))
                     }
                     | Switch::Ana(AnnId::Type(expected)) => {
                         let expected_view =
                             expected.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
-                        let ss::Type::Named(ss::Named(expected_name, inner_ty)) =
+                        let ss::Type::Label(ss::Label(expected_name, inner_ty)) =
                             tycker.type_filled_k(&expected_view)?.to_owned()
                         else {
                             tycker.err_k(
@@ -918,7 +966,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                             Alloc::alloc(tycker, ss::Named(name, inner), expected, &self.info);
                         checked.with_annotation(PatAnnId::Value(named, expected))
                     }
-                    | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
+                    | Switch::Ana(AnnId::Set) => {
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     }
                 }
@@ -1052,16 +1100,18 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                         let mut opened = Vec::new();
                         for (index, item) in items.iter().copied().enumerate() {
                             let view = body_ty.unroll_k(tycker)?.subst_env_k(tycker, &body_env)?;
-                            let ss::Type::Exists(ss::Exists(source_abst, next_ty)) =
+                            let ss::Type::Exists(ss::Exists(source_binder, next_ty)) =
                                 tycker.type_filled_k(&view)?.to_owned()
                             else {
                                 body_index = index;
                                 break;
                             };
-                            let kd = tycker.statics.annotations_abst[&source_abst];
+                            let domain_kind = source_binder.domain_kind(tycker);
+                            let payload_kind = source_binder.payload_kind(tycker);
                             let checked = TyEnvT::new(body_env.clone(), item).tyck_k(
                                 tycker,
-                                PatternAction::ana(kd.into()).with_skolems(skolems.clone()),
+                                PatternAction::ana(domain_kind.into())
+                                    .with_skolems(skolems.clone()),
                             )?;
                             let (witness, _) = checked.try_as_type(
                                 tycker,
@@ -1077,18 +1127,25 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                             let skolem = match skolems.get(&item) {
                                 | Some(skolem) => {
                                     let expected = tycker.statics.annotations_abst[&skolem];
-                                    Lub::lub_k(expected, kd, tycker)?;
+                                    Lub::lub_k(expected, payload_kind, tycker)?;
                                     skolem
                                 }
-                                | None => Alloc::alloc(tycker, witness, (), &()),
+                                | None => {
+                                    let (def, _) = witness.try_destruct_def(tycker);
+                                    Alloc::alloc(tycker, def, payload_kind, &())
+                                }
                             };
                             tycker.statics.existential_skolems.ensure(skolem);
                             body_env = body_env.with_skolem(skolem);
-                            let abstract_ty = Alloc::alloc(tycker, skolem, kd, &body_env);
-                            if let (Some(def), _) = witness.try_destruct_def(tycker) {
-                                body_env += [(def, abstract_ty.into())];
-                            }
-                            body_ty = next_ty.subst_abst_k(tycker, (source_abst, abstract_ty))?;
+                            let abstract_ty = Alloc::alloc(tycker, skolem, payload_kind, &body_env);
+                            let full_witness =
+                                source_binder.pattern.introduce_payload(tycker, abstract_ty);
+                            let full_witness = tycker.err_p_to_k(full_witness)?;
+                            body_env = TyEnvT::new(body_env, Assign(witness, full_witness))
+                                .tyck_k(tycker, ())?
+                                .info;
+                            body_ty = next_ty
+                                .subst_abst_k(tycker, (source_binder.witness, abstract_ty))?;
                             witnesses.push(witness);
                             opened.push(skolem);
                         }
@@ -1233,6 +1290,12 @@ impl<'a> Tyck<'a> for TyEnvT<Assign<ss::TPatId, ss::TypeId>> {
                 env += [(def, assignee.into())];
                 Ok(TyEnvT { info: env, inner: () })
             }
+            | TPat::Named(ss::Named(name, inner)) => {
+                let payload_kind = tycker.statics.annotations_tpat[&inner];
+                let payload = assignee.project_named(tycker, &name, payload_kind);
+                let payload = tycker.err_p_to_k(payload)?;
+                self.mk(Assign(inner, payload)).tyck_k(tycker, ())
+            }
         }
     }
 }
@@ -1290,15 +1353,33 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiInstantiation> {
             )?
         }
 
-        signature.witnesses.iter().copied().zip(witnesses.iter().copied()).try_fold(
-            signature.codomain,
-            |codomain, (binder, witness)| {
-                let binder_kind = tycker.statics.annotations_abst[&binder];
-                let witness_kind = tycker.statics.annotations_type[&witness];
-                Lub::lub_k(binder_kind, witness_kind, tycker)?;
-                codomain.subst_abst_k(tycker, (binder, witness))
-            },
-        )
+        signature
+            .witnesses
+            .iter()
+            .copied()
+            .zip(witnesses.iter().copied())
+            .try_fold(
+                (signature.codomain, signature.domain),
+                |(codomain, domain), (canonical, witness)| {
+                    let view = domain.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
+                    let ss::Type::Exists(ss::Exists(source, next_domain)) =
+                        tycker.type_filled_k(&view)?.to_owned()
+                    else {
+                        return tycker.err_k(
+                            TyckError::PackageWitnessArityMismatch { expected, found },
+                            std::panic::Location::caller(),
+                        );
+                    };
+                    let payload = source.pattern.bind_argument_k(tycker, witness)?;
+                    let canonical_kind = tycker.statics.annotations_abst[&canonical];
+                    let payload_kind = tycker.statics.annotations_type[&payload];
+                    Lub::lub_k(canonical_kind, payload_kind, tycker)?;
+                    let codomain = codomain.subst_abst_k(tycker, (canonical, payload))?;
+                    let domain = next_domain.subst_abst_k(tycker, (source.witness, payload))?;
+                    Ok((codomain, domain))
+                },
+            )
+            .map(|(codomain, _)| codomain)
     }
 }
 
@@ -1607,9 +1688,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 let hole = Alloc::alloc(tycker, ss::Hole, ty, &self.info);
                                 TermAnnId::Compu(hole, ty)
                             }
-                            | ss::Kind::Arrow(_) => {
-                                unreachable!()
-                            }
+                            | ss::Kind::Arrow(_) | ss::Kind::Label(_) => tycker
+                                .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
                         }
                     }
                 }
@@ -1651,17 +1731,23 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 match switch {
                     | Switch::Syn => match self.mk(inner).tyck_k(tycker, Action::syn())? {
                         | TermAnnId::Type(inner, kd) => {
-                            let vtype = ss::VType.build(tycker, &self.info);
-                            let vtype = Lub::lub_k(vtype, kd, tycker)?;
-                            let named =
-                                Alloc::alloc(tycker, ss::Named(name, inner), vtype, &self.info);
-                            TermAnnId::Type(named, vtype)
+                            let named_kind =
+                                Alloc::alloc(tycker, ss::Label(name.clone(), kd), (), &());
+                            let named = Alloc::alloc(
+                                tycker,
+                                ss::Named(name, inner),
+                                named_kind,
+                                &self.info,
+                            );
+                            TermAnnId::Type(named, named_kind)
                         }
                         | TermAnnId::Value(inner, inner_ty) => {
+                            let inner_kind = tycker.statics.annotations_type[&inner_ty];
                             let vtype = ss::VType.build(tycker, &self.info);
+                            Lub::lub_k(vtype, inner_kind, tycker)?;
                             let named_ty = Alloc::alloc(
                                 tycker,
-                                ss::Named(name.clone(), inner_ty),
+                                ss::Label(name.clone(), inner_ty),
                                 vtype,
                                 &self.info,
                             );
@@ -1676,21 +1762,34 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         }
                     },
                     | Switch::Ana(AnnId::Kind(kd)) => {
-                        let vtype = ss::VType.build(tycker, &self.info);
-                        let vtype = Lub::lub_k(vtype, kd, tycker)?;
-                        let checked = self.mk(inner).tyck_k(tycker, Action::ana(vtype.into()))?;
+                        let ss::Kind::Label(ss::Label(expected_name, inner_kind)) =
+                            tycker.kind_filled_k(&kd)?.to_owned()
+                        else {
+                            tycker.err_k(TyckError::KindMismatch, std::panic::Location::caller())?
+                        };
+                        if name != expected_name {
+                            tycker.err_k(
+                                TyckError::NamedLabelMismatch {
+                                    expected: expected_name,
+                                    found: name.clone(),
+                                },
+                                std::panic::Location::caller(),
+                            )?
+                        }
+                        let checked =
+                            self.mk(inner).tyck_k(tycker, Action::ana(inner_kind.into()))?;
                         let (inner, _) = checked.try_as_type(
                             tycker,
                             TyckError::SortMismatch,
                             std::panic::Location::caller(),
                         )?;
-                        let named = Alloc::alloc(tycker, ss::Named(name, inner), vtype, &self.info);
-                        TermAnnId::Type(named, vtype)
+                        let named = Alloc::alloc(tycker, ss::Named(name, inner), kd, &self.info);
+                        TermAnnId::Type(named, kd)
                     }
                     | Switch::Ana(AnnId::Type(expected)) => {
                         let expected_view =
                             expected.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
-                        let ss::Type::Named(ss::Named(expected_name, inner_ty)) =
+                        let ss::Type::Label(ss::Label(expected_name, inner_ty)) =
                             tycker.type_filled_k(&expected_view)?.to_owned()
                         else {
                             tycker.err_k(
@@ -1722,6 +1821,54 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         TermAnnId::Value(named, expected)
                     }
                     | Switch::Ana(AnnId::Set) => {
+                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                    }
+                }
+            }
+            | Tm::Label(term) => {
+                let su::Label(name, inner) = term;
+                match switch {
+                    | Switch::Syn => match self.mk(inner).tyck_k(tycker, Action::syn())? {
+                        | TermAnnId::Kind(inner) => {
+                            let label = Alloc::alloc(tycker, ss::Label(name, inner), (), &());
+                            TermAnnId::Kind(label)
+                        }
+                        | TermAnnId::Type(inner, kind) => {
+                            let vtype = ss::VType.build(tycker, &self.info);
+                            Lub::lub_k(vtype, kind, tycker)?;
+                            let label =
+                                Alloc::alloc(tycker, ss::Label(name, inner), vtype, &self.info);
+                            TermAnnId::Type(label, vtype)
+                        }
+                        | TermAnnId::Hole(_) => tycker
+                            .err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?,
+                        | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
+                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                        }
+                    },
+                    | Switch::Ana(AnnId::Set) => {
+                        let inner =
+                            self.mk(inner).tyck_k(tycker, Action::ana(AnnId::Set))?.try_as_kind(
+                                tycker,
+                                TyckError::SortMismatch,
+                                std::panic::Location::caller(),
+                            )?;
+                        let label = Alloc::alloc(tycker, ss::Label(name, inner), (), &());
+                        TermAnnId::Kind(label)
+                    }
+                    | Switch::Ana(AnnId::Kind(kind)) => {
+                        let vtype = ss::VType.build(tycker, &self.info);
+                        Lub::lub_k(vtype, kind, tycker)?;
+                        let (inner, _) =
+                            self.mk(inner).tyck_k(tycker, Action::ana(vtype.into()))?.try_as_type(
+                                tycker,
+                                TyckError::SortMismatch,
+                                std::panic::Location::caller(),
+                            )?;
+                        let label = Alloc::alloc(tycker, ss::Label(name, inner), vtype, &self.info);
+                        TermAnnId::Type(label, vtype)
+                    }
+                    | Switch::Ana(AnnId::Type(_)) => {
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     }
                 }
@@ -1850,23 +1997,25 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                             let view = body_ty
                                                 .unroll_k(tycker)?
                                                 .subst_env_k(tycker, &self.info)?;
-                                            let ss::Type::Exists(ss::Exists(abst, next_ty)) =
+                                            let ss::Type::Exists(ss::Exists(binder, next_ty)) =
                                                 tycker.type_filled_k(&view)?.to_owned()
                                             else {
                                                 body_index = index;
                                                 return Ok(None);
                                             };
-                                            let kd = tycker.statics.annotations_abst[&abst];
+                                            let domain_kind = binder.domain_kind(tycker);
                                             let checked = self
                                                 .mk(item)
-                                                .tyck_k(tycker, Action::ana(kd.into()))?;
+                                                .tyck_k(tycker, Action::ana(domain_kind.into()))?;
                                             let (witness, _) = checked.try_as_type(
                                                 tycker,
                                                 TyckError::SortMismatch,
                                                 std::panic::Location::caller(),
                                             )?;
-                                            body_ty =
-                                                next_ty.subst_abst_k(tycker, (abst, witness))?;
+                                            let payload =
+                                                binder.pattern.bind_argument_k(tycker, witness)?;
+                                            body_ty = next_ty
+                                                .subst_abst_k(tycker, (binder.witness, payload))?;
                                             Ok(Some(witness))
                                         })()
                                         .transpose()
@@ -2033,9 +2182,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     | TermAnnId::Compu(compu, body_ty) => {
                                         // a type-polymorphic function
                                         let ctype = ss::CType.build(tycker, &self.info);
+                                        let binder =
+                                            ss::TypeBinder { pattern: tpat, witness: abst };
                                         let ann = Alloc::alloc(
                                             tycker,
-                                            ss::Forall(abst, body_ty),
+                                            ss::Forall(binder, body_ty),
                                             ctype,
                                             &self.info,
                                         );
@@ -2176,24 +2327,32 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         .mk(PackPiIntroduction { binder: pat, body, signature })
                                         .tyck_k(tycker, ())?,
                                     | ss::Type::Forall(ty) => {
-                                        let ss::Forall(abst, ty_body) = ty;
-                                        let kd = tycker.statics.annotations_abst[&abst].to_owned();
-                                        let binder = self
-                                            .mk(pat)
-                                            .tyck_k(tycker, PatternAction::ana(kd.into()))?;
+                                        let ss::Forall(source_binder, ty_body) = ty;
+                                        let domain_kind = source_binder.domain_kind(tycker);
+                                        let binder = self.mk(pat).tyck_k(
+                                            tycker,
+                                            PatternAction::ana(domain_kind.into()),
+                                        )?;
                                         let (binder, _binder_kd) = binder.try_as_type(
                                             tycker,
                                             TyckError::SortMismatch,
                                             std::panic::Location::caller(),
                                         )?;
-                                        let (def_binder, binder_kd) =
-                                            binder.try_destruct_def(tycker);
-                                        let mut env = self.info.clone();
-                                        if let Some(def) = def_binder {
-                                            let abst_ty =
-                                                Alloc::alloc(tycker, abst, binder_kd, &self.info);
-                                            env += [(def, abst_ty.into())];
-                                        }
+                                        let payload_kind = source_binder.payload_kind(tycker);
+                                        let abst_ty = Alloc::alloc(
+                                            tycker,
+                                            source_binder.witness,
+                                            payload_kind,
+                                            &self.info,
+                                        );
+                                        let full_argument = source_binder
+                                            .pattern
+                                            .introduce_payload(tycker, abst_ty);
+                                        let full_argument = tycker.err_p_to_k(full_argument)?;
+                                        let env = self
+                                            .mk(Assign(binder, full_argument))
+                                            .tyck_k(tycker, ())?
+                                            .info;
                                         let body_out_ann = TyEnvT { info: env, inner: body }
                                             .tyck_k(tycker, Action::ana(ty_body.into()))?;
                                         // throwing _body_ty away because it has been substituted
@@ -2206,7 +2365,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         let ctype = ss::CType.build(tycker, &self.info);
                                         let ann = Alloc::alloc(
                                             tycker,
-                                            ss::Forall(abst, body_ty),
+                                            ss::Forall(source_binder, body_ty),
                                             ctype,
                                             &self.info,
                                         );
@@ -2319,16 +2478,18 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             }
                             | ss::Type::Forall(ty) => {
                                 // a type-polymorphic term application
-                                let ss::Forall(abst, ty_body) = ty;
-                                let kd = tycker.statics.annotations_abst[&abst].to_owned();
+                                let ss::Forall(binder, ty_body) = ty;
+                                let domain_kind = binder.domain_kind(tycker);
                                 let a_out_ann =
-                                    self.mk(a).tyck_k(tycker, Action::ana(kd.into()))?;
+                                    self.mk(a).tyck_k(tycker, Action::ana(domain_kind.into()))?;
                                 let (a_ty, _a_kd) = a_out_ann.try_as_type(
                                     tycker,
                                     TyckError::SortMismatch,
                                     std::panic::Location::caller(),
                                 )?;
-                                let body_ty_subst = ty_body.subst_abst_k(tycker, (abst, a_ty))?;
+                                let payload = binder.pattern.bind_argument_k(tycker, a_ty)?;
+                                let body_ty_subst =
+                                    ty_body.subst_abst_k(tycker, (binder.witness, payload))?;
                                 // // Debug: print
                                 // {
                                 //     println!(
@@ -2449,9 +2610,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         // forall; kd_2 should be ctype
                                         let ctype = ss::CType.build(tycker, &self.info);
                                         Lub::lub_k(ctype, kd_2, tycker)?;
+                                        let binder =
+                                            ss::TypeBinder { pattern: tpat, witness: abst };
                                         let forall = Alloc::alloc(
                                             tycker,
-                                            ss::Forall(abst, ty_2),
+                                            ss::Forall(binder, ty_2),
                                             ctype,
                                             &self.info,
                                         );
@@ -2512,9 +2675,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                                 TyckError::SortMismatch,
                                                 std::panic::Location::caller(),
                                             )?;
+                                            let binder =
+                                                ss::TypeBinder { pattern: tpat, witness: abst };
                                             let forall = Alloc::alloc(
                                                 tycker,
-                                                ss::Forall(abst, ty_2),
+                                                ss::Forall(binder, ty_2),
                                                 ctype,
                                                 &self.info,
                                             );
@@ -2561,6 +2726,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     let arr = Alloc::alloc(tycker, ss::Arrow(kd_1, kd_2), (), &());
                                     TermAnnId::Kind(arr)
                                 }
+                                | ss::Kind::Label(_) => tycker.err_k(
+                                    TyckError::KindMismatch,
+                                    std::panic::Location::caller(),
+                                )?,
                             }
                         }
                         | AnnId::Type(_) => {
@@ -2598,9 +2767,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 // body_kd should be of vtype
                                 let vtype = ss::VType.build(tycker, &self.info);
                                 Lub::lub_k(vtype, body_kd, tycker)?;
+                                let binder = ss::TypeBinder { pattern: tpat, witness: abst };
                                 let exists = Alloc::alloc(
                                     tycker,
-                                    ss::Exists(abst, body_ty),
+                                    ss::Exists(binder, body_ty),
                                     vtype,
                                     &self.info,
                                 );
@@ -2929,7 +3099,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     Alloc::alloc(tycker, monad_ty_var, monad_ty_kd, &self.info);
                 let res_body_ty = Alloc::alloc(
                     tycker,
-                    ss::Forall(abst, monad_impl_to_body_lift_ty),
+                    ss::Forall(
+                        ss::TypeBinder { pattern: monad_ty_tpat, witness: abst },
+                        monad_impl_to_body_lift_ty,
+                    ),
                     ctype,
                     &self.info,
                 );
@@ -3224,103 +3397,138 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
             | Tm::Proj(term) => {
                 let su::Proj(head, name) = term;
                 let checked = self.mk(head).tyck_k(tycker, Action::syn())?;
-                let (head, head_ty) = checked.try_as_value(
-                    tycker,
-                    TyckError::SortMismatch,
-                    std::panic::Location::caller(),
-                )?;
-                let head_view = head_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
-                let (target, projected_ty) = match tycker.type_filled_k(&head_view)?.to_owned() {
-                    | ss::Type::Named(ss::Named(found, projected_ty)) => {
+                match checked {
+                    | TermAnnId::Type(head, head_kind) => {
+                        let ss::Kind::Label(ss::Label(found, payload_kind)) =
+                            tycker.kind_filled_k(&head_kind)?.to_owned()
+                        else {
+                            tycker.err_k(TyckError::KindMismatch, std::panic::Location::caller())?
+                        };
                         if name != found {
                             tycker.err_k(
-                                TyckError::MissingNamedField {
-                                    field: name.clone(),
-                                    found: head_ty,
+                                TyckError::NamedLabelMismatch {
+                                    expected: found,
+                                    found: name.clone(),
                                 },
                                 std::panic::Location::caller(),
                             )?
                         }
-                        (ss::ProjTarget::Direct, projected_ty)
-                    }
-                    | ss::Type::Prod(_) => {
-                        let mut next = Some(head_view);
-                        let components = std::iter::from_fn(|| {
-                            let current = next.take()?;
-                            let view = match current
-                                .unroll_k(tycker)
-                                .and_then(|ty| ty.subst_env_k(tycker, &self.info))
-                            {
-                                | Ok(view) => view,
-                                | Err(()) => return Some(Err(())),
-                            };
-                            match tycker.type_filled_k(&view) {
-                                | Ok(ss::Type::Prod(ss::Prod(item, tail))) => {
-                                    next = Some(tail);
-                                    Some(Ok(item))
-                                }
-                                | Ok(_) => Some(Ok(view)),
-                                | Err(()) => Some(Err(())),
+                        let payload_kind = match switch {
+                            | Switch::Syn => payload_kind,
+                            | Switch::Ana(AnnId::Kind(expected)) => {
+                                Lub::lub_k(payload_kind, expected, tycker)?
                             }
-                        })
-                        .collect::<ResultKont<Vec<_>>>()?;
-                        let matches = components
-                            .into_iter()
-                            .enumerate()
-                            .map(|(position, component)| -> ResultKont<_> {
-                                let view =
-                                    component.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
-                                Ok(match tycker.type_filled_k(&view)?.to_owned() {
-                                    | ss::Type::Named(ss::Named(found, projected_ty))
-                                        if found == name =>
-                                    {
-                                        Some((position, projected_ty))
+                            | Switch::Ana(AnnId::Set | AnnId::Type(_)) => tycker
+                                .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
+                        };
+                        let projected = head.project_named(tycker, &name, payload_kind);
+                        let projected = tycker.err_p_to_k(projected)?;
+                        TermAnnId::Type(projected, payload_kind)
+                    }
+                    | TermAnnId::Value(head, head_ty) => {
+                        let head_view =
+                            head_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
+                        let (target, projected_ty) =
+                            match tycker.type_filled_k(&head_view)?.to_owned() {
+                                | ss::Type::Label(ss::Label(found, projected_ty)) => {
+                                    if name != found {
+                                        tycker.err_k(
+                                            TyckError::MissingNamedField {
+                                                field: name.clone(),
+                                                found: head_ty,
+                                            },
+                                            std::panic::Location::caller(),
+                                        )?
                                     }
-                                    | _ => None,
-                                })
-                            })
-                            .collect::<ResultKont<Vec<_>>>()?
-                            .into_iter()
-                            .flatten()
-                            .collect::<Vec<_>>();
-                        match matches.as_slice() {
-                            | [] => tycker.err_k(
-                                TyckError::MissingNamedField {
-                                    field: name.clone(),
-                                    found: head_ty,
-                                },
-                                std::panic::Location::caller(),
-                            )?,
-                            | [(position, projected_ty)] => {
-                                (ss::ProjTarget::Product(*position), *projected_ty)
+                                    (ss::ProjTarget::Direct, projected_ty)
+                                }
+                                | ss::Type::Prod(_) => {
+                                    let mut next = Some(head_view);
+                                    let components = std::iter::from_fn(|| {
+                                        let current = next.take()?;
+                                        let view = match current
+                                            .unroll_k(tycker)
+                                            .and_then(|ty| ty.subst_env_k(tycker, &self.info))
+                                        {
+                                            | Ok(view) => view,
+                                            | Err(()) => return Some(Err(())),
+                                        };
+                                        match tycker.type_filled_k(&view) {
+                                            | Ok(ss::Type::Prod(ss::Prod(item, tail))) => {
+                                                next = Some(tail);
+                                                Some(Ok(item))
+                                            }
+                                            | Ok(_) => Some(Ok(view)),
+                                            | Err(()) => Some(Err(())),
+                                        }
+                                    })
+                                    .collect::<ResultKont<Vec<_>>>()?;
+                                    let matches = components
+                                        .into_iter()
+                                        .enumerate()
+                                        .map(|(position, component)| -> ResultKont<_> {
+                                            let view = component
+                                                .unroll_k(tycker)?
+                                                .subst_env_k(tycker, &self.info)?;
+                                            Ok(match tycker.type_filled_k(&view)?.to_owned() {
+                                                | ss::Type::Label(ss::Label(
+                                                    found,
+                                                    projected_ty,
+                                                )) if found == name => {
+                                                    Some((position, projected_ty))
+                                                }
+                                                | _ => None,
+                                            })
+                                        })
+                                        .collect::<ResultKont<Vec<_>>>()?
+                                        .into_iter()
+                                        .flatten()
+                                        .collect::<Vec<_>>();
+                                    match matches.as_slice() {
+                                        | [] => tycker.err_k(
+                                            TyckError::MissingNamedField {
+                                                field: name.clone(),
+                                                found: head_ty,
+                                            },
+                                            std::panic::Location::caller(),
+                                        )?,
+                                        | [(position, projected_ty)] => {
+                                            (ss::ProjTarget::Product(*position), *projected_ty)
+                                        }
+                                        | _ => tycker.err_k(
+                                            TyckError::DuplicateNamedField {
+                                                field: name.clone(),
+                                                found: head_ty,
+                                            },
+                                            std::panic::Location::caller(),
+                                        )?,
+                                    }
+                                }
+                                | _ => tycker.err_k(
+                                    TyckError::MissingNamedField {
+                                        field: name.clone(),
+                                        found: head_ty,
+                                    },
+                                    std::panic::Location::caller(),
+                                )?,
+                            };
+                        let projected_ty = match switch {
+                            | Switch::Syn => projected_ty,
+                            | Switch::Ana(AnnId::Type(expected)) => {
+                                Lub::lub_k(projected_ty, expected, tycker)?
                             }
-                            | _ => tycker.err_k(
-                                TyckError::DuplicateNamedField {
-                                    field: name.clone(),
-                                    found: head_ty,
-                                },
-                                std::panic::Location::caller(),
-                            )?,
-                        }
+                            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker
+                                .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
+                        };
+                        let field = ss::ResolvedField { name, target };
+                        let projected =
+                            Alloc::alloc(tycker, ss::Proj(head, field), projected_ty, &self.info);
+                        TermAnnId::Value(projected, projected_ty)
                     }
-                    | _ => tycker.err_k(
-                        TyckError::MissingNamedField { field: name.clone(), found: head_ty },
-                        std::panic::Location::caller(),
-                    )?,
-                };
-                let projected_ty = match switch {
-                    | Switch::Syn => projected_ty,
-                    | Switch::Ana(AnnId::Type(expected)) => {
-                        Lub::lub_k(projected_ty, expected, tycker)?
-                    }
-                    | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
+                    | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Compu(_, _) => {
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     }
-                };
-                let field = ss::ResolvedField { name, target };
-                let projected =
-                    Alloc::alloc(tycker, ss::Proj(head, field), projected_ty, &self.info);
-                TermAnnId::Value(projected, projected_ty)
+                }
             }
             | Tm::Lit(lit) => {
                 fn check_against_ty<'a>(

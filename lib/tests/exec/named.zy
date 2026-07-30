@@ -1,7 +1,7 @@
-alias Point = (x = Int) * (y = Int) end
-alias Rectangle = (top_left = Point) * (status = Int) end
-alias Triple = (first = Int) * ((middle = Int) * (last = Int)) end
-alias Nested = ((inner_x = Int) * (inner_y = Int)) * (outer = Int) end
+alias Point = (x :: Int) * (y :: Int) end
+alias Rectangle = (top_left :: Point) * (status :: Int) end
+alias Triple = (first :: Int) * ((middle :: Int) * (last :: Int)) end
+alias Nested = ((inner_x :: Int) * (inner_y :: Int)) * (outer :: Int) end
 
 def rectangle : Rectangle = (
   top_left = (x = 5, y = 1),

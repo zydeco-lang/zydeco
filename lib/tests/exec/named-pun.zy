@@ -1,19 +1,19 @@
 -- `= field` expands to `field = field` without introducing a downstream
 -- syntax form. The inferred payload is resolved according to its context.
 alias Slot (pun_value : VType) : VType =
-  (= pun_value)
+  (pun_value :: pun_value)
 end
 
 alias UpperSlot (PunValue : VType) : VType =
-  (= PunValue)
+  (PunValue :: PunValue)
 end
 
 alias PunPair =
-  (pun_x = Int) * (pun_y = Int)
+  (pun_x :: Int) * (pun_y :: Int)
 end
 
 alias Wrapped =
-  (outer = (pun_inner = Int))
+  (outer :: (pun_inner :: Int))
 end
 
 def pun_value : Int = 4 end

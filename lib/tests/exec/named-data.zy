@@ -1,6 +1,6 @@
 -- Data constructors treat a named tuple as an ordinary payload type.
 data Packet where
-  | +Packet : (tag = Int) * (Int * (payload = Int))
+  | +Packet : (tag :: Int) * (Int * (payload :: Int))
   | +Empty : Unit
 end
 

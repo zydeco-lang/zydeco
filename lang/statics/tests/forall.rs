@@ -19,6 +19,8 @@ fn alpha_equivalent_forall_types_unify() {
         let env = TyEnv::new();
         let (lhs_binder, lhs_body) = TestFixture::abst(tycker, vtype);
         let (rhs_binder, rhs_body) = TestFixture::abst(tycker, vtype);
+        let lhs_binder = TypeBinder::with_witness(tycker, lhs_binder, &env);
+        let rhs_binder = TypeBinder::with_witness(tycker, rhs_binder, &env);
         let lhs = Alloc::alloc(tycker, Forall(lhs_binder, lhs_body), ctype, &env);
         let rhs = Alloc::alloc(tycker, Forall(rhs_binder, rhs_body), ctype, &env);
 

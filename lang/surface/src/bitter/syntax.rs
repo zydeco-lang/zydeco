@@ -96,6 +96,7 @@ pub enum Term<Ref> {
     #[from(ignore)]
     Var(Ref),
     Named(Named<FieldName, TermId>),
+    Label(Label<FieldName, TermId>),
     Triv(Triv),
     Cons(ConsN<TermId, TermId>),
     Abs(Abs<PatId, TermId>),

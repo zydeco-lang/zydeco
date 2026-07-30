@@ -2,15 +2,15 @@
 -- parameter and result types may contain names, and a thunked arrow may occupy
 -- a named tuple component.
 alias Arguments =
-  (lhs = Int) * Int
+  (lhs :: Int) * Int
 end
 
 alias FunctionResult =
-  Int * (sum = Int)
+  Int * (sum :: Int)
 end
 
 alias FunctionBox =
-  (apply = Thunk (Arguments -> Ret FunctionResult)) * Int
+  (apply :: Thunk (Arguments -> Ret FunctionResult)) * Int
 end
 
 def combine : Thunk (Arguments -> Ret FunctionResult) = {

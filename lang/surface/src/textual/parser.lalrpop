@@ -243,6 +243,8 @@ TermAnn: Term = {
     },
     #[precedence(level="2")] #[assoc(side="right")]
     <name:FieldName> "=" <inner:TermGen<TermAnn>> => Named(name, inner).into(),
+    #[precedence(level="2")] #[assoc(side="right")]
+    <name:FieldName> "::" <inner:TermGen<TermAnn>> => Label(name, inner).into(),
 };
 
 #[inline]

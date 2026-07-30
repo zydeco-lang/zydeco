@@ -47,7 +47,26 @@ impl Lub for KindId {
 
                     Alloc::alloc(tycker, Arrow(kd_in, kd_out), (), &())
                 }
-                | (Kind::VType(_), _) | (Kind::CType(_), _) | (Kind::Arrow(_), _) => {
+                | (
+                    Kind::Label(Label(lhs_name, lhs_inner)),
+                    Kind::Label(Label(rhs_name, rhs_inner)),
+                ) => {
+                    if lhs_name != rhs_name {
+                        tycker.err(
+                            TyckError::NamedLabelMismatch {
+                                expected: lhs_name.clone(),
+                                found: rhs_name,
+                            },
+                            std::panic::Location::caller(),
+                        )?
+                    }
+                    let inner = lhs_inner.lub(rhs_inner, tycker)?;
+                    Alloc::alloc(tycker, Label(lhs_name, inner), (), &())
+                }
+                | (Kind::VType(_), _)
+                | (Kind::CType(_), _)
+                | (Kind::Arrow(_), _)
+                | (Kind::Label(_), _) => {
                     tycker.err(TyckError::KindMismatch, std::panic::Location::caller())?
                 }
             },
@@ -149,9 +168,12 @@ impl Debruijn {
                     std::panic::Location::caller(),
                 )?,
                 | (Type::Abs(Abs(lpat, lbody)), Type::Abs(Abs(rpat, rbody))) => {
-                    let (ldef, lkd) = lpat.try_destruct_def(tycker);
-                    let (rdef, rkd) = rpat.try_destruct_def(tycker);
-                    let _kd = Lub::lub(lkd, rkd, tycker)?;
+                    let ldomain = tycker.statics.annotations_tpat[&lpat];
+                    let rdomain = tycker.statics.annotations_tpat[&rpat];
+                    let _domain = Lub::lub(ldomain, rdomain, tycker)?;
+                    let (ldef, lpayload) = lpat.try_destruct_def(tycker);
+                    let (rdef, rpayload) = rpat.try_destruct_def(tycker);
+                    let _payload = Lub::lub(lpayload, rpayload, tycker)?;
                     let body = self.insert(ldef, rdef).lub(lbody, rbody, tycker)?;
                     if body == lbody {
                         lhs_id
@@ -205,6 +227,53 @@ impl Debruijn {
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                     std::panic::Location::caller(),
                 )?,
+                | (
+                    Type::Label(Label(lhs_name, lhs_inner)),
+                    Type::Label(Label(rhs_name, rhs_inner)),
+                ) => {
+                    if lhs_name != rhs_name {
+                        tycker.err(
+                            TyckError::NamedLabelMismatch {
+                                expected: lhs_name.clone(),
+                                found: rhs_name,
+                            },
+                            std::panic::Location::caller(),
+                        )?
+                    }
+                    let inner = self.lub(lhs_inner, rhs_inner, tycker)?;
+                    if inner == lhs_inner {
+                        lhs_id
+                    } else {
+                        let kd = tycker.statics.annotations_type[&lhs_id];
+                        Alloc::alloc(tycker, Label(lhs_name, inner), kd, &env)
+                    }
+                }
+                | (Type::Label(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
+                | (Type::Proj(Proj(lhs_head, lhs_name)), Type::Proj(Proj(rhs_head, rhs_name))) => {
+                    if lhs_name != rhs_name {
+                        tycker.err(
+                            TyckError::NamedLabelMismatch {
+                                expected: lhs_name.clone(),
+                                found: rhs_name,
+                            },
+                            std::panic::Location::caller(),
+                        )?
+                    }
+                    let head = self.lub(lhs_head, rhs_head, tycker)?;
+                    if head == lhs_head {
+                        lhs_id
+                    } else {
+                        let kd = tycker.statics.annotations_type[&lhs_id];
+                        Alloc::alloc(tycker, Proj(head, lhs_name), kd, &env)
+                    }
+                }
+                | (Type::Proj(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
                 | (Type::Thk(ThkTy), Type::Thk(ThkTy)) => lhs_id,
                 | (Type::Thk(_), _) => tycker.err(
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
@@ -255,17 +324,20 @@ impl Debruijn {
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                     std::panic::Location::caller(),
                 )?,
-                | (Type::Forall(Forall(labst, lbody)), Type::Forall(Forall(rabst, rbody))) => {
-                    let lkd = tycker.statics.annotations_abst[&labst].to_owned();
-                    let rkd = tycker.statics.annotations_abst[&rabst].to_owned();
-                    let _kd = Lub::lub(lkd, rkd, tycker)?;
-                    let body = self.insert(Some(labst), Some(rabst)).lub(lbody, rbody, tycker)?;
+                | (Type::Forall(Forall(lbind, lbody)), Type::Forall(Forall(rbind, rbody))) => {
+                    let _domain =
+                        Lub::lub(lbind.domain_kind(tycker), rbind.domain_kind(tycker), tycker)?;
+                    let _payload =
+                        Lub::lub(lbind.payload_kind(tycker), rbind.payload_kind(tycker), tycker)?;
+                    let body = self
+                        .insert(Some(lbind.witness), Some(rbind.witness))
+                        .lub(lbody, rbody, tycker)?;
                     if body == lbody {
                         lhs_id
                     } else {
                         let kd = tycker.statics.annotations_type[&lhs_id];
 
-                        Alloc::alloc(tycker, Forall(labst, body), kd, &env)
+                        Alloc::alloc(tycker, Forall(lbind, body), kd, &env)
                     }
                 }
                 | (Type::Forall(_), _) => tycker.err(
@@ -333,17 +405,20 @@ impl Debruijn {
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                     std::panic::Location::caller(),
                 )?,
-                | (Type::Exists(Exists(labst, lbody)), Type::Exists(Exists(rabst, rbody))) => {
-                    let lkd = tycker.statics.annotations_abst[&labst].to_owned();
-                    let rkd = tycker.statics.annotations_abst[&rabst].to_owned();
-                    let _kd = Lub::lub(lkd, rkd, tycker)?;
-                    let body = self.insert(Some(labst), Some(rabst)).lub(lbody, rbody, tycker)?;
+                | (Type::Exists(Exists(lbind, lbody)), Type::Exists(Exists(rbind, rbody))) => {
+                    let _domain =
+                        Lub::lub(lbind.domain_kind(tycker), rbind.domain_kind(tycker), tycker)?;
+                    let _payload =
+                        Lub::lub(lbind.payload_kind(tycker), rbind.payload_kind(tycker), tycker)?;
+                    let body = self
+                        .insert(Some(lbind.witness), Some(rbind.witness))
+                        .lub(lbody, rbody, tycker)?;
                     if body == lbody {
                         lhs_id
                     } else {
                         let kd = tycker.statics.annotations_type[&lhs_id];
 
-                        Alloc::alloc(tycker, Exists(labst, body), kd, &env)
+                        Alloc::alloc(tycker, Exists(lbind, body), kd, &env)
                     }
                 }
                 | (Type::Exists(_), _) => tycker.err(

@@ -130,6 +130,7 @@ impl DocumentSymbolContext<'_> {
                 )]
             }
             | b::Term::Named(b::Named(_name, inner)) => self.term(inner),
+            | b::Term::Label(b::Label(_name, inner)) => self.term(inner),
             | b::Term::Triv(b::Triv) => vec![],
             | b::Term::Cons(items) => items.iter().flat_map(|item| self.term(item)).collect(),
             | b::Term::Abs(t) => {

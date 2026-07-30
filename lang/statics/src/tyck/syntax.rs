@@ -253,6 +253,7 @@ pub enum Kind {
     VType(VType),
     CType(CType),
     Arrow(ArrowU<KindId>),
+    Label(Label<FieldName, KindId>),
 }
 
 /* ---------------------------------- Type ---------------------------------- */
@@ -261,6 +262,7 @@ pub enum Kind {
 pub enum TypePattern {
     Hole(Hole),
     Var(DefId),
+    Named(Named<FieldName, TPatId>),
 }
 
 /// `U`
@@ -291,9 +293,21 @@ pub struct StringTy;
 #[derive(Clone, Debug)]
 pub struct OSTy;
 
-/// `pi (x: A) -> B`
+/// A type-level binder retains both its checked pattern and the abstract
+/// payload used in the body.
+///
+/// Keeping the pattern is semantically relevant for named binders:
+/// `(field = X)` binds the payload of a named type, while a plain `X` binds
+/// the whole argument.
 #[derive(Clone, Debug)]
-pub struct Forall(pub AbstId, pub TypeId);
+pub struct TypeBinder {
+    pub pattern: TPatId,
+    pub witness: AbstId,
+}
+
+/// `forall (x: A) . B`
+#[derive(Clone, Debug)]
+pub struct Forall(pub TypeBinder, pub TypeId);
 
 /// The non-empty telescope of abstract type witnesses bound by a [`PackPi`].
 ///
@@ -316,9 +330,9 @@ pub struct PackPi {
     pub codomain: TypeId,
 }
 
-/// `sigma (x: A) . A'`
+/// `exists (x: A) . A'`
 #[derive(Clone, Debug)]
-pub struct Exists(pub AbstId, pub TypeId);
+pub struct Exists(pub TypeBinder, pub TypeId);
 
 /// data | C_1 ty | ... end
 #[derive(Clone, Debug, IntoIterator)]
@@ -407,6 +421,8 @@ pub enum Type {
     Abs(Abs<TPatId, TypeId>),
     App(App<TypeId, TypeId>),
     Named(Named<FieldName, TypeId>),
+    Label(Label<FieldName, TypeId>),
+    Proj(Proj<TypeId, FieldName>),
     Thk(ThkTy),
     Ret(RetTy),
     Unit(UnitTy),

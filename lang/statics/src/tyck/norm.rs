@@ -141,7 +141,10 @@ impl TypeSupportCollector {
                 | Type::App(App(function, argument)) => {
                     [function, argument].into_iter().try_for_each(|ty| self.visit(ty, tycker))?;
                 }
-                | Type::Named(Named(_, inner)) => self.visit(inner, tycker)?,
+                | Type::Named(Named(_, inner)) | Type::Label(Label(_, inner)) => {
+                    self.visit(inner, tycker)?
+                }
+                | Type::Proj(Proj(head, _)) => self.visit(head, tycker)?,
                 | Type::Thk(_)
                 | Type::Ret(_)
                 | Type::Unit(_)
@@ -152,11 +155,11 @@ impl TypeSupportCollector {
                 | Type::Arrow(Arrow(input, output)) | Type::Prod(Prod(input, output)) => {
                     [input, output].into_iter().try_for_each(|ty| self.visit(ty, tycker))?;
                 }
-                | Type::Forall(Forall(abst, body)) | Type::Exists(Exists(abst, body)) => {
-                    let newly_bound = self.bound.insert(abst);
+                | Type::Forall(Forall(binder, body)) | Type::Exists(Exists(binder, body)) => {
+                    let newly_bound = self.bound.insert(binder.witness);
                     let result = self.visit(body, tycker);
                     if newly_bound {
-                        self.bound.remove(&abst);
+                        self.bound.remove(&binder.witness);
                     }
                     result?;
                 }
@@ -253,6 +256,24 @@ impl TypeId {
                         *self
                     } else {
                         Alloc::alloc(tycker, Named(name, inner_), kd, env)
+                    }
+                }
+                | Type::Label(label) => {
+                    let Label(name, inner) = label;
+                    let inner_ = inner.subst_env(tycker, env)?;
+                    if inner == inner_ {
+                        *self
+                    } else {
+                        Alloc::alloc(tycker, Label(name, inner_), kd, env)
+                    }
+                }
+                | Type::Proj(proj) => {
+                    let Proj(head, name) = proj;
+                    let head_ = head.subst_env(tycker, env)?;
+                    if head == head_ {
+                        *self
+                    } else {
+                        Alloc::alloc(tycker, Proj(head_, name), kd, env)
                     }
                 }
                 | Type::Thk(_)
@@ -448,6 +469,24 @@ impl TypeId {
                         Alloc::alloc(tycker, Named(name, inner_), kd, &env)
                     }
                 }
+                | Type::Label(label) => {
+                    let Label(name, inner) = label;
+                    let inner_ = inner.subst_abst(tycker, assign)?;
+                    if inner == inner_ {
+                        *self
+                    } else {
+                        Alloc::alloc(tycker, Label(name, inner_), kd, &env)
+                    }
+                }
+                | Type::Proj(proj) => {
+                    let Proj(head, name) = proj;
+                    let head_ = head.subst_abst(tycker, assign)?;
+                    match tycker.type_filled(&head_)?.to_owned() {
+                        | Type::Named(Named(found, inner)) if found == name => inner,
+                        | _ if head == head_ => *self,
+                        | _ => Alloc::alloc(tycker, Proj(head_, name), kd, &env),
+                    }
+                }
                 | Type::Thk(_)
                 | Type::Ret(_)
                 | Type::Unit(_)
@@ -599,6 +638,7 @@ impl TypeId {
             | Type::Var(_) // unchanged because type-variable-typed terms are abstract
             | Type::Abs(_) // unchanged because type-abstration-typed terms are ill-formed
             | Type::Named(_)
+            | Type::Label(_)
             | Type::Thk(_)
             | Type::Ret(_)
             | Type::Unit(_)
@@ -612,7 +652,17 @@ impl TypeId {
             | Type::Prod(_)
             | Type::Exists(_) => self,
             | Type::Data(_)
-            | Type::CoData(_) => self
+            | Type::CoData(_) => self,
+            | Type::Proj(Proj(head, name)) => {
+                let head = head.unroll(tycker)?;
+                match tycker.type_filled(&head)?.to_owned() {
+                    | Type::Named(Named(found, inner)) if found == name => inner.unroll(tycker)?,
+                    | _ => {
+                        let payload_kind = tycker.statics.annotations_type[&self];
+                        Alloc::alloc(tycker, Proj(head, name), payload_kind, &env)
+                    }
+                }
+            }
         };
         Ok(res)
     }
@@ -650,6 +700,7 @@ impl TypeId {
                 | Type::Abst(_)
                 | Type::Abs(_)
                 | Type::Named(_)
+                | Type::Label(_)
                 | Type::Thk(_)
                 | Type::Ret(_)
                 | Type::Unit(_)
@@ -664,6 +715,19 @@ impl TypeId {
                 | Type::Exists(_)
                 | Type::Data(_)
                 | Type::CoData(_) => self,
+                | Type::Proj(Proj(head, name)) => {
+                    let head_kind = tycker.statics.annotations_type[&head];
+                    let head = head.normalize(tycker, head_kind)?;
+                    match tycker.type_filled(&head)?.to_owned() {
+                        | Type::Named(Named(found, inner)) if found == name => {
+                            inner.normalize(tycker, kd)?
+                        }
+                        | _ => {
+                            let env = tycker.statics.env_type[&self].clone();
+                            Alloc::alloc(tycker, Proj(head, name), kd, &env)
+                        }
+                    }
+                }
             },
         };
         Ok(res)
@@ -686,7 +750,12 @@ impl TypeId {
                     let Abs(binder, body_ty) = abs;
                     let (def, _) = binder.try_destruct_def(tycker);
 
-                    if let Some(def) = def { body_ty.subst(tycker, def, a_ty)? } else { body_ty }
+                    if let Some(def) = def {
+                        let argument = binder.bind_argument(tycker, a_ty)?;
+                        body_ty.subst(tycker, def, argument)?
+                    } else {
+                        body_ty
+                    }
                 }
                 | _ => {
                     // else, the app is already normalized
@@ -818,6 +887,38 @@ impl TypeId {
                             tycker.statics.annotations_type[&res],
                             &env,
                         )
+                    }
+                }
+                | Type::Label(ty) => {
+                    let Label(name, inner) = ty;
+                    let (inner_, fills_) = inner.solution(tycker)?;
+                    fills.extend(fills_);
+                    if inner == inner_ {
+                        res
+                    } else {
+                        Alloc::alloc(
+                            tycker,
+                            Label(name, inner_),
+                            tycker.statics.annotations_type[&res],
+                            &env,
+                        )
+                    }
+                }
+                | Type::Proj(ty) => {
+                    let Proj(head, name) = ty;
+                    let (head_, fills_) = head.solution(tycker)?;
+                    fills.extend(fills_);
+                    match tycker.statics.types_pre[&head_].to_owned() {
+                        | Fillable::Done(Type::Named(Named(found, inner))) if found == name => {
+                            inner
+                        }
+                        | _ if head == head_ => res,
+                        | _ => Alloc::alloc(
+                            tycker,
+                            Proj(head_, name),
+                            tycker.statics.annotations_type[&res],
+                            &env,
+                        ),
                     }
                 }
                 | Type::Thk(_)
@@ -1091,6 +1192,14 @@ impl KindId {
                         Alloc::alloc(tycker, Arrow(from_norm, to_norm), (), &())
                     }
                 }
+                | Kind::Label(Label(name, inner)) => {
+                    let inner_norm = inner.filled_norm_id(tycker, memo)?;
+                    if inner_norm == inner {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, Label(name, inner_norm), (), &())
+                    }
+                }
             },
         };
         memo.insert(self, res);
@@ -1173,7 +1282,8 @@ impl TypeId {
                             let Abs(tpat, body) = abs;
                             let (def, _) = tpat.try_destruct_def(tycker);
                             let body_subst = if let Some(def) = def {
-                                body.subst(tycker, def, a_norm)?
+                                let argument = tpat.bind_argument(tycker, a_norm)?;
+                                body.subst(tycker, def, argument)?
                             } else {
                                 body
                             };
@@ -1199,6 +1309,26 @@ impl TypeId {
                         self
                     } else {
                         Alloc::alloc(tycker, Named(name, inner_norm), kd_norm, &env)
+                    }
+                }
+                | Type::Label(label) => {
+                    let Label(name, inner) = label;
+                    let inner_norm = inner.filled_norm_id(tycker, memo, memo_kd)?;
+                    if inner_norm == inner && kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, Label(name, inner_norm), kd_norm, &env)
+                    }
+                }
+                | Type::Proj(proj) => {
+                    let Proj(head, name) = proj;
+                    let head_norm = head.filled_norm_id(tycker, memo, memo_kd)?;
+                    match tycker.statics.types_pre[&head_norm].to_owned() {
+                        | Fillable::Done(Type::Named(Named(found, inner))) if found == name => {
+                            inner.filled_norm_id(tycker, memo, memo_kd)?
+                        }
+                        | _ if head_norm == head && kd_norm == kd => self,
+                        | _ => Alloc::alloc(tycker, Proj(head_norm, name), kd_norm, &env),
                     }
                 }
                 | Type::Thk(ThkTy) => {

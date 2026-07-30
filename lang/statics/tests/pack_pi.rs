@@ -9,7 +9,8 @@ impl TestFixture {
         let env = TyEnv::new();
         let source_witness: AbstId = Alloc::alloc(tycker, None::<DefId>, ctype, &());
         let payload = Alloc::alloc(tycker, UnitTy, vtype, &env);
-        Alloc::alloc(tycker, Exists(source_witness, payload), vtype, &env)
+        let binder = TypeBinder::with_witness(tycker, source_witness, &env);
+        Alloc::alloc(tycker, Exists(binder, payload), vtype, &env)
     }
 
     fn witness(tycker: &mut Tycker<'_>, ctype: KindId) -> (AbstId, TypeId) {

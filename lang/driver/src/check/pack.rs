@@ -87,6 +87,9 @@ impl PackageScoped {
                 | Tm::Named(sc::Named(_name, inner)) => {
                     rm(inner);
                 }
+                | Tm::Label(sc::Label(_name, inner)) => {
+                    rm(inner);
+                }
                 | Tm::Triv(sc::Triv) => {}
                 | Tm::Cons(items) => {
                     for item in items {

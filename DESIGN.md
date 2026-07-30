@@ -41,17 +41,56 @@ without changing the canonical layout. Product layouts are always nonempty;
 
 ### Named Components
 
-Names are an orthogonal wrapper rather than a separate record calculus.
-`Named(field, A)` labels a type, while `Named(field, term)` and
-`Named(field, pattern)` introduce or eliminate a payload with the same label.
-Surface syntax uses `field = inner` for all three forms. For example, if
-`value : A`, then `(field = value) : (field = A)`, and a pattern
-`(field = pattern)` checks its payload against `A`.
+Names are an orthogonal wrapper rather than a separate record calculus. Two surface constructors distinguish
+classification from introduction:
+
+- `field :: classifier` says that the classifier expects a payload carrying `field`.
+- `field = term` introduces a payload carrying `field`; the same syntax in a pattern eliminates the wrapper.
+
+This distinction matters because a payload type does not itself contain its field name. In particular,
+`(field = value) : (field :: A)` relates the term-level name to a classifier that records the same name, rather
+than reusing `=` structurally at both levels.
+
+The value-level rules are:
+
+```text
+Γ ⊢ A : VType                   Γ ⊢ value : A
+─────────────────── LABEL-V     ─────────────────────────── NAME-V
+Γ ⊢ (field :: A) : VType        Γ ⊢ (field = value) : (field :: A)
+```
+
+Named values remain limited to value types. Zydeco does not yet have a corresponding introduction form for
+computations. A computation can still occupy a named value component through `Thk`, as before.
+
+The same distinction lifts one level to named types and named kinds:
+
+```text
+Γ ⊢ K : Set                   Γ ⊢ A : K
+────────────────── LABEL-K     ─────────────────────── NAME-T
+Γ ⊢ (field :: K) : Set         Γ ⊢ (field = A) : (field :: K)
+```
+
+For example, `(item = Int) : (item :: VType)` is a type-level judgment, while `item :: Int` is the value type
+classifying values such as `(item = 1) : (item :: Int)`. A type constructor can be named at its higher kind in
+the same way:
+
+```zydeco
+alias NamedIdentity : (constructor :: (VType -> VType)) =
+  (constructor = Identity)
+end
+
+alias IntAgain : VType = NamedIdentity/constructor Int end
+```
+
+`Set` remains the meta-level classifier of kinds. There is no named-kind introduction `field = K`, because that
+would require a first-class `field :: Set`; the hierarchy therefore stops cleanly at named kinds. Labels preserve
+the existing level instead of adding subkinding or coercions, and two labeled classifiers unify only when both
+their labels and payload classifiers agree.
 
 Named product types use the existing product operator:
 
 ```zydeco
-(x = A) * (y = B)
+(x :: A) * (y :: B)
 ```
 
 Their term and pattern forms use the existing comma tuple syntax:
@@ -76,44 +115,66 @@ ordinary same-spelled binder. Because parsing remains sort-agnostic, the same
 syntax may refer to a type variable in a type position. Non-variable payloads
 must continue to use the explicit `field = term` form.
 
-In particular, `(x = A, y = B)` is not alternate product-type syntax. It is
-parsed as the same comma tuple used in every other term position, and its sort
-and validity are left to type checking. Only `*` forms a product type. This
-keeps `Named` modular: it labels one type, term, or pattern, while `Prod` and
-`ConsN` continue to supply product formation and tuple introduction or
-elimination.
+In particular, `(x = A, y = B)` is not alternate product-type syntax. Depending on its expected sort, it can be a
+tuple containing named values or the witness prefix of an existential package containing named types. Only `*`
+forms a product type, and its named components use `::`. Product order and explicit grouping remain significant,
+and named and unnamed components may be mixed.
 
-For the MVP, named types are value types. A named term checks against a named
-type only when its field label agrees and its payload checks against the
-underlying value type; named patterns follow the same rule. Computations can be
-stored in named products through their thunks. Product order and explicit
-grouping remain significant, and named and unnamed components may be mixed.
-Labels affect static equality and checking, but not runtime layout, so they may
-be erased after type checking.
+The parser preserves `field = ...` as `Named` and `field :: ...` as `Label`, while continuing to defer their
+precise sorts to type checking. Named projection uses postfix slash syntax: `term/field`. Selection associates to
+the left, making `term/outer/inner` a path through nested named terms. Its receiver undergoes ordinary lexical or
+global name resolution, while field labels are checked statically rather than resolved as variables. Slash is
+reserved exclusively for named projection; dot remains exclusively the elimination syntax for computation
+destructors, preserving the value/computation distinction. Slash binds tighter than application, so
+`f value/field` means `f (value/field)`.
 
-The parser preserves `field = ...` as `Named` syntax and continues to defer its
-sort to type checking. Named projection uses postfix slash syntax:
-`term/field`. Selection associates to the left, making
-`term/outer/inner` a path through nested named terms. Its receiver undergoes
-ordinary lexical or global name resolution, while field labels are checked
-statically rather than resolved as variables. Slash is reserved exclusively
-for named projection; dot remains exclusively the elimination syntax for
-computation destructors, preserving the value/computation distinction. Slash
-binds tighter than application, so `f value/field` means
-`f (value/field)`.
+At the annotation layer, `:` binds more tightly than named-component `=` and `::`. The two named-component
+operators share one precedence level and associate to the right:
+
+```text
+field = value : A           ≡  field = (value : A)
+field :: A : K              ≡  field :: (A : K)
+outer = inner :: A          ≡  outer = (inner :: A)
+outer :: inner :: A         ≡  outer :: (inner :: A)
+```
+
+The annotation operator is non-associative. Parentheses therefore state whether an annotation describes a
+payload or the complete named component. The canonical judgment spelling is
+`(field = value) : (field :: classifier)`; leaving off the first pair would annotate only `value`, and a named
+classifier used to the right of `:` must itself be parenthesized. The same parentheses also keep named components
+from capturing the right side of ordinary operators: `(field :: A) * B` labels only `A`, whereas
+`field :: A * B` means `field :: (A * B)`.
 
 Named projection accepts a directly named value or searches only the immediate
 product spine. It requires exactly one matching field and exposes the payload
-beneath `Named`; missing and duplicate matches are distinct type errors.
-Reusing slash is intentional: named terms internalize namespace-like name
-management in the expression language instead of introducing a parallel
-projection mechanism for each sort or abstraction level.
+beneath `Named`; missing and duplicate matches are distinct type errors. Type
+projection is the static counterpart: if `T : (field :: K)`, then `T/field : K`.
+A concrete projection `(field = A)/field` reduces to `A`. Projection from an
+abstract named type remains explicit in the typed syntax and reduces when the
+abstract type is later instantiated.
+
+Type patterns make one additional distinction visible. A named pattern
+`(field = X) : (field :: K)` binds `X : K` to the payload, whereas a plain pattern
+`Whole : (field :: K)` binds the complete named type. Typed `forall`, `exists`,
+and type-function binders retain this pattern shape. Consequently:
+
+```text
+(fn (field = X) -> B) (field = A)  ↦  B[A/X]
+(fn Whole -> B) (field = A)        ↦  B[(field = A)/Whole]
+```
+
+The same payload extraction is used when existential witnesses instantiate a
+package-dependent result. Retaining the pattern is necessary for sound
+substitution; reducing every type pattern to one abstract identifier would
+confuse the payload kind `K` with the whole named kind `field :: K`.
 
 Named structure does not enter StackIR. Type checking resolves each projection
 either to the payload of a directly named value or to a physical product
 position. Lowering erases the former as an identity and the latter as an
 ordinary full-arity tuple pattern and `let`; subsequent backends therefore see
-only the existing tuple representation and layout.
+only the existing tuple representation and layout. Named types, named kinds,
+and static projections are also compile-time-only and have no runtime
+representation.
 
 ### Source Organization and Modules
 

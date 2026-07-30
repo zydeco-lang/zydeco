@@ -1,12 +1,12 @@
 -- Codata destructors remain dot eliminations. Their arguments and results may
 -- use named value types, and slash can project from a returned named value.
 codata Gauge where
-  | .read : Ret ((reading = Int) * Int)
-  | .shift : (delta = Int) -> Ret (reading = Int)
+  | .read : Ret ((reading :: Int) * Int)
+  | .shift : (delta :: Int) -> Ret (reading :: Int)
 end
 
 alias GaugeBox =
-  Int * (gauge = Thunk Gauge)
+  Int * (gauge :: Thunk Gauge)
 end
 
 def gauge : Thunk Gauge = {

@@ -112,6 +112,10 @@ impl DeepClone for b::TermId {
                 let b::Named(name, inner) = term;
                 b::Named(name.clone(), inner.deep_clone(desugarer)).into()
             }
+            | b::Term::Label(term) => {
+                let b::Label(name, inner) = term;
+                b::Label(name.clone(), inner.deep_clone(desugarer)).into()
+            }
             | b::Term::Triv(_term) => b::Triv.into(),
             | b::Term::Cons(term) => {
                 let b::ConsN(terms, tail) = term;
