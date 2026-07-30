@@ -15,6 +15,8 @@ pub enum ResolveError {
     UndefinedPrimitive(Sp<VarName>),
     #[error("Duplicate primitive: {0} and {1}")]
     DuplicatePrimitive(Sp<VarName>, Sp<VarName>),
+    #[error("Multiple executable bodies")]
+    DuplicateEntry(Span, Span),
     #[error("Missing primitive: {0}")]
     MissingPrim(&'static str),
 }
@@ -86,6 +88,22 @@ impl ResolveError {
                         format!("duplicate definition of primitive `{}`", var2.inner),
                     ));
                 }
+                report.finish()
+            }
+            | ResolveError::DuplicateEntry(first, second) => {
+                let (first_path, first_range) = first.to_ariadne_span();
+                let (second_path, second_range) = second.to_ariadne_span();
+                let report =
+                    Report::build(ReportKind::Error, (second_path.clone(), second_range.clone()))
+                        .with_message("Multiple executable bodies")
+                        .with_label(
+                            Label::new((second_path.clone(), second_range))
+                                .with_message("second executable body"),
+                        )
+                        .with_label(
+                            Label::new((first_path, first_range))
+                                .with_message("first executable body"),
+                        );
                 report.finish()
             }
             | ResolveError::MissingPrim(name) => Report::build(

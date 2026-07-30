@@ -180,9 +180,12 @@ representation.
 
 Zydeco temporarily has no source-language module, namespace, import, layer, or
 qualified-name machinery. Files that previously used module blocks are
-flattened into one global declaration scope, with comments retaining any useful
-organizational boundaries. Name resolution therefore maps ordinary local and
-global `VarName`s directly to their definitions. Filesystem paths in project
+flattened into one global binding context, with comments retaining any useful
+organizational boundaries. Parsing and desugaring still use declarations as
+source-organization syntax. Name resolution eliminates that sort and produces
+one contextual term: its binding context is an SCC condensation DAG and its
+optional body is the executable program. Ordinary local and global `VarName`s
+therefore map directly to their definitions. Filesystem paths in project
 dependency configuration remain a driver concern and do not introduce paths
 into the language. A future module system will be designed afresh rather than
 constrained by the removed scaffolding.

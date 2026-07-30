@@ -5,6 +5,100 @@ pub use crate::textual::syntax::SpanArena;
 
 use zydeco_utils::cells::SingCell;
 
+/* --------------------------- Contextual program --------------------------- */
+
+/// Context bindings retain the identity of the source declaration that
+/// introduced them, but declarations themselves do not survive name
+/// resolution.
+pub type BindingId = DeclId;
+
+zydeco_utils::new_key_type! {
+    /// Identifier for a node in the condensation DAG of context bindings.
+    pub struct ContextNodeId;
+}
+
+/// A definition contributing a type or value to the surrounding context.
+#[derive(Clone, Debug)]
+pub struct Definition {
+    pub binder: PatId,
+    pub bindee: TermId,
+}
+
+/// An externally supplied binding with an optional classifier.
+#[derive(Clone, Debug)]
+pub struct External {
+    pub binder: PatId,
+    pub classifier: Option<TermId>,
+}
+
+/// A single binding stored in a contextual term.
+#[derive(Clone, Debug)]
+pub struct Binding {
+    pub id: BindingId,
+    pub inner: BindingForm,
+    pub metas: im::Vector<Meta>,
+    pub(crate) source_order: usize,
+}
+
+/// The two binding forms admitted by the legacy top-level syntax.
+#[derive(Clone, Debug)]
+pub enum BindingForm {
+    Definition(Definition),
+    External(External),
+}
+
+impl Binding {
+    pub fn source_order(&self) -> usize {
+        self.source_order
+    }
+}
+
+/// One strongly connected component in a contextual term.
+///
+/// `Acyclic` is a singleton component without a self edge. `Recursive`
+/// therefore contains either one self-recursive binding or several mutually
+/// recursive bindings.
+#[derive(Clone, Debug)]
+pub enum ContextNode {
+    Acyclic(Binding),
+    Recursive(Vec<Binding>),
+}
+
+impl ContextNode {
+    pub fn bindings(&self) -> &[Binding] {
+        match self {
+            | ContextNode::Acyclic(binding) => std::slice::from_ref(binding),
+            | ContextNode::Recursive(bindings) => bindings,
+        }
+    }
+
+    pub fn source_order(&self) -> usize {
+        self.bindings()
+            .iter()
+            .map(Binding::source_order)
+            .min()
+            .expect("a context node must contain at least one binding")
+    }
+}
+
+/// The executable body of a contextual term.
+#[derive(Clone, Debug)]
+pub struct ContextBody {
+    pub id: DeclId,
+    pub term: TermId,
+    pub metas: im::Vector<Meta>,
+}
+
+/// A term together with the context that it inhabits.
+///
+/// The context representation is supplied by the owning compiler arena. The
+/// optional body permits checking libraries that do not define an entry point.
+#[derive(Debug)]
+pub struct ContextualTerm<C> {
+    pub context: C,
+    pub body: Option<ContextBody>,
+}
+
 /* --------------------------------- Context -------------------------------- */
 
 /// Context is what variables we *can use* at a given term site.

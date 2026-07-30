@@ -1,32 +1,39 @@
 use crate::scoped::{syntax::*, *};
 use crate::textual::syntax as t;
-use zydeco_utils::prelude::{DepGraph, Kosaraju, SccGraph, SccGroup};
+use zydeco_utils::prelude::DepGraph;
 
 /// Global name environment collected from top-level binders.
 #[derive(Clone, Debug, Default)]
 pub struct Global {
     /// map from variable names to their definitions
     pub(super) var_to_def: im::HashMap<VarName, DefId>,
-    /// map from definitions to their global declarations
-    pub(super) under_map: im::HashMap<DefId, DeclId>,
+    /// map from definitions to their context bindings
+    pub(super) under_map: im::HashMap<DefId, BindingId>,
 }
 /// Local name environment built from pattern binders.
 #[derive(Clone, Debug)]
 pub struct Local {
-    /// which global declaration is the local scope checking in
-    under: DeclId,
+    /// The context binding whose dependencies are currently being collected.
+    /// An executable body is outside the context DAG and therefore has no
+    /// enclosing binding.
+    under: Option<BindingId>,
     /// map from variable names to their definitions
     var_to_def: im::HashMap<VarName, DefId>,
 }
 
 impl Local {
-    fn new(under: DeclId) -> Self {
-        Self { under, var_to_def: im::HashMap::new() }
+    fn for_binding(under: BindingId) -> Self {
+        Self { under: Some(under), var_to_def: im::HashMap::new() }
+    }
+
+    fn for_body() -> Self {
+        Self { under: None, var_to_def: im::HashMap::new() }
     }
 }
 
 /// Name-resolution state and accumulators.
 pub struct Resolver<'a> {
+    allocator: IdAllocator<ScopedScope>,
     pub spans: &'a SpanArena,
     pub bitter: BitterArena,
     pub prim_term: PrimTerms,
@@ -38,12 +45,14 @@ pub struct Resolver<'a> {
     pub defs: ArenaSparse<ScopedScope, DefId>,
     pub pats: ArenaSparse<ScopedScope, PatId>,
     pub terms: ArenaSparse<ScopedScope, TermId>,
-    pub decls: ArenaSparse<ScopedScope, DeclId>,
+    pub bindings: ArenaAssoc<BindingId, Binding>,
+    pub body: Option<ContextBody>,
 
     pub users: ArenaForth<DefId, TermId>,
     pub metas: ArenaAssoc<DeclId, im::Vector<Meta>>,
-    pub exts: ArenaAssoc<DeclId, (Internal, DefId)>,
-    pub deps: DepGraph<DeclId>,
+    pub exts: ArenaAssoc<BindingId, (Internal, DefId)>,
+    pub deps: DepGraph<BindingId>,
+    source_order: ArenaAssoc<BindingId, usize>,
 }
 
 /// Output of the name-resolution pass.
@@ -55,6 +64,7 @@ pub struct ResolveOut {
 impl<'a> Resolver<'a> {
     pub fn new(spans: &'a SpanArena, bitter: BitterArena, prim_term: PrimTerms) -> Self {
         Self {
+            allocator: IdAllocator::new(),
             spans,
             bitter,
             prim_term,
@@ -64,18 +74,21 @@ impl<'a> Resolver<'a> {
             defs: ArenaSparse::default(),
             pats: ArenaSparse::default(),
             terms: ArenaSparse::default(),
-            decls: ArenaSparse::default(),
+            bindings: ArenaAssoc::default(),
+            body: None,
 
             users: ArenaForth::default(),
             metas: ArenaAssoc::default(),
             exts: ArenaAssoc::default(),
             deps: DepGraph::default(),
+            source_order: ArenaAssoc::default(),
         }
     }
     /// Run name resolution and context collection over the top-level program.
     pub fn run(mut self, top: &TopLevel) -> Result<ResolveOut> {
         top.resolve(&mut self, ())?;
         let Resolver {
+            allocator,
             spans: _,
             bitter,
             prim_term: _,
@@ -85,58 +98,55 @@ impl<'a> Resolver<'a> {
             defs,
             pats,
             terms,
-            decls,
+            bindings,
+            body,
 
             users,
-            metas,
+            metas: _,
             exts,
             deps,
+            source_order: _,
         } = self;
         let BitterArena {
             defs: bitter_defs,
             pats: bitter_pats,
             terms: bitter_terms,
-            decls: bitter_decls,
+            decls: _,
             textual,
         } = bitter;
         let defs = bitter_defs.filter_map_id(|id| defs.get(&id).cloned());
         let pats = bitter_pats.filter_map_id(|id| pats.get(&id).cloned());
         let terms = bitter_terms.filter_map_id(|id| terms.get(&id).cloned());
-        let decls = bitter_decls.filter_map_id(|id| decls.get(&id).cloned());
         let ctxs_term = ArenaAssoc::default();
         let ctxs_pat_local = ArenaAssoc::default();
         let coctxs_pat_local = ArenaAssoc::default();
         let coctxs_term_local = ArenaAssoc::default();
-        let unis = ArenaAssoc::default();
-        let top = Kosaraju::new(&deps).run();
+        let root = ContextualTerm {
+            context: BindingContext::from_bindings(allocator, bindings, deps),
+            body,
+        };
         let Collector {
             defs,
             pats,
             terms,
-            decls,
             textual,
             users,
             ctxs_term,
             ctxs_pat_local,
             coctxs_pat_local,
             coctxs_term_local,
-            unis,
-            deps,
-            top,
+            root,
         } = Collector {
             defs,
             pats,
             terms,
-            decls,
             textual,
             users,
             ctxs_term,
             ctxs_pat_local,
             coctxs_pat_local,
             coctxs_term_local,
-            unis,
-            deps,
-            top,
+            root,
         }
         .run()?;
         Ok(ResolveOut {
@@ -145,20 +155,50 @@ impl<'a> Resolver<'a> {
                 defs,
                 pats,
                 terms,
-                decls,
                 textual,
                 users,
                 ctxs_term,
                 ctxs_pat_local,
                 coctxs_pat_local,
                 coctxs_term_local,
-                metas,
                 exts,
-                unis,
-                deps,
-                top,
+                root,
             },
         })
+    }
+
+    fn add_dependency(&mut self, local: &Local, dependency: BindingId) {
+        if let Some(binding) = local.under {
+            self.deps.add(binding, [dependency]);
+        }
+    }
+
+    fn source_items(&self, declaration: DeclId) -> Vec<DeclId> {
+        let Modifiers { inner, .. } = &self.bitter.decls[&declaration];
+        match inner {
+            | Declaration::Meta(MetaT(_, inner)) => self.source_items(*inner),
+            | Declaration::AliasBody(_) | Declaration::AliasHead(_) | Declaration::Exec(_) => {
+                vec![declaration]
+            }
+        }
+    }
+
+    fn record_source_order(&mut self, top: &TopLevel) {
+        let TopLevel(declarations) = top;
+        let bindings = declarations
+            .iter()
+            .flat_map(|declaration| self.source_items(*declaration))
+            .filter(|declaration| {
+                matches!(
+                    self.bitter.decls[declaration].inner,
+                    Declaration::AliasBody(_) | Declaration::AliasHead(_)
+                )
+            })
+            .collect::<Vec<_>>();
+        bindings
+            .into_iter()
+            .enumerate()
+            .for_each(|(order, binding)| self.source_order.insert_new(binding, order));
     }
 }
 
@@ -174,6 +214,7 @@ impl Resolve for TopLevel {
     type Lookup<'a> = ();
     fn resolve(&self, resolver: &mut Resolver, (): Self::Lookup<'_>) -> Result<Self::Out> {
         let TopLevel(decls) = self;
+        resolver.record_source_order(self);
         // collect all top-level binders and ...
         // 1. check for duplicates
         // 2. update primitives to internal_to_def
@@ -198,10 +239,7 @@ impl Resolve for DeclId {
     type Out = ();
     type Lookup<'a> = &'a Global;
     fn resolve(&self, resolver: &mut Resolver, global: Self::Lookup<'_>) -> Result<Self::Out> {
-        // register the global binder in deps
-        resolver.deps.add(*self, []);
         let decl = resolver.bitter.decls[self].clone();
-        let local = Local::new(*self);
         let Modifiers { public: _, external: _, inner } = decl;
         match inner.clone() {
             | Declaration::Meta(decl) => {
@@ -212,32 +250,63 @@ impl Resolve for DeclId {
                 }
                 metas.push_back(meta);
                 resolver.metas.insert_new(decl, metas);
-                resolver.deps.add(*self, [decl]);
                 let () = decl.resolve(resolver, global)?;
             }
             | Declaration::AliasBody(decl) => {
+                resolver.deps.add(*self, []);
+                let local = Local::for_binding(*self);
                 let AliasBody { binder, bindee } = decl;
                 // resolve bindee first
                 let () = bindee.resolve(resolver, (local.clone(), global))?;
                 // and then binder, though we don't need the context yielded by binder
                 // since it's global and has been collected already
                 let _ = binder.resolve(resolver, (local.clone(), global))?;
+                resolver.bindings.insert_new(
+                    *self,
+                    Binding {
+                        id: *self,
+                        inner: BindingForm::Definition(Definition { binder, bindee }),
+                        metas: resolver.metas.remove(self).unwrap_or_default(),
+                        source_order: resolver.source_order[self],
+                    },
+                );
             }
             | Declaration::AliasHead(decl) => {
+                resolver.deps.add(*self, []);
+                let local = Local::for_binding(*self);
                 let AliasHead { binder, ty } = decl;
                 // no more bindee, but we still need to resolve the binders just for the type mentioned
                 if let Some(ty) = ty {
                     let () = ty.resolve(resolver, (local.clone(), global))?;
                 }
                 let _ = binder.resolve(resolver, (local.clone(), global))?;
+                resolver.bindings.insert_new(
+                    *self,
+                    Binding {
+                        id: *self,
+                        inner: BindingForm::External(External { binder, classifier: ty }),
+                        metas: resolver.metas.remove(self).unwrap_or_default(),
+                        source_order: resolver.source_order[self],
+                    },
+                );
             }
             | Declaration::Exec(decl) => {
+                let local = Local::for_body();
                 let Exec(term) = decl;
                 let () = term.resolve(resolver, (local.clone(), global))?;
+                let body = ContextBody {
+                    id: *self,
+                    term,
+                    metas: resolver.metas.remove(self).unwrap_or_default(),
+                };
+                if let Some(previous) = resolver.body.replace(body) {
+                    Err(ResolveError::DuplicateEntry(
+                        previous.id.span(resolver).clone(),
+                        self.span(resolver).clone(),
+                    ))?
+                }
             }
         };
-        // no id changed, reuse old inner decl structure
-        resolver.decls.insert_new(*self, inner);
         Ok(())
     }
 }
@@ -314,8 +383,8 @@ impl Resolve for TermId {
                 // which has already been updated by primitives when collecting top level
                 let def = resolver.internal_to_def[self];
                 // now the only thing left is to add the dependency
-                let decl = global.under_map[&def];
-                resolver.deps.add(local.under, [decl]);
+                let binding = global.under_map[&def];
+                resolver.add_dependency(&local, binding);
                 // no need update the term as def
                 resolver.terms.insert_new(*self, Term::Var(def));
                 return Ok(());
@@ -348,7 +417,7 @@ impl Resolve for TermId {
                     // if found, also add dependency
                     resolver.terms.insert_new(*self, Term::Var(*def));
                     resolver.users.insert_new(*def, *self);
-                    resolver.deps.add(local.under, [global.under_map[def]]);
+                    resolver.add_dependency(&local, global.under_map[def]);
                     return Ok(());
                 }
                 // if not found, report an error
@@ -445,7 +514,7 @@ impl Resolve for TermId {
                 let MoBlock(body) = &term;
                 let () = body.resolve(resolver, (local.clone(), global))?;
                 let mo_def = resolver.prim_def.monad.get().to_owned();
-                resolver.deps.add(local.under, [global.under_map[&mo_def]]);
+                resolver.add_dependency(&local, global.under_map[&mo_def]);
                 term.into()
             }
             | Term::Data(term) => {
@@ -511,7 +580,6 @@ pub struct Collector {
     pub defs: ArenaSparse<ScopedScope, DefId>,
     pub pats: ArenaSparse<ScopedScope, PatId>,
     pub terms: ArenaSparse<ScopedScope, TermId>,
-    pub decls: ArenaSparse<ScopedScope, DeclId>,
     pub textual: ArenaForth<t::EntityId, EntityId>,
 
     pub users: ArenaForth<DefId, TermId>,
@@ -520,139 +588,65 @@ pub struct Collector {
     pub coctxs_pat_local: ArenaAssoc<PatId, CoContext>,
     pub coctxs_term_local: ArenaAssoc<TermId, CoContext>,
 
-    pub unis: ArenaAssoc<DeclId, ()>,
-    pub deps: DepGraph<DeclId>,
-    pub top: SccGraph<DeclId>,
+    pub root: ContextualTerm<BindingContext>,
 }
 
 impl Collector {
     pub fn run(mut self) -> Result<Self> {
-        let mut scc = self.top.clone();
-        let mut ctx = Context::new();
-        loop {
-            let groups = scc.top();
-            if groups.is_empty() {
-                break;
-            }
-            for group in groups {
-                ctx = group.collect(&mut self, ctx.clone())?;
-                scc.release(group)
-            }
+        let ctx = self
+            .root
+            .context
+            .topological_order()
+            .into_iter()
+            .try_fold(Context::new(), |ctx, node| {
+                self.root.context.nodes[&node].clone().collect(&mut self, ctx)
+            })?;
+        if let Some(body) = self.root.body.clone() {
+            body.term.collect(&mut self, ctx)?;
         }
         Ok(self)
     }
 }
 
-/// Collects contexts on all term sites.
-/// Additionally, collects whether top level declarations are recursive.
-///
-/// 1. Gradually collects variables from the topologically sorted top level declarations.
-/// 2. Within each declaration, collects variables according to the declaration's recursiveness.
+/// Collect contexts on every pattern and term site in a contextual term.
 trait Collect {
     type Out;
     fn collect(&self, collector: &mut Collector, ctx: Context) -> Result<Self::Out>;
 }
 
-impl Collect for SccGroup<DeclId> {
+impl Collect for ContextNode {
     type Out = Context;
-    fn collect(&self, collector: &mut Collector, mut ctx: Context) -> Result<Self::Out> {
-        let SccGroup(decls) = self;
-        match decls.len() {
-            | 0 => Ok(ctx),
-            | 1 => {
-                use std::collections::HashSet;
-                let id = decls.iter().next().unwrap();
-                let self_ref =
-                    collector.deps.query(id).into_iter().collect::<HashSet<_>>().contains(id);
-                if self_ref {
-                    // collect context for the binder before collecting for the bindee
-                    let decl = collector.decls[id].clone();
-                    match decl {
-                        | Declaration::Meta(decl) => {
-                            let MetaT(meta, decl) = decl;
-                            let _ = meta;
-                            ctx = SccGroup::from_iter([decl]).collect(collector, ctx)?;
-                        }
-                        | Declaration::AliasBody(decl) => {
-                            let AliasBody { binder, bindee } = decl;
-                            ctx = binder.collect(collector, ctx)?;
-                            let () = bindee.collect(collector, ctx.to_owned())?;
-                        }
-                        | Declaration::AliasHead(_) | Declaration::Exec(_) => {
-                            unreachable!()
-                        }
-                    }
-                } else {
-                    // add the declaration to unis
-                    collector.unis.insert_new(*id, ());
-                    // collect context for bindee before collecting for the binder
-                    let decl = collector.decls[id].clone();
-                    match decl {
-                        | Declaration::Meta(decl) => {
-                            let MetaT(meta, decl) = decl;
-                            let _ = meta;
-                            ctx = SccGroup::from_iter([decl]).collect(collector, ctx)?;
-                        }
-                        | Declaration::AliasBody(decl) => {
-                            let AliasBody { binder, bindee } = decl;
-                            let () = bindee.collect(collector, ctx.to_owned())?;
-                            ctx = binder.collect(collector, ctx)?;
-                        }
-                        | Declaration::AliasHead(decl) => {
-                            let AliasHead { binder, ty } = decl;
-                            if let Some(ty) = ty {
-                                let () = ty.collect(collector, ctx.clone())?;
-                            }
-                            ctx = binder.collect(collector, ctx)?;
-                        }
-                        | Declaration::Exec(decl) => {
-                            let Exec(term) = decl;
-                            let () = term.collect(collector, ctx.to_owned())?;
-                        }
-                    }
+    fn collect(&self, collector: &mut Collector, ctx: Context) -> Result<Self::Out> {
+        match self {
+            | ContextNode::Acyclic(binding) => match &binding.inner {
+                | BindingForm::Definition(Definition { binder, bindee }) => {
+                    bindee.collect(collector, ctx.clone())?;
+                    binder.collect(collector, ctx)
                 }
-                Ok(ctx)
-            }
-            | _ => {
-                // collect context for all binders before collecting all bindees
-                for decl in decls.iter() {
-                    let mut id = decl.to_owned();
-                    loop {
-                        match collector.decls[&id].clone() {
-                            | Declaration::Meta(decl) => {
-                                let MetaT(meta, decl) = decl;
-                                let _ = meta;
-                                id = decl;
-                            }
-                            | Declaration::AliasBody(decl) => {
-                                let AliasBody { binder, bindee: _ } = decl;
-                                break ctx = binder.collect(collector, ctx)?;
-                            }
-                            | Declaration::AliasHead(_) | Declaration::Exec(_) => {
-                                unreachable!()
-                            }
-                        }
+                | BindingForm::External(External { binder, classifier }) => {
+                    if let Some(classifier) = classifier {
+                        classifier.collect(collector, ctx.clone())?;
                     }
+                    binder.collect(collector, ctx)
                 }
-                for decl in decls.iter() {
-                    let mut id = decl.to_owned();
-                    loop {
-                        match collector.decls[&id].clone() {
-                            | Declaration::Meta(decl) => {
-                                let MetaT(meta, decl) = decl;
-                                let _ = meta;
-                                id = decl;
-                            }
-                            | Declaration::AliasBody(decl) => {
-                                let AliasBody { binder: _, bindee } = decl;
-                                break bindee.collect(collector, ctx.to_owned())?;
-                            }
-                            | Declaration::AliasHead(_) | Declaration::Exec(_) => {
-                                unreachable!()
-                            }
-                        }
+            },
+            | ContextNode::Recursive(bindings) => {
+                let ctx = bindings.iter().try_fold(ctx, |ctx, binding| match &binding.inner {
+                    | BindingForm::Definition(Definition { binder, .. }) => {
+                        binder.collect(collector, ctx)
                     }
-                }
+                    | BindingForm::External(_) => {
+                        unreachable!("external bindings cannot participate in a recursive group")
+                    }
+                })?;
+                bindings.iter().try_for_each(|binding| match &binding.inner {
+                    | BindingForm::Definition(Definition { bindee, .. }) => {
+                        bindee.collect(collector, ctx.clone())
+                    }
+                    | BindingForm::External(_) => {
+                        unreachable!("external bindings cannot participate in a recursive group")
+                    }
+                })?;
                 Ok(ctx)
             }
         }

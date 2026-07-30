@@ -134,26 +134,19 @@ impl<'a> CompilerPass for Lowerer<'a> {
     type Error = std::convert::Infallible;
     /// Lower the full program into a stack arena.
     fn run(mut self) -> Result<StackirArena, Self::Error> {
-        // Topologically traverse declarations and translate VAliasBody
-        let mut scc = self.scoped.top.clone();
-        loop {
-            let groups = scc.top();
-            if groups.is_empty() {
-                break;
-            }
-            for group in groups {
-                for decl_id in group.iter() {
-                    let Some(decl) = self.statics.decls.get(decl_id).cloned() else {
-                        continue;
-                    };
-                    use ss::Declaration as Decl;
-                    match decl {
-                        | Decl::VAliasBody(valias_body) => valias_body.lower(&mut self, ()),
-                        | Decl::VAliasHead(valias_head) => valias_head.lower(&mut self, ()),
-                        | Decl::TAliasBody(_) | Decl::Exec(_) => {}
-                    }
+        // Topologically traverse context bindings and translate runtime values.
+        for node_id in self.scoped.root.context.topological_order() {
+            let node = self.scoped.root.context.nodes[&node_id].clone();
+            for decl_id in node.bindings().iter().map(|binding| binding.id) {
+                let Some(decl) = self.statics.decls.get(&decl_id).cloned() else {
+                    continue;
+                };
+                use ss::Declaration as Decl;
+                match decl {
+                    | Decl::VAliasBody(valias_body) => valias_body.lower(&mut self, ()),
+                    | Decl::VAliasHead(valias_head) => valias_head.lower(&mut self, ()),
+                    | Decl::TAliasBody(_) | Decl::Exec(_) => {}
                 }
-                scc.release(group);
             }
         }
 

@@ -4,6 +4,7 @@ use std::rc::Rc;
 use zydeco_statics::{surface_syntax::ScopedArena, tyck::syntax::StaticsArena};
 use zydeco_syntax::*;
 use zydeco_utils::arena::{ArenaAccess, ArenaSparse};
+use zydeco_utils::prelude::{DepGraph, Kosaraju};
 
 /// Trait for translating statics syntax nodes into dynamic syntax nodes.
 pub trait Link {
@@ -19,20 +20,38 @@ pub struct Linker {
 }
 
 impl Linker {
-    /// Lower all statics declarations into the dynamic arena.
+    /// Lower typed context bindings and the executable body into the dynamic arena.
     pub fn run(self) -> DynamicsArena {
         let Linker { scoped, statics } = self;
         let defs = scoped.defs.rebind::<ds::DynamicsScope>();
-        let mut top = scoped.top;
-        let mut invalid = Vec::new();
-        let decls = scoped.decls.filter_map_id_mut(|id| match id.link((&statics, &defs)) {
-            | Some(decl) => Some(decl),
-            | None => {
-                invalid.push(id);
-                None
-            }
+        let linked = statics
+            .decls
+            .iter()
+            .filter_map(|(id, _)| id.link((&statics, &defs)).map(|decl| (*id, decl)))
+            .collect::<Vec<_>>();
+        let dynamic_ids =
+            linked.iter().map(|(id, _)| *id).collect::<std::collections::HashSet<_>>();
+        let entry = scoped.root.body.as_ref().map(|body| body.id);
+        let values =
+            dynamic_ids.iter().copied().filter(|id| Some(*id) != entry).collect::<Vec<_>>();
+        let mut dependencies = DepGraph::new();
+        dynamic_ids.iter().copied().for_each(|id| {
+            let deps = if Some(id) == entry {
+                values.clone()
+            } else {
+                scoped
+                    .root
+                    .context
+                    .dependencies(&id)
+                    .into_iter()
+                    .filter(|dependency| dynamic_ids.contains(dependency))
+                    .collect()
+            };
+            dependencies.add(id, deps);
         });
-        top.release(invalid);
+        let top = Kosaraju::new(&dependencies).run();
+        let mut decls = ArenaSparse::default();
+        decls.extend(linked);
         DynamicsArena { defs, decls, top }
     }
 }

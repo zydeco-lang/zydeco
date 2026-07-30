@@ -295,13 +295,13 @@ impl<Id: Hash + Eq + Clone> SccGraph<Id>
         }
         let mut srcs = SrcGraph::new();
         let mut deps = DepGraph::new();
+        strongs.keys().for_each(|component| {
+            srcs.add(*component, []);
+            deps.add(*component, []);
+        });
         for (k, scc) in &strongs {
             for id in scc {
                 let ds = id_deps.query(id);
-                if ds.is_empty() {
-                    // if one's dependency is empty, it is a root
-                    srcs.add(*k, []);
-                }
                 for d in ds {
                     let repr = belongs[&d];
                     if repr != *k {
@@ -498,5 +498,20 @@ mod tests {
         assert_eq!(scc.top(), vec![[3].into_iter().collect()]);
         scc.release([3]);
         assert_eq!(scc.top(), vec![[1, 2, 7, 8, 9].into_iter().collect()]);
+    }
+
+    #[test]
+    fn isolated_recursive_components_are_roots() {
+        let mut deps = DepGraph::new();
+        deps.add(1, [1]);
+        deps.add(2, [3]);
+        deps.add(3, [2]);
+
+        let scc = Kosaraju::new(&deps).run();
+        let roots = scc.top();
+
+        assert_eq!(roots.len(), 2);
+        assert!(roots.iter().any(|group| group == &[1].into_iter().collect()));
+        assert!(roots.iter().any(|group| group == &[2, 3].into_iter().collect()));
     }
 }

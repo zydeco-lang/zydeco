@@ -83,22 +83,17 @@ impl SyntacticallyUsed for ss::VPatId {
 pub trait SyntacticallyAnnotated {
     fn syntactically_annotated(&self, tycker: &mut Tycker) -> Option<su::TermId>;
 }
-impl SyntacticallyAnnotated for su::Declaration {
+impl SyntacticallyAnnotated for su::Binding {
     fn syntactically_annotated(&self, tycker: &mut Tycker) -> Option<su::TermId> {
-        use su::Declaration as Decl;
-        match self {
-            | Decl::Meta(su::MetaT(_, decl)) => {
-                tycker.scoped.decls[decl].to_owned().syntactically_annotated(tycker)
-            }
-            | Decl::AliasBody(su::AliasBody { binder, bindee }) => {
+        match &self.inner {
+            | su::BindingForm::Definition(su::Definition { binder, bindee }) => {
                 let _ = binder;
                 bindee.syntactically_annotated(tycker)
             }
-            | Decl::AliasHead(su::AliasHead { binder, ty }) => {
+            | su::BindingForm::External(su::External { binder, classifier }) => {
                 let _ = binder;
-                *ty
+                *classifier
             }
-            | Decl::Exec(su::Exec(_term)) => None,
         }
     }
 }

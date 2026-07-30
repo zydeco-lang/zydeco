@@ -17,9 +17,9 @@ impl Tycker<'_> {
         Ok(env)
     }
     pub fn register_prim_decl(
-        &mut self, decl: su::AliasHead, id: &su::DeclId, mut env: TyEnvT<()>,
+        &mut self, external: su::External, id: &su::BindingId, mut env: TyEnvT<()>,
     ) -> ResultKont<TyEnvT<()>> {
-        let su::AliasHead { binder, ty } = decl;
+        let su::External { binder, classifier: ty } = external;
         let internal_or = self.scoped.exts.get(id).cloned();
         match internal_or {
             | Some((internal, def)) => {

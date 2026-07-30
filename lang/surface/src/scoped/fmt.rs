@@ -12,15 +12,6 @@ impl<'arena> Formatter<'arena> {
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for TopLevel {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let TopLevel(decls) = self;
-        s += &decls.iter().map(|decl| decl.ugly(f)).collect::<Vec<_>>().join("\n");
-        s
-    }
-}
-
 impl<'a> Ugly<'a, Formatter<'a>> for DefId {
     fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
@@ -91,16 +82,30 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
 
 impl<'a> Ugly<'a, Formatter<'a>> for DeclId {
     fn ugly(&self, f: &'a Formatter) -> String {
-        let decl = &f.arena.decls[self];
-        let mut s = String::new();
-        use Declaration as Decl;
-        match decl {
-            | Decl::Meta(d) => s += &d.ugly(f),
-            | Decl::AliasBody(d) => s += &d.ugly(f),
-            | Decl::AliasHead(d) => s += &d.ugly(f),
-            | Decl::Exec(d) => s += &d.ugly(f),
+        if let Some(body) = &f.arena.root.body
+            && body.id == *self
+        {
+            return Exec(body.term).ugly(f);
         }
-        s
+        let binding = f
+            .arena
+            .root
+            .context
+            .nodes
+            .iter()
+            .flat_map(|(_, node)| node.bindings())
+            .find(|binding| binding.id == *self)
+            .expect("a scoped binding id must occur in its contextual term");
+        let prefix = binding.metas.iter().map(|meta| meta.ugly(f)).collect::<Vec<_>>().join(" ");
+        let body = match &binding.inner {
+            | BindingForm::Definition(Definition { binder, bindee }) => {
+                AliasBody { binder: *binder, bindee: *bindee }.ugly(f)
+            }
+            | BindingForm::External(External { binder, classifier }) => {
+                AliasHead { binder: *binder, ty: *classifier }.ugly(f)
+            }
+        };
+        [prefix, body].into_iter().filter(|part| !part.is_empty()).collect::<Vec<_>>().join(" ")
     }
 }
 

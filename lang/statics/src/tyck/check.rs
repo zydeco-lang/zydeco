@@ -9,7 +9,7 @@ use {
         surface_syntax::{PrimDefs, ScopedArena, SpanArena},
         *,
     },
-    zydeco_utils::prelude::{ArenaAccess, CompilerPass, IdAllocator, SccGroup},
+    zydeco_utils::prelude::{ArenaAccess, CompilerPass, IdAllocator},
 };
 
 /// Type-checking driver that consumes scoped syntax and produces typed arenas.
@@ -128,27 +128,24 @@ impl<'a> Tycker<'a> {
             errors: Vec::new(),
         }
     }
-    /// Type-check all top-level declarations, then resolve and report holes.
+    /// Type-check the program context and body, then resolve and report holes.
     pub fn run_k(&mut self) -> ResultKont<()> {
-        let mut scc = self.scoped.top.clone();
+        let mut traversal = self.scoped.root.context.traversal();
         let mut env = TyEnvT::new(Default::default(), ());
         loop {
-            let groups = scc.top();
-            // if no more groups are at the top, we're done
-            if groups.is_empty() {
+            let ready = self.scoped.root.context.ready(&traversal);
+            if ready.is_empty() {
                 break;
             }
-            for group in groups {
-                // each group should be type checked on its own
-                match env.mk(group.clone()).tyck_k(self, ()) {
+            for node in ready {
+                let contextual = self.scoped.root.context.nodes[&node].clone();
+                match env.mk(contextual).tyck_k(self, ()) {
                     | Ok(new_env) => {
-                        // move on
                         env = new_env;
-                        scc.release(group);
+                        traversal.release([node]);
                     }
                     | Err(()) => {
-                        // mark all decls in the group and those that depend on them unreachable
-                        scc.obliviate(group);
+                        traversal.obliviate([node]);
                         self.tasks.clear();
                     }
                 }
@@ -156,6 +153,9 @@ impl<'a> Tycker<'a> {
         }
         if !self.errors.is_empty() {
             Err(())?
+        }
+        if let Some(body) = self.scoped.root.body.clone() {
+            env.mk(body).tyck_k(self, ())?;
         }
         // before we go, resolve all holes with solutions (including nested ones)
         self.do_resolve_holes();
@@ -637,107 +637,71 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiPatternSkolems> {
     }
 }
 
-impl<'a> Tyck<'a> for TyEnvT<SccGroup<su::DeclId>> {
+impl<'a> Tyck<'a> for TyEnvT<su::ContextNode> {
     type Out = TyEnvT<()>;
     type Action = ();
+
     fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<TyEnvT<()>> {
-        let mut env = self.mk(());
-        let decls = &self.inner;
-        use su::Declaration as Decl;
-        match decls.len() {
-            | 0 => Ok(env),
-            | 1 => {
-                let id = decls.iter().next().unwrap();
-                match tycker.scoped.decls[id].clone() {
-                    | Decl::Meta(decl) => {
-                        // let su::MetaT(meta, decl) = decl;
-                        // tycker.metas.push_back(meta);
-                        // let res = env
-                        //     .mk(SccGroup(&[decl].into_iter().collect()))
-                        //     .tyck_k(tycker, ());
-                        // tycker.metas.pop_back();
-                        // res
-                        // do nothing; meta is handled by scoped.metas
-                        let _ = decl;
-                        Ok(env)
-                    }
-                    | Decl::AliasBody(_) => {
-                        let uni = tycker.scoped.unis.get(id).is_some();
-                        if uni {
-                            env.mk(id.to_owned()).tyck_k(tycker, ())
-                        } else {
-                            FixPoint(env.mk(SccGroup::from_iter([*id]))).tyck_k(tycker, ())
-                        }
-                    }
-                    | Decl::AliasHead(decl) => {
-                        tycker.guarded(|tycker| {
-                            // administrative
-                            tycker.tasks.push_back(TyckTask::DeclHead(id.to_owned()));
-                            env = tycker.register_prim_decl(decl, id, env)?;
-                            Ok(env)
-                        })
-                    }
-                    | Decl::Exec(decl) => {
-                        tycker.guarded(|tycker| {
-                            // administrative
-                            tycker.tasks.push_back(TyckTask::Exec(id.to_owned()));
-                            // mark the exec as an entry point
-                            tycker.statics.entry.insert_new(id.to_owned(), ());
-                            let su::Exec(term) = decl;
-                            // check if the exec is annotated as pure
-                            if let Some(meta) = tycker.scoped.metas.get(id).and_then(|v| v.last())
-                                && &meta.stem == "pure"
-                            {
-                                // check with Ret
-                                let ret_app_hole = tycker.ret_hole(&self.info, term);
-                                let out_ann = env
-                                    .mk(term)
-                                    .tyck_k(tycker, Action::ana(ret_app_hole.into()))?;
-                                let TermAnnId::Compu(body, _) = out_ann else { unreachable!() };
-                                tycker
-                                    .statics
-                                    .decls
-                                    .insert_new(id.to_owned(), ss::Exec(body).into());
-                            } else {
-                                // check with OS
-                                let os = ss::OSTy.build(tycker, &env.info);
-                                let out_ann =
-                                    env.mk(term).tyck_k(tycker, Action::ana(os.into()))?;
-                                let TermAnnId::Compu(body, _) = out_ann else { unreachable!() };
-                                tycker
-                                    .statics
-                                    .decls
-                                    .insert_new(id.to_owned(), ss::Exec(body).into());
-                            }
-                            Ok(env)
-                        })
-                    }
-                }
+        match &self.inner {
+            | su::ContextNode::Acyclic(binding) => self.mk(binding.clone()).tyck_k(tycker, ()),
+            | su::ContextNode::Recursive(bindings) => {
+                FixPoint(self.mk(bindings.clone())).tyck_k(tycker, ())
             }
-            | _ => FixPoint(env.mk(decls.to_owned())).tyck_k(tycker, ()),
         }
     }
 }
 
-/// Type check a single declaration (uni ref)
-impl<'a> Tyck<'a> for TyEnvT<su::DeclId> {
+impl<'a> Tyck<'a> for TyEnvT<su::ContextBody> {
     type Out = TyEnvT<()>;
     type Action = ();
+
     fn tyck_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
         tycker.guarded(|tycker| {
-            // administrative
-            tycker.tasks.push_back(TyckTask::DeclUni(self.inner.to_owned()));
+            tycker.tasks.push_back(TyckTask::Exec(self.inner.id));
             self.tyck_inner_k(tycker, action)
         })
     }
-    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<TyEnvT<()>> {
-        let id = self.inner;
-        let mut env = self.mk(());
 
-        let su::Declaration::AliasBody(decl) = tycker.scoped.decls[&id].clone() else {
+    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<Self::Out> {
+        let su::ContextBody { id, term, metas } = &self.inner;
+        tycker.statics.entry.insert_new(*id, ());
+        let expected = if metas.last().is_some_and(|meta| meta.stem == "pure") {
+            tycker.ret_hole(&self.info, *term).into()
+        } else {
+            ss::OSTy.build(tycker, &self.info).into()
+        };
+        let out_ann = self.mk(*term).tyck_k(tycker, Action::ana(expected))?;
+        let TermAnnId::Compu(body, _) = out_ann else { unreachable!() };
+        tycker.statics.decls.insert_new(*id, ss::Exec(body).into());
+        Ok(self.mk(()))
+    }
+}
+
+/// Type check one acyclic context binding.
+impl<'a> Tyck<'a> for TyEnvT<su::Binding> {
+    type Out = TyEnvT<()>;
+    type Action = ();
+
+    fn tyck_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
+        match &self.inner.inner {
+            | su::BindingForm::Definition(_) => tycker.guarded(|tycker| {
+                tycker.tasks.push_back(TyckTask::DeclUni(self.inner.id));
+                self.tyck_inner_k(tycker, action)
+            }),
+            | su::BindingForm::External(external) => tycker.guarded(|tycker| {
+                tycker.tasks.push_back(TyckTask::DeclHead(self.inner.id));
+                tycker.register_prim_decl(external.clone(), &self.inner.id, self.mk(()))
+            }),
+        }
+    }
+
+    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<TyEnvT<()>> {
+        let id = self.inner.id;
+        let mut env = self.mk(());
+        let su::BindingForm::Definition(su::Definition { binder, bindee }) = self.inner.inner
+        else {
             unreachable!()
         };
-        let su::AliasBody { binder, bindee } = decl;
         let surface_bindee = bindee;
         let (bindee, is_sealed) = match bindee.syntactically_sealed(tycker) {
             | Some(bindee) => (bindee, true),
@@ -829,32 +793,34 @@ impl<'a> Tyck<'a> for TyEnvT<su::DeclId> {
     }
 }
 
-/// Type check a group of declarations that are mutually recursive.
-impl<'a> Tyck<'a> for FixPoint<TyEnvT<SccGroup<su::DeclId>>> {
+/// Type check a self-recursive or mutually recursive context node.
+impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
     type Out = TyEnvT<()>;
     type Action = ();
+
     fn tyck_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
         let FixPoint(group_under_env) = self;
-        let decls = group_under_env.inner.iter().cloned().collect();
+        let bindings = group_under_env.inner.iter().map(|binding| binding.id).collect();
         tycker.guarded(|tycker| {
-            // administrative
-            tycker.tasks.push_back(TyckTask::DeclScc(decls));
+            tycker.tasks.push_back(TyckTask::DeclScc(bindings));
             self.tyck_inner_k(tycker, action)
         })
     }
+
     fn tyck_inner_k<'f>(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<Self::Out> {
         let FixPoint(group_under_env) = self;
-        let decls = &group_under_env.inner;
+        let bindings = &group_under_env.inner;
         let mut env = group_under_env.mk(());
 
         use std::collections::HashMap;
 
         let mut binder_map = HashMap::new();
         let mut abst_map = HashMap::new();
-        for id in decls {
-            let su::AliasBody { binder, bindee } = match tycker.scoped.decls[id].clone() {
-                | su::Declaration::AliasBody(decl) => decl,
-                | _ => unreachable!(),
+        for binding in bindings {
+            let id = binding.id;
+            let su::BindingForm::Definition(su::Definition { binder, bindee }) = binding.inner
+            else {
+                unreachable!("external bindings cannot participate in a recursive group")
             };
             // the bindee must be sealed
             let Some(bindee) = bindee.syntactically_sealed(tycker) else {
@@ -871,7 +837,7 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<SccGroup<su::DeclId>>> {
                 ann.try_as_kind(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
             let binder = env.mk(binder).tyck_k(tycker, PatternAction::ana(kd.into()))?;
             let (binder, _kd) = binder.as_type();
-            binder_map.insert(id.to_owned(), binder);
+            binder_map.insert(id, binder);
             // register the def with abstract type
             let (def, kd) = binder.try_destruct_def(tycker);
             if let Some(def) = def {
@@ -879,15 +845,16 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<SccGroup<su::DeclId>>> {
                 tycker.statics.abst_hints.insert_new(abst, def);
                 let abst_ty = Alloc::alloc(tycker, abst, kd, &env.info);
                 env.info += [(def, abst_ty.into())];
-                abst_map.insert(id.to_owned(), (abst, kd));
+                abst_map.insert(id, (abst, kd));
             }
         }
-        for id in decls.iter() {
-            let su::AliasBody { binder: _, bindee } = match tycker.scoped.decls[id].clone() {
-                | su::Declaration::AliasBody(decl) => decl,
-                | _ => unreachable!(),
+        for binding in bindings {
+            let id = binding.id;
+            let su::BindingForm::Definition(su::Definition { binder: _, bindee }) = binding.inner
+            else {
+                unreachable!("external bindings cannot participate in a recursive group")
             };
-            let binder = binder_map[id];
+            let binder = binder_map[&id];
             // should not be added to global because they are mutually recursive
             // match binder.try_destruct_def(tycker) {
             //     | (Some(def), _) => {
@@ -906,7 +873,7 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<SccGroup<su::DeclId>>> {
             // subst vars in bindee
             let bindee_subst = bindee.subst_env_k(tycker, &env.info)?;
             // add the types to the seal arena
-            let (abst, kd) = abst_map[id];
+            let (abst, kd) = abst_map[&id];
             tycker.statics.seals.insert_new(abst, bindee_subst);
             let abst_ty = Alloc::alloc(tycker, abst, kd, &env.info);
             // add the type into the environment
