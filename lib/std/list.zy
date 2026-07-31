@@ -1,16 +1,14 @@
+-- module List
 {
 param (
   (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
   @[import("builtin.zy")] _
 ) in
 ret begin
-  def List : (VType) -> (VType) =
-    begin
-      param (A : VType) that
-      data
-      | +Nil : Unit
-      | +Cons : A * List A
-      end
+  def List (A : VType) : VType =
+    data
+    | +Nil : Unit
+    | +Cons : A * List A
     end
   that
   def nil : Thk (
@@ -27,7 +25,7 @@ ret begin
     fn (A : VType) (head : A) (tail : List A) ->
       ret +Cons(head, tail)
   } that
-  def eliminate : Thk (
+  def case : Thk (
     forall (A : VType) .
     forall (B : CType) .
       List A -> Thk B -> Thk (A -> List A -> B) -> B
@@ -42,6 +40,27 @@ ret begin
       | +Cons(head, tail) -> ! when_cons head tail
       end
   } that
+  def fold : Thk (
+    forall (A : VType) .
+    forall (B : CType) .
+      List A -> Thk B -> Thk (A -> Thk B -> B) -> B
+  ) = {
+    fix (fold : Thk (
+      forall (A : VType) .
+      forall (B : CType) .
+        List A -> Thk B -> Thk (A -> Thk B -> B) -> B
+    )) ->
+      fn (A : VType)
+         (B : CType)
+         (list : List A)
+         (when_nil : Thk B)
+         (when_cons : Thk (A -> Thk B -> B)) ->
+        match list
+        | +Nil(_) -> ! when_nil
+        | +Cons(head, tail) ->
+          ! when_cons head { ! fold A B tail when_nil when_cons }
+        end
+  } that
   let Interface =
     exists (
       List = AbstractList :
@@ -55,12 +74,20 @@ ret begin
         forall (A : VType) .
           A -> AbstractList A -> Ret (AbstractList A)
       )) *
-      (eliminate :: Thk (
+      (case :: Thk (
         forall (A : VType) .
         forall (B : CType) .
           AbstractList A ->
           Thk B ->
           Thk (A -> AbstractList A -> B) ->
+          B
+      )) *
+      (fold :: Thk (
+        forall (A : VType) .
+        forall (B : CType) .
+          AbstractList A ->
+          Thk B ->
+          Thk (A -> Thk B -> B) ->
           B
       ))
   that
@@ -69,7 +96,9 @@ ret begin
     List = List,
     nil = nil,
     cons = cons,
-    eliminate = eliminate,
+    case = case,
+    fold = fold,
   ) : Interface
 end
 }
+-- end module List

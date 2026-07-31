@@ -13,16 +13,16 @@ begin
     Char = StdChar,
     String = StdString,
     OS = StdOS,
-    public
+    std
   ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
-  do value <- ! (public/some) StdInt 0;
-  ! (public/option_eliminate)
+  do value <- ! (std/option/some) StdInt 0;
+  ! (std/option/fold)
     StdInt
     StdOS
     value
-    { ! (public/exit) 1 }
+    { ! (std/os/exit) 1 }
     {
       fn status ->
-        ! (public/exit) status
+        ! (std/os/exit) status
     }
 end

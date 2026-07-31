@@ -11,11 +11,11 @@ begin
   that
 
   match packed
-  | (Left, Right, left, middle, status) ->
-    let flat = (left, status, middle) in
-    let (first, (code, last)) = flat in
-    let nested = (first, (code, last)) in
-    let (first, result, last) = nested in
+  | (Left, Right, x, y, status) ->
+    let flat = (x, status, y) in
+    let (a, (code, c)) = flat in
+    let nested = (a, (code, c)) in
+    let (p, result, q) = nested in
     ! (api/exit) result
   end
 end

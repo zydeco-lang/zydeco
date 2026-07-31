@@ -10,39 +10,39 @@ begin
     | +S : Nat
     end
   that
-  def Bool : VType =
+  let Bool =
     data
     | +True : Unit
     | +False : Unit
     end
   that
-  def OddEven : VType =
+  let OddEven =
     data
     | +OddEven : Thk (Nat -> Ret Bool) * Thk (Nat -> Ret Bool)
     end
   that
-  def pair : Thk (Ret OddEven) = {
-    fix (pair : Thk (Ret OddEven)) ->
+  def fp : Thk (Ret OddEven) = {
+    fix (fp : Thk (Ret OddEven)) ->
       ret +OddEven(
         {
-          do current <- ! pair;
-          match current
+          do fp <- ! fp;
+          match fp
           | +OddEven(odd, even) ->
-            fn (number : Nat) ->
-              match number
+            fn (x : Nat) ->
+              match x
               | +Z() -> ret +False()
-              | +S(predecessor) -> ! even predecessor
+              | +S(x) -> ! even x
               end
           end
         },
         {
-          do current <- ! pair;
-          match current
+          do fp <- ! fp;
+          match fp
           | +OddEven(odd, even) ->
-            fn (number : Nat) ->
-              match number
+            fn (x : Nat) ->
+              match x
               | +Z() -> ret +True()
-              | +S(predecessor) -> ! odd predecessor
+              | +S(x) -> ! odd x
               end
           end
         },
@@ -50,13 +50,13 @@ begin
   } that
 
   do odd <- (
-    do current <- ! pair;
-    match current
+    do fp <- ! fp;
+    match fp
     | +OddEven(odd, even) -> ret { ! odd }
     end
   );
-  do result <- ! odd +S(+S(+S(+Z())));
-  match result
+  do b <- ! odd +S(+S(+S(+Z())));
+  match b
   | +True() -> ! (api/exit) 0
   | +False() -> ! (api/exit) 1
   end

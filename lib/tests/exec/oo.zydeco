@@ -1,3 +1,5 @@
+-- We can do good old object-oriented programming in here
+-- e.g. define a Counter that can incr and project out Int or String
 begin
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
@@ -11,28 +13,29 @@ begin
     | .fmt : Ret String
     end
   that
-  def make_counter : Thk (Int -> Counter) = {
-    fix (make_counter : Thk (Int -> Counter)) ->
-      fn current ->
+  -- We can use `this` (or `self`) as in normal OO languages
+  def mk_counter : Thk (Int -> Counter) = {
+    fix (mk_counter : Thk (Int -> Counter)) ->
+      fn n ->
         fix (this : Thk Counter) ->
           comatch
-          | .num -> ret current
-          | .incr increment ->
-            do previous <- ! this .num;
-            do next <- ! (api/add) increment previous;
-            ! make_counter next
+          | .num -> ret n
+          | .incr i ->
+            do j <- ! this .num;
+            do n <- ! (api/add) i j;
+            ! mk_counter n
           | .fmt ->
-            do number <- ! this .num;
-            ! (api/int_to_str) number
+            do n <- ! this .num;
+            ! (api/int_to_str) n
           end
   } that
 
   let counter_42 : Thk Counter = {
-    ! make_counter 42
+    ! mk_counter 42
   } in
-  do rendered <- ! counter_42 .fmt;
-  ! (api/write_line) rendered {
-    do number <- ! counter_42 .incr -42 .num;
-    ! (api/exit) number
+  do s <- ! counter_42 .fmt;
+  ! (api/write_line) s {
+    do n <- ! counter_42 .incr -42 .num;
+    ! (api/exit) n
   }
 end

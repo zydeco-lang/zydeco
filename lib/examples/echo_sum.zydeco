@@ -1,3 +1,8 @@
+-- The Echo Sum Server
+-- When the program starts, it waits for a number followed by a newline.
+-- It then prints the sum of all numbers received so far, followed by a newline.
+-- Then it loops.
+-- If the input is not a number, the program exits.
 begin
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
@@ -9,8 +14,8 @@ begin
       ! (api/read_line_as_int_branch)
         { ! (api/exit) 0 }
         {
-          fn integer ->
-            do sum <- ! (api/add) integer sum;
+          fn i ->
+            do sum <- ! (api/add) i sum;
             ! (api/write_int) sum {
               ! (api/write_line) " = sum" {
                 ! loop sum

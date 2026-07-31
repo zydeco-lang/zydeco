@@ -30,6 +30,44 @@ impl UniformTermCase {
 }
 
 #[test]
+fn infers_the_result_kind_of_a_parameterized_alias() {
+    UniformTermCase::check(
+        r#"
+begin
+  let Option (A : VType) =
+    data
+    | +None : Unit
+    | +Some : A
+    end
+  that
+  let none : Option Int = +None() that
+  ret ()
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn accepts_a_concise_recursive_type_definition() {
+    UniformTermCase::check(
+        r#"
+begin
+  def List (A : VType) : VType =
+    data
+    | +Nil : Unit
+    | +Cons : A * List A
+    end
+  that
+  let nil : List Unit = +Nil() that
+  ret ()
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
 fn rejects_that_without_an_enclosing_block() {
     UniformTermCase::assert_resolve_error(
         r#"

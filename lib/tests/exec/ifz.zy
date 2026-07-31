@@ -10,49 +10,50 @@ begin
     | +S : Nat
     end
   that
-  def Bool : VType =
+  let Bool =
     data
     | +True : Unit
     | +False : Unit
     end
   that
-  def successor : Thk (Nat -> Ret Nat) = {
-    fn (number : Nat) ->
-      ret +S(number)
+  def suc : Thk (Nat -> Ret Nat) = {
+    fn (x : Nat) ->
+      ret +S(x)
   } that
-  def eliminate_zero : Thk (
+  def ifz : Thk (
     Bool ->
     Thk (Nat -> Ret Bool) ->
     Nat ->
     Ret Bool
   ) = {
-    fn (when_zero : Bool)
-       (when_successor : Thk (Nat -> Ret Bool))
-       (number : Nat) ->
-      match number
-      | +Z() -> ret when_zero
-      | +S(predecessor) -> ! when_successor predecessor
+    fn (z : Bool)
+       (pred : Thk (Nat -> Ret Bool))
+       (x : Nat) ->
+      match x
+      | +Z() -> ret z
+      | +S(x) -> ! pred x
       end
   } that
-  def is_successor : Thk (Nat -> Ret Bool) = {
-    fn (number : Nat) ->
-      ! eliminate_zero
+  def ifz' : Thk (Nat -> Ret Bool) = {
+    fn (x : Nat) ->
+      ! ifz
         +False()
         { fn (_ : Nat) -> ret +True() }
-        number
+        x
   } that
 
-  do one <- ! successor +Z();
-  do two <- ! successor one;
-  do two_is_successor <- ! is_successor two;
-  do one_is_successor <- ! is_successor one;
-  do zero_is_successor <- ! is_successor +Z();
-  do result <- (
-    match two_is_successor
+  let zero : Nat = +Z() in
+  do one <- ! suc zero;
+  do two <- ! suc one;
+  do two' <- ! ifz' two;
+  do one' <- ! ifz' one;
+  do zero' <- ! ifz' zero;
+  do b <- (
+    match two'
     | +True() ->
-      match one_is_successor
+      match one'
       | +True() ->
-        match zero_is_successor
+        match zero'
         | +False() -> ret +True()
         | +True() -> ret +False()
         end
@@ -62,7 +63,7 @@ begin
     end
     : Ret Bool
   );
-  match result
+  match b
   | +True() -> ! (api/exit) 0
   | +False() -> ! (api/exit) 1
   end

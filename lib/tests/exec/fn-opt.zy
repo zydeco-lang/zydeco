@@ -4,35 +4,29 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  def FnRet : (VType) -> (CType) =
-    begin
-      param (A : VType) that
-      codata
-      | .arg : A -> Ret A
-      end
+  let FnRet (A : VType) =
+    codata
+    | .arg : A -> Ret A
     end
   that
-  def FnOpt : (VType) -> (CType) =
-    begin
-      param (A : VType) that
-      codata
-      | .one : A -> Ret A
-      | .zero : Ret A
-      end
+  let FnOpt (A : VType) =
+    codata
+    | .one : A -> Ret A
+    | .zero : Ret A
     end
   that
   def fn_int : Thk (FnRet Int) = {
     comatch
-    | .arg value -> ret value
+    | .arg i -> ret i
     end
   } that
   def fn_opt_int : Thk (FnOpt Int) = {
     comatch
-    | .one value -> ! fn_int .arg value
+    | .one i -> ! fn_int .arg i
     | .zero -> ! fn_int .arg 0
     end
   } that
 
-  do status <- ! fn_opt_int .zero;
-  ! (api/exit) status
+  do x <- ! fn_opt_int .zero;
+  ! (api/exit) x
 end

@@ -3,24 +3,23 @@ begin
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
-  let captured = 100 that
-  def constant : Thk (
+  let x = 100 that
+  def const : Thk (
     forall (A : VType) .
-    forall (B : VType) .
-      A -> B -> Ret A
+    forall (A' : VType) .
+      A -> A' -> Ret A
   ) = {
     fn (A : VType)
-       (B : VType)
-       (value : A)
-       (ignored : B) ->
-      let _ = captured in
-      ret value
+       (A' : VType)
+       (a : A)
+       (_ : A') ->
+      let _ = x in
+      ret a
   } that
-  def zero : Thk (Int -> Ret Int) = {
-    fn ignored ->
-      ! constant Int Int 0 ignored
+  def one : Thk (Int -> Ret Int) = {
+    ! const Int Int 0
   } that
 
-  do status <- ! zero 20;
-  ! (api/exit) status
+  do x <- ! one 20;
+  ! (api/exit) x
 end

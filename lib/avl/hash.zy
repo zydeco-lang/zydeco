@@ -13,24 +13,17 @@ begin
     Char = StdChar,
     String = StdString,
     OS = StdOS,
-    public
+    std
   ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
-    let Cmp =
-      begin
-        param (A : VType) that
-        Thk (A -> A -> Ret StdBool)
-      end
+    let Cmp (A : VType) =
+      Thk (A -> A -> Ret StdBool)
     that
-    def Avl :
-      (VType) ->
-      (VType) =
-      begin
-        param (A : VType) that
-        data
-        | +Leaf : Unit
-        | +Node : Avl A * A * StdInt * Avl A
-        end
+    --| AvlTree
+    def Avl (A : VType) : VType =
+      data
+      | +Leaf : Unit
+      | +Node : Avl A * A * StdInt * Avl A
       end
     that
     def leaf : Thk (
@@ -61,8 +54,8 @@ begin
       StdInt -> StdInt -> Ret StdInt
     ) = {
       fn left right ->
-        do greater <- ! (public/int_gt) left right;
-        ! (public/branch)
+        do greater <- ! (std/int/gt) left right;
+        ! (std/bool/if)
           (Ret StdInt)
           greater
           { ret left }
@@ -79,7 +72,7 @@ begin
           do left_height <- ! height A left;
           do right_height <- ! height A right;
           do child_height <- ! int_max left_height right_height;
-          do new_height <- ! (public/add) child_height 1;
+          do new_height <- ! (std/int/add) child_height 1;
           ret +Node(left, value, new_height, right)
         end
     } that
@@ -93,7 +86,7 @@ begin
         | +Node(left, _, _, right) ->
           do left_height <- ! height A left;
           do right_height <- ! height A right;
-          ! (public/sub) left_height right_height
+          ! (std/int/sub) left_height right_height
         end
     } that
     def left : Thk (
@@ -131,17 +124,17 @@ begin
            (tree : Avl A)
            (comparison : Cmp A) ->
           match tree
-          | +Leaf() -> ! (public/none) A
+          | +Leaf() -> ! (std/option/none) A
           | +Node(left, value, _, _) ->
             do minimum <- ! min_element A left comparison;
-            ! (public/option_eliminate)
+            ! (std/option/fold)
               A
               (Ret (StdOption A))
               minimum
-              { ! (public/some) A value }
+              { ! (std/option/some) A value }
               {
                 fn found ->
-                  ! (public/some) A found
+                  ! (std/option/some) A found
               }
           end
     } that
@@ -186,14 +179,14 @@ begin
         | +Leaf() -> ret +Leaf()
         | +Node(left, value, _, right) ->
           do factor <- ! balance_factor A tree;
-          do left_heavy <- ! (public/int_gt) factor 1;
-          ! (public/branch)
+          do left_heavy <- ! (std/int/gt) factor 1;
+          ! (std/bool/if)
             (Ret (Avl A))
             left_heavy
             {
               do left_factor <- ! balance_factor A left;
-              do double_rotation <- ! (public/int_lt) left_factor 0;
-              ! (public/branch)
+              do double_rotation <- ! (std/int/lt) left_factor 0;
+              ! (std/bool/if)
                 (Ret (Avl A))
                 double_rotation
                 {
@@ -204,14 +197,14 @@ begin
                 { ! rotate_right A tree }
             }
             {
-              do right_heavy <- ! (public/int_lt) factor -1;
-              ! (public/branch)
+              do right_heavy <- ! (std/int/lt) factor -1;
+              ! (std/bool/if)
                 (Ret (Avl A))
                 right_heavy
                 {
                   do right_factor <- ! balance_factor A right;
-                  do double_rotation <- ! (public/int_gt) right_factor 0;
-                  ! (public/branch)
+                  do double_rotation <- ! (std/int/gt) right_factor 0;
+                  ! (std/bool/if)
                     (Ret (Avl A))
                     double_rotation
                     {
@@ -244,7 +237,7 @@ begin
           | +Leaf() -> ! singleton A item
           | +Node(left, value, tree_height, right) ->
             do goes_left <- ! comparison item value;
-            ! (public/branch)
+            ! (std/bool/if)
               (Ret (Avl A))
               goes_left
               {
@@ -276,16 +269,16 @@ begin
            (equal : Cmp A)
            (less : Cmp A) ->
           match tree
-          | +Leaf() -> ! (public/none) A
+          | +Leaf() -> ! (std/option/none) A
           | +Node(left, value, _, right) ->
             do found <- ! equal item value;
-            ! (public/branch)
+            ! (std/bool/if)
               (Ret (StdOption A))
               found
-              { ! (public/some) A value }
+              { ! (std/option/some) A value }
               {
                 do goes_left <- ! less item value;
-                ! (public/branch)
+                ! (std/bool/if)
                   (Ret (StdOption A))
                   goes_left
                   { ! search A item left equal less }
@@ -313,13 +306,13 @@ begin
           | +Leaf() -> ret tree
           | +Node(left, value, tree_height, right) ->
             do found <- ! equal item value;
-            ! (public/branch)
+            ! (std/bool/if)
               (Ret (Avl A))
               found
               { ret +Node(left, item, tree_height, right) }
               {
                 do goes_left <- ! less item value;
-                ! (public/branch)
+                ! (std/bool/if)
                   (Ret (Avl A))
                   goes_left
                   {
@@ -353,7 +346,7 @@ begin
           | +Leaf() -> ret tree
           | +Node(left, value, tree_height, right) ->
             do found <- ! equal item value;
-            ! (public/branch)
+            ! (std/bool/if)
               (Ret (Avl A))
               found
               {
@@ -364,7 +357,7 @@ begin
                   | +Leaf() -> ret left
                   | +Node(_, _, _, _) ->
                     do minimum <- ! min_element A right less;
-                    ! (public/option_eliminate)
+                    ! (std/option/fold)
                       A
                       (Ret (Avl A))
                       minimum
@@ -381,7 +374,7 @@ begin
               }
               {
                 do goes_left <- ! less item value;
-                ! (public/branch)
+                ! (std/bool/if)
                   (Ret (Avl A))
                   goes_left
                   {
@@ -415,23 +408,23 @@ begin
           match first
           | +Leaf() ->
             match second
-            | +Leaf() -> ret (public/truth)
-            | +Node(_, _, _, _) -> ret (public/falsehood)
+            | +Leaf() -> ret (std/bool/true)
+            | +Node(_, _, _, _) -> ret (std/bool/false)
             end
           | +Node(first_left, first_value, _, first_right) ->
             match second
-            | +Leaf() -> ret (public/falsehood)
+            | +Leaf() -> ret (std/bool/false)
             | +Node(second_left, second_value, _, second_right) ->
               do values_equal <- ! item_equal first_value second_value;
-              ! (public/branch)
+              ! (std/bool/if)
                 (Ret StdBool)
                 values_equal
                 {
                   do left_equal <- ! equal A first_left second_left item_equal;
                   do right_equal <- ! equal A first_right second_right item_equal;
-                  ! (public/and) left_equal right_equal
+                  ! (std/bool/and) left_equal right_equal
                 }
-                { ret (public/falsehood) }
+                { ret (std/bool/false) }
             end
           end
     } that
@@ -460,30 +453,24 @@ begin
           | +Leaf() -> ! continuation
           | +Node(left, value, tree_height, right) ->
             do rendered_value <- ! format value;
-            do with_label <- ! (public/str_append) rendered_value " h:";
-            do rendered_height <- ! (public/int_to_str) tree_height;
-            do line <- ! (public/str_append) with_label rendered_height;
-            ! (public/write_line) line {
+            do with_label <- ! (std/string/append) rendered_value " h:";
+            do rendered_height <- ! (std/int/to_str) tree_height;
+            do line <- ! (std/string/append) with_label rendered_height;
+            ! (std/os/write_line) line {
               ! pre_traversal A left format {
                 ! pre_traversal A right format continuation
               }
             }
           end
     } that
-    def Hash :
-      (VType) ->
-      (VType) ->
-      (VType) =
-      begin
-        param (K : VType) that
-        param (V : VType) that
-        data
-        | +Hash :
-          Avl (K * V) *
-          Cmp (K * V) *
-          Cmp (K * V) *
-          Cmp (K * V)
-        end
+    --| Hash
+    let Hash (K : VType) (V : VType) =
+      data
+      | +Hash :
+        Avl (K * V) *
+        Cmp (K * V) *
+        Cmp (K * V) *
+        Cmp (K * V)
       end
     that
     def hash_new : Thk (
@@ -527,7 +514,7 @@ begin
                 | (second_key, second_value) ->
                   do values_equal <- ! value_equal first_value second_value;
                   do keys_equal <- ! search_key_equal first_key second_key;
-                  ! (public/and) values_equal keys_equal
+                  ! (std/bool/and) values_equal keys_equal
                 end
               end
           }
@@ -549,6 +536,7 @@ begin
           ret +Hash(new_body, insert_less, search_equal, item_equal)
         end
     } that
+    --| in search, a default value for v is needed, because the type of v is unknown
     def hash_search : Thk (
       forall (K : VType) .
       forall (V : VType) .
@@ -562,15 +550,15 @@ begin
         match hash
         | +Hash(body, insert_less, search_equal, _) ->
           do result <- ! search (K * V) (key, default) body search_equal insert_less;
-          ! (public/option_eliminate)
+          ! (std/option/fold)
             (K * V)
             (Ret (StdOption V))
             result
-            { ! (public/none) V }
+            { ! (std/option/none) V }
             {
               fn pair ->
                 match pair
-                | (_, value) -> ! (public/some) V value
+                | (_, value) -> ! (std/option/some) V value
                 end
             }
         end
@@ -626,9 +614,9 @@ begin
     } that
 
     do hash <- ! hash_new StdInt StdString
-      (public/int_lt)
-      (public/int_eq)
-      (public/str_eq);
+      (std/int/lt)
+      (std/int/eq)
+      (std/string/eq);
     do hash <- ! hash_insert StdInt StdString 1 "one" hash;
     do hash <- ! hash_insert StdInt StdString 2 "two" hash;
     do hash <- ! hash_insert StdInt StdString 3 "three" hash;
@@ -640,10 +628,11 @@ begin
     do hash <- ! hash_insert StdInt StdString 9 "nine" hash;
     do hash <- ! hash_insert StdInt StdString 10 "ten" hash;
 
+    -- answer
     do expected <- ! hash_new StdInt StdString
-      (public/int_lt)
-      (public/int_eq)
-      (public/str_eq);
+      (std/int/lt)
+      (std/int/eq)
+      (std/string/eq);
     do expected <- ! hash_insert StdInt StdString 1 "one change" expected;
     do expected <- ! hash_insert StdInt StdString 2 "two" expected;
     do expected <- ! hash_insert StdInt StdString 3 "three" expected;
@@ -653,6 +642,7 @@ begin
     do expected <- ! hash_insert StdInt StdString 9 "nine" expected;
     do expected <- ! hash_insert StdInt StdString 10 "ten change" expected;
 
+    -- start deleting, changing and searching
     do hash <- ! hash_delete StdInt StdString 5 "default" hash;
     do hash <- ! hash_delete StdInt StdString 6 "default" hash;
     do hash <- ! hash_change StdInt StdString 1 "one change" hash;
@@ -661,27 +651,27 @@ begin
     do hashes_equal <- ! hash_equal StdInt StdString hash expected;
     do first <- ! hash_search StdInt StdString 1 "default" hash;
     do second <- ! hash_search StdInt StdString 1 "default" hash;
-    ! (public/option_eliminate)
+    ! (std/option/fold)
       StdString
       StdOS
       first
-      { ! (public/exit) 1 }
+      { ! (std/os/exit) 1 }
       {
         fn first_value ->
-          ! (public/option_eliminate)
+          ! (std/option/fold)
             StdString
             StdOS
             second
-            { ! (public/exit) 1 }
+            { ! (std/os/exit) 1 }
             {
               fn second_value ->
-                do values_equal <- ! (public/str_eq) first_value second_value;
-                do result <- ! (public/and) hashes_equal values_equal;
-                ! (public/branch)
+                do values_equal <- ! (std/string/eq) first_value second_value;
+                do result <- ! (std/bool/and) hashes_equal values_equal;
+                ! (std/bool/if)
                   StdOS
                   result
-                  { ! (public/exit) 0 }
-                  { ! (public/exit) 1 }
+                  { ! (std/os/exit) 0 }
+                  { ! (std/os/exit) 1 }
             }
       }
   end

@@ -12,14 +12,9 @@ begin
     @[import("../../lib/std/builtin.zy")] _
   ) that
 
-  def Y :
-    (CType) ->
-    (CType) =
-    begin
-      param (B : CType) that
-      codata
-      | .apply : Thk (Y B) -> B
-      end
+  def Y (B : CType) : CType =
+    codata
+    | .apply : Thk (Y B) -> B
     end
   that
 
@@ -49,7 +44,7 @@ begin
     Char = StdChar,
     String = StdString,
     OS = StdOS,
-    public
+    std
   ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
     def factorial_step : Thk (
@@ -58,15 +53,15 @@ begin
       Ret StdInt
     ) = {
       fn recursive number ->
-        do is_zero <- ! (public/int_eq) number 0;
-        ! (public/branch)
+        do is_zero <- ! (std/int/eq) number 0;
+        ! (std/bool/if)
           (Ret StdInt)
           is_zero
           { ret 1 }
           {
-            do predecessor <- ! (public/sub) number 1;
+            do predecessor <- ! (std/int/sub) number 1;
             do rest <- ! recursive predecessor;
-            ! (public/mul) number rest
+            ! (std/int/mul) number rest
           }
     } that
     def check : Thk (
@@ -78,20 +73,20 @@ begin
     ) = {
       fn factorial input expected continuation ->
         do actual <- ! factorial input;
-        do correct <- ! (public/int_eq) actual expected;
-        ! (public/branch)
+        do correct <- ! (std/int/eq) actual expected;
+        ! (std/bool/if)
           StdOS
           correct
           { ! continuation }
-          { ! (public/exit) 1 }
+          { ! (std/os/exit) 1 }
     } that
 
     do factorial <-
       ! fixed_point (StdInt -> Ret StdInt) factorial_step;
     ! check factorial 5 120 {
       ! check factorial 10 3628800 {
-        ! (public/write_line) "factorial results are correct" {
-          ! (public/exit) 0
+        ! (std/os/write_line) "factorial results are correct" {
+          ! (std/os/exit) 0
         }
       }
     }

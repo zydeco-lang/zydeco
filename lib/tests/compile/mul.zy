@@ -2,6 +2,6 @@ param (
   (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
   @[import("../../std/builtin.zy")] _
 ) in
-  do product <- ! (api/mul) 10 10;
-  do status <- ! (api/sub) product 100;
-  ! (api/exit) status
+  do z <- ! (api/mul) 10 10;
+  do r <- ! (api/sub) z 100;
+  ! (api/exit) r

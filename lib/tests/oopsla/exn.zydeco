@@ -1,3 +1,4 @@
+--| Examples of exception monads
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
@@ -8,84 +9,43 @@ begin
     ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
 
-  let Either :
-    (VType) ->
-    (VType) ->
-    (VType) =
-    begin
-      param (E : VType) that
-      param (A : VType) that
-      data
-      | +Left : E
-      | +Right : A
-      end
+  let Either (E : VType) (A : VType) =
+    data
+    | +Left : E
+    | +Right : A
     end
   that
-  def MonadErr :
-    (VType) ->
-    (
-      (
-        (VType) ->
-        (CType)
-      ) ->
-      (CType)
-    ) =
-    begin
-      param (E : VType) that
-      param (
-        M :
-        (VType) ->
-        (CType)
-      ) that
-      codata
-      | .fail :
-        forall (A : VType) .
-          E -> M A
-      end
+  let MonadErr (E : VType) (M : (VType) -> (CType)) =
+    codata
+    | .fail :
+      forall (A : VType) .
+        E -> M A
     end
   that
-  def Exn :
-    (VType) ->
-    (VType) ->
-    (CType) =
-    begin
-      param (E : VType) that
-      param (A : VType) that
-      codata
-      | .done : Ret (Either E A)
-      end
+  --| Ret Either exception monad
+  let Exn (E : VType) (A : VType) =
+    codata
+    | .done : Ret (Either E A)
     end
   that
-  def ExnK :
-    (VType) ->
-    (VType) ->
-    (CType) =
-    begin
-      param (E : VType) that
-      param (A : VType) that
-      codata
-      | .run :
-        forall (R : CType) .
-          Thk (E -> R) -> Thk (A -> R) -> R
-      end
+  --| Church-encoded exception monad
+  let ExnK (E : VType) (A : VType) =
+    codata
+    | .run :
+      forall (R : CType) .
+        Thk (E -> R) -> Thk (A -> R) -> R
     end
   that
-  def ExnDe :
-    (VType) ->
-    (VType) ->
-    (CType) =
-    begin
-      param (E : VType) that
-      param (A : VType) that
-      codata
-      | .try :
-        forall (F : VType) .
-          Thk (E -> ExnDe F A) -> ExnDe F A
-      | .kont :
-        forall (B : VType) .
-          Thk (A -> ExnDe E B) -> ExnDe E B
-      | .done : Ret (Either E A)
-      end
+  --| Defunctionalized exception monad
+  def ExnDe (E : VType) (A : VType) : CType =
+    codata
+    | .try :
+      forall (E' : VType) .
+        Thk (E -> ExnDe E' A) -> ExnDe E' A
+    | .kont :
+      forall (A' : VType) .
+        Thk (A -> ExnDe E A') -> ExnDe E A'
+    | .done : Ret (Either E A)
     end
   that
   let ExnCounter = ExnDe Unit Int that
@@ -96,18 +56,18 @@ begin
   ) = {
     fn E ->
       comatch
-      | .return A value ->
+      | .return A a ->
         fn .done ->
-          ret +Right(value)
-      | .bind A B computation function ->
-        do outcome <- ! computation .done;
-        match outcome
-        | +Left(error) ->
+          ret +Right(a)
+      | .bind A A' m f ->
+        do a? <- ! m .done;
+        match a?
+        | +Left(e) ->
           fn .done ->
-            ret +Left(error)
-        | +Right(value) ->
+            ret +Left(e)
+        | +Right(a) ->
           fn .done ->
-            ! function value .done
+            ! f a .done
         end
       end
   } that
@@ -117,14 +77,14 @@ begin
   ) = {
     fn E ->
       comatch
-      | .return A value ->
-        fn .run R failure success ->
-          ! success value
-      | .bind A B computation function ->
-        fn .run R failure success ->
-          ! computation .run R failure {
-            fn value ->
-              ! function value .run R failure success
+      | .return A a ->
+        fn .run R ke ka ->
+          ! ka a
+      | .bind A A' m f ->
+        fn .run R ke ka ->
+          ! m .run R ke {
+            fn a ->
+              ! f a .run R ke ka
           }
       end
   } that
@@ -139,19 +99,19 @@ begin
       fn E ->
         comatch
         | .return ->
-          fn A value ->
+          fn A a ->
             comatch
             | .try ->
-              fn F continuation ->
-                ! mexnde F .return A value
+              fn E' k ->
+                ! mexnde E' .return A a
             | .kont ->
-              fn B continuation ->
-                ! continuation value
-            | .done -> ret +Right(value)
+              fn A' k ->
+                ! k a
+            | .done -> ret +Right(a)
             end
         | .bind ->
-          fn A B computation function ->
-            ! computation .kont B function
+          fn A A' m f ->
+            ! m .kont A' f
         end
   } that
   def mexnde_err : Thk (
@@ -165,18 +125,20 @@ begin
       fn E ->
         comatch
         | .fail ->
-          fn A error ->
+          fn A e ->
             comatch
             | .try ->
-              fn F continuation ->
-                ! continuation error
+              fn E' k ->
+                ! k e
             | .kont ->
-              fn B continuation ->
-                ! mexnde_err E .fail B error
-            | .done -> ret +Left(error)
+              fn A' k ->
+                ! mexnde_err E .fail A' e
+            | .done -> ret +Left(e)
             end
         end
   } that
+  --| Proof of the violation of the monad laws of
+  --| the defunctionalized exception monad above
   def count_kont : Thk (
     forall (E : VType) .
     forall (A : VType) .
@@ -187,51 +149,52 @@ begin
       forall (A : VType) .
         Int -> Thk (Int -> ExnDe E A) -> ExnDe E A
     )) ->
-      fn E A count finish ->
+      fn E A i fi ->
         comatch
         | .try ->
-          fn F failure ->
-            ! count_kont F A count {
-              fn count ->
-                ! finish count .try F failure
+          fn E' ke ->
+            ! count_kont E' A i {
+              fn i ->
+                ! fi i .try E' ke
             }
         | .kont ->
-          fn B success ->
-            do next <- ! (api/add) count 1;
-            ! count_kont E B next {
-              fn count ->
-                ! finish count .kont B success
+          fn A' ka ->
+            do i' <- ! (api/add) i 1;
+            ! count_kont E A' i' {
+              fn i ->
+                ! fi i .kont A' ka
             }
-        | .done -> ! finish count .done
+        | .done -> ! fi i .done
         end
   } that
   def bench : Thk (
     Thk (Thk ExnCounter -> ExnCounter) ->
     Ret Int
   ) = {
-    fn implementation ->
-      do outcome <- ! implementation {
+    fn impl ->
+      do i? <- ! impl {
         ! count_kont Unit Int 0 {
           ! mexnde Unit .return Int
         }
       } .done;
-      match outcome
-      | +Left(_) -> ret -1
-      | +Right(result) -> ret result
+      match i?
+      | +Left(e) -> ret -1
+      | +Right(i) -> ret i
       end
   } that
+  -- LHS and RHS of the associativity law
   def lhs : Thk (
     Thk (Int -> ExnDe Unit Int) ->
     Thk (Int -> ExnDe Unit Int) ->
     Thk (ExnDe Unit Int) ->
     ExnDe Unit Int
   ) = {
-    fn first second computation ->
+    fn f g m ->
       ! mexnde Unit .bind Int Int
         {
-          ! mexnde Unit .bind Int Int computation first
+          ! mexnde Unit .bind Int Int m f
         }
-        second
+        g
   } that
   def rhs : Thk (
     Thk (Int -> ExnDe Unit Int) ->
@@ -239,27 +202,30 @@ begin
     Thk (ExnDe Unit Int) ->
     ExnDe Unit Int
   ) = {
-    fn first second computation ->
-      ! mexnde Unit .bind Int Int computation {
-        fn value ->
-          ! mexnde Unit .bind Int Int { ! first value } second
+    fn f g m ->
+      ! mexnde Unit .bind Int Int m {
+        fn i ->
+          ! mexnde Unit .bind Int Int { ! f i } g
       }
   } that
 
-  let trivial : Thk (Int -> ExnDe Unit Int) = {
+  -- Observable violation of the monad laws because the results are different
+  let triv : Thk (Int -> ExnDe Unit Int) = {
     ! mexnde Unit .return Int
   } in
-  do left <- ! bench {
-    fn computation ->
-      ! lhs trivial trivial computation
+  do a <- ! bench {
+    fn i ->
+      ! lhs triv triv i
   };
-  do right <- ! bench {
-    fn computation ->
-      ! rhs trivial trivial computation
+  do b <- ! bench {
+    fn i ->
+      ! rhs triv triv i
   };
-  ! (api/write_int) left {
+  -- syntactic sugar:
+  -- do~ M; N ==> M { N }
+  ! (api/write_int) a {
     ! (api/write_str) " != " {
-      ! (api/write_int) right {
+      ! (api/write_int) b {
         ! (api/write_str) "\n" {
           ! (api/exit) 0
         }

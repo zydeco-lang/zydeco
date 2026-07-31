@@ -5,7 +5,7 @@ begin
     | +S : Nat
     end
   that
-  def Bool : VType =
+  let Bool =
     data
     | +False : Unit
     | +True : Unit

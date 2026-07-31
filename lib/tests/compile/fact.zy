@@ -13,23 +13,25 @@ begin
     Char = StdChar,
     String = StdString,
     OS = StdOS,
-    public
+    std
   ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
-  let factorial : Thk (StdInt -> Ret StdInt) = {
-    fix (factorial : Thk (StdInt -> Ret StdInt)) ->
-      fn (value : StdInt) ->
-        do zero <- ! (public/int_eq) value 0;
-        ! (public/branch)
+  let fact : Thk (StdInt -> Ret StdInt) = {
+    -- extern def add : Thk (Int -> Int -> Ret Int) end
+    fix (fact : Thk (StdInt -> Ret StdInt)) ->
+      fn (i : StdInt) ->
+        do zero? <- ! (std/int/eq) i 0;
+        ! (std/bool/if)
           (Ret StdInt)
-          zero
+          zero?
           { ret 1 }
           {
-            do predecessor <- ! (public/sub) value 1;
-            do accumulated <- ! factorial predecessor;
-            ! (public/mul) value accumulated
+            -- do i <- ret i;
+            do i' <- ! (std/int/sub) i 1;
+            do acc <- ! fact i';
+            ! (std/int/mul) i acc
           }
   } in
-  do result <- ! factorial 10;
-  do status <- ! (public/sub) result 3628800;
-  ! (public/exit) status
+  do x <- ! fact 10;
+  do r <- ! (std/int/sub) x 3628800;
+  ! (std/os/exit) r
 end

@@ -10,7 +10,7 @@ begin
     | +S : Nat
     end
   that
-  def Bool : VType =
+  let Bool =
     data
     | +True : Unit
     | +False : Unit
@@ -20,21 +20,21 @@ begin
     fix (odd : Thk (Nat -> Ret Bool)) ->
       let even : Thk (Nat -> Ret Bool) = {
         fix (even : Thk (Nat -> Ret Bool)) ->
-          fn (number : Nat) ->
-            match number
+          fn (x : Nat) ->
+            match x
             | +Z() -> ret +True()
-            | +S(predecessor) -> ! odd predecessor
+            | +S(x) -> ! odd x
             end
       } in
-      fn (number : Nat) ->
-        match number
+      fn (x : Nat) ->
+        match x
         | +Z() -> ret +False()
-        | +S(predecessor) -> ! even predecessor
+        | +S(x) -> ! even x
         end
   } that
 
-  do result <- ! odd +S(+S(+S(+Z())));
-  match result
+  do b <- ! odd +S(+S(+S(+Z())));
+  match b
   | +True() -> ! (api/exit) 0
   | +False() -> ! (api/exit) 1
   end

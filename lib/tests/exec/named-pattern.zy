@@ -1,3 +1,5 @@
+-- Named components support payload annotations, opaque variable bindings,
+-- whole-pattern annotations, and holes alongside unnamed patterns.
 begin
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
@@ -13,18 +15,24 @@ begin
     right = 3
   ) that
 
+  -- Payload annotations on named patterns coexist with an annotated unnamed
+  -- component.
   let (
     left = direct_left : Int,
     direct_middle : Int,
     right = direct_right : Int
   ) = pattern_target in
+  -- Variable patterns may bind named values without opening them.
   let (
     left_field : (left :: Int),
     opaque_middle : Int,
     right_field : (right :: Int)
   ) = pattern_target in
+  -- The field can later be opened with either an annotation on the complete
+  -- named pattern or an annotation on only its payload.
   let ((left = opaque_left) : (left :: Int)) = left_field in
   let (right = opaque_right : Int) = right_field in
+  -- Holes still check the surrounding field labels and product structure.
   let (
     left = _,
     _,

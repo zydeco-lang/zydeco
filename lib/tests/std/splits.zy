@@ -13,10 +13,10 @@ begin
     Char = StdChar,
     String = StdString,
     OS = StdOS,
-    public
+    std
   ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
-  do present <- ! (public/str_split_once) "left:right" ':';
-  do present_status <- ! (public/option_eliminate)
+  do present <- ! (std/string/split_once) "left:right" ':';
+  do present_status <- ! (std/option/fold)
     (StdString * StdString)
     (Ret StdInt)
     present
@@ -25,8 +25,8 @@ begin
       fn pair ->
         ret 0
     };
-  do absent <- ! (public/str_split_n) "short" 99;
-  do absent_status <- ! (public/option_eliminate)
+  do absent <- ! (std/string/split_n) "short" 99;
+  do absent_status <- ! (std/option/fold)
     (StdString * StdString)
     (Ret StdInt)
     absent
@@ -35,6 +35,6 @@ begin
       fn pair ->
         ret 1
     };
-  do status <- ! (public/add) present_status absent_status;
-  ! (public/exit) status
+  do status <- ! (std/int/add) present_status absent_status;
+  ! (std/os/exit) status
 end

@@ -1,10 +1,11 @@
+-- Data constructors treat a named tuple as an ordinary payload type.
 begin
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  def Packet : VType =
+  let Packet =
     data
     | +Packet : (tag :: Int) * (Int * (payload :: Int))
     | +Empty : Unit

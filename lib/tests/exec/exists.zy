@@ -4,33 +4,26 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  def Seal :
-    (VType) ->
-    (VType) ->
-    (VType) =
-    begin
-      param (X : VType) that
-      param (A : VType) that
-      data
-      | +Seal : Thk (A -> Ret X) * Thk (X -> Ret A)
-      end
+  let Seal (X : VType) (A : VType) =
+    data
+    | +Seal : Thk (A -> Ret X) * Thk (X -> Ret A)
     end
   that
-  def identity : Thk (
+  def id : Thk (
     forall (A : VType) .
       A -> Ret A
   ) = {
     fn (A : VType) (value : A) ->
       ret value
   } that
-  def natural :
+  def nat :
     exists (X : VType) .
       Seal X Int =
     (
       Int,
       +Seal(
-        { ! identity Int },
-        { ! identity Int },
+        { ! id Int },
+        { ! id Int },
       )
     )
   that
@@ -42,13 +35,13 @@ begin
 
   match packed
   | (Left, Right, zero, letter, status) ->
-    match natural
-    | (Natural, seal) ->
+    match nat
+    | (Nat, seal) ->
       match seal
-      | +Seal(from_int, to_int) ->
-        do number <- ! from_int 0;
-        do integer <- ! to_int number;
-        ! (api/exit) integer
+      | +Seal(of, to) ->
+        do n <- ! of 0;
+        do i <- ! to n;
+        ! (api/exit) i
       end
     end
   end

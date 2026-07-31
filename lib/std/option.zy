@@ -4,13 +4,10 @@ param (
   @[import("builtin.zy")] _
 ) in
 ret begin
-  def Option : (VType) -> (VType) =
-    begin
-      param (A : VType) that
-      data
-      | +None : Unit
-      | +Some : A
-      end
+  let Option (A : VType) =
+    data
+    | +None : Unit
+    | +Some : A
     end
   that
   def none : Thk (
@@ -27,7 +24,7 @@ ret begin
     fn (A : VType) (value : A) ->
       ret +Some(value)
   } that
-  def eliminate : Thk (
+  def fold : Thk (
     forall (A : VType) .
     forall (B : CType) .
       Option A -> Thk B -> Thk (A -> B) -> B
@@ -55,7 +52,7 @@ ret begin
         forall (A : VType) .
           A -> Ret (AbstractOption A)
       )) *
-      (eliminate :: Thk (
+      (fold :: Thk (
         forall (A : VType) .
         forall (B : CType) .
           AbstractOption A -> Thk B -> Thk (A -> B) -> B
@@ -66,7 +63,7 @@ ret begin
     Option = Option,
     none = none,
     some = some,
-    eliminate = eliminate,
+    fold = fold,
   ) : Interface
 end
 }

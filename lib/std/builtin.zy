@@ -1,8 +1,18 @@
+-- module Builtin
 exists
+  --| VType and CType
   (VType as @[intrinsic(vtype)] _)
   (CType as @[intrinsic(ctype)] _)
+  --| Thk and Ret
   (Thk as @[intrinsic(thk)] _)
   (Ret as @[intrinsic(ret)] _)
+  --| primitive base types
+
+  --| we support the constructors externally because
+  --| the parsers of their constructors are customized
+  --| so the type is registered as a data type but the constructors
+  --| are not implemented as internal constructors
+
   (Unit as @[intrinsic(unit)] _)
 .
   @[builtin(int)] exists (Int : VType) .
@@ -59,3 +69,4 @@ exists
            ))) *
            (@[builtin(random_int)] (random_int :: Thk (Thk (Int -> OS) -> OS))) *
            (@[builtin(exit)] (exit :: Thk (Int -> OS)))))))
+-- end module Builtin

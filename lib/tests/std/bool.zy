@@ -13,12 +13,12 @@ begin
     Char = StdChar,
     String = StdString,
     OS = StdOS,
-    public
+    std
   ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
-  do result <- ! (public/not) (public/falsehood);
-  ! (public/branch)
+  do result <- ! (std/bool/not) (std/bool/false);
+  ! (std/bool/if)
     StdOS
     result
-    { ! (public/exit) 0 }
-    { ! (public/exit) 1 }
+    { ! (std/os/exit) 0 }
+    { ! (std/os/exit) 1 }
 end

@@ -1,5 +1,5 @@
 begin
-  def Bool : VType =
+  let Bool =
     data
     | +False : Unit
     | +True : Unit
@@ -10,8 +10,8 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let value : Bool = +False() in
-  match value
+  let x : Bool = +False() in
+  match x
   | +True(_) -> ! (api/exit) 10
   | +False(_) -> ! (api/exit) 0
   end

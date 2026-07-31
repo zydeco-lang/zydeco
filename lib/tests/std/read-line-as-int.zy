@@ -13,27 +13,27 @@ begin
     Char = StdChar,
     String = StdString,
     OS = StdOS,
-    public
+    std
   ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
-  ! (public/read_line_as_int) {
+  ! (std/os/read_line_as_int) {
     fn first ->
-      ! (public/option_eliminate)
+      ! (std/option/fold)
         StdInt
         StdOS
         first
-        { ! (public/exit) 1 }
+        { ! (std/os/exit) 1 }
         {
           fn integer ->
-            ! (public/read_line_as_int) {
+            ! (std/os/read_line_as_int) {
               fn second ->
-                ! (public/option_eliminate)
+                ! (std/option/fold)
                   StdInt
                   StdOS
                   second
-                  { ! (public/exit) 0 }
+                  { ! (std/os/exit) 0 }
                   {
                     fn unexpected ->
-                      ! (public/exit) 1
+                      ! (std/os/exit) 1
                   }
             }
         }

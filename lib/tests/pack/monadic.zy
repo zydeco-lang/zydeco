@@ -15,7 +15,7 @@ begin
     exists (Trailing as Unit : VType) .
       X
   that
-  def ret_monad : Thk (Monad Ret) = {
+  def mo_ret : Thk (Monad Ret) = {
     comatch
     | .return A value -> ret value
     | .bind A B computation continuation ->
@@ -49,7 +49,7 @@ begin
     end
   } that
 
-  do _ <- ! translated Ret { ! ret_monad };
+  do _ <- ! translated Ret { ! mo_ret };
   ! (api/exit) 0
 end
 end

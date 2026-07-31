@@ -8,30 +8,16 @@ begin
     ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
 
-  def Either :
-    (VType) ->
-    (VType) ->
-    (VType) =
-    begin
-      param (A : VType) that
-      param (B : VType) that
-      data
-      | +Left : A
-      | +Right : B
-      end
+  let Either (E : VType) (A : VType) =
+    data
+    | +Left : E
+    | +Right : A
     end
   that
-  let Exn :
-    (VType) ->
-    (VType) ->
-    (CType) =
-    begin
-      param (E : VType) that
-      param (A : VType) that
-      Ret (Either E A)
-    end
+  let Exn (E : VType) (A : VType) =
+    Ret (Either E A)
   that
-  let Top : CType =
+  let Top =
     codata
     end
   that
@@ -40,78 +26,85 @@ begin
     end
   } that
 
-  def mo_exn : Thk (
+  def mo-exn : Thk (
     forall (E : VType) .
       Monad (Exn E)
   ) = {
     fn E ->
       comatch
-      | .return A value ->
-        ret +Right(value)
-      | .bind A B computation function ->
-        do outcome <- ! computation;
-        match outcome
-        | +Left(error) -> ret +Left(error)
-        | +Right(value) -> ! function value
+      | .return A a ->
+        ret +Right(a)
+      | .bind A A' m f ->
+        do a? <- ! m;
+        match a?
+        | +Left(e) -> ret +Left(e)
+        | +Right(a) -> ! f a
         end
       end
   } that
-  def alg_exn_os : Thk (
+  def alg-exn-os : Thk (
     forall (E : VType) .
       Algebra (Exn E) OS
   ) = {
-    fn E A computation function ->
-      do outcome <- ! computation;
-      match outcome
-      | +Left(_) -> ! (api/exit) 1
-      | +Right(value) -> ! function value
+    fn E X m f ->
+      do a? <- ! m;
+      match a?
+      | +Left(e) -> ! (api/exit) 1
+      | +Right(a) -> ! f a
       end
   } that
-  def mo_return : Thk (
+  -- test algebra generation for ret and bind
+  def mo-return : Thk (
     forall (E : VType) .
       Thk (Monad (Exn E)) ->
       Exn E Int
   ) = {
-    fn E monad ->
+    fn E mo ->
       let translated = {
+        -- use mo
         monadic
-          do value <- ret 1;
-          ret value
+          do a <- ret 1;
+          ret a
         end
       } in
-      ! translated (Exn E) monad
+      ! translated (Exn E) mo
   } that
-  def mo_thunk : Thk (
+  -- test algebra generation for thunk
+  def mo-thunk : Thk (
     forall (E : VType) .
       Thk (Monad (Exn E)) ->
       Exn E Int
   ) = {
-    fn E monad ->
+    fn E mo ->
       let translated = {
+        -- use mo
         monadic
           do _ <- ret 1;
           ! { ret 1 }
         end
       } in
-      ! translated (Exn E) monad
+      ! translated (Exn E) mo
   } that
-  def mo_thunk_arg : Thk (
+  -- test algebra generation for thunk at argument position
+  def mo-thunk-arg : Thk (
     forall (E : VType) .
       Thk (Monad (Exn E)) ->
       Exn E Int
   ) = {
-    fn E monad ->
+    fn E mo ->
       let translated = {
+        -- use mo
         monadic
           do _ <- ret 1;
-          (fn (computation : Thk _) -> ! computation) {
+          (fn (x : Thk _) -> ! x) {
             ret 1
           }
         end
       } in
-      ! translated (Exn E) monad
+      ! translated (Exn E) mo
   } that
-  def mo_forallv : Thk (
+  -- test algebra generation for forall vtype
+  def mo-forallv : Thk (
     forall (E : VType) .
       Thk (Monad (Exn E)) ->
       (
@@ -120,17 +113,19 @@ begin
           X -> Exn E X
       )
   ) = {
-    fn E monad ->
+    fn E mo ->
       let translated = {
+        -- use mo
         monadic
           do _ <- ret -1;
-          fn (X : VType) (value : X) ->
-            ret value
+          fn (X : VType) (a : X) ->
+            ret a
         end
       } in
-      ! translated (Exn E) monad
+      ! translated (Exn E) mo
   } that
-  def mo_forallc : Thk (
+  -- test algebra generation for forall ctype
+  def mo-forallc : Thk (
     forall (E : VType) .
       Thk (Monad (Exn E)) ->
       (
@@ -140,18 +135,123 @@ begin
           X
       )
   ) = {
-    fn E monad ->
+    fn E mo ->
       let translated = {
+        -- ( comatch .bindA X m f -> fn (Y: CType) (strY: U (Algebra _ Y)) ->
+        --   ( comatch .bindA X m f -> fn (a: U Y) ->
+        --     ! strY .bindA X m { fn x -> ! f x a }
+        --   end : Algebra (Exn E) (U Y -> Y)) .bindA X m { fn x -> ! f x Y strY }
+        -- end : Algebra (Exn E) (forall (X: CType) . U (Algebra (Exn E) X) -> U X -> X))
+        -- .bindA Int { ! mo .return Int -1 }
+        -- { fn (_: Int) -> fn (X: CType) (algX: U (Algebra (Exn E) X)) (b: U X) -> ! b }
+        -- use mo
         monadic
           do _ <- ret -1;
-          fn (X : CType) (computation : Thk X) ->
-            ! computation
+          fn (X : CType) (b : Thk X) ->
+            ! b
         end
       } in
-      ! translated (Exn E) monad
+      ! translated (Exn E) mo
   } that
 
-  do returned <- ! mo_return String { ! mo_exn String };
+  -- -- test algebra generation for forall (ctype -> ctype)
+  -- alias IdCType (B: CType) : CType = B end
+  -- def ! mo-forallcc (E: VType)
+  --   (mo: U (Monad (Exn E)))
+  -- :
+  --   forall (X: CType -> CType) .
+  --   U (forall (Y: CType) . U (Algebra (Exn E) Y) -> Algebra (Exn E) (X Y)) ->
+  --   (forall (Y: CType) .
+  --   U (Algebra (Exn E) Y) -> U (X Y) -> (X Y))
+  --   -- forall (X: CType -> CType) .
+  --   -- U (forall (Y: CType) . U (Algebra (Exn E) Y) -> Algebra (Exn E) (X Y)) ->
+  --   -- (forall (Y: CType) .
+  --   -- U (Algebra (Exn E) Y) -> U (X Y) -> (X Y))
+  -- =
+  --   use mo
+  --   monadic
+  --     do _ <- ret -1;
+  --     -- forall (X: CType -> CType) (Y: CType) . U (X Y) -> X Y
+  --     --
+  --     -- |> Sig =
+  --     --
+  --     -- forall (X: CType -> CType) .
+  --     --   U (forall (Y: CType) . U (Algebra M Y) -> Algebra M (X Y)) ->
+  --     --     forall (Y: CType) . U (Algebra M Y) ->
+  --     --       U (X Y) -> X Y
+  --     fn (X: CType -> CType) (Y: CType) (b: U (X Y)) -> ! b
+  --   end
+  -- end
+  -- -- run it
+  -- def ! _mo-forallcc : OS =
+  --   ! mo-forallcc String { ! mo-exn String } IdCType OS { ! alg-exn-os String } { ! exit 0 }
+  -- end
+  -- -- using primitive id
+  -- def ! mo-prim-id (M: VType -> CType) (mo: U (Monad M)) : forall (A: VType) . A -> M A =
+  --   use mo
+  --     import id : Thunk (forall (A: VType) . A -> Ret A) = ({
+  --       comatch A a ->
+  --         do a <- ! id A a;
+  --         ! mo .return A a
+  --       end
+  --     } : Thunk (forall (A: VType) . A -> M A))
+  --   monadic
+  --     ! id
+  --   end
+  -- end
+  -- -- run it
+  -- def ! _mo-prim-id : OS =
+  --   do i? <- ! mo-prim-id (Exn String) { ! mo-exn String } Int 0;
+  --   match i?
+  --   | +Left(e) -> ! panic "error"
+  --   | +Right(i) -> ! exit i
+  --   end
+  -- end
+  -- -- using primitive id~
+  -- def ! mo-prim-id~ (M: VType -> CType) (mo: U (Monad M)) : forall (B: CType) . Thunk (Algebra M B) -> Thunk B -> B =
+  --   use mo
+  --     import id~ : Thunk (forall (B: CType) . Thunk B -> B) = ({
+  --       comatch B algB b ->
+  --         ! id~ B b
+  --       end
+  --     } : Thunk (forall (B: CType) . Thunk (Algebra M B) -> Thunk B -> B))
+  --   monadic
+  --     ! id~
+  --   end
+  -- end
+  -- -- run it
+  -- def ! _mo-prim-id~ : OS =
+  --   ! mo-prim-id~ (Exn String) { ! mo-exn String } OS { ! alg-exn-os String } { ! exit 0 }
+  -- end
+  -- def ! _mo-prim-id~' : OS =
+  --   do i <- ! mo-prim-id~ (Exn String) { ! mo-exn String } (Ret Int) { _ } { ret 0 };
+  --   ! exit i
+  -- end
+  -- -- primitive ret in contravariant position
+  -- def ! dethunk (A: VType) (a : Thunk (Ret A)) : Ret A =
+  --   ! a
+  -- end
+  -- def ! mo-prim-return-contra
+  --   (M: VType -> CType) (mo: U (Monad M))
+  --   (alg: U (Algebra M _))
+  -- : forall (A: VType) . U (M A) -> M A =
+  --   with mo with alg
+  --     import dethunk : Thunk (forall (A: VType) . Thunk (Ret A) -> Ret A) = ({
+  --       comatch A ma ->
+  --         ! alg .bindA A ma { fn a -> do a <- ! dethunk A { ret a }; ! mo .return A a }
+  --       end
+  --     } : Thunk (forall (A: VType) . Thunk (M A) -> M A))
+  --   monadic
+  --     ! dethunk
+  --   end
+  -- end
+
+  -- run it
+  -- ! _mo-forallc
+  -- ! _mo-prim-id
+  -- ! _mo-prim-id~
+  -- ! _mo-prim-id~'
+  do returned <- ! mo-return String { ! mo-exn String };
   match returned
   | +Left(_) -> ! (api/exit) 1
   | +Right(returned) ->
@@ -160,7 +260,7 @@ begin
       returned
       1
       {
-        do thunked <- ! mo_thunk String { ! mo_exn String };
+        do thunked <- ! mo-thunk String { ! mo-exn String };
         match thunked
         | +Left(_) -> ! (api/exit) 1
         | +Right(thunked) ->
@@ -169,8 +269,8 @@ begin
             thunked
             1
             {
-              do argument <- ! mo_thunk_arg String {
-                ! mo_exn String
+              do argument <- ! mo-thunk-arg String {
+                ! mo-exn String
               };
               match argument
               | +Left(_) -> ! (api/exit) 1
@@ -180,9 +280,9 @@ begin
                   argument
                   1
                   {
-                    do quantified <- ! mo_forallv
+                    do quantified <- ! mo-forallv
                       String
-                      { ! mo_exn String }
+                      { ! mo-exn String }
                       Int
                       top
                       0;
@@ -194,11 +294,12 @@ begin
                         quantified
                         0
                         {
-                          ! mo_forallc
+                          -- run it
+                          ! mo-forallc
                             String
-                            { ! mo_exn String }
+                            { ! mo-exn String }
                             OS
-                            { ! alg_exn_os String }
+                            { ! alg-exn-os String }
                             { ! (api/exit) 0 }
                         }
                         { ! (api/exit) 1 }

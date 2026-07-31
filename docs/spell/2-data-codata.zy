@@ -11,26 +11,16 @@ begin
     @[import("../../lib/std/builtin.zy")] _
   ) that
 
-  def Option :
-    (VType) ->
-    (VType) =
-    begin
-      param (A : VType) that
-      data
-      | +None : Unit
-      | +Some : A
-      end
+  let Option (A : VType) =
+    data
+    | +None : Unit
+    | +Some : A
     end
   that
-  def List :
-    (VType) ->
-    (VType) =
-    begin
-      param (A : VType) that
-      data
-      | +Nil : Unit
-      | +Cons : A * List A
-      end
+  def List (A : VType) : VType =
+    data
+    | +Nil : Unit
+    | +Cons : A * List A
     end
   that
 
@@ -53,27 +43,15 @@ begin
 
   -- A lazy list separates one observable layer from the suspended remainder.
   -- Its layer is data; the stream itself is codata.
-  def LazyLayer :
-    (VType) ->
-    (VType) ->
-    (VType) =
-    begin
-      param (A : VType) that
-      param (Tail : VType) that
-      data
-      | +LazyNil : Unit
-      | +LazyCons : A * Tail
-      end
+  let LazyLayer (A : VType) (Tail : VType) =
+    data
+    | +LazyNil : Unit
+    | +LazyCons : A * Tail
     end
   that
-  def LazyList :
-    (VType) ->
-    (CType) =
-    begin
-      param (A : VType) that
-      codata
-      | .run : Ret (LazyLayer A (Thk (LazyList A)))
-      end
+  def LazyList (A : VType) : CType =
+    codata
+    | .run : Ret (LazyLayer A (Thk (LazyList A)))
     end
   that
   def lazy_values : Thk (LazyList Int) = {
@@ -177,13 +155,8 @@ begin
   } that
 
   -- Exercise: define a coinductive list using only a lazy recursive data type.
-  def LazyListPrime :
-    (VType) ->
-    (VType) =
-    begin
-      param (A : VType) that
-      data
-      end
+  let LazyListPrime (A : VType) =
+    data
     end
   that
 

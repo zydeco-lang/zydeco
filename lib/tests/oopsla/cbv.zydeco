@@ -1,10 +1,13 @@
+--| This file implements an interpreter for a simple CBV language.
+
+--| As it is a CBV language, our syntax only contains expressions.
 begin
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  def Bool : VType =
+  let Bool =
     data
     | +True : Unit
     | +False : Unit
@@ -20,12 +23,15 @@ begin
     | +If : Expr * Expr * Expr
     end
   that
+  --| Environments are implemented as association lists.
   def Env : VType =
     data
     | +Empty : Unit
     | +Cons : String * Value * Env
     end
   that
+  --| The interpreter works with semantic values, which do not include variables.
+  --| We use closures in the interpreter to implement semantic thunks.
   def Value : VType =
     data
     | +True : Unit
@@ -41,13 +47,15 @@ begin
     | .bind : Ret Answer
     end
   that
+  --| The "final answer" of the interpreter is either the final value or an error.
   def Answer : VType =
     data
     | +Ok : Value
     | +Err : Unit
     end
   that
-  def Interp : CType =
+  --| The error handler.
+  let Interp =
     codata
     | .descend : Expr * Env -> Machine
     | .ascend : Value -> Machine
@@ -64,27 +72,27 @@ begin
         { ret +False() }
   } that
   def panic : Thk (String -> OS) = {
-    fn message ->
-      ! (api/write_line) message {
+    fn msg ->
+      ! (api/write_line) msg {
         ! (api/exit) 1
       }
   } that
   def lookup : Thk (String -> Env -> Ret Answer) = {
     fix (lookup : Thk (String -> Env -> Ret Answer)) ->
-      fn requested environment ->
-        match environment
+      fn x g ->
+        match g
         | +Empty() -> ret +Err()
-        | +Cons(name, value, remaining) ->
-          do equal <- ! str_eq requested name;
-          match equal
-          | +True() -> ret +Ok(value)
-          | +False() -> ! lookup requested remaining
+        | +Cons(y, v, g) ->
+          do b <- ! str_eq x y;
+          match b
+          | +True() -> ret +Ok(v)
+          | +False() -> ! lookup x g
           end
         end
   } that
   def value_to_str : Thk (Value -> Ret String) = {
-    fn value ->
-      match value
+    fn v ->
+      match v
       | +True() -> ret "true"
       | +False() -> ret "false"
       | +Closure(_) -> ret "<closure>"
@@ -99,54 +107,63 @@ begin
       | .bind -> ret +Err()
       end
   } that
+  --| The abstract machine is a codata type that describes the interpreter state:
+  --| either descending into an expression or ascending to return a value.
+  --| The mutually recursive functions `descend` and `ascend` are defined as a
+  --| codata-typed term `interp`.
   def interp : Thk Interp = {
     fix (interp : Thk Interp) ->
       comatch
-      | .descend (expression, environment) ->
-        match expression
-        | +Var(name) ->
-          do result <- ! lookup name environment;
-          match result
+      | .descend (expr, env) ->
+        match expr
+        | +Var(x) ->
+          do v <- ! lookup x env;
+          match v
           | +Err(_) -> ! error
-          | +Ok(value) -> ! interp .ascend value
+          | +Ok(v) -> ! interp .ascend v
           end
         | +True() -> ! interp .ascend +True()
         | +False() -> ! interp .ascend +False()
-        | +Lam(name, body) ->
+        | +Lam(x, expr) ->
+          -- creates a host language thunk that runs the function body with an
+          -- extended environment
           ! interp .ascend +Closure({
-            fn value ->
-              ! interp .descend (body, +Cons(name, value, environment))
+            fn v ->
+              ! interp .descend (expr, +Cons(x, v, env))
           })
-        | +App(function, argument) ->
-          ! interp .descend (function, environment) .fun (argument, environment)
-        | +If(condition, consequent, alternative) ->
+        | +App(f, a) ->
+          ! interp .descend (f, env) .fun (a, env)
+        | +If(c, t, f) ->
           ! interp
             .descend
-            (condition, environment)
+            (c, env)
             .if
-            (consequent, alternative, environment)
+            (t, f, env)
         end
-      | .ascend value ->
+      | .ascend v ->
         comatch
-        | .fun (argument, environment) ->
-          ! interp .descend (argument, environment) .app value
-        | .app function ->
-          match function
+        | .fun (a, env) ->
+          ! interp .descend (a, env) .app v
+        | .app f ->
+          match f
           | +True(_) -> ! error
           | +False(_) -> ! error
-          | +Closure(body) -> ! body value
+          | +Closure(fun) ->
+            -- call the function and follow its continuation
+            ! fun v
           end
-        | .if (consequent, alternative, environment) ->
-          match value
-          | +True(_) -> ! interp .descend (consequent, environment)
-          | +False(_) -> ! interp .descend (alternative, environment)
+        | .if (t, f, env) ->
+          match v
+          | +True(_) -> ! interp .descend (t, env)
+          | +False(_) -> ! interp .descend (f, env)
           | +Closure(_) -> ! error
           end
-        | .bind -> ret +Ok(value)
+        | .bind -> ret +Ok(v)
         end
       end
   } that
 
+  -- Examples
   def identity : Expr =
     +Lam("x", +Var("x"))
   that
@@ -181,12 +198,13 @@ begin
     +App(+App(+App(if_, true_), +True()), +False())
   that
 
-  do result <- ! interp .descend (if_true, +Empty()) .bind;
-  match result
+  -- should return +True()
+  do x <- ! interp .descend (if_true, +Empty()) .bind;
+  match x
   | +Err(_) -> ! panic "ERROR"
-  | +Ok(value) ->
-    do output <- ! value_to_str value;
-    ! (api/write_line) output {
+  | +Ok(v) ->
+    do s <- ! value_to_str v;
+    ! (api/write_line) s {
       ! (api/exit) 0
     }
   end

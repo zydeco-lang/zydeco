@@ -8,23 +8,16 @@ begin
     ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
 
-  let Kont :
-    (CType) ->
-    (VType) ->
-    (CType) =
-    begin
-      param (R : CType) that
-      param (A : VType) that
-      Thk (A -> R) -> R
-    end
+  let Kont (R : CType) (A : VType) =
+    Thk (A -> R) -> R
   that
   def mret : Thk (Monad Ret) = {
     comatch
-    | .return A value ->
-      ret value
-    | .bind A B computation function ->
-      do value <- ! computation;
-      ! function value
+    | .return A a ->
+      ret a
+    | .bind A A' m f ->
+      do a <- ! m;
+      ! f a
     end
   } that
   def reset : Thk (
@@ -120,31 +113,33 @@ begin
       }
   } that
 
-  do thrown <- ! attempt Ret mret Int Int
+  do i <- ! attempt Ret mret Int Int
     {
       ! throw Ret mret Int Int 42
+    -- fn _ -> ret 0
     }
     {
-      fn exception ->
-        ! (api/sub) exception 42
+      fn x ->
+        ! (api/sub) x 42
     };
-  do returned <- ! attempt Ret mret Int Int
+  do j <- ! attempt Ret mret Int Int
     {
-      fn ignored ->
+      -- ! throw Ret mret Int Int 42
+      fn _ ->
         ret 0
     }
     {
-      fn exception ->
-        ! (api/sub) exception 42
+      fn x ->
+        ! (api/sub) x 42
     };
   ! (api/int_eq_branch)
     OS
-    thrown
+    i
     0
     {
       ! (api/int_eq_branch)
         OS
-        returned
+        j
         0
         { ! (api/exit) 0 }
         { ! (api/exit) 2 }

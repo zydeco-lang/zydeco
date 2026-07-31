@@ -1,3 +1,4 @@
+--| The Free monad
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
@@ -8,125 +9,99 @@ begin
     ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
 
-  def Empty : VType =
+  let Empty =
     data
     end
   that
-  def Kont :
-    (CType) ->
-    (VType) ->
-    (CType) =
-    begin
-      param (R : CType) that
-      param (A : VType) that
-      codata
-      | .run : Thk (A -> R) -> R
-      end
+  let Kont (R : CType) (A : VType) =
+    codata
+    | .run : Thk (A -> R) -> R
     end
   that
-  let KRead :
-    (CType) ->
-    (VType) =
-    begin
-      param (R : CType) that
-      Thk (Unit -> Kont R String)
-    end
+  -- Types of handlers
+  let KRead (R : CType) =
+    Thk (Unit -> Kont R String)
   that
-  let KWrite :
-    (CType) ->
-    (VType) =
-    begin
-      param (R : CType) that
-      Thk (String -> Kont R Unit)
-    end
+  let KWrite (R : CType) =
+    Thk (String -> Kont R Unit)
   that
-  let KFail :
-    (VType) ->
-    (CType) ->
-    (VType) =
-    begin
-      param (E : VType) that
-      param (R : CType) that
-      Thk (E -> Kont R Empty)
-    end
+  let KFail (E : VType) (R : CType) =
+    Thk (E -> Kont R Empty)
   that
-  def Free :
-    (VType) ->
-    (CType) =
-    begin
-      param (A : VType) that
-      codata
-      | .run :
-        forall (R : CType) .
-          KRead R ->
-          KWrite R ->
-          KFail String R ->
-          Kont R A
-      end
+  -- A specific free monad with three handlers
+  let Free (A : VType) =
+    codata
+    | .run :
+      forall (R : CType) .
+        KRead R ->
+        KWrite R ->
+        KFail String R ->
+        Kont R A
     end
   that
 
   def mfree : Thk (Monad Free) = {
     comatch
-    | .return A value ->
+    | .return A a ->
       fn .run R read write fail ->
-      fn .run continuation ->
-        ! continuation value
-    | .bind A B computation function ->
+      fn .run k ->
+        ! k a
+    | .bind A A' m f ->
       fn .run R read write fail ->
-      fn .run continuation ->
-        ! computation
+      fn .run k' ->
+        ! m
           .run R read write fail
           .run {
-            fn value ->
-              ! function value
+            fn a ->
+              ! f a
                 .run R read write fail
-                .run continuation
+                .run k'
           }
     end
   } that
+  -- The interface for using Free
   def read : Thk (Unit -> Free String) = {
     fn () ->
       fn .run R read write fail ->
         ! read ()
   } that
   def write : Thk (String -> Free Unit) = {
-    fn string ->
+    fn s ->
       fn .run R read write fail ->
-        ! write string
+        ! write s
   } that
   def fail : Thk (String -> Free Empty) = {
-    fn string ->
+    fn s ->
       fn .run R read write fail ->
-        ! fail string
+        ! fail s
   } that
   def read_os : Thk (Unit -> Kont OS String) = {
     fn () ->
-      fn .run continuation ->
-        ! (api/read_line) continuation
+      fn .run k ->
+        ! (api/read_line) k
   } that
   def write_os : Thk (String -> Kont OS Unit) = {
-    fn string ->
-      fn .run continuation ->
-        ! (api/write_line) string {
-          ! continuation ()
+    fn s ->
+      fn .run k ->
+        ! (api/write_line) s {
+          ! k ()
         }
   } that
   def fail_os : Thk (String -> Kont OS Empty) = {
-    fn string ->
-      fn .run continuation ->
-        ! (api/write_line) string {
+    fn s ->
+      fn .run k ->
+        ! (api/write_line) s {
           ! (api/exit) 1
         }
   } that
 
-  let program : Thk (Free Unit) = {
+  let prog : Thk (Free Unit) = {
     ! mfree .bind String Unit { ! read () } {
-      fn string ->
-        ! write string
+      fn s ->
+        ! write s
     }
   } in
-  ! program
+  ! prog
     .run OS read_os write_os fail_os
     .run {
       fn () ->

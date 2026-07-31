@@ -18,7 +18,7 @@ begin
   let (top_left = point, = status : Int) = rectangle in
   let status_field = (= status : Int) in
   let direct = (code = point/x) in
-  let (inner, outer = ignored_outer) = nested in
+  let (inner, outer = _) = nested in
   let pair = (triple/first, triple/last) in
   let (first, last) = pair in
   do total <- ! (api/add) first triple/middle;

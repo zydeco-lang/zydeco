@@ -8,31 +8,12 @@ begin
     ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
 
-  let Kont :
-    (CType) ->
-    (VType) ->
-    (CType) =
-    begin
-      param (R : CType) that
-      param (A : VType) that
-      Thk (A -> R) -> R
-    end
+  let Kont (R : CType) (A : VType) =
+    Thk (A -> R) -> R
   that
-  let Free :
-    (
-      ((CType) -> (VType)) ->
-      (VType) ->
-      (CType)
-    ) =
-    begin
-      param (
-        H :
-        (CType) -> (VType)
-      ) that
-      param (A : VType) that
-      forall (R : CType) .
-        H R -> Kont R A
-    end
+  let Free (H : (CType) -> (VType)) (A : VType) =
+    forall (R : CType) .
+      H R -> Kont R A
   that
 
   def mkont : Thk (
@@ -41,14 +22,14 @@ begin
   ) = {
     fn R ->
       comatch
-      | .return A value ->
-        fn continuation ->
-          ! continuation value
-      | .bind A B computation function ->
-        fn continuation ->
-          ! computation {
-            fn value ->
-              ! function value continuation
+      | .return A a ->
+        fn k ->
+          ! k a
+      | .bind A A' m f ->
+        fn k ->
+          ! m {
+            fn a ->
+              ! f a k
           }
       end
   } that
@@ -61,16 +42,16 @@ begin
   ) = {
     fn H ->
       comatch
-      | .return A value ->
-        fn R handler ->
-          ! mkont R .return A value
-      | .bind A B computation function ->
-        fn R handler ->
-          ! mkont R .bind A B
-            { ! computation R handler }
+      | .return A a ->
+        fn R h ->
+          ! mkont R .return A a
+      | .bind A A' m f ->
+        fn R h ->
+          ! mkont R .bind A A'
+            { ! m R h }
             {
-              fn value ->
-                ! function value R handler
+              fn a ->
+                ! f a R h
             }
       end
   } that

@@ -2,6 +2,6 @@ param (
   (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
   @[import("../../std/builtin.zy")] _
 ) in
-  let pair = (10, 0) in
-  let (ignored, status) = pair in
-  ! (api/exit) status
+  let x = (10, 0) in
+  let (y, z) = x in
+  ! (api/exit) z

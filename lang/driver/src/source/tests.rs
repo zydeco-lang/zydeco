@@ -1335,7 +1335,7 @@ fn legacy_alias_example_ports_to_uniform_term_composition() {
 }
 
 #[test]
-fn legacy_polymorphic_identity_example_ports_to_uniform_term_composition() {
+fn standard_prelude_exports_legacy_thunk_and_return_aliases() {
     let root = repository_source("tests/std/identity.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
@@ -1455,7 +1455,7 @@ fn abstract_option_package_exports_a_type_constructor_and_an_eliminator() {
 }
 
 #[test]
-fn abstract_list_package_exports_a_recursive_type_constructor_and_an_eliminator() {
+fn abstract_list_package_exports_case_analysis_and_a_recursive_fold() {
     let library = SourceDriver::check(repository_source("std/list.zy")).unwrap();
     assert!(matches!(library.root, zydeco_statics::tyck::syntax::TermAnnId::Value(_, _)));
 

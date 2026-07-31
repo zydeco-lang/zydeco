@@ -8,15 +8,8 @@ begin
     ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
 
-  let Kont :
-    (CType) ->
-    (VType) ->
-    (CType) =
-    begin
-      param (R : CType) that
-      param (A : VType) that
-      Thk (A -> R) -> R
-    end
+  let Kont (R : CType) (A : VType) =
+    Thk (A -> R) -> R
   that
   def mkont : Thk (
     forall (R : CType) .
@@ -24,69 +17,80 @@ begin
   ) = {
     fn R ->
       comatch
-      | .return A value ->
-        fn continuation ->
-          ! continuation value
-      | .bind A B computation function ->
-        fn continuation ->
-          ! computation {
-            fn value ->
-              ! function value continuation
+      | .return A a ->
+        fn k ->
+          ! k a
+      | .bind A A' m f ->
+        fn k ->
+          ! m {
+            fn a ->
+              ! f a k
           }
       end
   } that
-  def reset : Thk (
+  def reset' : Thk (
     forall (A : VType) .
       Thk (Kont (Ret A) A) ->
       Ret A
   ) = {
-    fn A expression ->
-      ! expression {
-        fn value ->
-          ret value
+    fn A e ->
+      ! e {
+        fn x ->
+          ret x
       }
   } that
-  def shift : Thk (
+  def shift' : Thk (
     forall (A : VType) .
-    forall (B : VType) .
+    forall (A' : VType) .
       Thk (
-        Thk (A -> Ret B) ->
-        Kont (Ret B) B
+        Thk (A -> Ret A') ->
+        Kont (Ret A') A'
       ) ->
-      Kont (Ret B) A
+      Kont (Ret A') A
   ) = {
-    fn A B expression continuation ->
-      ! expression
-        continuation
+    fn A A' e ka' ->
+      ! e
+        ka'
         {
-          fn value ->
-            ret value
+          fn x' ->
+            ret x'
         }
   } that
-  def example : Thk (Ret Int) = {
-    ! reset Int {
+  -- reset' and shift' are the primitives of delimited continuations.
+  -- example:
+  -- def ! _ : F Int =
+  --   ! reset' {
+  --     do x <- ! shift' { fn cont ->
+  --       do y <- ! cont { ret 4 };
+  --       ! add 17 y
+  --     };
+  --     ! mul 2 x
+  --   }
+  -- end
+  def ex : Thk (Ret Int) = {
+    ! reset' Int {
       ! mkont (Ret Int) .bind Int Int
         {
-          ! shift Int Int {
-            fn continuation ->
-              do value <- ! continuation 4;
-              do result <- ! (api/add) 17 value;
-              ! mkont (Ret Int) .return Int result
+          ! shift' Int Int {
+            fn cont ->
+              do y <- ! cont 4;
+              do res <- ! (api/add) 17 y;
+              ! mkont (Ret Int) .return Int res
           }
         }
         {
-          fn value ->
-            do result <- ! (api/mul) 2 value;
-            ! mkont (Ret Int) .return Int result
+          fn x ->
+            do res <- ! (api/mul) 2 x;
+            ! mkont (Ret Int) .return Int res
         }
     }
   } that
 
-  do result <- ! example;
-  do rendered <- ! (api/int_to_str) result;
-  ! (api/write_line) rendered {
-    do status <- ! (api/sub) result 25;
-    ! (api/exit) status
+  do x <- ! ex;
+  do s <- ! (api/int_to_str) x;
+  ! (api/write_line) s {
+    do zero <- ! (api/sub) x 25;
+    ! (api/exit) zero
   }
 end
 end

@@ -4,36 +4,30 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  def Y : (CType) -> (CType) =
-    begin
-      param (B : CType) that
-      codata
-      | .y : Thk (Y B) -> B
-      end
+  def Y (B : CType) : CType =
+    codata
+    | .y : Thk (Y B) -> B
     end
   that
-  def Self : (VType) -> (VType) =
-    begin
-      param (B : VType) that
-      data
-      | +Roll : Thk (Self B -> Ret B)
-      end
+  def Self (B : VType) : VType =
+    data
+    | +Roll : Thk (Self B -> Ret B)
     end
   that
-  def fix_prime : Thk (
+  def fix' : Thk (
     forall (B : CType) .
       Thk (Thk B -> B) -> B
   ) = {
-    fn (B : CType) (function : Thk (Thk B -> B)) ->
-      let primitive : Thk (Y B) = {
+    fn (B : CType) (f : Thk (Thk B -> B)) ->
+      let prim : Thk (Y B) = {
         comatch
-        | .y recursive -> ! function { ! recursive .y recursive }
+        | .y x -> ! f { ! x .y x }
         end
       } in
-      ! primitive .y primitive
+      ! prim .y prim
   } that
-  def divergent : Thk OS = {
-    ! fix_prime OS { fn loop -> ! loop }
+  def m : Thk OS = {
+    ! fix' OS { fn loop -> ! loop }
   } that
 
   ! (api/exit) 0

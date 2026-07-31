@@ -13,23 +13,23 @@ begin
     Char = StdChar,
     String = StdString,
     OS = StdOS,
-    public
+    std
   ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
-  ! (public/arg_list) {
+  ! (std/os/arg_list) {
     fn arguments ->
-      ! (public/list_eliminate)
+      ! (std/list/case)
         StdString
         StdOS
         arguments
-        { ! (public/exit) 1 }
+        { ! (std/os/exit) 1 }
         {
           fn first remaining ->
-            do first_matches <- ! (public/str_eq) first "alpha";
-            ! (public/branch)
+            do first_matches <- ! (std/string/eq) first "alpha";
+            ! (std/bool/if)
               StdOS
               first_matches
-              { ! (public/exit) 0 }
-              { ! (public/exit) 1 }
+              { ! (std/os/exit) 0 }
+              { ! (std/os/exit) 1 }
         }
   }
 end

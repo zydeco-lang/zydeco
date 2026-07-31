@@ -4,6 +4,9 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
+  -- Named components remain ordinary product components. They may be mixed with
+  -- unnamed components, nested explicitly, and destructured by ordinary tuple
+  -- patterns.
   let FlatMixed =
     (first :: Int) * (Int * (third :: Int))
   that
@@ -20,7 +23,9 @@ begin
     right = 6 : Int
   ) that
 
-  def Packet : VType =
+  let Packet =
+    -- Data constructors do not interpret field names. Their payload may simply be
+    -- a mixed product, whose labels are checked when its pattern is checked.
     data
     | +Packet : (kind :: Int) * (Int * (payload :: Int))
     | +Empty : Unit
@@ -32,6 +37,8 @@ begin
     payload = 9 : Int
   ) that
 
+  -- Named value types may contain thunked arrows. The arrow itself is unchanged:
+  -- its parameter and result are merely ordinary value types containing names.
   let FunctionInput =
     (lhs :: Int) * Int
   that
@@ -51,7 +58,9 @@ begin
     0
   ) that
 
-  def Gauge : CType =
+  let Gauge =
+    -- Codata also remains unchanged. A destructor may accept or return named value
+    -- types, and a thunked codata object may itself occupy a named product field.
     codata
     | .read : Ret ((reading :: Int) * Int)
     | .shift : (delta :: Int) -> Ret (reading :: Int)
@@ -73,6 +82,7 @@ begin
     gauge = gauge
   ) that
 
+  -- Positional weighting makes an accidental field permutation visible.
   def checksum3 : Thk (Int -> Int -> Int -> Ret Int) = {
     fn (a : Int) (b : Int) (c : Int) ->
       do tens <- ! (api/mul) b 10;
@@ -89,6 +99,8 @@ begin
   do flat_checksum <- ! checksum3 first middle third;
   do flat_check <- ! (api/sub) flat_checksum 321;
 
+  -- A variable pattern may bind a named component opaquely. It can then be
+  -- opened by either a whole-pattern annotation or a payload annotation.
   let (
     first_field : (first :: Int),
     opaque_middle : Int,

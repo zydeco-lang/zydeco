@@ -13,13 +13,13 @@ begin
     Char = StdChar,
     String = StdString,
     OS = StdOS,
-    public
+    std
   ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
     let Num = StdInt that
     def done : Thk (Num -> StdOS) = {
-      fn (status : Num) ->
-        ! (public/exit) status
+      fn (x : Num) ->
+        ! (std/os/exit) x
     } that
 
     ! done 0

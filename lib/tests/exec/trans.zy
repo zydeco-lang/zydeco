@@ -8,123 +8,44 @@ begin
     ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
 
-  def Option : (VType) -> (VType) =
-    begin
-      param (A : VType) that
-      data
-      | +None : Unit
-      | +Some : A
-      end
+  let Option (A : VType) =
+    data
+    | +None : Unit
+    | +Some : A
     end
   that
-  def MonadTransformer :
-    (
-      (
-        (
-          (VType) ->
-          (CType)
-        ) ->
-        (VType) ->
-        (CType)
-      ) ->
-      (CType)
-    ) =
-    begin
-      param (
-        T :
-        (
-          (
-            (VType) ->
-            (CType)
-          ) ->
-          (VType) ->
-          (CType)
-        )
-      ) that
-      codata
-      | .lift :
-        forall (
-          M :
-          (VType) ->
-          (CType)
-        ) .
-        forall (A : VType) .
-          Thk (Monad M) ->
-          Thk (M A) ->
-          T M A
-      end
-    end
-  that
-  def ReaderT :
-    (
-      (VType) ->
-      (
-        (
-          (VType) ->
-          (CType)
-        ) ->
-        (VType) ->
-        (CType)
-      )
-    ) =
-    begin
-      param (R : VType) that
-      param (
+  let MonadTrans'' (T : (((VType) -> (CType)) -> (VType) -> (CType))) =
+    codata
+    | .lift :
+      forall (
         M :
         (VType) ->
         (CType)
-      ) that
-      param (A : VType) that
-      codata
-      | .run : R -> M A
-      end
+      ) .
+      forall (A : VType) .
+        Thk (Monad M) ->
+        Thk (M A) ->
+        T M A
     end
   that
-  def OptionT :
-    (
-      (
-        (VType) ->
-        (CType)
-      ) ->
-      (VType) ->
-      (CType)
-    ) =
-    begin
-      param (
-        M :
-        (VType) ->
-        (CType)
-      ) that
-      param (A : VType) that
-      codata
-      | .run : M (Option A)
-      end
+  let ReaderT (R : VType) (M : (VType) -> (CType)) (A : VType) =
+    codata
+    | .run : R -> M A
     end
   that
-  def KOptionT :
-    (
-      (
-        (VType) ->
-        (CType)
-      ) ->
-      (VType) ->
-      (CType)
-    ) =
-    begin
-      param (
-        M :
-        (VType) ->
-        (CType)
-      ) that
-      param (A : VType) that
-      codata
-      | .run :
-        forall (R : CType) .
-          Thk (Algebra M R) ->
-          Thk (A -> R) ->
-          Thk R ->
-          R
-      end
+  let OptionT (M : (VType) -> (CType)) (A : VType) =
+    codata
+    | .run : M (Option A)
+    end
+  that
+  let KOptionT (M : (VType) -> (CType)) (A : VType) =
+    codata
+    | .run :
+      forall (R : CType) .
+        Thk (Algebra M R) ->
+        Thk (A -> R) ->
+        Thk R ->
+        R
     end
   that
 
@@ -137,33 +58,37 @@ begin
       Thk (Monad M) ->
       Monad (ReaderT R M)
   ) = {
-    fn R M monad ->
+    fn R M mo ->
       comatch
-      | .return A value ->
+      | .return A a ->
+        -- goal: ReaderT R M A
         comatch
-        | .run _ -> ! monad .return A value
+        | .run _ -> ! mo .return A a
         end
-      | .bind A B computation function ->
+      | .bind A A' m f -> -- m: U (ReaderT R M A), f: U (A -> ReaderT R M A')
+        -- goal: ReaderT R M A'
         comatch
-        | .run environment ->
-          ! monad .bind A B
-            { ! computation .run environment }
+        | .run r ->
+          ! mo .bind A A'
+            { ! m .run r }
             {
-              fn value ->
-                ! function value .run environment
+              fn a ->
+                ! f a .run r
             }
         end
       end
   } that
   def reader_t_trans : Thk (
     forall (R : VType) .
-      MonadTransformer (ReaderT R)
+      MonadTrans'' (ReaderT R)
   ) = {
     fn R ->
       comatch
-      | .lift M A monad computation ->
+      | .lift M A mo m ->
+        -- goal: ReaderT R M A
         comatch
-        | .run _ -> ! computation
+        | .run _ -> ! m
+        -- basically ignoring the reader input
         end
       end
   } that
@@ -175,47 +100,49 @@ begin
       Thk (Monad M) ->
       Monad (OptionT M)
   ) = {
-    fn M monad ->
+    fn M mo ->
       comatch
-      | .return A value ->
+      | .return A a ->
+        -- goal: OptionT M A
         comatch
-        | .run -> ! monad .return (Option A) +Some(value)
+        | .run -> ! mo .return (Option A) +Some(a)
         end
-      | .bind A B computation function ->
+      | .bind A A' m f -> -- m: U (OptionT M A), f: U (A -> OptionT M A')
+        -- goal: OptionT M A'
         comatch
         | .run ->
-          ! monad .bind
+          ! mo .bind
             (Option A)
-            (Option B)
-            { ! computation .run }
+            (Option A')
+            { ! m .run }
             {
-              fn possible ->
-                match possible
-                | +Some(value) -> ! function value .run
-                | +None() -> ! monad .return (Option B) +None()
+              fn a? ->
+                match a?
+                | +Some(a) -> ! f a .run
+                | +None() -> ! mo .return (Option A') +None()
                 end
             }
         end
       end
   } that
-  def option_t_trans : Thk (MonadTransformer OptionT) = {
+  def option_t_trans : Thk (MonadTrans'' OptionT) = {
     comatch
-    | .lift M A monad computation ->
+    | .lift M A mo m ->
       comatch
       | .run ->
-        ! monad .bind A (Option A) computation {
-          fn value ->
-            ! monad .return (Option A) +Some(value)
+        ! mo .bind A (Option A) m {
+          fn a ->
+            ! mo .return (Option A) +Some(a)
         }
       end
     end
   } that
-  def koption_t_trans : Thk (MonadTransformer KOptionT) = {
+  def koption_t_trans : Thk (MonadTrans'' KOptionT) = {
     comatch
-    | .lift M A monad computation ->
+    | .lift M A mo m -> -- m : U(M A)
       comatch
-      | .run R algebra success failure ->
-        ! algebra A computation success
+      | .run R bAlg kS kE -> -- kS : U(A -> R), bAlg : Algebra M B
+        ! bAlg A m kS
       end
     end
   } that
@@ -227,24 +154,24 @@ begin
       Thk (Monad M) ->
       Monad (KOptionT M)
   ) = {
-    fn M monad ->
+    fn M monadM ->
       comatch
-      | .return A value ->
+      | .return A a ->
         comatch
-        | .run R algebra success failure ->
-          ! success value
+        | .run R bAlg kS kE ->
+          ! kS a
         end
-      | .bind A B computation function ->
+      | .bind A A' m k -> -- m : U(KOptT M A), k : U(A -> KOptT M A'), goal: KOptT M A'
         comatch
-        | .run R algebra success failure ->
-          ! computation .run
+        | .run R bAlg kS kE -> -- kS : U(A' -> R), kE: U R, bAlg: Algebra M R, goal: R
+          ! m .run
             R
-            algebra
+            bAlg
             {
-              fn value ->
-                ! function value .run R algebra success failure
+              fn a ->
+                ! k a .run R bAlg kS kE
             }
-            failure
+            kE
         end
       end
   } that

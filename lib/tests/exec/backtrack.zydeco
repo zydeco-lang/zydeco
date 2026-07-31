@@ -8,67 +8,43 @@ begin
     ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
 
-  def Bool : VType =
+  let Bool =
     data
     | +True : Unit
     | +False : Unit
     end
   that
-  def Pair :
-    (VType) ->
-    (VType) ->
-    (VType) =
-    begin
-      param (A : VType) that
-      param (B : VType) that
-      data
-      | +Pair : A * B
-      end
+  let Pair (A : VType) (A' : VType) =
+    data
+    | +Cons : A * A'
     end
   that
-  def List : (VType) -> (VType) =
-    begin
-      param (A : VType) that
-      data
-      | +Nil : Unit
-      | +Cons : A * List A
-      end
+  def List (A : VType) : VType =
+    data
+    | +Nil : Unit
+    | +Cons : A * List A
     end
   that
-  def Monoid :
-    (
-      (
-        (VType) ->
-        (CType)
-      ) ->
-      (CType)
-    ) =
-    begin
-      param (
-        M :
-        (VType) ->
-        (CType)
-      ) that
-      codata
-      | .empty :
-        forall (A : VType) .
-          M A
-      | .append :
-        forall (A : VType) .
-          Thk (M A) ->
-          Thk (M A) ->
-          M A
-      end
+  let Monoid (M : (VType) -> (CType)) =
+    codata
+    | .empty :
+      forall (A : VType) .
+        M A
+    | .append :
+      forall (A : VType) .
+        Thk (M A) ->
+        Thk (M A) ->
+        M A
     end
   that
-  def MList :
-    (VType) ->
-    (CType) =
-    begin
-      param (A : VType) that
-      codata
-      | .done : Ret (List A)
-      end
+  -- codata Monad (M: VType -> CType) where
+  --   | .return : forall (A: VType) . A -> M A
+  --   | .bind : forall (A: VType) (A': VType) . U (M A) -> U (A -> M A') -> M A'
+  -- end
+  let MList (A : VType) =
+    codata
+    | .done : Ret (List A)
+    -- | .run : forall (R: CType) . U (U R -> A -> R) -> U R -> R
     end
   that
 
@@ -81,123 +57,123 @@ begin
         { ret +True() }
         { ret +False() }
   } that
-  def list_monoid : Thk (Monoid MList) = {
+  def mnlist : Thk (Monoid MList) = {
     comatch
     | .empty A ->
       fn .done ->
         ret +Nil()
-    | .append A left right ->
+    | .append A m1 m2 ->
       fn .done ->
-        do left <- ! left .done;
-        do right <- ! right .done;
-        let append : Thk (List A -> Ret (List A)) = {
-          fix (append : Thk (List A -> Ret (List A))) ->
-            fn values ->
-              match values
-              | +Nil() -> ret right
-              | +Cons(head, tail) ->
-                do tail <- ! append tail;
-                ret +Cons(head, tail)
+        do xs <- ! m1 .done;
+        do ys <- ! m2 .done;
+        let loop : Thk (List A -> Ret (List A)) = {
+          fix (loop : Thk (List A -> Ret (List A))) ->
+            fn xs ->
+              match xs
+              | +Nil() -> ret ys
+              | +Cons(x, xs) ->
+                do ys <- ! loop xs;
+                ret +Cons(x, ys)
               end
         } in
-        ! append left
+        ! loop xs
     end
   } that
-  def list_monad : Thk (Monad MList) = {
+  def mlist : Thk (Monad MList) = {
     comatch
-    | .return A value ->
+    | .return A a ->
       fn .done ->
-        ret +Cons(value, +Nil())
-    | .bind A B computation function ->
-      do values <- ! computation .done;
+        ret +Cons(a, +Nil())
+    | .bind A A' m f ->
+      do xs <- ! m .done;
       let loop : Thk (
         List A ->
-        Thk (Thk (MList B) -> MList B) ->
-        MList B
+        Thk (Thk (MList A') -> MList A') ->
+        MList A'
       ) = {
         fix (
           loop :
           Thk (
             List A ->
-            Thk (Thk (MList B) -> MList B) ->
-            MList B
+            Thk (Thk (MList A') -> MList A') ->
+            MList A'
           )
         ) ->
-          fn values continuation ->
-            match values
+          fn xs g ->
+            match xs
             | +Nil() ->
-              ! continuation { ! list_monoid .empty B }
-            | +Cons(head, tail) ->
-              ! loop tail {
-                fn accumulated ->
-                  ! continuation {
-                    ! list_monoid .append B
-                      { ! function head }
-                      accumulated
+              ! g { ! mnlist .empty A' }
+            | +Cons(x, xs) ->
+              ! loop xs {
+                fn ys ->
+                  ! g {
+                    ! mnlist .append A'
+                      { ! f x }
+                      ys
                   }
               }
             end
       } in
-      ! loop values {
-        fn result ->
-          ! result
+      ! loop xs {
+        fn ys ->
+          ! ys
       }
     end
   } that
   def choose : Thk (List Int -> MList Int) = {
-    fn values ->
+    fn xs ->
       fn .done ->
-        ret values
+        ret xs
   } that
   def guard : Thk (Bool -> MList Unit) = {
-    fn condition ->
-      match condition
-      | +True() -> ! list_monad .return Unit ()
-      | +False() -> ! list_monoid .empty Unit
+    fn b ->
+      match b
+      | +True() -> ! mlist .return Unit ()
+      | +False() -> ! mnlist .empty Unit
       end
   } that
 
   let demo : Thk (MList (Pair Int Int)) = {
-    ! list_monad .bind Int (Pair Int Int)
+    ! mlist .bind Int (Pair Int Int)
       { ! choose +Cons(1, +Cons(2, +Nil())) }
       {
-        fn left ->
-          ! list_monad .bind Int (Pair Int Int)
+        fn x ->
+          ! mlist .bind Int (Pair Int Int)
             { ! choose +Cons(3, +Cons(4, +Nil())) }
             {
-              fn right ->
-                ! list_monad .bind Unit (Pair Int Int)
+              fn y ->
+                ! mlist .bind Unit (Pair Int Int)
                   {
-                    do sum <- ! (api/add) left right;
-                    do equal <- ! int_eq sum 5;
-                    ! guard equal
+                    do r <- ! (api/add) x y;
+                    do b <- ! int_eq r 5;
+                    ! guard b
                   }
                   {
                     fn _ ->
-                      ! list_monad .return
+                      ! mlist .return
                         (Pair Int Int)
-                        +Pair(left, right)
+                        +Cons(x, y)
                   }
             }
       }
   } in
-  do pairs <- ! demo .done;
+  do ps <- ! demo .done;
   let print : Thk (List (Pair Int Int) -> Thk OS -> OS) = {
     fix (
       print :
       Thk (List (Pair Int Int) -> Thk OS -> OS)
     ) ->
-      fn pairs continuation ->
-        match pairs
-        | +Nil() -> ! continuation
-        | +Cons(pair, tail) ->
-          match pair
-          | +Pair(left, right) ->
-            ! (api/write_int) left {
+      fn ps kont ->
+        match ps
+        | +Nil() -> ! kont
+        | +Cons(p, ps) ->
+          match p
+          | +Cons(x, y) ->
+            ! (api/write_int) x {
               ! (api/write_str) " + " {
-                ! (api/write_int) right {
+                ! (api/write_int) y {
                   ! (api/write_line) "" {
-                    ! print tail continuation
+                    ! print ps kont
                   }
                 }
               }
@@ -205,6 +181,6 @@ begin
           end
         end
   } in
-  ! print pairs { ! (api/exit) 0 }
+  ! print ps { ! (api/exit) 0 }
 end
 end

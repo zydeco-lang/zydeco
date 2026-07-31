@@ -4,24 +4,21 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  def Stack : (VType) -> (CType) =
-    begin
-      param (A : VType) that
-      codata
-      | .app : A -> Stack A
-      | .return : Ret A
-      end
+  def Stack (A : VType) : CType =
+    codata
+    | .app : A -> Stack A
+    | .return : Ret A
     end
   that
   def abort : Thk (Int -> Stack Int) = {
     fix (abort : Thk (Int -> Stack Int)) ->
-      fn (value : Int) ->
+      fn (x : Int) ->
         comatch
-        | .app _ -> ! abort value
-        | .return -> ret value
+        | .app _ -> ! abort x
+        | .return -> ret x
         end
   } that
 
-  do status <- ! abort 0 .app 1 .app 2 .app 3 .return;
-  ! (api/exit) status
+  do x <- ! abort 0 .app 1 .app 2 .app 3 .return;
+  ! (api/exit) x
 end

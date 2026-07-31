@@ -1,20 +1,16 @@
+-- `= field` expands to `field = field` without introducing a downstream
+-- syntax form. The inferred payload is resolved according to its context.
 begin
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let Slot =
-    begin
-      param (pun_value : VType) that
-      (pun_value :: pun_value)
-    end
+  let Slot (pun_value : VType) =
+    (pun_value :: pun_value)
   that
-  let UpperSlot =
-    begin
-      param (PunValue : VType) that
-      (PunValue :: PunValue)
-    end
+  let UpperSlot (PunValue : VType) =
+    (PunValue :: PunValue)
   that
   let PunPair =
     (pun_x :: Int) * (pun_y :: Int)

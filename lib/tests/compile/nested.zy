@@ -4,12 +4,12 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  do left <- ret 40;
-  do right <- ret 30;
-  do total <-
-    do subtotal <- ! (api/add) left right;
-    do total <- ! (api/add) subtotal 10;
-    ret total;
-  do status <- ! (api/sub) total 80;
-  ! (api/exit) status
+  do x <- ret 40;
+  do y <- ret 30;
+  do z <-
+    do a <- ! (api/add) x y;
+    do b <- ! (api/add) a 10;
+    ret b;
+  do r <- ! (api/sub) z 80;
+  ! (api/exit) r
 end

@@ -1,5 +1,5 @@
 begin
-  def Bool : VType =
+  let Bool =
     data
     | +False : Unit
     | +True : Unit
@@ -9,18 +9,20 @@ begin
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
-  def choose : Thk (Bool -> Thk (Int -> OS) -> OS) = {
-    fn (condition : Bool) (continuation : Thk (Int -> OS)) ->
-      match condition
-      | +True(_) -> ! continuation 0
-      | +False(_) -> ! continuation 1
+  def f : Thk (Bool -> Thk (Int -> OS) -> OS) = {
+    fn (b : Bool) (k : Thk (Int -> OS)) ->
+      -- k might be large
+      match b
+      | +True(_) -> ! k 0
+      | +False(_) -> ! k 1
       end
   } that
 
-  ! choose (+True()) {
-    fn value ->
+  ! f (+True()) {
+    -- a large continuation gets inlined
+    fn x ->
       match (+True() : Bool)
-      | +True(_) -> ! (api/exit) value
+      | +True(_) -> ! (api/exit) x
       | +False(_) -> ! (api/exit) 0
       end
   }

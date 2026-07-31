@@ -3,17 +3,17 @@ begin
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
-  def identity : Thk (
+  def id : Thk (
     forall (A : VType) .
       A -> Ret A
   ) = {
-    fn (A : VType) (value : A) ->
-      ret value
+    fn (A : VType) (a : A) ->
+      ret a
   } that
 
-  do first <- ! identity Int 0;
-  do second <- ! identity Int first;
-  do third <- ! identity Int second;
-  do status <- ! identity Int third;
-  ! (api/exit) status
+  do x <- ! id Int 0;
+  do y <- ! id Int x;
+  do z <- ! id Int y;
+  do r <- ! id Int z;
+  ! (api/exit) r
 end

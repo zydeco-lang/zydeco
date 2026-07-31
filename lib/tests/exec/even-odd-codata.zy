@@ -10,36 +10,36 @@ begin
     | +S : Nat
     end
   that
-  def Bool : VType =
+  let Bool =
     data
     | +True : Unit
     | +False : Unit
     end
   that
-  def OddEven : CType =
+  let OddEven =
     codata
     | .even : Nat -> Ret Bool
     | .odd : Nat -> Ret Bool
     end
   that
-  def odd_even : Thk OddEven = {
-    fix (odd_even : Thk OddEven) ->
+  def eo : Thk OddEven = {
+    fix (eo : Thk OddEven) ->
       comatch
-      | .even number ->
-        match number
+      | .even n ->
+        match n
         | +Z() -> ret +True()
-        | +S(predecessor) -> ! odd_even .odd predecessor
+        | +S(n) -> ! eo .odd n
         end
-      | .odd number ->
-        match number
+      | .odd n ->
+        match n
         | +Z() -> ret +False()
-        | +S(predecessor) -> ! odd_even .even predecessor
+        | +S(n) -> ! eo .even n
         end
       end
   } that
 
-  do result <- ! odd_even .even +S(+S(+S(+S(+Z()))));
-  match result
+  do b <- ! eo .even +S(+S(+S(+S(+Z()))));
+  match b
   | +True() -> ! (api/exit) 0
   | +False() -> ! (api/exit) 1
   end

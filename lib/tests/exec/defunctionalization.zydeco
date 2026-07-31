@@ -1,94 +1,138 @@
+-- Don't defunctionalize the kontinuation, objectify the computation!
+-- Let's consider a simple example of a recursive function, summing up
+-- the numbers in a list.
 begin
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  def List : (VType) -> (VType) =
-    begin
-      param (A : VType) that
-      data
-      | +Nil : Unit
-      | +Cons : A * List A
-      end
+  def List (A : VType) : VType =
+    data
+    | +Nil : Unit
+    | +Cons : A * List A
     end
   that
   def Summer : CType =
     codata
     | .done : Ret Int
+    -- The equivalent of CALLERS_KONT
     | .addN : Int -> Summer
     end
   that
-  def Summer' : CType =
+  let Summer' =
     codata
     | .add : Int -> Ret Int
     end
   that
 
-  def sum_bad : Thk (List Int -> Ret Int) = {
-    fix (sum_bad : Thk (List Int -> Ret Int)) ->
-      fn values ->
-        match values
+  def sumBad : Thk (List Int -> Ret Int) = {
+    fix (sumBad : Thk (List Int -> Ret Int)) ->
+      fn xs ->
+        match xs
         | +Nil() -> ret 0
-        | +Cons(head, tail) ->
-          do accumulated <- ! sum_bad tail;
-          ! (api/add) accumulated head
+        | +Cons(x, xs) ->
+          do n <- ! sumBad xs;
+          ! (api/add) n x
         end
   } that
-  def ret_summer : Thk (Int -> Summer) = {
-    fix (ret_summer : Thk (Int -> Summer)) ->
-      fn accumulated ->
+  -- This is a bad algorithm because it uses stack space linear in the
+  -- size of the input list. Why is that? each time we have a cons, we do
+  -- a *bind*, which pushes a kontinuation onto the stack. So if we have a list
+  -- +Cons(5, +Cons(13, Nil))
+  -- when we get to the recursive call, the stack looks like:
+  -- (n <- -. ! add n 13) :: (n <- -. ! add n 5) :: CALLERS_KONT
+  -- We can make this recursive stack structure explicit in the program
+  -- by changing the return type from Ret(Int) to a new special codata
+  -- type Summer (see above)
+  -- and changing the implementation as follows:
+  def retSummer : Thk (Int -> Summer) = {
+    fix (retSummer : Thk (Int -> Summer)) ->
+      fn n ->
         comatch
-        | .done -> ret accumulated
-        | .addN next ->
-          do accumulated <- ! (api/add) accumulated next;
-          ! ret_summer accumulated
+        | .done -> ret n
+        | .addN x ->
+          do n' <- ! (api/add) n x;
+          ! retSummer n'
         end
   } that
-  def sum_ok : Thk (List Int -> Summer) = {
-    fix (sum_ok : Thk (List Int -> Summer)) ->
-      fn values ->
-        match values
-        | +Nil() -> ! ret_summer 0
-        | +Cons(head, tail) -> ! sum_ok tail .addN head
+  def sumOk : Thk (List Int -> Summer) = {
+    fix (sumOk : Thk (List Int -> Summer)) ->
+      fn xs ->
+        match xs
+        | +Nil() -> ! retSummer 0
+        | +Cons(x, xs) -> ! sumOk xs .addN x
         end
   } that
-  def sum_better : Thk (List Int -> Summer) = {
-    fix (sum_better : Thk (List Int -> Summer)) ->
-      fn values ->
-        match values
-        | +Nil() -> ! ret_summer 0
-        | +Cons(head, tail) ->
+  -- Now instead of pushing a "real" continuation we add a "method"
+  -- .addN(n) with the captured variables of the continuation as
+  -- arguments (in this case, just n).
+  -- So when we get to empty, the stack looks like:
+  -- .addN 13 .addN 5 .done
+  -- Since each of these is no longer a *real* continuation, we can't
+  -- just use `ret` to return, so we need to implement a new function
+  -- "retSummer" that interprets each of these "abstract" continuations
+  -- as the operation the original continuation performed.
+  -- But note that this algorithm is *just* as bad as before, in that it
+  -- still uses linear stack space, we've just changed from continuations
+  -- to methods.
+  -- To get a better algorithm we need to make a key insight:
+  -- when we run ! retSummer x .addN y .addN z
+  -- we will evaluate to ! retSummer .addN (x + y) .addN (z)
+  -- and then            ! retSummer .addN ((x + y) + z)
+  -- which is clearly equivalent to ! retSummer .addN (x + (y + z))
+  -- by the associativity of addition.
+  -- but this is what we would have evaluated to if we had run
+  -- ! retSummer x .addN (y + z)
+  -- So when we pushed .addN (y) on the stack, we could have instead added
+  -- it to `z` and not increased the size of the stack(!)
+  def sumBetter : Thk (List Int -> Summer) = {
+    fix (sumBetter : Thk (List Int -> Summer)) ->
+      fn xs ->
+        match xs
+        | +Nil() -> ! retSummer 0
+        | +Cons(x, xs) ->
           comatch
-          | .done -> ! sum_better tail .addN head .done
-          | .addN next ->
-            do accumulated <- ! (api/add) head next;
-            ! sum_better tail .addN accumulated
+          | .done -> ! sumBetter xs .addN x .done
+          | .addN y ->
+            do xPlusy <- ! (api/add) x y;
+            ! sumBetter xs .addN xPlusy
           end
         end
   } that
-  def sum_best : Thk (List Int -> Summer') = {
-    fix (sum_best : Thk (List Int -> Summer')) ->
-      fn values ->
-        match values
+  def sumBest : Thk (List Int -> Summer') = {
+    fix (sumBest : Thk (List Int -> Summer')) ->
+      fn xs ->
+        -- This is better in that it uses *constant* space to implement the
+        -- same algorithm, but we can make a couple of more improvements:
+        -- 1. We are branching on what the stack is every time we have a
+        --    Cons. but what if we instead ensured that there was always an
+        --    .add n on the stack so we wouldn't have to guess? We can do this
+        --    by changing our codata type to only have one case (see above, Summer'):
+        -- This no longer needs to be recursive because we know there will only
+        -- be at most one add, i.e., because we use constant stack space!
+        --
+        -- We can implement the .done method from before by pushing .add(0)
+        -- (using that it is the additive unit).
+        match xs
         | +Nil() ->
           comatch
-          | .add accumulated -> ret accumulated
+          | .add n -> ret n
           end
-        | +Cons(head, tail) ->
+        | +Cons(x, xs) ->
           comatch
-          | .add accumulated ->
-            do accumulated <- ! (api/add) head accumulated;
-            ! sum_best tail .add accumulated
+          | .add n ->
+            do n' <- ! (api/add) x n;
+            ! sumBest xs .add n'
           end
         end
   } that
   def sum : Thk (List Int -> Ret Int) = {
-    fn values ->
-      ! sum_best values .add 0
+    fn xs ->
+      ! sumBest xs .add 0
   } that
 
-  do result <- ! sum (+Cons(5, +Cons(13, +Nil())));
-  do rendered <- ! (api/int_to_str) result;
-  ! (api/write_line) rendered { ! (api/exit) 0 }
+  do n <- ! sum (+Cons(5, +Cons(13, +Nil())));
+  do s <- ! (api/int_to_str) n;
+  ! (api/write_line) s { ! (api/exit) 0 }
 end

@@ -732,6 +732,8 @@ impl Desugar for t::GenBind<t::TermId> {
         let binder = binder.desugar(desugarer)?;
         let bindee = bindee.desugar(desugarer)?;
         // ty -> ann
+        let annotation_is_explicit = ty.is_some();
+        let annotation_follows_sugar = annotation_is_explicit || fix || comp;
         let ty = match ty {
             | Some(ty) => Some(ty.desugar(desugarer)?),
             | None => None,
@@ -753,8 +755,10 @@ impl Desugar for t::GenBind<t::TermId> {
                 match param {
                     | b::CoPatternItem::Pat(pat) => {
                         binding = Alloc::alloc(desugarer, b::Abs(pat, binding).into(), prev);
-                        let tpat = pat.deep_clone(desugarer);
-                        ann = Alloc::alloc(desugarer, b::Pi(tpat, ann).into(), prev);
+                        if annotation_follows_sugar {
+                            let tpat = pat.deep_clone(desugarer);
+                            ann = Alloc::alloc(desugarer, b::Pi(tpat, ann).into(), prev);
+                        }
                     }
                     | b::CoPatternItem::Dtor(dtor) => {
                         binding = Alloc::alloc(
@@ -779,8 +783,10 @@ impl Desugar for t::GenBind<t::TermId> {
         // add thunk?
         if fix || comp {
             binding = Alloc::alloc(desugarer, b::Thunk(binding).into(), prev);
-            let thunk = desugarer.thunk(prev);
-            ann = Alloc::alloc(desugarer, b::App(thunk, ann).into(), prev);
+            if annotation_follows_sugar {
+                let thunk = desugarer.thunk(prev);
+                ann = Alloc::alloc(desugarer, b::App(thunk, ann).into(), prev);
+            }
         }
         // binding & ann -> anno
         let anno = Alloc::alloc(desugarer, b::Ann { tm: binding, ty: ann }.into(), prev);

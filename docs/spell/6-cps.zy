@@ -10,15 +10,10 @@ begin
     @[import("../../lib/std/builtin.zy")] _
   ) that
 
-  def List :
-    (VType) ->
-    (VType) =
-    begin
-      param (A : VType) that
-      data
-      | +Nil : Unit
-      | +Cons : A * List A
-      end
+  def List (A : VType) : VType =
+    data
+    | +Nil : Unit
+    | +Cons : A * List A
     end
   that
   def values : List String =

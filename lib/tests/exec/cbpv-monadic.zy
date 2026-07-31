@@ -23,44 +23,27 @@ begin
   let read_line = api/read_line that
   let exit = api/exit that
 
-  def Bool : VType =
+  let Bool =
     data
     | +True : Unit
     | +False : Unit
     end
   that
-  def Option :
-    (VType) ->
-    (VType) =
-    begin
-      param (A : VType) that
-      data
-      | +None : Unit
-      | +Some : A
-      end
+  let Option (A : VType) =
+    data
+    | +None : Unit
+    | +Some : A
     end
   that
-  def List :
-    (VType) ->
-    (VType) =
-    begin
-      param (A : VType) that
-      data
-      | +Nil : Unit
-      | +Cons : A * List A
-      end
+  def List (A : VType) : VType =
+    data
+    | +Nil : Unit
+    | +Cons : A * List A
     end
   that
-  def Pair :
-    (VType) ->
-    (VType) ->
-    (VType) =
-    begin
-      param (A : VType) that
-      param (B : VType) that
-      data
-      | +Cons : A * B
-      end
+  let Pair (A : VType) (A' : VType) =
+    data
+    | +Cons : A * A'
     end
   that
 
@@ -136,8 +119,8 @@ begin
       end
   } that
   def bool_to_str : U (Bool -> Ret String) = {
-    fn boolean ->
-      match boolean
+    fn b ->
+      match b
       | +True() -> ret "true"
       | +False() -> ret "false"
       end
@@ -184,144 +167,58 @@ begin
   } that
 
   -- A monad structure that supports fail
-  def MonadErr :
-    (
-      (
-        (VType) ->
-        (CType)
-      ) ->
-      (CType)
-    ) =
-    begin
-      param (
-        M :
-        (VType) ->
-        (CType)
-      ) that
-      codata
-      | .fail :
-        forall (A : VType) .
-          Exception -> M A
-      end
+  let MonadErr (M : (VType) -> (CType)) =
+    codata
+    | .fail :
+      forall (A : VType) .
+        Exception -> M A
     end
   that
 
   -- A monad structure that supports print
-  def MonadPrint :
-    (
-      (
-        (VType) ->
-        (CType)
-      ) ->
-      (CType)
-    ) =
-    begin
-      param (
-        M :
-        (VType) ->
-        (CType)
-      ) that
-      codata
-      | .print : String -> M Unit
-      end
+  let MonadPrint (M : (VType) -> (CType)) =
+    codata
+    | .print : String -> M Unit
     end
   that
 
-  def MonadAlt :
-    (
-      (
-        (VType) ->
-        (CType)
-      ) ->
-      (CType)
-    ) =
-    begin
-      param (
-        M :
-        (VType) ->
-        (CType)
-      ) that
-      codata
-      | .alt :
-        forall (A : VType) .
-          U (M A) -> U (M A) -> M A
-      end
+  let MonadAlt (M : (VType) -> (CType)) =
+    codata
+    | .alt :
+      forall (A : VType) .
+        U (M A) -> U (M A) -> M A
     end
   that
 
-  def MonadReduce :
-    (
-      (
-        (VType) ->
-        (CType)
-      ) ->
-      (CType)
-    ) =
-    begin
-      param (
-        M :
-        (VType) ->
-        (CType)
-      ) that
-      codata
-      | .reduce :
-        forall (A : VType) .
-          List (U (M A)) -> U (M A) -> M A
-      end
+  let MonadReduce (M : (VType) -> (CType)) =
+    codata
+    | .reduce :
+      forall (A : VType) .
+        List (U (M A)) -> U (M A) -> M A
     end
   that
 
   -- A comonad structure
-  def Comonad :
-    (
-      (
-        (CType) ->
-        (VType)
-      ) ->
-      (CType)
-    ) =
-    begin
-      param (
-        W :
-        (CType) ->
-        (VType)
-      ) that
-      codata
-      | .extract :
-        forall (B : CType) .
-          W B -> B
-      | .extend :
-        forall (B : CType) .
-        forall (C : CType) .
-          W B -> U (W B -> C) -> F (W C)
-      end
+  let Comonad (W : (CType) -> (VType)) =
+    codata
+    | .extract :
+      forall (B : CType) .
+        W B -> B
+    | .extend :
+      forall (B : CType) .
+      forall (B' : CType) .
+        W B -> U (W B -> B') -> F (W B')
     end
   that
 
   -- An algebra structure that supports fail
-  def AlgebraErr :
-    (
-      (
-        (VType) ->
-        (CType)
-      ) ->
-      (CType) ->
-      (CType)
-    ) =
-    begin
-      param (
-        M :
-        (VType) ->
-        (CType)
-      ) that
-      param (B : CType) that
-      codata
-      | .failA : Exception -> B
-      end
+  let AlgebraErr (M : (VType) -> (CType)) (B : CType) =
+    codata
+    | .failA : Exception -> B
     end
   that
 
-  def Exception : VType =
+  let Exception =
     data
     | +ParseError : Int * String
     | +FreeVariable : Unit
@@ -330,14 +227,9 @@ begin
   that
 
   -- Continuation-based error monad
-  def MExnOS :
-    (VType) ->
-    (CType) =
-    begin
-      param (A : VType) that
-      codata
-      | .run : U (A -> OS) -> U (Exception -> OS) -> OS
-      end
+  let MExnOS (A : VType) =
+    codata
+    | .run : U (A -> OS) -> U (Exception -> OS) -> OS
     end
   that
 
@@ -375,6 +267,8 @@ begin
     | +Force : SValue
     | +Rec : String * SCompu
     | +If : SValue * SCompu * SCompu
+    -- | +Add : SValue * SValue
+    -- | +Mul : SValue * SValue
     | +Env : SCompu
     end
   that
@@ -469,7 +363,7 @@ begin
 -- end module MExnOS
 
 -- module Print
-  def PrintSCbpv : CType =
+  let PrintSCbpv =
     codata
     | .value : SValue -> U OS -> OS
     | .compu : SCompu -> U OS -> OS
@@ -552,7 +446,7 @@ begin
     ! print-scbpv .compu
   } that
 
-  def PrintCbpv : CType =
+  let PrintCbpv =
     codata
     | .value : Value -> U OS -> OS
     | .compu : U Compu -> U OS -> OS
@@ -634,7 +528,7 @@ begin
 -- end module Env
 
 -- module Trace
-  def TraceItem : VType =
+  let TraceItem =
     data
     | +App : Value
     -- | +App : SValue * Value
@@ -643,7 +537,7 @@ begin
     end
   that
 
-  def TraceO : CType =
+  let TraceO =
     codata
     | .print : U OS -> OS
     end
@@ -658,10 +552,12 @@ begin
           do~ ! foldl (TraceItem) (U OS) items { fn item kont -> ret {
             match item
             | +App(v) ->
+              -- | +App(_sv, v) ->
               do~ ! write_str "  app ";
               do~ ! print-value v;
               do~ ! write_line ",";
               ! kont
+            -- | +Bind(_k) ->
             | +Bind(x, sc, _k) ->
               do~ ! write_str "  bind ";
               do~ ! write_str x;
@@ -681,14 +577,9 @@ begin
 /- Parser -/
 
 -- module Parser
-  def Parser :
-    (VType) ->
-    (CType) =
-    begin
-      param (A : VType) that
-      codata
-      | .run : String -> Int -> MExnOS (Pair A Int)
-      end
+  let Parser (A : VType) =
+    codata
+    | .run : String -> Int -> MExnOS (Pair A Int)
     end
   that
 
@@ -837,7 +728,7 @@ begin
     end
   } that
 
-  def ParserCbpv : CType =
+  let ParserCbpv =
     codata
     | .value : Parser SValue
     | .compu : Parser SCompu
@@ -972,7 +863,7 @@ begin
 
 /- Interpretor -/
 
-  def Interp : CType =
+  let Interp =
     codata
     | .value : SValue -> MExnOS Value
     | .compu : SCompu -> Compu

@@ -4,31 +4,22 @@ begin
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
-  def Tree : (VType) -> (VType) =
-    begin
-      param (A : VType) that
-      data
-      | +Fork : Tree A * Tree A
-      | +Final : A
-      end
+  def Tree (A : VType) : VType =
+    data
+    | +Fork : Tree A * Tree A
+    | +Final : A
     end
   that
-  def Choice : (CType) -> (VType) =
-    begin
-      param (B : CType) that
-      data
-      | +L : Thk B
-      | +R : Thk B
-      end
+  let Choice (B : CType) =
+    data
+    | +L : Thk B
+    | +R : Thk B
     end
   that
-  def Path : (VType) -> (VType) =
-    begin
-      param (A : VType) that
-      data
-      | +Nil : Unit
-      | +Cons : A * Path A
-      end
+  def Path (A : VType) : VType =
+    data
+    | +Nil : Unit
+    | +Cons : A * Path A
     end
   that
 
@@ -40,18 +31,18 @@ begin
     Char = StdChar,
     String = StdString,
     OS = StdOS,
-    public
+    std
   ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   def beep : Choice (Thk StdOS -> StdOS) =
     +L({
-      fn continuation ->
-        ! (public/write_line) "0" continuation
+      fn k ->
+        ! (std/os/write_line) "0" k
     })
   in
   def boop : Choice (Thk StdOS -> StdOS) =
     +R({
-      fn continuation ->
-        ! (public/write_line) "1" continuation
+      fn k ->
+        ! (std/os/write_line) "1" k
     })
   in
   def tree : Tree StdString =
@@ -76,28 +67,28 @@ begin
         StdOS
       )
     ) ->
-      fn current_tree current_path ->
-        match current_tree
-        | +Final(result) ->
-          match current_path
+      fn t p ->
+        match t
+        | +Final(res) ->
+          match p
           | +Nil() ->
-            ! (public/write_line) result {
-              do correct <- ! (public/str_eq) result "o";
-              ! (public/branch)
+            ! (std/os/write_line) res {
+              do correct <- ! (std/string/eq) res "o";
+              ! (std/bool/if)
                 StdOS
                 correct
-                { ! (public/exit) 0 }
-                { ! (public/exit) 1 }
+                { ! (std/os/exit) 0 }
+                { ! (std/os/exit) 1 }
             }
-          | +Cons(_, _) -> ! (public/exit) 2
+          | +Cons(_, _) -> ! (std/os/exit) 2
           end
-        | +Fork(left, right) ->
-          match current_path
-          | +Nil() -> ! (public/exit) 3
-          | +Cons(choice, remaining) ->
-            match choice
-            | +L(continuation) -> ! continuation { ! walk left remaining }
-            | +R(continuation) -> ! continuation { ! walk right remaining }
+        | +Fork(tl, tr) ->
+          match p
+          | +Nil() -> ! (std/os/exit) 3
+          | +Cons(c, p') ->
+            match c
+            | +L(k) -> ! k { ! walk tl p' }
+            | +R(k) -> ! k { ! walk tr p' }
             end
           end
         end

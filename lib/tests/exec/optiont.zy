@@ -4,43 +4,24 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  def Option : (VType) -> (VType) =
-    begin
-      param (A : VType) that
-      data
-      | +None : Unit
-      | +Some : A
-      end
+  let Option (A : VType) =
+    data
+    | +None : Unit
+    | +Some : A
     end
   that
-  def OptionT :
-    ((VType) -> (CType)) ->
-    (VType) ->
-    (CType) =
-    begin
-      param (
-        M :
-        (VType) -> (CType)
-      ) that
-      param (A : VType) that
-      codata
-      | .trans : M (Option A)
-      end
+  let OptionT (M : (VType) -> (CType)) (A : VType) =
+    codata
+    | .trans : M (Option A)
     end
   that
-  let Return =
-    begin
-      param (A : VType) that
-      Ret A
-    end
+  let Return (X : VType) =
+    Ret X
   that
-  let OptionPrime =
-    begin
-      param (A : VType) that
-      OptionT Return A
-    end
+  let Option' (A : VType) =
+    OptionT Return A
   that
-  def optional : Thk (OptionPrime Int) = {
+  def o : Thk (Option' Int) = {
     comatch
     | .trans ->
       ret +Some(1)

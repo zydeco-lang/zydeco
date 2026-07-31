@@ -6,11 +6,11 @@ begin
 
   ! (api/read_line) {
     fn line ->
-      let finish : Thk (Int -> OS) = {
-        fn status ->
-          let captured = line in
-          ! (api/exit) status
+      let f : Thk (Int -> OS) = {
+        fn z ->
+          let line = line in
+          ! (api/exit) z
       } in
-      ! finish 0
+      ! f 0
   }
 end

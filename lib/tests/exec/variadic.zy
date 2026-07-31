@@ -4,29 +4,21 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  def List : (VType) -> (VType) =
-    begin
-      param (A : VType) that
-      data
-      | +Nil : Unit
-      | +Cons : A * List A
-      end
+  def List (A : VType) : VType =
+    data
+    | +Nil : Unit
+    | +Cons : A * List A
     end
   that
-  def Variadic :
-    (VType) ->
-    (CType) ->
-    (CType) =
-    begin
-      param (A : VType) that
-      param (B : CType) that
-      codata
-      | .more : A -> Variadic A B
-      | .done : B
-      end
+  def Variadic (A : VType) (B : CType) : CType =
+    codata
+    | .more : A -> Variadic A B
+    | .done : B
     end
   that
-  def restore : Thk (
+  -- A ->* B == List A -> B
+  -- restore
+  def l : Thk (
     forall (A : VType) .
     forall (B : CType) .
       Thk (Variadic A B) ->
@@ -34,7 +26,7 @@ begin
       B
   ) = {
     fix (
-      restore :
+      l :
       Thk (
         forall (A : VType) .
         forall (B : CType) .
@@ -45,82 +37,88 @@ begin
     ) ->
       fn (A : VType)
          (B : CType)
-         variadic
-         values ->
-        match values
-        | +Nil() -> ! variadic .done
-        | +Cons(head, tail) ->
-          ! restore A B { ! variadic .more head } tail
+         fv
+         xs ->
+        match xs
+        | +Nil() -> ! fv .done
+        | +Cons(x, xs) ->
+          ! l A B { ! fv .more x } xs
         end
   } that
-  def capture : Thk (
+  def r : Thk (
     forall (A : VType) .
     forall (B : CType) .
       Thk (List A -> B) ->
       Variadic A B
   ) = {
+    -- capture
     fn (A : VType)
        (B : CType)
-       function ->
-      let recursive : Thk (
+       fl ->
+      let r : Thk (
         Thk (List A -> B) ->
         Variadic A B
       ) = {
         fix (
-          recursive :
+          r :
           Thk (
             Thk (List A -> B) ->
             Variadic A B
           )
         ) ->
-          fn continuation ->
+          fn k ->
             comatch
-            | .more value ->
-              ! recursive {
-                fn values ->
-                  ! continuation +Cons(value, values)
+            | .more x ->
+              ! r {
+                fn xs ->
+                  ! k +Cons(x, xs)
               }
-            | .done -> ! continuation +Nil()
+            | .done -> ! k +Nil()
             end
       } in
-      ! recursive { fn values -> ! function values }
+      ! r { fn xs -> ! fl xs }
   } that
-  def print_list : Thk (
+  -- continuation based mich wand
+  -- ! r (B) (A) { ! l (B) (A) fv } == fv
+  -- forall fv: U (Variadic A B)
+  -- ! l (B) (A) { ! r (B) (A) fl } == fl
+  -- forall fl: U (List A -> B)
+  def printl : Thk (
     List String ->
     Thk OS ->
     OS
   ) = {
     fix (
-      print_list :
+      printl :
       Thk (
         List String ->
         Thk OS ->
         OS
       )
     ) ->
-      fn values continuation ->
-        match values
-        | +Nil() -> ! continuation
-        | +Cons(head, tail) ->
-          ! (api/write_line) head { ! print_list tail continuation }
+      fn xs kont ->
+        match xs
+        | +Nil() -> ! kont
+        | +Cons(x, xs) ->
+          ! (api/write_line) x { ! printl xs kont }
         end
   } that
-  def print_variadic : Thk (
+  def printv : Thk (
     Variadic String (Thk OS -> OS)
   ) = {
-    ! capture String (Thk OS -> OS) print_list
+    ! r String (Thk OS -> OS) printl
   } that
 
-  ! restore
+  ! l
     String
     (Thk OS -> OS)
-    { ! capture String (Thk OS -> OS) print_list }
+    { ! r String (Thk OS -> OS) printl }
     (+Cons("hello", +Cons("world", +Nil())))
     {
-      ! capture
+      ! r
         String
         (Thk OS -> OS)
-        { ! restore String (Thk OS -> OS) print_variadic }
+        { ! l String (Thk OS -> OS) printv }
         .more "hello"
         .more "world"
         .done

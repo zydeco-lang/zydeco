@@ -1,32 +1,25 @@
+-- a binary tree
 begin
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  def Tree :
-    (VType) ->
-    (VType) =
-    begin
-      param (A : VType) that
-      data
-      | +Leaf : Unit
-      | +Node : Tree A * A * Tree A
-      end
+  def Tree (A : VType) : VType =
+    data
+    | +Leaf : Unit
+    | +Node : Tree A * A * Tree A
     end
   that
-  def TreeKont :
-    (VType) ->
-    (CType) =
-    begin
-      param (A : VType) that
-      codata
-      | .run :
-        Thk (Tree A -> Ret (Tree A)) ->
-        Ret (Tree A)
-      end
+  -- capture the shape of do binding with a kont type
+  let TreeKont (A : VType) =
+    codata
+    | .run :
+      Thk (Tree A -> Ret (Tree A)) ->
+      Ret (Tree A)
     end
   that
+  -- a normal invert without tail-call opt.
   def invert : Thk (
     forall (A : VType) .
       Tree A ->
@@ -40,12 +33,13 @@ begin
       fn A tree ->
         match tree
         | +Leaf() -> ret +Leaf()
-        | +Node(left, value, right) ->
-          do left <- ! invert A left;
-          do right <- ! invert A right;
-          ret +Node(right, value, left)
+        | +Node(l, a, r) ->
+          do l <- ! invert A l;
+          do r <- ! invert A r;
+          ret +Node(r, a, l)
         end
   } that
+  -- now we have the tree kont version of invert, tail recursive by default
   def invert_tree_kont : Thk (
     forall (A : VType) .
       Tree A ->
@@ -60,33 +54,34 @@ begin
         match tree
         | +Leaf() ->
           comatch
-          | .run continuation ->
-            ! continuation +Leaf()
+          | .run k ->
+            ! k +Leaf()
           end
-        | +Node(left, value, right) ->
+        | +Node(l, a, r) ->
           comatch
-          | .run continuation ->
-            ! invert_tree_kont A left .run {
-              fn left ->
-                ! invert_tree_kont A right .run {
-                  fn right ->
-                    ! continuation +Node(right, value, left)
+          | .run k ->
+            ! invert_tree_kont A l .run {
+              fn l ->
+                ! invert_tree_kont A r .run {
+                  fn r ->
+                    ! k +Node(r, a, l)
                 }
             }
           end
         end
   } that
-  def invert_tree : Thk (
+  def invert' : Thk (
     forall (A : VType) .
       Tree A ->
       Ret (Tree A)
   ) = {
     fn A tree ->
       ! invert_tree_kont A tree .run {
-        fn result ->
-          ret result
+        fn t ->
+          ret t
       }
   } that
+  -- and below is the correct cps solution
   def invert_kont : Thk (
     forall (A : VType) .
       Tree A ->
@@ -99,31 +94,32 @@ begin
         Thk (Tree A -> Ret (Tree A)) ->
         Ret (Tree A)
     )) ->
-      fn A tree continuation ->
+      fn A tree k ->
         match tree
-        | +Leaf() -> ! continuation +Leaf()
-        | +Node(left, value, right) ->
-          ! invert_kont A left {
-            fn left ->
-              ! invert_kont A right {
-                fn right ->
-                  ! continuation +Node(right, value, left)
+        | +Leaf() -> ! k +Leaf()
+        | +Node(l, a, r) ->
+          ! invert_kont A l {
+            fn l ->
+              ! invert_kont A r {
+                fn r ->
+                  ! k +Node(r, a, l)
               }
           }
         end
   } that
-  def invert_cps : Thk (
+  def invert'' : Thk (
     forall (A : VType) .
       Tree A ->
       Ret (Tree A)
   ) = {
     fn A tree ->
       ! invert_kont A tree {
-        fn result ->
-          ret result
+        fn t ->
+          ret t
       }
   } that
-  def tree : Tree Int =
+  -- here's a test
+  def t0 : Tree Int =
     +Node(
       +Node(
         +Node(+Leaf(), 1, +Leaf()),
@@ -144,16 +140,16 @@ begin
       Thk OS ->
       OS
     )) ->
-      fn tree continuation ->
-        match tree
+      fn t k ->
+        match t
         | +Leaf() ->
-          ! (api/write_str) "()" continuation
-        | +Node(left, value, right) ->
+          ! (api/write_str) "()" k
+        | +Node(l, a, r) ->
           ! (api/write_str) "(" {
-            ! write_tree left {
-              ! (api/write_int) value {
-                ! write_tree right {
-                  ! (api/write_str) ")" continuation
+            ! write_tree l {
+              ! (api/write_int) a {
+                ! write_tree r {
+                  ! (api/write_str) ")" k
                 }
               }
             }
@@ -161,16 +157,16 @@ begin
         end
   } that
 
-  do direct <- ! invert Int tree;
-  do explicit_stack <- ! invert_tree Int tree;
-  do cps <- ! invert_cps Int tree;
-  ! write_tree tree {
+  do t1 <- ! invert Int t0;
+  do t2 <- ! invert' Int t0;
+  do t3 <- ! invert'' Int t0;
+  ! write_tree t0 {
     ! (api/write_line) "" {
-      ! write_tree direct {
+      ! write_tree t1 {
         ! (api/write_line) "" {
-          ! write_tree explicit_stack {
+          ! write_tree t2 {
             ! (api/write_line) "" {
-              ! write_tree cps {
+              ! write_tree t3 {
                 ! (api/write_line) "" {
                   ! (api/exit) 0
                 }

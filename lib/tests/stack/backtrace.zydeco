@@ -1,29 +1,24 @@
+-- a binary tree
 begin
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  def Tree :
-    (VType) ->
-    (VType) =
-    begin
-      param (A : VType) that
-      data
-      | +Leaf : Unit
-      | +Node : Tree A * A * Tree A
-      end
+  def Tree (A : VType) : VType =
+    data
+    | +Leaf : Unit
+    | +Node : Tree A * A * Tree A
     end
   that
-  def List :
-    (VType) ->
-    (VType) =
-    begin
-      param (A : VType) that
-      data
-      | +Nil : Unit
-      | +Cons : A * List A
-      end
+  -- codata Trace (A: VType) where
+  -- | .done : Ret (Tree (List A))
+  -- | .step : A -> Trace A
+  -- end
+  def List (A : VType) : VType =
+    data
+    | +Nil : Unit
+    | +Cons : A * List A
     end
   that
   def trace : Thk (
@@ -38,17 +33,18 @@ begin
         List A ->
         Ret (Tree (List A))
     )) ->
-      fn A tree stack ->
-        match tree
+      fn A t stk ->
+        match t
         | +Leaf() -> ret +Leaf()
-        | +Node(left, value, right) ->
-          let stack : List A = +Cons(value, stack) in
-          do left <- ! trace A left stack;
-          do right <- ! trace A right stack;
-          ret +Node(left, stack, right)
+        | +Node(l, a, r) ->
+          let stk : List A = +Cons(a, stk) in
+          do l <- ! trace A l stk;
+          do r <- ! trace A r stk;
+          ret +Node(l, stk, r)
         end
   } that
-  def tree : Tree Int =
+  -- here's a test
+  def t0 : Tree Int =
     +Node(
       +Node(
         +Node(+Leaf(), 1, +Leaf()),
@@ -66,31 +62,31 @@ begin
       Thk OS ->
       OS
   ) = {
-    fn A write list continuation ->
-      let write_tail : Thk (
+    fn A write l k ->
+      let write_list_aux : Thk (
         List A ->
         Thk OS ->
         OS
       ) = {
-        fix (write_tail : Thk (
+        fix (write_list_aux : Thk (
           List A ->
           Thk OS ->
           OS
         )) ->
-          fn list continuation ->
-            match list
-            | +Nil() -> ! continuation
-            | +Cons(value, tail) ->
-              ! write value {
+          fn l k ->
+            match l
+            | +Nil() -> ! k
+            | +Cons(a, l) ->
+              ! write a {
                 ! (api/write_str) "," {
-                  ! write_tail tail continuation
+                  ! write_list_aux l k
                 }
               }
             end
       } in
       ! (api/write_str) "[" {
-        ! write_tail list {
-          ! (api/write_str) "]" continuation
+        ! write_list_aux l {
+          ! (api/write_str) "]" k
         }
       }
   } that
@@ -108,16 +104,16 @@ begin
         Thk OS ->
         OS
     )) ->
-      fn A write tree continuation ->
-        match tree
+      fn A write t k ->
+        match t
         | +Leaf() ->
-          ! (api/write_str) "()" continuation
-        | +Node(left, value, right) ->
+          ! (api/write_str) "()" k
+        | +Node(l, a, r) ->
           ! (api/write_str) "(" {
-            ! write_tree A write left {
-              ! write value {
-                ! write_tree A write right {
-                  ! (api/write_str) ")" continuation
+            ! write_tree A write l {
+              ! write a {
+                ! write_tree A write r {
+                  ! (api/write_str) ")" k
                 }
               }
             }
@@ -125,13 +121,13 @@ begin
         end
   } that
 
-  do traced <- ! trace Int tree +Nil();
-  ! write_tree Int (api/write_int) tree {
+  do t1 <- ! trace Int t0 +Nil();
+  ! write_tree Int (api/write_int) t0 {
     ! (api/write_line) "" {
       ! write_tree
         (List Int)
         { ! write_list Int (api/write_int) }
-        traced
+        t1
         {
           ! (api/write_line) "" {
             ! (api/exit) 0

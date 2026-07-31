@@ -2,11 +2,11 @@ param (
   (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
   @[import("../../std/builtin.zy")] _
 ) in
-  do left <- ret 40;
-  do right <- ret 30;
-  do retained <-
-    do sum <- ! (api/add) left right;
-    do ignored <- ! (api/add) sum 10;
-    ret left;
-  do status <- ! (api/sub) retained 40;
-  ! (api/exit) status
+  do x <- ret 40;
+  do y <- ret 30;
+  do z <-
+    do a <- ! (api/add) x y;
+    do b <- ! (api/add) a 10;
+    ret x;
+  do r <- ! (api/sub) z 40;
+  ! (api/exit) r

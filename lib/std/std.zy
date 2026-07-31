@@ -1,5 +1,5 @@
 begin
-  let boolean = @[import("bool.zy")] _ that
+  let bool = @[import("bool.zy")] _ that
   let option = @[import("option.zy")] _ that
   let list = @[import("list.zy")] _ that
 
@@ -9,7 +9,7 @@ begin
       @[import("builtin.zy")] _
     ) in
       do (Bool = Bool, bool_api) <-
-        ! boolean (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+        ! bool (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
       do (Option = Option, option_api) <-
         ! option (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
       do (List = List, list_api) <-
@@ -30,8 +30,8 @@ begin
       let compare : Thk (
         forall (A : VType) .
           Thk (
-            forall (R : CType) .
-              A -> A -> Thk R -> Thk R -> R
+            forall (B : CType) .
+              A -> A -> Thk B -> Thk B -> B
           ) ->
           A -> A -> Ret Bool
       ) = {
@@ -43,8 +43,8 @@ begin
             (Ret Bool)
             left
             right
-            { ret (bool_api/truth) }
-            { ret (bool_api/falsehood) }
+            { ret (bool_api/true) }
+            { ret (bool_api/false) }
       } in
       let int_eq : Thk (Int -> Int -> Ret Bool) = {
         fn left right ->
@@ -115,6 +115,140 @@ begin
             };
           ! continuation arguments
       } in
+      let Prelude =
+        exists (
+          Thunk = PublicThunk as Thk :
+          (CType) -> (VType)
+        ) .
+        exists (
+          U = PublicU as Thk :
+          (CType) -> (VType)
+        ) .
+        exists (
+          F = PublicF as Ret :
+          (VType) -> (CType)
+        ) .
+          Unit
+      in
+      let prelude : Prelude = (
+        Thunk = Thk,
+        U = Thk,
+        F = Ret,
+        ()
+      ) in
+      let BoolModule (PublicBool : VType) =
+        (true :: PublicBool) *
+        (false :: PublicBool) *
+        (not :: Thk (PublicBool -> Ret PublicBool)) *
+        (and :: Thk (PublicBool -> PublicBool -> Ret PublicBool)) *
+        (or :: Thk (PublicBool -> PublicBool -> Ret PublicBool)) *
+        (if :: Thk (
+          forall (B : CType) .
+            PublicBool -> Thk B -> Thk B -> B
+        ))
+      in
+      let OptionModule (PublicOption : (VType) -> (VType)) =
+        (none :: Thk (
+          forall (A : VType) .
+            Ret (PublicOption A)
+        )) *
+        (some :: Thk (
+          forall (A : VType) .
+            A -> Ret (PublicOption A)
+        )) *
+        (fold :: Thk (
+          forall (A : VType) .
+          forall (B : CType) .
+            PublicOption A -> Thk B -> Thk (A -> B) -> B
+        ))
+      in
+      let ListModule (PublicList : (VType) -> (VType)) =
+        (nil :: Thk (
+          forall (A : VType) .
+            Ret (PublicList A)
+        )) *
+        (cons :: Thk (
+          forall (A : VType) .
+            A -> PublicList A -> Ret (PublicList A)
+        )) *
+        (case :: Thk (
+          forall (A : VType) .
+          forall (B : CType) .
+            PublicList A ->
+            Thk B ->
+            Thk (A -> PublicList A -> B) ->
+            B
+        )) *
+        (fold :: Thk (
+          forall (A : VType) .
+          forall (B : CType) .
+            PublicList A ->
+            Thk B ->
+            Thk (A -> Thk B -> B) ->
+            B
+        ))
+      in
+      --| Conversions
+      let IntModule (PublicBool : VType) (PublicInt : VType) (PublicString : VType) =
+        (add :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
+        (sub :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
+        (mul :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
+        (div :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
+        (mod :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
+        (eq :: Thk (PublicInt -> PublicInt -> Ret PublicBool)) *
+        (lt :: Thk (PublicInt -> PublicInt -> Ret PublicBool)) *
+        (gt :: Thk (PublicInt -> PublicInt -> Ret PublicBool)) *
+        (increment :: Thk (PublicInt -> Ret PublicInt)) *
+        (to_str :: Thk (PublicInt -> Ret PublicString))
+      in
+      let CharModule (PublicChar : VType) (PublicInt : VType) (PublicString : VType) =
+        (to_str :: Thk (PublicChar -> Ret PublicString)) *
+        (to_int :: Thk (PublicChar -> Ret PublicInt))
+      in
+      -- module String
+      let StringModule
+        (PublicBool : VType)
+        (PublicOption : (VType) -> (VType))
+        (PublicInt : VType)
+        (PublicChar : VType)
+        (PublicString : VType) =
+        (length :: Thk (PublicString -> Ret PublicInt)) *
+        (append :: Thk (PublicString -> PublicString -> Ret PublicString)) *
+        (split_once :: Thk (
+          PublicString ->
+          PublicChar ->
+          Ret (PublicOption (PublicString * PublicString))
+        )) *
+        (split_n :: Thk (
+          PublicString ->
+          PublicInt ->
+          Ret (PublicOption (PublicString * PublicString))
+        )) *
+        (eq :: Thk (PublicString -> PublicString -> Ret PublicBool)) *
+        (index :: Thk (PublicString -> PublicInt -> Ret PublicChar)) *
+        (to_int :: Thk (PublicString -> Ret PublicInt))
+      in
+      -- end module String
+      -- module OS
+      let OSModule
+        (PublicOption : (VType) -> (VType))
+        (PublicList : (VType) -> (VType))
+        (PublicInt : VType)
+        (PublicString : VType)
+        (PublicOS : CType) =
+        (write_str :: Thk (PublicString -> Thk PublicOS -> PublicOS)) *
+        (write_int :: Thk (PublicInt -> Thk PublicOS -> PublicOS)) *
+        (write_line :: Thk (PublicString -> Thk PublicOS -> PublicOS)) *
+        (read_line :: Thk (Thk (PublicString -> PublicOS) -> PublicOS)) *
+        (read_line_as_int :: Thk (
+          Thk (PublicOption PublicInt -> PublicOS) -> PublicOS
+        )) *
+        (read_till_eof :: Thk (Thk (PublicString -> PublicOS) -> PublicOS)) *
+        (arg_list :: Thk (Thk (PublicList PublicString -> PublicOS) -> PublicOS)) *
+        (random_int :: Thk (Thk (PublicInt -> PublicOS) -> PublicOS)) *
+        (exit :: Thk (PublicInt -> PublicOS))
+      in
+      -- end module OS
       let Public =
         exists (Bool = PublicBool : VType) .
         exists (
@@ -129,121 +263,70 @@ begin
         exists (Char = PublicChar as Char : VType) .
         exists (String = PublicString as String : VType) .
         exists (OS = PublicOS as OS : CType) .
-          (truth :: PublicBool) *
-          (falsehood :: PublicBool) *
-          (not :: Thk (PublicBool -> Ret PublicBool)) *
-          (and :: Thk (PublicBool -> PublicBool -> Ret PublicBool)) *
-          (or :: Thk (PublicBool -> PublicBool -> Ret PublicBool)) *
-          (branch :: Thk (
-            forall (B : CType) .
-              PublicBool -> Thk B -> Thk B -> B
-          )) *
-          (none :: Thk (
-            forall (A : VType) .
-              Ret (PublicOption A)
-          )) *
-          (some :: Thk (
-            forall (A : VType) .
-              A -> Ret (PublicOption A)
-          )) *
-          (option_eliminate :: Thk (
-            forall (A : VType) .
-            forall (B : CType) .
-              PublicOption A -> Thk B -> Thk (A -> B) -> B
-          )) *
-          (nil :: Thk (
-            forall (A : VType) .
-              Ret (PublicList A)
-          )) *
-          (cons :: Thk (
-            forall (A : VType) .
-              A -> PublicList A -> Ret (PublicList A)
-          )) *
-          (list_eliminate :: Thk (
-            forall (A : VType) .
-            forall (B : CType) .
-              PublicList A ->
-              Thk B ->
-              Thk (A -> PublicList A -> B) ->
-              B
-          )) *
-          (add :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
-          (sub :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
-          (mul :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
-          (div :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
-          (mod :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
-          (int_eq :: Thk (PublicInt -> PublicInt -> Ret PublicBool)) *
-          (int_lt :: Thk (PublicInt -> PublicInt -> Ret PublicBool)) *
-          (int_gt :: Thk (PublicInt -> PublicInt -> Ret PublicBool)) *
-          (str_length :: Thk (PublicString -> Ret PublicInt)) *
-          (str_append :: Thk (PublicString -> PublicString -> Ret PublicString)) *
-          (str_split_once :: Thk (
-            PublicString ->
-            PublicChar ->
-            Ret (PublicOption (PublicString * PublicString))
-          )) *
-          (str_split_n :: Thk (
-            PublicString ->
-            PublicInt ->
-            Ret (PublicOption (PublicString * PublicString))
-          )) *
-          (str_eq :: Thk (PublicString -> PublicString -> Ret PublicBool)) *
-          (str_index :: Thk (PublicString -> PublicInt -> Ret PublicChar)) *
-          (int_to_str :: Thk (PublicInt -> Ret PublicString)) *
-          (char_to_str :: Thk (PublicChar -> Ret PublicString)) *
-          (char_to_int :: Thk (PublicChar -> Ret PublicInt)) *
-          (str_to_int :: Thk (PublicString -> Ret PublicInt)) *
-          (write_str :: Thk (PublicString -> Thk PublicOS -> PublicOS)) *
-          (write_int :: Thk (PublicInt -> Thk PublicOS -> PublicOS)) *
-          (write_line :: Thk (PublicString -> Thk PublicOS -> PublicOS)) *
-          (read_line :: Thk (Thk (PublicString -> PublicOS) -> PublicOS)) *
-          (read_line_as_int :: Thk (
-            Thk (PublicOption PublicInt -> PublicOS) -> PublicOS
-          )) *
-          (read_till_eof :: Thk (Thk (PublicString -> PublicOS) -> PublicOS)) *
-          (arg_list :: Thk (Thk (PublicList PublicString -> PublicOS) -> PublicOS)) *
-          (random_int :: Thk (Thk (PublicInt -> PublicOS) -> PublicOS)) *
-          (increment :: Thk (PublicInt -> Ret PublicInt)) *
-          (exit :: Thk (PublicInt -> PublicOS))
+          (prelude :: Prelude) *
+          (bool :: BoolModule PublicBool) *
+          (option :: OptionModule PublicOption) *
+          (list :: ListModule PublicList) *
+          (int :: IntModule PublicBool PublicInt PublicString) *
+          (char :: CharModule PublicChar PublicInt PublicString) *
+          (string :: StringModule PublicBool PublicOption PublicInt PublicChar PublicString) *
+          (os :: OSModule PublicOption PublicList PublicInt PublicString PublicOS) *
+          Unit
       in
       ret ((
-          Bool = Bool,
-          Option = Option,
-          List = List,
-          Int = Int,
-          Char = Char,
-          String = String,
-          OS = OS,
-          truth = bool_api/truth,
-          falsehood = bool_api/falsehood,
+        Bool = Bool,
+        Option = Option,
+        List = List,
+        Int = Int,
+        Char = Char,
+        String = String,
+        OS = OS,
+        prelude = prelude,
+        bool = (
+          true = bool_api/true,
+          false = bool_api/false,
           not = bool_api/not,
           and = bool_api/and,
           or = bool_api/or,
-          branch = bool_api/branch,
+          if = bool_api/if,
+        ),
+        option = (
           none = option_api/none,
           some = option_api/some,
-          option_eliminate = option_api/eliminate,
+          fold = option_api/fold,
+        ),
+        list = (
           nil = list_api/nil,
           cons = list_api/cons,
-          list_eliminate = list_api/eliminate,
+          case = list_api/case,
+          fold = list_api/fold,
+        ),
+        int = (
           add = primitive_add,
           sub = api/sub,
           mul = api/mul,
           div = api/div,
           mod = api/mod,
-          int_eq = int_eq,
-          int_lt = int_lt,
-          int_gt = int_gt,
-          str_length = api/str_length,
-          str_append = api/str_append,
-          str_split_once = str_split_once,
-          str_split_n = str_split_n,
-          str_eq = str_eq,
-          str_index = api/str_index,
-          int_to_str = api/int_to_str,
-          char_to_str = api/char_to_str,
-          char_to_int = api/char_to_int,
-          str_to_int = api/str_to_int,
+          eq = int_eq,
+          lt = int_lt,
+          gt = int_gt,
+          increment = increment,
+          to_str = api/int_to_str,
+        ),
+        char = (
+          to_str = api/char_to_str,
+          to_int = api/char_to_int,
+        ),
+        string = (
+          length = api/str_length,
+          append = api/str_append,
+          split_once = str_split_once,
+          split_n = str_split_n,
+          eq = str_eq,
+          index = api/str_index,
+          to_int = api/str_to_int,
+        ),
+        os = (
           write_str = api/write_str,
           write_int = api/write_int,
           write_line = api/write_line,
@@ -252,8 +335,9 @@ begin
           read_till_eof = api/read_till_eof,
           arg_list = arg_list,
           random_int = api/random_int,
-          = increment,
           exit = api/exit,
-        ) : Public)
+        ),
+        (),
+      ) : Public)
   }
 end

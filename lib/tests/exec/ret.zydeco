@@ -1,53 +1,52 @@
+-- An example that uses forall and type aliases to prove that
+-- `Ret' A` and the `Ret A` primitive are isomorphic to each other.
 begin
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let RetPrime =
-    begin
-      param (A : VType) that
-      forall (R : CType) .
-        Thk (A -> R) -> R
-    end
+  let Ret' (A : VType) =
+    forall (R : CType) .
+      Thk (A -> R) -> R
   that
-  def to_ret : Thk (
+  def f : Thk (
     forall (A : VType) .
-      Thk (RetPrime A) -> Ret A
+      Thk (Ret' A) -> Ret A
   ) = {
-    fn (A : VType) (encoded : Thk (RetPrime A)) ->
-      ! encoded (Ret A) { fn (value : A) -> ret value }
+    fn (A : VType) (rr : Thk (Ret' A)) ->
+      ! rr (Ret A) { fn (a : A) -> ret a }
   } that
-  def from_ret : Thk (
+  def g : Thk (
     forall (A : VType) .
-      Thk (Ret A) -> RetPrime A
+      Thk (Ret A) -> Ret' A
   ) = {
     fn (A : VType)
-       (computation : Thk (Ret A))
+       (r : Thk (Ret A))
        (R : CType)
-       (continuation : Thk (A -> R)) ->
-      do value <- ! computation;
-      ! continuation value
+       (ar : Thk (A -> R)) ->
+      do a <- ! r;
+      ! ar a
   } that
-  def identity_ret : Thk (
+  def id_ret : Thk (
     forall (A : VType) .
       Thk (Ret A) -> Ret A
   ) = {
-    fn (A : VType) (computation : Thk (Ret A)) ->
-      ! to_ret A { ! from_ret A computation }
+    fn (A : VType) (r : Thk (Ret A)) ->
+      ! f A { ! g A r }
   } that
-  def identity_ret_prime : Thk (
+  def id_ret' : Thk (
     forall (A : VType) .
-      Thk (RetPrime A) -> RetPrime A
+      Thk (Ret' A) -> Ret' A
   ) = {
-    fn (A : VType) (encoded : Thk (RetPrime A)) ->
-      ! from_ret A { ! to_ret A encoded }
+    fn (A : VType) (rr : Thk (Ret' A)) ->
+      ! g A { ! f A rr }
   } that
 
-  do status <- ! identity_ret Int { ret 0 };
-  ! identity_ret_prime
+  do n <- ! id_ret Int { ret 0 };
+  ! id_ret'
     Int
-    { fn (R : CType) continuation -> ! continuation status }
+    { fn (R : CType) ar -> ! ar n }
     OS
     (api/exit)
 end

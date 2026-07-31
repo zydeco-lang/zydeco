@@ -13,17 +13,29 @@ begin
     Char = StdChar,
     String = StdString,
     OS = StdOS,
-    public
+    std
   ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
-  do empty <- ! (public/nil) StdInt;
-  do values <- ! (public/cons) StdInt 0 empty;
-  ! (public/list_eliminate)
+  do empty <- ! (std/list/nil) StdInt;
+  do one <- ! (std/list/cons) StdInt 1 empty;
+  do values <- ! (std/list/cons) StdInt 2 one;
+  ! (std/list/case)
     StdInt
     StdOS
     values
-    { ! (public/exit) 1 }
+    { ! (std/os/exit) 1 }
     {
       fn head tail ->
-        ! (public/exit) head
+        do total <- ! (std/list/fold)
+          StdInt
+          (Ret StdInt)
+          tail
+          { ret head }
+          {
+            fn value rest ->
+              do subtotal <- ! rest;
+              ! (std/int/add) value subtotal
+          };
+        do status <- ! (std/int/sub) total 3;
+        ! (std/os/exit) status
     }
 end

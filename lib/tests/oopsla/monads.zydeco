@@ -1,3 +1,5 @@
+--| A bunch of example of monads
+--| The program prints "Hello, world!" using the io monads and then exits.
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
@@ -8,113 +10,58 @@ begin
     ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
 
-  def Kont :
-    (CType) ->
-    (VType) ->
-    (CType) =
-    begin
-      param (R : CType) that
-      param (A : VType) that
-      codata
-      | .run : Thk (A -> R) -> R
-      end
+  --| The continuation monad
+  let Kont (R : CType) (A : VType) =
+    codata
+    | .run : Thk (A -> R) -> R
     end
   that
-  def PolyKont :
-    (VType) ->
-    (CType) =
-    begin
-      param (A : VType) that
-      codata
-      | .bind :
-        forall (R : CType) .
-          Thk (A -> R) -> R
-      end
+  --| The polymorphic continuation monad
+  let PolyKont (A : VType) =
+    codata
+    | .bind :
+      forall (R : CType) .
+        Thk (A -> R) -> R
     end
   that
-  let State :
-    (VType) ->
-    (VType) ->
-    (CType) =
-    begin
-      param (S : VType) that
-      param (A : VType) that
-      S -> Ret (A * S)
+  --| The state monad
+  let State (S : VType) (A : VType) =
+    S -> Ret (A * S)
+  that
+  let StateK (S : VType) (A : VType) =
+    codata
+    | .run :
+      forall (R : CType) .
+        S -> Thk (S -> A -> R) -> R
     end
   that
-  def StateK :
-    (VType) ->
-    (VType) ->
-    (CType) =
-    begin
-      param (S : VType) that
-      param (A : VType) that
-      codata
-      | .run :
-        forall (R : CType) .
-          S -> Thk (S -> A -> R) -> R
-      end
+  --| The interface for state monads
+  let MonadState (S : VType) (M : (VType) -> (CType)) =
+    codata
+    | .get : M S
+    | .put : S -> M Unit
     end
   that
-  def MonadState :
-    (VType) ->
-    (
-      (
-        (VType) ->
-        (CType)
-      ) ->
-      (CType)
-    ) =
-    begin
-      param (S : VType) that
-      param (
-        M :
-        (VType) ->
-        (CType)
-      ) that
-      codata
-      | .get : M S
-      | .put : S -> M Unit
-      end
+  --| The I/O monad
+  let IO (A : VType) =
+    codata
+    | .run : Thk (A -> OS) -> OS
     end
   that
-  def IO :
-    (VType) ->
-    (CType) =
-    begin
-      param (A : VType) that
-      codata
-      | .run : Thk (A -> OS) -> OS
-      end
-    end
-  that
-  def MonadIO :
-    (
-      (
-        (VType) ->
-        (CType)
-      ) ->
-      (CType)
-    ) =
-    begin
-      param (
-        M :
-        (VType) ->
-        (CType)
-      ) that
-      codata
-      | .read : M String
-      | .write : String -> M Unit
-      end
+  let MonadIO (M : (VType) -> (CType)) =
+    codata
+    | .read : M String
+    | .write : String -> M Unit
     end
   that
 
+  --| The Ret monad (mret in the paper)
   def mo-return : Thk (Monad Ret) = {
     comatch
-    | .return A value -> ret value
-    | .bind A B computation function ->
-      do value <- ! computation;
-      ! function value
+    | .return A a -> ret a
+    | .bind A A' m f ->
+      do a <- ! m;
+      ! f a
     end
   } that
   def mo-kont : Thk (
@@ -123,25 +70,25 @@ begin
   ) = {
     fn R ->
       comatch
-      | .return A value ->
-        fn .run continuation ->
-          ! continuation value
-      | .bind A B computation function ->
-        fn .run continuation ->
-          do~ ! computation .run; fn value ->
-          ! function value .run continuation
+      | .return A a ->
+        fn .run k ->
+          ! k a
+      | .bind A A' m f ->
+        fn .run k ->
+          do~ ! m .run; fn a ->
+          ! f a .run k
       end
   } that
   def mo-polykont : Thk (Monad PolyKont) = {
     comatch
-    | .return A value ->
-      fn .bind R continuation ->
-        ! continuation value
-    | .bind A B computation function ->
-      fn .bind R continuation ->
-        ! computation .bind R {
-          fn value ->
-            ! function value .bind R continuation
+    | .return A a ->
+      fn .bind R k ->
+        ! k a
+    | .bind A A' m f ->
+      fn .bind R k' ->
+        ! m .bind R {
+          fn a ->
+            ! f a .bind R k'
         }
     end
   } that
@@ -151,13 +98,13 @@ begin
   ) = {
     fn S ->
       comatch
-      | .return A value ->
-        fn state ->
-          ret (value, state)
-      | .bind A B computation function ->
-        fn state ->
-          do (value, state) <- ! computation state;
-          ! function value state
+      | .return A a ->
+        fn s ->
+          ret (a, s)
+      | .bind A A' m f ->
+        fn s ->
+          do (a, s') <- ! m s;
+          ! f a s'
       end
   } that
   def mo-statek : Thk (
@@ -166,14 +113,14 @@ begin
   ) = {
     fn S ->
       comatch
-      | .return A value ->
-        fn .run R state continuation ->
-          ! continuation state value
-      | .bind A B computation function ->
-        fn .run R state continuation ->
-          ! computation .run R state {
-            fn state value ->
-              ! function value .run R state continuation
+      | .return A a ->
+        fn .run R s k ->
+          ! k s a
+      | .bind A A' m f ->
+        fn .run R s k' ->
+          ! m .run R s {
+            fn s' a ->
+              ! f a .run R s' k'
           }
       end
   } that
@@ -184,11 +131,12 @@ begin
     fn S ->
       comatch
       | .get ->
-        fn state ->
-          ret (state, state)
-      | .put state ->
+        fn s ->
+          ret (s, s)
+      | .put s' ->
         fn _ ->
-          ret ((), state)
+          let u = () in
+          ret (u, s')
       end
   } that
   def statek : Thk (
@@ -198,35 +146,35 @@ begin
     fn S ->
       comatch
       | .get ->
-        fn .run R state continuation ->
-          ! continuation state state
-      | .put state ->
-        fn .run R _ continuation ->
-          ! continuation state ()
+        fn .run R s k ->
+          ! k s s
+      | .put s' ->
+        fn .run R s k ->
+          ! k s' ()
       end
   } that
   def mo-io : Thk (Monad IO) = {
     comatch
-    | .return A value ->
-      fn .run continuation ->
-        ! continuation value
-    | .bind A B computation function ->
-      fn .run continuation ->
-        ! computation .run {
-          fn value ->
-            ! function value .run continuation
+    | .return A a ->
+      fn .run k ->
+        ! k a
+    | .bind A A' m f ->
+      fn .run ka' ->
+        ! m .run {
+          fn a ->
+            ! f a .run ka'
         }
     end
   } that
   def io : Thk (MonadIO IO) = {
     comatch
     | .read ->
-      fn .run continuation ->
-        ! (api/read_line) continuation
-    | .write string ->
-      fn .run continuation ->
-        ! (api/write_line) string {
-          ! continuation ()
+      fn .run ka ->
+        ! (api/read_line) ka
+    | .write s ->
+      fn .run ku ->
+        ! (api/write_line) s {
+          ! ku ()
         }
     end
   } that

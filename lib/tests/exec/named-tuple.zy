@@ -1,3 +1,5 @@
+-- Flat products may freely mix named and unnamed components. Projection skips
+-- unnamed components but preserves their physical positions.
 begin
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :

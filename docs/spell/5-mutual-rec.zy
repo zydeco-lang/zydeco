@@ -16,13 +16,13 @@ begin
     | +Successor : Nat
     end
   that
-  def Bool : VType =
+  let Bool =
     data
     | +True : Unit
     | +False : Unit
     end
   that
-  def EvenOdd : CType =
+  let EvenOdd =
     codata
     | .even : Nat -> Ret Bool
     | .odd : Nat -> Ret Bool

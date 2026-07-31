@@ -4,26 +4,29 @@ begin
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
-  def Y : (CType) -> (CType) =
-    begin
-      param (B : CType) that
-      codata
-      | .y : Thk (Y B) -> B
-      end
+  def Y (B : CType) : CType =
+    codata
+    | .y : Thk (Y B) -> B
     end
   that
-  def fix_prime : Thk (
+  /-
+    \f. (\x. f (x x)) (\x. f (x x))
+    The famous Y combinator in call-by-name sense actually works
+    under call-by-push-value - thanks to thunks, we are able to
+    preserve the intention of lazy evaluation in `x` above.
+  -/
+  def fix' : Thk (
     forall (B : CType) .
       Thk (Thk B -> B) -> Ret (Thk B)
   ) = {
     fn (B : CType)
-       (function : Thk (Thk B -> B)) ->
-      let primitive : Thk (Y B) = {
+       (f : Thk (Thk B -> B)) ->
+      let prim : Thk (Y B) = {
         comatch
-        | .y recursive -> ! function { ! recursive .y recursive }
+        | .y x -> ! f { ! x .y x }
         end
       } in
-      ret { ! primitive .y primitive }
+      ret { ! prim .y prim }
   } that
 
   do (
@@ -34,55 +37,57 @@ begin
     Char = StdChar,
     String = StdString,
     OS = StdOS,
-    public
+    std
   ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
-  def factorial_step : Thk (
+  -- good old factorial
+  def fact : Thk (
     Thk (StdInt -> Ret StdInt) ->
     StdInt ->
     Ret StdInt
   ) = {
-    fn recursive number ->
-      do is_zero <- ! (public/int_eq) number 0;
-      ! (public/branch)
+    fn f n ->
+      do is_zero <- ! (std/int/eq) n 0;
+      ! (std/bool/if)
         (Ret StdInt)
         is_zero
         { ret 1 }
         {
-          do predecessor <- ! (public/sub) number 1;
-          do rest <- ! recursive predecessor;
-          ! (public/mul) number rest
+          do n-1 <- ! (std/int/sub) n 1;
+          do rest <- ! f n-1;
+          ! (std/int/mul) n rest
         }
   } in
-  do factorial <- ! fix_prime (StdInt -> Ret StdInt) factorial_step;
+  do fact <- ! fix' (StdInt -> Ret StdInt) fact;
+  -- tests
   def demo : Thk (
     StdInt ->
     StdInt ->
     Thk StdOS ->
     StdOS
   ) = {
-    fn input expected continuation ->
-      do actual <- ! factorial input;
-      do correct <- ! (public/int_eq) actual expected;
-      ! (public/branch)
+    fn input expected t ->
+      do x <- ! fact input;
+      do correct <- ! (std/int/eq) x expected;
+      ! (std/bool/if)
         StdOS
         correct
-        { ! continuation }
+        { ! t }
         {
-          do rendered_input <- ! (public/int_to_str) input;
-          do rendered_expected <- ! (public/int_to_str) expected;
-          do rendered_actual <- ! (public/int_to_str) actual;
-          do message <- ! (public/str_append) "f " rendered_input;
-          do message <- ! (public/str_append) message " = ";
-          do message <- ! (public/str_append) message rendered_expected;
-          do message <- ! (public/str_append) message ", got ";
-          do message <- ! (public/str_append) message rendered_actual;
-          ! (public/write_line) message { ! (public/exit) 1 }
+          do input <- ! (std/int/to_str) input;
+          do expected <- ! (std/int/to_str) expected;
+          do got <- ! (std/int/to_str) x;
+          do msg <- ! (std/string/append) "f " input;
+          do msg <- ! (std/string/append) msg " = ";
+          do msg <- ! (std/string/append) msg expected;
+          do msg <- ! (std/string/append) msg ", got ";
+          do msg <- ! (std/string/append) msg got;
+          ! (std/os/write_line) msg { ! (std/os/exit) 1 }
         }
   } in
 
   ! demo 5 120 {
     ! demo 10 3628800 {
-      ! (public/exit) 0
+      ! (std/os/exit) 0
     }
   }
 end

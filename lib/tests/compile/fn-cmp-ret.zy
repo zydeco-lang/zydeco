@@ -3,16 +3,16 @@ begin
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
-  def classify : Thk (Int -> Ret Int) = {
-    fn value ->
+  def f : Thk (Int -> Ret Int) = {
+    fn x ->
       ! (api/int_eq_branch)
         (Ret Int)
-        value
+        x
         0
         { ret 0 }
         { ret 1 }
   } that
 
-  do status <- ! classify 0;
-  ! (api/exit) status
+  do z <- ! f 0;
+  ! (api/exit) z
 end

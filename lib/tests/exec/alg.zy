@@ -8,17 +8,10 @@ begin
     ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
 
-  def With :
-    (CType) ->
-    (CType) ->
-    (CType) =
-    begin
-      param (B1 : CType) that
-      param (B2 : CType) that
-      codata
-      | .l : B1
-      | .r : B2
-      end
+  let With (B1 : CType) (B2 : CType) =
+    codata
+    | .l : B1
+    | .r : B2
     end
   that
 
@@ -33,11 +26,11 @@ begin
       Algebra M (A -> B)
   ) = {
     fn M A B alg ->
-      comatch X computation continuation ->
-        fn argument ->
-          ! alg X computation {
-            fn value ->
-              ! continuation value argument
+      comatch X m f ->
+        fn a ->
+          ! alg X m {
+            fn x ->
+              ! f x a
           }
       end
   } that
@@ -55,17 +48,17 @@ begin
       )
   ) = {
     fn M B1 alg1 B2 alg2 ->
-      comatch X computation continuation ->
+      comatch X m f ->
         comatch
         | .l ->
-          ! alg1 X computation {
-            fn value ->
-              ! continuation value .l
+          ! alg1 X m {
+            fn x ->
+              ! f x .l
           }
         | .r ->
-          ! alg2 X computation {
-            fn value ->
-              ! continuation value .r
+          ! alg2 X m {
+            fn x ->
+              ! f x .r
           }
         end
       end
@@ -81,9 +74,9 @@ begin
           Algebra M (M A)
       )
   ) = {
-    fn M monad A ->
-      comatch X computation continuation ->
-        ! monad .bind X A computation continuation
+    fn M mo A ->
+      comatch X m f ->
+        ! mo .bind X A m f
       end
   } that
   def alg_forall_ctype : Thk (
@@ -107,11 +100,11 @@ begin
       )
   ) = {
     fn M S algS ->
-      comatch X computation continuation ->
+      comatch X m f ->
         comatch Y algY ->
-          ! algS Y algY X computation {
-            fn value ->
-              ! continuation value Y algY
+          ! algS Y algY X m {
+            fn a ->
+              ! f a Y algY
           }
         end
       end
@@ -154,11 +147,11 @@ begin
       )
   ) = {
     fn M S algS ->
-      comatch X computation continuation ->
+      comatch X m f ->
         comatch F algZFZ ->
-          ! algS F algZFZ X computation {
-            fn value ->
-              ! continuation value F algZFZ
+          ! algS F algZFZ X m {
+            fn a ->
+              ! f a F algZFZ
           }
         end
       end
@@ -168,20 +161,20 @@ begin
       Algebra Ret R
   ) = {
     fn R ->
-      comatch X computation continuation ->
-        do value <- ! computation;
-        ! continuation value
+      comatch X m f ->
+        do x <- ! m;
+        ! f x
       end
   } that
 
-  do result <- ! alg_of_ret
+  do x <- ! alg_of_ret
     (Ret Int)
     Int
     { ret 0 }
     {
-      fn value ->
-        ret value
+      fn x ->
+        ret x
     };
-  ! (api/exit) result
+  ! (api/exit) x
 end
 end

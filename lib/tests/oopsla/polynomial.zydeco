@@ -5,13 +5,16 @@ begin
   ) that
 
   def poly : Thk (Int -> Ret Int) = {
+    -- f(x) = x^2 + x + 10
     fn x ->
-      do square <- ! (api/mul) x x;
-      do linear <- ! (api/add) x 10;
-      ! (api/add) square linear
+      do s <- ! (api/mul) x x;
+      do y <- ! (api/add) x 10;
+      ! (api/add) s y
   } that
 
-  do result <- ! poly 10;
-  do status <- ! (api/sub) result 120;
-  ! (api/exit) status
+  -- the exit code should be 0 for the test to pass
+  do r <- ! poly 10;
+  -- since f(10) = 120, we minus the result by 120 to get 0
+  do e <- ! (api/sub) r 120;
+  ! (api/exit) e
 end

@@ -10,11 +10,11 @@ begin
   ) = {
     fn (A : VType)
        (B : CType)
-       (function : Thk (A -> B))
-       (argument : A) ->
-      ! function argument
+       (f : Thk (A -> B))
+       (x : A) ->
+      ! f x
   } that
 
-  do status <- ! apply Int (Ret Int) { fn value -> ret value } 0;
-  ! (api/exit) status
+  do x <- ! apply Int (Ret Int) { fn x -> ret x } 0;
+  ! (api/exit) x
 end

@@ -4,41 +4,38 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  def Bool : VType =
+  let Bool =
     data
     | +True : Unit
     | +False : Unit
     end
   that
-  def Tok : VType =
+  let Tok =
     data
     | +LParen : Unit
     | +RParen : Unit
     end
   that
-  def LazyList : (VType) -> (VType) =
-    begin
-      param (A : VType) that
-      data
-      | +Nil : Unit
-      | +Cons : A * Thk (Ret (LazyList A))
-      end
+  def LList' (A : VType) : VType =
+    data
+    | +Nil : Unit
+    | +Cons : A * Thk (Ret (LList' A))
     end
   that
-  def ParenCounterState : VType =
+  let ParenCounterState =
     data
     | +Ok : Unit
     | +Reject : Unit
     end
   that
-  def ParenCounterStack : CType =
+  def ParenCounterStk : CType =
     codata
     | .none : Ret Bool
-    | .some : ParenCounterStack
+    | .some : ParenCounterStk
     end
   that
-  let ParenCounterTransition : CType =
-    ParenCounterState -> ParenCounterStack
+  let ParenCounterTrans : CType =
+    ParenCounterState -> ParenCounterStk
   that
 
   def bool_eq : Thk (Bool -> Bool -> Ret Bool) = {
@@ -56,94 +53,95 @@ begin
         end
       end
   } that
-  def bool_to_string : Thk (Bool -> Ret String) = {
-    fn value ->
-      match value
+  def bool_to_str : Thk (Bool -> Ret String) = {
+    fn b ->
+      match b
       | +True() -> ret "true"
       | +False() -> ret "false"
       end
   } that
   def paren_foldr : Thk (
-    Thk (Ret (LazyList Tok)) ->
-    Thk (Tok -> Thk ParenCounterTransition -> ParenCounterTransition) ->
-    Thk ParenCounterTransition ->
-    ParenCounterTransition
+    Thk (Ret (LList' Tok)) ->
+    Thk (Tok -> Thk ParenCounterTrans -> ParenCounterTrans) ->
+    Thk ParenCounterTrans ->
+    ParenCounterTrans
   ) = {
     fix (
       paren_foldr :
       Thk (
-        Thk (Ret (LazyList Tok)) ->
-        Thk (Tok -> Thk ParenCounterTransition -> ParenCounterTransition) ->
-        Thk ParenCounterTransition ->
-        ParenCounterTransition
+        Thk (Ret (LList' Tok)) ->
+        Thk (Tok -> Thk ParenCounterTrans -> ParenCounterTrans) ->
+        Thk ParenCounterTrans ->
+        ParenCounterTrans
       )
     ) ->
-      fn values step final ->
-        do layer <- ! values;
-        match layer
+      fn ll step final ->
+        do l <- ! ll;
+        match l
         | +Nil() -> ! final
-        | +Cons(head, tail) ->
-          ! step head { ! paren_foldr tail step final }
+        | +Cons(c, k) ->
+          ! step c { ! paren_foldr k step final }
         end
   } that
-  def reject : Thk ParenCounterStack = {
-    fix (reject : Thk ParenCounterStack) ->
+  def reject : Thk ParenCounterStk = {
+    fix (reject : Thk ParenCounterStk) ->
       comatch
       | .none -> ret +False()
       | .some -> ! reject
       end
   } that
-  def try_accept : Thk ParenCounterStack = {
+  def try_accept : Thk ParenCounterStk = {
     comatch
     | .none -> ret +True()
     | .some -> ! reject
     end
   } that
-  def accept_or_not : Thk (ParenCounterState -> ParenCounterStack) = {
-    fn state ->
-      match state
+  def accept_or_not : Thk (ParenCounterState -> ParenCounterStk) = {
+    fn s ->
+      match s
       | +Ok() -> ! try_accept
       | +Reject() -> ! reject
       end
   } that
   def paren_counter_step : Thk (
     Tok ->
-    Thk ParenCounterTransition ->
-    ParenCounterTransition
+    Thk ParenCounterTrans ->
+    ParenCounterTrans
   ) = {
-    fn token continuation state ->
-      match token
-      | +LParen() -> ! continuation state .some
+    fn c k state ->
+      match c
+      | +LParen() -> ! k state .some
       | +RParen() ->
         (comatch
-        | .none -> ! continuation (+Reject() : ParenCounterState) .none
-        | .some -> ! continuation state
+        | .none -> ! k (+Reject() : ParenCounterState) .none
+        -- Note: would be more efficient to just ! reject here
+        | .some -> ! k state
         end)
       end
   } that
   def demonstrate : Thk (
     String ->
     Bool ->
-    Thk (Ret (LazyList Tok)) ->
+    Thk (Ret (LList' Tok)) ->
     Thk OS ->
     OS
   ) = {
-    fn source expected tokens continuation ->
-      do heading <- ! (api/str_append)
+    fn s expect toks t ->
+      do s' <- ! (api/str_append)
         "The following parens are balanced? "
-        source;
-      do actual <- ! paren_foldr
-        tokens
+        s;
+      do b <- ! paren_foldr
+        toks
         paren_counter_step
         accept_or_not
         (+Ok() : ParenCounterState)
         .none;
-      do passes <- ! bool_eq expected actual;
-      match passes
+      do pass <- ! bool_eq expect b;
+      match pass
       | +True() ->
-        do rendered <- ! bool_to_string actual;
-        ! (api/write_line) heading {
-          ! (api/write_line) rendered continuation
+        do s <- ! bool_to_str b;
+        ! (api/write_line) s' {
+          ! (api/write_line) s t
         }
       | +False() ->
         ! (api/write_line) "WRONG ANSWER" { ! (api/exit) 1 }

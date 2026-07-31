@@ -13,34 +13,34 @@ begin
     Char = StdChar,
     String = StdString,
     OS = StdOS,
-    public
+    std
   ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
-  do equal <- ! (public/int_eq) 3 3;
-  do equal_status <- ! (public/branch)
+  do equal <- ! (std/int/eq) 3 3;
+  do equal_status <- ! (std/bool/if)
     (Ret StdInt)
     equal
     { ret 0 }
     { ret 1 };
-  do less <- ! (public/int_lt) 2 3;
-  do less_status <- ! (public/branch)
+  do less <- ! (std/int/lt) 2 3;
+  do less_status <- ! (std/bool/if)
     (Ret StdInt)
     less
     { ret 0 }
     { ret 1 };
-  do greater <- ! (public/int_gt) 3 2;
-  do greater_status <- ! (public/branch)
+  do greater <- ! (std/int/gt) 3 2;
+  do greater_status <- ! (std/bool/if)
     (Ret StdInt)
     greater
     { ret 0 }
     { ret 1 };
-  do string_equal <- ! (public/str_eq) "zydeco" "zydeco";
-  do string_status <- ! (public/branch)
+  do string_equal <- ! (std/string/eq) "zydeco" "zydeco";
+  do string_status <- ! (std/bool/if)
     (Ret StdInt)
     string_equal
     { ret 0 }
     { ret 1 };
-  do first <- ! (public/add) equal_status less_status;
-  do second <- ! (public/add) greater_status string_status;
-  do status <- ! (public/add) first second;
-  ! (public/exit) status
+  do first <- ! (std/int/add) equal_status less_status;
+  do second <- ! (std/int/add) greater_status string_status;
+  do status <- ! (std/int/add) first second;
+  ! (std/os/exit) status
 end

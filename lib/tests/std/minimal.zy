@@ -13,9 +13,9 @@ begin
     Char = StdChar,
     String = StdString,
     OS = StdOS,
-    public
+    std
   ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
-  do one <- ! (public/increment) 0;
-  do status <- ! (public/sub) one 1;
-  ! (public/exit) status
+  do one <- ! (std/int/increment) 0;
+  do status <- ! (std/int/sub) one 1;
+  ! (std/os/exit) status
 end

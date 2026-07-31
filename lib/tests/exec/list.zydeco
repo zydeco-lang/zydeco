@@ -13,39 +13,39 @@ begin
     Char = StdChar,
     String = StdString,
     OS = StdOS,
-    public
+    std
   ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
-  def fold_lengths : Thk (
+  def foldl : Thk (
     StdList StdString ->
     StdInt ->
     Ret StdInt
   ) = {
     fix (
-      fold_lengths :
+      foldl :
       Thk (
         StdList StdString ->
         StdInt ->
         Ret StdInt
       )
     ) ->
-      fn values accumulated ->
-        ! (public/list_eliminate)
+      fn xs i ->
+        ! (std/list/case)
           StdString
           (Ret StdInt)
-          values
-          { ret accumulated }
+          xs
+          { ret i }
           {
-            fn head tail ->
-              do length <- ! (public/str_length) head;
-              do next <- ! (public/add) accumulated length;
-              ! fold_lengths tail next
+            fn s xs ->
+              do i' <- ! (std/string/length) s;
+              do i' <- ! (std/int/add) i i';
+              ! foldl xs i'
           }
   } in
-  do nil <- ! (public/nil) StdString;
-  do ys <- ! (public/cons) StdString "y" nil;
-  do empty_and_ys <- ! (public/cons) StdString "" ys;
-  do values <- ! (public/cons) StdString "abc" empty_and_ys;
-  do length <- ! fold_lengths values 0;
-  do rendered <- ! (public/int_to_str) length;
-  ! (public/write_line) rendered { ! (public/exit) 0 }
+  do nil <- ! (std/list/nil) StdString;
+  do ys <- ! (std/list/cons) StdString "y" nil;
+  do empty_and_ys <- ! (std/list/cons) StdString "" ys;
+  do xs <- ! (std/list/cons) StdString "abc" empty_and_ys;
+  do l <- ! foldl xs 0;
+  do s <- ! (std/int/to_str) l;
+  ! (std/os/write_line) s { ! (std/os/exit) 0 }
 end

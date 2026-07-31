@@ -5,20 +5,21 @@ begin
   ) that
   def sum : Thk (Int -> Int -> Ret Int) = {
     fix (sum : Thk (Int -> Int -> Ret Int)) ->
-      fn index accumulated ->
+      fn i acc ->
         ! (api/int_eq_branch)
           (Ret Int)
-          index
+          i
           0
-          { ret accumulated }
+          { ret acc }
           {
-            do predecessor <- ! (api/sub) index 1;
-            do accumulated <- ! (api/add) index accumulated;
-            ! sum predecessor accumulated
+            -- do i <- ret i;
+            do i' <- ! (api/sub) i 1;
+            do acc' <- ! (api/add) i acc;
+            ! sum i' acc'
           }
   } that
 
-  do result <- ! sum 10 0;
-  do status <- ! (api/sub) result 55;
-  ! (api/exit) status
+  do z <- ! sum 10 0;
+  do r <- ! (api/sub) z 55;
+  ! (api/exit) r
 end

@@ -1,3 +1,7 @@
+-- This file implements an interpreter for a simple CBPV language.
+
+-- As it is a CBPV language, our syntax distinguishes between values
+-- and computations
 begin
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
@@ -22,12 +26,16 @@ begin
     | +Bind : SynComp * String * SynComp
     end
   that
+  -- Environments are implemented as association lists.
   def Env : VType =
     data
     | +Empty : Unit
     | +Cons : String * SemVal * Env
     end
   that
+  -- The interpreter works with semantic values, which do not include
+  -- variables. We use closures in the interpreter to implement semantic
+  -- thunks.
   def SemVal : VType =
     data
     | +True : Unit
@@ -35,22 +43,28 @@ begin
     | +ThunkV : Thk SemComp
     end
   that
-  def Answer : (VType) -> (VType) =
-    begin
-      param (A : VType) that
-      data
-      | +Ok : A
-      | +Err : Unit
-      end
+  -- The "final answer" of the interpreter is either the final value or
+  -- an error.
+  let Answer (A : VType) =
+    data
+    | +Ok : A
+    | +Err : Unit
     end
   that
+  -- The semantics of computations are Zydeco computations which satisfy
+  -- this codata type. There are two eliminators: application to a
+  -- variable and a bind.
   def SemComp : CType =
     codata
     | .app : SemVal -> SemComp
     | .bind : Ret (Answer SemVal)
     end
   that
-  def Interpreter : CType =
+  -- The interpreters for values and computations are implemented
+  -- mutually recursively.
+  -- Currently zydeco doesn't directly support mutual recursion but
+  -- it can be easily simulated:
+  let Interpreter =
     codata
     | .valu : SynVal -> Env -> Ret (Answer SemVal)
     | .comp : SynComp -> Env -> SemComp
@@ -59,21 +73,21 @@ begin
 
   def lookup : Thk (String -> Env -> Ret (Answer SemVal)) = {
     fix (lookup : Thk (String -> Env -> Ret (Answer SemVal))) ->
-      fn requested environment ->
-        match environment
+      fn x g ->
+        match g
         | +Empty() -> ret +Err()
-        | +Cons(name, value, tail) ->
+        | +Cons(y, v, g) ->
           ! (api/str_eq_branch)
             (Ret (Answer SemVal))
-            requested
-            name
-            { ret +Ok(value) }
-            { ! lookup requested tail }
+            x
+            y
+            { ret +Ok(v) }
+            { ! lookup x g }
         end
   } that
-  def sem_val_to_string : Thk (SemVal -> Ret String) = {
-    fn value ->
-      match value
+  def sem_val_to_str : Thk (SemVal -> Ret String) = {
+    fn s ->
+      match s
       | +True(_) -> ret "true"
       | +False(_) -> ret "false"
       | +ThunkV(_) -> ret "<thunk>"
@@ -89,64 +103,66 @@ begin
   def interp : Thk Interpreter = {
     fix (interp : Thk Interpreter) ->
       comatch
-      | .valu value environment ->
-        match value
-        | +Var(name) -> ! lookup name environment
+      | .valu v g ->
+        match v
+        | +Var(x) -> ! lookup x g
         | +True(_) -> ret +Ok(+True())
         | +False(_) -> ret +Ok(+False())
-        | +ThunkV(computation) ->
-          ret +Ok(+ThunkV({ ! interp .comp computation environment }))
+        -- Here we use the meta-language closures to capture the environment g
+        | +ThunkV(m) ->
+          ret +Ok(+ThunkV({ ! interp .comp m g }))
         end
-      | .comp computation environment ->
-        match computation
-        | +If(condition, consequent, alternative) ->
-          match condition
+      | .comp m g ->
+        match m
+        | +If(cond, mt, mf) ->
+          match cond
           | +Var(_) -> ! error
-          | +True(_) -> ! interp .comp consequent environment
-          | +False(_) -> ! interp .comp alternative environment
+          | +True(_) -> ! interp .comp mt g
+          | +False(_) -> ! interp .comp mf g
           | +ThunkV(_) -> ! error
           end
-        | +Force(syntax_value) ->
-          do result <- ! interp .valu syntax_value environment;
-          match result
-          | +Ok(value) ->
-            match value
-            | +ThunkV(thunk) -> ! thunk
+        | +Force(syn_val) ->
+          do v? <- ! interp .valu syn_val g;
+          match v?
+          | +Ok(v) ->
+            match v
+            | +ThunkV(t) -> ! t
             | +True(_) -> ! error
             | +False(_) -> ! error
             end
           | +Err() -> ! error
           end
-        | +Return(syntax_value) ->
-          do result <- ! interp .valu syntax_value environment;
+        | +Return(syn_val) ->
+          do v <- ! interp .valu syn_val g;
           comatch
-          | .bind -> ret result
+          | .bind -> ret v
           | .app _ -> ! error
           end
-        | +Bind(bindee, name, body) ->
-          do result <- ! interp .comp bindee environment .bind;
-          match result
-          | +Ok(value) ->
-            ! interp .comp body +Cons(name, value, environment)
+        | +Bind(m, x, k) ->
+          do v? <- ! interp .comp m g .bind;
+          match v?
+          | +Ok(v) ->
+            ! interp .comp k +Cons(x, v, g)
           | +Err() -> ! error
           end
-        | +Lam(name, body) ->
+        | +Lam(x, m) ->
           comatch
-          | .app value ->
-            ! interp .comp body +Cons(name, value, environment)
+          | .app v ->
+            ! interp .comp m +Cons(x, v, g)
           | .bind -> ret +Err()
           end
-        | +App(function, argument) ->
-          do result <- ! interp .valu argument environment;
-          match result
-          | +Ok(value) -> ! interp .comp function environment .app value
+        | +App(m, v) ->
+          do v? <- ! interp .valu v g;
+          match v?
+          | +Ok(v) -> ! interp .comp m g .app v
           | +Err() -> ! error
           end
         end
       end
   } that
 
-  do result <- ! interp
+  -- An example
+  do x <- ! interp
     .comp
     +App(
       +Lam("x", +Return(+Var("x"))),
@@ -154,10 +170,10 @@ begin
     )
     +Empty()
     .bind;
-  match result
+  match x
   | +Err(_) -> ! (api/exit) 1
-  | +Ok(value) ->
-    do rendered <- ! sem_val_to_string value;
-    ! (api/write_line) rendered { ! (api/exit) 0 }
+  | +Ok(sv) ->
+    do s <- ! sem_val_to_str sv;
+    ! (api/write_line) s { ! (api/exit) 0 }
   end
 end

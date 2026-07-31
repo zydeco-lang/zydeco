@@ -10,40 +10,24 @@ begin
     @[import("../../lib/std/builtin.zy")] _
   ) that
 
-  let Lens =
-    begin
-      param (S : VType) that
-      param (A : VType) that
-      forall (
-        Fun :
-        (VType) ->
-        (CType)
-      ) .
-        Thk (A -> Fun A) ->
-        S ->
-        Fun S
+  let Lens (S : VType) (A : VType) =
+    forall (
+      Fun :
+      (VType) ->
+      (CType)
+    ) .
+      Thk (A -> Fun A) ->
+      S ->
+      Fun S
+  that
+  let Identity (A : VType) =
+    codata
+    | .identity : Ret A
     end
   that
-  def Identity :
-    (VType) ->
-    (CType) =
-    begin
-      param (A : VType) that
-      codata
-      | .identity : Ret A
-      end
-    end
-  that
-  def Const :
-    (VType) ->
-    (VType) ->
-    (CType) =
-    begin
-      param (A : VType) that
-      param (B : VType) that
-      codata
-      | .constant : Ret A
-      end
+  let Const (A : VType) (B : VType) =
+    codata
+    | .constant : Ret A
     end
   that
 

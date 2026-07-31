@@ -1,3 +1,4 @@
+-- module Monad
 {
 param (
   (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
@@ -5,46 +6,25 @@ param (
 ) in
 ret begin
 
-  let Monad :
-    (
-      ((VType) -> (CType)) ->
-      (CType)
-    ) =
-    begin
-      param (
-        M :
-        (VType) -> (CType)
-      ) that
-      codata
-      | .return :
-        forall (A : VType) .
-          A -> M A
-      | .bind :
-        forall (A : VType) .
-        forall (B : VType) .
-          Thk (M A) ->
-          Thk (A -> M B) ->
-          M B
-      end
+  --| interface for monads and their algebras
+  let Monad (M : (VType) -> (CType)) =
+    codata
+    | .return :
+      forall (A : VType) .
+        A -> M A
+    | .bind :
+      forall (A : VType) .
+      forall (B : VType) .
+        Thk (M A) ->
+        Thk (A -> M B) ->
+        M B
     end
   that
-  let Algebra :
-    (
-      ((VType) -> (CType)) ->
-      (CType) ->
-      (CType)
-    ) =
-    begin
-      param (
-        M :
-        (VType) -> (CType)
-      ) that
-      param (R : CType) that
-      forall (A : VType) .
-        Thk (M A) ->
-        Thk (A -> R) ->
-        R
-    end
+  let Algebra (M : (VType) -> (CType)) (R : CType) =
+    forall (A : VType) .
+      Thk (M A) ->
+      Thk (A -> R) ->
+      R
   that
 
   let MonadicBasis =
@@ -69,3 +49,4 @@ ret begin
   ((Monad = Monad, Algebra = Algebra, ()) : MonadicBasis)
 end
 }
+-- end module Monad

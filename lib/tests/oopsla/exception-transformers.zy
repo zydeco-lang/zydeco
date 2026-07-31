@@ -9,7 +9,7 @@ begin
     ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
 
-  let Top : CType =
+  let Top =
     codata
     end
   that
@@ -17,218 +17,89 @@ begin
     comatch
     end
   } that
-  let Either :
-    (VType) ->
-    (VType) ->
-    (VType) =
-    begin
-      param (E : VType) that
-      param (A : VType) that
-      data
-      | +Left : E
-      | +Right : A
-      end
+  let Either (E : VType) (A : VType) =
+    data
+    | +Left : E
+    | +Right : A
     end
   that
-  let Exn :
-    (VType) ->
-    (VType) ->
-    (CType) =
-    begin
-      param (E : VType) that
-      param (A : VType) that
-      Ret (Either E A)
-    end
+  let Exn (E : VType) (A : VType) =
+    Ret (Either E A)
   that
-  let ExnT :
-    (VType) ->
-    (
-      (
-        (VType) ->
-        (CType)
-      ) ->
-      (VType) ->
-      (CType)
-    ) =
-    begin
-      param (E : VType) that
-      param (
-        M :
-        (VType) ->
-        (CType)
-      ) that
-      param (A : VType) that
-      M (Either E A)
-    end
+  let ExnT (E : VType) (M : (VType) -> (CType)) (A : VType) =
+    M (Either E A)
   that
-  let ExnK :
-    (VType) ->
-    (VType) ->
-    (CType) =
-    begin
-      param (E : VType) that
-      param (A : VType) that
-      forall (R : CType) .
-        Thk (E -> R) ->
-        Thk (A -> R) ->
-        R
-    end
+  let ExnK (E : VType) (A : VType) =
+    forall (R : CType) .
+      Thk (E -> R) ->
+      Thk (A -> R) ->
+      R
   that
-  let ExnKT :
-    (VType) ->
-    (
-      (
-        (VType) ->
-        (CType)
-      ) ->
-      (VType) ->
-      (CType)
-    ) =
-    begin
-      param (E : VType) that
-      param (
-        M :
-        (VType) ->
-        (CType)
-      ) that
-      param (A : VType) that
-      forall (R : CType) .
-        Thk (Algebra M R) ->
-        Thk (E -> R) ->
-        Thk (A -> R) ->
-        R
-    end
+  let ExnKT (E : VType) (M : (VType) -> (CType)) (A : VType) =
+    forall (R : CType) .
+      Thk (Algebra M R) ->
+      Thk (E -> R) ->
+      Thk (A -> R) ->
+      R
   that
-  let MonadPrime :
-    (
-      (
-        (VType) ->
-        (CType)
-      ) ->
-      (CType)
-    ) =
-    begin
-      param (
-        M :
-        (VType) ->
-        (CType)
-      ) that
-      codata
-      | .return :
-        forall (A : VType) .
-          Thk Top ->
-          A ->
-          M A
-      | .bind :
-        forall (A : VType) .
-          Thk Top ->
-          (
-            forall (B : VType) .
-              Thk Top ->
-              Thk (M A) ->
-              Thk (A -> M B) ->
-              M B
-          )
-      end
-    end
-  that
-  let MonadTransInner :
-    (
-      (
-        (VType) ->
-        (CType)
-      ) ->
-      (CType)
-    ) =
-    begin
-      param (
-        T_M :
-        (VType) ->
-        (CType)
-      ) that
-      codata
-      | .monad : Monad T_M
-      | .lift :
-        forall (A : VType) .
-          Thk (Ret A) ->
-          T_M A
-      end
-    end
-  that
-  let MonadTrans :
-    (
-      (
+  let MonadPrime (M : (VType) -> (CType)) =
+    codata
+    | .return :
+      forall (A : VType) .
+        Thk Top ->
+        A ->
+        M A
+    | .bind :
+      forall (A : VType) .
+        Thk Top ->
         (
-          (VType) ->
-          (CType)
-        ) ->
-        (VType) ->
-        (CType)
-      ) ->
-      (CType)
-    ) =
-    begin
-      param (
-        T :
-        (
-          (VType) ->
-          (CType)
-        ) ->
-        (VType) ->
-        (CType)
-      ) that
-      forall (
-        M :
-        (VType) ->
-        (CType)
-      ) .
-        Thk (Monad M) ->
-        codata
-        | .monad : Monad (T M)
-        | .lift :
-          forall (A : VType) .
-            Thk (M A) ->
-            T M A
-        end
-    end
-  that
-  let MonadTransPrime :
-    (
-      (
-        (
-          (VType) ->
-          (CType)
-        ) ->
-        (VType) ->
-        (CType)
-      ) ->
-      (CType)
-    ) =
-    begin
-      param (
-        T :
-        (
-          (VType) ->
-          (CType)
-        ) ->
-        (VType) ->
-        (CType)
-      ) that
-      forall (
-        M :
-        (VType) ->
-        (CType)
-      ) .
-        Thk (Monad M) ->
-        codata
-        | .monad : MonadPrime (T M)
-        | .lift :
-          forall (A : VType) .
+          forall (B : VType) .
             Thk Top ->
             Thk (M A) ->
-            T M A
-        end
+            Thk (A -> M B) ->
+            M B
+        )
     end
+  that
+  let MonadTransInner (T_M : (VType) -> (CType)) =
+    codata
+    | .monad : Monad T_M
+    | .lift :
+      forall (A : VType) .
+        Thk (Ret A) ->
+        T_M A
+    end
+  that
+  let MonadTrans (T : ((VType) -> (CType)) -> (VType) -> (CType)) =
+    forall (
+      M :
+      (VType) ->
+      (CType)
+    ) .
+      Thk (Monad M) ->
+      codata
+      | .monad : Monad (T M)
+      | .lift :
+        forall (A : VType) .
+          Thk (M A) ->
+          T M A
+      end
+  that
+  let MonadTransPrime (T : ((VType) -> (CType)) -> (VType) -> (CType)) =
+    forall (
+      M :
+      (VType) ->
+      (CType)
+    ) .
+      Thk (Monad M) ->
+      codata
+      | .monad : MonadPrime (T M)
+      | .lift :
+        forall (A : VType) .
+          Thk Top ->
+          Thk (M A) ->
+          T M A
+      end
   that
 
   def ret_monad : Thk (Monad Ret) = {

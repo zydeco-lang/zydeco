@@ -3,7 +3,7 @@ begin
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
-  def Choice : CType =
+  let Choice =
     codata
     | .left : OS
     | .right : Int -> OS
@@ -12,6 +12,6 @@ begin
 
   (comatch
   | .left -> ! (api/exit) 10
-  | .right value -> ! (api/exit) value
+  | .right i -> ! (api/exit) i
   end : Choice) .right 0
 end

@@ -1,39 +1,40 @@
+-- module Bool
 {
 param (
   (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
   @[import("builtin.zy")] _
 ) in
 ret begin
-  def Bool : VType =
+  let Bool =
     data
     | +False : Unit
     | +True : Unit
     end
   that
-  def truth : Bool = +True() that
-  def falsehood : Bool = +False() that
-  def bool_not : Thk (Bool -> Ret Bool) = {
+  def true : Bool = +True() that
+  def false : Bool = +False() that
+  def not : Thk (Bool -> Ret Bool) = {
     fn (value : Bool) ->
       match value
-      | +False(_) -> ret truth
-      | +True(_) -> ret falsehood
+      | +False(_) -> ret true
+      | +True(_) -> ret false
       end
   } that
-  def bool_and : Thk (Bool -> Bool -> Ret Bool) = {
+  def and : Thk (Bool -> Bool -> Ret Bool) = {
     fn (left : Bool) (right : Bool) ->
       match left
-      | +False(_) -> ret falsehood
+      | +False(_) -> ret false
       | +True(_) -> ret right
       end
   } that
-  def bool_or : Thk (Bool -> Bool -> Ret Bool) = {
+  def or : Thk (Bool -> Bool -> Ret Bool) = {
     fn (left : Bool) (right : Bool) ->
       match left
       | +False(_) -> ret right
-      | +True(_) -> ret truth
+      | +True(_) -> ret true
       end
   } that
-  def branch : Thk (
+  def if : Thk (
     forall (B : CType) .
       Bool -> Thk B -> Thk B -> B
   ) = {
@@ -48,12 +49,12 @@ ret begin
   } that
   let Interface =
     exists (Bool = AbstractBool : VType) .
-      (truth :: AbstractBool) *
-      (falsehood :: AbstractBool) *
+      (true :: AbstractBool) *
+      (false :: AbstractBool) *
       (not :: Thk (AbstractBool -> Ret AbstractBool)) *
       (and :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool)) *
       (or :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool)) *
-      (branch :: Thk (
+      (if :: Thk (
         forall (B : CType) .
           AbstractBool -> Thk B -> Thk B -> B
       ))
@@ -61,12 +62,13 @@ ret begin
 
   (
     Bool = Bool,
-    truth = truth,
-    falsehood = falsehood,
-    not = bool_not,
-    and = bool_and,
-    or = bool_or,
-    branch = branch,
+    true = true,
+    false = false,
+    not = not,
+    and = and,
+    or = or,
+    if = if,
   ) : Interface
 end
 }
+-- end module Bool

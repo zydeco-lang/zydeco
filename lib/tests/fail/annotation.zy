@@ -3,7 +3,7 @@ begin
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
-  def Bool : VType =
+  let Bool =
     data
     | +True : Unit
     | +False : Unit

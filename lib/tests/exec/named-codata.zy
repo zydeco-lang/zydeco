@@ -1,10 +1,12 @@
+-- Codata destructors remain dot eliminations. Their arguments and results may
+-- use named value types, and slash can project from a returned named value.
 begin
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  def Gauge : CType =
+  let Gauge =
     codata
     | .read : Ret ((reading :: Int) * Int)
     | .shift : (delta :: Int) -> Ret (reading :: Int)
