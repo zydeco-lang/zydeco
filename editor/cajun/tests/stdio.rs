@@ -39,6 +39,15 @@ impl LspProcess {
             .unwrap()
     }
 
+    fn request_without_notifications(&mut self, method: &str, params: Value) -> Value {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.send(json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }));
+        let response = self.receive();
+        assert_eq!(response.get("id"), Some(&json!(id)), "unexpected LSP message: {response}");
+        response
+    }
+
     fn notify(&mut self, method: &str, params: Value) {
         let message = if params.is_null() {
             json!({ "jsonrpc": "2.0", "method": method })
@@ -168,6 +177,45 @@ fn stdio_server_synchronizes_documents_and_answers_navigation_requests() {
     );
     let diagnostics = server.notification("textDocument/publishDiagnostics");
     assert_eq!(diagnostics["params"]["diagnostics"].as_array().unwrap().len(), 1);
+
+    server.finish();
+}
+
+#[test]
+fn stdio_server_ignores_documents_outside_zydeco_source_extensions() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join(".gitignore");
+    std::fs::write(&path, "begin ?").unwrap();
+    let uri = Url::from_file_path(&path).unwrap().to_string();
+    let mut server = LspProcess::start();
+
+    server.request(
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": Url::from_file_path(directory.path()).unwrap(),
+            "capabilities": {},
+        }),
+    );
+    server.notify("initialized", json!({}));
+    server.notification("window/logMessage");
+    server.notify(
+        "textDocument/didOpen",
+        json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "ignore",
+                "version": 1,
+                "text": "begin ?",
+            },
+        }),
+    );
+
+    let symbols = server.request_without_notifications(
+        "textDocument/documentSymbol",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    assert!(symbols["result"].is_null());
 
     server.finish();
 }

@@ -19,6 +19,19 @@ use tower_lsp::{
     },
 };
 
+struct ZydecoDocument;
+
+impl ZydecoDocument {
+    fn accepts(uri: &Url) -> bool {
+        uri.to_file_path().ok().is_some_and(|path| {
+            matches!(
+                path.extension().and_then(|extension| extension.to_str()),
+                Some("zy") | Some("zydeco")
+            )
+        })
+    }
+}
+
 /// The Cajun Zydeco language server.
 ///
 /// Cajun treats every open source file as a potential root term. Its imported
@@ -122,12 +135,18 @@ impl LanguageServer for Cajun {
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let document = params.text_document;
+        if !ZydecoDocument::accepts(&document.uri) {
+            return;
+        }
         self.set_document(&document.uri, document.text).await;
         self.analyze_and_publish(document.uri, Some(document.version)).await;
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         let document = params.text_document;
+        if !ZydecoDocument::accepts(&document.uri) {
+            return;
+        }
         let Some(change) = params.content_changes.into_iter().last() else {
             self.client
                 .log_message(
@@ -142,6 +161,9 @@ impl LanguageServer for Cajun {
     }
 
     async fn did_save(&self, params: DidSaveTextDocumentParams) {
+        if !ZydecoDocument::accepts(&params.text_document.uri) {
+            return;
+        }
         if let Some(text) = params.text {
             self.set_document(&params.text_document.uri, text).await;
         }
@@ -150,6 +172,9 @@ impl LanguageServer for Cajun {
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
         let uri = params.text_document.uri;
+        if !ZydecoDocument::accepts(&uri) {
+            return;
+        }
         if let Ok(path) = Self::path(&uri) {
             self.open_documents.write().await.remove(&path);
             self.projects.write().await.remove(&path);
@@ -161,6 +186,9 @@ impl LanguageServer for Cajun {
         &self, params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
         let target = params.text_document_position_params;
+        if !ZydecoDocument::accepts(&target.text_document.uri) {
+            return Ok(None);
+        }
         let path = match self.refresh(&target.text_document.uri).await {
             | Ok(path) => path,
             | Err(_) => return Ok(None),
@@ -174,6 +202,9 @@ impl LanguageServer for Cajun {
     async fn document_symbol(
         &self, params: DocumentSymbolParams,
     ) -> Result<Option<DocumentSymbolResponse>> {
+        if !ZydecoDocument::accepts(&params.text_document.uri) {
+            return Ok(None);
+        }
         let path = match self.refresh(&params.text_document.uri).await {
             | Ok(path) => path,
             | Err(_) => return Ok(None),
@@ -182,5 +213,28 @@ impl LanguageServer for Cajun {
         let symbols =
             projects.get(&path).map(|project| project.document_symbols(&path)).unwrap_or_default();
         Ok(Some(DocumentSymbolResponse::Nested(symbols)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ZydecoDocument;
+    use tower_lsp::lsp_types::Url;
+
+    #[test]
+    fn accepts_only_zydeco_source_extensions() {
+        ["file:///workspace/main.zy", "file:///workspace/main.zydeco"]
+            .into_iter()
+            .for_each(|uri| assert!(ZydecoDocument::accepts(&Url::parse(uri).unwrap())));
+
+        [
+            "file:///workspace/.gitignore",
+            "file:///workspace/main",
+            "file:///workspace/main.zy.toml",
+            "file:///workspace/main.ZY",
+            "untitled:main.zy",
+        ]
+        .into_iter()
+        .for_each(|uri| assert!(!ZydecoDocument::accepts(&Url::parse(uri).unwrap())));
     }
 }
