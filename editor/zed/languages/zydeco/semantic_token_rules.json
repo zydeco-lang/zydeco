@@ -1,0 +1,26 @@
+[
+  {
+    "token_modifiers": ["kind"],
+    "style": ["type.builtin", "type"]
+  },
+  {
+    "token_modifiers": ["computationType"],
+    "style": ["type.interface", "type"]
+  },
+  {
+    "token_modifiers": ["valueType"],
+    "style": ["type"]
+  },
+  {
+    "token_modifiers": ["computation"],
+    "style": ["function", "variable"]
+  },
+  {
+    "token_modifiers": ["value"],
+    "style": ["variable"]
+  },
+  {
+    "token_type": "punctuation",
+    "style": ["punctuation"]
+  }
+]

@@ -13,6 +13,7 @@ readme = { workspace = true }
 zydeco-utils = { workspace = true }
 zydeco-syntax = { workspace = true }
 zydeco-surface = { workspace = true }
+zydeco-statics = { workspace = true }
 zydeco-driver = { workspace = true }
 clap = { workspace = true }
 env_logger = { workspace = true }

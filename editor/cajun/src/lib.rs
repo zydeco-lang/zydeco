@@ -1,6 +1,8 @@
 mod analysis;
+mod semantic;
 
 use analysis::ProjectState;
+use semantic::SemanticHighlighter;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -14,8 +16,10 @@ use tower_lsp::{
         DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentSymbolParams,
         DocumentSymbolResponse, GotoDefinitionParams, GotoDefinitionResponse, InitializeParams,
         InitializeResult, InitializedParams, MessageType, OneOf, Position, PositionEncodingKind,
-        Range, ServerCapabilities, ServerInfo, TextDocumentSyncCapability, TextDocumentSyncKind,
-        TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Url,
+        Range, SemanticTokens, SemanticTokensFullOptions, SemanticTokensOptions,
+        SemanticTokensParams, SemanticTokensResult, ServerCapabilities, ServerInfo,
+        TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
+        TextDocumentSyncSaveOptions, Url,
     },
 };
 
@@ -119,6 +123,15 @@ impl LanguageServer for Cajun {
                 )),
                 definition_provider: Some(OneOf::Left(true)),
                 document_symbol_provider: Some(OneOf::Left(true)),
+                semantic_tokens_provider: Some(
+                    SemanticTokensOptions {
+                        legend: SemanticHighlighter::legend(),
+                        range: None,
+                        full: Some(SemanticTokensFullOptions::Bool(true)),
+                        ..SemanticTokensOptions::default()
+                    }
+                    .into(),
+                ),
                 ..ServerCapabilities::default()
             },
             offset_encoding: None,
@@ -213,6 +226,39 @@ impl LanguageServer for Cajun {
         let symbols =
             projects.get(&path).map(|project| project.document_symbols(&path)).unwrap_or_default();
         Ok(Some(DocumentSymbolResponse::Nested(symbols)))
+    }
+
+    async fn semantic_tokens_full(
+        &self, params: SemanticTokensParams,
+    ) -> Result<Option<SemanticTokensResult>> {
+        let uri = params.text_document.uri;
+        if !ZydecoDocument::accepts(&uri) {
+            return Ok(None);
+        }
+        let path = match Self::path(&uri) {
+            | Ok(path) => path,
+            | Err(_) => return Ok(None),
+        };
+        let refined = self
+            .projects
+            .read()
+            .await
+            .get(&path)
+            .and_then(|project| project.semantic_tokens(&path));
+        let data = match refined {
+            | Some(tokens) => tokens,
+            | None => {
+                let source = self
+                    .open_documents
+                    .read()
+                    .await
+                    .get(&path)
+                    .cloned()
+                    .or_else(|| std::fs::read_to_string(&path).ok());
+                source.map(|source| SemanticHighlighter::lexical(&source)).unwrap_or_default()
+            }
+        };
+        Ok(Some(SemanticTokens { result_id: None, data }.into()))
     }
 }
 

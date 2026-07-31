@@ -33,15 +33,55 @@ pub struct Tycker<'a> {
     pub metas: im::Vector<su::Meta>,
     /// a writer monad for error handling
     pub errors: Vec<TyckErrorEntry>,
+    hole_solution_output: HoleSolutionOutput,
 }
 
 pub type TyckReports =
     Vec<ariadne::Report<'static, (zydeco_utils::span::PathDisplay, std::ops::Range<usize>)>>;
 
+/// How a type-checking run exposes inferred solutions for source holes.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub enum HoleSolutionOutput {
+    #[default]
+    Stdout,
+    Silent,
+}
+
 /// The typed result of checking one complete source term.
 pub struct CheckedSource {
     pub statics: StaticsArena,
     pub root: TermAnnId,
+}
+
+/// A failed source check together with the static facts established before
+/// the failure.
+pub struct RejectedSource {
+    pub statics: StaticsArena,
+    pub reports: TyckReports,
+}
+
+/// The recoverable result of checking one complete source term.
+pub enum SourceCheckOutcome {
+    Checked(CheckedSource),
+    Rejected(RejectedSource),
+}
+
+impl SourceCheckOutcome {
+    /// Recover the conventional all-or-nothing source-checking result.
+    pub fn into_result(self) -> std::result::Result<CheckedSource, TyckReports> {
+        match self {
+            | Self::Checked(checked) => Ok(checked),
+            | Self::Rejected(RejectedSource { reports, .. }) => Err(reports),
+        }
+    }
+
+    /// Retain every static fact established before either outcome.
+    pub fn into_statics(self) -> StaticsArena {
+        match self {
+            | Self::Checked(CheckedSource { statics, .. })
+            | Self::Rejected(RejectedSource { statics, .. }) => statics,
+        }
+    }
 }
 
 /// Non-contextual output of the pattern-checking judgment.
@@ -194,7 +234,14 @@ impl<'a> Tycker<'a> {
             tasks: im::Vector::new(),
             metas: im::Vector::new(),
             errors: Vec::new(),
+            hole_solution_output: HoleSolutionOutput::default(),
         }
+    }
+
+    /// Select how inferred source-hole solutions are exposed by this run.
+    pub fn with_hole_solution_output(mut self, output: HoleSolutionOutput) -> Self {
+        self.hole_solution_output = output;
+        self
     }
 
     #[track_caller]
@@ -242,12 +289,20 @@ impl<'a> Tycker<'a> {
     }
 
     /// Consume the checker and retain the typed identity of a complete source term.
-    pub fn check_source(
-        mut self, root: su::TermId,
-    ) -> std::result::Result<CheckedSource, TyckReports> {
+    pub fn check_source(self, root: su::TermId) -> std::result::Result<CheckedSource, TyckReports> {
+        self.check_source_outcome(root).into_result()
+    }
+
+    /// Check a source while retaining static facts from a rejected term.
+    pub fn check_source_outcome(mut self, root: su::TermId) -> SourceCheckOutcome {
         match self.run_source_k(root) {
-            | Ok(root) => Ok(CheckedSource { statics: self.statics, root }),
-            | Err(()) => Err(self.error_reports()),
+            | Ok(root) => {
+                SourceCheckOutcome::Checked(CheckedSource { statics: self.statics, root })
+            }
+            | Err(()) => {
+                let reports = self.error_reports();
+                SourceCheckOutcome::Rejected(RejectedSource { statics: self.statics, reports })
+            }
         }
     }
 
@@ -315,6 +370,9 @@ impl<'a> Tycker<'a> {
     /// Print all hole solutions as a reference for the user.
     #[inline]
     pub fn do_print_hole_solutions(&self) {
+        if self.hole_solution_output == HoleSolutionOutput::Silent {
+            return;
+        }
         if self.statics.fill_hints.len() > 0 {
             println!("Hole Solutions:");
         }

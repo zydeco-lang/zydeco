@@ -123,6 +123,16 @@ fn stdio_server_synchronizes_documents_and_answers_navigation_requests() {
     assert_eq!(capabilities["textDocumentSync"]["change"], 1);
     assert_eq!(capabilities["definitionProvider"], true);
     assert_eq!(capabilities["documentSymbolProvider"], true);
+    assert_eq!(capabilities["semanticTokensProvider"]["full"], true);
+    let semantic_legend = &capabilities["semanticTokensProvider"]["legend"];
+    assert!(semantic_legend["tokenTypes"].as_array().unwrap().iter().any(|kind| kind == "keyword"));
+    assert!(
+        semantic_legend["tokenModifiers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|modifier| modifier == "computationType")
+    );
     server.notify("initialized", json!({}));
 
     server.notify(
@@ -138,6 +148,9 @@ fn stdio_server_synchronizes_documents_and_answers_navigation_requests() {
     );
     let diagnostics = server.notification("textDocument/publishDiagnostics");
     assert!(diagnostics["params"]["diagnostics"].as_array().unwrap().is_empty());
+    let semantic = server
+        .request("textDocument/semanticTokens/full", json!({ "textDocument": { "uri": uri } }));
+    assert!(!semantic["result"]["data"].as_array().unwrap().is_empty());
     let symbols =
         server.request("textDocument/documentSymbol", json!({ "textDocument": { "uri": uri } }));
     assert!(symbols["result"].as_array().unwrap().iter().any(|symbol| symbol["name"] == "answer"));
@@ -177,6 +190,16 @@ fn stdio_server_synchronizes_documents_and_answers_navigation_requests() {
     );
     let diagnostics = server.notification("textDocument/publishDiagnostics");
     assert_eq!(diagnostics["params"]["diagnostics"].as_array().unwrap().len(), 1);
+    let semantic = server
+        .request("textDocument/semanticTokens/full", json!({ "textDocument": { "uri": uri } }));
+    let data = semantic["result"]["data"].as_array().unwrap();
+    let keyword = semantic_legend["tokenTypes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .position(|kind| kind == "keyword")
+        .unwrap();
+    assert_eq!(data[0..5], [json!(0), json!(0), json!(5), json!(keyword), json!(0)]);
 
     server.finish();
 }
@@ -216,6 +239,11 @@ fn stdio_server_ignores_documents_outside_zydeco_source_extensions() {
         json!({ "textDocument": { "uri": uri } }),
     );
     assert!(symbols["result"].is_null());
+    let semantic = server.request_without_notifications(
+        "textDocument/semanticTokens/full",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    assert!(semantic["result"].is_null());
 
     server.finish();
 }

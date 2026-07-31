@@ -183,6 +183,7 @@ dependencies = [
  "tokio",
  "tower-lsp",
  "zydeco-driver",
+ "zydeco-statics",
  "zydeco-surface",
  "zydeco-syntax",
  "zydeco-utils",

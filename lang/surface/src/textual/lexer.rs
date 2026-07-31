@@ -1,5 +1,8 @@
 use logos::{Logos, SpannedIter};
-use std::fmt::{Debug, Display};
+use std::{
+    fmt::{Debug, Display},
+    ops::Range,
+};
 
 /// Tokens produced by the surface lexer.
 #[derive(Logos, Clone, Debug, PartialEq)]
@@ -114,9 +117,9 @@ pub enum Tok<'input> {
     #[token("@")]
     At,
 
-    #[regex(r"--\|.*?\n")]
+    #[regex(r"--\|[^\n]*\n?", allow_greedy = true)]
     DocLine(&'input str),
-    #[regex(r"--.*?\n")]
+    #[regex(r"--[^\n]*\n?", allow_greedy = true)]
     CommentLine(&'input str),
     #[token("/-")]
     CommentOpen,
@@ -124,6 +127,170 @@ pub enum Tok<'input> {
     CommentClose,
     #[regex(".", priority = 0)]
     Unknown(&'input str),
+}
+
+/// The lexical role of a source token, independent of a particular editor
+/// protocol or theme.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum LexicalTokenKind {
+    UpperIdentifier,
+    LowerIdentifier,
+    Constructor,
+    Destructor,
+    Keyword,
+    Number,
+    String,
+    Comment,
+    DocumentationComment,
+    Operator,
+    Punctuation,
+    Hole,
+    Attribute,
+}
+
+/// A source token retained for tooling, including tokens ignored by parsing.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LexicalToken {
+    pub range: Range<usize>,
+    pub kind: LexicalTokenKind,
+}
+
+impl LexicalToken {
+    fn new(range: Range<usize>, kind: LexicalTokenKind) -> Self {
+        Self { range, kind }
+    }
+}
+
+/// A lexer view for source tooling.
+///
+/// Unlike [`Lexer`], this view retains comments and combines a nested block
+/// comment into one source range. It deliberately reports only lexical roles;
+/// later compiler phases may refine identifier tokens without having to
+/// reproduce lexical recovery themselves.
+pub struct LexicalTokens<'source> {
+    inner: SpannedIter<'source, Tok<'source>>,
+    source_len: usize,
+    comment_start: Option<usize>,
+    comment_depth: usize,
+}
+
+impl<'source> LexicalTokens<'source> {
+    /// Observe all highlightable tokens in a source string.
+    pub fn new(source: &'source str) -> Self {
+        Self {
+            inner: Tok::lexer(source).spanned(),
+            source_len: source.len(),
+            comment_start: None,
+            comment_depth: 0,
+        }
+    }
+
+    fn classify(tok: &Tok<'_>) -> Option<LexicalTokenKind> {
+        use LexicalTokenKind as Kind;
+        Some(match tok {
+            | Tok::UpperIdent(_) => Kind::UpperIdentifier,
+            | Tok::LowerIdent(_) => Kind::LowerIdentifier,
+            | Tok::CtorIdent(_) => Kind::Constructor,
+            | Tok::DtorIdent(_) => Kind::Destructor,
+            | Tok::End
+            | Tok::Begin
+            | Tok::Data
+            | Tok::Codata
+            | Tok::As
+            | Tok::Define
+            | Tok::Let
+            | Tok::Param
+            | Tok::In
+            | Tok::That
+            | Tok::Do
+            | Tok::DoTilde
+            | Tok::Ret
+            | Tok::Monadic
+            | Tok::Monadically
+            | Tok::Fn
+            | Tok::Pi
+            | Tok::Fix
+            | Tok::Match
+            | Tok::Comatch
+            | Tok::Forall
+            | Tok::Sigma
+            | Tok::Exists => Kind::Keyword,
+            | Tok::IntLit(_) => Kind::Number,
+            | Tok::StrLit(_) | Tok::CharLit(_) => Kind::String,
+            | Tok::ParenOpen
+            | Tok::ParenClose
+            | Tok::BracketOpen
+            | Tok::BracketClose
+            | Tok::BraceOpen
+            | Tok::BraceClose
+            | Tok::Comma
+            | Tok::Colon
+            | Tok::ColonColon
+            | Tok::Semicolon => Kind::Punctuation,
+            | Tok::Equals
+            | Tok::Force
+            | Tok::Slash
+            | Tok::Branch
+            | Tok::Plus
+            | Tok::Star
+            | Tok::Dot
+            | Tok::Arrow
+            | Tok::Assign
+            | Tok::CommentClose => Kind::Operator,
+            | Tok::Hole => Kind::Hole,
+            | Tok::At => Kind::Attribute,
+            | Tok::DocLine(_) => Kind::DocumentationComment,
+            | Tok::CommentLine(_) => Kind::Comment,
+            | Tok::CommentOpen | Tok::Unknown(_) => return None,
+        })
+    }
+}
+
+impl Iterator for LexicalTokens<'_> {
+    type Item = LexicalToken;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let Some((token, range)) = self.inner.next() else {
+                return self.comment_start.take().map(|start| {
+                    LexicalToken::new(start..self.source_len, LexicalTokenKind::Comment)
+                });
+            };
+            let Ok(token) = token else {
+                continue;
+            };
+
+            if self.comment_depth > 0 {
+                match token {
+                    | Tok::CommentOpen => self.comment_depth += 1,
+                    | Tok::CommentClose => {
+                        self.comment_depth -= 1;
+                        if self.comment_depth == 0 {
+                            let start = self
+                                .comment_start
+                                .take()
+                                .expect("a nested comment has an opening range");
+                            return Some(LexicalToken::new(
+                                start..range.end,
+                                LexicalTokenKind::Comment,
+                            ));
+                        }
+                    }
+                    | _ => {}
+                }
+                continue;
+            }
+
+            if matches!(token, Tok::CommentOpen) {
+                self.comment_start = Some(range.start);
+                self.comment_depth = 1;
+                continue;
+            }
+            if let Some(kind) = Self::classify(&token) {
+                return Some(LexicalToken::new(range, kind));
+            }
+        }
+    }
 }
 
 impl Display for Tok<'_> {
@@ -256,6 +423,49 @@ impl<'source> Iterator for HashLexer<'source> {
             | Some((l, tok, r)) => Some((l, tok, r)),
             | _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tooling_tests {
+    use super::{LexicalToken, LexicalTokenKind, LexicalTokens};
+
+    struct LexicalFixture<'source> {
+        source: &'source str,
+    }
+
+    impl<'source> LexicalFixture<'source> {
+        fn new(source: &'source str) -> Self {
+            Self { source }
+        }
+
+        fn tokens(&self) -> Vec<LexicalToken> {
+            LexicalTokens::new(self.source).collect()
+        }
+
+        fn text(&self, token: &LexicalToken) -> &'source str {
+            &self.source[token.range.clone()]
+        }
+    }
+
+    #[test]
+    fn tooling_tokens_retain_line_comments_at_end_of_file() {
+        let fixture = LexicalFixture::new("begin --| documentation");
+        let tokens = fixture.tokens();
+        assert_eq!(tokens.len(), 2);
+        assert_eq!(tokens[1].kind, LexicalTokenKind::DocumentationComment);
+        assert_eq!(fixture.text(&tokens[1]), "--| documentation");
+    }
+
+    #[test]
+    fn tooling_tokens_combine_nested_and_unterminated_block_comments() {
+        ["/- outer /- nested -/ tail -/", "/- unfinished"].into_iter().for_each(|source| {
+            let fixture = LexicalFixture::new(source);
+            let tokens = fixture.tokens();
+            assert_eq!(tokens.len(), 1);
+            assert_eq!(tokens[0].kind, LexicalTokenKind::Comment);
+            assert_eq!(fixture.text(&tokens[0]), source);
+        });
     }
 }
 
