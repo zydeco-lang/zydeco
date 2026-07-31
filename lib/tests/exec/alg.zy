@@ -1,72 +1,187 @@
-def ! alg_arrow
-  (M: VType -> CType)
-  (A: VType)
-  (B: CType) (alg: U (Algebra M B))
-: Algebra M (A -> B) =
-  comatch X (m: U (M X)) (f: U (X -> A -> B)) ->
-    fn a -> ! alg X m { fn x -> ! f x a }
-  end
-end
+begin
+  let monadic_basis = @[import("../../std/monad.zy")] _ that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  do (= Monad, = Algebra, ()) <-
+    ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  begin
 
-codata With (B1: CType) (B2: CType) where
-  | .l: B1
-  | .r: B2
-end
-
-def ! alg_with
-  (M: VType -> CType)
-  (B1: CType) (alg1: U (Algebra M B1))
-  (B2: CType) (alg2: U (Algebra M B2))
-: Algebra M (With B1 B2) =
-  comatch X (m: U (M X)) (f: U (X -> With B1 B2)) ->
-    comatch
-    | .l -> ! alg1 X m { fn x -> ! f x .l }
-    | .r -> ! alg2 X m { fn x -> ! f x .r }
+  def With :
+    (CType) ->
+    (CType) ->
+    (CType) =
+    begin
+      param (B1 : CType) that
+      param (B2 : CType) that
+      codata
+      | .l : B1
+      | .r : B2
+      end
     end
-  end
-end
+  that
 
-def ! alg_ret
-  (M: VType -> CType) (mo: U (Monad M))
-  (A: VType)
-: Algebra M (M A) =
-  comatch X m f ->
-    ! mo .bind X A m f
-  end
-end
+  def alg_arrow : Thk (
+    forall (
+      M :
+      (VType) -> (CType)
+    ) .
+    forall (A : VType) .
+    forall (B : CType) .
+      Thk (Algebra M B) ->
+      Algebra M (A -> B)
+  ) = {
+    fn M A B alg ->
+      comatch X computation continuation ->
+        fn argument ->
+          ! alg X computation {
+            fn value ->
+              ! continuation value argument
+          }
+      end
+  } that
+  def alg_with : Thk (
+    forall (
+      M :
+      (VType) -> (CType)
+    ) .
+    forall (B1 : CType) .
+      Thk (Algebra M B1) ->
+      (
+        forall (B2 : CType) .
+          Thk (Algebra M B2) ->
+          Algebra M (With B1 B2)
+      )
+  ) = {
+    fn M B1 alg1 B2 alg2 ->
+      comatch X computation continuation ->
+        comatch
+        | .l ->
+          ! alg1 X computation {
+            fn value ->
+              ! continuation value .l
+          }
+        | .r ->
+          ! alg2 X computation {
+            fn value ->
+              ! continuation value .r
+          }
+        end
+      end
+  } that
+  def alg_ret : Thk (
+    forall (
+      M :
+      (VType) -> (CType)
+    ) .
+      Thk (Monad M) ->
+      (
+        forall (A : VType) .
+          Algebra M (M A)
+      )
+  ) = {
+    fn M monad A ->
+      comatch X computation continuation ->
+        ! monad .bind X A computation continuation
+      end
+  } that
+  def alg_forall_ctype : Thk (
+    forall (
+      M :
+      (VType) -> (CType)
+    ) .
+    forall (
+      S :
+      (CType) -> (CType)
+    ) .
+      Thk (
+        forall (Y : CType) .
+          Thk (Algebra M Y) ->
+          Algebra M (S Y)
+      ) ->
+      Algebra M (
+        forall (Y : CType) .
+          Thk (Algebra M Y) ->
+          S Y
+      )
+  ) = {
+    fn M S algS ->
+      comatch X computation continuation ->
+        comatch Y algY ->
+          ! algS Y algY X computation {
+            fn value ->
+              ! continuation value Y algY
+          }
+        end
+      end
+  } that
+  def alg_forall_ctype_constructor : Thk (
+    forall (
+      M :
+      (VType) -> (CType)
+    ) .
+    forall (
+      S :
+      (
+        ((CType) -> (CType)) ->
+        (CType)
+      )
+    ) .
+      Thk (
+        forall (
+          F :
+          (CType) -> (CType)
+        ) .
+          Thk (
+            forall (Z : CType) .
+              Thk (Algebra M Z) ->
+              Algebra M (F Z)
+          ) ->
+          Algebra M (S F)
+      ) ->
+      Algebra M (
+        forall (
+          F :
+          (CType) -> (CType)
+        ) .
+          Thk (
+            forall (Z : CType) .
+              Thk (Algebra M Z) ->
+              Algebra M (F Z)
+          ) ->
+          S F
+      )
+  ) = {
+    fn M S algS ->
+      comatch X computation continuation ->
+        comatch F algZFZ ->
+          ! algS F algZFZ X computation {
+            fn value ->
+              ! continuation value F algZFZ
+          }
+        end
+      end
+  } that
+  def alg_of_ret : Thk (
+    forall (R : CType) .
+      Algebra Ret R
+  ) = {
+    fn R ->
+      comatch X computation continuation ->
+        do value <- ! computation;
+        ! continuation value
+      end
+  } that
 
-def ! alg_forall_ctype
-  (M: VType -> CType)
-  (S: CType -> CType) (algS: U (forall (Y: CType) . U (Algebra M Y) -> Algebra M (S Y)))
-: Algebra M (forall (Y: CType) . U (Algebra M Y) -> S Y) =
-  comatch X (m: U (M X)) (f: U (X -> (forall (Y: CType) . U (Algebra M Y) -> S Y))) ->
-    comatch Y algY ->
-      ! algS Y algY X m { fn a -> ! f a Y algY }
-    end
-  end
+  do result <- ! alg_of_ret
+    (Ret Int)
+    Int
+    { ret 0 }
+    {
+      fn value ->
+        ret value
+    };
+  ! (api/exit) result
 end
-
-def ! alg_forall_ctype_constructor
-  (M: VType -> CType)
-  (S: (CType -> CType) -> CType)
-  (algS: U (forall (F: CType -> CType) . U (forall (Z: CType) . U (Algebra M Z) -> Algebra M (F Z)) -> Algebra M (S F)))
-: Algebra M (forall (F: CType -> CType) . U (forall (Z: CType) . U (Algebra M Z) -> Algebra M (F Z)) -> S F) =
-  comatch X (m: U (M X))
-    (f: U (X -> (forall (F: CType -> CType) . U (forall (Z: CType) . U (Algebra M Z) -> Algebra M (F Z)) -> S F))) ->
-    comatch F algZFZ ->
-      ! algS F algZFZ X m { fn a -> ! f a F algZFZ }
-    end
-  end
-end
-
-def ! alg_of_ret (R: CType) : Algebra Ret R =
-  comatch X m f ->
-    do x <- ! m;
-    ! f x
-  end
-end
-
-main
-  do x <- ! alg_of_ret (Ret Int) Int { ret 0 } { fn x -> ret x };
-  ! exit x
 end

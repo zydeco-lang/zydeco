@@ -1,28 +1,54 @@
-data Seal (X : VType) (A : VType) where
-| +Seal : Thunk(A -> Ret X) * Thunk(X -> Ret A)
-end
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
 
-def nat : exists (X : VType) . Seal X Int = (
-  Int, +Seal(
-    { ! id (Int) },
-    { ! id (Int) },
-  )
-) end
+  def Seal :
+    (VType) ->
+    (VType) ->
+    (VType) =
+    begin
+      param (X : VType) that
+      param (A : VType) that
+      data
+      | +Seal : Thk (A -> Ret X) * Thk (X -> Ret A)
+      end
+    end
+  that
+  def identity : Thk (
+    forall (A : VType) .
+      A -> Ret A
+  ) = {
+    fn (A : VType) (value : A) ->
+      ret value
+  } that
+  def natural :
+    exists (X : VType) .
+      Seal X Int =
+    (
+      Int,
+      +Seal(
+        { ! identity Int },
+        { ! identity Int },
+      )
+    )
+  that
+  def packed :
+    exists (X : VType) (Y : VType) .
+      X * (Y * Int) =
+    (Int, Char, 0, ('z', 0))
+  that
 
-def packed : exists (X : VType) . exists (Y : VType) . X * (Y * Int) = (
-  Int, Char, 0, ('z', 0)
-) end
-
-main
   match packed
   | (Left, Right, zero, letter, status) ->
-    match nat
-    | (Nat, seal) ->
+    match natural
+    | (Natural, seal) ->
       match seal
-      | +Seal(of, to) ->
-        do n <- ! of 0;
-        do i <- ! to n;
-        ! exit i
+      | +Seal(from_int, to_int) ->
+        do number <- ! from_int 0;
+        do integer <- ! to_int number;
+        ! (api/exit) integer
       end
     end
   end

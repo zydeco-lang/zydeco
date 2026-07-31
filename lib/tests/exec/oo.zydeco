@@ -1,34 +1,38 @@
--- We can do good old object-oriented programming in here
--- e.g. define a Counter that can incr and project out Int or String
-codata Counter where
-| .num : Ret Int
-| .incr : Int -> Counter
-| .fmt : Ret String
-end
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
 
--- We can use `this` (or `self`) as in normal OO languages
-def mk_counter : Thunk(Int -> Counter) = {
-  fix mk_counter ->
-  fn n -> fix this ->
-  comatch
-  | .num -> ret n
-  | .incr -> fn i ->
-    do j <- ! this .num;
-    do n <- ! add i j;
-    ! mk_counter n
-  | .fmt ->
-    do n <- ! this .num;
-    ! int_to_str n
-  end
-} end
+  def Counter : CType =
+    codata
+    | .num : Ret Int
+    | .incr : Int -> Counter
+    | .fmt : Ret String
+    end
+  that
+  def make_counter : Thk (Int -> Counter) = {
+    fix (make_counter : Thk (Int -> Counter)) ->
+      fn current ->
+        fix (this : Thk Counter) ->
+          comatch
+          | .num -> ret current
+          | .incr increment ->
+            do previous <- ! this .num;
+            do next <- ! (api/add) increment previous;
+            ! make_counter next
+          | .fmt ->
+            do number <- ! this .num;
+            ! (api/int_to_str) number
+          end
+  } that
 
-main
-  let counter_42: Thunk(Counter) = {
-    ! mk_counter 42
+  let counter_42 : Thk Counter = {
+    ! make_counter 42
   } in
-  do s <- ! counter_42 .fmt;
-  ! write_line s {
-    do n <- ! counter_42 .incr -42 .num;
-    ! exit n
+  do rendered <- ! counter_42 .fmt;
+  ! (api/write_line) rendered {
+    do number <- ! counter_42 .incr -42 .num;
+    ! (api/exit) number
   }
 end

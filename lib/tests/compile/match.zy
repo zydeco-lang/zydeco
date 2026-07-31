@@ -1,16 +1,18 @@
-extern def exit : Thk (Int -> OS) end
+begin
+  def Bool : VType =
+    data
+    | +False : Unit
+    | +True : Unit
+    end
+  that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
 
-alias Bool : VType =
-  data
-  | +False : Unit
-  | +True : Unit
-  end
-end
-
-main
-  let x: Bool = +False () in
-  match x
-  | +True _ -> ! exit 10
-  | +False _ -> ! exit 0
+  let value : Bool = +False() in
+  match value
+  | +True(_) -> ! (api/exit) 10
+  | +False(_) -> ! (api/exit) 0
   end
 end

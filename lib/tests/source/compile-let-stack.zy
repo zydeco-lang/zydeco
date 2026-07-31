@@ -1,7 +1,0 @@
-param (
-  (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
-  @[import("../../std/builtin.zy")] _
-) in
-  let status = 0 in
-  (let ignored = 42 in
-   ! (api/exit)) status

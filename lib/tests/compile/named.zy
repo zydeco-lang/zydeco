@@ -1,32 +1,31 @@
-pub extern def add : Thk (Int -> Int -> Ret Int) end
-pub extern def exit : Thk (Int -> OS) end
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  let Point = (x :: Int) * (y :: Int) that
+  let Rectangle = (top_left :: Point) * (status :: Int) that
+  let Triple = (first :: Int) * ((middle :: Int) * (last :: Int)) that
+  let Nested = ((inner_x :: Int) * (inner_y :: Int)) * (outer :: Int) that
+  def rectangle : Rectangle = (
+    top_left = (x = 5, y = 1),
+    status = 0
+  ) that
+  def triple : Triple = (first = 7, middle = -3, last = -4) that
+  def nested : Nested = ((inner_x = 0, inner_y = -12), outer = 0) that
+  def first_global : Int = triple/first that
 
-alias Point = (x :: Int) * (y :: Int) end
-alias Rectangle = (top_left :: Point) * (status :: Int) end
-alias Triple = (first :: Int) * ((middle :: Int) * (last :: Int)) end
-alias Nested = ((inner_x :: Int) * (inner_y :: Int)) * (outer :: Int) end
-
-def rectangle : Rectangle = (
-  top_left = (x = 5, y = 1),
-  status = 0
-) end
-
-def triple : Triple = (first = 7, middle = -3, last = -4) end
-def nested : Nested = ((inner_x = 0, inner_y = -12), outer = 0) end
-def first_global : Int = triple/first end
-
-main
   let (top_left = point, = status : Int) = rectangle in
   let status_field = (= status : Int) in
   let direct = (code = point/x) in
-  let (inner, outer = _) = nested in
+  let (inner, outer = ignored_outer) = nested in
   let pair = (triple/first, triple/last) in
   let (first, last) = pair in
-  do total <- ! add first triple/middle;
-  do total <- ! add total last;
-  do total <- ! add total inner/inner_y;
-  do total <- ! add total direct/code;
-  do total <- ! add total first_global;
-  do total <- ! add total status_field/status;
-  ! exit total
+  do total <- ! (api/add) first triple/middle;
+  do total <- ! (api/add) total last;
+  do total <- ! (api/add) total inner/inner_y;
+  do total <- ! (api/add) total direct/code;
+  do total <- ! (api/add) total first_global;
+  do total <- ! (api/add) total status_field/status;
+  ! (api/exit) total
 end

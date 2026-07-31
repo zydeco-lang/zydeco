@@ -1037,7 +1037,7 @@ fn declaration_free_source_reaches_native_assembly_emission() {
 
 #[test]
 fn canonical_builtin_signature_imports_into_interpreter_and_native_compilation() {
-    let root = repository_source("tests/source/builtin-full.zy");
+    let root = repository_source("tests/builtin/full.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -1090,7 +1090,7 @@ fn canonical_builtin_signature_exports_intrinsics_as_static_manifest_fields() {
         Abstract(BuiltinTypeRole),
     }
 
-    let checked = SourceDriver::check(repository_source("tests/source/builtin-full.zy")).unwrap();
+    let checked = SourceDriver::check(repository_source("tests/builtin/full.zy")).unwrap();
     let TermAnnId::Compu(_, root_type) = checked.root else {
         panic!("expected the canonical Builtin consumer to be a computation")
     };
@@ -1181,7 +1181,7 @@ fn canonical_builtin_signature_exports_intrinsics_as_static_manifest_fields() {
 
 #[test]
 fn foundational_comparison_selects_a_computation_without_constructing_bool() {
-    let root = repository_source("tests/source/builtin-comparison-branch.zy");
+    let root = repository_source("tests/builtin/comparison-branch.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -1200,7 +1200,7 @@ fn foundational_comparison_selects_a_computation_without_constructing_bool() {
 
 #[test]
 fn foundational_line_parser_selects_a_continuation_without_constructing_option() {
-    let root = repository_source("tests/source/builtin-read-line-as-int-branch.zy");
+    let root = repository_source("tests/builtin/read-line-as-int-branch.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::Cursor::new("42\nnot-an-integer\n");
     let mut output = Vec::new();
@@ -1219,7 +1219,7 @@ fn foundational_line_parser_selects_a_continuation_without_constructing_option()
 
 #[test]
 fn foundational_argument_fold_preserves_sequence_without_constructing_list() {
-    let root = repository_source("tests/source/builtin-arg-fold.zy");
+    let root = repository_source("tests/builtin/arg-fold.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -1236,7 +1236,7 @@ fn foundational_argument_fold_preserves_sequence_without_constructing_list() {
 
 #[test]
 fn standard_library_package_composes_as_an_ordinary_imported_term() {
-    let root = repository_source("tests/source/std-minimal.zy");
+    let root = repository_source("tests/std/minimal.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -1255,7 +1255,7 @@ fn standard_library_package_composes_as_an_ordinary_imported_term() {
 
 #[test]
 fn standard_library_reifies_foundational_comparisons_as_abstract_bool() {
-    let root = repository_source("tests/source/std-comparisons.zy");
+    let root = repository_source("tests/std/comparisons.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -1270,7 +1270,7 @@ fn standard_library_reifies_foundational_comparisons_as_abstract_bool() {
 
 #[test]
 fn standard_library_reifies_foundational_splits_as_abstract_option() {
-    let root = repository_source("tests/source/std-splits.zy");
+    let root = repository_source("tests/std/splits.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -1285,7 +1285,7 @@ fn standard_library_reifies_foundational_splits_as_abstract_option() {
 
 #[test]
 fn standard_library_reifies_foundational_line_parsing_as_abstract_option() {
-    let root = repository_source("tests/source/std-read-line-as-int.zy");
+    let root = repository_source("tests/std/read-line-as-int.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::Cursor::new("42\nnot-an-integer\n");
     let mut output = Vec::new();
@@ -1300,7 +1300,7 @@ fn standard_library_reifies_foundational_line_parsing_as_abstract_option() {
 
 #[test]
 fn standard_library_reifies_foundational_argument_fold_as_abstract_list() {
-    let root = repository_source("tests/source/std-arg-list.zy");
+    let root = repository_source("tests/std/arg-list.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -1317,7 +1317,7 @@ fn standard_library_reifies_foundational_argument_fold_as_abstract_list() {
 
 #[test]
 fn legacy_alias_example_ports_to_uniform_term_composition() {
-    let root = repository_source("tests/source/std-alias.zy");
+    let root = repository_source("tests/exec/alias.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -1336,7 +1336,7 @@ fn legacy_alias_example_ports_to_uniform_term_composition() {
 
 #[test]
 fn legacy_polymorphic_identity_example_ports_to_uniform_term_composition() {
-    let root = repository_source("tests/source/std-identity.zy");
+    let root = repository_source("tests/std/identity.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -1355,7 +1355,7 @@ fn legacy_polymorphic_identity_example_ports_to_uniform_term_composition() {
 
 #[test]
 fn legacy_tuple_example_ports_to_uniform_term_composition() {
-    let root = repository_source("tests/source/builtin-tuple.zy");
+    let root = repository_source("tests/builtin/tuple.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -1374,7 +1374,7 @@ fn legacy_tuple_example_ports_to_uniform_term_composition() {
 
 #[test]
 fn exact_signed_arithmetic_agrees_through_interpretation_and_native_emission() {
-    let root = repository_source("tests/source/builtin-arithmetic.zy");
+    let root = repository_source("tests/builtin/arithmetic.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -1393,7 +1393,7 @@ fn exact_signed_arithmetic_agrees_through_interpretation_and_native_emission() {
 
 #[test]
 fn recursive_nominal_types_port_to_a_declaration_free_block() {
-    let root = repository_source("tests/source/builtin-recursive-data.zy");
+    let root = repository_source("tests/builtin/recursive-data.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -1415,7 +1415,7 @@ fn abstract_bool_package_exports_values_and_an_eliminator() {
     let library = SourceDriver::check(repository_source("std/bool.zy")).unwrap();
     assert!(matches!(library.root, zydeco_statics::tyck::syntax::TermAnnId::Value(_, _)));
 
-    let root = repository_source("tests/source/std-bool.zy");
+    let root = repository_source("tests/std/bool.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -1437,7 +1437,7 @@ fn abstract_option_package_exports_a_type_constructor_and_an_eliminator() {
     let library = SourceDriver::check(repository_source("std/option.zy")).unwrap();
     assert!(matches!(library.root, zydeco_statics::tyck::syntax::TermAnnId::Value(_, _)));
 
-    let root = repository_source("tests/source/std-option.zy");
+    let root = repository_source("tests/std/option.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -1459,7 +1459,7 @@ fn abstract_list_package_exports_a_recursive_type_constructor_and_an_eliminator(
     let library = SourceDriver::check(repository_source("std/list.zy")).unwrap();
     assert!(matches!(library.root, zydeco_statics::tyck::syntax::TermAnnId::Value(_, _)));
 
-    let root = repository_source("tests/source/std-list.zy");
+    let root = repository_source("tests/std/list.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -1478,7 +1478,7 @@ fn abstract_list_package_exports_a_recursive_type_constructor_and_an_eliminator(
 
 #[test]
 fn named_manifest_package_example_ports_without_declarations() {
-    let root = repository_source("tests/source/pack-named.zy");
+    let root = repository_source("tests/pack/named.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -1497,7 +1497,7 @@ fn named_manifest_package_example_ports_without_declarations() {
 
 #[test]
 fn interleaved_pack_pi_example_ports_without_declarations() {
-    let root = repository_source("tests/source/pack-interleaved.zy");
+    let root = repository_source("tests/pack/interleaved.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -1516,7 +1516,7 @@ fn interleaved_pack_pi_example_ports_without_declarations() {
 
 #[test]
 fn legacy_match_example_ports_without_declarations() {
-    let root = repository_source("tests/source/compile-match.zy");
+    let root = repository_source("tests/compile/match.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -1535,7 +1535,7 @@ fn legacy_match_example_ports_without_declarations() {
 
 #[test]
 fn legacy_comatch_example_ports_without_declarations() {
-    let root = repository_source("tests/source/compile-comatch.zy");
+    let root = repository_source("tests/compile/comatch.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -1554,7 +1554,7 @@ fn legacy_comatch_example_ports_without_declarations() {
 
 #[test]
 fn legacy_continuation_clone_example_ports_without_declarations() {
-    let root = repository_source("tests/source/compile-kont-clone.zy");
+    let root = repository_source("tests/compile/kont-clone.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -1573,7 +1573,7 @@ fn legacy_continuation_clone_example_ports_without_declarations() {
 
 #[test]
 fn legacy_factorial_example_ports_through_foundational_comparison() {
-    let root = repository_source("tests/source/compile-fact.zy");
+    let root = repository_source("tests/compile/fact.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -1592,51 +1592,51 @@ fn legacy_factorial_example_ports_through_foundational_comparison() {
 
 #[test]
 fn legacy_constant_example_ports_with_mobile_term_definitions() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/source/compile-const.zy");
+    assert_source_program_exits_zero_and_reaches_amd64("tests/compile/const.zy");
 }
 
 #[test]
 fn legacy_higher_order_example_ports_with_type_and_computation_parameters() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/source/compile-hof.zy");
+    assert_source_program_exits_zero_and_reaches_amd64("tests/compile/hof.zy");
 }
 
 #[test]
 fn legacy_nested_bind_example_ports_without_declarations() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/source/compile-nested.zy");
+    assert_source_program_exits_zero_and_reaches_amd64("tests/compile/nested.zy");
 }
 
 #[test]
 fn legacy_recursive_sum_example_ports_through_foundational_comparison() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/source/compile-sum.zy");
+    assert_source_program_exits_zero_and_reaches_amd64("tests/compile/sum.zy");
 }
 
 #[test]
 fn legacy_uniform_composition_example_ports_as_one_term() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/source/compile-uniform.zy");
+    assert_source_program_exits_zero_and_reaches_amd64("tests/compile/uniform.zy");
 }
 
 #[test]
 fn legacy_nested_existential_product_example_ports_as_one_term() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/source/compile-triple.zy");
+    assert_source_program_exits_zero_and_reaches_amd64("tests/compile/triple.zy");
 }
 
 #[test]
 fn remaining_small_compile_examples_port_as_root_terms() {
     [
-        "tests/source/compile-add0.zy",
-        "tests/source/compile-add.zy",
-        "tests/source/compile-exit.zy",
-        "tests/source/compile-sub.zy",
-        "tests/source/compile-mul.zy",
-        "tests/source/compile-env.zy",
-        "tests/source/compile-nested-out.zy",
-        "tests/source/compile-label.zy",
-        "tests/source/compile-id.zy",
-        "tests/source/compile-cmp.zy",
-        "tests/source/compile-fn-cmp-ret.zy",
-        "tests/source/compile-tuple.zy",
-        "tests/source/compile-tuple-do.zy",
-        "tests/source/compile-let-stack.zy",
+        "tests/compile/add0.zy",
+        "tests/compile/add.zy",
+        "tests/compile/exit.zy",
+        "tests/compile/sub.zy",
+        "tests/compile/mul.zy",
+        "tests/compile/env.zy",
+        "tests/compile/nested-out.zy",
+        "tests/compile/label.zy",
+        "tests/compile/id.zy",
+        "tests/compile/cmp.zy",
+        "tests/compile/fn-cmp-ret.zy",
+        "tests/compile/tuple.zy",
+        "tests/compile/tuple-do.zy",
+        "tests/compile/let-stack.zy",
     ]
     .into_iter()
     .for_each(assert_source_program_exits_zero_and_reaches_amd64);
@@ -1645,10 +1645,10 @@ fn remaining_small_compile_examples_port_as_root_terms() {
 #[test]
 fn finite_io_compile_examples_port_as_root_terms() {
     [
-        ("tests/source/compile-echo-none.zy", "ignored\n", ""),
-        ("tests/source/compile-echo-none-cap.zy", "captured\n", ""),
-        ("tests/source/compile-echo-none-twice.zy", "first\nsecond\n", ""),
-        ("tests/source/compile-echo-once.zy", "echoed\n", "echoed\n"),
+        ("tests/compile/echo-none.zy", "ignored\n", ""),
+        ("tests/compile/echo-none-cap.zy", "captured\n", ""),
+        ("tests/compile/echo-none-twice.zy", "first\nsecond\n", ""),
+        ("tests/compile/echo-once.zy", "echoed\n", "echoed\n"),
     ]
     .into_iter()
     .for_each(|(fixture, input, output)| assert_source_io_program(fixture, input, output));
@@ -1656,46 +1656,42 @@ fn finite_io_compile_examples_port_as_root_terms() {
 
 #[test]
 fn nonterminating_compile_examples_check_and_lower_as_root_terms() {
-    [
-        "tests/source/compile-echo.zy",
-        "tests/source/compile-loop.zy",
-        "tests/source/compile-looping.zy",
-    ]
-    .into_iter()
-    .for_each(assert_source_program_reaches_amd64);
+    ["tests/compile/echo.zy", "tests/compile/loop.zy", "tests/compile/looping.zy"]
+        .into_iter()
+        .for_each(assert_source_program_reaches_amd64);
 }
 
 #[test]
 fn named_term_compile_example_ports_as_one_block() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/source/compile-named.zy");
+    assert_source_program_exits_zero_and_reaches_amd64("tests/compile/named.zy");
 }
 
 #[test]
 fn mixed_named_data_and_codata_compile_example_ports_as_one_block() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/source/compile-named-mixed.zy");
+    assert_source_program_exits_zero_and_reaches_amd64("tests/compile/named-mixed.zy");
 }
 
 #[test]
 fn small_non_monadic_exec_examples_port_as_root_terms() {
     [
-        "tests/source/exec-forall.zy",
-        "tests/source/exec-fn-opt.zy",
-        "tests/source/exec-partial-annotation.zy",
-        "tests/source/exec-ret.zy",
-        "tests/source/exec-exists.zy",
-        "tests/source/exec-abort.zy",
-        "tests/source/exec-explosion.zy",
-        "tests/source/exec-num.zy",
-        "tests/source/exec-even-odd-codata.zy",
-        "tests/source/exec-even-odd-fix.zy",
-        "tests/source/exec-even-odd-data.zy",
-        "tests/source/exec-add.zy",
-        "tests/source/exec-ifz.zy",
-        "tests/source/exec-bigmac.zy",
-        "tests/source/exec-comment.zy",
-        "tests/source/exec-loopy.zy",
-        "tests/source/exec-optiont.zy",
-        "tests/source/exec-loop.zy",
+        "tests/exec/forall.zy",
+        "tests/exec/fn-opt.zy",
+        "tests/exec/partial-annotation.zy",
+        "tests/exec/ret.zydeco",
+        "tests/exec/exists.zy",
+        "tests/exec/abort.zy",
+        "tests/exec/explosion.zy",
+        "tests/exec/num.zy",
+        "tests/exec/even-odd-codata.zy",
+        "tests/exec/even-odd-fix.zy",
+        "tests/exec/even-odd-data.zy",
+        "tests/exec/add.zy",
+        "tests/exec/ifz.zy",
+        "tests/exec/bigmac.zy",
+        "tests/exec/comment.zy",
+        "tests/exec/loopy.zy",
+        "tests/exec/optiont.zy",
+        "tests/exec/loop.zydeco",
     ]
     .into_iter()
     .for_each(assert_source_program_exits_zero_and_reaches_amd64);
@@ -1703,23 +1699,23 @@ fn small_non_monadic_exec_examples_port_as_root_terms() {
 
 #[test]
 fn intrinsic_unit_exec_example_ports_as_a_root_term() {
-    assert_source_io_program_reaches_zasm("tests/source/exec-unit.zy", "", "()\n");
+    assert_source_io_program_reaches_zasm("tests/exec/unit.zy", "", "()\n");
 }
 
 #[test]
 fn choice_exec_example_composes_the_standard_library_as_a_root_term() {
-    assert_source_io_program_reaches_zasm("tests/source/exec-choice.zy", "", "0\n1\no\n");
+    assert_source_io_program_reaches_zasm("tests/exec/choice.zy", "", "0\n1\no\n");
 }
 
 #[test]
 fn y_combinator_exec_example_composes_as_a_root_term() {
-    assert_source_io_program_reaches_zasm("tests/source/exec-y.zy", "", "");
+    assert_source_io_program_reaches_zasm("tests/exec/Y.zydeco", "", "");
 }
 
 #[test]
 fn lazy_list_exec_example_composes_as_a_root_term() {
     assert_source_io_program_reaches_zasm(
-        "tests/source/exec-listm.zy",
+        "tests/exec/listm.zydeco",
         "",
         "0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n",
     );
@@ -1728,7 +1724,7 @@ fn lazy_list_exec_example_composes_as_a_root_term() {
 #[test]
 fn variadic_exec_example_composes_as_a_root_term() {
     assert_source_io_program_reaches_zasm(
-        "tests/source/exec-variadic.zy",
+        "tests/exec/variadic.zy",
         "",
         "hello\nworld\nhello\nworld\n",
     );
@@ -1736,23 +1732,23 @@ fn variadic_exec_example_composes_as_a_root_term() {
 
 #[test]
 fn abstract_list_exec_example_composes_as_a_root_term() {
-    assert_source_io_program_reaches_zasm("tests/source/exec-list.zy", "", "4\n");
+    assert_source_io_program_reaches_zasm("tests/exec/list.zydeco", "", "4\n");
 }
 
 #[test]
 fn object_oriented_codata_exec_example_composes_as_a_root_term() {
-    assert_source_io_program_reaches_zasm("tests/source/exec-oo.zy", "", "42\n");
+    assert_source_io_program_reaches_zasm("tests/exec/oo.zydeco", "", "42\n");
 }
 
 #[test]
 fn defunctionalization_exec_example_composes_as_a_root_term() {
-    assert_source_io_program_reaches_zasm("tests/source/exec-defunctionalization.zy", "", "18\n");
+    assert_source_io_program_reaches_zasm("tests/exec/defunctionalization.zydeco", "", "18\n");
 }
 
 #[test]
 fn deterministic_pushdown_automaton_exec_example_composes_as_a_root_term() {
     assert_source_io_program_reaches_zasm(
-        "tests/source/exec-deterministic-pushdown-automaton.zy",
+        "tests/exec/deterministic-pushdown-automaton.zydeco",
         "",
         concat!(
             "The following parens are balanced? (())\n",
@@ -1777,85 +1773,83 @@ fn deterministic_pushdown_automaton_exec_example_composes_as_a_root_term() {
 
 #[test]
 fn self_interpreter_exec_example_composes_as_a_root_term() {
-    assert_source_io_program_reaches_zasm("tests/source/exec-interpreter.zy", "", "false\n");
+    assert_source_io_program_reaches_zasm("tests/exec/interpreter.zydeco", "", "false\n");
 }
 
 #[test]
 fn regular_expression_exec_example_composes_as_a_root_term() {
-    assert_source_io_program_reaches_zasm("tests/source/exec-regex.zy", "", "\\^o^/\n");
+    assert_source_io_program_reaches_zasm("tests/exec/regex.zy", "", "\\^o^/\n");
 }
 
 #[test]
 fn monadic_block_resolves_its_basis_from_ordinary_lexical_types() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/source/exec-monadic-ret.zy");
+    assert_source_program_exits_zero_and_reaches_amd64("tests/exec/monadic-ret.zy");
 }
 
 #[test]
 fn monadic_block_lifts_builtin_literals_with_trivial_value_structures() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/source/exec-monadic-int.zy");
+    assert_source_program_exits_zero_and_reaches_amd64("tests/exec/monadic-int.zy");
 }
 
 #[test]
 fn nested_monadic_block_uses_the_nearest_lexical_basis() {
-    SourceDriver::check(repository_source("tests/source/monadic-shadow.zy")).unwrap();
+    SourceDriver::check(repository_source("tests/monadic/shadow.zy")).unwrap();
 }
 
 #[test]
 fn monadic_pack_pi_example_uses_the_lexical_library_basis() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/source/pack-monadic.zy");
+    assert_source_program_exits_zero_and_reaches_amd64("tests/pack/monadic.zy");
 }
 
 #[test]
 fn algebra_construction_exec_example_uses_the_lexical_library_basis() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/source/exec-alg.zy");
+    assert_source_program_exits_zero_and_reaches_amd64("tests/exec/alg.zy");
 }
 
 #[test]
 fn algebra_translation_exec_example_uses_the_lexical_library_basis() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/source/exec-algtrans.zy");
+    assert_source_program_exits_zero_and_reaches_amd64("tests/exec/algtrans.zy");
 }
 
 #[test]
 fn generated_exception_transformer_uses_lexical_types_in_a_monadic_block() {
-    assert_source_program_exits_zero_and_reaches_amd64(
-        "tests/source/oopsla-exception-transformers.zy",
-    );
+    assert_source_program_exits_zero_and_reaches_amd64("tests/oopsla/exception-transformers.zy");
 }
 
 #[test]
 fn free_monad_exec_example_uses_the_lexical_library_basis() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/source/exec-free.zy");
+    assert_source_program_exits_zero_and_reaches_amd64("tests/exec/free.zy");
 }
 
 #[test]
 fn monad_transformer_exec_example_uses_the_lexical_library_basis() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/source/exec-trans.zy");
+    assert_source_program_exits_zero_and_reaches_amd64("tests/exec/trans.zy");
 }
 
 #[test]
 fn free_handler_exec_example_uses_the_lexical_library_basis() {
-    assert_source_program_exits_zero_and_reaches_zasm("tests/source/exec-free-handlers.zy");
+    assert_source_program_exits_zero_and_reaches_zasm("tests/exec/free'.zy");
 }
 
 #[test]
 fn backtracking_exec_example_uses_the_lexical_library_basis() {
-    assert_source_io_program_reaches_zasm("tests/source/exec-backtrack.zy", "", "1 + 4\n2 + 3\n");
+    assert_source_io_program_reaches_zasm("tests/exec/backtrack.zydeco", "", "1 + 4\n2 + 3\n");
 }
 
 #[test]
 fn call_by_value_interpreter_exec_example_composes_as_a_root_term() {
-    assert_source_io_program_reaches_zasm("tests/source/exec-cbv.zy", "", "\\^o^/\n");
+    assert_source_io_program_reaches_zasm("tests/exec/cbv.zy", "", "\\^o^/\n");
 }
 
 #[test]
 fn cbpv_interpreter_exec_example_composes_as_a_root_term() {
-    assert_source_io_program_reaches_zasm("tests/source/exec-cbpv.zy", "", "\\^o^/\n\\^o^/\n");
+    assert_source_io_program_reaches_zasm("tests/exec/cbpv.zy", "", "\\^o^/\n\\^o^/\n");
 }
 
 #[test]
 fn cbpv_parser_and_monadic_interpreter_compose_as_a_root_term() {
     assert_source_io_program_reaches_zasm(
-        "tests/source/exec-cbpv-monadic.zy",
+        "tests/exec/cbpv-monadic.zy",
         "",
         "\\^o^/\n\\^o^/\n\\^o^/\n\\^o^/\n",
     );
@@ -1863,7 +1857,7 @@ fn cbpv_parser_and_monadic_interpreter_compose_as_a_root_term() {
 
 #[test]
 fn initial_oopsla_artifact_examples_compose_as_root_terms() {
-    ["tests/source/oopsla-polynomial.zy", "tests/source/oopsla-calling-conventions.zy"]
+    ["tests/oopsla/polynomial.zydeco", "tests/oopsla/cc.zydeco"]
         .into_iter()
         .for_each(assert_source_program_exits_zero_and_reaches_amd64);
 }
@@ -1899,22 +1893,22 @@ fn reusable_examples_are_configuration_free_root_programs() {
 
 #[test]
 fn oopsla_cbv_interpreter_composes_as_a_root_term() {
-    assert_source_io_program_reaches_zasm("tests/source/oopsla-cbv.zy", "", "true\n");
+    assert_source_io_program_reaches_zasm("tests/oopsla/cbv.zydeco", "", "true\n");
 }
 
 #[test]
 fn oopsla_monad_examples_compose_with_a_lexical_basis() {
-    assert_source_io_program_reaches_zasm("tests/source/oopsla-monads.zy", "", "Hello, world!\n");
+    assert_source_io_program_reaches_zasm("tests/oopsla/monads.zydeco", "", "Hello, world!\n");
 }
 
 #[test]
 fn oopsla_free_monad_composes_with_a_lexical_basis() {
-    assert_source_io_program_reaches_zasm("tests/source/oopsla-free.zy", "", "\n");
+    assert_source_io_program_reaches_zasm("tests/oopsla/free.zydeco", "", "\n");
 }
 
 #[test]
 fn oopsla_defunctionalized_exception_counterexample_composes_as_a_root_term() {
-    assert_source_io_program_reaches_zasm("tests/source/oopsla-exn.zy", "", "2 != 1\n");
+    assert_source_io_program_reaches_zasm("tests/oopsla/exn.zydeco", "", "2 != 1\n");
 }
 
 #[test]
@@ -1925,15 +1919,15 @@ fn oopsla_relative_monad_algebras_compose_as_a_root_term() {
 #[test]
 fn named_exec_examples_have_focused_root_term_counterparts() {
     [
-        "tests/source/compile-named.zy",
-        "tests/source/exec-named-tuple.zy",
-        "tests/source/exec-named-nested.zy",
-        "tests/source/exec-named-pattern.zy",
-        "tests/source/exec-named-data.zy",
-        "tests/source/exec-named-function.zy",
-        "tests/source/exec-named-codata.zy",
-        "tests/source/exec-named-pun.zy",
-        "tests/source/compile-named-mixed.zy",
+        "tests/compile/named.zy",
+        "tests/exec/named-tuple.zy",
+        "tests/exec/named-nested.zy",
+        "tests/exec/named-pattern.zy",
+        "tests/exec/named-data.zy",
+        "tests/exec/named-function.zy",
+        "tests/exec/named-codata.zy",
+        "tests/exec/named-pun.zy",
+        "tests/compile/named-mixed.zy",
     ]
     .into_iter()
     .for_each(assert_source_program_exits_zero_and_reaches_amd64);
@@ -1941,12 +1935,12 @@ fn named_exec_examples_have_focused_root_term_counterparts() {
 
 #[test]
 fn manifest_package_example_ports_as_a_root_term() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/source/pack-manifest.zy");
+    assert_source_program_exits_zero_and_reaches_amd64("tests/pack/manifest.zy");
 }
 
 #[test]
 fn nested_block_bindings_shadow_enclosing_mobile_names() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/source/pack-uniform.zy");
+    assert_source_program_exits_zero_and_reaches_amd64("tests/pack/uniform.zy");
 }
 
 #[test]

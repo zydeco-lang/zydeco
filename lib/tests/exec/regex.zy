@@ -1,119 +1,189 @@
-data Syn where
-  | +Str : String
-  | +Concat : Syn * Syn
-  | +Kleene : Syn
-  | +Choose : Syn * Syn
-end
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
 
-codata Matcher where
-  | .str    : String -> F(Option String)
-  | .concat : Syn -> Syn -> F(Option String)
-  | .kleene : Syn -> F(Option String)
-  | .choose : Syn -> Syn -> F(Option String)
-  | .bind   : Syn -> F(Option String)
-end
-
-codata Regex where
-  | .run : String -> Matcher
-end
-
-def str_chop_hd : U(String -> Int -> F String) = { fn (s: String) (i: Int) ->
-  do l <- ! str_length s;
-  let fix str_collect : String -> Int -> String -> Ret(String) = fn (s: String) (i: Int) (r: String) ->
-    do continue? <- ! int_lt i l;
-    match continue?
-    | +False() -> ret r
-    | +True() ->
-      do tl <- ! str_index s i;
-      do tl <- ! char_to_str tl;
-      do r <- ! str_append r tl;
-      do i+1 <- ! add i 1;
-      ! str_collect s i+1 r
+  def Bool : VType =
+    data
+    | +True : Unit
+    | +False : Unit
     end
-  in
-  ! str_collect s i ""
-} end
+  that
+  def Option : (VType) -> (VType) =
+    begin
+      param (A : VType) that
+      data
+      | +None : Unit
+      | +Some : A
+      end
+    end
+  that
+  def Syn : VType =
+    data
+    | +Str : String
+    | +Concat : Syn * Syn
+    | +Kleene : Syn
+    | +Choose : Syn * Syn
+    end
+  that
+  def Matcher : CType =
+    codata
+    | .str : String -> Ret (Option String)
+    | .concat : Syn -> Syn -> Ret (Option String)
+    | .kleene : Syn -> Ret (Option String)
+    | .choose : Syn -> Syn -> Ret (Option String)
+    | .bind : Syn -> Ret (Option String)
+    end
+  that
+  def Regex : CType =
+    codata
+    | .run : String -> Matcher
+    end
+  that
 
-def ! str_eq_at (a: String) (b: String) (i: Int): F Bool =
-  do ai <- ! str_index a i;
-  do bi <- ! str_index b i;
-  ! char_eq ai bi
-end
-
-def str_match : U(String -> String -> F(Option String)) = {
-  let fix str_match : Int -> String -> String -> F(Option String) =
-    fn (i: Int) (s: String) (p: String) ->
-      do s_len <- ! str_length s;
-      do p_len <- ! str_length p;
-      do i_lt_s <- ! int_lt i s_len;
-      do i_lt_p <- ! int_lt i p_len;
-      match i_lt_p
-      | +False() ->
-        do s' <- ! str_chop_hd s i;
-        ret +Some(s')
-      | +True() ->
-        match i_lt_s
-        | +False() -> ret +None()
-        | +True() ->
-          do eq? <- ! str_eq_at s p i;
-          match eq?
-          | +False() -> ret +None()
-          | +True() ->
-            do i+1 <- ! add i 1;
-            ! str_match i+1 s p
+  def int_lt : Thk (Int -> Int -> Ret Bool) = {
+    fn left right ->
+      ! (api/int_lt_branch)
+        (Ret Bool)
+        left
+        right
+        { ret +True() }
+        { ret +False() }
+  } that
+  def char_eq : Thk (Char -> Char -> Ret Bool) = {
+    fn left right ->
+      do left <- ! (api/char_to_int) left;
+      do right <- ! (api/char_to_int) right;
+      ! (api/int_eq_branch)
+        (Ret Bool)
+        left
+        right
+        { ret +True() }
+        { ret +False() }
+  } that
+  def str_chop_head : Thk (String -> Int -> Ret String) = {
+    fn source index ->
+      do length <- ! (api/str_length) source;
+      let collect : Thk (String -> Int -> String -> Ret String) = {
+        fix (
+          collect :
+          Thk (String -> Int -> String -> Ret String)
+        ) ->
+          fn source index result ->
+            do continues <- ! int_lt index length;
+            match continues
+            | +False() -> ret result
+            | +True() ->
+              do character <- ! (api/str_index) source index;
+              do suffix <- ! (api/char_to_str) character;
+              do result <- ! (api/str_append) result suffix;
+              do next <- ! (api/add) index 1;
+              ! collect source next result
+            end
+      } in
+      ! collect source index ""
+  } that
+  def str_eq_at : Thk (String -> String -> Int -> Ret Bool) = {
+    fn left right index ->
+      do left <- ! (api/str_index) left index;
+      do right <- ! (api/str_index) right index;
+      ! char_eq left right
+  } that
+  def str_match : Thk (String -> String -> Ret (Option String)) = {
+    fn source pattern ->
+      let match_from : Thk (
+        Int ->
+        String ->
+        String ->
+        Ret (Option String)
+      ) = {
+        fix (
+          match_from :
+          Thk (
+            Int ->
+            String ->
+            String ->
+            Ret (Option String)
+          )
+        ) ->
+          fn index source pattern ->
+            do source_length <- ! (api/str_length) source;
+            do pattern_length <- ! (api/str_length) pattern;
+            do source_continues <- ! int_lt index source_length;
+            do pattern_continues <- ! int_lt index pattern_length;
+            match pattern_continues
+            | +False() ->
+              do remainder <- ! str_chop_head source index;
+              ret +Some(remainder)
+            | +True() ->
+              match source_continues
+              | +False() -> ret +None()
+              | +True() ->
+                do matches <- ! str_eq_at source pattern index;
+                match matches
+                | +False() -> ret +None()
+                | +True() ->
+                  do next <- ! (api/add) index 1;
+                  ! match_from next source pattern
+                end
+              end
+            end
+      } in
+      ! match_from 0 source pattern
+  } that
+  def regex : Thk Regex = {
+    fix (regex : Thk Regex) ->
+      comatch
+      | .run source ->
+        comatch
+        | .str pattern -> ! str_match source pattern
+        | .concat left right ->
+          do remainder <- ! regex .run source .bind left;
+          match remainder
+          | +None() -> ret +None()
+          | +Some(remainder) ->
+            ! regex .run remainder .bind right
+          end
+        | .kleene syntax ->
+          do remainder <- ! regex .run source .bind syntax;
+          match remainder
+          | +None() -> ret +Some(source)
+          | +Some(remainder) -> ! regex .run remainder .kleene syntax
+          end
+        | .choose left right ->
+          do remainder <- ! regex .run source .bind left;
+          match remainder
+          | +Some(remainder) -> ret +Some(remainder)
+          | +None() -> ! regex .run source .bind right
+          end
+        | .bind syntax ->
+          match syntax
+          | +Str(pattern) -> ! regex .run source .str pattern
+          | +Concat(left, right) -> ! regex .run source .concat left right
+          | +Kleene(body) -> ! regex .run source .kleene body
+          | +Choose(left, right) -> ! regex .run source .choose left right
           end
         end
       end
-  in
-  ! str_match 0
-} end
+  } that
+  def demo : Thk (Syn -> String -> Thk OS -> OS) = {
+    fn syntax source continuation ->
+      do result <- ! regex .run source .bind syntax;
+      match result
+      | +Some(remainder) -> ! (api/write_line) remainder continuation
+      | +None() -> ! (api/exit) 1
+      end
+  } that
 
-def fix regex : Regex = 
-  comatch
-  | .run s ->
-    comatch
-    | .str p -> ! str_match s p
-    | .concat -> fn sy1 sy2 ->
-      do s? <- ! regex .run s .bind sy1;
-      match s?
-      | +None() -> ret +None()
-      | +Some(s) ->
-        ! regex .run s .bind sy2
-      end
-    | .kleene sy ->
-      do s? <- ! regex .run s .bind sy;
-      match s?
-      | +None() -> ret +Some(s)
-      | +Some(s) -> ! regex .run s .kleene sy
-      end
-    | .choose -> fn sy1 sy2 ->
-      do s? <- ! regex .run s .bind sy1;
-      match s?
-      | +Some(s) -> ret +Some(s)
-      | +None() -> ! regex .run s .bind sy2
-      end
-    | .bind sy ->
-      match sy
-      | +Str(p) -> ! regex .run s .str p
-      | +Concat(sy1, sy2) -> ! regex .run s .concat sy1 sy2
-      | +Kleene(sy) -> ! regex .run s .kleene sy
-      | +Choose(sy1, sy2) -> ! regex .run s .choose sy1 sy2
-      end
-    end
-  end
-end
-
-def ! demo (syn: Syn) (str: String) (kont: Thunk OS): OS =
-  do res <- ! regex .run str .bind syn;
-  match res
-  | +Some(s) ->
-    ! write_line s kont
-  | +None() -> ! exit 1
-  end
-end
-
-main
-  -- p*q*(xos|sox)
-  ! demo (+Concat(+Kleene(+Str("p")), +Concat(+Kleene(+Str("q")), +Choose(+Str("xos"), +Str("sox"))))) "pppqqqsox\\^o^/" {
-  ! exit 0 }
+  ! demo
+    +Concat(
+      +Kleene(+Str("p")),
+      +Concat(
+        +Kleene(+Str("q")),
+        +Choose(+Str("xos"), +Str("sox"))
+      )
+    )
+    "pppqqqsox\\^o^/"
+    { ! (api/exit) 0 }
 end

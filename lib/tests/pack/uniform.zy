@@ -1,80 +1,76 @@
-alias TypeIdentity =
-  begin
-    let Result = A that
-    param (A : VType) that
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  let TypeIdentity =
+    begin
+      let Result = A that
+      param (A : VType) that
+      Result
+    end
+  that
+  let IdentityResult = TypeIdentity Int that
+  let InferredType :
+    (VType) -> (VType) =
+    begin
+      param A that
+      A
+    end
+  that
+  let LexicalTypeIdentity =
+    param (A : VType) in
+    let Result = A in
     Result
-  end
-end
-
-alias IdentityResult = TypeIdentity Int end
-
-alias InferredType : VType -> VType =
-  begin
-    param A that
-    A
-  end
-end
-
-alias LexicalTypeIdentity =
-  param (A : VType) in
-  let Result = A in
-  Result
-end
-
-alias LexicalHidden =
-  def Secret : VType = Int in
-  Secret
-end
-
-alias Hidden =
-  begin
-    def Secret : VType = Int that
+  that
+  let LexicalHidden =
+    def Secret : VType = Int in
     Secret
-  end
-end
+  that
+  let Hidden =
+    begin
+      def Secret : VType = Int that
+      Secret
+    end
+  that
+  let LocalList =
+    begin
+      def LocalList : VType =
+        data
+        | +Nil : Unit
+        | +Cons : Int * LocalList
+        end
+      that
+      LocalList
+    end
+  that
+  def plain : Int = begin 42 end that
+  def inferred : Thk (Int -> Ret Int) = {
+    begin
+      param value that
+      ret value
+    end
+  } that
+  def lexical_run = {
+    param (value : Int) in
+    def expected : Int = 42 in
+    let answer = value in
+    do status <- ! (api/sub) answer expected;
+    ! (api/exit) status
+  } that
+  def run = {
+    begin
+      let answer : Number = seed that
+      param (seed : Number) that
+      def expected : Int = 42 that
+      let Number = A that
+      param (A : VType) that
+      def Opaque : VType = Int that
+      do status <- ! (api/sub) expected 42;
+      ! (api/exit) status
+    end
+  } that
 
-alias LocalList =
-  begin
-    def LocalList : VType =
-      data
-      | +Nil : Unit
-      | +Cons : Int * LocalList
-      end
-    that
-    LocalList
-  end
-end
-
-def plain : Int = begin 42 end end
-
-def inferred : Thunk (Int -> Ret Int) = {
-  begin
-    param value that
-    ret value
-  end
-} end
-
-def lexical_run = {
-  param (value : Int) in
-  def expected : Int = 42 in
-  let answer = value in
-  do status <- ! sub answer expected;
-  ! exit status
-} end
-
-def run = {
-  begin
-    let answer : Number = seed that
-    param (seed : Number) that
-    def expected : Int = 42 that
-    let Number = A that
-    param (A : VType) that
-    def Opaque : VType = Int that
-    do status <- ! sub expected 42;
-    ! exit status
-  end
-} end
-
-main
-  ! run Int 42
+  ! run IdentityResult 42
 end

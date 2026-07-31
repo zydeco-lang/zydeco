@@ -1,16 +1,21 @@
-extern def exit : Thk (Int -> OS) end
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  def packed :
+    exists (X : VType) .
+    exists (Y : VType) .
+      X * (Y * Int) =
+    (Int, Int, 10, (20, 0))
+  that
 
-def packed : exists (X : VType) . exists (Y : VType) . X * (Y * Int) = (
-  Int, Int, 10, (20, 0)
-) end
-
-main
   match packed
-  | (Left, Right, x, y, status) ->
-    let flat = (x, status, y) in
-    let (a, (code, c)) = flat in
-    let nested = (a, (code, c)) in
-    let (p, result, q) = nested in
-    ! exit result
+  | (Left, Right, left, middle, status) ->
+    let flat = (left, status, middle) in
+    let (first, (code, last)) = flat in
+    let nested = (first, (code, last)) in
+    let (first, result, last) = nested in
+    ! (api/exit) result
   end
 end

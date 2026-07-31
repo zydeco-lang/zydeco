@@ -1,25 +1,30 @@
-alias CounterLibrary =
-  exists (Counter = Representation as Int : VType) .
-    (zero :: Representation) *
-    (increment :: Thunk (Representation -> Ret Representation))
-end
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  let CounterLibrary =
+    exists (
+      Counter = Representation as Int :
+      VType
+    ) .
+      (zero :: Representation) *
+      (increment :: Thk (Representation -> Ret Representation))
+  that
+  def counter : CounterLibrary = (
+    Counter = Int,
+    zero = 0,
+    increment = {
+      fn (value : Int) ->
+        ! (api/add) value 1
+    },
+  ) that
+  def use_counter : Thk (CounterLibrary -> Ret Int) = {
+    fn ((= Counter, = zero, = increment) : CounterLibrary) ->
+      ! increment zero
+  } that
 
-def counter : CounterLibrary = (
-  Counter = Int,
-  zero = 0,
-  increment = {
-    fn (value : Int) ->
-      ! add value 1
-  },
-) end
-
-def use_counter : Thk (CounterLibrary -> Ret Int) = {
-  fn ((= Counter, = zero, = increment) : CounterLibrary) ->
-    ! increment zero
-} end
-
-main
   do value <- ! use_counter counter;
-  do status <- ! sub value 1;
-  ! exit status
+  do status <- ! (api/sub) value 1;
+  ! (api/exit) status
 end

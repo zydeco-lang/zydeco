@@ -1,40 +1,69 @@
-main
-  let zero: Nat = +Z() in
-  let ! suc (x: Nat): F Nat =
-    ret (+S(x) : Nat)
-  in
-  let ! ifz (z: Bool) (pred: U (Nat -> Ret Bool)) (x: Nat): Ret Bool =
-    match x
-    | +Z() -> ret z
-    | +S(x) -> !pred x
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  def Nat : VType =
+    data
+    | +Z : Unit
+    | +S : Nat
     end
-  in
-  do one <- !suc zero;
-  do two <- !suc one;
-  let ! ifz (x: Nat): F Bool =
-    !ifz false { fn (_: Nat) -> ret true } x
-  in
-  do two' <- !ifz two;
-  do one' <- !ifz one;
-  do zero' <- !ifz zero;
-  do b <- (
-    match two'
-    | +True() -> (
-      match one'
-      | +True() -> (
-        match zero'
-        | +False() -> ret true
-        | +True() -> ret false
-        end
-      )
-      | +False() -> ret false
+  that
+  def Bool : VType =
+    data
+    | +True : Unit
+    | +False : Unit
+    end
+  that
+  def successor : Thk (Nat -> Ret Nat) = {
+    fn (number : Nat) ->
+      ret +S(number)
+  } that
+  def eliminate_zero : Thk (
+    Bool ->
+    Thk (Nat -> Ret Bool) ->
+    Nat ->
+    Ret Bool
+  ) = {
+    fn (when_zero : Bool)
+       (when_successor : Thk (Nat -> Ret Bool))
+       (number : Nat) ->
+      match number
+      | +Z() -> ret when_zero
+      | +S(predecessor) -> ! when_successor predecessor
       end
-    )
-    | +False() -> ret false
+  } that
+  def is_successor : Thk (Nat -> Ret Bool) = {
+    fn (number : Nat) ->
+      ! eliminate_zero
+        +False()
+        { fn (_ : Nat) -> ret +True() }
+        number
+  } that
+
+  do one <- ! successor +Z();
+  do two <- ! successor one;
+  do two_is_successor <- ! is_successor two;
+  do one_is_successor <- ! is_successor one;
+  do zero_is_successor <- ! is_successor +Z();
+  do result <- (
+    match two_is_successor
+    | +True() ->
+      match one_is_successor
+      | +True() ->
+        match zero_is_successor
+        | +False() -> ret +True()
+        | +True() -> ret +False()
+        end
+      | +False() -> ret +False()
+      end
+    | +False() -> ret +False()
     end
+    : Ret Bool
   );
-  match b
-  | +True() -> ! exit 0
-  | +False() -> ! exit 1
+  match result
+  | +True() -> ! (api/exit) 0
+  | +False() -> ! (api/exit) 1
   end
 end

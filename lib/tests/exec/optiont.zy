@@ -1,14 +1,51 @@
-codata OptionT (M : VType -> CType) (A : VType) where
-  | .trans: M (Option A)
-end
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
 
-alias Option' (A : VType) : CType = OptionT (fn (X: VType) -> Ret X) A end
-
-main
-  let o : Thunk (Option' Int) = {
-    comatch .trans ->
+  def Option : (VType) -> (VType) =
+    begin
+      param (A : VType) that
+      data
+      | +None : Unit
+      | +Some : A
+      end
+    end
+  that
+  def OptionT :
+    ((VType) -> (CType)) ->
+    (VType) ->
+    (CType) =
+    begin
+      param (
+        M :
+        (VType) -> (CType)
+      ) that
+      param (A : VType) that
+      codata
+      | .trans : M (Option A)
+      end
+    end
+  that
+  let Return =
+    begin
+      param (A : VType) that
+      Ret A
+    end
+  that
+  let OptionPrime =
+    begin
+      param (A : VType) that
+      OptionT Return A
+    end
+  that
+  def optional : Thk (OptionPrime Int) = {
+    comatch
+    | .trans ->
       ret +Some(1)
     end
-  } in
-  ! exit 0
+  } that
+
+  ! (api/exit) 0
 end

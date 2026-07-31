@@ -1,28 +1,80 @@
-alias Kont (R: CType) (A: VType) : CType =
-  U (A -> R) -> R
-end
+begin
+  let monadic_basis = @[import("../../std/monad.zy")] _ that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  do (= Monad, = Algebra, ()) <-
+    ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  begin
 
-def ! mkont (R: CType) : Monad (Kont R) =
-  comatch
-  | .return A a -> fn k -> ! k a
-  | .bind A A' m f -> fn k ->
-    ! m { fn a -> ! f a k }
-  end
-end
+  let Kont :
+    (CType) ->
+    (VType) ->
+    (CType) =
+    begin
+      param (R : CType) that
+      param (A : VType) that
+      Thk (A -> R) -> R
+    end
+  that
+  let Free :
+    (
+      ((CType) -> (VType)) ->
+      (VType) ->
+      (CType)
+    ) =
+    begin
+      param (
+        H :
+        (CType) -> (VType)
+      ) that
+      param (A : VType) that
+      forall (R : CType) .
+        H R -> Kont R A
+    end
+  that
 
-alias Free (H: CType -> VType) (A: VType) : CType =
-  forall (R: CType) . H R -> Kont R A
-end
+  def mkont : Thk (
+    forall (R : CType) .
+      Monad (Kont R)
+  ) = {
+    fn R ->
+      comatch
+      | .return A value ->
+        fn continuation ->
+          ! continuation value
+      | .bind A B computation function ->
+        fn continuation ->
+          ! computation {
+            fn value ->
+              ! function value continuation
+          }
+      end
+  } that
+  def mfree : Thk (
+    forall (
+      H :
+      (CType) -> (VType)
+    ) .
+      Monad (Free H)
+  ) = {
+    fn H ->
+      comatch
+      | .return A value ->
+        fn R handler ->
+          ! mkont R .return A value
+      | .bind A B computation function ->
+        fn R handler ->
+          ! mkont R .bind A B
+            { ! computation R handler }
+            {
+              fn value ->
+                ! function value R handler
+            }
+      end
+  } that
 
-def ! mfree (H: CType -> VType) : Monad (Free H) =
-  comatch
-  | .return A a -> fn R h ->
-    ! mkont R .return A a
-  | .bind A A' m f -> fn R h ->
-    ! mkont R .bind A A' { ! m R h } { fn a -> ! f a R h }
-  end
+  ! (api/exit) 0
 end
-
-main
-  ! exit 0
 end

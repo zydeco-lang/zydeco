@@ -1,21 +1,40 @@
-codata Y (B : CType) where
-  | .y : Thunk (Y B) -> B
-end
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
 
-data Self (B : VType) where
-  | +Roll : Thunk(Self B -> Ret B)
-end
+  def Y : (CType) -> (CType) =
+    begin
+      param (B : CType) that
+      codata
+      | .y : Thk (Y B) -> B
+      end
+    end
+  that
+  def Self : (VType) -> (VType) =
+    begin
+      param (B : VType) that
+      data
+      | +Roll : Thk (Self B -> Ret B)
+      end
+    end
+  that
+  def fix_prime : Thk (
+    forall (B : CType) .
+      Thk (Thk B -> B) -> B
+  ) = {
+    fn (B : CType) (function : Thk (Thk B -> B)) ->
+      let primitive : Thk (Y B) = {
+        comatch
+        | .y recursive -> ! function { ! recursive .y recursive }
+        end
+      } in
+      ! primitive .y primitive
+  } that
+  def divergent : Thk OS = {
+    ! fix_prime OS { fn loop -> ! loop }
+  } that
 
-def fix' : Thunk (forall (B : CType) . Thunk(Thunk B -> B) -> B) = {
-  fn B f ->
-  let prim : Thunk (Y B) = { comatch | .y x -> ! f { ! x .y x } end } in
-  ! prim .y prim
-} end
-
-def ! m: OS =
-  ! fix' OS { fn loop -> ! loop }
-end
-
-main
-  ! exit 0
+  ! (api/exit) 0
 end

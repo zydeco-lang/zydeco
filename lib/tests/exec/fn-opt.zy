@@ -1,26 +1,38 @@
-codata FnRet (A : VType) where
-  | .arg : A -> Ret A
-end
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
 
-codata FnOpt (A : VType) where
-  | .one : A -> Ret A
-  | .zero : Ret A
-end
-
-main
-  let fn_int : Thunk(FnRet Int) = {
-    comatch
-    | .arg i -> ret i
+  def FnRet : (VType) -> (CType) =
+    begin
+      param (A : VType) that
+      codata
+      | .arg : A -> Ret A
+      end
     end
-  } in
-
-  let fn_opt_int : Thunk(FnOpt Int) = {
+  that
+  def FnOpt : (VType) -> (CType) =
+    begin
+      param (A : VType) that
+      codata
+      | .one : A -> Ret A
+      | .zero : Ret A
+      end
+    end
+  that
+  def fn_int : Thk (FnRet Int) = {
     comatch
-    | .one i -> ! fn_int .arg i
+    | .arg value -> ret value
+    end
+  } that
+  def fn_opt_int : Thk (FnOpt Int) = {
+    comatch
+    | .one value -> ! fn_int .arg value
     | .zero -> ! fn_int .arg 0
     end
-  } in
+  } that
 
-  do x <- ! fn_opt_int .zero;
-  ! exit x
+  do status <- ! fn_opt_int .zero;
+  ! (api/exit) status
 end

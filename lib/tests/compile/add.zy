@@ -1,9 +1,8 @@
-pub extern def add : Thk (Int -> Int -> Ret Int) end
-pub extern def exit : Thk (Int -> OS) end
-
-main
-  do x <- ret 40;
-  do y <- ret -40;
-  do z <- ! add x y;
-  ! exit z
-end
+param (
+  (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+  @[import("../../std/builtin.zy")] _
+) in
+  do left <- ret 40;
+  do right <- ret -40;
+  do status <- ! (api/add) left right;
+  ! (api/exit) status

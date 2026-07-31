@@ -1,153 +1,163 @@
--- This file implements an interpreter for a simple CBPV language.
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
 
--- As it is a CBPV language, our syntax distinguishes between values
--- and computations
-data SynVal where
-| +Var    : String
-| +True   : Unit
-| +False  : Unit
-| +ThunkV : SynComp
-end
-
-data SynComp where
-| +If     : SynVal * SynComp * SynComp
-| +Force  : SynVal
-| +Lam    : String * SynComp
-| +App    : SynComp * SynVal
-| +Return : SynVal
-| +Bind   : SynComp * String * SynComp
-end
-
--- Environments are implemented as association lists.
-data Env where
-| +Empty : Unit
-| +Cons  : String * SemVal * Env
-end
-
-def fix lookup (x : String) (g : Env) : Ret (Answer SemVal) =
-  match g
-  | +Empty () -> ret +Err()
-  | +Cons (y,v,g) ->
-    do b <- ! str_eq x y;
-    match b
-    | +True() -> ret +Ok v
-    | +False() -> ! lookup x g
+  def SynVal : VType =
+    data
+    | +Var : String
+    | +True : Unit
+    | +False : Unit
+    | +ThunkV : SynComp
     end
-  end
-end
-
--- The interpreter works with semantic values, which do not include
--- variables. We use closures in the interpreter to implement semantic
--- thunks.
-data SemVal where
-| +True   : Unit
-| +False  : Unit
-| +ThunkV : Thunk(SemComp)
-end
-
-def ! sem_val_to_str (s : SemVal) : Ret String =
-  match s
-  | +True   _ -> ret "true"
-  | +False  _ -> ret "false"
-  | +ThunkV _ -> ret "<thunk>"
-  end
-end
-
--- The "final answer" of the interpreter is either the final value or
--- an error.
-data Answer (A : VType) where
-| +Ok  : A
-| +Err : Unit
-end
-
--- The semantics of computations are Zydeco computations which satisfy
--- this codata type. There are two eliminators: application to a
--- variable and a bind.
-codata SemComp where
-| .app  : SemVal -> SemComp
-| .bind : Ret (Answer SemVal)
-end
-
-def fix error: SemComp =
-  comatch
-  | .app  -> fn _ -> ! error
-  | .bind -> ret +Err()
-  end
-end
-
--- The interpreters for values and computations are implemented
--- mutually recursively.
--- Currently zydeco doesn't directly support mutual recursion but
--- it can be easily simulated:
-codata Interpreter where
-| .valu : SynVal  -> Env -> Ret (Answer SemVal)
-| .comp : SynComp -> Env -> SemComp
-end
-
-def fix interp: Interpreter =
-  comatch
-  | .valu -> fn v g ->
-    match v
-    | +Var   x -> ! lookup x g
-    | +True  _ -> ret +Ok +True()
-    | +False _ -> ret +Ok +False()
-    -- Here we use the meta-language closures to capture the environment g 
-    | +ThunkV m -> ret +Ok +ThunkV { ! interp .comp m g }
+  that
+  def SynComp : VType =
+    data
+    | +If : SynVal * SynComp * SynComp
+    | +Force : SynVal
+    | +Lam : String * SynComp
+    | +App : SynComp * SynVal
+    | +Return : SynVal
+    | +Bind : SynComp * String * SynComp
     end
-  | .comp -> fn m g ->
-    match m
-    | +If (cond, mt, mf) ->
-      match cond
-      | +Var    _ -> ! error
-      | +True   _ -> ! interp .comp mt g
-      | +False  _ -> ! interp .comp mf g
-      | +ThunkV _ -> ! error
+  that
+  def Env : VType =
+    data
+    | +Empty : Unit
+    | +Cons : String * SemVal * Env
+    end
+  that
+  def SemVal : VType =
+    data
+    | +True : Unit
+    | +False : Unit
+    | +ThunkV : Thk SemComp
+    end
+  that
+  def Answer : (VType) -> (VType) =
+    begin
+      param (A : VType) that
+      data
+      | +Ok : A
+      | +Err : Unit
       end
-    | +Force syn_val ->
-      do v? <- ! interp .valu syn_val g;
-      match v?
-      | +Ok v ->
-        match v
-        | +ThunkV t -> ! t
-        | +True   _ -> ! error
-        | +False  _ -> ! error
+    end
+  that
+  def SemComp : CType =
+    codata
+    | .app : SemVal -> SemComp
+    | .bind : Ret (Answer SemVal)
+    end
+  that
+  def Interpreter : CType =
+    codata
+    | .valu : SynVal -> Env -> Ret (Answer SemVal)
+    | .comp : SynComp -> Env -> SemComp
+    end
+  that
+
+  def lookup : Thk (String -> Env -> Ret (Answer SemVal)) = {
+    fix (lookup : Thk (String -> Env -> Ret (Answer SemVal))) ->
+      fn requested environment ->
+        match environment
+        | +Empty() -> ret +Err()
+        | +Cons(name, value, tail) ->
+          ! (api/str_eq_branch)
+            (Ret (Answer SemVal))
+            requested
+            name
+            { ret +Ok(value) }
+            { ! lookup requested tail }
         end
-      | +Err() -> ! error
+  } that
+  def sem_val_to_string : Thk (SemVal -> Ret String) = {
+    fn value ->
+      match value
+      | +True(_) -> ret "true"
+      | +False(_) -> ret "false"
+      | +ThunkV(_) -> ret "<thunk>"
       end
-    | +Return syn_val ->
-      do v <- ! interp .valu syn_val g;
+  } that
+  def error : Thk SemComp = {
+    fix (error : Thk SemComp) ->
       comatch
-      | .bind -> ret v
-      | .app -> fn _ -> ! error
-      end
-    | +Bind (m, x, k) ->
-      do v? <- ! interp .comp m g .bind;
-      match v?
-      | +Ok(v) -> ! interp .comp k +Cons(x, v, g)
-      | +Err() -> ! error
-      end
-    | +Lam (x, m) ->
-      comatch
-      | .app -> fn v -> ! interp .comp m +Cons(x, v, g)
+      | .app _ -> ! error
       | .bind -> ret +Err()
       end
-    | +App (m, v) ->
-      do v? <- ! interp .valu v g;
-      match v?
-      | +Ok(v) -> ! interp .comp m g .app v
-      | +Err() -> ! error
+  } that
+  def interp : Thk Interpreter = {
+    fix (interp : Thk Interpreter) ->
+      comatch
+      | .valu value environment ->
+        match value
+        | +Var(name) -> ! lookup name environment
+        | +True(_) -> ret +Ok(+True())
+        | +False(_) -> ret +Ok(+False())
+        | +ThunkV(computation) ->
+          ret +Ok(+ThunkV({ ! interp .comp computation environment }))
+        end
+      | .comp computation environment ->
+        match computation
+        | +If(condition, consequent, alternative) ->
+          match condition
+          | +Var(_) -> ! error
+          | +True(_) -> ! interp .comp consequent environment
+          | +False(_) -> ! interp .comp alternative environment
+          | +ThunkV(_) -> ! error
+          end
+        | +Force(syntax_value) ->
+          do result <- ! interp .valu syntax_value environment;
+          match result
+          | +Ok(value) ->
+            match value
+            | +ThunkV(thunk) -> ! thunk
+            | +True(_) -> ! error
+            | +False(_) -> ! error
+            end
+          | +Err() -> ! error
+          end
+        | +Return(syntax_value) ->
+          do result <- ! interp .valu syntax_value environment;
+          comatch
+          | .bind -> ret result
+          | .app _ -> ! error
+          end
+        | +Bind(bindee, name, body) ->
+          do result <- ! interp .comp bindee environment .bind;
+          match result
+          | +Ok(value) ->
+            ! interp .comp body +Cons(name, value, environment)
+          | +Err() -> ! error
+          end
+        | +Lam(name, body) ->
+          comatch
+          | .app value ->
+            ! interp .comp body +Cons(name, value, environment)
+          | .bind -> ret +Err()
+          end
+        | +App(function, argument) ->
+          do result <- ! interp .valu argument environment;
+          match result
+          | +Ok(value) -> ! interp .comp function environment .app value
+          | +Err() -> ! error
+          end
+        end
       end
-    end
-  end
-end
+  } that
 
--- An example
-main
-  do x <- ! interp .comp +App(+Lam("x", +Return +Var "x"), +False()) +Empty() .bind;
-  match x
-  | +Err _ -> ! panic "ERROR"
-  | +Ok sv ->
-    do s <- ! sem_val_to_str sv;
-    ! write_line s { ! exit 0 }
+  do result <- ! interp
+    .comp
+    +App(
+      +Lam("x", +Return(+Var("x"))),
+      +False()
+    )
+    +Empty()
+    .bind;
+  match result
+  | +Err(_) -> ! (api/exit) 1
+  | +Ok(value) ->
+    do rendered <- ! sem_val_to_string value;
+    ! (api/write_line) rendered { ! (api/exit) 0 }
   end
 end

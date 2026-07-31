@@ -1,21 +1,32 @@
-main
-  let add = {
-    fix (add: Thunk(Nat -> Nat -> Ret(Nat))) -> (
-      fn (x: Nat) (y: Nat) -> (
-        match x
-        | +Z() -> ret y
-        | +S(x) -> !add x +S(y)
-        end
-      )
-    )
-  } in
-  let fix add' (x: Nat) (y: Nat): Ret(Nat) =
-    match x
-    | +Z() -> ret y
-    | +S(x) -> !add x +S(y)
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  def Nat : VType =
+    data
+    | +Z : Unit
+    | +S : Nat
     end
-  in
-  do x <- ! add +S(+S(+Z())) +S(+Z());
-  do y <- ! add' x +S(+S(+S(+Z())));
-  ! exit 0
+  that
+  def add_nat : Thk (Nat -> Nat -> Ret Nat) = {
+    fix (recur : Thk (Nat -> Nat -> Ret Nat)) ->
+      fn (left : Nat) (right : Nat) ->
+        match left
+        | +Z() -> ret right
+        | +S(predecessor) -> ! recur predecessor +S(right)
+        end
+  } that
+  def add_nat_prime : Thk (Nat -> Nat -> Ret Nat) = {
+    fn (left : Nat) (right : Nat) ->
+      match left
+      | +Z() -> ret right
+      | +S(predecessor) -> ! add_nat predecessor +S(right)
+      end
+  } that
+
+  do first <- ! add_nat +S(+S(+Z())) +S(+Z());
+  do second <- ! add_nat_prime first +S(+S(+S(+Z())));
+  ! (api/exit) 0
 end

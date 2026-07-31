@@ -1,5 +1,12 @@
-def fix loop : OS = ! loop end
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  def loop : Thk OS = {
+    fix (loop : Thk OS) ->
+      ! loop
+  } that
 
-main
   ! loop
 end

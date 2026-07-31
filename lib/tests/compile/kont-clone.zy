@@ -1,26 +1,27 @@
-extern def exit : Thk (Int -> OS) end
-
-alias Bool : VType =
-  data
-  | +False : Unit
-  | +True : Unit
-  end
-end
-
-def ! f (b: Bool) (k: Thk (Int -> OS)) =
-  -- k might be large
-  match b
-  | +True _ -> ! k 0
-  | +False _ -> ! k 1
-  end
-end
-
-main
-  ! f (+True ()) {
-    -- a large continuation gets inlined
-    fn x -> match (+True (): Bool)
-    | +True _ -> ! exit x
-    | +False _ -> ! exit 0
+begin
+  def Bool : VType =
+    data
+    | +False : Unit
+    | +True : Unit
     end
+  that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  def choose : Thk (Bool -> Thk (Int -> OS) -> OS) = {
+    fn (condition : Bool) (continuation : Thk (Int -> OS)) ->
+      match condition
+      | +True(_) -> ! continuation 0
+      | +False(_) -> ! continuation 1
+      end
+  } that
+
+  ! choose (+True()) {
+    fn value ->
+      match (+True() : Bool)
+      | +True(_) -> ! (api/exit) value
+      | +False(_) -> ! (api/exit) 0
+      end
   }
 end

@@ -1,25 +1,41 @@
-main
-  let fix odd: Nat -> Ret(Bool) =
-    let even = {
-      fix (even: Thunk(Nat -> Ret(Bool))) -> (
-        fn (x: Nat) -> (
-          match x
-          | +Z() -> ret +True()
-          | +S(x) -> !odd x
-          end
-        )
-      )
-    } in
-    fn (x: Nat) -> (
-      match x
-      | +Z() -> ret +False()
-      | +S(x) -> !even x
-      end
-    )
-  in
-  do b <- !odd +S(+S(+S(+Z())));
-  match b
-  | +True() -> ! exit 0
-  | +False() -> ! exit 1
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  def Nat : VType =
+    data
+    | +Z : Unit
+    | +S : Nat
+    end
+  that
+  def Bool : VType =
+    data
+    | +True : Unit
+    | +False : Unit
+    end
+  that
+  def odd : Thk (Nat -> Ret Bool) = {
+    fix (odd : Thk (Nat -> Ret Bool)) ->
+      let even : Thk (Nat -> Ret Bool) = {
+        fix (even : Thk (Nat -> Ret Bool)) ->
+          fn (number : Nat) ->
+            match number
+            | +Z() -> ret +True()
+            | +S(predecessor) -> ! odd predecessor
+            end
+      } in
+      fn (number : Nat) ->
+        match number
+        | +Z() -> ret +False()
+        | +S(predecessor) -> ! even predecessor
+        end
+  } that
+
+  do result <- ! odd +S(+S(+S(+Z())));
+  match result
+  | +True() -> ! (api/exit) 0
+  | +False() -> ! (api/exit) 1
   end
 end

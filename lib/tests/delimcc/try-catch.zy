@@ -1,16 +1,154 @@
-main
-  do i <- ! try Ret mret Int Int {
-    ! throw Ret mret Int Int 42
-    -- fn _ -> ret 0
-  } { fn x -> ! sub x 42 };
-  do j <- ! try Ret mret Int Int {
-    -- ! throw Ret mret Int Int 42
-    fn _ -> ret 0
-  } { fn x -> ! sub x 42 };
-  let ! is_0 (x: Int) (msg: String) (k: Thk OS) =
-    ! if~ _ { ! int_eq x 0 } k { ! panic msg }
-  in
-  do~ ! is_0 i "i != 0";
-  do~ ! is_0 j "j != 0";
-  ! exit 0
+begin
+  let monadic_basis = @[import("../../std/monad.zy")] _ that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  do (= Monad, = Algebra, ()) <-
+    ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  begin
+
+  let Kont :
+    (CType) ->
+    (VType) ->
+    (CType) =
+    begin
+      param (R : CType) that
+      param (A : VType) that
+      Thk (A -> R) -> R
+    end
+  that
+  def mret : Thk (Monad Ret) = {
+    comatch
+    | .return A value ->
+      ret value
+    | .bind A B computation function ->
+      do value <- ! computation;
+      ! function value
+    end
+  } that
+  def reset : Thk (
+    forall (
+      M :
+      (VType) -> (CType)
+    ) .
+      Thk (Monad M) ->
+      (
+        forall (A : VType) .
+          Thk (Kont (M A) A) ->
+          M A
+      )
+  ) = {
+    fn M monad A expression ->
+      ! expression {
+        fn value ->
+          ! monad .return A value
+      }
+  } that
+  def shift : Thk (
+    forall (
+      M :
+      (VType) -> (CType)
+    ) .
+      Thk (Monad M) ->
+      (
+        forall (A : VType) .
+        forall (B : VType) .
+          Thk (
+            Thk (A -> M B) ->
+            Kont (M B) B
+          ) ->
+          Kont (M B) A
+      )
+  ) = {
+    fn M monad A B handler continuation ->
+      ! handler
+        continuation
+        {
+          fn value ->
+            ! monad .return B value
+        }
+  } that
+  def attempt : Thk (
+    forall (
+      M :
+      (VType) -> (CType)
+    ) .
+      Thk (Monad M) ->
+      (
+        forall (A : VType) .
+        forall (E : VType) .
+          Thk (Kont (M A) E) ->
+          Thk (E -> M A) ->
+          M A
+      )
+  ) = {
+    fn M monad A E computation handler ->
+      ! monad .bind
+        (Thk (Kont (M A) E))
+        A
+        {
+          ! reset M monad (Thk (Kont (M A) E)) {
+            fn ignored ->
+              ! monad .return
+                (Thk (Kont (M A) E))
+                computation
+          }
+        }
+        {
+          fn suspended ->
+            ! suspended handler
+        }
+  } that
+  def throw : Thk (
+    forall (
+      M :
+      (VType) -> (CType)
+    ) .
+      Thk (Monad M) ->
+      (
+        forall (A : VType) .
+        forall (E : VType) .
+          E ->
+          Kont (M A) E
+      )
+  ) = {
+    fn M monad A E exception ->
+      ! shift M monad E A {
+        fn continuation ignored ->
+          ! continuation exception
+      }
+  } that
+
+  do thrown <- ! attempt Ret mret Int Int
+    {
+      ! throw Ret mret Int Int 42
+    }
+    {
+      fn exception ->
+        ! (api/sub) exception 42
+    };
+  do returned <- ! attempt Ret mret Int Int
+    {
+      fn ignored ->
+        ret 0
+    }
+    {
+      fn exception ->
+        ! (api/sub) exception 42
+    };
+  ! (api/int_eq_branch)
+    OS
+    thrown
+    0
+    {
+      ! (api/int_eq_branch)
+        OS
+        returned
+        0
+        { ! (api/exit) 0 }
+        { ! (api/exit) 2 }
+    }
+    { ! (api/exit) 1 }
+end
 end

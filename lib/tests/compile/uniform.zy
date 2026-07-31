@@ -1,29 +1,31 @@
-extern def add : Thk (Int -> Int -> Ret Int) end
-extern def exit : Thk (Int -> OS) end
+begin
+  let TypeIdentity =
+    begin
+      let Result = A that
+      param (A : VType) that
+      Result
+    end
+  that
+  let IdentityResult = TypeIdentity Int that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  def run : Thk (
+    forall (A : VType) .
+      A -> OS
+  ) = {
+    begin
+      let copy : Number = seed that
+      param (seed : Number) that
+      def expected : Int = 0 that
+      let Number = A that
+      param (A : VType) that
+      def Opaque : VType = Int that
+      do status <- ! (api/add) expected 0;
+      ! (api/exit) status
+    end
+  } that
 
-alias TypeIdentity =
-  begin
-    let Result = A that
-    param (A : VType) that
-    Result
-  end
-end
-
-alias IdentityResult = TypeIdentity Int end
-
-def run = {
-  begin
-    let copy : Number = seed that
-    param (seed : Number) that
-    def expected : Int = 0 that
-    let Number = A that
-    param (A : VType) that
-    def Opaque : VType = Int that
-    do status <- ! add expected 0;
-    ! exit status
-  end
-} end
-
-main
-  ! run Int 7
+  ! run IdentityResult 7
 end

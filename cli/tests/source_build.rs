@@ -2,8 +2,7 @@ use std::{path::PathBuf, process::Command};
 
 #[test]
 fn a_root_term_builds_without_project_configuration() {
-    let root =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib/tests/source/builtin-exit.zy");
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib/tests/builtin/exit.zy");
     let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
         .arg("build")
         .arg(root)

@@ -1,8 +1,0 @@
-param (
-  (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
-  @[import("../../std/builtin.zy")] _
-) in
-  do left <- ret 40;
-  do right <- ret -40;
-  do status <- ! (api/add) left right;
-  ! (api/exit) status

@@ -1,205 +1,333 @@
-data Exception where
-  | +TypeError : Unit
-  | +FreeVariable : Unit
-end
+begin
+  let monadic_basis = @[import("../../std/monad.zy")] _ that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  do (= Monad, = Algebra, ()) <-
+    ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  begin
 
-data State where
-  | +State : Int * String
-end
-
-alias Kont' (A: VType) : CType =
-  forall (R: CType) . U (A -> R) -> R
-end
-
-def ! kret (v: Value) : Kont' Value =
-  fn R k -> ! k v
-end
-
-alias State' (A: VType) : CType =
-  State -> Ret (Pair State A)
-end
-
-alias Exn (A: VType) : VType =
-  Either Exception A
-end
-
-alias Mo' (A: VType) : CType =
-  State' (Exn (U (Kont' A)))
-end
-
-codata Mo (A: VType) where
-  | .run: Mo' A
-end
-
-def ! mk_mexn (v: U (Mo' Value)) : Mo Value =
-  comatch
-  | .run -> ! v
-  end
-end
-
--- def ! stdin (k: U (String -> OS)) : Mo Value =
---   ! mk_mexn { fn s ->
---     ret +Cons(s, +Right())
---   }
--- end
-
-def ! cnt (v: Value) : Mo Value =
-  ! mk_mexn { fn s ->
-    match s
-    | +State(c, o) ->
-      do c' <- ! add c 1;
-      ret +Cons(+State(c', o), +Right({ ! kret v }))
+  def Bool : VType =
+    data
+    | +True : Unit
+    | +False : Unit
     end
-  }
-end
-
-def ! stdout (str: String) (v: Value) : Mo Value =
-  ! mk_mexn { fn s ->
-    match s
-    | +State(c, o) ->
-      do o' <- ! str_append o str;
-      ret +Cons(+State(c, o'), +Right({ ! kret v }))
-    end
-  }
-end
-
-def ! raise (exn: Exception) : Mo Value =
-  ! mk_mexn { fn s -> ret +Cons(s, +Left(exn)) }
-end
-
-def ! mexn : Monad Mo =
-  comatch
-  | .return -> fn A a ->
-    comatch
-    | .run s ->
-      ret +Cons(s, +Right({ fn R k -> ! k a }))
-    end
-  | .bind -> fn A A' m f -> comatch
-    | .run s -> 
-      do x <- ! m .run s;
-      match x
-      | +Cons(s', v) ->
-        match v
-        | +Left(e) -> ret +Cons(s', +Left(e))
-        | +Right(k) ->
-          do a <- ! k (Ret A) { fn a -> ret a };
-          ! f a .run s'
-        end
+  that
+  def Pair :
+    (VType) ->
+    (VType) ->
+    (VType) =
+    begin
+      param (A : VType) that
+      param (B : VType) that
+      data
+      | +Pair : A * B
       end
     end
-  end
-end
-
-data EnvT where
-  | +Empty : Unit
-  | +Extend : String * Value * EnvT
-end
-
-codata EnvO where
-  | .lookup: String -> Ret (Option Value)
-  | .extend: String -> Value -> EnvO
-end
-
-def fix envo (env: EnvT) : EnvO =
-  comatch
-  | .lookup x ->
-    match env
-    | +Empty() -> ret +None()
-    | +Extend(x', v, env') ->
-      do is-eq? <- ! str_eq x x';
-      match is-eq?
-      | +True() -> ret +Some(v)
-      | +False() -> ! envo env' .lookup x
+  that
+  def Either :
+    (VType) ->
+    (VType) ->
+    (VType) =
+    begin
+      param (A : VType) that
+      param (B : VType) that
+      data
+      | +Left : A
+      | +Right : B
       end
     end
-  | .extend -> fn x v ->
-    ! envo +Extend(x, v, env)
-  end
-end
-
-data Value where
-  | +Bool : Bool
-  | +Lam : U EnvO * String * Term
-end
-
-data Term where
-  | +Var : String
-  | +Lam : String * Term
-  | +App : Term * Term
-  | +Bool : Bool
-  | +If : Term * Term * Term
-end
-
-def fix interp (env: U EnvO) (t: Term) : Mo Value =
-  match t
-  | +Var(x) ->
-    do x? <- ! env .lookup x;
-    match x?
-    | +None() -> ! raise +FreeVariable()
-    | +Some(v) ->
-      ! mexn .return (Value) v
-      -- ret[mexn] v
+  that
+  def Option :
+    (VType) ->
+    (VType) =
+    begin
+      param (A : VType) that
+      data
+      | +None : Unit
+      | +Some : A
+      end
     end
-  | +Lam(x, t) ->
-    ! mexn .return (Value) +Lam(env, x, t)
-    -- ret[mexn] +Lam(env, x, t)
-  | +App(t1, t2) ->
-    let m1 = { ! interp env t1 .run } in
-    ! mexn .bind (Value) (Value) { ! mk_mexn m1 } { fn v1 ->
-      -- do[mexn] v1 <- ! interp env t1 .run;
-      let m2 = { ! interp env t2 .run } in
-      ! mexn .bind (Value) (Value) { ! mk_mexn m2 } { fn v2 ->
-        -- do[mexn] v2 <- ! interp env t2 .run;
-        match v1
-        | +Bool(b) -> ! raise +TypeError()
-        | +Lam(env', x, t) ->
-          ! interp { ! env' .extend x v2 } t
-        end
+  that
+  def Exception : VType =
+    data
+    | +TypeError : Unit
+    | +FreeVariable : Unit
+    end
+  that
+  def State : VType =
+    data
+    | +State : Int * String
+    end
+  that
+
+  let Kont' :
+    (VType) ->
+    (CType) =
+    begin
+      param (A : VType) that
+      forall (R : CType) .
+        Thk (A -> R) -> R
+    end
+  that
+  let State' :
+    (VType) ->
+    (CType) =
+    begin
+      param (A : VType) that
+      State -> Ret (Pair State A)
+    end
+  that
+  let Exn :
+    (VType) ->
+    (VType) =
+    begin
+      param (A : VType) that
+      Either Exception A
+    end
+  that
+  let Mo' :
+    (VType) ->
+    (CType) =
+    begin
+      param (A : VType) that
+      State' (Exn (Thk (Kont' A)))
+    end
+  that
+  def Mo :
+    (VType) ->
+    (CType) =
+    begin
+      param (A : VType) that
+      codata
+      | .run : Mo' A
+      end
+    end
+  that
+
+  def EnvT : VType =
+    data
+    | +Empty : Unit
+    | +Extend : String * Value * EnvT
+    end
+  that
+  def EnvO : CType =
+    codata
+    | .lookup : String -> Ret (Option Value)
+    | .extend : String -> Value -> EnvO
+    end
+  that
+  def Value : VType =
+    data
+    | +Bool : Bool
+    | +Lam : Thk EnvO * String * Term
+    end
+  that
+  def Term : VType =
+    data
+    | +Var : String
+    | +Lam : String * Term
+    | +App : Term * Term
+    | +Bool : Bool
+    | +If : Term * Term * Term
+    end
+  that
+
+  def kret : Thk (Value -> Kont' Value) = {
+    fn value ->
+      fn R continuation ->
+        ! continuation value
+  } that
+  def mk_mexn : Thk (Thk (Mo' Value) -> Mo Value) = {
+    fn computation ->
+      comatch
+      | .run -> ! computation
+      end
+  } that
+  def cnt : Thk (Value -> Mo Value) = {
+    fn value ->
+      ! mk_mexn {
+        fn state ->
+          match state
+          | +State(count, output) ->
+            do next <- ! (api/add) count 1;
+            ret +Pair(
+              +State(next, output),
+              +Right({ ! kret value })
+            )
+          end
       }
-    }
-  | +Bool(b) ->
-    ! mexn .return (Value) +Bool(b)
-    -- ret[mexn] +Bool(b)
-  | +If(t1, t2, t3) ->
-    let m1 = { ! interp env t1 .run } in
-    ! mexn .bind (Value) (Value) { ! mk_mexn m1 } { fn v1 ->
-      -- do[mexn] v1 <- ! interp env t1 .run;
-      match v1
-      | +Bool(b) ->
-        match b
-        | +True() -> ! interp env t2
-        | +False() -> ! interp env t3
-        end
-      | +Lam(env', x, t) -> ! raise +TypeError()
+  } that
+  def stdout : Thk (String -> Value -> Mo Value) = {
+    fn string value ->
+      ! mk_mexn {
+        fn state ->
+          match state
+          | +State(count, output) ->
+            do output <- ! (api/str_append) output string;
+            ret +Pair(
+              +State(count, output),
+              +Right({ ! kret value })
+            )
+          end
+      }
+  } that
+  def raise : Thk (Exception -> Mo Value) = {
+    fn exception ->
+      ! mk_mexn {
+        fn state ->
+          ret +Pair(state, +Left(exception))
+      }
+  } that
+  def mexn : Thk (Monad Mo) = {
+    comatch
+    | .return A value ->
+      comatch
+      | .run state ->
+        ret +Pair(
+          state,
+          +Right({
+            fn R continuation ->
+              ! continuation value
+          })
+        )
       end
-    }
-  end
-end
+    | .bind A B computation function ->
+      comatch
+      | .run state ->
+        do result <- ! computation .run state;
+        match result
+        | +Pair(next, outcome) ->
+          match outcome
+          | +Left(exception) ->
+            ret +Pair(next, +Left(exception))
+          | +Right(continuation) ->
+            do value <- ! continuation (Ret A) {
+              fn value -> ret value
+            };
+            ! function value .run next
+          end
+        end
+      end
+    end
+  } that
+  def str_eq : Thk (String -> String -> Ret Bool) = {
+    fn left right ->
+      ! (api/str_eq_branch)
+        (Ret Bool)
+        left
+        right
+        { ret +True() }
+        { ret +False() }
+  } that
+  def envo : Thk (EnvT -> EnvO) = {
+    fix (envo : Thk (EnvT -> EnvO)) ->
+      fn environment ->
+        comatch
+        | .lookup requested ->
+          match environment
+          | +Empty() -> ret +None()
+          | +Extend(name, value, tail) ->
+            do equal <- ! str_eq requested name;
+            match equal
+            | +True() -> ret +Some(value)
+            | +False() -> ! envo tail .lookup requested
+            end
+          end
+        | .extend name value ->
+          ! envo +Extend(name, value, environment)
+        end
+  } that
+  def interp : Thk (Thk EnvO -> Term -> Mo Value) = {
+    fix (interp : Thk (Thk EnvO -> Term -> Mo Value)) ->
+      fn environment term ->
+        match term
+        | +Var(name) ->
+          do result <- ! environment .lookup name;
+          match result
+          | +None() -> ! raise +FreeVariable()
+          | +Some(value) ->
+            ! mexn .return Value value
+          end
+        | +Lam(name, body) ->
+          ! mexn .return Value +Lam(environment, name, body)
+        | +App(function_term, argument_term) ->
+          let function_computation = {
+            ! interp environment function_term .run
+          } in
+          ! mexn .bind Value Value
+            { ! mk_mexn function_computation }
+            {
+              fn function_value ->
+                let argument_computation = {
+                  ! interp environment argument_term .run
+                } in
+                ! mexn .bind Value Value
+                  { ! mk_mexn argument_computation }
+                  {
+                    fn argument_value ->
+                      match function_value
+                      | +Bool(_) -> ! raise +TypeError()
+                      | +Lam(closure, name, body) ->
+                        ! interp
+                          { ! closure .extend name argument_value }
+                          body
+                      end
+                  }
+            }
+        | +Bool(value) ->
+          ! mexn .return Value +Bool(value)
+        | +If(condition, consequent, alternative) ->
+          let condition_computation = {
+            ! interp environment condition .run
+          } in
+          ! mexn .bind Value Value
+            { ! mk_mexn condition_computation }
+            {
+              fn condition_value ->
+                match condition_value
+                | +Bool(value) ->
+                  match value
+                  | +True() -> ! interp environment consequent
+                  | +False() -> ! interp environment alternative
+                  end
+                | +Lam(_, _, _) -> ! raise +TypeError()
+                end
+            }
+        end
+  } that
 
-main
-  let term : Term = +App(+Lam("x", +Var("x")), +Bool(+True())) in
-  let env : U EnvO = { ! envo +Empty() } in
-  do sv? <- ! interp env term .run +State(0, "");
-  match sv?
-  | +Cons(s, v?) ->
-    match v?
-    | +Left(_) -> ! panic "error"
-    | +Right(k) -> ! k (OS) { fn v ->
-      match v
-      | +Bool(b) ->
-        match b
-        | +True() -> ! write_line "\\^o^/" { ! exit 0 }
-        | +False() -> ! panic "wrong value"
-        end
-      | +Lam(_, _, _) -> ! panic "should be bool"
-      end
-    }
+  let term : Term =
+    +App(
+      +Lam("x", +Var("x")),
+      +Bool(+True())
+    )
+  in
+  let environment : Thk EnvO = {
+    ! envo +Empty()
+  } in
+  do result <- ! interp environment term .run +State(0, "");
+  match result
+  | +Pair(_, outcome) ->
+    match outcome
+    | +Left(_) -> ! (api/exit) 1
+    | +Right(continuation) ->
+      ! continuation OS {
+        fn value ->
+          match value
+          | +Bool(boolean) ->
+            match boolean
+            | +True() ->
+              ! (api/write_line) "\\^o^/" {
+                ! (api/exit) 0
+              }
+            | +False() -> ! (api/exit) 1
+            end
+          | +Lam(_, _, _) -> ! (api/exit) 1
+          end
+      }
     end
   end
-
-  -- let w : Term = +Lam("x", +App(Var("x"), +Var("x")));
-  -- let term : Term = +App(w, w);
-  -- let env : U EnvO = { ! envo +Empty() };
-  -- do v? <- ! interp env term .run;
-  -- ! panic "unreachable"
+end
 end

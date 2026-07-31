@@ -1,66 +1,107 @@
-data Tree (A : VType) where
-  | +Fork : Tree A * Tree A
-  | +Final : A
-end
-
-data Choice (B : CType) where
-  | +L : U B
-  | +R : U B
-end
-
-data Path (A : VType) where
-  | +Nil : Unit
-  | +Cons : A * Path A
-end
-
-def beep : Choice (U OS -> OS) =
-  +L({ fn (k) ->
-    ! write_line "0" k
-  })
-end
-def boop : Choice (U OS -> OS) =
-  +R({ fn (k) ->
-    ! write_line "1" k
-  })
-end
-
-def tree : Tree String =
-  +Fork(+Fork(+Final("x"), +Final("o")), +Final("x"))
-end
-def path : Path (Choice (U OS -> OS)) =
-  +Cons(beep, +Cons(boop, +Nil()))
-end
-
-def fix walk : Tree String -> Path (Choice (U OS -> OS)) -> OS = fn t p ->
-  match t
-  | +Final(res) -> (
-    match p
-    | +Nil() -> (
-      ! write_line res {
-        do correct <- ! str_eq res "o";
-        match correct
-        | +True() -> ! exit 0
-        | +False() -> ! exit 1
-        end
-      }
-    )
-    | +Cons(_, _) -> ! exit 2
-    end
-  )
-  | +Fork(tl, tr) -> (
-    match p
-    | +Nil() -> ! exit 3
-    | +Cons(c, p') -> (
-      match c
-      | +L(k) -> ! k { ! walk tl p' }
-      | +R(k) -> ! k { ! walk tr p' }
+begin
+  let std = @[import("../../std/std.zy")] _ that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  def Tree : (VType) -> (VType) =
+    begin
+      param (A : VType) that
+      data
+      | +Fork : Tree A * Tree A
+      | +Final : A
       end
-    )
     end
-  )
-  end
-end
+  that
+  def Choice : (CType) -> (VType) =
+    begin
+      param (B : CType) that
+      data
+      | +L : Thk B
+      | +R : Thk B
+      end
+    end
+  that
+  def Path : (VType) -> (VType) =
+    begin
+      param (A : VType) that
+      data
+      | +Nil : Unit
+      | +Cons : A * Path A
+      end
+    end
+  that
 
-main
+  do (
+    Bool = StdBool,
+    Option = StdOption,
+    List = StdList,
+    Int = StdInt,
+    Char = StdChar,
+    String = StdString,
+    OS = StdOS,
+    public
+  ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  def beep : Choice (Thk StdOS -> StdOS) =
+    +L({
+      fn continuation ->
+        ! (public/write_line) "0" continuation
+    })
+  in
+  def boop : Choice (Thk StdOS -> StdOS) =
+    +R({
+      fn continuation ->
+        ! (public/write_line) "1" continuation
+    })
+  in
+  def tree : Tree StdString =
+    +Fork(
+      +Fork(+Final("x"), +Final("o")),
+      +Final("x")
+    )
+  in
+  def path : Path (Choice (Thk StdOS -> StdOS)) =
+    +Cons(beep, +Cons(boop, +Nil()))
+  in
+  def walk : Thk (
+    Tree StdString ->
+    Path (Choice (Thk StdOS -> StdOS)) ->
+    StdOS
+  ) = {
+    fix (
+      walk :
+      Thk (
+        Tree StdString ->
+        Path (Choice (Thk StdOS -> StdOS)) ->
+        StdOS
+      )
+    ) ->
+      fn current_tree current_path ->
+        match current_tree
+        | +Final(result) ->
+          match current_path
+          | +Nil() ->
+            ! (public/write_line) result {
+              do correct <- ! (public/str_eq) result "o";
+              ! (public/branch)
+                StdOS
+                correct
+                { ! (public/exit) 0 }
+                { ! (public/exit) 1 }
+            }
+          | +Cons(_, _) -> ! (public/exit) 2
+          end
+        | +Fork(left, right) ->
+          match current_path
+          | +Nil() -> ! (public/exit) 3
+          | +Cons(choice, remaining) ->
+            match choice
+            | +L(continuation) -> ! continuation { ! walk left remaining }
+            | +R(continuation) -> ! continuation { ! walk right remaining }
+            end
+          end
+        end
+  } in
+
   ! walk tree path
 end

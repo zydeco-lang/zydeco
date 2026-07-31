@@ -1,42 +1,92 @@
-def ! reset' (A: VType)
-  (e: Thk (Kont (Ret A) A))
-: Ret A =
-  ! e { fn x -> ret x }
-end
+begin
+  let monadic_basis = @[import("../../std/monad.zy")] _ that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  do (= Monad, = Algebra, ()) <-
+    ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  begin
 
-def ! shift' (A: VType) (A': VType)
-  (e: Thk (Thk (A -> Ret A') -> Kont (Ret A') A'))
-: Kont (Ret A') A =
-  fn ka' -> ! e ka' { fn x' -> ret x' }
-end
-
--- reset' and shift' are the primitives of delimited continuations.
--- example:
-
--- def ! _ : F Int =
---   ! reset' {
---     do x <- ! shift' { fn cont ->
---       do y <- ! cont { ret 4 };
---       ! add 17 y
---     };
---     ! mul 2 x
---   }
--- end
-
-def ! ex : Ret Int =
-  ! reset' Int {
-    ! mkont (Ret Int) .bind Int Int {
-      ! shift' Int Int { fn cont ->
-        do y <- ! cont 4;
-        do res <- ! add 17 y;
-        ! mkont (Ret Int) .return Int res
+  let Kont :
+    (CType) ->
+    (VType) ->
+    (CType) =
+    begin
+      param (R : CType) that
+      param (A : VType) that
+      Thk (A -> R) -> R
+    end
+  that
+  def mkont : Thk (
+    forall (R : CType) .
+      Monad (Kont R)
+  ) = {
+    fn R ->
+      comatch
+      | .return A value ->
+        fn continuation ->
+          ! continuation value
+      | .bind A B computation function ->
+        fn continuation ->
+          ! computation {
+            fn value ->
+              ! function value continuation
+          }
+      end
+  } that
+  def reset : Thk (
+    forall (A : VType) .
+      Thk (Kont (Ret A) A) ->
+      Ret A
+  ) = {
+    fn A expression ->
+      ! expression {
+        fn value ->
+          ret value
       }
+  } that
+  def shift : Thk (
+    forall (A : VType) .
+    forall (B : VType) .
+      Thk (
+        Thk (A -> Ret B) ->
+        Kont (Ret B) B
+      ) ->
+      Kont (Ret B) A
+  ) = {
+    fn A B expression continuation ->
+      ! expression
+        continuation
+        {
+          fn value ->
+            ret value
+        }
+  } that
+  def example : Thk (Ret Int) = {
+    ! reset Int {
+      ! mkont (Ret Int) .bind Int Int
+        {
+          ! shift Int Int {
+            fn continuation ->
+              do value <- ! continuation 4;
+              do result <- ! (api/add) 17 value;
+              ! mkont (Ret Int) .return Int result
+          }
+        }
+        {
+          fn value ->
+            do result <- ! (api/mul) 2 value;
+            ! mkont (Ret Int) .return Int result
+        }
     }
-    { fn x -> do res <- ! mul 2 x; ! mkont (Ret Int) .return Int res }
+  } that
+
+  do result <- ! example;
+  do rendered <- ! (api/int_to_str) result;
+  ! (api/write_line) rendered {
+    do status <- ! (api/sub) result 25;
+    ! (api/exit) status
   }
 end
-
-main
-  do x <- ! ex;
-  ! write_int_line x { do zero <- ! sub x 25; ! exit zero }
 end

@@ -1,39 +1,55 @@
-alias Mixed =
-  exists (Leading as Unit : VType) .
-  exists (X : VType) .
-  exists (AliasX as X : VType) .
-  exists (Trailing as Unit : VType) .
-    X
-end
+begin
+  let monadic_basis = @[import("../../std/monad.zy")] _ that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  do (= Monad, = Algebra, ()) <-
+    ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  begin
 
-def ! mo_ret : Monad Ret =
-  comatch
-  | .return A value ->
-    ret value
-  | .bind A B computation continuation ->
-    do value <- ! computation;
-    ! continuation value
-  end
-end
+  let Mixed =
+    exists (Leading as Unit : VType) .
+    exists (X : VType) .
+    exists (AliasX as X : VType) .
+    exists (Trailing as Unit : VType) .
+      X
+  that
+  def ret_monad : Thk (Monad Ret) = {
+    comatch
+    | .return A value -> ret value
+    | .bind A B computation continuation ->
+      do value <- ! computation;
+      ! continuation value
+    end
+  } that
+  def translated = {
+    monadic
+      let reveal = {
+        do _ <- ret ();
+        fn (
+          (
+            Leading,
+            X,
+            AliasX,
+            Trailing,
+            value
+          ) :
+          Mixed
+        ) ->
+          ret value
+      } in
+      ! reveal (
+        Unit,
+        Unit,
+        Unit,
+        Unit,
+        ()
+      )
+    end
+  } that
 
-def ! translated =
-  monadic
-    let reveal = {
-      do _ <- ret ();
-      fn ((Leading, X, AliasX, Trailing, value) : Mixed) ->
-        ret value
-    } in
-    ! reveal (
-      Unit,
-      Unit,
-      Unit,
-      Unit,
-      (),
-    )
-  end
+  do _ <- ! translated Ret { ! ret_monad };
+  ! (api/exit) 0
 end
-
-main
-  do _ <- ! translated Ret { ! mo_ret };
-  ! exit 0
 end

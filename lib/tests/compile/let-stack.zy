@@ -1,7 +1,7 @@
-extern def exit : Thk (Int -> OS) end
-
-main
-  let x = 0 in
-  (let y = 42 in
-  ! exit) x
-end
+param (
+  (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+  @[import("../../std/builtin.zy")] _
+) in
+  let status = 0 in
+  (let ignored = 42 in
+   ! (api/exit)) status

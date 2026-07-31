@@ -1,18 +1,10 @@
-extern def exit : Thk (Int -> OS) end
-
-alias Bool : VType =
-  data
-  | +False : Unit
-  | +True : Unit
-  end
-end
-
-extern def int_eq : Thk (Int -> Int -> Ret Bool) end
-
-main
-  do x <- ! int_eq 10 10;
-  match x
-  | +True _ -> ! exit 0
-  | +False _ -> ! exit 1
-  end
-end
+param (
+  (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+  @[import("../../std/builtin.zy")] _
+) in
+  ! (api/int_eq_branch)
+    OS
+    10
+    10
+    { ! (api/exit) 0 }
+    { ! (api/exit) 1 }

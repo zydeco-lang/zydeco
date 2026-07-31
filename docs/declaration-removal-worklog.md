@@ -552,7 +552,7 @@ derived library definitions. It also wraps every foundational eliminator whose p
 algebraic type: comparisons produce `Bool`, splits and line parsing produce `Option`,
 and argument folding produces `List`.
 
-The `std-minimal.zy` client imports both terms transitively, applies the standard library, opens its result,
+The `std/minimal.zy` client imports both terms transitively, applies the standard library, opens its result,
 and invokes projected `increment`, `sub`, and `exit` operations. It checks and runs in the interpreter and reaches
 amd64 emission without declarations or configuration. This path also exposed an older normalization defect:
 substitution assignments are stored from inner to outer, but their deep clone had freshened them in that order.
@@ -579,7 +579,7 @@ the block dependency graph orders the wrappers correctly, while the source remai
 definitions together. A separate existential-product port checks nested package opening and product reassociation
 without a declaration entry.
 
-Every executable under `lib/tests/compile` now has an independent root-term counterpart under `lib/tests/source`.
+Every executable under `lib/tests/compile` is now an independent root term at its original path.
 The ports cover finite continuation-based I/O, intentionally nonterminating computations, named and mixed products,
 and the largest named-term fixture with local `data` and `codata` definitions.
 Terminating roots are interpreted and lowered to amd64; intentionally divergent roots are checked and lowered
@@ -617,7 +617,7 @@ The original insertion, rotation, deletion, replacement, search, and structural-
 successfully through both the interpreter and linked amd64 backend.
 Its integration test no longer discovers a project, and `lib/avl/proj.toml` has been removed.
 
-The manifest, named, interleaved, and uniform package fixtures likewise have root-term counterparts.
+The manifest, named, interleaved, and uniform package fixtures likewise inhabit their original paths as root terms.
 The uniform fixture exposed a lexical-shadowing defect in nested blocks:
 the persistent-map union used to install block-wide binders could retain an enclosing definition when that map
 was larger than the inner binder map. Block scope construction now applies explicit functional updates,
@@ -643,7 +643,7 @@ Its string literal now has the same linked-amd64 representation exercised by the
 Every focused named-field fixture under `lib/tests/exec` now has a declaration-free counterpart.
 The small roots retain the separate regression intent for mixed and nested products, named patterns,
 data payloads, function arguments and results, codata destructors, and field punning.
-The existing comprehensive `compile-named` and `compile-named-mixed` roots serve the two overlapping fixtures;
+The existing comprehensive `compile/named.zy` and `compile/named-mixed.zy` roots serve the two overlapping fixtures;
 all nine counterparts interpret successfully and lower through amd64.
 
 The `choice` fixture is the first medium legacy client of the assembled standard-library term.

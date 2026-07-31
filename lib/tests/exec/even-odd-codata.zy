@@ -1,24 +1,46 @@
-codata OddEven where
-  | .even : Nat -> Ret(Bool)
-  | .odd  : Nat -> Ret(Bool)
-end
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
 
-main
-  let fix eo : OddEven =
-    comatch
-    | .even -> fn (n : Nat) -> match n
-      | +Z()  -> ret +True()
-      | +S(n) -> ((! eo .odd) n)
-      end
-    | .odd -> fn(n : Nat) -> match n
-      | +Z()  -> ret +False()
-      | +S(n) -> (! eo.even) n
-      end
+  def Nat : VType =
+    data
+    | +Z : Unit
+    | +S : Nat
     end
-  in
-  do b <- (! eo .even) +S(+S(+S(+S(+Z()))));
-  match b
-  | +True() -> ! exit 0
-  | +False() -> ! exit 1
+  that
+  def Bool : VType =
+    data
+    | +True : Unit
+    | +False : Unit
+    end
+  that
+  def OddEven : CType =
+    codata
+    | .even : Nat -> Ret Bool
+    | .odd : Nat -> Ret Bool
+    end
+  that
+  def odd_even : Thk OddEven = {
+    fix (odd_even : Thk OddEven) ->
+      comatch
+      | .even number ->
+        match number
+        | +Z() -> ret +True()
+        | +S(predecessor) -> ! odd_even .odd predecessor
+        end
+      | .odd number ->
+        match number
+        | +Z() -> ret +False()
+        | +S(predecessor) -> ! odd_even .even predecessor
+        end
+      end
+  } that
+
+  do result <- ! odd_even .even +S(+S(+S(+S(+Z()))));
+  match result
+  | +True() -> ! (api/exit) 0
+  | +False() -> ! (api/exit) 1
   end
 end

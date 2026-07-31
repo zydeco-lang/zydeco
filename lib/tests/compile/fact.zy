@@ -1,31 +1,35 @@
-extern def exit : Thk (Int -> OS) end
+begin
+  let std = @[import("../../std/std.zy")] _ that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
 
-alias Bool : VType =
-  data
-  | +False : Unit
-  | +True : Unit
-  end
-end
-
--- extern def add : Thk (Int -> Int -> Ret Int) end
-extern def sub : Thk (Int -> Int -> Ret Int) end
-extern def mul : Thk (Int -> Int -> Ret Int) end
-extern def int_eq : Thk (Int -> Int -> Ret Bool) end
-
-def fix fact (i: Int): Ret Int =
-  do zero? <- ! int_eq i 0;
-  match zero?
-  | +True _ -> ret 1
-  | +False _ ->
-    -- do i <- ret i;
-    do i' <- ! sub i 1;
-    do acc <- ! fact i';
-    ! mul i acc
-  end
-end
-
-main
-  do x <- ! fact 10;
-  do r <- ! sub x 3628800;
-  ! exit r
+  do (
+    Bool = StdBool,
+    Option = StdOption,
+    List = StdList,
+    Int = StdInt,
+    Char = StdChar,
+    String = StdString,
+    OS = StdOS,
+    public
+  ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  let factorial : Thk (StdInt -> Ret StdInt) = {
+    fix (factorial : Thk (StdInt -> Ret StdInt)) ->
+      fn (value : StdInt) ->
+        do zero <- ! (public/int_eq) value 0;
+        ! (public/branch)
+          (Ret StdInt)
+          zero
+          { ret 1 }
+          {
+            do predecessor <- ! (public/sub) value 1;
+            do accumulated <- ! factorial predecessor;
+            ! (public/mul) value accumulated
+          }
+  } in
+  do result <- ! factorial 10;
+  do status <- ! (public/sub) result 3628800;
+  ! (public/exit) status
 end

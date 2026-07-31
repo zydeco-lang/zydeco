@@ -1,29 +1,34 @@
--- Data constructors treat a named tuple as an ordinary payload type.
-data Packet where
-  | +Packet : (tag :: Int) * (Int * (payload :: Int))
-  | +Empty : Unit
-end
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
 
-def packet : Packet = +Packet(
-  tag = 7 : Int,
-  8 : Int,
-  payload = 9 : Int
-) end
+  def Packet : VType =
+    data
+    | +Packet : (tag :: Int) * (Int * (payload :: Int))
+    | +Empty : Unit
+    end
+  that
+  def packet : Packet = +Packet(
+    tag = 7 : Int,
+    8 : Int,
+    payload = 9 : Int
+  ) that
 
-main
   match packet
   | +Packet(
       tag = tag : Int,
       body : Int,
       payload = payload : Int
     ) ->
-    do tag_check <- ! sub tag 7;
-    do body_check <- ! sub body 8;
-    do payload_check <- ! sub payload 9;
-    do total <- ! add tag_check body_check;
-    do total <- ! add total payload_check;
-    ! exit total
+    do tag_check <- ! (api/sub) tag 7;
+    do body_check <- ! (api/sub) body 8;
+    do payload_check <- ! (api/sub) payload 9;
+    do total <- ! (api/add) tag_check body_check;
+    do total <- ! (api/add) total payload_check;
+    ! (api/exit) total
   | +Empty() ->
-    ! exit 1
+    ! (api/exit) 1
   end
 end

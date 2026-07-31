@@ -1,31 +1,53 @@
--- An example that uses forall and type aliases to prove that
--- `Ret' A` and the `Ret A` primitive are isomorphic to each other.
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
 
-alias Ret' (A : VType) : CType = forall (R : CType) . Thunk(A -> R) -> R end
+  let RetPrime =
+    begin
+      param (A : VType) that
+      forall (R : CType) .
+        Thk (A -> R) -> R
+    end
+  that
+  def to_ret : Thk (
+    forall (A : VType) .
+      Thk (RetPrime A) -> Ret A
+  ) = {
+    fn (A : VType) (encoded : Thk (RetPrime A)) ->
+      ! encoded (Ret A) { fn (value : A) -> ret value }
+  } that
+  def from_ret : Thk (
+    forall (A : VType) .
+      Thk (Ret A) -> RetPrime A
+  ) = {
+    fn (A : VType)
+       (computation : Thk (Ret A))
+       (R : CType)
+       (continuation : Thk (A -> R)) ->
+      do value <- ! computation;
+      ! continuation value
+  } that
+  def identity_ret : Thk (
+    forall (A : VType) .
+      Thk (Ret A) -> Ret A
+  ) = {
+    fn (A : VType) (computation : Thk (Ret A)) ->
+      ! to_ret A { ! from_ret A computation }
+  } that
+  def identity_ret_prime : Thk (
+    forall (A : VType) .
+      Thk (RetPrime A) -> RetPrime A
+  ) = {
+    fn (A : VType) (encoded : Thk (RetPrime A)) ->
+      ! from_ret A { ! to_ret A encoded }
+  } that
 
-def f : Thunk(forall (A : VType) . Thunk(Ret' A) -> Ret A) = {
-  fn A rr ->
-    ! rr (Ret A) { fn a -> ret a }
-} end
-
-def g : Thunk(forall (A : VType) . Thunk(Ret A) -> Ret' A) = {
-  fn A r R ar ->
-    do a <- ! r;
-    ! ar a
-} end
-
-def id_ret : Thunk(forall (A : VType) . Thunk(Ret A) -> Ret A) = {
-  fn A r ->
-    ! f A { ! g A r }
-} end
-
-def id_ret' : Thunk(forall (A : VType) . Thunk(Ret' A) -> Ret' A) = {
-  fn A rr ->
-    ! g A { ! f A rr }
-} end
-
-main
-  let n = 0 in
-  do n <- ! id_ret Int { ret n };
-  ! id_ret' Int { fn R ar -> ! ar n } OS exit
+  do status <- ! identity_ret Int { ret 0 };
+  ! identity_ret_prime
+    Int
+    { fn (R : CType) continuation -> ! continuation status }
+    OS
+    (api/exit)
 end

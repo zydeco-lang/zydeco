@@ -1,40 +1,42 @@
--- `= field` expands to `field = field` without introducing a downstream
--- syntax form. The inferred payload is resolved according to its context.
-alias Slot (pun_value : VType) : VType =
-  (pun_value :: pun_value)
-end
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
 
-alias UpperSlot (PunValue : VType) : VType =
-  (PunValue :: PunValue)
-end
+  let Slot =
+    begin
+      param (pun_value : VType) that
+      (pun_value :: pun_value)
+    end
+  that
+  let UpperSlot =
+    begin
+      param (PunValue : VType) that
+      (PunValue :: PunValue)
+    end
+  that
+  let PunPair =
+    (pun_x :: Int) * (pun_y :: Int)
+  that
+  let Wrapped =
+    (outer :: (pun_inner :: Int))
+  that
+  def pun_value : Int = 4 that
+  def slot : Slot Int = (= pun_value) that
+  def PunValue : Int = 5 that
+  def upper_slot : UpperSlot Int = (= PunValue) that
+  def pun_x : Int = 10 that
+  def pun_y : Int = 11 that
+  def pun_pair : PunPair = (
+    = pun_x : Int,
+    = pun_y : Int
+  ) that
+  def pun_inner : Int = 12 that
+  def wrapped : Wrapped = (
+    outer = (= pun_inner)
+  ) that
 
-alias PunPair =
-  (pun_x :: Int) * (pun_y :: Int)
-end
-
-alias Wrapped =
-  (outer :: (pun_inner :: Int))
-end
-
-def pun_value : Int = 4 end
-def slot : Slot Int = (= pun_value) end
-
-def PunValue : Int = 5 end
-def upper_slot : UpperSlot Int = (= PunValue) end
-
-def pun_x : Int = 10 end
-def pun_y : Int = 11 end
-def pun_pair : PunPair = (
-  = pun_x : Int,
-  = pun_y : Int
-) end
-
-def pun_inner : Int = 12 end
-def wrapped : Wrapped = (
-  outer = (= pun_inner)
-) end
-
-main
   let (= pun_value : Int) = slot in
   let (= PunValue : Int) = upper_slot in
   let (
@@ -44,18 +46,16 @@ main
   let (
     outer = (= pun_inner : Int)
   ) = wrapped in
-
-  do value_check <- ! sub pun_value 4;
-  do upper_value_check <- ! sub PunValue 5;
-  do upper_projection_check <- ! sub upper_slot/PunValue 5;
-  do x_check <- ! sub pun_x 10;
-  do y_check <- ! sub pun_y 11;
-  do inner_check <- ! sub pun_inner 12;
-
-  do total <- ! add value_check x_check;
-  do total <- ! add total upper_value_check;
-  do total <- ! add total upper_projection_check;
-  do total <- ! add total y_check;
-  do total <- ! add total inner_check;
-  ! exit total
+  do value_check <- ! (api/sub) pun_value 4;
+  do upper_value_check <- ! (api/sub) PunValue 5;
+  do upper_projection_check <- ! (api/sub) upper_slot/PunValue 5;
+  do x_check <- ! (api/sub) pun_x 10;
+  do y_check <- ! (api/sub) pun_y 11;
+  do inner_check <- ! (api/sub) pun_inner 12;
+  do total <- ! (api/add) value_check x_check;
+  do total <- ! (api/add) total upper_value_check;
+  do total <- ! (api/add) total upper_projection_check;
+  do total <- ! (api/add) total y_check;
+  do total <- ! (api/add) total inner_check;
+  ! (api/exit) total
 end

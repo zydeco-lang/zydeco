@@ -1,44 +1,83 @@
-data List~ (A : VType) where
-  | +Nil : Unit
-  | +Cons : A * U(F(List~ A))
-end
-
-def fix foldr~ (A : VType) (B : CType) (ll : U(F(List~ A))) (f : U(A -> U(B) -> B)) (b : U(B)) : B =
-  do llv <- ! ll;
-  match llv
-  | +Nil() -> ! b
-  | +Cons(a, ll) -> ! f a { ! foldr~ (A) (B) ll f b }
-  end
-end
-
--- List~ is actually coinductive type
-
-def fix loop : F(List~ Int) =
-  ret +Cons(0, loop)
-end
-
--- Since it's coinductive, here's iota
-
-def fix iota (i : Int) : F(List~ Int) =
-  do i+1 <- ! add i 1;
-  ret +Cons(i, { ! iota i+1 })
-end
-
--- foldr~ and an example of summing up the list and exiting with the sum
-
-main
-  let loopy = {
-    ! foldr~ (Int) (OS)
-    { ! iota 0 }
-    { fn (x: Int) (b: U(OS)) ->
-      do next? <- ! int_lt x 10;
-      match next?
-      | +True() -> ! write_int_line x b
-      | +False() -> ! exit 0
+begin
+  let std = @[import("../../std/std.zy")] _ that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  def LazyList : (VType) -> (VType) =
+    begin
+      param (A : VType) that
+      data
+      | +Nil : Unit
+      | +Cons : A * Thk (Ret (LazyList A))
       end
-    }
-    { ! panic "unreachable" }
+    end
+  that
+  def fold_right : Thk (
+    forall (A : VType) .
+    forall (B : CType) .
+      Thk (Ret (LazyList A)) ->
+      Thk (A -> Thk B -> B) ->
+      Thk B ->
+      B
+  ) = {
+    fix (
+      fold_right :
+      Thk (
+        forall (A : VType) .
+        forall (B : CType) .
+          Thk (Ret (LazyList A)) ->
+          Thk (A -> Thk B -> B) ->
+          Thk B ->
+          B
+      )
+    ) ->
+      fn (A : VType)
+         (B : CType)
+         lazy_list
+         function
+         base ->
+        do list <- ! lazy_list;
+        match list
+        | +Nil() -> ! base
+        | +Cons(head, tail) ->
+          ! function head { ! fold_right A B tail function base }
+        end
+  } that
+
+  do (
+    Bool = StdBool,
+    Option = StdOption,
+    List = StdList,
+    Int = StdInt,
+    Char = StdChar,
+    String = StdString,
+    OS = StdOS,
+    public
+  ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  def iota : Thk (StdInt -> Ret (LazyList StdInt)) = {
+    fix (iota : Thk (StdInt -> Ret (LazyList StdInt))) ->
+      fn current ->
+        do next <- ! (public/add) current 1;
+        ret +Cons(current, { ! iota next })
   } in
 
-  ! loopy
+  ! fold_right
+    StdInt
+    StdOS
+    { ! iota 0 }
+    {
+      fn current continuation ->
+        do continue <- ! (public/int_lt) current 10;
+        ! (public/branch)
+          StdOS
+          continue
+          {
+            ! (public/write_int) current {
+              ! (public/write_line) "" continuation
+            }
+          }
+          { ! (public/exit) 0 }
+    }
+    { ! (public/exit) 1 }
 end

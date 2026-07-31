@@ -1,3 +1,5 @@
-main
-  ! exit 0
-end
+param (
+  (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+  @[import("../../std/builtin.zy")] _
+) in
+  ! (api/exit) 0

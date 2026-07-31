@@ -1,20 +1,22 @@
-alias Transparent =
-  exists (Representation as Int : VType) .
-    Representation
-end
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  let Transparent =
+    exists (Representation as Int : VType) .
+      Representation
+  that
+  def packed : Transparent = (
+    Int,
+    42,
+  ) that
+  def reveal : Thk (Transparent -> Ret Int) = {
+    fn ((Representation, value) : Transparent) ->
+      ret value
+  } that
 
-def packed : Transparent = (
-  Int,
-  42,
-) end
-
-def reveal : Thk (Transparent -> Ret Int) = {
-  fn ((Representation, value) : Transparent) ->
-    ret value
-} end
-
-main
   do value <- ! reveal packed;
-  do status <- ! sub value 42;
-  ! exit status
+  do status <- ! (api/sub) value 42;
+  ! (api/exit) status
 end

@@ -1,7 +1,16 @@
-pub extern def exit : Thk (Int -> OS) end
-def ! id (A: VType) (a: A) = ret a end
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  def identity : Thk (
+    forall (A : VType) .
+      A -> Ret A
+  ) = {
+    fn (A : VType) (value : A) ->
+      ret value
+  } that
 
-main
-  do x <- ! id Int 0;
-  ! exit x
+  do status <- ! identity Int 0;
+  ! (api/exit) status
 end

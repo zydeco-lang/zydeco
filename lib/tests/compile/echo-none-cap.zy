@@ -1,10 +1,16 @@
-pub extern def read_line : Thk (Thk (String -> OS) -> OS) end
-pub extern def exit : Thunk(Int -> OS) end
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
 
-main
-  ! read_line {
+  ! (api/read_line) {
     fn line ->
-      let ! f (z: Int) = let line = line in ! exit z in
-      ! f 0
+      let finish : Thk (Int -> OS) = {
+        fn status ->
+          let captured = line in
+          ! (api/exit) status
+      } in
+      ! finish 0
   }
 end

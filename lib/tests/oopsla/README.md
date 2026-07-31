@@ -51,20 +51,19 @@ This section shows how our artifact supports the claims made in the paper, and h
 
 ### Running the examples
 
-The files beside this README preserve the paper artifact's original presentation.
-The maintained, declaration-free programs are complete source terms under `lib/tests/source`;
+The maintained programs are complete, declaration-free source terms beside this README;
 the algebra example is shared with `lib/examples`.
 
 | Example | Maintained source term |
 | --- | --- |
-| polynomial | [`oopsla-polynomial.zy`](../source/oopsla-polynomial.zy) |
-| calling conventions | [`oopsla-calling-conventions.zy`](../source/oopsla-calling-conventions.zy) |
-| CBV machine | [`oopsla-cbv.zy`](../source/oopsla-cbv.zy) |
-| relative monads | [`oopsla-monads.zy`](../source/oopsla-monads.zy) |
-| exceptions | [`oopsla-exn.zy`](../source/oopsla-exn.zy) |
-| free monad | [`oopsla-free.zy`](../source/oopsla-free.zy) |
+| polynomial | [`polynomial.zydeco`](polynomial.zydeco) |
+| calling conventions | [`cc.zydeco`](cc.zydeco) |
+| CBV machine | [`cbv.zydeco`](cbv.zydeco) |
+| relative monads | [`monads.zydeco`](monads.zydeco) |
+| exceptions | [`exn.zydeco`](exn.zydeco) |
+| free monad | [`free.zydeco`](free.zydeco) |
 | relative-monad algebras | [`algebra.zydeco`](../../examples/algebra.zydeco) |
-| ExnT and ExnKT | [`oopsla-exception-transformers.zy`](../source/oopsla-exception-transformers.zy) |
+| ExnT and ExnKT | [`exception-transformers.zy`](exception-transformers.zy) |
 
 We provide an interactive script to run the maintained terms.
 From the repository root, run:
@@ -82,7 +81,7 @@ zydeco run <path-to-source-term>
 For example:
 
 ```sh
-zydeco run lib/tests/source/oopsla-polynomial.zy
+zydeco run lib/tests/oopsla/polynomial.zydeco
 ```
 
 

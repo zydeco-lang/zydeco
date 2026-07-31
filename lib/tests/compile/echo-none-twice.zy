@@ -1,10 +1,11 @@
-pub extern def read_line : Thk (Thk (String -> OS) -> OS) end
-pub extern def exit : Thunk(Int -> OS) end
-
-main
-  ! read_line {
-    fn _ -> ! read_line {
-      fn _ -> ! exit 0
-    }
+param (
+  (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+  @[import("../../std/builtin.zy")] _
+) in
+  ! (api/read_line) {
+    fn first ->
+      ! (api/read_line) {
+        fn second ->
+          ! (api/exit) 0
+      }
   }
-end

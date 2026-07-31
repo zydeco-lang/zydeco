@@ -25,7 +25,7 @@ zydeco run path/to/main.zy
 For example, the declaration-free OOPSLA polynomial root runs with:
 
 ```sh
-zydeco run lib/tests/source/oopsla-polynomial.zy
+zydeco run lib/tests/oopsla/polynomial.zydeco
 ```
 
 ## Run Tests

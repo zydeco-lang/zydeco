@@ -1,31 +1,24 @@
-pub extern def exit : Thk (Int -> OS) end
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  def sum : Thk (Int -> Int -> Ret Int) = {
+    fix (sum : Thk (Int -> Int -> Ret Int)) ->
+      fn index accumulated ->
+        ! (api/int_eq_branch)
+          (Ret Int)
+          index
+          0
+          { ret accumulated }
+          {
+            do predecessor <- ! (api/sub) index 1;
+            do accumulated <- ! (api/add) index accumulated;
+            ! sum predecessor accumulated
+          }
+  } that
 
-alias Bool : VType =
-  data
-  | +False : Unit
-  | +True : Unit
-  end
-end
-
-extern def add : Thk (Int -> Int -> Ret Int) end
-extern def sub : Thk (Int -> Int -> Ret Int) end
-extern def mul : Thk (Int -> Int -> Ret Int) end
-extern def int_eq : Thk (Int -> Int -> Ret Bool) end
-
-def fix sum (i: Int) (acc: Int): Ret Int =
-  do zero? <- ! int_eq i 0;
-  match zero?
-  | +True _ -> ret acc
-  | +False _ ->
-    -- do i <- ret i;
-    do i' <- ! sub i 1;
-    do acc' <- ! add i acc;
-    ! sum i' acc'
-  end
-end
-
-main
-  do z <- ! sum 10 0;
-  do r <- ! sub z 55;
-  ! exit r
+  do result <- ! sum 10 0;
+  do status <- ! (api/sub) result 55;
+  ! (api/exit) status
 end

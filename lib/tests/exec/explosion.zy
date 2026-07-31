@@ -1,5 +1,13 @@
-main
-  let loop = { fix (loop: Thunk(OS)) -> ! loop } in
-  -- ! loop
-  ! exit 0
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  def loop : Thk OS = {
+    fix (loop : Thk OS) ->
+      ! loop
+  } that
+
+  ! (api/exit) 0
 end

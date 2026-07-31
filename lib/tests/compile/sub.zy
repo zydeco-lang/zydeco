@@ -1,8 +1,7 @@
-pub extern def sub : Thk (Int -> Int -> Ret Int) end
-pub extern def exit : Thk (Int -> OS) end
-
-main
-  do x <- ! sub 10 4;
-  do z <- ! sub x 6;
-  ! exit z
-end
+param (
+  (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+  @[import("../../std/builtin.zy")] _
+) in
+  do difference <- ! (api/sub) 10 4;
+  do status <- ! (api/sub) difference 6;
+  ! (api/exit) status

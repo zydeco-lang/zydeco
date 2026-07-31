@@ -1,15 +1,52 @@
-def fix merge (a: List Int) (b: List Int) : Ret (List Int) =
-  match a
-  | +Nil () -> ret b
-  | +Cons (a_head, a_tail) ->
-    match b
-    | +Nil () -> ret a
-    | +Cons (b_head, b_tail) ->
-      ! if~ (Ret (List Int)) { ! int_le a_head b_head }
-      { do res <- ! merge a_tail b ; ret +Cons (a_head, res) }
-      { do res <- ! merge a b_tail ; ret +Cons (b_head, res) }
-    end
-  end
-end
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
 
-main ! exit 0 end
+  def List :
+    (VType) ->
+    (VType) =
+    begin
+      param (A : VType) that
+      data
+      | +Nil : Unit
+      | +Cons : A * List A
+      end
+    end
+  that
+  def merge : Thk (
+    List Int ->
+    List Int ->
+    Ret (List Int)
+  ) = {
+    fix (merge : Thk (
+      List Int ->
+      List Int ->
+      Ret (List Int)
+    )) ->
+      fn left right ->
+        match left
+        | +Nil() -> ret right
+        | +Cons(left_head, left_tail) ->
+          match right
+          | +Nil() -> ret left
+          | +Cons(right_head, right_tail) ->
+            ! (api/int_gt_branch)
+              (Ret (List Int))
+              left_head
+              right_head
+              {
+                do result <- ! merge left right_tail;
+                ret +Cons(right_head, result)
+              }
+              {
+                do result <- ! merge left_tail right;
+                ret +Cons(left_head, result)
+              }
+          end
+        end
+  } that
+
+  ! (api/exit) 0
+end
