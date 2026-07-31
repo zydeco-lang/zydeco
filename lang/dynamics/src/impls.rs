@@ -100,6 +100,37 @@ intcomp!(int_eq, ==);
 intcomp!(int_lt, <);
 intcomp!(int_gt, >);
 
+struct Branch;
+
+impl Branch {
+    fn select(condition: bool, when_true: &ZValue, when_false: &ZValue) -> Result<ZCompute, i32> {
+        let selected = if condition { when_true } else { when_false };
+        Ok(Force(mk_rc(selected.clone().into())).into())
+    }
+}
+
+macro_rules! intcomp_branch {
+    ( $name:ident, $op:tt ) => {
+        pub fn $name(
+            args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
+        ) -> Result<ZCompute, i32> {
+            match args.as_slice() {
+                [
+                    ZValue::Literal(Literal::Int(a)),
+                    ZValue::Literal(Literal::Int(b)),
+                    when_true @ ZValue::Thunk(_),
+                    when_false @ ZValue::Thunk(_),
+                ] => Branch::select(a $op b, when_true, when_false),
+                _ => unreachable!(""),
+            }
+        }
+    };
+}
+
+intcomp_branch!(int_eq_branch, ==);
+intcomp_branch!(int_lt_branch, <);
+intcomp_branch!(int_gt_branch, >);
+
 // /* Strings */
 /// Return the length of a string as an integer literal.
 pub fn str_length(
@@ -174,6 +205,69 @@ pub fn str_split_n(
     }
 }
 
+struct OptionalPairBranch;
+
+impl OptionalPairBranch {
+    fn select(
+        pair: Option<(Vec<char>, Vec<char>)>, when_none: &ZValue, when_some: &ZValue,
+    ) -> Result<ZCompute, i32> {
+        match pair {
+            | None => Ok(Force(mk_rc(when_none.clone().into())).into()),
+            | Some((first, second)) => {
+                let continuation = Force(mk_rc(when_some.clone().into())).into();
+                let continuation = app(mk_rc(continuation), Literal::String(first).into());
+                Ok(app(mk_rc(continuation), Literal::String(second).into()))
+            }
+        }
+    }
+}
+
+/// Split once and select a computation without constructing a
+/// library-defined optional pair.
+pub fn str_split_once_branch(
+    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
+) -> Result<ZCompute, i32> {
+    match args.as_slice() {
+        | [
+            ZValue::Literal(Literal::String(string)),
+            ZValue::Literal(Literal::Char(separator)),
+            when_none @ ZValue::Thunk(_),
+            when_some @ ZValue::Thunk(_),
+        ] => {
+            let pair =
+                string.iter().collect::<String>().split_once(*separator).map(|(first, second)| {
+                    (first.chars().collect::<Vec<_>>(), second.chars().collect::<Vec<_>>())
+                });
+            OptionalPairBranch::select(pair, when_none, when_some)
+        }
+        | _ => unreachable!(""),
+    }
+}
+
+/// Split at an index and select a computation without constructing a
+/// library-defined optional pair.
+pub fn str_split_n_branch(
+    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
+) -> Result<ZCompute, i32> {
+    match args.as_slice() {
+        | [
+            ZValue::Literal(Literal::String(string)),
+            ZValue::Literal(Literal::Int(index)),
+            when_none @ ZValue::Thunk(_),
+            when_some @ ZValue::Thunk(_),
+        ] => {
+            let pair = usize::try_from(*index).ok().and_then(|index| {
+                (index <= string.len()).then(|| {
+                    let (first, second) = string.split_at(index);
+                    (first.to_vec(), second.to_vec())
+                })
+            });
+            OptionalPairBranch::select(pair, when_none, when_some)
+        }
+        | _ => unreachable!(""),
+    }
+}
+
 /// Test two strings for equality.
 pub fn str_eq(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
@@ -182,6 +276,22 @@ pub fn str_eq(
         | [ZValue::Literal(Literal::String(a)), ZValue::Literal(Literal::String(b))] => {
             ret(bool(a == b))
         }
+        | _ => unreachable!(""),
+    }
+}
+
+/// Select a computation according to string equality without constructing a
+/// library-defined Boolean value.
+pub fn str_eq_branch(
+    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
+) -> Result<ZCompute, i32> {
+    match args.as_slice() {
+        | [
+            ZValue::Literal(Literal::String(a)),
+            ZValue::Literal(Literal::String(b)),
+            when_true @ ZValue::Thunk(_),
+            when_false @ ZValue::Thunk(_),
+        ] => Branch::select(a == b, when_true, when_false),
         | _ => unreachable!(""),
     }
 }
@@ -259,6 +369,34 @@ pub fn write_str(
     }
 }
 
+/// Write an integer to output and then force the provided continuation.
+pub fn write_int(
+    args: Vec<ZValue>, _r: &mut dyn BufRead, w: &mut dyn Write, _: &[String],
+) -> Result<ZCompute, i32> {
+    match args.as_slice() {
+        | [ZValue::Literal(Literal::Int(i)), e @ ZValue::Thunk(..)] => {
+            write!(w, "{i}").unwrap();
+            w.flush().unwrap();
+            Ok(Force(mk_rc(e.clone().into())).into())
+        }
+        | _ => unreachable!(""),
+    }
+}
+
+/// Write a string and newline to output, then force the continuation.
+pub fn write_line(
+    args: Vec<ZValue>, _r: &mut dyn BufRead, w: &mut dyn Write, _: &[String],
+) -> Result<ZCompute, i32> {
+    match args.as_slice() {
+        | [ZValue::Literal(Literal::String(line)), e @ ZValue::Thunk(..)] => {
+            writeln!(w, "{}", line.iter().collect::<String>()).unwrap();
+            w.flush().unwrap();
+            Ok(Force(mk_rc(e.clone().into())).into())
+        }
+        | _ => unreachable!(""),
+    }
+}
+
 /// Read a line from input and pass it to the continuation.
 pub fn read_line(
     args: Vec<ZValue>, r: &mut dyn BufRead, _w: &mut dyn Write, _: &[String],
@@ -301,6 +439,27 @@ pub fn read_line_as_int(
     }
 }
 
+/// Read a line and select either the failure continuation or the successful
+/// integer continuation without constructing a library-defined option value.
+pub fn read_line_as_int_branch(
+    args: Vec<ZValue>, r: &mut dyn BufRead, _w: &mut dyn Write, _: &[String],
+) -> Result<ZCompute, i32> {
+    match args.as_slice() {
+        | [failure @ ZValue::Thunk(_), success @ ZValue::Thunk(_)] => {
+            let mut line = String::new();
+            r.read_line(&mut line).unwrap();
+            match line.trim_end_matches(['\r', '\n']).parse::<i64>() {
+                | Ok(integer) => Ok(app(
+                    mk_rc(Force(mk_rc(success.clone().into())).into()),
+                    Literal::Int(integer).into(),
+                )),
+                | Err(_) => Ok(Force(mk_rc(failure.clone().into())).into()),
+            }
+        }
+        | _ => unreachable!(""),
+    }
+}
+
 /// Read all remaining input and pass it to the continuation.
 pub fn read_till_eof(
     args: Vec<ZValue>, r: &mut dyn BufRead, _w: &mut dyn Write, _: &[String],
@@ -332,6 +491,39 @@ pub fn arg_list(
                 );
             }
             Ok(app(mk_rc(Force(mk_rc(k.clone().into())).into()), z_arg_list))
+        }
+        | _ => unreachable!(""),
+    }
+}
+
+struct ArgumentFold;
+
+impl ArgumentFold {
+    fn tail(tail: ZCompute) -> RcValue {
+        mk_rc(Value::Thunk(Thunk(mk_rc(tail))))
+    }
+
+    fn item(step: &ZValue, argument: &str, tail: ZCompute) -> ZCompute {
+        let step: ZCompute = Force(mk_rc(step.clone().into())).into();
+        let with_argument = app(mk_rc(step), Literal::String(argument.chars().collect()).into());
+        App(mk_rc(with_argument), Self::tail(tail)).into()
+    }
+
+    fn build(argv: &[String], when_empty: &ZValue, when_item: &ZValue) -> ZCompute {
+        let empty: ZCompute = Force(mk_rc(when_empty.clone().into())).into();
+        argv.iter().rev().fold(empty, |tail, argument| Self::item(when_item, argument, tail))
+    }
+}
+
+/// Fold over command-line arguments without constructing a library-defined
+/// list. The item continuation receives the remaining fold as a thunk, so it
+/// may preserve the ordinary lazy right-fold behavior.
+pub fn arg_fold(
+    args: Vec<ZValue>, _r: &mut dyn BufRead, _w: &mut dyn Write, argv: &[String],
+) -> Result<ZCompute, i32> {
+    match args.as_slice() {
+        | [when_empty @ ZValue::Thunk(_), when_item @ ZValue::Thunk(_)] => {
+            Ok(ArgumentFold::build(argv, when_empty, when_item))
         }
         | _ => unreachable!(""),
     }

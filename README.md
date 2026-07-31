@@ -70,8 +70,16 @@ cargo test-all
 
 ## Editor Support
 
-Zydeco is optionally syntax-highlighted in VSCode. Open the Extensions tab and
-search for "zls".
+The `cajun` binary is Zydeco's Language Server Protocol implementation.
+It provides live syntax and name-resolution diagnostics, document symbols,
+and go to definition across imported files:
+
+```bash
+cargo install --path editor/cajun
+```
+
+Client integrations live under [`editor/vscode`](editor/vscode) and
+[`editor/zed`](editor/zed).
 
 ## Rust API Docs
 

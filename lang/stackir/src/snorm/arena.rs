@@ -53,6 +53,23 @@ pub struct SNormInnerArena {
     pub entry: ArenaAssoc<CompuId, ()>,
 }
 
+impl SNormInnerArena {
+    pub(super) fn record_value_user(&mut self, value: ValueId) {
+        let Value::Var(definition) = self.svalues[&value] else {
+            return;
+        };
+        let users = self.users.entry(definition).or_default();
+        if !users.contains(&value) {
+            users.push(value);
+        }
+    }
+
+    pub(super) fn replace_value(&mut self, value: ValueId, replacement: Value) {
+        self.svalues.replace_existing(value, replacement);
+        self.record_value_user(value);
+    }
+}
+
 impl SNormArena {
     pub fn new(admin: AdminArena) -> Self {
         Self { admin, inner: SNormInnerArena::default() }

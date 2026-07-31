@@ -21,8 +21,8 @@ but removes syntactic sugar and inserts explicit nodes the later passes rely on.
 
 `bitter::syntax` defines the desugared AST and the identifiers used to store it:
 
-- `DefId`, `PatId`, `TermId`, `DeclId`: arena-backed IDs.
-- `BitterArena`: holds arenas for defs/pats/terms/decls plus a `textual` mapping
+- `DefId`, `PatId`, and `TermId`: arena-backed IDs.
+- `BitterArena`: holds arenas for definitions, patterns, and terms plus a `textual` mapping
   (`ArenaForth`) that links bitter nodes back to the original textual entity IDs.
 - `PrimTerms`: collects the inserted internal terms (like `VType`, `CType`, `Thk`,
   `Ret`, etc.) so name resolution can treat them as primitives and avoid capture.
@@ -51,7 +51,8 @@ preserving their original source linkage.
 
 ## Errors and spans
 
-- `bitter::err` defines `DesugarError` (currently only `CompWhileFix`).
+- `bitter::err` defines errors for malformed intrinsic metadata and incompatible
+  binding modifiers.
 - `bitter::span` provides `SpanView` implementations that retrieve spans via the
   `textual` back-mapping.
 

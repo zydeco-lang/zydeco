@@ -1,0 +1,45 @@
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  let PatternTarget =
+    (left :: Int) * (Int * (right :: Int))
+  that
+  def pattern_target : PatternTarget = (
+    left = 1,
+    2,
+    right = 3
+  ) that
+
+  let (
+    left = direct_left : Int,
+    direct_middle : Int,
+    right = direct_right : Int
+  ) = pattern_target in
+  let (
+    left_field : (left :: Int),
+    opaque_middle : Int,
+    right_field : (right :: Int)
+  ) = pattern_target in
+  let ((left = opaque_left) : (left :: Int)) = left_field in
+  let (right = opaque_right : Int) = right_field in
+  let (
+    left = _,
+    _,
+    right = _
+  ) = pattern_target in
+  do direct_left_check <- ! (api/sub) direct_left 1;
+  do direct_middle_check <- ! (api/sub) direct_middle 2;
+  do direct_right_check <- ! (api/sub) direct_right 3;
+  do opaque_left_check <- ! (api/sub) opaque_left 1;
+  do opaque_middle_check <- ! (api/sub) opaque_middle 2;
+  do opaque_right_check <- ! (api/sub) opaque_right 3;
+  do total <- ! (api/add) direct_left_check direct_middle_check;
+  do total <- ! (api/add) total direct_right_check;
+  do total <- ! (api/add) total opaque_left_check;
+  do total <- ! (api/add) total opaque_middle_check;
+  do total <- ! (api/add) total opaque_right_check;
+  ! (api/exit) total
+end

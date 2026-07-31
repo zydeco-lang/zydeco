@@ -7,33 +7,8 @@ use zydeco_utils::cells::SingCell;
 
 /* --------------------------- Contextual program --------------------------- */
 
-/// The source site that contributed a binding to a contextual term.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub enum BindingId {
-    Declaration(DeclId),
-    Term(TermId),
-}
-
-impl BindingId {
-    pub fn declaration(self) -> Option<DeclId> {
-        match self {
-            | BindingId::Declaration(id) => Some(id),
-            | BindingId::Term(_) => None,
-        }
-    }
-}
-
-impl From<DeclId> for BindingId {
-    fn from(id: DeclId) -> Self {
-        Self::Declaration(id)
-    }
-}
-
-impl From<TermId> for BindingId {
-    fn from(id: TermId) -> Self {
-        Self::Term(id)
-    }
-}
+/// The term site that contributed a binding to a contextual term.
+pub type BindingId = TermId;
 
 zydeco_utils::new_key_type! {
     /// Identifier for a node in the condensation DAG of context bindings.
@@ -45,13 +20,6 @@ zydeco_utils::new_key_type! {
 pub struct Definition {
     pub binder: PatId,
     pub bindee: TermId,
-}
-
-/// An externally supplied binding with an optional classifier.
-#[derive(Clone, Debug)]
-pub struct External {
-    pub binder: PatId,
-    pub classifier: Option<TermId>,
 }
 
 /// A parameter contributed by `param ... that ...`.
@@ -74,12 +42,11 @@ pub struct Binding {
 pub enum BindingForm {
     Parameter(Parameter),
     Definition(Definition),
-    External(External),
 }
 
 impl Binding {
     pub fn from_term(source: TermId, inner: BindingForm, source_order: usize) -> Self {
-        Self { id: BindingId::Term(source), inner, metas: im::Vector::new(), source_order }
+        Self { id: source, inner, metas: im::Vector::new(), source_order }
     }
 
     pub fn source_order(&self) -> usize {
@@ -115,20 +82,9 @@ impl ContextNode {
     }
 }
 
-/// The executable body of a contextual term.
-#[derive(Clone, Debug)]
-pub struct ContextBody {
-    pub id: DeclId,
-    pub term: TermId,
-    pub metas: im::Vector<Meta>,
-}
-
 /// A term together with the context that it inhabits.
-///
-/// The context representation is supplied by the owning compiler arena. The
-/// optional body permits checking libraries that do not define an entry point.
 #[derive(Debug)]
-pub struct ContextualTerm<C, B = Option<ContextBody>> {
+pub struct ContextualTerm<C, B> {
     pub context: C,
     pub body: B,
 }
@@ -152,14 +108,12 @@ pub type CoContext = zydeco_utils::context::CoContext<DefId>;
 
 /* -------------------------------- Primitive ------------------------------- */
 
-/// Primitive definitions
+/// Legacy lexical identities consulted by a few internal monadic
+/// transformations.
 ///
-/// Collects the primitive definitions from the surface syntax.
-/// To add a new primitive form:
-/// 1. Add a new field to this struct.
-/// 2. Check if the form can be introduced during desugaring, e.g. annotations.
-///    If so, add it to [`crate::bitter::syntax::PrimTerms`] too.
-/// 3. Implement the `check` method to ensure all fields are filled.
+/// The canonical Builtin signature introduces intrinsic constructors and
+/// assigns host types through typed roles, so name resolution does not
+/// populate these cells from distinguished source spellings.
 #[derive(Default)]
 pub struct PrimDefs {
     pub vtype: SingCell<DefId>,
@@ -173,26 +127,4 @@ pub struct PrimDefs {
     pub os: SingCell<DefId>,
     pub monad: SingCell<DefId>,
     pub algebra: SingCell<DefId>,
-}
-
-mod impls {
-    use super::*;
-    use crate::scoped::err::*;
-    impl PrimDefs {
-        /// Ensure all primitive definitions are provided by extern declarations.
-        pub fn check(&self) -> Result<()> {
-            self.vtype.get_or_else(|| ResolveError::MissingPrim("VType"))?;
-            self.ctype.get_or_else(|| ResolveError::MissingPrim("CType"))?;
-            self.thk.get_or_else(|| ResolveError::MissingPrim("Thk"))?;
-            self.ret.get_or_else(|| ResolveError::MissingPrim("Ret"))?;
-            self.unit.get_or_else(|| ResolveError::MissingPrim("Unit"))?;
-            self.int.get_or_else(|| ResolveError::MissingPrim("Int"))?;
-            self.char.get_or_else(|| ResolveError::MissingPrim("Char"))?;
-            self.string.get_or_else(|| ResolveError::MissingPrim("String"))?;
-            self.os.get_or_else(|| ResolveError::MissingPrim("OS"))?;
-            self.monad.get_or_else(|| ResolveError::MissingPrim("Monad"))?;
-            self.algebra.get_or_else(|| ResolveError::MissingPrim("Algebra"))?;
-            Ok(())
-        }
-    }
 }

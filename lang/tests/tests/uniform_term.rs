@@ -1,19 +1,11 @@
-use std::path::PathBuf;
-use zydeco_driver::{BuildError, BuildSystem, PackId, check::err::CompileError};
+use zydeco_driver::{BuildError, check::err::CompileError};
+use zydeco_tests::utils::SourceCase;
 
 struct UniformTermCase;
 
 impl UniformTermCase {
     fn check(source: &str) -> Result<(), BuildError> {
-        let case_dir = tempfile::tempdir().unwrap();
-        let source_path = case_dir.path().join("uniform-term.zy");
-        std::fs::write(&source_path, source).unwrap();
-
-        let std_proj = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib/std/proj.toml");
-        let mut build_system = BuildSystem::new();
-        build_system.add_local_package(std_proj).unwrap();
-        let package: PackId = build_system.add_orphan_file(source_path).unwrap();
-        build_system.test_pack(package, true)
+        SourceCase::check(source)
     }
 
     fn assert_resolve_error(source: &str) {
@@ -41,7 +33,7 @@ impl UniformTermCase {
 fn rejects_that_without_an_enclosing_block() {
     UniformTermCase::assert_resolve_error(
         r#"
-alias Bad = param A that A end
+param A that A
 "#,
     );
 }
@@ -50,11 +42,9 @@ alias Bad = param A that A end
 fn rejects_a_recursive_parameter_component() {
     UniformTermCase::assert_resolve_error(
         r#"
-alias Bad =
-  begin
-    param (A : A) that
-    A
-  end
+begin
+  param (A : A) that
+  A
 end
 "#,
     );
@@ -64,12 +54,10 @@ end
 fn rejects_a_recursive_value_definition() {
     UniformTermCase::assert_type_error(
         r#"
-def bad = {
-  begin
-    def value : Int = value that
-    ret ()
-  end
-} end
+begin
+  def value : Int = value that
+  ret ()
+end
 "#,
     );
 }

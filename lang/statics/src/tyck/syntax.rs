@@ -12,6 +12,7 @@ pub type DefId = su::DefId;
 // PatId and TermId are unsorted, so we've got the following:
 zydeco_utils::new_key_type! {
     pub struct KindId;
+    pub struct KPatId;
     pub struct TPatId;
     pub struct TypeId;
     pub struct VPatId;
@@ -22,6 +23,7 @@ zydeco_utils::new_key_type! {
 /// A dispatcher for all patterns.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
 pub enum PatId {
+    Kind(KPatId),
     Type(TPatId),
     Value(VPatId),
 }
@@ -45,6 +47,7 @@ pub enum AnnId {
 // and there are times when we need a proper pair of annotated things
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
 pub enum PatAnnId {
+    Kind(KPatId),
     Type(TPatId, KindId),
     Value(VPatId, TypeId),
 }
@@ -56,9 +59,6 @@ pub enum TermAnnId {
     Value(ValueId, TypeId),
     Compu(CompuId, TypeId),
 }
-/// The declaration identifiers are the same of the surface syntax.
-pub type DeclId = su::DeclId;
-
 zydeco_utils::new_key_type! {
     /// Identifier for abstract types, including:
     /// 1. sealed types, and
@@ -70,6 +70,20 @@ zydeco_utils::new_key_type! {
     pub struct DataId;
     /// Identifier for codata definitions.
     pub struct CoDataId;
+}
+
+/// A pattern carried by an erased, manifest kind component.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
+pub enum StaticPatId {
+    Kind(KPatId),
+    Type(TPatId),
+}
+
+/// A compile-time package component erased before dynamics.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
+pub enum StaticTermId {
+    Kind(KindId),
+    Type(TypeId),
 }
 
 mod impls_identifiers {
@@ -91,16 +105,52 @@ mod impls_identifiers {
         }
     }
 
+    impl StaticPatId {
+        pub fn as_kind(self) -> Option<KPatId> {
+            match self {
+                | Self::Kind(pattern) => Some(pattern),
+                | Self::Type(_) => None,
+            }
+        }
+
+        pub fn as_type(self) -> Option<TPatId> {
+            match self {
+                | Self::Kind(_) => None,
+                | Self::Type(pattern) => Some(pattern),
+            }
+        }
+    }
+
+    impl StaticTermId {
+        pub fn as_kind(self) -> Option<KindId> {
+            match self {
+                | Self::Kind(kind) => Some(kind),
+                | Self::Type(_) => None,
+            }
+        }
+
+        pub fn as_type(self) -> Option<TypeId> {
+            match self {
+                | Self::Kind(_) => None,
+                | Self::Type(ty) => Some(ty),
+            }
+        }
+    }
+
     impl PatAnnId {
         pub fn as_pat(self) -> PatId {
             match self {
+                | PatAnnId::Kind(pat) => PatId::Kind(pat),
                 | PatAnnId::Type(pat, _) => PatId::Type(pat),
                 | PatAnnId::Value(pat, _) => PatId::Value(pat),
             }
         }
         pub fn mk_hole(tycker: &mut Tycker<'_>, env: &TyEnv, ann: AnnId) -> Self {
             match ann {
-                | ss::AnnId::Set => unreachable!(),
+                | ss::AnnId::Set => {
+                    let tm = Alloc::alloc(tycker, Hole, (), env);
+                    PatAnnId::Kind(tm)
+                }
                 | ss::AnnId::Kind(kd) => {
                     let tm = Alloc::alloc(tycker, Hole, kd, env);
                     PatAnnId::Type(tm, kd)
@@ -113,7 +163,10 @@ mod impls_identifiers {
         }
         pub fn mk_var(tycker: &mut Tycker<'_>, env: &TyEnv, def: DefId, ann: AnnId) -> Self {
             match ann {
-                | ss::AnnId::Set => unreachable!(),
+                | ss::AnnId::Set => {
+                    let tm = Alloc::alloc(tycker, def, (), env);
+                    PatAnnId::Kind(tm)
+                }
                 | ss::AnnId::Kind(kd) => {
                     let tm = Alloc::alloc(tycker, def, kd, env);
                     PatAnnId::Type(tm, kd)
@@ -127,13 +180,22 @@ mod impls_identifiers {
         pub fn as_type(self) -> (TPatId, KindId) {
             match self {
                 | PatAnnId::Type(pat, kd) => (pat, kd),
-                | PatAnnId::Value(_, _) => unreachable!(),
+                | PatAnnId::Kind(_) | PatAnnId::Value(_, _) => unreachable!(),
             }
         }
         pub fn as_value(self) -> (VPatId, TypeId) {
             match self {
                 | PatAnnId::Value(pat, ty) => (pat, ty),
-                | PatAnnId::Type(_, _) => unreachable!(),
+                | PatAnnId::Kind(_) | PatAnnId::Type(_, _) => unreachable!(),
+            }
+        }
+        pub fn try_as_kind(
+            self, tycker: &mut Tycker<'_>, err: TyckError,
+            blame: &'static std::panic::Location<'static>,
+        ) -> ResultKont<KPatId> {
+            match self {
+                | PatAnnId::Kind(pat) => Ok(pat),
+                | PatAnnId::Type(_, _) | PatAnnId::Value(_, _) => tycker.err_k(err, blame),
             }
         }
         pub fn try_as_type(
@@ -142,7 +204,7 @@ mod impls_identifiers {
         ) -> ResultKont<(TPatId, KindId)> {
             match self {
                 | PatAnnId::Type(pat, kd) => Ok((pat, kd)),
-                | PatAnnId::Value(_, _) => tycker.err_k(err, blame),
+                | PatAnnId::Kind(_) | PatAnnId::Value(_, _) => tycker.err_k(err, blame),
             }
         }
         pub fn try_as_value(
@@ -151,7 +213,7 @@ mod impls_identifiers {
         ) -> ResultKont<(VPatId, TypeId)> {
             match self {
                 | PatAnnId::Value(pat, ty) => Ok((pat, ty)),
-                | PatAnnId::Type(_, _) => tycker.err_k(err, blame),
+                | PatAnnId::Kind(_) | PatAnnId::Type(_, _) => tycker.err_k(err, blame),
             }
         }
     }
@@ -256,6 +318,14 @@ pub enum Kind {
     Label(Label<FieldName, KindId>),
 }
 
+/* ------------------------------- KindPattern ------------------------------ */
+
+#[derive(From, Clone, Debug)]
+pub enum KindPattern {
+    Hole(Hole),
+    Var(DefId),
+}
+
 /* ---------------------------------- Type ---------------------------------- */
 
 #[derive(From, Clone, Debug)]
@@ -342,6 +412,18 @@ pub enum ExistsMode {
 pub struct Exists {
     pub binder: TypeBinder,
     pub mode: ExistsMode,
+    pub body: TypeId,
+}
+
+/// A transparent kind alias exported by a package signature.
+///
+/// Unlike an abstract existential type component, this entry introduces no
+/// fresh identity. Its definition is substituted into the package body and
+/// the component is erased before dynamics.
+#[derive(Clone, Debug)]
+pub struct ManifestKind {
+    pub binder: KPatId,
+    pub definition: KindId,
     pub body: TypeId,
 }
 
@@ -463,6 +545,7 @@ pub enum Type {
     PackPi(PackPi),
     Prod(ProdU<TypeId>),
     Exists(Exists),
+    ManifestKind(ManifestKind),
     Data(DataId),
     CoData(CoDataId),
 }
@@ -484,7 +567,7 @@ pub enum ValuePattern {
     Ctor(Ctor<CtorName, VPatId>),
     Triv(Triv),
     VCons(ConsN<VPatId, VPatId>),
-    TCons(ConsN<TPatId, VPatId>),
+    SCons(ConsN<StaticPatId, VPatId>),
 }
 
 #[derive(From, Clone, Debug)]
@@ -492,11 +575,13 @@ pub enum Value {
     Hole(Hole),
     Var(DefId),
     Named(Named<FieldName, ValueId>),
+    /// Administrative scoped binding used when a source block produces a value.
+    Let(Let<VPatId, ValueId, ValueId>),
     Thunk(Thunk<CompuId>),
     Ctor(Ctor<CtorName, ValueId>),
     Triv(Triv),
     VCons(ConsN<ValueId, ValueId>),
-    TCons(ConsN<TypeId, ValueId>),
+    SCons(ConsN<StaticTermId, ValueId>),
     Proj(Proj<ValueId, ResolvedField>),
     Lit(Literal),
 }
@@ -534,35 +619,4 @@ pub enum Computation {
     Match(Match<ValueId, VPatId, CompuId>),
     CoMatch(CoMatch<DtorName, CompuId>),
     Dtor(Dtor<CompuId, DtorName>),
-}
-
-/* -------------------------------- TopLevel -------------------------------- */
-
-#[derive(Clone, Debug)]
-pub struct TAliasBody {
-    pub binder: TPatId,
-    pub bindee: TypeId,
-}
-
-#[derive(Clone, Debug)]
-pub struct VAliasBody {
-    pub binder: VPatId,
-    pub bindee: ValueId,
-}
-
-#[derive(Clone, Debug)]
-pub struct VAliasHead {
-    pub binder: VPatId,
-    pub ty: TypeId,
-}
-
-#[derive(Clone, Debug)]
-pub struct Exec(pub CompuId);
-
-#[derive(Clone, From, Debug)]
-pub enum Declaration {
-    TAliasBody(TAliasBody),
-    VAliasBody(VAliasBody),
-    VAliasHead(VAliasHead),
-    Exec(Exec),
 }

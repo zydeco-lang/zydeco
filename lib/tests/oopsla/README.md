@@ -51,30 +51,45 @@ This section shows how our artifact supports the claims made in the paper, and h
 
 ### Running the examples
 
-All examples are located under the `lib/tests/oopsla` directory and listed in
-the `lib/tests/oopsla/proj.toml` file.
+The files beside this README preserve the paper artifact's original presentation.
+The maintained, declaration-free programs are complete source terms under `lib/tests/source`;
+the algebra example is shared with `lib/examples`.
 
-We provide an interactive and integrated script to run all the examples. Under the root directory of the repository, run the following command
+| Example | Maintained source term |
+| --- | --- |
+| polynomial | [`oopsla-polynomial.zy`](../source/oopsla-polynomial.zy) |
+| calling conventions | [`oopsla-calling-conventions.zy`](../source/oopsla-calling-conventions.zy) |
+| CBV machine | [`oopsla-cbv.zy`](../source/oopsla-cbv.zy) |
+| relative monads | [`oopsla-monads.zy`](../source/oopsla-monads.zy) |
+| exceptions | [`oopsla-exn.zy`](../source/oopsla-exn.zy) |
+| free monad | [`oopsla-free.zy`](../source/oopsla-free.zy) |
+| relative-monad algebras | [`algebra.zydeco`](../../examples/algebra.zydeco) |
+| ExnT and ExnKT | [`oopsla-exception-transformers.zy`](../source/oopsla-exception-transformers.zy) |
+
+We provide an interactive script to run the maintained terms.
+From the repository root, run:
+
 ```sh
 ./run.sh
 ```
 
-Alternatively, the reviewers can manually run the examples using the `run` sub-command.
+Alternatively, run any source path directly:
 
 ```sh
-zydeco run lib/tests/oopsla/proj.toml --bin=<name>
+zydeco run <path-to-source-term>
 ```
 
-For example, to run the first example `polynomial`, run the following command:
+For example:
 
 ```sh
-zydeco run lib/tests/oopsla/proj.toml --bin=polynomial
+zydeco run lib/tests/source/oopsla-polynomial.zy
 ```
 
 
 ### VSCode Extension
 
-Zydeco is optionally syntax-highlighted in VSCode. To install the extension, open the VSCode Extensions tab and search for "zls". 
+Zydeco has optional editor support powered by the Cajun language server.
+See [`editor`](../../../editor) for the VS Code and Zed integrations.
 
 
 
@@ -418,36 +433,32 @@ The source code is organized into the following directories:
     + `compile`: programs shared by the interpreter and native compiler test paths.
     + `delimcc`: a tiny library implementing `shift`/`reset`-style delimited continuations, with `try` and `throw` examples.
 + [`cli`](../../../cli): the command-line interface of `zydeco`. See the next section for more details about the command-line interface.
-+ [`editor`](../../../editor): editor plugin implementations. Currently only a simple syntax highlighter written in TextMate grammars is [implemented](../../../editor/code/zls/syntaxes/zydeco.tmLanguage.json). The corresponding VSCode extension is available [here](https://marketplace.visualstudio.com/items?itemName=LitiaEeloo.zls).
++ [`editor`](../../../editor): the Cajun language server and its VS Code and Zed integrations.
 
 ### Writing and Running Zydeco Programs
 
 Since Zydeco is a functional programming language, users can write new Zydeco programs and run them via a command-line interface.
 
-#### Creating a New Zydeco Project
+#### Composing Source Files
 
-Zydeco programs are organized into projects. A project is a collection of Zydeco programs (either library or binary) and their dependencies. A project is typically defined in a `proj.toml` file. In the following paragraphs, we'll use [`lib/tests/delimcc/proj.toml`](../delimcc/proj.toml) as an example.
+A Zydeco source file contains one complete term.
+Dependencies are term occurrences introduced by import metadata, and each relative path is resolved from the
+file containing that occurrence. For example:
 
-The following is an example project file:
-```toml
-name = "delimcc"
+```zydeco
+begin
+  let library = @[import("relative/path/to/library.zy")] _ that
+  param builtin that
+  let public = library builtin that
 
-srcs = [
-    "lib.zy",
-]
-deps = [
-    { local = "../../std/proj.toml" },
-]
-bins = [
-    "reset-shift-r.zy",
-    "reset-shift-k.zy",
-    "try-catch.zy",
-]
-
-std = "nostd"
+  -- consume `public`
+  ...
+end
 ```
 
-The `name` field is the name of the project. The `srcs` field is a list of Zydeco source files (called library files) in the project. The `deps` field is a list of dependencies of the project. The `bins` field is a list of binary files that includes exactaly one `main` declaration. The `std` field is the standard library to use for the project; currently, only `nostd` is supported, and the standard library should be included as a local dependency.
+The driver first loads the import DAG, diagnoses cycles at their import sites, and then substitutes a fresh copy
+of each imported term at each occurrence. The resulting whole program is one term; no project manifest or
+declaration named `main` determines its meaning.
 
 
 #### Writing New Zydeco Programs
@@ -456,29 +467,19 @@ We've seen the syntax of Zydeco in [Zydeco as a Functional Programming Language]
 
 If the reader prefers a more systematic approach to learn Zydeco, a short tutorial is available in the [`lib/spell`](../../spell) directory.
 
-The easiest program we can write is a simple program that exits with exit code 42. Create a new project called `playground` in the `lib` directory.
-
-`lib/playground/proj.toml`
-```toml
-name = "playground"
-srcs = []
-deps = [
-  { local = "../std/proj.toml" },
-]
-bins = [
-    "main.zydeco",
-]
-std = "nostd"
-```
+The easiest program we can write is a term that accepts the Builtin package and exits with status 42.
 
 `lib/playground/main.zydeco`
 ```zydeco
-main
-  ! exit 42
-end
+param (
+  (Int, Char, String, OS, api) :
+  @[import("../std/builtin.zy")] _
+) in
+  ! (api/exit) 42
 ```
 
-Run `cargo run --bin=zydeco --release -- run lib/playground/proj.toml --bin=main` to run the Zydeco program. The program should exit with exit code 42. To examine the exit code, run
+Run `cargo run --bin=zydeco --release -- run lib/playground/main.zydeco` to run the Zydeco program.
+The program should exit with status 42. To examine the status, run:
 
 ```sh
 echo $?
@@ -498,10 +499,11 @@ cargo build --bin=zydeco --release
 
 Once the build is complete, a CLI program `zydeco` will be located at `target/release/zydeco`. It supports the following sub-commands:
 
-+ `run`: run a Zydeco program or a Zydeco project
-  + `zydeco run path/to/proj.toml --bin=foo` runs the binary `foo.zy` or `foo.zydeco` in the project `path/to/proj.toml`
++ `run`: check and execute one source term
+  + `zydeco run path/to/program.zy` runs that term after applying the Builtin package at the command boundary
   + `zydeco run --help` prints the help information about the `run` sub-command
-+ `check`: check a Zydeco program or a Zydeco project
++ `check`: check one source term without requiring it to be executable
++ `build`: lower one executable source term to an intermediate or native target
 + `help`: print brief help information
 
 
@@ -536,11 +538,11 @@ To see the documentation of a specific package, e.g. `zydeco-statics`, run `carg
 The following are some limitations of the artifact:
 
 + The native backends remain experimental. The AMD64 path is covered by end-to-end tests, while the LLVM emitter has more limited coverage.
-+ A basic package manager is implemented in [`zydeco-driver`](../../../lang/driver/). However, it only supports local dependencies, and the standard library can only be manually added to the project.
-+ The source language currently has no module, namespace, import, or qualified-name machinery. Former module groups are flattened into the global scope and retained as comments; `pub` is parsed but visibility is not enforced.
-+ When running Zydeco in debug mode, the stack size is extended to 4MB to pass all test cases, because under debug profile Rust generates large debuginfo on the stack, causing large test cases to stack overflow. This is not a problem in release mode.
++ Whole-program source imports currently provide composition rather than separate compilation; incremental artifacts,
+  registries, and generated lock files remain future work.
++ Packages are expressed by ordinary product and existential types. There is not yet a separate namespace or
+  visibility layer over those typed interfaces.
 + There're several caveats in using monadic blocks as a Zydeco programmer.
   + The monadic blocks are compiled to a function that accepts a monad instance as function argument, which is passed in at runtime. However, an efficient implementation is to inline the monad instance into the monadic block if it's known at compile time, which is feasible in most cases, but not currently supported in the artifact.
   + As mentioned in previous sections, the monadic blocks requires its inner computation to be closed in the paper. Even with the improvement in the artifact, it can only allow for the use of global types and terms.
   + As a result, to use monad-specific features e.g. using `raise` with the `Exn` monad, the user must pass in the implementation of the `raise` function as a function argument to the monadic block, and introduce a function parameter inside the monadic block. It's therefore recommended to abstract the monad-specific features into an existential type interface, which requires the user to learn as a style of programming. Similar to the monad instance, the inline optimization oppotunity exists for the instance of the existential type interface, but just like the case of the monad instance, the application of instances are not currently optimized in the artifact.
-

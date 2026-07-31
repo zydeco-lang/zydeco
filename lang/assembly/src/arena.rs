@@ -1,7 +1,7 @@
 use super::syntax::*;
 use zydeco_derive::{AsMutSelf, AsRefSelf};
 use zydeco_stackir::sps::syntax as sk;
-use zydeco_utils::{graph::DepGraph, with::With};
+use zydeco_utils::graph::DepGraph;
 
 /// Allocation and owning storage scope for assembly nodes.
 #[derive(Debug)]
@@ -66,9 +66,30 @@ where
     }
 }
 
+impl AssemblyArena {
+    pub(crate) fn insert_program(&mut self, id: ProgId, program: Program, context: Context) {
+        self.programs.insert_new(id, program.clone());
+        self.contexts.insert_new(id, context);
+
+        match program {
+            | Program::Instruction(_, next) => self.deps.add(next, [id]),
+            | Program::Terminator(terminator) => match terminator {
+                | Terminator::Jump(Jump(target)) => self.deps.add(id, [target]),
+                | Terminator::PopJump(PopJump)
+                | Terminator::LeapJump(LeapJump)
+                | Terminator::Extern(Extern { .. })
+                | Terminator::Abort(Abort) => {}
+                | Terminator::PopBranch(PopBranch(branches)) => {
+                    self.deps.add(id, branches.into_iter().map(|(_, target)| target));
+                }
+            },
+        }
+    }
+}
+
 pub trait Construct<'a, S, T, Arena>: Sized + Into<S> {
     type Site;
-    fn build<'f: 'a>(self, arena: &'f mut Arena, site: Self::Site) -> T;
+    fn build(self, arena: &mut Arena, site: Self::Site) -> T;
 }
 
 impl<'a, U, Arena> Construct<'a, VarName, VarId, Arena> for U
@@ -77,7 +98,7 @@ where
     U: Into<VarName>,
 {
     type Site = Option<sk::DefId>;
-    fn build<'f: 'a>(self, arena: &'f mut Arena, site: Self::Site) -> VarId {
+    fn build(self, arena: &mut Arena, site: Self::Site) -> VarId {
         let id = AsMut::<IdAllocator<AssemblyScope>>::as_mut(arena).alloc();
         let this = AsMut::<AssemblyArena>::as_mut(arena);
         this.variables.insert_new(id, self.into());
@@ -94,7 +115,7 @@ where
     U: Into<Symbol>,
 {
     type Site = (Option<String>, Option<sk::DefId>);
-    fn build<'f: 'a>(self, arena: &'f mut Arena, (name, site): Self::Site) -> SymId {
+    fn build(self, arena: &mut Arena, (name, site): Self::Site) -> SymId {
         let id = AsMut::<IdAllocator<AssemblyScope>>::as_mut(arena).alloc();
         let this = AsMut::<AssemblyArena>::as_mut(arena);
         let symbol = NamedSymbol { name: name.unwrap_or_default(), inner: self.into() };
@@ -139,30 +160,10 @@ where
     U: Into<Program>,
 {
     type Site = Context;
-    fn build<'f: 'a>(self, arena: &'f mut Arena, cx: Self::Site) -> ProgId {
+    fn build(self, arena: &mut Arena, cx: Self::Site) -> ProgId {
         let id = AsMut::<IdAllocator<AssemblyScope>>::as_mut(arena).alloc();
         let this = AsMut::<AssemblyArena>::as_mut(arena);
-        let program = self.into();
-        this.programs.insert_new(id, program.clone());
-        this.contexts.insert_new(id, cx);
-
-        // Update dependencies.
-        match program {
-            | Program::Instruction(_, prog_id) => this.deps.add(prog_id, [id]),
-            | Program::Terminator(t) => match t {
-                | Terminator::Jump(Jump(prog_id)) => this.deps.add(id, [prog_id]),
-                | Terminator::PopJump(PopJump) => {}
-                | Terminator::LeapJump(LeapJump) => {}
-                | Terminator::PopBranch(PopBranch(brs)) => {
-                    for (_, prog_id) in brs {
-                        this.deps.add(id, [prog_id]);
-                    }
-                }
-                | Terminator::Extern(Extern { .. }) => {}
-                | Terminator::Abort(Abort) => {}
-            },
-        }
-
+        this.insert_program(id, self.into(), cx);
         id
     }
 }
@@ -173,25 +174,8 @@ where
     U: Into<Terminator>,
 {
     type Site = Context;
-    fn build<'f: 'a>(self, arena: &'f mut Arena, cx: Self::Site) -> ProgId {
+    fn build(self, arena: &mut Arena, cx: Self::Site) -> ProgId {
         let terminator = self.into();
         Program::Terminator(terminator).build(arena, cx)
-    }
-}
-
-impl<'a, U, Arena> Construct<'a, Instruction, ProgId, Arena> for U
-where
-    Arena: AsMut<AssemblyArena> + AsMut<IdAllocator<AssemblyScope>> + 'a,
-    U: Into<Instruction>,
-{
-    /// The continuation.
-    type Site = With<Context, CxKont<'a, Arena>>;
-    fn build<'f: 'a>(
-        self, arena: &'f mut Arena, With { info: cx, inner: CxKont { incr, kont } }: Self::Site,
-    ) -> ProgId {
-        let instr = self.into();
-        let cx_incr = incr(&cx);
-        let next = kont(arena, cx_incr);
-        Program::Instruction(instr, next).build(arena, cx)
     }
 }

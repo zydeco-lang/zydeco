@@ -20,7 +20,6 @@ impl_span_view_pair! {
     DefId
     PatId
     TermId
-    DeclId
 }
 
 macro_rules! impl_span_view_resolver {
@@ -40,5 +39,4 @@ impl_span_view_resolver! {
     DefId
     PatId
     TermId
-    DeclId
 }

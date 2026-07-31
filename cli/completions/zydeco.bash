@@ -61,16 +61,12 @@ _zydeco() {
             return 0
             ;;
         zydeco__build)
-            opts="-t -b -r -x -v -h --bin --target-os --target-arch --target --build-dir --runtime-dir --link-existing --execute --dry --no-cps --verbose --help [FILE]..."
+            opts="-t -b -r -x -v -h --target-os --target-arch --target --build-dir --runtime-dir --link-existing --execute --dry --no-cps --verbose --help <FILE>"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
-                --bin)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
                 --target-os)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -111,7 +107,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__check)
-            opts="-v -h --verbose --help [FILE]..."
+            opts="-v -h --verbose --help <FILE>"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -195,16 +191,12 @@ _zydeco() {
             return 0
             ;;
         zydeco__run)
-            opts="-v -h --bin --dry --verbose --help [FILE]... [ARGS]..."
+            opts="-v -h --dry --verbose --help <FILE> [ARGS]..."
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
-                --bin)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
                 *)
                     COMPREPLY=()
                     ;;

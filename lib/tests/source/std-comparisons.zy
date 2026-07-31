@@ -1,0 +1,46 @@
+begin
+  let std = @[import("../../std/std.zy")] _ that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  do (
+    Bool = StdBool,
+    Option = StdOption,
+    List = StdList,
+    Int = StdInt,
+    Char = StdChar,
+    String = StdString,
+    OS = StdOS,
+    public
+  ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  do equal <- ! (public/int_eq) 3 3;
+  do equal_status <- ! (public/branch)
+    (Ret StdInt)
+    equal
+    { ret 0 }
+    { ret 1 };
+  do less <- ! (public/int_lt) 2 3;
+  do less_status <- ! (public/branch)
+    (Ret StdInt)
+    less
+    { ret 0 }
+    { ret 1 };
+  do greater <- ! (public/int_gt) 3 2;
+  do greater_status <- ! (public/branch)
+    (Ret StdInt)
+    greater
+    { ret 0 }
+    { ret 1 };
+  do string_equal <- ! (public/str_eq) "zydeco" "zydeco";
+  do string_status <- ! (public/branch)
+    (Ret StdInt)
+    string_equal
+    { ret 0 }
+    { ret 1 };
+  do first <- ! (public/add) equal_status less_status;
+  do second <- ! (public/add) greater_status string_status;
+  do status <- ! (public/add) first second;
+  ! (public/exit) status
+end

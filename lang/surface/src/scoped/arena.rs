@@ -165,11 +165,10 @@ pub trait ArenaScoped {
     fn def(&self, id: &DefId) -> VarName;
     fn pat(&self, id: &PatId) -> Pattern;
     fn term(&self, id: &TermId) -> Term<DefId>;
-    fn context_node(&self, id: &ContextNodeId) -> ContextNode;
 }
 
 /// Resolved arena plus name-resolution metadata and dependency/context analysis.
-#[derive(Debug, AsRefSelf, AsMutSelf)]
+#[derive(Debug, Default, AsRefSelf, AsMutSelf)]
 pub struct ScopedArena {
     // arenas
     pub defs: ArenaSparse<ScopedScope, DefId>,
@@ -188,12 +187,8 @@ pub struct ScopedArena {
     pub coctxs_pat_local: ArenaAssoc<PatId, CoContext>,
     /// variables that are free within the term
     pub coctxs_term_local: ArenaAssoc<TermId, CoContext>,
-    /// externs to defs
-    pub exts: ArenaAssoc<BindingId, (Internal, DefId)>,
     /// Context DAGs retained for nested `begin` terms.
     pub blocks: ArenaAssoc<TermId, ContextualTerm<BindingContext, BlockBody>>,
-    /// The whole name-resolved program, represented as one contextual term.
-    pub root: ContextualTerm<BindingContext>,
 }
 
 impl ScopedArena {
@@ -213,9 +208,6 @@ impl ArenaScoped for ScopedArena {
     fn term(&self, id: &TermId) -> Term<DefId> {
         self.terms[id].to_owned()
     }
-    fn context_node(&self, id: &ContextNodeId) -> ContextNode {
-        self.root.context.nodes[id].to_owned()
-    }
 }
 
 use super::Collector;
@@ -229,9 +221,6 @@ impl ArenaScoped for Collector {
     }
     fn term(&self, id: &TermId) -> Term<DefId> {
         self.terms[id].to_owned()
-    }
-    fn context_node(&self, id: &ContextNodeId) -> ContextNode {
-        self.root.context.nodes[id].to_owned()
     }
 }
 
@@ -308,8 +297,13 @@ impl LocalFoldScoped<Context> for Collector {
                 let co_term = self.coctxs_term_local[&inner].to_owned();
                 self.coctxs_term_local.insert_new(term, co_term);
             }
+            | Term::SourceBoundary(inner) => {
+                let SourceBoundary(inner) = inner;
+                let co_inner = self.coctxs_term_local[&inner].to_owned();
+                self.coctxs_term_local.insert_new(term, co_inner);
+            }
             | Term::Internal(_) => {
-                unreachable!()
+                self.coctxs_term_local.insert_new(term, CoContext::new());
             }
             | Term::Sealed(inner) => {
                 let Sealed(inner) = inner;
@@ -454,9 +448,11 @@ impl LocalFoldScoped<Context> for Collector {
                 self.coctxs_term_local.insert_new(term, free_definitions + free_tail - bound);
             }
             | Term::MoBlock(inner) => {
-                let MoBlock(body) = inner;
+                let MoBlock { body, basis } = inner;
                 let co_body = self.coctxs_term_local[&body].to_owned();
-                self.coctxs_term_local.insert_new(term, co_body);
+                let co_basis = self.coctxs_term_local[&basis.monad].to_owned()
+                    + self.coctxs_term_local[&basis.algebra].to_owned();
+                self.coctxs_term_local.insert_new(term, co_body + co_basis);
             }
             | Term::Data(inner) => {
                 let Data { arms } = inner;
@@ -599,7 +595,11 @@ mod impl_obverse_local_post {
                     let MetaT(_meta, term) = inner;
                     term.obverse_local_post(f, ctx);
                 }
-                | Term::Internal(_) => unreachable!(),
+                | Term::SourceBoundary(inner) => {
+                    let SourceBoundary(inner) = inner;
+                    inner.obverse_local_post(f, ctx);
+                }
+                | Term::Internal(_) => {}
                 | Term::Sealed(inner) => {
                     let Sealed(inner) = inner;
                     inner.obverse_local_post(f, ctx);
@@ -698,14 +698,16 @@ mod impl_obverse_local_post {
                 }
                 | Term::RecGroup(inner) => {
                     let RecGroup { definitions, tail } = inner;
-                    for AliasBody { binder, bindee } in definitions {
+                    for RecursiveDefinition { binder, bindee } in definitions {
                         binder.obverse_local_post(f, ctx);
                         bindee.obverse_local_post(f, ctx);
                     }
                     tail.obverse_local_post(f, ctx);
                 }
                 | Term::MoBlock(inner) => {
-                    let MoBlock(body) = inner;
+                    let MoBlock { body, basis } = inner;
+                    basis.monad.obverse_local_post(f, ctx);
+                    basis.algebra.obverse_local_post(f, ctx);
                     body.obverse_local_post(f, ctx);
                 }
                 | Term::Data(inner) => {
@@ -776,8 +778,7 @@ mod tests {
         }
 
         fn add_binding(&mut self, source_order: usize) -> BindingId {
-            let declaration: DeclId = self.allocator.alloc();
-            let id = BindingId::Declaration(declaration);
+            let id: TermId = self.allocator.alloc();
             let binder = self.allocator.alloc();
             let bindee = self.allocator.alloc();
             self.bindings.insert_new(

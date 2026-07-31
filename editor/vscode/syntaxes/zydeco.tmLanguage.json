@@ -1,0 +1,126 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Zydeco",
+  "scopeName": "source.zydeco",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#characters"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#constructors"
+    },
+    {
+      "include": "#literals"
+    },
+    {
+      "include": "#operators"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.documentation.zydeco",
+          "match": "--\\|.*$"
+        },
+        {
+          "name": "comment.line.double-dash.zydeco",
+          "match": "--.*$"
+        },
+        {
+          "name": "comment.block.zydeco",
+          "begin": "/-",
+          "end": "-/",
+          "patterns": [
+            {
+              "include": "#comments"
+            }
+          ]
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.zydeco",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.zydeco",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "characters": {
+      "name": "string.quoted.single.zydeco",
+      "begin": "'",
+      "end": "'",
+      "patterns": [
+        {
+          "name": "constant.character.escape.zydeco",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.zydeco",
+          "match": "\\b(begin|end|in|that|do|ret|match|comatch)\\b|\\bdo~"
+        },
+        {
+          "name": "storage.type.zydeco",
+          "match": "\\b(data|codata|def|define|let|param|monadic|monadically)\\b"
+        },
+        {
+          "name": "storage.modifier.zydeco",
+          "match": "\\b(as|fn|fix)\\b"
+        },
+        {
+          "name": "keyword.declaration.zydeco",
+          "match": "\\b(pi|forall|sigma|exists)\\b"
+        }
+      ]
+    },
+    "constructors": {
+      "patterns": [
+        {
+          "name": "entity.name.type.zydeco",
+          "match": "\\b[A-Z][A-Za-z0-9_'?+*=~-]*\\b"
+        },
+        {
+          "name": "entity.name.type.variant.zydeco",
+          "match": "\\+[A-Z][A-Za-z0-9_'?+*=~-]*"
+        },
+        {
+          "name": "entity.name.function.zydeco",
+          "match": "\\.[a-z][A-Za-z0-9_'?+*=~-]*"
+        }
+      ]
+    },
+    "literals": {
+      "patterns": [
+        {
+          "name": "constant.numeric.integer.zydeco",
+          "match": "[+-]?[0-9]+"
+        },
+        {
+          "name": "constant.language.hole.zydeco",
+          "match": "\\b_\\b|(?<![A-Za-z0-9_])_(?![A-Za-z0-9_])"
+        }
+      ]
+    },
+    "operators": {
+      "name": "keyword.operator.zydeco",
+      "match": "::|->|<-|[!/:=|+*]"
+    }
+  }
+}

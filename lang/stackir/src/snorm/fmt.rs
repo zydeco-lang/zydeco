@@ -377,9 +377,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for SNormArena {
             doc = doc.append(RcDoc::text(format!("[operator:{}] {}", name, builtin)));
             doc = doc.append(RcDoc::line());
         }
-        for (name, builtin) in
-            builtins.iter().filter(|(_, builtin)| builtin.sort == BuiltinSort::Function)
-        {
+        for (name, builtin) in builtins.iter().filter(|(_, builtin)| builtin.is_function()) {
             doc = doc.append(RcDoc::text(format!("[function:{}] {}", name, builtin)));
             doc = doc.append(RcDoc::line());
         }

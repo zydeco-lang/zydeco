@@ -1,0 +1,259 @@
+begin
+  let boolean = @[import("bool.zy")] _ that
+  let option = @[import("option.zy")] _ that
+  let list = @[import("list.zy")] _ that
+
+  {
+    param (
+      (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+      @[import("builtin.zy")] _
+    ) in
+      do (Bool = Bool, bool_api) <-
+        ! boolean (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+      do (Option = Option, option_api) <-
+        ! option (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+      do (List = List, list_api) <-
+        ! list (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+      let primitive_add = api/add in
+      let primitive_int_eq = api/int_eq_branch in
+      let primitive_int_lt = api/int_lt_branch in
+      let primitive_int_gt = api/int_gt_branch in
+      let primitive_str_split_once = api/str_split_once_branch in
+      let primitive_str_split_n = api/str_split_n_branch in
+      let primitive_str_eq = api/str_eq_branch in
+      let primitive_read_line_as_int = api/read_line_as_int_branch in
+      let primitive_arg_fold = api/arg_fold in
+      let increment : Thk (Int -> Ret Int) = {
+        fn value ->
+          ! primitive_add value 1
+      } in
+      let compare : Thk (
+        forall (A : VType) .
+          Thk (
+            forall (R : CType) .
+              A -> A -> Thk R -> Thk R -> R
+          ) ->
+          A -> A -> Ret Bool
+      ) = {
+        fn (A : VType)
+           predicate
+           left
+           right ->
+          ! predicate
+            (Ret Bool)
+            left
+            right
+            { ret (bool_api/truth) }
+            { ret (bool_api/falsehood) }
+      } in
+      let int_eq : Thk (Int -> Int -> Ret Bool) = {
+        fn left right ->
+          ! compare Int primitive_int_eq left right
+      } in
+      let int_lt : Thk (Int -> Int -> Ret Bool) = {
+        fn left right ->
+          ! compare Int primitive_int_lt left right
+      } in
+      let int_gt : Thk (Int -> Int -> Ret Bool) = {
+        fn left right ->
+          ! compare Int primitive_int_gt left right
+      } in
+      let str_eq : Thk (String -> String -> Ret Bool) = {
+        fn left right ->
+          ! compare String primitive_str_eq left right
+      } in
+      let str_split_once : Thk (
+        String -> Char -> Ret (Option (String * String))
+      ) = {
+        fn string separator ->
+          ! primitive_str_split_once
+            (Ret (Option (String * String)))
+            string
+            separator
+            { ! (option_api/none) (String * String) }
+            {
+              fn first second ->
+                ! (option_api/some) (String * String) (first, second)
+            }
+      } in
+      let str_split_n : Thk (
+        String -> Int -> Ret (Option (String * String))
+      ) = {
+        fn string index ->
+          ! primitive_str_split_n
+            (Ret (Option (String * String)))
+            string
+            index
+            { ! (option_api/none) (String * String) }
+            {
+              fn first second ->
+                ! (option_api/some) (String * String) (first, second)
+            }
+      } in
+      let read_line_as_int : Thk (Thk (Option Int -> OS) -> OS) = {
+        fn continuation ->
+          ! primitive_read_line_as_int
+            {
+              do absent <- ! (option_api/none) Int;
+              ! continuation absent
+            }
+            {
+              fn integer ->
+                do present <- ! (option_api/some) Int integer;
+                ! continuation present
+            }
+      } in
+      let arg_list : Thk (Thk (List String -> OS) -> OS) = {
+        fn continuation ->
+          do arguments <- ! primitive_arg_fold
+            (Ret (List String))
+            { ! (list_api/nil) String }
+            {
+              fn argument remaining ->
+                do tail <- ! remaining;
+                ! (list_api/cons) String argument tail
+            };
+          ! continuation arguments
+      } in
+      let Public =
+        exists (Bool = PublicBool : VType) .
+        exists (
+          Option = PublicOption :
+          (VType) -> (VType)
+        ) .
+        exists (
+          List = PublicList :
+          (VType) -> (VType)
+        ) .
+        exists (Int = PublicInt as Int : VType) .
+        exists (Char = PublicChar as Char : VType) .
+        exists (String = PublicString as String : VType) .
+        exists (OS = PublicOS as OS : CType) .
+          (truth :: PublicBool) *
+          (falsehood :: PublicBool) *
+          (not :: Thk (PublicBool -> Ret PublicBool)) *
+          (and :: Thk (PublicBool -> PublicBool -> Ret PublicBool)) *
+          (or :: Thk (PublicBool -> PublicBool -> Ret PublicBool)) *
+          (branch :: Thk (
+            forall (B : CType) .
+              PublicBool -> Thk B -> Thk B -> B
+          )) *
+          (none :: Thk (
+            forall (A : VType) .
+              Ret (PublicOption A)
+          )) *
+          (some :: Thk (
+            forall (A : VType) .
+              A -> Ret (PublicOption A)
+          )) *
+          (option_eliminate :: Thk (
+            forall (A : VType) .
+            forall (B : CType) .
+              PublicOption A -> Thk B -> Thk (A -> B) -> B
+          )) *
+          (nil :: Thk (
+            forall (A : VType) .
+              Ret (PublicList A)
+          )) *
+          (cons :: Thk (
+            forall (A : VType) .
+              A -> PublicList A -> Ret (PublicList A)
+          )) *
+          (list_eliminate :: Thk (
+            forall (A : VType) .
+            forall (B : CType) .
+              PublicList A ->
+              Thk B ->
+              Thk (A -> PublicList A -> B) ->
+              B
+          )) *
+          (add :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
+          (sub :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
+          (mul :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
+          (div :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
+          (mod :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
+          (int_eq :: Thk (PublicInt -> PublicInt -> Ret PublicBool)) *
+          (int_lt :: Thk (PublicInt -> PublicInt -> Ret PublicBool)) *
+          (int_gt :: Thk (PublicInt -> PublicInt -> Ret PublicBool)) *
+          (str_length :: Thk (PublicString -> Ret PublicInt)) *
+          (str_append :: Thk (PublicString -> PublicString -> Ret PublicString)) *
+          (str_split_once :: Thk (
+            PublicString ->
+            PublicChar ->
+            Ret (PublicOption (PublicString * PublicString))
+          )) *
+          (str_split_n :: Thk (
+            PublicString ->
+            PublicInt ->
+            Ret (PublicOption (PublicString * PublicString))
+          )) *
+          (str_eq :: Thk (PublicString -> PublicString -> Ret PublicBool)) *
+          (str_index :: Thk (PublicString -> PublicInt -> Ret PublicChar)) *
+          (int_to_str :: Thk (PublicInt -> Ret PublicString)) *
+          (char_to_str :: Thk (PublicChar -> Ret PublicString)) *
+          (char_to_int :: Thk (PublicChar -> Ret PublicInt)) *
+          (str_to_int :: Thk (PublicString -> Ret PublicInt)) *
+          (write_str :: Thk (PublicString -> Thk PublicOS -> PublicOS)) *
+          (write_int :: Thk (PublicInt -> Thk PublicOS -> PublicOS)) *
+          (write_line :: Thk (PublicString -> Thk PublicOS -> PublicOS)) *
+          (read_line :: Thk (Thk (PublicString -> PublicOS) -> PublicOS)) *
+          (read_line_as_int :: Thk (
+            Thk (PublicOption PublicInt -> PublicOS) -> PublicOS
+          )) *
+          (read_till_eof :: Thk (Thk (PublicString -> PublicOS) -> PublicOS)) *
+          (arg_list :: Thk (Thk (PublicList PublicString -> PublicOS) -> PublicOS)) *
+          (random_int :: Thk (Thk (PublicInt -> PublicOS) -> PublicOS)) *
+          (increment :: Thk (PublicInt -> Ret PublicInt)) *
+          (exit :: Thk (PublicInt -> PublicOS))
+      in
+      ret ((
+          Bool = Bool,
+          Option = Option,
+          List = List,
+          Int = Int,
+          Char = Char,
+          String = String,
+          OS = OS,
+          truth = bool_api/truth,
+          falsehood = bool_api/falsehood,
+          not = bool_api/not,
+          and = bool_api/and,
+          or = bool_api/or,
+          branch = bool_api/branch,
+          none = option_api/none,
+          some = option_api/some,
+          option_eliminate = option_api/eliminate,
+          nil = list_api/nil,
+          cons = list_api/cons,
+          list_eliminate = list_api/eliminate,
+          add = primitive_add,
+          sub = api/sub,
+          mul = api/mul,
+          div = api/div,
+          mod = api/mod,
+          int_eq = int_eq,
+          int_lt = int_lt,
+          int_gt = int_gt,
+          str_length = api/str_length,
+          str_append = api/str_append,
+          str_split_once = str_split_once,
+          str_split_n = str_split_n,
+          str_eq = str_eq,
+          str_index = api/str_index,
+          int_to_str = api/int_to_str,
+          char_to_str = api/char_to_str,
+          char_to_int = api/char_to_int,
+          str_to_int = api/str_to_int,
+          write_str = api/write_str,
+          write_int = api/write_int,
+          write_line = api/write_line,
+          read_line = api/read_line,
+          read_line_as_int = read_line_as_int,
+          read_till_eof = api/read_till_eof,
+          arg_list = arg_list,
+          random_int = api/random_int,
+          = increment,
+          exit = api/exit,
+        ) : Public)
+  }
+end

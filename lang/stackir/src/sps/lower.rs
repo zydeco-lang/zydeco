@@ -1,6 +1,8 @@
 use super::syntax::*;
 use derive_more::{AsMut, AsRef};
-use zydeco_statics::{tyck::arena::StaticsArena, tyck::syntax as ss};
+use zydeco_statics::tyck::{
+    BuiltinPackagePlan, BuiltinPackageValue, arena::StaticsArena, syntax as ss,
+};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_utils::pass::CompilerPass;
 
@@ -50,6 +52,20 @@ impl<T> ValuePlan<T> {
 }
 
 impl ValuePlan<ValueId> {
+    fn scoped(self, binder: VPatId, tail: Self, site: Option<ss::TermId>) -> Self {
+        let Self { bindings, value: bindee } = self;
+        let Self { bindings: tail_bindings, value } = tail;
+        let binding = ValueBinding { binder, bindee, site };
+        ValuePlan {
+            bindings: bindings
+                .into_iter()
+                .chain(std::iter::once(binding))
+                .chain(tail_bindings)
+                .collect(),
+            value,
+        }
+    }
+
     fn lower_into(
         self, lo: &mut Lowerer, kont: impl FnOnce(ValueId, &mut Lowerer) -> CompuId,
     ) -> CompuId {
@@ -68,15 +84,33 @@ pub struct Lowerer<'a> {
     #[as_ref]
     #[as_mut]
     pub arena: StackirArena,
-    /// initialization order of globals (built during lowering, folded into entry lets at end)
-    sequence: Vec<DefId>,
-    /// global def -> value (built during lowering, folded into entry lets at end)
-    globals: ArenaAssoc<DefId, ValuePlan<ValueId>>,
     pub spans: &'a SpanArena,
     #[as_mut(ScopedArena)]
     pub scoped: &'a mut ScopedArena,
     pub statics: &'a StaticsArena,
 }
+
+/// Lowering pass for one checked computation root.
+#[derive(AsRef, AsMut)]
+pub struct RootLowerer<'a> {
+    #[as_ref(StackirArena)]
+    #[as_mut(StackirArena)]
+    lowerer: Lowerer<'a>,
+    root: ss::CompuId,
+}
+
+/// Lowering pass for a package-dependent root applied to the host Builtin package.
+#[derive(AsRef, AsMut)]
+pub struct BuiltinRootLowerer<'a> {
+    #[as_ref(StackirArena)]
+    #[as_mut(StackirArena)]
+    lowerer: Lowerer<'a>,
+    root: ss::CompuId,
+    signature: ss::PackPi,
+}
+
+/// Materializes backend-independent Builtin package plans as Stack IR values.
+struct BuiltinPackageLowering;
 
 impl<'a> Lowerer<'a> {
     /// Create a new lowerer with fresh stack arenas.
@@ -84,7 +118,7 @@ impl<'a> Lowerer<'a> {
         spans: &'a SpanArena, scoped: &'a mut ScopedArena, statics: &'a StaticsArena,
     ) -> Self {
         let arena = StackirArena::default();
-        Self { arena, sequence: Vec::new(), globals: ArenaAssoc::new(), spans, scoped, statics }
+        Self { arena, spans, scoped, statics }
     }
 
     fn product_arity(&self, ty: ss::TypeId) -> usize {
@@ -128,132 +162,78 @@ impl<'a> Lowerer<'a> {
     }
 }
 
-impl<'a> CompilerPass for Lowerer<'a> {
+impl<'a> RootLowerer<'a> {
+    pub fn new(
+        spans: &'a SpanArena, scoped: &'a mut ScopedArena, statics: &'a StaticsArena,
+        root: ss::CompuId,
+    ) -> Self {
+        Self { lowerer: Lowerer::new(spans, scoped, statics), root }
+    }
+}
+
+impl<'a> BuiltinRootLowerer<'a> {
+    pub fn new(
+        spans: &'a SpanArena, scoped: &'a mut ScopedArena, statics: &'a StaticsArena,
+        root: ss::CompuId, signature: ss::PackPi,
+    ) -> Self {
+        Self { lowerer: Lowerer::new(spans, scoped, statics), root, signature }
+    }
+}
+
+impl BuiltinPackageLowering {
+    fn lower(
+        value: BuiltinPackageValue, lowerer: &mut Lowerer<'_>,
+    ) -> Result<ValueId, BuiltinPackageLowerError> {
+        match value {
+            | BuiltinPackageValue::Unit => Ok(Triv.build(lowerer, None)),
+            | BuiltinPackageValue::Operation(role) => {
+                let builtin = Builtin::for_role(&lowerer.arena.admin.builtins, role)?;
+                Ok(match builtin.sort {
+                    | BuiltinSort::Operator => builtin.make_operator(lowerer),
+                    | BuiltinSort::Function(_) => builtin.make_function(lowerer),
+                })
+            }
+            | BuiltinPackageValue::Product(product) => {
+                let values = product
+                    .into_values()
+                    .into_iter()
+                    .map(|value| Self::lower(value, lowerer))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let layout = ProductLayout { arity: values.len() };
+                let items = ConsN::from_vec(values).expect("a checked product plan is non-empty");
+                Ok(VCons::new(items, layout).build(lowerer, None))
+            }
+        }
+    }
+}
+
+impl CompilerPass for RootLowerer<'_> {
     type Arena = StackirArena;
     type Out = StackirArena;
     type Error = std::convert::Infallible;
-    /// Lower the full program into a stack arena.
-    fn run(mut self) -> Result<StackirArena, Self::Error> {
-        // Topologically traverse context bindings and translate runtime values.
-        for node_id in self.scoped.root.context.topological_order() {
-            let node = self.scoped.root.context.nodes[&node_id].clone();
-            for decl_id in node.bindings().iter().filter_map(|binding| binding.id.declaration()) {
-                let Some(decl) = self.statics.decls.get(&decl_id).cloned() else {
-                    continue;
-                };
-                use ss::Declaration as Decl;
-                match decl {
-                    | Decl::VAliasBody(valias_body) => valias_body.lower(&mut self, ()),
-                    | Decl::VAliasHead(valias_head) => valias_head.lower(&mut self, ()),
-                    | Decl::TAliasBody(_) | Decl::Exec(_) => {}
-                }
-            }
-        }
 
-        // Get entry declarations from statics arena; lower each and wrap in global lets
-        for decl_id in self.statics.entry.iter().map(|(decl_id, _)| *decl_id) {
-            // Get the declaration and extract the computation
-            let decl = &self.statics.decls[&decl_id];
-            use ss::Declaration as Decl;
-            let entry = match decl {
-                | Decl::Exec(ss::Exec(compu)) => *compu,
-                // Only Exec declarations should be entry points
-                | Decl::TAliasBody(_) | Decl::VAliasBody(_) | Decl::VAliasHead(_) => {
-                    let fmt = zydeco_statics::tyck::fmt::Formatter::new(self.scoped, self.statics);
-                    let decl_str = decl_id.ugly(&fmt);
-                    panic!("entry point must be a main declaration, found:\n{}", decl_str);
-                }
-            };
-
-            // Lower the computation
-            let lowered = entry.lower(&mut self, ());
-
-            // Wrap in let bindings for all globals (in sequence order)
-            let wrapped = {
-                let sequence = self.sequence.clone();
-                sequence.into_iter().rev().fold(lowered, |tail, def| {
-                    let bindee = self.globals[&def].clone();
-                    let binder = ValuePattern::Var(def).build(&mut self.arena, None);
-                    bindee.lower_into(&mut self, move |bindee, lo| {
-                        Let { binder, bindee, tail }.build(lo, None)
-                    })
-                })
-            };
-
-            // Register as entry point
-            self.arena.inner.entry.insert_new(wrapped, ());
-        }
-        Ok(self.arena)
+    fn run(self) -> Result<StackirArena, Self::Error> {
+        let Self { mut lowerer, root } = self;
+        let root = root.lower(&mut lowerer, ());
+        lowerer.arena.inner.entry.insert_new(root, ());
+        Ok(lowerer.arena)
     }
 }
 
-impl Lower for ss::VAliasBody {
-    type Kont = ();
-    type Out = ();
+impl CompilerPass for BuiltinRootLowerer<'_> {
+    type Arena = StackirArena;
+    type Out = StackirArena;
+    type Error = BuiltinPackageLowerError;
 
-    fn lower(&self, lo: &mut Lowerer, (): Self::Kont) -> Self::Out {
-        let ss::VAliasBody { binder, bindee } = self.clone();
-        // Lower the binder (VPatId) - creates new VPatId and stores mapping
-        let binder_vpat = binder.lower(lo, ());
-        // Extract DefId from binder (should be a Var pattern)
-        use ValuePattern as VPat;
-        let def_id = match lo.arena.inner.vpats[&binder_vpat] {
-            | VPat::Var(def) => def,
-            | _ => {
-                let fmt = super::fmt::Formatter::new(
-                    &lo.arena.admin,
-                    &lo.arena.inner,
-                    lo.scoped,
-                    lo.statics,
-                );
-                let binder_doc = binder_vpat.pretty(&fmt);
-                let mut binder_str = String::new();
-                binder_doc.render_fmt(80, &mut binder_str).unwrap();
-                panic!("VAliasBody binder must be a variable, found:\n{}", binder_str);
-            }
-        };
-        let value = bindee.lower(lo, ());
-        lo.sequence.push(def_id);
-        lo.globals.insert_new(def_id, value);
-    }
-}
-
-impl Lower for ss::VAliasHead {
-    type Kont = ();
-    type Out = ();
-
-    fn lower(&self, lo: &mut Lowerer, (): Self::Kont) -> Self::Out {
-        let ss::VAliasHead { binder, ty: _ } = self.clone();
-        // Lower the binder (VPatId) - creates new VPatId and stores mapping
-        let binder_vpat = binder.lower(lo, ());
-        // Extract DefId from binder (should be a Var pattern)
-        use ValuePattern as VPat;
-        let def = match &lo.arena.inner.vpats[&binder_vpat] {
-            | VPat::Var(def) => *def,
-            | _ => {
-                let fmt = super::fmt::Formatter::new(
-                    &lo.arena.admin,
-                    &lo.arena.inner,
-                    lo.scoped,
-                    lo.statics,
-                );
-                let binder_doc = binder_vpat.pretty(&fmt);
-                let mut binder_str = String::new();
-                binder_doc.render_fmt(usize::MAX, &mut binder_str).unwrap();
-                panic!("VAliasHead binder must be a variable, found:\n{}", binder_str);
-            }
-        };
-        let name = lo.scoped.defs[&def].plain();
-        let Some(builtin) = lo.arena.admin.builtins.get(name.as_str()).cloned() else {
-            panic!("Undefined builtin extern:\n{}", name);
-        };
-        // Create the builtin value and store it in globals
-        let value = match builtin.sort {
-            | BuiltinSort::Operator => builtin.make_operator(lo),
-            | BuiltinSort::Function => builtin.make_function(lo),
-        };
-        lo.sequence.push(def);
-        lo.globals.insert_new(def, ValuePlan::pure(value));
+    fn run(self) -> Result<StackirArena, Self::Error> {
+        let Self { mut lowerer, root, signature } = self;
+        let plan = BuiltinPackagePlan::for_executable(lowerer.statics, &signature)?;
+        let function = root.lower(&mut lowerer, ());
+        let package = BuiltinPackageLowering::lower(plan.value, &mut lowerer)?;
+        let stack = Cons(package, Bullet.build(&mut lowerer, None)).build(&mut lowerer, None);
+        let root = Let { binder: Bullet, bindee: stack, tail: function }.build(&mut lowerer, None);
+        lowerer.arena.inner.entry.insert_new(root, ());
+        Ok(lowerer.arena)
     }
 }
 
@@ -295,7 +275,7 @@ impl Lower for ss::VPatId {
                 let ty = lo.statics.annotations_vpat[self];
                 VCons::new(ConsN(items, tail), lo.product_layout(ty)).into()
             }
-            | SSVPat::TCons(ss::ConsN(_, body)) => {
+            | SSVPat::SCons(ss::ConsN(_, body)) => {
                 let vpat = body.lower(lo, ());
                 lo.arena.inner.vpats[&vpat].clone()
             }
@@ -316,6 +296,12 @@ impl Lower for ss::ValueId {
             | ss::Value::Hole(_) => ValuePlan::pure(Hole.build(lo, site)),
             | ss::Value::Var(def) => ValuePlan::pure(def.build(lo, site)),
             | ss::Value::Named(Named(_, inner)) => inner.lower(lo, ()),
+            | ss::Value::Let(Let { binder, bindee, tail }) => {
+                let binder = binder.lower(lo, ());
+                let bindee = bindee.lower(lo, ());
+                let tail = tail.lower(lo, ());
+                bindee.scoped(binder, tail, site)
+            }
             | ss::Value::Thunk(Thunk(body)) => {
                 let body = body.lower(lo, ());
                 ValuePlan::pure(Closure { stack: Bullet, body }.build(lo, site))
@@ -339,7 +325,7 @@ impl Lower for ss::ValueId {
                     VCons::new(items, layout).build(lo, site)
                 })
             }
-            | ss::Value::TCons(ss::ConsN(_witnesses, inner)) => {
+            | ss::Value::SCons(ss::ConsN(_witnesses, inner)) => {
                 // Type cons values are erased.
                 inner.lower(lo, ())
             }
@@ -496,5 +482,28 @@ impl Lower for ss::CompuId {
                 Let { binder: Bullet, bindee: tag_stack_id, tail: body_compu }.build(lo, site)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zydeco_utils::prelude::IdAllocator;
+
+    #[test]
+    fn computation_roots_lower_without_declaration_entries() {
+        let mut allocator = IdAllocator::<ss::StaticsScope>::new();
+        let value = allocator.alloc();
+        let root = allocator.alloc();
+        let mut statics = ss::StaticsArena::default();
+        statics.values.insert_new(value, ss::Triv.into());
+        statics.compus.insert_new(root, ss::Return(value).into());
+        let spans = SpanArena::default();
+        let mut scoped = ScopedArena::default();
+
+        let stackir = RootLowerer::new(&spans, &mut scoped, &statics, root).run().unwrap();
+
+        assert_eq!(stackir.inner.entry.len(), 1);
+        super::super::check::check(&stackir, &scoped);
     }
 }

@@ -1,0 +1,53 @@
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  let value = 0 in
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  do value <- ret value;
+  ! (api/exit) value
+end

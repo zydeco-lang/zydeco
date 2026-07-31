@@ -30,13 +30,13 @@ _zydeco() {
         case $line[1] in
             (run)
 _arguments "${_arguments_options[@]}" : \
-'--bin=[Name of the binary]:BIN:_default' \
 '--dry[Dry run (don'\''t execute)]' \
 '*-v[Level of verbosity]' \
 '*--verbose[Level of verbosity]' \
 '-h[Print help]' \
 '--help[Print help]' \
-'*::files -- Path to the file to run:_files' \
+':file -- Path to the file to run:_files' \
+'*::args -- Environmental arguments to pass to the program:_default' \
 && ret=0
 ;;
 (check)
@@ -45,12 +45,11 @@ _arguments "${_arguments_options[@]}" : \
 '*--verbose[Level of verbosity]' \
 '-h[Print help]' \
 '--help[Print help]' \
-'*::files -- Path to the file to check:_files' \
+':file -- Path to the file to check:_files' \
 && ret=0
 ;;
 (build)
 _arguments "${_arguments_options[@]}" : \
-'--bin=[Name of the binary]:BIN:_default' \
 '--target-os=[Target OS (defaults to host OS)]:TARGET_OS:_default' \
 '--target-arch=[Target architecture (defaults to host architecture)]:TARGET_ARCH:_default' \
 '-t+[Target backend (zir, zasm, asm, llvm, exe, llvm-exe)]:TARGET:_default' \
@@ -68,7 +67,7 @@ _arguments "${_arguments_options[@]}" : \
 '*--verbose[Level of verbosity]' \
 '-h[Print help]' \
 '--help[Print help]' \
-'*::files -- Path to the file to compile:_files' \
+':file -- Path to the file to compile:_files' \
 && ret=0
 ;;
 (help)

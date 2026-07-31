@@ -1,11 +1,12 @@
-use zydeco_tests::interp_proj_bin;
+use zydeco_tests::e2e_sources;
 
-interp_proj_bin!(spell, toplevel, "0-toplevel");
-interp_proj_bin!(spell, thunk_ret, "1-thunk-ret");
-interp_proj_bin!(spell, data_codata, "2-data-codata");
-interp_proj_bin!(spell, object, "3-object");
-interp_proj_bin!(spell, y_combinator, "4-y-combinator");
-interp_proj_bin!(spell, mutual_rec, "5-mutual-rec");
-interp_proj_bin!(spell, cps, "6-cps");
-// lib_proj_bin!(spell, call_by_need, "7-call-by-need");
-interp_proj_bin!(spell, lense_prism_optics, "8-lense-prism-optics");
+e2e_sources!({
+    one_term => "spell/0-toplevel.zy",
+    thunk_ret => "spell/1-thunk-ret.zy",
+    data_codata => "spell/2-data-codata.zy",
+    object => "spell/3-object.zy",
+    y_combinator => "spell/4-y-combinator.zy",
+    mutual_recursion => "spell/5-mutual-rec.zy",
+    cps => "spell/6-cps.zy",
+    optics => "spell/8-lense-prism-optics.zy",
+});

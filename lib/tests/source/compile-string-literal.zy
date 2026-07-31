@@ -1,0 +1,22 @@
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  do unicode_length <- ! (api/str_length) "λx";
+  do joined <- ! (api/str_append) "uniform " "terms";
+  ! (api/int_eq_branch)
+    OS
+    unicode_length
+    2
+    {
+      ! (api/str_eq_branch)
+        OS
+        joined
+        "uniform terms"
+        { ! (api/exit) 0 }
+        { ! (api/exit) 2 }
+    }
+    { ! (api/exit) 1 }
+end

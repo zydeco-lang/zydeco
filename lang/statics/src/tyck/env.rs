@@ -129,24 +129,17 @@ mod impls_ty_env {
         }
 
         pub fn monadic_new(tycker: &mut Tycker<'_>, ori: &TyEnv) -> Self {
-            let mut env = TyEnv::new().with_skolem_scope(ori.skolems.clone());
-            env += [
-                (tycker.prim.vtype.get().to_owned(), VType.build(tycker, ori).into()),
-                (tycker.prim.ctype.get().to_owned(), CType.build(tycker, ori).into()),
-                (tycker.prim.thk.get().to_owned(), ThkTy.build(tycker, ori).into()),
-                (tycker.prim.ret.get().to_owned(), RetTy.build(tycker, ori).into()),
-                (tycker.prim.unit.get().to_owned(), UnitTy.build(tycker, ori).into()),
-                // (tycker.prim.top.get().to_owned(), cs::TopTy.build(tycker, ori).into()),
-                // (tycker.prim.monad.get().to_owned(), cs::MonadTy.build(tycker, ori).into()),
-                // (tycker.prim.algebra.get().to_owned(), cs::AlgebraTy.build(tycker, ori).into()),
-            ];
-            for (def, ann) in ori.clone() {
-                use zydeco_surface::arena::ArenaAccess;
-                if tycker.statics.global_defs.get(&def).is_some() {
-                    env += [(def, ann)];
-                }
-            }
-            env
+            use zydeco_surface::arena::ArenaAccess;
+
+            let defs = ori
+                .clone()
+                .into_iter()
+                .filter(|(def, _)| {
+                    !matches!(tycker.statics.annotations_var[def], AnnId::Type(_))
+                        || tycker.statics.global_defs.get(def).is_some()
+                })
+                .collect();
+            Self { defs, skolems: ori.skolems.clone() }
         }
         pub fn recursively_get_type(&self, tycker: &Tycker<'_>, def: &DefId) -> Option<&AnnId> {
             let ann = self.defs.get(def)?;
@@ -279,6 +272,13 @@ mod impls_str_env {
 /// A payload paired with a structure environment.
 pub type StrEnvT<T> = With<StrEnv, T>;
 
+/// The ordinary type constructors selected for one monadic translation.
+#[derive(Clone, Copy)]
+pub struct MonadicTypeBasis {
+    pub monad: TypeId,
+    pub algebra: TypeId,
+}
+
 /// Monadic translation environment (types, substitutions, and structure state).
 #[derive(Clone)]
 pub struct MonEnv {
@@ -286,6 +286,7 @@ pub struct MonEnv {
     pub subst: SubstEnv,
     pub subst_abst: SubstAbstEnv,
     pub structure: StrEnv,
+    pub basis: MonadicTypeBasis,
     pub monad_ty: TypeId,
     pub monad_impl: ValueId,
 }

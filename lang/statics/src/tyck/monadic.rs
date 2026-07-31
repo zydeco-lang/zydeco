@@ -247,6 +247,7 @@ mod syntax_impl {
         fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, AbstId)> {
             let cs::AbstPat(old, new) = self;
             let (env, new) = new.mbuild(tycker, env)?;
+            tycker.transfer_builtin_role(old, new)?;
             let mut env = env;
             env.subst_abst.insert(old, new);
             Ok((env, new))
@@ -391,8 +392,9 @@ struct PackPiBinderPattern {
 
 #[derive(Clone, Copy)]
 enum PackPiWitnessLayoutEntry {
+    KindManifest,
     Abstract(AbstId),
-    Manifest,
+    TypeManifest,
 }
 
 enum PackagePatternStructure {
@@ -414,30 +416,36 @@ impl<'a> PackPiWitnessLayoutState<'a> {
         self, tycker: &mut Tycker<'_>, env: &TyEnv,
     ) -> Result<Vec<PackPiWitnessLayoutEntry>> {
         let view = self.domain.unroll(tycker)?.subst_env(tycker, env)?;
-        let Type::Exists(Exists { binder, mode, body }) = tycker.type_filled(&view)?.to_owned()
-        else {
-            return if self.witnesses.is_empty() { Ok(Vec::new()) } else { self.mismatch(tycker) };
-        };
-
-        let (entry, witnesses, payload) = match mode {
-            | ExistsMode::Abstract => {
-                let Some((&witness, witnesses)) = self.witnesses.split_first() else {
-                    return self.mismatch(tycker);
+        match tycker.type_filled(&view)?.to_owned() {
+            | Type::ManifestKind(ManifestKind { body, .. }) => {
+                let tail = Self { domain: body, ..self }.collect(tycker, env)?;
+                Ok(std::iter::once(PackPiWitnessLayoutEntry::KindManifest).chain(tail).collect())
+            }
+            | Type::Exists(Exists { binder, mode, body }) => {
+                let (entry, witnesses, payload) = match mode {
+                    | ExistsMode::Abstract => {
+                        let Some((&witness, witnesses)) = self.witnesses.split_first() else {
+                            return self.mismatch(tycker);
+                        };
+                        let kind = tycker.statics.annotations_abst[&witness];
+                        (
+                            PackPiWitnessLayoutEntry::Abstract(witness),
+                            witnesses,
+                            Alloc::alloc(tycker, witness, kind, env),
+                        )
+                    }
+                    | ExistsMode::Manifest(definition) => {
+                        (PackPiWitnessLayoutEntry::TypeManifest, self.witnesses, definition)
+                    }
                 };
-                let kind = tycker.statics.annotations_abst[&witness];
-                (
-                    PackPiWitnessLayoutEntry::Abstract(witness),
-                    witnesses,
-                    Alloc::alloc(tycker, witness, kind, env),
-                )
+                let domain = body.subst_abst(tycker, (binder.witness, payload))?;
+                let tail =
+                    Self { domain, witnesses, expected: self.expected }.collect(tycker, env)?;
+                Ok(std::iter::once(entry).chain(tail).collect())
             }
-            | ExistsMode::Manifest(definition) => {
-                (PackPiWitnessLayoutEntry::Manifest, self.witnesses, definition)
-            }
-        };
-        let domain = body.subst_abst(tycker, (binder.witness, payload))?;
-        let tail = Self { domain, witnesses, expected: self.expected }.collect(tycker, env)?;
-        Ok(std::iter::once(entry).chain(tail).collect())
+            | _ if self.witnesses.is_empty() => Ok(Vec::new()),
+            | _ => self.mismatch(tycker),
+        }
     }
 
     #[track_caller]
@@ -476,37 +484,63 @@ impl PackPiBinderPattern {
         let capacity = entries.len();
         let (body_ty, witness_patterns) = entries.into_iter().enumerate().try_fold(
             (domain, Vec::with_capacity(capacity)),
-            |(body_ty, mut witness_patterns), (index, entry)| -> Result<(TypeId, Vec<TPatId>)> {
+            |(body_ty, mut witness_patterns),
+             (index, entry)|
+             -> Result<(TypeId, Vec<StaticPatId>)> {
                 let view = body_ty.unroll(tycker)?.subst_env(tycker, env)?;
-                let Type::Exists(Exists { binder, mode, body }) =
-                    tycker.type_filled(&view)?.to_owned()
-                else {
-                    unreachable!()
-                };
-                let kind = binder.payload_kind(tycker);
-                let witness_def = Alloc::alloc(
-                    tycker,
-                    VarName(format!("pack_witness_{index}")),
-                    kind.into(),
-                    &(),
-                );
-                witness_patterns.push(binder.pattern.rebind_payload(
-                    tycker,
-                    Some(witness_def),
-                    env,
-                ));
-                let payload = match (entry, mode) {
-                    | (PackPiWitnessLayoutEntry::Abstract(witness), ExistsMode::Abstract) => {
-                        Alloc::alloc(tycker, witness, kind, env)
+                match (entry, tycker.type_filled(&view)?.to_owned()) {
+                    | (
+                        PackPiWitnessLayoutEntry::KindManifest,
+                        Type::ManifestKind(ManifestKind { definition, body, .. }),
+                    ) => {
+                        let witness_def = Alloc::alloc(
+                            tycker,
+                            VarName(format!("pack_kind_{index}")),
+                            AnnId::Set,
+                            &(),
+                        );
+                        let pattern_env = env.clone() + [(witness_def, AnnId::Kind(definition))];
+                        let pattern = Alloc::alloc(tycker, witness_def, (), &pattern_env);
+                        witness_patterns.push(StaticPatId::Kind(pattern));
+                        Ok((body, witness_patterns))
                     }
-                    | (PackPiWitnessLayoutEntry::Manifest, ExistsMode::Manifest(definition)) => {
-                        definition
+                    | (
+                        entry @ (PackPiWitnessLayoutEntry::Abstract(_)
+                        | PackPiWitnessLayoutEntry::TypeManifest),
+                        Type::Exists(Exists { binder, mode, body }),
+                    ) => {
+                        let kind = binder.payload_kind(tycker);
+                        let witness_def = Alloc::alloc(
+                            tycker,
+                            VarName(format!("pack_witness_{index}")),
+                            kind.into(),
+                            &(),
+                        );
+                        witness_patterns.push(StaticPatId::Type(binder.pattern.rebind_payload(
+                            tycker,
+                            Some(witness_def),
+                            env,
+                        )));
+                        let payload = match (entry, mode) {
+                            | (
+                                PackPiWitnessLayoutEntry::Abstract(witness),
+                                ExistsMode::Abstract,
+                            ) => Alloc::alloc(tycker, witness, kind, env),
+                            | (
+                                PackPiWitnessLayoutEntry::TypeManifest,
+                                ExistsMode::Manifest(definition),
+                            ) => definition,
+                            | (PackPiWitnessLayoutEntry::Abstract(_), ExistsMode::Manifest(_))
+                            | (PackPiWitnessLayoutEntry::TypeManifest, ExistsMode::Abstract) => {
+                                unreachable!()
+                            }
+                            | (PackPiWitnessLayoutEntry::KindManifest, _) => unreachable!(),
+                        };
+                        let body_ty = body.subst_abst(tycker, (binder.witness, payload))?;
+                        Ok((body_ty, witness_patterns))
                     }
-                    | (PackPiWitnessLayoutEntry::Abstract(_), ExistsMode::Manifest(_))
-                    | (PackPiWitnessLayoutEntry::Manifest, ExistsMode::Abstract) => unreachable!(),
-                };
-                let body_ty = body.subst_abst(tycker, (binder.witness, payload))?;
-                Ok((body_ty, witness_patterns))
+                    | _ => unreachable!(),
+                }
             },
         )?;
 
@@ -540,7 +574,7 @@ impl PackPiPatternTranslation {
                 let named = Alloc::alloc(tycker, Named(name, inner), translated_ty, &env.ty);
                 Ok((env, named))
             }
-            | ValuePattern::TCons(ConsN(witnesses, body)) => package_pattern_translation(
+            | ValuePattern::SCons(ConsN(witnesses, body)) => package_pattern_translation(
                 tycker,
                 env,
                 &witnesses,
@@ -647,37 +681,50 @@ impl PackPiStructureTranslation {
     }
 }
 
+/// Resolve a recorded structure for a type reference, synthesizing the unique
+/// trivial structure when the reference has value kind.
+struct ReferencedStructure {
+    ty: TypeId,
+    structure: Option<ValueId>,
+}
+
+impl MonConstruct<CompuId> for ReferencedStructure {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+        if let Some(structure) = self.structure {
+            return Force(structure).mbuild(tycker, env);
+        }
+
+        let (env, kind) = cs::TypeOf(self.ty).mbuild(tycker, env)?;
+        match tycker.kind_filled(&kind)?.to_owned() {
+            | Kind::VType(VType) => cs::Top.mbuild(tycker, env),
+            | _ => tycker.err(TyckError::MissingStructure(self.ty), std::panic::Location::caller()),
+        }
+    }
+}
+
 /// Structure Translation `Str(T)`
 fn structure_translation(
     tycker: &mut Tycker, env: MonEnv, ty: TypeId,
 ) -> Result<(MonEnv, CompuId)> {
     let monad_impl = env.monad_impl;
     let res = match tycker.type_filled(&ty)? {
-        | Type::Var(def) => {
-            match env.structure.def_map.get(&def).map(|abst| env.structure.absts[abst]) {
-                | Some(str) => Force(str).mbuild(tycker, env)?,
-                | None => {
-                    tycker.err(TyckError::MissingStructure(ty), std::panic::Location::caller())?
-                    // Fixme: or just ignore it
-                    // let (env, sig) = cs::Signature { ty }.mbuild(tycker, env)?;
-                    // (env, Alloc::alloc(tycker, Hole, sig))
-                }
-            }
+        | Type::Var(def) => ReferencedStructure {
+            ty,
+            structure: env
+                .structure
+                .def_map
+                .get(&def)
+                .and_then(|abst| env.structure.absts.get(abst))
+                .copied(),
         }
+        .mbuild(tycker, env)?,
         | Type::Abst(abst) => {
             let abst = match env.subst_abst.get(&abst).cloned() {
                 | Some(new_abst) => new_abst,
                 | None => abst,
             };
-            match env.structure.absts.get(&abst).cloned() {
-                | Some(str) => Force(str).mbuild(tycker, env)?,
-                | None => {
-                    tycker.err(TyckError::MissingStructure(ty), std::panic::Location::caller())?
-                    // Fixme: or just ignore it
-                    // let (env, sig) = cs::Signature { ty }.mbuild(tycker, env)?;
-                    // (env, Alloc::alloc(tycker, Hole, sig))
-                }
-            }
+            ReferencedStructure { ty, structure: env.structure.absts.get(&abst).copied() }
+                .mbuild(tycker, env)?
         }
         | Type::Abs(ty) => {
             // input: fn (X : K) -> S
@@ -711,9 +758,12 @@ fn structure_translation(
         | Type::Named(Named(_, inner)) | Type::Proj(Proj(inner, _)) => {
             cs::Structure { ty: inner }.mbuild(tycker, env)?
         }
-        | Type::Label(_) | Type::Unit(UnitTy) | Type::Prod(_) | Type::Exists(_) | Type::Data(_) => {
-            cs::Top.mbuild(tycker, env)?
-        }
+        | Type::Label(_)
+        | Type::Unit(UnitTy)
+        | Type::Prod(_)
+        | Type::Exists(_)
+        | Type::ManifestKind(_)
+        | Type::Data(_) => cs::Top.mbuild(tycker, env)?,
         // the thunk type is itself a type constructor,
         // so its structure takes a type and the type's structure as arguments
         | Type::Thk(ThkTy) => {
@@ -861,6 +911,28 @@ fn type_pattern_translation(
     Ok((env, tpat_))
 }
 
+fn kind_pattern_translation(
+    tycker: &mut Tycker, env: MonEnv, pattern: KPatId, definition: KindId,
+) -> Result<(MonEnv, KPatId)> {
+    match tycker.statics.kpats[&pattern].to_owned() {
+        | KindPattern::Hole(Hole) => {
+            let pattern = Alloc::alloc(tycker, Hole, (), &env.ty);
+            Ok((env, pattern))
+        }
+        | KindPattern::Var(source) => {
+            use zydeco_surface::scoped::arena::ArenaScoped;
+
+            let variable = tycker.scoped.def(&source);
+            let target = Alloc::alloc(tycker, variable, AnnId::Set, &());
+            let mut env = env;
+            env.subst += [(source, target)];
+            env.ty += [(target, AnnId::Kind(definition))];
+            let pattern = Alloc::alloc(tycker, target, (), &env.ty);
+            Ok((env, pattern))
+        }
+    }
+}
+
 /// Carrier (Type) Translation `[T]`
 fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(MonEnv, TypeId)> {
     let monad_ty = env.monad_ty;
@@ -977,6 +1049,13 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             let exists = Alloc::alloc(tycker, Exists { binder, mode, body }, vtype, &env.ty);
             (env, exists)
         }
+        | Type::ManifestKind(manifest) => {
+            let ManifestKind { binder, definition, body } = manifest;
+            let (env, body) = cs::TypeLift { ty: body }.mbuild(tycker, env)?;
+            let manifest =
+                Alloc::alloc(tycker, ManifestKind { binder, definition, body }, kd, &env.ty);
+            (env, manifest)
+        }
         // os type is also not allowed in monadic blocks
         | Type::OS(_) => unreachable!(),
         // the return type is translated to the provided monad type
@@ -1017,7 +1096,7 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
 
 /// Value Pattern Translation `[VPat]`
 fn package_pattern_translation(
-    tycker: &mut Tycker, env: MonEnv, witnesses: &[TPatId],
+    tycker: &mut Tycker, env: MonEnv, witnesses: &[StaticPatId],
     source_layout: Option<&[PackPiWitnessLayoutEntry]>, body: VPatId, translated_ty: TypeId,
 ) -> Result<(MonEnv, VPatId)> {
     let Some((&witness, remaining)) = witnesses.split_first() else {
@@ -1031,15 +1110,6 @@ fn package_pattern_translation(
         }
         return cs::TermLift { tm: body }.mbuild(tycker, env);
     };
-    let Type::Exists(Exists {
-        binder: translated_binder,
-        mode: translated_mode,
-        body: translated_body_ty,
-    }) = tycker.type_filled(&translated_ty)?.to_owned()
-    else {
-        unreachable!("translated package type must remain existential")
-    };
-    let domain_abst = translated_binder.witness;
     let (source_entry, remaining_source_layout) = match source_layout {
         | Some(source_layout) => {
             let Some((&source_entry, remaining)) = source_layout.split_first() else {
@@ -1053,93 +1123,196 @@ fn package_pattern_translation(
         | None => (None, None),
     };
 
-    let (env, witness) = cs::TypeLift { ty: witness }.mbuild(tycker, env)?;
-    let (witness_var, _) = witness.try_destruct_def(tycker);
-    let mut env = env;
-    let (pattern_abst, bound_ty, structure) = match (source_entry, translated_mode) {
-        | (Some(PackPiWitnessLayoutEntry::Abstract(source_skolem)), ExistsMode::Abstract) => {
-            let pattern_abst = Alloc::alloc(tycker, witness, (), &());
-            tycker.statics.existential_skolems.ensure(pattern_abst);
-            env.ty = env.ty.with_skolem(pattern_abst);
-            env.subst_abst.insert(source_skolem, pattern_abst);
-            let (env_, abst_ty) = cs::Type(pattern_abst).mbuild(tycker, env)?;
-            env = env_;
-            (pattern_abst, abst_ty, PackagePatternStructure::Abstract)
-        }
-        | (None, ExistsMode::Abstract) => {
-            let (env_, abst_ty) = cs::Type(domain_abst).mbuild(tycker, env)?;
-            env = env_;
-            (domain_abst, abst_ty, PackagePatternStructure::Abstract)
-        }
-        | (Some(PackPiWitnessLayoutEntry::Manifest), ExistsMode::Manifest(definition))
-        | (None, ExistsMode::Manifest(definition)) => {
-            (domain_abst, definition, PackagePatternStructure::Manifest)
-        }
-        | (Some(PackPiWitnessLayoutEntry::Abstract(_)), ExistsMode::Manifest(_))
-        | (Some(PackPiWitnessLayoutEntry::Manifest), ExistsMode::Abstract) => {
-            return tycker.err(
-                TyckError::PackageWitnessArityMismatch { expected: witnesses.len(), found: 0 },
-                std::panic::Location::caller(),
+    match witness {
+        | StaticPatId::Kind(witness) => {
+            let Type::ManifestKind(ManifestKind { definition, body: translated_tail_ty, .. }) =
+                tycker.type_filled(&translated_ty)?.to_owned()
+            else {
+                return tycker.err(
+                    TyckError::PackageWitnessArityMismatch { expected: witnesses.len(), found: 0 },
+                    std::panic::Location::caller(),
+                );
+            };
+            if !matches!(source_entry, None | Some(PackPiWitnessLayoutEntry::KindManifest)) {
+                return tycker.err(
+                    TyckError::PackageWitnessArityMismatch { expected: witnesses.len(), found: 0 },
+                    std::panic::Location::caller(),
+                );
+            }
+            let (env, witness) = kind_pattern_translation(tycker, env, witness, definition)?;
+            let (env, body) = package_pattern_translation(
+                tycker,
+                env,
+                remaining,
+                remaining_source_layout,
+                body,
+                translated_tail_ty,
+            )?;
+            let package = Alloc::alloc(
+                tycker,
+                ConsN(vec![StaticPatId::Kind(witness)], body),
+                translated_ty,
+                &env.ty,
             );
+            Ok((env, package))
         }
-    };
-    let translated_body_ty = if pattern_abst == domain_abst {
-        translated_body_ty
-    } else {
-        translated_body_ty.subst_abst(tycker, (domain_abst, bound_ty))?
-    };
-    let Type::Prod(Prod(structure_ty, translated_tail_ty)) =
-        tycker.type_filled(&translated_body_ty)?.to_owned()
-    else {
-        unreachable!("translated existential body must contain its structure")
-    };
-    let mut env = env;
-    if let Some(witness_var) = witness_var {
-        env.ty += [(witness_var, bound_ty.into())];
+        | StaticPatId::Type(witness) => {
+            let Type::Exists(Exists {
+                binder: translated_binder,
+                mode: translated_mode,
+                body: translated_body_ty,
+            }) = tycker.type_filled(&translated_ty)?.to_owned()
+            else {
+                return tycker.err(
+                    TyckError::PackageWitnessArityMismatch { expected: witnesses.len(), found: 0 },
+                    std::panic::Location::caller(),
+                );
+            };
+            let domain_abst = translated_binder.witness;
+            let (env, witness) = cs::TypeLift { ty: witness }.mbuild(tycker, env)?;
+            let (witness_var, _) = witness.try_destruct_def(tycker);
+            let mut env = env;
+            let (pattern_abst, bound_ty, structure) = match (source_entry, translated_mode) {
+                | (
+                    Some(PackPiWitnessLayoutEntry::Abstract(source_skolem)),
+                    ExistsMode::Abstract,
+                ) => {
+                    let pattern_abst = Alloc::alloc(tycker, witness, (), &());
+                    tycker.transfer_builtin_role(source_skolem, pattern_abst)?;
+                    tycker.statics.existential_skolems.ensure(pattern_abst);
+                    env.ty = env.ty.with_skolem(pattern_abst);
+                    env.subst_abst.insert(source_skolem, pattern_abst);
+                    let (env_, abst_ty) = cs::Type(pattern_abst).mbuild(tycker, env)?;
+                    env = env_;
+                    (pattern_abst, abst_ty, PackagePatternStructure::Abstract)
+                }
+                | (None, ExistsMode::Abstract) => {
+                    let (env_, abst_ty) = cs::Type(domain_abst).mbuild(tycker, env)?;
+                    env = env_;
+                    (domain_abst, abst_ty, PackagePatternStructure::Abstract)
+                }
+                | (
+                    Some(PackPiWitnessLayoutEntry::TypeManifest),
+                    ExistsMode::Manifest(definition),
+                )
+                | (None, ExistsMode::Manifest(definition)) => {
+                    (domain_abst, definition, PackagePatternStructure::Manifest)
+                }
+                | (
+                    Some(
+                        PackPiWitnessLayoutEntry::KindManifest
+                        | PackPiWitnessLayoutEntry::Abstract(_),
+                    ),
+                    ExistsMode::Manifest(_),
+                )
+                | (
+                    Some(
+                        PackPiWitnessLayoutEntry::KindManifest
+                        | PackPiWitnessLayoutEntry::TypeManifest,
+                    ),
+                    ExistsMode::Abstract,
+                ) => {
+                    return tycker.err(
+                        TyckError::PackageWitnessArityMismatch {
+                            expected: witnesses.len(),
+                            found: 0,
+                        },
+                        std::panic::Location::caller(),
+                    );
+                }
+            };
+            let translated_body_ty = if pattern_abst == domain_abst {
+                translated_body_ty
+            } else {
+                translated_body_ty.subst_abst(tycker, (domain_abst, bound_ty))?
+            };
+            let Type::Prod(Prod(structure_ty, translated_tail_ty)) =
+                tycker.type_filled(&translated_body_ty)?.to_owned()
+            else {
+                unreachable!("translated existential body must contain its structure")
+            };
+            if let Some(witness_var) = witness_var {
+                env.ty += [(witness_var, bound_ty.into())];
+            }
+            let (env, structure) = match structure {
+                | PackagePatternStructure::Abstract => {
+                    cs::StrPat("str", pattern_abst, witness_var).mbuild(tycker, env)?
+                }
+                | PackagePatternStructure::Manifest => {
+                    cs::Pat("str", structure_ty).mbuild(tycker, env)?
+                }
+            };
+            let (env, body) = package_pattern_translation(
+                tycker,
+                env,
+                remaining,
+                remaining_source_layout,
+                body,
+                translated_tail_ty,
+            )?;
+            let product =
+                Alloc::alloc(tycker, ConsN(vec![structure], body), translated_body_ty, &env.ty);
+            let package = Alloc::alloc(
+                tycker,
+                ConsN(vec![StaticPatId::Type(witness)], product),
+                translated_ty,
+                &env.ty,
+            );
+            Ok((env, package))
+        }
     }
-    let (env, structure) = match structure {
-        | PackagePatternStructure::Abstract => {
-            cs::StrPat("str", pattern_abst, witness_var).mbuild(tycker, env)?
-        }
-        | PackagePatternStructure::Manifest => cs::Pat("str", structure_ty).mbuild(tycker, env)?,
-    };
-    let (env, body) = package_pattern_translation(
-        tycker,
-        env,
-        remaining,
-        remaining_source_layout,
-        body,
-        translated_tail_ty,
-    )?;
-    let product = Alloc::alloc(tycker, ConsN(vec![structure], body), translated_body_ty, &env.ty);
-    let package = Alloc::alloc(tycker, ConsN(vec![witness], product), translated_ty, &env.ty);
-    let _ = structure_ty;
-    Ok((env, package))
 }
 
 fn package_value_translation(
-    tycker: &mut Tycker, env: MonEnv, witnesses: &[TypeId], body: ValueId, translated_ty: TypeId,
+    tycker: &mut Tycker, env: MonEnv, witnesses: &[StaticTermId], body: ValueId,
+    translated_ty: TypeId,
 ) -> Result<(MonEnv, ValueId)> {
     let Some((&witness, remaining)) = witnesses.split_first() else {
         return cs::TermLift { tm: body }.mbuild(tycker, env);
     };
-    let Some((_abst, translated_body_ty)) = translated_ty.destruct_exists(tycker) else {
-        unreachable!("translated package type must remain existential")
-    };
-    let Type::Prod(Prod(_structure_ty, translated_tail_ty)) =
-        tycker.type_filled(&translated_body_ty)?.to_owned()
-    else {
-        unreachable!("translated existential body must contain its structure")
-    };
+    match witness {
+        | StaticTermId::Kind(witness) => {
+            let Type::ManifestKind(ManifestKind { body: translated_tail_ty, .. }) =
+                tycker.type_filled(&translated_ty)?.to_owned()
+            else {
+                unreachable!("translated manifest-kind package field must remain manifest")
+            };
+            let (env, body) =
+                package_value_translation(tycker, env, remaining, body, translated_tail_ty)?;
+            let package = Alloc::alloc(
+                tycker,
+                ConsN(vec![StaticTermId::Kind(witness)], body),
+                translated_ty,
+                &env.ty,
+            );
+            Ok((env, package))
+        }
+        | StaticTermId::Type(witness) => {
+            let Some((_abst, translated_body_ty)) = translated_ty.destruct_exists(tycker) else {
+                unreachable!("translated type package field must remain existential")
+            };
+            let Type::Prod(Prod(_structure_ty, translated_tail_ty)) =
+                tycker.type_filled(&translated_body_ty)?.to_owned()
+            else {
+                unreachable!("translated existential body must contain its structure")
+            };
 
-    let (env, translated_witness) = cs::TypeLift { ty: witness }.mbuild(tycker, env)?;
-    let (env, structure) = cs::Structure { ty: witness }.mbuild(tycker, env)?;
-    let (env, structure) = Thunk(structure).mbuild(tycker, env)?;
-    let (env, body) = package_value_translation(tycker, env, remaining, body, translated_tail_ty)?;
-    let product = Alloc::alloc(tycker, ConsN(vec![structure], body), translated_body_ty, &env.ty);
-    let package =
-        Alloc::alloc(tycker, ConsN(vec![translated_witness], product), translated_ty, &env.ty);
-    Ok((env, package))
+            let (env, translated_witness) = cs::TypeLift { ty: witness }.mbuild(tycker, env)?;
+            let (env, structure) = cs::Structure { ty: witness }.mbuild(tycker, env)?;
+            let (env, structure) = Thunk(structure).mbuild(tycker, env)?;
+            let (env, body) =
+                package_value_translation(tycker, env, remaining, body, translated_tail_ty)?;
+            let product =
+                Alloc::alloc(tycker, ConsN(vec![structure], body), translated_body_ty, &env.ty);
+            let package = Alloc::alloc(
+                tycker,
+                ConsN(vec![StaticTermId::Type(translated_witness)], product),
+                translated_ty,
+                &env.ty,
+            );
+            Ok((env, package))
+        }
+    }
 }
 
 fn value_pattern_translation(
@@ -1172,7 +1345,7 @@ fn value_pattern_translation(
             let tail = cs::TermLift { tm: tail };
             ConsN(items, tail).mbuild(tycker, env)?
         }
-        | VPat::TCons(vpat) => {
+        | VPat::SCons(vpat) => {
             let ConsN(witnesses, body) = vpat;
             package_pattern_translation(tycker, env, &witnesses, None, body, ty_)?
         }
@@ -1188,8 +1361,10 @@ fn value_translation(
     let (env, ty_) = cs::TypeLift { ty }.mbuild(tycker, env)?;
     let (env, res) = match tycker.statics.values[&value].to_owned() {
         | Value::Hole(Hole) => cs::Ann(Hole, ty_).mbuild(tycker, env)?,
-        // figure out how to handle literals
-        | Value::Lit(_) => unreachable!(),
+        | Value::Lit(literal) => {
+            let literal = Alloc::alloc(tycker, literal, ty_, &env.ty);
+            (env, literal)
+        }
         | Value::Var(def) => {
             // substitute according to the environment
             match env.subst.get(&def).cloned() {
@@ -1214,6 +1389,15 @@ fn value_translation(
             let named = Alloc::alloc(tycker, Named(name, inner), ty_, &env.ty);
             (env, named)
         }
+        | Value::Let(value) => {
+            let Let { binder, bindee, tail } = value;
+            Let {
+                binder: cs::TermLift { tm: binder },
+                bindee: cs::TermLift { tm: bindee },
+                tail: move |_| cs::TermLift { tm: tail },
+            }
+            .mbuild(tycker, env)?
+        }
         | Value::Thunk(value) => {
             let Thunk(body) = value;
             Thunk(cs::TermLift { tm: body }).mbuild(tycker, env)?
@@ -1231,7 +1415,7 @@ fn value_translation(
             let tail = cs::TermLift { tm: tail };
             ConsN(items, tail).mbuild(tycker, env)?
         }
-        | Value::TCons(value) => {
+        | Value::SCons(value) => {
             let ConsN(witnesses, body) = value;
             package_value_translation(tycker, env, &witnesses, body, ty_)?
         }

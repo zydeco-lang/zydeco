@@ -1,0 +1,151 @@
+use crate::source::SourceImportId;
+use std::{
+    error::Error,
+    fmt::{Display, Formatter},
+    io,
+    path::PathBuf,
+};
+use thiserror::Error;
+use zydeco_statics::tyck::syntax::{TermAnnId, TypeId};
+use zydeco_surface::textual::{
+    BuiltinDirectiveError, ImportDirectiveError, IntrinsicDirectiveError,
+};
+use zydeco_utils::span::Span;
+
+#[derive(Debug, Error)]
+pub enum SourceLoadError {
+    #[error("cannot resolve root source `{}`: {source}", path.display())]
+    RootPath {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
+    #[error(
+        "cannot resolve import `{}` from `{}` at {span}: {source}",
+        requested.display(),
+        importer.display()
+    )]
+    ImportPath {
+        importer: PathBuf,
+        requested: PathBuf,
+        span: Span,
+        #[source]
+        source: io::Error,
+    },
+    #[error("cannot read source `{}`: {source}", path.display())]
+    Read {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
+    #[error("cannot lex source `{}`: {message}", path.display())]
+    Lex { path: PathBuf, message: String },
+    #[error("cannot parse source `{}`: {message}", path.display())]
+    Parse { path: PathBuf, message: String },
+    #[error("invalid source directive in `{}`: {error}", path.display())]
+    Directive {
+        path: PathBuf,
+        #[source]
+        error: ImportDirectiveError,
+    },
+    #[error("invalid Builtin directive in `{}`: {error}", path.display())]
+    BuiltinDirective {
+        path: PathBuf,
+        #[source]
+        error: BuiltinDirectiveError,
+    },
+    #[error("invalid intrinsic directive in `{}`: {error}", path.display())]
+    IntrinsicDirective {
+        path: PathBuf,
+        #[source]
+        error: IntrinsicDirectiveError,
+    },
+    #[error(transparent)]
+    Cycle(#[from] ImportCycle),
+}
+
+#[derive(Debug, Error)]
+pub enum ProgramAssemblyError {
+    #[error("source `{}` has no import edge for term {term:?}", path.display())]
+    MissingImport { path: PathBuf, term: zydeco_surface::textual::syntax::TermId },
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum CheckedRootSort {
+    Hole,
+    Kind,
+    Type,
+    Value,
+    Computation,
+}
+
+impl From<TermAnnId> for CheckedRootSort {
+    fn from(root: TermAnnId) -> Self {
+        match root {
+            | TermAnnId::Hole(_) => Self::Hole,
+            | TermAnnId::Kind(_) => Self::Kind,
+            | TermAnnId::Type(_, _) => Self::Type,
+            | TermAnnId::Value(_, _) => Self::Value,
+            | TermAnnId::Compu(_, _) => Self::Computation,
+        }
+    }
+}
+
+impl Display for CheckedRootSort {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            | Self::Hole => write!(f, "an unclassified hole"),
+            | Self::Kind => write!(f, "a kind"),
+            | Self::Type => write!(f, "a type"),
+            | Self::Value => write!(f, "a value"),
+            | Self::Computation => write!(f, "a computation"),
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum SourceLowerError {
+    #[error("cannot execute or lower a source root classified as {found}")]
+    NonComputation { found: CheckedRootSort },
+    #[error("Builtin execution requires a package-dependent root, but found type {found:?}")]
+    NonBuiltinExecutable { found: TypeId },
+    #[error(transparent)]
+    BuiltinPackage(#[from] zydeco_dynamics::BuiltinPackageError),
+    #[error(transparent)]
+    BuiltinStack(#[from] zydeco_stackir::BuiltinPackageLowerError),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ImportCycleStep {
+    pub import: SourceImportId,
+    pub importer: PathBuf,
+    pub imported: PathBuf,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ImportCycle {
+    pub steps: Vec<ImportCycleStep>,
+}
+
+impl Display for ImportCycle {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "cyclic source imports")?;
+        write!(
+            f,
+            "{}",
+            self.steps
+                .iter()
+                .map(|step| format!(
+                    "  `{}` imports `{}` at {}",
+                    step.importer.display(),
+                    step.imported.display(),
+                    step.span
+                ))
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
+    }
+}
+
+impl Error for ImportCycle {}

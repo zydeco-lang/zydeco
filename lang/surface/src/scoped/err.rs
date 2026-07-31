@@ -11,18 +11,10 @@ pub enum ResolveError {
     UnboundVar(Sp<VarName>),
     #[error("Duplicate definition: {0} and {1}")]
     DuplicateDefinition(Sp<VarName>, Sp<VarName>),
-    #[error("Undefined primitive: {0}")]
-    UndefinedPrimitive(Sp<VarName>),
-    #[error("Duplicate primitive: {0} and {1}")]
-    DuplicatePrimitive(Sp<VarName>, Sp<VarName>),
-    #[error("Multiple executable bodies")]
-    DuplicateEntry(Span, Span),
     #[error("`that` requires an enclosing `begin` block")]
     UnenclosedThat(Span),
     #[error("A recursive context component cannot contain a parameter")]
     RecursiveParameter(Span),
-    #[error("Missing primitive: {0}")]
-    MissingPrim(&'static str),
 }
 
 impl ResolveError {
@@ -49,65 +41,12 @@ impl ResolveError {
                         Label::new((file_path1.clone(), range1))
                             .with_message(format!("first definition of `{}`", var1.inner)),
                     );
-                if file_path1 == file_path2 {
-                    report = report.with_label(
-                        Label::new((file_path2, range2))
-                            .with_message(format!("second definition of `{}`", var2.inner)),
-                    );
+                let message = if file_path1 == file_path2 {
+                    format!("second definition of `{}`", var2.inner)
                 } else {
-                    report = report.with_label(
-                        Label::new((file_path2, range2))
-                            .with_message(format!("duplicate definition of `{}`", var2.inner)),
-                    );
-                }
-                report.finish()
-            }
-            | ResolveError::UndefinedPrimitive(var) => {
-                let (file_path, range) = var.info.to_ariadne_span();
-                Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
-                    .with_message("Undefined primitive")
-                    .with_label(
-                        Label::new((file_path, range))
-                            .with_message(format!("primitive `{}` is not defined", var.inner)),
-                    )
-                    .finish()
-            }
-            | ResolveError::DuplicatePrimitive(var1, var2) => {
-                let (file_path1, range1) = var1.info.to_ariadne_span();
-                let (file_path2, range2) = var2.info.to_ariadne_span();
-                let mut report =
-                    Report::build(ReportKind::Error, (file_path1.clone(), range1.clone()))
-                        .with_message("Duplicate primitive")
-                        .with_label(Label::new((file_path1.clone(), range1)).with_message(
-                            format!("first definition of primitive `{}`", var1.inner),
-                        ));
-                if file_path1 == file_path2 {
-                    report =
-                        report.with_label(Label::new((file_path2, range2)).with_message(format!(
-                            "second definition of primitive `{}`",
-                            var2.inner
-                        )));
-                } else {
-                    report = report.with_label(Label::new((file_path2, range2)).with_message(
-                        format!("duplicate definition of primitive `{}`", var2.inner),
-                    ));
-                }
-                report.finish()
-            }
-            | ResolveError::DuplicateEntry(first, second) => {
-                let (first_path, first_range) = first.to_ariadne_span();
-                let (second_path, second_range) = second.to_ariadne_span();
-                let report =
-                    Report::build(ReportKind::Error, (second_path.clone(), second_range.clone()))
-                        .with_message("Multiple executable bodies")
-                        .with_label(
-                            Label::new((second_path.clone(), second_range))
-                                .with_message("second executable body"),
-                        )
-                        .with_label(
-                            Label::new((first_path, first_range))
-                                .with_message("first executable body"),
-                        );
+                    format!("duplicate definition of `{}`", var2.inner)
+                };
+                report = report.with_label(Label::new((file_path2, range2)).with_message(message));
                 report.finish()
             }
             | ResolveError::UnenclosedThat(span) => {
@@ -130,13 +69,6 @@ impl ResolveError {
                     )
                     .finish()
             }
-            | ResolveError::MissingPrim(name) => Report::build(
-                ReportKind::Error,
-                (PathDisplay::from(std::path::PathBuf::from("<internal>")), 0..0),
-            )
-            .with_message(format!("Missing primitive: {}", name))
-            .with_note(format!("The primitive `{}` must be defined but is missing", name))
-            .finish(),
         }
     }
 }

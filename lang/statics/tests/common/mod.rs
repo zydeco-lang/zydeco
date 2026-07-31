@@ -20,12 +20,7 @@ impl TestFixture {
             ctxs_pat_local: Default::default(),
             coctxs_pat_local: Default::default(),
             coctxs_term_local: Default::default(),
-            exts: Default::default(),
             blocks: Default::default(),
-            root: zydeco_statics::surface_syntax::ContextualTerm {
-                context: Default::default(),
-                body: None,
-            },
         };
         test(&mut Tycker::new(&spans, &prim, &mut scoped));
     }

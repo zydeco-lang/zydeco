@@ -1,0 +1,31 @@
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  let Mixed =
+    (left :: Int) * (Int * (right :: Int))
+  that
+  def mixed : Mixed = (
+    left = 2 : Int,
+    3 : Int,
+    right = 4 : Int
+  ) that
+
+  let (
+    left = left : Int,
+    middle : Int,
+    right = right : Int
+  ) = mixed in
+  do tens <- ! (api/mul) middle 10;
+  do hundreds <- ! (api/mul) right 100;
+  do low <- ! (api/add) left tens;
+  do checksum <- ! (api/add) low hundreds;
+  do layout_check <- ! (api/sub) checksum 432;
+  do left_projection_check <- ! (api/sub) mixed/left 2;
+  do right_projection_check <- ! (api/sub) mixed/right 4;
+  do total <- ! (api/add) layout_check left_projection_check;
+  do total <- ! (api/add) total right_projection_check;
+  ! (api/exit) total
+end

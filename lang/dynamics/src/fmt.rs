@@ -12,19 +12,6 @@ impl<'arena> Formatter<'arena> {
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Declaration {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        match self {
-            | Declaration::VAliasBody(VAliasBody { binder, bindee }) => {
-                format!("def {} = {} end", binder.ugly(f), bindee.ugly(f))
-            }
-            | Declaration::Exec(Exec(comp)) => {
-                format!("exec {} end", comp.ugly(f))
-            }
-        }
-    }
-}
-
 impl<'a> Ugly<'a, Formatter<'a>> for DefId {
     fn ugly(&self, f: &'a Formatter) -> String {
         let VarName(name) = &f.arena.defs[self];
@@ -50,6 +37,9 @@ impl<'a> Ugly<'a, Formatter<'a>> for Value {
         match self {
             | Value::Hole(Hole) => "_".to_string(),
             | Value::Var(def) => def.ugly(f),
+            | Value::Let(Let { binder, bindee, tail }) => {
+                format!("let {} = {} in {}", binder.ugly(f), bindee.ugly(f), tail.ugly(f))
+            }
             | Value::Thunk(Thunk(body)) => {
                 format!("{{ {} }}", body.ugly(f))
             }

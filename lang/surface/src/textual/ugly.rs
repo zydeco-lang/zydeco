@@ -12,15 +12,6 @@ impl<'arena> Formatter<'arena> {
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for TopLevel {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let TopLevel(decls) = self;
-        s += &decls.iter().map(|decl| (*decl).ugly(f)).collect::<Vec<_>>().join("\n");
-        s
-    }
-}
-
 impl<'a> Ugly<'a, Formatter<'a>> for DefId {
     fn ugly(&self, f: &'a Formatter) -> String {
         let name = &f.arena.defs[self];
@@ -63,6 +54,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
         let term = &f.arena.terms[self];
         match term {
             | Term::Meta(t) => s += &t.ugly(f),
+            | Term::SourceBoundary(SourceBoundary(t)) => s += &t.ugly(f),
             | Term::Ann(t) => s += &t.ugly(f),
             | Term::Hole(t) => s += &t.ugly(f),
             | Term::Var(t) => s += &t.ugly(f),
@@ -102,40 +94,9 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for DeclId {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let Modifiers { public, external, inner } = &f.arena.decls[self];
-        let mut s = String::new();
-        if *public {
-            s += "pub ";
-        }
-        if *external {
-            s += "extern ";
-        }
-        use Declaration as Decl;
-        match inner {
-            | Decl::Meta(d) => s += &d.ugly(f),
-            | Decl::DataDef(d) => s += &d.ugly(f),
-            | Decl::CoDataDef(d) => s += &d.ugly(f),
-            | Decl::Define(d) => s += &d.ugly(f),
-            | Decl::Alias(d) => s += &d.ugly(f),
-            | Decl::Exec(d) => s += &d.ugly(f),
-        }
-        s
-    }
-}
-
 impl<'a> Ugly<'a, Formatter<'a>> for Meta {
     fn ugly(&self, _f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let Meta { stem, args } = self;
-        s += stem;
-        if !args.is_empty() {
-            s += "(";
-            s += &args.iter().map(|a| a.ugly(_f)).collect::<Vec<_>>().join(",");
-            s += ")";
-        }
-        s
+        self.to_string()
     }
 }
 
@@ -390,12 +351,14 @@ impl<'a> Ugly<'a, Formatter<'a>> for Exists {
 
 impl<'a> Ugly<'a, Formatter<'a>> for ManifestExists {
     fn ugly(&self, f: &'a Formatter) -> String {
-        let ManifestExists { binder, definition, kind, body } = self;
+        let ManifestExists { binder, definition, classifier, body } = self;
+        let classifier =
+            classifier.map(|classifier| format!(" : {}", classifier.ugly(f))).unwrap_or_default();
         format!(
-            "exists ({} as {} : {}) . {}",
+            "exists ({} as {}{}) . {}",
             binder.ugly(f),
             definition.ugly(f),
-            kind.ugly(f),
+            classifier,
             body.ugly(f)
         )
     }
@@ -649,87 +612,6 @@ where
         s += "]";
         s += " ";
         s += &(*decl).ugly(f);
-        s
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for Define {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let Define(b) = self;
-        s += "def ";
-        s += &b.ugly(f);
-        s += " end";
-        s
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for Alias {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let Alias(b) = self;
-        s += "alias ";
-        s += &b.ugly(f);
-        s += " end";
-        s
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for DataDef {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let DataDef { name, params, def: Data { arms } } = self;
-        s += "data ";
-        s += &name.ugly(f);
-        for param in params {
-            s += " ";
-            s += &param.ugly(f);
-        }
-        s += " where";
-        for DataArm { name, param } in arms {
-            s += " | ";
-            s += &name.ugly(f);
-            s += " ";
-            s += &param.ugly(f);
-        }
-        s += " end";
-        s
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for CoDataDef {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let CoDataDef { name, params, def: CoData { arms } } = self;
-        s += "codata ";
-        s += &name.ugly(f);
-        for param in params {
-            s += " ";
-            s += &param.ugly(f);
-        }
-        s += " where";
-        for CoDataArm { name, params, out } in arms {
-            s += " | ";
-            s += &name.ugly(f);
-            if let Some(params) = params {
-                s += " ";
-                s += &params.ugly(f);
-            }
-            s += " : ";
-            s += &out.ugly(f);
-        }
-        s += " end";
-        s
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for Exec {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let Exec(m) = self;
-        s += "main ";
-        s += &m.ugly(f);
-        s += " end";
         s
     }
 }

@@ -9,9 +9,8 @@ use zydeco_utils::span::PathDisplay;
 
 /// Create a source cache from a `HashMap<PathBuf, String>`.
 ///
-/// This allows Ariadne to access source code that's stored in memory (from
-/// `PackageStew.sources` or `PackageScoped.sources`) rather than requiring
-/// files to be on disk.
+/// This allows Ariadne to access assembled source text held in memory rather
+/// than requiring files to be read again from disk.
 pub fn create_source_cache(
     sources: &HashMap<PathBuf, String>,
 ) -> FnCache<

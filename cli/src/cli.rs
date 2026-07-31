@@ -14,10 +14,7 @@ pub enum Commands {
     Run {
         /// Path to the file to run
         #[arg(value_name = "FILE")]
-        files: Vec<PathBuf>,
-        /// Name of the binary
-        #[arg(long)]
-        bin: Option<String>,
+        file: PathBuf,
         /// Dry run (don't execute)
         #[arg(long, default_value_t = false)]
         dry: bool,
@@ -32,7 +29,7 @@ pub enum Commands {
     Check {
         /// Path to the file to check
         #[arg(value_name = "FILE")]
-        files: Vec<PathBuf>,
+        file: PathBuf,
         /// Level of verbosity
         #[arg(short, long, action = ArgAction::Count)]
         verbose: u8,
@@ -46,10 +43,7 @@ pub enum Commands {
     Build {
         /// Path to the file to compile
         #[arg(value_name = "FILE")]
-        files: Vec<PathBuf>,
-        /// Name of the binary
-        #[arg(long)]
-        bin: Option<String>,
+        file: PathBuf,
         /// Target OS (defaults to host OS)
         #[arg(long)]
         target_os: Option<String>,

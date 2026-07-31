@@ -5,7 +5,6 @@ pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
 use crate::textual::syntax as t;
 use derive_more::From;
-use std::ops::AddAssign;
 use zydeco_utils::cells::MultiCell;
 
 /* ------------------------------- Identifier ------------------------------- */
@@ -14,7 +13,6 @@ zydeco_utils::new_key_type! {
     pub struct DefId;
     pub struct PatId;
     pub struct TermId;
-    pub struct DeclId;
 }
 
 #[derive(From, Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -23,7 +21,6 @@ pub enum EntityId {
     Def(DefId),
     Pat(PatId),
     Term(TermId),
-    Decl(DeclId),
 }
 
 /* --------------------------------- Binder --------------------------------- */
@@ -67,10 +64,20 @@ pub struct ManifestExists {
     pub body: TermId,
 }
 
+/// The ordinary type definitions used to elaborate a monadic block.
+#[derive(Clone, Debug)]
+pub struct MonadicBasis {
+    pub monad: TermId,
+    pub algebra: TermId,
+}
+
 /// `monadic ... end`
 #[derive(Clone, Debug)]
 /// Monadic block body kept as a single node until later translation.
-pub struct MoBlock(pub TermId);
+pub struct MoBlock {
+    pub body: TermId,
+    pub basis: MonadicBasis,
+}
 
 /// A term whose nested `that` forms contribute to one block context.
 #[derive(Clone, Debug)]
@@ -102,7 +109,7 @@ pub struct Residual(pub TermId);
 /// A recursive type component followed by the residual term of its block.
 #[derive(Clone, Debug)]
 pub struct RecGroup {
-    pub definitions: Vec<AliasBody>,
+    pub definitions: Vec<RecursiveDefinition>,
     pub tail: TermId,
 }
 
@@ -131,6 +138,7 @@ pub struct CoDataArm {
 #[derive(From, Clone, Debug)]
 pub enum Term<Ref> {
     Meta(MetaT<TermId>),
+    SourceBoundary(SourceBoundary<TermId>),
     Internal(Internal),
     Sealed(Sealed<TermId>),
     Ann(Ann<TermId, TermId>),
@@ -172,54 +180,19 @@ pub enum Term<Ref> {
     Lit(Literal),
 }
 
-/* -------------------------------- TopLevel -------------------------------- */
-
 #[derive(Clone, Debug)]
-pub struct AliasBody {
+pub struct RecursiveDefinition {
     pub binder: PatId,
     pub bindee: TermId,
 }
 
-#[derive(Clone, Debug)]
-pub struct AliasHead {
-    pub binder: PatId,
-    pub ty: Option<TermId>,
-}
-
-#[derive(Clone, Debug)]
-pub struct Exec(pub TermId);
-
-#[derive(Clone, From, Debug)]
-pub enum Declaration {
-    Meta(MetaT<DeclId>),
-    AliasBody(AliasBody),
-    AliasHead(AliasHead),
-    Exec(Exec),
-}
-
-#[derive(From, Clone, Debug)]
-pub enum ReplInput {
-    Declaration(Modifiers<Declaration>),
-    Term(TermId),
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct TopLevel(pub Vec<DeclId>);
-impl AddAssign for TopLevel {
-    fn add_assign(&mut self, rhs: TopLevel) {
-        self.0.extend(rhs.0);
-    }
-}
-
 /* -------------------------------- Primitive ------------------------------- */
 
-/// Primitive terms injected by desugaring.
+/// Internal terms introduced while desugaring one source unit.
 ///
-/// Collects those terms that are `Internal` within the bitter syntax so name
-/// resolution can treat them as primitives and avoid accidental capture.
-///
-/// To add a new primitive term, add a field here and follow instructions at
-/// [`crate::scoped::syntax::PrimDefs`].
+/// The terms remain explicit nodes through name resolution. This inventory is
+/// retained for compatibility with monadic transformations that still carry
+/// legacy primitive-definition metadata.
 #[derive(Clone, Default, derive_more::AddAssign)]
 pub struct PrimTerms {
     /// VType kind

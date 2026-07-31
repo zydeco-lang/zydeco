@@ -18,7 +18,6 @@ impl_span_view_pair! {
     DefId
     PatId
     TermId
-    DeclId
 }
 
 macro_rules! impl_span_view_desugarer {
@@ -38,5 +37,4 @@ impl_span_view_desugarer! {
     DefId
     PatId
     TermId
-    DeclId
 }

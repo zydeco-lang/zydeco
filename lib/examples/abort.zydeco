@@ -1,33 +1,59 @@
--- Function Types and the abort example
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../std/builtin.zy")] _
+  ) that
 
--- Funciton Type
-codata Fn (A: VType) (B: CType) where
-  | .push (arg: A) : B
-end
+  def Fn :
+    (VType) ->
+    (CType) ->
+    (CType) =
+    begin
+      param (A : VType) that
+      param (B : CType) that
+      codata
+      | .push : A -> B
+      end
+    end
+  that
+  def FnOpt :
+    (VType) ->
+    (CType) ->
+    (CType) =
+    begin
+      param (A : VType) that
+      param (B : CType) that
+      codata
+      | .some : A -> B
+      | .none : B
+      end
+    end
+  that
+  def FnVar :
+    (VType) ->
+    (CType) ->
+    (CType) =
+    begin
+      param (A : VType) that
+      param (B : CType) that
+      codata
+      | .more : A -> FnVar A B
+      | .done : B
+      end
+    end
+  that
+  def abort : Thk (
+    forall (A : VType) .
+      A -> FnVar A (Ret A)
+  ) = {
+    fn A first ->
+      fix (unwind : Thk (FnVar A (Ret A))) ->
+        comatch
+        | .more _ -> ! unwind
+        | .done -> ret first
+        end
+  } that
 
--- Function Type with Optional Argument
-codata FnOpt (A: VType) (B: CType) where
-  | .some (arg: A) : B
-  | .none          : B
-end
-
--- Variadic Function Type
-codata FnVar (A: VType) (B: CType) where
-  | .more (arg: A) : FnVar A B
-  | .done          : B
-end
-
-
--- Abort that takes the first argument and removes the rest
-def ! abort : forall (A: VType) . A -> FnVar A (Ret A) =
-  fn A -> fn x -> fix unwind ->
-  comatch
-  | .more _ -> ! unwind
-  | .done -> ret x
-  end
-end
-
-main
-  do i <- ! abort Int 0 .more 1 .more 2 .done;
-  ! exit i
+  do status <- ! abort Int 0 .more 1 .more 2 .done;
+  ! (api/exit) status
 end

@@ -1,0 +1,81 @@
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  do twelve <- ! (api/int_to_str) 12;
+  do combined <- ! (api/str_append) twelve twelve;
+  do length <- ! (api/str_length) combined;
+  do parsed <- ! (api/str_to_int) combined;
+  do first <- ! (api/str_index) combined 0;
+  do first_code <- ! (api/char_to_int) first;
+  do first_string <- ! (api/char_to_str) first;
+  do one_string <- ! (api/int_to_str) 1;
+  do negative <- ! (api/int_to_str) -1;
+  do dash <- ! (api/str_index) negative 0;
+  do fold_status <- ! (api/arg_fold)
+    (Ret Int)
+    { ret 0 }
+    {
+      fn argument remaining ->
+        ret 1
+    };
+  do length_status <- ! (api/sub) length 4;
+  do parsed_status <- ! (api/sub) parsed 1212;
+  do first_status <- ! (api/sub) first_code 49;
+  do status <- ! (api/add) length_status parsed_status;
+  do status <- ! (api/add) status first_status;
+  do status <- ! (api/add) status fold_status;
+  ! (api/str_eq_branch)
+    OS
+    first_string
+    one_string
+    {
+      ! (api/str_split_once_branch)
+        OS
+        negative
+        dash
+        { ! (api/exit) 1 }
+        {
+          fn prefix suffix ->
+            do prefix_length <- ! (api/str_length) prefix;
+            ! (api/int_eq_branch)
+              OS
+              prefix_length
+              0
+              {
+                ! (api/str_eq_branch)
+                  OS
+                  suffix
+                  one_string
+                  {
+                    ! (api/str_split_n_branch)
+                      OS
+                      combined
+                      2
+                      { ! (api/exit) 1 }
+                      {
+                        fn left right ->
+                          ! (api/str_eq_branch)
+                            OS
+                            left
+                            twelve
+                            {
+                              ! (api/str_eq_branch)
+                                OS
+                                right
+                                twelve
+                                { ! (api/exit) status }
+                                { ! (api/exit) 1 }
+                            }
+                            { ! (api/exit) 1 }
+                      }
+                  }
+                  { ! (api/exit) 1 }
+              }
+              { ! (api/exit) 1 }
+        }
+    }
+    { ! (api/exit) 1 }
+end

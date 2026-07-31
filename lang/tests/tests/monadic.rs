@@ -1,5 +1,5 @@
-use zydeco_tests::interp_proj_bin;
+use zydeco_tests::interp_source;
 
-interp_proj_bin!(tests / monadic, exnt, "exnt");
-interp_proj_bin!(tests / monadic, exnkt, "exnkt");
-interp_proj_bin!(tests / monadic, mobin, "mobin");
+interp_source!(exnt, "tests/source/oopsla-exception-transformers.zy");
+interp_source!(exnkt, "tests/source/oopsla-exception-transformers.zy");
+interp_source!(mobin, "tests/source/monadic-mobin.zy");

@@ -1,0 +1,59 @@
+exists (VType as @[intrinsic(vtype)] _) .
+exists (CType as @[intrinsic(ctype)] _) .
+exists (Thk as @[intrinsic(thk)] _) .
+exists (Ret as @[intrinsic(ret)] _) .
+exists (Unit as @[intrinsic(unit)] _) .
+  @[builtin(int)] exists (Int : VType) .
+    (@[builtin(char)] exists (Char : VType) .
+      (@[builtin(string)] exists (String : VType) .
+        (@[builtin(os)] exists (OS : CType) .
+          ((@[builtin(add)] (add :: Thk (Int -> Int -> Ret Int))) *
+           (@[builtin(sub)] (sub :: Thk (Int -> Int -> Ret Int))) *
+           (@[builtin(mul)] (mul :: Thk (Int -> Int -> Ret Int))) *
+           (@[builtin(div)] (div :: Thk (Int -> Int -> Ret Int))) *
+           (@[builtin(mod)] (mod :: Thk (Int -> Int -> Ret Int))) *
+           (@[builtin(int_eq)] (int_eq_branch :: Thk (
+             forall (R : CType) .
+               Int -> Int -> Thk R -> Thk R -> R
+           ))) *
+           (@[builtin(int_lt)] (int_lt_branch :: Thk (
+             forall (R : CType) .
+               Int -> Int -> Thk R -> Thk R -> R
+           ))) *
+           (@[builtin(int_gt)] (int_gt_branch :: Thk (
+             forall (R : CType) .
+               Int -> Int -> Thk R -> Thk R -> R
+           ))) *
+           (@[builtin(str_length)] (str_length :: Thk (String -> Ret Int))) *
+           (@[builtin(str_append)] (str_append :: Thk (String -> String -> Ret String))) *
+           (@[builtin(str_split_once)] (str_split_once_branch :: Thk (
+             forall (R : CType) .
+               String -> Char -> Thk R -> Thk (String -> String -> R) -> R
+           ))) *
+           (@[builtin(str_split_n)] (str_split_n_branch :: Thk (
+             forall (R : CType) .
+               String -> Int -> Thk R -> Thk (String -> String -> R) -> R
+           ))) *
+           (@[builtin(str_eq)] (str_eq_branch :: Thk (
+             forall (R : CType) .
+               String -> String -> Thk R -> Thk R -> R
+           ))) *
+           (@[builtin(str_index)] (str_index :: Thk (String -> Int -> Ret Char))) *
+           (@[builtin(int_to_str)] (int_to_str :: Thk (Int -> Ret String))) *
+           (@[builtin(char_to_str)] (char_to_str :: Thk (Char -> Ret String))) *
+           (@[builtin(char_to_int)] (char_to_int :: Thk (Char -> Ret Int))) *
+           (@[builtin(str_to_int)] (str_to_int :: Thk (String -> Ret Int))) *
+           (@[builtin(write_str)] (write_str :: Thk (String -> Thk OS -> OS))) *
+           (@[builtin(write_int)] (write_int :: Thk (Int -> Thk OS -> OS))) *
+           (@[builtin(write_line)] (write_line :: Thk (String -> Thk OS -> OS))) *
+           (@[builtin(read_line)] (read_line :: Thk (Thk (String -> OS) -> OS))) *
+           (@[builtin(read_line_as_int)] (read_line_as_int_branch :: Thk (
+             Thk OS -> Thk (Int -> OS) -> OS
+           ))) *
+           (@[builtin(read_till_eof)] (read_till_eof :: Thk (Thk (String -> OS) -> OS))) *
+           (@[builtin(arg_list)] (arg_fold :: Thk (
+             forall (R : CType) .
+               Thk R -> Thk (String -> Thk R -> R) -> R
+           ))) *
+           (@[builtin(random_int)] (random_int :: Thk (Thk (Int -> OS) -> OS))) *
+           (@[builtin(exit)] (exit :: Thk (Int -> OS)))))))

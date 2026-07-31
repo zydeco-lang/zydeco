@@ -28,7 +28,6 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand help 'Print this message or the help of the given subcommand(s)'
         }
         &'zydeco;run'= {
-            cand --bin 'Name of the binary'
             cand --dry 'Dry run (don''t execute)'
             cand -v 'Level of verbosity'
             cand --verbose 'Level of verbosity'
@@ -42,7 +41,6 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand --help 'Print help'
         }
         &'zydeco;build'= {
-            cand --bin 'Name of the binary'
             cand --target-os 'Target OS (defaults to host OS)'
             cand --target-arch 'Target architecture (defaults to host architecture)'
             cand -t 'Target backend (zir, zasm, asm, llvm, exe, llvm-exe)'

@@ -178,26 +178,28 @@ representation.
 
 ### Source Organization and Modules
 
-Zydeco temporarily has no source-language module, namespace, import, layer, or
-qualified-name machinery. Files that previously used module blocks are
-flattened into one global binding context, with comments retaining any useful
-organizational boundaries. Parsing and desugaring still use declarations as
-source-organization syntax. Name resolution eliminates that sort and produces
-one contextual term: its binding context is an SCC condensation DAG and its
-optional body is the executable program. Ordinary local and global `VarName`s
-therefore map directly to their definitions. Filesystem paths in project
-dependency configuration remain a driver concern and do not introduce paths
-into the language. A future module system will be designed afresh rather than
-constrained by the removed scaffolding.
+Every Zydeco source file contains exactly one complete term. Imports are typed
+metadata on holes, such as `@[import("library.zy")] _`, rather than namespace
+operations. The driver discovers a file dependency graph, orders providers
+before their consumers, and substitutes a freshly cloned provider term at each
+import occurrence. A source boundary around each clone prevents free names and
+mobile block bindings from crossing the file boundary.
+
+Libraries use ordinary term abstractions and package types. Transparent
+definitions travel through products and manifest package signatures; abstract
+types travel through existential packages and package-dependent arrows. The
+language therefore needs no module, namespace, visibility, or qualified-name
+sort to compose the current whole-program sources. Separate compilation and
+external package discovery remain future work and should elaborate to the same
+term-level interfaces.
 
 The same representation supports nested context-forming terms. A
 `begin ... end` term collects `param`, `let`, and `def` forms connected by
 `that` up to the nearest block boundary. Name resolution installs all of their
 pattern binders before resolving the block, records dependencies from right-hand
 sides and pattern annotations, and retains the resulting condensation DAG in
-`ScopedArena`. Dependencies also propagate through nested blocks to any
-enclosing context binding, so using a global definition inside a block still
-orders the source-level definition that contains the block.
+`ScopedArena`. Dependencies also propagate through nested blocks to an active
+binding in the enclosing block.
 
 The scoped block also carries a dependency-ordered elaboration for the existing
 static judgments. Acyclic parameters become `Abs` terms, and acyclic transparent
@@ -218,9 +220,12 @@ via the algebra translation implemented in
 `lang/statics/src/tyck/monadic.rs` and invoked from
 `lang/statics/src/tyck/check.rs`.
 
-Monadic blocks are designed to be closed in the paper, but the artifact allows
-use of global types and terms. These global definitions are reinterpreted under
-the block's ambient monad during translation.
+Each monadic block resolves `Monad` and `Algebra` as ordinary types at its lexical site.
+The checker verifies their expected higher kinds and records the selected constructors in the block's
+translation environment. Global types and terms used by the block are then reinterpreted under this
+lexically selected monad during translation. The block's preliminary typing environment retains lexical
+type bindings, including existential witnesses and transparent aliases, while term bindings still require
+the global, inlinable status needed by algebra translation.
 
 ## Implementation Architecture
 
@@ -288,7 +293,7 @@ Two separate type-level relations constrain IDs:
   type checking and transparent syntax make surface-to-typed provenance
   many-to-many, while one typed node can lower to many stack-IR nodes.
 - Parsed entities use a tagged `EntityId` enum, so definitions, patterns,
-  copatterns, terms, and declarations cannot be confused through raw-ID casts.
+  copatterns, and terms cannot be confused through raw-ID casts.
 
 ## Repository Layout
 
@@ -304,8 +309,8 @@ Two separate type-level relations constrain IDs:
 The artifact documents a few important limitations:
 
 - The LLVM emitter is experimental; the tested native backend targets AMD64.
-- The package manager supports only local dependencies.
-- `pub` is parsed, but declaration visibility is not enforced.
-- Debug builds use a larger stack to avoid overflow on large tests.
+- Imports currently address relative or absolute source paths; there is no
+  external package resolver or lock file.
+- Absolute imports are location-dependent and receive no portability warning.
 - Monadic blocks pass monad instances at runtime; inlining is not implemented,
   and only global definitions can be referenced inside blocks.

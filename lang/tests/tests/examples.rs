@@ -1,5 +1,5 @@
-use zydeco_tests::interp_proj_bin;
+use zydeco_tests::interp_source;
 
-interp_proj_bin!(examples, abort, "abort");
-interp_proj_bin!(examples, algebra, "algebra");
-interp_proj_bin!(examples, echo_sum, "echo_sum");
+interp_source!(abort, "examples/abort.zydeco");
+interp_source!(algebra, "examples/algebra.zydeco");
+interp_source!(echo_sum, "examples/echo_sum.zydeco");

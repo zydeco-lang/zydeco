@@ -1,0 +1,49 @@
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  let Inner =
+    (x :: Int) * Int
+  that
+  let Outer =
+    Inner * (z :: Int)
+  that
+  let Wrapped =
+    (outer :: inner :: Int)
+  that
+  def nested : Outer = (
+    (x = 5 : Int, 6 : Int),
+    z = 7 : Int
+  ) that
+  def wrapped : Wrapped = (
+    outer = inner = 8 : Int
+  ) that
+
+  let (
+    inner : Inner,
+    z = z : Int
+  ) = nested in
+  let (
+    x = x : Int,
+    y : Int
+  ) = inner in
+  let (
+    outer = inner = wrapped_value : Int
+  ) = wrapped in
+  do tens <- ! (api/mul) y 10;
+  do hundreds <- ! (api/mul) z 100;
+  do low <- ! (api/add) x tens;
+  do checksum <- ! (api/add) low hundreds;
+  do layout_check <- ! (api/sub) checksum 765;
+  do inner_projection_check <- ! (api/sub) inner/x 5;
+  do outer_projection_check <- ! (api/sub) nested/z 7;
+  do chained_projection_check <- ! (api/sub) wrapped/outer/inner 8;
+  do chained_pattern_check <- ! (api/sub) wrapped_value 8;
+  do total <- ! (api/add) layout_check inner_projection_check;
+  do total <- ! (api/add) total outer_projection_check;
+  do total <- ! (api/add) total chained_projection_check;
+  do total <- ! (api/add) total chained_pattern_check;
+  ! (api/exit) total
+end

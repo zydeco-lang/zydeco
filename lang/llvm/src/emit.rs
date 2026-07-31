@@ -170,7 +170,7 @@ impl<'e> Emitter<'e> {
         self.add_declaration("declare i64 @zydeco_alloc(i64)".to_string());
 
         // Declare user externs
-        for sa::Extern { name, arity } in self.assembly.externs.iter() {
+        for sa::Extern { name, arity, .. } in self.assembly.externs.iter() {
             let label = format!("zydeco_{}", name);
             let args = (1..=*arity).map(|_| "i64").collect::<Vec<_>>().join(", ");
             let decl = format!("declare i64 @{}({})", label, args);
@@ -187,7 +187,7 @@ impl<'e> Emitter<'e> {
         entry_ir.push_str("entry:\n");
 
         // Allocate local slots
-        for _ in 0..context_size {
+        for _ in 0..context_size.max(1) {
             let local = self.alloc_local();
             entry_ir.push_str(&format!("  {} = alloca i64, align 8\n", local));
         }
@@ -215,7 +215,7 @@ impl<'e> Emitter<'e> {
 
                 // Allocate local slots
                 self.stack = StackEntry::default();
-                for _ in 0..context_size {
+                for _ in 0..context_size.max(1) {
                     let local = self.alloc_local();
                     block_ir.push_str(&format!("  {} = alloca i64, align 8\n", local));
                 }
@@ -285,7 +285,7 @@ impl<'a> Emit<'a> for Terminator {
                 let _tag = em.emit_pop();
                 let _ = arms;
             }
-            | Terminator::Extern(sa::Extern { name, arity }) => {
+            | Terminator::Extern(sa::Extern { name, arity, .. }) => {
                 let _func_name = format!("zydeco_{}", name);
                 let mut args = Vec::new();
                 for _ in 0..*arity {

@@ -135,10 +135,15 @@ pub struct PackageAmd64Executable {
 
 impl PackageAmd64Executable {
     pub fn run(self) -> Result<ExitStatus> {
+        self.run_with_args(&[])
+    }
+
+    pub fn run_with_args(self, args: &[String]) -> Result<ExitStatus> {
         let PackageAmd64Executable { name, executable, verbosity } = self;
         log::info!("Running program: {}", name);
         // run the program with interactive I/O
         let mut command = Command::new(&executable);
+        command.args(args);
         if verbosity.enables_runtime_trace_env() {
             command.env("RUST_LOG", "trace");
         }

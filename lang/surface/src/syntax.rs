@@ -5,7 +5,7 @@ pub struct NameDef<T>(pub T);
 
 /* -------------------------------- Primitive ------------------------------- */
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum Internal {
     VType,
     CType,
@@ -29,22 +29,3 @@ pub struct Appli<T>(pub Vec<T>);
 /// `(...)` as paren-shaped container
 #[derive(Clone, Debug)]
 pub struct Paren<T>(pub Vec<T>);
-
-/* -------------------------------- TopLevel -------------------------------- */
-
-// Note: use macro to declare externs?
-#[derive(Clone, Debug)]
-pub struct Modifiers<T> {
-    pub public: bool,
-    pub external: bool,
-    pub inner: T,
-}
-impl<T> Modifiers<T> {
-    pub fn try_map_ref<F, U, E>(&self, f: F) -> Result<Modifiers<U>, E>
-    where
-        F: FnOnce(&T) -> Result<U, E>,
-    {
-        let Modifiers { public, external, inner } = self;
-        Ok(Modifiers { public: *public, external: *external, inner: f(inner)? })
-    }
-}

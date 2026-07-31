@@ -27,6 +27,9 @@ pub mod textual {
     /// Parse error formatting.
     pub mod err;
     pub use err::*;
+    /// Complete term source units and typed source-level directives.
+    pub mod source;
+    pub use source::*;
 
     /// A formatter built on top of the textual syntax.
     /// Introduces the ugly syntax.

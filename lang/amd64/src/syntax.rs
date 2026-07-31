@@ -162,6 +162,10 @@ pub enum Instr {
     Sub(BinArgs),
     #[display("        imul {_0}")]
     IMul(BinArgs),
+    #[display("        cqo")]
+    Cqo,
+    #[display("        idiv {_0}")]
+    IDiv(Reg),
     #[display("        and {_0}")]
     And(BinArgs),
     #[display("        or {_0}")]
@@ -215,6 +219,18 @@ pub enum Instr {
     // Define data
     #[display("        dq {_0}")]
     Dq(String),
+    #[display("        db {_0}")]
+    Db(ByteSequence),
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ByteSequence(pub Vec<u8>);
+
+impl fmt::Display for ByteSequence {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let bytes = self.0.iter().map(u8::to_string).collect::<Vec<_>>().join(", ");
+        write!(f, "{bytes}")
+    }
 }
 
 /// Represents a complete amd64 assembly file organized by ELF sections.

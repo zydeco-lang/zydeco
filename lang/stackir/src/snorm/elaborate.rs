@@ -77,9 +77,9 @@ impl<'a> Elaborate for ValueId {
         match value {
             | Value::Hole(Hole) => Hole.sbuild(el, self, ()),
             | Value::Var(def) => {
-                let user = el.arena.inner.users.entry(def).or_insert_with(Vec::new);
-                user.push(self);
-                def.sbuild(el, self, ())
+                let value = def.sbuild(el, self, ());
+                el.arena.inner.record_value_user(value);
+                value
             }
             | Value::Closure(Closure { stack: Bullet, body }) => {
                 let body = body.elaborate(el);

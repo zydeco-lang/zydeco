@@ -1,29 +1,102 @@
--- # Chapter 8: Lense, Prism and Optics
+-- # Chapter 8: Lenses from Higher-Kinded Functions
 
--- The following code is only a sketch of the idea.
+-- This final sketch encodes a lens by quantifying over a value-to-computation
+-- type constructor. `Identity` interprets a lens as an update; `Const`
+-- interprets the same lens as an observation.
 
-alias Lens (S : VType) (A : VType) : CType =
-  forall (Fun : VType -> CType) . Thunk (A -> Fun A) -> (S -> Fun S)
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../lib/std/builtin.zy")] _
+  ) that
+
+  let Lens =
+    begin
+      param (S : VType) that
+      param (A : VType) that
+      forall (
+        Fun :
+        (VType) ->
+        (CType)
+      ) .
+        Thk (A -> Fun A) ->
+        S ->
+        Fun S
+    end
+  that
+  def Identity :
+    (VType) ->
+    (CType) =
+    begin
+      param (A : VType) that
+      codata
+      | .identity : Ret A
+      end
+    end
+  that
+  def Const :
+    (VType) ->
+    (VType) ->
+    (CType) =
+    begin
+      param (A : VType) that
+      param (B : VType) that
+      codata
+      | .constant : Ret A
+      end
+    end
+  that
+
+  def over : Thk (
+    forall (S : VType) .
+    forall (A : VType) .
+      Thk (Lens S A) ->
+      Thk (A -> Ret A) ->
+      S ->
+      Ret S
+  ) = {
+    fn (S : VType)
+       (A : VType)
+       lens
+       function
+       source ->
+      (! lens
+        Identity
+        {
+          fn focused ->
+            comatch
+            | .identity -> ! function focused
+            end
+        }
+        source)
+      .identity
+  } that
+  def view : Thk (
+    forall (S : VType) .
+    forall (A : VType) .
+      Thk (Lens S A) ->
+      S ->
+      Ret A
+  ) = {
+    fn (S : VType)
+       (A : VType)
+       lens
+       source ->
+      (! lens
+        (Const A)
+        {
+          fn focused ->
+            comatch
+            | .constant -> ret focused
+            end
+        }
+        source)
+      .constant
+  } that
+
+  ! (api/exit) 0
 end
 
-codata Identity (A : VType) where
-| .identity : Ret A
-end
-
-codata Const (A : VType) (B : VType) where
-| .const: Ret A
-end
-
-def ! over (S : VType) (A : VType) (lens : Thunk (Lens S A)) (f : Thunk (A -> Ret A)) (s : S) : Ret S =
-  (! lens Identity { fn a -> fn .identity -> ! f a } s) .identity
-end
-
-def ! view (S : VType) (A : VType) (lens : Thunk (Lens S A)) (s : S) : Ret A =
-  (! lens (Const A) { fn a -> fn .const -> ret a } s) .const
-end
-
-main
-  ! exit 0
-end
-
--- To be continued...
+-- A complete optics library would package these representations and their
+-- laws behind an interface. The important point here is that the encoding is
+-- composed entirely from ordinary type and term functions.

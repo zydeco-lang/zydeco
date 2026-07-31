@@ -1,0 +1,411 @@
+begin
+  let monadic_basis = @[import("../../std/monad.zy")] _ that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  do (= Monad, = Algebra, ()) <-
+    ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  begin
+
+  def Bool : VType =
+    data
+    | +True : Unit
+    | +False : Unit
+    end
+  that
+  def Option :
+    (VType) ->
+    (VType) =
+    begin
+      param (A : VType) that
+      data
+      | +None : Unit
+      | +Some : A
+      end
+    end
+  that
+  def Exception : VType =
+    data
+    | +TypeError : Unit
+    | +FreeVariable : Unit
+    end
+  that
+  def MonadErrPrint :
+    (
+      (
+        (VType) ->
+        (CType)
+      ) ->
+      (CType)
+    ) =
+    begin
+      param (
+        M :
+        (VType) ->
+        (CType)
+      ) that
+      codata
+      | .return :
+        forall (A : VType) .
+          A -> M A
+      | .bind :
+        forall (A : VType) .
+        forall (B : VType) .
+          Thk (M A) ->
+          Thk (A -> M B) ->
+          M B
+      | .fail :
+        forall (A : VType) .
+          Exception -> M A
+      | .print :
+        String -> M Unit
+      end
+    end
+  that
+  def MExnOS :
+    (VType) ->
+    (CType) =
+    begin
+      param (A : VType) that
+      codata
+      | .run :
+        Thk (A -> OS) ->
+        Thk (Exception -> OS) ->
+        OS
+      end
+    end
+  that
+
+  def EnvT : VType =
+    data
+    | +Empty : Unit
+    | +Extend : String * Value * EnvT
+    end
+  that
+  def EnvO : CType =
+    codata
+    | .lookup : String -> Ret (Option Value)
+    | .extend : String -> Value -> EnvO
+    end
+  that
+  def Value : VType =
+    data
+    | +Bool : Bool
+    | +Thunk : Thk Compu
+    end
+  that
+  def Compu : CType =
+    codata
+    | .app : Value -> Compu
+    | .bind : MExnOS Value
+    end
+  that
+  def SValue : VType =
+    data
+    | +Var : String
+    | +Bool : Bool
+    | +Thunk : SCompu
+    end
+  that
+  def SCompu : VType =
+    data
+    | +Lam : String * SCompu
+    | +App : SCompu * SValue
+    | +Ret : SValue
+    | +Bind : SCompu * String * SCompu
+    | +Force : SValue
+    | +If : SValue * SCompu * SCompu
+    end
+  that
+  def Interp : CType =
+    codata
+    | .value : SValue -> MExnOS Value
+    | .compu : SCompu -> Compu
+    end
+  that
+
+  def mexn : Thk (MonadErrPrint MExnOS) = {
+    comatch
+    | .return A value ->
+      comatch
+      | .run success _ ->
+        ! success value
+      end
+    | .bind A B computation function ->
+      comatch
+      | .run success failure ->
+        ! computation .run
+          {
+            fn value ->
+              ! function value .run success failure
+          }
+          {
+            fn exception ->
+              ! failure exception
+          }
+      end
+    | .fail A exception ->
+      comatch
+      | .run _ failure ->
+        ! failure exception
+      end
+    | .print string ->
+      comatch
+      | .run success _ ->
+        ! (api/write_line) string {
+          ! success ()
+        }
+      end
+    end
+  } that
+  def bool_eq : Thk (Bool -> Bool -> Ret Bool) = {
+    fn left right ->
+      match left
+      | +True() ->
+        match right
+        | +True() -> ret +True()
+        | +False() -> ret +False()
+        end
+      | +False() ->
+        match right
+        | +True() -> ret +False()
+        | +False() -> ret +True()
+        end
+      end
+  } that
+  def str_eq : Thk (String -> String -> Ret Bool) = {
+    fn left right ->
+      ! (api/str_eq_branch)
+        (Ret Bool)
+        left
+        right
+        { ret +True() }
+        { ret +False() }
+  } that
+  def envo : Thk (EnvT -> EnvO) = {
+    fix (envo : Thk (EnvT -> EnvO)) ->
+      fn environment ->
+        comatch
+        | .lookup requested ->
+          match environment
+          | +Empty() -> ret +None()
+          | +Extend(name, value, tail) ->
+            do equal <- ! str_eq requested name;
+            match equal
+            | +True() -> ret +Some(value)
+            | +False() -> ! envo tail .lookup requested
+            end
+          end
+        | .extend name value ->
+          ! envo +Extend(name, value, environment)
+        end
+  } that
+  def abort : Thk (Exception -> Compu) = {
+    fn exception ->
+      fix (unwind : Thk Compu) ->
+        comatch
+        | .app _ -> ! unwind
+        | .bind -> ! mexn .fail Value exception
+        end
+  } that
+  def malg : Thk (Algebra MExnOS Compu) = {
+    fix (malg : Thk (Algebra MExnOS Compu)) ->
+      fn A computation function ->
+        comatch
+        | .app argument ->
+          ! malg A computation {
+            fn value ->
+              ! function value .app argument
+          }
+        | .bind ->
+          ! mexn .bind A Value computation {
+            fn value ->
+              ! function value .bind
+          }
+        end
+  } that
+  def interp : Thk (Thk EnvO -> Interp) = {
+    fix (interp : Thk (Thk EnvO -> Interp)) ->
+      fn environment ->
+        comatch
+        | .value syntax_value ->
+          match syntax_value
+          | +Var(name) ->
+            do result <- ! environment .lookup name;
+            match result
+            | +None() ->
+              ! mexn .fail Value +FreeVariable()
+            | +Some(value) ->
+              ! mexn .return Value value
+            end
+          | +Bool(value) ->
+            ! mexn .return Value +Bool(value)
+          | +Thunk(computation) ->
+            ! mexn .return Value +Thunk({
+              ! interp environment .compu computation
+            })
+          end
+        | .compu syntax_computation ->
+          match syntax_computation
+          | +Lam(name, body) ->
+            comatch
+            | .app value ->
+              ! interp
+                { ! environment .extend name value }
+                .compu
+                body
+            | .bind ->
+              ! mexn .fail Value +TypeError()
+            end
+          | +App(function, argument) ->
+            let argument_computation = {
+              ! interp environment .value argument
+            } in
+            ! malg Value argument_computation {
+              fn value ->
+                ! interp environment .compu function .app value
+            }
+          | +Ret(syntax_value) ->
+            let unwind : Thk (
+              Thk (MExnOS Value) ->
+              Compu
+            ) = {
+              fix (
+                unwind :
+                Thk (
+                  Thk (MExnOS Value) ->
+                  Compu
+                )
+              ) ->
+                fn computation ->
+                  comatch
+                  | .app _ ->
+                    ! unwind {
+                      ! mexn .fail Value +TypeError()
+                    }
+                  | .bind -> ! computation
+                  end
+            } in
+            ! unwind {
+              ! interp environment .value syntax_value
+            }
+          | +Bind(bindee, name, body) ->
+            let computation = {
+              ! interp environment .compu bindee .bind
+            } in
+            ! malg Value computation {
+              fn value ->
+                ! interp
+                  { ! environment .extend name value }
+                  .compu
+                  body
+            }
+          | +Force(syntax_value) ->
+            let computation = {
+              ! interp environment .value syntax_value
+            } in
+            ! malg Value computation {
+              fn value ->
+                match value
+                | +Bool(_) -> ! abort +TypeError()
+                | +Thunk(thunk) -> ! thunk
+                end
+            }
+          | +If(condition, consequent, alternative) ->
+            let computation = {
+              ! interp environment .value condition
+            } in
+            ! malg Value computation {
+              fn value ->
+                match value
+                | +Bool(boolean) ->
+                  match boolean
+                  | +True() ->
+                    ! interp environment .compu consequent
+                  | +False() ->
+                    ! interp environment .compu alternative
+                  end
+                | +Thunk(_) -> ! abort +TypeError()
+                end
+            }
+          end
+        end
+  } that
+
+  let environment : Thk EnvO = {
+    ! envo +Empty()
+  } in
+  let report : Thk (Exception -> OS) = {
+    fn _ ->
+      ! (api/exit) 1
+  } in
+  let value_eq : Thk (
+    Value ->
+    Value ->
+    Thk OS ->
+    OS
+  ) = {
+    fn left right continuation ->
+      match left
+      | +Bool(left) ->
+        match right
+        | +Bool(right) ->
+          do equal <- ! bool_eq left right;
+          match equal
+          | +True() ->
+            ! (api/write_line) "\\^o^/" continuation
+          | +False() -> ! (api/exit) 1
+          end
+        | +Thunk(_) -> ! (api/exit) 1
+        end
+      | +Thunk(_) -> ! (api/exit) 1
+      end
+  } in
+  let demo : Thk (
+    SCompu ->
+    Value ->
+    Thk OS ->
+    OS
+  ) = {
+    fn term answer continuation ->
+      ! interp environment .compu term .bind .run
+        {
+          fn value ->
+            ! value_eq value answer continuation
+        }
+        report
+  } in
+  let term1 : SCompu =
+    +If(
+      +Bool(+True()),
+      +Ret(+Bool(+True())),
+      +Ret(+Bool(+False()))
+    )
+  in
+  let answer1 : Value = +Bool(+True()) in
+  let term2 : SCompu =
+    +App(
+      +Bind(
+        +Ret(+Bool(+True())),
+        "x",
+        +Lam(
+          "b",
+          +If(
+            +Var("b"),
+            +Ret(+Var("x")),
+            +Ret(+Bool(+False()))
+          )
+        )
+      ),
+      +Bool(+True())
+    )
+  in
+  let answer2 : Value = +Bool(+True()) in
+  ! demo term1 answer1 {
+    ! demo term2 answer2 {
+      ! (api/exit) 0
+    }
+  }
+end
+end

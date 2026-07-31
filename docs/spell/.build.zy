@@ -1,101 +1,205 @@
-alias GuardResult = Pair String Bool end
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../lib/std/builtin.zy")] _
+  ) that
 
--- checks if line starts with "-- " and remove it
-def ! guard (line : String) : Ret GuardResult =
-  let ! bind (b : Bool) (b~ : Thunk (Ret Bool)) : Ret Bool =
-    ! if (Ret Bool) b b~ { ret b }
-  in
-  do l <- ! str_length line;
-  let ifp~ = { ! if~ (Ret GuardResult) } in
-  ! ifp~ { ! int_lt l 3 } {
-    ret +Cons(line, false)
-  } {
-    -- can index into
-    do c1 <- ! str_index line 0;
-    do c2 <- ! str_index line 1;
-    do c3 <- ! str_index line 2;
-    do p? <- ! str_split_n line 3;
-    match p?
-    | +Some(p) ->
-      match p
-      | +Cons(_, line') ->
-        do b1 <- ! bind true { ! char_eq c1 '-' };
-        do b2 <- ! bind b1 { ! char_eq c2 '-' };
-        do b3 <- ! bind b2 { ! char_eq c3 ' ' };
-        ! if (Ret GuardResult) b3 {
-          ret +Cons(line', true)
-        } {
-          ret +Cons(line, false)
+  def Bool : VType =
+    data
+    | +True : Unit
+    | +False : Unit
+    end
+  that
+  def branch : Thk (
+    forall (B : CType) .
+      Bool -> Thk B -> Thk B -> B
+  ) = {
+    fn (B : CType)
+       condition
+       when_true
+       when_false ->
+      match condition
+      | +True() -> ! when_true
+      | +False() -> ! when_false
+      end
+  } that
+  def int_equal : Thk (
+    Int -> Int -> Ret Bool
+  ) = {
+    fn left right ->
+      ! (api/int_eq_branch)
+        (Ret Bool)
+        left
+        right
+        { ret +True() }
+        { ret +False() }
+  } that
+  def int_less : Thk (
+    Int -> Int -> Ret Bool
+  ) = {
+    fn left right ->
+      ! (api/int_lt_branch)
+        (Ret Bool)
+        left
+        right
+        { ret +True() }
+        { ret +False() }
+  } that
+  def string_equal : Thk (
+    String -> String -> Ret Bool
+  ) = {
+    fn left right ->
+      ! (api/str_eq_branch)
+        (Ret Bool)
+        left
+        right
+        { ret +True() }
+        { ret +False() }
+  } that
+
+  -- Return the line without a leading comment marker and whether one existed.
+  def classify_line : Thk (
+    String ->
+    Ret (String * Bool)
+  ) = {
+    fn line ->
+      do length <- ! (api/str_length) line;
+      do too_short <- ! int_less length 3;
+      ! branch
+        (Ret (String * Bool))
+        too_short
+        {
+          do bare_comment <- ! string_equal line "--";
+          ! branch
+            (Ret (String * Bool))
+            bare_comment
+            { ret ("", +True()) }
+            { ret (line, +False()) }
         }
-      end
-    | +None() -> 
-      ret +Cons(line, false)
-    end
-  }
-end
-
-def ! str_empty? (s : String) : Ret Bool =
-  do l <- ! str_length s;
-  ! int_eq l 0
-end
-
-main
-  let fix loop (rest : String) (code : Bool) : OS =
-    do p? <- ! str_split_once rest '\n';
-    match p?
-    | +Some(p) ->
-      match p
-      | +Cons(line, r) ->
-        do p <- ! guard line;
-        match p
-        | +Cons(res, comment_head) ->
-          ! if~ OS { ! not code } {
-            -- normal mode:
-            do empty? <- ! str_empty? res;
-            ! if OS empty? {
-              ! write_str "\n\n" {
-              ! loop r code }
-            } {
-              ! if OS comment_head {
-                -- if starts with "-- " then remove it and output the line
-                ! write_str res {
-                ! write_str " " {
-                ! loop r code } }
-              } {
-                -- if not, output "```" and output the line and switch mode
-                ! write_str "\n```haskell\n" {
-                ! write_str res {
-                ! loop r true } }
-              }
+        {
+          ! (api/str_split_n_branch)
+            (Ret (String * Bool))
+            line
+            3
+            { ret (line, +False()) }
+            {
+              fn prefix remainder ->
+                do is_comment <- ! string_equal prefix "-- ";
+                ! branch
+                  (Ret (String * Bool))
+                  is_comment
+                  { ret (remainder, +True()) }
+                  { ret (line, +False()) }
             }
-          } {
-            -- code mode:
-            do empty? <- ! str_empty? res;
-            ! if OS empty? {
-              ! write_str "\n" {
-              ! loop r code }
-            } {
-              ! if OS comment_head {
-                -- if starts with "-- " then output "```", remove, output and switch mode
-                ! write_str "```\n\n" {
-                ! write_str res {
-                ! write_str " " {
-                ! loop r false } } }
-              } {
-                -- if not, output the line
-                ! write_str "\n" {
-                ! write_str res {
-                ! loop r code } }
+        }
+  } that
+  def string_empty : Thk (
+    String -> Ret Bool
+  ) = {
+    fn string ->
+      do length <- ! (api/str_length) string;
+      ! int_equal length 0
+  } that
+
+  def loop : Thk (
+    String ->
+    Bool ->
+    OS
+  ) = {
+    fix (
+      loop :
+      Thk (
+        String ->
+        Bool ->
+        OS
+      )
+    ) ->
+      fn remaining in_code ->
+        ! (api/str_split_once_branch)
+          OS
+          remaining
+          '\n'
+          {
+            match in_code
+            | +True() ->
+              ! (api/write_str) "\n```\n" {
+                ! (api/exit) 0
               }
-            }
+            | +False() -> ! (api/exit) 0
+            end
           }
-        end
-      end
-    | +None() ->
-      ! exit 0
-    end
-  in
-  ! read_till_eof { fn file ->
-    ! loop file false
+          {
+            fn line rest ->
+              do classified <- ! classify_line line;
+              match classified
+              | (content, comment) ->
+                do empty <- ! string_empty content;
+                match in_code
+                | +False() ->
+                  ! branch
+                    OS
+                    empty
+                    {
+                      ! (api/write_str) "\n\n" {
+                        ! loop rest in_code
+                      }
+                    }
+                    {
+                      ! branch
+                        OS
+                        comment
+                        {
+                          ! (api/write_str) content {
+                            ! (api/write_str) " " {
+                              ! loop rest in_code
+                            }
+                          }
+                        }
+                        {
+                          ! (api/write_str) "\n```zydeco\n" {
+                            ! (api/write_str) content {
+                              ! loop rest +True()
+                            }
+                          }
+                        }
+                    }
+                | +True() ->
+                  ! branch
+                    OS
+                    empty
+                    {
+                      ! (api/write_str) "\n" {
+                        ! loop rest in_code
+                      }
+                    }
+                    {
+                      ! branch
+                        OS
+                        comment
+                        {
+                          ! (api/write_str) "\n```\n\n" {
+                            ! (api/write_str) content {
+                              ! (api/write_str) " " {
+                                ! loop rest +False()
+                              }
+                            }
+                          }
+                        }
+                        {
+                          ! (api/write_str) "\n" {
+                            ! (api/write_str) content {
+                              ! loop rest in_code
+                            }
+                          }
+                        }
+                    }
+                end
+              end
+          }
+  } that
+
+  ! (api/read_till_eof) {
+    fn file ->
+      ! loop file +False()
   }
 end

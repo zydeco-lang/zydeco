@@ -174,6 +174,7 @@ impl TypeSupportCollector {
                     }
                     result?;
                 }
+                | Type::ManifestKind(ManifestKind { body, .. }) => self.visit(body, tycker)?,
                 | Type::PackPi(PackPi { domain, witnesses, codomain }) => {
                     self.visit(domain, tycker)?;
                     let outer_bound = self.bound.clone();
@@ -348,6 +349,20 @@ impl TypeId {
                         *self
                     } else {
                         Alloc::alloc(tycker, Exists { binder, mode, body: body_ }, kd, env)
+                    }
+                }
+                | Type::ManifestKind(manifest) => {
+                    let ManifestKind { binder, definition, body } = manifest;
+                    let body_ = body.subst_env(tycker, env)?;
+                    if body == body_ {
+                        *self
+                    } else {
+                        Alloc::alloc(
+                            tycker,
+                            ManifestKind { binder, definition, body: body_ },
+                            kd,
+                            env,
+                        )
                     }
                 }
                 | Type::Data(id) => {
@@ -580,6 +595,20 @@ impl TypeId {
                         Alloc::alloc(tycker, Exists { binder, mode, body: body_ }, kd, &env)
                     }
                 }
+                | Type::ManifestKind(manifest) => {
+                    let ManifestKind { binder, definition, body } = manifest;
+                    let body_ = body.subst_abst(tycker, assign)?;
+                    if body == body_ {
+                        *self
+                    } else {
+                        Alloc::alloc(
+                            tycker,
+                            ManifestKind { binder, definition, body: body_ },
+                            kd,
+                            &env,
+                        )
+                    }
+                }
                 | Type::Data(id) => {
                     let arms = tycker.statics.datas[&id].clone();
                     let mut unchanged = true;
@@ -679,7 +708,8 @@ impl TypeId {
             | Type::Forall(_)
             | Type::PackPi(_)
             | Type::Prod(_)
-            | Type::Exists(_) => self,
+            | Type::Exists(_)
+            | Type::ManifestKind(_) => self,
             | Type::Data(_)
             | Type::CoData(_) => self,
             | Type::Proj(Proj(head, name)) => {
@@ -742,6 +772,7 @@ impl TypeId {
                 | Type::PackPi(_)
                 | Type::Prod(_)
                 | Type::Exists(_)
+                | Type::ManifestKind(_)
                 | Type::Data(_)
                 | Type::CoData(_) => self,
                 | Type::Proj(Proj(head, name)) => {
@@ -1042,6 +1073,21 @@ impl TypeId {
                         Alloc::alloc(
                             tycker,
                             Exists { binder, mode, body: body_ },
+                            tycker.statics.annotations_type[&res],
+                            &env,
+                        )
+                    }
+                }
+                | Type::ManifestKind(manifest) => {
+                    let ManifestKind { binder, definition, body } = manifest;
+                    let (body_, body_fills) = body.solution(tycker)?;
+                    fills.extend(body_fills);
+                    if body == body_ {
+                        res
+                    } else {
+                        Alloc::alloc(
+                            tycker,
+                            ManifestKind { binder, definition, body: body_ },
                             tycker.statics.annotations_type[&res],
                             &env,
                         )
@@ -1477,6 +1523,21 @@ impl TypeId {
                         Alloc::alloc(
                             tycker,
                             Exists { binder, mode, body: body_norm },
+                            kd_norm,
+                            &env,
+                        )
+                    }
+                }
+                | Type::ManifestKind(manifest) => {
+                    let ManifestKind { binder, definition, body } = manifest;
+                    let definition_norm = definition.filled_norm_id(tycker, memo_kd)?;
+                    let body_norm = body.filled_norm_id(tycker, memo, memo_kd)?;
+                    if definition_norm == definition && body_norm == body && kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(
+                            tycker,
+                            ManifestKind { binder, definition: definition_norm, body: body_norm },
                             kd_norm,
                             &env,
                         )

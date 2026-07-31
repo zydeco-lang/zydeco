@@ -3,9 +3,9 @@
 ## Abstract
 
 Zydeco uses a common term language for kinds, types, values, and computations.
-Source files still reserve a separate syntactic category, the declaration sort, for top-level definitions.
-As a result, local terms and compilation units follow different rules for scope, dependency ordering, and abstraction.
-Uniform term composition addresses this split by making context formation part of the term language.
+Its former source language reserved a separate declaration sort for top-level definitions,
+which gave local terms and compilation units different rules for scope, dependency ordering, and abstraction.
+Uniform term composition removes this split by making context formation part of the term language.
 The guiding idea is that a term may contribute the binders it needs before their final nesting is known.
 Its central construct is `begin ... end`, a block that closes its body over binders contributed by nested terms.
 The forms `param`, `let`, and `def` contribute parameters, transparent bindings, and nominal definitions.

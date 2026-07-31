@@ -69,7 +69,7 @@ impl SyntacticallyUsed for ss::VPatId {
                 pat.syntactically_used(tycker)
             }
             | Pat::VCons(pat) => pat.into_iter().any(|item| item.syntactically_used(tycker)),
-            | Pat::TCons(pat) => {
+            | Pat::SCons(pat) => {
                 let ss::ConsN(_witnesses, body) = pat;
                 // Hack: assuming that we don't care whether the abstracted type is used
                 //       well, technically, it's not syntactic but semantic,
@@ -91,10 +91,6 @@ impl SyntacticallyAnnotated for su::Binding {
                 let _ = binder;
                 bindee.syntactically_annotated(tycker)
             }
-            | su::BindingForm::External(su::External { binder, classifier }) => {
-                let _ = binder;
-                *classifier
-            }
         }
     }
 }
@@ -108,6 +104,7 @@ impl SyntacticallyAnnotated for su::TermId {
                 let _ = meta;
                 term.syntactically_annotated(tycker)
             }
+            | Tm::SourceBoundary(su::SourceBoundary(term)) => term.syntactically_annotated(tycker),
             | Tm::Internal(_) => unreachable!(),
             | Tm::Sealed(term) => {
                 let su::Sealed(term) = term;
@@ -166,6 +163,7 @@ impl SyntacticallySealed for su::TermId {
                 let _ = meta;
                 term.syntactically_sealed(tycker)
             }
+            | Tm::SourceBoundary(su::SourceBoundary(term)) => term.syntactically_sealed(tycker),
             | Tm::Internal(_) => unreachable!(),
             | Tm::Sealed(term) => {
                 let su::Sealed(term) = term;

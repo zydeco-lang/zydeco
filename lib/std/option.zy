@@ -1,0 +1,72 @@
+{
+param (
+  (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+  @[import("builtin.zy")] _
+) in
+ret begin
+  def Option : (VType) -> (VType) =
+    begin
+      param (A : VType) that
+      data
+      | +None : Unit
+      | +Some : A
+      end
+    end
+  that
+  def none : Thk (
+    forall (A : VType) .
+      Ret (Option A)
+  ) = {
+    fn (A : VType) ->
+      ret +None()
+  } that
+  def some : Thk (
+    forall (A : VType) .
+      A -> Ret (Option A)
+  ) = {
+    fn (A : VType) (value : A) ->
+      ret +Some(value)
+  } that
+  def eliminate : Thk (
+    forall (A : VType) .
+    forall (B : CType) .
+      Option A -> Thk B -> Thk (A -> B) -> B
+  ) = {
+    fn (A : VType)
+       (B : CType)
+       (option : Option A)
+       (when_none : Thk B)
+       (when_some : Thk (A -> B)) ->
+      match option
+      | +None(_) -> ! when_none
+      | +Some(value) -> ! when_some value
+      end
+  } that
+  let Interface =
+    exists (
+      Option = AbstractOption :
+      (VType) -> (VType)
+    ) .
+      (none :: Thk (
+        forall (A : VType) .
+          Ret (AbstractOption A)
+      )) *
+      (some :: Thk (
+        forall (A : VType) .
+          A -> Ret (AbstractOption A)
+      )) *
+      (eliminate :: Thk (
+        forall (A : VType) .
+        forall (B : CType) .
+          AbstractOption A -> Thk B -> Thk (A -> B) -> B
+      ))
+  that
+
+  (
+    Option = Option,
+    none = none,
+    some = some,
+    eliminate = eliminate,
+  ) : Interface
+end
+}

@@ -1,19 +1,15 @@
-use std::path::PathBuf;
-use zydeco_driver::{BuildError, BuildSystem, check::err::CompileError};
+use zydeco_driver::{BuildError, check::err::CompileError};
+use zydeco_tests::utils::SourceCase;
 
 struct NamedCase;
 
 impl NamedCase {
     fn check(source: &str) -> Result<(), BuildError> {
-        let case_dir = tempfile::tempdir().unwrap();
-        let source_path = case_dir.path().join("named.zy");
-        std::fs::write(&source_path, source).unwrap();
+        SourceCase::check(source)
+    }
 
-        let std_proj = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib/std/proj.toml");
-        let mut build_sys = BuildSystem::new();
-        build_sys.add_local_package(std_proj).unwrap();
-        let pack = build_sys.add_orphan_file(source_path).unwrap();
-        build_sys.test_pack(pack, true)
+    fn check_monadic(source: &str) -> Result<(), BuildError> {
+        SourceCase::check_monadic(source)
     }
 
     fn assert_type_error(source: &str) {
@@ -31,42 +27,82 @@ impl NamedCase {
 fn accepts_named_types_named_kinds_and_static_projection() {
     NamedCase::check(
         r#"
-alias Identity (A : VType) : VType = A end
+begin
+  let Identity :
+    (VType) -> (VType) =
+    begin
+      param (A : VType) that
+      A
+    end
+  that
 
-alias NamedIdentity : (constructor :: (VType -> VType)) =
-  (constructor = Identity)
+  let NamedIdentity :
+    (constructor :: ((VType) -> (VType))) =
+    (constructor = Identity)
+  that
+
+  let NamedInt : (item :: VType) =
+    (item = (NamedIdentity/constructor Int))
+  that
+
+  let ProjectedInt : VType = NamedInt/item that
+  let PayloadOf :
+    (item :: VType) -> (VType) =
+    begin
+      param ((item = A) : (item :: VType)) that
+      A
+    end
+  that
+  let WholePayloadOf :
+    (item :: VType) -> (VType) =
+    begin
+      param (Whole : (item :: VType)) that
+      Whole/item
+    end
+  that
+  let PatternProjectedInt : VType =
+    PayloadOf NamedInt
+  that
+  let WholeProjectedInt : VType =
+    WholePayloadOf NamedInt
+  that
+
+  let NamedOS : (operation :: CType) =
+    (operation = OS)
+  that
+  let ProjectedOS : CType = NamedOS/operation that
+
+  let PunnedNamedType :
+    (VType) ->
+    (Punned :: VType) =
+    begin
+      param (Punned : VType) that
+      (= Punned)
+    end
+  that
+  let PunnedNamedInt : (Punned :: VType) =
+    PunnedNamedType Int
+  that
+  let PunnedProjectedInt : VType =
+    PunnedNamedInt/Punned
+  that
+
+  let NestedNamedInt :
+    (outer :: (inner :: VType)) =
+    (outer = (inner = Int))
+  that
+  let NestedProjectedInt : VType =
+    NestedNamedInt/outer/inner
+  that
+
+  def value : ProjectedInt = 0 that
+  def pattern_value : PatternProjectedInt = 1 that
+  def whole_value : WholeProjectedInt = 2 that
+  def nested_value : NestedProjectedInt = 3 that
+  def punned_value : PunnedProjectedInt = 4 that
+
+  ! exit value
 end
-
-alias NamedInt : (item :: VType) =
-  (item = (NamedIdentity/constructor Int))
-end
-
-alias ProjectedInt : VType = NamedInt/item end
-alias PayloadOf ((item = A) : (item :: VType)) : VType = A end
-alias WholePayloadOf (Whole : (item :: VType)) : VType = Whole/item end
-alias PatternProjectedInt : VType = PayloadOf NamedInt end
-alias WholeProjectedInt : VType = WholePayloadOf NamedInt end
-
-alias NamedOS : (operation :: CType) = (operation = OS) end
-alias ProjectedOS : CType = NamedOS/operation end
-
-alias PunnedNamedType (Punned : VType) : (Punned :: VType) =
-  (= Punned)
-end
-alias PunnedNamedInt : (Punned :: VType) = PunnedNamedType Int end
-alias PunnedProjectedInt : VType = PunnedNamedInt/Punned end
-
-alias NestedNamedInt : (outer :: (inner :: VType)) =
-  (outer = (inner = Int))
-end
-alias NestedProjectedInt : VType = NestedNamedInt/outer/inner end
-
-def value : ProjectedInt = 0 end
-def pattern_value : PatternProjectedInt = 1 end
-def whole_value : WholeProjectedInt = 2 end
-def nested_value : NestedProjectedInt = 3 end
-def punned_value : PunnedProjectedInt = 4 end
-main ! exit value end
 "#,
     )
     .unwrap();
@@ -76,14 +112,16 @@ main ! exit value end
 fn accepts_named_type_patterns_in_polymorphic_functions() {
     NamedCase::check(
         r#"
-def ! named_identity
-  ((item = A) : (item :: VType))
-  (value : A)
-: Ret A =
-  ret value
-end
+begin
+  def named_identity : Thk (
+    forall ((item = A) : (item :: VType)) .
+      A -> Ret A
+  ) = {
+    fn ((item = A) : (item :: VType))
+       (value : A) ->
+      ret value
+  } that
 
-main
   do value <- ! named_identity (item = Int) 0;
   ! exit value
 end
@@ -94,42 +132,45 @@ end
 
 #[test]
 fn translates_named_type_applications_in_monadic_blocks() {
-    NamedCase::check(
+    NamedCase::check_monadic(
         r#"
-def ! mo_ret : Monad Ret =
-  comatch
-  | .return A value -> ret value
-  | .bind A B computation continuation ->
-    do value <- ! computation;
-    ! continuation value
-  end
-end
+begin
+  def mo_ret : Thk (Monad Ret) = {
+    comatch
+    | .return A value -> ret value
+    | .bind A B computation continuation ->
+      do value <- ! computation;
+      ! continuation value
+    end
+  } that
 
-def ! translated : Ret Unit =
-  (monadic
-    let ! named_identity =
-      fn ((item = A) : (item :: VType)) (value : A) ->
+  def translated : Thk (Ret Unit) = {
+    (monadic
+      let named_identity = {
+        fn ((item = A) : (item :: VType))
+           (value : A) ->
+          ret value
+      } in
+      ! named_identity (item = Unit) ()
+    end)
+    Ret
+    { ! mo_ret }
+  } that
+
+  def translated_polymorphic : Thk (
+    forall ((item = A) : (item :: VType)) .
+      Thk Top -> A -> Ret A
+  ) = {
+    (monadic
+      do _ <- ret ();
+      fn ((item = A) : (item :: VType))
+         (value : A) ->
         ret value
-    in
-    ! named_identity (item = Unit) ()
-  end)
-  Ret
-  { ! mo_ret }
-end
+    end)
+    Ret
+    { ! mo_ret }
+  } that
 
-def ! translated_polymorphic
-: forall ((item = A) : (item :: VType)) .
-    Thk Top -> A -> Ret A =
-  (monadic
-    do _ <- ret ();
-    fn ((item = A) : (item :: VType)) (value : A) ->
-      ret value
-  end)
-  Ret
-  { ! mo_ret }
-end
-
-main
   do _ <- ! translated;
   do _ <- ! translated_polymorphic (item = Unit) triv ();
   ! exit 0
@@ -143,18 +184,24 @@ end
 fn distinguishes_payload_and_whole_named_existential_binders() {
     NamedCase::check(
         r#"
-alias PayloadBox =
-  exists ((item = A) : (item :: VType)) . A
-end
+begin
+  let PayloadBox =
+    exists (
+      (item = A) :
+      (item :: VType)
+    ) . A
+  that
 
-alias WholeBox =
-  exists (Whole : (item :: VType)) . Whole/item
-end
+  let WholeBox =
+    exists (
+      Whole :
+      (item :: VType)
+    ) . Whole/item
+  that
 
-def payload_box : PayloadBox = (item = Int, 41) end
-def whole_box : WholeBox = (item = Int, 42) end
+  def payload_box : PayloadBox = (item = Int, 41) that
+  def whole_box : WholeBox = (item = Int, 42) that
 
-main
   let (item = A, payload) = payload_box in
   let (Whole, whole) = whole_box in
   ! exit 0
@@ -168,21 +215,24 @@ end
 fn instantiates_package_dependent_results_from_named_witnesses() {
     NamedCase::check(
         r#"
-alias Box =
-  exists ((item = A) : (item :: VType)) . A
-end
+begin
+  let Box =
+    exists (
+      (item = A) :
+      (item :: VType)
+    ) . A
+  that
 
-alias Reveal =
-  pi ((item = A, _) : Box) . Ret A
-end
+  let Reveal =
+    pi ((item = A, _) : Box) . Ret A
+  that
 
-def reveal : Thk Reveal = {
-  fn ((item = A, value) : Box) -> ret value
-} end
+  def reveal : Thk Reveal = {
+    fn ((item = A, value) : Box) -> ret value
+  } that
 
-def boxed : Box = (item = Int, 41) end
+  def boxed : Box = (item = Int, 41) that
 
-main
   do value <- ! reveal boxed;
   ! exit value
 end
@@ -195,8 +245,10 @@ end
 fn rejects_named_term_with_mismatched_label() {
     NamedCase::assert_type_error(
         r#"
-def bad : (x :: Int) = (y = 0) end
-main ! exit 0 end
+begin
+  def bad : (x :: Int) = (y = 0) that
+  ! exit 0
+end
 "#,
     );
 }
@@ -205,8 +257,8 @@ main ! exit 0 end
 fn rejects_named_pattern_with_mismatched_label() {
     NamedCase::assert_type_error(
         r#"
-def value : (x :: Int) = (x = 0) end
-main
+begin
+  def value : (x :: Int) = (x = 0) that
   let (y = inner) = value in
   ! exit inner
 end
@@ -218,9 +270,9 @@ end
 fn rejects_named_pattern_on_unnamed_mixed_component() {
     NamedCase::assert_type_error(
         r#"
-alias Mixed = (left :: Int) * (Int * (right :: Int)) end
-def value : Mixed = (left = 1, 2, right = 3) end
-main
+begin
+  let Mixed = (left :: Int) * (Int * (right :: Int)) that
+  def value : Mixed = (left = 1, 2, right = 3) that
   let (
     left = left : Int,
     middle = middle : Int,
@@ -236,9 +288,9 @@ end
 fn rejects_mismatched_named_pattern_in_nested_mixed_product() {
     NamedCase::assert_type_error(
         r#"
-alias Nested = ((left :: Int) * Int) * (right :: Int) end
-def value : Nested = ((left = 1, 2), right = 3) end
-main
+begin
+  let Nested = ((left :: Int) * Int) * (right :: Int) that
+  def value : Nested = ((left = 1, 2), right = 3) that
   let (
     (wrong = left : Int, middle : Int),
     right = right : Int
@@ -253,9 +305,9 @@ end
 fn rejects_incompatible_named_payload_annotation_in_mixed_pattern() {
     NamedCase::assert_type_error(
         r#"
-alias Mixed = (left :: Int) * (Int * (right :: Int)) end
-def value : Mixed = (left = 1, 2, right = 3) end
-main
+begin
+  let Mixed = (left :: Int) * (Int * (right :: Int)) that
+  def value : Mixed = (left = 1, 2, right = 3) that
   let (
     left = left : String,
     middle : Int,
@@ -271,8 +323,12 @@ end
 fn rejects_mismatched_named_type_label() {
     NamedCase::assert_type_error(
         r#"
-alias InvalidNamedType : (operation :: CType) = (other = OS) end
-main ! exit 0 end
+begin
+  let InvalidNamedType : (operation :: CType) =
+    (other = OS)
+  that
+  ! exit 0
+end
 "#,
     );
 }
@@ -281,8 +337,12 @@ main ! exit 0 end
 fn rejects_named_computation_classifiers_without_named_computations() {
     NamedCase::assert_type_error(
         r#"
-alias InvalidNamedComputation : CType = (operation :: OS) end
-main ! exit 0 end
+begin
+  let InvalidNamedComputation : CType =
+    (operation :: OS)
+  that
+  ! exit 0
+end
 "#,
     );
 }
@@ -291,9 +351,15 @@ main ! exit 0 end
 fn rejects_missing_named_type_projection() {
     NamedCase::assert_type_error(
         r#"
-alias NamedInt : (item :: VType) = (item = Int) end
-alias InvalidProjection : VType = NamedInt/other end
-main ! exit 0 end
+begin
+  let NamedInt : (item :: VType) =
+    (item = Int)
+  that
+  let InvalidProjection : VType =
+    NamedInt/other
+  that
+  ! exit 0
+end
 "#,
     );
 }
@@ -302,9 +368,11 @@ main ! exit 0 end
 fn rejects_missing_named_projection() {
     NamedCase::assert_type_error(
         r#"
-alias Point = (x :: Int) * (y :: Int) end
-def point : Point = (x = 0, y = 1) end
-main ! exit (point/z) end
+begin
+  let Point = (x :: Int) * (y :: Int) that
+  def point : Point = (x = 0, y = 1) that
+  ! exit (point/z)
+end
 "#,
     );
 }
@@ -313,9 +381,11 @@ main ! exit (point/z) end
 fn rejects_ambiguous_named_projection() {
     NamedCase::assert_type_error(
         r#"
-alias DuplicateFields = (x :: Int) * (x :: Int) end
-def duplicate : DuplicateFields = (x = 0, x = 1) end
-main ! exit (duplicate/x) end
+begin
+  let DuplicateFields = (x :: Int) * (x :: Int) that
+  def duplicate : DuplicateFields = (x = 0, x = 1) that
+  ! exit (duplicate/x)
+end
 "#,
     );
 }

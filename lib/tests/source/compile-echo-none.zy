@@ -1,0 +1,8 @@
+param (
+  (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+  @[import("../../std/builtin.zy")] _
+) in
+  ! (api/read_line) {
+    fn ignored ->
+      ! (api/exit) 0
+  }

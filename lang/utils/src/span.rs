@@ -69,19 +69,26 @@ impl FileInfo {
             return None;
         }
         let line_end = self.line_starts.get(line + 1).copied().unwrap_or(self.text_len);
-        let line_text = &source[line_start..line_end];
-        let mut utf16_count = 0usize;
-        let mut byte_count = 0usize;
-        for ch in line_text.chars() {
-            let units = ch.len_utf16();
-            if utf16_count + units > column {
-                break;
-            }
-            utf16_count += units;
-            byte_count += ch.len_utf8();
+        let line = source.get(line_start..line_end)?;
+        let line_text = line
+            .strip_suffix('\n')
+            .map(|line| line.strip_suffix('\r').unwrap_or(line))
+            .unwrap_or(line);
+        std::iter::once((0, 0))
+            .chain(line_text.char_indices().scan(0, |utf16_count, (byte, ch)| {
+                *utf16_count += ch.len_utf16();
+                Some((byte + ch.len_utf8(), *utf16_count))
+            }))
+            .find_map(|(byte, utf16_count)| (utf16_count == column).then_some(line_start + byte))
+    }
+    pub fn trans_span2_utf16(&self, source: &str, offset: Cursor1) -> Option<Cursor2> {
+        if offset > self.text_len || !source.is_char_boundary(offset) {
+            return None;
         }
-        let offset = if column > utf16_count { line_end } else { line_start + byte_count };
-        (offset <= line_end).then_some(offset)
+        let cursor = self.trans_span2(offset);
+        let line_start = *self.line_starts.get(cursor.line)?;
+        let column = source.get(line_start..offset)?.encode_utf16().count();
+        Some(Cursor2 { line: cursor.line, column })
     }
     pub fn path(&self) -> PathBuf {
         self.path.as_ref().map(|p| p.to_path_buf()).unwrap_or_default()
@@ -298,5 +305,31 @@ impl PathDisplay {
 
     pub fn into_path_buf(self) -> PathBuf {
         self.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Cursor2, FileInfo};
+
+    #[test]
+    fn utf16_positions_round_trip_through_byte_offsets() {
+        let source = "a😀b\nλ";
+        let info = FileInfo::new(source, None);
+        let positions = [
+            Cursor2 { line: 0, column: 0 },
+            Cursor2 { line: 0, column: 1 },
+            Cursor2 { line: 0, column: 3 },
+            Cursor2 { line: 0, column: 4 },
+            Cursor2 { line: 1, column: 0 },
+            Cursor2 { line: 1, column: 1 },
+        ];
+
+        positions.into_iter().for_each(|position| {
+            let offset = info.trans_span1_utf16(source, position.clone()).unwrap();
+            assert_eq!(info.trans_span2_utf16(source, offset), Some(position));
+        });
+        assert_eq!(info.trans_span1_utf16(source, Cursor2 { line: 0, column: 2 }), None,);
+        assert_eq!(info.trans_span1_utf16(source, Cursor2 { line: 0, column: 5 }), None,);
     }
 }

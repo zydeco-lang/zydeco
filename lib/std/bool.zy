@@ -1,0 +1,72 @@
+{
+param (
+  (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+  @[import("builtin.zy")] _
+) in
+ret begin
+  def Bool : VType =
+    data
+    | +False : Unit
+    | +True : Unit
+    end
+  that
+  def truth : Bool = +True() that
+  def falsehood : Bool = +False() that
+  def bool_not : Thk (Bool -> Ret Bool) = {
+    fn (value : Bool) ->
+      match value
+      | +False(_) -> ret truth
+      | +True(_) -> ret falsehood
+      end
+  } that
+  def bool_and : Thk (Bool -> Bool -> Ret Bool) = {
+    fn (left : Bool) (right : Bool) ->
+      match left
+      | +False(_) -> ret falsehood
+      | +True(_) -> ret right
+      end
+  } that
+  def bool_or : Thk (Bool -> Bool -> Ret Bool) = {
+    fn (left : Bool) (right : Bool) ->
+      match left
+      | +False(_) -> ret right
+      | +True(_) -> ret truth
+      end
+  } that
+  def branch : Thk (
+    forall (B : CType) .
+      Bool -> Thk B -> Thk B -> B
+  ) = {
+    fn (B : CType)
+       (condition : Bool)
+       (when_true : Thk B)
+       (when_false : Thk B) ->
+      match condition
+      | +False(_) -> ! when_false
+      | +True(_) -> ! when_true
+      end
+  } that
+  let Interface =
+    exists (Bool = AbstractBool : VType) .
+      (truth :: AbstractBool) *
+      (falsehood :: AbstractBool) *
+      (not :: Thk (AbstractBool -> Ret AbstractBool)) *
+      (and :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool)) *
+      (or :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool)) *
+      (branch :: Thk (
+        forall (B : CType) .
+          AbstractBool -> Thk B -> Thk B -> B
+      ))
+  that
+
+  (
+    Bool = Bool,
+    truth = truth,
+    falsehood = falsehood,
+    not = bool_not,
+    and = bool_and,
+    or = bool_or,
+    branch = branch,
+  ) : Interface
+end
+}

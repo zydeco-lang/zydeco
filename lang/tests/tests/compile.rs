@@ -1,37 +1,51 @@
-use zydeco_tests::e2e_proj_bins;
+use zydeco_tests::e2e_sources;
 
-e2e_proj_bins!(tests / compile, {
-    exit => "exit",
-    // echo => "echo",
-    // echo_none => "echo-none",
-    // echo_none_cap => "echo-none-cap",
-    // echo_none_twice => "echo-none-twice",
-    // echo_once => "echo-once",
-    env => "env",
-    add0 => "add0",
-    add => "add",
-    sub => "sub",
-    mul => "mul",
-    nested => "nested",
-    nested_out => "nested-out",
-    r#match => "match",
-    cmp => "cmp",
-    label => "label",
-    id => "id",
-    r#const => "const",
-    hof => "hof",
-    // r#loop => "loop",
-    // looping => "looping",
-    comatch => "comatch",
-    fn_cmp_ret => "fn-cmp-ret",
-    tuple => "tuple",
-    tuple_do => "tuple-do",
-    triple => "triple",
-    sum => "sum",
-    fact => "fact",
-    let_stack => "let-stack",
-    kont_clone => "kont-clone",
-    uniform => "uniform",
-    named_mixed => "named-mixed",
-    named => "named",
+e2e_sources!({
+    exit => "tests/source/compile-exit.zy",
+    env => "tests/source/compile-env.zy",
+    add0 => "tests/source/compile-add0.zy",
+    add => "tests/source/compile-add.zy",
+    sub => "tests/source/compile-sub.zy",
+    mul => "tests/source/compile-mul.zy",
+    nested => "tests/source/compile-nested.zy",
+    nested_out => "tests/source/compile-nested-out.zy",
+    r#match => "tests/source/compile-match.zy",
+    cmp => "tests/source/compile-cmp.zy",
+    label => "tests/source/compile-label.zy",
+    id => "tests/source/compile-id.zy",
+    r#const => "tests/source/compile-const.zy",
+    hof => "tests/source/compile-hof.zy",
+    comatch => "tests/source/compile-comatch.zy",
+    fn_cmp_ret => "tests/source/compile-fn-cmp-ret.zy",
+    tuple => "tests/source/compile-tuple.zy",
+    tuple_do => "tests/source/compile-tuple-do.zy",
+    triple => "tests/source/compile-triple.zy",
+    sum => "tests/source/compile-sum.zy",
+    fact => "tests/source/compile-fact.zy",
+    let_stack => "tests/source/compile-let-stack.zy",
+    kont_clone => "tests/source/compile-kont-clone.zy",
+    uniform => "tests/source/compile-uniform.zy",
+    named_mixed => "tests/source/compile-named-mixed.zy",
+    named => "tests/source/compile-named.zy",
+    host_return => "tests/source/compile-host-return.zy",
+    host_runtime => "tests/source/compile-host-runtime.zy",
+    string_literal => "tests/source/compile-string-literal.zy",
 });
+
+mod host_arguments {
+    use zydeco_tests::utils::{SourceProgram, TestBackend};
+
+    fn program() -> SourceProgram {
+        SourceProgram::setup("tests/source/compile-host-arguments.zy").with_args(["alpha", "beta"])
+    }
+
+    #[test]
+    fn interpreter() {
+        program().test(TestBackend::Interpreter);
+    }
+
+    #[test]
+    fn amd64() {
+        program().test(TestBackend::Amd64);
+    }
+}

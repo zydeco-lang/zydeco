@@ -1,18 +1,21 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Run Extension",
-            "type": "extensionHost",
-            "request": "launch",
-            "runtimeExecutable": "${execPath}",
-            "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}/code/zls"
-            ],
-            "outFiles": [
-                "${workspaceFolder}/code/zls/out/**/*.js"
-            ],
-            "preLaunchTask": "VS Code Extension Prelaunch"
-        }
-    ]
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Cajun VS Code Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/vscode"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/vscode/dist/**/*.js"
+      ],
+      "env": {
+        "CAJUN_SERVER_PATH": "${workspaceFolder}/../target/debug/cajun"
+      },
+      "preLaunchTask": "VS Code Extension Prelaunch"
+    }
+  ]
 }

@@ -1,0 +1,63 @@
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  def Nat : VType =
+    data
+    | +Z : Unit
+    | +S : Nat
+    end
+  that
+  def Bool : VType =
+    data
+    | +True : Unit
+    | +False : Unit
+    end
+  that
+  def OddEven : VType =
+    data
+    | +OddEven : Thk (Nat -> Ret Bool) * Thk (Nat -> Ret Bool)
+    end
+  that
+  def pair : Thk (Ret OddEven) = {
+    fix (pair : Thk (Ret OddEven)) ->
+      ret +OddEven(
+        {
+          do current <- ! pair;
+          match current
+          | +OddEven(odd, even) ->
+            fn (number : Nat) ->
+              match number
+              | +Z() -> ret +False()
+              | +S(predecessor) -> ! even predecessor
+              end
+          end
+        },
+        {
+          do current <- ! pair;
+          match current
+          | +OddEven(odd, even) ->
+            fn (number : Nat) ->
+              match number
+              | +Z() -> ret +True()
+              | +S(predecessor) -> ! odd predecessor
+              end
+          end
+        },
+      )
+  } that
+
+  do odd <- (
+    do current <- ! pair;
+    match current
+    | +OddEven(odd, even) -> ret { ! odd }
+    end
+  );
+  do result <- ! odd +S(+S(+S(+Z())));
+  match result
+  | +True() -> ! (api/exit) 0
+  | +False() -> ! (api/exit) 1
+  end
+end

@@ -164,8 +164,8 @@ pub mod syntax {
     /// `comatch end`
     pub struct Top;
 
-    /// TCons
-    pub struct TCons<T, F>(pub T, pub F);
+    /// SCons
+    pub struct SCons<T, F>(pub T, pub F);
 
     pub use crate::tyck::monadic::syntax::*;
 }
@@ -308,15 +308,23 @@ impl<'a> Construct<Tycker<'a>, KindId> for cs::TypeOf<AbstId> {
     }
 }
 impl<'a> Construct<Tycker<'a>, KindId> for VType {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> KindId {
-        let AnnId::Kind(kd) = env[tycker.prim.vtype.get()] else { unreachable!() };
-        kd
+    fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> KindId {
+        if let Some(kind) = tycker.statics.intrinsics.vtype {
+            return kind;
+        }
+        let kind = Alloc::alloc(tycker, VType, (), &());
+        tycker.statics.intrinsics.vtype = Some(kind);
+        kind
     }
 }
 impl<'a> Construct<Tycker<'a>, KindId> for CType {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> KindId {
-        let AnnId::Kind(kd) = env[tycker.prim.ctype.get()] else { unreachable!() };
-        kd
+    fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> KindId {
+        if let Some(kind) = tycker.statics.intrinsics.ctype {
+            return kind;
+        }
+        let kind = Alloc::alloc(tycker, CType, (), &());
+        tycker.statics.intrinsics.ctype = Some(kind);
+        kind
     }
 }
 impl<'a, S, T> Construct<Tycker<'a>, KindId> for Arrow<S, T>
@@ -496,7 +504,14 @@ impl<'a> Construct<Tycker<'a>, TypeId> for StringTy {
 }
 impl<'a> Construct<Tycker<'a>, TypeId> for ThkTy {
     fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        let AnnId::Type(ty) = env[tycker.prim.thk.get()] else { unreachable!() };
+        if let Some(ty) = tycker.statics.intrinsics.thk {
+            return ty;
+        }
+        let ctype = CType.build(tycker, env);
+        let vtype = VType.build(tycker, env);
+        let kind = Alloc::alloc(tycker, Arrow(ctype, vtype), (), &());
+        let ty = Alloc::alloc(tycker, ThkTy, kind, env);
+        tycker.statics.intrinsics.thk = Some(ty);
         ty
     }
 }
@@ -534,7 +549,12 @@ where
 }
 impl<'a> Construct<Tycker<'a>, TypeId> for UnitTy {
     fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        let AnnId::Type(ty) = env[tycker.prim.unit.get()] else { unreachable!() };
+        if let Some(ty) = tycker.statics.intrinsics.unit {
+            return ty;
+        }
+        let vtype = VType.build(tycker, env);
+        let ty = Alloc::alloc(tycker, UnitTy, vtype, env);
+        tycker.statics.intrinsics.unit = Some(ty);
         ty
     }
 }
@@ -635,7 +655,14 @@ where
 }
 impl<'a> Construct<Tycker<'a>, TypeId> for RetTy {
     fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        let AnnId::Type(ty) = env[tycker.prim.ret.get()] else { unreachable!() };
+        if let Some(ty) = tycker.statics.intrinsics.ret {
+            return ty;
+        }
+        let vtype = VType.build(tycker, env);
+        let ctype = CType.build(tycker, env);
+        let kind = Alloc::alloc(tycker, Arrow(vtype, ctype), (), &());
+        let ty = Alloc::alloc(tycker, RetTy, kind, env);
+        tycker.statics.intrinsics.ret = Some(ty);
         ty
     }
 }

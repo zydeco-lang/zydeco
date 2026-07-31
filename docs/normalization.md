@@ -49,11 +49,14 @@ they do not introduce a declaration sort into the source language.
 
 ```text
 Θ ::= ·
+    | static X as D : S; Θ
     | type X : K; Θ
     | type X as A : K; Θ
     | val x : A; Θ
 ```
 
+`static X as D : S` binds a transparent compile-time component, where the classifier `S`
+may be `Set` or an ordinary kind.
 `type X : K` is abstract.
 `type X as A : K` is manifest and contributes the definitional equality `X ≡ A`.
 The `as` keyword states an equation on an otherwise ordinary existential type binder.
@@ -65,6 +68,7 @@ The package signature can be represented by nested package and product types:
 ```text
 ⟦ type X : K; Θ ⟧      = exists (X : K). ⟦ Θ ⟧
 ⟦ type X as A : K; Θ ⟧ = exists (X as A : K). ⟦ Θ ⟧
+⟦ static X as D : S; Θ ⟧ = exists (X as D : S). ⟦ Θ ⟧
 ⟦ val x : B; Θ ⟧       = (x :: B) * ⟦ Θ ⟧
 ```
 
@@ -76,6 +80,39 @@ Its witness is packaged like an existential type component,
 but its defining equation is disclosed by the package signature.
 Here `X` is an ordinary type variable.
 Manifest existential types add only the equation `X ≡ A`; they do not introduce a new pattern or naming form.
+
+## Manifest Static Fields
+
+The classifier of a manifest field may be omitted when the definition determines it:
+
+```text
+Γ ⊢ D : S
+Γ, X ≡ D : S ⊢ B : VType
+────────────────────────────────
+Γ ⊢ exists (X as D). B : VType
+```
+
+This judgment applies uniformly when `D` is a kind classified by `Set` and when `D` is a type
+classified by an ordinary kind.
+The explicit form `exists (X as D : S). B` remains available and checks the stated classifier.
+
+The canonical Builtin signature uses the inferred form to introduce the core CBPV vocabulary once:
+
+```zydeco
+exists (VType as @[intrinsic(vtype)] _) .
+exists (CType as @[intrinsic(ctype)] _) .
+exists (Thk as @[intrinsic(thk)] _) .
+exists (Ret as @[intrinsic(ret)] _) .
+exists (Unit as @[intrinsic(unit)] _) .
+  ...
+```
+
+Opening this signature binds `VType`, `CType`, `Thk`, `Ret`, and `Unit` by ordinary package-pattern
+name resolution.
+The first two fields bind kinds; the remaining three bind types or type constructors.
+All five are transparent and erased.
+They neither create fresh identities nor contribute witnesses to a package-dependent arrow.
+Abstract host types later in the signature, such as `Int` and `OS`, retain the ordinary existential semantics.
 
 ## Manifest Types
 

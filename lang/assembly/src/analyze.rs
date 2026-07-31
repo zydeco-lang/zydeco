@@ -81,6 +81,14 @@ impl<'a> StackAnalyzer<'a> {
         let slot_id = layout.control.pop_back();
         slot_id.map(|slot_id| self.slots[&slot_id].clone())
     }
+
+    fn program_chain(&self, start: ProgId) -> Vec<ProgId> {
+        std::iter::successors(Some(start), |program| match self.arena.programs[program] {
+            | Program::Instruction(_, next) => Some(next),
+            | Program::Terminator(_) => None,
+        })
+        .collect()
+    }
 }
 
 impl<'a> CompilerPass for StackAnalyzer<'a> {
@@ -129,36 +137,38 @@ impl<'a> CompilerPass for StackAnalyzer<'a> {
 }
 
 impl<'a> StackMeasure<'a> for ProgId {
-    fn stack_measure(self, si: &mut StackAnalyzer<'a>, mut layout: Layout) {
-        let prog = si.arena.programs[&self].to_owned();
-        let _ = si.layouts.upsert(self, layout.to_owned());
-        match prog {
-            | Program::Terminator(terminator) => match terminator {
-                | Terminator::Jump(Jump(_)) => {}
-                | Terminator::PopJump(PopJump) => {
-                    let Some(slot_id) = layout.control.pop_back() else { return };
-                    let slot = si.slots[&slot_id].clone();
-                    match slot {
-                        | Slot::Sym(sym) => match si.arena.symbols[&sym].inner {
-                            | Symbol::Prog(_) => si.inlined[&slot_id] = true,
-                            | _ => {}
-                        },
-                        | Slot::Imm(_) | Slot::Product(_) | Slot::Unknown => {}
+    fn stack_measure(self, si: &mut StackAnalyzer<'a>, layout: Layout) {
+        let _ = si.program_chain(self).into_iter().fold(layout, |mut layout, program_id| {
+            let program = si.arena.programs[&program_id].to_owned();
+            let _ = si.layouts.upsert(program_id, layout.to_owned());
+            match program {
+                | Program::Terminator(terminator) => match terminator {
+                    | Terminator::PopJump(PopJump) => {
+                        if let Some(slot_id) = layout.control.pop_back() {
+                            if matches!(
+                                si.slots[&slot_id],
+                                Slot::Sym(sym)
+                                    if matches!(
+                                        si.arena.symbols[&sym].inner,
+                                        Symbol::Prog(_)
+                                    )
+                            ) {
+                                si.inlined[&slot_id] = true;
+                            }
+                        }
                     }
-                }
-                | Terminator::LeapJump(_) => {}
-                | Terminator::PopBranch(_) => {}
-                | Terminator::Abort(Abort) => {}
-                | Terminator::Extern(_) => {}
-            },
-            | Program::Instruction(instruction, next) => {
-                let layout = match instruction {
+                    | Terminator::Jump(_)
+                    | Terminator::LeapJump(_)
+                    | Terminator::PopBranch(_)
+                    | Terminator::Abort(_)
+                    | Terminator::Extern(_) => {}
+                },
+                | Program::Instruction(instruction, _) => match instruction {
                     | Instruction::PackProduct(Pack(product)) => {
                         let items = (0..product.elements)
                             .map(|_| si.pop_control(&mut layout).unwrap_or(Slot::Unknown))
                             .collect();
                         si.push_control(&mut layout, Slot::Product(items));
-                        layout
                     }
                     | Instruction::UnpackProduct(Unpack(product)) => {
                         let items = match si.pop_control(&mut layout) {
@@ -167,129 +177,106 @@ impl<'a> StackMeasure<'a> for ProgId {
                             }
                             | _ => vec![Slot::Unknown; product.elements],
                         };
-                        for item in items.into_iter().rev() {
+                        items.into_iter().rev().for_each(|item| {
                             si.push_control(&mut layout, item);
-                        }
-                        layout
+                        });
                     }
                     | Instruction::PushContext(Push(ContextMarker)) => {
                         si.push_control(&mut layout, Slot::Unknown);
-                        layout
                     }
                     | Instruction::PopContext(Pop(ContextMarker)) => {
                         si.pop_control(&mut layout);
-                        layout
                     }
                     | Instruction::AllocContext(Alloc(ContextMarker)) => {
                         layout.context.clear();
-                        layout
                     }
                     | Instruction::PushArg(Push(atom)) => {
                         let slot = match atom {
                             | Atom::Var(var) => layout
                                 .context
                                 .iter()
-                                .find(|(v, _)| v == &var)
-                                .map(|(_, s)| s.clone())
+                                .find(|(candidate, _)| candidate == &var)
+                                .map(|(_, slot)| slot.clone())
                                 .unwrap_or(Slot::Unknown),
                             | Atom::Sym(sym) => Slot::Sym(sym),
                             | Atom::Imm(imm) => Slot::Imm(imm),
                         };
                         si.push_control(&mut layout, slot);
-                        layout
                     }
                     | Instruction::PopArg(Pop(var)) => {
-                        let slot = match si.pop_control(&mut layout) {
-                            | Some(slot) => slot,
-                            | None => Slot::Unknown,
-                        };
+                        let slot = si.pop_control(&mut layout).unwrap_or(Slot::Unknown);
                         layout.context.push_back((var, slot));
-                        layout
                     }
                     | Instruction::PushTag(Push(_)) => {
                         si.push_control(&mut layout, Slot::Unknown);
-                        layout
                     }
                     | Instruction::Intrinsic(Intrinsic { name: _, arity }) => {
-                        for _ in 0..arity {
+                        (0..arity).for_each(|_| {
                             si.pop_control(&mut layout);
-                        }
+                        });
                         si.push_control(&mut layout, Slot::Unknown);
-                        layout
                     }
-                    | Instruction::Swap(Swap) => {
-                        if layout.control.len() < 2 {
-                            layout
-                        } else {
-                            let a = si.pop_control(&mut layout).unwrap();
-                            let b = si.pop_control(&mut layout).unwrap();
-                            si.push_control(&mut layout, a);
-                            si.push_control(&mut layout, b);
-                            layout
-                        }
+                    | Instruction::Swap(Swap) if layout.control.len() >= 2 => {
+                        let first = si.pop_control(&mut layout).unwrap();
+                        let second = si.pop_control(&mut layout).unwrap();
+                        si.push_control(&mut layout, first);
+                        si.push_control(&mut layout, second);
                     }
+                    | Instruction::Swap(Swap) => {}
                     | Instruction::Clear(context) => {
                         let context = std::collections::HashSet::<_>::from_iter(context);
                         layout.context.retain(|(var, _)| !context.contains(var));
-                        layout
                     }
-                };
-                next.stack_measure(si, layout)
+                },
             }
-        }
+            layout
+        });
     }
 }
 
 impl<'a> StackInline<'a> for ProgId {
     fn stack_inline(self, si: &mut StackAnalyzer<'a>) {
-        let prog = si.arena.programs[&self].to_owned();
-        let layout = si.layouts[&self].to_owned();
-        match prog {
-            | Program::Terminator(terminator) => match terminator {
-                | Terminator::Jump(_) => {}
-                | Terminator::PopJump(PopJump) => {
-                    let Some(slot_id) = layout.control.last() else { return };
-                    let slot = si.slots[&slot_id].clone();
-                    match slot {
-                        | Slot::Sym(sym) => match si.arena.symbols[&sym].inner {
-                            | Symbol::Prog(target) => si
-                                .arena
-                                .programs
-                                .replace_existing_with(self, Terminator::Jump(Jump(target))),
-                            | _ => {}
-                        },
-                        | Slot::Imm(_) | Slot::Product(_) | Slot::Unknown => {}
+        si.program_chain(self).into_iter().rev().for_each(|program_id| {
+            let program = si.arena.programs[&program_id].to_owned();
+            let layout = si.layouts[&program_id].to_owned();
+            match program {
+                | Program::Terminator(Terminator::PopJump(PopJump)) => {
+                    if let Some(target) =
+                        layout.control.last().and_then(|slot_id| match si.slots[slot_id] {
+                            | Slot::Sym(sym) => match si.arena.symbols[&sym].inner {
+                                | Symbol::Prog(target) => Some(target),
+                                | Symbol::Undefined(_) | Symbol::StringLiteral(_) => None,
+                            },
+                            | Slot::Imm(_) | Slot::Product(_) | Slot::Unknown => None,
+                        })
+                    {
+                        si.arena
+                            .programs
+                            .replace_existing_with(program_id, Terminator::Jump(Jump(target)));
                     }
                 }
-                | Terminator::LeapJump(LeapJump) => {}
-                | Terminator::PopBranch(PopBranch(_arms)) => {}
-                | Terminator::Abort(Abort) => {}
-                | Terminator::Extern(Extern { .. }) => {}
-            },
-            | Program::Instruction(instruction, next) => {
-                match instruction {
-                    | Instruction::PackProduct(Pack(_)) => {}
-                    | Instruction::UnpackProduct(Unpack(_)) => {}
-                    | Instruction::PushContext(Push(ContextMarker)) => {}
-                    | Instruction::PopContext(Pop(ContextMarker)) => {}
-                    | Instruction::AllocContext(Alloc(ContextMarker)) => {}
-                    | Instruction::PushArg(Push(_)) => {
-                        let new_slot = si.layouts[&next].control.last().unwrap();
-                        if si.inlined[&new_slot] {
-                            next.stack_inline(si);
-                            let prog = si.arena.programs[&next].to_owned();
-                            si.arena.programs.replace_existing(self, prog);
-                            return;
-                        }
+                | Program::Instruction(Instruction::PushArg(Push(_)), next) => {
+                    let new_slot = si.layouts[&next].control.last().unwrap();
+                    if si.inlined[&new_slot] {
+                        let next_program = si.arena.programs[&next].to_owned();
+                        si.arena.programs.replace_existing(program_id, next_program);
                     }
-                    | Instruction::PopArg(Pop(_var)) => {}
-                    | Instruction::PushTag(Push(_tag)) => {}
-                    | Instruction::Intrinsic(Intrinsic { .. }) => {}
-                    | Instruction::Swap(Swap) => {}
-                    | Instruction::Clear(_context) => {}
-                };
-                next.stack_inline(si);
+                }
+                | Program::Terminator(_)
+                | Program::Instruction(
+                    Instruction::PackProduct(_)
+                    | Instruction::UnpackProduct(_)
+                    | Instruction::PushContext(_)
+                    | Instruction::PopContext(_)
+                    | Instruction::AllocContext(_)
+                    | Instruction::PopArg(_)
+                    | Instruction::PushTag(_)
+                    | Instruction::Intrinsic(_)
+                    | Instruction::Swap(_)
+                    | Instruction::Clear(_),
+                    _,
+                ) => {}
             }
-        }
+        });
     }
 }

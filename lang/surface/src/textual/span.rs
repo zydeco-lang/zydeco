@@ -22,7 +22,6 @@ impl_span_view! {
     PatId
     CoPatId
     TermId
-    DeclId
 }
 
 mod impl_span_arena {
@@ -36,7 +35,6 @@ mod impl_span_arena {
         Pattern,
         CoPattern,
         Term,
-        Declaration,
     }
 
     impl SpanArena {
@@ -83,7 +81,6 @@ mod impl_span_arena {
                 | EntityId::Pat(_) => Category::Pattern,
                 | EntityId::CoPat(_) => Category::CoPattern,
                 | EntityId::Term(_) => Category::Term,
-                | EntityId::Decl(_) => Category::Declaration,
             }
         }
 

@@ -1,10 +1,9 @@
 # Uniform Term Composition
 
-Zydeco represents kinds, types, values, and computations in a common term language,
-but definitions and compilation units still inhabit a separate declaration sort.
-The split makes dependency resolution a privilege of the top level and leaves libraries
-outside the language's ordinary abstraction mechanisms.
-This note proposes eliminating declarations in favor of a term former, `begin ... end`.
+Zydeco represents kinds, types, values, and computations in a common term language.
+Its former declaration sort made dependency resolution a privilege of the top level
+and left libraries outside the language's ordinary abstraction mechanisms.
+This note develops the declaration-free replacement centered on `begin ... end`.
 A block closes an open term: it collects static binders contributed by its subterms,
 resolves their dependencies, and elaborates them into a heterogeneous telescope.
 The connective `in` preserves lexical placement and scope.

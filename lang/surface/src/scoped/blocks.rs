@@ -25,7 +25,7 @@ impl MobileCandidate {
     }
 
     fn binding_id(&self) -> BindingId {
-        BindingId::Term(self.source())
+        self.source()
     }
 
     fn resolve(
@@ -34,7 +34,7 @@ impl MobileCandidate {
     ) -> Result<Binding> {
         let id = self.binding_id();
         let mut local = local.clone();
-        local.under.push_back(BindingSite { owner: ContextOwner::Block(block), id });
+        local.under.push_back(BindingSite { owner: block, id });
         let inner = match self {
             | Self::Parameter { binder, .. } => {
                 let _ = binder.resolve(resolver, (local, global))?;
@@ -99,7 +99,7 @@ impl<'a> BlockCandidateCollector<'a> {
                 .chain(self.term(*tail))
                 .collect()
             }
-            | Term::Block(_) => Vec::new(),
+            | Term::Block(_) | Term::SourceBoundary(_) => Vec::new(),
             | Term::Residual(_) => {
                 unreachable!("residual nodes are introduced only after candidate collection")
             }
@@ -107,8 +107,13 @@ impl<'a> BlockCandidateCollector<'a> {
             | Term::Sealed(b::Sealed(inner))
             | Term::Thunk(b::Thunk(inner))
             | Term::Force(b::Force(inner))
-            | Term::Ret(b::Return(inner))
-            | Term::MoBlock(b::MoBlock(inner)) => self.term(*inner),
+            | Term::Ret(b::Return(inner)) => self.term(*inner),
+            | Term::MoBlock(b::MoBlock { body, basis }) => {
+                [self.term(basis.monad), self.term(basis.algebra), self.term(*body)]
+                    .into_iter()
+                    .flatten()
+                    .collect()
+            }
             | Term::Ann(b::Ann { tm, ty }) => {
                 [self.term(*tm), self.term(*ty)].into_iter().flatten().collect()
             }
@@ -189,7 +194,7 @@ impl BlockScope {
                 )
             },
         )?;
-        let owner = ContextOwner::Block(block);
+        let owner = block;
         local.boundary = Some(block);
         local.under_map = local.under_map.union(
             candidates
@@ -205,7 +210,12 @@ impl BlockScope {
                 })
                 .collect(),
         );
-        local.var_to_def = local.var_to_def.union(binders);
+        // Names contributed by this block shadow names inherited from its
+        // enclosing lexical scope. Use explicit updates because `im` may
+        // choose either map as the physical union base.
+        local.var_to_def = binders
+            .into_iter()
+            .fold(local.var_to_def, |scope, (name, definition)| scope.update(name, definition));
         Ok(Self { local })
     }
 }
@@ -227,7 +237,7 @@ impl<'a> ContextElaboration<'a> {
         self.context.topological_order().into_iter().rev().try_fold(residual, |tail, node| {
             match self.context.nodes[&node].clone() {
                 | ContextNode::Acyclic(binding) => {
-                    let source = Self::term_source(binding.id);
+                    let source = binding.id;
                     let term = match binding.inner {
                         | BindingForm::Parameter(Parameter { binder }) => {
                             b::Abs(binder, tail).into()
@@ -235,29 +245,20 @@ impl<'a> ContextElaboration<'a> {
                         | BindingForm::Definition(Definition { binder, bindee }) => {
                             b::Let { binder, bindee, tail }.into()
                         }
-                        | BindingForm::External(_) => {
-                            unreachable!("nested blocks cannot contribute externals")
-                        }
                     };
                     Ok(resolver.alloc_scoped_term(source, term))
                 }
                 | ContextNode::Recursive(bindings) => {
-                    let source = bindings
-                        .first()
-                        .map(|binding| Self::term_source(binding.id))
-                        .unwrap_or(block);
+                    let source = bindings.first().map(|binding| binding.id).unwrap_or(block);
                     let definitions = bindings
                         .into_iter()
                         .map(|binding| match binding.inner {
                             | BindingForm::Definition(Definition { binder, bindee }) => {
-                                Ok(b::AliasBody { binder, bindee })
+                                Ok(b::RecursiveDefinition { binder, bindee })
                             }
                             | BindingForm::Parameter(_) => {
                                 Err(ResolveError::RecursiveParameter(source.span(resolver).clone())
                                     .into())
-                            }
-                            | BindingForm::External(_) => {
-                                unreachable!("nested blocks cannot contribute externals")
                             }
                         })
                         .collect::<Result<Vec<_>>>()?;
@@ -265,15 +266,6 @@ impl<'a> ContextElaboration<'a> {
                 }
             }
         })
-    }
-
-    fn term_source(binding: BindingId) -> TermId {
-        match binding {
-            | BindingId::Term(term) => term,
-            | BindingId::Declaration(_) => {
-                unreachable!("a nested block binding must originate at a term")
-            }
-        }
     }
 }
 

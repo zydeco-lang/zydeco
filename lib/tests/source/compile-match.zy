@@ -1,0 +1,18 @@
+begin
+  def Bool : VType =
+    data
+    | +False : Unit
+    | +True : Unit
+    end
+  that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  let value : Bool = +False() in
+  match value
+  | +True(_) -> ! (api/exit) 10
+  | +False(_) -> ! (api/exit) 0
+  end
+end

@@ -16,23 +16,16 @@ The resulting binary is located at `target/release/zydeco`.
 
 ## Run Programs and Examples
 
-Run a Zydeco project with a named binary:
+Run a Zydeco source file directly:
 
 ```sh
-zydeco run path/to/proj.toml --bin=foo
+zydeco run path/to/main.zy
 ```
 
-To run the OOPSLA examples in batch, use the provided script from the repo
-root:
+For example, the declaration-free OOPSLA polynomial root runs with:
 
 ```sh
-./run.sh
-```
-
-You can also run a specific OOPSLA example directly:
-
-```sh
-zydeco run lib/tests/oopsla/proj.toml --bin=polynomial
+zydeco run lib/tests/source/oopsla-polynomial.zy
 ```
 
 ## Run Tests
@@ -43,24 +36,21 @@ The repository provides an aggregate test command:
 cargo test-all --release
 ```
 
-## Create a New Zydeco Project
+## Create a Zydeco Program
 
-Zydeco projects are described by a `proj.toml` file. A minimal example is
-shown in `lib/playground`:
+A Zydeco program is one complete term in one source file.
+Source dependencies are ordinary term imports written at their use sites:
 
-```toml
-name = "playground"
-srcs = []
-deps = [
-  { local = "../std/proj.toml" },
-]
-bins = [
-  "main.zydeco",
-]
-std = "nostd"
+```zydeco
+param (
+  (Int, Char, String, OS, api) :
+  @[import("../std/builtin.zy")] _
+) in
+  ! (api/exit) 42
 ```
 
-Binary files listed in `bins` must contain exactly one `main` declaration.
+The launcher supplies the declared Builtin package when this term is run.
+No authored project configuration or distinguished `main` declaration is needed.
 
 ## Work on the Language Implementation
 

@@ -1,0 +1,270 @@
+begin
+  let monadic_basis = @[import("../../std/monad.zy")] _ that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  do (= Monad, = Algebra, ()) <-
+    ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  begin
+
+  let Either :
+    (VType) ->
+    (VType) ->
+    (VType) =
+    begin
+      param (E : VType) that
+      param (A : VType) that
+      data
+      | +Left : E
+      | +Right : A
+      end
+    end
+  that
+  def MonadErr :
+    (VType) ->
+    (
+      (
+        (VType) ->
+        (CType)
+      ) ->
+      (CType)
+    ) =
+    begin
+      param (E : VType) that
+      param (
+        M :
+        (VType) ->
+        (CType)
+      ) that
+      codata
+      | .fail :
+        forall (A : VType) .
+          E -> M A
+      end
+    end
+  that
+  def Exn :
+    (VType) ->
+    (VType) ->
+    (CType) =
+    begin
+      param (E : VType) that
+      param (A : VType) that
+      codata
+      | .done : Ret (Either E A)
+      end
+    end
+  that
+  def ExnK :
+    (VType) ->
+    (VType) ->
+    (CType) =
+    begin
+      param (E : VType) that
+      param (A : VType) that
+      codata
+      | .run :
+        forall (R : CType) .
+          Thk (E -> R) -> Thk (A -> R) -> R
+      end
+    end
+  that
+  def ExnDe :
+    (VType) ->
+    (VType) ->
+    (CType) =
+    begin
+      param (E : VType) that
+      param (A : VType) that
+      codata
+      | .try :
+        forall (F : VType) .
+          Thk (E -> ExnDe F A) -> ExnDe F A
+      | .kont :
+        forall (B : VType) .
+          Thk (A -> ExnDe E B) -> ExnDe E B
+      | .done : Ret (Either E A)
+      end
+    end
+  that
+  let ExnCounter = ExnDe Unit Int that
+
+  def mexn : Thk (
+    forall (E : VType) .
+      Monad (Exn E)
+  ) = {
+    fn E ->
+      comatch
+      | .return A value ->
+        fn .done ->
+          ret +Right(value)
+      | .bind A B computation function ->
+        do outcome <- ! computation .done;
+        match outcome
+        | +Left(error) ->
+          fn .done ->
+            ret +Left(error)
+        | +Right(value) ->
+          fn .done ->
+            ! function value .done
+        end
+      end
+  } that
+  def mexnk : Thk (
+    forall (E : VType) .
+      Monad (ExnK E)
+  ) = {
+    fn E ->
+      comatch
+      | .return A value ->
+        fn .run R failure success ->
+          ! success value
+      | .bind A B computation function ->
+        fn .run R failure success ->
+          ! computation .run R failure {
+            fn value ->
+              ! function value .run R failure success
+          }
+      end
+  } that
+  def mexnde : Thk (
+    forall (E : VType) .
+      Monad (ExnDe E)
+  ) = {
+    fix (mexnde : Thk (
+      forall (E : VType) .
+        Monad (ExnDe E)
+    )) ->
+      fn E ->
+        comatch
+        | .return ->
+          fn A value ->
+            comatch
+            | .try ->
+              fn F continuation ->
+                ! mexnde F .return A value
+            | .kont ->
+              fn B continuation ->
+                ! continuation value
+            | .done -> ret +Right(value)
+            end
+        | .bind ->
+          fn A B computation function ->
+            ! computation .kont B function
+        end
+  } that
+  def mexnde_err : Thk (
+    forall (E : VType) .
+      MonadErr E (ExnDe E)
+  ) = {
+    fix (mexnde_err : Thk (
+      forall (E : VType) .
+        MonadErr E (ExnDe E)
+    )) ->
+      fn E ->
+        comatch
+        | .fail ->
+          fn A error ->
+            comatch
+            | .try ->
+              fn F continuation ->
+                ! continuation error
+            | .kont ->
+              fn B continuation ->
+                ! mexnde_err E .fail B error
+            | .done -> ret +Left(error)
+            end
+        end
+  } that
+  def count_kont : Thk (
+    forall (E : VType) .
+    forall (A : VType) .
+      Int -> Thk (Int -> ExnDe E A) -> ExnDe E A
+  ) = {
+    fix (count_kont : Thk (
+      forall (E : VType) .
+      forall (A : VType) .
+        Int -> Thk (Int -> ExnDe E A) -> ExnDe E A
+    )) ->
+      fn E A count finish ->
+        comatch
+        | .try ->
+          fn F failure ->
+            ! count_kont F A count {
+              fn count ->
+                ! finish count .try F failure
+            }
+        | .kont ->
+          fn B success ->
+            do next <- ! (api/add) count 1;
+            ! count_kont E B next {
+              fn count ->
+                ! finish count .kont B success
+            }
+        | .done -> ! finish count .done
+        end
+  } that
+  def bench : Thk (
+    Thk (Thk ExnCounter -> ExnCounter) ->
+    Ret Int
+  ) = {
+    fn implementation ->
+      do outcome <- ! implementation {
+        ! count_kont Unit Int 0 {
+          ! mexnde Unit .return Int
+        }
+      } .done;
+      match outcome
+      | +Left(_) -> ret -1
+      | +Right(result) -> ret result
+      end
+  } that
+  def lhs : Thk (
+    Thk (Int -> ExnDe Unit Int) ->
+    Thk (Int -> ExnDe Unit Int) ->
+    Thk (ExnDe Unit Int) ->
+    ExnDe Unit Int
+  ) = {
+    fn first second computation ->
+      ! mexnde Unit .bind Int Int
+        {
+          ! mexnde Unit .bind Int Int computation first
+        }
+        second
+  } that
+  def rhs : Thk (
+    Thk (Int -> ExnDe Unit Int) ->
+    Thk (Int -> ExnDe Unit Int) ->
+    Thk (ExnDe Unit Int) ->
+    ExnDe Unit Int
+  ) = {
+    fn first second computation ->
+      ! mexnde Unit .bind Int Int computation {
+        fn value ->
+          ! mexnde Unit .bind Int Int { ! first value } second
+      }
+  } that
+
+  let trivial : Thk (Int -> ExnDe Unit Int) = {
+    ! mexnde Unit .return Int
+  } in
+  do left <- ! bench {
+    fn computation ->
+      ! lhs trivial trivial computation
+  };
+  do right <- ! bench {
+    fn computation ->
+      ! rhs trivial trivial computation
+  };
+  ! (api/write_int) left {
+    ! (api/write_str) " != " {
+      ! (api/write_int) right {
+        ! (api/write_str) "\n" {
+          ! (api/exit) 0
+        }
+      }
+    }
+  }
+end
+end

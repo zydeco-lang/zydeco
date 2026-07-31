@@ -3,8 +3,17 @@
 use crate::sps::syntax::*;
 use std::collections::HashMap;
 use zydeco_statics::surface_syntax::ScopedArena;
+use zydeco_syntax::BuiltinValueRole;
 
 pub type BuiltinMap = HashMap<&'static str, Builtin>;
+
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum BuiltinPackageLowerError {
+    #[error(transparent)]
+    Plan(#[from] zydeco_statics::tyck::BuiltinPackagePlanError),
+    #[error("host operation `{role}` has no Stack IR implementation")]
+    UnsupportedOperation { role: BuiltinValueRole },
+}
 
 #[derive(Clone, Debug, derive_more::Display)]
 #[display("{name}/{arity}")]
@@ -17,38 +26,57 @@ pub struct Builtin {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BuiltinSort {
     Operator,
-    Function,
+    Function(HostCallMode),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HostCallMode {
+    /// Return one machine-word value through the platform ABI.
+    Returning,
+    /// Select a Zydeco closure or terminate the process.
+    Control,
 }
 
 impl Builtin {
     pub fn all() -> BuiltinMap {
         use BuiltinSort::*;
+        use HostCallMode::*;
         [
             Builtin::new("add", 2, Operator),
             Builtin::new("sub", 2, Operator),
             Builtin::new("mul", 2, Operator),
+            Builtin::new("div", 2, Operator),
+            Builtin::new("mod", 2, Operator),
             Builtin::new("int_eq", 2, Operator),
             Builtin::new("int_lt", 2, Operator),
             Builtin::new("int_gt", 2, Operator),
-            // Builtin::new("str_length", 1, Function),
-            // Builtin::new("str_append", 2, Function),
+            Builtin::new("int_eq_branch", 4, Function(Control)),
+            Builtin::new("int_lt_branch", 4, Function(Control)),
+            Builtin::new("int_gt_branch", 4, Function(Control)),
+            Builtin::new("str_length", 1, Function(Returning)),
+            Builtin::new("str_append", 2, Function(Returning)),
             // Builtin::new("str_split_once", 2, Function),
             // Builtin::new("str_split_n", 2, Function),
+            Builtin::new("str_split_once_branch", 4, Function(Control)),
+            Builtin::new("str_split_n_branch", 4, Function(Control)),
             // Builtin::new("str_eq", 2, Function),
-            // Builtin::new("str_index", 2, Function),
-            // Builtin::new("int_to_str", 1, Function),
-            // Builtin::new("char_to_str", 1, Function),
-            // Builtin::new("char_to_int", 1, Function),
-            // Builtin::new("str_to_int", 1, Function),
-            Builtin::new("write_str", 2, Function),
-            Builtin::new("write_int", 2, Function),
-            Builtin::new("write_line", 2, Function),
-            Builtin::new("read_line", 1, Function),
-            Builtin::new("read_line_as_int", 1, Function),
-            // Builtin::new("read_till_eof", 1, Function),
+            Builtin::new("str_eq_branch", 4, Function(Control)),
+            Builtin::new("str_index", 2, Function(Returning)),
+            Builtin::new("int_to_str", 1, Function(Returning)),
+            Builtin::new("char_to_str", 1, Function(Returning)),
+            Builtin::new("char_to_int", 1, Function(Returning)),
+            Builtin::new("str_to_int", 1, Function(Returning)),
+            Builtin::new("write_str", 2, Function(Control)),
+            Builtin::new("write_int", 2, Function(Control)),
+            Builtin::new("write_line", 2, Function(Control)),
+            Builtin::new("read_line", 1, Function(Control)),
+            Builtin::new("read_line_as_int", 1, Function(Control)),
+            Builtin::new("read_line_as_int_branch", 2, Function(Control)),
+            Builtin::new("read_till_eof", 1, Function(Control)),
             // Builtin::new("arg_list", 1, Function),
-            Builtin::new("random_int", 1, Function),
-            Builtin::new("exit", 1, Function),
+            Builtin::new("arg_fold", 2, Function(Control)),
+            Builtin::new("random_int", 1, Function(Control)),
+            Builtin::new("exit", 1, Function(Control)),
         ]
         .into_iter()
         .map(Self::generate)
@@ -59,6 +87,15 @@ impl Builtin {
     }
     fn generate<'a>(self) -> (&'a str, Self) {
         (self.name, self)
+    }
+
+    pub fn for_role(
+        builtins: &BuiltinMap, role: BuiltinValueRole,
+    ) -> Result<Self, BuiltinPackageLowerError> {
+        builtins
+            .get(role.host_name())
+            .cloned()
+            .ok_or(BuiltinPackageLowerError::UnsupportedOperation { role })
     }
 
     /// Turn a builtin operator definition into returning a complex CBPV value,
@@ -103,5 +140,26 @@ impl Builtin {
         let stack = Bullet.build(arena, None);
         let body = ExternCall { function, stack }.build(arena, None);
         Closure { stack: Bullet, body }.build(arena, None)
+    }
+
+    pub fn is_function(&self) -> bool {
+        matches!(self.sort, BuiltinSort::Function(_))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_builtin_role_has_a_stack_ir_package_implementation() {
+        let builtins = Builtin::all();
+        let missing = BuiltinValueRole::ALL
+            .iter()
+            .copied()
+            .filter(|role| Builtin::for_role(&builtins, *role).is_err())
+            .collect::<Vec<_>>();
+
+        assert!(missing.is_empty(), "missing Stack IR Builtin roles: {missing:?}");
     }
 }

@@ -1,11 +1,11 @@
-use std::path::PathBuf;
-use zydeco_driver::{BuildError, BuildSystem, PackId, check::err::CompileError};
+use zydeco_driver::{BuildError, check::err::CompileError};
+use zydeco_tests::utils::SourceCase;
 
 struct PackPiCase;
 
 impl PackPiCase {
     const RET_MONAD: &str = r#"
-def ! mo-ret : Monad Ret =
+def mo_ret : Thk (Monad Ret) = {
   comatch
   | .return A value ->
     ret value
@@ -13,30 +13,19 @@ def ! mo-ret : Monad Ret =
     do value <- ! computation;
     ! continuation value
   end
-end
+} that
 "#;
 
-    fn with_source(
-        source: &str, test: impl FnOnce(&BuildSystem, PackId) -> Result<(), BuildError>,
-    ) -> Result<(), BuildError> {
-        let case_dir = tempfile::tempdir().unwrap();
-        let source_path = case_dir.path().join("pack-pi.zy");
-        std::fs::write(&source_path, source).unwrap();
-
-        let std_proj = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib/std/proj.toml");
-        let mut build_sys = BuildSystem::new();
-        build_sys.add_local_package(std_proj).unwrap();
-        let pack = build_sys.add_orphan_file(source_path).unwrap();
-        test(&build_sys, pack)
+    fn check(source: &str) -> Result<(), BuildError> {
+        SourceCase::check(source)
     }
 
-    fn check(source: &str) -> Result<(), BuildError> {
-        Self::with_source(source, |build_sys, pack| build_sys.test_pack(pack, true))
+    fn check_monadic(source: &str) -> Result<(), BuildError> {
+        SourceCase::check_monadic(source)
     }
 
     fn run(source: &str) -> Result<(), BuildError> {
-        let source = format!("{}\n{source}", Self::RET_MONAD);
-        Self::with_source(&source, |build_sys, pack| build_sys.test_pack(pack, false))
+        SourceCase::run_monadic(&format!("begin\n{}\n{}\nend", Self::RET_MONAD, source))
     }
 
     fn assert_type_error(source: &str) {
@@ -54,15 +43,17 @@ end
 fn synthesizes_a_package_dependent_arrow() {
     PackPiCase::check(
         r#"
-alias Core =
-  exists (OS : CType) . Unit
-end
+begin
+  let Core =
+    exists (OS : CType) . Unit
+  that
 
-alias Binary =
-  pi ((OS, _) : Core) . OS
-end
+  let Binary =
+    pi ((OS, _) : Core) . OS
+  that
 
-main ! exit 0 end
+  ! exit 0
+end
 "#,
     )
     .unwrap();
@@ -72,15 +63,17 @@ main ! exit 0 end
 fn analyzes_a_package_dependent_arrow_as_ctype() {
     PackPiCase::check(
         r#"
-alias Core =
-  exists (OS : CType) . Unit
-end
+begin
+  let Core =
+    exists (OS : CType) . Unit
+  that
 
-alias Binary : CType =
-  pi ((OS, _) : Core) . OS
-end
+  let Binary : CType =
+    pi ((OS, _) : Core) . OS
+  that
 
-main ! exit 0 end
+  ! exit 0
+end
 "#,
     )
     .unwrap();
@@ -90,17 +83,19 @@ main ! exit 0 end
 fn scopes_multiple_package_witnesses_over_the_codomain() {
     PackPiCase::check(
         r#"
-alias Core =
-  exists (A : VType) .
-  exists (OS : CType) .
-  Unit
-end
+begin
+  let Core =
+    exists (A : VType) .
+    exists (OS : CType) .
+      Unit
+  that
 
-alias Binary : CType =
-  pi ((A, OS, _) : Core) . A -> OS
-end
+  let Binary : CType =
+    pi ((A, OS, _) : Core) . A -> OS
+  that
 
-main ! exit 0 end
+  ! exit 0
+end
 "#,
     )
     .unwrap();
@@ -110,15 +105,17 @@ main ! exit 0 end
 fn rejects_dependency_on_the_package_payload() {
     PackPiCase::assert_type_error(
         r#"
-alias Core =
-  exists (OS : CType) . Int
-end
+begin
+  let Core =
+    exists (OS : CType) . Int
+  that
 
-alias Bad : CType =
-  pi ((OS, payload) : Core) . payload
-end
+  let Bad : CType =
+    pi ((OS, payload) : Core) . payload
+  that
 
-main ! exit 0 end
+  ! exit 0
+end
 "#,
     );
 }
@@ -127,21 +124,21 @@ main ! exit 0 end
 fn checks_and_applies_a_package_dependent_abstraction() {
     PackPiCase::check(
         r#"
-alias Box =
-  exists (X : VType) . X
-end
+begin
+  let Box =
+    exists (X : VType) . X
+  that
 
-alias Unbox =
-  pi ((X, _) : Box) . Ret X
-end
+  let Unbox =
+    pi ((X, _) : Box) . Ret X
+  that
 
-def unbox : Thk Unbox = {
-  fn ((X, value) : Box) -> ret value
-} end
+  def unbox : Thk Unbox = {
+    fn ((X, value) : Box) -> ret value
+  } that
 
-def boxed : Box = (Int, 41) end
+  def boxed : Box = (Int, 41) that
 
-main
   do value <- ! unbox boxed;
   ! exit value
 end
@@ -154,17 +151,17 @@ end
 fn synthesizes_a_package_dependent_abstraction() {
     PackPiCase::check(
         r#"
-alias Box =
-  exists (X : VType) . X
-end
+begin
+  let Box =
+    exists (X : VType) . X
+  that
 
-def unbox = {
-  fn ((X, value) : Box) -> ret value
-} end
+  def unbox = {
+    fn ((X, value) : Box) -> ret value
+  } that
 
-def boxed : Box = (Int, 41) end
+  def boxed : Box = (Int, 41) that
 
-main
   do value <- ! unbox boxed;
   ! exit value
 end
@@ -177,23 +174,23 @@ end
 fn instantiates_multiple_package_witnesses() {
     PackPiCase::check(
         r#"
-alias PairBox =
-  exists (X : VType) .
-  exists (Y : VType) .
-  X * Y
-end
+begin
+  let PairBox =
+    exists (X : VType) .
+    exists (Y : VType) .
+      X * Y
+  that
 
-alias UnboxPair =
-  pi ((X, Y, _, _) : PairBox) . Ret (X * Y)
-end
+  let UnboxPair =
+    pi ((X, Y, _, _) : PairBox) . Ret (X * Y)
+  that
 
-def unbox_pair : Thk UnboxPair = {
-  fn ((X, Y, x, y) : PairBox) -> ret (x, y)
-} end
+  def unbox_pair : Thk UnboxPair = {
+    fn ((X, Y, x, y) : PairBox) -> ret (x, y)
+  } that
 
-def boxed : PairBox = (Int, Char, 41, 'z') end
+  def boxed : PairBox = (Int, Char, 41, 'z') that
 
-main
   do (value, _) <- ! unbox_pair boxed;
   ! exit value
 end
@@ -206,33 +203,33 @@ end
 fn preserves_an_opened_witness_across_applications() {
     PackPiCase::check(
         r#"
-alias Box =
-  exists (X : VType) .
-  X * Thk (X -> Ret Int)
-end
+begin
+  let Box =
+    exists (X : VType) .
+      X * Thk (X -> Ret Int)
+  that
 
-alias Reveal =
-  pi ((X, _, _) : Box) . Ret X
-end
+  let Reveal =
+    pi ((X, _, _) : Box) . Ret X
+  that
 
-def reveal : Thk Reveal = {
-  fn ((X, value, _) : Box) -> ret value
-} end
+  def reveal : Thk Reveal = {
+    fn ((X, value, _) : Box) -> ret value
+  } that
 
-def consume_twice : Thk (Box -> Ret Int) = {
-  fn ((X, value, consume) : Box) ->
-    do first <- ! reveal (X, value, consume);
-    do second <- ! reveal (X, first, consume);
-    ! consume second
-} end
+  def consume_twice : Thk (Box -> Ret Int) = {
+    fn ((X, value, consume) : Box) ->
+      do first <- ! reveal (X, value, consume);
+      do second <- ! reveal (X, first, consume);
+      ! consume second
+  } that
 
-def boxed : Box = (
-  Int,
-  41,
-  { fn (value : Int) -> ret value },
-) end
+  def boxed : Box = (
+    Int,
+    41,
+    { fn (value : Int) -> ret value },
+  ) that
 
-main
   do status <- ! consume_twice boxed;
   ! exit status
 end
@@ -245,21 +242,21 @@ end
 fn infers_a_hole_in_the_package_dependent_codomain() {
     PackPiCase::check(
         r#"
-alias Box =
-  exists (X : VType) . X
-end
+begin
+  let Box =
+    exists (X : VType) . X
+  that
 
-alias Unbox : CType =
-  pi ((X, _) : Box) . (_ : CType)
-end
+  let Unbox : CType =
+    pi ((X, _) : Box) . (_ : CType)
+  that
 
-def unbox : Thk Unbox = {
-  fn ((X, value) : Box) -> ret value
-} end
+  def unbox : Thk Unbox = {
+    fn ((X, value) : Box) -> ret value
+  } that
 
-def boxed : Box = (Int, 41) end
+  def boxed : Box = (Int, 41) that
 
-main
   do value <- ! unbox boxed;
   ! exit value
 end
@@ -272,48 +269,52 @@ end
 fn rejects_application_to_a_package_with_hidden_witnesses() {
     PackPiCase::assert_type_error(
         r#"
-alias Box =
-  exists (X : VType) . X
+begin
+  let Box =
+    exists (X : VType) . X
+  that
+
+  let Unbox =
+    pi ((X, _) : Box) . Ret X
+  that
+
+  def unbox : Thk Unbox = {
+    fn ((X, value) : Box) -> ret value
+  } that
+
+  def hidden : Thk (Box -> Ret Int) = {
+    fn (boxed : Box) ->
+      do _ <- ! unbox boxed;
+      ret 0
+  } that
+
+  ! exit 0
 end
-
-alias Unbox =
-  pi ((X, _) : Box) . Ret X
-end
-
-def unbox : Thk Unbox = {
-  fn ((X, value) : Box) -> ret value
-} end
-
-def hidden : Thk (Box -> Ret Int) = {
-  fn (boxed : Box) ->
-    do _ <- ! unbox boxed;
-    ret 0
-} end
-
-main ! exit 0 end
 "#,
     );
 }
 
 #[test]
 fn translates_package_dependent_functions_in_monadic_blocks() {
-    PackPiCase::check(
+    PackPiCase::check_monadic(
         r#"
-alias Box =
-  exists (X : VType) . X
-end
+begin
+  let Box =
+    exists (X : VType) . X
+  that
 
-def ! translated =
-  monadic
-    let unbox = {
-      do _ <- ret ();
-      fn ((X, value) : Box) -> ret value
-    } in
-    ! unbox (Unit, ())
-  end
-end
+  def translated = {
+    monadic
+      let unbox = {
+        do _ <- ret ();
+        fn ((X, value) : Box) -> ret value
+      } in
+      ! unbox (Unit, ())
+    end
+  } that
 
-main ! exit 0 end
+  ! exit 0
+end
 "#,
     )
     .unwrap();
@@ -321,31 +322,33 @@ main ! exit 0 end
 
 #[test]
 fn translates_multiple_package_witnesses_and_their_structures() {
-    PackPiCase::check(
+    PackPiCase::check_monadic(
         r#"
-alias Core =
-  exists (A : VType) .
-  exists (OS : CType) .
-  A * Thk (A -> OS)
-end
+begin
+  let Core =
+    exists (A : VType) .
+    exists (OS : CType) .
+      A * Thk (A -> OS)
+  that
 
-def ! translated =
-  monadic
-    let run = {
-      do _ <- ret ();
-      fn ((A, OS, value, execute) : Core) ->
-        ! execute value
-    } in
-    ! run (
-      Unit,
-      Ret Unit,
-      (),
-      { fn (_ : Unit) -> ret () },
-    )
-  end
-end
+  def translated = {
+    monadic
+      let run = {
+        do _ <- ret ();
+        fn ((A, OS, value, execute) : Core) ->
+          ! execute value
+      } in
+      ! run (
+        Unit,
+        Ret Unit,
+        (),
+        { fn (_ : Unit) -> ret () },
+      )
+    end
+  } that
 
-main ! exit 0 end
+  ! exit 0
+end
 "#,
     )
     .unwrap();
@@ -355,29 +358,29 @@ main ! exit 0 end
 fn runs_package_dependent_destructors_after_a_monadic_bind() {
     PackPiCase::run(
         r#"
-alias Box =
-  exists (X : VType) . X
-end
+begin
+  let Box =
+    exists (X : VType) . X
+  that
 
-alias Service : CType =
-  codata
-  | .unbox : pi ((X, _) : Box) . Ret X
-  end
-end
+  let Service : CType =
+    codata
+    | .unbox : pi ((X, _) : Box) . Ret X
+    end
+  that
 
-def ! translated =
-  monadic
-    do _ <- ret ();
-    (comatch
-    | .unbox ->
-      fn ((X, value) : Box) -> ret value
-    end : Service)
-  end
-end
+  def translated = {
+    monadic
+      do _ <- ret ();
+      (comatch
+      | .unbox ->
+        fn ((X, value) : Box) -> ret value
+      end : Service)
+    end
+  } that
 
-main
-  do value <- ! translated Ret { ! mo-ret } .unbox (Int, triv, 41);
-  do status <- ! sub value 41;
+  do value <- ! translated Ret { ! mo_ret } .unbox (Int, triv, 41);
+  do status <- ! (api/sub) value 41;
   ! exit status
 end
 "#,
@@ -389,40 +392,44 @@ end
 fn runs_package_dependent_destructors_with_an_abstract_computation_witness() {
     PackPiCase::run(
         r#"
-alias Core =
-  exists (OS : CType) . Thk OS
-end
+begin
+  let Core =
+    exists (OS : CType) . Thk OS
+  that
 
-alias Runner : CType =
-  codata
-  | .run : pi ((OS, _) : Core) . OS
-  end
-end
+  let Runner : CType =
+    codata
+    | .run : pi ((OS, _) : Core) . OS
+    end
+  that
 
-def ! ret-algebra (R : CType) : Algebra Ret R =
-  comatch X computation continuation ->
-    do value <- ! computation;
-    ! continuation value
-  end
-end
+  def ret_algebra : Thk (
+    forall (R : CType) .
+      Algebra Ret R
+  ) = {
+    fn (R : CType) ->
+      comatch X computation continuation ->
+        do value <- ! computation;
+        ! continuation value
+      end
+  } that
 
-def ! translated =
-  monadic
-    do _ <- ret ();
-    (comatch
-    | .run ->
-      fn ((OS, computation) : Core) -> ! computation
-    end : Runner)
-  end
-end
+  def translated = {
+    monadic
+      do _ <- ret ();
+      (comatch
+      | .run ->
+        fn ((OS, computation) : Core) -> ! computation
+      end : Runner)
+    end
+  } that
 
-main
-  do value <- ! translated Ret { ! mo-ret } .run (
+  do value <- ! translated Ret { ! mo_ret } .run (
     Ret Int,
-    { ! ret-algebra (Ret Int) },
+    { ! ret_algebra (Ret Int) },
     { ret 41 },
   );
-  do status <- ! sub value 41;
+  do status <- ! (api/sub) value 41;
   ! exit status
 end
 "#,
@@ -432,27 +439,29 @@ end
 
 #[test]
 fn translates_only_the_existential_prefix_opened_by_a_package_arrow() {
-    PackPiCase::check(
+    PackPiCase::check_monadic(
         r#"
-alias Inner =
-  exists (Y : VType) . Y
-end
+begin
+  let Inner =
+    exists (Y : VType) . Y
+  that
 
-alias NestedBox =
-  exists (X : VType) . X * Inner
-end
+  let NestedBox =
+    exists (X : VType) . X * Inner
+  that
 
-def ! translated =
-  monadic
-    let first = {
-      do _ <- ret ();
-      fn ((X, value, _) : NestedBox) -> ret value
-    } in
-    ! first (Unit, (), (Unit, ()))
-  end
-end
+  def translated = {
+    monadic
+      let first = {
+        do _ <- ret ();
+        fn ((X, value, _) : NestedBox) -> ret value
+      } in
+      ! first (Unit, (), (Unit, ()))
+    end
+  } that
 
-main ! exit 0 end
+  ! exit 0
+end
 "#,
     )
     .unwrap();
@@ -460,26 +469,28 @@ main ! exit 0 end
 
 #[test]
 fn translates_a_manifest_component_before_a_pack_pi_witness() {
-    PackPiCase::check(
+    PackPiCase::check_monadic(
         r#"
-alias Mixed =
-  exists (Y as Unit : VType) .
-  exists (X : VType) .
-  exists (Z as X : VType) .
-    Z
-end
+begin
+  let Mixed =
+    exists (Y as Unit : VType) .
+    exists (X : VType) .
+    exists (Z as X : VType) .
+      Z
+  that
 
-def ! translated =
-  monadic
-    let reveal = {
-      do _ <- ret ();
-      fn ((Y, X, Z, value) : Mixed) -> ret value
-    } in
-    ! reveal (Unit, Unit, Unit, ())
-  end
-end
+  def translated = {
+    monadic
+      let reveal = {
+        do _ <- ret ();
+        fn ((Y, X, Z, value) : Mixed) -> ret value
+      } in
+      ! reveal (Unit, Unit, Unit, ())
+    end
+  } that
 
-main ! exit 0 end
+  ! exit 0
+end
 "#,
     )
     .unwrap();
@@ -487,25 +498,27 @@ main ! exit 0 end
 
 #[test]
 fn preserves_an_opened_witness_across_monadic_applications() {
-    PackPiCase::check(
+    PackPiCase::check_monadic(
         r#"
-alias Box =
-  exists (X : VType) . X
-end
+begin
+  let Box =
+    exists (X : VType) . X
+  that
 
-def ! translated =
-  monadic
-    let reveal = {
-      do _ <- ret ();
-      fn ((X, value) : Box) -> ret value
-    } in
-    fn ((X, value) : Box) ->
-      do first <- ! reveal (X, value);
-      ! reveal (X, first)
-  end
-end
+  def translated = {
+    monadic
+      let reveal = {
+        do _ <- ret ();
+        fn ((X, value) : Box) -> ret value
+      } in
+      fn ((X, value) : Box) ->
+        do first <- ! reveal (X, value);
+        ! reveal (X, first)
+    end
+  } that
 
-main ! exit 0 end
+  ! exit 0
+end
 "#,
     )
     .unwrap();
@@ -515,28 +528,28 @@ main ! exit 0 end
 fn runs_package_dependent_destructors_from_monadic_blocks() {
     PackPiCase::run(
         r#"
-alias Box =
-  exists (X : VType) . X
-end
+begin
+  let Box =
+    exists (X : VType) . X
+  that
 
-alias Service : CType =
-  codata
-  | .unbox : pi ((X, _) : Box) . Ret X
-  end
-end
+  let Service : CType =
+    codata
+    | .unbox : pi ((X, _) : Box) . Ret X
+    end
+  that
 
-def ! translated =
-  monadic
-    (comatch
-    | .unbox ->
-      fn ((X, value) : Box) -> ret value
-    end : Service)
-  end
-end
+  def translated = {
+    monadic
+      (comatch
+      | .unbox ->
+        fn ((X, value) : Box) -> ret value
+      end : Service)
+    end
+  } that
 
-main
-  do value <- ! translated Ret { ! mo-ret } .unbox (Int, triv, 41);
-  do status <- ! sub value 41;
+  do value <- ! translated Ret { ! mo_ret } .unbox (Int, triv, 41);
+  do status <- ! (api/sub) value 41;
   ! exit status
 end
 "#,
@@ -548,30 +561,30 @@ end
 fn runs_multiple_package_witnesses_and_their_structures() {
     PackPiCase::run(
         r#"
-alias Core =
-  exists (A : VType) .
-  exists (OS : CType) .
-  A * Thk (A -> OS)
-end
+begin
+  let Core =
+    exists (A : VType) .
+    exists (OS : CType) .
+      A * Thk (A -> OS)
+  that
 
-def ! translated =
-  monadic
-    let run = {
-      do _ <- ret ();
-      fn ((A, OS, value, execute) : Core) ->
-        ! execute value
-    } in
-    ! run (
-      Unit,
-      Ret Unit,
-      (),
-      { fn (_ : Unit) -> ret () },
-    )
-  end
-end
+  def translated = {
+    monadic
+      let run = {
+        do _ <- ret ();
+        fn ((A, OS, value, execute) : Core) ->
+          ! execute value
+      } in
+      ! run (
+        Unit,
+        Ret Unit,
+        (),
+        { fn (_ : Unit) -> ret () },
+      )
+    end
+  } that
 
-main
-  do _ <- ! translated Ret { ! mo-ret };
+  do _ <- ! translated Ret { ! mo_ret };
   ! exit 0
 end
 "#,
@@ -583,24 +596,29 @@ end
 fn runs_with_an_unopened_existential_package_in_the_payload() {
     PackPiCase::run(
         r#"
-alias Inner =
-  exists (Y : VType) . Y
-end
+begin
+  let Inner =
+    exists (Y : VType) . Y
+  that
 
-alias NestedBox =
-  exists (X : VType) . X * Inner
-end
+  let NestedBox =
+    exists (X : VType) . X * Inner
+  that
 
-def ! translated =
-  monadic
-    do _ <- ret ();
-    fn ((X, value, _) : NestedBox) -> ret value
-  end
-end
+  def translated = {
+    monadic
+      do _ <- ret ();
+      fn ((X, value, _) : NestedBox) -> ret value
+    end
+  } that
 
-main
-  do value <- ! translated Ret { ! mo-ret } (Int, triv, 41, (Unit, triv, ()));
-  do status <- ! sub value 41;
+  do value <- ! translated Ret { ! mo_ret } (
+    Int,
+    triv,
+    41,
+    (Unit, triv, ()),
+  );
+  do status <- ! (api/sub) value 41;
   ! exit status
 end
 "#,
@@ -612,25 +630,25 @@ end
 fn runs_repeated_package_applications_with_one_opened_witness() {
     PackPiCase::run(
         r#"
-alias Box =
-  exists (X : VType) . X
-end
+begin
+  let Box =
+    exists (X : VType) . X
+  that
 
-def ! translated =
-  monadic
-    let reveal = {
-      do _ <- ret ();
-      fn ((X, value) : Box) -> ret value
-    } in
-    fn ((X, value) : Box) ->
-      do first <- ! reveal (X, value);
-      ! reveal (X, first)
-  end
-end
+  def translated = {
+    monadic
+      let reveal = {
+        do _ <- ret ();
+        fn ((X, value) : Box) -> ret value
+      } in
+      fn ((X, value) : Box) ->
+        do first <- ! reveal (X, value);
+        ! reveal (X, first)
+    end
+  } that
 
-main
-  do value <- ! translated Ret { ! mo-ret } (Int, triv, 41);
-  do status <- ! sub value 41;
+  do value <- ! translated Ret { ! mo_ret } (Int, triv, 41);
+  do status <- ! (api/sub) value 41;
   ! exit status
 end
 "#,

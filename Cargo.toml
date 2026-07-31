@@ -16,7 +16,6 @@ members = [
     "cli",
     # "web",
     # "runtime",
-    "editor/zls",
     "editor/cajun",
 ]
 exclude = ["build"]
@@ -76,7 +75,6 @@ serde_json = "1.0"
 toml = "1.1"
 toml_edit = "0.25"
 # parallelism
-rayon = "1.10"
 # logging
 log = "0.4"
 env_logger = "0.11"
@@ -102,10 +100,22 @@ tower-lsp = { version = "0.20", features = ["proposed"] }
 [profile.dev.package."*"]
 opt-level = 2
 
-# Deeply nested programs exercise recursive type checking;
-# optimizing this crate keeps its test stack frames small
-# without changing the profile.
+[profile.dev.package.zydeco-statics]
+opt-level = 1
+
+[profile.dev.package.zydeco-surface]
+opt-level = 1
+
+# Deeply nested programs exercise recursive surface, static, and assembly passes;
+# optimizing these crates keeps their test stack frames small
+# without changing the whole profile.
 [profile.test.package.zydeco-statics]
+opt-level = 1
+
+[profile.test.package.zydeco-surface]
+opt-level = 1
+
+[profile.test.package.zydeco-assembly]
 opt-level = 1
 
 [profile.release]

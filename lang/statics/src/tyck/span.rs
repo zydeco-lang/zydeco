@@ -63,10 +63,3 @@ impl<'a> SpanView<'a, Tycker<'a>> for CompuId {
         term.span(tycker)
     }
 }
-
-impl<'a> SpanView<'a, Tycker<'a>> for DeclId {
-    fn span(&self, tycker: &'a Tycker) -> &'a Span {
-        let entity = tycker.scoped.textual.back(&(*self).into()).unwrap();
-        &tycker.spans[entity]
-    }
-}

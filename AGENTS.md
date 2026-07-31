@@ -39,7 +39,7 @@ cargo clippy-all
 
 Run a Zydeco program:
 ```sh
-zydeco run path/to/proj.toml --bin=foo
+zydeco run path/to/main.zy
 ```
 
 Run the test suite:

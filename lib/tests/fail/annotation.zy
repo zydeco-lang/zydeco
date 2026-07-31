@@ -1,6 +1,17 @@
-main
-  match +True ()
-  | +True () -> ! exit 0
-  | +False () -> ! exit 1
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  def Bool : VType =
+    data
+    | +True : Unit
+    | +False : Unit
+    end
+  that
+
+  match +True()
+  | +True() -> ! (api/exit) 0
+  | +False() -> ! (api/exit) 1
   end
 end

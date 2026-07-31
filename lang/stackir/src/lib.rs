@@ -40,7 +40,12 @@ pub mod sps {
     pub mod clone;
 }
 
-pub use sps::{arena::*, convert::ClosureConverter, cps::CpsTranslator, lower::Lowerer};
+pub use sps::{
+    arena::*,
+    convert::ClosureConverter,
+    cps::CpsTranslator,
+    lower::{BuiltinRootLowerer, Lowerer, RootLowerer},
+};
 
 pub mod snorm {
     /// Extra syntax for normalization.

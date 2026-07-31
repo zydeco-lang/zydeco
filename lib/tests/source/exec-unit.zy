@@ -1,0 +1,15 @@
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  def unit_to_string : Thk (Unit -> Ret String) = {
+    fn (_ : Unit) ->
+      ret "()"
+  } that
+
+  let value : Unit = () in
+  do rendered <- ! unit_to_string value;
+  ! (api/write_line) rendered { ! (api/exit) 0 }
+end

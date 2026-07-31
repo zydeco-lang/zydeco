@@ -1,0 +1,16 @@
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  ! (api/read_line) {
+    fn line ->
+      let finish : Thk (Int -> OS) = {
+        fn status ->
+          let captured = line in
+          ! (api/exit) status
+      } in
+      ! finish 0
+  }
+end

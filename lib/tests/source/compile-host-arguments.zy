@@ -1,0 +1,22 @@
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  do length <- ! (api/arg_fold)
+    (Ret Int)
+    { ret 0 }
+    {
+      fn argument remaining ->
+        do suffix_length <- ! remaining;
+        do argument_length <- ! (api/str_length) argument;
+        ! (api/add) argument_length suffix_length
+    };
+  ! (api/int_eq_branch)
+    OS
+    length
+    9
+    { ! (api/exit) 0 }
+    { ! (api/exit) 1 }
+end

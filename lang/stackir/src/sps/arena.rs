@@ -45,9 +45,11 @@ pub struct StackirInnerArena {
     /// computation arena
     pub compus: ArenaSparse<StackirScope, CompuId>,
 
-    /// entry point(s), i.e. declarations that are marked as entry points;
-    /// each entry compu is wrapped in a let chain binding globals (in order) then the body
-    /// typically the main function, which normally should only be unique
+    /// Computation roots selected for backend execution.
+    ///
+    /// A source-file compilation contributes exactly one root. The set-like
+    /// representation is retained because later whole-arena rewrites operate
+    /// uniformly over every selected root.
     pub entry: ArenaAssoc<CompuId, ()>,
 }
 

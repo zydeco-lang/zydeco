@@ -1,5 +1,7 @@
-use zydeco_tests::interp_proj_bin;
+use zydeco_tests::e2e_sources;
 
-interp_proj_bin!(tests / delimcc, reset_shift, "reset-shift-r");
-interp_proj_bin!(tests / delimcc, reset_shift_k, "reset-shift-k");
-interp_proj_bin!(tests / delimcc, try_catch, "try-catch");
+e2e_sources!({
+    reset_shift => "tests/source/delimcc-reset-shift-r.zy",
+    reset_shift_k => "tests/source/delimcc-reset-shift-k.zy",
+    try_catch => "tests/source/delimcc-try-catch.zy",
+});

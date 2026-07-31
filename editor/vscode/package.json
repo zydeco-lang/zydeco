@@ -1,0 +1,93 @@
+{
+  "name": "cajun-zydeco-language-server",
+  "displayName": "Zydeco (Cajun)",
+  "description": "Zydeco language support powered by the Cajun language server",
+  "license": "MIT",
+  "version": "0.1.0",
+  "keywords": [
+    "Zydeco",
+    "language-server",
+    "LSP"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zydeco-lang/zydeco"
+  },
+  "publisher": "LitiaEeloo",
+  "categories": [
+    "Programming Languages"
+  ],
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "activationEvents": [
+    "onLanguage:zydeco"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "zydeco",
+        "aliases": [
+          "Zydeco",
+          "zydeco"
+        ],
+        "extensions": [
+          ".zy",
+          ".zydeco"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "zydeco",
+        "scopeName": "source.zydeco",
+        "path": "./syntaxes/zydeco.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Cajun",
+      "properties": {
+        "cajun.server.path": {
+          "type": "string",
+          "scope": "machine",
+          "default": "",
+          "description": "Path to the Cajun executable. Leave empty to find cajun on PATH."
+        },
+        "cajun.trace.server": {
+          "type": "string",
+          "scope": "window",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Trace communication with Cajun."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "bundle": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+    "check": "tsc --noEmit",
+    "compile": "npm run check && npm run bundle -- --sourcemap",
+    "watch": "npm run bundle -- --sourcemap --watch",
+    "vscode:prepublish": "npm run check && npm run bundle -- --minify",
+    "package": "vsce package --no-dependencies",
+    "publish": "vsce publish --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.9",
+    "@types/vscode": "1.96.0",
+    "@vscode/vsce": "^3.7.1",
+    "esbuild": "^0.27.2",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "packageManager": "pnpm@11.9.0"
+}

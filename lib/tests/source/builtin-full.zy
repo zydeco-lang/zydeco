@@ -1,0 +1,13 @@
+param (
+  (VType, CType, Thk, Ret, Unit, Int, Char, String, OS,
+   = add, = sub, = mul, = div, = mod,
+   = int_eq_branch, = int_lt_branch, = int_gt_branch,
+   = str_length, = str_append, = str_split_once_branch, = str_split_n_branch,
+   = str_eq_branch, = str_index,
+   = int_to_str, = char_to_str, = char_to_int, = str_to_int,
+   = write_str, = write_int, = write_line,
+   = read_line, = read_line_as_int_branch, = read_till_eof, = arg_fold,
+   = random_int, = exit) :
+  @[import("../../std/builtin.zy")] _
+) in
+  ! exit 0

@@ -1,0 +1,28 @@
+begin
+  let std = @[import("../../std/std.zy")] _ that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  do (
+    Bool = StdBool,
+    Option = StdOption,
+    List = StdList,
+    Int = StdInt,
+    Char = StdChar,
+    String = StdString,
+    OS = StdOS,
+    public
+  ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  do value <- ! (public/some) StdInt 0;
+  ! (public/option_eliminate)
+    StdInt
+    StdOS
+    value
+    { ! (public/exit) 1 }
+    {
+      fn status ->
+        ! (public/exit) status
+    }
+end

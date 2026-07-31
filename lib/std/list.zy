@@ -1,0 +1,75 @@
+{
+param (
+  (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+  @[import("builtin.zy")] _
+) in
+ret begin
+  def List : (VType) -> (VType) =
+    begin
+      param (A : VType) that
+      data
+      | +Nil : Unit
+      | +Cons : A * List A
+      end
+    end
+  that
+  def nil : Thk (
+    forall (A : VType) .
+      Ret (List A)
+  ) = {
+    fn (A : VType) ->
+      ret +Nil()
+  } that
+  def cons : Thk (
+    forall (A : VType) .
+      A -> List A -> Ret (List A)
+  ) = {
+    fn (A : VType) (head : A) (tail : List A) ->
+      ret +Cons(head, tail)
+  } that
+  def eliminate : Thk (
+    forall (A : VType) .
+    forall (B : CType) .
+      List A -> Thk B -> Thk (A -> List A -> B) -> B
+  ) = {
+    fn (A : VType)
+       (B : CType)
+       (list : List A)
+       (when_nil : Thk B)
+       (when_cons : Thk (A -> List A -> B)) ->
+      match list
+      | +Nil(_) -> ! when_nil
+      | +Cons(head, tail) -> ! when_cons head tail
+      end
+  } that
+  let Interface =
+    exists (
+      List = AbstractList :
+      (VType) -> (VType)
+    ) .
+      (nil :: Thk (
+        forall (A : VType) .
+          Ret (AbstractList A)
+      )) *
+      (cons :: Thk (
+        forall (A : VType) .
+          A -> AbstractList A -> Ret (AbstractList A)
+      )) *
+      (eliminate :: Thk (
+        forall (A : VType) .
+        forall (B : CType) .
+          AbstractList A ->
+          Thk B ->
+          Thk (A -> AbstractList A -> B) ->
+          B
+      ))
+  that
+
+  (
+    List = List,
+    nil = nil,
+    cons = cons,
+    eliminate = eliminate,
+  ) : Interface
+end
+}

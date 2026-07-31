@@ -332,7 +332,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Literal {
 
 impl<'a> Pretty<'a, Formatter<'a>> for Extern {
     fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
-        RcDoc::text(format!("<extern:{}/{}>", self.name, self.arity))
+        RcDoc::text(format!("<extern:{}/{}:{:?}>", self.name, self.arity, self.mode))
     }
 }
 

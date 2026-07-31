@@ -1,0 +1,23 @@
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  do twelve <- ! (api/int_to_str) 12;
+  do combined <- ! (api/str_append) twelve twelve;
+  do length <- ! (api/str_length) combined;
+  do parsed <- ! (api/str_to_int) combined;
+  do first <- ! (api/str_index) combined 0;
+  do first_code <- ! (api/char_to_int) first;
+  do first_string <- ! (api/char_to_str) first;
+  do first_length <- ! (api/str_length) first_string;
+  do length_status <- ! (api/sub) length 4;
+  do parsed_status <- ! (api/sub) parsed 1212;
+  do first_status <- ! (api/sub) first_code 49;
+  do first_length_status <- ! (api/sub) first_length 1;
+  do status <- ! (api/add) length_status parsed_status;
+  do status <- ! (api/add) status first_status;
+  do status <- ! (api/add) status first_length_status;
+  ! (api/exit) status
+end

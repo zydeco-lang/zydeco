@@ -1,10 +1,9 @@
 use crate::{
     bitter::{syntax as b, *},
-    syntax::*,
-    textual::syntax::{self as t, GenBind},
+    textual::syntax as t,
 };
 use derive_more::{AsMut, AsRef};
-use zydeco_syntax::SpanView;
+use zydeco_syntax::{BuiltinMeta, IntrinsicMeta, IntrinsicRole, Meta, SpanView};
 use zydeco_utils::prelude::{Allocates, ArenaId, CompilerPass, IdAllocator};
 
 /// Desugar a textual node into bitter syntax using a shared `Desugarer`.
@@ -19,22 +18,29 @@ pub struct Desugarer<'a> {
     allocator: IdAllocator<b::BitterScope>,
     pub spans: &'a t::SpanArena,
     pub textual: &'a t::TextArena,
-    pub top: t::TopLevel,
     #[as_ref(b::BitterArena)]
     #[as_mut(b::BitterArena)]
     pub bitter: b::BitterArena,
     pub prim: b::PrimTerms,
 }
+
+/// A desugaring pass whose input is one complete source term.
+#[derive(AsRef, AsMut)]
+pub struct SourceUnitDesugarer<'a> {
+    #[as_ref(b::BitterArena)]
+    #[as_mut(b::BitterArena)]
+    desugarer: Desugarer<'a>,
+    unit: t::SourceUnit,
+}
+
 impl<'a> Desugarer<'a> {
-    pub fn new(
-        spans: &'a t::SpanArena, textual: &'a t::TextArena, top: t::TopLevel,
-        bitter: b::BitterArena,
+    fn with_arena(
+        spans: &'a t::SpanArena, textual: &'a t::TextArena, bitter: b::BitterArena,
     ) -> Self {
         Self {
             allocator: IdAllocator::new(),
             spans,
             textual,
-            top,
             bitter,
             prim: b::PrimTerms::default(),
         }
@@ -49,11 +55,20 @@ impl<'a> Desugarer<'a> {
     }
 }
 
-/// Output of the desugaring pass.
-pub struct DesugarOut {
+impl<'a> SourceUnitDesugarer<'a> {
+    pub fn new(
+        spans: &'a t::SpanArena, textual: &'a t::TextArena, unit: t::SourceUnit,
+        bitter: b::BitterArena,
+    ) -> Self {
+        Self { desugarer: Desugarer::with_arena(spans, textual, bitter), unit }
+    }
+}
+
+/// Output of desugaring one complete source term.
+pub struct SourceDesugarOut {
     pub arena: b::BitterArena,
     pub prim: b::PrimTerms,
-    pub top: b::TopLevel,
+    pub root: b::TermId,
 }
 
 struct PatternPayloadAnnotation {
@@ -79,15 +94,16 @@ impl PatternPayloadAnnotation {
     }
 }
 
-impl CompilerPass for Desugarer<'_> {
+impl CompilerPass for SourceUnitDesugarer<'_> {
     type Arena = b::BitterArena;
-    type Out = DesugarOut;
+    type Out = SourceDesugarOut;
     type Error = DesugarError;
-    fn run(self) -> Result<DesugarOut> {
-        let mut desugarer = self;
-        let top = desugarer.top.clone().desugar(&mut desugarer)?;
+
+    fn run(self) -> Result<SourceDesugarOut> {
+        let SourceUnitDesugarer { mut desugarer, unit } = self;
+        let root = unit.root.desugar(&mut desugarer)?;
         let Desugarer { bitter: arena, prim, .. } = desugarer;
-        Ok(DesugarOut { arena, prim, top })
+        Ok(SourceDesugarOut { arena, prim, root })
     }
 }
 
@@ -98,138 +114,6 @@ where
     type Out = Vec<T::Out>;
     fn desugar(self, desugarer: &mut Desugarer) -> Result<Self::Out> {
         self.into_iter().map(|x| x.desugar(desugarer)).collect()
-    }
-}
-
-impl Desugar for t::TopLevel {
-    type Out = b::TopLevel;
-    fn desugar(self, desugarer: &mut Desugarer) -> Result<Self::Out> {
-        let t::TopLevel(decls) = self;
-        Ok(b::TopLevel(decls.desugar(desugarer)?))
-    }
-}
-
-impl Desugar for t::DeclId {
-    type Out = b::DeclId;
-    fn desugar(self, desugarer: &mut Desugarer) -> Result<Self::Out> {
-        let Modifiers { public, external, inner } = desugarer.lookup_decl(self).clone();
-        use t::Declaration as Decl;
-        let inner = match inner {
-            | Decl::Meta(decl) => {
-                let t::MetaT(meta, decl) = decl;
-                let decl = decl.desugar(desugarer)?;
-                b::MetaT(meta, decl).into()
-            }
-            | Decl::DataDef(decl) => {
-                let t::DataDef { name, params, def: body } = decl;
-                // name -> pat
-                let name = name.desugar(desugarer)?;
-                let pat = Alloc::alloc(desugarer, name.into(), self.into());
-                // body -> term
-                let body = (body, self.into()).desugar(desugarer)?;
-                // params & body -> abs term
-                let params = params.desugar(desugarer)?;
-                let mut abs = body;
-                let mut ann = desugarer.vtype(self.into());
-                for param in params.into_iter().rev() {
-                    abs = Alloc::alloc(desugarer, b::Abs(param, abs).into(), self.into());
-                    let tpat = param.deep_clone(desugarer);
-                    ann = Alloc::alloc(desugarer, b::Pi(tpat, ann).into(), self.into());
-                }
-                // abs & ann -> anno
-                let anno = Alloc::alloc(desugarer, b::Ann { tm: abs, ty: ann }.into(), self.into());
-                // anno -> sealed
-                let sealed = Alloc::alloc(desugarer, b::Sealed(anno).into(), self.into());
-                // pat & sealed -> alias
-                b::AliasBody { binder: pat, bindee: sealed }.into()
-            }
-            | Decl::CoDataDef(decl) => {
-                let t::CoDataDef { name, params, def: body } = decl;
-                // name -> pat
-                let name = name.desugar(desugarer)?;
-                let pat = Alloc::alloc(desugarer, name.into(), self.into());
-                // body -> term
-                let body = (body, self.into()).desugar(desugarer)?;
-                // params & body -> abs term
-                let params = params.desugar(desugarer)?;
-                let mut abs = body;
-                let mut ann = desugarer.ctype(self.into());
-                for param in params.into_iter().rev() {
-                    abs = Alloc::alloc(desugarer, b::Abs(param, abs).into(), self.into());
-                    let tpat = param.deep_clone(desugarer);
-                    ann = Alloc::alloc(desugarer, b::Pi(tpat, ann).into(), self.into());
-                }
-                // abs & ann -> anno
-                let anno = Alloc::alloc(desugarer, b::Ann { tm: abs, ty: ann }.into(), self.into());
-                // anno -> sealed
-                let sealed = Alloc::alloc(desugarer, b::Sealed(anno).into(), self.into());
-                // pat & sealed -> alias
-                b::AliasBody { binder: pat, bindee: sealed }.into()
-            }
-            | Decl::Define(decl) => {
-                let t::Define(GenBind { fix, comp, binder, params, ty, bindee }) = decl;
-                if let Some(bindee) = bindee {
-                    let (pat, term) =
-                        t::GenBind { fix, comp, binder, params, ty, bindee }.desugar(desugarer)?;
-                    // sealed
-                    let sealed = Alloc::alloc(desugarer, b::Sealed(term).into(), self.into());
-                    // pat & sealed -> alias
-                    b::AliasBody { binder: pat, bindee: sealed }.into()
-                } else {
-                    {
-                        let span = desugarer.spans[&self.into()].clone();
-                        if !external {
-                            Err(DesugarError::EmptyDeclNotExternal(span.make(self)))?
-                        }
-                        if comp {
-                            Err(DesugarError::ExternCompNotAllowed(span.make(self)))?
-                        }
-                    }
-                    let binder = binder.desugar(desugarer)?;
-                    let ty = if let Some(ty) = ty {
-                        let mut ty = ty.desugar(desugarer)?;
-                        if let Some(params) = params {
-                            let b::Appli(items) = params.desugar(desugarer)?;
-                            for item in items {
-                                match item {
-                                    | b::CoPatternItem::Pat(pat) => {
-                                        ty = Alloc::alloc(
-                                            desugarer,
-                                            b::Pi(pat, ty).into(),
-                                            self.into(),
-                                        )
-                                    }
-                                    | b::CoPatternItem::Dtor(_) => {
-                                        unimplemented!("Dtor in extern params")
-                                    }
-                                }
-                            }
-                        };
-                        Some(ty)
-                    } else {
-                        None
-                    };
-                    b::AliasHead { binder, ty }.into()
-                }
-            }
-            | Decl::Alias(decl) => {
-                let t::Alias(genbind) = decl;
-                let (pat, term) = genbind.desugar(desugarer)?;
-                // pat & term -> alias
-                b::AliasBody { binder: pat, bindee: term }.into()
-            }
-            | Decl::Exec(decl) => {
-                let t::Exec(term) = decl;
-                let term = term.desugar(desugarer)?;
-                // // term -> ann
-                // let os = desugarer.os(self.into());
-                // let ann = Alloc::alloc(desugarer, b::Ann { tm: term, ty: os }.into(), self.into());
-                // b::Exec(ann).into()
-                b::Exec(term).into()
-            }
-        };
-        let res = Alloc::alloc(desugarer, Modifiers { public, external, inner }, self.into());
-        Ok(res)
     }
 }
 
@@ -348,8 +232,40 @@ impl Desugar for t::TermId {
         let res = match term {
             | Tm::Meta(term) => {
                 let t::MetaT(meta, term) = term;
+                match IntrinsicMeta::decode(&meta) {
+                    | Ok(Some(meta)) => {
+                        if !matches!(desugarer.lookup_term(term), Tm::Hole(_)) {
+                            return Err(DesugarError::IntrinsicPayloadNotHole(
+                                self.span(desugarer.spans).clone().make(self),
+                            ));
+                        }
+                        return Ok(desugarer.intrinsic(meta.role, self.into()));
+                    }
+                    | Ok(None) => {}
+                    | Err(source) => {
+                        return Err(DesugarError::InvalidIntrinsicMeta {
+                            term: self.span(desugarer.spans).clone().make(self),
+                            source,
+                        });
+                    }
+                }
+                let meta = match BuiltinMeta::decode(&meta) {
+                    | Ok(Some(meta)) => Meta::Builtin(meta),
+                    | Ok(None) => meta,
+                    | Err(source) => {
+                        return Err(DesugarError::InvalidBuiltinMeta {
+                            term: self.span(desugarer.spans).clone().make(self),
+                            source,
+                        });
+                    }
+                };
                 let term = term.desugar(desugarer)?;
                 Alloc::alloc(desugarer, b::MetaT(meta, term).into(), self.into())
+            }
+            | Tm::SourceBoundary(term) => {
+                let t::SourceBoundary(term) = term;
+                let term = term.desugar(desugarer)?;
+                Alloc::alloc(desugarer, b::SourceBoundary(term).into(), self.into())
             }
             | Tm::Ann(term) => {
                 let t::Ann { tm, ty } = term;
@@ -568,13 +484,21 @@ impl Desugar for t::TermId {
                 Alloc::alloc(desugarer, b::Ann { tm: exists, ty: vtype }.into(), self.into())
             }
             | Tm::ManifestExists(term) => {
-                let t::ManifestExists { binder, definition, kind, body } = term;
+                let t::ManifestExists { binder, definition, classifier, body } = term;
                 let binder = binder.desugar(desugarer)?;
                 let definition = definition.desugar(desugarer)?;
-                let kind = kind.desugar(desugarer)?;
-                let binder =
-                    PatternPayloadAnnotation { pattern: binder, ty: kind, source: self.into() }
-                        .build(desugarer);
+                let binder = match classifier {
+                    | Some(classifier) => {
+                        let classifier = classifier.desugar(desugarer)?;
+                        PatternPayloadAnnotation {
+                            pattern: binder,
+                            ty: classifier,
+                            source: self.into(),
+                        }
+                        .build(desugarer)
+                    }
+                    | None => binder,
+                };
                 let body = body.desugar(desugarer)?;
                 Alloc::alloc(
                     desugarer,
@@ -666,7 +590,19 @@ impl Desugar for t::TermId {
             | Tm::MoBlock(term) => {
                 let t::MoBlock(body) = term;
                 let body = body.desugar(desugarer)?;
-                Alloc::alloc(desugarer, b::MoBlock(body).into(), self.into())
+                let basis = b::MonadicBasis {
+                    monad: Alloc::alloc(
+                        desugarer,
+                        b::Term::Var(b::VarName("Monad".into())),
+                        self.into(),
+                    ),
+                    algebra: Alloc::alloc(
+                        desugarer,
+                        b::Term::Var(b::VarName("Algebra".into())),
+                        self.into(),
+                    ),
+                };
+                Alloc::alloc(desugarer, b::MoBlock { body, basis }.into(), self.into())
             }
             | Tm::Data(data) => (data, self.into()).desugar(desugarer)?,
             | Tm::CoData(codata) => (codata, self.into()).desugar(desugarer)?,
@@ -880,12 +816,19 @@ mod impls {
         pub fn lookup_term(&self, id: t::TermId) -> t::Term {
             self.textual.terms[&id].clone()
         }
-        pub fn lookup_decl(&self, id: t::DeclId) -> Modifiers<t::Declaration> {
-            self.textual.decls[&id].clone()
-        }
     }
 
     impl Desugarer<'_> {
+        pub(crate) fn intrinsic(&mut self, role: IntrinsicRole, prev: t::EntityId) -> b::TermId {
+            match role {
+                | IntrinsicRole::VType => self.vtype(prev),
+                | IntrinsicRole::CType => self.ctype(prev),
+                | IntrinsicRole::Thk => self.thunk(prev),
+                | IntrinsicRole::Ret => self.ret(prev),
+                | IntrinsicRole::Unit => self.unit(prev),
+            }
+        }
+
         pub(crate) fn vtype(&mut self, prev: t::EntityId) -> b::TermId {
             let term = Alloc::alloc(self, b::Internal::VType.into(), prev);
             *self.prim.vtype.extend_one(term)

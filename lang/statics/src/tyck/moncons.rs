@@ -487,8 +487,18 @@ where
 }
 impl_mon_construct_from_construct! {
     impl MonConstruct<TypeId> for RetTy;
-    impl MonConstruct<TypeId> for cs::MonadTy;
-    impl MonConstruct<TypeId> for cs::AlgebraTy;
+}
+impl MonConstruct<TypeId> for cs::MonadTy {
+    fn mbuild(self, _tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
+        let monad = env.basis.monad;
+        Ok((env, monad))
+    }
+}
+impl MonConstruct<TypeId> for cs::AlgebraTy {
+    fn mbuild(self, _tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
+        let algebra = env.basis.algebra;
+        Ok((env, algebra))
+    }
 }
 impl<T> MonConstruct<TypeId> for cs::Ret<T>
 where
@@ -576,6 +586,19 @@ where
         cs::Ann(def, ty).mbuild(tycker, env)
     }
 }
+
+struct DataHint(TypeId);
+
+impl DataHint {
+    fn resolve(self, tycker: &mut Tycker<'_>, env: &TyEnv) -> Result<DataId> {
+        let view = self.0.unroll(tycker)?.subst_env(tycker, env)?;
+        let Type::Data(data) = tycker.type_filled(&view)?.to_owned() else {
+            unreachable!("a translated constructor retains a data classifier")
+        };
+        Ok(data)
+    }
+}
+
 impl<C, V, T> MonConstruct<VPatId> for cs::Pat<cs::Ctor<C, V>, T>
 where
     C: MonConstruct<CtorName>,
@@ -587,7 +610,10 @@ where
         let (env, ctor) = ctor.mbuild(tycker, env)?;
         let (env, body) = body.mbuild(tycker, env)?;
         let (env, ty) = ty.mbuild(tycker, env)?;
-        cs::Ann(Ctor(ctor, body), ty).mbuild(tycker, env)
+        let pattern = Alloc::alloc(tycker, Ctor(ctor, body), ty, &env.ty);
+        let data = DataHint(ty).resolve(tycker, &env.ty)?;
+        tycker.statics.data_pat_hints.insert_new(pattern, data);
+        Ok((env, pattern))
     }
 }
 impl MonConstruct<VPatId> for Triv {
@@ -636,7 +662,7 @@ where
         cs::Ann(ConsN(output, tail), ty).mbuild(tycker, env)
     }
 }
-impl<S, F, V, T> MonConstruct<VPatId> for cs::Pat<cs::TCons<S, F>, T>
+impl<S, F, V, T> MonConstruct<VPatId> for cs::Pat<cs::SCons<S, F>, T>
 where
     S: MonConstruct<TPatId>,
     F: FnOnce(Option<DefId>, AbstId) -> V,
@@ -644,7 +670,7 @@ where
     T: MonConstruct<TypeId>,
 {
     fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, VPatId)> {
-        let cs::Pat(cs::TCons(a, f), ty) = self;
+        let cs::Pat(cs::SCons(a, f), ty) = self;
         let (env, ty) = ty.mbuild(tycker, env)?;
         let Some((abst, _)) = ty.destruct_exists(tycker) else { unreachable!() };
         let (env, a) = a.mbuild(tycker, env)?;
@@ -780,7 +806,10 @@ where
         let (env, ctor) = ctor.mbuild(tycker, env)?;
         let (env, body) = body.mbuild(tycker, env)?;
         let (env, ty) = ty.mbuild(tycker, env)?;
-        cs::Ann(Ctor(ctor, body), ty).mbuild(tycker, env)
+        let value = Alloc::alloc(tycker, Ctor(ctor, body), ty, &env.ty);
+        let data = DataHint(ty).resolve(tycker, &env.ty)?;
+        tycker.statics.data_hints.insert_new(value, data);
+        Ok((env, value))
     }
 }
 
@@ -1012,6 +1041,24 @@ where
         Ok((env, alloc))
     }
 }
+// administrative pure bind
+impl<P, B, F, R> MonConstruct<ValueId> for Let<P, B, F>
+where
+    P: MonConstruct<VPatId>,
+    B: MonConstruct<ValueId>,
+    F: FnOnce(VPatId) -> R,
+    R: MonConstruct<ValueId>,
+{
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, ValueId)> {
+        let Let { binder, bindee, tail } = self;
+        let (env, bindee) = bindee.mbuild(tycker, env)?;
+        let (env, binder) = binder.mbuild(tycker, env)?;
+        let (env, tail) = tail(binder).mbuild(tycker, env)?;
+        let tail_ty = tycker.statics.annotations_value[&tail];
+        let alloc = Alloc::alloc(tycker, Let { binder, bindee, tail }, tail_ty, &env.ty);
+        Ok((env, alloc))
+    }
+}
 // match
 impl<T, F, R> MonConstruct<CompuId> for cs::Match<T, F>
 where
@@ -1061,6 +1108,7 @@ where
         let (env, ctype) = CType.mbuild(tycker, env)?;
         let ty_ = Alloc::alloc(tycker, Type::from(coda_id), ctype, &env.ty);
         let alloc = Alloc::alloc(tycker, CoMatch { arms }, ty_, &env.ty);
+        let _ = tycker.statics.codata_hints.upsert(alloc, coda_id);
         Ok((env, alloc))
     }
 }
@@ -1073,7 +1121,12 @@ where
         let Dtor(head, dtor) = self;
         let (env, head) = head.mbuild(tycker, env)?;
         let head_ty = tycker.statics.annotations_compu[&head];
-        let Some(coda) = head_ty.destruct_codata(&env.ty, tycker) else { unreachable!() };
+        let head_view = head_ty.unroll(tycker)?.subst_env(tycker, &env.ty)?;
+        let Type::CoData(coda_id) = tycker.type_filled(&head_view)?.to_owned() else {
+            unreachable!()
+        };
+        let _ = tycker.statics.codata_hints.upsert(head, coda_id);
+        let coda = tycker.statics.codatas[&coda_id].to_owned();
         let Some(ty) = coda.get(&dtor) else { unreachable!() };
         let alloc = Alloc::alloc(tycker, Dtor(head, dtor), ty, &env.ty);
         Ok((env, alloc))

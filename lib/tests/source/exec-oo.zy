@@ -1,0 +1,38 @@
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  def Counter : CType =
+    codata
+    | .num : Ret Int
+    | .incr : Int -> Counter
+    | .fmt : Ret String
+    end
+  that
+  def make_counter : Thk (Int -> Counter) = {
+    fix (make_counter : Thk (Int -> Counter)) ->
+      fn current ->
+        fix (this : Thk Counter) ->
+          comatch
+          | .num -> ret current
+          | .incr increment ->
+            do previous <- ! this .num;
+            do next <- ! (api/add) increment previous;
+            ! make_counter next
+          | .fmt ->
+            do number <- ! this .num;
+            ! (api/int_to_str) number
+          end
+  } that
+
+  let counter_42 : Thk Counter = {
+    ! make_counter 42
+  } in
+  do rendered <- ! counter_42 .fmt;
+  ! (api/write_line) rendered {
+    do number <- ! counter_42 .incr -42 .num;
+    ! (api/exit) number
+  }
+end

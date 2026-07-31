@@ -1,5 +1,8 @@
-use zydeco_tests::interp_proj_bin;
+use zydeco_tests::e2e_sources;
 
-interp_proj_bin!(tests / stack, invert, "invert");
-interp_proj_bin!(tests / stack, backtrace, "backtrace");
-interp_proj_bin!(tests / stack, cbv, "cbv");
+e2e_sources!({
+    invert => "tests/source/stack-invert.zy",
+    backtrace => "tests/source/stack-backtrace.zy",
+    cbv => "tests/source/oopsla-cbv.zy",
+    merge => "tests/source/stack-merge.zy",
+});

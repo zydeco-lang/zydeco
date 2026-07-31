@@ -1,10 +1,13 @@
-use crate::{syntax::DynamicsArena, *};
-use builtin::BUILTINS;
+use crate::{builtin::BuiltinRuntime, syntax::DynamicsArena, *};
 use std::rc::Rc;
-use zydeco_statics::{surface_syntax::ScopedArena, tyck::syntax::StaticsArena};
+use thiserror::Error;
+use zydeco_statics::{
+    surface_syntax::ScopedArena,
+    tyck::{
+        BuiltinPackagePlan, BuiltinPackagePlanError, BuiltinPackageValue, syntax::StaticsArena,
+    },
+};
 use zydeco_syntax::*;
-use zydeco_utils::arena::{ArenaAccess, ArenaSparse};
-use zydeco_utils::prelude::{DepGraph, Kosaraju};
 
 /// Trait for translating statics syntax nodes into dynamic syntax nodes.
 pub trait Link {
@@ -13,91 +16,70 @@ pub trait Link {
     fn link(&self, arena: Self::Arena<'_>) -> Self::Out;
 }
 
-/// Entry point for linking a type-checked package.
-pub struct Linker {
+/// Entry point for linking one checked computation root.
+pub struct RootLinker {
     pub scoped: ScopedArena,
     pub statics: StaticsArena,
+    pub root: ss::CompuId,
 }
 
-impl Linker {
-    /// Lower typed context bindings and the executable body into the dynamic arena.
-    pub fn run(self) -> DynamicsArena {
-        let Linker { scoped, statics } = self;
-        let defs = scoped.defs.rebind::<ds::DynamicsScope>();
-        let linked = statics
-            .decls
-            .iter()
-            .filter_map(|(id, _)| id.link((&statics, &defs)).map(|decl| (*id, decl)))
-            .collect::<Vec<_>>();
-        let dynamic_ids =
-            linked.iter().map(|(id, _)| *id).collect::<std::collections::HashSet<_>>();
-        let entry = scoped.root.body.as_ref().map(|body| body.id);
-        let values =
-            dynamic_ids.iter().copied().filter(|id| Some(*id) != entry).collect::<Vec<_>>();
-        let mut dependencies = DepGraph::new();
-        dynamic_ids.iter().copied().for_each(|id| {
-            let deps = if Some(id) == entry {
-                values.clone()
-            } else {
-                scoped
-                    .root
-                    .context
-                    .dependencies(&id.into())
+/// Link a package-dependent root and apply the concrete host Builtin package.
+pub struct BuiltinRootLinker {
+    pub scoped: ScopedArena,
+    pub statics: StaticsArena,
+    pub root: ss::CompuId,
+    pub signature: ss::PackPi,
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum BuiltinPackageError {
+    #[error(transparent)]
+    Plan(#[from] BuiltinPackagePlanError),
+    #[error("host operation `{role}` has no interpreter implementation")]
+    UnsupportedOperation { role: BuiltinValueRole },
+}
+
+/// Materialize the operation values described by a checked Builtin package plan.
+struct BuiltinPackageLinker;
+
+impl BuiltinPackageLinker {
+    fn link(value: BuiltinPackageValue) -> Result<ds::RcValue, BuiltinPackageError> {
+        match value {
+            | BuiltinPackageValue::Unit => Ok(Rc::new(ds::Value::Triv(Triv))),
+            | BuiltinPackageValue::Operation(role) => BuiltinRuntime::package_value(role)
+                .ok_or(BuiltinPackageError::UnsupportedOperation { role }),
+            | BuiltinPackageValue::Product(product) => {
+                let values = product
+                    .into_values()
                     .into_iter()
-                    .filter_map(|dependency| dependency.declaration())
-                    .filter(|dependency| dynamic_ids.contains(dependency))
-                    .collect()
-            };
-            dependencies.add(id, deps);
-        });
-        let top = Kosaraju::new(&dependencies).run();
-        let mut decls = ArenaSparse::default();
-        decls.extend(linked);
-        DynamicsArena { defs, decls, top }
+                    .map(Self::link)
+                    .collect::<Result<Vec<_>, _>>()?;
+                let values = ConsN::from_vec(values).expect("a checked product plan is non-empty");
+                Ok(Rc::new(ds::Value::VCons(values)))
+            }
+        }
     }
 }
 
-impl Link for ss::DeclId {
-    type Arena<'a> = (&'a StaticsArena, &'a ArenaSparse<ds::DynamicsScope, ds::DefId>);
-    type Out = Option<ds::Declaration>;
+impl RootLinker {
+    /// Erase static structure and retain one computation as the dynamic root.
+    pub fn run(self) -> DynamicsArena {
+        let Self { scoped, statics, root } = self;
+        let defs = scoped.defs.rebind::<ds::DynamicsScope>();
+        let root = root.link(&statics);
+        DynamicsArena { defs, root }
+    }
+}
 
-    fn link(&self, (statics, defs): Self::Arena<'_>) -> Self::Out {
-        let decl = statics.decls.get(self)?;
-        use ss::Declaration as Decl;
-        let decl = match decl {
-            | Decl::TAliasBody(_) => None?,
-            | Decl::VAliasBody(decl) => {
-                let ss::VAliasBody { binder, bindee } = decl;
-                let binder = binder.link(statics);
-                let bindee = bindee.link(statics);
-                ds::VAliasBody { binder, bindee }.into()
-            }
-            | Decl::VAliasHead(decl) => {
-                let ss::VAliasHead { binder, ty: _ } = decl;
-                let binder = binder.link(statics);
-                use ds::ValuePattern as VPat;
-                let def = match binder.as_ref() {
-                    | VPat::Var(def) => def,
-                    | VPat::Hole(_) | VPat::Ctor(_) | VPat::Triv(_) | VPat::VCons(_) => {
-                        unreachable!()
-                    }
-                };
-                let name = defs[def].plain();
-                // println!("builtin: {}", name);
-                let bindee = {
-                    let prim = BUILTINS[name.as_str()].to_owned().into();
-                    let thunk = Thunk(Rc::new(prim)).into();
-                    Rc::new(thunk)
-                };
-                ds::VAliasBody { binder, bindee }.into()
-            }
-            | Decl::Exec(exec) => {
-                let ss::Exec(comp) = exec;
-                let comp = comp.link(statics);
-                ds::Exec(comp).into()
-            }
-        };
-        Some(decl)
+impl BuiltinRootLinker {
+    pub fn run(self) -> Result<DynamicsArena, BuiltinPackageError> {
+        let Self { scoped, statics, root, signature } = self;
+        let plan = BuiltinPackagePlan::for_executable(&statics, &signature)?;
+        let package = BuiltinPackageLinker::link(plan.value)?;
+        let defs = scoped.defs.rebind::<ds::DynamicsScope>();
+        let function = root.link(&statics);
+        let root = Rc::new(ds::Computation::VApp(App(function, package)));
+        Ok(DynamicsArena { defs, root })
     }
 }
 
@@ -123,7 +105,7 @@ impl Link for ss::VPatId {
                 let tail = tail.link(statics);
                 ds::ConsN(items, tail).into()
             }
-            | VPat::TCons(ss::ConsN(_, body)) => {
+            | VPat::SCons(ss::ConsN(_, body)) => {
                 let body = body.link(statics);
                 body.as_ref().to_owned()
             }
@@ -143,6 +125,12 @@ impl Link for ss::ValueId {
             | Value::Hole(Hole) => Hole.into(),
             | Value::Var(def) => (*def).into(),
             | Value::Named(Named(_, inner)) => inner.link(statics).as_ref().to_owned(),
+            | Value::Let(Let { binder, bindee, tail }) => {
+                let binder = binder.link(statics);
+                let bindee = bindee.link(statics);
+                let tail = tail.link(statics);
+                Let { binder, bindee, tail }.into()
+            }
             | Value::Thunk(Thunk(body)) => {
                 let body = body.link(statics);
                 Thunk(body).into()
@@ -158,7 +146,7 @@ impl Link for ss::ValueId {
                 let tail = tail.link(statics);
                 ds::ConsN(items, tail).into()
             }
-            | Value::TCons(ss::ConsN(_, body)) => {
+            | Value::SCons(ss::ConsN(_, body)) => {
                 let body = body.link(statics);
                 body.as_ref().to_owned()
             }
@@ -257,5 +245,28 @@ impl Link for ss::CompuId {
             }
         };
         Rc::new(compu)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zydeco_utils::prelude::IdAllocator;
+
+    #[test]
+    fn computation_roots_link_and_evaluate_without_declarations() {
+        let mut allocator = IdAllocator::<ss::StaticsScope>::new();
+        let value = allocator.alloc();
+        let root = allocator.alloc();
+        let mut statics = ss::StaticsArena::default();
+        statics.values.insert_new(value, ss::Triv.into());
+        statics.compus.insert_new(root, ss::Return(value).into());
+
+        let arena = RootLinker { scoped: ScopedArena::default(), statics, root }.run();
+        let mut input = std::io::empty();
+        let mut output = Vec::new();
+        let results = ds::Runtime::new(&mut input, &mut output, &[], arena).run();
+
+        assert!(matches!(results.as_slice(), [ds::ProgKont::Ret(ds::SemValue::Triv(ss::Triv))]));
     }
 }

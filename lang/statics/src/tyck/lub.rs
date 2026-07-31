@@ -445,6 +445,36 @@ impl Debruijn {
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                     std::panic::Location::caller(),
                 )?,
+                | (
+                    Type::ManifestKind(ManifestKind {
+                        binder: lhs_binder,
+                        definition: lhs_definition,
+                        body: lhs_body,
+                    }),
+                    Type::ManifestKind(ManifestKind {
+                        binder: _,
+                        definition: rhs_definition,
+                        body: rhs_body,
+                    }),
+                ) => {
+                    let definition = Lub::lub(lhs_definition, rhs_definition, tycker)?;
+                    let body = self.lub(lhs_body, rhs_body, tycker)?;
+                    if definition == lhs_definition && body == lhs_body {
+                        lhs_id
+                    } else {
+                        let kind = tycker.statics.annotations_type[&lhs_id];
+                        Alloc::alloc(
+                            tycker,
+                            ManifestKind { binder: lhs_binder, definition, body },
+                            kind,
+                            &env,
+                        )
+                    }
+                }
+                | (Type::ManifestKind(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
                 | (Type::Data(lhs), Type::Data(rhs)) => {
                     use std::collections::HashMap;
                     let lhs_query =

@@ -10,15 +10,6 @@ impl<'arena> Formatter<'arena> {
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for TopLevel {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let TopLevel(decls) = self;
-        s += &decls.iter().map(|decl| decl.ugly(f)).collect::<Vec<_>>().join("\n");
-        s
-    }
-}
-
 impl<'a> Ugly<'a, Formatter<'a>> for DefId {
     fn ugly(&self, f: &'a Formatter) -> String {
         let name = &f.arena.defs[self];
@@ -49,6 +40,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
         let term = &f.arena.terms[self];
         match term {
             | Term::Meta(t) => s += &t.ugly(f),
+            | Term::SourceBoundary(SourceBoundary(t)) => s += &t.ugly(f),
             | Term::Internal(t) => s += &t.ugly(f),
             | Term::Sealed(t) => s += &t.ugly(f),
             | Term::Ann(t) => s += &t.ugly(f),
@@ -88,27 +80,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for DeclId {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let Modifiers { public, external, inner } = &f.arena.decls[self];
-        let mut s = String::new();
-        if *public {
-            s += "pub ";
-        }
-        if *external {
-            s += "extern ";
-        }
-        use Declaration as Decl;
-        match inner {
-            | Decl::Meta(d) => s += &d.ugly(f),
-            | Decl::AliasBody(d) => s += &d.ugly(f),
-            | Decl::AliasHead(d) => s += &d.ugly(f),
-            | Decl::Exec(d) => s += &d.ugly(f),
-        }
-        s
-    }
-}
-
 impl<'a> Ugly<'a, Formatter<'a>> for Internal {
     fn ugly(&self, _f: &'a Formatter) -> String {
         let mut s = String::new();
@@ -131,13 +102,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Internal {
 
 impl<'a> Ugly<'a, Formatter<'a>> for Meta {
     fn ugly(&self, _f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let Meta { stem, args } = self;
-        s += stem;
-        s += "(";
-        s += &args.iter().map(|a| a.ugly(_f)).collect::<Vec<_>>().join(",");
-        s += ")";
-        s
+        self.to_string()
     }
 }
 
@@ -463,7 +428,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for RecGroup {
         let RecGroup { definitions, tail } = self;
         let definitions = definitions
             .iter()
-            .map(|AliasBody { binder, bindee }| {
+            .map(|RecursiveDefinition { binder, bindee }| {
                 format!("def {} = {}", binder.ugly(f), bindee.ugly(f))
             })
             .collect::<Vec<_>>()
@@ -475,7 +440,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for RecGroup {
 impl<'a> Ugly<'a, Formatter<'a>> for MoBlock {
     fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
-        let MoBlock(body) = self;
+        let MoBlock { body, basis: _ } = self;
         s += "monadic ";
         s += &body.ugly(f);
         s += " end";
@@ -561,41 +526,15 @@ impl<'a> Ugly<'a, Formatter<'a>> for Literal {
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for AliasBody {
+impl<'a> Ugly<'a, Formatter<'a>> for RecursiveDefinition {
     fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
-        let AliasBody { binder, bindee } = self;
-        s += "alias ";
+        let RecursiveDefinition { binder, bindee } = self;
+        s += "def ";
         s += &binder.ugly(f);
         s += " = ";
         s += &bindee.ugly(f);
-        s += " end";
-        s
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for AliasHead {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let AliasHead { binder, ty } = self;
-        s += "def ";
-        s += &binder.ugly(f);
-        if let Some(ty) = ty {
-            s += " : ";
-            s += &ty.ugly(f);
-        }
-        s += " end";
-        s
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for Exec {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let Exec(m) = self;
-        s += "main ";
-        s += &m.ugly(f);
-        s += " end";
+        s += " that";
         s
     }
 }

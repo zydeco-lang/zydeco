@@ -12,15 +12,17 @@ produce program continuations or exit codes.
 textual -> bitter -> scoped -> tyck -> dynamics
 ```
 
-The dynamics arena is built from the statics output, with builtin primitives
-resolved by name.
+The dynamics arena is built from one checked computation root. A
+package-dependent executable receives its concrete host Builtin package before
+evaluation.
 
 ## Key components
 
 The crate is intentionally small and tightly scoped.
 
 - The `syntax` module defines the runtime AST, semantic values, and `Runtime`.
-- `link` lowers typed syntax into dynamic declarations and injects builtins.
+- `link` erases a checked computation into the dynamic term language and
+  materializes a typed Builtin package when required.
 - `eval` implements the stepper that executes dynamic computations.
 - `builtin` and `impls` provide primitive operations (arithmetic, strings, IO).
 - `fmt` offers a debug formatter for dynamic terms.

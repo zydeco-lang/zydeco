@@ -21,17 +21,12 @@ extern {
         "CtorId" => Tok::CtorIdent(<&'input str>),
         "DtorId" => Tok::DtorIdent(<&'input str>),
 
-        "where" => Tok::Where,
         "end" => Tok::End,
         "begin" => Tok::Begin,
-        "pub" => Tok::Public,
         "data" => Tok::Data,
         "codata" => Tok::Codata,
-        "alias" => Tok::Alias,
         "as" => Tok::As,
         "define" => Tok::Define,
-        "extern" => Tok::Extern,
-        "main" => Tok::Exec,
         "let" => Tok::Let,
         "param" => Tok::Param,
         "in" => Tok::In,
@@ -115,6 +110,35 @@ Literal: Literal = {
 #[inline]
 MixedId: String = { <"UpperId"> => <>.into(), <"LowerId"> => <>.into(), };
 
+// Metadata occupies its own namespace, so language keywords remain useful as
+// closed role names inside an annotation.
+MetaId: String = {
+    <MixedId>,
+    "end" => "end".into(),
+    "begin" => "begin".into(),
+    "data" => "data".into(),
+    "codata" => "codata".into(),
+    "as" => "as".into(),
+    "define" => "define".into(),
+    "let" => "let".into(),
+    "param" => "param".into(),
+    "in" => "in".into(),
+    "that" => "that".into(),
+    "do" => "do".into(),
+    "do~" => "do~".into(),
+    "ret" => "ret".into(),
+    "monadic" => "monadic".into(),
+    "monadically" => "monadically".into(),
+    "fn" => "fn".into(),
+    "pi" => "pi".into(),
+    "fix" => "fix".into(),
+    "match" => "match".into(),
+    "comatch" => "comatch".into(),
+    "forall" => "forall".into(),
+    "exists" => "exists".into(),
+    "sigma" => "sigma".into(),
+};
+
 VarName: VarName = <MixedId> => VarName(<>);
 FieldName: FieldName = <name:VarName> => FieldName(name.0);
 CtorName: CtorName = <"CtorId"> => CtorName(<>.into());
@@ -135,9 +159,9 @@ Hole: Hole = "_" => Hole;
 
 MetaT<T>: MetaT<T> = "@" "[" <Meta> "]" <T> => MetaT(<>);
 Meta: Meta = {
-    <stem:String> => Meta { stem, args: Vec::new() },
-    <stem:MixedId> => Meta { stem, args: Vec::new() },
-    <stem:MixedId> <args:SepByDelim<"(", ",", <Meta>, ")">> => Meta { stem, args },
+    <value:String> => Meta::string(value),
+    <name:MetaId> => Meta::ident(name),
+    <callee:MetaId> <args:SepByDelim<"(", ",", <Meta>, ")">> => Meta::apply(callee, args),
 };
 
 //* --------------------------------- Pattern -------------------------------- */
@@ -146,6 +170,7 @@ PatternGen<P>: PatId = <Sp<P>> => parser.pat(<>);
 
 #[inline]
 PatternAnnId: PatId = <PatternGen<PatternAnn>>;
+
 PatternAnn: Pattern = {
     #[precedence(level="0")]
     <Pattern>,
@@ -326,9 +351,9 @@ Term: Term = {
     // sigma
     "sigma" <params:CoPatId> "." <ty:TermGen<Term>> => Sigma(<>).into(),
     // exists
-    "exists" "(" <binder:PatternAnnId> "as" <definition:TermGen<Term>>
-        ":" <kind:TermId> ")" "." <body:TermGen<Term>> => {
-        ManifestExists { binder, definition, kind, body }.into()
+    "exists" "(" <binder:PatternAnnId> "as" <definition:TermId>
+        <classifier:(":" <TermId>)?> ")" "." <body:TermId> => {
+        ManifestExists { binder, definition, classifier, body }.into()
     },
     "exists" <params:CoPatId> "." <ty:TermGen<Term>> => Exists(<>).into(),
 
@@ -372,46 +397,4 @@ Term: Term = {
 
 pub SingleTerm: TermId = TermId;
 
-//* -------------------------------- TopLevel -------------------------------- */
-
-DataDef: DataDef = {
-    "data" <name:DefId> <params:PatId*>
-        <def:("where" <Data>)>
-    "end" => DataDef {<>},
-};
-
-CoDataDef: CoDataDef = {
-    "codata" <name:DefId> <params:PatId*>
-        <def:("where" <CoData>)>
-    "end" => CoDataDef {<>},
-};
-
-DeclarationGen<D>: DeclId = <Sp<D>> => parser.decl(<>);
-
-#[inline]
-DeclId: DeclId = <DeclarationGen<Modifiers<Declaration>>>;
-Declaration: Declaration = {
-    <MetaT<DeclId>> => <>.into(),
-    <DataDef> => <>.into(),
-    <CoDataDef> => <>.into(),
-    "define" <GenBind<("=" <TermId>)?>> "end" => Define(<>).into(),
-    "alias" <GenBindTerm> "end" => Alias(<>).into(),
-    "main" <TermId> "end" => Exec(<>).into(),
-};
-
-Modifiers<T>: Modifiers<T> = {
-    <public:"pub"?> <external:"extern"?> <inner:T> => Modifiers {
-        public: public.is_some(),
-        external: external.is_some(),
-        inner,
-    },
-};
-
-pub ReplInput: ReplInput = {
-    <DeclId> => <>.into(),
-    <TermId> => <>.into(),
-};
-
-pub TopLevel: TopLevel = {
-    <DeclId*> => TopLevel(<>),
-};
+pub SourceUnit: SourceUnit = <root:TermId> => SourceUnit { root };

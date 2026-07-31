@@ -1,7 +1,7 @@
-use zydeco_tests::interp_proj_bin;
+use zydeco_tests::interp_source;
 
-interp_proj_bin!(tests / pack, manifest, "manifest");
-interp_proj_bin!(tests / pack, interleaved, "interleaved");
-interp_proj_bin!(tests / pack, named, "named");
-interp_proj_bin!(tests / pack, monadic, "monadic");
-interp_proj_bin!(tests / pack, uniform, "uniform");
+interp_source!(manifest, "tests/source/pack-manifest.zy");
+interp_source!(interleaved, "tests/source/pack-interleaved.zy");
+interp_source!(named, "tests/source/pack-named.zy");
+interp_source!(monadic, "tests/source/pack-monadic.zy");
+interp_source!(uniform, "tests/source/pack-uniform.zy");

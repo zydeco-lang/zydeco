@@ -1,0 +1,107 @@
+begin
+  let std = @[import("../../std/std.zy")] _ that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  def Tree : (VType) -> (VType) =
+    begin
+      param (A : VType) that
+      data
+      | +Fork : Tree A * Tree A
+      | +Final : A
+      end
+    end
+  that
+  def Choice : (CType) -> (VType) =
+    begin
+      param (B : CType) that
+      data
+      | +L : Thk B
+      | +R : Thk B
+      end
+    end
+  that
+  def Path : (VType) -> (VType) =
+    begin
+      param (A : VType) that
+      data
+      | +Nil : Unit
+      | +Cons : A * Path A
+      end
+    end
+  that
+
+  do (
+    Bool = StdBool,
+    Option = StdOption,
+    List = StdList,
+    Int = StdInt,
+    Char = StdChar,
+    String = StdString,
+    OS = StdOS,
+    public
+  ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  def beep : Choice (Thk StdOS -> StdOS) =
+    +L({
+      fn continuation ->
+        ! (public/write_line) "0" continuation
+    })
+  in
+  def boop : Choice (Thk StdOS -> StdOS) =
+    +R({
+      fn continuation ->
+        ! (public/write_line) "1" continuation
+    })
+  in
+  def tree : Tree StdString =
+    +Fork(
+      +Fork(+Final("x"), +Final("o")),
+      +Final("x")
+    )
+  in
+  def path : Path (Choice (Thk StdOS -> StdOS)) =
+    +Cons(beep, +Cons(boop, +Nil()))
+  in
+  def walk : Thk (
+    Tree StdString ->
+    Path (Choice (Thk StdOS -> StdOS)) ->
+    StdOS
+  ) = {
+    fix (
+      walk :
+      Thk (
+        Tree StdString ->
+        Path (Choice (Thk StdOS -> StdOS)) ->
+        StdOS
+      )
+    ) ->
+      fn current_tree current_path ->
+        match current_tree
+        | +Final(result) ->
+          match current_path
+          | +Nil() ->
+            ! (public/write_line) result {
+              do correct <- ! (public/str_eq) result "o";
+              ! (public/branch)
+                StdOS
+                correct
+                { ! (public/exit) 0 }
+                { ! (public/exit) 1 }
+            }
+          | +Cons(_, _) -> ! (public/exit) 2
+          end
+        | +Fork(left, right) ->
+          match current_path
+          | +Nil() -> ! (public/exit) 3
+          | +Cons(choice, remaining) ->
+            match choice
+            | +L(continuation) -> ! continuation { ! walk left remaining }
+            | +R(continuation) -> ! continuation { ! walk right remaining }
+            end
+          end
+        end
+  } in
+
+  ! walk tree path
+end

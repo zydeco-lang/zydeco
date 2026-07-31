@@ -179,6 +179,13 @@ pub struct Intrinsic {
 pub struct Extern {
     pub name: &'static str,
     pub arity: usize,
+    pub mode: ExternMode,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ExternMode {
+    Returning,
+    Control,
 }
 
 /// Contexts are ordered sets of variables.

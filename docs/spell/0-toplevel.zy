@@ -1,84 +1,94 @@
--- # Chapter 0: Toplevel
+-- # Chapter 0: One Term
 
--- This is a top-level syntax introduction as well as a meta thread for the
--- whole walkthrough. The series of tutorials is presented as a chain of single
--- files, each of which will focus on a single topic. Along the way, we will
--- cover some of the key points from the previous workshops and company the
--- notes with some exercises.
+-- A Zydeco source file contains one term. This tutorial is a chain of such
+-- files, each focused on one aspect of the language. A program does not begin
+-- with a distinguished sequence of declarations and end with a `main`
+-- declaration. Its outer term describes both its dependencies and its result.
 
--- A zydeco program is assembled by a text file, conventionally with a .zy or
--- .zydeco extension. Within each file, there is a top-level that contains all
--- the declarations used by the program. There are five types of declarations:
+begin
+  -- A block is a term inspired by monadic block notation. It gives the
+  -- context-aware forms below one region in which their dependencies can be
+  -- resolved. The block itself does not decide whether its result is a kind,
+  -- type, value, or computation.
 
--- 1. Data type declaration
-data Prod-2 (A : VType) (A' : VType) where
-  | +Pair: A * A'
-end
 
--- 2. Codata type declaration
-codata CoProd-2 (A : VType) (A' : VType) where
-  | .prj-1 : Ret A
-  | .prj-2 : Ret A'
-end
+  -- `param` turns the block into a function. Here its argument is the canonical
+  -- Builtin package: the host types and operations that the launcher supplies.
+  -- `that` lets this parameter move within the current block according to the
+  -- dependency graph, so later definitions may use its fields.
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../lib/std/builtin.zy")] _
+  ) that
 
--- Both data and codata declarations can be parametric. The type parameters are
--- kinded by VType, which is the kind of all value types, and CType, which is
--- the kind of all computation types.
+  -- A former `data` declaration is now a type-valued definition. Parameters
+  -- are ordinary term parameters, and the `data ... end` term constructs the
+  -- recursive value type together with its constructors.
+  def Product2 :
+    (VType) ->
+    (VType) ->
+    (VType) =
+    begin
+      param (A : VType) that
+      param (B : VType) that
+      data
+      | +Pair : A * B
+      end
+    end
+  that
 
--- The syntax (especially the `where` part) is inspired by Agda and GADT in
--- Haskell. But unlike both of them, zydeco is layout-insensitive, which means
--- you can place whitespaces and linebreaks in whatever way you like. The
--- tradeoff is that all declarations are syntactically guarded by the keyword
--- `end`.
+  -- Codata is handled in the same way. It constructs a computation type whose
+  -- observations are described by its destructors.
+  def CoProduct2 :
+    (VType) ->
+    (VType) ->
+    (CType) =
+    begin
+      param (A : VType) that
+      param (B : VType) that
+      codata
+      | .first : Ret A
+      | .second : Ret B
+      end
+    end
+  that
 
--- 3. Type alias declaration
-alias CoProd-Bool-Sth (A : VType): CType = CoProd-2 Bool A end
+  -- `let` gives a transparent definition. Its right-hand side is itself a
+  -- parameterized type term, replacing the old type-alias declaration.
+  let CoProductInt =
+    begin
+      param (A : VType) that
+      CoProduct2 Int A
+    end
+  that
 
--- 4. Term definitions of value type
-def some-co-prod : Thunk (CoProd-Bool-Sth (Prod-2 Int String)) = {
-  comatch
-  | .prj-1 -> ret false
-  | .prj-2 -> ret +Pair(0, "42")
+  -- `def` seals its right-hand side at the given classifier. This is a value
+  -- definition even though that value is a thunk containing a computation.
+  def sample : Thk (CoProductInt (Product2 Int String)) = {
+    comatch
+    | .first -> ret 0
+    | .second -> ret +Pair(0, "42")
+    end
+  } that
+
+  -- The final subterm is the result of the whole block. Because it has type
+  -- `OS`, the command boundary can run this file as a program.
+  do pair <- ! sample .second;
+  match pair
+  | +Pair(status, _) ->
+    ! (api/exit) status
   end
-} end
-
--- All variables are value types; thus, all term definitions are values. Just to
--- preview a little bit, to encode computations like functions and codata types,
--- we use the thunk `{ b }` to wrap the body `b`, a computation term, in a
--- "closure" and freeze it from running. For `b : B`, the thunk will have type
--- `Thunk B`.
-
--- 5. Main computation of type `OS`
-main
-  do p <- ! some-co-prod .prj-2;
-  match p
-  | +Pair(n, _) ->
-    ! exit n
-  end
 end
 
--- You'll see more details on `OS` type in chapter 6.
+-- The five context-forming ingredients used above are therefore ordinary term
+-- composition: `begin ... end`, `param`, transparent `let`, sealed `def`, and
+-- the `data` or `codata` terms on their right-hand sides. `that` permits
+-- dependency-directed movement inside the inhabiting block; use `in` when a
+-- binding should remain in its written lexical tail.
 
--- If you are familiar with Levy and his CBPV, you'll find the idea very
--- similar; the syntax, however, might feel different. However, don't worry if
--- they're not; the consequent chapters will walk you through the details.
-
--- It's a good practice (and exercise) to annotate all types at the top level
--- due to the current implementation of the type checker. The type checker is
--- not yet smart enough (and sometimes theoretically impossible) to infer the
--- types of all the declarations. However, you'll need almost no type
--- annotations beyond the top level. This is done in `(x : T)`.
-
--- It's also possible to annotate terms directly like `(! exit 0 : OS)`. Note
--- that the parentheses are necessary to avoid ambiguity.
-
--- The top level is as concise and declarative as possible. For a more detailed
--- explanation of the term-level syntax, please refer to the next chapter.
-
--- A final comment is on how to run a file and use REPL.
-
--- You can `alias zydeco=cargo run --bin zydeco --` and try `zydeco run <FILE>`.
--- For REPL, run `zydeco repl`; alternatively, install `rlwrap` and then try out
--- a modern and advanced REPL via `rlwrap cargo run --bin zydeco -- repl`. If
--- you don't know the type of a built-in function, say `add`, you can try typing
--- `add` and press enter. To exit, press `Ctrl-D`.
+-- Run this file directly:
+--
+--     cargo run --bin zydeco -- run docs/spell/0-toplevel.zy
+--
+-- The relative import is resolved from this file, and no project
+-- configuration participates in the command.

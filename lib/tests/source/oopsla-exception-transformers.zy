@@ -1,0 +1,550 @@
+-- Generated and manual ExnT and ExnKT implementations from the OOPSLA artifact.
+begin
+  let monadic_basis = @[import("../../std/monad.zy")] _ that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  do (= Monad, = Algebra, ()) <-
+    ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  begin
+
+  let Top : CType =
+    codata
+    end
+  that
+  let top : Thk Top = {
+    comatch
+    end
+  } that
+  let Either :
+    (VType) ->
+    (VType) ->
+    (VType) =
+    begin
+      param (E : VType) that
+      param (A : VType) that
+      data
+      | +Left : E
+      | +Right : A
+      end
+    end
+  that
+  let Exn :
+    (VType) ->
+    (VType) ->
+    (CType) =
+    begin
+      param (E : VType) that
+      param (A : VType) that
+      Ret (Either E A)
+    end
+  that
+  let ExnT :
+    (VType) ->
+    (
+      (
+        (VType) ->
+        (CType)
+      ) ->
+      (VType) ->
+      (CType)
+    ) =
+    begin
+      param (E : VType) that
+      param (
+        M :
+        (VType) ->
+        (CType)
+      ) that
+      param (A : VType) that
+      M (Either E A)
+    end
+  that
+  let ExnK :
+    (VType) ->
+    (VType) ->
+    (CType) =
+    begin
+      param (E : VType) that
+      param (A : VType) that
+      forall (R : CType) .
+        Thk (E -> R) ->
+        Thk (A -> R) ->
+        R
+    end
+  that
+  let ExnKT :
+    (VType) ->
+    (
+      (
+        (VType) ->
+        (CType)
+      ) ->
+      (VType) ->
+      (CType)
+    ) =
+    begin
+      param (E : VType) that
+      param (
+        M :
+        (VType) ->
+        (CType)
+      ) that
+      param (A : VType) that
+      forall (R : CType) .
+        Thk (Algebra M R) ->
+        Thk (E -> R) ->
+        Thk (A -> R) ->
+        R
+    end
+  that
+  let MonadPrime :
+    (
+      (
+        (VType) ->
+        (CType)
+      ) ->
+      (CType)
+    ) =
+    begin
+      param (
+        M :
+        (VType) ->
+        (CType)
+      ) that
+      codata
+      | .return :
+        forall (A : VType) .
+          Thk Top ->
+          A ->
+          M A
+      | .bind :
+        forall (A : VType) .
+          Thk Top ->
+          (
+            forall (B : VType) .
+              Thk Top ->
+              Thk (M A) ->
+              Thk (A -> M B) ->
+              M B
+          )
+      end
+    end
+  that
+  let MonadTransInner :
+    (
+      (
+        (VType) ->
+        (CType)
+      ) ->
+      (CType)
+    ) =
+    begin
+      param (
+        T_M :
+        (VType) ->
+        (CType)
+      ) that
+      codata
+      | .monad : Monad T_M
+      | .lift :
+        forall (A : VType) .
+          Thk (Ret A) ->
+          T_M A
+      end
+    end
+  that
+  let MonadTrans :
+    (
+      (
+        (
+          (VType) ->
+          (CType)
+        ) ->
+        (VType) ->
+        (CType)
+      ) ->
+      (CType)
+    ) =
+    begin
+      param (
+        T :
+        (
+          (VType) ->
+          (CType)
+        ) ->
+        (VType) ->
+        (CType)
+      ) that
+      forall (
+        M :
+        (VType) ->
+        (CType)
+      ) .
+        Thk (Monad M) ->
+        codata
+        | .monad : Monad (T M)
+        | .lift :
+          forall (A : VType) .
+            Thk (M A) ->
+            T M A
+        end
+    end
+  that
+  let MonadTransPrime :
+    (
+      (
+        (
+          (VType) ->
+          (CType)
+        ) ->
+        (VType) ->
+        (CType)
+      ) ->
+      (CType)
+    ) =
+    begin
+      param (
+        T :
+        (
+          (VType) ->
+          (CType)
+        ) ->
+        (VType) ->
+        (CType)
+      ) that
+      forall (
+        M :
+        (VType) ->
+        (CType)
+      ) .
+        Thk (Monad M) ->
+        codata
+        | .monad : MonadPrime (T M)
+        | .lift :
+          forall (A : VType) .
+            Thk Top ->
+            Thk (M A) ->
+            T M A
+        end
+    end
+  that
+
+  def ret_monad : Thk (Monad Ret) = {
+    comatch
+    | .return A value -> ret value
+    | .bind A B computation function ->
+      do value <- ! computation;
+      ! function value
+    end
+  } that
+  def mo_exn : Thk (
+    forall (E : VType) .
+      Monad (Exn E)
+  ) = {
+    fn E ->
+      comatch
+      | .return A value ->
+        ret +Right(value)
+      | .bind A B computation function ->
+        do outcome <- ! computation;
+        match outcome
+        | +Left(error) -> ret +Left(error)
+        | +Right(value) -> ! function value
+        end
+      end
+  } that
+  def mo_exnk : Thk (
+    forall (E : VType) .
+      Monad (ExnK E)
+  ) = {
+    fn E ->
+      comatch
+      | .return A value ->
+        fn R failure success ->
+          ! success value
+      | .bind A B computation function ->
+        fn R failure success ->
+          ! computation R failure {
+            fn value ->
+              ! function value R failure success
+          }
+      end
+  } that
+  def alg_ret_int : Thk (Algebra Ret (Ret Int)) = {
+    fn A computation function ->
+      do value <- ! computation;
+      ! function value
+  } that
+  def detriv_mo : Thk (
+    forall (
+      M :
+      (VType) ->
+      (CType)
+    ) .
+      Thk (MonadPrime M) ->
+      Monad M
+  ) = {
+    fn M monad ->
+      comatch
+      | .return A ->
+        ! monad .return A top
+      | .bind A B ->
+        ! monad .bind A top B top
+      end
+  } that
+  def detriv_mt : Thk (
+    forall (
+      T :
+      (
+        (
+          (VType) ->
+          (CType)
+        ) ->
+        (VType) ->
+        (CType)
+      )
+    ) .
+      Thk (MonadTransPrime T) ->
+      MonadTrans T
+  ) = {
+    fn T transformer ->
+      fn M monad ->
+        comatch
+        | .monad ->
+          ! detriv_mo
+            (T M)
+            { ! transformer M monad .monad }
+        | .lift A ->
+          ! transformer M monad .lift A top
+        end
+  } that
+  def mt_exn : Thk (
+    forall (E : VType) .
+      MonadTrans (ExnT E)
+  ) = {
+    fn E ->
+      let translated_transformer : Thk (
+        MonadTransPrime (ExnT E)
+      ) = {
+        fn M monad ->
+          let translated = {
+            monadic
+              (
+                fn (E : VType) ->
+                  comatch
+                  | .monad ->
+                    comatch
+                    | .return A value ->
+                      ret +Right(value)
+                    | .bind A B computation function ->
+                      do outcome <- ! computation;
+                      match outcome
+                      | +Left(error) -> ret +Left(error)
+                      | +Right(value) -> ! function value
+                      end
+                    end
+                  | .lift A computation ->
+                    do value <- ! computation;
+                    ret +Right(value)
+                  end
+                :
+                forall (E : VType) .
+                  codata
+                  | .monad : Monad (Exn E)
+                  | .lift :
+                    forall (A : VType) .
+                      Thk (Ret A) ->
+                      Exn E A
+                  end
+              )
+            end
+          } in
+          ! translated M monad E top
+      } in
+      ! detriv_mt (ExnT E) translated_transformer
+  } that
+  def mt_exn_manual : Thk (
+    forall (E : VType) .
+      MonadTrans (ExnT E)
+  ) = {
+    fn E M monad ->
+      comatch
+      | .monad ->
+        comatch
+        | .return A value ->
+          ! monad .return (Either E A) +Right(value)
+        | .bind A B computation function ->
+          ! monad .bind
+            (Either E A)
+            (Either E B)
+            computation
+            {
+              fn outcome ->
+                match outcome
+                | +Left(error) ->
+                  ! monad .return
+                    (Either E B)
+                    +Left(error)
+                | +Right(value) -> ! function value
+                end
+            }
+        end
+      | .lift A computation ->
+        ! monad .bind
+          A
+          (Either E A)
+          computation
+          {
+            fn value ->
+              ! monad .return
+                (Either E A)
+                +Right(value)
+          }
+      end
+  } that
+  def mt_exnk : Thk (
+    forall (E : VType) .
+      MonadTrans (ExnKT E)
+  ) = {
+    fn E ->
+      let translated_transformer : Thk (
+        MonadTransPrime (ExnKT E)
+      ) = {
+        fn M monad ->
+          let translated = {
+            monadic
+              (
+                fn (E : VType) ->
+                  comatch
+                  | .monad ->
+                    comatch
+                    | .return A value ->
+                      fn R failure success ->
+                        ! success value
+                    | .bind A B computation function ->
+                      fn R failure success ->
+                        ! computation R failure {
+                          fn value ->
+                            ! function value R failure success
+                        }
+                    end
+                  | .lift A computation ->
+                    do value <- ! computation;
+                    fn R failure success ->
+                      ! success value
+                  end
+                :
+                forall (E : VType) .
+                  codata
+                  | .monad : Monad (ExnK E)
+                  | .lift :
+                    forall (A : VType) .
+                      Thk (Ret A) ->
+                      ExnK E A
+                  end
+              )
+            end
+          } in
+          ! translated M monad E top
+      } in
+      ! detriv_mt (ExnKT E) translated_transformer
+  } that
+  def mt_exnk_manual : Thk (
+    forall (E : VType) .
+      MonadTrans (ExnKT E)
+  ) = {
+    fn E M monad ->
+      comatch
+      | .monad ->
+        comatch
+        | .return A value ->
+          fn R algebra failure success ->
+            ! success value
+        | .bind A B computation function ->
+          fn R algebra failure success ->
+            ! computation R algebra failure {
+              fn value ->
+                ! function value R algebra failure success
+            }
+        end
+      | .lift A computation ->
+        fn R algebra failure success ->
+          ! algebra A computation success
+      end
+  } that
+
+  do generated <- ! mt_exn
+    Unit
+    Ret
+    { ! ret_monad }
+    .lift
+    Int
+    { ret 7 };
+  match generated
+  | +Left(_) -> ! (api/exit) 1
+  | +Right(generated) ->
+    ! (api/int_eq_branch)
+      OS
+      generated
+      7
+      {
+        do manual <- ! mt_exn_manual
+          Unit
+          Ret
+          { ! ret_monad }
+          .lift
+          Int
+          { ret 9 };
+        match manual
+        | +Left(_) -> ! (api/exit) 1
+        | +Right(manual) ->
+          ! (api/int_eq_branch)
+            OS
+            manual
+            9
+            {
+              do generated_k <- ! mt_exnk
+                Unit
+                Ret
+                { ! ret_monad }
+                .lift
+                Int
+                { ret 11 }
+                (Ret Int)
+                { ! alg_ret_int }
+                { fn _ -> ret -1 }
+                { fn value -> ret value };
+              ! (api/int_eq_branch)
+                OS
+                generated_k
+                11
+                {
+                  do manual_k <- ! mt_exnk_manual
+                    Unit
+                    Ret
+                    { ! ret_monad }
+                    .lift
+                    Int
+                    { ret 13 }
+                    (Ret Int)
+                    { ! alg_ret_int }
+                    { fn _ -> ret -1 }
+                    { fn value -> ret value };
+                  ! (api/int_eq_branch)
+                    OS
+                    manual_k
+                    13
+                    { ! (api/exit) 0 }
+                    { ! (api/exit) 1 }
+                }
+                { ! (api/exit) 1 }
+            }
+            { ! (api/exit) 1 }
+        end
+      }
+      { ! (api/exit) 1 }
+  end
+end
+end

@@ -37,13 +37,3 @@ impl Alloc for b::TermId {
         curr
     }
 }
-impl Alloc for b::DeclId {
-    type Entity = b::Modifiers<b::Declaration>;
-    type Prev = t::EntityId;
-    fn alloc(desugarer: &mut Desugarer, entity: Self::Entity, prev: Self::Prev) -> Self {
-        let curr = desugarer.fresh();
-        desugarer.bitter.decls.insert_new(curr, entity);
-        desugarer.bitter.textual.insert_new(prev, curr.into());
-        curr
-    }
-}

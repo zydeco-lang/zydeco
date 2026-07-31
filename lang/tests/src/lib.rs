@@ -1,6 +1,6 @@
 pub mod utils {
     use std::path::PathBuf;
-    use zydeco_driver::{BuildConf, BuildSystem, Driver, PackId, Verbosity};
+    use zydeco_driver::{BuildConf, BuildError, PipelineConf, SourceDriver, Verbosity};
 
     #[derive(Clone, Copy, Debug)]
     pub enum TestBackend {
@@ -8,139 +8,187 @@ pub mod utils {
         Amd64,
     }
 
-    pub struct ProjectBinary {
-        build_sys: BuildSystem,
-        pack: PackId,
+    pub struct SourceProgram {
+        path: PathBuf,
+        arguments: Vec<String>,
     }
 
-    impl ProjectBinary {
-        pub fn setup(proj_path: impl Into<PathBuf>, binary_name: impl Into<String>) -> Self {
-            let proj_path = proj_path.into();
-            let binary_name = binary_name.into();
-            let Driver { build_sys } =
-                Driver::setup(vec![proj_path.clone()]).unwrap_or_else(|err| {
-                    panic!("Error loading project {}: {err}", proj_path.display())
+    impl SourceProgram {
+        pub fn setup(relative: impl Into<PathBuf>) -> Self {
+            let relative = relative.into();
+            let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../lib")
+                .join(&relative)
+                .canonicalize()
+                .unwrap_or_else(|error| {
+                    panic!("Error locating source {}: {error}", relative.display())
                 });
-            let pack = build_sys.pick_marked(Some(binary_name.clone())).unwrap_or_else(|err| {
-                panic!(
-                    "Error selecting binary {binary_name:?} from project {}: {err}",
-                    proj_path.display()
-                )
-            });
-            Self { build_sys, pack }
+            Self { path, arguments: Vec::new() }
         }
 
-        pub fn test(mut self, backend: TestBackend) {
+        pub fn with_args(mut self, arguments: impl IntoIterator<Item = impl Into<String>>) -> Self {
+            self.arguments = arguments.into_iter().map(Into::into).collect();
+            self
+        }
+
+        pub fn test(self, backend: TestBackend) {
             let result = match backend {
-                | TestBackend::Interpreter => self.build_sys.test_pack(self.pack, false),
-                | TestBackend::Amd64 => {
-                    self.configure_amd64();
-                    self.build_sys.test_amd64_pack(self.pack, Verbosity::new(3))
-                }
+                | TestBackend::Interpreter => SourceDriver::test(&self.path, &self.arguments),
+                | TestBackend::Amd64 => self.test_amd64(),
             };
-            match result {
-                | Ok(()) => {}
-                | Err(err) => {
-                    eprintln!("{err}");
-                    panic!("Error running project with {backend:?}");
-                }
+            if let Err(error) = result {
+                panic!("Error running source {} with {backend:?}: {error}", self.path.display());
             }
         }
 
-        fn configure_amd64(&mut self) {
-            let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        fn test_amd64(&self) -> Result<(), BuildError> {
+            let native = SourceDriver::amd64(
+                &self.path,
+                &PipelineConf::default(),
+                Self::build_conf(),
+                Verbosity::new(3),
+            )?;
+            let status = native.link()?.run_with_args(&self.arguments)?;
+            if status.success() { Ok(()) } else { Err(BuildError::Amd64RunError(status)) }
+        }
+
+        fn build_conf() -> BuildConf {
+            let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
             let build_dir = tempfile::tempdir().unwrap().keep();
             println!("build_dir: {}", build_dir.display());
-            let build_conf = BuildConf {
+            BuildConf {
                 build_dir,
-                runtime_dir: dir.join("../../runtime"),
+                runtime_dir: workspace.join("../../runtime"),
                 target_arch: "x86_64".to_string(),
                 target_os: std::env::consts::OS.to_string(),
                 link_existing: false,
+            }
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    enum SourceCasePrelude {
+        Core,
+        Monadic,
+    }
+
+    /// A temporary root-source fixture with explicit core and host dependencies.
+    pub struct SourceCase;
+
+    impl SourceCase {
+        pub fn check(source: &str) -> Result<(), BuildError> {
+            Self::with_source(SourceCasePrelude::Core, source, |path| SourceDriver::check(path))
+                .map(|_| ())
+        }
+
+        pub fn check_monadic(source: &str) -> Result<(), BuildError> {
+            Self::with_source(SourceCasePrelude::Monadic, source, |path| SourceDriver::check(path))
+                .map(|_| ())
+        }
+
+        pub fn run(source: &str) -> Result<(), BuildError> {
+            Self::with_source(SourceCasePrelude::Core, source, |path| SourceDriver::test(path, &[]))
+        }
+
+        pub fn run_monadic(source: &str) -> Result<(), BuildError> {
+            Self::with_source(SourceCasePrelude::Monadic, source, |path| {
+                SourceDriver::test(path, &[])
+            })
+        }
+
+        fn with_source<T>(
+            prelude: SourceCasePrelude, source: &str,
+            action: impl FnOnce(&std::path::Path) -> Result<T, BuildError>,
+        ) -> Result<T, BuildError> {
+            let directory = tempfile::tempdir()?;
+            let path = directory.path().join("case.zy");
+            std::fs::write(&path, Self::wrap(prelude, source))?;
+            action(&path)
+        }
+
+        fn wrap(prelude: SourceCasePrelude, source: &str) -> String {
+            let library = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib/std");
+            let builtin = library.join("builtin.zy").canonicalize().unwrap();
+            let monadic = match prelude {
+                | SourceCasePrelude::Core => String::new(),
+                | SourceCasePrelude::Monadic => {
+                    let basis = library.join("monad.zy").canonicalize().unwrap();
+                    format!(
+                        concat!("let monadic_basis = @[import(\"{}\")] _ in\n",),
+                        basis.display()
+                    )
+                }
             };
-            self.build_sys.build_confs.insert_new(self.pack, build_conf);
+            let open_monadic = match prelude {
+                | SourceCasePrelude::Core => String::new(),
+                | SourceCasePrelude::Monadic => concat!(
+                    "do (= Monad, = Algebra, ()) <-\n",
+                    "  ! monadic_basis ",
+                    "(VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);\n",
+                )
+                .to_string(),
+            };
+
+            format!(
+                r#"let Builtin = @[import("{builtin}")] _ in
+{monadic}param (
+  (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+  Builtin
+) in
+let Thunk = Thk in
+let U = Thk in
+let F = Ret in
+{open_monadic}
+let exit = api/exit in
+let Top : CType = codata end in
+let triv : Thk Top = {{ comatch end }} in
+{source}
+"#,
+                builtin = builtin.display(),
+            )
         }
     }
 }
 
+#[macro_export]
+macro_rules! interp_source {
+    ($name:ident, $source:expr) => {
+        $crate::__source_test!($name, $source, $crate::utils::TestBackend::Interpreter);
+    };
+}
+
 #[doc(hidden)]
 #[macro_export]
-macro_rules! __proj_bin_test {
-    ($($proj:ident)/+, $name:ident, $binary:expr, $backend:expr) => {
+macro_rules! __source_test {
+    ($name:ident, $source:expr, $backend:expr) => {
         #[test]
         fn $name() {
-            let local = ::std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("../../lib")
-                $(.join(stringify!($proj)))+
-                .join("proj.toml")
-                .canonicalize()
-                .unwrap();
-            $crate::utils::ProjectBinary::setup(local, $binary).test($backend);
+            $crate::utils::SourceProgram::setup($source).test($backend);
         }
     };
 }
 
 #[macro_export]
-macro_rules! interp_proj_bin {
-    ($($proj:ident)/+, $name:ident, $binary:expr) => {
-        $crate::__proj_bin_test!(
-            $($proj)/+,
-            $name,
-            $binary,
-            $crate::utils::TestBackend::Interpreter
-        );
-    };
-}
-
-#[macro_export]
-macro_rules! amd64_proj_bin {
-    ($($proj:ident)/+, $name:ident, $binary:expr) => {
-        $crate::__proj_bin_test!(
-            $($proj)/+,
-            $name,
-            $binary,
-            $crate::utils::TestBackend::Amd64
-        );
-    };
-}
-
-#[macro_export]
-macro_rules! e2e_proj_bins {
-    ($($proj:ident)/+, { $($name:ident => $binary:expr),* $(,)? }) => {
-        $crate::__e2e_proj_bins!(
-            [$($proj)/+],
-            { $($name => $binary),* }
-        );
-    };
-}
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __e2e_proj_bins {
-    ($proj:tt, { $($name:ident => $binary:expr),* $(,)? }) => {
+macro_rules! e2e_sources {
+    ({ $($name:ident => $source:expr),* $(,)? }) => {
         mod interpreter {
             $(
-                $crate::__e2e_proj_bin!($proj, $name, $binary, Interpreter);
+                $crate::__source_test!(
+                    $name,
+                    $source,
+                    $crate::utils::TestBackend::Interpreter
+                );
             )*
         }
 
         mod amd64 {
             $(
-                $crate::__e2e_proj_bin!($proj, $name, $binary, Amd64);
+                $crate::__source_test!(
+                    $name,
+                    $source,
+                    $crate::utils::TestBackend::Amd64
+                );
             )*
         }
-    };
-}
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __e2e_proj_bin {
-    ([$($proj:ident)/+], $name:ident, $binary:expr, $backend:ident) => {
-        $crate::__proj_bin_test!(
-            $($proj)/+,
-            $name,
-            $binary,
-            $crate::utils::TestBackend::$backend
-        );
     };
 }

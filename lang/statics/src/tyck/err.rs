@@ -27,6 +27,11 @@ pub enum TyckError {
     PackageWitnessesUnavailable { package: ValueId },
     PackageWitnessArityMismatch { expected: usize, found: usize },
     EscapingExistential { witnesses: Vec<AbstId>, result: TypeId },
+    InvalidBuiltinAttachment { role: BuiltinRole, expected: &'static str },
+    InvalidBuiltinSignature(BuiltinSignatureError),
+    ConflictingBuiltinRole { existing: BuiltinRole, found: BuiltinRole },
+    MissingBuiltinTypeRole { role: BuiltinTypeRole },
+    AmbiguousBuiltinTypeRole { role: BuiltinTypeRole, witnesses: Vec<AbstId> },
     Expressivity(&'static str),
     NotInlinable(DefId),
     NotInlinableSeal(AbstId),
@@ -130,6 +135,29 @@ impl<'a> Tycker<'a> {
                     witnesses
                 )
             }
+            | TyckError::InvalidBuiltinAttachment { role, expected } => {
+                format!("Builtin role `{role}` must annotate {expected}")
+            }
+            | TyckError::InvalidBuiltinSignature(error) => error.to_string(),
+            | TyckError::ConflictingBuiltinRole { existing, found } => {
+                format!(
+                    "Conflicting Builtin roles on one package entry: `{existing}` and `{found}`"
+                )
+            }
+            | TyckError::MissingBuiltinTypeRole { role } => {
+                format!("Builtin type role `{}` is unavailable in this scope", role.source_name())
+            }
+            | TyckError::AmbiguousBuiltinTypeRole { role, witnesses } => {
+                let witnesses = witnesses
+                    .into_iter()
+                    .map(|witness| self.pretty_statics_nested(witness, "\t"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(
+                    "Builtin type role `{}` is ambiguous in this scope: {witnesses}",
+                    role.source_name()
+                )
+            }
             | TyckError::Expressivity(s) => s.to_string(),
             | TyckError::NotInlinable(def) => {
                 let span = def.span(self);
@@ -176,28 +204,6 @@ impl<'a> Tycker<'a> {
         s += &format!("Blame: {}\n", blame);
         for task in stack.iter() {
             match task {
-                | TyckTask::DeclHead(decl) => {
-                    s += &format!("\t- when tycking external declaration ({}):\n", decl.span(self));
-                    s += &format!("\t\t{}\n", truncated(self.ugly_scoped(decl)));
-                }
-                | TyckTask::DeclUni(decl) => {
-                    s += &format!("\t- when tycking single declaration ({}):\n", decl.span(self));
-                    s += &format!("\t\t{}\n", truncated(self.ugly_scoped(decl)));
-                }
-                | TyckTask::DeclScc(decls) => {
-                    s += "\t- when tycking scc declarations:\n";
-                    for decl in decls.iter() {
-                        s += &format!(
-                            "\t\t({})\n\t\t{}\n",
-                            decl.span(self),
-                            truncated(self.ugly_scoped(decl))
-                        );
-                    }
-                }
-                | TyckTask::Exec(exec) => {
-                    s += &format!("\t- when tycking execution ({}):\n", exec.span(self));
-                    s += &format!("\t\t{}\n", truncated(self.ugly_scoped(exec)));
-                }
                 | TyckTask::Pat(pat, switch) => {
                     s += &format!("\t- when tycking pattern ({}):\n", pat.span(self));
                     s += &format!("\t\t>> {}\n", truncated(self.ugly_scoped(pat)));
@@ -254,6 +260,13 @@ impl<'a> Tycker<'a> {
                     );
                 }
                 | TyckTask::MonadicLiftPat(pat) => match pat {
+                    | PatId::Kind(kind) => {
+                        s += "\t- when performing monadic lift of kind pattern:\n";
+                        s += &format!(
+                            "\t\t>> {}\n",
+                            truncated(self.pretty_statics_nested(kind, "\t\t\t"))
+                        );
+                    }
                     | PatId::Type(ty) => {
                         s += "\t- when performing monadic lift of type pattern:\n";
                         s += &format!(
@@ -387,6 +400,19 @@ impl<'a> Tycker<'a> {
                 "Existential witness escapes through result type {}",
                 self.pretty_statics_nested(*result, "")
             ),
+            | TyckError::InvalidBuiltinAttachment { role, expected } => {
+                format!("Builtin role `{role}` must annotate {expected}")
+            }
+            | TyckError::InvalidBuiltinSignature(error) => error.to_string(),
+            | TyckError::ConflictingBuiltinRole { existing, found } => format!(
+                "Conflicting Builtin roles on one package entry: `{existing}` and `{found}`"
+            ),
+            | TyckError::MissingBuiltinTypeRole { role } => {
+                format!("Builtin type role `{}` is unavailable", role.source_name())
+            }
+            | TyckError::AmbiguousBuiltinTypeRole { role, .. } => {
+                format!("Builtin type role `{}` is ambiguous", role.source_name())
+            }
             | TyckError::Expressivity(s) => s.to_string(),
             | TyckError::NotInlinable(_) => "Cannot inline definition".to_string(),
             | TyckError::NotInlinableSeal(_) => "Cannot inline sealed abstract type".to_string(),
@@ -409,12 +435,6 @@ impl<'a> Tycker<'a> {
                 stack.last().and_then(|task| match task {
                     | TyckTask::Pat(pat, _) => Some(pat.span(self).to_ariadne_span()),
                     | TyckTask::Term(term, _) => Some(term.span(self).to_ariadne_span()),
-                    | TyckTask::DeclHead(decl) | TyckTask::DeclUni(decl) | TyckTask::Exec(decl) => {
-                        Some(decl.span(self).to_ariadne_span())
-                    }
-                    | TyckTask::DeclScc(decls) => {
-                        decls.first().map(|decl| decl.span(self).to_ariadne_span())
-                    }
                     | _ => None,
                 })
             })
@@ -481,26 +501,6 @@ impl<'a> Tycker<'a> {
         // Add stack trace as labels (context)
         for task in stack.iter().rev() {
             let task_label = match task {
-                | TyckTask::DeclHead(decl) => {
-                    let span = decl.span(self).to_ariadne_span();
-                    Some(Label::new(span).with_message("when tycking external declaration"))
-                }
-                | TyckTask::DeclUni(decl) => {
-                    let span = decl.span(self).to_ariadne_span();
-                    Some(Label::new(span).with_message("when tycking single declaration"))
-                }
-                | TyckTask::DeclScc(decls) => {
-                    // Use the first declaration as the span
-                    decls.first().map(|decl| {
-                        let span = decl.span(self).to_ariadne_span();
-                        Label::new(span)
-                            .with_message(format!("when tycking {} declarations", decls.len()))
-                    })
-                }
-                | TyckTask::Exec(exec) => {
-                    let span = exec.span(self).to_ariadne_span();
-                    Some(Label::new(span).with_message("when tycking execution"))
-                }
                 | TyckTask::Pat(pat, _switch) => {
                     let span = pat.span(self).to_ariadne_span();
                     Some(Label::new(span).with_message("when tycking pattern"))
@@ -537,6 +537,7 @@ impl<'a> Tycker<'a> {
                     .map(|span| Label::new(span).with_message("when generating structure"))
                 }
                 | TyckTask::MonadicLiftPat(pat) => match pat {
+                    | PatId::Kind(_) => None,
                     | PatId::Type(_) => self.statics_pat_ariadne_span(*pat).map(|span| {
                         Label::new(span)
                             .with_message("when performing monadic lift of type pattern")

@@ -8,11 +8,10 @@ edition = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
 readme = { workspace = true }
-description = "a minimal build system for zydeco"
+description = "the source-file compiler pipeline for zydeco"
 
 [dependencies]
 zydeco-utils = { workspace = true }
-zydeco-derive = { workspace = true }
 zydeco-syntax = { workspace = true }
 zydeco-surface = { workspace = true }
 zydeco-statics = { workspace = true }
@@ -22,15 +21,14 @@ zydeco-llvm = { workspace = true }
 zydeco-assembly = { workspace = true }
 zydeco-stackir = { workspace = true }
 derive_more = { workspace = true, features = ["display", "from"] }
-rayon = { workspace = true }
 thiserror = { workspace = true }
 ariadne = { workspace = true }
 sculptor = { workspace = true }
-serde = { workspace = true }
-toml = { workspace = true }
-colored = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
 
 [lib]
 doctest = false
+
+[dev-dependencies]
+tempfile = { workspace = true }

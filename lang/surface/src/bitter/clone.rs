@@ -59,6 +59,10 @@ impl DeepClone for b::TermId {
                 let term = term.deep_clone(desugarer);
                 b::MetaT(meta.clone(), term).into()
             }
+            | b::Term::SourceBoundary(term) => {
+                let b::SourceBoundary(term) = term;
+                b::SourceBoundary(term.deep_clone(desugarer)).into()
+            }
             | b::Term::Internal(term) => {
                 use crate::syntax::Internal;
                 match term {
@@ -219,7 +223,7 @@ impl DeepClone for b::TermId {
                 b::RecGroup {
                     definitions: definitions
                         .iter()
-                        .map(|b::AliasBody { binder, bindee }| b::AliasBody {
+                        .map(|b::RecursiveDefinition { binder, bindee }| b::RecursiveDefinition {
                             binder: binder.deep_clone(desugarer),
                             bindee: bindee.deep_clone(desugarer),
                         })
@@ -229,9 +233,13 @@ impl DeepClone for b::TermId {
                 .into()
             }
             | b::Term::MoBlock(term) => {
-                let b::MoBlock(body) = term;
+                let b::MoBlock { body, basis } = term;
                 let body = body.deep_clone(desugarer);
-                b::MoBlock(body).into()
+                let basis = b::MonadicBasis {
+                    monad: basis.monad.deep_clone(desugarer),
+                    algebra: basis.algebra.deep_clone(desugarer),
+                };
+                b::MoBlock { body, basis }.into()
             }
             | b::Term::Data(term) => {
                 let b::Data { arms } = term;

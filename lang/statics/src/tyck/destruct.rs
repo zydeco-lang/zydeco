@@ -42,6 +42,43 @@ impl KindId {
     }
 }
 
+impl KPatId {
+    pub fn try_destruct_def<Arena>(&self, arena: &Arena) -> Option<DefId>
+    where
+        Arena: AsRef<StaticsArena>,
+    {
+        match arena.as_ref().kpats[self] {
+            | KindPattern::Hole(_) => None,
+            | KindPattern::Var(definition) => Some(definition),
+        }
+    }
+
+    pub fn reify(&self, tycker: &Tycker<'_>) -> KindId {
+        match tycker.statics.kpats[self] {
+            | KindPattern::Hole(_) => {
+                unreachable!("a manifest kind-pattern hole cannot be reified")
+            }
+            | KindPattern::Var(definition) => {
+                let AnnId::Kind(kind) = tycker.statics.env_kpat[self][&definition] else {
+                    unreachable!(
+                        "a manifest kind binder must resolve to its transparent definition"
+                    )
+                };
+                kind
+            }
+        }
+    }
+}
+
+impl StaticPatId {
+    pub fn reify(&self, tycker: &mut Tycker<'_>) -> StaticTermId {
+        match self {
+            | StaticPatId::Kind(pattern) => pattern.reify(tycker).into(),
+            | StaticPatId::Type(pattern) => pattern.reify(tycker).into(),
+        }
+    }
+}
+
 impl TPatId {
     pub fn try_destruct_def<Arena>(&self, arena: &Arena) -> (Option<DefId>, KindId)
     where
@@ -211,6 +248,7 @@ impl TypeId {
             | Type::PackPi(_)
             | Type::Prod(_)
             | Type::Exists(_)
+            | Type::ManifestKind(_)
             | Type::Data(_)
             | Type::CoData(_) => (ty, Vec::new()),
         };
@@ -359,7 +397,7 @@ impl VPatId {
             | VPat::Ctor(_) => (None, ty),
             | VPat::Triv(_) => (None, ty),
             | VPat::VCons(_) => (None, ty),
-            | VPat::TCons(_) => (None, ty),
+            | VPat::SCons(_) => (None, ty),
         }
     }
 
@@ -373,7 +411,7 @@ impl VPatId {
         loop {
             match tycker.statics.vpats[&pattern].to_owned() {
                 | ValuePattern::Named(Named(_, inner)) => pattern = inner,
-                | ValuePattern::TCons(ConsN(witnesses, _)) => return Some(witnesses.len()),
+                | ValuePattern::SCons(ConsN(witnesses, _)) => return Some(witnesses.len()),
                 | ValuePattern::Hole(_)
                 | ValuePattern::Var(_)
                 | ValuePattern::Ctor(_)
@@ -409,7 +447,7 @@ impl VPatId {
                 let tail = tail.reify(tycker);
                 Alloc::alloc(tycker, ConsN(items, tail), ty, &env)
             }
-            | VPat::TCons(vpat) => {
+            | VPat::SCons(vpat) => {
                 let ConsN(witnesses, body) = vpat;
                 let witnesses =
                     witnesses.into_iter().map(|witness| witness.reify(tycker)).collect();
@@ -425,7 +463,7 @@ impl ValueId {
     ///
     /// Following immutable value aliases preserves the identity of their
     /// witness types. Named wrappers are transparent.
-    pub fn package_witnesses(&self, tycker: &Tycker<'_>) -> Option<Vec<TypeId>> {
+    pub fn package_witnesses(&self, tycker: &Tycker<'_>) -> Option<Vec<StaticTermId>> {
         let mut value = *self;
         let mut visited = std::collections::HashSet::new();
         loop {
@@ -435,7 +473,8 @@ impl ValueId {
             match tycker.statics.values[&value].to_owned() {
                 | Value::Var(def) => value = *tycker.statics.value_aliases.get(&def)?,
                 | Value::Named(Named(_, inner)) => value = inner,
-                | Value::TCons(ConsN(witnesses, _)) => return Some(witnesses),
+                | Value::Let(Let { tail, .. }) => value = tail,
+                | Value::SCons(ConsN(witnesses, _)) => return Some(witnesses),
                 | Value::Hole(_)
                 | Value::Thunk(_)
                 | Value::Ctor(_)

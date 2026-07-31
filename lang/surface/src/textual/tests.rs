@@ -1,9 +1,10 @@
 use crate::textual::{
     arena::TextualScope,
     syntax::{
-        Ann, Appli, Block, CoPatId, ContextBind, DeclId, DefId, DefinitionMode, Dtor, EntityId,
-        Hole, Label, Literal, ManifestExists, Named, Param, Paren, Parser, PatId, Pattern,
-        Placement, Prod, Proj, Term, TermId,
+        Ann, Appli, Block, BuiltinMetaError, BuiltinRole, BuiltinTypeRole, CoPatId, ContextBind,
+        DefId, DefinitionMode, Dtor, EntityId, Hole, IntrinsicMeta, IntrinsicMetaError,
+        IntrinsicRole, Label, Literal, ManifestExists, Meta, MetaT, Named, Param, Paren, Parser,
+        PatId, Pattern, Placement, Prod, Proj, SourceUnit, Term, TermId,
     },
 };
 use zydeco_utils::{arena::IdAllocator, span::LocationCtx};
@@ -17,13 +18,11 @@ fn textual_entities_retain_their_category_tags() {
     let pat: PatId = allocator.alloc();
     let copat: CoPatId = allocator.alloc();
     let term: TermId = allocator.alloc();
-    let decl: DeclId = allocator.alloc();
 
     assert!(matches!(EntityId::from(def), EntityId::Def(id) if id == def));
     assert!(matches!(EntityId::from(pat), EntityId::Pat(id) if id == pat));
     assert!(matches!(EntityId::from(copat), EntityId::CoPat(id) if id == copat));
     assert!(matches!(EntityId::from(term), EntityId::Term(id) if id == term));
-    assert!(matches!(EntityId::from(decl), EntityId::Decl(id) if id == decl));
 }
 
 #[test]
@@ -37,12 +36,255 @@ fn parsing_1() {
 }
 #[test]
 fn parsing_2() {
-    let source = "main { let x = 1 in ! exit x } end";
+    let source = "{ let x = 1 in ! exit x }";
     let mut parser = Parser::new();
-    let t = parser::TopLevelParser::new()
+    let t = parser::SourceUnitParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
         .unwrap();
     println!("{:?}", t);
+}
+
+#[test]
+fn metadata_preserves_identifiers_strings_and_applications() {
+    let source = r#"@[debug(name,"value",nested("path"))] _"#;
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::Meta(MetaT(meta, payload)) = &parser.arena.terms[&term] else {
+        panic!("expected a metadata term")
+    };
+    let Meta::Apply { callee, args } = meta else { panic!("expected applied metadata") };
+
+    assert_eq!(callee, "debug");
+    assert_eq!(
+        args,
+        &[
+            Meta::ident("name"),
+            Meta::string("value"),
+            Meta::apply("nested", [Meta::string("path")]),
+        ]
+    );
+    assert!(matches!(parser.arena.terms[payload], Term::Hole(Hole)));
+    assert_eq!(meta.to_string(), r#"debug(name,"value",nested("path"))"#);
+}
+
+#[test]
+fn source_unit_decodes_relative_and_absolute_imports() {
+    let source = r#"(@[import("../library.zy")] _, @[import("/opt/zydeco/core.zy")] _)"#;
+    let mut parser = Parser::new();
+    let unit = parser::SourceUnitParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let imports = unit.imports(&parser.arena, &parser.spans).unwrap();
+    let paths = imports.iter().map(|site| site.directive.path.as_path()).collect::<Vec<_>>();
+
+    assert_eq!(
+        paths,
+        [std::path::Path::new("../library.zy"), std::path::Path::new("/opt/zydeco/core.zy")]
+    );
+}
+
+#[test]
+fn source_unit_rejects_import_without_one_string_path() {
+    enum ExpectedImportError {
+        PathArity(usize),
+        PathNotString,
+        EmptyPath,
+    }
+
+    let cases = [
+        ("@[import] _", ExpectedImportError::PathArity(0)),
+        ("@[import(path)] _", ExpectedImportError::PathNotString),
+        (r#"@[import("one.zy","two.zy")] _"#, ExpectedImportError::PathArity(2)),
+        (r#"@[import("")] _"#, ExpectedImportError::EmptyPath),
+    ];
+
+    cases.into_iter().for_each(|(source, expected)| {
+        let mut parser = Parser::new();
+        let unit = parser::SourceUnitParser::new()
+            .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+            .unwrap();
+        let error = unit.imports(&parser.arena, &parser.spans).unwrap_err();
+
+        match (error, expected) {
+            | (
+                ImportDirectiveError::PathArity { found, .. },
+                ExpectedImportError::PathArity(expected),
+            ) => assert_eq!(found, expected),
+            | (ImportDirectiveError::PathNotString { .. }, ExpectedImportError::PathNotString) => {}
+            | (ImportDirectiveError::EmptyPath { .. }, ExpectedImportError::EmptyPath) => {}
+            | (error, _) => panic!("unexpected import error: {error}"),
+        }
+    });
+}
+
+#[test]
+fn source_unit_rejects_import_on_a_non_hole_term() {
+    let source = r#"@[import("library.zy")] value"#;
+    let mut parser = Parser::new();
+    let unit = parser::SourceUnitParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    assert!(matches!(
+        unit.imports(&parser.arena, &parser.spans),
+        Err(ImportDirectiveError::PayloadNotHole { .. })
+    ));
+}
+
+#[test]
+fn source_unit_decodes_typed_builtin_roles() {
+    let source = "@[builtin(int)] _";
+    let mut parser = Parser::new();
+    let unit = parser::SourceUnitParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let builtins = unit.builtins(&parser.arena, &parser.spans).unwrap();
+    let [site] = builtins.as_slice() else { panic!("expected one Builtin role") };
+
+    assert_eq!(site.directive.role, BuiltinRole::Type(BuiltinTypeRole::Int));
+    assert!(matches!(parser.arena.terms[&site.payload], Term::Hole(Hole)));
+}
+
+#[test]
+fn source_unit_decodes_typed_intrinsic_splices() {
+    [
+        ("vtype", IntrinsicRole::VType),
+        ("ctype", IntrinsicRole::CType),
+        ("thk", IntrinsicRole::Thk),
+        ("ret", IntrinsicRole::Ret),
+        ("unit", IntrinsicRole::Unit),
+    ]
+    .into_iter()
+    .for_each(|(name, expected)| {
+        let source = format!("@[intrinsic({name})] _");
+        let mut parser = Parser::new();
+        let unit = parser::SourceUnitParser::new()
+            .parse(&source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(&source))
+            .unwrap();
+
+        let intrinsics = unit.intrinsics(&parser.arena, &parser.spans).unwrap();
+        let [site] = intrinsics.as_slice() else { panic!("expected one intrinsic splice") };
+        assert_eq!(site.directive.role, expected);
+        assert!(matches!(parser.arena.terms[&site.payload], Term::Hole(Hole)));
+    });
+}
+
+#[test]
+fn source_unit_rejects_ambiguous_or_malformed_intrinsic_splices() {
+    enum ExpectedIntrinsicError {
+        RoleArity(usize),
+        RoleNotIdentifier,
+        UnknownRole,
+        PayloadNotHole,
+    }
+
+    let cases = [
+        ("@[intrinsic] _", ExpectedIntrinsicError::RoleArity(0)),
+        ("@[intrinsic(vtype,ctype)] _", ExpectedIntrinsicError::RoleArity(2)),
+        (r#"@[intrinsic("vtype")] _"#, ExpectedIntrinsicError::RoleNotIdentifier),
+        ("@[intrinsic(monad)] _", ExpectedIntrinsicError::UnknownRole),
+        ("@[intrinsic(unit)] Unit", ExpectedIntrinsicError::PayloadNotHole),
+    ];
+
+    cases.into_iter().for_each(|(source, expected)| {
+        let mut parser = Parser::new();
+        let unit = parser::SourceUnitParser::new()
+            .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+            .unwrap();
+        let error = unit.intrinsics(&parser.arena, &parser.spans).unwrap_err();
+
+        match (error, expected) {
+            | (
+                IntrinsicDirectiveError::Invalid {
+                    source: IntrinsicMetaError::RoleArity { found },
+                    ..
+                },
+                ExpectedIntrinsicError::RoleArity(expected),
+            ) => assert_eq!(found, expected),
+            | (
+                IntrinsicDirectiveError::Invalid {
+                    source: IntrinsicMetaError::RoleNotIdentifier,
+                    ..
+                },
+                ExpectedIntrinsicError::RoleNotIdentifier,
+            ) => {}
+            | (
+                IntrinsicDirectiveError::Invalid {
+                    source: IntrinsicMetaError::UnknownRole(_), ..
+                },
+                ExpectedIntrinsicError::UnknownRole,
+            ) => {}
+            | (
+                IntrinsicDirectiveError::PayloadNotHole { .. },
+                ExpectedIntrinsicError::PayloadNotHole,
+            ) => {}
+            | (error, _) => panic!("unexpected intrinsic error: {error}"),
+        }
+    });
+}
+
+#[test]
+fn source_unit_rejects_malformed_builtin_roles() {
+    enum ExpectedBuiltinError {
+        RoleArity(usize),
+        RoleNotIdentifier,
+        UnknownRole,
+    }
+
+    let cases = [
+        ("@[builtin] _", ExpectedBuiltinError::RoleArity(0)),
+        ("@[builtin(int,char)] _", ExpectedBuiltinError::RoleArity(2)),
+        (r#"@[builtin("int")] _"#, ExpectedBuiltinError::RoleNotIdentifier),
+        ("@[builtin(number)] _", ExpectedBuiltinError::UnknownRole),
+        ("@[builtin(vtype)] _", ExpectedBuiltinError::UnknownRole),
+        ("@[builtin(thk)] _", ExpectedBuiltinError::UnknownRole),
+        ("@[builtin(monad)] _", ExpectedBuiltinError::UnknownRole),
+    ];
+
+    cases.into_iter().for_each(|(source, expected)| {
+        let mut parser = Parser::new();
+        let unit = parser::SourceUnitParser::new()
+            .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+            .unwrap();
+        let error = unit.builtins(&parser.arena, &parser.spans).unwrap_err();
+
+        match (error, expected) {
+            | (
+                BuiltinDirectiveError::Invalid {
+                    source: BuiltinMetaError::RoleArity { found },
+                    ..
+                },
+                ExpectedBuiltinError::RoleArity(expected),
+            ) => assert_eq!(found, expected),
+            | (
+                BuiltinDirectiveError::Invalid {
+                    source: BuiltinMetaError::RoleNotIdentifier, ..
+                },
+                ExpectedBuiltinError::RoleNotIdentifier,
+            ) => {}
+            | (
+                BuiltinDirectiveError::Invalid { source: BuiltinMetaError::UnknownRole(_), .. },
+                ExpectedBuiltinError::UnknownRole,
+            ) => {}
+            | (error, _) => panic!("unexpected Builtin error: {error}"),
+        }
+    });
+}
+
+#[test]
+fn source_unit_wraps_exactly_one_complete_term() {
+    let source = "begin let value = 1 that value end";
+    let mut parser = Parser::new();
+    let SourceUnit { root } = parser::SourceUnitParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    assert!(matches!(parser.arena.terms[&root], Term::Block(_)));
 }
 
 #[test]
@@ -93,7 +335,7 @@ fn parses_manifest_existential_with_a_punned_field_binder() {
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
-    let Term::ManifestExists(ManifestExists { binder, definition, kind, body }) =
+    let Term::ManifestExists(ManifestExists { binder, definition, classifier, body }) =
         &parser.arena.terms[&term]
     else {
         panic!("expected a manifest existential")
@@ -107,7 +349,8 @@ fn parses_manifest_existential_with_a_punned_field_binder() {
     let Term::Var(definition) = &parser.arena.terms[definition] else {
         panic!("expected a manifest definition")
     };
-    let Term::Var(kind) = &parser.arena.terms[kind] else { panic!("expected a binder kind") };
+    let kind = classifier.expect("expected a binder classifier");
+    let Term::Var(kind) = &parser.arena.terms[&kind] else { panic!("expected a binder kind") };
     let Term::Var(body) = &parser.arena.terms[body] else { panic!("expected a package body") };
 
     assert_eq!(field.plain(), "Counter");
@@ -115,6 +358,41 @@ fn parses_manifest_existential_with_a_punned_field_binder() {
     assert_eq!(definition.plain(), "Int");
     assert_eq!(kind.plain(), "VType");
     assert_eq!(body.plain(), "Counter");
+}
+
+#[test]
+fn parses_manifest_existential_with_an_inferred_classifier() {
+    let source = "exists (VType as @[intrinsic(vtype)] _) . VType";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::ManifestExists(ManifestExists { binder, definition, classifier, body }) =
+        &parser.arena.terms[&term]
+    else {
+        panic!("expected a manifest existential")
+    };
+    let Pattern::Var(binder) = &parser.arena.pats[binder] else {
+        panic!("expected an ordinary kind-variable binder")
+    };
+    let Term::Meta(MetaT(meta, payload)) = &parser.arena.terms[definition] else {
+        panic!("expected the intrinsic definition to retain its metadata")
+    };
+    let Term::Hole(_) = parser.arena.terms[payload] else {
+        panic!("expected the intrinsic metadata to annotate a hole")
+    };
+    let Term::Var(body) = &parser.arena.terms[body] else {
+        panic!("expected the package body to use the bound kind")
+    };
+
+    assert_eq!(parser.arena.defs[binder].plain(), "VType");
+    assert_eq!(
+        IntrinsicMeta::decode(meta).unwrap().map(|meta| meta.role),
+        Some(IntrinsicRole::VType)
+    );
+    assert!(classifier.is_none());
+    assert_eq!(body.plain(), "VType");
 }
 
 #[test]

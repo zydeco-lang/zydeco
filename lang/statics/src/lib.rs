@@ -9,13 +9,14 @@ pub mod tyck {
     pub mod syntax;
     /// Typed arena storage and annotation tables.
     pub mod arena;
+    /// Backend-independent interpretation of a checked Builtin package signature.
+    pub mod builtin;
+    pub use builtin::*;
 
     /// Type-checking driver and per-node rules.
     pub mod check;
     pub use check::*;
 
-    /// Primitive registration for internal kinds and types.
-    pub mod prims;
     /// Typing environments and substitution helpers.
     pub mod env;
     /// Typed arena allocation helpers.

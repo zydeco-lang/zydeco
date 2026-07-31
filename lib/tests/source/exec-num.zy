@@ -1,0 +1,20 @@
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  def Bool : VType =
+    data
+    | +True : Unit
+    | +False : Unit
+    end
+  that
+
+  do positive <- (fn _ -> ret 1 : Bool -> Ret Int) +True();
+  do truth <- (fn _ -> ret +True() : Int -> Ret Bool) +123;
+  do truth <- (fn _ -> ret +True() : Int -> Ret Bool) -123;
+  do negative <- ! (api/mul) positive -1;
+  do status <- ! (api/add) positive negative;
+  ! (api/exit) status
+end

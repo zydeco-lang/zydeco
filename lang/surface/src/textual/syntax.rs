@@ -14,7 +14,6 @@ zydeco_utils::new_key_type! {
     pub struct PatId;
     pub struct CoPatId;
     pub struct TermId;
-    pub struct DeclId;
 }
 
 /// Identifier for any textual entity. The tag prevents cross-category casts.
@@ -24,7 +23,6 @@ pub enum EntityId {
     Pat(PatId),
     CoPat(CoPatId),
     Term(TermId),
-    Decl(DeclId),
 }
 
 /* --------------------------------- Pattern -------------------------------- */
@@ -61,7 +59,7 @@ pub struct GenBind<Bindee> {
     pub params: Option<CoPatId>,
     /// Optional type annotation.
     pub ty: Option<TermId>,
-    /// Bound term or placeholder for externs.
+    /// Bound term.
     pub bindee: Bindee,
 }
 
@@ -85,12 +83,12 @@ pub struct Sigma(pub CoPatId, pub TermId);
 /// `exists (x: A) . A'`
 #[derive(Clone, Debug)]
 pub struct Exists(pub CoPatId, pub TermId);
-/// `exists (X as A : K) . B`
+/// `exists (X as A : K) . B` or `exists (X as A) . B`
 #[derive(Clone, Debug)]
 pub struct ManifestExists {
     pub binder: PatId,
     pub definition: TermId,
-    pub kind: TermId,
+    pub classifier: Option<TermId>,
     pub body: TermId,
 }
 
@@ -178,6 +176,7 @@ pub struct CoMatcherParam {
 #[derive(From, Clone, Debug)]
 pub enum Term {
     Meta(MetaT<TermId>),
+    SourceBoundary(SourceBoundary<TermId>),
     Ann(Ann<TermId, TermId>),
     Hole(Hole),
     Var(VarName),
@@ -214,57 +213,13 @@ pub enum Term {
     Lit(Literal),
 }
 
-/* -------------------------------- TopLevel -------------------------------- */
+/* ------------------------------- Source Unit ------------------------------ */
 
-#[derive(Clone, Debug)]
-pub struct DataDef {
-    pub name: DefId,
-    pub params: Vec<PatId>,
-    pub def: Data,
+/// A complete source file represented by one root term.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct SourceUnit {
+    pub root: TermId,
 }
-
-#[derive(Clone, Debug)]
-pub struct CoDataDef {
-    pub name: DefId,
-    pub params: Vec<PatId>,
-    pub def: CoData,
-}
-
-#[derive(Clone, Debug)]
-pub struct Define(pub GenBind<Option<TermId>>);
-
-#[derive(Clone, Debug)]
-pub struct Alias(pub GenBind<TermId>);
-
-// Todo: Add a way to specify the expected output of the execution
-#[derive(Clone, Debug)]
-pub enum ExecType {
-    Main,
-    Test,
-    Fail,
-}
-
-#[derive(Clone, Debug)]
-pub struct Exec(pub TermId);
-
-#[derive(Clone, From, Debug)]
-pub enum Declaration {
-    Meta(MetaT<DeclId>),
-    DataDef(DataDef),
-    CoDataDef(CoDataDef),
-    Define(Define),
-    Alias(Alias),
-    Exec(Exec),
-}
-
-#[derive(From, Clone, Debug)]
-pub enum ReplInput {
-    Declaration(DeclId),
-    Term(TermId),
-}
-
-#[derive(Clone, Debug)]
-pub struct TopLevel(pub Vec<DeclId>);
 
 /* --------------------------------- Parser --------------------------------- */
 
@@ -348,11 +303,5 @@ impl Parser {
             | None => variable,
         };
         Named(field.inner, inner).into()
-    }
-    /// Allocate a declaration node and record its span.
-    pub fn decl(&mut self, decl: Sp<Modifiers<Declaration>>) -> DeclId {
-        let id = self.alloc(decl.info);
-        self.arena.decls.insert_new(id, decl.inner);
-        id
     }
 }

@@ -47,6 +47,15 @@ impl<'a> Ugly<'a, Formatter<'a>> for KindId {
     }
 }
 
+impl<'a> Ugly<'a, Formatter<'a>> for KPatId {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        match &f.statics.kpats[self] {
+            | KindPattern::Hole(pattern) => pattern.ugly(f),
+            | KindPattern::Var(definition) => definition.ugly(f),
+        }
+    }
+}
+
 impl<'a> Ugly<'a, Formatter<'a>> for TPatId {
     fn ugly(&self, f: &'a Formatter) -> String {
         let tpat = &f.statics.tpats[self];
@@ -85,6 +94,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for TypeId {
                 | Type::PackPi(ty) => ty.ugly(f),
                 | Type::Prod(ty) => ty.ugly(f),
                 | Type::Exists(ty) => ty.ugly(f),
+                | Type::ManifestKind(ty) => ty.ugly(f),
                 | Type::Data(ty) => ty.ugly(f),
                 | Type::CoData(ty) => ty.ugly(f),
             },
@@ -103,7 +113,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for VPatId {
             | VPat::Ctor(vpat) => vpat.ugly(f),
             | VPat::Triv(vpat) => vpat.ugly(f),
             | VPat::VCons(vpat) => vpat.ugly(f),
-            | VPat::TCons(vpat) => vpat.ugly(f),
+            | VPat::SCons(vpat) => vpat.ugly(f),
         }
     }
 }
@@ -115,13 +125,32 @@ impl<'a> Ugly<'a, Formatter<'a>> for ValueId {
             | Value::Hole(value) => value.ugly(f),
             | Value::Var(value) => value.ugly(f),
             | Value::Named(value) => value.ugly(f),
+            | Value::Let(value) => value.ugly(f),
             | Value::Thunk(value) => value.ugly(f),
             | Value::Ctor(value) => value.ugly(f),
             | Value::Triv(value) => value.ugly(f),
             | Value::VCons(value) => value.ugly(f),
-            | Value::TCons(value) => value.ugly(f),
+            | Value::SCons(value) => value.ugly(f),
             | Value::Proj(value) => value.ugly(f),
             | Value::Lit(value) => value.ugly(f),
+        }
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for StaticPatId {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        match self {
+            | StaticPatId::Kind(pattern) => pattern.ugly(f),
+            | StaticPatId::Type(pattern) => pattern.ugly(f),
+        }
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for StaticTermId {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        match self {
+            | StaticTermId::Kind(kind) => kind.ugly(f),
+            | StaticTermId::Type(ty) => ty.ugly(f),
         }
     }
 }
@@ -507,6 +536,17 @@ impl<'a> Ugly<'a, Formatter<'a>> for Exists {
     }
 }
 
+impl<'a> Ugly<'a, Formatter<'a>> for ManifestKind {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        format!(
+            "(exists ({} as {}) . {})",
+            self.binder.ugly(f),
+            self.definition.ugly(f),
+            self.body.ugly(f)
+        )
+    }
+}
+
 impl<'a, Sc, Br, Tail> Ugly<'a, Formatter<'a>> for Match<Sc, Br, Tail>
 where
     Sc: Ugly<'a, Formatter<'a>>,
@@ -541,31 +581,6 @@ where
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for DeclId {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let decl = &f.statics.decls[self];
-        use Declaration as Decl;
-        match decl {
-            | Decl::TAliasBody(decl) => {
-                let TAliasBody { binder, bindee } = decl;
-                format!("type {} = {} end", binder.ugly(f), bindee.ugly(f))
-            }
-            | Decl::VAliasBody(decl) => {
-                let VAliasBody { binder, bindee } = decl;
-                format!("val {} = {} end", binder.ugly(f), bindee.ugly(f))
-            }
-            | Decl::VAliasHead(decl) => {
-                let VAliasHead { binder, ty } = decl;
-                format!("extern {} : {} end", binder.ugly(f), ty.ugly(f))
-            }
-            | Decl::Exec(decl) => {
-                let Exec(compu) = decl;
-                format!("exec {} end", compu.ugly(f))
-            }
-        }
-    }
-}
-
 /* --------------------------------- Pretty --------------------------------- */
 
 use pretty::RcDoc;
@@ -588,6 +603,15 @@ impl<'a> Pretty<'a, Formatter<'a>> for KindId {
                 | Kind::Arrow(kd) => kd.pretty(f),
                 | Kind::Label(kd) => kd.pretty(f),
             },
+        }
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for KPatId {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        match &f.statics.kpats[self] {
+            | KindPattern::Hole(pattern) => pattern.pretty(f),
+            | KindPattern::Var(definition) => definition.pretty(f),
         }
     }
 }
@@ -628,9 +652,28 @@ impl<'a> Pretty<'a, Formatter<'a>> for TypeId {
                 | Type::PackPi(ty) => ty.pretty(f),
                 | Type::Prod(ty) => ty.pretty(f),
                 | Type::Exists(ty) => ty.pretty(f),
+                | Type::ManifestKind(ty) => ty.pretty(f),
                 | Type::Data(ty) => ty.pretty(f),
                 | Type::CoData(ty) => ty.pretty(f),
             },
+        }
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for StaticPatId {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        match self {
+            | StaticPatId::Kind(pattern) => pattern.pretty(f),
+            | StaticPatId::Type(pattern) => pattern.pretty(f),
+        }
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for StaticTermId {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        match self {
+            | StaticTermId::Kind(kind) => kind.pretty(f),
+            | StaticTermId::Type(ty) => ty.pretty(f),
         }
     }
 }
@@ -646,7 +689,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
             | VPat::Ctor(vpat) => vpat.pretty(f),
             | VPat::Triv(vpat) => vpat.pretty(f),
             | VPat::VCons(vpat) => vpat.pretty(f),
-            | VPat::TCons(vpat) => vpat.pretty(f),
+            | VPat::SCons(vpat) => vpat.pretty(f),
         }
     }
 }
@@ -658,11 +701,12 @@ impl<'a> Pretty<'a, Formatter<'a>> for ValueId {
             | Value::Hole(value) => value.pretty(f),
             | Value::Var(value) => value.pretty(f),
             | Value::Named(value) => value.pretty(f),
+            | Value::Let(value) => value.pretty(f),
             | Value::Thunk(value) => value.pretty(f),
             | Value::Ctor(value) => value.pretty(f),
             | Value::Triv(value) => value.pretty(f),
             | Value::VCons(value) => value.pretty(f),
-            | Value::TCons(value) => value.pretty(f),
+            | Value::SCons(value) => value.pretty(f),
             | Value::Proj(value) => value.pretty(f),
             | Value::Lit(value) => value.pretty(f),
         }
@@ -1157,6 +1201,25 @@ impl<'a> Pretty<'a, Formatter<'a>> for Exists {
             RcDoc::text("exists"),
             RcDoc::space(),
             binder,
+            RcDoc::space(),
+            RcDoc::text("."),
+            RcDoc::concat([RcDoc::line(), self.body.pretty(f)]).group().nest(f.indent),
+        ])
+        .group()
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for ManifestKind {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::concat([
+            RcDoc::text("exists"),
+            RcDoc::space(),
+            RcDoc::text("("),
+            self.binder.pretty(f),
+            RcDoc::text(" as"),
+            RcDoc::space(),
+            self.definition.pretty(f),
+            RcDoc::text(")"),
             RcDoc::space(),
             RcDoc::text("."),
             RcDoc::concat([RcDoc::line(), self.body.pretty(f)]).group().nest(f.indent),

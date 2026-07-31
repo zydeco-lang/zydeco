@@ -1,47 +1,99 @@
--- # Chapter 5: Mutual Recursion
+-- # Chapter 5: Mutual Recursion through Codata
 
--- Let's take the use of `rec` to a new level. With `codata`, we can define
--- mutually recursive functions with ease. 
+-- A codata value can collect several observations behind one fixed point.
+-- Those observations may invoke one another through the shared value, giving a
+-- direct representation of mutually recursive operations.
 
--- Exercise `even-odd`: Define `even` and `odd` for natural numbers.
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../lib/std/builtin.zy")] _
+  ) that
 
-codata EvenOdd where
-  | .even : Nat -> Ret Bool
-  | .odd  : Nat -> Ret Bool
+  def Nat : VType =
+    data
+    | +Zero : Unit
+    | +Successor : Nat
+    end
+  that
+  def Bool : VType =
+    data
+    | +True : Unit
+    | +False : Unit
+    end
+  that
+  def EvenOdd : CType =
+    codata
+    | .even : Nat -> Ret Bool
+    | .odd : Nat -> Ret Bool
+    end
+  that
+
+  def even_odd : Thk EvenOdd = {
+    fix (even_odd : Thk EvenOdd) ->
+      comatch
+      | .even number ->
+        match number
+        | +Zero() -> ret +True()
+        | +Successor(predecessor) ->
+          ! even_odd .odd predecessor
+        end
+      | .odd number ->
+        match number
+        | +Zero() -> ret +False()
+        | +Successor(predecessor) ->
+          ! even_odd .even predecessor
+        end
+      end
+  } that
+
+  -- These wrappers are ordinary projections from the shared recursive object.
+  def even : Thk (Nat -> Ret Bool) = {
+    fn number ->
+      ! even_odd .even number
+  } that
+  def odd : Thk (Nat -> Ret Bool) = {
+    fn number ->
+      ! even_odd .odd number
+  } that
+
+  def assert_equal : Thk (
+    Bool ->
+    Bool ->
+    Thk OS ->
+    OS
+  ) = {
+    fn actual expected continuation ->
+      match actual
+      | +True() ->
+        match expected
+        | +True() -> ! continuation
+        | +False() -> ! (api/exit) 1
+        end
+      | +False() ->
+        match expected
+        | +True() -> ! (api/exit) 1
+        | +False() -> ! continuation
+        end
+      end
+  } that
+
+  do even_two <- ! even +Successor(+Successor(+Zero()));
+  do odd_three <-
+    ! odd +Successor(+Successor(+Successor(+Zero())));
+  do even_one <- ! even +Successor(+Zero());
+  do odd_two <- ! odd +Successor(+Successor(+Zero()));
+  ! assert_equal even_two +True() {
+    ! assert_equal odd_three +True() {
+      ! assert_equal even_one +False() {
+        ! assert_equal odd_two +False() {
+          ! (api/exit) 0
+        }
+      }
+    }
+  }
 end
 
-def even-odd : Thunk EvenOdd = {
-  -- Todo..
-  fix even-odd -> ! even-odd
-} end
-
-def even : Thunk (Nat -> Ret Bool) = {
-  -- Todo..
-  fn n -> ret true
-} end
-
-def odd : Thunk (Nat -> Ret Bool) = {
-  -- Todo..
-  fn n -> ret true
-} end
-
-main
-  let ! assert (b : Thunk (Ret Bool)) (b' : Bool) (kont : Thunk OS) =
-    do b <- ! b;
-    ! if~ OS { ! bool_eq b b' } { ! kont } { ! panic "failed test case >_<" }
-  in
-  ! assert { ! even +S(+S(+Z())) } true {
-  ! assert { ! odd +S(+S(+S(+Z()))) } true {
-  ! assert { ! even +Z() } true {
-  ! assert { ! odd +S(+Z()) } true {
-  -- Todo: uncomment the following lines
-  -- ! assert { ! even +S(+Z()) } false {
-  -- ! assert { ! odd +S(+S(+Z())) } false {
-  ! exit 0
-  }}}}
-  -- Todo: uncomment the following lines
-  -- }}
-end
-
--- At this point, I believe that you are convinced that `codata` is a general
--- representation of computation.
+-- Type definitions may form recursive SCCs in a block. Term recursion remains
+-- explicit: the single computation-level `fix` above is what ties the
+-- `even_odd` object to itself.

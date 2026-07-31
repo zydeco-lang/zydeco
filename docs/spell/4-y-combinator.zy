@@ -1,87 +1,102 @@
--- # Chapter 4: Y Combinator
+-- # Chapter 4: A Fixed Point from Codata
 
--- In the last few chapters, we saw the `rec` keyword, which allows us to define
--- recursive functions. However, it is actually possible to define recursive
--- functions without the primitive `rec` terms. This can be done by using the Y
--- combinator.
+-- Zydeco has a primitive computation-level `fix`, but recursion can also be
+-- encoded. In a call-by-name reading, a fixed point satisfies `Y f = f (Y f)`.
+-- Codata gives the delayed self-application needed to state this safely in
+-- call-by-push-value.
 
-codata Y (B : CType) where
-  | .y : Thunk (Y B) -> B
-end
+begin
+  let std = @[import("../../lib/std/std.zy")] _ that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../lib/std/builtin.zy")] _
+  ) that
 
--- Exercise Y: Implement the Y combinator.
-
--- Hint: In call-by-name sense, the Y combinator is given by: `Y f = f (Y f)`
--- and can be defined as `\f. (\x. f (x x)) (\x. f (x x))`. Also, note that
--- call-by-name has lazy semantics.
-
-alias FnInt = Int -> Ret Int end
-def fix' : Thunk (Thunk (Thunk FnInt -> FnInt) -> Ret (Thunk FnInt)) = {
-  fn (f : Thunk (Thunk FnInt -> FnInt)) -> (
-    -- Todo..
-    ret { fn x -> ret 3628800 }
-  )
-} end
-
--- The fact that we can implement the Y combinator in zydeco implies that zydeco
--- is very likely to be a partial language with turning computability. In fact,
--- this is exactly the case.
-
--- With a little extra effort, it is possible to implement the Y combinator in a
--- generic way. See zydeco-lang/tests/nonzero-exit-code/Y.zydeco for details.
-
--- The rest is just a test bench.
-main
-  -- good old factorial
-  let ! fact (f: U(Int -> F Int)) (n: Int): F Int =
-    do is_zero <- ! int_eq n 0;
-    match is_zero
-    | +True() -> ret 1
-    | +False() ->
-      do rest <- (
-        do n-1 <- ! sub n 1;
-        ! f n-1
-      );
-      ! mul n rest
+  def Y :
+    (CType) ->
+    (CType) =
+    begin
+      param (B : CType) that
+      codata
+      | .apply : Thk (Y B) -> B
+      end
     end
-  in
+  that
 
-  do fact <- ! fix' fact;
+  def fixed_point : Thk (
+    forall (B : CType) .
+      Thk (Thk B -> B) ->
+      Ret (Thk B)
+  ) = {
+    fn (B : CType)
+       (function : Thk (Thk B -> B)) ->
+      let self_application : Thk (Y B) = {
+        comatch
+        | .apply recursive ->
+          ! function { ! recursive .apply recursive }
+        end
+      } in
+      ret { ! self_application .apply self_application }
+  } that
 
-  -- tests
-  let ! demo (input: Int) (expected: Int) (t: Thunk(OS)): OS =
-    do x <- ! fact input;
-    do correct <- ! int_eq x expected;
-    match correct
-    | +True() -> ! t
-    | +False() ->
-      do input <- ! int_to_str input;
-      do expected <- ! int_to_str expected;
-      do got <- ! int_to_str x;
-      do msg <- ! str_append "f " input;
-      do msg <- ! str_append msg " = ";
-      do msg <- ! str_append msg expected;
-      do msg <- ! str_append msg ", got ";
-      do msg <- ! str_append msg got;
-      ! write_line msg { ! exit 1 }
-    end
-  in
+  -- The standard-library term is an ordinary dependency. Opening its result
+  -- establishes abstract Boolean, option, and list types in the lexical tail.
+  do (
+    Bool = StdBool,
+    Option = StdOption,
+    List = StdList,
+    Int = StdInt,
+    Char = StdChar,
+    String = StdString,
+    OS = StdOS,
+    public
+  ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  begin
+    def factorial_step : Thk (
+      Thk (StdInt -> Ret StdInt) ->
+      StdInt ->
+      Ret StdInt
+    ) = {
+      fn recursive number ->
+        do is_zero <- ! (public/int_eq) number 0;
+        ! (public/branch)
+          (Ret StdInt)
+          is_zero
+          { ret 1 }
+          {
+            do predecessor <- ! (public/sub) number 1;
+            do rest <- ! recursive predecessor;
+            ! (public/mul) number rest
+          }
+    } that
+    def check : Thk (
+      Thk (StdInt -> Ret StdInt) ->
+      StdInt ->
+      StdInt ->
+      Thk StdOS ->
+      StdOS
+    ) = {
+      fn factorial input expected continuation ->
+        do actual <- ! factorial input;
+        do correct <- ! (public/int_eq) actual expected;
+        ! (public/branch)
+          StdOS
+          correct
+          { ! continuation }
+          { ! (public/exit) 1 }
+    } that
 
-  ! demo 10 3628800 {
-  ! write_line "factorial result is correct :)" {
-  ! exit 0 }}
+    do factorial <-
+      ! fixed_point (StdInt -> Ret StdInt) factorial_step;
+    ! check factorial 5 120 {
+      ! check factorial 10 3628800 {
+        ! (public/write_line) "factorial results are correct" {
+          ! (public/exit) 0
+        }
+      }
+    }
+  end
 end
 
--- Exercise (optional): Write a term that never terminates.
--- def loop : ... = ... end
-
--- Exercise (optional): Write iota, a `CoNat` that spills out infinite `Nat`s.
--- Define `CoNat` first, of course.
-
-data CoNat where
-  -- Todo..
-end
-
--- `
--- def iota : Thunk CoNat = ... end
--- `
+-- This construction also demonstrates why unrestricted recursion makes
+-- Zydeco a partial language: a fixed point need not terminate.

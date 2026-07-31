@@ -1,11 +1,11 @@
-use zydeco_tests::interp_proj_bin;
+use zydeco_tests::interp_source;
 
-interp_proj_bin!(tests / oopsla, polynomial, "polynomial");
-interp_proj_bin!(tests / oopsla, cc, "cc");
-interp_proj_bin!(tests / oopsla, cbv, "cbv");
-interp_proj_bin!(tests / oopsla, monads, "monads");
-interp_proj_bin!(tests / oopsla, exn, "exn");
-interp_proj_bin!(tests / oopsla, free, "free");
-interp_proj_bin!(tests / oopsla, algebra, "algebra");
-interp_proj_bin!(tests / oopsla, exnt, "exnt");
-interp_proj_bin!(tests / oopsla, exnkt, "exnkt");
+interp_source!(polynomial, "tests/source/oopsla-polynomial.zy");
+interp_source!(cc, "tests/source/oopsla-calling-conventions.zy");
+interp_source!(cbv, "tests/source/oopsla-cbv.zy");
+interp_source!(monads, "tests/source/oopsla-monads.zy");
+interp_source!(exn, "tests/source/oopsla-exn.zy");
+interp_source!(free, "tests/source/oopsla-free.zy");
+interp_source!(algebra, "examples/algebra.zydeco");
+interp_source!(exnt, "tests/source/oopsla-exception-transformers.zy");
+interp_source!(exnkt, "tests/source/oopsla-exception-transformers.zy");

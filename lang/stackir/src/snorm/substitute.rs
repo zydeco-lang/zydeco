@@ -105,7 +105,7 @@ mod impls {
                                 // directly substitute all users of the variable with the value
                                 let arena_mut = AsMut::<SNormInnerArena>::as_mut(arena);
                                 let value = arena_mut.svalues[&value].clone();
-                                arena_mut.svalues.replace_existing(*user, value);
+                                arena_mut.replace_value(*user, value);
                             }
                             | _users => {
                                 // items.push_back(item);
@@ -115,7 +115,7 @@ mod impls {
                                     let value = value.deep_clone(arena, &mut Default::default());
                                     let arena_mut = AsMut::<SNormInnerArena>::as_mut(arena);
                                     let value = arena_mut.svalues[&value].clone();
-                                    arena_mut.svalues.replace_existing(*user, value);
+                                    arena_mut.replace_value(*user, value);
                                 }
                             }
                         }

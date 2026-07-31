@@ -1,6 +1,5 @@
 use crate::{statics_syntax::Env, syntax::*};
 use std::io::{BufRead, Write};
-use zydeco_utils::arena::ArenaAccess;
 
 /// Trait for stepping a term until a result is produced.
 pub trait Eval<'rt>: Sized {
@@ -32,78 +31,15 @@ impl<'rt> Runtime<'rt> {
     ) -> Self {
         Runtime { input, output, args, stack: im::Vector::new(), env: Env::new(), arena }
     }
-    /// Evaluate all declarations in topological order and collect entry points.
+    /// Evaluate the program's computation root.
     pub fn run(mut self) -> Vec<ProgKont> {
-        let mut scc = self.arena.top.clone();
-        let mut konts = Vec::new();
-        loop {
-            let groups = scc.top();
-            // if no more groups are at the top, we're done
-            if groups.is_empty() {
-                break;
-            }
-            for group in groups {
-                // each group should be evaluated on its own
-                for decl in &group {
-                    let decl = {
-                        match self.arena.decls.get(decl) {
-                            | Some(decl) => decl.clone(),
-                            | None => continue,
-                        }
-                    };
-                    let res = decl.eval(&mut self);
-                    if let Some(kont) = res {
-                        konts.push(kont);
-                    }
-                }
-                scc.release(group);
-            }
-        }
-        konts
+        let root = self.arena.root.clone();
+        vec![root.as_ref().clone().eval(&mut self)]
     }
 }
 
 fn mk_box<T>(t: T) -> Box<T> {
     Box::new(t)
-}
-
-impl<'rt> Eval<'rt> for Declaration {
-    type Out = Option<ProgKont>;
-
-    fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out> {
-        match self {
-            | Declaration::VAliasBody(VAliasBody { binder, bindee }) => {
-                // // Debug: print
-                // {
-                //     use ValuePattern as VPat;
-                //     match binder.as_ref() {
-                //         | VPat::Hole(Hole) => println!("hole"),
-                //         | VPat::Var(def) => println!("{}", runtime.arena.defs[def]),
-                //         | _ => println!("{:?}", binder.as_ref()),
-                //     }
-                // }
-                // copy and later restore the env
-                let env = runtime.env.clone();
-                let bindee = bindee.as_ref().clone().eval(runtime);
-                runtime.env = env;
-                let () = Assign(binder, bindee)
-                    .eval(runtime)
-                    .expect("pattern match failed in definition");
-                Step::Done(None)
-            }
-            | Declaration::Exec(Exec(comp)) => {
-                // // Debug: print
-                // {
-                //     println!("main");
-                // }
-                // copy and later restore the env
-                let env = runtime.env.clone();
-                let prog_kont = comp.as_ref().clone().eval(runtime);
-                runtime.env = env;
-                Step::Done(Some(prog_kont))
-            }
-        }
-    }
 }
 
 /// Helper to bind a runtime value to a value pattern.
@@ -216,6 +152,14 @@ impl<'rt> Eval<'rt> for Value {
                 //     println!("==> {}", runtime.arena.defs[&var]);
                 // }
                 Step::Done(runtime.env.get(&var).expect("variable does not exist").clone())
+            }
+            | Value::Let(Let { binder, bindee, tail }) => {
+                let outer = runtime.env.clone();
+                let bindee = bindee.as_ref().clone().eval(runtime);
+                Assign(binder, bindee).eval(runtime).expect("pattern match failed in value let");
+                let value = tail.as_ref().clone().eval(runtime);
+                runtime.env = outer;
+                Step::Done(value)
             }
             | Value::Thunk(Thunk(body)) => {
                 Step::Done(EnvThunk { body, env: runtime.env.clone() }.into())

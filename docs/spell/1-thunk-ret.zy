@@ -1,73 +1,56 @@
--- # Chapter 1: Term Syntax
+-- # Chapter 1: Values and Computations
 
--- This chapter is about the syntax of terms, namely values and computations.
+-- Call-by-push-value distinguishes values from computations. We conventionally
+-- write `A` for a value type and `B` for a computation type. The term grammar
+-- remains uniform: context tells the checker which form a particular term must
+-- inhabit.
 
--- Like said in the last chapter, the definitions have value types. From now on
--- we denote a value type by `A` and a value term `a`; similarly, a computation
--- type `B` along with its term `b`.
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../lib/std/builtin.zy")] _
+  ) that
 
-def zero : Int = 0 end
+  -- Integers, characters, and strings are host value types supplied by the
+  -- Builtin package. A sealed value definition may bind one directly.
+  def zero : Int = 0 that
 
--- Currently, zydeco has `Int`, `Char` and `String` types as primitive value
--- types, and the ability to introduce data types. Check out the definition of
--- `Bool` and `List` by searching in the standard library
--- (zydeco-lang/src/library/std.zydeco).
+  -- `Ret A` is the simplest computation type: a computation that returns an
+  -- `A`. Braces suspend a computation as a value of type `Thk B`.
+  def lazy_one : Thk (Ret Int) = {
+    ret 1
+  } that
 
--- Oh, how could I not mention the most important value type in a
--- call-by-push-value language: `Thunk B`. Here `B` is a computation type, which
--- will keep recurring. 
+  -- A thunk captures values from its lexical environment. It is not executed
+  -- until forced with `!`.
+  def lazy_add_one_zero : Thk (Ret Int) = {
+    do x <- ! lazy_one;
+    do y <- ret zero;
+    ! (api/add) x y
+  } that
 
-def lazy-one : Thunk (Ret Int) = { ret 1 } end
+  -- `do x <- computation; tail` eliminates `Ret A`, binding the returned value
+  -- in the tail. The right-hand side need not be written literally as `ret`.
 
--- Here `Ret A` type and `ret a` computation is the simplest computation type,
--- with the meaning of simply returning a value `a` of type `A`. Though this
--- particular computation is not sweating, it's wrapped in a `Thunk` and will
--- not be executed until runtime.
+  -- Function types `A -> B` are computation types. Consequently, a reusable
+  -- function is commonly stored as a thunked computation.
+  def decrement : Thk (
+    Thk (Ret Int) ->
+    Ret Int
+  ) = {
+    fn suspended ->
+      do value <- ! suspended;
+      ! (api/sub) value 1
+  } that
 
-def lazy-add-one-zero : Thunk (Ret Int) = {
-  do x <- ! lazy-one;
-  do y <- ret zero;
-  -- equivalent to let y = zero in ...
-  ! add x y
-  -- add is defined in the standard library too
-  -- add: Thunk (Int -> Int -> Ret Int)
-} end
-
--- The `do` notation is borrowed (again) from Haskell. It takes a `Ret A` typed
--- term and binds it to a variable `x` of type `A`. It's the elimination form of
--- `Ret A`. Note that the RHS isn't necessarily syntactically `ret a` - any
--- computation of type `Ret A` would suffice.
-
--- The `!`, read as "force", is the operator to force a `Thunk B` typed term to
--- evaluate to a `B` typed term. It's the only way to "defrost" the computation
--- in a thunk. Notice that the thunks are able to capture `lazy-one` and `zero`
--- from the environment, which means that even if the thunk is not eagerly
--- evaluated, it can still run correctly on the evaluation site.
-
-def decr~ : Thunk (Thunk (Ret Int) -> Ret Int) = {
-  -- Function types are written as `A -> B`, and are by themselves computations.
-  fn x~ -> (
-    do x <- ! x~;
-    ! sub x 1
-  )
-} end
-
--- By convension, we use `~` to denote terms that is a thunk or takes a thunk as
--- its argument; it's just a valid symbol for values, so you may use any
--- variable name as you like.
-
--- The `fn` keyword denotes a function, a computation type `A -> B`. In fact,
--- function types in call-by-push-value can be better defined by the general
--- form of codata. Search `Fn` in the standard library to see its definition.
--- We'll learn more about it in the next chapter.
-
--- As a finishing touch, we exit with a perfect zero'.
-
-main
-  do zero' <- ! decr~ lazy-add-one-zero;
-  ! exit zero'
+  -- The dependency order differs from the presentation order without changing
+  -- lexical meaning: all four definitions are candidates within this block.
+  -- The final computation forces them and returns an `OS` result.
+  do result <- ! decrement lazy_add_one_zero;
+  ! (api/exit) result
 end
 
--- The `module` - actually namespace - part hasn't been implemented yet, so
--- anything you observe in `std.zydeco` related to `module` is only compatible
--- syntax without actually meaning and can be safely ignored.
+-- `Thk` and `Ret` are core CBPV constructors bound by opening the Builtin
+-- package. Their intrinsic definitions occur once in that package's signature.
+-- Arithmetic and process termination are host capabilities selected from the
+-- same package; neither class of operation arrives through an ambient prelude.

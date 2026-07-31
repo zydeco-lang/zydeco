@@ -6,7 +6,7 @@ use std::{
     io::{BufRead, Write},
     rc::Rc,
 };
-use zydeco_utils::prelude::{ArenaSchema, ArenaSparse, SccGraph};
+use zydeco_utils::prelude::{ArenaSchema, ArenaSparse};
 
 /* ------------------------------- Identifier ------------------------------- */
 
@@ -18,12 +18,10 @@ pub type RcVPat = Rc<ValuePattern>;
 pub type RcValue = Rc<Value>;
 /// Shared computation pointer for dynamic syntax.
 pub type RcCompu = Rc<Computation>;
-/// Declaration identifier reused from the statics arena.
-pub type DeclId = ss::DeclId;
 
 /* ---------------------------------- Value --------------------------------- */
 
-/// Patterns used for value binders in runtime declarations and computations.
+/// Patterns used for value binders in runtime computations.
 #[derive(From, Clone, Debug)]
 pub enum ValuePattern {
     Hole(Hole),
@@ -38,6 +36,7 @@ pub enum ValuePattern {
 pub enum Value {
     Hole(Hole),
     Var(DefId),
+    Let(Let<RcVPat, RcValue, RcValue>),
     Thunk(Thunk<RcCompu>),
     Ctor(Ctor<CtorName, RcValue>),
     Triv(Triv),
@@ -77,26 +76,6 @@ pub enum Computation {
     Prim(Prim),
 }
 
-/* ------------------------------- Declaration ------------------------------ */
-
-/// Runtime value definition: binder and expression to evaluate.
-#[derive(Clone, Debug)]
-pub struct VAliasBody {
-    pub binder: RcVPat,
-    pub bindee: RcValue,
-}
-
-/// Runtime entry point for execution.
-#[derive(Clone, Debug)]
-pub struct Exec(pub RcCompu);
-
-/// Top-level dynamic declaration.
-#[derive(Clone, From, Debug)]
-pub enum Declaration {
-    VAliasBody(VAliasBody),
-    Exec(Exec),
-}
-
 /* ---------------------------------- Arena --------------------------------- */
 
 /// Owning storage scope for linked runtime syntax.
@@ -106,16 +85,11 @@ pub enum DynamicsScope {}
 impl ArenaSchema<DefId> for DynamicsScope {
     type Item = VarName;
 }
-impl ArenaSchema<DeclId> for DynamicsScope {
-    type Item = Declaration;
-}
 
-/// Storage for dynamic declarations and dependency tracking.
+/// Storage for one linked runtime computation.
 pub struct DynamicsArena {
-    // arenas
     pub defs: ArenaSparse<DynamicsScope, DefId>,
-    pub decls: ArenaSparse<DynamicsScope, DeclId>,
-    pub top: SccGraph<DeclId>,
+    pub root: RcCompu,
 }
 
 /* -------------------------------- Semantics ------------------------------- */
@@ -156,7 +130,7 @@ pub struct Runtime<'rt> {
 }
 
 /// Program-level continuation produced by evaluation.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ProgKont {
     Dry,
     Ret(SemValue),

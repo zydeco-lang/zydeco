@@ -1,0 +1,8 @@
+.vscode
+.gitignore
+node_modules
+dist/**/*.map
+src
+tsconfig.json
+pnpm-lock.yaml
+pnpm-workspace.yaml

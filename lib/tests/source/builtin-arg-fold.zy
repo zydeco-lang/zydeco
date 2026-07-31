@@ -1,0 +1,21 @@
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  do joined <- ! (api/arg_fold)
+    (Ret String)
+    { ret "" }
+    {
+      fn argument remaining ->
+        do suffix <- ! remaining;
+        ! (api/str_append) argument suffix
+    };
+  ! (api/str_eq_branch)
+    OS
+    joined
+    "alphabeta"
+    { ! (api/exit) 0 }
+    { ! (api/exit) 1 }
+end

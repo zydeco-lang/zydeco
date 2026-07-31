@@ -1,3 +1,5 @@
-use zydeco_tests::interp_proj_bin;
+use zydeco_tests::e2e_sources;
 
-interp_proj_bin!(avl, hash, "hash");
+e2e_sources!({
+    hash => "tests/source/avl-hash.zy",
+});

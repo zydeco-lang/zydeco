@@ -1,0 +1,71 @@
+{
+param (
+  (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+  @[import("builtin.zy")] _
+) in
+ret begin
+
+  let Monad :
+    (
+      ((VType) -> (CType)) ->
+      (CType)
+    ) =
+    begin
+      param (
+        M :
+        (VType) -> (CType)
+      ) that
+      codata
+      | .return :
+        forall (A : VType) .
+          A -> M A
+      | .bind :
+        forall (A : VType) .
+        forall (B : VType) .
+          Thk (M A) ->
+          Thk (A -> M B) ->
+          M B
+      end
+    end
+  that
+  let Algebra :
+    (
+      ((VType) -> (CType)) ->
+      (CType) ->
+      (CType)
+    ) =
+    begin
+      param (
+        M :
+        (VType) -> (CType)
+      ) that
+      param (R : CType) that
+      forall (A : VType) .
+        Thk (M A) ->
+        Thk (A -> R) ->
+        R
+    end
+  that
+
+  let MonadicBasis =
+    exists (
+      Monad = ExportedMonad as Monad :
+      (
+        ((VType) -> (CType)) ->
+        (CType)
+      )
+    ) .
+    exists (
+      Algebra = ExportedAlgebra as Algebra :
+      (
+        ((VType) -> (CType)) ->
+        (CType) ->
+        (CType)
+      )
+    ) .
+      Unit
+  that
+
+  ((Monad = Monad, Algebra = Algebra, ()) : MonadicBasis)
+end
+}

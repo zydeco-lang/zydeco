@@ -16,10 +16,6 @@ pub enum Tok<'input> {
     #[regex(r"\.[a-z](?&ident)*")]
     DtorIdent(&'input str),
 
-    #[token("pub")]
-    Public,
-    #[token("where")]
-    Where,
     #[token("end")]
     End,
     #[token("begin")]
@@ -28,17 +24,11 @@ pub enum Tok<'input> {
     Data,
     #[token("codata")]
     Codata,
-    #[token("alias")]
-    Alias,
     #[token("as")]
     As,
     #[token("def")]
     #[token("define")]
     Define,
-    #[token("extern")]
-    Extern,
-    #[token("main")]
-    Exec,
     #[token("let")]
     Let,
     #[token("param")]
@@ -143,17 +133,12 @@ impl Display for Tok<'_> {
             | Tok::LowerIdent(s) => write!(f, "LowerIdent({})", s),
             | Tok::CtorIdent(s) => write!(f, "CtorIdent({})", s),
             | Tok::DtorIdent(s) => write!(f, "DtorIdent({})", s),
-            | Tok::Where => write!(f, "where"),
             | Tok::End => write!(f, "end"),
             | Tok::Begin => write!(f, "begin"),
-            | Tok::Public => write!(f, "pub"),
             | Tok::Data => write!(f, "data"),
             | Tok::Codata => write!(f, "codata"),
-            | Tok::Alias => write!(f, "alias"),
             | Tok::As => write!(f, "as"),
             | Tok::Define => write!(f, "define"),
-            | Tok::Extern => write!(f, "extern"),
-            | Tok::Exec => write!(f, "main"),
             | Tok::Let => write!(f, "let"),
             | Tok::Param => write!(f, "param"),
             | Tok::In => write!(f, "in"),

@@ -1,0 +1,17 @@
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  def poly : Thk (Int -> Ret Int) = {
+    fn x ->
+      do square <- ! (api/mul) x x;
+      do linear <- ! (api/add) x 10;
+      ! (api/add) square linear
+  } that
+
+  do result <- ! poly 10;
+  do status <- ! (api/sub) result 120;
+  ! (api/exit) status
+end

@@ -81,14 +81,482 @@ pub struct Sealed<T>(pub T);
 
 /* ---------------------------------- Meta ---------------------------------- */
 
+/// Compiler-defined identities for the intrinsic CBPV structure.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum IntrinsicRole {
+    VType,
+    CType,
+    Thk,
+    Ret,
+    Unit,
+}
+
+impl IntrinsicRole {
+    pub fn from_source_name(name: &str) -> Option<Self> {
+        match name {
+            | "vtype" => Some(Self::VType),
+            | "ctype" => Some(Self::CType),
+            | "thk" => Some(Self::Thk),
+            | "ret" => Some(Self::Ret),
+            | "unit" => Some(Self::Unit),
+            | _ => None,
+        }
+    }
+
+    pub fn source_name(self) -> &'static str {
+        match self {
+            | Self::VType => "vtype",
+            | Self::CType => "ctype",
+            | Self::Thk => "thk",
+            | Self::Ret => "ret",
+            | Self::Unit => "unit",
+        }
+    }
+}
+
+impl std::fmt::Display for IntrinsicRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.source_name())
+    }
+}
+
+/// A decoded `intrinsic(role)` splice annotation.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct IntrinsicMeta {
+    pub role: IntrinsicRole,
+}
+
+impl IntrinsicMeta {
+    pub fn new(role: IntrinsicRole) -> Self {
+        Self { role }
+    }
+
+    pub fn decode(meta: &Meta) -> Result<Option<Self>, IntrinsicMetaError> {
+        match meta {
+            | Meta::Intrinsic(meta) => Ok(Some(*meta)),
+            | Meta::Ident(callee) if callee == "intrinsic" => {
+                Err(IntrinsicMetaError::RoleArity { found: 0 })
+            }
+            | Meta::Apply { callee, args } if callee == "intrinsic" => match args.as_slice() {
+                | [Meta::Ident(role)] => IntrinsicRole::from_source_name(role)
+                    .map(Self::new)
+                    .map(Some)
+                    .ok_or_else(|| IntrinsicMetaError::UnknownRole(role.clone())),
+                | [_] => Err(IntrinsicMetaError::RoleNotIdentifier),
+                | args => Err(IntrinsicMetaError::RoleArity { found: args.len() }),
+            },
+            | Meta::Ident(_) | Meta::String(_) | Meta::Apply { .. } | Meta::Builtin(_) => Ok(None),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Meta {
-    pub stem: String,
-    pub args: Vec<Meta>,
+pub enum IntrinsicMetaError {
+    RoleArity { found: usize },
+    RoleNotIdentifier,
+    UnknownRole(String),
+}
+
+impl std::fmt::Display for IntrinsicMetaError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            | Self::RoleArity { found } => {
+                write!(f, "intrinsic expects one role identifier, but found {found} arguments")
+            }
+            | Self::RoleNotIdentifier => write!(f, "intrinsic role must be an identifier"),
+            | Self::UnknownRole(role) => write!(f, "unknown intrinsic role `{role}`"),
+        }
+    }
+}
+
+impl std::error::Error for IntrinsicMetaError {}
+
+/// Compiler-defined roles for host-provided abstract types in the Builtin
+/// package signature.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum BuiltinTypeRole {
+    Int,
+    Char,
+    String,
+    OS,
+}
+
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum BuiltinTypeUniverse {
+    Value,
+    Computation,
+}
+
+impl BuiltinTypeRole {
+    pub fn from_source_name(name: &str) -> Option<Self> {
+        match name {
+            | "int" => Some(Self::Int),
+            | "char" => Some(Self::Char),
+            | "string" => Some(Self::String),
+            | "os" => Some(Self::OS),
+            | _ => None,
+        }
+    }
+
+    pub fn source_name(self) -> &'static str {
+        match self {
+            | Self::Int => "int",
+            | Self::Char => "char",
+            | Self::String => "string",
+            | Self::OS => "os",
+        }
+    }
+
+    pub fn universe(self) -> BuiltinTypeUniverse {
+        match self {
+            | Self::Int | Self::Char | Self::String => BuiltinTypeUniverse::Value,
+            | Self::OS => BuiltinTypeUniverse::Computation,
+        }
+    }
+}
+
+impl std::fmt::Display for BuiltinTypeRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.source_name())
+    }
+}
+
+/// Compiler-defined roles that may be assigned to host-provided value entries
+/// in the Builtin package signature.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum BuiltinValueRole {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    IntEq,
+    IntLt,
+    IntGt,
+    StrLength,
+    StrAppend,
+    StrSplitOnce,
+    StrSplitN,
+    StrEq,
+    StrIndex,
+    IntToStr,
+    CharToStr,
+    CharToInt,
+    StrToInt,
+    WriteStr,
+    WriteInt,
+    WriteLine,
+    ReadLine,
+    ReadLineAsInt,
+    ReadTillEof,
+    ArgList,
+    RandomInt,
+    Exit,
+}
+
+impl BuiltinValueRole {
+    pub const ALL: &'static [Self] = &[
+        Self::Add,
+        Self::Sub,
+        Self::Mul,
+        Self::Div,
+        Self::Mod,
+        Self::IntEq,
+        Self::IntLt,
+        Self::IntGt,
+        Self::StrLength,
+        Self::StrAppend,
+        Self::StrSplitOnce,
+        Self::StrSplitN,
+        Self::StrEq,
+        Self::StrIndex,
+        Self::IntToStr,
+        Self::CharToStr,
+        Self::CharToInt,
+        Self::StrToInt,
+        Self::WriteStr,
+        Self::WriteInt,
+        Self::WriteLine,
+        Self::ReadLine,
+        Self::ReadLineAsInt,
+        Self::ReadTillEof,
+        Self::ArgList,
+        Self::RandomInt,
+        Self::Exit,
+    ];
+
+    pub fn from_source_name(name: &str) -> Option<Self> {
+        match name {
+            | "add" => Some(Self::Add),
+            | "sub" => Some(Self::Sub),
+            | "mul" => Some(Self::Mul),
+            | "div" => Some(Self::Div),
+            | "mod" => Some(Self::Mod),
+            | "int_eq" => Some(Self::IntEq),
+            | "int_lt" => Some(Self::IntLt),
+            | "int_gt" => Some(Self::IntGt),
+            | "str_length" => Some(Self::StrLength),
+            | "str_append" => Some(Self::StrAppend),
+            | "str_split_once" => Some(Self::StrSplitOnce),
+            | "str_split_n" => Some(Self::StrSplitN),
+            | "str_eq" => Some(Self::StrEq),
+            | "str_index" => Some(Self::StrIndex),
+            | "int_to_str" => Some(Self::IntToStr),
+            | "char_to_str" => Some(Self::CharToStr),
+            | "char_to_int" => Some(Self::CharToInt),
+            | "str_to_int" => Some(Self::StrToInt),
+            | "write_str" => Some(Self::WriteStr),
+            | "write_int" => Some(Self::WriteInt),
+            | "write_line" => Some(Self::WriteLine),
+            | "read_line" => Some(Self::ReadLine),
+            | "read_line_as_int" => Some(Self::ReadLineAsInt),
+            | "read_till_eof" => Some(Self::ReadTillEof),
+            | "arg_list" => Some(Self::ArgList),
+            | "random_int" => Some(Self::RandomInt),
+            | "exit" => Some(Self::Exit),
+            | _ => None,
+        }
+    }
+
+    pub fn source_name(self) -> &'static str {
+        match self {
+            | Self::Add => "add",
+            | Self::Sub => "sub",
+            | Self::Mul => "mul",
+            | Self::Div => "div",
+            | Self::Mod => "mod",
+            | Self::IntEq => "int_eq",
+            | Self::IntLt => "int_lt",
+            | Self::IntGt => "int_gt",
+            | Self::StrLength => "str_length",
+            | Self::StrAppend => "str_append",
+            | Self::StrSplitOnce => "str_split_once",
+            | Self::StrSplitN => "str_split_n",
+            | Self::StrEq => "str_eq",
+            | Self::StrIndex => "str_index",
+            | Self::IntToStr => "int_to_str",
+            | Self::CharToStr => "char_to_str",
+            | Self::CharToInt => "char_to_int",
+            | Self::StrToInt => "str_to_int",
+            | Self::WriteStr => "write_str",
+            | Self::WriteInt => "write_int",
+            | Self::WriteLine => "write_line",
+            | Self::ReadLine => "read_line",
+            | Self::ReadLineAsInt => "read_line_as_int",
+            | Self::ReadTillEof => "read_till_eof",
+            | Self::ArgList => "arg_list",
+            | Self::RandomInt => "random_int",
+            | Self::Exit => "exit",
+        }
+    }
+
+    /// Runtime symbol used when the role is materialized in the foundational
+    /// Builtin package. This may differ from the legacy external name when the
+    /// package uses a representation-independent classifier.
+    pub fn host_name(self) -> &'static str {
+        match self {
+            | Self::IntEq => "int_eq_branch",
+            | Self::IntLt => "int_lt_branch",
+            | Self::IntGt => "int_gt_branch",
+            | Self::StrSplitOnce => "str_split_once_branch",
+            | Self::StrSplitN => "str_split_n_branch",
+            | Self::StrEq => "str_eq_branch",
+            | Self::ReadLineAsInt => "read_line_as_int_branch",
+            | Self::ArgList => "arg_fold",
+            | role => role.source_name(),
+        }
+    }
+}
+
+impl std::fmt::Display for BuiltinValueRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.source_name())
+    }
+}
+
+/// The typed meaning of one `@[builtin(...)]` annotation.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum BuiltinRole {
+    Type(BuiltinTypeRole),
+    Value(BuiltinValueRole),
+}
+
+impl BuiltinRole {
+    pub fn from_source_name(name: &str) -> Option<Self> {
+        BuiltinTypeRole::from_source_name(name)
+            .map(Self::Type)
+            .or_else(|| BuiltinValueRole::from_source_name(name).map(Self::Value))
+    }
+
+    pub fn source_name(self) -> &'static str {
+        match self {
+            | Self::Type(role) => role.source_name(),
+            | Self::Value(role) => role.source_name(),
+        }
+    }
+}
+
+impl std::fmt::Display for BuiltinRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.source_name())
+    }
+}
+
+/// A decoded Builtin role annotation.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct BuiltinMeta {
+    pub role: BuiltinRole,
+}
+
+impl BuiltinMeta {
+    pub fn new(role: BuiltinRole) -> Self {
+        Self { role }
+    }
+
+    /// Decode `builtin(role)` while leaving unrelated metadata untouched.
+    pub fn decode(meta: &Meta) -> Result<Option<Self>, BuiltinMetaError> {
+        match meta {
+            | Meta::Builtin(meta) => Ok(Some(*meta)),
+            | Meta::Ident(callee) if callee == "builtin" => {
+                Err(BuiltinMetaError::RoleArity { found: 0 })
+            }
+            | Meta::Apply { callee, args } if callee == "builtin" => match args.as_slice() {
+                | [Meta::Ident(role)] => BuiltinRole::from_source_name(role)
+                    .map(Self::new)
+                    .map(Some)
+                    .ok_or_else(|| BuiltinMetaError::UnknownRole(role.clone())),
+                | [_] => Err(BuiltinMetaError::RoleNotIdentifier),
+                | args => Err(BuiltinMetaError::RoleArity { found: args.len() }),
+            },
+            | Meta::Ident(_) | Meta::String(_) | Meta::Apply { .. } | Meta::Intrinsic(_) => {
+                Ok(None)
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub enum BuiltinMetaError {
+    RoleArity { found: usize },
+    RoleNotIdentifier,
+    UnknownRole(String),
+}
+
+impl std::fmt::Display for BuiltinMetaError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            | Self::RoleArity { found } => {
+                write!(f, "builtin expects one role identifier, but found {found} arguments")
+            }
+            | Self::RoleNotIdentifier => write!(f, "builtin role must be an identifier"),
+            | Self::UnknownRole(role) => write!(f, "unknown builtin role `{role}`"),
+        }
+    }
+}
+
+impl std::error::Error for BuiltinMetaError {}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub enum Meta {
+    Ident(String),
+    String(String),
+    Apply { callee: String, args: Vec<Meta> },
+    Intrinsic(IntrinsicMeta),
+    Builtin(BuiltinMeta),
+}
+
+impl Meta {
+    pub fn ident(name: impl Into<String>) -> Self {
+        Self::Ident(name.into())
+    }
+
+    pub fn string(value: impl Into<String>) -> Self {
+        Self::String(value.into())
+    }
+
+    pub fn apply(callee: impl Into<String>, args: impl IntoIterator<Item = Self>) -> Self {
+        Self::Apply { callee: callee.into(), args: args.into_iter().collect() }
+    }
+
+    pub fn builtin(role: BuiltinRole) -> Self {
+        Self::Builtin(BuiltinMeta::new(role))
+    }
+
+    pub fn intrinsic(role: IntrinsicRole) -> Self {
+        Self::Intrinsic(IntrinsicMeta::new(role))
+    }
+
+    pub fn callee(&self) -> Option<&str> {
+        match self {
+            | Self::Ident(name) | Self::Apply { callee: name, .. } => Some(name),
+            | Self::String(_) => None,
+            | Self::Intrinsic(_) => Some("intrinsic"),
+            | Self::Builtin(_) => Some("builtin"),
+        }
+    }
+
+    pub fn arguments(&self) -> &[Self] {
+        match self {
+            | Self::Apply { args, .. } => args,
+            | Self::Ident(_) | Self::String(_) | Self::Intrinsic(_) | Self::Builtin(_) => &[],
+        }
+    }
+
+    pub fn is(&self, name: &str) -> bool {
+        self.callee() == Some(name)
+    }
+
+    pub fn as_string(&self) -> Option<&str> {
+        match self {
+            | Self::String(value) => Some(value),
+            | Self::Ident(_) | Self::Apply { .. } | Self::Intrinsic(_) | Self::Builtin(_) => None,
+        }
+    }
+
+    pub fn as_ident(&self) -> Option<&str> {
+        match self {
+            | Self::Ident(value) => Some(value),
+            | Self::String(_) | Self::Apply { .. } | Self::Intrinsic(_) | Self::Builtin(_) => None,
+        }
+    }
+
+    pub fn as_intrinsic(&self) -> Option<IntrinsicRole> {
+        match self {
+            | Self::Intrinsic(meta) => Some(meta.role),
+            | Self::Ident(_) | Self::String(_) | Self::Apply { .. } | Self::Builtin(_) => None,
+        }
+    }
+
+    pub fn as_builtin(&self) -> Option<BuiltinRole> {
+        match self {
+            | Self::Builtin(meta) => Some(meta.role),
+            | Self::Ident(_) | Self::String(_) | Self::Apply { .. } | Self::Intrinsic(_) => None,
+        }
+    }
+}
+
+impl std::fmt::Display for Meta {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            | Self::Ident(name) => write!(f, "{name}"),
+            | Self::String(value) => write!(f, "{value:?}"),
+            | Self::Apply { callee, args } => write!(
+                f,
+                "{callee}({})",
+                args.iter().map(ToString::to_string).collect::<Vec<_>>().join(",")
+            ),
+            | Self::Intrinsic(meta) => write!(f, "intrinsic({})", meta.role),
+            | Self::Builtin(meta) => write!(f, "builtin({})", meta.role),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MetaT<T>(pub Meta, pub T);
+
+/// A compiler-internal boundary around one imported source term.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct SourceBoundary<T>(pub T);
 
 /* --------------------------------- Common --------------------------------- */
 

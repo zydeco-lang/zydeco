@@ -46,6 +46,12 @@ pub trait StaticsAlloc: AsMut<IdAllocator<StaticsScope>> + AsMut<StaticsArena> {
         id
     }
 
+    fn alloc_kpat(&mut self, value: KindPattern) -> KPatId {
+        let id = self.fresh();
+        AsMut::<StaticsArena>::as_mut(self).kpats.insert_new(id, value);
+        id
+    }
+
     fn alloc_tpat(&mut self, value: TypePattern) -> TPatId {
         let id = self.fresh();
         AsMut::<StaticsArena>::as_mut(self).tpats.insert_new(id, value);
@@ -200,6 +206,47 @@ AllocKind! {
     Label<FieldName, KindId>
 }
 
+/* ------------------------------- KindPattern ------------------------------ */
+
+impl<Arena> Alloc<Arena, KPatId> for KindPattern
+where
+    Arena: StaticsAlloc,
+{
+    type Ann = ();
+    type Env = TyEnv;
+
+    fn alloc(arena: &mut Arena, val: Self, (): Self::Ann, env: &Self::Env) -> KPatId {
+        let kpat = arena.alloc_kpat(val);
+        AsMut::<StaticsArena>::as_mut(arena).env_kpat.insert_new(kpat, env.clone());
+        kpat
+    }
+}
+
+macro_rules! AllocKindPattern {
+    ($($t:ty)*) => {
+        $(
+            impl<Arena> Alloc<Arena, KPatId> for $t
+            where
+                Arena: StaticsAlloc,
+            {
+                type Ann = ();
+                type Env = TyEnv;
+
+                fn alloc(
+                    arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env,
+                ) -> KPatId {
+                    Alloc::alloc(arena, KindPattern::from(val), ann, env)
+                }
+            }
+        )*
+    };
+}
+
+AllocKindPattern! {
+    Hole
+    DefId
+}
+
 /* ------------------------------- TypePattern ------------------------------ */
 
 impl<Arena> Alloc<Arena, TPatId> for TypePattern
@@ -308,6 +355,7 @@ AllocType! {
     PackPi
     ProdU<TypeId>
     Exists
+    ManifestKind
     DataId
     CoDataId
 }
@@ -351,7 +399,25 @@ AllocValuePattern! {
     Ctor<CtorName, VPatId>
     Triv
     ConsN<VPatId, VPatId>
-    ConsN<TPatId, VPatId>
+    ConsN<StaticPatId, VPatId>
+}
+
+impl<Arena> Alloc<Arena, VPatId> for ConsN<TPatId, VPatId>
+where
+    Arena: StaticsAlloc,
+{
+    type Ann = TypeId;
+    type Env = TyEnv;
+
+    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> VPatId {
+        let ConsN(items, tail) = val;
+        Alloc::alloc(
+            arena,
+            ConsN(items.into_iter().map(StaticPatId::from).collect(), tail),
+            ann,
+            env,
+        )
+    }
 }
 
 /* ---------------------------------- Value --------------------------------- */
@@ -390,13 +456,32 @@ AllocValue! {
     Hole
     DefId
     Named<FieldName, ValueId>
+    Let<VPatId, ValueId, ValueId>
     Thunk<CompuId>
     Ctor<CtorName, ValueId>
     Triv
     ConsN<ValueId, ValueId>
-    ConsN<TypeId, ValueId>
+    ConsN<StaticTermId, ValueId>
     Proj<ValueId, ResolvedField>
     Literal
+}
+
+impl<Arena> Alloc<Arena, ValueId> for ConsN<TypeId, ValueId>
+where
+    Arena: StaticsAlloc,
+{
+    type Ann = TypeId;
+    type Env = TyEnv;
+
+    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> ValueId {
+        let ConsN(items, tail) = val;
+        Alloc::alloc(
+            arena,
+            ConsN(items.into_iter().map(StaticTermId::from).collect(), tail),
+            ann,
+            env,
+        )
+    }
 }
 
 /* ------------------------------- Computation ------------------------------ */

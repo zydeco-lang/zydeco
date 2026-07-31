@@ -1,0 +1,21 @@
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  def packed :
+    exists (X : VType) .
+    exists (Y : VType) .
+      X * (Y * Int) =
+    (Int, Int, 10, (20, 0))
+  that
+
+  match packed
+  | (Left, Right, left, middle, status) ->
+    let flat = (left, status, middle) in
+    let (first, (code, last)) = flat in
+    let nested = (first, (code, last)) in
+    let (first, result, last) = nested in
+    ! (api/exit) result
+  end
+end

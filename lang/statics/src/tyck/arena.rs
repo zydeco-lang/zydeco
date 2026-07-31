@@ -15,6 +15,7 @@ pub use zydeco_surface::arena::*;
 pub enum StaticsScope {}
 
 impl Allocates<KindId> for StaticsScope {}
+impl Allocates<KPatId> for StaticsScope {}
 impl Allocates<TPatId> for StaticsScope {}
 impl Allocates<TypeId> for StaticsScope {}
 impl Allocates<VPatId> for StaticsScope {}
@@ -24,6 +25,9 @@ impl Allocates<DefId> for StaticsScope {}
 
 impl ArenaSchema<KindId> for StaticsScope {
     type Item = Fillable<Kind>;
+}
+impl ArenaSchema<KPatId> for StaticsScope {
+    type Item = KindPattern;
 }
 impl ArenaSchema<TPatId> for StaticsScope {
     type Item = TypePattern;
@@ -40,9 +44,6 @@ impl ArenaSchema<ValueId> for StaticsScope {
 impl ArenaSchema<CompuId> for StaticsScope {
     type Item = Computation;
 }
-impl ArenaSchema<DeclId> for StaticsScope {
-    type Item = Declaration;
-}
 impl ArenaSchema<AbstId> for StaticsScope {
     type Item = ();
 }
@@ -58,11 +59,79 @@ impl ArenaSchema<CoDataId> for StaticsScope {
 
 pub use zydeco_surface::scoped::arena::*;
 
+/// Static associations introduced by `@[builtin(...)]` package-signature
+/// annotations.
+#[derive(Debug, Default)]
+pub struct BuiltinRoles {
+    witnesses: ArenaAssoc<AbstId, BuiltinRole>,
+    values: ArenaAssoc<TypeId, BuiltinValueRole>,
+}
+
+impl BuiltinRoles {
+    pub fn attach_type(
+        &mut self, witness: AbstId, role: BuiltinTypeRole,
+    ) -> Result<(), BuiltinRole> {
+        self.attach_witness(witness, BuiltinRole::Type(role))
+    }
+
+    pub fn attach_value(
+        &mut self, entry: TypeId, role: BuiltinValueRole,
+    ) -> Result<(), BuiltinValueRole> {
+        match self.values.insert_or_get(entry, role) {
+            | None => Ok(()),
+            | Some(existing) if existing == role => Ok(()),
+            | Some(existing) => Err(existing),
+        }
+    }
+
+    pub fn witness(&self, witness: AbstId) -> Option<BuiltinRole> {
+        zydeco_utils::arena::ArenaAccess::get(&self.witnesses, &witness).copied()
+    }
+
+    pub fn value(&self, entry: TypeId) -> Option<BuiltinValueRole> {
+        zydeco_utils::arena::ArenaAccess::get(&self.values, &entry).copied()
+    }
+
+    pub fn type_witnesses(&self, role: BuiltinTypeRole) -> impl Iterator<Item = AbstId> + '_ {
+        self.witnesses.iter().filter_map(move |(witness, found)| {
+            (*found == BuiltinRole::Type(role)).then_some(*witness)
+        })
+    }
+
+    pub fn transfer_witness(&mut self, source: AbstId, target: AbstId) -> Result<(), BuiltinRole> {
+        match self.witness(source) {
+            | Some(role) => self.attach_witness(target, role),
+            | None => Ok(()),
+        }
+    }
+
+    fn attach_witness(&mut self, witness: AbstId, role: BuiltinRole) -> Result<(), BuiltinRole> {
+        match self.witnesses.insert_or_get(witness, role) {
+            | None => Ok(()),
+            | Some(existing) if existing == role => Ok(()),
+            | Some(existing) => Err(existing),
+        }
+    }
+}
+
+/// Canonical static identities for the CBPV structure built into the
+/// language.
+#[derive(Debug, Default)]
+pub struct IntrinsicStatics {
+    pub(crate) vtype: Option<KindId>,
+    pub(crate) ctype: Option<KindId>,
+    pub(crate) thk: Option<TypeId>,
+    pub(crate) ret: Option<TypeId>,
+    pub(crate) unit: Option<TypeId>,
+}
+
 /// Typed arena plus annotation tables and translation metadata.
 #[derive(Debug, Default, AsRefSelf, AsMutSelf)]
 pub struct StaticsArena {
     /// kind arena before normalization
     pub kinds_pre: ArenaSparse<StaticsScope, KindId>,
+    /// manifest kind-pattern arena
+    pub kpats: ArenaSparse<StaticsScope, KPatId>,
     /// type pattern arena
     pub tpats: ArenaSparse<StaticsScope, TPatId>,
     /// type arena before normalization
@@ -73,13 +142,6 @@ pub struct StaticsArena {
     pub values: ArenaSparse<StaticsScope, ValueId>,
     /// computation arena
     pub compus: ArenaSparse<StaticsScope, CompuId>,
-    /// declaration arena
-    pub decls: ArenaSparse<StaticsScope, DeclId>,
-
-    /// entry point(s), i.e. declarations that are marked as entry points;
-    /// typically the main function, which normally should only be unique
-    pub entry: ArenaAssoc<DeclId, ()>,
-
     /// Untyped-to-typed pattern provenance. A surface pattern can be checked
     /// more than once, while transparent wrappers can share a typed pattern.
     pub pats: ArenaBipartite<su::PatId, PatId>,
@@ -95,6 +157,10 @@ pub struct StaticsArena {
     pub abst_hints: ArenaAssoc<AbstId, DefId>,
     /// abstract types introduced by existential elimination
     pub existential_skolems: ArenaAssoc<AbstId, ()>,
+    /// canonical identities for intrinsic kinds and type constructors
+    pub intrinsics: IntrinsicStatics,
+    /// Builtin roles attached to existential witnesses and named value entries.
+    pub builtin_roles: BuiltinRoles,
     /// arena for filling context-constrained holes; the [`su::TermId`] is the site;
     /// only types and kinds are now fillable
     pub fills: ArenaDense<StaticsScope, FillId>,
@@ -143,6 +209,8 @@ pub struct StaticsArena {
     pub annotations_compu: ArenaAssoc<CompuId, TypeId>,
 
     // typing environments during type checking
+    /// typing environments for manifest kind patterns
+    pub env_kpat: ArenaAssoc<KPatId, TyEnv>,
     /// typing environments for type patterns
     pub env_tpat: ArenaAssoc<TPatId, TyEnv>,
     /// typing environments for types
@@ -167,10 +235,10 @@ pub struct StaticsArena {
 #[auto_impl::auto_impl(&mut, Box)]
 pub trait LocalFoldStatics<Cx> {
     fn action_kind(&mut self, kind: KindId, ctx: &Cx);
+    fn action_kpat(&mut self, kpat: KPatId, ctx: &Cx);
     fn action_tpat(&mut self, tpat: TPatId, ctx: &Cx);
     fn action_type(&mut self, r#type: TypeId, ctx: &Cx);
     fn action_vpat(&mut self, vpat: VPatId, ctx: &Cx);
     fn action_value(&mut self, value: ValueId, ctx: &Cx);
     fn action_compu(&mut self, compu: CompuId, ctx: &Cx);
-    fn action_decl(&mut self, decl: DeclId, ctx: &Cx);
 }

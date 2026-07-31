@@ -1,8 +1,8 @@
 # Scoped (Name Resolution)
 
-`scoped` performs name resolution on the desugared surface syntax (`bitter`).
-It replaces `VarName` occurrences with `DefId`s, checks scoping rules, and turns
-the source declaration sequence into one contextual term.
+`scoped` resolves names in one desugared source term. It replaces `VarName`
+occurrences with `DefId`s, checks lexical scope, and elaborates context-forming
+blocks into ordinary term structure.
 
 ## Role in the pipeline
 
@@ -10,74 +10,59 @@ the source declaration sequence into one contextual term.
 textual -> bitter -> scoped -> statics
 ```
 
-This pass is where variable names become bound identifiers (ABT-style), so later
-phases operate directly on definition IDs. Textual and bitter declarations remain
-useful for parsing and desugaring, but the declaration sort does not cross the
-scoped boundary.
+Every source file has already become one complete term before this pass begins.
+Name resolution therefore has no separate root environment or executable-body
+case: it resolves the root under an empty lexical context and returns that term
+identity alongside the scoped arena.
 
 ## Data model
 
 - `ScopedArena` stores resolved patterns and `Term<DefId>` nodes.
-- Its root is a `ContextualTerm<BindingContext>`, consisting of a context and an
-  optional executable body. The absent-body case permits checking a library.
-- A context binding is a `Parameter`, a `Definition` with a right-hand side, or
-  an `External` with an optional classifier. Root contexts currently use the
-  latter two forms; nested `begin` contexts use parameters and definitions.
-  Metadata is attached directly to a binding or body rather than represented by
-  wrapper nodes.
-- `ScopedArena::blocks` retains the contextual term for every nested
-  `begin ... end`. Its body records both the residual source term and a
-  dependency-ordered elaboration into ordinary abstractions and bindings.
-- `ContextNode::Acyclic` represents a singleton SCC without a self edge.
-  `ContextNode::Recursive` represents a self-recursive singleton or a mutually
-  recursive group. The nodes form the condensation DAG of the binding dependency
-  graph.
-- `Context` tracks variables available at each term site; `CoContext` tracks free
-  variables used at that site.
-- `PrimDefs` records definitions of primitives such as `VType`, `CType`, `Thk`,
-  and `Ret`, and validates that they were provided.
+- `ScopedArena::blocks` retains the contextual plan for every `begin ... end`
+  term. A block body records both its residual source term and its
+  dependency-ordered elaboration.
+- A block binding is a `Parameter` or a `Definition`. Its `BindingId` is the
+  `TermId` of the contributing `param`, `let`, or `def` form.
+- `ContextNode::Acyclic` represents a singleton strongly connected component
+  without a self edge. `ContextNode::Recursive` represents a self-recursive
+  singleton or a mutually recursive group. These nodes form the condensation
+  DAG of the block's binding dependencies.
+- `Context` records variables available at each term site; `CoContext` records
+  free variables used at that site.
 
 ## Resolution process
 
-`Resolver` first collects all global binders, then resolves each source item with
-a `(Local, Global)` lookup:
+Ordinary lexical binders are introduced as their patterns are traversed. A
+`SourceBoundary` begins with an empty lexical environment, preventing an
+imported term from capturing names in its importer.
 
-- Local bindings come from patterns and shadow global names.
-- Global references contribute dependency edges between context bindings.
-- Internal terms inserted by desugaring are redirected to their primitive
-  definitions and contribute the same dependency edges.
-- An executable body may refer to the complete global context, but it is not a
-  binding and therefore does not become a graph node.
+For a `begin` block, resolution first collects every mobile `that` contribution
+up to the next block or source boundary. It installs all contributed pattern
+binders before resolving occurrences, then records dependency edges from each
+binding's right-hand side and pattern annotations. References inside nested
+syntax propagate to the active binding of the same block, so the resulting DAG
+captures the dependencies required to move each binder safely.
 
-For a nested `begin`, resolution first collects every `that` contribution up to
-the next nested block and installs all of its pattern binders. It then resolves
-each candidate under the complete block scope. Active context bindings form a
-stack: a reference can add an edge to the block-local DAG and, when relevant,
-to an enclosing block or root definition. This propagation preserves outer
-dependency ordering without treating already available outer bindings as nodes
-of the inner DAG.
-
-After resolution, SCC analysis classifies each binding component and constructs
-its condensation DAG. Source order is retained within recursive groups and breaks
-ties between independent nodes.
-
-The block elaboration follows the resulting topological order. Parameters become
-`Abs`, definitions become `Let`, and a recursive type component becomes
-`RecGroup`. A `Residual` indirection remains at each original mobile site, which
-preserves tree ownership of term IDs after its binder moves to the block context.
+SCC analysis classifies each component and constructs the condensation DAG.
+Source order is retained within recursive groups and breaks ties between
+independent nodes. Parameters become `Abs`, acyclic definitions become `Let`,
+and recursive type components become `RecGroup`. A `Residual` indirection at
+each original mobile site preserves tree ownership after its binder moves to
+the block boundary.
 
 ## Context collection
 
-`Collector` traverses the context DAG before the executable body. An acyclic
-definition checks its right-hand side before introducing its binder. A recursive
-node introduces all binders before visiting any right-hand side. During this
-traversal the collector records:
+After elaboration, `Collector` traverses the resolved root term directly. The
+ordinary term structure already contains the dependency-ordered abstractions
+and bindings, so no separate root-context traversal is required. The traversal
+records:
 
 - `ctxs_*`: variables available at a site.
 - `coctxs_*`: variables used at a site.
 
 ## Errors and formatting
 
-`ResolveError` reports unbound variables, duplicate definitions, duplicate
-executable bodies, and missing or duplicate primitives. The `fmt` module provides
-an "ugly" formatter for resolved terms and context bindings used in diagnostics.
+`ResolveError` reports unbound variables, duplicate block definitions,
+unenclosed mobile forms, illegal recursive parameters, and dependency cycles
+that cannot be represented by the supported recursive type form. The `fmt`
+module provides an ugly formatter for resolved terms used in diagnostics.

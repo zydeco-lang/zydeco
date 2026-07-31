@@ -20,6 +20,8 @@ pub trait Lower<'a> {
     fn lower(&self, lo: &mut Lowerer<'a>, kont: Self::Kont) -> Self::Out;
 }
 
+type PendingInstruction<'a> = Box<dyn FnOnce(&mut Lowerer<'a>) + 'a>;
+
 #[derive(AsRef, AsMut)]
 pub struct Lowerer<'a> {
     /// Sequential issuer scoped to this lowering run.
@@ -32,6 +34,7 @@ pub struct Lowerer<'a> {
     pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
     pub stackir: &'a StackirArena,
+    pending: Vec<PendingInstruction<'a>>,
 }
 
 impl<'a> Lowerer<'a> {
@@ -40,15 +43,23 @@ impl<'a> Lowerer<'a> {
         stackir: &'a StackirArena,
     ) -> Self {
         let arena = AssemblyArena::default();
-        Self { allocator: IdAllocator::new(), arena, spans, scoped, statics, stackir }
+        Self {
+            allocator: IdAllocator::new(),
+            arena,
+            spans,
+            scoped,
+            statics,
+            stackir,
+            pending: Vec::new(),
+        }
     }
 
     pub fn run(mut self) -> AssemblyArena {
         // Lower all builtins
         for (_, builtin) in self.stackir.admin.builtins.iter() {
             let sk::Builtin { name, arity, sort } = builtin.clone();
-            if sort == sk::BuiltinSort::Function {
-                self.arena.externs.push(Extern { name, arity });
+            if let Some(mode) = ExternMode::for_builtin(sort) {
+                self.arena.externs.push(Extern { name, arity, mode });
             }
         }
 
@@ -57,8 +68,36 @@ impl<'a> Lowerer<'a> {
         for (compu_id, ()) in &self.stackir.inner.entry {
             let whole = (*compu_id).lower(&mut self, Context::new());
             self.arena.entry.ensure(whole);
+            self.finish_pending();
         }
         self.arena
+    }
+
+    fn finish_pending(&mut self) {
+        while let Some(pending) = self.pending.pop() {
+            pending(self);
+        }
+    }
+}
+
+impl<'a, U> Construct<'a, Instruction, ProgId, Lowerer<'a>> for U
+where
+    U: Into<Instruction>,
+{
+    type Site = With<Context, CxKont<'a, Lowerer<'a>>>;
+
+    fn build(
+        self, lowerer: &mut Lowerer<'a>,
+        With { info: context, inner: CxKont { incr, kont } }: Self::Site,
+    ) -> ProgId {
+        let id = lowerer.allocator.alloc();
+        let instruction = self.into();
+        lowerer.pending.push(Box::new(move |lowerer| {
+            let next_context = incr(&context);
+            let next = kont(lowerer, next_context);
+            lowerer.arena.insert_program(id, Program::Instruction(instruction, next), context);
+        }));
+        id
     }
 }
 
@@ -571,15 +610,30 @@ impl<'a> Lower<'a> for sk::CompuId {
                 )
             }
             | Compu::ExternCall(sk::ExternCall { function, stack }) => {
-                let arity = lo.stackir.admin.builtins[function].arity;
+                let builtin = &lo.stackir.admin.builtins[function];
+                let arity = builtin.arity;
+                let mode =
+                    ExternMode::for_builtin(builtin.sort.clone()).expect("operator used as extern");
                 stack.lower(
                     lo,
                     With::new(
                         cx,
-                        Box::new(move |lo, cx| Extern { name: function, arity }.build(lo, cx)),
+                        Box::new(move |lo, cx| {
+                            Extern { name: function, arity, mode }.build(lo, cx)
+                        }),
                     ),
                 )
             }
+        }
+    }
+}
+
+impl ExternMode {
+    fn for_builtin(sort: sk::BuiltinSort) -> Option<Self> {
+        match sort {
+            | sk::BuiltinSort::Operator => None,
+            | sk::BuiltinSort::Function(sk::HostCallMode::Returning) => Some(Self::Returning),
+            | sk::BuiltinSort::Function(sk::HostCallMode::Control) => Some(Self::Control),
         }
     }
 }

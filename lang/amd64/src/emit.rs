@@ -97,6 +97,10 @@ impl<'e> CompilerPass for Emitter<'e> {
             Instr::Extern("zydeco_abort".to_string()),
             // zydeco_alloc
             Instr::Extern("zydeco_alloc".to_string()),
+            // host callback used by runtime-created argument-fold thunks
+            Instr::Extern("zydeco_arg_fold_resume".to_string()),
+            // construct an owned host string from static UTF-8 bytes
+            Instr::Extern("zydeco_string_literal".to_string()),
         ]);
 
         // Emit the externs
@@ -105,28 +109,49 @@ impl<'e> CompilerPass for Emitter<'e> {
             self.asm.text.push(Instr::Extern(label));
         }
 
-        // Emit rust_call_zydeco functions
+        // Emit host-to-Zydeco resumption bridges.
         self.asm.text.extend([
-            Instr::Global("rust_call_zydeco_0".to_string()),
-            Instr::Label("rust_call_zydeco_0".to_string()),
-            Instr::Comment("discard the return address that is not needed".to_string()),
-            Instr::Pop(Loc::Reg(Reg::Rax)),
-            Instr::Comment("push the __env__ (which is in rsi) to the stack".to_string()),
+            Instr::Global("rust_resume_zydeco_0".to_string()),
+            Instr::Label("rust_resume_zydeco_0".to_string()),
+            Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Mem(MemRef { reg: Reg::Rdi, offset: 8 }))),
+            Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Mem(MemRef { reg: Reg::Rax, offset: 0 }))),
+            Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Mem(MemRef { reg: Reg::Rax, offset: 8 }))),
             Instr::Push(Arg32::Reg(Reg::Rsi)),
-            Instr::Comment("call the zydeco function __code__ (which is in rdi)".to_string()),
-            Instr::Jmp(JmpArgs::Reg(Reg::Rdi)),
+            Instr::Jmp(JmpArgs::Reg(Reg::Rax)),
         ]);
         self.asm.text.extend([
-            Instr::Global("rust_call_zydeco_1".to_string()),
-            Instr::Label("rust_call_zydeco_1".to_string()),
-            Instr::Comment("discard the return address that is not needed".to_string()),
-            Instr::Pop(Loc::Reg(Reg::Rax)),
-            Instr::Comment("push the argument 0 (which is in rdx) to the stack".to_string()),
+            Instr::Global("rust_resume_zydeco_1".to_string()),
+            Instr::Label("rust_resume_zydeco_1".to_string()),
+            Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Mem(MemRef { reg: Reg::Rdi, offset: 16 }))),
+            Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Mem(MemRef { reg: Reg::Rdi, offset: 8 }))),
+            Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Mem(MemRef { reg: Reg::Rax, offset: 0 }))),
+            Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Mem(MemRef { reg: Reg::Rax, offset: 8 }))),
             Instr::Push(Arg32::Reg(Reg::Rdx)),
-            Instr::Comment("push the __env__ (which is in rsi) to the stack".to_string()),
             Instr::Push(Arg32::Reg(Reg::Rsi)),
-            Instr::Comment("call the zydeco function __code__ (which is in rdi)".to_string()),
-            Instr::Jmp(JmpArgs::Reg(Reg::Rdi)),
+            Instr::Jmp(JmpArgs::Reg(Reg::Rax)),
+        ]);
+        self.asm.text.extend([
+            Instr::Global("rust_resume_zydeco_2".to_string()),
+            Instr::Label("rust_resume_zydeco_2".to_string()),
+            Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Mem(MemRef { reg: Reg::Rdi, offset: 16 }))),
+            Instr::Mov(MovArgs::ToReg(Reg::Rcx, Arg64::Mem(MemRef { reg: Reg::Rdi, offset: 24 }))),
+            Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Mem(MemRef { reg: Reg::Rdi, offset: 8 }))),
+            Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Mem(MemRef { reg: Reg::Rax, offset: 0 }))),
+            Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Mem(MemRef { reg: Reg::Rax, offset: 8 }))),
+            Instr::Push(Arg32::Reg(Reg::Rcx)),
+            Instr::Push(Arg32::Reg(Reg::Rdx)),
+            Instr::Push(Arg32::Reg(Reg::Rsi)),
+            Instr::Jmp(JmpArgs::Reg(Reg::Rax)),
+        ]);
+        self.asm.text.extend([
+            Instr::Global("rust_arg_fold_tail".to_string()),
+            Instr::Label("rust_arg_fold_tail".to_string()),
+            Instr::Comment("pass the runtime-created thunk environment to Rust".to_string()),
+            Instr::Pop(Loc::Reg(Reg::Rdi)),
+            Instr::Call(JmpArgs::Label("zydeco_arg_fold_resume".to_string())),
+            Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::Rax))),
+            Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Mem(MemRef { reg: Reg::Rdi, offset: 0 }))),
+            Instr::Jmp(JmpArgs::Reg(Reg::Rax)),
         ]);
 
         self.asm.text.extend([
@@ -208,6 +233,20 @@ impl<'e> CompilerPass for Emitter<'e> {
             }
         }
 
+        let string_literals = self
+            .assembly
+            .symbols
+            .iter()
+            .filter_map(|(symbol, named)| match &named.inner {
+                | Symbol::StringLiteral(characters) => {
+                    Some(NativeStringLiteral::new(self.assembly.sym_label(symbol), characters))
+                }
+                | Symbol::Undefined(_) | Symbol::Prog(_) => None,
+            })
+            .flat_map(NativeStringLiteral::declaration)
+            .collect::<Vec<_>>();
+        self.asm.rodata.extend(string_literals);
+
         Ok(self.asm)
     }
 }
@@ -215,6 +254,31 @@ impl<'e> CompilerPass for Emitter<'e> {
 struct JumpTable {
     id: ProgId,
     arms: Vec<(Option<String>, ProgId)>,
+}
+
+struct NativeStringLiteral {
+    label: String,
+    bytes: Vec<u8>,
+}
+
+impl NativeStringLiteral {
+    fn new(label: String, characters: &[char]) -> Self {
+        let bytes = characters.iter().collect::<String>().into_bytes();
+        Self { label, bytes }
+    }
+
+    fn length(&self) -> usize {
+        self.bytes.len()
+    }
+
+    fn declaration(self) -> [Instr; 3] {
+        let storage = if self.bytes.is_empty() { vec![0] } else { self.bytes };
+        [
+            Instr::Comment("UTF-8 string literal".to_string()),
+            Instr::Label(self.label),
+            Instr::Db(ByteSequence(storage)),
+        ]
+    }
 }
 impl JumpTable {
     fn rodata_label(&self) -> String {
@@ -327,7 +391,7 @@ impl<'a> Emit<'a> for Terminator {
                     }
                 }
             }
-            | Terminator::Extern(sa::Extern { name, arity }) => {
+            | Terminator::Extern(sa::Extern { name, arity, mode }) => {
                 em.asm.text.push(Instr::Comment(format!("extern: {}/{}", name, arity)));
 
                 let zydeco_extern_name = format!("zydeco_{}", name);
@@ -362,6 +426,42 @@ impl<'a> Emit<'a> for Terminator {
                 // Restore the padding from the stack
                 if padding > 0 {
                     em.asm.text.push(Instr::Add(BinArgs::ToReg(Reg::Rsp, Arg32::Signed(padding))));
+                }
+                match mode {
+                    | sa::ExternMode::Returning => {
+                        em.asm.text.extend([
+                            Instr::Comment(
+                                "return the host result through the current Zydeco continuation"
+                                    .to_string(),
+                            ),
+                            Instr::Mov(MovArgs::ToReg(Reg::Rcx, Arg64::Reg(Reg::Rax))),
+                            Instr::Pop(Loc::Reg(Reg::Rax)),
+                            Instr::Mov(MovArgs::ToReg(
+                                Reg::Rsi,
+                                Arg64::Mem(MemRef { reg: Reg::Rax, offset: 0 }),
+                            )),
+                            Instr::Mov(MovArgs::ToReg(
+                                Reg::Rax,
+                                Arg64::Mem(MemRef { reg: Reg::Rax, offset: 8 }),
+                            )),
+                            Instr::Push(Arg32::Reg(Reg::Rcx)),
+                            Instr::Push(Arg32::Reg(Reg::Rsi)),
+                            Instr::Jmp(JmpArgs::Reg(Reg::Rax)),
+                        ]);
+                    }
+                    | sa::ExternMode::Control => {
+                        em.asm.text.extend([
+                            Instr::Comment(
+                                "resume the host-selected Zydeco computation".to_string(),
+                            ),
+                            Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::Rax))),
+                            Instr::Mov(MovArgs::ToReg(
+                                Reg::Rax,
+                                Arg64::Mem(MemRef { reg: Reg::Rdi, offset: 0 }),
+                            )),
+                            Instr::Jmp(JmpArgs::Reg(Reg::Rax)),
+                        ]);
+                    }
                 }
             }
             | Terminator::Abort(sa::Abort) => {
@@ -598,7 +698,22 @@ impl<'a> Emit<'a> for Atom {
                     }
                     | Symbol::StringLiteral(s) => {
                         em.asm.text.push(Instr::Comment(format!("push_sym_str {:?}", s)));
-                        todo!()
+                        let literal = NativeStringLiteral::new(em.assembly.sym_label(sym_id), &s);
+                        let length = literal.length();
+                        em.asm.text.extend([
+                            Instr::Lea(
+                                Reg::Rdi,
+                                LeaArgs::RelLabel(RelLabel { label: literal.label, offset: None }),
+                            ),
+                            Instr::Mov(MovArgs::ToReg(
+                                Reg::Rsi,
+                                Arg64::Unsigned(
+                                    u64::try_from(length).expect("string literal length overflow"),
+                                ),
+                            )),
+                            Instr::Call(JmpArgs::Label("zydeco_string_literal".to_string())),
+                            Instr::Push(Arg32::Reg(Reg::Rax)),
+                        ]);
                     }
                 }
             }
@@ -664,6 +779,16 @@ impl<'a> Emit<'a> for Intrinsic {
                     }
                     | "mul" => {
                         emit_ba(Instr::IMul, em);
+                    }
+                    | "div" => {
+                        em.asm.text.extend([Instr::Cqo, Instr::IDiv(Reg::Rcx)]);
+                    }
+                    | "mod" => {
+                        em.asm.text.extend([
+                            Instr::Cqo,
+                            Instr::IDiv(Reg::Rcx),
+                            Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Reg(Reg::Rdx))),
+                        ]);
                     }
                     | "and" => {
                         emit_ba(Instr::And, em);

@@ -1,0 +1,24 @@
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  def sum : Thk (Int -> Int -> Ret Int) = {
+    fix (sum : Thk (Int -> Int -> Ret Int)) ->
+      fn index accumulated ->
+        ! (api/int_eq_branch)
+          (Ret Int)
+          index
+          0
+          { ret accumulated }
+          {
+            do predecessor <- ! (api/sub) index 1;
+            do accumulated <- ! (api/add) index accumulated;
+            ! sum predecessor accumulated
+          }
+  } that
+
+  do result <- ! sum 10 0;
+  do status <- ! (api/sub) result 55;
+  ! (api/exit) status
+end

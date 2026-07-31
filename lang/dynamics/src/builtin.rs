@@ -1,5 +1,6 @@
 use crate::syntax::*;
 use std::{collections::HashMap, sync::LazyLock};
+use zydeco_syntax::BuiltinValueRole;
 
 /// Mapping from builtin names to their primitive implementations.
 pub static BUILTINS: LazyLock<HashMap<&'static str, Prim>> = {
@@ -14,21 +15,31 @@ pub static BUILTINS: LazyLock<HashMap<&'static str, Prim>> = {
             Builtin::new("int_eq", 2, int_eq),
             Builtin::new("int_lt", 2, int_lt),
             Builtin::new("int_gt", 2, int_gt),
+            Builtin::new("int_eq_branch", 4, int_eq_branch),
+            Builtin::new("int_lt_branch", 4, int_lt_branch),
+            Builtin::new("int_gt_branch", 4, int_gt_branch),
             Builtin::new("str_length", 1, str_length),
             Builtin::new("str_append", 2, str_append),
             Builtin::new("str_split_once", 2, str_split_once),
             Builtin::new("str_split_n", 2, str_split_n),
+            Builtin::new("str_split_once_branch", 4, str_split_once_branch),
+            Builtin::new("str_split_n_branch", 4, str_split_n_branch),
             Builtin::new("str_eq", 2, str_eq),
+            Builtin::new("str_eq_branch", 4, str_eq_branch),
             Builtin::new("str_index", 2, str_index),
             Builtin::new("int_to_str", 1, int_to_str),
             Builtin::new("char_to_str", 1, char_to_str),
             Builtin::new("char_to_int", 1, char_to_int),
             Builtin::new("str_to_int", 1, str_to_int),
             Builtin::new("write_str", 2, write_str),
+            Builtin::new("write_int", 2, write_int),
+            Builtin::new("write_line", 2, write_line),
             Builtin::new("read_line", 1, read_line),
             Builtin::new("read_line_as_int", 1, read_line_as_int),
+            Builtin::new("read_line_as_int_branch", 2, read_line_as_int_branch),
             Builtin::new("read_till_eof", 1, read_till_eof),
             Builtin::new("arg_list", 1, arg_list),
+            Builtin::new("arg_fold", 2, arg_fold),
             Builtin::new("random_int", 1, random_int),
             Builtin::new("exit", 1, exit),
         ]
@@ -46,7 +57,7 @@ pub struct Builtin {
 }
 
 impl Builtin {
-    /// Construct a new builtin declaration.
+    /// Describe a new builtin operation.
     fn new(name: &'static str, arity: u64, behavior: PrimComp) -> Self {
         Builtin { name, arity, behavior }
     }
@@ -61,4 +72,35 @@ impl Builtin {
     //     let thunk = Thunk(Rc::new(prim)).into();
     //     (name, Rc::new(thunk))
     // }
+}
+
+/// Typed access to host-operation values used to construct the Builtin
+/// package.
+pub struct BuiltinRuntime;
+
+impl BuiltinRuntime {
+    pub fn package_value(role: BuiltinValueRole) -> Option<RcValue> {
+        Self::named_value(role.host_name())
+    }
+
+    fn named_value(name: &str) -> Option<RcValue> {
+        let primitive: Computation = BUILTINS.get(name)?.to_owned().into();
+        Some(std::rc::Rc::new(Thunk(std::rc::Rc::new(primitive)).into()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_builtin_role_has_an_interpreter_package_implementation() {
+        let missing = BuiltinValueRole::ALL
+            .iter()
+            .copied()
+            .filter(|role| BuiltinRuntime::package_value(*role).is_none())
+            .collect::<Vec<_>>();
+
+        assert!(missing.is_empty(), "missing interpreter Builtin roles: {missing:?}");
+    }
 }

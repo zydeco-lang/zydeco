@@ -5,29 +5,36 @@ pub enum BuildError {
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
     #[error("{0}")]
-    LocalError(#[from] crate::local::err::LocalError),
-    #[error("{0}")]
     CompileError(#[from] crate::check::err::CompileError),
-    #[error("{0}")]
-    InterpError(#[from] crate::interp::err::InterpError),
     #[error("{0}")]
     Amd64LinkError(#[from] crate::amd64::err::LinkError),
     #[error("Program terminated with {0}")]
     Amd64RunError(std::process::ExitStatus),
     #[error("{0}")]
     LlvmLinkError(#[from] crate::llvm::err::LinkError),
+    #[error("LLVM emitter cannot represent local {variable:?} at assembly program {program:?}")]
+    LlvmUnsupportedLocal {
+        program: zydeco_assembly::syntax::ProgId,
+        variable: zydeco_assembly::syntax::VarId,
+    },
     #[error("Program terminated with {0}")]
     LlvmRunError(std::process::ExitStatus),
     #[error("{0}")]
     AssemblyInterpError(#[from] crate::zasm::err::AssemblyInterpError),
-    #[error("Duplicate package marked name: {0}")]
-    DuplicateMark(String),
-    #[error("No suitable marked binary to run: wanted: {0}, available: {1:#?}")]
-    NoSuitableMark(String, Vec<String>),
-    #[error("Can't determine a suitable marked binary to run from: {0:#?}")]
-    AmbiguousMark(Vec<String>),
-    #[error("Missing build configuration for package: {0}")]
-    MissingBuildConf(String),
+    #[error("{0}")]
+    SourceLoadError(#[from] crate::source::SourceLoadError),
+    #[error("{0}")]
+    ProgramAssemblyError(#[from] crate::source::ProgramAssemblyError),
+    #[error("{0}")]
+    SourceDesugarError(#[from] zydeco_surface::bitter::DesugarError),
+    #[error("{0}")]
+    SourceLowerError(#[from] crate::source::SourceLowerError),
+    #[error("source execution produced {0} roots; expected exactly one")]
+    SourceEntryCount(usize),
+    #[error("source test expected exit code 0, got {0:?}")]
+    SourceTestFailure(zydeco_dynamics::ProgKont),
+    #[error("source root path `{0}` does not have a valid UTF-8 artifact name")]
+    InvalidSourceArtifactName(std::path::PathBuf),
     #[error("Unsupported target: {0}")]
     UnsupportedTarget(String),
     #[error("Unsupported target OS: {0}")]

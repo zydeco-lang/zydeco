@@ -10,7 +10,6 @@ impl Allocates<DefId> for TextualScope {}
 impl Allocates<PatId> for TextualScope {}
 impl Allocates<CoPatId> for TextualScope {}
 impl Allocates<TermId> for TextualScope {}
-impl Allocates<DeclId> for TextualScope {}
 
 impl ArenaSchema<DefId> for TextualScope {
     type Item = VarName;
@@ -24,10 +23,6 @@ impl ArenaSchema<CoPatId> for TextualScope {
 impl ArenaSchema<TermId> for TextualScope {
     type Item = Term;
 }
-impl ArenaSchema<DeclId> for TextualScope {
-    type Item = Modifiers<Declaration>;
-}
-
 /// Parsed nodes keyed by textual IDs.
 #[derive(Default, Debug)]
 pub struct TextArena {
@@ -35,7 +30,6 @@ pub struct TextArena {
     pub pats: ArenaSparse<TextualScope, PatId>,
     pub copats: ArenaSparse<TextualScope, CoPatId>,
     pub terms: ArenaSparse<TextualScope, TermId>,
-    pub decls: ArenaSparse<TextualScope, DeclId>,
 }
 
 /// Span storage keyed by textual entity IDs.

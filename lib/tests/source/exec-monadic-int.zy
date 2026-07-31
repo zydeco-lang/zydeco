@@ -1,0 +1,34 @@
+begin
+  let monadic_basis = @[import("../../std/monad.zy")] _ that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  do (= Monad, = Algebra, ()) <-
+    ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  begin
+
+  def ret_monad : Thk (Monad Ret) = {
+    comatch
+    | .return A value -> ret value
+    | .bind A B computation function ->
+      do value <- ! computation;
+      ! function value
+    end
+  } that
+  def translated = {
+    monadic
+      do value <- ret 1;
+      ret value
+    end
+  } that
+
+  do value <- ! translated Ret { ! ret_monad };
+  ! (api/int_eq_branch)
+    OS
+    value
+    1
+    { ! (api/exit) 0 }
+    { ! (api/exit) 1 }
+end
+end

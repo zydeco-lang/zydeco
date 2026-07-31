@@ -1,130 +1,234 @@
 -- # Chapter 2: Data and Codata
 
--- A `data` declaration positively defines a value type that can be matched
--- against. It can be treated as sum types together with product types. It can
--- be introduced by data constructors (values) and eliminated with the `match`
--- computaion.
+-- A `data` term positively describes a value type. Constructors introduce its
+-- values, and `match` eliminates them. A `codata` term negatively describes a
+-- computation type. `comatch` implements its observations, and destructors
+-- select one observation.
 
--- System-F hasn't been formally introduced to you yet, so we'll use a trivial
--- example to illustrate; you'll see what it's all about in a week or two.
-def hd-int : Thunk (List Int -> Ret (Option Int)) = {
-  fn xs -> (
-    match xs
-    | +Nil() -> ret +None()
-    | +Cons(x, _) -> ret +Some(x)
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../lib/std/builtin.zy")] _
+  ) that
+
+  def Option :
+    (VType) ->
+    (VType) =
+    begin
+      param (A : VType) that
+      data
+      | +None : Unit
+      | +Some : A
+      end
     end
-  )
-} end
+  that
+  def List :
+    (VType) ->
+    (VType) =
+    begin
+      param (A : VType) that
+      data
+      | +Nil : Unit
+      | +Cons : A * List A
+      end
+    end
+  that
 
-def xs : List Int = +Cons(0, +Cons(2, +Cons(4, +Nil()))) end
+  def head_int : Thk (
+    List Int ->
+    Ret (Option Int)
+  ) = {
+    fn values ->
+      match values
+      | +Nil() -> ret +None()
+      | +Cons(head, _) -> ret +Some(head)
+      end
+  } that
+  def values : List Int =
+    +Cons(0, +Cons(2, +Cons(4, +Nil())))
+  that
+  def first_value : Thk (Ret (Option Int)) = {
+    ! head_int values
+  } that
 
-def some-0~ : Thunk(Ret (Option Int)) = {
-  ! hd-int xs
-} end
-
--- Unsurprisingly, `codata` declaration, dually, negatively defines a
--- computation type that comatches the stack. It can be introduced by comatch
--- computation and can be eliminated by codata destructors.
-
--- Read how `LList`, a.k.a. lazy list, a.k.a. `CoList`, is defined in `std.zydeco`.
-
-def xs~ : Thunk (LList Int) = {
-  comatch
-  | .run -> ret +Cons(0, {
+  -- A lazy list separates one observable layer from the suspended remainder.
+  -- Its layer is data; the stream itself is codata.
+  def LazyLayer :
+    (VType) ->
+    (VType) ->
+    (VType) =
+    begin
+      param (A : VType) that
+      param (Tail : VType) that
+      data
+      | +LazyNil : Unit
+      | +LazyCons : A * Tail
+      end
+    end
+  that
+  def LazyList :
+    (VType) ->
+    (CType) =
+    begin
+      param (A : VType) that
+      codata
+      | .run : Ret (LazyLayer A (Thk (LazyList A)))
+      end
+    end
+  that
+  def lazy_values : Thk (LazyList Int) = {
     comatch
-    | .run -> ret +Cons(2, {
-      comatch
-      | .run -> ret +Cons(4, {
+    | .run ->
+      ret +LazyCons(0, {
         comatch
-        | .run -> ret +Nil()
+        | .run ->
+          ret +LazyCons(2, {
+            comatch
+            | .run ->
+              ret +LazyCons(4, {
+                comatch
+                | .run -> ret +LazyNil()
+                end
+              })
+            end
+          })
         end
-      }) end
-    }) end
-  }) end
-} end
+      })
+    end
+  } that
+  def lazy_first_value : Thk (Ret (Option Int)) = {
+    do layer <- ! lazy_values .run;
+    match layer
+    | +LazyNil() -> ret +None()
+    | +LazyCons(head, _) -> ret +Some(head)
+    end
+  } that
 
-def some-0~' : Thunk(Ret (Option Int)) = {
-  do p <- ! xs~ .run;
-  match p
-  | +Nil() -> ret +None()
-  | +Cons(x, _) -> ret +Some(x)
-  end
-} end
+  -- These two folds are complete reference implementations.
+  def fold_left : Thk (
+    Thk (Int -> Int -> Ret Int) ->
+    Int ->
+    List Int ->
+    Ret Int
+  ) = {
+    fix (
+      fold_left :
+      Thk (
+        Thk (Int -> Int -> Ret Int) ->
+        Int ->
+        List Int ->
+        Ret Int
+      )
+    ) ->
+      fn combine accumulated remaining ->
+        match remaining
+        | +Nil() -> ret accumulated
+        | +Cons(head, tail) ->
+          do next <- ! combine accumulated head;
+          ! fold_left combine next tail
+        end
+  } that
+  def fold_right : Thk (
+    Thk (Int -> Thk (Ret Int) -> Ret Int) ->
+    Thk (Ret Int) ->
+    Thk (LazyList Int) ->
+    Ret Int
+  ) = {
+    fix (
+      fold_right :
+      Thk (
+        Thk (Int -> Thk (Ret Int) -> Ret Int) ->
+        Thk (Ret Int) ->
+        Thk (LazyList Int) ->
+        Ret Int
+      )
+    ) ->
+      fn combine base remaining ->
+        do layer <- ! remaining .run;
+        match layer
+        | +LazyNil() -> ! base
+        | +LazyCons(head, tail) ->
+          ! combine head {
+            ! fold_right combine base tail
+          }
+        end
+  } that
 
--- Note that `data` can be used to naturally represent inductive types, and
--- `codata` - you tell me - can be used to represent coinductive types.
+  -- Exercises: replace either constant implementation with the corresponding
+  -- recursive fold above. The test data sum to six, so these placeholders keep
+  -- the chapter runnable while leaving a visible exercise.
+  def fold_left_exercise : Thk (
+    Thk (Int -> Int -> Ret Int) ->
+    Int ->
+    List Int ->
+    Ret Int
+  ) = {
+    fn _ _ _ ->
+      ret 6
+  } that
+  def fold_right_exercise : Thk (
+    Thk (Int -> Thk (Ret Int) -> Ret Int) ->
+    Thk (Ret Int) ->
+    Thk (LazyList Int) ->
+    Ret Int
+  ) = {
+    fn _ _ _ ->
+      ret 6
+  } that
 
--- The good thing about writing dual definitions (and their explanations) is
--- that it's extremely copilot-friendly.
+  -- Exercise: define a coinductive list using only a lazy recursive data type.
+  def LazyListPrime :
+    (VType) ->
+    (VType) =
+    begin
+      param (A : VType) that
+      data
+      end
+    end
+  that
 
--- Exercise `data`: implement `foldl` for `List Int`.
+  def add_lazy : Thk (
+    Int ->
+    Thk (Ret Int) ->
+    Ret Int
+  ) = {
+    fn left right ->
+      do right <- ! right;
+      ! (api/add) left right
+  } that
+  def check_result : Thk (
+    Int ->
+    Int ->
+    String ->
+    Thk OS ->
+    OS
+  ) = {
+    fn expected actual label continuation ->
+      ! (api/int_eq_branch)
+        OS
+        expected
+        actual
+        { ! continuation }
+        {
+          do message <- ! (api/str_append) label " is not correct";
+          ! (api/write_line) message {
+            ! (api/exit) 1
+          }
+        }
+  } that
 
-def foldl'' : Thunk(Thunk (Int -> Int -> Ret Int) -> Int -> List Int -> Ret Int) = {
-  fix foldl'' -> fn f -> fn acc -> fn xs -> (
-    -- Todo..
-    ret 6
-  )
-} end
-
--- Exercise `codata`: implement `foldr` for `LList Int`.
-
-def foldr'' : Thunk(
-  Thunk (Int -> Thunk (Ret Int) -> Ret Int)
-  -> Thunk (Ret Int) -> Thunk (LList Int)
-  -> Ret Int
-) = {
-  fix foldr'' -> fn f -> fn base -> fn xs -> (
-    -- Todo..
-    ret 6
-  )
-} end
-
--- You may wonder what is `rec`. It's *just* `fix` in the System PCF sense. The
--- only caveat is that if the whole term is a computation of type `B`, then the
--- variable passed in is of type `Thunk B`, because variables must have value
--- types.
-
--- Exercise `data`-coinductive: declare the coinductive type `LList'` using only
--- `data`, yet still being "coinductive". The most important hint is that it
--- should at least be lazy.
-
-data LList' (A : VType) where
-  -- Todo..
-end
-
--- Exercise (optional): Read how `fold`s are implemented in `std.zydeco`, and
--- get a taste of how parametric polymorphism (template functions in C++) work.
-
-main
-  let ! check_res (x : Int) (y : Int) (s : String) (kont : Thunk OS) : OS =
-    ! if~ OS { ! int_eq x y } {
-      ! kont
-    } {
-      do msg <- ! str_append s " is not correct";
-      ! write_line msg { ! exit 1 }
-    }
-  in
-  let ! check (xs : List Int) (kont : Thunk OS) : OS =
-    do x <- ! foldl Int Int xs add 0;
-    do y <- ! foldl'' add 0 xs;
-    ! check_res x y "foldl''" kont
-  in
-  let ! check~ (xs : Thunk (LList Int)) (kont : Thunk OS) : OS =
-    let add~ : Thunk (Int -> Thunk (Ret Int) -> Ret Int) = {
-      fn x y~ -> do y <- ! y~; ! add x y
-    } in
-    do x <- ! foldr Int (Ret Int) xs~ { ret 0 } add~;
-    do y <- ! foldr'' add~ { ret 0 } xs~;
-    ! check_res x y "foldr''" kont
-  in
-  ! check xs {
-    ! check~ xs~ {
-      ! write_line "All tests passed" {
-        ! exit 0
+  do strict_expected <- ! fold_left (api/add) 0 values;
+  do strict_actual <- ! fold_left_exercise (api/add) 0 values;
+  do lazy_expected <- ! fold_right add_lazy { ret 0 } lazy_values;
+  do lazy_actual <- ! fold_right_exercise add_lazy { ret 0 } lazy_values;
+  ! check_result strict_expected strict_actual "fold_left exercise" {
+    ! check_result lazy_expected lazy_actual "fold_right exercise" {
+      ! (api/write_line) "all tests passed" {
+        ! (api/exit) 0
       }
     }
   }
 end
 
--- The test bench uses more than what has been taught. It's ok if you don't
--- understand all of them, but you can make your best guess.
+-- The type constructors above are ordinary block definitions. Recursive type
+-- SCCs are accepted; recursive term behavior remains visible through `fix`.

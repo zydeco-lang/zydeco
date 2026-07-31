@@ -123,8 +123,8 @@ impl Eval for Terminator {
                 let arm = arms.iter().find(|(t, _)| t.idx == tag.idx).unwrap();
                 arm.1.eval(interp)
             }
-            | Terminator::Extern(Extern { name, arity }) => {
-                log::trace!("extern: {:?}, {:?}", name, arity);
+            | Terminator::Extern(Extern { name, arity, mode }) => {
+                log::trace!("extern: {:?}, {:?}, {:?}", name, arity, mode);
                 todo!()
             }
             | Terminator::Abort(Abort) => todo!(),

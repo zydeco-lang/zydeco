@@ -1,0 +1,83 @@
+begin
+  let std = @[import("../../std/std.zy")] _ that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  def LazyList : (VType) -> (VType) =
+    begin
+      param (A : VType) that
+      data
+      | +Nil : Unit
+      | +Cons : A * Thk (Ret (LazyList A))
+      end
+    end
+  that
+  def fold_right : Thk (
+    forall (A : VType) .
+    forall (B : CType) .
+      Thk (Ret (LazyList A)) ->
+      Thk (A -> Thk B -> B) ->
+      Thk B ->
+      B
+  ) = {
+    fix (
+      fold_right :
+      Thk (
+        forall (A : VType) .
+        forall (B : CType) .
+          Thk (Ret (LazyList A)) ->
+          Thk (A -> Thk B -> B) ->
+          Thk B ->
+          B
+      )
+    ) ->
+      fn (A : VType)
+         (B : CType)
+         lazy_list
+         function
+         base ->
+        do list <- ! lazy_list;
+        match list
+        | +Nil() -> ! base
+        | +Cons(head, tail) ->
+          ! function head { ! fold_right A B tail function base }
+        end
+  } that
+
+  do (
+    Bool = StdBool,
+    Option = StdOption,
+    List = StdList,
+    Int = StdInt,
+    Char = StdChar,
+    String = StdString,
+    OS = StdOS,
+    public
+  ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  def iota : Thk (StdInt -> Ret (LazyList StdInt)) = {
+    fix (iota : Thk (StdInt -> Ret (LazyList StdInt))) ->
+      fn current ->
+        do next <- ! (public/add) current 1;
+        ret +Cons(current, { ! iota next })
+  } in
+
+  ! fold_right
+    StdInt
+    StdOS
+    { ! iota 0 }
+    {
+      fn current continuation ->
+        do continue <- ! (public/int_lt) current 10;
+        ! (public/branch)
+          StdOS
+          continue
+          {
+            ! (public/write_int) current {
+              ! (public/write_line) "" continuation
+            }
+          }
+          { ! (public/exit) 0 }
+    }
+    { ! (public/exit) 1 }
+end

@@ -1,0 +1,35 @@
+begin
+  let std = @[import("../../std/std.zy")] _ that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  do (
+    Bool = StdBool,
+    Option = StdOption,
+    List = StdList,
+    Int = StdInt,
+    Char = StdChar,
+    String = StdString,
+    OS = StdOS,
+    public
+  ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  ! (public/arg_list) {
+    fn arguments ->
+      ! (public/list_eliminate)
+        StdString
+        StdOS
+        arguments
+        { ! (public/exit) 1 }
+        {
+          fn first remaining ->
+            do first_matches <- ! (public/str_eq) first "alpha";
+            ! (public/branch)
+              StdOS
+              first_matches
+              { ! (public/exit) 0 }
+              { ! (public/exit) 1 }
+        }
+  }
+end
