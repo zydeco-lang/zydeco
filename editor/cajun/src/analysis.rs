@@ -4,22 +4,36 @@ use std::{
     sync::Arc,
 };
 use tower_lsp::lsp_types::{
-    DocumentSymbol, Location, Position, Range, SemanticToken, SymbolKind, Url,
+    DocumentSymbol, Hover, HoverContents, Location, MarkupContent, MarkupKind, Position, Range,
+    SemanticToken, SymbolKind, Url,
 };
 use zydeco_driver::source::{SourceGraph, SourceScoped};
-use zydeco_statics::tyck::{HoleSolutionOutput, Tycker};
-use zydeco_surface::scoped::syntax::{DefId, Term};
-use zydeco_syntax::SpanView;
-use zydeco_utils::span::{Cursor2, FileInfo, Span};
+use zydeco_statics::tyck::{HoleSolutionOutput, Tycker, arena::StaticsArena, fmt::Formatter};
+use zydeco_surface::{
+    scoped::syntax::{DefId, Term, TermId},
+    textual::syntax::EntityId,
+};
+use zydeco_syntax::Pretty;
+use zydeco_utils::{
+    arena::ArenaAccess,
+    span::{Cursor2, FileInfo, Span},
+};
 
 use crate::semantic::SemanticHighlighter;
 
 /// Compiler analysis state for one editor root.
 pub(crate) struct ProjectState {
     scoped: SourceScoped,
+    statics: StaticsArena,
     file_infos: HashMap<PathBuf, FileInfo>,
     semantic_path: PathBuf,
     semantic_tokens: Vec<SemanticToken>,
+}
+
+#[derive(Copy, Clone)]
+struct SymbolOccurrence {
+    definition: DefId,
+    range: Range,
 }
 
 impl ProjectState {
@@ -68,12 +82,45 @@ impl ProjectState {
         let semantic_path = source_path;
         let semantic_tokens = tokens;
 
-        Ok(Self { scoped, file_infos, semantic_path, semantic_tokens })
+        Ok(Self { scoped, statics, file_infos, semantic_path, semantic_tokens })
     }
 
     pub(crate) fn definition(&self, file_path: &Path, position: Position) -> Option<Location> {
-        let definition = self.definition_at(file_path, position)?;
-        self.definition_location(definition)
+        let occurrence = self.symbol_at(file_path, position)?;
+        self.definition_location(occurrence.definition)
+    }
+
+    pub(crate) fn references(
+        &self, file_path: &Path, position: Position, include_declaration: bool,
+    ) -> Option<Vec<Location>> {
+        let definition = self.symbol_at(file_path, position)?.definition;
+        let declaration =
+            include_declaration.then(|| self.definition_location(definition)).into_iter().flatten();
+        let uses = self
+            .scoped
+            .arena
+            .users
+            .forth(&definition)
+            .iter()
+            .filter_map(|term| self.term_location(*term));
+        Some(Self::ordered_locations(declaration.chain(uses).collect()))
+    }
+
+    pub(crate) fn hover(&self, file_path: &Path, position: Position) -> Option<Hover> {
+        let occurrence = self.symbol_at(file_path, position)?;
+        let name = &self.scoped.arena.defs[&occurrence.definition];
+        let annotation = self.statics.annotations_var.get(&occurrence.definition)?;
+        let formatter = Formatter::new(&self.scoped.arena, &self.statics);
+        let mut annotation_text = String::new();
+        annotation.pretty(&formatter).render_fmt(100, &mut annotation_text).ok()?;
+        let signature = format!("{} : {}", name.0, annotation_text);
+        Some(Hover {
+            contents: HoverContents::Markup(MarkupContent {
+                kind: MarkupKind::Markdown,
+                value: format!("```zydeco\n{signature}\n```"),
+            }),
+            range: Some(occurrence.range),
+        })
     }
 
     pub(crate) fn document_symbols(&self, file_path: &Path) -> Vec<DocumentSymbol> {
@@ -110,34 +157,79 @@ impl ProjectState {
             .then(|| self.semantic_tokens.clone())
     }
 
-    fn definition_at(&self, file_path: &Path, position: Position) -> Option<DefId> {
+    fn symbol_at(&self, file_path: &Path, position: Position) -> Option<SymbolOccurrence> {
         let file_path = Self::normalize_path(file_path);
         let offset = self.offset(&file_path, position)?;
-        let spans = (&self.scoped.spans, &self.scoped.arena);
-        self.scoped
-            .arena
-            .terms
-            .iter()
-            .filter_map(|(term, body)| {
-                let Term::Var(definition) = body else {
-                    return None;
-                };
-                let span = term.span(&spans);
-                let (start, end) = span.get_cursor1();
-                let same_file = span.get_path().map(|path| Self::normalize_path(path))
-                    == Some(file_path.clone());
-                (same_file && start <= offset && offset < end)
-                    .then_some((end.saturating_sub(start), *definition))
+        let definitions = self.scoped.arena.defs.iter().filter_map(|(definition, _)| {
+            let entity = self.scoped.arena.textual.back(&(*definition).into())?;
+            Some((*definition, &self.scoped.spans[entity]))
+        });
+        let uses = self.scoped.arena.terms.iter().filter_map(|(term, body)| {
+            let Term::Var(definition) = body else {
+                return None;
+            };
+            let entity = self.scoped.arena.textual.back(&(*term).into())?;
+            Some((*definition, &self.scoped.spans[entity]))
+        });
+        definitions
+            .chain(uses)
+            .filter_map(|(definition, span)| {
+                self.containing_occurrence(&file_path, offset, definition, span)
             })
             .min_by_key(|(length, _)| *length)
-            .map(|(_, definition)| definition)
+            .map(|(_, occurrence)| occurrence)
+    }
+
+    fn containing_occurrence(
+        &self, file_path: &Path, offset: usize, definition: DefId, span: &Span,
+    ) -> Option<(usize, SymbolOccurrence)> {
+        let same_file =
+            span.get_path().map(|path| Self::normalize_path(path)) == Some(file_path.to_path_buf());
+        let (start, end) = span.get_cursor1();
+        (same_file && start <= offset && offset < end)
+            .then(|| {
+                self.span_range(span).map(|range| {
+                    (end.saturating_sub(start), SymbolOccurrence { definition, range })
+                })
+            })
+            .flatten()
     }
 
     fn definition_location(&self, definition: DefId) -> Option<Location> {
         let entity = self.scoped.arena.textual.back(&definition.into())?;
+        self.entity_location(entity)
+    }
+
+    fn term_location(&self, term: TermId) -> Option<Location> {
+        let entity = self.scoped.arena.textual.back(&term.into())?;
+        self.entity_location(entity)
+    }
+
+    fn entity_location(&self, entity: &EntityId) -> Option<Location> {
         let span = &self.scoped.spans[entity];
         let path = Self::normalize_path(span.get_path()?);
         Some(Location { uri: Url::from_file_path(path).ok()?, range: self.span_range(span)? })
+    }
+
+    fn ordered_locations(mut locations: Vec<Location>) -> Vec<Location> {
+        locations.sort_by(|left, right| {
+            (
+                left.uri.as_str(),
+                left.range.start.line,
+                left.range.start.character,
+                left.range.end.line,
+                left.range.end.character,
+            )
+                .cmp(&(
+                    right.uri.as_str(),
+                    right.range.start.line,
+                    right.range.start.character,
+                    right.range.end.line,
+                    right.range.end.character,
+                ))
+        });
+        locations.dedup();
+        locations
     }
 
     fn offset(&self, file_path: &Path, position: Position) -> Option<usize> {
@@ -187,7 +279,7 @@ mod tests {
     use super::ProjectState;
     use crate::semantic::SemanticHighlighter;
     use std::{collections::HashMap, path::Path};
-    use tower_lsp::lsp_types::{SemanticToken, SemanticTokensLegend};
+    use tower_lsp::lsp_types::{HoverContents, Position, SemanticToken, SemanticTokensLegend};
     use zydeco_utils::span::{Cursor2, FileInfo};
 
     struct DecodedToken {
@@ -248,6 +340,51 @@ mod tests {
                 })
                 .collect()
         }
+    }
+
+    #[test]
+    fn resolved_symbols_support_definition_references_and_type_hover_across_imports() {
+        let directory = tempfile::tempdir().unwrap();
+        let library = directory.path().join("library.zy");
+        let root = directory.path().join("main.zy");
+        std::fs::write(&library, "begin\n  let answer = () that\n  (answer, answer)\nend\n")
+            .unwrap();
+        std::fs::write(&root, "@[import(\"library.zy\")] _\n").unwrap();
+        let project = ProjectState::load(&root, &HashMap::new()).unwrap();
+
+        let definition = project.definition(&library, Position::new(1, 7)).unwrap();
+        assert_eq!(definition.uri.to_file_path().unwrap(), library.canonicalize().unwrap());
+        assert_eq!(definition.range.start, Position::new(1, 6));
+
+        let references = project.references(&library, Position::new(2, 4), true).unwrap();
+        assert_eq!(references.len(), 3);
+        assert_eq!(references[0].range.start, Position::new(1, 6));
+        assert_eq!(references[1].range.start, Position::new(2, 3));
+        assert_eq!(references[2].range.start, Position::new(2, 11));
+
+        let uses = project.references(&library, Position::new(1, 7), false).unwrap();
+        assert_eq!(uses.len(), 2);
+        let hover = project.hover(&library, Position::new(2, 4)).unwrap();
+        assert_eq!(hover.range.unwrap().start, Position::new(2, 3));
+        let HoverContents::Markup(contents) = hover.contents else {
+            panic!("type hover should use markup content")
+        };
+        assert_eq!(contents.value, "```zydeco\nanswer : Unit\n```");
+    }
+
+    #[test]
+    fn type_hover_uses_source_names_for_polymorphic_types() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../lib/tests/exec/forall.zy")
+            .canonicalize()
+            .unwrap();
+        let project = ProjectState::load(&path, &HashMap::new()).unwrap();
+        let hover = project.hover(&path, Position::new(11, 11)).unwrap();
+        let HoverContents::Markup(contents) = hover.contents else {
+            panic!("type hover should use markup content")
+        };
+
+        assert_eq!(contents.value, "```zydeco\nvalue : A\n```");
     }
 
     #[test]

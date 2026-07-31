@@ -122,6 +122,8 @@ fn stdio_server_synchronizes_documents_and_answers_navigation_requests() {
     assert_eq!(capabilities["textDocumentSync"]["openClose"], true);
     assert_eq!(capabilities["textDocumentSync"]["change"], 1);
     assert_eq!(capabilities["definitionProvider"], true);
+    assert_eq!(capabilities["referencesProvider"], true);
+    assert_eq!(capabilities["hoverProvider"], true);
     assert_eq!(capabilities["documentSymbolProvider"], true);
     assert_eq!(capabilities["semanticTokensProvider"]["full"], true);
     let semantic_legend = &capabilities["semanticTokensProvider"]["legend"];
@@ -166,6 +168,58 @@ fn stdio_server_synchronizes_documents_and_answers_navigation_requests() {
         Url::parse(definition["result"]["uri"].as_str().unwrap()).unwrap().to_file_path().unwrap();
     assert_eq!(definition_path, path.canonicalize().unwrap());
     assert_eq!(definition["result"]["range"]["start"]["line"], 1);
+
+    let definition_from_binder = server.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 1, "character": 7 },
+        }),
+    );
+    assert_eq!(definition_from_binder["result"], definition["result"]);
+
+    let references = server.request(
+        "textDocument/references",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 1, "character": 7 },
+            "context": { "includeDeclaration": true },
+        }),
+    );
+    let references = references["result"].as_array().unwrap();
+    assert_eq!(references.len(), 2);
+    assert_eq!(references[0]["range"]["start"]["line"], 1);
+    assert_eq!(references[1]["range"]["start"]["line"], 2);
+
+    let uses = server.request(
+        "textDocument/references",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 2, "character": 3 },
+            "context": { "includeDeclaration": false },
+        }),
+    );
+    let uses = uses["result"].as_array().unwrap();
+    assert_eq!(uses.len(), 1);
+    assert_eq!(uses[0]["range"]["start"]["line"], 2);
+
+    let binder_hover = server.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 1, "character": 7 },
+        }),
+    );
+    let use_hover = server.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 2, "character": 3 },
+        }),
+    );
+    assert_eq!(binder_hover["result"]["contents"], use_hover["result"]["contents"]);
+    assert_eq!(binder_hover["result"]["contents"]["kind"], "markdown");
+    assert_eq!(binder_hover["result"]["contents"]["value"], "```zydeco\nanswer : Unit\n```");
 
     let changed = "begin\n  let result = () that\n  result\nend\n";
     server.notify(
@@ -244,6 +298,23 @@ fn stdio_server_ignores_documents_outside_zydeco_source_extensions() {
         json!({ "textDocument": { "uri": uri } }),
     );
     assert!(semantic["result"].is_null());
+    let references = server.request_without_notifications(
+        "textDocument/references",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 0 },
+            "context": { "includeDeclaration": true },
+        }),
+    );
+    assert!(references["result"].is_null());
+    let hover = server.request_without_notifications(
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 0 },
+        }),
+    );
+    assert!(hover["result"].is_null());
 
     server.finish();
 }

@@ -3,7 +3,8 @@
 This extension recognizes `.zy` and `.zydeco` files and starts the
 [Cajun language server](https://github.com/zydeco-lang/zydeco/tree/main/editor/cajun).
 It provides live syntax and name-resolution diagnostics, document symbols,
-go to definition across imported files, and compiler-aware semantic highlighting.
+definition and reference lookup across imported files, inferred kind and type
+information on hover, and compiler-aware semantic highlighting.
 
 The extension does not bundle a Tree-sitter grammar. Enable Cajun's full-document
 semantic tokens for Zydeco in Zed settings:

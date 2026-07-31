@@ -8,7 +8,8 @@ for `.zy` and `.zydeco` files.
 
 - live syntax and name-resolution diagnostics;
 - document symbols;
-- go to definition across imported source files;
+- definition and reference lookup across imported source files;
+- inferred kind and type information on hover;
 - compiler-aware semantic highlighting;
 - full synchronization of unsaved editor contents.
 

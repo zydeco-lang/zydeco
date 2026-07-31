@@ -14,12 +14,12 @@ use tower_lsp::{
     lsp_types::{
         Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
         DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentSymbolParams,
-        DocumentSymbolResponse, GotoDefinitionParams, GotoDefinitionResponse, InitializeParams,
-        InitializeResult, InitializedParams, MessageType, OneOf, Position, PositionEncodingKind,
-        Range, SemanticTokens, SemanticTokensFullOptions, SemanticTokensOptions,
-        SemanticTokensParams, SemanticTokensResult, ServerCapabilities, ServerInfo,
-        TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
-        TextDocumentSyncSaveOptions, Url,
+        DocumentSymbolResponse, GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverParams,
+        HoverProviderCapability, InitializeParams, InitializeResult, InitializedParams, Location,
+        MessageType, OneOf, Position, PositionEncodingKind, Range, ReferenceParams, SemanticTokens,
+        SemanticTokensFullOptions, SemanticTokensOptions, SemanticTokensParams,
+        SemanticTokensResult, ServerCapabilities, ServerInfo, TextDocumentSyncCapability,
+        TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Url,
     },
 };
 
@@ -122,6 +122,8 @@ impl LanguageServer for Cajun {
                     },
                 )),
                 definition_provider: Some(OneOf::Left(true)),
+                references_provider: Some(OneOf::Left(true)),
+                hover_provider: Some(HoverProviderCapability::Simple(true)),
                 document_symbol_provider: Some(OneOf::Left(true)),
                 semantic_tokens_provider: Some(
                     SemanticTokensOptions {
@@ -210,6 +212,35 @@ impl LanguageServer for Cajun {
         let location =
             projects.get(&path).and_then(|project| project.definition(&path, target.position));
         Ok(location.map(GotoDefinitionResponse::Scalar))
+    }
+
+    async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
+        let include_declaration = params.context.include_declaration;
+        let target = params.text_document_position;
+        if !ZydecoDocument::accepts(&target.text_document.uri) {
+            return Ok(None);
+        }
+        let path = match self.refresh(&target.text_document.uri).await {
+            | Ok(path) => path,
+            | Err(_) => return Ok(None),
+        };
+        let projects = self.projects.read().await;
+        Ok(projects
+            .get(&path)
+            .and_then(|project| project.references(&path, target.position, include_declaration)))
+    }
+
+    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+        let target = params.text_document_position_params;
+        if !ZydecoDocument::accepts(&target.text_document.uri) {
+            return Ok(None);
+        }
+        let path = match self.refresh(&target.text_document.uri).await {
+            | Ok(path) => path,
+            | Err(_) => return Ok(None),
+        };
+        let projects = self.projects.read().await;
+        Ok(projects.get(&path).and_then(|project| project.hover(&path, target.position)))
     }
 
     async fn document_symbol(
