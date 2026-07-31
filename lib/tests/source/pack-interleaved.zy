@@ -4,12 +4,14 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
   let Interleaved =
-    exists (Leading as Unit : VType) .
-    exists (X : VType) .
-    exists (AliasX as X : VType) .
-    exists (Middle as Unit : VType) .
-    exists (Y : VType) .
-    exists (AliasY as Y : VType) .
+    exists
+      (Leading as Unit : VType)
+      (X : VType)
+      (AliasX as X : VType)
+      (Middle as Unit : VType)
+      (Y : VType)
+      (AliasY as Y : VType)
+    .
       X * Y
   that
   let Reveal =

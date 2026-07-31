@@ -16,7 +16,7 @@ decision remains type-directed.
 For example, against
 
 ```text
-exists (X : VType) . exists (Y : VType) . X * Y
+exists (X : VType) (Y : VType) . X * Y
 ```
 
 the term `(Int, Char, 0, 'z')` contains two witnesses and a two-component

@@ -48,11 +48,11 @@ pub enum CoPatternItem {
 
 /* ---------------------------------- Term ---------------------------------- */
 
-/// `pi (x: A) -> B`
+/// One binder of a desugared `pi` telescope.
 #[derive(Clone, Debug)]
 pub struct Pi(pub PatId, pub TermId);
 
-/// `sigma (x: A) . A'`
+/// One binder of a desugared `sigma` telescope.
 #[derive(Clone, Debug)]
 pub struct Sigma(pub PatId, pub TermId);
 

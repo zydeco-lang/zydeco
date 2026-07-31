@@ -71,7 +71,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
             | Term::Sigma(t) => s += &t.ugly(f),
             | Term::Prod(t) => s += &t.ugly(f),
             | Term::Exists(t) => s += &t.ugly(f),
-            | Term::ManifestExists(t) => s += &t.ugly(f),
             | Term::Thunk(t) => s += &t.ugly(f),
             | Term::Force(t) => s += &t.ugly(f),
             | Term::Ret(t) => s += &t.ugly(f),
@@ -339,28 +338,33 @@ where
 
 impl<'a> Ugly<'a, Formatter<'a>> for Exists {
     fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let Exists(p, t) = self;
-        s += "exists ";
-        s += &p.ugly(f);
-        s += " . ";
-        s += &t.ugly(f);
-        s
+        let Exists { parameters, body } = self;
+        let parameters =
+            parameters.iter().map(|parameter| parameter.ugly(f)).collect::<Vec<_>>().join(" ");
+        format!("exists {parameters} . {}", body.ugly(f))
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for ManifestExists {
+impl<'a> Ugly<'a, Formatter<'a>> for ExistentialParameter {
     fn ugly(&self, f: &'a Formatter) -> String {
-        let ManifestExists { binder, definition, classifier, body } = self;
+        match self {
+            | ExistentialParameter::Abstract(binder)
+                if matches!(f.arena.pats[binder], Pattern::Ann(_) | Pattern::Paren(_)) =>
+            {
+                binder.ugly(f)
+            }
+            | ExistentialParameter::Abstract(binder) => format!("({})", binder.ugly(f)),
+            | ExistentialParameter::Manifest(parameter) => parameter.ugly(f),
+        }
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for ManifestParameter {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let ManifestParameter { binder, definition, classifier } = self;
         let classifier =
             classifier.map(|classifier| format!(" : {}", classifier.ugly(f))).unwrap_or_default();
-        format!(
-            "exists ({} as {}{}) . {}",
-            binder.ugly(f),
-            definition.ugly(f),
-            classifier,
-            body.ugly(f)
-        )
+        format!("({} as {}{})", binder.ugly(f), definition.ugly(f), classifier)
     }
 }
 

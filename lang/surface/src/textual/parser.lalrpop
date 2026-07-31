@@ -217,6 +217,14 @@ CoPatternAtom: CoPattern = {
     <DtorName> => <>.into(),
 };
 
+ExistentialParameter: ExistentialParameter = {
+    "(" <binder:PatternAnnId> "as" <definition:TermId>
+        <classifier:(":" <TermId>)?> ")" => {
+        ExistentialParameter::Manifest(ManifestParameter { binder, definition, classifier })
+    },
+    "(" <binder:PatternAnnId> ")" => ExistentialParameter::Abstract(binder),
+};
+
 //* ---------------------------------- Term ---------------------------------- */
 
 TermGen<T>: TermId = <Sp<T>> => parser.term(<>);
@@ -351,11 +359,9 @@ Term: Term = {
     // sigma
     "sigma" <params:CoPatId> "." <ty:TermGen<Term>> => Sigma(<>).into(),
     // exists
-    "exists" "(" <binder:PatternAnnId> "as" <definition:TermId>
-        <classifier:(":" <TermId>)?> ")" "." <body:TermId> => {
-        ManifestExists { binder, definition, classifier, body }.into()
+    "exists" <parameters:ExistentialParameter+> "." <body:TermId> => {
+        Exists { parameters, body }.into()
     },
-    "exists" <params:CoPatId> "." <ty:TermGen<Term>> => Exists(<>).into(),
 
     // Bindings are loosest to capture the largest possible tail.
     #[precedence(level="6")]

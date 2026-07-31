@@ -94,6 +94,108 @@ impl PatternPayloadAnnotation {
     }
 }
 
+#[derive(Copy, Clone)]
+enum Quantifier {
+    Pi,
+    Sigma,
+}
+
+struct ParameterTelescope {
+    parameters: Vec<b::PatId>,
+    source: t::EntityId,
+}
+
+impl ParameterTelescope {
+    fn desugar(params: t::CoPatId, source: t::EntityId, desugarer: &mut Desugarer) -> Result<Self> {
+        let span = params.span(desugarer.spans).clone().make(params);
+        let b::Appli(parameters) = params.desugar(desugarer)?;
+        let parameters = parameters
+            .into_iter()
+            .map(|parameter| match parameter {
+                | b::CoPatternItem::Pat(pattern) => Ok(pattern),
+                | b::CoPatternItem::Dtor(_) => {
+                    Err(DesugarError::QuantifierParameterNotPattern(span.clone()))
+                }
+            })
+            .collect::<Result<_>>()?;
+        Ok(Self { parameters, source })
+    }
+
+    fn quantify(
+        self, quantifier: Quantifier, body: b::TermId, desugarer: &mut Desugarer,
+    ) -> b::TermId {
+        self.parameters.into_iter().rev().fold(body, |body, parameter| {
+            let term = match quantifier {
+                | Quantifier::Pi => b::Pi(parameter, body).into(),
+                | Quantifier::Sigma => b::Sigma(parameter, body).into(),
+            };
+            Alloc::alloc(desugarer, term, self.source)
+        })
+    }
+}
+
+enum ExistentialParameter {
+    Abstract(b::PatId),
+    Manifest { binder: b::PatId, definition: b::TermId },
+}
+
+impl ExistentialParameter {
+    fn desugar(parameter: t::ExistentialParameter, desugarer: &mut Desugarer) -> Result<Self> {
+        match parameter {
+            | t::ExistentialParameter::Abstract(binder) => {
+                Ok(Self::Abstract(binder.desugar(desugarer)?))
+            }
+            | t::ExistentialParameter::Manifest(t::ManifestParameter {
+                binder,
+                definition,
+                classifier,
+            }) => {
+                let source = binder.into();
+                let binder = binder.desugar(desugarer)?;
+                let definition = definition.desugar(desugarer)?;
+                let binder = match classifier {
+                    | Some(classifier) => {
+                        let classifier = classifier.desugar(desugarer)?;
+                        PatternPayloadAnnotation { pattern: binder, ty: classifier, source }
+                            .build(desugarer)
+                    }
+                    | None => binder,
+                };
+                Ok(Self::Manifest { binder, definition })
+            }
+        }
+    }
+}
+
+struct ExistentialTelescope {
+    parameters: Vec<ExistentialParameter>,
+    source: t::EntityId,
+}
+
+impl ExistentialTelescope {
+    fn desugar(
+        parameters: Vec<t::ExistentialParameter>, source: t::EntityId, desugarer: &mut Desugarer,
+    ) -> Result<Self> {
+        let parameters = parameters
+            .into_iter()
+            .map(|parameter| ExistentialParameter::desugar(parameter, desugarer))
+            .collect::<Result<_>>()?;
+        Ok(Self { parameters, source })
+    }
+
+    fn quantify(self, body: b::TermId, desugarer: &mut Desugarer) -> b::TermId {
+        self.parameters.into_iter().rev().fold(body, |body, parameter| {
+            let term = match parameter {
+                | ExistentialParameter::Abstract(binder) => b::Sigma(binder, body).into(),
+                | ExistentialParameter::Manifest { binder, definition } => {
+                    b::ManifestExists { binder, definition, body }.into()
+                }
+            };
+            Alloc::alloc(desugarer, term, self.source)
+        })
+    }
+}
+
 impl CompilerPass for SourceUnitDesugarer<'_> {
     type Arena = b::BitterArena;
     type Out = SourceDesugarOut;
@@ -393,19 +495,9 @@ impl Desugar for t::TermId {
             }
             | Tm::Pi(term) => {
                 let t::Pi(params, ty) = term;
-                let b::Appli(params) = params.desugar(desugarer)?;
-                let mut ty = ty.desugar(desugarer)?;
-                for param in params.into_iter().rev() {
-                    match param {
-                        | b::CoPatternItem::Pat(pat) => {
-                            ty = Alloc::alloc(desugarer, b::Pi(pat, ty).into(), self.into())
-                        }
-                        | b::CoPatternItem::Dtor(_dtor) => {
-                            unimplemented!("handle dtor in pi type error")
-                        }
-                    }
-                }
-                ty
+                let parameters = ParameterTelescope::desugar(params, self.into(), desugarer)?;
+                let body = ty.desugar(desugarer)?;
+                parameters.quantify(Quantifier::Pi, body, desugarer)
             }
             | Tm::Arrow(term) => {
                 let t::Arrow(ty_in, ty_out) = term;
@@ -420,38 +512,18 @@ impl Desugar for t::TermId {
             }
             | Tm::Forall(term) => {
                 let t::Forall(params, ty) = term;
-                let b::Appli(params) = params.desugar(desugarer)?;
-                let mut ty = ty.desugar(desugarer)?;
-                for param in params.into_iter().rev() {
-                    match param {
-                        | b::CoPatternItem::Pat(pat) => {
-                            ty = Alloc::alloc(desugarer, b::Pi(pat, ty).into(), self.into())
-                        }
-                        | b::CoPatternItem::Dtor(_dtor) => {
-                            unimplemented!("handle dtor in forall type error")
-                        }
-                    }
-                }
-                let forall = ty;
+                let parameters = ParameterTelescope::desugar(params, self.into(), desugarer)?;
+                let body = ty.desugar(desugarer)?;
+                let forall = parameters.quantify(Quantifier::Pi, body, desugarer);
                 // forall -> ann
                 let ctype = desugarer.ctype(self.into());
                 Alloc::alloc(desugarer, b::Ann { tm: forall, ty: ctype }.into(), self.into())
             }
             | Tm::Sigma(term) => {
                 let t::Sigma(params, ty) = term;
-                let b::Appli(params) = params.desugar(desugarer)?;
-                let mut ty = ty.desugar(desugarer)?;
-                for param in params.into_iter().rev() {
-                    match param {
-                        | b::CoPatternItem::Pat(pat) => {
-                            ty = Alloc::alloc(desugarer, b::Sigma(pat, ty).into(), self.into())
-                        }
-                        | b::CoPatternItem::Dtor(_dtor) => {
-                            unimplemented!("handle dtor in sigma type error")
-                        }
-                    }
-                }
-                ty
+                let parameters = ParameterTelescope::desugar(params, self.into(), desugarer)?;
+                let body = ty.desugar(desugarer)?;
+                parameters.quantify(Quantifier::Sigma, body, desugarer)
             }
             | Tm::Prod(term) => {
                 let t::Prod(ty_l, ty_r) = term;
@@ -465,46 +537,13 @@ impl Desugar for t::TermId {
                 Alloc::alloc(desugarer, b::Sigma(ann, ty_r).into(), self.into())
             }
             | Tm::Exists(term) => {
-                let t::Exists(params, ty) = term;
-                let b::Appli(params) = params.desugar(desugarer)?;
-                let mut ty = ty.desugar(desugarer)?;
-                for param in params.into_iter().rev() {
-                    match param {
-                        | b::CoPatternItem::Pat(pat) => {
-                            ty = Alloc::alloc(desugarer, b::Sigma(pat, ty).into(), self.into())
-                        }
-                        | b::CoPatternItem::Dtor(_dtor) => {
-                            unimplemented!("handle dtor in exists type error")
-                        }
-                    }
-                }
-                let exists = ty;
+                let t::Exists { parameters, body } = term;
+                let parameters = ExistentialTelescope::desugar(parameters, self.into(), desugarer)?;
+                let body = body.desugar(desugarer)?;
+                let exists = parameters.quantify(body, desugarer);
                 // exists -> ann
                 let vtype = desugarer.vtype(self.into());
                 Alloc::alloc(desugarer, b::Ann { tm: exists, ty: vtype }.into(), self.into())
-            }
-            | Tm::ManifestExists(term) => {
-                let t::ManifestExists { binder, definition, classifier, body } = term;
-                let binder = binder.desugar(desugarer)?;
-                let definition = definition.desugar(desugarer)?;
-                let binder = match classifier {
-                    | Some(classifier) => {
-                        let classifier = classifier.desugar(desugarer)?;
-                        PatternPayloadAnnotation {
-                            pattern: binder,
-                            ty: classifier,
-                            source: self.into(),
-                        }
-                        .build(desugarer)
-                    }
-                    | None => binder,
-                };
-                let body = body.desugar(desugarer)?;
-                Alloc::alloc(
-                    desugarer,
-                    b::ManifestExists { binder, definition, body }.into(),
-                    self.into(),
-                )
             }
             | Tm::Thunk(term) => {
                 let t::Thunk(body) = term;

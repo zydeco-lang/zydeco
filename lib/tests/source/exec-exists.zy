@@ -35,8 +35,7 @@ begin
     )
   that
   def packed :
-    exists (X : VType) .
-    exists (Y : VType) .
+    exists (X : VType) (Y : VType) .
       X * (Y * Int) =
     (Int, Char, 0, ('z', 0))
   that

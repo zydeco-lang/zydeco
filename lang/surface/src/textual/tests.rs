@@ -2,9 +2,9 @@ use crate::textual::{
     arena::TextualScope,
     syntax::{
         Ann, Appli, Block, BuiltinMetaError, BuiltinRole, BuiltinTypeRole, CoPatId, ContextBind,
-        DefId, DefinitionMode, Dtor, EntityId, Hole, IntrinsicMeta, IntrinsicMetaError,
-        IntrinsicRole, Label, Literal, ManifestExists, Meta, MetaT, Named, Param, Paren, Parser,
-        PatId, Pattern, Placement, Prod, Proj, SourceUnit, Term, TermId,
+        DefId, DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists, Hole, IntrinsicMeta,
+        IntrinsicMetaError, IntrinsicRole, Label, Literal, ManifestParameter, Meta, MetaT, Named,
+        Param, Paren, Parser, PatId, Pattern, Placement, Prod, Proj, SourceUnit, Term, TermId,
     },
 };
 use zydeco_utils::{arena::IdAllocator, span::LocationCtx};
@@ -335,10 +335,13 @@ fn parses_manifest_existential_with_a_punned_field_binder() {
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
-    let Term::ManifestExists(ManifestExists { binder, definition, classifier, body }) =
-        &parser.arena.terms[&term]
-    else {
+    let Term::Exists(Exists { parameters, body }) = &parser.arena.terms[&term] else {
         panic!("expected a manifest existential")
+    };
+    let [ExistentialParameter::Manifest(ManifestParameter { binder, definition, classifier })] =
+        parameters.as_slice()
+    else {
+        panic!("expected one manifest parameter")
     };
     let Pattern::Named(Named(field, binder)) = &parser.arena.pats[binder] else {
         panic!("expected a punned named binder")
@@ -368,10 +371,13 @@ fn parses_manifest_existential_with_an_inferred_classifier() {
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
-    let Term::ManifestExists(ManifestExists { binder, definition, classifier, body }) =
-        &parser.arena.terms[&term]
-    else {
+    let Term::Exists(Exists { parameters, body }) = &parser.arena.terms[&term] else {
         panic!("expected a manifest existential")
+    };
+    let [ExistentialParameter::Manifest(ManifestParameter { binder, definition, classifier })] =
+        parameters.as_slice()
+    else {
+        panic!("expected one manifest parameter")
     };
     let Pattern::Var(binder) = &parser.arena.pats[binder] else {
         panic!("expected an ordinary kind-variable binder")
@@ -393,6 +399,31 @@ fn parses_manifest_existential_with_an_inferred_classifier() {
     );
     assert!(classifier.is_none());
     assert_eq!(body.plain(), "VType");
+}
+
+#[test]
+fn parses_interleaved_abstract_and_manifest_existential_parameters() {
+    let source = "exists (X : VType) (Y as X : VType) (value : Y) . X";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::Exists(Exists { parameters, body }) = &parser.arena.terms[&term] else {
+        panic!("expected an existential telescope")
+    };
+    assert!(matches!(
+        parameters.as_slice(),
+        [
+            ExistentialParameter::Abstract(_),
+            ExistentialParameter::Manifest(_),
+            ExistentialParameter::Abstract(_),
+        ]
+    ));
+    let Term::Var(body) = &parser.arena.terms[body] else {
+        panic!("expected the telescope body to be a type variable")
+    };
+    assert_eq!(body.plain(), "X");
 }
 
 #[test]

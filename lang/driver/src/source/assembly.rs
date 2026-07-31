@@ -93,6 +93,27 @@ impl<'graph> ProgramAssembler<'graph> {
         Ok(self.parser.copat(self.span(source, pattern.into()).make(syntax)))
     }
 
+    fn existential_parameter(
+        &mut self, source: SourceId, parameter: t::ExistentialParameter,
+    ) -> Result<t::ExistentialParameter, ProgramAssemblyError> {
+        match parameter {
+            | t::ExistentialParameter::Abstract(binder) => {
+                Ok(t::ExistentialParameter::Abstract(self.pattern(source, binder)?))
+            }
+            | t::ExistentialParameter::Manifest(t::ManifestParameter {
+                binder,
+                definition,
+                classifier,
+            }) => Ok(t::ExistentialParameter::Manifest(t::ManifestParameter {
+                binder: self.pattern(source, binder)?,
+                definition: self.term(source, definition)?,
+                classifier: classifier
+                    .map(|classifier| self.term(source, classifier))
+                    .transpose()?,
+            })),
+        }
+    }
+
     fn binding(
         &mut self, source: SourceId, binding: t::GenBind<t::TermId>,
     ) -> Result<t::GenBind<t::TermId>, ProgramAssemblyError> {
@@ -171,20 +192,11 @@ impl<'graph> ProgramAssembler<'graph> {
             | t::Term::Sigma(t::Sigma(pattern, body)) => {
                 t::Sigma(self.copattern(source, pattern)?, self.term(source, body)?).into()
             }
-            | t::Term::Exists(t::Exists(pattern, body)) => {
-                t::Exists(self.copattern(source, pattern)?, self.term(source, body)?).into()
-            }
-            | t::Term::ManifestExists(t::ManifestExists {
-                binder,
-                definition,
-                classifier,
-                body,
-            }) => t::ManifestExists {
-                binder: self.pattern(source, binder)?,
-                definition: self.term(source, definition)?,
-                classifier: classifier
-                    .map(|classifier| self.term(source, classifier))
-                    .transpose()?,
+            | t::Term::Exists(t::Exists { parameters, body }) => t::Exists {
+                parameters: parameters
+                    .into_iter()
+                    .map(|parameter| self.existential_parameter(source, parameter))
+                    .collect::<Result<Vec<_>, _>>()?,
                 body: self.term(source, body)?,
             }
             .into(),

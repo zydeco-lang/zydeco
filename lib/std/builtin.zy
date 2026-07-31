@@ -1,8 +1,10 @@
-exists (VType as @[intrinsic(vtype)] _) .
-exists (CType as @[intrinsic(ctype)] _) .
-exists (Thk as @[intrinsic(thk)] _) .
-exists (Ret as @[intrinsic(ret)] _) .
-exists (Unit as @[intrinsic(unit)] _) .
+exists
+  (VType as @[intrinsic(vtype)] _)
+  (CType as @[intrinsic(ctype)] _)
+  (Thk as @[intrinsic(thk)] _)
+  (Ret as @[intrinsic(ret)] _)
+  (Unit as @[intrinsic(unit)] _)
+.
   @[builtin(int)] exists (Int : VType) .
     (@[builtin(char)] exists (Char : VType) .
       (@[builtin(string)] exists (String : VType) .

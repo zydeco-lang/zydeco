@@ -20,6 +20,8 @@ pub enum DesugarError {
     },
     #[error("Intrinsic annotation must annotate a hole expression")]
     IntrinsicPayloadNotHole(Sp<t::TermId>),
+    #[error("A quantified type parameter must be a pattern")]
+    QuantifierParameterNotPattern(Sp<t::CoPatId>),
     #[error("The binding has both `!` and `fix` modifiers")]
     CompWhileFix(Sp<b::PatId>),
 }

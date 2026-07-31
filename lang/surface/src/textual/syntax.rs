@@ -70,25 +70,35 @@ pub struct KontCall {
     pub tail: TermId,
 }
 
-/// `pi (x: A) -> B`
+/// `pi (x : A) (y : B) . C`
 #[derive(Clone, Debug)]
 pub struct Pi(pub CoPatId, pub TermId);
-/// `forall (x: A) . B`
+/// `forall (x : A) (y : B) . C`
 #[derive(Clone, Debug)]
 pub struct Forall(pub CoPatId, pub TermId);
 
-/// `sigma (x: A) . A'`
+/// `sigma (x : A) (y : B) . C`
 #[derive(Clone, Debug)]
 pub struct Sigma(pub CoPatId, pub TermId);
-/// `exists (x: A) . A'`
+/// One abstract or manifest binder in an existential telescope.
 #[derive(Clone, Debug)]
-pub struct Exists(pub CoPatId, pub TermId);
-/// `exists (X as A : K) . B` or `exists (X as A) . B`
+pub enum ExistentialParameter {
+    Abstract(PatId),
+    Manifest(ManifestParameter),
+}
+
+/// `(X as A : K)` or `(X as A)`
 #[derive(Clone, Debug)]
-pub struct ManifestExists {
+pub struct ManifestParameter {
     pub binder: PatId,
     pub definition: TermId,
     pub classifier: Option<TermId>,
+}
+
+/// `exists (x : A) (X as B : K) . C`
+#[derive(Clone, Debug)]
+pub struct Exists {
+    pub parameters: Vec<ExistentialParameter>,
     pub body: TermId,
 }
 
@@ -192,7 +202,6 @@ pub enum Term {
     Arrow(ArrowU<TermId>),
     Sigma(Sigma),
     Exists(Exists),
-    ManifestExists(ManifestExists),
     Prod(ProdU<TermId>),
     Thunk(Thunk<TermId>),
     Force(Force<TermId>),

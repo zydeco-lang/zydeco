@@ -99,11 +99,13 @@ The explicit form `exists (X as D : S). B` remains available and checks the stat
 The canonical Builtin signature uses the inferred form to introduce the core CBPV vocabulary once:
 
 ```zydeco
-exists (VType as @[intrinsic(vtype)] _) .
-exists (CType as @[intrinsic(ctype)] _) .
-exists (Thk as @[intrinsic(thk)] _) .
-exists (Ret as @[intrinsic(ret)] _) .
-exists (Unit as @[intrinsic(unit)] _) .
+exists
+  (VType as @[intrinsic(vtype)] _)
+  (CType as @[intrinsic(ctype)] _)
+  (Thk as @[intrinsic(thk)] _)
+  (Ret as @[intrinsic(ret)] _)
+  (Unit as @[intrinsic(unit)] _)
+.
   ...
 ```
 
@@ -147,9 +149,11 @@ Manifest types do not add `PackPi` witnesses.
 The two forms may occur in one telescope:
 
 ```text
-exists (Key : VType).
-  exists (Map as Tree Key : VType).
-    API Key Map
+exists
+  (Key : VType)
+  (Map as Tree Key : VType)
+.
+  API Key Map
 ```
 
 Opening this package creates an abstract `Key` and then binds `Map ≡ Tree Key`.
