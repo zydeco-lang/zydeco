@@ -1,5 +1,6 @@
-# Rust
+# Build products
 /target
+*.wasm
 
 # Local script folders
 _*/
