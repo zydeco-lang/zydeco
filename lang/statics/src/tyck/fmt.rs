@@ -7,6 +7,7 @@ use zydeco_utils::arena::ArenaAccess;
 /* -------------------------------- Formatter ------------------------------- */
 
 pub use zydeco_syntax::{Pretty, Ugly};
+
 pub struct Formatter<'arena> {
     scoped: &'arena ScopedArena,
     statics: &'arena StaticsArena,
@@ -15,6 +16,19 @@ pub struct Formatter<'arena> {
 impl<'arena> Formatter<'arena> {
     pub fn new(scoped: &'arena ScopedArena, statics: &'arena StaticsArena) -> Self {
         Formatter { scoped, statics, indent: 2 }
+    }
+}
+
+/// A source-facing equation that reveals the representation behind one
+/// lexically sealed abstract type.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SealedTypeEquation(AbstId);
+
+impl SealedTypeEquation {
+    pub fn new(statics: &StaticsArena, sealed: AbstId) -> Option<Self> {
+        let definition = statics.seals.get(&sealed)?;
+        statics.annotations_type.get(definition)?;
+        Some(Self(sealed))
     }
 }
 
@@ -759,7 +773,6 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
 impl<'a> Pretty<'a, Formatter<'a>> for AbstId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let () = &f.statics.absts[self];
-        let sealed = &f.statics.seals.get(self);
         let hint = match f.statics.abst_hints.get(self) {
             | Some(hint) => {
                 let hint = &f.scoped.defs[hint];
@@ -767,10 +780,28 @@ impl<'a> Pretty<'a, Formatter<'a>> for AbstId {
             }
             | None => self.concise(),
         };
-        match sealed {
-            | Some(_ty) => RcDoc::text(format!("{}[sealed]", hint)),
-            | None => RcDoc::text(hint.to_string()),
-        }
+        RcDoc::text(hint.to_string())
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for SealedTypeEquation {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let sealed = self.0;
+        let definition = f.statics.seals[&sealed];
+        let kind = f.statics.annotations_type[&definition];
+        RcDoc::concat([
+            sealed.pretty(f),
+            RcDoc::text(" :"),
+            RcDoc::space(),
+            kind.pretty(f),
+            RcDoc::concat([
+                RcDoc::hardline(),
+                RcDoc::text("="),
+                RcDoc::space(),
+                definition.pretty(f).nest(f.indent),
+            ])
+            .nest(f.indent),
+        ])
     }
 }
 
@@ -781,7 +812,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for DataId {
             RcDoc::text("data"),
             RcDoc::concat(data.iter().map(|(ctor, ty)| {
                 RcDoc::concat([
-                    RcDoc::line(),
+                    RcDoc::hardline(),
                     RcDoc::text("|"),
                     RcDoc::space(),
                     ctor.pretty(f),
@@ -790,7 +821,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for DataId {
                     RcDoc::concat([RcDoc::line(), ty.pretty(f)]).group().nest(f.indent),
                 ])
             })),
-            RcDoc::line(),
+            RcDoc::hardline(),
             RcDoc::text("end"),
         ])
         .group()
@@ -804,7 +835,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for CoDataId {
             RcDoc::text("codata"),
             RcDoc::concat(codata.iter().map(|(dtor, ty)| {
                 RcDoc::concat([
-                    RcDoc::line(),
+                    RcDoc::hardline(),
                     RcDoc::text("|"),
                     RcDoc::space(),
                     dtor.pretty(f),
@@ -813,7 +844,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for CoDataId {
                     RcDoc::concat([RcDoc::line(), ty.pretty(f)]).group().nest(f.indent),
                 ])
             })),
-            RcDoc::line(),
+            RcDoc::hardline(),
             RcDoc::text("end"),
         ])
         .group()

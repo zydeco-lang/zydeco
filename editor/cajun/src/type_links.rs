@@ -10,10 +10,26 @@ use zydeco_surface::scoped::syntax::DefId;
 use zydeco_syntax::{Abs, App, Arrow, Label, Named, Prod, Proj};
 use zydeco_utils::arena::ArenaAccess;
 
-/// Source definitions whose names occur in a formatted static annotation.
-pub(crate) struct TypeDefinitionCollector<'arena> {
+pub(crate) struct TypeReferences {
+    definitions: BTreeSet<DefId>,
+    sealed_types: BTreeSet<AbstId>,
+}
+
+impl TypeReferences {
+    pub(crate) fn definitions(&self) -> impl Iterator<Item = DefId> + '_ {
+        self.definitions.iter().copied()
+    }
+
+    pub(crate) fn sealed_types(&self) -> impl Iterator<Item = AbstId> + '_ {
+        self.sealed_types.iter().copied()
+    }
+}
+
+/// Source definitions and sealed representations reached by displayed static terms.
+pub(crate) struct TypeReferenceCollector<'arena> {
     statics: &'arena StaticsArena,
     definitions: BTreeSet<DefId>,
+    sealed_types: BTreeSet<AbstId>,
     kinds: BTreeSet<KindId>,
     kind_patterns: BTreeSet<KPatId>,
     types: BTreeSet<TypeId>,
@@ -23,11 +39,14 @@ pub(crate) struct TypeDefinitionCollector<'arena> {
     codatas: BTreeSet<CoDataId>,
 }
 
-impl<'arena> TypeDefinitionCollector<'arena> {
-    pub(crate) fn collect(statics: &'arena StaticsArena, annotation: AnnId) -> BTreeSet<DefId> {
+impl<'arena> TypeReferenceCollector<'arena> {
+    pub(crate) fn collect(
+        statics: &'arena StaticsArena, annotation: AnnId, displayed_type: Option<TypeId>,
+    ) -> TypeReferences {
         let mut collector = Self {
             statics,
             definitions: BTreeSet::new(),
+            sealed_types: BTreeSet::new(),
             kinds: BTreeSet::new(),
             kind_patterns: BTreeSet::new(),
             types: BTreeSet::new(),
@@ -37,7 +56,8 @@ impl<'arena> TypeDefinitionCollector<'arena> {
             codatas: BTreeSet::new(),
         };
         collector.visit_annotation(annotation);
-        collector.definitions
+        displayed_type.into_iter().for_each(|ty| collector.visit_type(ty));
+        TypeReferences { definitions: collector.definitions, sealed_types: collector.sealed_types }
     }
 
     fn visit_annotation(&mut self, annotation: AnnId) {
@@ -95,11 +115,16 @@ impl<'arena> TypeDefinitionCollector<'arena> {
     }
 
     fn visit_abstract(&mut self, abstract_type: AbstId) {
-        if self.abstracts.insert(abstract_type)
-            && let Some(definition) = self.statics.abst_hints.get(&abstract_type)
-        {
-            self.definitions.insert(*definition);
+        if !self.abstracts.insert(abstract_type) {
+            return;
         }
+        self.statics.abst_hints.get(&abstract_type).into_iter().for_each(|definition| {
+            self.definitions.insert(*definition);
+        });
+        self.statics.seals.get(&abstract_type).copied().into_iter().for_each(|definition| {
+            self.sealed_types.insert(abstract_type);
+            self.visit_type(definition);
+        });
     }
 
     fn visit_type(&mut self, ty: TypeId) {
@@ -112,6 +137,16 @@ impl<'arena> TypeDefinitionCollector<'arena> {
         match ty {
             | Type::Var(definition) => {
                 self.definitions.insert(*definition);
+                self.statics
+                    .abst_hints
+                    .iter()
+                    .filter_map(|(abstract_type, hint)| {
+                        (*hint == *definition && self.statics.seals.get(abstract_type).is_some())
+                            .then_some(*abstract_type)
+                    })
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .for_each(|abstract_type| self.visit_abstract(abstract_type));
             }
             | Type::Abst(abstract_type) => self.visit_abstract(*abstract_type),
             | Type::Abs(Abs(pattern, body)) => {

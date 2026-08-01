@@ -8,7 +8,12 @@ use tower_lsp::lsp_types::{
     SemanticToken, SymbolKind, Url,
 };
 use zydeco_driver::source::{SourceGraph, SourceScoped};
-use zydeco_statics::tyck::{HoleSolutionOutput, Tycker, arena::StaticsArena, fmt::Formatter};
+use zydeco_statics::tyck::{
+    HoleSolutionOutput, Tycker,
+    arena::StaticsArena,
+    fmt::{Formatter, SealedTypeEquation},
+    syntax::AbstId,
+};
 use zydeco_surface::{
     scoped::syntax::{DefId, Term, TermId},
     textual::syntax::EntityId,
@@ -20,9 +25,9 @@ use zydeco_utils::{
 };
 
 use crate::{
-    hover::{HoverSignature, TypeDefinitionLink, TypeDefinitionPreview},
+    hover::{HoverSignature, SealedTypeEquationPreview, TypeDefinitionLink, TypeDefinitionPreview},
     semantic::SemanticHighlighter,
-    type_links::TypeDefinitionCollector,
+    type_links::TypeReferenceCollector,
 };
 
 /// Compiler analysis state for one editor root.
@@ -117,17 +122,29 @@ impl ProjectState {
         let formatter = Formatter::new(&self.scoped.arena, &self.statics);
         let mut annotation_text = String::new();
         annotation.pretty(&formatter).render_fmt(100, &mut annotation_text).ok()?;
-        let definition =
-            self.statics.type_definitions.get(&occurrence.definition).and_then(|definition| {
-                let mut rendered = String::new();
-                definition.pretty(&formatter).render_fmt(90, &mut rendered).ok()?;
-                Some(TypeDefinitionPreview::new(rendered))
-            });
-        let definitions = TypeDefinitionCollector::collect(&self.statics, *annotation)
-            .into_iter()
+        let definition_type = self.statics.type_definitions.get(&occurrence.definition).copied();
+        let definition = definition_type.and_then(|definition| {
+            let mut rendered = String::new();
+            definition.pretty(&formatter).render_fmt(90, &mut rendered).ok()?;
+            Some(TypeDefinitionPreview::new(rendered))
+        });
+        let displayed_definition =
+            definition.as_ref().filter(|definition| definition.is_expanded()).and(definition_type);
+        let references =
+            TypeReferenceCollector::collect(&self.statics, *annotation, displayed_definition);
+        let definitions = references
+            .definitions()
+            .filter(|definition| *definition != occurrence.definition)
             .filter_map(|definition| self.type_definition_link(definition));
+        let sealed_types = references
+            .sealed_types()
+            .filter(|sealed| {
+                self.statics.abst_hints.get(sealed).copied() != Some(occurrence.definition)
+            })
+            .filter_map(|sealed| self.sealed_type_equation(sealed, &formatter));
         let signature = HoverSignature::with_definitions(&name.0, &annotation_text, definitions)
             .with_definition(definition)
+            .with_sealed_types(sealed_types)
             .markdown();
         Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
@@ -221,6 +238,17 @@ impl ProjectState {
         let mut target = location.uri;
         target.set_fragment(Some(&format!("L{}", location.range.start.line + 1)));
         Some(TypeDefinitionLink { name, target })
+    }
+
+    fn sealed_type_equation(
+        &self, sealed: AbstId, formatter: &Formatter<'_>,
+    ) -> Option<SealedTypeEquationPreview> {
+        let mut rendered = String::new();
+        SealedTypeEquation::new(&self.statics, sealed)?
+            .pretty(formatter)
+            .render_fmt(90, &mut rendered)
+            .ok()?;
+        Some(SealedTypeEquationPreview::new(rendered))
     }
 
     fn term_location(&self, term: TermId) -> Option<Location> {
@@ -442,6 +470,8 @@ mod tests {
             .canonicalize()
             .unwrap();
         let project = ProjectState::load(&path, &HashMap::new()).unwrap();
+        let mut parameter = Url::from_file_path(&path).unwrap();
+        parameter.set_fragment(Some("L7"));
 
         let short = project.hover(&path, Position::new(6, 7)).unwrap();
         let HoverContents::Markup(short) = short.contents else {
@@ -449,12 +479,20 @@ mod tests {
         };
         assert_eq!(
             short.value,
-            concat!(
-                "```zydeco\n",
-                "Option : VType -> VType =\n",
-                "  fn A ->\n",
-                "    data | +None : Unit | +Some : A end\n",
-                "```"
+            format!(
+                concat!(
+                    "```zydeco\n",
+                    "Option : VType -> VType =\n",
+                    "  fn A ->\n",
+                    "    data\n",
+                    "    | +None : Unit\n",
+                    "    | +Some : A\n",
+                    "    end\n",
+                    "```\n\n",
+                    "Types:\n\n",
+                    "- [`A` ↗](<{parameter}>)"
+                ),
+                parameter = parameter
             )
         );
 
@@ -479,7 +517,50 @@ mod tests {
 
         assert_eq!(
             contents.value,
-            "```zydeco\nNat : VType =\n  data | +Z : Unit | +S : Nat[sealed] end\n```"
+            concat!(
+                "```zydeco\n",
+                "Nat : VType =\n",
+                "  data\n",
+                "  | +Z : Unit\n",
+                "  | +S : Nat\n",
+                "  end\n",
+                "```"
+            )
+        );
+    }
+
+    #[test]
+    fn term_hover_explains_sealed_types_with_where_equations() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../lib/tests/builtin/recursive-data.zy")
+            .canonicalize()
+            .unwrap();
+        let project = ProjectState::load(&path, &HashMap::new()).unwrap();
+        let hover = project.hover(&path, Position::new(14, 9)).unwrap();
+        let HoverContents::Markup(contents) = hover.contents else {
+            panic!("type hover should use markup content")
+        };
+        let mut definition = Url::from_file_path(&path).unwrap();
+        definition.set_fragment(Some("L2"));
+
+        assert_eq!(
+            contents.value,
+            format!(
+                concat!(
+                    "```zydeco\n",
+                    "value : Nat\n",
+                    "where\n",
+                    "  Nat : VType\n",
+                    "    = data\n",
+                    "      | +Z : Unit\n",
+                    "      | +S : Nat\n",
+                    "      end\n",
+                    "```\n\n",
+                    "Types:\n\n",
+                    "- [`Nat` ↗](<{definition}>)"
+                ),
+                definition = definition
+            )
         );
     }
 
