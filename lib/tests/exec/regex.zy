@@ -39,139 +39,112 @@ begin
     end
   that
 
-  def int_lt : Thk (Int -> Int -> Ret Bool) = {
-    fn left right ->
-      ! (api/int_lt_branch)
-        (Ret Bool)
-        left
-        right
-        { ret +True() }
-        { ret +False() }
-  } that
-  def char_eq : Thk (Char -> Char -> Ret Bool) = {
-    fn left right ->
-      do left <- ! (api/char_to_int) left;
-      do right <- ! (api/char_to_int) right;
-      ! (api/int_eq_branch)
-        (Ret Bool)
-        left
-        right
-        { ret +True() }
-        { ret +False() }
-  } that
-  def str_chop_hd : Thk (String -> Int -> Ret String) = {
-    fn s i ->
-      do l <- ! (api/str_length) s;
-      let str_collect : Thk (String -> Int -> String -> Ret String) = {
-        fix (
-          str_collect :
-          Thk (String -> Int -> String -> Ret String)
-        ) ->
-          fn s i r ->
-            do continue? <- ! int_lt i l;
-            match continue?
-            | +False() -> ret r
-            | +True() ->
-              do tl <- ! (api/str_index) s i;
-              do tl <- ! (api/char_to_str) tl;
-              do r <- ! (api/str_append) r tl;
-              do i+1 <- ! (api/add) i 1;
-              ! str_collect s i+1 r
-            end
-      } in
-      ! str_collect s i ""
-  } that
-  def str_eq_at : Thk (String -> String -> Int -> Ret Bool) = {
-    fn a b i ->
-      do ai <- ! (api/str_index) a i;
-      do bi <- ! (api/str_index) b i;
-      ! char_eq ai bi
-  } that
-  def str_match : Thk (String -> String -> Ret (Option String)) = {
-    fn s p ->
-      let str_match : Thk (
-        Int ->
-        String ->
-        String ->
-        Ret (Option String)
-      ) = {
-        fix (
-          str_match :
-          Thk (
-            Int ->
-            String ->
-            String ->
-            Ret (Option String)
-          )
-        ) ->
-          fn i s p ->
-            do s_len <- ! (api/str_length) s;
-            do p_len <- ! (api/str_length) p;
-            do i_lt_s <- ! int_lt i s_len;
-            do i_lt_p <- ! int_lt i p_len;
-            match i_lt_p
-            | +False() ->
-              do s' <- ! str_chop_hd s i;
-              ret +Some(s')
-            | +True() ->
-              match i_lt_s
-              | +False() -> ret +None()
-              | +True() ->
-                do eq? <- ! str_eq_at s p i;
-                match eq?
-                | +False() -> ret +None()
-                | +True() ->
-                  do i+1 <- ! (api/add) i 1;
-                  ! str_match i+1 s p
-                end
-              end
-            end
-      } in
-      ! str_match 0 s p
-  } that
-  def regex : Thk Regex = {
-    fix (regex : Thk Regex) ->
-      comatch
-      | .run s ->
-        comatch
-        | .str p -> ! str_match s p
-        | .concat sy1 sy2 ->
-          do s? <- ! regex .run s .bind sy1;
-          match s?
-          | +None() -> ret +None()
-          | +Some(s) ->
-            ! regex .run s .bind sy2
-          end
-        | .kleene sy ->
-          do s? <- ! regex .run s .bind sy;
-          match s?
-          | +None() -> ret +Some(s)
-          | +Some(s) -> ! regex .run s .kleene sy
-          end
-        | .choose sy1 sy2 ->
-          do s? <- ! regex .run s .bind sy1;
-          match s?
-          | +Some(s) -> ret +Some(s)
-          | +None() -> ! regex .run s .bind sy2
-          end
-        | .bind sy ->
-          match sy
-          | +Str(p) -> ! regex .run s .str p
-          | +Concat(sy1, sy2) -> ! regex .run s .concat sy1 sy2
-          | +Kleene(sy) -> ! regex .run s .kleene sy
-          | +Choose(sy1, sy2) -> ! regex .run s .choose sy1 sy2
+  def ! int_lt (left : Int) (right : Int) : Ret Bool =
+    ! (api/int_lt_branch)
+      (Ret Bool)
+      left
+      right
+      { ret +True() }
+      { ret +False() }
+  that
+  def ! char_eq (left : Char) (right : Char) : Ret Bool =
+    do left <- ! (api/char_to_int) left;
+    do right <- ! (api/char_to_int) right;
+    ! (api/int_eq_branch)
+      (Ret Bool)
+      left
+      right
+      { ret +True() }
+      { ret +False() }
+  that
+  def ! str_chop_hd (s : String) (i : Int) : Ret String =
+    do l <- ! (api/str_length) s;
+    let fix str_collect (s : String) (i : Int) (r : String) : Ret String =
+      do continue? <- ! int_lt i l;
+      match continue?
+      | +False() -> ret r
+      | +True() ->
+        do tl <- ! (api/str_index) s i;
+        do tl <- ! (api/char_to_str) tl;
+        do r <- ! (api/str_append) r tl;
+        do i+1 <- ! (api/add) i 1;
+        ! str_collect s i+1 r
+      end
+    in
+    ! str_collect s i ""
+  that
+  def ! str_eq_at (a : String) (b : String) (i : Int) : Ret Bool =
+    do ai <- ! (api/str_index) a i;
+    do bi <- ! (api/str_index) b i;
+    ! char_eq ai bi
+  that
+  def ! str_match (s : String) (p : String) : Ret (Option String) =
+    let fix str_match (i : Int) (s : String) (p : String) : Ret (Option String) =
+        do s_len <- ! (api/str_length) s;
+      do p_len <- ! (api/str_length) p;
+      do i_lt_s <- ! int_lt i s_len;
+      do i_lt_p <- ! int_lt i p_len;
+      match i_lt_p
+      | +False() ->
+        do s' <- ! str_chop_hd s i;
+        ret +Some(s')
+      | +True() ->
+        match i_lt_s
+        | +False() -> ret +None()
+        | +True() ->
+          do eq? <- ! str_eq_at s p i;
+          match eq?
+          | +False() -> ret +None()
+          | +True() ->
+            do i+1 <- ! (api/add) i 1;
+            ! str_match i+1 s p
           end
         end
       end
-  } that
-  def demo : Thk (Syn -> String -> Thk OS -> OS) = {
-    fn syn str kont ->
-      do res <- ! regex .run str .bind syn;
-      match res
-      | +Some(s) -> ! (api/write_line) s kont
-      | +None() -> ! (api/exit) 1
+      in
+    ! str_match 0 s p
+  that
+  def fix regex : Regex =
+    comatch
+    | .run s ->
+      comatch
+      | .str p -> ! str_match s p
+      | .concat sy1 sy2 ->
+        do s? <- ! regex .run s .bind sy1;
+        match s?
+        | +None() -> ret +None()
+        | +Some(s) ->
+          ! regex .run s .bind sy2
+        end
+      | .kleene sy ->
+        do s? <- ! regex .run s .bind sy;
+        match s?
+        | +None() -> ret +Some(s)
+        | +Some(s) -> ! regex .run s .kleene sy
+        end
+      | .choose sy1 sy2 ->
+        do s? <- ! regex .run s .bind sy1;
+        match s?
+        | +Some(s) -> ret +Some(s)
+        | +None() -> ! regex .run s .bind sy2
+        end
+      | .bind sy ->
+        match sy
+        | +Str(p) -> ! regex .run s .str p
+        | +Concat(sy1, sy2) -> ! regex .run s .concat sy1 sy2
+        | +Kleene(sy) -> ! regex .run s .kleene sy
+        | +Choose(sy1, sy2) -> ! regex .run s .choose sy1 sy2
+        end
       end
-  } that
+    end
+  that
+  def ! demo (syn : Syn) (str : String) (kont : Thk OS) : OS =
+    do res <- ! regex .run str .bind syn;
+    match res
+    | +Some(s) -> ! (api/write_line) s kont
+    | +None() -> ! (api/exit) 1
+    end
+  that
 
   -- p*q*(xos|sox)
   ! demo

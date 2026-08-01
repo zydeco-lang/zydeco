@@ -5,10 +5,9 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  def unit_to_str : Thk (Unit -> Ret String) = {
-    fn (_ : Unit) ->
-      ret "()"
-  } that
+  def ! unit_to_str (_ : Unit) : Ret String =
+    ret "()"
+  that
 
   let v : Unit = () in
   do x <- ! unit_to_str v;

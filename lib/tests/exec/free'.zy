@@ -46,7 +46,7 @@ begin
     end
   that
 
-  def mfree : Thk (Monad (Free Handlers)) = {
+  def ! mfree : Monad (Free Handlers) =
     comatch
     | .return A a ->
       fn .run R ->
@@ -70,59 +70,49 @@ begin
                   k'
             }
     end
-  } that
-  def print : Thk (String -> Free Handlers Bool) = {
-    fn string ->
-      fn .run R ->
-        fn .eff print fail flip ->
-          ! print string
-  } that
-  def fail : Thk (Err -> Free Handlers Empty) = {
-    fn error ->
-      fn .run R ->
-        fn .eff print fail flip ->
-          ! fail error
-  } that
-  def flip : Thk (Free Handlers Bool) = {
+  that
+  def ! print (string : String) : Free Handlers Bool =
+    fn .run R ->
+      fn .eff print fail flip ->
+        ! print string
+  that
+  def ! fail (error : Err) : Free Handlers Empty =
+    fn .run R ->
+      fn .eff print fail flip ->
+        ! fail error
+  that
+  def ! flip : Free Handlers Bool =
     fn .run R ->
       fn .eff print fail flip ->
         ! flip ()
-  } that
-  def print-os : Thk (String -> Thk (Bool -> OS) -> OS) = {
-    fn string k ->
-      ! (api/write_line) string { ! k +True() }
-  } that
-  def print-str : Thk (
-    String ->
-    Thk (Bool -> Ret String) ->
-    Ret String
-  ) = {
-    fn string k ->
-      do suffix <- ! k +True();
-      ! (api/str_append) string suffix
-  } that
-  def fail-os : Thk (Err -> Thk (Empty -> OS) -> OS) = {
-    fn error continuation ->
-      match error
-      | +Msg(message) ->
-        ! (api/write_line) message { ! (api/exit) 1 }
-      end
-  } that
-  def flip-os : Thk (Unit -> Thk (Bool -> OS) -> OS) = {
-    fn unit continuation ->
-      ! (api/random_int) {
-        fn random ->
-          do remainder <- ! (api/mod) random 2;
-          ! (api/int_eq_branch)
-            OS
-            remainder
-            0
-            { ! continuation +True() }
-            { ! continuation +False() }
-      }
-  } that
+  that
+  def ! print-os (string : String) (k : Thk (Bool -> OS)) : OS =
+    ! (api/write_line) string { ! k +True() }
+  that
+  def ! print-str (string : String) (k : Thk (Bool -> Ret String)) : Ret String =
+    do suffix <- ! k +True();
+    ! (api/str_append) string suffix
+  that
+  def ! fail-os (error : Err) (continuation : Thk (Empty -> OS)) : OS =
+    match error
+    | +Msg(message) ->
+      ! (api/write_line) message { ! (api/exit) 1 }
+    end
+  that
+  def ! flip-os (unit : Unit) (continuation : Thk (Bool -> OS)) : OS =
+    ! (api/random_int) {
+      fn random ->
+        do remainder <- ! (api/mod) random 2;
+        ! (api/int_eq_branch)
+          OS
+          remainder
+          0
+          { ! continuation +True() }
+          { ! continuation +False() }
+    }
+  that
 
-  let m : Thk (Free Handlers Unit) = {
+  let ! m : Free Handlers Unit =
     ! mfree .bind Bool Unit
       { ! print "a" }
       {
@@ -149,7 +139,7 @@ begin
                   }
             }
       }
-  } in
+  in
   ! m .run OS .eff print-os fail-os flip-os {
     fn _ ->
       ! (api/exit) 0

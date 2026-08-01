@@ -17,10 +17,9 @@ begin
   ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
     let Num = StdInt that
-    def done : Thk (Num -> StdOS) = {
-      fn (x : Num) ->
-        ! (std/os/exit) x
-    } that
+    def ! done (x : Num) : StdOS =
+      ! (std/os/exit) x
+    that
 
     ! done 0
   end

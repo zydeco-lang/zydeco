@@ -62,106 +62,99 @@ begin
     end
   that
 
-  def str_eq : Thk (String -> String -> Ret Bool) = {
-    fn left right ->
-      ! (api/str_eq_branch)
-        (Ret Bool)
-        left
-        right
-        { ret +True() }
-        { ret +False() }
-  } that
-  def panic : Thk (String -> OS) = {
-    fn msg ->
-      ! (api/write_line) msg {
-        ! (api/exit) 1
-      }
-  } that
-  def lookup : Thk (String -> Env -> Ret Answer) = {
-    fix (lookup : Thk (String -> Env -> Ret Answer)) ->
-      fn x g ->
-        match g
-        | +Empty() -> ret +Err()
-        | +Cons(y, v, g) ->
-          do b <- ! str_eq x y;
-          match b
-          | +True() -> ret +Ok(v)
-          | +False() -> ! lookup x g
-          end
-        end
-  } that
-  def value_to_str : Thk (Value -> Ret String) = {
-    fn v ->
-      match v
-      | +True() -> ret "true"
-      | +False() -> ret "false"
-      | +Closure(_) -> ret "<closure>"
+  def ! str_eq (left : String) (right : String) : Ret Bool =
+    ! (api/str_eq_branch)
+      (Ret Bool)
+      left
+      right
+      { ret +True() }
+      { ret +False() }
+  that
+  def ! panic (msg : String) : OS =
+    ! (api/write_line) msg {
+      ! (api/exit) 1
+    }
+  that
+  def fix lookup (x : String) (g : Env) : Ret Answer =
+    match g
+    | +Empty() -> ret +Err()
+    | +Cons(y, v, g) ->
+      do b <- ! str_eq x y;
+      match b
+      | +True() -> ret +Ok(v)
+      | +False() -> ! lookup x g
       end
-  } that
-  def error : Thk Machine = {
-    fix (error : Thk Machine) ->
-      comatch
-      | .fun _ -> ! error
-      | .app _ -> ! error
-      | .if _ -> ! error
-      | .bind -> ret +Err()
-      end
-  } that
+    end
+  that
+  def ! value_to_str (v : Value) : Ret String =
+    match v
+    | +True() -> ret "true"
+    | +False() -> ret "false"
+    | +Closure(_) -> ret "<closure>"
+    end
+  that
+  def fix error : Machine =
+    comatch
+    | .fun _ -> ! error
+    | .app _ -> ! error
+    | .if _ -> ! error
+    | .bind -> ret +Err()
+    end
+  that
   --| The abstract machine is a codata type that describes the interpreter state:
   --| either descending into an expression or ascending to return a value.
   --| The mutually recursive functions `descend` and `ascend` are defined as a
   --| codata-typed term `interp`.
-  def interp : Thk Interp = {
-    fix (interp : Thk Interp) ->
-      comatch
-      | .descend (expr, env) ->
-        match expr
-        | +Var(x) ->
-          do v <- ! lookup x env;
-          match v
-          | +Err(_) -> ! error
-          | +Ok(v) -> ! interp .ascend v
-          end
-        | +True() -> ! interp .ascend +True()
-        | +False() -> ! interp .ascend +False()
-        | +Lam(x, expr) ->
-          -- creates a host language thunk that runs the function body with an
-          -- extended environment
-          ! interp .ascend +Closure({
-            fn v ->
-              ! interp .descend (expr, +Cons(x, v, env))
-          })
-        | +App(f, a) ->
-          ! interp .descend (f, env) .fun (a, env)
-        | +If(c, t, f) ->
-          ! interp
-            .descend
-            (c, env)
-            .if
-            (t, f, env)
+  def fix interp : Interp =
+    comatch
+    | .descend (expr, env) ->
+      match expr
+      | +Var(x) ->
+        do v <- ! lookup x env;
+        match v
+        | +Err(_) -> ! error
+        | +Ok(v) -> ! interp .ascend v
         end
-      | .ascend v ->
-        comatch
-        | .fun (a, env) ->
-          ! interp .descend (a, env) .app v
-        | .app f ->
-          match f
-          | +True(_) -> ! error
-          | +False(_) -> ! error
-          | +Closure(fun) ->
-            -- call the function and follow its continuation
-            ! fun v
-          end
-        | .if (t, f, env) ->
-          match v
-          | +True(_) -> ! interp .descend (t, env)
-          | +False(_) -> ! interp .descend (f, env)
-          | +Closure(_) -> ! error
-          end
-        | .bind -> ret +Ok(v)
-        end
+      | +True() -> ! interp .ascend +True()
+      | +False() -> ! interp .ascend +False()
+      | +Lam(x, expr) ->
+        -- creates a host language thunk that runs the function body with an
+        -- extended environment
+        ! interp .ascend +Closure({
+          fn v ->
+            ! interp .descend (expr, +Cons(x, v, env))
+        })
+      | +App(f, a) ->
+        ! interp .descend (f, env) .fun (a, env)
+      | +If(c, t, f) ->
+        ! interp
+          .descend
+          (c, env)
+          .if
+          (t, f, env)
       end
-  } that
+    | .ascend v ->
+      comatch
+      | .fun (a, env) ->
+        ! interp .descend (a, env) .app v
+      | .app f ->
+        match f
+        | +True(_) -> ! error
+        | +False(_) -> ! error
+        | +Closure(fun) ->
+          -- call the function and follow its continuation
+          ! fun v
+        end
+      | .if (t, f, env) ->
+        match v
+        | +True(_) -> ! interp .descend (t, env)
+        | +False(_) -> ! interp .descend (f, env)
+        | +Closure(_) -> ! error
+        end
+      | .bind -> ret +Ok(v)
+      end
+    end
+  that
 
   -- Examples
   def identity : Expr =

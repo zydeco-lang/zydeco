@@ -46,20 +46,20 @@ begin
     end
   that
   def plain : Int = begin 42 end that
-  def inferred : Thk (Int -> Ret Int) = {
+  def ! inferred : Int -> Ret Int =
     begin
       param value that
       ret value
     end
-  } that
-  def lexical_run = {
+  that
+  def ! lexical_run =
     param (value : Int) in
     def expected : Int = 42 in
     let answer = value in
     do status <- ! (api/sub) answer expected;
     ! (api/exit) status
-  } that
-  def run = {
+  that
+  def ! run =
     begin
       let answer : Number = seed that
       param (seed : Number) that
@@ -70,7 +70,7 @@ begin
       do status <- ! (api/sub) expected 42;
       ! (api/exit) status
     end
-  } that
+  that
 
   ! run IdentityResult 42
 end

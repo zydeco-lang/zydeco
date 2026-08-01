@@ -21,12 +21,12 @@ begin
   let Option' (A : VType) =
     OptionT Return A
   that
-  def o : Thk (Option' Int) = {
+  def ! o : Option' Int =
     comatch
     | .trans ->
       ret +Some(1)
     end
-  } that
+  that
 
   ! (api/exit) 0
 end

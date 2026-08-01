@@ -8,19 +8,19 @@ begin
     ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
 
-  def ret_monad : Thk (Monad Ret) = {
+  def ! ret_monad : Monad Ret =
     comatch
     | .return A value -> ret value
     | .bind A B computation continuation ->
       do value <- ! computation;
       ! continuation value
     end
-  } that
-  def translated = {
+  that
+  def ! translated =
     monadic
       ret ()
     end
-  } that
+  that
 
   do _ <- ! translated Ret { ! ret_monad };
   ! (api/exit) 0

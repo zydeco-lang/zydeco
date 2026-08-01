@@ -103,7 +103,7 @@ begin
     end
   that
 
-  def mexn : Thk (MonadErrPrint MExnOS) = {
+  def ! mexn : MonadErrPrint MExnOS =
     comatch
     | .return A a ->
       comatch
@@ -136,232 +136,204 @@ begin
         }
       end
     end
-  } that
-  def bool_eq : Thk (Bool -> Bool -> Ret Bool) = {
-    fn b b' ->
-      match b
-      | +True() ->
-        match b'
-        | +True() -> ret +True()
-        | +False() -> ret +False()
-        end
-      | +False() ->
-        match b'
-        | +True() -> ret +False()
-        | +False() -> ret +True()
+  that
+  def ! bool_eq (b : Bool) (b' : Bool) : Ret Bool =
+    match b
+    | +True() ->
+      match b'
+      | +True() -> ret +True()
+      | +False() -> ret +False()
+      end
+    | +False() ->
+      match b'
+      | +True() -> ret +False()
+      | +False() -> ret +True()
+      end
+    end
+  that
+  def ! str_eq (left : String) (right : String) : Ret Bool =
+    ! (api/str_eq_branch)
+      (Ret Bool)
+      left
+      right
+      { ret +True() }
+      { ret +False() }
+  that
+  def fix envo (env : EnvT) : EnvO =
+    comatch
+    | .lookup x ->
+      match env
+      | +Empty() -> ret +None()
+      | +Extend(x', v, env') ->
+        do is-eq? <- ! str_eq x x';
+        match is-eq?
+        | +True() -> ret +Some(v)
+        | +False() -> ! envo env' .lookup x
         end
       end
-  } that
-  def str_eq : Thk (String -> String -> Ret Bool) = {
-    fn left right ->
-      ! (api/str_eq_branch)
-        (Ret Bool)
-        left
-        right
-        { ret +True() }
-        { ret +False() }
-  } that
-  def envo : Thk (EnvT -> EnvO) = {
-    fix (envo : Thk (EnvT -> EnvO)) ->
-      fn env ->
-        comatch
-        | .lookup x ->
-          match env
-          | +Empty() -> ret +None()
-          | +Extend(x', v, env') ->
-            do is-eq? <- ! str_eq x x';
-            match is-eq?
-            | +True() -> ret +Some(v)
-            | +False() -> ! envo env' .lookup x
-            end
-          end
-        | .extend x v ->
-          ! envo +Extend(x, v, env)
+    | .extend x v ->
+      ! envo +Extend(x, v, env)
+    end
+  that
+  def ! abort (e : Exception) : Compu =
+    fix (unwind : Thk Compu) ->
+      comatch
+      | .app _ -> ! unwind
+      | .bind -> ! mexn .fail Value e
+      end
+  that
+  def fix malg : Algebra MExnOS Compu =
+    fn A m f ->
+      -- m : U (MExnOS A), f: U (A -> Compu)
+      comatch
+      | .app a ->
+        -- goal: Compu
+        ! malg A m {
+          fn v ->
+            ! f v .app a
+        }
+      | .bind ->
+        -- goal: MExnOS Value, use ordinary bind
+        ! mexn .bind A Value m {
+          fn x ->
+            ! f x .bind
+        }
+      end
+  that
+  def fix interp (env : Thk EnvO) : Interp =
+    comatch
+    | .value sv ->
+      match sv
+      | +Var(x) ->
+        do x? <- ! env .lookup x;
+        match x?
+        | +None() ->
+          ! mexn .fail Value +FreeVariable()
+        | +Some(v) ->
+          ! mexn .return Value v
         end
-  } that
-  def abort : Thk (Exception -> Compu) = {
-    fn e ->
-      fix (unwind : Thk Compu) ->
+      | +Bool(b) ->
+        ! mexn .return Value +Bool(b)
+      | +Thunk(c) ->
+        ! mexn .return Value +Thunk({
+          ! interp env .compu c
+        })
+      end
+    | .compu sc ->
+      match sc
+      | +Lam(x, sc) ->
         comatch
-        | .app _ -> ! unwind
-        | .bind -> ! mexn .fail Value e
-        end
-  } that
-  def malg : Thk (Algebra MExnOS Compu) = {
-    fix (malg : Thk (Algebra MExnOS Compu)) ->
-      fn A m f ->
-        -- m : U (MExnOS A), f: U (A -> Compu)
-        comatch
-        | .app a ->
-          -- goal: Compu
-          ! malg A m {
-            fn v ->
-              ! f v .app a
-          }
+        | .app v ->
+          ! interp
+            { ! env .extend x v }
+            .compu
+            sc
         | .bind ->
-          -- goal: MExnOS Value, use ordinary bind
-          ! mexn .bind A Value m {
-            fn x ->
-              ! f x .bind
-          }
+          ! mexn .fail Value +TypeError()
         end
-  } that
-  def interp : Thk (Thk EnvO -> Interp) = {
-    fix (interp : Thk (Thk EnvO -> Interp)) ->
-      fn env ->
-        comatch
-        | .value sv ->
-          match sv
-          | +Var(x) ->
-            do x? <- ! env .lookup x;
-            match x?
-            | +None() ->
-              ! mexn .fail Value +FreeVariable()
-            | +Some(v) ->
-              ! mexn .return Value v
-            end
-          | +Bool(b) ->
-            ! mexn .return Value +Bool(b)
-          | +Thunk(c) ->
-            ! mexn .return Value +Thunk({
-              ! interp env .compu c
-            })
-          end
-        | .compu sc ->
-          match sc
-          | +Lam(x, sc) ->
-            comatch
-            | .app v ->
-              ! interp
-                { ! env .extend x v }
-                .compu
-                sc
-            | .bind ->
-              ! mexn .fail Value +TypeError()
-            end
-          | +App(sc, sv) ->
-            let mv = {
-              ! interp env .value sv
-            } in
-            ! malg Value mv {
-              fn v ->
-                ! interp env .compu sc .app v
-            }
-          | +Ret(sv) ->
-            let unwind : Thk (
-              Thk (MExnOS Value) ->
-              Compu
-            ) = {
-              fix (
-                unwind :
-                Thk (
-                  Thk (MExnOS Value) ->
-                  Compu
-                )
-              ) ->
-                fn m ->
-                  comatch
-                  | .app _ ->
-                    ! unwind {
-                      ! mexn .fail Value +TypeError()
-                    }
-                  | .bind -> ! m
-                  end
-            } in
+      | +App(sc, sv) ->
+        let ! mv =
+          ! interp env .value sv
+        in
+        ! malg Value mv {
+          fn v ->
+            ! interp env .compu sc .app v
+        }
+      | +Ret(sv) ->
+        let fix unwind (m : Thk (MExnOS Value)) : Compu =
+          comatch
+          | .app _ ->
             ! unwind {
-              ! interp env .value sv
+              ! mexn .fail Value +TypeError()
             }
-          | +Bind(sc1, x, sc2) ->
-            let mv = {
-              ! interp env .compu sc1 .bind
-            } in
-            ! malg Value mv {
-              fn v ->
-                ! interp
-                  { ! env .extend x v }
-                  .compu
-                  sc2
-            }
-          | +Force(sv) ->
-            let mv = {
-              ! interp env .value sv
-            } in
-            ! malg Value mv {
-              fn v ->
-                match v
-                | +Bool(_) -> ! abort +TypeError()
-                | +Thunk(c) -> ! c
-                end
-            }
-          | +If(sv, c1, c2) ->
-            let mv = {
-              ! interp env .value sv
-            } in
-            ! malg Value mv {
-              fn v ->
-                match v
-                | +Bool(b) ->
-                  match b
-                  | +True() ->
-                    ! interp env .compu c1
-                  | +False() ->
-                    ! interp env .compu c2
-                  end
-                | +Thunk(_) -> ! abort +TypeError()
-                end
-            }
+          | .bind -> ! m
           end
-        end
-  } that
-
-  let env : Thk EnvO = {
-    ! envo +Empty()
-  } in
-  let report : Thk (Exception -> OS) = {
-    fn e ->
-      match e
-      | +TypeError() -> ! (api/exit) 1
-      | +FreeVariable() -> ! (api/exit) 1
+        in
+        ! unwind {
+          ! interp env .value sv
+        }
+      | +Bind(sc1, x, sc2) ->
+        let ! mv =
+          ! interp env .compu sc1 .bind
+        in
+        ! malg Value mv {
+          fn v ->
+            ! interp
+              { ! env .extend x v }
+              .compu
+              sc2
+        }
+      | +Force(sv) ->
+        let ! mv =
+          ! interp env .value sv
+        in
+        ! malg Value mv {
+          fn v ->
+            match v
+            | +Bool(_) -> ! abort +TypeError()
+            | +Thunk(c) -> ! c
+            end
+        }
+      | +If(sv, c1, c2) ->
+        let ! mv =
+          ! interp env .value sv
+        in
+        ! malg Value mv {
+          fn v ->
+            match v
+            | +Bool(b) ->
+              match b
+              | +True() ->
+                ! interp env .compu c1
+              | +False() ->
+                ! interp env .compu c2
+              end
+            | +Thunk(_) -> ! abort +TypeError()
+            end
+        }
       end
-  } in
-  let value-eq : Thk (
-    Value ->
-    Value ->
-    Thk OS ->
-    OS
-  ) = {
-    fn v1 v2 k ->
-      let bool-value-panic = { ! (api/exit) 1 } in
-      let thunk-panic = { ! (api/exit) 1 } in
-      match v1
-      | +Bool(b1) ->
-        match v2
-        | +Bool(b2) ->
-          do eq? <- ! bool_eq b1 b2;
-          match eq?
-          | +True() ->
-            ! (api/write_line) "\\^o^/" k
-          | +False() -> ! bool-value-panic
-          end
-        | +Thunk(_) -> ! thunk-panic
+    end
+  that
+
+  let ! env : EnvO =
+    ! envo +Empty()
+  in
+  let ! report (e : Exception) : OS =
+    match e
+    | +TypeError() -> ! (api/exit) 1
+    | +FreeVariable() -> ! (api/exit) 1
+    end
+  in
+  let ! value-eq (v1 : Value) (v2 : Value) (k : Thk OS) : OS =
+    let ! bool-value-panic =
+        ! (api/exit) 1
+      in
+    let ! thunk-panic =
+      ! (api/exit) 1
+    in
+    match v1
+    | +Bool(b1) ->
+      match v2
+      | +Bool(b2) ->
+        do eq? <- ! bool_eq b1 b2;
+        match eq?
+        | +True() ->
+          ! (api/write_line) "\\^o^/" k
+        | +False() -> ! bool-value-panic
         end
       | +Thunk(_) -> ! thunk-panic
       end
-  } in
-  let demo : Thk (
-    SCompu ->
-    Value ->
-    Thk OS ->
-    OS
-  ) = {
-    fn term ans k ->
-      ! interp env .compu term .bind .run
-        {
-          fn v ->
-            ! value-eq v ans k
-        }
-        report
-  } in
+    | +Thunk(_) -> ! thunk-panic
+    end
+  in
+  let ! demo (term : SCompu) (ans : Value) (k : Thk OS) : OS =
+    ! interp env .compu term .bind .run
+      {
+        fn v ->
+          ! value-eq v ans k
+      }
+      report
+  in
   -- if true then ret true else ret false
   let term1 : SCompu =
     +If(

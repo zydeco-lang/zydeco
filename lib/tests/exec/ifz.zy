@@ -16,31 +16,21 @@ begin
     | +False : Unit
     end
   that
-  def suc : Thk (Nat -> Ret Nat) = {
-    fn (x : Nat) ->
-      ret +S(x)
-  } that
-  def ifz : Thk (
-    Bool ->
-    Thk (Nat -> Ret Bool) ->
-    Nat ->
-    Ret Bool
-  ) = {
-    fn (z : Bool)
-       (pred : Thk (Nat -> Ret Bool))
-       (x : Nat) ->
-      match x
-      | +Z() -> ret z
-      | +S(x) -> ! pred x
-      end
-  } that
-  def ifz' : Thk (Nat -> Ret Bool) = {
-    fn (x : Nat) ->
-      ! ifz
-        +False()
-        { fn (_ : Nat) -> ret +True() }
-        x
-  } that
+  def ! suc (x : Nat) : Ret Nat =
+    ret +S(x)
+  that
+  def ! ifz (z : Bool) (pred : Thk (Nat -> Ret Bool)) (x : Nat) : Ret Bool =
+    match x
+    | +Z() -> ret z
+    | +S(x) -> ! pred x
+    end
+  that
+  def ! ifz' (x : Nat) : Ret Bool =
+    ! ifz
+      +False()
+      { fn (_ : Nat) -> ret +True() }
+      x
+  that
 
   let zero : Nat = +Z() in
   do one <- ! suc zero;

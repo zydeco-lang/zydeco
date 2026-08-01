@@ -11,51 +11,41 @@ begin
   let Kont (R : CType) (A : VType) =
     Thk (A -> R) -> R
   that
-  def mkont : Thk (
-    forall (R : CType) .
-      Monad (Kont R)
-  ) = {
-    fn R ->
-      comatch
-      | .return A a ->
-        fn k ->
-          ! k a
-      | .bind A A' m f ->
-        fn k ->
-          ! m {
-            fn a ->
-              ! f a k
-          }
-      end
-  } that
-  def reset' : Thk (
-    forall (A : VType) .
-      Thk (Kont (Ret A) A) ->
-      Ret A
-  ) = {
-    fn A e ->
-      ! e {
-        fn x ->
-          ret x
-      }
-  } that
-  def shift' : Thk (
-    forall (A : VType) .
-    forall (A' : VType) .
-      Thk (
-        Thk (A -> Ret A') ->
-        Kont (Ret A') A'
-      ) ->
-      Kont (Ret A') A
-  ) = {
-    fn A A' e ka' ->
+  def ! mkont (R : CType) : Monad (Kont R) =
+    comatch
+    | .return A a ->
+      fn k ->
+        ! k a
+    | .bind A A' m f ->
+      fn k ->
+        ! m {
+          fn a ->
+            ! f a k
+        }
+    end
+  that
+  def ! reset' (A : VType) (e : Thk (Kont (Ret A) A)) : Ret A =
+    ! e {
+      fn x ->
+        ret x
+    }
+  that
+  def ! shift'
+    (A : VType)
+    (A' : VType)
+    (e : Thk (
+      Thk (A -> Ret A') ->
+      Kont (Ret A') A'
+    ))
+    : Kont (Ret A') A =
+    fn ka' ->
       ! e
         ka'
         {
           fn x' ->
             ret x'
         }
-  } that
+  that
   -- reset' and shift' are the primitives of delimited continuations.
   -- example:
   -- def ! _ : F Int =
@@ -67,7 +57,7 @@ begin
   --     ! mul 2 x
   --   }
   -- end
-  def ex : Thk (Ret Int) = {
+  def ! ex : Ret Int =
     ! reset' Int {
       ! mkont (Ret Int) .bind Int Int
         {
@@ -84,7 +74,7 @@ begin
             ! mkont (Ret Int) .return Int res
         }
     }
-  } that
+  that
 
   do x <- ! ex;
   do s <- ! (api/int_to_str) x;

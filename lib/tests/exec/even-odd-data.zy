@@ -21,33 +21,32 @@ begin
     | +OddEven : Thk (Nat -> Ret Bool) * Thk (Nat -> Ret Bool)
     end
   that
-  def fp : Thk (Ret OddEven) = {
-    fix (fp : Thk (Ret OddEven)) ->
-      ret +OddEven(
-        {
-          do fp <- ! fp;
-          match fp
-          | +OddEven(odd, even) ->
-            fn (x : Nat) ->
-              match x
-              | +Z() -> ret +False()
-              | +S(x) -> ! even x
-              end
-          end
-        },
-        {
-          do fp <- ! fp;
-          match fp
-          | +OddEven(odd, even) ->
-            fn (x : Nat) ->
-              match x
-              | +Z() -> ret +True()
-              | +S(x) -> ! odd x
-              end
-          end
-        },
-      )
-  } that
+  def fix fp : Ret OddEven =
+    ret +OddEven(
+      {
+        do fp <- ! fp;
+        match fp
+        | +OddEven(odd, even) ->
+          fn (x : Nat) ->
+            match x
+            | +Z() -> ret +False()
+            | +S(x) -> ! even x
+            end
+        end
+      },
+      {
+        do fp <- ! fp;
+        match fp
+        | +OddEven(odd, even) ->
+          fn (x : Nat) ->
+            match x
+            | +Z() -> ret +True()
+            | +S(x) -> ! odd x
+            end
+        end
+      },
+    )
+  that
 
   do odd <- (
     do fp <- ! fp;

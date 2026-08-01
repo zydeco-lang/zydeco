@@ -11,54 +11,42 @@ begin
   let Kont (R : CType) (A : VType) =
     Thk (A -> R) -> R
   that
-  def mkont : Thk (
-    forall (R : CType) .
-      Monad (Kont R)
-  ) = {
-    fn R ->
-      comatch
-      | .return A a ->
-        fn k ->
-          ! k a
-      | .bind A A' m f ->
-        fn k ->
-          ! m {
-            fn a ->
-              ! f a k
-          }
-      end
-  } that
-  def reset' : Thk (
-    forall (A : VType) .
-      Thk (Kont (Ret A) A) ->
-      (
-        forall (R : CType) .
-          Kont R A
-      )
-  ) = {
-    fn A e R k ->
+  def ! mkont (R : CType) : Monad (Kont R) =
+    comatch
+    | .return A a ->
+      fn k ->
+        ! k a
+    | .bind A A' m f ->
+      fn k ->
+        ! m {
+          fn a ->
+            ! f a k
+        }
+    end
+  that
+  def ! reset' (A : VType) (e : Thk (Kont (Ret A) A)) (R : CType) : Kont R A =
+    fn k ->
       do x <- ! e {
         fn x ->
           ret x
       };
       ! k x
-  } that
-  def shift' : Thk (
-    forall (A : VType) .
-    forall (A' : VType) .
+  that
+  def ! shift'
+    (A : VType)
+    (A' : VType)
+    (e : Thk (
       Thk (
-        Thk (
-          A ->
-          (
-            forall (R : CType) .
-              Kont R A'
-          )
-        ) ->
-        Kont (Ret A') A'
+        A ->
+        (
+          forall (R : CType) .
+            Kont R A'
+        )
       ) ->
-      Kont (Ret A') A
-  ) = {
-    fn A A' e kaa' ->
+      Kont (Ret A') A'
+    ))
+    : Kont (Ret A') A =
+    fn kaa' ->
       ! e
         {
           fn x R ka' ->
@@ -69,7 +57,7 @@ begin
           fn x' ->
             ret x'
         }
-  } that
+  that
   -- reset and shift are the primitives of delimited continuations.
   -- example:
   -- def ! _ : F Int =
@@ -81,10 +69,9 @@ begin
   --     ! mul 2 x
   --   }
   -- end
-  def ex : Thk (
-    forall (R : CType) .
-      Kont R Int
-  ) = {
+  def ! ex
+    : forall (R : CType) .
+    Kont R Int =
     ! reset' Int {
       ! mkont (Ret Int) .bind Int Int
         {
@@ -105,7 +92,7 @@ begin
             ! mkont (Ret Int) .return Int res
         }
     }
-  } that
+  that
 
   ! ex OS {
     fn x ->

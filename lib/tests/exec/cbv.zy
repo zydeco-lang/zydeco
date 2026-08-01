@@ -95,53 +95,48 @@ begin
     end
   that
 
-  def kret : Thk (Value -> Kont' Value) = {
-    fn v ->
-      fn R k ->
-        ! k v
-  } that
-  def mk_mexn : Thk (Thk (Mo' Value) -> Mo Value) = {
-    fn v ->
-      comatch
-      | .run -> ! v
-      end
-  } that
-  def cnt : Thk (Value -> Mo Value) = {
-    fn v ->
-      ! mk_mexn {
-        fn s ->
-          match s
-          | +State(c, o) ->
-            do c' <- ! (api/add) c 1;
-            ret +Cons(
-              +State(c', o),
-              +Right({ ! kret v })
-            )
-          end
-      }
-  } that
-  def stdout : Thk (String -> Value -> Mo Value) = {
-    fn str v ->
-      ! mk_mexn {
-        fn s ->
-          match s
-          | +State(c, o) ->
-            do o' <- ! (api/str_append) o str;
-            ret +Cons(
-              +State(c, o'),
-              +Right({ ! kret v })
-            )
-          end
-      }
-  } that
-  def raise : Thk (Exception -> Mo Value) = {
-    fn exn ->
-      ! mk_mexn {
-        fn s ->
-          ret +Cons(s, +Left(exn))
-      }
-  } that
-  def mexn : Thk (Monad Mo) = {
+  def ! kret (v : Value) : Kont' Value =
+    fn R k ->
+      ! k v
+  that
+  def ! mk_mexn (v : Thk (Mo' Value)) : Mo Value =
+    comatch
+    | .run -> ! v
+    end
+  that
+  def ! cnt (v : Value) : Mo Value =
+    ! mk_mexn {
+      fn s ->
+        match s
+        | +State(c, o) ->
+          do c' <- ! (api/add) c 1;
+          ret +Cons(
+            +State(c', o),
+            +Right({ ! kret v })
+          )
+        end
+    }
+  that
+  def ! stdout (str : String) (v : Value) : Mo Value =
+    ! mk_mexn {
+      fn s ->
+        match s
+        | +State(c, o) ->
+          do o' <- ! (api/str_append) o str;
+          ret +Cons(
+            +State(c, o'),
+            +Right({ ! kret v })
+          )
+        end
+    }
+  that
+  def ! raise (exn : Exception) : Mo Value =
+    ! mk_mexn {
+      fn s ->
+        ret +Cons(s, +Left(exn))
+    }
+  that
+  def ! mexn : Monad Mo =
     comatch
     | .return A a ->
       comatch
@@ -172,98 +167,93 @@ begin
         end
       end
     end
-  } that
-  def str_eq : Thk (String -> String -> Ret Bool) = {
-    fn left right ->
-      ! (api/str_eq_branch)
-        (Ret Bool)
-        left
-        right
-        { ret +True() }
-        { ret +False() }
-  } that
-  def envo : Thk (EnvT -> EnvO) = {
-    fix (envo : Thk (EnvT -> EnvO)) ->
-      fn env ->
-        comatch
-        | .lookup x ->
-          match env
-          | +Empty() -> ret +None()
-          | +Extend(x', v, env') ->
-            do is-eq? <- ! str_eq x x';
-            match is-eq?
-            | +True() -> ret +Some(v)
-            | +False() -> ! envo env' .lookup x
-            end
-          end
-        | .extend x v ->
-          ! envo +Extend(x, v, env)
+  that
+  def ! str_eq (left : String) (right : String) : Ret Bool =
+    ! (api/str_eq_branch)
+      (Ret Bool)
+      left
+      right
+      { ret +True() }
+      { ret +False() }
+  that
+  def fix envo (env : EnvT) : EnvO =
+    comatch
+    | .lookup x ->
+      match env
+      | +Empty() -> ret +None()
+      | +Extend(x', v, env') ->
+        do is-eq? <- ! str_eq x x';
+        match is-eq?
+        | +True() -> ret +Some(v)
+        | +False() -> ! envo env' .lookup x
         end
-  } that
-  def interp : Thk (Thk EnvO -> Term -> Mo Value) = {
-    fix (interp : Thk (Thk EnvO -> Term -> Mo Value)) ->
-      fn env t ->
-        match t
-        | +Var(x) ->
-          do x? <- ! env .lookup x;
-          match x?
-          | +None() -> ! raise +FreeVariable()
-          | +Some(v) ->
-            ! mexn .return Value v
-          -- ret[mexn] v
-          end
-        | +Lam(x, t) ->
-          ! mexn .return Value +Lam(env, x, t)
-        -- ret[mexn] +Lam(env, x, t)
-        | +App(t1, t2) ->
-          let m1 = {
-            ! interp env t1 .run
-          } in
-          ! mexn .bind Value Value
-            { ! mk_mexn m1 }
-            {
-              fn v1 ->
-                -- do[mexn] v1 <- ! interp env t1 .run;
-                let m2 = {
-                  ! interp env t2 .run
-                } in
-                ! mexn .bind Value Value
-                  { ! mk_mexn m2 }
-                  {
-                    fn v2 ->
-                      -- do[mexn] v2 <- ! interp env t2 .run;
-                      match v1
-                      | +Bool(_) -> ! raise +TypeError()
-                      | +Lam(env', x, t) ->
-                        ! interp
-                          { ! env' .extend x v2 }
-                          t
-                      end
-                  }
-            }
-        | +Bool(b) ->
-          ! mexn .return Value +Bool(b)
-        -- ret[mexn] +Bool(b)
-        | +If(t1, t2, t3) ->
-          let m1 = {
-            ! interp env t1 .run
-          } in
-          ! mexn .bind Value Value
-            { ! mk_mexn m1 }
-            {
-              fn v1 ->
-                -- do[mexn] v1 <- ! interp env t1 .run;
-                match v1
-                | +Bool(b) ->
-                  match b
-                  | +True() -> ! interp env t2
-                  | +False() -> ! interp env t3
+      end
+    | .extend x v ->
+      ! envo +Extend(x, v, env)
+    end
+  that
+  def fix interp (env : Thk EnvO) (t : Term) : Mo Value =
+    match t
+    | +Var(x) ->
+      do x? <- ! env .lookup x;
+      match x?
+      | +None() -> ! raise +FreeVariable()
+      | +Some(v) ->
+        ! mexn .return Value v
+      -- ret[mexn] v
+      end
+    | +Lam(x, t) ->
+      ! mexn .return Value +Lam(env, x, t)
+    -- ret[mexn] +Lam(env, x, t)
+    | +App(t1, t2) ->
+      let ! m1 =
+        ! interp env t1 .run
+      in
+      ! mexn .bind Value Value
+        { ! mk_mexn m1 }
+        {
+          fn v1 ->
+            -- do[mexn] v1 <- ! interp env t1 .run;
+            let ! m2 =
+              ! interp env t2 .run
+            in
+            ! mexn .bind Value Value
+              { ! mk_mexn m2 }
+              {
+                fn v2 ->
+                  -- do[mexn] v2 <- ! interp env t2 .run;
+                  match v1
+                  | +Bool(_) -> ! raise +TypeError()
+                  | +Lam(env', x, t) ->
+                    ! interp
+                      { ! env' .extend x v2 }
+                      t
                   end
-                | +Lam(_, _, _) -> ! raise +TypeError()
-                end
-            }
-        end
-  } that
+              }
+        }
+    | +Bool(b) ->
+      ! mexn .return Value +Bool(b)
+    -- ret[mexn] +Bool(b)
+    | +If(t1, t2, t3) ->
+      let ! m1 =
+        ! interp env t1 .run
+      in
+      ! mexn .bind Value Value
+        { ! mk_mexn m1 }
+        {
+          fn v1 ->
+            -- do[mexn] v1 <- ! interp env t1 .run;
+            match v1
+            | +Bool(b) ->
+              match b
+              | +True() -> ! interp env t2
+              | +False() -> ! interp env t3
+              end
+            | +Lam(_, _, _) -> ! raise +TypeError()
+            end
+        }
+    end
+  that
 
   let term : Term =
     +App(
@@ -271,9 +261,9 @@ begin
       +Bool(+True())
     )
   in
-  let env : Thk EnvO = {
+  let ! env : EnvO =
     ! envo +Empty()
-  } in
+  in
   do sv? <- ! interp env term .run +State(0, "");
   match sv?
   | +Cons(s, v?) ->

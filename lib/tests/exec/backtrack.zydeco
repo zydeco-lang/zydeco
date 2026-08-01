@@ -48,16 +48,15 @@ begin
     end
   that
 
-  def int_eq : Thk (Int -> Int -> Ret Bool) = {
-    fn left right ->
-      ! (api/int_eq_branch)
-        (Ret Bool)
-        left
-        right
-        { ret +True() }
-        { ret +False() }
-  } that
-  def mnlist : Thk (Monoid MList) = {
+  def ! int_eq (left : Int) (right : Int) : Ret Bool =
+    ! (api/int_eq_branch)
+      (Ret Bool)
+      left
+      right
+      { ret +True() }
+      { ret +False() }
+  that
+  def ! mnlist : Monoid MList =
     comatch
     | .empty A ->
       fn .done ->
@@ -66,74 +65,57 @@ begin
       fn .done ->
         do xs <- ! m1 .done;
         do ys <- ! m2 .done;
-        let loop : Thk (List A -> Ret (List A)) = {
-          fix (loop : Thk (List A -> Ret (List A))) ->
-            fn xs ->
-              match xs
-              | +Nil() -> ret ys
-              | +Cons(x, xs) ->
-                do ys <- ! loop xs;
-                ret +Cons(x, ys)
-              end
-        } in
+        let fix loop (xs : List A) : Ret (List A) =
+          match xs
+          | +Nil() -> ret ys
+          | +Cons(x, xs) ->
+            do ys <- ! loop xs;
+            ret +Cons(x, ys)
+          end
+        in
         ! loop xs
     end
-  } that
-  def mlist : Thk (Monad MList) = {
+  that
+  def ! mlist : Monad MList =
     comatch
     | .return A a ->
       fn .done ->
         ret +Cons(a, +Nil())
     | .bind A A' m f ->
       do xs <- ! m .done;
-      let loop : Thk (
-        List A ->
-        Thk (Thk (MList A') -> MList A') ->
-        MList A'
-      ) = {
-        fix (
-          loop :
-          Thk (
-            List A ->
-            Thk (Thk (MList A') -> MList A') ->
-            MList A'
-          )
-        ) ->
-          fn xs g ->
-            match xs
-            | +Nil() ->
-              ! g { ! mnlist .empty A' }
-            | +Cons(x, xs) ->
-              ! loop xs {
-                fn ys ->
-                  ! g {
-                    ! mnlist .append A'
-                      { ! f x }
-                      ys
-                  }
+      let fix loop (xs : List A) (g : Thk (Thk (MList A') -> MList A')) : MList A' =
+        match xs
+        | +Nil() ->
+          ! g { ! mnlist .empty A' }
+        | +Cons(x, xs) ->
+          ! loop xs {
+            fn ys ->
+              ! g {
+                ! mnlist .append A'
+                  { ! f x }
+                  ys
               }
-            end
-      } in
+          }
+        end
+      in
       ! loop xs {
         fn ys ->
           ! ys
       }
     end
-  } that
-  def choose : Thk (List Int -> MList Int) = {
-    fn xs ->
-      fn .done ->
-        ret xs
-  } that
-  def guard : Thk (Bool -> MList Unit) = {
-    fn b ->
-      match b
-      | +True() -> ! mlist .return Unit ()
-      | +False() -> ! mnlist .empty Unit
-      end
-  } that
+  that
+  def ! choose (xs : List Int) : MList Int =
+    fn .done ->
+      ret xs
+  that
+  def ! guard (b : Bool) : MList Unit =
+    match b
+    | +True() -> ! mlist .return Unit ()
+    | +False() -> ! mnlist .empty Unit
+    end
+  that
 
-  let demo : Thk (MList (Pair Int Int)) = {
+  let ! demo : MList (Pair Int Int) =
     ! mlist .bind Int (Pair Int Int)
       { ! choose +Cons(1, +Cons(2, +Nil())) }
       {
@@ -156,31 +138,26 @@ begin
                   }
             }
       }
-  } in
+  in
   do ps <- ! demo .done;
-  let print : Thk (List (Pair Int Int) -> Thk OS -> OS) = {
-    fix (
-      print :
-      Thk (List (Pair Int Int) -> Thk OS -> OS)
-    ) ->
-      fn ps kont ->
-        match ps
-        | +Nil() -> ! kont
-        | +Cons(p, ps) ->
-          match p
-          | +Cons(x, y) ->
-            ! (api/write_int) x {
-              ! (api/write_str) " + " {
-                ! (api/write_int) y {
-                  ! (api/write_line) "" {
-                    ! print ps kont
-                  }
-                }
+  let fix print (ps : List (Pair Int Int)) (kont : Thk OS) : OS =
+    match ps
+    | +Nil() -> ! kont
+    | +Cons(p, ps) ->
+      match p
+      | +Cons(x, y) ->
+        ! (api/write_int) x {
+          ! (api/write_str) " + " {
+            ! (api/write_int) y {
+              ! (api/write_line) "" {
+                ! print ps kont
               }
             }
-          end
-        end
-  } in
+          }
+        }
+      end
+    end
+  in
   ! print ps { ! (api/exit) 0 }
 end
 end

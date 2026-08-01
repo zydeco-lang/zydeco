@@ -11,56 +11,37 @@ ret begin
     | +Cons : A * List A
     end
   that
-  def nil : Thk (
-    forall (A : VType) .
-      Ret (List A)
-  ) = {
-    fn (A : VType) ->
-      ret +Nil()
-  } that
-  def cons : Thk (
-    forall (A : VType) .
-      A -> List A -> Ret (List A)
-  ) = {
-    fn (A : VType) (head : A) (tail : List A) ->
-      ret +Cons(head, tail)
-  } that
-  def case : Thk (
-    forall (A : VType) .
-    forall (B : CType) .
-      List A -> Thk B -> Thk (A -> List A -> B) -> B
-  ) = {
-    fn (A : VType)
-       (B : CType)
-       (list : List A)
-       (when_nil : Thk B)
-       (when_cons : Thk (A -> List A -> B)) ->
-      match list
-      | +Nil(_) -> ! when_nil
-      | +Cons(head, tail) -> ! when_cons head tail
-      end
-  } that
-  def fold : Thk (
-    forall (A : VType) .
-    forall (B : CType) .
-      List A -> Thk B -> Thk (A -> Thk B -> B) -> B
-  ) = {
-    fix (fold : Thk (
-      forall (A : VType) .
-      forall (B : CType) .
-        List A -> Thk B -> Thk (A -> Thk B -> B) -> B
-    )) ->
-      fn (A : VType)
-         (B : CType)
-         (list : List A)
-         (when_nil : Thk B)
-         (when_cons : Thk (A -> Thk B -> B)) ->
-        match list
-        | +Nil(_) -> ! when_nil
-        | +Cons(head, tail) ->
-          ! when_cons head { ! fold A B tail when_nil when_cons }
-        end
-  } that
+  def ! nil (A : VType) : Ret (List A) =
+    ret +Nil()
+  that
+  def ! cons (A : VType) (head : A) (tail : List A) : Ret (List A) =
+    ret +Cons(head, tail)
+  that
+  def ! case
+    (A : VType)
+    (B : CType)
+    (list : List A)
+    (when_nil : Thk B)
+    (when_cons : Thk (A -> List A -> B))
+    : B =
+    match list
+    | +Nil(_) -> ! when_nil
+    | +Cons(head, tail) -> ! when_cons head tail
+    end
+  that
+  def fix fold
+    (A : VType)
+    (B : CType)
+    (list : List A)
+    (when_nil : Thk B)
+    (when_cons : Thk (A -> Thk B -> B))
+    : B =
+    match list
+    | +Nil(_) -> ! when_nil
+    | +Cons(head, tail) ->
+      ! when_cons head { ! fold A B tail when_nil when_cons }
+    end
+  that
   let Interface =
     exists (
       List = AbstractList :

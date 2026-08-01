@@ -11,17 +11,15 @@ begin
     | +True : Unit
     end
   that
-  def successor : Thk (Nat -> Ret Nat) = {
-    fn (value : Nat) ->
-      ret +S(value)
-  } that
-  def is_nonzero : Thk (Nat -> Ret Bool) = {
-    fn (value : Nat) ->
-      match value
-      | +Z(_) -> ret +False()
-      | +S(_) -> ret +True()
-      end
-  } that
+  def ! successor (value : Nat) : Ret Nat =
+    ret +S(value)
+  that
+  def ! is_nonzero (value : Nat) : Ret Bool =
+    match value
+    | +Z(_) -> ret +False()
+    | +S(_) -> ret +True()
+    end
+  that
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _

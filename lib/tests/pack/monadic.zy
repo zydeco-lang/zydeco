@@ -15,17 +15,17 @@ begin
     exists (Trailing as Unit : VType) .
       X
   that
-  def mo_ret : Thk (Monad Ret) = {
+  def ! mo_ret : Monad Ret =
     comatch
     | .return A value -> ret value
     | .bind A B computation continuation ->
       do value <- ! computation;
       ! continuation value
     end
-  } that
-  def translated = {
+  that
+  def ! translated =
     monadic
-      let reveal = {
+      let ! reveal =
         do _ <- ret ();
         fn (
           (
@@ -38,7 +38,7 @@ begin
           Mixed
         ) ->
           ret value
-      } in
+      in
       ! reveal (
         Unit,
         Unit,
@@ -47,7 +47,7 @@ begin
         ()
       )
     end
-  } that
+  that
 
   do _ <- ! translated Ret { ! mo_ret };
   ! (api/exit) 0

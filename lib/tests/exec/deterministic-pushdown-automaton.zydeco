@@ -38,77 +38,58 @@ begin
     ParenCounterState -> ParenCounterStk
   that
 
-  def bool_eq : Thk (Bool -> Bool -> Ret Bool) = {
-    fn left right ->
-      match left
-      | +True() ->
-        match right
-        | +True() -> ret +True()
-        | +False() -> ret +False()
-        end
-      | +False() ->
-        match right
-        | +True() -> ret +False()
-        | +False() -> ret +True()
-        end
+  def ! bool_eq (left : Bool) (right : Bool) : Ret Bool =
+    match left
+    | +True() ->
+      match right
+      | +True() -> ret +True()
+      | +False() -> ret +False()
       end
-  } that
-  def bool_to_str : Thk (Bool -> Ret String) = {
-    fn b ->
-      match b
-      | +True() -> ret "true"
-      | +False() -> ret "false"
+    | +False() ->
+      match right
+      | +True() -> ret +False()
+      | +False() -> ret +True()
       end
-  } that
-  def paren_foldr : Thk (
-    Thk (Ret (LList' Tok)) ->
-    Thk (Tok -> Thk ParenCounterTrans -> ParenCounterTrans) ->
-    Thk ParenCounterTrans ->
-    ParenCounterTrans
-  ) = {
-    fix (
-      paren_foldr :
-      Thk (
-        Thk (Ret (LList' Tok)) ->
-        Thk (Tok -> Thk ParenCounterTrans -> ParenCounterTrans) ->
-        Thk ParenCounterTrans ->
-        ParenCounterTrans
-      )
-    ) ->
-      fn ll step final ->
-        do l <- ! ll;
-        match l
-        | +Nil() -> ! final
-        | +Cons(c, k) ->
-          ! step c { ! paren_foldr k step final }
-        end
-  } that
-  def reject : Thk ParenCounterStk = {
-    fix (reject : Thk ParenCounterStk) ->
-      comatch
-      | .none -> ret +False()
-      | .some -> ! reject
-      end
-  } that
-  def try_accept : Thk ParenCounterStk = {
+    end
+  that
+  def ! bool_to_str (b : Bool) : Ret String =
+    match b
+    | +True() -> ret "true"
+    | +False() -> ret "false"
+    end
+  that
+  def fix paren_foldr
+    (ll : Thk (Ret (LList' Tok)))
+    (step : Thk (Tok -> Thk ParenCounterTrans -> ParenCounterTrans))
+    (final : Thk ParenCounterTrans)
+    : ParenCounterTrans =
+    do l <- ! ll;
+    match l
+    | +Nil() -> ! final
+    | +Cons(c, k) ->
+      ! step c { ! paren_foldr k step final }
+    end
+  that
+  def fix reject : ParenCounterStk =
+    comatch
+    | .none -> ret +False()
+    | .some -> ! reject
+    end
+  that
+  def ! try_accept : ParenCounterStk =
     comatch
     | .none -> ret +True()
     | .some -> ! reject
     end
-  } that
-  def accept_or_not : Thk (ParenCounterState -> ParenCounterStk) = {
-    fn s ->
-      match s
-      | +Ok() -> ! try_accept
-      | +Reject() -> ! reject
-      end
-  } that
-  def paren_counter_step : Thk (
-    Tok ->
-    Thk ParenCounterTrans ->
-    ParenCounterTrans
-  ) = {
-    fn c k state ->
+  that
+  def ! accept_or_not (s : ParenCounterState) : ParenCounterStk =
+    match s
+    | +Ok() -> ! try_accept
+    | +Reject() -> ! reject
+    end
+  that
+  def ! paren_counter_step (c : Tok) (k : Thk ParenCounterTrans) : ParenCounterTrans =
+    fn state ->
       match c
       | +LParen() -> ! k state .some
       | +RParen() ->
@@ -118,35 +99,28 @@ begin
         | .some -> ! k state
         end)
       end
-  } that
-  def demonstrate : Thk (
-    String ->
-    Bool ->
-    Thk (Ret (LList' Tok)) ->
-    Thk OS ->
-    OS
-  ) = {
-    fn s expect toks t ->
-      do s' <- ! (api/str_append)
-        "The following parens are balanced? "
-        s;
-      do b <- ! paren_foldr
-        toks
-        paren_counter_step
-        accept_or_not
-        (+Ok() : ParenCounterState)
-        .none;
-      do pass <- ! bool_eq expect b;
-      match pass
-      | +True() ->
-        do s <- ! bool_to_str b;
-        ! (api/write_line) s' {
-          ! (api/write_line) s t
-        }
-      | +False() ->
-        ! (api/write_line) "WRONG ANSWER" { ! (api/exit) 1 }
-      end
-  } that
+  that
+  def ! demonstrate (s : String) (expect : Bool) (toks : Thk (Ret (LList' Tok))) (t : Thk OS) : OS =
+    do s' <- ! (api/str_append)
+      "The following parens are balanced? "
+      s;
+    do b <- ! paren_foldr
+      toks
+      paren_counter_step
+      accept_or_not
+      (+Ok() : ParenCounterState)
+      .none;
+    do pass <- ! bool_eq expect b;
+    match pass
+    | +True() ->
+      do s <- ! bool_to_str b;
+      ! (api/write_line) s' {
+        ! (api/write_line) s t
+      }
+    | +False() ->
+      ! (api/write_line) "WRONG ANSWER" { ! (api/exit) 1 }
+    end
+  that
 
   ! demonstrate
     "(())"

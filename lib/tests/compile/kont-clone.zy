@@ -9,14 +9,14 @@ begin
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
-  def f : Thk (Bool -> Thk (Int -> OS) -> OS) = {
+  def ! f : Bool -> Thk (Int -> OS) -> OS =
     fn (b : Bool) (k : Thk (Int -> OS)) ->
       -- k might be large
       match b
       | +True(_) -> ! k 0
       | +False(_) -> ! k 1
       end
-  } that
+  that
 
   ! f (+True()) {
     -- a large continuation gets inlined

@@ -11,10 +11,9 @@ begin
     Int,
     42,
   ) that
-  def reveal : Thk (Transparent -> Ret Int) = {
-    fn ((Representation, value) : Transparent) ->
-      ret value
-  } that
+  def ! reveal ((Representation, value) : Transparent) : Ret Int =
+    ret value
+  that
 
   do value <- ! reveal packed;
   do status <- ! (api/sub) value 42;

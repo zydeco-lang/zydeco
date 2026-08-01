@@ -15,17 +15,17 @@ begin
     | .zero : Ret A
     end
   that
-  def fn_int : Thk (FnRet Int) = {
+  def ! fn_int : FnRet Int =
     comatch
     | .arg i -> ret i
     end
-  } that
-  def fn_opt_int : Thk (FnOpt Int) = {
+  that
+  def ! fn_opt_int : FnOpt Int =
     comatch
     | .one i -> ! fn_int .arg i
     | .zero -> ! fn_int .arg 0
     end
-  } that
+  that
 
   do x <- ! fn_opt_int .zero;
   ! (api/exit) x

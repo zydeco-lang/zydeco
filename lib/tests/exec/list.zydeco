@@ -15,32 +15,19 @@ begin
     OS = StdOS,
     std
   ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
-  def foldl : Thk (
-    StdList StdString ->
-    StdInt ->
-    Ret StdInt
-  ) = {
-    fix (
-      foldl :
-      Thk (
-        StdList StdString ->
-        StdInt ->
-        Ret StdInt
-      )
-    ) ->
-      fn xs i ->
-        ! (std/list/case)
-          StdString
-          (Ret StdInt)
-          xs
-          { ret i }
-          {
-            fn s xs ->
-              do i' <- ! (std/string/length) s;
-              do i' <- ! (std/int/add) i i';
-              ! foldl xs i'
-          }
-  } in
+  def fix foldl (xs : StdList StdString) (i : StdInt) : Ret StdInt =
+    ! (std/list/case)
+      StdString
+      (Ret StdInt)
+      xs
+      { ret i }
+      {
+        fn s xs ->
+          do i' <- ! (std/string/length) s;
+          do i' <- ! (std/int/add) i i';
+          ! foldl xs i'
+      }
+  in
   do nil <- ! (std/list/nil) StdString;
   do ys <- ! (std/list/cons) StdString "y" nil;
   do empty_and_ys <- ! (std/list/cons) StdString "" ys;

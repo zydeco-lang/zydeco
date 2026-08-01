@@ -18,96 +18,46 @@ begin
   that
   -- A ->* B == List A -> B
   -- restore
-  def l : Thk (
-    forall (A : VType) .
-    forall (B : CType) .
-      Thk (Variadic A B) ->
-      List A ->
-      B
-  ) = {
-    fix (
-      l :
-      Thk (
-        forall (A : VType) .
-        forall (B : CType) .
-          Thk (Variadic A B) ->
-          List A ->
-          B
-      )
-    ) ->
-      fn (A : VType)
-         (B : CType)
-         fv
-         xs ->
-        match xs
-        | +Nil() -> ! fv .done
-        | +Cons(x, xs) ->
-          ! l A B { ! fv .more x } xs
-        end
-  } that
-  def r : Thk (
-    forall (A : VType) .
-    forall (B : CType) .
-      Thk (List A -> B) ->
-      Variadic A B
-  ) = {
+  def fix l (A : VType) (B : CType) (fv : Thk (Variadic A B)) (xs : List A) : B =
+    match xs
+    | +Nil() -> ! fv .done
+    | +Cons(x, xs) ->
+      ! l A B { ! fv .more x } xs
+    end
+  that
+  def ! r
+    (A : VType)
+    (B : CType)
+    (fl : Thk (List A -> B))
+    : Variadic A B =
     -- capture
-    fn (A : VType)
-       (B : CType)
-       fl ->
-      let r : Thk (
-        Thk (List A -> B) ->
-        Variadic A B
-      ) = {
-        fix (
-          r :
-          Thk (
-            Thk (List A -> B) ->
-            Variadic A B
-          )
-        ) ->
-          fn k ->
-            comatch
-            | .more x ->
-              ! r {
-                fn xs ->
-                  ! k +Cons(x, xs)
-              }
-            | .done -> ! k +Nil()
-            end
-      } in
-      ! r { fn xs -> ! fl xs }
-  } that
+    let fix r (k : Thk (List A -> B)) : Variadic A B =
+      comatch
+      | .more x ->
+        ! r {
+          fn xs ->
+            ! k +Cons(x, xs)
+        }
+      | .done -> ! k +Nil()
+      end
+    in
+    ! r { fn xs -> ! fl xs }
+  that
   -- continuation based mich wand
   -- ! r (B) (A) { ! l (B) (A) fv } == fv
   -- forall fv: U (Variadic A B)
   -- ! l (B) (A) { ! r (B) (A) fl } == fl
   -- forall fl: U (List A -> B)
-  def printl : Thk (
-    List String ->
-    Thk OS ->
-    OS
-  ) = {
-    fix (
-      printl :
-      Thk (
-        List String ->
-        Thk OS ->
-        OS
-      )
-    ) ->
-      fn xs kont ->
-        match xs
-        | +Nil() -> ! kont
-        | +Cons(x, xs) ->
-          ! (api/write_line) x { ! printl xs kont }
-        end
-  } that
-  def printv : Thk (
-    Variadic String (Thk OS -> OS)
-  ) = {
+  def fix printl (xs : List String) (kont : Thk OS) : OS =
+    match xs
+    | +Nil() -> ! kont
+    | +Cons(x, xs) ->
+      ! (api/write_line) x { ! printl xs kont }
+    end
+  that
+  def ! printv : Variadic String (Thk OS -> OS) =
     ! r String (Thk OS -> OS) printl
-  } that
+  that
 
   ! l
     String

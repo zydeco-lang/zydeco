@@ -10,37 +10,20 @@ begin
     | +Cons : A * Thk (Ret (List~ A))
     end
   that
-  def foldr~ : Thk (
-    forall (A : VType) .
-    forall (B : CType) .
-      Thk (Ret (List~ A)) ->
-      Thk (A -> Thk B -> B) ->
-      Thk B ->
-      B
-  ) = {
-    fix (
-      foldr~ :
-      Thk (
-        forall (A : VType) .
-        forall (B : CType) .
-          Thk (Ret (List~ A)) ->
-          Thk (A -> Thk B -> B) ->
-          Thk B ->
-          B
-      )
-    ) ->
-      fn (A : VType)
-         (B : CType)
-         ll
-         f
-         b ->
-        do llv <- ! ll;
-        match llv
-        | +Nil() -> ! b
-        | +Cons(a, ll) ->
-          ! f a { ! foldr~ A B ll f b }
-        end
-  } that
+  def fix foldr~
+    (A : VType)
+    (B : CType)
+    (ll : Thk (Ret (List~ A)))
+    (f : Thk (A -> Thk B -> B))
+    (b : Thk B)
+    : B =
+    do llv <- ! ll;
+    match llv
+    | +Nil() -> ! b
+    | +Cons(a, ll) ->
+      ! f a { ! foldr~ A B ll f b }
+    end
+  that
 
   do (
     Bool = StdBool,
@@ -53,20 +36,17 @@ begin
     std
   ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   -- List~ is actually coinductive type
-  def loop : Thk (Ret (List~ StdInt)) = {
-    fix (loop : Thk (Ret (List~ StdInt))) ->
-      ret +Cons(0, loop)
-  } in
+  def fix loop : Ret (List~ StdInt) =
+    ret +Cons(0, loop)
+  in
   -- Since it's coinductive, here's iota
-  def iota : Thk (StdInt -> Ret (List~ StdInt)) = {
-    fix (iota : Thk (StdInt -> Ret (List~ StdInt))) ->
-      fn i ->
-        do i+1 <- ! (std/int/add) i 1;
-        ret +Cons(i, { ! iota i+1 })
-  } in
+  def fix iota (i : StdInt) : Ret (List~ StdInt) =
+    do i+1 <- ! (std/int/add) i 1;
+    ret +Cons(i, { ! iota i+1 })
+  in
 
   -- foldr~ and an example of summing up the list and exiting with the sum
-  let loopy : Thk StdOS = {
+  let ! loopy : StdOS =
     ! foldr~
       StdInt
       StdOS
@@ -85,7 +65,7 @@ begin
             { ! (std/os/exit) 0 }
       }
       { ! (std/os/exit) 1 }
-  } in
+  in
 
   ! loopy
 end

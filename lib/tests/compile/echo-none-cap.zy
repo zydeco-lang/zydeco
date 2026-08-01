@@ -6,11 +6,10 @@ begin
 
   ! (api/read_line) {
     fn line ->
-      let f : Thk (Int -> OS) = {
-        fn z ->
-          let line = line in
-          ! (api/exit) z
-      } in
+      let ! f (z : Int) : OS =
+        let line = line in
+        ! (api/exit) z
+      in
       ! f 0
   }
 end

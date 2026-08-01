@@ -54,45 +54,32 @@ begin
   def path : Path (Choice (Thk StdOS -> StdOS)) =
     +Cons(beep, +Cons(boop, +Nil()))
   in
-  def walk : Thk (
-    Tree StdString ->
-    Path (Choice (Thk StdOS -> StdOS)) ->
-    StdOS
-  ) = {
-    fix (
-      walk :
-      Thk (
-        Tree StdString ->
-        Path (Choice (Thk StdOS -> StdOS)) ->
-        StdOS
-      )
-    ) ->
-      fn t p ->
-        match t
-        | +Final(res) ->
-          match p
-          | +Nil() ->
-            ! (std/os/write_line) res {
-              do correct <- ! (std/string/eq) res "o";
-              ! (std/bool/if)
-                StdOS
-                correct
-                { ! (std/os/exit) 0 }
-                { ! (std/os/exit) 1 }
-            }
-          | +Cons(_, _) -> ! (std/os/exit) 2
-          end
-        | +Fork(tl, tr) ->
-          match p
-          | +Nil() -> ! (std/os/exit) 3
-          | +Cons(c, p') ->
-            match c
-            | +L(k) -> ! k { ! walk tl p' }
-            | +R(k) -> ! k { ! walk tr p' }
-            end
-          end
+  def fix walk (t : Tree StdString) (p : Path (Choice (Thk StdOS -> StdOS))) : StdOS =
+    match t
+    | +Final(res) ->
+      match p
+      | +Nil() ->
+        ! (std/os/write_line) res {
+          do correct <- ! (std/string/eq) res "o";
+          ! (std/bool/if)
+            StdOS
+            correct
+            { ! (std/os/exit) 0 }
+            { ! (std/os/exit) 1 }
+        }
+      | +Cons(_, _) -> ! (std/os/exit) 2
+      end
+    | +Fork(tl, tr) ->
+      match p
+      | +Nil() -> ! (std/os/exit) 3
+      | +Cons(c, p') ->
+        match c
+        | +L(k) -> ! k { ! walk tl p' }
+        | +R(k) -> ! k { ! walk tr p' }
         end
-  } in
+      end
+    end
+  in
 
   ! walk tree path
 end

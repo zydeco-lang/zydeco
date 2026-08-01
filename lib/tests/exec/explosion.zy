@@ -4,10 +4,9 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  def loop : Thk OS = {
-    fix (loop : Thk OS) ->
-      ! loop
-  } that
+  def fix loop : OS =
+    ! loop
+  that
 
   -- ! loop
   ! (api/exit) 0

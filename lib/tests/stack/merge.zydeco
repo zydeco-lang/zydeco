@@ -10,38 +10,28 @@ begin
     | +Cons : A * List A
     end
   that
-  def merge : Thk (
-    List Int ->
-    List Int ->
-    Ret (List Int)
-  ) = {
-    fix (merge : Thk (
-      List Int ->
-      List Int ->
-      Ret (List Int)
-    )) ->
-      fn a b ->
-        match a
-        | +Nil() -> ret b
-        | +Cons(a_head, a_tail) ->
-          match b
-          | +Nil() -> ret a
-          | +Cons(b_head, b_tail) ->
-            ! (api/int_gt_branch)
-              (Ret (List Int))
-              a_head
-              b_head
-              {
-                do res <- ! merge a b_tail;
-                ret +Cons(b_head, res)
-              }
-              {
-                do res <- ! merge a_tail b;
-                ret +Cons(a_head, res)
-              }
-          end
-        end
-  } that
+  def fix merge (a : List Int) (b : List Int) : Ret (List Int) =
+    match a
+    | +Nil() -> ret b
+    | +Cons(a_head, a_tail) ->
+      match b
+      | +Nil() -> ret a
+      | +Cons(b_head, b_tail) ->
+        ! (api/int_gt_branch)
+          (Ret (List Int))
+          a_head
+          b_head
+          {
+            do res <- ! merge a b_tail;
+            ret +Cons(b_head, res)
+          }
+          {
+            do res <- ! merge a_tail b;
+            ret +Cons(a_head, res)
+          }
+      end
+    end
+  that
 
   ! (api/exit) 0
 end

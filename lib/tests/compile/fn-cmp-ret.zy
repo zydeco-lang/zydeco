@@ -3,15 +3,14 @@ begin
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
-  def f : Thk (Int -> Ret Int) = {
-    fn x ->
-      ! (api/int_eq_branch)
-        (Ret Int)
-        x
-        0
-        { ret 0 }
-        { ret 1 }
-  } that
+  def ! f (x : Int) : Ret Int =
+    ! (api/int_eq_branch)
+      (Ret Int)
+      x
+      0
+      { ret 0 }
+      { ret 1 }
+  that
 
   do z <- ! f 0;
   ! (api/exit) z

@@ -16,11 +16,10 @@ begin
   let FunctionBox =
     (apply :: Thk (Arguments -> Ret FunctionResult)) * Int
   that
-  def combine : Thk (Arguments -> Ret FunctionResult) = {
-    fn (lhs = lhs : Int, rhs : Int) ->
-      do sum <- ! (api/add) lhs rhs;
-      ret (lhs, sum = sum : Int)
-  } that
+  def ! combine ((lhs = lhs : Int, rhs : Int) : Arguments) : Ret FunctionResult =
+    do sum <- ! (api/add) lhs rhs;
+    ret (lhs, sum = sum : Int)
+  that
   def function_box : FunctionBox = (
     apply = combine,
     0

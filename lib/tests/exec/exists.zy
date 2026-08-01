@@ -9,13 +9,9 @@ begin
     | +Seal : Thk (A -> Ret X) * Thk (X -> Ret A)
     end
   that
-  def id : Thk (
-    forall (A : VType) .
-      A -> Ret A
-  ) = {
-    fn (A : VType) (value : A) ->
-      ret value
-  } that
+  def ! id (A : VType) (value : A) : Ret A =
+    ret value
+  that
   def nat :
     exists (X : VType) .
       Seal X Int =

@@ -10,21 +10,18 @@ begin
     | +S : Nat
     end
   that
-  def add : Thk (Nat -> Nat -> Ret Nat) = {
-    fix (add : Thk (Nat -> Nat -> Ret Nat)) ->
-      fn (x : Nat) (y : Nat) ->
-        match x
-        | +Z() -> ret y
-        | +S(x) -> ! add x +S(y)
-        end
-  } that
-  def add' : Thk (Nat -> Nat -> Ret Nat) = {
-    fn (x : Nat) (y : Nat) ->
-      match x
-      | +Z() -> ret y
-      | +S(x) -> ! add x +S(y)
-      end
-  } that
+  def fix add (x : Nat) (y : Nat) : Ret Nat =
+    match x
+    | +Z() -> ret y
+    | +S(x) -> ! add x +S(y)
+    end
+  that
+  def ! add' (x : Nat) (y : Nat) : Ret Nat =
+    match x
+    | +Z() -> ret y
+    | +S(x) -> ! add x +S(y)
+    end
+  that
 
   do x <- ! add +S(+S(+Z())) +S(+Z());
   do y <- ! add' x +S(+S(+S(+Z())));

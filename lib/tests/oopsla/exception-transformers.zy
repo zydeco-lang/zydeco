@@ -13,10 +13,10 @@ begin
     codata
     end
   that
-  let top : Thk Top = {
+  let ! top : Top =
     comatch
     end
-  } that
+  that
   let Either (E : VType) (A : VType) =
     data
     | +Left : E
@@ -102,71 +102,61 @@ begin
       end
   that
 
-  def ret_monad : Thk (Monad Ret) = {
+  def ! ret_monad : Monad Ret =
     comatch
     | .return A value -> ret value
     | .bind A B computation function ->
       do value <- ! computation;
       ! function value
     end
-  } that
-  def mo_exn : Thk (
-    forall (E : VType) .
-      Monad (Exn E)
-  ) = {
-    fn E ->
-      comatch
-      | .return A value ->
-        ret +Right(value)
-      | .bind A B computation function ->
-        do outcome <- ! computation;
-        match outcome
-        | +Left(error) -> ret +Left(error)
-        | +Right(value) -> ! function value
-        end
+  that
+  def ! mo_exn (E : VType) : Monad (Exn E) =
+    comatch
+    | .return A value ->
+      ret +Right(value)
+    | .bind A B computation function ->
+      do outcome <- ! computation;
+      match outcome
+      | +Left(error) -> ret +Left(error)
+      | +Right(value) -> ! function value
       end
-  } that
-  def mo_exnk : Thk (
-    forall (E : VType) .
-      Monad (ExnK E)
-  ) = {
-    fn E ->
-      comatch
-      | .return A value ->
-        fn R failure success ->
-          ! success value
-      | .bind A B computation function ->
-        fn R failure success ->
-          ! computation R failure {
-            fn value ->
-              ! function value R failure success
-          }
-      end
-  } that
-  def alg_ret_int : Thk (Algebra Ret (Ret Int)) = {
+    end
+  that
+  def ! mo_exnk (E : VType) : Monad (ExnK E) =
+    comatch
+    | .return A value ->
+      fn R failure success ->
+        ! success value
+    | .bind A B computation function ->
+      fn R failure success ->
+        ! computation R failure {
+          fn value ->
+            ! function value R failure success
+        }
+    end
+  that
+  def ! alg_ret_int : Algebra Ret (Ret Int) =
     fn A computation function ->
       do value <- ! computation;
       ! function value
-  } that
-  def detriv_mo : Thk (
-    forall (
+  that
+  def ! detriv_mo
+    (
       M :
       (VType) ->
       (CType)
-    ) .
-      Thk (Monad' M) ->
-      Monad M
-  ) = {
-    fn M monad ->
-      comatch
-      | .return A ->
-        ! monad .return A top
-      | .bind A B ->
-        ! monad .bind A top B top
-      end
-  } that
-  def detriv_mt : Thk (
-    forall (
+    )
+    (monad : Thk (Monad' M))
+    : Monad M =
+    comatch
+    | .return A ->
+      ! monad .return A top
+    | .bind A B ->
+      ! monad .bind A top B top
+    end
+  that
+  def ! detriv_mt
+    (
       T :
       (
         (
@@ -176,71 +166,60 @@ begin
         (VType) ->
         (CType)
       )
-    ) .
-      Thk (MonadTrans' T) ->
-      MonadTrans T
-  ) = {
-    fn T transformer ->
-      fn M monad ->
-        comatch
-        | .monad ->
-          ! detriv_mo
-            (T M)
-            { ! transformer M monad .monad }
-        | .lift A ->
-          ! transformer M monad .lift A top
-        end
-  } that
-  def mt_exn : Thk (
-    forall (E : VType) .
-      MonadTrans (ExnT E)
-  ) = {
-    fn E ->
-      let translated_transformer : Thk (
-        MonadTrans' (ExnT E)
-      ) = {
+    )
+    (transformer : Thk (MonadTrans' T))
+    : MonadTrans T =
+    fn M monad ->
+      comatch
+      | .monad ->
+        ! detriv_mo
+          (T M)
+          { ! transformer M monad .monad }
+      | .lift A ->
+        ! transformer M monad .lift A top
+      end
+  that
+  def ! mt_exn (E : VType) : MonadTrans (ExnT E) =
+    let ! translated_transformer : MonadTrans' (ExnT E) =
         fn M monad ->
-          let translated = {
-            monadic
-              (
-                fn (E : VType) ->
+        let ! translated =
+          monadic
+            (
+              fn (E : VType) ->
+                comatch
+                | .monad ->
                   comatch
-                  | .monad ->
-                    comatch
-                    | .return A value ->
-                      ret +Right(value)
-                    | .bind A B computation function ->
-                      do outcome <- ! computation;
-                      match outcome
-                      | +Left(error) -> ret +Left(error)
-                      | +Right(value) -> ! function value
-                      end
-                    end
-                  | .lift A computation ->
-                    do value <- ! computation;
+                  | .return A value ->
                     ret +Right(value)
+                  | .bind A B computation function ->
+                    do outcome <- ! computation;
+                    match outcome
+                    | +Left(error) -> ret +Left(error)
+                    | +Right(value) -> ! function value
+                    end
                   end
-                :
-                forall (E : VType) .
-                  codata
-                  | .monad : Monad (Exn E)
-                  | .lift :
-                    forall (A : VType) .
-                      Thk (Ret A) ->
-                      Exn E A
-                  end
-              )
-            end
-          } in
-          ! translated M monad E top
-      } in
-      ! detriv_mt (ExnT E) translated_transformer
-  } that
-  def mt_exn_manual : Thk (
-    forall (E : VType) .
-      MonadTrans (ExnT E)
-  ) = {
-    fn E M monad ->
+                | .lift A computation ->
+                  do value <- ! computation;
+                  ret +Right(value)
+                end
+              :
+              forall (E : VType) .
+                codata
+                | .monad : Monad (Exn E)
+                | .lift :
+                  forall (A : VType) .
+                    Thk (Ret A) ->
+                    Exn E A
+                end
+            )
+          end
+        in
+        ! translated M monad E top
+      in
+    ! detriv_mt (ExnT E) translated_transformer
+  that
+  def ! mt_exn_manual (E : VType) : MonadTrans (ExnT E) =
+    fn M monad ->
       comatch
       | .monad ->
         comatch
@@ -274,59 +253,50 @@ begin
                 +Right(value)
           }
       end
-  } that
-  def mt_exnk : Thk (
-    forall (E : VType) .
-      MonadTrans (ExnKT E)
-  ) = {
-    fn E ->
-      let translated_transformer : Thk (
-        MonadTrans' (ExnKT E)
-      ) = {
+  that
+  def ! mt_exnk (E : VType) : MonadTrans (ExnKT E) =
+    let ! translated_transformer : MonadTrans' (ExnKT E) =
         fn M monad ->
-          let translated = {
-            monadic
-              (
-                fn (E : VType) ->
+        let ! translated =
+          monadic
+            (
+              fn (E : VType) ->
+                comatch
+                | .monad ->
                   comatch
-                  | .monad ->
-                    comatch
-                    | .return A value ->
-                      fn R failure success ->
-                        ! success value
-                    | .bind A B computation function ->
-                      fn R failure success ->
-                        ! computation R failure {
-                          fn value ->
-                            ! function value R failure success
-                        }
-                    end
-                  | .lift A computation ->
-                    do value <- ! computation;
+                  | .return A value ->
                     fn R failure success ->
                       ! success value
+                  | .bind A B computation function ->
+                    fn R failure success ->
+                      ! computation R failure {
+                        fn value ->
+                          ! function value R failure success
+                      }
                   end
-                :
-                forall (E : VType) .
-                  codata
-                  | .monad : Monad (ExnK E)
-                  | .lift :
-                    forall (A : VType) .
-                      Thk (Ret A) ->
-                      ExnK E A
-                  end
-              )
-            end
-          } in
-          ! translated M monad E top
-      } in
-      ! detriv_mt (ExnKT E) translated_transformer
-  } that
-  def mt_exnk_manual : Thk (
-    forall (E : VType) .
-      MonadTrans (ExnKT E)
-  ) = {
-    fn E M monad ->
+                | .lift A computation ->
+                  do value <- ! computation;
+                  fn R failure success ->
+                    ! success value
+                end
+              :
+              forall (E : VType) .
+                codata
+                | .monad : Monad (ExnK E)
+                | .lift :
+                  forall (A : VType) .
+                    Thk (Ret A) ->
+                    ExnK E A
+                end
+            )
+          end
+        in
+        ! translated M monad E top
+      in
+    ! detriv_mt (ExnKT E) translated_transformer
+  that
+  def ! mt_exnk_manual (E : VType) : MonadTrans (ExnKT E) =
+    fn M monad ->
       comatch
       | .monad ->
         comatch
@@ -344,7 +314,7 @@ begin
         fn R algebra failure success ->
           ! algebra A computation success
       end
-  } that
+  that
 
   do generated <- ! mt_exn
     Unit

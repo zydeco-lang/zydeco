@@ -56,30 +56,26 @@ begin
   that
 
   --| The Ret monad (mret in the paper)
-  def mo-return : Thk (Monad Ret) = {
+  def ! mo-return : Monad Ret =
     comatch
     | .return A a -> ret a
     | .bind A A' m f ->
       do a <- ! m;
       ! f a
     end
-  } that
-  def mo-kont : Thk (
-    forall (R : CType) .
-      Monad (Kont R)
-  ) = {
-    fn R ->
-      comatch
-      | .return A a ->
-        fn .run k ->
-          ! k a
-      | .bind A A' m f ->
-        fn .run k ->
-          do~ ! m .run; fn a ->
-          ! f a .run k
-      end
-  } that
-  def mo-polykont : Thk (Monad PolyKont) = {
+  that
+  def ! mo-kont (R : CType) : Monad (Kont R) =
+    comatch
+    | .return A a ->
+      fn .run k ->
+        ! k a
+    | .bind A A' m f ->
+      fn .run k ->
+        do~ ! m .run; fn a ->
+        ! f a .run k
+    end
+  that
+  def ! mo-polykont : Monad PolyKont =
     comatch
     | .return A a ->
       fn .bind R k ->
@@ -91,69 +87,53 @@ begin
             ! f a .bind R k'
         }
     end
-  } that
-  def mo-state : Thk (
-    forall (S : VType) .
-      Monad (State S)
-  ) = {
-    fn S ->
-      comatch
-      | .return A a ->
-        fn s ->
-          ret (a, s)
-      | .bind A A' m f ->
-        fn s ->
-          do (a, s') <- ! m s;
-          ! f a s'
-      end
-  } that
-  def mo-statek : Thk (
-    forall (S : VType) .
-      Monad (StateK S)
-  ) = {
-    fn S ->
-      comatch
-      | .return A a ->
-        fn .run R s k ->
-          ! k s a
-      | .bind A A' m f ->
-        fn .run R s k' ->
-          ! m .run R s {
-            fn s' a ->
-              ! f a .run R s' k'
-          }
-      end
-  } that
-  def state : Thk (
-    forall (S : VType) .
-      MonadState S (State S)
-  ) = {
-    fn S ->
-      comatch
-      | .get ->
-        fn s ->
-          ret (s, s)
-      | .put s' ->
-        fn _ ->
-          let u = () in
-          ret (u, s')
-      end
-  } that
-  def statek : Thk (
-    forall (S : VType) .
-      MonadState S (StateK S)
-  ) = {
-    fn S ->
-      comatch
-      | .get ->
-        fn .run R s k ->
-          ! k s s
-      | .put s' ->
-        fn .run R s k ->
-          ! k s' ()
-      end
-  } that
-  def mo-io : Thk (Monad IO) = {
+  that
+  def ! mo-state (S : VType) : Monad (State S) =
+    comatch
+    | .return A a ->
+      fn s ->
+        ret (a, s)
+    | .bind A A' m f ->
+      fn s ->
+        do (a, s') <- ! m s;
+        ! f a s'
+    end
+  that
+  def ! mo-statek (S : VType) : Monad (StateK S) =
+    comatch
+    | .return A a ->
+      fn .run R s k ->
+        ! k s a
+    | .bind A A' m f ->
+      fn .run R s k' ->
+        ! m .run R s {
+          fn s' a ->
+            ! f a .run R s' k'
+        }
+    end
+  that
+  def ! state (S : VType) : MonadState S (State S) =
+    comatch
+    | .get ->
+      fn s ->
+        ret (s, s)
+    | .put s' ->
+      fn _ ->
+        let u = () in
+        ret (u, s')
+    end
+  that
+  def ! statek (S : VType) : MonadState S (StateK S) =
+    comatch
+    | .get ->
+      fn .run R s k ->
+        ! k s s
+    | .put s' ->
+      fn .run R s k ->
+        ! k s' ()
+    end
+  that
+  def ! mo-io : Monad IO =
     comatch
     | .return A a ->
       fn .run k ->
@@ -165,8 +145,8 @@ begin
             ! f a .run ka'
         }
     end
-  } that
-  def io : Thk (MonadIO IO) = {
+  that
+  def ! io : MonadIO IO =
     comatch
     | .read ->
       fn .run ka ->
@@ -177,7 +157,7 @@ begin
           ! ku ()
         }
     end
-  } that
+  that
 
   ! io .write "Hello, world!" .run {
     fn _ ->

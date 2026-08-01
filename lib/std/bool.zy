@@ -13,40 +13,30 @@ ret begin
   that
   def true : Bool = +True() that
   def false : Bool = +False() that
-  def not : Thk (Bool -> Ret Bool) = {
-    fn (value : Bool) ->
-      match value
-      | +False(_) -> ret true
-      | +True(_) -> ret false
-      end
-  } that
-  def and : Thk (Bool -> Bool -> Ret Bool) = {
-    fn (left : Bool) (right : Bool) ->
-      match left
-      | +False(_) -> ret false
-      | +True(_) -> ret right
-      end
-  } that
-  def or : Thk (Bool -> Bool -> Ret Bool) = {
-    fn (left : Bool) (right : Bool) ->
-      match left
-      | +False(_) -> ret right
-      | +True(_) -> ret true
-      end
-  } that
-  def if : Thk (
-    forall (B : CType) .
-      Bool -> Thk B -> Thk B -> B
-  ) = {
-    fn (B : CType)
-       (condition : Bool)
-       (when_true : Thk B)
-       (when_false : Thk B) ->
-      match condition
-      | +False(_) -> ! when_false
-      | +True(_) -> ! when_true
-      end
-  } that
+  def ! not (value : Bool) : Ret Bool =
+    match value
+    | +False(_) -> ret true
+    | +True(_) -> ret false
+    end
+  that
+  def ! and (left : Bool) (right : Bool) : Ret Bool =
+    match left
+    | +False(_) -> ret false
+    | +True(_) -> ret right
+    end
+  that
+  def ! or (left : Bool) (right : Bool) : Ret Bool =
+    match left
+    | +False(_) -> ret right
+    | +True(_) -> ret true
+    end
+  that
+  def ! if (B : CType) (condition : Bool) (when_true : Thk B) (when_false : Thk B) : B =
+    match condition
+    | +False(_) -> ! when_false
+    | +True(_) -> ! when_true
+    end
+  that
   let Interface =
     exists (Bool = AbstractBool : VType) .
       (true :: AbstractBool) *

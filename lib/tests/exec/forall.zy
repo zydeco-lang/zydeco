@@ -4,20 +4,12 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  def id : Thk (
-    forall (A : VType) (value : A) .
-      Ret A
-  ) = {
-    fn (A : VType) (value : A) ->
-      ret value
-  } that
-  def id~ : Thk (
-    forall (B : CType) .
-      Thk B -> B
-  ) = {
-    fn (B : CType) (b : Thk B) ->
-      ! b
-  } that
+  def ! id (A : VType) (value : A) : Ret A =
+    ret value
+  that
+  def ! id~ (B : CType) (b : Thk B) : B =
+    ! b
+  that
 
   do x <- ! id Int 0;
   ! id~ OS { ! (api/exit) x }

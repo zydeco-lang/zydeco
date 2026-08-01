@@ -4,13 +4,12 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  def poly : Thk (Int -> Ret Int) = {
+  def ! poly (x : Int) : Ret Int =
     -- f(x) = x^2 + x + 10
-    fn x ->
-      do s <- ! (api/mul) x x;
-      do y <- ! (api/add) x 10;
-      ! (api/add) s y
-  } that
+    do s <- ! (api/mul) x x;
+    do y <- ! (api/add) x 10;
+    ! (api/add) s y
+  that
 
   -- the exit code should be 0 for the test to pass
   do r <- ! poly 10;

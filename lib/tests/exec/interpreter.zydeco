@@ -71,95 +71,90 @@ begin
     end
   that
 
-  def lookup : Thk (String -> Env -> Ret (Answer SemVal)) = {
-    fix (lookup : Thk (String -> Env -> Ret (Answer SemVal))) ->
-      fn x g ->
-        match g
-        | +Empty() -> ret +Err()
-        | +Cons(y, v, g) ->
-          ! (api/str_eq_branch)
-            (Ret (Answer SemVal))
-            x
-            y
-            { ret +Ok(v) }
-            { ! lookup x g }
-        end
-  } that
-  def sem_val_to_str : Thk (SemVal -> Ret String) = {
-    fn s ->
-      match s
-      | +True(_) -> ret "true"
-      | +False(_) -> ret "false"
-      | +ThunkV(_) -> ret "<thunk>"
+  def fix lookup (x : String) (g : Env) : Ret (Answer SemVal) =
+    match g
+    | +Empty() -> ret +Err()
+    | +Cons(y, v, g) ->
+      ! (api/str_eq_branch)
+        (Ret (Answer SemVal))
+        x
+        y
+        { ret +Ok(v) }
+        { ! lookup x g }
+    end
+  that
+  def ! sem_val_to_str (s : SemVal) : Ret String =
+    match s
+    | +True(_) -> ret "true"
+    | +False(_) -> ret "false"
+    | +ThunkV(_) -> ret "<thunk>"
+    end
+  that
+  def fix error : SemComp =
+    comatch
+    | .app _ -> ! error
+    | .bind -> ret +Err()
+    end
+  that
+  def fix interp : Interpreter =
+    comatch
+    | .valu v g ->
+      match v
+      | +Var(x) -> ! lookup x g
+      | +True(_) -> ret +Ok(+True())
+      | +False(_) -> ret +Ok(+False())
+      -- Here we use the meta-language closures to capture the environment g
+      | +ThunkV(m) ->
+        ret +Ok(+ThunkV({ ! interp .comp m g }))
       end
-  } that
-  def error : Thk SemComp = {
-    fix (error : Thk SemComp) ->
-      comatch
-      | .app _ -> ! error
-      | .bind -> ret +Err()
-      end
-  } that
-  def interp : Thk Interpreter = {
-    fix (interp : Thk Interpreter) ->
-      comatch
-      | .valu v g ->
-        match v
-        | +Var(x) -> ! lookup x g
-        | +True(_) -> ret +Ok(+True())
-        | +False(_) -> ret +Ok(+False())
-        -- Here we use the meta-language closures to capture the environment g
-        | +ThunkV(m) ->
-          ret +Ok(+ThunkV({ ! interp .comp m g }))
+    | .comp m g ->
+      match m
+      | +If(cond, mt, mf) ->
+        match cond
+        | +Var(_) -> ! error
+        | +True(_) -> ! interp .comp mt g
+        | +False(_) -> ! interp .comp mf g
+        | +ThunkV(_) -> ! error
         end
-      | .comp m g ->
-        match m
-        | +If(cond, mt, mf) ->
-          match cond
-          | +Var(_) -> ! error
-          | +True(_) -> ! interp .comp mt g
-          | +False(_) -> ! interp .comp mf g
-          | +ThunkV(_) -> ! error
+      | +Force(syn_val) ->
+        do v? <- ! interp .valu syn_val g;
+        match v?
+        | +Ok(v) ->
+          match v
+          | +ThunkV(t) -> ! t
+          | +True(_) -> ! error
+          | +False(_) -> ! error
           end
-        | +Force(syn_val) ->
-          do v? <- ! interp .valu syn_val g;
-          match v?
-          | +Ok(v) ->
-            match v
-            | +ThunkV(t) -> ! t
-            | +True(_) -> ! error
-            | +False(_) -> ! error
-            end
-          | +Err() -> ! error
-          end
-        | +Return(syn_val) ->
-          do v <- ! interp .valu syn_val g;
-          comatch
-          | .bind -> ret v
-          | .app _ -> ! error
-          end
-        | +Bind(m, x, k) ->
-          do v? <- ! interp .comp m g .bind;
-          match v?
-          | +Ok(v) ->
-            ! interp .comp k +Cons(x, v, g)
-          | +Err() -> ! error
-          end
-        | +Lam(x, m) ->
-          comatch
-          | .app v ->
-            ! interp .comp m +Cons(x, v, g)
-          | .bind -> ret +Err()
-          end
-        | +App(m, v) ->
-          do v? <- ! interp .valu v g;
-          match v?
-          | +Ok(v) -> ! interp .comp m g .app v
-          | +Err() -> ! error
-          end
+        | +Err() -> ! error
+        end
+      | +Return(syn_val) ->
+        do v <- ! interp .valu syn_val g;
+        comatch
+        | .bind -> ret v
+        | .app _ -> ! error
+        end
+      | +Bind(m, x, k) ->
+        do v? <- ! interp .comp m g .bind;
+        match v?
+        | +Ok(v) ->
+          ! interp .comp k +Cons(x, v, g)
+        | +Err() -> ! error
+        end
+      | +Lam(x, m) ->
+        comatch
+        | .app v ->
+          ! interp .comp m +Cons(x, v, g)
+        | .bind -> ret +Err()
+        end
+      | +App(m, v) ->
+        do v? <- ! interp .valu v g;
+        match v?
+        | +Ok(v) -> ! interp .comp m g .app v
+        | +Err() -> ! error
         end
       end
-  } that
+    end
+  that
 
   -- An example
   do x <- ! interp

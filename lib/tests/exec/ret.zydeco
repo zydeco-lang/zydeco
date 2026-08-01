@@ -10,38 +10,21 @@ begin
     forall (R : CType) .
       Thk (A -> R) -> R
   that
-  def f : Thk (
-    forall (A : VType) .
-      Thk (Ret' A) -> Ret A
-  ) = {
-    fn (A : VType) (rr : Thk (Ret' A)) ->
-      ! rr (Ret A) { fn (a : A) -> ret a }
-  } that
-  def g : Thk (
-    forall (A : VType) .
-      Thk (Ret A) -> Ret' A
-  ) = {
-    fn (A : VType)
-       (r : Thk (Ret A))
-       (R : CType)
+  def ! f (A : VType) (rr : Thk (Ret' A)) : Ret A =
+    ! rr (Ret A) { fn (a : A) -> ret a }
+  that
+  def ! g (A : VType) (r : Thk (Ret A)) : Ret' A =
+    fn (R : CType)
        (ar : Thk (A -> R)) ->
       do a <- ! r;
       ! ar a
-  } that
-  def id_ret : Thk (
-    forall (A : VType) .
-      Thk (Ret A) -> Ret A
-  ) = {
-    fn (A : VType) (r : Thk (Ret A)) ->
-      ! f A { ! g A r }
-  } that
-  def id_ret' : Thk (
-    forall (A : VType) .
-      Thk (Ret' A) -> Ret' A
-  ) = {
-    fn (A : VType) (rr : Thk (Ret' A)) ->
-      ! g A { ! f A rr }
-  } that
+  that
+  def ! id_ret (A : VType) (r : Thk (Ret A)) : Ret A =
+    ! f A { ! g A r }
+  that
+  def ! id_ret' (A : VType) (rr : Thk (Ret' A)) : Ret' A =
+    ! g A { ! f A rr }
+  that
 
   do n <- ! id_ret Int { ret 0 };
   ! id_ret'

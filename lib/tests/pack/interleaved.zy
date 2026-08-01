@@ -29,7 +29,7 @@ begin
     ) .
       Ret (X * Y)
   that
-  def reveal : Thk Reveal = {
+  def ! reveal : Reveal =
     fn (
       (
         Leading,
@@ -43,7 +43,7 @@ begin
       ) : Interleaved
     ) ->
       ret (x, y)
-  } that
+  that
   def packed : Interleaved = (
     Unit,
     Int,

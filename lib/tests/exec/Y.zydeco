@@ -15,19 +15,14 @@ begin
     under call-by-push-value - thanks to thunks, we are able to
     preserve the intention of lazy evaluation in `x` above.
   -/
-  def fix' : Thk (
-    forall (B : CType) .
-      Thk (Thk B -> B) -> Ret (Thk B)
-  ) = {
-    fn (B : CType)
-       (f : Thk (Thk B -> B)) ->
-      let prim : Thk (Y B) = {
+  def ! fix' (B : CType) (f : Thk (Thk B -> B)) : Ret (Thk B) =
+    let ! prim : Y B =
         comatch
-        | .y x -> ! f { ! x .y x }
-        end
-      } in
-      ret { ! prim .y prim }
-  } that
+      | .y x -> ! f { ! x .y x }
+      end
+      in
+    ret { ! prim .y prim }
+  that
 
   do (
     Bool = StdBool,
@@ -40,50 +35,39 @@ begin
     std
   ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   -- good old factorial
-  def fact : Thk (
-    Thk (StdInt -> Ret StdInt) ->
-    StdInt ->
-    Ret StdInt
-  ) = {
-    fn f n ->
-      do is_zero <- ! (std/int/eq) n 0;
-      ! (std/bool/if)
-        (Ret StdInt)
-        is_zero
-        { ret 1 }
-        {
-          do n-1 <- ! (std/int/sub) n 1;
-          do rest <- ! f n-1;
-          ! (std/int/mul) n rest
-        }
-  } in
+  def ! fact (f : Thk (StdInt -> Ret StdInt)) (n : StdInt) : Ret StdInt =
+    do is_zero <- ! (std/int/eq) n 0;
+    ! (std/bool/if)
+      (Ret StdInt)
+      is_zero
+      { ret 1 }
+      {
+        do n-1 <- ! (std/int/sub) n 1;
+        do rest <- ! f n-1;
+        ! (std/int/mul) n rest
+      }
+  in
   do fact <- ! fix' (StdInt -> Ret StdInt) fact;
   -- tests
-  def demo : Thk (
-    StdInt ->
-    StdInt ->
-    Thk StdOS ->
-    StdOS
-  ) = {
-    fn input expected t ->
-      do x <- ! fact input;
-      do correct <- ! (std/int/eq) x expected;
-      ! (std/bool/if)
-        StdOS
-        correct
-        { ! t }
-        {
-          do input <- ! (std/int/to_str) input;
-          do expected <- ! (std/int/to_str) expected;
-          do got <- ! (std/int/to_str) x;
-          do msg <- ! (std/string/append) "f " input;
-          do msg <- ! (std/string/append) msg " = ";
-          do msg <- ! (std/string/append) msg expected;
-          do msg <- ! (std/string/append) msg ", got ";
-          do msg <- ! (std/string/append) msg got;
-          ! (std/os/write_line) msg { ! (std/os/exit) 1 }
-        }
-  } in
+  def ! demo (input : StdInt) (expected : StdInt) (t : Thk StdOS) : StdOS =
+    do x <- ! fact input;
+    do correct <- ! (std/int/eq) x expected;
+    ! (std/bool/if)
+      StdOS
+      correct
+      { ! t }
+      {
+        do input <- ! (std/int/to_str) input;
+        do expected <- ! (std/int/to_str) expected;
+        do got <- ! (std/int/to_str) x;
+        do msg <- ! (std/string/append) "f " input;
+        do msg <- ! (std/string/append) msg " = ";
+        do msg <- ! (std/string/append) msg expected;
+        do msg <- ! (std/string/append) msg ", got ";
+        do msg <- ! (std/string/append) msg got;
+        ! (std/os/write_line) msg { ! (std/os/exit) 1 }
+      }
+  in
 
   ! demo 5 120 {
     ! demo 10 3628800 {

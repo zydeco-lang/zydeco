@@ -23,98 +23,82 @@ begin
       let primitive_str_eq = api/str_eq_branch in
       let primitive_read_line_as_int = api/read_line_as_int_branch in
       let primitive_arg_fold = api/arg_fold in
-      let increment : Thk (Int -> Ret Int) = {
-        fn value ->
-          ! primitive_add value 1
-      } in
-      let compare : Thk (
-        forall (A : VType) .
-          Thk (
-            forall (B : CType) .
-              A -> A -> Thk B -> Thk B -> B
-          ) ->
-          A -> A -> Ret Bool
-      ) = {
-        fn (A : VType)
-           predicate
-           left
-           right ->
-          ! predicate
-            (Ret Bool)
-            left
-            right
-            { ret (bool_api/true) }
-            { ret (bool_api/false) }
-      } in
-      let int_eq : Thk (Int -> Int -> Ret Bool) = {
-        fn left right ->
-          ! compare Int primitive_int_eq left right
-      } in
-      let int_lt : Thk (Int -> Int -> Ret Bool) = {
-        fn left right ->
-          ! compare Int primitive_int_lt left right
-      } in
-      let int_gt : Thk (Int -> Int -> Ret Bool) = {
-        fn left right ->
-          ! compare Int primitive_int_gt left right
-      } in
-      let str_eq : Thk (String -> String -> Ret Bool) = {
-        fn left right ->
-          ! compare String primitive_str_eq left right
-      } in
-      let str_split_once : Thk (
-        String -> Char -> Ret (Option (String * String))
-      ) = {
-        fn string separator ->
-          ! primitive_str_split_once
-            (Ret (Option (String * String)))
-            string
-            separator
-            { ! (option_api/none) (String * String) }
-            {
-              fn first second ->
-                ! (option_api/some) (String * String) (first, second)
-            }
-      } in
-      let str_split_n : Thk (
-        String -> Int -> Ret (Option (String * String))
-      ) = {
-        fn string index ->
-          ! primitive_str_split_n
-            (Ret (Option (String * String)))
-            string
-            index
-            { ! (option_api/none) (String * String) }
-            {
-              fn first second ->
-                ! (option_api/some) (String * String) (first, second)
-            }
-      } in
-      let read_line_as_int : Thk (Thk (Option Int -> OS) -> OS) = {
-        fn continuation ->
-          ! primitive_read_line_as_int
-            {
-              do absent <- ! (option_api/none) Int;
-              ! continuation absent
-            }
-            {
-              fn integer ->
-                do present <- ! (option_api/some) Int integer;
-                ! continuation present
-            }
-      } in
-      let arg_list : Thk (Thk (List String -> OS) -> OS) = {
-        fn continuation ->
-          do arguments <- ! primitive_arg_fold
-            (Ret (List String))
-            { ! (list_api/nil) String }
-            {
-              fn argument remaining ->
-                do tail <- ! remaining;
-                ! (list_api/cons) String argument tail
-            };
-          ! continuation arguments
-      } in
+      let ! increment (value : Int) : Ret Int =
+        ! primitive_add value 1
+      in
+      let ! compare
+        (A : VType)
+        (predicate : Thk (
+          forall (B : CType) .
+            A -> A -> Thk B -> Thk B -> B
+        ))
+        (left : A)
+        (right : A)
+        : Ret Bool =
+        ! predicate
+          (Ret Bool)
+          left
+          right
+          { ret (bool_api/true) }
+          { ret (bool_api/false) }
+      in
+      let ! int_eq (left : Int) (right : Int) : Ret Bool =
+        ! compare Int primitive_int_eq left right
+      in
+      let ! int_lt (left : Int) (right : Int) : Ret Bool =
+        ! compare Int primitive_int_lt left right
+      in
+      let ! int_gt (left : Int) (right : Int) : Ret Bool =
+        ! compare Int primitive_int_gt left right
+      in
+      let ! str_eq (left : String) (right : String) : Ret Bool =
+        ! compare String primitive_str_eq left right
+      in
+      let ! str_split_once (string : String) (separator : Char) : Ret (Option (String * String)) =
+        ! primitive_str_split_once
+          (Ret (Option (String * String)))
+          string
+          separator
+          { ! (option_api/none) (String * String) }
+          {
+            fn first second ->
+              ! (option_api/some) (String * String) (first, second)
+          }
+      in
+      let ! str_split_n (string : String) (index : Int) : Ret (Option (String * String)) =
+        ! primitive_str_split_n
+          (Ret (Option (String * String)))
+          string
+          index
+          { ! (option_api/none) (String * String) }
+          {
+            fn first second ->
+              ! (option_api/some) (String * String) (first, second)
+          }
+      in
+      let ! read_line_as_int (continuation : Thk (Option Int -> OS)) : OS =
+        ! primitive_read_line_as_int
+          {
+            do absent <- ! (option_api/none) Int;
+            ! continuation absent
+          }
+          {
+            fn integer ->
+              do present <- ! (option_api/some) Int integer;
+              ! continuation present
+          }
+      in
+      let ! arg_list (continuation : Thk (List String -> OS)) : OS =
+        do arguments <- ! primitive_arg_fold
+          (Ret (List String))
+          { ! (list_api/nil) String }
+          {
+            fn argument remaining ->
+              do tail <- ! remaining;
+              ! (list_api/cons) String argument tail
+          };
+        ! continuation arguments
+      in
       let Prelude =
         exists (
           Thunk = PublicThunk as Thk :

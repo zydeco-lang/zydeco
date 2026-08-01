@@ -16,22 +16,19 @@ begin
     | +False : Unit
     end
   that
-  def odd : Thk (Nat -> Ret Bool) = {
-    fix (odd : Thk (Nat -> Ret Bool)) ->
-      let even : Thk (Nat -> Ret Bool) = {
-        fix (even : Thk (Nat -> Ret Bool)) ->
-          fn (x : Nat) ->
-            match x
-            | +Z() -> ret +True()
-            | +S(x) -> ! odd x
-            end
-      } in
-      fn (x : Nat) ->
+  def fix odd : Nat -> Ret Bool =
+    let fix even (x : Nat) : Ret Bool =
         match x
-        | +Z() -> ret +False()
-        | +S(x) -> ! even x
-        end
-  } that
+      | +Z() -> ret +True()
+      | +S(x) -> ! odd x
+      end
+      in
+    fn (x : Nat) ->
+      match x
+      | +Z() -> ret +False()
+      | +S(x) -> ! even x
+      end
+  that
 
   do b <- ! odd +S(+S(+S(+Z())));
   match b

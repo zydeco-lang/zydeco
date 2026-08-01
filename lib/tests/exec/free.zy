@@ -16,45 +16,39 @@ begin
       H R -> Kont R A
   that
 
-  def mkont : Thk (
-    forall (R : CType) .
-      Monad (Kont R)
-  ) = {
-    fn R ->
-      comatch
-      | .return A a ->
-        fn k ->
-          ! k a
-      | .bind A A' m f ->
-        fn k ->
-          ! m {
-            fn a ->
-              ! f a k
-          }
-      end
-  } that
-  def mfree : Thk (
-    forall (
+  def ! mkont (R : CType) : Monad (Kont R) =
+    comatch
+    | .return A a ->
+      fn k ->
+        ! k a
+    | .bind A A' m f ->
+      fn k ->
+        ! m {
+          fn a ->
+            ! f a k
+        }
+    end
+  that
+  def ! mfree
+    (
       H :
       (CType) -> (VType)
-    ) .
-      Monad (Free H)
-  ) = {
-    fn H ->
-      comatch
-      | .return A a ->
-        fn R h ->
-          ! mkont R .return A a
-      | .bind A A' m f ->
-        fn R h ->
-          ! mkont R .bind A A'
-            { ! m R h }
-            {
-              fn a ->
-                ! f a R h
-            }
-      end
-  } that
+    )
+    : Monad (Free H) =
+    comatch
+    | .return A a ->
+      fn R h ->
+        ! mkont R .return A a
+    | .bind A A' m f ->
+      fn R h ->
+        ! mkont R .bind A A'
+          { ! m R h }
+          {
+            fn a ->
+              ! f a R h
+          }
+    end
+  that
 
   ! (api/exit) 0
 end

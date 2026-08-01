@@ -4,21 +4,13 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
   let x = 100 that
-  def const : Thk (
-    forall (A : VType) .
-    forall (A' : VType) .
-      A -> A' -> Ret A
-  ) = {
-    fn (A : VType)
-       (A' : VType)
-       (a : A)
-       (_ : A') ->
-      let _ = x in
-      ret a
-  } that
-  def one : Thk (Int -> Ret Int) = {
+  def ! const (A : VType) (A' : VType) (a : A) (_ : A') : Ret A =
+    let _ = x in
+    ret a
+  that
+  def ! one : Int -> Ret Int =
     ! const Int Int 0
-  } that
+  that
 
   do x <- ! one 20;
   ! (api/exit) x

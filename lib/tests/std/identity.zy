@@ -16,9 +16,13 @@ begin
     std
   ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   let (= Thunk, = U, = F, ()) = std/prelude in
-  let first : Thunk (F StdInt) = { ret 0 } in
+  let ! first : F StdInt =
+    ret 0
+  in
   do first <- ! first;
-  let second : U (Ret StdInt) = { ret first } in
+  let ! second : Ret StdInt =
+    ret first
+  in
   do status <- ! second;
   ! (std/os/exit) status
 end

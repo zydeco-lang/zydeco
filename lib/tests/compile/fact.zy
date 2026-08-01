@@ -15,22 +15,20 @@ begin
     OS = StdOS,
     std
   ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
-  let fact : Thk (StdInt -> Ret StdInt) = {
+  let fix fact (i : StdInt) : Ret StdInt =
     -- extern def add : Thk (Int -> Int -> Ret Int) end
-    fix (fact : Thk (StdInt -> Ret StdInt)) ->
-      fn (i : StdInt) ->
-        do zero? <- ! (std/int/eq) i 0;
-        ! (std/bool/if)
-          (Ret StdInt)
-          zero?
-          { ret 1 }
-          {
-            -- do i <- ret i;
-            do i' <- ! (std/int/sub) i 1;
-            do acc <- ! fact i';
-            ! (std/int/mul) i acc
-          }
-  } in
+    do zero? <- ! (std/int/eq) i 0;
+    ! (std/bool/if)
+      (Ret StdInt)
+      zero?
+      { ret 1 }
+      {
+        -- do i <- ret i;
+        do i' <- ! (std/int/sub) i 1;
+        do acc <- ! fact i';
+        ! (std/int/mul) i acc
+      }
+  in
   do x <- ! fact 10;
   do r <- ! (std/int/sub) x 3628800;
   ! (std/os/exit) r

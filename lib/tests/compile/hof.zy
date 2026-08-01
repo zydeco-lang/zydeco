@@ -3,17 +3,9 @@ begin
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
-  def apply : Thk (
-    forall (A : VType) .
-    forall (B : CType) .
-      Thk (A -> B) -> A -> B
-  ) = {
-    fn (A : VType)
-       (B : CType)
-       (f : Thk (A -> B))
-       (x : A) ->
-      ! f x
-  } that
+  def ! apply (A : VType) (B : CType) (f : Thk (A -> B)) (x : A) : B =
+    ! f x
+  that
 
   do x <- ! apply Int (Ret Int) { fn x -> ret x } 0;
   ! (api/exit) x

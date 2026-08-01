@@ -11,10 +11,9 @@ begin
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
-  def run : Thk (
-    forall (A : VType) .
-      A -> OS
-  ) = {
+  def ! run
+    : forall (A : VType) .
+    A -> OS =
     begin
       let copy : Number = seed that
       param (seed : Number) that
@@ -25,7 +24,7 @@ begin
       do status <- ! (api/add) expected 0;
       ! (api/exit) status
     end
-  } that
+  that
 
   ! run IdentityResult 7
 end
