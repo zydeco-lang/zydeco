@@ -202,6 +202,31 @@ fn source_graph_loads_nested_relative_imports_in_provider_order() {
 }
 
 #[test]
+fn source_graph_reports_unique_sources_as_they_are_discovered() {
+    let fixture = SourceFixture::new();
+    fixture.write("leaf.zy", "1");
+    fixture.write("nested/library.zy", r#"@[import("../leaf.zy")] _"#);
+    let root = fixture.write("main.zy", r#"@[import("nested/library.zy")] _"#);
+    let mut progress = Vec::new();
+
+    let graph = SourceGraph::load_with_progress(&root, |update| progress.push(update)).unwrap();
+    let progress = progress
+        .into_iter()
+        .map(|update| (update.path.file_name().unwrap().to_owned(), update.discovered))
+        .collect::<Vec<_>>();
+
+    assert_eq!(graph.sources.len(), 3);
+    assert_eq!(
+        progress,
+        [
+            (std::ffi::OsString::from("main.zy"), 1),
+            (std::ffi::OsString::from("library.zy"), 2),
+            (std::ffi::OsString::from("leaf.zy"), 3),
+        ]
+    );
+}
+
+#[test]
 fn source_graph_orders_a_diamond_after_its_shared_provider() {
     let fixture = SourceFixture::new();
     fixture.write("leaf.zy", "1");

@@ -1,6 +1,6 @@
 use crate::source::{
     SourceFile, SourceGraph, SourceGraphScope, SourceId, SourceImport, SourceImportId,
-    SourceLoadError,
+    SourceLoadError, SourceLoadProgress,
 };
 use sculptor::ShaSnap;
 use std::{
@@ -16,29 +16,20 @@ use zydeco_utils::{
     span::{FileInfo, LocationCtx},
 };
 
-pub(crate) struct SourceGraphLoader<'source> {
+pub(crate) struct SourceGraphLoader<'source, Progress> {
     sources: ArenaDense<SourceGraphScope, SourceId>,
     imports: ArenaDense<SourceGraphScope, SourceImportId>,
     dependencies: DepGraph<SourceId>,
     seen: HashMap<PathBuf, SourceId>,
     overrides: &'source HashMap<PathBuf, String>,
+    progress: Progress,
 }
 
-impl SourceGraphLoader<'_> {
-    pub(crate) fn load(root: &Path) -> Result<SourceGraph, SourceLoadError> {
-        let overrides = HashMap::new();
-        SourceGraphLoader::with_overrides(&overrides).load_root(root)
-    }
-}
-
-impl<'source> SourceGraphLoader<'source> {
-    pub(crate) fn load_with_overrides(
-        root: &Path, overrides: &'source HashMap<PathBuf, String>,
-    ) -> Result<SourceGraph, SourceLoadError> {
-        Self::with_overrides(overrides).load_root(root)
-    }
-
-    fn load_root(mut self, root: &Path) -> Result<SourceGraph, SourceLoadError> {
+impl<'source, Progress> SourceGraphLoader<'source, Progress>
+where
+    Progress: FnMut(SourceLoadProgress),
+{
+    pub(crate) fn load_root(mut self, root: &Path) -> Result<SourceGraph, SourceLoadError> {
         let canonical = root
             .canonicalize()
             .map_err(|source| SourceLoadError::RootPath { path: root.to_path_buf(), source })?;
@@ -53,13 +44,16 @@ impl<'source> SourceGraphLoader<'source> {
         Ok(graph)
     }
 
-    fn with_overrides(overrides: &'source HashMap<PathBuf, String>) -> Self {
+    pub(crate) fn with_overrides(
+        overrides: &'source HashMap<PathBuf, String>, progress: Progress,
+    ) -> Self {
         Self {
             sources: ArenaDense::new(),
             imports: ArenaDense::new(),
             dependencies: DepGraph::new(),
             seen: HashMap::new(),
             overrides,
+            progress,
         }
     }
 
@@ -67,6 +61,8 @@ impl<'source> SourceGraphLoader<'source> {
         if let Some(source) = self.seen.get(&path) {
             return Ok(*source);
         }
+
+        (self.progress)(SourceLoadProgress { path: path.clone(), discovered: self.seen.len() + 1 });
 
         let source = match self.overrides.get(&path) {
             | Some(source) => source.clone(),

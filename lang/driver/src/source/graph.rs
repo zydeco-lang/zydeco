@@ -50,15 +50,37 @@ pub struct SourceGraph {
     pub dependencies: DepGraph<SourceId>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SourceLoadProgress {
+    pub path: PathBuf,
+    pub discovered: usize,
+}
+
 impl SourceGraph {
     pub fn load(root: impl AsRef<Path>) -> Result<Self, SourceLoadError> {
-        super::loader::SourceGraphLoader::load(root.as_ref())
+        let overrides = HashMap::new();
+        Self::load_with_overrides(root, &overrides)
+    }
+
+    pub fn load_with_progress(
+        root: impl AsRef<Path>, progress: impl FnMut(SourceLoadProgress),
+    ) -> Result<Self, SourceLoadError> {
+        let overrides = HashMap::new();
+        Self::load_with_overrides_and_progress(root, &overrides, progress)
     }
 
     pub fn load_with_overrides(
         root: impl AsRef<Path>, overrides: &HashMap<PathBuf, String>,
     ) -> Result<Self, SourceLoadError> {
-        super::loader::SourceGraphLoader::load_with_overrides(root.as_ref(), overrides)
+        Self::load_with_overrides_and_progress(root, overrides, |_| {})
+    }
+
+    pub fn load_with_overrides_and_progress(
+        root: impl AsRef<Path>, overrides: &HashMap<PathBuf, String>,
+        progress: impl FnMut(SourceLoadProgress),
+    ) -> Result<Self, SourceLoadError> {
+        super::loader::SourceGraphLoader::with_overrides(overrides, progress)
+            .load_root(root.as_ref())
     }
 
     pub fn provider_order(&self) -> Vec<SourceId> {

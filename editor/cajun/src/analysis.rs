@@ -26,6 +26,7 @@ use zydeco_utils::{
 
 use crate::{
     hover::{HoverSignature, SealedTypeEquationPreview, TypeDefinitionLink, TypeDefinitionPreview},
+    progress::AnalysisProgress,
     semantic::SemanticHighlighter,
     type_links::TypeReferenceCollector,
 };
@@ -46,18 +47,31 @@ struct SymbolOccurrence {
 }
 
 impl ProjectState {
+    #[cfg(test)]
     pub(crate) fn load(
         source_path: &Path, overrides: &HashMap<PathBuf, String>,
     ) -> Result<Self, String> {
-        let mut scoped = SourceGraph::load_with_overrides(source_path, overrides)
-            .map_err(|error| format!("Source error: {error}"))?
-            .assemble()
-            .map_err(|error| format!("Assembly error: {error}"))?
-            .desugar()
-            .map_err(|error| format!("Desugaring error: {error}"))?
-            .resolve()
-            .map_err(|error| format!("Resolution error: {error}"))?;
+        Self::load_with_progress(source_path, overrides, |_| {})
+    }
+
+    pub(crate) fn load_with_progress(
+        source_path: &Path, overrides: &HashMap<PathBuf, String>,
+        mut progress: impl FnMut(AnalysisProgress),
+    ) -> Result<Self, String> {
+        let graph =
+            SourceGraph::load_with_overrides_and_progress(source_path, overrides, |source| {
+                progress(AnalysisProgress::Parsing(source))
+            })
+            .map_err(|error| format!("Source error: {error}"))?;
+        let source_count = graph.sources.len();
+        progress(AnalysisProgress::Assembling { source_count });
+        let assembly = graph.assemble().map_err(|error| format!("Assembly error: {error}"))?;
+        progress(AnalysisProgress::Desugaring { source_count });
+        let bitter = assembly.desugar().map_err(|error| format!("Desugaring error: {error}"))?;
+        progress(AnalysisProgress::Resolving { source_count });
+        let mut scoped = bitter.resolve().map_err(|error| format!("Resolution error: {error}"))?;
         let root = scoped.root;
+        progress(AnalysisProgress::Tycking { source_count });
         let statics = Tycker::new(&scoped.spans, &scoped.prim, &mut scoped.arena)
             .with_hole_solution_output(HoleSolutionOutput::Silent)
             .check_source_outcome(root)
@@ -81,6 +95,7 @@ impl ProjectState {
                 })
             })
             .ok_or_else(|| format!("assembled source graph omitted `{}`", source_path.display()))?;
+        progress(AnalysisProgress::Highlighting { path: source_path.clone() });
         let tokens = SemanticHighlighter::compiler_refined(
             source,
             &source_path,
@@ -328,9 +343,10 @@ impl ProjectState {
 #[cfg(test)]
 mod tests {
     use super::ProjectState;
-    use crate::semantic::SemanticHighlighter;
+    use crate::{progress::AnalysisProgress, semantic::SemanticHighlighter};
     use std::{collections::HashMap, path::Path};
     use tower_lsp::lsp_types::{HoverContents, Position, SemanticToken, SemanticTokensLegend, Url};
+    use zydeco_driver::source::SourceLoadProgress;
     use zydeco_utils::span::{Cursor2, FileInfo};
 
     struct DecodedToken {
@@ -391,6 +407,34 @@ mod tests {
                 })
                 .collect()
         }
+    }
+
+    #[test]
+    fn analysis_reports_discovery_before_whole_program_phases() {
+        let directory = tempfile::tempdir().unwrap();
+        let library = directory.path().join("library.zy");
+        let root = directory.path().join("main.zy");
+        std::fs::write(&library, "()\n").unwrap();
+        std::fs::write(&root, "@[import(\"library.zy\")] _\n").unwrap();
+        let library = library.canonicalize().unwrap();
+        let root = root.canonicalize().unwrap();
+        let mut progress = Vec::new();
+
+        ProjectState::load_with_progress(&root, &HashMap::new(), |update| progress.push(update))
+            .unwrap();
+
+        assert_eq!(
+            progress,
+            vec![
+                AnalysisProgress::Parsing(SourceLoadProgress { path: root.clone(), discovered: 1 }),
+                AnalysisProgress::Parsing(SourceLoadProgress { path: library, discovered: 2 }),
+                AnalysisProgress::Assembling { source_count: 2 },
+                AnalysisProgress::Desugaring { source_count: 2 },
+                AnalysisProgress::Resolving { source_count: 2 },
+                AnalysisProgress::Tycking { source_count: 2 },
+                AnalysisProgress::Highlighting { path: root },
+            ]
+        );
     }
 
     #[test]

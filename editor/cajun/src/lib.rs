@@ -1,13 +1,16 @@
 mod analysis;
 mod hover;
+mod progress;
 mod semantic;
 mod type_links;
 
 use analysis::ProjectState;
+use progress::{AnalysisProgressReporter, AnalysisProgressSession};
 use semantic::SemanticHighlighter;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
 };
 use tokio::sync::RwLock;
 use tower_lsp::{
@@ -47,6 +50,8 @@ pub struct Cajun {
     client: Client,
     projects: RwLock<HashMap<PathBuf, ProjectState>>,
     open_documents: RwLock<HashMap<PathBuf, String>>,
+    work_done_progress: AtomicBool,
+    next_progress_sequence: AtomicU64,
 }
 
 impl Cajun {
@@ -55,13 +60,29 @@ impl Cajun {
             client,
             projects: RwLock::new(HashMap::new()),
             open_documents: RwLock::new(HashMap::new()),
+            work_done_progress: AtomicBool::new(false),
+            next_progress_sequence: AtomicU64::new(1),
         }
     }
 
     async fn refresh(&self, uri: &Url) -> std::result::Result<PathBuf, String> {
+        self.refresh_with_progress(uri, AnalysisProgressReporter::default()).await
+    }
+
+    async fn refresh_with_progress(
+        &self, uri: &Url, progress: AnalysisProgressReporter,
+    ) -> std::result::Result<PathBuf, String> {
         let path = Self::path(uri)?;
+        let analysis_path = path.clone();
         let overrides = self.open_documents.read().await.clone();
-        match ProjectState::load(&path, &overrides) {
+        let analysis = tokio::task::spawn_blocking(move || {
+            ProjectState::load_with_progress(&analysis_path, &overrides, |update| {
+                progress.report(update)
+            })
+        })
+        .await
+        .map_err(|error| format!("analysis task failed: {error}"))?;
+        match analysis {
             | Ok(project) => {
                 self.projects.write().await.insert(path.clone(), project);
                 Ok(path)
@@ -73,8 +94,12 @@ impl Cajun {
         }
     }
 
-    async fn analyze_and_publish(&self, uri: Url, version: Option<i32>) {
-        let diagnostics = match self.refresh(&uri).await {
+    async fn analyze_and_publish(
+        &self, uri: Url, version: Option<i32>, mut progress: Option<AnalysisProgressSession>,
+    ) {
+        let reporter =
+            progress.as_mut().map(|progress| progress.take_reporter()).unwrap_or_default();
+        let diagnostics = match self.refresh_with_progress(&uri, reporter).await {
             | Ok(_) => Vec::new(),
             | Err(message) => vec![Diagnostic {
                 range: Range::new(Position::new(0, 0), Position::new(0, 1)),
@@ -84,7 +109,19 @@ impl Cajun {
                 ..Diagnostic::default()
             }],
         };
+        if let Some(progress) = progress {
+            progress.finish().await;
+        }
         self.client.publish_diagnostics(uri, diagnostics, version).await;
+    }
+
+    fn progress_session(&self, uri: &Url) -> Option<AnalysisProgressSession> {
+        if !self.work_done_progress.load(Ordering::Relaxed) {
+            return None;
+        }
+        let root = Self::path(uri).ok()?;
+        let sequence = self.next_progress_sequence.fetch_add(1, Ordering::Relaxed);
+        Some(AnalysisProgressSession::new(self.client.clone(), root, sequence))
     }
 
     async fn set_document(&self, uri: &Url, text: String) -> Option<PathBuf> {
@@ -106,7 +143,13 @@ impl Cajun {
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Cajun {
-    async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
+    async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
+        let work_done_progress = params
+            .capabilities
+            .window
+            .and_then(|window| window.work_done_progress)
+            .unwrap_or(false);
+        self.work_done_progress.store(work_done_progress, Ordering::Relaxed);
         Ok(InitializeResult {
             server_info: Some(ServerInfo {
                 name: "Cajun".to_string(),
@@ -156,7 +199,8 @@ impl LanguageServer for Cajun {
             return;
         }
         self.set_document(&document.uri, document.text).await;
-        self.analyze_and_publish(document.uri, Some(document.version)).await;
+        let progress = self.progress_session(&document.uri);
+        self.analyze_and_publish(document.uri, Some(document.version), progress).await;
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
@@ -174,7 +218,7 @@ impl LanguageServer for Cajun {
             return;
         };
         self.set_document(&document.uri, change.text).await;
-        self.analyze_and_publish(document.uri, Some(document.version)).await;
+        self.analyze_and_publish(document.uri, Some(document.version), None).await;
     }
 
     async fn did_save(&self, params: DidSaveTextDocumentParams) {
@@ -184,7 +228,7 @@ impl LanguageServer for Cajun {
         if let Some(text) = params.text {
             self.set_document(&params.text_document.uri, text).await;
         }
-        self.analyze_and_publish(params.text_document.uri, None).await;
+        self.analyze_and_publish(params.text_document.uri, None, None).await;
     }
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
