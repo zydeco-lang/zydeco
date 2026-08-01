@@ -1,8 +1,0 @@
-name = "core"
-
-srcs = [
-    "core.zy",
-]
-deps = []
-
-std = "nostd"
