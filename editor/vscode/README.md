@@ -9,7 +9,7 @@ for `.zy` and `.zydeco` files.
 - live syntax and name-resolution diagnostics;
 - document symbols;
 - definition and reference lookup across imported source files;
-- inferred kind and type information on hover, with inline links to type definitions;
+- inferred kind and type information on hover, with links to type definitions;
 - compiler-aware semantic highlighting;
 - full synchronization of unsaved editor contents.
 

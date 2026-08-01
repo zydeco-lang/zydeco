@@ -20,7 +20,7 @@ use zydeco_utils::{
 };
 
 use crate::{
-    hover::{HoverSignature, TypeDefinitionLink},
+    hover::{HoverSignature, TypeDefinitionLink, TypeDefinitionPreview},
     semantic::SemanticHighlighter,
     type_links::TypeDefinitionCollector,
 };
@@ -116,12 +116,19 @@ impl ProjectState {
         let annotation = self.statics.annotations_var.get(&occurrence.definition)?;
         let formatter = Formatter::new(&self.scoped.arena, &self.statics);
         let mut annotation_text = String::new();
-        annotation.pretty(&formatter).render_fmt(usize::MAX, &mut annotation_text).ok()?;
+        annotation.pretty(&formatter).render_fmt(100, &mut annotation_text).ok()?;
+        let definition =
+            self.statics.type_definitions.get(&occurrence.definition).and_then(|definition| {
+                let mut rendered = String::new();
+                definition.pretty(&formatter).render_fmt(90, &mut rendered).ok()?;
+                Some(TypeDefinitionPreview::new(rendered))
+            });
         let definitions = TypeDefinitionCollector::collect(&self.statics, *annotation)
             .into_iter()
             .filter_map(|definition| self.type_definition_link(definition));
-        let signature =
-            HoverSignature::with_definitions(&name.0, &annotation_text, definitions).markdown();
+        let signature = HoverSignature::with_definitions(&name.0, &annotation_text, definitions)
+            .with_definition(definition)
+            .markdown();
         Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
@@ -385,7 +392,7 @@ mod tests {
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
-        assert_eq!(contents.value, "`answer : Unit`");
+        assert_eq!(contents.value, "```zydeco\nanswer : Unit\n```");
     }
 
     #[test]
@@ -402,7 +409,10 @@ mod tests {
         let mut definition = Url::from_file_path(&path).unwrap();
         definition.set_fragment(Some("L8"));
 
-        assert_eq!(contents.value, format!("`value :` [`A` ↗](<{definition}>)"));
+        assert_eq!(
+            contents.value,
+            format!("```zydeco\nvalue : A\n```\n\nTypes:\n\n- [`A` ↗](<{definition}>)")
+        );
     }
 
     #[test]
@@ -419,7 +429,58 @@ mod tests {
         let mut definition = Url::from_file_path(&path).unwrap();
         definition.set_fragment(Some("L15"));
 
-        assert_eq!(contents.value, format!("`copy :` [`A` ↗](<{definition}>)"));
+        assert_eq!(
+            contents.value,
+            format!("```zydeco\ncopy : A\n```\n\nTypes:\n\n- [`A` ↗](<{definition}>)")
+        );
+    }
+
+    #[test]
+    fn type_hover_expands_short_definitions_and_collapses_long_ones() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../lib/std/option.zy")
+            .canonicalize()
+            .unwrap();
+        let project = ProjectState::load(&path, &HashMap::new()).unwrap();
+
+        let short = project.hover(&path, Position::new(6, 7)).unwrap();
+        let HoverContents::Markup(short) = short.contents else {
+            panic!("type hover should use markup content")
+        };
+        assert_eq!(
+            short.value,
+            concat!(
+                "```zydeco\n",
+                "Option : VType -> VType =\n",
+                "  fn A ->\n",
+                "    data | +None : Unit | +Some : A end\n",
+                "```"
+            )
+        );
+
+        let long = project.hover(&path, Position::new(41, 7)).unwrap();
+        let HoverContents::Markup(long) = long.contents else {
+            panic!("type hover should use markup content")
+        };
+        assert_eq!(long.value, "```zydeco\nInterface : VType =\n  ...\n```");
+    }
+
+    #[test]
+    fn type_hover_recovers_recursive_definition_bodies() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../lib/tests/builtin/recursive-data.zy")
+            .canonicalize()
+            .unwrap();
+        let project = ProjectState::load(&path, &HashMap::new()).unwrap();
+        let hover = project.hover(&path, Position::new(1, 7)).unwrap();
+        let HoverContents::Markup(contents) = hover.contents else {
+            panic!("type hover should use markup content")
+        };
+
+        assert_eq!(
+            contents.value,
+            "```zydeco\nNat : VType =\n  data | +Z : Unit | +S : Nat[sealed] end\n```"
+        );
     }
 
     #[test]

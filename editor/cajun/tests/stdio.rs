@@ -219,7 +219,7 @@ fn stdio_server_synchronizes_documents_and_answers_navigation_requests() {
     );
     assert_eq!(binder_hover["result"]["contents"], use_hover["result"]["contents"]);
     assert_eq!(binder_hover["result"]["contents"]["kind"], "markdown");
-    assert_eq!(binder_hover["result"]["contents"]["value"], "`answer : Unit`");
+    assert_eq!(binder_hover["result"]["contents"]["value"], "```zydeco\nanswer : Unit\n```");
 
     let changed = "begin\n  let result = () that\n  result\nend\n";
     server.notify(
@@ -301,7 +301,10 @@ fn stdio_hover_links_referenced_type_definitions() {
         }),
     );
     assert_eq!(hover["result"]["contents"]["kind"], "markdown");
-    assert_eq!(hover["result"]["contents"]["value"], format!("`value :` [`A` ↗](<{definition}>)"));
+    assert_eq!(
+        hover["result"]["contents"]["value"],
+        format!("```zydeco\nvalue : A\n```\n\nTypes:\n\n- [`A` ↗](<{definition}>)")
+    );
 
     server.finish();
 }

@@ -1019,6 +1019,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::Binding> {
                 let binder = env.mk(binder).tyck_k(tycker, PatternAction::ana(kd.into()))?;
                 let (binder, _kd) = binder.as_type();
 
+                if let (Some(def), _) = binder.try_destruct_def(tycker) {
+                    let _ = tycker.statics.type_definitions.upsert(def, bindee);
+                }
+
                 // seal the type if needed
                 let bindee = if is_sealed {
                     let abst = tycker.statics.absts.alloc(());
@@ -1154,6 +1158,9 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
             )?;
             // subst vars in bindee
             let bindee_subst = bindee.subst_env_k(tycker, &env.info)?;
+            if let (Some(def), _) = binder.try_destruct_def(tycker) {
+                let _ = tycker.statics.type_definitions.upsert(def, bindee_subst);
+            }
             // add the types to the seal arena
             let (abst, kd) = abst_map[&id];
             tycker.statics.seals.insert_new(abst, bindee_subst);
@@ -3582,6 +3589,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         let binder_out_ann =
                             self.mk(binder).tyck_k(tycker, PatternAction::ana(bindee_kd.into()))?;
                         let (binder_out, _binder_kd) = binder_out_ann.as_type();
+                        if let (Some(def), _) = binder_out.try_destruct_def(tycker) {
+                            let _ = tycker.statics.type_definitions.upsert(def, bindee_out);
+                        }
                         let bindee_out = if is_sealed {
                             let abst = tycker.statics.absts.alloc(());
                             if let (Some(def), _) = binder_out.try_destruct_def(tycker) {

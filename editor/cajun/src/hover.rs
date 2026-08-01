@@ -1,6 +1,5 @@
-use std::{collections::BTreeMap, ops::Range};
+use std::collections::BTreeMap;
 use tower_lsp::lsp_types::Url;
-use zydeco_surface::textual::{LexicalTokenKind, LexicalTokens};
 
 #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub(crate) struct TypeDefinitionLink {
@@ -32,8 +31,16 @@ impl FromIterator<TypeDefinitionLink> for TypeDefinitionLinks {
 }
 
 impl TypeDefinitionLinks {
-    fn target(&self, name: &str) -> Option<&Url> {
-        self.by_name.get(name)?.as_ref()
+    fn markdown(&self) -> Option<String> {
+        let lines = self
+            .by_name
+            .iter()
+            .filter_map(|(name, target)| {
+                target.as_ref().map(|target| format!("- {}", MarkdownCode::link(name, target)))
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        if lines.is_empty() { None } else { Some(lines) }
     }
 }
 
@@ -66,27 +73,33 @@ impl MarkdownCode {
     fn link(label: &str, target: &Url) -> String {
         format!("[{} {}](<{}>)", Self::span(label), Self::GOTO_SYMBOL, target.as_str())
     }
-
-    fn with_links<'a>(
-        text: &str, links: impl IntoIterator<Item = (Range<usize>, &'a Url)>,
-    ) -> String {
-        let (mut markdown, cursor) = links.into_iter().fold(
-            (String::new(), 0usize),
-            |(mut markdown, cursor), (range, target)| {
-                markdown.push_str(&Self::span(&text[cursor..range.start]));
-                markdown.push_str(&Self::link(&text[range.clone()], target));
-                (markdown, range.end)
-            },
-        );
-        markdown.push_str(&Self::span(&text[cursor..]));
-        markdown
-    }
 }
 
 pub(crate) struct HoverSignature<'a> {
     name: &'a str,
     annotation: &'a str,
+    definition: Option<TypeDefinitionPreview>,
     definitions: TypeDefinitionLinks,
+}
+
+pub(crate) struct TypeDefinitionPreview(String);
+
+impl TypeDefinitionPreview {
+    const MAX_NON_WHITESPACE_CHARS: usize = 90;
+
+    pub(crate) fn new(rendered: String) -> Self {
+        let too_long = rendered
+            .chars()
+            .filter(|character| !character.is_whitespace())
+            .take(Self::MAX_NON_WHITESPACE_CHARS + 1)
+            .count()
+            > Self::MAX_NON_WHITESPACE_CHARS;
+        Self(if too_long { "...".to_owned() } else { rendered })
+    }
+
+    fn indented(&self) -> String {
+        self.0.lines().map(|line| format!("  {line}")).collect::<Vec<_>>().join("\n")
+    }
 }
 
 impl<'a> HoverSignature<'a> {
@@ -94,35 +107,36 @@ impl<'a> HoverSignature<'a> {
         name: &'a str, annotation: &'a str,
         definitions: impl IntoIterator<Item = TypeDefinitionLink>,
     ) -> Self {
-        Self { name, annotation, definitions: definitions.into_iter().collect() }
+        Self { name, annotation, definition: None, definitions: definitions.into_iter().collect() }
+    }
+
+    pub(crate) fn with_definition(mut self, definition: Option<TypeDefinitionPreview>) -> Self {
+        self.definition = definition;
+        self
     }
 
     pub(crate) fn markdown(&self) -> String {
-        let prefix = format!("{} : ", self.name);
-        let signature = format!("{prefix}{}", self.annotation);
-        let offset = prefix.len();
-        let links = LexicalTokens::new(self.annotation).filter_map(|token| {
-            if !matches!(
-                token.kind,
-                LexicalTokenKind::UpperIdentifier | LexicalTokenKind::LowerIdentifier
-            ) {
-                return None;
+        let declaration = match &self.definition {
+            | Some(definition) => {
+                format!("{} : {} =\n{}", self.name, self.annotation, definition.indented())
             }
-            let name = &self.annotation[token.range.clone()];
-            let target = self.definitions.target(name)?;
-            Some((token.range.start + offset..token.range.end + offset, target))
-        });
-        MarkdownCode::with_links(&signature, links)
+            | None => format!("{} : {}", self.name, self.annotation),
+        };
+        let signature = format!("```zydeco\n{declaration}\n```");
+        match self.definitions.markdown() {
+            | Some(definitions) => format!("{signature}\n\nTypes:\n\n{definitions}"),
+            | None => signature,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{HoverSignature, TypeDefinitionLink};
+    use super::{HoverSignature, TypeDefinitionLink, TypeDefinitionPreview};
     use tower_lsp::lsp_types::Url;
 
     #[test]
-    fn repeated_type_names_link_in_place() {
+    fn referenced_types_follow_the_signature_once() {
         let target = Url::parse("file:///types.zy#L1").unwrap();
         let signature = HoverSignature::with_definitions(
             "id",
@@ -132,7 +146,7 @@ mod tests {
 
         assert_eq!(
             signature.markdown(),
-            format!("`id :` [`A` ↗](<{target}>) `->` [`A` ↗](<{target}>)")
+            format!("```zydeco\nid : A -> A\n```\n\nTypes:\n\n- [`A` ↗](<{target}>)")
         );
     }
 
@@ -153,6 +167,36 @@ mod tests {
             ],
         );
 
-        assert_eq!(signature.markdown(), "`value : A`");
+        assert_eq!(signature.markdown(), "```zydeco\nvalue : A\n```");
+    }
+
+    #[test]
+    fn short_type_definition_is_expanded_on_following_lines() {
+        let signature = HoverSignature::with_definitions("Pair", "VType", []).with_definition(
+            Some(TypeDefinitionPreview::new("data\n| +Pair : A * B\nend".to_owned())),
+        );
+
+        assert_eq!(
+            signature.markdown(),
+            "```zydeco\nPair : VType =\n  data\n  | +Pair : A * B\n  end\n```"
+        );
+    }
+
+    #[test]
+    fn long_type_definition_is_collapsed() {
+        let definition = "x".repeat(91);
+        let signature = HoverSignature::with_definitions("Large", "VType", [])
+            .with_definition(Some(TypeDefinitionPreview::new(definition)));
+
+        assert_eq!(signature.markdown(), "```zydeco\nLarge : VType =\n  ...\n```");
+    }
+
+    #[test]
+    fn whitespace_does_not_count_toward_definition_limit() {
+        let definition = format!("{}{}", "x".repeat(90), " \n \t".repeat(20));
+        let signature = HoverSignature::with_definitions("Spaced", "VType", [])
+            .with_definition(Some(TypeDefinitionPreview::new(definition)));
+
+        assert!(!signature.markdown().contains("..."));
     }
 }
