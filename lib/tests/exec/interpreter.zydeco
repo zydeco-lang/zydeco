@@ -45,7 +45,7 @@ begin
   that
   -- The "final answer" of the interpreter is either the final value or
   -- an error.
-  let Answer (A : VType) =
+  def Answer (A : VType) =
     data
     | +Ok : A
     | +Err : Unit
@@ -64,7 +64,7 @@ begin
   -- mutually recursively.
   -- Currently zydeco doesn't directly support mutual recursion but
   -- it can be easily simulated:
-  let Interpreter =
+  def Interpreter =
     codata
     | .valu : SynVal -> Env -> Ret (Answer SemVal)
     | .comp : SynComp -> Env -> SemComp

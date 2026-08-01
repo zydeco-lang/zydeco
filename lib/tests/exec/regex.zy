@@ -4,13 +4,13 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let Bool =
+  def Bool =
     data
     | +True : Unit
     | +False : Unit
     end
   that
-  let Option (A : VType) =
+  def Option (A : VType) =
     data
     | +None : Unit
     | +Some : A
@@ -24,7 +24,7 @@ begin
     | +Choose : Syn * Syn
     end
   that
-  let Matcher =
+  def Matcher =
     codata
     | .str : String -> Ret (Option String)
     | .concat : Syn -> Syn -> Ret (Option String)
@@ -33,7 +33,7 @@ begin
     | .bind : Syn -> Ret (Option String)
     end
   that
-  let Regex =
+  def Regex =
     codata
     | .run : String -> Matcher
     end

@@ -10,13 +10,13 @@ begin
     | +S : Nat
     end
   that
-  let Bool =
+  def Bool =
     data
     | +True : Unit
     | +False : Unit
     end
   that
-  let OddEven =
+  def OddEven =
     data
     | +OddEven : Thk (Nat -> Ret Bool) * Thk (Nat -> Ret Bool)
     end

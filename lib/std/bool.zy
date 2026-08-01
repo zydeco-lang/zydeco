@@ -5,7 +5,7 @@ param (
   @[import("builtin.zy")] _
 ) in
 ret begin
-  let Bool =
+  def Bool =
     data
     | +False : Unit
     | +True : Unit

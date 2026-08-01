@@ -8,13 +8,13 @@ begin
     ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
 
-  let Bool =
+  def Bool =
     data
     | +True : Unit
     | +False : Unit
     end
   that
-  let Pair (A : VType) (A' : VType) =
+  def Pair (A : VType) (A' : VType) =
     data
     | +Cons : A * A'
     end
@@ -25,7 +25,7 @@ begin
     | +Cons : A * List A
     end
   that
-  let Monoid (M : (VType) -> (CType)) =
+  def Monoid (M : (VType) -> (CType)) =
     codata
     | .empty :
       forall (A : VType) .
@@ -41,7 +41,7 @@ begin
   --   | .return : forall (A: VType) . A -> M A
   --   | .bind : forall (A: VType) (A': VType) . U (M A) -> U (A -> M A') -> M A'
   -- end
-  let MList (A : VType) =
+  def MList (A : VType) =
     codata
     | .done : Ret (List A)
     -- | .run : forall (R: CType) . U (U R -> A -> R) -> U R -> R

@@ -6,7 +6,7 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let Gauge =
+  def Gauge =
     codata
     | .read : Ret ((reading :: Int) * Int)
     | .shift : (delta :: Int) -> Ret (reading :: Int)

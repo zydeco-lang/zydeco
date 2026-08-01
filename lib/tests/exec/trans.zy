@@ -8,13 +8,13 @@ begin
     ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
 
-  let Option (A : VType) =
+  def Option (A : VType) =
     data
     | +None : Unit
     | +Some : A
     end
   that
-  let MonadTrans'' (T : (((VType) -> (CType)) -> (VType) -> (CType))) =
+  def MonadTrans'' (T : (((VType) -> (CType)) -> (VType) -> (CType))) =
     codata
     | .lift :
       forall (
@@ -28,17 +28,17 @@ begin
         T M A
     end
   that
-  let ReaderT (R : VType) (M : (VType) -> (CType)) (A : VType) =
+  def ReaderT (R : VType) (M : (VType) -> (CType)) (A : VType) =
     codata
     | .run : R -> M A
     end
   that
-  let OptionT (M : (VType) -> (CType)) (A : VType) =
+  def OptionT (M : (VType) -> (CType)) (A : VType) =
     codata
     | .run : M (Option A)
     end
   that
-  let KOptionT (M : (VType) -> (CType)) (A : VType) =
+  def KOptionT (M : (VType) -> (CType)) (A : VType) =
     codata
     | .run :
       forall (R : CType) .

@@ -9,13 +9,13 @@ begin
     ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
 
-  let Either (E : VType) (A : VType) =
+  def Either (E : VType) (A : VType) =
     data
     | +Left : E
     | +Right : A
     end
   that
-  let MonadErr (E : VType) (M : (VType) -> (CType)) =
+  def MonadErr (E : VType) (M : (VType) -> (CType)) =
     codata
     | .fail :
       forall (A : VType) .
@@ -23,13 +23,13 @@ begin
     end
   that
   --| Ret Either exception monad
-  let Exn (E : VType) (A : VType) =
+  def Exn (E : VType) (A : VType) =
     codata
     | .done : Ret (Either E A)
     end
   that
   --| Church-encoded exception monad
-  let ExnK (E : VType) (A : VType) =
+  def ExnK (E : VType) (A : VType) =
     codata
     | .run :
       forall (R : CType) .

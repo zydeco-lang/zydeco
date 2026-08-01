@@ -23,7 +23,7 @@ begin
     right = 6 : Int
   ) that
 
-  let Packet =
+  def Packet =
     -- Data constructors do not interpret field names. Their payload may simply be
     -- a mixed product, whose labels are checked when its pattern is checked.
     data
@@ -58,7 +58,7 @@ begin
     0
   ) that
 
-  let Gauge =
+  def Gauge =
     -- Codata also remains unchanged. A destructor may accept or return named value
     -- types, and a thunked codata object may itself occupy a named product field.
     codata

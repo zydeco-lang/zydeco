@@ -4,13 +4,13 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let Option (A : VType) =
+  def Option (A : VType) =
     data
     | +None : Unit
     | +Some : A
     end
   that
-  let OptionT (M : (VType) -> (CType)) (A : VType) =
+  def OptionT (M : (VType) -> (CType)) (A : VType) =
     codata
     | .trans : M (Option A)
     end

@@ -20,12 +20,12 @@ begin
       S ->
       Fun S
   that
-  let Identity (A : VType) =
+  def Identity (A : VType) =
     codata
     | .identity : Ret A
     end
   that
-  let Const (A : VType) (B : VType) =
+  def Const (A : VType) (B : VType) =
     codata
     | .constant : Ret A
     end

@@ -9,25 +9,25 @@ begin
     ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
 
-  let Bool =
+  def Bool =
     data
     | +True : Unit
     | +False : Unit
     end
   that
-  let Option (A : VType) =
+  def Option (A : VType) =
     data
     | +None : Unit
     | +Some : A
     end
   that
-  let Exception =
+  def Exception =
     data
     | +TypeError : Unit
     | +FreeVariable : Unit
     end
   that
-  let MonadErrPrint (M : (VType) -> (CType)) =
+  def MonadErrPrint (M : (VType) -> (CType)) =
     codata
     | .return :
       forall (A : VType) .
@@ -45,7 +45,7 @@ begin
       String -> M Unit
     end
   that
-  let MExnOS (A : VType) =
+  def MExnOS (A : VType) =
     -- Continuation-based error monad
     codata
     | .run :
@@ -96,7 +96,7 @@ begin
     | +If : SValue * SCompu * SCompu
     end
   that
-  let Interp =
+  def Interp =
     codata
     | .value : SValue -> MExnOS Value
     | .compu : SCompu -> Compu

@@ -10,7 +10,7 @@ begin
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
-  let Option (A : VType) =
+  def Option (A : VType) =
     data
     | +None : Unit
     | +Some : A

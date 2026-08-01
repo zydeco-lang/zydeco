@@ -5,7 +5,7 @@ begin
     | +S : Nat
     end
   that
-  let Bool =
+  def Bool =
     data
     | +False : Unit
     | +True : Unit

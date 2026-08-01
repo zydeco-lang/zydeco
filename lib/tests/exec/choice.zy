@@ -10,7 +10,7 @@ begin
     | +Final : A
     end
   that
-  let Choice (B : CType) =
+  def Choice (B : CType) =
     data
     | +L : Thk B
     | +R : Thk B

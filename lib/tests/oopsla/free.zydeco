@@ -9,11 +9,11 @@ begin
     ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
 
-  let Empty =
+  def Empty =
     data
     end
   that
-  let Kont (R : CType) (A : VType) =
+  def Kont (R : CType) (A : VType) =
     codata
     | .run : Thk (A -> R) -> R
     end
@@ -29,7 +29,7 @@ begin
     Thk (E -> Kont R Empty)
   that
   -- A specific free monad with three handlers
-  let Free (A : VType) =
+  def Free (A : VType) =
     codata
     | .run :
       forall (R : CType) .

@@ -11,22 +11,22 @@ begin
   let Kont (R : CType) (A : VType) =
     Thk (A -> R) -> R
   that
-  let Bool =
+  def Bool =
     data
     | +True : Unit
     | +False : Unit
     end
   that
-  let Empty =
+  def Empty =
     data
     end
   that
-  let Err =
+  def Err =
     data
     | +Msg : String
     end
   that
-  let Handlers (R : CType) (K : CType) =
+  def Handlers (R : CType) (K : CType) =
     codata
     | .eff :
       -- print : String ~> Bool
@@ -38,7 +38,7 @@ begin
       K
     end
   that
-  let Free (H : (CType) -> (CType) -> (CType)) (A : VType) =
+  def Free (H : (CType) -> (CType) -> (CType)) (A : VType) =
     codata
     | .run :
       forall (R : CType) .

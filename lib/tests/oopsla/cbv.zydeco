@@ -7,7 +7,7 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let Bool =
+  def Bool =
     data
     | +True : Unit
     | +False : Unit
@@ -55,7 +55,7 @@ begin
     end
   that
   --| The error handler.
-  let Interp =
+  def Interp =
     codata
     | .descend : Expr * Env -> Machine
     | .ascend : Value -> Machine

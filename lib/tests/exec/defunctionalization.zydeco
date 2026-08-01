@@ -20,7 +20,7 @@ begin
     | .addN : Int -> Summer
     end
   that
-  let Summer' =
+  def Summer' =
     codata
     | .add : Int -> Ret Int
     end

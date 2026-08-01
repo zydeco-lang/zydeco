@@ -8,7 +8,7 @@ begin
     ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
 
-  let With (B1 : CType) (B2 : CType) =
+  def With (B1 : CType) (B2 : CType) =
     codata
     | .l : B1
     | .r : B2

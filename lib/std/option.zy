@@ -4,7 +4,7 @@ param (
   @[import("builtin.zy")] _
 ) in
 ret begin
-  let Option (A : VType) =
+  def Option (A : VType) =
     data
     | +None : Unit
     | +Some : A

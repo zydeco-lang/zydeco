@@ -42,7 +42,7 @@ begin
       Thk (A -> R) ->
       R
   that
-  let MonadPrime (M : (VType) -> (CType)) =
+  let Monad' (M : (VType) -> (CType)) =
     codata
     | .return :
       forall (A : VType) .
@@ -61,7 +61,7 @@ begin
         )
     end
   that
-  let MonadTransInner (T_M : (VType) -> (CType)) =
+  def MonadTransInner (T_M : (VType) -> (CType)) =
     codata
     | .monad : Monad T_M
     | .lift :
@@ -85,7 +85,7 @@ begin
           T M A
       end
   that
-  let MonadTransPrime (T : ((VType) -> (CType)) -> (VType) -> (CType)) =
+  let MonadTrans' (T : ((VType) -> (CType)) -> (VType) -> (CType)) =
     forall (
       M :
       (VType) ->
@@ -93,7 +93,7 @@ begin
     ) .
       Thk (Monad M) ->
       codata
-      | .monad : MonadPrime (T M)
+      | .monad : Monad' (T M)
       | .lift :
         forall (A : VType) .
           Thk Top ->
@@ -154,7 +154,7 @@ begin
       (VType) ->
       (CType)
     ) .
-      Thk (MonadPrime M) ->
+      Thk (Monad' M) ->
       Monad M
   ) = {
     fn M monad ->
@@ -177,7 +177,7 @@ begin
         (CType)
       )
     ) .
-      Thk (MonadTransPrime T) ->
+      Thk (MonadTrans' T) ->
       MonadTrans T
   ) = {
     fn T transformer ->
@@ -197,7 +197,7 @@ begin
   ) = {
     fn E ->
       let translated_transformer : Thk (
-        MonadTransPrime (ExnT E)
+        MonadTrans' (ExnT E)
       ) = {
         fn M monad ->
           let translated = {
@@ -281,7 +281,7 @@ begin
   ) = {
     fn E ->
       let translated_transformer : Thk (
-        MonadTransPrime (ExnKT E)
+        MonadTrans' (ExnKT E)
       ) = {
         fn M monad ->
           let translated = {

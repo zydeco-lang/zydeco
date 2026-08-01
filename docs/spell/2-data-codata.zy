@@ -11,7 +11,7 @@ begin
     @[import("../../lib/std/builtin.zy")] _
   ) that
 
-  let Option (A : VType) =
+  def Option (A : VType) =
     data
     | +None : Unit
     | +Some : A
@@ -43,7 +43,7 @@ begin
 
   -- A lazy list separates one observable layer from the suspended remainder.
   -- Its layer is data; the stream itself is codata.
-  let LazyLayer (A : VType) (Tail : VType) =
+  def LazyLayer (A : VType) (Tail : VType) =
     data
     | +LazyNil : Unit
     | +LazyCons : A * Tail
@@ -155,7 +155,7 @@ begin
   } that
 
   -- Exercise: define a coinductive list using only a lazy recursive data type.
-  let LazyListPrime (A : VType) =
+  def LazyList' (A : VType) =
     data
     end
   that

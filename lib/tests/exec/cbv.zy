@@ -8,36 +8,36 @@ begin
     ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
 
-  let Bool =
+  def Bool =
     data
     | +True : Unit
     | +False : Unit
     end
   that
-  let Pair (A : VType) (A' : VType) =
+  def Pair (A : VType) (A' : VType) =
     data
     | +Cons : A * A'
     end
   that
-  let Either (E : VType) (A : VType) =
+  def Either (E : VType) (A : VType) =
     data
     | +Left : E
     | +Right : A
     end
   that
-  let Option (A : VType) =
+  def Option (A : VType) =
     data
     | +None : Unit
     | +Some : A
     end
   that
-  let Exception =
+  def Exception =
     data
     | +TypeError : Unit
     | +FreeVariable : Unit
     end
   that
-  let State =
+  def State =
     data
     | +State : Int * String
     end
@@ -56,7 +56,7 @@ begin
   let Mo' (A : VType) =
     State' (Exn (Thk (Kont' A)))
   that
-  let Mo (A : VType) =
+  def Mo (A : VType) =
     codata
     | .run : Mo' A
     end

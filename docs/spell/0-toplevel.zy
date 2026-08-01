@@ -24,7 +24,7 @@ begin
   -- A former `data` declaration is now a type-valued definition. Parameters
   -- are ordinary term parameters, and the `data ... end` term constructs the
   -- recursive value type together with its constructors.
-  let Product2 (A : VType) (B : VType) =
+  def Product2 (A : VType) (B : VType) =
     data
     | +Pair : A * B
     end
@@ -32,7 +32,7 @@ begin
 
   -- Codata is handled in the same way. It constructs a computation type whose
   -- observations are described by its destructors.
-  let CoProduct2 (A : VType) (B : VType) =
+  def CoProduct2 (A : VType) (B : VType) =
     codata
     | .first : Ret A
     | .second : Ret B

@@ -4,7 +4,7 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let Kont (A : VType) (B : CType) =
+  def Kont (A : VType) (B : CType) =
     data
     | +Running : Thk B
     | +Done : A

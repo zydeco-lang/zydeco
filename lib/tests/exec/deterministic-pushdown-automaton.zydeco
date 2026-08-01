@@ -4,13 +4,13 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let Bool =
+  def Bool =
     data
     | +True : Unit
     | +False : Unit
     end
   that
-  let Tok =
+  def Tok =
     data
     | +LParen : Unit
     | +RParen : Unit
@@ -22,7 +22,7 @@ begin
     | +Cons : A * Thk (Ret (LList' A))
     end
   that
-  let ParenCounterState =
+  def ParenCounterState =
     data
     | +Ok : Unit
     | +Reject : Unit

@@ -23,13 +23,13 @@ begin
   let read_line = api/read_line that
   let exit = api/exit that
 
-  let Bool =
+  def Bool =
     data
     | +True : Unit
     | +False : Unit
     end
   that
-  let Option (A : VType) =
+  def Option (A : VType) =
     data
     | +None : Unit
     | +Some : A
@@ -41,7 +41,7 @@ begin
     | +Cons : A * List A
     end
   that
-  let Pair (A : VType) (A' : VType) =
+  def Pair (A : VType) (A' : VType) =
     data
     | +Cons : A * A'
     end
@@ -167,7 +167,7 @@ begin
   } that
 
   -- A monad structure that supports fail
-  let MonadErr (M : (VType) -> (CType)) =
+  def MonadErr (M : (VType) -> (CType)) =
     codata
     | .fail :
       forall (A : VType) .
@@ -176,13 +176,13 @@ begin
   that
 
   -- A monad structure that supports print
-  let MonadPrint (M : (VType) -> (CType)) =
+  def MonadPrint (M : (VType) -> (CType)) =
     codata
     | .print : String -> M Unit
     end
   that
 
-  let MonadAlt (M : (VType) -> (CType)) =
+  def MonadAlt (M : (VType) -> (CType)) =
     codata
     | .alt :
       forall (A : VType) .
@@ -190,7 +190,7 @@ begin
     end
   that
 
-  let MonadReduce (M : (VType) -> (CType)) =
+  def MonadReduce (M : (VType) -> (CType)) =
     codata
     | .reduce :
       forall (A : VType) .
@@ -199,7 +199,7 @@ begin
   that
 
   -- A comonad structure
-  let Comonad (W : (CType) -> (VType)) =
+  def Comonad (W : (CType) -> (VType)) =
     codata
     | .extract :
       forall (B : CType) .
@@ -212,13 +212,13 @@ begin
   that
 
   -- An algebra structure that supports fail
-  let AlgebraErr (M : (VType) -> (CType)) (B : CType) =
+  def AlgebraErr (M : (VType) -> (CType)) (B : CType) =
     codata
     | .failA : Exception -> B
     end
   that
 
-  let Exception =
+  def Exception =
     data
     | +ParseError : Int * String
     | +FreeVariable : Unit
@@ -227,7 +227,7 @@ begin
   that
 
   -- Continuation-based error monad
-  let MExnOS (A : VType) =
+  def MExnOS (A : VType) =
     codata
     | .run : U (A -> OS) -> U (Exception -> OS) -> OS
     end
@@ -363,7 +363,7 @@ begin
 -- end module MExnOS
 
 -- module Print
-  let PrintSCbpv =
+  def PrintSCbpv =
     codata
     | .value : SValue -> U OS -> OS
     | .compu : SCompu -> U OS -> OS
@@ -446,7 +446,7 @@ begin
     ! print-scbpv .compu
   } that
 
-  let PrintCbpv =
+  def PrintCbpv =
     codata
     | .value : Value -> U OS -> OS
     | .compu : U Compu -> U OS -> OS
@@ -528,7 +528,7 @@ begin
 -- end module Env
 
 -- module Trace
-  let TraceItem =
+  def TraceItem =
     data
     | +App : Value
     -- | +App : SValue * Value
@@ -537,7 +537,7 @@ begin
     end
   that
 
-  let TraceO =
+  def TraceO =
     codata
     | .print : U OS -> OS
     end
@@ -577,7 +577,7 @@ begin
 /- Parser -/
 
 -- module Parser
-  let Parser (A : VType) =
+  def Parser (A : VType) =
     codata
     | .run : String -> Int -> MExnOS (Pair A Int)
     end
@@ -728,7 +728,7 @@ begin
     end
   } that
 
-  let ParserCbpv =
+  def ParserCbpv =
     codata
     | .value : Parser SValue
     | .compu : Parser SCompu
@@ -863,7 +863,7 @@ begin
 
 /- Interpretor -/
 
-  let Interp =
+  def Interp =
     codata
     | .value : SValue -> MExnOS Value
     | .compu : SCompu -> Compu

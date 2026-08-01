@@ -4,12 +4,12 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let FnRet (A : VType) =
+  def FnRet (A : VType) =
     codata
     | .arg : A -> Ret A
     end
   that
-  let FnOpt (A : VType) =
+  def FnOpt (A : VType) =
     codata
     | .one : A -> Ret A
     | .zero : Ret A

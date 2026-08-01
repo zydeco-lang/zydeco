@@ -7,13 +7,13 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let Fn (A : VType) (B : CType) =
+  def Fn (A : VType) (B : CType) =
     codata
     | .push : A -> B
     end
   that
   --| Function Type with Optional Argument (A ->? B)
-  let FnOpt (A : VType) (B : CType) =
+  def FnOpt (A : VType) (B : CType) =
     codata
     | .some : A -> B
     | .none : B

@@ -464,7 +464,7 @@ begin
           end
     } that
     --| Hash
-    let Hash (K : VType) (V : VType) =
+    def Hash (K : VType) (V : VType) =
       data
       | +Hash :
         Avl (K * V) *

@@ -12,7 +12,7 @@ begin
     end
   that
   -- capture the shape of do binding with a kont type
-  let TreeKont (A : VType) =
+  def TreeKont (A : VType) =
     codata
     | .run :
       Thk (Tree A -> Ret (Tree A)) ->

@@ -15,18 +15,18 @@ begin
     ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
 
-  let Either (E : VType) (A : VType) =
+  def Either (E : VType) (A : VType) =
     data
     | +Left : E
     | +Right : A
     end
   that
-  let IO (A : VType) =
+  def IO (A : VType) =
     codata
     | .run : Thk (A -> OS) -> OS
     end
   that
-  let With (L : CType) (R : CType) =
+  def With (L : CType) (R : CType) =
     codata
     | .l : L
     | .r : R
@@ -58,7 +58,7 @@ begin
   --   | .bind : forall (A: VType) (A': VType) .
   --     Thunk (M A) -> Thunk (A -> M A') -> M A'
   -- end
-  let MonadErr (E : VType) (M : (VType) -> (CType)) =
+  def MonadErr (E : VType) (M : (VType) -> (CType)) =
     codata
     | .fail :
       forall (A : VType) .

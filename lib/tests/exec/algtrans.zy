@@ -8,7 +8,7 @@ begin
     ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
   begin
 
-  let Either (E : VType) (A : VType) =
+  def Either (E : VType) (A : VType) =
     data
     | +Left : E
     | +Right : A
