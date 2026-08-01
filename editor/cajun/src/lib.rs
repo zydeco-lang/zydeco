@@ -1,5 +1,7 @@
 mod analysis;
+mod hover;
 mod semantic;
+mod type_links;
 
 use analysis::ProjectState;
 use semantic::SemanticHighlighter;

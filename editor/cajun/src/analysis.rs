@@ -19,7 +19,11 @@ use zydeco_utils::{
     span::{Cursor2, FileInfo, Span},
 };
 
-use crate::semantic::SemanticHighlighter;
+use crate::{
+    hover::{HoverSignature, TypeDefinitionLink},
+    semantic::SemanticHighlighter,
+    type_links::TypeDefinitionCollector,
+};
 
 /// Compiler analysis state for one editor root.
 pub(crate) struct ProjectState {
@@ -112,12 +116,16 @@ impl ProjectState {
         let annotation = self.statics.annotations_var.get(&occurrence.definition)?;
         let formatter = Formatter::new(&self.scoped.arena, &self.statics);
         let mut annotation_text = String::new();
-        annotation.pretty(&formatter).render_fmt(100, &mut annotation_text).ok()?;
-        let signature = format!("{} : {}", name.0, annotation_text);
+        annotation.pretty(&formatter).render_fmt(usize::MAX, &mut annotation_text).ok()?;
+        let definitions = TypeDefinitionCollector::collect(&self.statics, *annotation)
+            .into_iter()
+            .filter_map(|definition| self.type_definition_link(definition));
+        let signature =
+            HoverSignature::with_definitions(&name.0, &annotation_text, definitions).markdown();
         Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
-                value: format!("```zydeco\n{signature}\n```"),
+                value: signature,
             }),
             range: Some(occurrence.range),
         })
@@ -200,6 +208,14 @@ impl ProjectState {
         self.entity_location(entity)
     }
 
+    fn type_definition_link(&self, definition: DefId) -> Option<TypeDefinitionLink> {
+        let name = self.scoped.arena.defs.get(&definition)?.0.clone();
+        let location = self.definition_location(definition)?;
+        let mut target = location.uri;
+        target.set_fragment(Some(&format!("L{}", location.range.start.line + 1)));
+        Some(TypeDefinitionLink { name, target })
+    }
+
     fn term_location(&self, term: TermId) -> Option<Location> {
         let entity = self.scoped.arena.textual.back(&term.into())?;
         self.entity_location(entity)
@@ -279,7 +295,7 @@ mod tests {
     use super::ProjectState;
     use crate::semantic::SemanticHighlighter;
     use std::{collections::HashMap, path::Path};
-    use tower_lsp::lsp_types::{HoverContents, Position, SemanticToken, SemanticTokensLegend};
+    use tower_lsp::lsp_types::{HoverContents, Position, SemanticToken, SemanticTokensLegend, Url};
     use zydeco_utils::span::{Cursor2, FileInfo};
 
     struct DecodedToken {
@@ -369,7 +385,7 @@ mod tests {
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
-        assert_eq!(contents.value, "```zydeco\nanswer : Unit\n```");
+        assert_eq!(contents.value, "`answer : Unit`");
     }
 
     #[test]
@@ -383,8 +399,27 @@ mod tests {
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
+        let mut definition = Url::from_file_path(&path).unwrap();
+        definition.set_fragment(Some("L8"));
 
-        assert_eq!(contents.value, "```zydeco\nvalue : A\n```");
+        assert_eq!(contents.value, format!("`value :` [`A` ↗](<{definition}>)"));
+    }
+
+    #[test]
+    fn type_hover_links_through_context_reordered_type_aliases() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../lib/tests/compile/uniform.zy")
+            .canonicalize()
+            .unwrap();
+        let project = ProjectState::load(&path, &HashMap::new()).unwrap();
+        let hover = project.hover(&path, Position::new(18, 11)).unwrap();
+        let HoverContents::Markup(contents) = hover.contents else {
+            panic!("type hover should use markup content")
+        };
+        let mut definition = Url::from_file_path(&path).unwrap();
+        definition.set_fragment(Some("L15"));
+
+        assert_eq!(contents.value, format!("`copy :` [`A` ↗](<{definition}>)"));
     }
 
     #[test]

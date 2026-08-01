@@ -219,7 +219,7 @@ fn stdio_server_synchronizes_documents_and_answers_navigation_requests() {
     );
     assert_eq!(binder_hover["result"]["contents"], use_hover["result"]["contents"]);
     assert_eq!(binder_hover["result"]["contents"]["kind"], "markdown");
-    assert_eq!(binder_hover["result"]["contents"]["value"], "```zydeco\nanswer : Unit\n```");
+    assert_eq!(binder_hover["result"]["contents"]["value"], "`answer : Unit`");
 
     let changed = "begin\n  let result = () that\n  result\nend\n";
     server.notify(
@@ -254,6 +254,54 @@ fn stdio_server_synchronizes_documents_and_answers_navigation_requests() {
         .position(|kind| kind == "keyword")
         .unwrap();
     assert_eq!(data[0..5], [json!(0), json!(0), json!(5), json!(keyword), json!(0)]);
+
+    server.finish();
+}
+
+#[test]
+fn stdio_hover_links_referenced_type_definitions() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../lib/tests/exec/forall.zy")
+        .canonicalize()
+        .unwrap();
+    let source = std::fs::read_to_string(&path).unwrap();
+    let mut definition = Url::from_file_path(&path).unwrap();
+    definition.set_fragment(Some("L8"));
+    let uri = Url::from_file_path(&path).unwrap().to_string();
+    let mut server = LspProcess::start();
+
+    server.request(
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": Url::from_file_path(path.parent().unwrap()).unwrap(),
+            "capabilities": {},
+        }),
+    );
+    server.notify("initialized", json!({}));
+    server.notify(
+        "textDocument/didOpen",
+        json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "zydeco",
+                "version": 1,
+                "text": source,
+            },
+        }),
+    );
+    let diagnostics = server.notification("textDocument/publishDiagnostics");
+    assert!(diagnostics["params"]["diagnostics"].as_array().unwrap().is_empty());
+
+    let hover = server.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 11, "character": 11 },
+        }),
+    );
+    assert_eq!(hover["result"]["contents"]["kind"], "markdown");
+    assert_eq!(hover["result"]["contents"]["value"], format!("`value :` [`A` ↗](<{definition}>)"));
 
     server.finish();
 }
