@@ -1,0 +1,3 @@
+allowBuilds:
+  tree-sitter-cli: true
+preferSymlinkedExecutables: true

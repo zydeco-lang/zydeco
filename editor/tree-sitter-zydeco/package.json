@@ -1,0 +1,23 @@
+{
+  "name": "tree-sitter-zydeco",
+  "version": "0.1.0",
+  "description": "Zydeco grammar for Tree-sitter",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zydeco-lang/zydeco",
+    "directory": "editor/tree-sitter-zydeco"
+  },
+  "scripts": {
+    "generate": "tree-sitter generate",
+    "test": "tree-sitter test",
+    "test:queries": "node scripts/check-queries.mjs",
+    "test:corpus": "node scripts/check-corpus.mjs",
+    "check": "pnpm run generate && pnpm run test && pnpm run test:queries && pnpm run test:corpus"
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "0.26.11"
+  },
+  "packageManager": "pnpm@11.9.0"
+}

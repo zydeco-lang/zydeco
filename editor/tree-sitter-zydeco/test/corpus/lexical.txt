@@ -1,0 +1,64 @@
+==================
+Identifiers and literals
+==================
+
+begin
+  let lower-name? = +12 that
+  let Upper' = -7 that
+  let ctor = +Some ("text", '\n') that
+  ctor
+end
+
+---
+
+(source_file
+  body: (block_expression
+    body: (context_binding
+      kind: (binding_kind)
+      binding: (general_binding
+        binder: (variable_pattern
+          name: (lower_identifier))
+        value: (integer_literal))
+      placement: (placement)
+      body: (context_binding
+        kind: (binding_kind)
+        binding: (general_binding
+          binder: (variable_pattern
+            name: (upper_identifier))
+          value: (integer_literal))
+        placement: (placement)
+        body: (context_binding
+          kind: (binding_kind)
+          binding: (general_binding
+            binder: (variable_pattern
+              name: (lower_identifier))
+            value: (constructor_expression
+              constructor: (constructor_identifier)
+              argument: (parenthesized_term
+                (string_literal)
+                (character_literal))))
+          placement: (placement)
+          body: (variable
+            name: (lower_identifier)))))))
+
+==================
+Nested and unfinished comments
+==================
+
+begin /- outer /- nested -/ tail -/ _ end /- unfinished
+
+---
+
+(source_file
+  body: (block_expression
+    (block_comment)
+    body: (hole))
+  (block_comment))
+
+==================
+Empty source file
+==================
+
+---
+
+(source_file)

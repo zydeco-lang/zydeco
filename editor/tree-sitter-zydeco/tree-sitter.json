@@ -1,0 +1,36 @@
+{
+  "grammars": [
+    {
+      "name": "zydeco",
+      "camelcase": "Zydeco",
+      "scope": "source.zydeco",
+      "path": ".",
+      "file-types": [
+        "zy",
+        "zydeco"
+      ],
+      "injection-regex": "^zy(deco)?$"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "Zydeco grammar for Tree-sitter",
+    "authors": [
+      {
+        "name": "The Zydeco Project Developers"
+      }
+    ],
+    "links": {
+      "repository": "https://github.com/zydeco-lang/zydeco"
+    }
+  },
+  "bindings": {
+    "c": false,
+    "go": false,
+    "node": false,
+    "python": false,
+    "rust": false,
+    "swift": false
+  }
+}

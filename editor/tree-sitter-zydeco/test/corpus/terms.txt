@@ -1,0 +1,164 @@
+==================
+Precedence and associativity
+==================
+
+A * B -> F x .observe / field
+
+---
+
+(source_file
+  body: (function_type
+    parameter: (product_type
+      left: (variable
+        name: (upper_identifier))
+      right: (variable
+        name: (upper_identifier)))
+    result: (projection_expression
+      value: (destructor_expression
+        value: (application_expression
+          function: (variable
+            name: (upper_identifier))
+          argument: (variable
+            name: (lower_identifier)))
+        destructor: (destructor_identifier))
+      field: (lower_identifier))))
+
+==================
+Definitions, binders, and matching
+==================
+
+begin
+  def ! fix map (A : VType) (xs : List A) : Ret (List A) =
+    match xs
+    | +Nil () -> ret +Nil ()
+    | +Cons (x, tail) ->
+      do rest <- ! map A tail;
+      ret +Cons (x, rest)
+    end
+  that
+  ! map
+end
+
+---
+
+(source_file
+  body: (block_expression
+    body: (context_binding
+      kind: (binding_kind)
+      binding: (general_binding
+        computation: (computation_modifier)
+        recursive: (recursion_modifier)
+        binder: (variable_pattern
+          name: (lower_identifier))
+        parameters: (copattern
+          (parenthesized_pattern
+            (pattern_annotation
+              pattern: (variable_pattern
+                name: (upper_identifier))
+              type: (variable
+                name: (upper_identifier))))
+          (parenthesized_pattern
+            (pattern_annotation
+              pattern: (variable_pattern
+                name: (lower_identifier))
+              type: (application_expression
+                function: (variable
+                  name: (upper_identifier))
+                argument: (variable
+                  name: (upper_identifier))))))
+        classifier: (application_expression
+          function: (variable
+            name: (upper_identifier))
+          argument: (parenthesized_term
+            (application_expression
+              function: (variable
+                name: (upper_identifier))
+              argument: (variable
+                name: (upper_identifier)))))
+        value: (match_expression
+          scrutinee: (variable
+            name: (lower_identifier))
+          arm: (match_arm
+            pattern: (constructor_pattern
+              constructor: (constructor_identifier)
+              argument: (parenthesized_pattern))
+            body: (return_expression
+              value: (constructor_expression
+                constructor: (constructor_identifier)
+                argument: (parenthesized_term))))
+          arm: (match_arm
+            pattern: (constructor_pattern
+              constructor: (constructor_identifier)
+              argument: (parenthesized_pattern
+                (variable_pattern
+                  name: (lower_identifier))
+                (variable_pattern
+                  name: (lower_identifier))))
+            body: (do_expression
+              binder: (variable_pattern
+                name: (lower_identifier))
+              value: (application_expression
+                function: (application_expression
+                  function: (force_expression
+                    value: (variable
+                      name: (lower_identifier)))
+                  argument: (variable
+                    name: (upper_identifier)))
+                argument: (variable
+                  name: (lower_identifier)))
+              body: (return_expression
+                value: (constructor_expression
+                  constructor: (constructor_identifier)
+                  argument: (parenthesized_term
+                    (variable
+                      name: (lower_identifier))
+                    (variable
+                      name: (lower_identifier)))))))))
+      placement: (placement)
+      body: (force_expression
+        value: (variable
+          name: (lower_identifier))))))
+
+==================
+Named terms and existential parameters
+==================
+
+exists (Counter as Int : VType) (= State as Counter) .
+  (state = 0, next :: Thk (State -> Ret State), = State)
+
+---
+
+(source_file
+  body: (existential_type
+    parameter: (existential_parameter
+      binder: (variable_pattern
+        name: (upper_identifier))
+      definition: (variable
+        name: (upper_identifier))
+      classifier: (variable
+        name: (upper_identifier)))
+    parameter: (existential_parameter
+      binder: (punned_pattern
+        name: (upper_identifier))
+      definition: (variable
+        name: (upper_identifier)))
+    body: (parenthesized_term
+      (named_term
+        name: (lower_identifier)
+        value: (integer_literal))
+      (labeled_term
+        name: (lower_identifier)
+        value: (application_expression
+          function: (variable
+            name: (upper_identifier))
+          argument: (parenthesized_term
+            (function_type
+              parameter: (variable
+                name: (upper_identifier))
+              result: (application_expression
+                function: (variable
+                  name: (upper_identifier))
+                argument: (variable
+                  name: (upper_identifier)))))))
+      (punned_term
+        name: (upper_identifier)))))
