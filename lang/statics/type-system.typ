@@ -914,7 +914,9 @@ the displayed `forall` and value arrow are the exact wrapper emitted by the chec
 
 = Prospective local inference
 
-These rules are a paper design and are not implemented. All preceding rules describe the current checker.
+These rules began as a paper design. The checker now implements the local monomorphic fragment: pattern-origin
+metavariables, the synthesizing pattern rules, structural refinement, guarded filling, and inference-region closing.
+Fresh symmetric merges with origin unions and generalization remain prospective.
 
 == Flexible metavariables
 

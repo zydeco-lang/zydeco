@@ -72,6 +72,19 @@ zydeco_utils::new_key_type! {
     pub struct CoDataId;
 }
 
+/// Source location that introduced a flexible inference metavariable.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
+pub enum InferenceSite {
+    Term(su::TermId),
+    Pattern(su::PatId),
+}
+
+impl InferenceSite {
+    pub fn is_pattern(self) -> bool {
+        matches!(self, Self::Pattern(_))
+    }
+}
+
 /// A pattern carried by an erased, manifest kind component.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
 pub enum StaticPatId {

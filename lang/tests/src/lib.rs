@@ -86,6 +86,14 @@ pub mod utils {
                 .map(|_| ())
         }
 
+        pub fn check_with_import(source: &str, imported: &str) -> Result<(), BuildError> {
+            let directory = tempfile::tempdir()?;
+            std::fs::write(directory.path().join("imported.zy"), imported)?;
+            let root = directory.path().join("case.zy");
+            std::fs::write(&root, Self::wrap(SourceCasePrelude::Core, source))?;
+            SourceDriver::check(&root).map(|_| ())
+        }
+
         pub fn run(source: &str) -> Result<(), BuildError> {
             Self::with_source(SourceCasePrelude::Core, source, |path| SourceDriver::test(path, &[]))
         }

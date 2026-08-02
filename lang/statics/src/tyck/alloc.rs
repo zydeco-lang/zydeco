@@ -150,7 +150,7 @@ where
 
 /* ---------------------------------- Fill ---------------------------------- */
 
-impl<Arena> Alloc<Arena, FillId> for su::TermId
+impl<Arena> Alloc<Arena, FillId> for InferenceSite
 where
     Arena: StaticsAlloc,
 {
@@ -158,6 +158,28 @@ where
     type Env = ();
     fn alloc(arena: &mut Arena, val: Self, (): Self::Ann, _env: &Self::Env) -> FillId {
         AsMut::<StaticsArena>::as_mut(arena).fills.alloc(val)
+    }
+}
+
+impl<Arena> Alloc<Arena, FillId> for su::TermId
+where
+    Arena: StaticsAlloc,
+{
+    type Ann = ();
+    type Env = ();
+    fn alloc(arena: &mut Arena, val: Self, (): Self::Ann, env: &Self::Env) -> FillId {
+        Alloc::alloc(arena, InferenceSite::from(val), (), env)
+    }
+}
+
+impl<Arena> Alloc<Arena, FillId> for su::PatId
+where
+    Arena: StaticsAlloc,
+{
+    type Ann = ();
+    type Env = ();
+    fn alloc(arena: &mut Arena, val: Self, (): Self::Ann, env: &Self::Env) -> FillId {
+        Alloc::alloc(arena, InferenceSite::from(val), (), env)
     }
 }
 

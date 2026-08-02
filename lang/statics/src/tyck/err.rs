@@ -13,6 +13,8 @@ pub enum TyckError {
     MissingAnnotation,
     MissingSeal,
     MissingSolution(Vec<FillId>),
+    UnconstrainedInference(Vec<FillId>),
+    OccursCheck(FillId),
     MissingStructure(TypeId),
     SortMismatch,
     KindMismatch,
@@ -58,6 +60,24 @@ impl<'a> Tycker<'a> {
         self.statics_term_ariadne_span((*ty).into())
     }
 
+    fn inference_site_ariadne_span(&self, site: InferenceSite) -> (PathDisplay, Range<usize>) {
+        match site {
+            | InferenceSite::Term(term) => term.span(self).to_ariadne_span(),
+            | InferenceSite::Pattern(pattern) => pattern.span(self).to_ariadne_span(),
+        }
+    }
+
+    fn inference_site_output(&self, site: InferenceSite) -> String {
+        match site {
+            | InferenceSite::Term(term) => {
+                format!("{} ({})", self.ugly_scoped(term), term.span(self))
+            }
+            | InferenceSite::Pattern(pattern) => {
+                format!("{} ({})", self.ugly_scoped(pattern), pattern.span(self))
+            }
+        }
+    }
+
     fn error_output(&'a self, error: TyckError) -> String {
         match error {
             | TyckError::MissingAnnotation => "Missing annotation".to_string(),
@@ -67,9 +87,21 @@ impl<'a> Tycker<'a> {
                 s += "Missing solution for:";
                 for fill in fills.iter() {
                     let site = self.statics.fills[fill];
-                    s += &format!("\n\t>> {} ({})", self.ugly_scoped(site), site.span(self))
+                    s += &format!("\n\t>> {}", self.inference_site_output(site))
                 }
                 s
+            }
+            | TyckError::UnconstrainedInference(fills) => {
+                let sites = fills
+                    .iter()
+                    .map(|fill| self.inference_site_output(self.statics.fills[fill]))
+                    .collect::<Vec<_>>()
+                    .join("\n\t>> ");
+                format!("Cannot infer a complete type for:\n\t>> {sites}")
+            }
+            | TyckError::OccursCheck(fill) => {
+                let site = self.inference_site_output(self.statics.fills[&fill]);
+                format!("Occurs check failed for inference variable introduced at {site}")
             }
             | TyckError::MissingStructure(ty) => {
                 format!("Missing structure for type: {}", self.pretty_statics_nested(ty, "\t"))
@@ -327,10 +359,12 @@ impl<'a> Tycker<'a> {
                 self.statics_term_ariadne_span((*package).into())
             }
             | TyckError::EscapingExistential { result, .. } => self.type_ariadne_span(result),
-            | TyckError::MissingSolution(fills) => fills.first().map(|fill| {
-                let site = self.statics.fills[fill];
-                site.span(self).to_ariadne_span()
-            }),
+            | TyckError::MissingSolution(fills) | TyckError::UnconstrainedInference(fills) => {
+                fills.first().map(|fill| self.inference_site_ariadne_span(self.statics.fills[fill]))
+            }
+            | TyckError::OccursCheck(fill) => {
+                Some(self.inference_site_ariadne_span(self.statics.fills[fill]))
+            }
             | TyckError::NotInlinable(def) => Some(def.span(self).to_ariadne_span()),
             | TyckError::NotInlinableSeal(abst) => {
                 // AbstId doesn't have a direct span, but we can get it from the hint if available
@@ -348,6 +382,12 @@ impl<'a> Tycker<'a> {
             | TyckError::MissingSeal => "Missing seal".to_string(),
             | TyckError::MissingSolution(fills) => {
                 format!("Missing solution for {} hole(s)", fills.len())
+            }
+            | TyckError::UnconstrainedInference(fills) => {
+                format!("Cannot infer a complete type for {} pattern(s)", fills.len())
+            }
+            | TyckError::OccursCheck(_) => {
+                "Occurs check failed: an inference variable contains itself".to_string()
             }
             | TyckError::MissingStructure(_) => "Missing structure for type".to_string(),
             | TyckError::SortMismatch => "Sort mismatch".to_string(),
@@ -464,16 +504,27 @@ impl<'a> Tycker<'a> {
                     );
                 }
             }
-            | TyckError::MissingSolution(fills) => {
+            | TyckError::MissingSolution(fills) | TyckError::UnconstrainedInference(fills) => {
+                let message = if matches!(error, TyckError::MissingSolution(_)) {
+                    "hole needs a solution"
+                } else {
+                    "pattern type remains unconstrained"
+                };
                 for fill in fills.iter() {
                     let site = self.statics.fills[fill];
-                    let site_span = site.span(self).to_ariadne_span();
+                    let site_span = self.inference_site_ariadne_span(site);
                     report = report.with_label(
-                        Label::new(site_span)
-                            .with_message("hole needs a solution")
-                            .with_color(primary_color),
+                        Label::new(site_span).with_message(message).with_color(primary_color),
                     );
                 }
+            }
+            | TyckError::OccursCheck(fill) => {
+                let site_span = self.inference_site_ariadne_span(self.statics.fills[fill]);
+                report = report.with_label(
+                    Label::new(site_span)
+                        .with_message("inference variable introduced here")
+                        .with_color(primary_color),
+                );
             }
             | TyckError::NotInlinableSeal(abst) => {
                 use zydeco_utils::arena::ArenaAccess;

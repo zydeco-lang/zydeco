@@ -48,7 +48,7 @@ impl ArenaSchema<AbstId> for StaticsScope {
     type Item = ();
 }
 impl ArenaSchema<FillId> for StaticsScope {
-    type Item = su::TermId;
+    type Item = InferenceSite;
 }
 impl ArenaSchema<DataId> for StaticsScope {
     type Item = Data;
@@ -161,7 +161,7 @@ pub struct StaticsArena {
     pub intrinsics: IntrinsicStatics,
     /// Builtin roles attached to existential witnesses and named value entries.
     pub builtin_roles: BuiltinRoles,
-    /// arena for filling context-constrained holes; the [`su::TermId`] is the site;
+    /// arena for context-constrained flexible metavariables and their source sites;
     /// only types and kinds are now fillable
     pub fills: ArenaDense<StaticsScope, FillId>,
     /// arena for the solutions of fillings,

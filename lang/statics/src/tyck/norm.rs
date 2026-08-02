@@ -83,6 +83,53 @@ struct TypeSupportCollector {
     visiting_codatas: HashSet<CoDataId>,
 }
 
+struct InferenceOccurs {
+    needle: FillId,
+    visiting_kinds: HashSet<KindId>,
+    visiting_fills: HashSet<FillId>,
+}
+
+impl InferenceOccurs {
+    fn new(needle: FillId) -> Self {
+        Self { needle, visiting_kinds: HashSet::new(), visiting_fills: HashSet::new() }
+    }
+
+    fn in_annotation(&mut self, annotation: AnnId, tycker: &mut Tycker<'_>) -> Result<bool> {
+        match annotation {
+            | AnnId::Set => Ok(false),
+            | AnnId::Kind(kind) => self.in_kind(kind, tycker),
+            | AnnId::Type(ty) => Ok(TypeSupport::of(ty, tycker)?.fills.contains_key(&self.needle)),
+        }
+    }
+
+    fn in_kind(&mut self, kind: KindId, tycker: &mut Tycker<'_>) -> Result<bool> {
+        if !self.visiting_kinds.insert(kind) {
+            return Ok(false);
+        }
+        let occurs = match tycker.statics.kinds_pre[&kind].to_owned() {
+            | Fillable::Fill(fill) if fill == self.needle => true,
+            | Fillable::Fill(fill) if self.visiting_fills.insert(fill) => {
+                let occurs = match tycker.statics.solus.get(&fill).copied() {
+                    | Some(AnnId::Kind(solution)) => self.in_kind(solution, tycker)?,
+                    | Some(AnnId::Set | AnnId::Type(_)) => {
+                        return tycker.err(TyckError::SortMismatch, std::panic::Location::caller());
+                    }
+                    | None => false,
+                };
+                self.visiting_fills.remove(&fill);
+                occurs
+            }
+            | Fillable::Fill(_) | Fillable::Done(Kind::VType(_) | Kind::CType(_)) => false,
+            | Fillable::Done(Kind::Arrow(Arrow(domain, codomain))) => {
+                self.in_kind(domain, tycker)? || self.in_kind(codomain, tycker)?
+            }
+            | Fillable::Done(Kind::Label(Label(_, payload))) => self.in_kind(payload, tycker)?,
+        };
+        self.visiting_kinds.remove(&kind);
+        Ok(occurs)
+    }
+}
+
 impl TypeSupportCollector {
     fn new() -> Self {
         Self {
@@ -850,18 +897,174 @@ impl TypeId {
 
 /* ------------------------- Hole Filling & Solution ------------------------ */
 
+struct InferenceRefinement;
+
+impl InferenceRefinement {
+    fn unresolved_type_fill(tycker: &Tycker<'_>, root: TypeId) -> Result<Option<FillId>> {
+        let mut current = root;
+        let mut visited = HashSet::new();
+        loop {
+            match tycker.statics.types_pre[&current] {
+                | Fillable::Done(_) => return Ok(None),
+                | Fillable::Fill(fill) if !visited.insert(fill) => {
+                    return tycker
+                        .err(TyckError::OccursCheck(fill), std::panic::Location::caller());
+                }
+                | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).copied() {
+                    | Some(AnnId::Type(solution)) => current = solution,
+                    | Some(AnnId::Set | AnnId::Kind(_)) => {
+                        return tycker.err(TyckError::SortMismatch, std::panic::Location::caller());
+                    }
+                    | None => return Ok(Some(fill)),
+                },
+            }
+        }
+    }
+
+    fn fresh_type(tycker: &mut Tycker<'_>, parent: FillId, kind: KindId, env: &TyEnv) -> TypeId {
+        let site = tycker.statics.fills[&parent];
+        let fill = Alloc::alloc(tycker, site, (), &());
+        Alloc::alloc(tycker, fill, kind, env)
+    }
+
+    fn arrow(tycker: &mut Tycker<'_>, fill: FillId, env: &TyEnv) -> Result<Type> {
+        let vtype = Alloc::alloc(tycker, VType, (), &());
+        let ctype = Alloc::alloc(tycker, CType, (), &());
+        let domain = Self::fresh_type(tycker, fill, vtype, env);
+        let codomain = Self::fresh_type(tycker, fill, ctype, env);
+        let shape = Alloc::alloc(tycker, Arrow(domain, codomain), ctype, env);
+        fill.fill(tycker, shape.into())?;
+        Ok(Type::Arrow(Arrow(domain, codomain)))
+    }
+
+    fn product(tycker: &mut Tycker<'_>, fill: FillId, env: &TyEnv) -> Result<Type> {
+        let vtype = Alloc::alloc(tycker, VType, (), &());
+        let head = Self::fresh_type(tycker, fill, vtype, env);
+        let tail = Self::fresh_type(tycker, fill, vtype, env);
+        let shape = Alloc::alloc(tycker, Prod(head, tail), vtype, env);
+        fill.fill(tycker, shape.into())?;
+        Ok(Type::Prod(Prod(head, tail)))
+    }
+}
+
+impl TypeId {
+    /// Reveal a solved computation type, refining an unresolved metavariable to
+    /// a value-to-computation arrow when application requires that shape.
+    #[track_caller]
+    pub(crate) fn reveal_or_refine_arrow_k(
+        self, tycker: &mut Tycker<'_>, env: &TyEnv,
+    ) -> ResultKont<Type> {
+        let result = (|| {
+            let ctype = Alloc::alloc(tycker, CType, (), &());
+            let kind = tycker.statics.annotations_type[&self];
+            Lub::lub(kind, ctype, tycker)?;
+            match InferenceRefinement::unresolved_type_fill(tycker, self)? {
+                | Some(fill) => InferenceRefinement::arrow(tycker, fill, env),
+                | None => tycker.type_filled(&self),
+            }
+        })();
+        tycker.err_p_to_k(result)
+    }
+
+    /// Reveal a solved value type, refining an unresolved metavariable to one
+    /// product layer when tuple syntax requires that shape.
+    #[track_caller]
+    pub(crate) fn reveal_or_refine_product_k(
+        self, tycker: &mut Tycker<'_>, env: &TyEnv,
+    ) -> ResultKont<Type> {
+        let result = (|| {
+            let view = match InferenceRefinement::unresolved_type_fill(tycker, self)? {
+                | Some(_) => self,
+                | None => self.unroll(tycker)?.subst_env(tycker, env)?,
+            };
+            let vtype = Alloc::alloc(tycker, VType, (), &());
+            let kind = tycker.statics.annotations_type[&view];
+            Lub::lub(kind, vtype, tycker)?;
+            match InferenceRefinement::unresolved_type_fill(tycker, view)? {
+                | Some(fill) => InferenceRefinement::product(tycker, fill, env),
+                | None => tycker.type_filled(&view),
+            }
+        })();
+        tycker.err_p_to_k(result)
+    }
+
+    #[track_caller]
+    pub(crate) fn view_product_k(
+        self, tycker: &mut Tycker<'_>, env: &TyEnv,
+    ) -> ResultKont<Prod<TypeId, TypeId>> {
+        match self.reveal_or_refine_product_k(tycker, env)? {
+            | Type::Prod(product) => Ok(product),
+            | _ => tycker.err_k(
+                TyckError::TypeExpected {
+                    expected: "a product with enough components".to_string(),
+                    found: self,
+                },
+                std::panic::Location::caller(),
+            ),
+        }
+    }
+}
+
 impl FillId {
     pub fn fill_k(&self, tycker: &mut Tycker<'_>, ann: AnnId) -> ResultKont<AnnId> {
         let res = self.fill(tycker, ann);
         tycker.err_p_to_k(res)
     }
     pub fn fill(&self, tycker: &mut Tycker<'_>, candidate: AnnId) -> Result<AnnId> {
-        let current = tycker.statics.solus.get(self).copied();
-        let solution =
-            current.map_or(Ok(candidate), |current| Lub::lub(current, candidate, tycker))?;
-        self.constrain_solution(tycker, solution)?;
-        let _ = tycker.statics.solus.upsert(*self, solution);
-        Ok(solution)
+        if let Some((head, annotation)) = Self::unresolved_head(tycker, candidate)
+            && head == *self
+        {
+            return Ok(tycker.statics.solus.get(self).copied().unwrap_or(annotation));
+        }
+        if InferenceOccurs::new(*self).in_annotation(candidate, tycker)? {
+            return tycker.err(TyckError::OccursCheck(*self), std::panic::Location::caller());
+        }
+
+        let solutions = tycker.statics.solus.clone();
+        let scopes = tycker.statics.fill_scopes.clone();
+        let result = (|| {
+            let current = tycker.statics.solus.get(self).copied();
+            let solution =
+                current.map_or(Ok(candidate), |current| Lub::lub(current, candidate, tycker))?;
+            if !matches!(Self::unresolved_head(tycker, solution), Some((head, _)) if head == *self)
+                && InferenceOccurs::new(*self).in_annotation(solution, tycker)?
+            {
+                return tycker.err(TyckError::OccursCheck(*self), std::panic::Location::caller());
+            }
+            self.constrain_solution(tycker, solution)?;
+            let _ = tycker.statics.solus.upsert(*self, solution);
+            Ok(solution)
+        })();
+        if result.is_err() {
+            tycker.statics.solus = solutions;
+            tycker.statics.fill_scopes = scopes;
+        }
+        result
+    }
+
+    fn unresolved_head(tycker: &Tycker<'_>, candidate: AnnId) -> Option<(FillId, AnnId)> {
+        let mut annotation = candidate;
+        let mut visited = HashSet::new();
+        loop {
+            let fill = match annotation {
+                | AnnId::Set => return None,
+                | AnnId::Kind(kind) => match tycker.statics.kinds_pre[&kind] {
+                    | Fillable::Fill(fill) => fill,
+                    | Fillable::Done(_) => return None,
+                },
+                | AnnId::Type(ty) => match tycker.statics.types_pre[&ty] {
+                    | Fillable::Fill(fill) => fill,
+                    | Fillable::Done(_) => return None,
+                },
+            };
+            if !visited.insert(fill) {
+                return None;
+            }
+            match tycker.statics.solus.get(&fill).copied() {
+                | Some(solution) => annotation = solution,
+                | None => return Some((fill, annotation)),
+            }
+        }
     }
 
     fn constrain_solution(&self, tycker: &mut Tycker<'_>, solution: AnnId) -> Result<()> {
