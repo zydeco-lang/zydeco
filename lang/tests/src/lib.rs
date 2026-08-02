@@ -130,9 +130,9 @@ pub mod utils {
             let open_monadic = match prelude {
                 | SourceCasePrelude::Core => String::new(),
                 | SourceCasePrelude::Monadic => concat!(
-                    "do (= Monad, = Algebra, ()) <-\n",
-                    "  ! monadic_basis ",
-                    "(VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);\n",
+                    "let (= Monad, = Algebra, ()) =\n",
+                    "  monadic_basis ",
+                    "(VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in\n",
                 )
                 .to_string(),
             };

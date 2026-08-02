@@ -211,10 +211,20 @@ This division keeps dependency analysis in the scoped language while reusing
 the established CBPV rules for type functions, polymorphic computations, value
 functions, and local definitions.
 
+The body sort also determines the classifier synthesized for an abstraction.
+A type-pattern abstraction with a value body has a pure universal type; a value-pattern abstraction with a value
+body has an ordinary pure arrow, or a pure package-dependent arrow when the boundary pattern opens existential
+witnesses used by the result. The corresponding type arguments and package witnesses are retained by statics and
+erased before evaluation. Consequently, `param`, `let`, `def`, and `begin ... end` can assemble a type or value
+package directly whenever their residual term is pure. Computation-producing packages continue to use the CBPV
+forms required by their effects.
+
 ## Relative Monads and Monadic Blocks
 
 Relative monads are defined as codata in the standard library (see
-`lib/std/monad.zy`). Zydeco also implements *monadic blocks*, a
+`lib/std/monad.zy`). The module is a pure package-dependent function from Builtin to the `Monad` and `Algebra`
+type package, so importing and opening it requires neither a thunk nor a returned computation. Zydeco also
+implements *monadic blocks*, a
 generalized do-notation. A monadic block is translated during type checking
 via the algebra translation implemented in
 `lang/statics/src/tyck/monadic.rs` and invoked from

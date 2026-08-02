@@ -290,7 +290,9 @@ binary : pi ((OS, api) : Core). OS
 
 The package pattern binds the opaque `OS` witness directly, and the binary's result type refers to that witness.
 This dependency is represented in the statics language by `PackPi`,
-a package-dependent arrow whose codomain may mention abstract types bound by its parameter pattern.
+a computation-valued package-dependent arrow whose codomain may mention abstract types bound by its parameter
+pattern. A value-valued library uses the corresponding `ValuePackPi`; its application instantiates the same witness
+telescope without introducing a computation.
 The package value carries a stable witness identity wherever it is used.
 At launch, the compiler instantiates `Core`, passes the package to the binary,
 and executes the resulting computation while the witness remains in scope.
@@ -299,7 +301,7 @@ The launcher supplies its concrete implementation.
 
 The library account therefore follows directly from block elaboration:
 nominal binders provide stable abstract identities, existential packages collect them into interfaces,
-and `PackPi` keeps those identities in scope across package-dependent calls.
+and the two package-dependent arrows keep those identities in scope across value and computation calls.
 
 ## 5. Consequences and Open Work
 

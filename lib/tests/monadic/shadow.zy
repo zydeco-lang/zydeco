@@ -4,13 +4,13 @@ begin
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
-  do (= Monad, = Algebra, ()) <-
-    ! outer_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  let (= Monad, = Algebra, ()) =
+    outer_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
 
   begin
     let inner_basis = @[import("../../std/monad.zy")] _ that
-    do (= Monad, = Algebra, ()) <-
-      ! inner_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+    let (= Monad, = Algebra, ()) =
+      inner_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
 
     begin
       monadic

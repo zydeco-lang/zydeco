@@ -818,6 +818,23 @@ The transformed passes preserve the CPS dependencies without making the Rust cal
 size. Stage dumps are also formatted only when trace logging is active, so a silent integration test does not build
 and discard a potentially large diagnostic document.
 
+### Pure parameterized packages
+
+Pure type abstraction now forms a value-level universal, and a pure function whose boundary pattern opens a package
+forms a value-level package-dependent arrow. Both forms preserve static witnesses through checking and application,
+then erase them before dynamics and Stack IR. Ordinary value arrows still reject existential escape, so only the
+explicit package telescope extends witness scope over the result.
+
+Block elaboration already lowers `param` to abstraction, `let` and `def` to scoped bindings, and `begin ... end` to
+its residual term. With the two pure classifiers available, those forms can now produce types and values directly as
+well as computations. `lib/std/monad.zy` is the representative migration: its Builtin parameter, transparent type
+definitions, and manifest result package no longer use an outer thunk or `ret`. Consumers apply it as a value and
+open the result with `let`; the exported monad operations remain computation-typed.
+
+Focused checks cover explicit and synthesized pure universals, package-dependent value application, nested
+existential escape rejection, monadic translation, interpreter erasure, Stack IR lowering, and a parameterized block
+that combines type definitions, value definitions, local bindings, and a pure package result.
+
 ### Transparent and abstract interfaces remain explicit
 
 Source import makes an implementation term available at compile time,

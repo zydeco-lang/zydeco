@@ -761,6 +761,8 @@ fn structure_translation(
         | Type::Label(_)
         | Type::Unit(UnitTy)
         | Type::VArrow(_)
+        | Type::VForall(_)
+        | Type::VPackPi(_)
         | Type::Prod(_)
         | Type::Exists(_)
         | Type::ManifestKind(_)
@@ -1070,6 +1072,27 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             let (env, vtype) = VType.mbuild(tycker, env)?;
             let arrow = Alloc::alloc(tycker, ValueArrow(ty_1, ty_2), vtype, &env.ty);
             (env, arrow)
+        }
+        | Type::VForall(ty) => {
+            let ValueForall(binder, ty) = ty;
+            let (env, pattern) = type_pattern_translation(tycker, env, binder.pattern)?;
+            let witness = env.subst_abst.get(&binder.witness).copied().unwrap_or(binder.witness);
+            let (env, body) = cs::TypeLift { ty }.mbuild(tycker, env)?;
+            let (env, vtype) = VType.mbuild(tycker, env)?;
+            let binder = TypeBinder { pattern, witness };
+            let forall = Alloc::alloc(tycker, ValueForall(binder, body), vtype, &env.ty);
+            (env, forall)
+        }
+        | Type::VPackPi(pack_pi) => {
+            let ValuePackPi { domain, witnesses, codomain } = pack_pi;
+            let (env, domain) = cs::TypeLift { ty: domain }.mbuild(tycker, env)?;
+            let witnesses =
+                witnesses.map(|witness| env.subst_abst.get(&witness).copied().unwrap_or(witness));
+            let (env, codomain) = cs::TypeLift { ty: codomain }.mbuild(tycker, env)?;
+            let (env, vtype) = VType.mbuild(tycker, env)?;
+            let alloc =
+                Alloc::alloc(tycker, ValuePackPi { domain, witnesses, codomain }, vtype, &env.ty);
+            (env, alloc)
         }
         | Type::Arrow(ty) => {
             let Arrow(ty_1, ty_2) = ty;
@@ -1415,6 +1438,18 @@ fn value_translation(
         | Value::VApp(App(function, argument)) => {
             let (env, function) = value_translation(tycker, env, function)?;
             let (env, argument) = value_translation(tycker, env, argument)?;
+            let application = Alloc::alloc(tycker, App(function, argument), ty_, &env.ty);
+            (env, application)
+        }
+        | Value::TAbs(Abs(pattern, body)) => {
+            let (env, pattern) = type_pattern_translation(tycker, env, pattern)?;
+            let (env, body) = value_translation(tycker, env, body)?;
+            let abstraction = Alloc::alloc(tycker, Abs(pattern, body), ty_, &env.ty);
+            (env, abstraction)
+        }
+        | Value::TApp(App(function, argument)) => {
+            let (env, function) = value_translation(tycker, env, function)?;
+            let (env, argument) = cs::TypeLift { ty: argument }.mbuild(tycker, env)?;
             let application = Alloc::alloc(tycker, App(function, argument), ty_, &env.ty);
             (env, application)
         }

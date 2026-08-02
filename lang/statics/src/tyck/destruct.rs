@@ -244,6 +244,8 @@ impl TypeId {
             | Type::String(_)
             | Type::OS(_)
             | Type::VArrow(_)
+            | Type::VForall(_)
+            | Type::VPackPi(_)
             | Type::Arrow(_)
             | Type::Forall(_)
             | Type::PackPi(_)
@@ -311,12 +313,26 @@ impl TypeId {
             | _ => None,
         }
     }
+    pub fn destruct_value_forall_binder(
+        &self, tycker: &mut Tycker,
+    ) -> Option<(TypeBinder, TypeId)> {
+        match tycker.type_filled(self).ok()?.to_owned() {
+            | Type::VForall(ValueForall(binder, ty)) => Some((binder, ty)),
+            | _ => None,
+        }
+    }
     pub fn destruct_forall(&self, tycker: &mut Tycker) -> Option<(AbstId, TypeId)> {
         self.destruct_forall_binder(tycker).map(|(binder, ty)| (binder.witness, ty))
     }
     pub fn destruct_pack_pi(&self, tycker: &mut Tycker) -> Option<PackPi> {
         match tycker.type_filled(self).ok()?.to_owned() {
             | Type::PackPi(pack_pi) => Some(pack_pi),
+            | _ => None,
+        }
+    }
+    pub fn destruct_value_pack_pi(&self, tycker: &mut Tycker) -> Option<ValuePackPi> {
+        match tycker.type_filled(self).ok()?.to_owned() {
+            | Type::VPackPi(pack_pi) => Some(pack_pi),
             | _ => None,
         }
     }
@@ -479,6 +495,8 @@ impl ValueId {
                 | Value::Hole(_)
                 | Value::VAbs(_)
                 | Value::VApp(_)
+                | Value::TAbs(_)
+                | Value::TApp(_)
                 | Value::Thunk(_)
                 | Value::Ctor(_)
                 | Value::Triv(_)

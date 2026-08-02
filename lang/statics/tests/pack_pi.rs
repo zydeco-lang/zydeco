@@ -31,6 +31,17 @@ impl TestFixture {
             &TyEnv::new(),
         )
     }
+
+    fn value_pack_pi(
+        tycker: &mut Tycker<'_>, domain: TypeId, witness: AbstId, codomain: TypeId, vtype: KindId,
+    ) -> TypeId {
+        Alloc::alloc(
+            tycker,
+            ValuePackPi { domain, witnesses: PackTelescope::singleton(witness), codomain },
+            vtype,
+            &TyEnv::new(),
+        )
+    }
 }
 
 #[test]
@@ -95,5 +106,24 @@ fn abstract_substitution_stops_at_pack_pi_witnesses() {
             panic!("substitution through a package arrow failed")
         };
         assert_eq!(substituted, pack_pi);
+    });
+}
+
+#[test]
+fn value_pack_pi_binds_and_alpha_renames_its_opened_witness() {
+    TestFixture::run(|tycker| {
+        let (vtype, _) = TestFixture::kinds(tycker);
+        let domain = TestFixture::package_domain(tycker, vtype, vtype);
+        let (lhs_witness, lhs_codomain) = TestFixture::witness(tycker, vtype);
+        let (rhs_witness, rhs_codomain) = TestFixture::witness(tycker, vtype);
+        let lhs = TestFixture::value_pack_pi(tycker, domain, lhs_witness, lhs_codomain, vtype);
+        let rhs = TestFixture::value_pack_pi(tycker, domain, rhs_witness, rhs_codomain, vtype);
+
+        assert!(lhs.constrain_to_scope(tycker, &SkolemScope::default()).is_ok());
+        assert!(lhs_codomain.constrain_to_scope(tycker, &SkolemScope::default()).is_err());
+        let Ok(joined) = lhs.lub(rhs, tycker) else {
+            panic!("alpha-equivalent pure package arrows did not unify")
+        };
+        assert_eq!(joined, lhs);
     });
 }

@@ -104,6 +104,8 @@ impl<'a> Ugly<'a, Formatter<'a>> for TypeId {
                 | Type::String(StringTy) => "String".to_string(),
                 | Type::OS(OSTy) => "OS".to_string(),
                 | Type::VArrow(ty) => ty.ugly(f),
+                | Type::VForall(ty) => ty.ugly(f),
+                | Type::VPackPi(ty) => ty.ugly(f),
                 | Type::Arrow(ty) => ty.ugly(f),
                 | Type::Forall(ty) => ty.ugly(f),
                 | Type::PackPi(ty) => ty.ugly(f),
@@ -143,6 +145,8 @@ impl<'a> Ugly<'a, Formatter<'a>> for ValueId {
             | Value::Let(value) => value.ugly(f),
             | Value::VAbs(value) => value.ugly(f),
             | Value::VApp(value) => value.ugly(f),
+            | Value::TAbs(value) => value.ugly(f),
+            | Value::TApp(value) => value.ugly(f),
             | Value::Thunk(value) => value.ugly(f),
             | Value::Ctor(value) => value.ugly(f),
             | Value::Triv(value) => value.ugly(f),
@@ -530,11 +534,30 @@ impl<'a> Ugly<'a, Formatter<'a>> for Forall {
     }
 }
 
+impl<'a> Ugly<'a, Formatter<'a>> for ValueForall {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let ValueForall(abst, ty) = self;
+        format!("(forall-v {} . {})", abst.ugly(f), ty.ugly(f))
+    }
+}
+
 impl<'a> Ugly<'a, Formatter<'a>> for PackPi {
     fn ugly(&self, f: &'a Formatter) -> String {
         let witnesses = self.witnesses.iter().map(|witness| witness.ugly(f)).collect::<Vec<_>>();
         format!(
             "(pack-pi ([{}] : {}) . {})",
+            witnesses.join(", "),
+            self.domain.ugly(f),
+            self.codomain.ugly(f)
+        )
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for ValuePackPi {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let witnesses = self.witnesses.iter().map(|witness| witness.ugly(f)).collect::<Vec<_>>();
+        format!(
+            "(pack-pi-v ([{}] : {}) . {})",
             witnesses.join(", "),
             self.domain.ugly(f),
             self.codomain.ugly(f)
@@ -672,6 +695,8 @@ impl<'a> Pretty<'a, Formatter<'a>> for TypeId {
                 | Type::String(StringTy) => RcDoc::text("String"),
                 | Type::OS(OSTy) => RcDoc::text("OS"),
                 | Type::VArrow(ty) => ty.pretty(f),
+                | Type::VForall(ty) => ty.pretty(f),
+                | Type::VPackPi(ty) => ty.pretty(f),
                 | Type::Arrow(ty) => ty.pretty(f),
                 | Type::Forall(ty) => ty.pretty(f),
                 | Type::PackPi(ty) => ty.pretty(f),
@@ -729,6 +754,8 @@ impl<'a> Pretty<'a, Formatter<'a>> for ValueId {
             | Value::Let(value) => value.pretty(f),
             | Value::VAbs(value) => value.pretty(f),
             | Value::VApp(value) => value.pretty(f),
+            | Value::TAbs(value) => value.pretty(f),
+            | Value::TApp(value) => value.pretty(f),
             | Value::Thunk(value) => value.pretty(f),
             | Value::Ctor(value) => value.pretty(f),
             | Value::Triv(value) => value.pretty(f),
@@ -1215,11 +1242,46 @@ impl<'a> Pretty<'a, Formatter<'a>> for Forall {
     }
 }
 
+impl<'a> Pretty<'a, Formatter<'a>> for ValueForall {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let ValueForall(abst, ty) = self;
+        RcDoc::concat([
+            RcDoc::text("forall-v"),
+            RcDoc::space(),
+            abst.pretty(f),
+            RcDoc::space(),
+            RcDoc::text("."),
+            RcDoc::concat([RcDoc::line(), ty.pretty(f)]).group().nest(f.indent),
+        ])
+        .group()
+    }
+}
+
 impl<'a> Pretty<'a, Formatter<'a>> for PackPi {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let witnesses = self.witnesses.iter().map(|witness| witness.pretty(f));
         RcDoc::concat([
             RcDoc::text("pack-pi"),
+            RcDoc::space(),
+            RcDoc::text("(["),
+            RcDoc::intersperse(witnesses, RcDoc::text(", ")),
+            RcDoc::text("] :"),
+            RcDoc::space(),
+            self.domain.pretty(f),
+            RcDoc::text(")"),
+            RcDoc::space(),
+            RcDoc::text("."),
+            RcDoc::concat([RcDoc::line(), self.codomain.pretty(f)]).group().nest(f.indent),
+        ])
+        .group()
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for ValuePackPi {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let witnesses = self.witnesses.iter().map(|witness| witness.pretty(f));
+        RcDoc::concat([
+            RcDoc::text("pack-pi-v"),
             RcDoc::space(),
             RcDoc::text("(["),
             RcDoc::intersperse(witnesses, RcDoc::text(", ")),

@@ -171,7 +171,16 @@ impl<'arena> TypeReferenceCollector<'arena> {
                 self.visit_type_binder(&forall.0);
                 self.visit_type(forall.1);
             }
+            | Type::VForall(forall) => {
+                self.visit_type_binder(&forall.0);
+                self.visit_type(forall.1);
+            }
             | Type::PackPi(pack_pi) => {
+                pack_pi.witnesses.iter().for_each(|witness| self.visit_abstract(*witness));
+                self.visit_type(pack_pi.domain);
+                self.visit_type(pack_pi.codomain);
+            }
+            | Type::VPackPi(pack_pi) => {
                 pack_pi.witnesses.iter().for_each(|witness| self.visit_abstract(*witness));
                 self.visit_type(pack_pi.domain);
                 self.visit_type(pack_pi.codomain);

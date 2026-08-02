@@ -392,11 +392,16 @@ pub struct TypeBinder {
     pub witness: AbstId,
 }
 
-/// `forall (x: A) . B`
+/// A value-level universal type `forall^v (X : K) . A`.
+#[derive(Clone, Debug)]
+pub struct ValueForall(pub TypeBinder, pub TypeId);
+
+/// A computation-level universal type `forall (X : K) . B`.
 #[derive(Clone, Debug)]
 pub struct Forall(pub TypeBinder, pub TypeId);
 
-/// The non-empty telescope of abstract type witnesses bound by a [`PackPi`].
+/// The non-empty telescope of abstract type witnesses bound by a
+/// package-dependent arrow.
 ///
 /// The order records how the witnesses correspond to the existential binders
 /// opened from the package domain.
@@ -412,6 +417,17 @@ pub struct PackTelescope {
 /// They are bound in `codomain`, but not in `domain`.
 #[derive(Clone, Debug)]
 pub struct PackPi {
+    pub domain: TypeId,
+    pub witnesses: PackTelescope,
+    pub codomain: TypeId,
+}
+
+/// A package-dependent pure value arrow.
+///
+/// `witnesses` are abstract type identities obtained by opening `domain`.
+/// They are bound in `codomain`, but not in `domain`.
+#[derive(Clone, Debug)]
+pub struct ValuePackPi {
     pub domain: TypeId,
     pub witnesses: PackTelescope,
     pub codomain: TypeId,
@@ -558,6 +574,8 @@ pub enum Type {
     String(StringTy),
     OS(OSTy),
     VArrow(ValueArrow),
+    VForall(ValueForall),
+    VPackPi(ValuePackPi),
     Arrow(ArrowU<TypeId>),
     Forall(Forall),
     PackPi(PackPi),
@@ -597,6 +615,8 @@ pub enum Value {
     Let(Let<VPatId, ValueId, ValueId>),
     VAbs(Abs<VPatId, ValueId>),
     VApp(App<ValueId, ValueId>),
+    TAbs(Abs<TPatId, ValueId>),
+    TApp(App<ValueId, TypeId>),
     Thunk(Thunk<CompuId>),
     Ctor(Ctor<CtorName, ValueId>),
     Triv(Triv),

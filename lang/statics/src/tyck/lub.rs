@@ -323,6 +323,74 @@ impl Debruijn {
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                     std::panic::Location::caller(),
                 )?,
+                | (
+                    Type::VForall(ValueForall(lbind, lbody)),
+                    Type::VForall(ValueForall(rbind, rbody)),
+                ) => {
+                    let _domain =
+                        Lub::lub(lbind.domain_kind(tycker), rbind.domain_kind(tycker), tycker)?;
+                    let _payload =
+                        Lub::lub(lbind.payload_kind(tycker), rbind.payload_kind(tycker), tycker)?;
+                    let body = self
+                        .insert(Some(lbind.witness), Some(rbind.witness))
+                        .lub(lbody, rbody, tycker)?;
+                    if body == lbody {
+                        lhs_id
+                    } else {
+                        let kd = tycker.statics.annotations_type[&lhs_id];
+                        Alloc::alloc(tycker, ValueForall(lbind, body), kd, &env)
+                    }
+                }
+                | (Type::VForall(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
+                | (
+                    Type::VPackPi(ValuePackPi {
+                        domain: lhs_domain,
+                        witnesses: lhs_witnesses,
+                        codomain: lhs_codomain,
+                    }),
+                    Type::VPackPi(ValuePackPi {
+                        domain: rhs_domain,
+                        witnesses: rhs_witnesses,
+                        codomain: rhs_codomain,
+                    }),
+                ) => {
+                    if lhs_witnesses.len() != rhs_witnesses.len() {
+                        tycker.err(
+                            TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                            std::panic::Location::caller(),
+                        )?
+                    }
+                    let domain = self.clone().lub(lhs_domain, rhs_domain, tycker)?;
+                    let body_context = lhs_witnesses
+                        .iter()
+                        .copied()
+                        .zip(rhs_witnesses.iter().copied())
+                        .try_fold(self, |context, (lhs, rhs)| -> Result<_> {
+                            let lhs_kind = tycker.statics.annotations_abst[&lhs];
+                            let rhs_kind = tycker.statics.annotations_abst[&rhs];
+                            let _ = Lub::lub(lhs_kind, rhs_kind, tycker)?;
+                            Ok(context.insert(Some(lhs), Some(rhs)))
+                        })?;
+                    let codomain = body_context.lub(lhs_codomain, rhs_codomain, tycker)?;
+                    if domain == lhs_domain && codomain == lhs_codomain {
+                        lhs_id
+                    } else {
+                        let kd = tycker.statics.annotations_type[&lhs_id];
+                        Alloc::alloc(
+                            tycker,
+                            ValuePackPi { domain, witnesses: lhs_witnesses, codomain },
+                            kd,
+                            &env,
+                        )
+                    }
+                }
+                | (Type::VPackPi(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
                 | (Type::Arrow(Arrow(la, lb)), Type::Arrow(Arrow(ra, rb))) => {
                     let a = self.clone().lub(la, ra, tycker)?;
                     let b = self.lub(lb, rb, tycker)?;

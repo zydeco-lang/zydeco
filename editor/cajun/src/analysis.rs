@@ -474,12 +474,12 @@ mod tests {
             .canonicalize()
             .unwrap();
         let project = ProjectState::load(&path, &HashMap::new()).unwrap();
-        let hover = project.hover(&path, Position::new(11, 11)).unwrap();
+        let hover = project.hover(&path, Position::new(7, 9)).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
         let mut definition = Url::from_file_path(&path).unwrap();
-        definition.set_fragment(Some("L8"));
+        definition.set_fragment(Some("L7"));
 
         assert_eq!(
             contents.value,
@@ -494,7 +494,7 @@ mod tests {
             .canonicalize()
             .unwrap();
         let project = ProjectState::load(&path, &HashMap::new()).unwrap();
-        let hover = project.hover(&path, Position::new(18, 11)).unwrap();
+        let hover = project.hover(&path, Position::new(17, 11)).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
@@ -540,7 +540,7 @@ mod tests {
             )
         );
 
-        let long = project.hover(&path, Position::new(41, 7)).unwrap();
+        let long = project.hover(&path, Position::new(30, 7)).unwrap();
         let HoverContents::Markup(long) = long.contents else {
             panic!("type hover should use markup content")
         };
@@ -580,7 +580,7 @@ mod tests {
             .canonicalize()
             .unwrap();
         let project = ProjectState::load(&path, &HashMap::new()).unwrap();
-        let hover = project.hover(&path, Position::new(14, 9)).unwrap();
+        let hover = project.hover(&path, Position::new(14, 12)).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };

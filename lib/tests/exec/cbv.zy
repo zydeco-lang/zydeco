@@ -4,8 +4,8 @@ begin
     (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
-  do (= Monad, = Algebra, ()) <-
-    ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  let (= Monad, = Algebra, ()) =
+    monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
   begin
 
   def Bool =

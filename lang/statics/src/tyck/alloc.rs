@@ -373,6 +373,8 @@ AllocType! {
     StringTy
     OSTy
     ValueArrow
+    ValueForall
+    ValuePackPi
     ArrowU<TypeId>
     Forall
     PackPi
@@ -482,6 +484,8 @@ AllocValue! {
     Let<VPatId, ValueId, ValueId>
     Abs<VPatId, ValueId>
     App<ValueId, ValueId>
+    Abs<TPatId, ValueId>
+    App<ValueId, TypeId>
     Thunk<CompuId>
     Ctor<CtorName, ValueId>
     Triv

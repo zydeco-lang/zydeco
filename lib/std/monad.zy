@@ -1,10 +1,9 @@
 -- module Monad
-{
 param (
   (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
   @[import("builtin.zy")] _
 ) in
-ret begin
+begin
 
   --| interface for monads and their algebras
   let Monad (M : (VType) -> (CType)) =
@@ -48,5 +47,4 @@ ret begin
 
   ((Monad = Monad, Algebra = Algebra, ()) : MonadicBasis)
 end
-}
 -- end module Monad

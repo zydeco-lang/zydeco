@@ -514,10 +514,7 @@ impl Desugar for t::TermId {
                 let t::Forall(params, ty) = term;
                 let parameters = ParameterTelescope::desugar(params, self.into(), desugarer)?;
                 let body = ty.desugar(desugarer)?;
-                let forall = parameters.quantify(Quantifier::Pi, body, desugarer);
-                // forall -> ann
-                let ctype = desugarer.ctype(self.into());
-                Alloc::alloc(desugarer, b::Ann { tm: forall, ty: ctype }.into(), self.into())
+                parameters.quantify(Quantifier::Pi, body, desugarer)
             }
             | Tm::Sigma(term) => {
                 let t::Sigma(params, ty) = term;

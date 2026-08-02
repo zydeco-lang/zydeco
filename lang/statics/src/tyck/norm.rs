@@ -204,7 +204,7 @@ impl TypeSupportCollector {
                 | Type::Prod(Prod(input, output)) => {
                     [input, output].into_iter().try_for_each(|ty| self.visit(ty, tycker))?;
                 }
-                | Type::Forall(Forall(binder, body)) => {
+                | Type::VForall(ValueForall(binder, body)) | Type::Forall(Forall(binder, body)) => {
                     let newly_bound = self.bound.insert(binder.witness);
                     let result = self.visit(body, tycker);
                     if newly_bound {
@@ -224,6 +224,7 @@ impl TypeSupportCollector {
                     result?;
                 }
                 | Type::ManifestKind(ManifestKind { body, .. }) => self.visit(body, tycker)?,
+                | Type::VPackPi(ValuePackPi { domain, witnesses, codomain })
                 | Type::PackPi(PackPi { domain, witnesses, codomain }) => {
                     self.visit(domain, tycker)?;
                     let outer_bound = self.bound.clone();
@@ -361,6 +362,30 @@ impl TypeId {
                         *self
                     } else {
                         Alloc::alloc(tycker, ValueArrow(ty1_, ty2_), kd, env)
+                    }
+                }
+                | Type::VForall(forall) => {
+                    let ValueForall(tpat, ty) = forall;
+                    let ty_ = ty.subst_env(tycker, env)?;
+                    if ty == ty_ {
+                        *self
+                    } else {
+                        Alloc::alloc(tycker, ValueForall(tpat, ty_), kd, env)
+                    }
+                }
+                | Type::VPackPi(pack_pi) => {
+                    let ValuePackPi { domain, witnesses, codomain } = pack_pi;
+                    let domain_ = domain.subst_env(tycker, env)?;
+                    let codomain_ = codomain.subst_env(tycker, env)?;
+                    if domain == domain_ && codomain == codomain_ {
+                        *self
+                    } else {
+                        Alloc::alloc(
+                            tycker,
+                            ValuePackPi { domain: domain_, witnesses, codomain: codomain_ },
+                            kd,
+                            env,
+                        )
                     }
                 }
                 | Type::Forall(forall) => {
@@ -608,6 +633,34 @@ impl TypeId {
                         Alloc::alloc(tycker, ValueArrow(ty1_, ty2_), kd, &env)
                     }
                 }
+                | Type::VForall(forall) => {
+                    let ValueForall(tpat, ty) = forall;
+                    let ty_ = ty.subst_abst(tycker, assign)?;
+                    if ty == ty_ {
+                        *self
+                    } else {
+                        Alloc::alloc(tycker, ValueForall(tpat, ty_), kd, &env)
+                    }
+                }
+                | Type::VPackPi(pack_pi) => {
+                    let ValuePackPi { domain, witnesses, codomain } = pack_pi;
+                    let domain_ = domain.subst_abst(tycker, assign)?;
+                    let codomain_ = if witnesses.contains(&assign.0) {
+                        codomain
+                    } else {
+                        codomain.subst_abst(tycker, assign)?
+                    };
+                    if domain == domain_ && codomain == codomain_ {
+                        *self
+                    } else {
+                        Alloc::alloc(
+                            tycker,
+                            ValuePackPi { domain: domain_, witnesses, codomain: codomain_ },
+                            kd,
+                            &env,
+                        )
+                    }
+                }
                 | Type::Forall(forall) => {
                     let Forall(tpat, ty) = forall;
                     let ty_ = ty.subst_abst(tycker, assign)?;
@@ -772,6 +825,8 @@ impl TypeId {
             | Type::String(_)
             | Type::OS(_) => self,
             | Type::VArrow(_)
+            | Type::VForall(_)
+            | Type::VPackPi(_)
             | Type::Arrow(_)
             | Type::Forall(_)
             | Type::PackPi(_)
@@ -836,6 +891,8 @@ impl TypeId {
                 | Type::String(_)
                 | Type::OS(_)
                 | Type::VArrow(_)
+                | Type::VForall(_)
+                | Type::VPackPi(_)
                 | Type::Arrow(_)
                 | Type::Forall(_)
                 | Type::PackPi(_)
@@ -1268,6 +1325,39 @@ impl TypeId {
                         Alloc::alloc(
                             tycker,
                             ValueArrow(ty1_, ty2_),
+                            tycker.statics.annotations_type[&res],
+                            &env,
+                        )
+                    }
+                }
+                | Type::VForall(ty) => {
+                    let ValueForall(tpat, ty) = ty;
+                    let tpat_ = tpat;
+                    let (ty_, fills_) = ty.solution(tycker)?;
+                    fills.extend(fills_);
+                    if ty == ty_ {
+                        res
+                    } else {
+                        Alloc::alloc(
+                            tycker,
+                            ValueForall(tpat_, ty_),
+                            tycker.statics.annotations_type[&res],
+                            &env,
+                        )
+                    }
+                }
+                | Type::VPackPi(pack_pi) => {
+                    let ValuePackPi { domain, witnesses, codomain } = pack_pi;
+                    let (domain_, domain_fills) = domain.solution(tycker)?;
+                    fills.extend(domain_fills);
+                    let (codomain_, codomain_fills) = codomain.solution(tycker)?;
+                    fills.extend(codomain_fills);
+                    if domain == domain_ && codomain == codomain_ {
+                        res
+                    } else {
+                        Alloc::alloc(
+                            tycker,
+                            ValuePackPi { domain: domain_, witnesses, codomain: codomain_ },
                             tycker.statics.annotations_type[&res],
                             &env,
                         )
@@ -1747,6 +1837,30 @@ impl TypeId {
                         self
                     } else {
                         Alloc::alloc(tycker, ValueArrow(ty1_norm, ty2_norm), kd_norm, &env)
+                    }
+                }
+                | Type::VForall(forall) => {
+                    let ValueForall(abst, body) = forall;
+                    let body_norm = body.filled_norm_id(tycker, memo, memo_kd)?;
+                    if body_norm == body && kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, ValueForall(abst, body_norm), kd_norm, &env)
+                    }
+                }
+                | Type::VPackPi(pack_pi) => {
+                    let ValuePackPi { domain, witnesses, codomain } = pack_pi;
+                    let domain_norm = domain.filled_norm_id(tycker, memo, memo_kd)?;
+                    let codomain_norm = codomain.filled_norm_id(tycker, memo, memo_kd)?;
+                    if domain_norm == domain && codomain_norm == codomain && kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(
+                            tycker,
+                            ValuePackPi { domain: domain_norm, witnesses, codomain: codomain_norm },
+                            kd_norm,
+                            &env,
+                        )
                     }
                 }
                 | Type::Forall(forall) => {

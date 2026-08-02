@@ -147,12 +147,60 @@ end
 }
 
 #[test]
-fn rejects_an_existential_witness_escaping_a_pure_result() {
-    PureFunctionCase::assert_type_error(
+fn synthesizes_a_pure_package_dependent_arrow() {
+    PureFunctionCase::run(
         r#"
 begin
   let Box = exists (X : VType) . X that
   let unpack = fn ((X, value) : Box) -> value that
+  let unit : Unit = unpack (Unit, ()) that
+  ! exit 0
+end
+"#,
+    );
+}
+
+#[test]
+fn checks_and_applies_a_pure_polymorphic_function() {
+    PureFunctionCase::run(
+        r#"
+begin
+  let identity : forall (A : VType) . A -> A =
+    fn (A : VType) -> fn (value : A) -> value
+  that
+  let identity_thunk : forall (B : CType) . Thk B -> Thk B =
+    fn (B : CType) -> fn (value : Thk B) -> value
+  that
+  let unit : Unit = identity Unit () that
+  let top : Thk Top = identity_thunk Top triv that
+  ! exit 0
+end
+"#,
+    );
+}
+
+#[test]
+fn pure_parameterized_blocks_need_no_thunk_or_return_wrappers() {
+    PureFunctionCase::run(
+        r#"
+begin
+  let Input = exists (A : VType) . A that
+
+  let make =
+    param ((A, seed) : Input) in
+    begin
+      def identity (value : A) : A = value that
+      let selected : A = identity seed that
+      let Output =
+        exists (B as A : VType) .
+          (identity :: B -> B) * B
+      that
+      (A, identity = identity, selected) : Output
+    end
+  that
+
+  let (B, identity = identity, selected) = make (Unit, ()) that
+  let result : B = identity selected that
   ! exit 0
 end
 "#,
@@ -175,12 +223,29 @@ begin
 
   def ! translated =
     monadic
-      let identity : Unit -> Unit = fn value -> value that
-      ret (identity ())
+      let identity : forall (A : VType) . A -> A =
+        fn (A : VType) -> fn (value : A) -> value
+      in
+      let Box = exists (A : VType) . A in
+      let unpack = fn ((A, value) : Box) -> value in
+      ret (identity Unit (unpack (Unit, ())))
     end
   that
 
   do _ <- ! translated Ret { ! ret_monad };
+  ! exit 0
+end
+"#,
+    );
+}
+
+#[test]
+fn rejects_a_nested_existential_escape_from_a_pure_function() {
+    PureFunctionCase::assert_type_error(
+        r#"
+begin
+  let Nested = Unit * (exists (A : VType) . A) that
+  let invalid = fn ((_, (A, value)) : Nested) -> value that
   ! exit 0
 end
 "#,

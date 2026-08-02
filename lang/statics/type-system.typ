@@ -42,10 +42,12 @@ The metavariable $N$ ranges over unsorted terms.
   [Kind], [$K$], [$::=$], [$"VType" | "CType" | K_1 arrow.r K_2 | ell :: K$],
   [Type], [$S$], [$::=$], [$X | alpha | "fn" Q arrow.r S | S_1 space S_2
     | (ell = S) | (ell :: S) | S slash ell$],
-  [], [], [$|$], [$"Thk" | "Ret" | "Unit" | H_rho | A_1 arrow.r A_2 | A arrow.r B
+  [], [], [$|$], [$"Thk" | "Ret" | "Unit" | H_rho | A_1 arrow.r A_2 | A arrow.r B$],
+  [], [], [$|$], [$"forall"^"v"_(alpha) (Q : K) . A
     | "forall"_(alpha) (Q : K) . B$],
-  [], [], [$|$], [$Pi^"pkg"_(alpha_1 dots.h.c alpha_n)(A\; B) | A_1 times A_2
-    | "exists"_(alpha) (Q : K) . A$],
+  [], [], [$|$], [$Pi^("pkg,v")_(alpha_1 dots.h.c alpha_n)(A_1\; A_2)
+    | Pi^"pkg"_(alpha_1 dots.h.c alpha_n)(A\; B)$],
+  [], [], [$|$], [$A_1 times A_2 | "exists"_(alpha) (Q : K) . A$],
   [], [], [$|$], [$"exists"_(alpha) (Q " as " S : K) . A
     | "exists" (R " as " K : "Set") . A$],
   [], [], [$|$], [$"data" { c_i : A_i }_(i in I) | "codata" { d_i : B_i }_(i in I)$],
@@ -59,7 +61,8 @@ The metavariable $N$ ranges over unsorted terms.
 
   [Value], [$V$], [$::=$], [$x | (ell = V) | {M} | c space V | () | (V_1, V_2)
     | (W, V) | V slash ell | "lit"$],
-  [], [], [$|$], [$"fn" P arrow.r V | V_1 space V_2 | "let" P = V_1 " in " V_2$],
+  [], [], [$|$], [$"fn" P arrow.r V | V_1 space V_2 | "fn" Q arrow.r V | V space S$],
+  [], [], [$|$], [$"let" P = V_1 " in " V_2$],
 
   [Computation], [$M$], [$::=$], [$"fn" P arrow.r M | M space V | "fn" Q arrow.r M | M space S$],
   [], [], [$|$], [$"fix" P arrow.r M | !V | "ret" V | P <- M_1 \; M_2
@@ -308,6 +311,14 @@ $
 $
   frac(
     Gamma \; Delta tack.r K arrow.l.double "Set"
+    quad Gamma \, Q : K \; Delta tack.r A arrow.l.double "VType",
+    Gamma \; Delta tack.r "forall"^"v"_(alpha) (Q : K) . A arrow.r.double "VType",
+  ) quad #text(size: 6.5pt)[T-VFORALL]
+$
+
+$
+  frac(
+    Gamma \; Delta tack.r K arrow.l.double "Set"
     quad Gamma \, Q : K \; Delta tack.r B arrow.l.double "CType",
     Gamma \; Delta tack.r "forall"_(alpha) (Q : K) . B arrow.r.double "CType",
   ) quad #text(size: 6.5pt)[T-FORALL]
@@ -357,8 +368,24 @@ $
   quad #text(size: 6.5pt)[T-PACK-PI]
 $
 
-The witness telescope binds only the codomain. The implementation admits only witnesses from the leading static
-prefix of $A$.
+$
+  frac(
+    #pad(bottom: 3pt, stack(
+      spacing: 11pt,
+      $Gamma \; Delta tack.r A_1 arrow.l.double "VType"
+        quad op("abs")(op("lead")(A_1)) = (K_1, dots.h.c, K_n) quad n > 0
+        quad alpha_i #text(" fresh")$,
+      $Gamma \, (alpha_i : K_i)_(i=1)^n \; Delta union {alpha_i}_(i=1)^n
+        tack.r A_2 arrow.l.double "VType"$,
+    )),
+    Gamma \; Delta tack.r Pi^("pkg,v")_(alpha_1 dots.h.c alpha_n)(A_1\; A_2)
+      arrow.r.double "VType",
+  )
+  quad #text(size: 6.5pt)[T-VPACK-PI]
+$
+
+In both package-dependent arrows, the witness telescope binds only the codomain. The implementation admits only
+witnesses from the leading static prefix of the domain.
 
 == Data and codata
 
@@ -541,7 +568,7 @@ $
   frac(
     Gamma \; Delta tack.r P arrow.l.double A_1 tack.l Gamma_1 \; Delta union Omega
     quad Gamma_1 \; Delta union Omega tack.r V arrow.l.double A_2
-    quad op("fsk")(A_2) inter Omega = emptyset,
+    quad Omega = emptyset,
     Gamma \; Delta tack.r "fn" P arrow.r V arrow.l.double A_1 arrow.r A_2,
   ) quad #text(size: 6.5pt)[V-ABS]
 $
@@ -553,6 +580,30 @@ $
     Gamma \; Delta tack.r V_1 space V_2 arrow.r.double A_2,
   ) quad #text(size: 6.5pt)[V-APP]
 $
+
+== Pure type abstraction and application
+
+$
+  frac(
+    Gamma \; Delta tack.r Q_2 arrow.l.double op("dom")_(Q_1) tack.l Gamma_1 \; Delta
+    quad Gamma_2 = Gamma_1[Q_2 := op("intro")_(Q_1)(alpha)]
+    quad Gamma_2 \; Delta tack.r V arrow.l.double A,
+    Gamma \; Delta tack.r "fn" Q_2 arrow.r V arrow.l.double
+      "forall"^"v"_(alpha)(Q_1 : op("dom")_(Q_1)).A,
+  ) quad #text(size: 6.5pt)[V-TABS]
+$
+
+$
+  frac(
+    Gamma \; Delta tack.r V arrow.r.double "forall"^"v"_(alpha)(Q : K).A
+    quad Gamma \; Delta tack.r W arrow.l.double op("dom")_Q
+    quad S = op("elim")_Q(W),
+    Gamma \; Delta tack.r V space W arrow.r.double A[S slash alpha],
+  ) quad #text(size: 6.5pt)[V-TAPP]
+$
+
+Type abstraction and application are erased before dynamics. Their surface syntax is shared with computation
+polymorphism; the body sort determines which universal is formed.
 
 $
   frac(
@@ -611,6 +662,32 @@ $
 
 Static witnesses are retained for package-dependent application and erased before dynamics.
 
+== Pure package-dependent functions
+
+$
+  frac(
+    Gamma \; Delta tack.r P arrow.l.double^"canon" A_1
+      tack.l Gamma_1 \; Delta union {alpha_1, dots.h.c, alpha_n}
+    quad Gamma_1 \; Delta union {alpha_1, dots.h.c, alpha_n} tack.r V arrow.l.double A_2,
+    Gamma \; Delta tack.r "fn" P arrow.r V arrow.l.double
+      Pi^("pkg,v")_(alpha_1 dots.h.c alpha_n)(A_1\;A_2),
+  ) quad #text(size: 6.5pt)[V-PACKPI-ABS]
+$
+
+$
+  frac(
+    Gamma \; Delta tack.r V_1 arrow.r.double Pi^("pkg,v")_(overline(alpha))(A_1\;A_2)
+    quad Gamma \; Delta tack.r V_2 arrow.l.double A_1
+    quad op("wits")_(A_1)(V_2) = overline(W)
+    quad A_3 = op("inst")_(A_1)(A_2, overline(W))
+    quad op("fsk")(A_3) subset.eq Delta,
+    Gamma \; Delta tack.r V_1 space V_2 arrow.r.double A_3,
+  ) quad #text(size: 6.5pt)[V-PACKPI-APP]
+$
+
+The package-dependent value arrow binds only the leading abstract type witnesses opened by its value pattern.
+It does not make value variables available to types.
+
 = Computations
 
 == Computation functions
@@ -619,7 +696,7 @@ $
   frac(
     Gamma \; Delta tack.r P arrow.l.double A tack.l Gamma_1 \; Delta union Omega
     quad Gamma_1 \; Delta union Omega tack.r M arrow.l.double B
-    quad op("fsk")(B) inter Omega = emptyset,
+    quad Omega = emptyset,
     Gamma \; Delta tack.r "fn" P arrow.r M arrow.l.double A arrow.r B,
   ) quad #text(size: 6.5pt)[C-ABS]
 $

@@ -141,6 +141,14 @@ impl Link for ss::ValueId {
                 let argument = argument.link(statics);
                 App(function, argument).into()
             }
+            | Value::TAbs(Abs(_, body)) => {
+                let body = body.link(statics);
+                body.as_ref().to_owned()
+            }
+            | Value::TApp(App(body, _)) => {
+                let body = body.link(statics);
+                body.as_ref().to_owned()
+            }
             | Value::Thunk(Thunk(body)) => {
                 let body = body.link(statics);
                 Thunk(body).into()

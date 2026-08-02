@@ -354,6 +354,8 @@ impl Lower for ss::ValueId {
                 values
                     .with_application(ValueApplication { binder, function, argument, site }, value)
             }
+            | ss::Value::TAbs(Abs(_param, body)) => body.lower(lo, ()),
+            | ss::Value::TApp(App(body, _arg)) => body.lower(lo, ()),
             | ss::Value::Thunk(Thunk(body)) => {
                 let body = body.lower(lo, ());
                 ValuePlan::pure(Closure { stack: Bullet, body }.build(lo, site))
