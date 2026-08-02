@@ -7,5 +7,5 @@ interp_source!(monads, "tests/oopsla/monads.zydeco");
 interp_source!(exn, "tests/oopsla/exn.zydeco");
 interp_source!(free, "tests/oopsla/free.zydeco");
 interp_source!(algebra, "examples/algebra.zydeco");
-interp_source!(exnt, "tests/oopsla/exception-transformers.zy");
-interp_source!(exnkt, "tests/oopsla/exception-transformers.zy");
+interp_source!(exnt, "tests/oopsla/exnt.zydeco");
+interp_source!(exnkt, "tests/oopsla/exnkt.zydeco");

@@ -62,7 +62,7 @@ read
 echo "Running exnt.zydeco"
 echo "Expected output: prints the original and generated code and then exits with code 0"
 echo "Actual output:"
-zydeco run lib/tests/oopsla/exception-transformers.zy
+zydeco run lib/tests/oopsla/exnt.zydeco
 echo "Program exited with code $?"
 echo "Press Enter to continue"
 read
@@ -70,6 +70,6 @@ read
 echo "Running exnkt.zydeco"
 echo "Expected output: prints the original and generated code and then exits with code 0"
 echo "Actual output:"
-zydeco run lib/tests/oopsla/exception-transformers.zy
+zydeco run lib/tests/oopsla/exnkt.zydeco
 echo "Program exited with code $?"
 echo "Demo ends here."

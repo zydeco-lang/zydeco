@@ -1,148 +1,216 @@
 --| Algebras of relative monads
 --| Implementations and examples
-
-
 -- The interface for the algebra
 -- codata Algebra (M: VType -> CType) (R: CType) where
 --   | : forall (A: VType) .
 --     Thk (M A) -> Thk (A -> R) -> R
 -- end
+begin
+  let monadic_basis = @[import("../../std/monad.zy")] _ that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  do (= Monad, = Algebra, ()) <-
+    ! monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  begin
 
-
-codata IO (A: VType) where
-  | .run : Thk (A -> OS) -> OS
-end
-
--- Algebra IO OS exists
-def ! alg_io : Algebra IO OS =
-  comatch A m k -> ! m .run k
-  end
-end
-
-
--- Algebra Ret R always exists
-def ! alg_ret (R: CType): Algebra Ret R =
-  comatch A m k ->
-    do a <- ! m; ! k a
-  end
-end
-
-
--- Algebra M (M V) always exists for M: Monad
-def ! alg_mo
-  (M: VType -> CType)
-  (V: VType)
-  (mo: Thk (Monad M))
-: Algebra M (M V) =
-  comatch A m k ->
-    ! mo .bind A V m k
-  end
-end
-
-
--- Algebras can be defined on the arrow type
-def ! alg_arrow
-  (M: VType -> CType) (R: CType) (A: VType)
-  (alg: Thk (Algebra M R))
-: Algebra M (A -> R) =
-  comatch A' m' f -> fn a ->
-    ! alg A' m' { fn a' -> ! f a' a }
-  end
-end
-
-
-codata With (L: CType) (R: CType) where
-  | .l : L
-  | .r : R
-end
-
--- Algebras can be defined on the with type
-def ! alg_with
-  (M: VType -> CType) (L: CType) (R: CType)
-  (algl: Thk (Algebra M L))
-  (algr: Thk (Algebra M R))
-: Algebra M (With L R) =
-  comatch A m f ->
-    comatch
-    | .l -> ! algl A m { fn a -> ! f a .l }
-    | .r -> ! algr A m { fn a -> ! f a .r }
+  def Either (E : VType) (A : VType) =
+    data
+    | +Left : E
+    | +Right : A
     end
-  end
-end
+  that
+  def IO (A : VType) =
+    codata
+    | .run : Thk (A -> OS) -> OS
+    end
+  that
+  def With (L : CType) (R : CType) =
+    codata
+    | .l : L
+    | .r : R
+    end
+  that
+  def FnVar (A : VType) (B : CType) : CType =
+    codata
+    | .more : A -> FnVar A B
+    | .done : B
+    end
+  that
+  def ! panic (msg : String) : OS =
+    ! (api/write_line) msg {
+      ! (api/exit) 1
+    }
+  that
 
+  -- Algebra IO OS exists
+  def ! alg_io : Algebra IO OS =
+    fn A m k ->
+      ! m .run k
+  that
 
-codata FnVar (A: VType) (B: CType) where
-  | .more : A -> FnVar A B
-  | .done : B
-end
+  -- Algebra Ret R always exists
+  def ! alg_ret (R : CType) : Algebra Ret R =
+    fn A m k ->
+      do a <- ! m;
+      ! k a
+  that
 
--- Algebras can be defined on coinductive types like FnVar
-def fix alg_var (M: VType -> CType) (R: CType) (alg: Thk (Algebra M R)) (V: VType)
-                   : Algebra M (FnVar V R) =
-  comatch A m ka ->
-    let fix loop (ka: Thk (A -> FnVar V R))
-    : FnVar V R =
+  -- Algebra M (M V) always exists for M: Monad
+  def ! alg_mo
+    (
+      M :
+      (VType) ->
+      (CType)
+    )
+    (V : VType)
+    (mo : Thk (Monad M))
+    : Algebra M (M V) =
+    fn A m k ->
+      ! mo .bind A V m k
+  that
+
+  -- Algebras can be defined on the arrow type
+  def ! alg_arrow
+    (
+      M :
+      (VType) ->
+      (CType)
+    )
+    (R : CType)
+    (A : VType)
+    (alg : Thk (Algebra M R))
+    : Algebra M (A -> R) =
+    fn A' m' f a ->
+      ! alg A' m' {
+        fn a' ->
+          ! f a' a
+      }
+  that
+
+  -- Algebras can be defined on the with type
+  def ! alg_with
+    (
+      M :
+      (VType) ->
+      (CType)
+    )
+    (L : CType)
+    (R : CType)
+    (algl : Thk (Algebra M L))
+    (algr : Thk (Algebra M R))
+    : Algebra M (With L R) =
+    fn A m f ->
       comatch
-      | .more v -> ! loop { fn a -> ! ka a .more v }
-      | .done -> ! alg A m { fn a -> ! ka a .done }
+      | .l ->
+        ! algl A m {
+          fn a ->
+            ! f a .l
+        }
+      | .r ->
+        ! algr A m {
+          fn a ->
+            ! f a .r
+        }
       end
-    in ! loop ka
-  end
-end
+  that
 
+  -- Algebras can be defined on coinductive types like FnVar
+  def fix alg_var
+    (
+      M :
+      (VType) ->
+      (CType)
+    )
+    (R : CType)
+    (alg : Thk (Algebra M R))
+    (V : VType)
+    : Algebra M (FnVar V R) =
+    fn A m ka ->
+      let fix loop (
+        ka :
+        Thk (A -> FnVar V R)
+      ) : FnVar V R =
+        comatch
+        | .more v ->
+          ! loop {
+            fn a ->
+              ! ka a .more v
+          }
+        | .done ->
+          ! alg A m {
+            fn a ->
+              ! ka a .done
+          }
+        end
+      in
+      ! loop ka
+  that
 
--- An example program of echo sum server which may error on add_of
+  -- An example program of echo sum server which may error on add_of
 
--- The defunctionalized exception type
-codata ExnDe (E: VType) (A: VType) where
-  | .try : forall (E': VType) .
-    Thk (E -> ExnDe E' A) -> ExnDe E' A
-  | .kont : forall (A': VType) .
-    Thk (A -> ExnDe E A') -> ExnDe E A'
-  | .done : Ret (Either E A)
-end
-
-codata MonadErr (E: VType) (M: VType -> CType) where
-  | .fail : forall (A: VType) . E -> M A
-end
-
-def fix mo_exnde (E: VType) : Monad (ExnDe E) =
-  comatch
-  | .return -> fn A a ->
+  -- The defunctionalized exception type
+  def ExnDe (E : VType) (A : VType) : CType =
+    codata
+    | .try :
+      forall (E' : VType) .
+        Thk (E -> ExnDe E' A) -> ExnDe E' A
+    | .kont :
+      forall (A' : VType) .
+        Thk (A -> ExnDe E A') -> ExnDe E A'
+    | .done : Ret (Either E A)
+    end
+  that
+  def MonadErr (E : VType) (M : (VType) -> (CType)) =
+    codata
+    | .fail :
+      forall (A : VType) .
+        E -> M A
+    end
+  that
+  def fix mo_exnde (E : VType) : Monad (ExnDe E) =
     comatch
-    | .try -> fn E' k -> ! mo_exnde E' .return A a
-    | .kont -> fn A' k -> ! k a
-    | .done -> ret +Right(a)
+    | .return ->
+      fn A a ->
+        comatch
+        | .try ->
+          fn E' k ->
+            ! mo_exnde E' .return A a
+        | .kont ->
+          fn A' k ->
+            ! k a
+        | .done -> ret +Right(a)
+        end
+    | .bind ->
+      fn A A' m f ->
+        ! m .kont A' f
     end
-  | .bind -> fn A A' m f ->
-    ! m .kont A' f
-  end
-end
-
-def fix err_exnde (E: VType) : MonadErr E (ExnDe E) =
-  comatch
-  | .fail -> fn A e ->
+  that
+  def fix err_exnde (E : VType) : MonadErr E (ExnDe E) =
     comatch
-    | .try -> fn E' k -> ! k e
-    | .kont -> fn A' k -> ! err_exnde E .fail A' e
-    | .done -> ret +Left(e)
+    | .fail ->
+      fn A e ->
+        comatch
+        | .try ->
+          fn E' k ->
+            ! k e
+        | .kont ->
+          fn A' k ->
+            ! err_exnde E .fail A' e
+        | .done -> ret +Left(e)
+        end
     end
-  end
+  that
+  -- Algebra of the defunctionalized exception type on OS
+  def ! alg_exn : Algebra (ExnDe String) OS =
+    fn A m k ->
+      do a? <- ! m .done;
+      match a?
+      | +Left(s) -> ! panic s
+      | +Right(a) -> ! k a
+      end
+  that
+  ! (api/exit) 0
 end
-
--- Algebra of the defunctionalized exception type on OS
-def ! alg_exn :
-  Algebra (ExnDe String) OS
-=
-  comatch A m k ->
-    do a? <- ! m .done;
-    match a?
-    | +Left(s) -> ! panic s
-    | +Right(a) -> ! k a
-    end
-  end
-end
-
-main
-  ! exit 0
 end

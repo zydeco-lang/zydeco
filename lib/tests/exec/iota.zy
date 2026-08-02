@@ -1,32 +1,69 @@
-data LList' (A : VType) where
-  | +Nil()
-  | +Cons(A, U(F(LList' A)))
-end
+begin
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  let U = Thk that
+  let F = Ret that
+  def Bool =
+    data
+    | +True : Unit
+    | +False : Unit
+    end
+  that
+  let add = api/add that
+  def ! int_lt (x : Int) (y : Int) : Ret Bool =
+    ! (api/int_lt_branch)
+      (Ret Bool)
+      x
+      y
+      { ret +True() }
+      { ret +False() }
+  that
+  let write_int = api/write_int that
+  let write_line = api/write_line that
+  def ! write_int_line (x : Int) (b : U OS) : OS =
+    ! write_int x {
+      ! write_line "" b
+    }
+  that
+  def ! panic (msg : String) : OS =
+    ! write_line msg {
+      ! (api/exit) 1
+    }
+  that
+  let exit = api/exit that
 
-def fix iota : Int -> F(LList' Int) =
-  fn (i: Int) ->
-    do i+1 <- ! add i 1;
-    ret +Cons(i, { ! iota i+1 })
-end
+  def LList' (A : VType) : VType =
+    data
+    | +Nil : Unit
+    | +Cons : A * U (F (LList' A))
+    end
+  that
 
-def fix llist_foldr (ll: U(F(LList' Int))) (f: U(Int -> U OS -> OS)) (b: U OS) : OS =
-  do llv <- ! ll;
-  match llv
-  | +Nil() -> ! b
-  | +Cons(a, ll) -> ! f a { ! llist_foldr ll f b }
-  end
-end
+  def fix iota : Int -> F(LList' Int) =
+    fn (i: Int) ->
+      do i+1 <- ! add i 1;
+      ret +Cons(i, { ! iota i+1 })
+  that
 
-def ! loopy =
-  ! llist_foldr
-  { ! iota 0 }
-  { fn (x: Int) (b: U OS) ->
-    do next? <- ! int_lt x 10;
-    ! write_int_line x b
-  }
-  { ! panic "unreachable" }
-end
+  def fix llist_foldr (ll: U(F(LList' Int))) (f: U(Int -> U OS -> OS)) (b: U OS) : OS =
+    do llv <- ! ll;
+    match llv
+    | +Nil() -> ! b
+    | +Cons(a, ll) -> ! f a { ! llist_foldr ll f b }
+    end
+  that
 
-main
+  def ! loopy =
+    ! llist_foldr
+    { ! iota 0 }
+    { fn (x: Int) (b: U OS) ->
+      do next? <- ! int_lt x 10;
+      ! write_int_line x b
+    }
+    { ! panic "unreachable" }
+  that
+
   ! exit 0
 end

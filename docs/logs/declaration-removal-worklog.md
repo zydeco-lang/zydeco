@@ -673,10 +673,10 @@ All forty-seven maintained executable tests now use this path directly.
 The obsolete `lib/tests/exec/proj.toml` has been removed.
 The five package integration tests likewise run their root counterparts directly,
 and `lib/tests/pack/proj.toml` has been removed.
-The three former `lib/tests/monadic` binaries now use the comprehensive exception-transformer root and a minimal
+The three former `lib/tests/monadic` binaries now use the migrated exception-transformer roots and a minimal
 Builtin executable root, so their project configuration has also been removed.
-The same transformer root and the OOPSLA exception root subsume the unreferenced `compile-more` project,
-whose configuration has been removed while its declaration-era sources remain available for comparison.
+The unreferenced `compile-more` project configuration has been removed, while its comparison sources now use
+root-term syntax. Its redundant exception source is represented by the maintained OOPSLA exception fixture.
 
 The two maintained negative fixtures are now root terms as well.
 One still reaches the checker without enough information to synthesize a constructor scrutinee, while the other

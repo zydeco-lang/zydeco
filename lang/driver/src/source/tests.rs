@@ -1838,7 +1838,12 @@ fn algebra_translation_exec_example_uses_the_lexical_library_basis() {
 
 #[test]
 fn generated_exception_transformer_uses_lexical_types_in_a_monadic_block() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/oopsla/exception-transformers.zy");
+    assert_source_program_exits_zero_and_reaches_amd64("tests/oopsla/exnt.zydeco");
+}
+
+#[test]
+fn generated_continuation_exception_transformer_uses_lexical_types_in_a_monadic_block() {
+    assert_source_program_exits_zero_and_reaches_amd64("tests/oopsla/exnkt.zydeco");
 }
 
 #[test]

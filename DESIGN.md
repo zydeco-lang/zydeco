@@ -214,7 +214,7 @@ functions, and local definitions.
 ## Relative Monads and Monadic Blocks
 
 Relative monads are defined as codata in the standard library (see
-`lib/tests/oopsla/core.zydeco`). Zydeco also implements *monadic blocks*, a
+`lib/std/monad.zy`). Zydeco also implements *monadic blocks*, a
 generalized do-notation. A monadic block is translated during type checking
 via the algebra translation implemented in
 `lang/statics/src/tyck/monadic.rs` and invoked from

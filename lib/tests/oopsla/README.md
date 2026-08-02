@@ -63,7 +63,8 @@ the algebra example is shared with `lib/examples`.
 | exceptions | [`exn.zydeco`](exn.zydeco) |
 | free monad | [`free.zydeco`](free.zydeco) |
 | relative-monad algebras | [`algebra.zydeco`](../../examples/algebra.zydeco) |
-| ExnT and ExnKT | [`exception-transformers.zy`](exception-transformers.zy) |
+| ExnT | [`exnt.zydeco`](exnt.zydeco) |
+| ExnKT | [`exnkt.zydeco`](exnkt.zydeco) |
 
 We provide an interactive script to run the maintained terms.
 From the repository root, run:
@@ -97,7 +98,9 @@ See [`editor`](../../../editor) for the VS Code and Zed integrations.
 In the following sections, we'll first introduce the grammar of Zydeco and then show example Zydeco programs in the paper.
 
 In Section 3 of the paper, we illustrated the abstract syntax and semantics of Zydeco. Specifically, Figure 2 through 6 shows the syntax and semantics of Zydeco. The following paragraphs briefly show the corresponding concrete syntax of Zydeco.
-The core standard library less than 200 lines of code is located in [`core.zydeco`](core.zydeco). After reading through this section, the reader is encouraged to browse through the file to understand all the core features of Zydeco.
+The artifact's compatibility library is located in [`core.zydeco`](core.zydeco) and
+[`data.zydeco`](data.zydeco). Both files use the current root-term syntax while preserving the artifact's
+comments and naming conventions.
 
 #### Comments
 
@@ -180,7 +183,8 @@ Other computation terms are:
 + comatch (terms of codata types): `comatch | .dtor1 -> <M> | .dtor2 -> <M> | ... end`
 + codata destructor: `<M> .dtor`
 
-Primitive functions that deal with integers, characters, strings, and operating system features are located in `lib/tests/oopsla/core.zydeco`.
+The artifact-level wrappers for primitive functions that deal with integers, characters, strings, and operating
+system features are located in [`core.zydeco`](core.zydeco).
 
 The main program is required to have type `OS`. A few crucial primitive functions related to the `OS` type are:
 + `exit: Thk (Int -> OS)`: constructs a computation that exits the program with the given exit code.
@@ -190,7 +194,9 @@ What `OS` type actually means is a computation that can run on the operating sys
 
 ### The Implementation of Zydeco
 
-To demonstrate that Zydeco is usable as a functional programming language, we provide a Rust implementation of a System-Fω-style type checker for Zydeco, a small-step interpreter, native-code backends, and a minimal standard library [`core.zydeco`](core.zydeco).
+To demonstrate that Zydeco is usable as a functional programming language, we provide a Rust implementation of a
+System-Fω-style type checker for Zydeco, a small-step interpreter, native-code backends, and a minimal
+[`standard library`](../../std). The migrated [`core.zydeco`](core.zydeco) preserves the artifact-facing names.
 
 The implementation of Zydeco is located in the [`lang`](../../../lang) directory in a modularized manner. Among all components, the most crucial modules are:
 
@@ -278,7 +284,8 @@ Zydeco doesn't directly support mutually recursive function definitions, however
 ### Relative Monads in Zydeco
 
 In Section 4 of the paper, we demonstrated how to define relative monads in Zydeco.
-Here, we demonstrate how the concept of relative monad can be defined in [`core.zydeco`](core.zydeco).
+The current relative-monad interface is defined in [`lib/std/monad.zy`](../../std/monad.zy), while the migrated
+artifact encoding remains in [`core.zydeco`](core.zydeco).
 Three exception monads are defined in [`exn.zydeco`](exn.zydeco).
 Furthermore, common data structures that are relative monads are defined in [`monads.zydeco`](monads.zydeco).
 And finally, the free monad is defined in [`free.zydeco`](free.zydeco).
@@ -315,7 +322,8 @@ In Section 5 we introduced the monadic blocks as generalization of the do-notati
 
 #### Algebras of Relative Monads
 
-The definition of algebras of relative monads is shown in Definition 5.1. In Zydeco, we define the interface for algebras of relative monads in [`core.zydeco`](core.zydeco) as follows:
+The definition of algebras of relative monads is shown in Definition 5.1. The migrated artifact interface is
+defined in [`core.zydeco`](core.zydeco) as follows:
 
 ```zydeco
 alias Algebra (M: VType -> CType) (R: CType) : CType =
@@ -323,7 +331,10 @@ alias Algebra (M: VType -> CType) (R: CType) : CType =
 end
 ```
 
-In the paper, we claimed that the algebras of relative monads extend to all types (constructors). To demonstrate, we manually implements crucial algebras listed in Section 5.1 of the paper in [`algebra.zydeco`](algebra.zydeco). Later on we'll demonstrate a systematic approach to derive algebras of relative monads in [Algebra Translation](#algebra-translation) section.
+In the paper, we claimed that the algebras of relative monads extend to all types (constructors). The migrated
+[`algebra.zydeco`](algebra.zydeco) fixture implements the crucial algebras listed in Section 5.1. Later on we'll
+demonstrate a systematic approach to derive algebras of relative monads in the
+[Algebra Translation](#algebra-translation) section.
 
 
 #### Monadic Blocks
@@ -399,7 +410,8 @@ end
 
 The reason why we can do this is because the definition of `id` is global, and therefore its ambient monad can be reinterpreted according to the surrounding monadic block.
 
-For a more realistic use case, refer to [`exnt.zydeco`](exnt.zydeco) and observe that variables `Exn` and `mo-exn` are directly referenced in the monadic block. Given the definition of the `Exn` type
+For a more realistic use case, refer to [`exnt.zydeco`](exnt.zydeco) and observe that `Exn` and `mo_exn` are
+directly referenced in the monadic block. Given the definition of the `Exn` type
 ```zydeco
 alias Exn (E: VType) (A: VType) : CType =
   Ret (Either E A)
@@ -409,14 +421,16 @@ In the definition of `Exn`, `Either` is a global type, therefore we can use `Exn
 
 #### Deriving Relative Monad Transformers
 
-We generate the relative monad transformer implementations for the `Exn` and `ExnK` monads, and compare to our manual implementations ([`exnt.zydeco`](exnt.zydeco) and [`exnkt.zydeco`](exnkt.zydeco)) to check their correctness. The `@[debug(...)]` macros are used to print the generated code to the console during type checking. The reader may look into the source code and read the comments to understand the details.
+The migrated [`exnt.zydeco`](exnt.zydeco) and [`exnkt.zydeco`](exnkt.zydeco) fixtures contain generated and manual
+transformer implementations for the `Exn` and `ExnK` monads. The `@[debug(...)]` macros print the generated code
+during type checking so it can be compared with the manual implementations.
 
 
 ## Reusability Guide
 
 The artifact is designed to be reusable by other researchers and practitioners. Overall, it contains the following components:
 + The source code of `zydeco` can be compiled to interpret Zydeco programs and perform algebra translation.
-+ The `core.zydeco` and `data.zydeco` files implement a minimal standard library for Zydeco.
++ The migrated `core.zydeco` and `data.zydeco` files preserve the artifact's compact compatibility library.
 + Examples listed under [`lib`](../../) can be used as references to understand the implementation of Zydeco. They are also a good starting point to write new Zydeco programs, either as a library or as a starting point for standalone executables.
 
 ### Project Structure
