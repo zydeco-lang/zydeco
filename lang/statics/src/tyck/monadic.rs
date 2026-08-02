@@ -760,6 +760,7 @@ fn structure_translation(
         }
         | Type::Label(_)
         | Type::Unit(UnitTy)
+        | Type::VArrow(_)
         | Type::Prod(_)
         | Type::Exists(_)
         | Type::ManifestKind(_)
@@ -1062,6 +1063,13 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
         | Type::Ret(RetTy) => (env, monad_ty),
         | Type::CoData(coda) => {
             cs::CoData(coda, |_dtor, ty| cs::TypeLift { ty }).mbuild(tycker, env)?
+        }
+        | Type::VArrow(ValueArrow(ty_1, ty_2)) => {
+            let (env, ty_1) = cs::TypeLift { ty: ty_1 }.mbuild(tycker, env)?;
+            let (env, ty_2) = cs::TypeLift { ty: ty_2 }.mbuild(tycker, env)?;
+            let (env, vtype) = VType.mbuild(tycker, env)?;
+            let arrow = Alloc::alloc(tycker, ValueArrow(ty_1, ty_2), vtype, &env.ty);
+            (env, arrow)
         }
         | Type::Arrow(ty) => {
             let Arrow(ty_1, ty_2) = ty;
@@ -1397,6 +1405,18 @@ fn value_translation(
                 tail: move |_| cs::TermLift { tm: tail },
             }
             .mbuild(tycker, env)?
+        }
+        | Value::VAbs(Abs(binder, body)) => {
+            let (env, binder) = value_pattern_translation(tycker, env, binder)?;
+            let (env, body) = value_translation(tycker, env, body)?;
+            let abstraction = Alloc::alloc(tycker, Abs(binder, body), ty_, &env.ty);
+            (env, abstraction)
+        }
+        | Value::VApp(App(function, argument)) => {
+            let (env, function) = value_translation(tycker, env, function)?;
+            let (env, argument) = value_translation(tycker, env, argument)?;
+            let application = Alloc::alloc(tycker, App(function, argument), ty_, &env.ty);
+            (env, application)
         }
         | Value::Thunk(value) => {
             let Thunk(body) = value;

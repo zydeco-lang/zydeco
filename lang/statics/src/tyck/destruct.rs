@@ -243,6 +243,7 @@ impl TypeId {
             | Type::Char(_)
             | Type::String(_)
             | Type::OS(_)
+            | Type::VArrow(_)
             | Type::Arrow(_)
             | Type::Forall(_)
             | Type::PackPi(_)
@@ -476,6 +477,8 @@ impl ValueId {
                 | Value::Let(Let { tail, .. }) => value = tail,
                 | Value::SCons(ConsN(witnesses, _)) => return Some(witnesses),
                 | Value::Hole(_)
+                | Value::VAbs(_)
+                | Value::VApp(_)
                 | Value::Thunk(_)
                 | Value::Ctor(_)
                 | Value::Triv(_)

@@ -40,6 +40,12 @@ impl<'a> Ugly<'a, Formatter<'a>> for Value {
             | Value::Let(Let { binder, bindee, tail }) => {
                 format!("let {} = {} in {}", binder.ugly(f), bindee.ugly(f), tail.ugly(f))
             }
+            | Value::VAbs(Abs(param, body)) => {
+                format!("fn {} -> {}", param.ugly(f), body.ugly(f))
+            }
+            | Value::VApp(App(function, argument)) => {
+                format!("({} {})", function.ugly(f), argument.ugly(f))
+            }
             | Value::Thunk(Thunk(body)) => {
                 format!("{{ {} }}", body.ugly(f))
             }
@@ -125,6 +131,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Computation {
 impl<'a> Ugly<'a, Formatter<'a>> for SemValue {
     fn ugly(&self, f: &'a Formatter) -> String {
         match self {
+            | SemValue::Closure(v) => format!("<pure {}>", v.body.ugly(f)),
             | SemValue::Thunk(v) => format!("{{ {} }}", v.ugly(f)),
             | SemValue::Ctor(v) => v.ugly(f),
             | SemValue::Triv(v) => v.ugly(f),

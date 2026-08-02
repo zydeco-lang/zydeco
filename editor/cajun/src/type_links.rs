@@ -3,7 +3,7 @@ use zydeco_statics::tyck::{
     arena::StaticsArena,
     syntax::{
         AbstId, AnnId, CoDataId, DataId, ExistsMode, Fillable, KPatId, Kind, KindId, KindPattern,
-        TPatId, Type, TypeBinder, TypeId, TypePattern,
+        TPatId, Type, TypeBinder, TypeId, TypePattern, ValueArrow,
     },
 };
 use zydeco_surface::scoped::syntax::DefId;
@@ -161,7 +161,9 @@ impl<'arena> TypeReferenceCollector<'arena> {
                 self.visit_type(*inner)
             }
             | Type::Proj(Proj(head, _)) => self.visit_type(*head),
-            | Type::Arrow(Arrow(domain, codomain)) | Type::Prod(Prod(domain, codomain)) => {
+            | Type::VArrow(ValueArrow(domain, codomain))
+            | Type::Arrow(Arrow(domain, codomain))
+            | Type::Prod(Prod(domain, codomain)) => {
                 self.visit_type(*domain);
                 self.visit_type(*codomain);
             }

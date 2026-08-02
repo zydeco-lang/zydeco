@@ -21,47 +21,62 @@ struct ValueBinding {
 }
 
 #[derive(Clone)]
+struct ValueApplication {
+    binder: VPatId,
+    function: ValueId,
+    argument: ValueId,
+    site: Option<ss::TermId>,
+}
+
+#[derive(Clone)]
+enum ValueStep {
+    Bind(ValueBinding),
+    Apply(ValueApplication),
+}
+
+#[derive(Clone)]
 struct ValuePlan<T> {
-    bindings: Vec<ValueBinding>,
+    steps: Vec<ValueStep>,
     value: T,
 }
 
 impl<T> ValuePlan<T> {
     fn pure(value: T) -> Self {
-        Self { bindings: Vec::new(), value }
+        Self { steps: Vec::new(), value }
     }
 
     fn map<U>(self, f: impl FnOnce(T) -> U) -> ValuePlan<U> {
-        let Self { bindings, value } = self;
-        ValuePlan { bindings, value: f(value) }
+        let Self { steps, value } = self;
+        ValuePlan { steps, value: f(value) }
     }
 
     fn with_binding<U>(self, binding: ValueBinding, value: U) -> ValuePlan<U> {
-        let Self { bindings, value: _ } = self;
+        let Self { steps, value: _ } = self;
+        ValuePlan { steps: steps.into_iter().chain([ValueStep::Bind(binding)]).collect(), value }
+    }
+
+    fn with_application<U>(self, application: ValueApplication, value: U) -> ValuePlan<U> {
+        let Self { steps, value: _ } = self;
         ValuePlan {
-            bindings: bindings.into_iter().chain(std::iter::once(binding)).collect(),
+            steps: steps.into_iter().chain([ValueStep::Apply(application)]).collect(),
             value,
         }
     }
 
     fn sequence(plans: impl IntoIterator<Item = Self>) -> ValuePlan<Vec<T>> {
-        let (bindings, values): (Vec<_>, Vec<_>) =
-            plans.into_iter().map(|Self { bindings, value }| (bindings, value)).unzip();
-        ValuePlan { bindings: bindings.into_iter().flatten().collect(), value: values }
+        let (steps, values): (Vec<_>, Vec<_>) =
+            plans.into_iter().map(|Self { steps, value }| (steps, value)).unzip();
+        ValuePlan { steps: steps.into_iter().flatten().collect(), value: values }
     }
 }
 
 impl ValuePlan<ValueId> {
     fn scoped(self, binder: VPatId, tail: Self, site: Option<ss::TermId>) -> Self {
-        let Self { bindings, value: bindee } = self;
-        let Self { bindings: tail_bindings, value } = tail;
+        let Self { steps, value: bindee } = self;
+        let Self { steps: tail_steps, value } = tail;
         let binding = ValueBinding { binder, bindee, site };
         ValuePlan {
-            bindings: bindings
-                .into_iter()
-                .chain(std::iter::once(binding))
-                .chain(tail_bindings)
-                .collect(),
+            steps: steps.into_iter().chain([ValueStep::Bind(binding)]).chain(tail_steps).collect(),
             value,
         }
     }
@@ -69,11 +84,17 @@ impl ValuePlan<ValueId> {
     fn lower_into(
         self, lo: &mut Lowerer, kont: impl FnOnce(ValueId, &mut Lowerer) -> CompuId,
     ) -> CompuId {
-        let Self { bindings, value } = self;
+        let Self { steps, value } = self;
         let tail = kont(value, lo);
-        bindings.into_iter().rev().fold(tail, |tail, binding| {
-            let ValueBinding { binder, bindee, site } = binding;
-            Let { binder, bindee, tail }.build(lo, site)
+        steps.into_iter().rev().fold(tail, |tail, step| match step {
+            | ValueStep::Bind(ValueBinding { binder, bindee, site }) => {
+                Let { binder, bindee, tail }.build(lo, site)
+            }
+            | ValueStep::Apply(ValueApplication { binder, function, argument, site }) => {
+                let stack = Kont { binder, body: tail }.build(lo, site);
+                let stack = Cons(argument, stack).build(lo, site);
+                SForce { thunk: function, stack }.build(lo, site)
+            }
         })
     }
 }
@@ -141,6 +162,12 @@ impl<'a> Lowerer<'a> {
     fn alloc_projection_def(&mut self) -> DefId {
         let def = self.arena.admin.fresh();
         self.scoped.insert_def(def, VarName("__proj__".to_owned()));
+        def
+    }
+
+    fn alloc_pure_result(&mut self) -> DefId {
+        let def = self.arena.admin.fresh();
+        self.scoped.insert_def(def, VarName("__pure_result__".to_owned()));
         def
     }
 
@@ -301,6 +328,31 @@ impl Lower for ss::ValueId {
                 let bindee = bindee.lower(lo, ());
                 let tail = tail.lower(lo, ());
                 bindee.scoped(binder, tail, site)
+            }
+            | ss::Value::VAbs(Abs(param, body)) => {
+                let param = param.lower(lo, ());
+                let body = body.lower(lo, ());
+                let body = body.lower_into(lo, |value, lo| {
+                    let stack = Bullet.build(lo, site);
+                    SReturn { stack, value }.build(lo, site)
+                });
+                let stack = Bullet.build(lo, site);
+                let body =
+                    Let { binder: Cons(param, Bullet), bindee: stack, tail: body }.build(lo, site);
+                ValuePlan::pure(Closure { stack: Bullet, body }.build(lo, site))
+            }
+            | ss::Value::VApp(App(function, argument)) => {
+                let function = function.lower(lo, ());
+                let argument = argument.lower(lo, ());
+                let values = ValuePlan::sequence([function, argument]);
+                let [function, argument] = values.value.as_slice() else { unreachable!() };
+                let function = *function;
+                let argument = *argument;
+                let result = lo.alloc_pure_result();
+                let binder = result.build(lo, None);
+                let value = result.build(lo, site);
+                values
+                    .with_application(ValueApplication { binder, function, argument, site }, value)
             }
             | ss::Value::Thunk(Thunk(body)) => {
                 let body = body.lower(lo, ());

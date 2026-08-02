@@ -65,6 +65,7 @@ impl<'rt> Eval<'rt> for Assign<RcVPat, SemValue> {
                         | Err(()) => return Step::Done(Err(())),
                     }
                 }
+                | SemValue::Closure(_)
                 | SemValue::Thunk(_)
                 | SemValue::Triv(_)
                 | SemValue::VCons(_)
@@ -72,6 +73,7 @@ impl<'rt> Eval<'rt> for Assign<RcVPat, SemValue> {
             },
             | VPat::Triv(Triv) => match sem {
                 | SemValue::Triv(Triv) => {}
+                | SemValue::Closure(_)
                 | SemValue::Thunk(_)
                 | SemValue::Ctor(_)
                 | SemValue::VCons(_)
@@ -99,6 +101,7 @@ impl<'rt> Eval<'rt> for Assign<RcVPat, SemValue> {
                         | Err(()) => return Step::Done(Err(())),
                     }
                 }
+                | SemValue::Closure(_)
                 | SemValue::Thunk(_)
                 | SemValue::Ctor(_)
                 | SemValue::Triv(_)
@@ -158,6 +161,23 @@ impl<'rt> Eval<'rt> for Value {
                 let bindee = bindee.as_ref().clone().eval(runtime);
                 Assign(binder, bindee).eval(runtime).expect("pattern match failed in value let");
                 let value = tail.as_ref().clone().eval(runtime);
+                runtime.env = outer;
+                Step::Done(value)
+            }
+            | Value::VAbs(Abs(binder, body)) => {
+                Step::Done(EnvValueClosure { binder, body, env: runtime.env.clone() }.into())
+            }
+            | Value::VApp(App(function, argument)) => {
+                let function = function.as_ref().clone().eval(runtime);
+                let argument = argument.as_ref().clone().eval(runtime);
+                let SemValue::Closure(EnvValueClosure { binder, body, env }) = function else {
+                    panic!("Value application on non-closure")
+                };
+                let outer = std::mem::replace(&mut runtime.env, env);
+                Assign(binder, argument)
+                    .eval(runtime)
+                    .expect("pattern match failed in pure function");
+                let value = body.as_ref().clone().eval(runtime);
                 runtime.env = outer;
                 Step::Done(value)
             }

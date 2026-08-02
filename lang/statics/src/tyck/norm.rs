@@ -199,7 +199,9 @@ impl TypeSupportCollector {
                 | Type::Char(_)
                 | Type::String(_)
                 | Type::OS(_) => {}
-                | Type::Arrow(Arrow(input, output)) | Type::Prod(Prod(input, output)) => {
+                | Type::VArrow(ValueArrow(input, output))
+                | Type::Arrow(Arrow(input, output))
+                | Type::Prod(Prod(input, output)) => {
                     [input, output].into_iter().try_for_each(|ty| self.visit(ty, tycker))?;
                 }
                 | Type::Forall(Forall(binder, body)) => {
@@ -350,6 +352,15 @@ impl TypeId {
                         *self
                     } else {
                         Alloc::alloc(tycker, Arrow(ty1_, ty2_), kd, env)
+                    }
+                }
+                | Type::VArrow(ValueArrow(ty1, ty2)) => {
+                    let ty1_ = ty1.subst_env(tycker, env)?;
+                    let ty2_ = ty2.subst_env(tycker, env)?;
+                    if ty1 == ty1_ && ty2 == ty2_ {
+                        *self
+                    } else {
+                        Alloc::alloc(tycker, ValueArrow(ty1_, ty2_), kd, env)
                     }
                 }
                 | Type::Forall(forall) => {
@@ -588,6 +599,15 @@ impl TypeId {
                         Alloc::alloc(tycker, Arrow(ty1_, ty2_), kd, &env)
                     }
                 }
+                | Type::VArrow(ValueArrow(ty1, ty2)) => {
+                    let ty1_ = ty1.subst_abst(tycker, assign)?;
+                    let ty2_ = ty2.subst_abst(tycker, assign)?;
+                    if ty1 == ty1_ && ty2 == ty2_ {
+                        *self
+                    } else {
+                        Alloc::alloc(tycker, ValueArrow(ty1_, ty2_), kd, &env)
+                    }
+                }
                 | Type::Forall(forall) => {
                     let Forall(tpat, ty) = forall;
                     let ty_ = ty.subst_abst(tycker, assign)?;
@@ -751,6 +771,7 @@ impl TypeId {
             | Type::Char(_)
             | Type::String(_)
             | Type::OS(_) => self,
+            | Type::VArrow(_)
             | Type::Arrow(_)
             | Type::Forall(_)
             | Type::PackPi(_)
@@ -814,6 +835,7 @@ impl TypeId {
                 | Type::Char(_)
                 | Type::String(_)
                 | Type::OS(_)
+                | Type::VArrow(_)
                 | Type::Arrow(_)
                 | Type::Forall(_)
                 | Type::PackPi(_)
@@ -937,6 +959,15 @@ impl InferenceRefinement {
         Ok(Type::Arrow(Arrow(domain, codomain)))
     }
 
+    fn value_arrow(tycker: &mut Tycker<'_>, fill: FillId, env: &TyEnv) -> Result<Type> {
+        let vtype = Alloc::alloc(tycker, VType, (), &());
+        let domain = Self::fresh_type(tycker, fill, vtype, env);
+        let codomain = Self::fresh_type(tycker, fill, vtype, env);
+        let shape = Alloc::alloc(tycker, ValueArrow(domain, codomain), vtype, env);
+        fill.fill(tycker, shape.into())?;
+        Ok(Type::VArrow(ValueArrow(domain, codomain)))
+    }
+
     fn product(tycker: &mut Tycker<'_>, fill: FillId, env: &TyEnv) -> Result<Type> {
         let vtype = Alloc::alloc(tycker, VType, (), &());
         let head = Self::fresh_type(tycker, fill, vtype, env);
@@ -948,6 +979,24 @@ impl InferenceRefinement {
 }
 
 impl TypeId {
+    /// Reveal a solved value type, refining an unresolved metavariable to a
+    /// pure value arrow when value application requires that shape.
+    #[track_caller]
+    pub(crate) fn reveal_or_refine_value_arrow_k(
+        self, tycker: &mut Tycker<'_>, env: &TyEnv,
+    ) -> ResultKont<Type> {
+        let result = (|| {
+            let vtype = Alloc::alloc(tycker, VType, (), &());
+            let kind = tycker.statics.annotations_type[&self];
+            Lub::lub(kind, vtype, tycker)?;
+            match InferenceRefinement::unresolved_type_fill(tycker, self)? {
+                | Some(fill) => InferenceRefinement::value_arrow(tycker, fill, env),
+                | None => tycker.type_filled(&self),
+            }
+        })();
+        tycker.err_p_to_k(result)
+    }
+
     /// Reveal a solved computation type, refining an unresolved metavariable to
     /// a value-to-computation arrow when application requires that shape.
     #[track_caller]
@@ -1203,6 +1252,22 @@ impl TypeId {
                         Alloc::alloc(
                             tycker,
                             Arrow(ty1_, ty2_),
+                            tycker.statics.annotations_type[&res],
+                            &env,
+                        )
+                    }
+                }
+                | Type::VArrow(ValueArrow(ty1, ty2)) => {
+                    let (ty1_, fills_) = ty1.solution(tycker)?;
+                    fills.extend(fills_);
+                    let (ty2_, fills_) = ty2.solution(tycker)?;
+                    fills.extend(fills_);
+                    if ty1 == ty1_ && ty2 == ty2_ {
+                        res
+                    } else {
+                        Alloc::alloc(
+                            tycker,
+                            ValueArrow(ty1_, ty2_),
                             tycker.statics.annotations_type[&res],
                             &env,
                         )
@@ -1673,6 +1738,15 @@ impl TypeId {
                         self
                     } else {
                         Alloc::alloc(tycker, Arrow(ty1_norm, ty2_norm), kd_norm, &env)
+                    }
+                }
+                | Type::VArrow(ValueArrow(ty1, ty2)) => {
+                    let ty1_norm = ty1.filled_norm_id(tycker, memo, memo_kd)?;
+                    let ty2_norm = ty2.filled_norm_id(tycker, memo, memo_kd)?;
+                    if ty1_norm == ty1 && ty2_norm == ty2 && kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, ValueArrow(ty1_norm, ty2_norm), kd_norm, &env)
                     }
                 }
                 | Type::Forall(forall) => {

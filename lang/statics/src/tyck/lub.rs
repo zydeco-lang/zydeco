@@ -309,6 +309,20 @@ impl Debruijn {
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                     std::panic::Location::caller(),
                 )?,
+                | (Type::VArrow(ValueArrow(la, lb)), Type::VArrow(ValueArrow(ra, rb))) => {
+                    let a = self.clone().lub(la, ra, tycker)?;
+                    let b = self.lub(lb, rb, tycker)?;
+                    if a == la && b == lb {
+                        lhs_id
+                    } else {
+                        let kd = tycker.statics.annotations_type[&lhs_id];
+                        Alloc::alloc(tycker, ValueArrow(a, b), kd, &env)
+                    }
+                }
+                | (Type::VArrow(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
                 | (Type::Arrow(Arrow(la, lb)), Type::Arrow(Arrow(ra, rb))) => {
                     let a = self.clone().lub(la, ra, tycker)?;
                     let b = self.lub(lb, rb, tycker)?;

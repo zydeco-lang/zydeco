@@ -131,6 +131,16 @@ impl Link for ss::ValueId {
                 let tail = tail.link(statics);
                 Let { binder, bindee, tail }.into()
             }
+            | Value::VAbs(Abs(binder, body)) => {
+                let binder = binder.link(statics);
+                let body = body.link(statics);
+                Abs(binder, body).into()
+            }
+            | Value::VApp(App(function, argument)) => {
+                let function = function.link(statics);
+                let argument = argument.link(statics);
+                App(function, argument).into()
+            }
             | Value::Thunk(Thunk(body)) => {
                 let body = body.link(statics);
                 Thunk(body).into()

@@ -376,6 +376,10 @@ pub struct StringTy;
 #[derive(Clone, Debug)]
 pub struct OSTy;
 
+/// A pure function from one value type to another.
+#[derive(Clone, Debug)]
+pub struct ValueArrow(pub TypeId, pub TypeId);
+
 /// A type-level binder retains both its checked pattern and the abstract
 /// payload used in the body.
 ///
@@ -553,6 +557,7 @@ pub enum Type {
     Char(CharTy),
     String(StringTy),
     OS(OSTy),
+    VArrow(ValueArrow),
     Arrow(ArrowU<TypeId>),
     Forall(Forall),
     PackPi(PackPi),
@@ -590,6 +595,8 @@ pub enum Value {
     Named(Named<FieldName, ValueId>),
     /// Administrative scoped binding used when a source block produces a value.
     Let(Let<VPatId, ValueId, ValueId>),
+    VAbs(Abs<VPatId, ValueId>),
+    VApp(App<ValueId, ValueId>),
     Thunk(Thunk<CompuId>),
     Ctor(Ctor<CtorName, ValueId>),
     Triv(Triv),

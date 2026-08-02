@@ -103,6 +103,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for TypeId {
                 | Type::Char(CharTy) => "Char".to_string(),
                 | Type::String(StringTy) => "String".to_string(),
                 | Type::OS(OSTy) => "OS".to_string(),
+                | Type::VArrow(ty) => ty.ugly(f),
                 | Type::Arrow(ty) => ty.ugly(f),
                 | Type::Forall(ty) => ty.ugly(f),
                 | Type::PackPi(ty) => ty.ugly(f),
@@ -140,6 +141,8 @@ impl<'a> Ugly<'a, Formatter<'a>> for ValueId {
             | Value::Var(value) => value.ugly(f),
             | Value::Named(value) => value.ugly(f),
             | Value::Let(value) => value.ugly(f),
+            | Value::VAbs(value) => value.ugly(f),
+            | Value::VApp(value) => value.ugly(f),
             | Value::Thunk(value) => value.ugly(f),
             | Value::Ctor(value) => value.ugly(f),
             | Value::Triv(value) => value.ugly(f),
@@ -349,6 +352,13 @@ where
     fn ugly(&self, f: &'a Formatter) -> String {
         let Arrow(s, t) = self;
         format!("({} -> {})", s.ugly(f), t.ugly(f))
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for ValueArrow {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let ValueArrow(input, output) = self;
+        format!("({} -> {})", input.ugly(f), output.ugly(f))
     }
 }
 
@@ -661,6 +671,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for TypeId {
                 | Type::Char(CharTy) => RcDoc::text("Char"),
                 | Type::String(StringTy) => RcDoc::text("String"),
                 | Type::OS(OSTy) => RcDoc::text("OS"),
+                | Type::VArrow(ty) => ty.pretty(f),
                 | Type::Arrow(ty) => ty.pretty(f),
                 | Type::Forall(ty) => ty.pretty(f),
                 | Type::PackPi(ty) => ty.pretty(f),
@@ -716,6 +727,8 @@ impl<'a> Pretty<'a, Formatter<'a>> for ValueId {
             | Value::Var(value) => value.pretty(f),
             | Value::Named(value) => value.pretty(f),
             | Value::Let(value) => value.pretty(f),
+            | Value::VAbs(value) => value.pretty(f),
+            | Value::VApp(value) => value.pretty(f),
             | Value::Thunk(value) => value.pretty(f),
             | Value::Ctor(value) => value.pretty(f),
             | Value::Triv(value) => value.pretty(f),
@@ -928,6 +941,19 @@ where
             RcDoc::text("->"),
             RcDoc::space(),
             arg.pretty(f),
+        ])
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for ValueArrow {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let ValueArrow(input, output) = self;
+        RcDoc::concat([
+            input.pretty(f),
+            RcDoc::space(),
+            RcDoc::text("->"),
+            RcDoc::space(),
+            output.pretty(f),
         ])
     }
 }

@@ -15,7 +15,7 @@
 #align(center)[
   #text(size: 17pt, weight: "bold")[Zydeco Static Semantics]
   #linebreak()
-  #text(size: 9pt)[Implementation-derived core calculus with a prospective inference appendix]
+  #text(size: 9pt)[Implementation-derived core calculus with local inference]
 ]
 
 The calculus is the checked core after desugaring and name resolution. Surface wrappers are given only where
@@ -42,7 +42,7 @@ The metavariable $N$ ranges over unsorted terms.
   [Kind], [$K$], [$::=$], [$"VType" | "CType" | K_1 arrow.r K_2 | ell :: K$],
   [Type], [$S$], [$::=$], [$X | alpha | "fn" Q arrow.r S | S_1 space S_2
     | (ell = S) | (ell :: S) | S slash ell$],
-  [], [], [$|$], [$"Thk" | "Ret" | "Unit" | H_rho | A arrow.r B
+  [], [], [$|$], [$"Thk" | "Ret" | "Unit" | H_rho | A_1 arrow.r A_2 | A arrow.r B
     | "forall"_(alpha) (Q : K) . B$],
   [], [], [$|$], [$Pi^"pkg"_(alpha_1 dots.h.c alpha_n)(A\; B) | A_1 times A_2
     | "exists"_(alpha) (Q : K) . A$],
@@ -59,7 +59,7 @@ The metavariable $N$ ranges over unsorted terms.
 
   [Value], [$V$], [$::=$], [$x | (ell = V) | {M} | c space V | () | (V_1, V_2)
     | (W, V) | V slash ell | "lit"$],
-  [], [], [$|$], [$"let" P = V_1 " in " V_2$],
+  [], [], [$|$], [$"fn" P arrow.r V | V_1 space V_2 | "let" P = V_1 " in " V_2$],
 
   [Computation], [$M$], [$::=$], [$"fn" P arrow.r M | M space V | "fn" Q arrow.r M | M space S$],
   [], [], [$|$], [$"fix" P arrow.r M | !V | "ret" V | P <- M_1 \; M_2
@@ -280,11 +280,20 @@ $
 
 $
   frac(
+    Gamma \; Delta tack.r A_1 arrow.l.double "VType"
+    quad Gamma \; Delta tack.r A_2 arrow.l.double "VType",
+    Gamma \; Delta tack.r A_1 arrow.r A_2 arrow.r.double "VType",
+  ) quad #text(size: 6.5pt)[T-VARROW]
+  quad
+  frac(
     Gamma \; Delta tack.r A arrow.l.double "VType"
     quad Gamma \; Delta tack.r B arrow.l.double "CType",
     Gamma \; Delta tack.r A arrow.r B arrow.r.double "CType",
   ) quad #text(size: 6.5pt)[T-ARROW]
 $
+
+The codomain sort disambiguates pure value arrows from computation arrows. The checked syntax retains distinct
+constructors for the two cases.
 
 $
   frac(
@@ -526,6 +535,25 @@ $
   ) quad #text(size: 6.5pt)[V-THUNK]
 $
 
+== Pure value functions
+
+$
+  frac(
+    Gamma \; Delta tack.r P arrow.l.double A_1 tack.l Gamma_1 \; Delta union Omega
+    quad Gamma_1 \; Delta union Omega tack.r V arrow.l.double A_2
+    quad op("fsk")(A_2) inter Omega = emptyset,
+    Gamma \; Delta tack.r "fn" P arrow.r V arrow.l.double A_1 arrow.r A_2,
+  ) quad #text(size: 6.5pt)[V-ABS]
+$
+
+$
+  frac(
+    Gamma \; Delta tack.r V_1 arrow.r.double A_1 arrow.r A_2
+    quad Gamma \; Delta tack.r V_2 arrow.l.double A_1,
+    Gamma \; Delta tack.r V_1 space V_2 arrow.r.double A_2,
+  ) quad #text(size: 6.5pt)[V-APP]
+$
+
 $
   frac(
     Gamma tack.r A_0 arrow.b.double "data" {c_i : A_i}_(i in I)
@@ -585,7 +613,7 @@ Static witnesses are retained for package-dependent application and erased befor
 
 = Computations
 
-== Value functions
+== Computation functions
 
 $
   frac(
@@ -912,11 +940,13 @@ the displayed `forall` and value arrow are the exact wrapper emitted by the chec
 
 #pagebreak()
 
-= Prospective local inference
+= Local inference
 
-These rules began as a paper design. The checker now implements the local monomorphic fragment: pattern-origin
-metavariables, the synthesizing pattern rules, structural refinement, guarded filling, and inference-region closing.
-Fresh symmetric merges with origin unions and generalization remain prospective.
+Local inference is monomorphic and region-scoped. An unannotated value-pattern binder receives a fresh flexible
+value-type metavariable. Body uses and call sites constrain it through $#lub$; shape-directed eliminations may refine
+it to a pure arrow, computation arrow, thunk, return, or product. Closing a block or source interface rejects every
+metavariable that remains unconstrained. Constructor ownership, existential/package structure, recursive boundaries,
+polymorphism, and generalization remain annotation-directed.
 
 == Flexible metavariables
 
@@ -963,8 +993,7 @@ LUB-MERGE aliases both operands to $?S_3$. Fill and merge are atomic; a failed c
 == Pattern synthesis up to constraints
 
 $
-  #text("prospective pattern synthesis")
-  quad Gamma \; Delta tack.r P arrow.r.double A
+  Gamma \; Delta tack.r P arrow.r.double A
     tack.l Gamma_1 \; Delta
 $
 
@@ -1018,6 +1047,27 @@ The synthesizing fragment contains only variables, unit, named patterns, and ord
 
 $
   frac(
+    Gamma \; Delta tack.r P arrow.r.double A_1 tack.l Gamma_1 \; Delta
+    quad Gamma_1 \; Delta tack.r V arrow.r.double A_2,
+    Gamma \; Delta tack.r "fn" P arrow.r V arrow.r.double A_1 arrow.r A_2,
+  ) quad #text(size: 6.5pt)[V-INF-ABS]
+$
+
+$
+  frac(
+    #pad(bottom: 2pt, stack(
+      spacing: 9pt,
+      $Gamma \; Delta tack.r V_1 arrow.r.double A_1
+        quad Gamma tack.r A_1 arrow.b.double A_2 arrow.r A_3$,
+      $Gamma \; Delta tack.r V_2 arrow.r.double A_4
+        quad Gamma tack.r A_2 #lub A_4 = A_5$,
+    )),
+    Gamma \; Delta tack.r V_1 space V_2 arrow.r.double A_3,
+  ) quad #text(size: 6.5pt)[V-INF-APP]
+$
+
+$
+  frac(
     Gamma \; Delta tack.r P arrow.r.double A tack.l Gamma_1 \; Delta
     quad Gamma_1 \; Delta tack.r M arrow.r.double B,
     Gamma \; Delta tack.r "fn" P arrow.r M arrow.r.double A arrow.r B,
@@ -1037,16 +1087,28 @@ $
   ) quad #text(size: 6.5pt)[C-INF-APP]
 $
 
-Within the body, V-VAR and CONV constrain the inferred domain through the same $#lub$ relation. C-APP remains the
-fallback when the argument checks but does not synthesize.
-
-#pagebreak()
+Within either body, V-VAR and CONV constrain the inferred domain through the same $#lub$ relation. V-APP and C-APP
+remain the fallbacks when an argument checks but does not synthesize.
 
 == Structural refinement
 
 A REFINE rule applies only to an unresolved flexible metavariable. Every fresh component inherits its scope,
 closing level, and origins. A shape-directed premise first synthesizes $S_1$ and then requests
 $Gamma tack.r S_1 arrow.b.double S_2$ before destructuring $S_2$.
+
+$
+  frac(
+    #pad(bottom: 2pt, stack(
+      spacing: 9pt,
+      $?A_1 : "VType" #text(" flexible")
+        quad ?A_2 : "VType" #text(" fresh")
+        quad ?A_3 : "VType" #text(" fresh")$,
+      $Gamma tack.r ?A_1 #lub (?A_2 arrow.r ?A_3)
+        = ?A_2 arrow.r ?A_3$,
+    )),
+    Gamma tack.r ?A_1 arrow.b.double ?A_2 arrow.r ?A_3,
+  ) quad #text(size: 6.5pt)[REFINE-VARROW]
+$
 
 $
   frac(
@@ -1059,7 +1121,7 @@ $
         = ?A_1 arrow.r ?B_2$,
     )),
     Gamma tack.r ?B_1 arrow.b.double ?A_1 arrow.r ?B_2,
-  ) quad #text(size: 6.5pt)[REFINE-ARROW]
+  ) quad #text(size: 6.5pt)[REFINE-CARROW]
 $
 
 $

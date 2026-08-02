@@ -37,6 +37,8 @@ pub enum Value {
     Hole(Hole),
     Var(DefId),
     Let(Let<RcVPat, RcValue, RcValue>),
+    VAbs(Abs<RcVPat, RcValue>),
+    VApp(App<RcValue, RcValue>),
     Thunk(Thunk<RcCompu>),
     Ctor(Ctor<CtorName, RcValue>),
     Triv(Triv),
@@ -101,9 +103,18 @@ pub struct EnvThunk {
     pub env: Env<SemValue>,
 }
 
+/// A pure value function paired with its lexical environment.
+#[derive(Clone, Debug)]
+pub struct EnvValueClosure {
+    pub binder: RcVPat,
+    pub body: RcValue,
+    pub env: Env<SemValue>,
+}
+
 /// Semantic values used by the evaluator.
 #[derive(From, Clone, Debug)]
 pub enum SemValue {
+    Closure(EnvValueClosure),
     Thunk(EnvThunk),
     Ctor(Ctor<CtorName, Box<SemValue>>),
     Triv(Triv),

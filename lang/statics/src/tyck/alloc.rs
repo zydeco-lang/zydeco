@@ -372,6 +372,7 @@ AllocType! {
     CharTy
     StringTy
     OSTy
+    ValueArrow
     ArrowU<TypeId>
     Forall
     PackPi
@@ -479,6 +480,8 @@ AllocValue! {
     DefId
     Named<FieldName, ValueId>
     Let<VPatId, ValueId, ValueId>
+    Abs<VPatId, ValueId>
+    App<ValueId, ValueId>
     Thunk<CompuId>
     Ctor<CtorName, ValueId>
     Triv
