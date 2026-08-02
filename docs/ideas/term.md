@@ -1,7 +1,5 @@
 # Uniform Term Composition
 
-## Abstract
-
 Zydeco uses a common term language for kinds, types, values, and computations.
 Its former source language reserved a separate declaration sort for top-level definitions,
 which gave local terms and compilation units different rules for scope, dependency ordering, and abstraction.

@@ -1,6 +1,8 @@
 # Build products
 /target
+/build
 *.wasm
+*.pdf
 
 # Local script folders
 _*/
@@ -20,6 +22,3 @@ _*/
 
 # Rustfmt
 **/*.rs.bk
-
-# Zydeco build files
-/build
