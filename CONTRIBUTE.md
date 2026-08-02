@@ -36,6 +36,22 @@ The repository provides an aggregate test command:
 cargo test-all --release
 ```
 
+## Check the Tree-sitter Grammar
+
+The editor-oriented Tree-sitter grammar lives under `editor/tree-sitter-zydeco`.
+Install its pinned development dependency and run the grammar corpus, Zed query,
+and current-source conformance checks with:
+
+```sh
+cd editor/tree-sitter-zydeco
+pnpm install
+pnpm check
+```
+
+Commit the generated files under `editor/tree-sitter-zydeco/src` whenever the
+grammar changes. The compiler's Logos lexer and LALRPOP grammar remain the
+authority for accepted Zydeco programs.
+
 ## Create a Zydeco Program
 
 A Zydeco program is one complete term in one source file.

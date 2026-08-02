@@ -29,3 +29,28 @@ jobs:
       run: cargo build-all --verbose
     - name: Run Tests
       run: cargo test-all --verbose
+
+  tree-sitter:
+
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: editor/tree-sitter-zydeco
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: pnpm/action-setup@v4
+      with:
+        version: 11.9.0
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        cache: pnpm
+        cache-dependency-path: editor/tree-sitter-zydeco/pnpm-lock.yaml
+    - name: Install Tree-sitter tooling
+      run: pnpm install --frozen-lockfile
+    - name: Check grammar, queries, and source corpus
+      run: pnpm check
+    - name: Check generated parser is current
+      run: git diff --exit-code -- src

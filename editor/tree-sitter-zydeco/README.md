@@ -15,9 +15,8 @@ pnpm check
 ```
 
 `pnpm test` runs focused Tree-sitter corpus tests. `pnpm test:queries` compiles every Zed
-query against the generated node API. `pnpm test:corpus` parses current `.zy` and `.zydeco`
-sources under `lib/` and fails if Tree-sitter produces an error node. The script explicitly
-excludes retained files written in removed, pre-0.2 surface syntaxes.
+query against the generated node API. `pnpm test:corpus` parses every `.zy` and `.zydeco`
+source under `lib/` and fails if Tree-sitter produces an error node.
 
 Generated files under `src/` are committed because Zed builds the parser from a pinned Git
 revision. After changing `grammar.js` or `src/scanner.c`, run `pnpm check` and commit the

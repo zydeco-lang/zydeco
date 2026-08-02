@@ -9,7 +9,10 @@ Zydeco's resolver and CBPV type checker.
 
 Editor integrations live in:
 
+- [tree-sitter-zydeco](tree-sitter-zydeco), for the editor-oriented concrete
+  syntax tree and its conformance checks;
 - [vscode](vscode), for Visual Studio Code;
 - [zed](zed), for Zed.
 
 Both clients start the same `cajun` executable over standard input and output.
+The Zed integration can combine the Tree-sitter syntax tree with Cajun's semantic information.

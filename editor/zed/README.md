@@ -24,6 +24,21 @@ Cajun keeps lexical highlighting available while a file is incomplete, then
 refines resolved binders and references with kind, value-type, computation-type,
 value, and computation information when the corresponding compiler phases succeed.
 
+The repository contains the Tree-sitter grammar under `../tree-sitter-zydeco`
+and Zed query files under `languages/zydeco`. Activating it in the extension is a
+two-commit release operation: first commit the generated parser, then add its commit
+SHA to `extension.toml` and set `grammar = "zydeco"` in `config.toml`:
+
+```toml
+[grammars.zydeco]
+repository = "https://github.com/zydeco-lang/zydeco"
+rev = "<commit-containing-the-generated-parser>"
+path = "editor/tree-sitter-zydeco"
+```
+
+Once the grammar is active, use `"semantic_tokens": "combined"` to retain
+Tree-sitter highlighting while applying Cajun's compiler-aware refinements.
+
 ## Installing Cajun
 
 Install the server with Cargo:

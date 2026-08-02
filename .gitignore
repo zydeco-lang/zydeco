@@ -1,6 +1,7 @@
 # Build products
 /target
 /build
+/.pnpm-store
 *.wasm
 *.pdf
 
