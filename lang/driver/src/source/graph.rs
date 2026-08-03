@@ -3,7 +3,7 @@ use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
 };
-use zydeco_surface::textual::syntax as t;
+use zydeco_surface::textual::{DocumentationSite, syntax as t};
 use zydeco_utils::prelude::{ArenaDense, ArenaSchema, DepGraph};
 
 zydeco_utils::new_key_type! {
@@ -30,6 +30,7 @@ pub struct SourceFile {
     pub spans: t::SpanArena,
     pub arena: t::TextArena,
     pub unit: t::SourceUnit,
+    pub documentation: Vec<DocumentationSite>,
     pub imports: Vec<SourceImportId>,
 }
 

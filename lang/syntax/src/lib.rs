@@ -535,6 +535,34 @@ impl Meta {
     }
 }
 
+/// The typed meaning of a `@[doc]` or `@[doc(...)]` annotation.
+///
+/// Arguments remain ordinary metadata values so documentation renderers can
+/// define presentation policies without extending the surface parser.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct DocMeta {
+    pub arguments: Vec<Meta>,
+}
+
+impl DocMeta {
+    pub fn new(arguments: impl IntoIterator<Item = Meta>) -> Self {
+        Self { arguments: arguments.into_iter().collect() }
+    }
+
+    /// Decode documentation metadata while leaving unrelated metadata untouched.
+    pub fn decode(meta: &Meta) -> Option<Self> {
+        match meta {
+            | Meta::Ident(callee) if callee == "doc" => Some(Self::new([])),
+            | Meta::Apply { callee, args } if callee == "doc" => Some(Self::new(args.clone())),
+            | Meta::Ident(_)
+            | Meta::String(_)
+            | Meta::Apply { .. }
+            | Meta::Intrinsic(_)
+            | Meta::Builtin(_) => None,
+        }
+    }
+}
+
 impl std::fmt::Display for Meta {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

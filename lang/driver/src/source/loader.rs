@@ -82,6 +82,7 @@ where
                 path: path.clone(),
                 message: ParseError { error, file_info: &info }.to_string(),
             })?;
+        let documentation = unit.documentation(&source, &parser.arena, &parser.spans);
         let import_sites = unit
             .imports(&parser.arena, &parser.spans)
             .map_err(|error| SourceLoadError::Directive { path: path.clone(), error })?;
@@ -98,6 +99,7 @@ where
             spans,
             arena,
             unit,
+            documentation,
             imports: Vec::new(),
         });
         self.seen.insert(path.clone(), source_id);

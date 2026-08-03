@@ -162,3 +162,44 @@ exists (Counter as Int : VType) (= State as Counter) .
                   name: (upper_identifier)))))))
       (punned_term
         name: (upper_identifier)))))
+
+==================
+Documented arbitrary terms
+==================
+
+--| API package
+@[doc(section,"api")]
+begin
+  --| An example binding
+  @[doc]
+  let example = 1 that example
+end
+
+---
+
+(source_file
+  (documentation_comment)
+  body: (metadata_expression
+    metadata: (metadata
+      value: (meta_application
+        callee: (meta_identifier
+          (lower_identifier))
+        arguments: (meta_arguments
+          (meta_identifier
+            (lower_identifier))
+          (string_literal))))
+    body: (block_expression
+      (documentation_comment)
+      body: (metadata_expression
+        metadata: (metadata
+          value: (meta_identifier
+            (lower_identifier)))
+        body: (context_binding
+          kind: (binding_kind)
+          binding: (general_binding
+            binder: (variable_pattern
+              name: (lower_identifier))
+            value: (integer_literal))
+          placement: (placement)
+          body: (variable
+            name: (lower_identifier)))))))

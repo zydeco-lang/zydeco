@@ -20,8 +20,9 @@ resolution.
   by `DefId`, `PatId`, `CoPatId`, and `TermId`.
 - `EntityId` is a tagged enum over those categories; it is not an unchecked
   shared raw index.
-- `SourceUnit` identifies the single complete term in one source file and
-  decodes typed metadata directives attached to holes.
+- `SourceUnit` identifies the single complete term in one source file. It
+  decodes typed metadata directives attached to holes and collects `@[doc]`
+  attachments for arbitrary terms without assigning them a presentation.
 - `SpanArena` stores `Span` values for every textual entity so later phases can
   report precise locations; it is storage-only and retains no ID allocator.
 - `Parser` combines `TextArena` and `SpanArena` and is passed through the

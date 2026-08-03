@@ -71,6 +71,93 @@ fn metadata_preserves_identifiers_strings_and_applications() {
 }
 
 #[test]
+fn source_unit_collects_documentation_for_arbitrary_annotated_terms() {
+    let source = concat!(
+        "--| Package heading\n",
+        "--|\n",
+        "--| Package details.\n",
+        "@[doc(section,\"api\",render(compact))] begin\n",
+        "  let value =\n",
+        "    --| An integer example.\n",
+        "    @[doc(example)] 1\n",
+        "  that\n",
+        "  value\n",
+        "end\n",
+    );
+    let mut parser = Parser::new();
+    let unit = parser::SourceUnitParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let documentation = unit.documentation(source, &parser.arena, &parser.spans);
+    let [package, example] = documentation.as_slice() else {
+        panic!("expected documentation on the root and a nested term")
+    };
+
+    assert_eq!(
+        package.directive.meta.arguments,
+        [
+            Meta::ident("section"),
+            Meta::string("api"),
+            Meta::apply("render", [Meta::ident("compact")]),
+        ]
+    );
+    assert_eq!(
+        package.directive.comment.as_ref().unwrap().markdown,
+        "Package heading\n\nPackage details."
+    );
+    assert!(matches!(parser.arena.terms[&package.payload], Term::Block(_)));
+
+    assert_eq!(example.directive.meta.arguments, [Meta::ident("example")]);
+    assert_eq!(example.directive.comment.as_ref().unwrap().markdown, "An integer example.");
+    assert!(matches!(parser.arena.terms[&example.payload], Term::Lit(Literal::Int(1))));
+}
+
+#[test]
+fn documentation_annotation_does_not_reach_across_a_blank_or_ordinary_comment() {
+    ["--| Detached\n\n@[doc] _", "--| Detached\n-- barrier\n@[doc] _"].into_iter().for_each(
+        |source| {
+            let mut parser = Parser::new();
+            let unit = parser::SourceUnitParser::new()
+                .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+                .unwrap();
+            let documentation = unit.documentation(source, &parser.arena, &parser.spans);
+            let [site] = documentation.as_slice() else {
+                panic!("the annotation must include its term even without attached prose")
+            };
+            assert!(site.directive.meta.arguments.is_empty());
+            assert!(site.directive.comment.is_none());
+            assert!(matches!(parser.arena.terms[&site.payload], Term::Hole(Hole)));
+        },
+    );
+}
+
+#[test]
+fn documentation_comments_without_an_annotation_remain_unattached() {
+    let source = "--| Informational only\n_";
+    let mut parser = Parser::new();
+    let unit = parser::SourceUnitParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    assert!(unit.documentation(source, &parser.arena, &parser.spans).is_empty());
+}
+
+#[test]
+fn documentation_annotation_accepts_an_explicit_empty_argument_list() {
+    let source = "--| Empty argument list\n@[doc()] _";
+    let mut parser = Parser::new();
+    let unit = parser::SourceUnitParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let documentation = unit.documentation(source, &parser.arena, &parser.spans);
+    let [site] = documentation.as_slice() else { panic!("expected one documentation attachment") };
+    assert!(site.directive.meta.arguments.is_empty());
+    assert_eq!(site.directive.comment.as_ref().unwrap().markdown, "Empty argument list");
+}
+
+#[test]
 fn source_unit_decodes_relative_and_absolute_imports() {
     let source = r#"(@[import("../library.zy")] _, @[import("/opt/zydeco/core.zy")] _)"#;
     let mut parser = Parser::new();

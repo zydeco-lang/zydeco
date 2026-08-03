@@ -215,7 +215,24 @@ a multiline thunk receives one additional indentation level.
 Align the arms of `match`, `comatch`, `data`, and `codata`, then indent an arm body once.
 Multiline tuples and packages use trailing commas.
 
-`--|` introduces documentation for an interface or exported binding.
+`--|` writes Markdown documentation prose. A contiguous block becomes part of
+the repository documentation when it appears immediately above a `@[doc]`
+annotation:
+
+```zydeco
+--| Maps a function over every element of a list.
+--|
+--| The result preserves the input order.
+@[doc]
+def map = _ in map
+```
+
+The annotation may carry renderer-specific metadata, such as
+`@[doc(section, "collections")]`. Its payload may be any term; documentation
+renderers decide how to present the attached term from its syntax and checked
+classifier. A blank line or an ordinary comment between the documentation
+block and `@[doc]` leaves the prose unattached.
+
 `--` introduces a local implementation note.
 The most useful comments explain purpose, invariants, or a typing choice
 that remains surprising after the surrounding code is read.

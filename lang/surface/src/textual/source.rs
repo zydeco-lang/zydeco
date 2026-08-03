@@ -1,6 +1,31 @@
+use super::lexer::{LexicalToken, LexicalTokenKind, LexicalTokens};
 use super::syntax::*;
-use std::path::PathBuf;
+use std::{ops::Range, path::PathBuf};
 use thiserror::Error;
+
+/// Markdown recovered from a contiguous `--|` block immediately above a
+/// documentation annotation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DocumentationComment {
+    pub markdown: String,
+    pub range: Range<usize>,
+}
+
+/// A decoded `@[doc]` annotation and its optional preceding prose.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DocumentationDirective {
+    pub meta: DocMeta,
+    pub comment: Option<DocumentationComment>,
+    pub span: Span,
+}
+
+/// One documented term in a parsed source unit.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DocumentationSite {
+    pub term: TermId,
+    pub payload: TermId,
+    pub directive: DocumentationDirective,
+}
 
 /// A validated source import attached to one term-level splice site.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -83,6 +108,30 @@ pub enum IntrinsicDirectiveError {
 }
 
 impl SourceUnit {
+    /// Collect every explicitly documented term in this source unit.
+    ///
+    /// Documentation comments remain parser trivia. The `@[doc]` annotation
+    /// provides the durable attachment point, and only an uninterrupted block
+    /// of `--|` lines immediately above that annotation becomes its prose.
+    pub fn documentation(
+        &self, source: &str, arena: &TextArena, spans: &SpanArena,
+    ) -> Vec<DocumentationSite> {
+        let _root = &arena.terms[&self.root];
+        let comments = DocumentationComments::new(source);
+        let mut sites = arena
+            .terms
+            .iter()
+            .filter_map(|(term, syntax)| match syntax {
+                | Term::Meta(MetaT(meta, payload)) => {
+                    DocumentationSite::decode(*term, meta, *payload, spans, &comments)
+                }
+                | _ => None,
+            })
+            .collect::<Vec<_>>();
+        sites.sort_by_key(|site| site.directive.span.get_cursor1());
+        sites
+    }
+
     /// Decode all import metadata parsed into this source unit.
     ///
     /// The textual arena must belong exclusively to this unit. A parser used
@@ -141,6 +190,74 @@ impl SourceUnit {
             .collect::<Result<Vec<_>, _>>()?;
         intrinsics.sort_by_key(|site| site.directive.span.get_cursor1());
         Ok(intrinsics)
+    }
+}
+
+impl DocumentationSite {
+    fn decode(
+        term: TermId, meta: &Meta, payload: TermId, spans: &SpanArena,
+        comments: &DocumentationComments<'_>,
+    ) -> Option<Self> {
+        let meta = DocMeta::decode(meta)?;
+        let span = spans[&EntityId::Term(term)].clone();
+        let (start, _) = span.get_cursor1();
+        let comment = comments.preceding(start);
+        Some(Self { term, payload, directive: DocumentationDirective { meta, comment, span } })
+    }
+}
+
+struct DocumentationComments<'source> {
+    source: &'source str,
+    comments: Vec<LexicalToken>,
+}
+
+impl<'source> DocumentationComments<'source> {
+    fn new(source: &'source str) -> Self {
+        let comments = LexicalTokens::new(source)
+            .filter(|token| token.kind == LexicalTokenKind::DocumentationComment)
+            .collect();
+        Self { source, comments }
+    }
+
+    fn preceding(&self, annotation_start: usize) -> Option<DocumentationComment> {
+        let preceding =
+            self.comments.partition_point(|comment| comment.range.end <= annotation_start);
+        let comments = self.comments[..preceding]
+            .iter()
+            .rev()
+            .scan(annotation_start, |cursor, comment| {
+                self.is_immediately_before(comment, *cursor).then(|| {
+                    *cursor = comment.range.start;
+                    comment
+                })
+            })
+            .collect::<Vec<_>>();
+        let first = comments.last()?;
+        let last = comments.first()?;
+        let markdown = comments
+            .iter()
+            .rev()
+            .map(|comment| self.markdown_line(comment))
+            .collect::<Vec<_>>()
+            .join("\n");
+        Some(DocumentationComment { markdown, range: first.range.start..last.range.end })
+    }
+
+    fn is_immediately_before(&self, comment: &LexicalToken, cursor: usize) -> bool {
+        self.source
+            .get(comment.range.end..cursor)
+            .is_some_and(|gap| gap.chars().all(|ch| matches!(ch, ' ' | '\t' | '\u{000c}')))
+    }
+
+    fn markdown_line(&self, comment: &LexicalToken) -> &str {
+        let line = &self.source[comment.range.clone()];
+        let line = line.strip_suffix('\n').unwrap_or(line);
+        let line = line.strip_suffix('\r').unwrap_or(line);
+        let line = line.trim_start_matches([' ', '\t', '\u{000c}']);
+        let line = line
+            .strip_prefix("--|")
+            .expect("documentation tokens always begin with the documentation marker");
+        line.strip_prefix(' ').unwrap_or(line)
     }
 }
 
