@@ -10,7 +10,7 @@
 #show heading: set block(above: 0.8em, below: 0.35em)
 #show heading.where(level: 1): set text(size: 13pt)
 #show heading.where(level: 2): set text(size: 10.5pt)
-#let lub = math.op($backslash #h(-0.22em) slash$)
+#let lub = math.op($or$)
 
 #align(center)[
   #text(size: 17pt, weight: "bold")[Zydeco Static Semantics]
