@@ -211,6 +211,11 @@ begin
       | +Right(a) -> ! k a
       end
   that
-  ! (api/exit) 0
+  (
+    ret_algebra = { ! alg_ret },
+    arrow_algebra = { ! alg_arrow },
+    product_algebra = { ! alg_with },
+    exception_algebra = { ! alg_exn },
+  )
 end
 end

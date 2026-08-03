@@ -43,7 +43,10 @@ begin
       X
   that
 
-  ! exit 0
+  let Export =
+    exists (PublicMixedPackage as MixedPackage : VType) . Unit
+  that
+  (MixedPackage, ()) : Export
 end
 "#,
     );

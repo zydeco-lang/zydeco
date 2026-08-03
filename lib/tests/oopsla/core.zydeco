@@ -192,5 +192,11 @@ begin
   } that
 -- end module OS
 
-  ! exit 0
+  (
+    halt = halt,
+    panic = panic,
+    write_line = write_line,
+    write_int = write_int,
+    write_int_line = write_int_line,
+  )
 end

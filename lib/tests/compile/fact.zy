@@ -5,7 +5,7 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  do (
+  let (
     Bool = StdBool,
     Option = StdOption,
     List = StdList,
@@ -14,7 +14,7 @@ begin
     String = StdString,
     OS = StdOS,
     std
-  ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
   let fix fact (i : StdInt) : Ret StdInt =
     -- extern def add : Thk (Int -> Int -> Ret Int) end
     do zero? <- ! (std/int/eq) i 0;

@@ -2442,6 +2442,7 @@ version = "0.2.2"
 dependencies = [
  "tempfile",
  "zydeco-driver",
+ "zydeco-statics",
 ]
 
 [[package]]

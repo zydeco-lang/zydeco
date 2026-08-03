@@ -101,7 +101,13 @@ begin
   def nested_value : NestedProjectedInt = 3 that
   def punned_value : PunnedProjectedInt = 4 that
 
-  ! exit value
+  (
+    value = value,
+    pattern_value = pattern_value,
+    whole_value = whole_value,
+    nested_value = nested_value,
+    punned_value = punned_value,
+  )
 end
 "#,
     )
@@ -122,8 +128,7 @@ begin
       ret value
   } that
 
-  do value <- ! named_identity (item = Int) 0;
-  ! exit value
+  { ! named_identity (item = Int) 0 }
 end
 "#,
     )
@@ -171,9 +176,10 @@ begin
     { ! mo_ret }
   } that
 
-  do _ <- ! translated;
-  do _ <- ! translated_polymorphic (item = Unit) triv ();
-  ! exit 0
+  (
+    translated = translated,
+    translated_polymorphic = translated_polymorphic,
+  )
 end
 "#,
     )
@@ -204,7 +210,7 @@ begin
 
   let (item = A, payload) = payload_box in
   let (Whole, whole) = whole_box in
-  ! exit 0
+  (payload_box, whole_box)
 end
 "#,
     )
@@ -233,8 +239,7 @@ begin
 
   def boxed : Box = (item = Int, 41) that
 
-  do value <- ! reveal boxed;
-  ! exit value
+  { ! reveal boxed }
 end
 "#,
     )
@@ -247,7 +252,7 @@ fn rejects_named_term_with_mismatched_label() {
         r#"
 begin
   def bad : (x :: Int) = (y = 0) that
-  ! exit 0
+  bad
 end
 "#,
     );
@@ -260,7 +265,7 @@ fn rejects_named_pattern_with_mismatched_label() {
 begin
   def value : (x :: Int) = (x = 0) that
   let (y = inner) = value in
-  ! exit inner
+  inner
 end
 "#,
     );
@@ -278,7 +283,7 @@ begin
     middle = middle : Int,
     right = right : Int
   ) = value in
-  ! exit 0
+  (left, middle, right)
 end
 "#,
     );
@@ -295,7 +300,7 @@ begin
     (wrong = left : Int, middle : Int),
     right = right : Int
   ) = value in
-  ! exit 0
+  (left, middle, right)
 end
 "#,
     );
@@ -313,7 +318,7 @@ begin
     middle : Int,
     right = right : Int
   ) = value in
-  ! exit 0
+  (left, middle, right)
 end
 "#,
     );
@@ -327,7 +332,7 @@ begin
   let InvalidNamedType : (operation :: CType) =
     (other = OS)
   that
-  ! exit 0
+  ()
 end
 "#,
     );
@@ -341,7 +346,7 @@ begin
   let InvalidNamedComputation : CType =
     (operation :: OS)
   that
-  ! exit 0
+  ()
 end
 "#,
     );
@@ -358,7 +363,7 @@ begin
   let InvalidProjection : VType =
     NamedInt/other
   that
-  ! exit 0
+  ()
 end
 "#,
     );
@@ -371,7 +376,7 @@ fn rejects_missing_named_projection() {
 begin
   let Point = (x :: Int) * (y :: Int) that
   def point : Point = (x = 0, y = 1) that
-  ! exit (point/z)
+  point/z
 end
 "#,
     );
@@ -384,7 +389,7 @@ fn rejects_ambiguous_named_projection() {
 begin
   let DuplicateFields = (x :: Int) * (x :: Int) that
   def duplicate : DuplicateFields = (x = 0, x = 1) that
-  ! exit (duplicate/x)
+  duplicate/x
 end
 "#,
     );

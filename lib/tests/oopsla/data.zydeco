@@ -569,5 +569,9 @@ begin
   that
 -- end module String
 
-  ! (api/exit) 0
+  (
+    identity = id,
+    lazy_identity = id~,
+    char_eq = char_eq,
+  )
 end

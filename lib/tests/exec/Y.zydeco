@@ -24,7 +24,7 @@ begin
     ret { ! prim .y prim }
   that
 
-  do (
+  let (
     Bool = StdBool,
     Option = StdOption,
     List = StdList,
@@ -33,7 +33,7 @@ begin
     String = StdString,
     OS = StdOS,
     std
-  ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
   -- good old factorial
   def ! fact (f : Thk (StdInt -> Ret StdInt)) (n : StdInt) : Ret StdInt =
     do is_zero <- ! (std/int/eq) n 0;

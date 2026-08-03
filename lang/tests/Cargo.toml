@@ -5,4 +5,5 @@ edition = { workspace = true }
 
 [dependencies]
 zydeco-driver = { workspace = true }
+zydeco-statics = { workspace = true }
 tempfile = { workspace = true }

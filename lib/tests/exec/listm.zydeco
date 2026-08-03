@@ -25,7 +25,7 @@ begin
     end
   that
 
-  do (
+  let (
     Bool = StdBool,
     Option = StdOption,
     List = StdList,
@@ -34,7 +34,7 @@ begin
     String = StdString,
     OS = StdOS,
     std
-  ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
   -- List~ is actually coinductive type
   def fix loop : Ret (List~ StdInt) =
     ret +Cons(0, loop)

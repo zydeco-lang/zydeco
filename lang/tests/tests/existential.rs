@@ -32,8 +32,7 @@ begin
     fn ((X, value) : Transparent) -> ret value
   } that
 
-  do status <- ! consume packed;
-  ! exit status
+  { ! consume packed }
 end
 "#,
     )
@@ -50,7 +49,7 @@ begin
   that
   def packed : Transparent = (Char, 'x') that
 
-  ! exit 0
+  packed
 end
 "#,
     );
@@ -73,8 +72,7 @@ begin
     fn ((= Counter, = zero) : CounterLibrary) -> ret zero
   } that
 
-  do status <- ! consume library;
-  ! exit status
+  { ! consume library }
 end
 "#,
     )
@@ -96,8 +94,7 @@ begin
     fn ((X, Y, value) : Mixed) -> ret value
   } that
 
-  do value <- ! unpack packed;
-  ! exit value
+  { ! unpack packed }
 end
 "#,
     )
@@ -119,8 +116,7 @@ begin
     fn ((Y, X, value) : Mixed) -> ret value
   } that
 
-  do value <- ! unpack packed;
-  ! exit value
+  { ! unpack packed }
 end
 "#,
     )
@@ -141,11 +137,13 @@ begin
     { fn (x : Int) -> ret x },
   ) that
 
-  match boxed
-  | (X, value, consume) ->
-    do status <- ! consume value;
-    ! exit status
-  end
+  {
+    match boxed
+    | (X, value, consume) ->
+      do status <- ! consume value;
+      ret status
+    end
+  }
 end
 "#,
     )
@@ -169,10 +167,12 @@ begin
     fn ((X, value, consume) : Box) -> ! consume value
   } that
 
-  let (Y, value, consume) = boxed in
-  do from_let <- ! consume value;
-  do from_function <- ! consume_box boxed;
-  ! exit from_function
+  {
+    let (Y, value, consume) = boxed in
+    do from_let <- ! consume value;
+    do from_function <- ! consume_box boxed;
+    ret from_function
+  }
 end
 "#,
     )
@@ -196,9 +196,11 @@ begin
     ret boxed
   } that
 
-  do (X, value, consume) <- ! yield_box;
-  do status <- ! consume value;
-  ! exit status
+  {
+    do (X, value, consume) <- ! yield_box;
+    do status <- ! consume value;
+    ret status
+  }
 end
 "#,
     )
@@ -224,14 +226,16 @@ begin
     { fn (_ : Char) -> ret 0 },
   ) that
 
-  match ints
-  | (XI, xi, _) ->
-    match chars
-    | (XC, _, from_char) ->
-      do status <- ! from_char xi;
-      ! exit status
+  {
+    match ints
+    | (XI, xi, _) ->
+      match chars
+      | (XC, _, from_char) ->
+        do status <- ! from_char xi;
+        ret status
+      end
     end
-  end
+  }
 end
 "#,
     );
@@ -252,7 +256,7 @@ begin
     end
   } that
 
-  ! exit 0
+  leak
 end
 "#,
     );
@@ -270,7 +274,7 @@ begin
     fn ((X, value) : Box) -> ret value
   } that
 
-  ! exit 0
+  unpack
 end
 "#,
     )
@@ -292,7 +296,7 @@ begin
       end
   } that
 
-  ! exit 0
+  repack
 end
 "#,
     )

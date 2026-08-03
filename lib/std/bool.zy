@@ -1,10 +1,9 @@
 -- module Bool
-{
 param (
   (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
   @[import("builtin.zy")] _
 ) in
-ret begin
+begin
   def Bool =
     data
     | +False : Unit
@@ -60,5 +59,4 @@ ret begin
     if = if,
   ) : Interface
 end
-}
 -- end module Bool

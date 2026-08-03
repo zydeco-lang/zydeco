@@ -1,9 +1,8 @@
-{
 param (
   (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
   @[import("builtin.zy")] _
 ) in
-ret begin
+begin
   def Option (A : VType) =
     data
     | +None : Unit
@@ -55,4 +54,3 @@ ret begin
     fold = fold,
   ) : Interface
 end
-}

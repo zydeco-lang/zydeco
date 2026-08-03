@@ -41,15 +41,15 @@ begin
       in
       ! reveal (
         Unit,
+        Int,
+        Int,
         Unit,
-        Unit,
-        Unit,
-        ()
+        0
       )
     end
   that
 
-  do _ <- ! translated Ret { ! mo_ret };
-  ! (api/exit) 0
+  do status <- ! translated Ret { ! mo_ret };
+  ! (api/exit) status
 end
 end

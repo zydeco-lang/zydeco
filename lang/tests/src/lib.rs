@@ -1,6 +1,7 @@
 pub mod utils {
     use std::path::PathBuf;
     use zydeco_driver::{BuildConf, BuildError, PipelineConf, SourceDriver, Verbosity};
+    use zydeco_statics::tyck::syntax::{Fillable, TermAnnId, Type};
 
     #[derive(Clone, Copy, Debug)]
     pub enum TestBackend {
@@ -13,17 +14,45 @@ pub mod utils {
         arguments: Vec<String>,
     }
 
+    /// A source fixture whose root is checked without imposing the executable contract.
+    pub struct SourceLibrary {
+        path: PathBuf,
+    }
+
+    impl SourceLibrary {
+        pub fn setup(relative: impl Into<PathBuf>) -> Self {
+            Self { path: SourceProgram::resolve(relative.into()) }
+        }
+
+        pub fn check(self) {
+            let checked = SourceDriver::check(&self.path).unwrap_or_else(|error| {
+                panic!("Error checking source {}: {error}", self.path.display())
+            });
+            let TermAnnId::Value(_, root_type) = checked.root else {
+                panic!("Library source {} must export a value", self.path.display());
+            };
+            assert!(
+                matches!(checked.statics.types_pre[&root_type], Fillable::Done(Type::VPackPi(_))),
+                "Library source {} must export a pure package function",
+                self.path.display()
+            );
+        }
+    }
+
     impl SourceProgram {
         pub fn setup(relative: impl Into<PathBuf>) -> Self {
-            let relative = relative.into();
-            let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            let path = Self::resolve(relative.into());
+            Self { path, arguments: Vec::new() }
+        }
+
+        fn resolve(relative: PathBuf) -> PathBuf {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("../../lib")
                 .join(&relative)
                 .canonicalize()
                 .unwrap_or_else(|error| {
                     panic!("Error locating source {}: {error}", relative.display())
-                });
-            Self { path, arguments: Vec::new() }
+                })
         }
 
         pub fn with_args(mut self, arguments: impl IntoIterator<Item = impl Into<String>>) -> Self {
@@ -156,6 +185,16 @@ let triv : Thk Top = {{ comatch end }} in
             )
         }
     }
+}
+
+#[macro_export]
+macro_rules! check_source {
+    ($name:ident, $source:expr) => {
+        #[test]
+        fn $name() {
+            $crate::utils::SourceLibrary::setup($source).check();
+        }
+    };
 }
 
 #[macro_export]

@@ -515,9 +515,9 @@ mod tests {
             .unwrap();
         let project = ProjectState::load(&path, &HashMap::new()).unwrap();
         let mut parameter = Url::from_file_path(&path).unwrap();
-        parameter.set_fragment(Some("L7"));
+        parameter.set_fragment(Some("L6"));
 
-        let short = project.hover(&path, Position::new(6, 7)).unwrap();
+        let short = project.hover(&path, Position::new(5, 7)).unwrap();
         let HoverContents::Markup(short) = short.contents else {
             panic!("type hover should use markup content")
         };
@@ -540,7 +540,7 @@ mod tests {
             )
         );
 
-        let long = project.hover(&path, Position::new(30, 7)).unwrap();
+        let long = project.hover(&path, Position::new(29, 7)).unwrap();
         let HoverContents::Markup(long) = long.contents else {
             panic!("type hover should use markup content")
         };

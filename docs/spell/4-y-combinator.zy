@@ -36,7 +36,7 @@ begin
 
   -- The standard-library term is an ordinary dependency. Opening its result
   -- establishes abstract Boolean, option, and list types in the lexical tail.
-  do (
+  let (
     Bool = StdBool,
     Option = StdOption,
     List = StdList,
@@ -45,7 +45,7 @@ begin
     String = StdString,
     OS = StdOS,
     std
-  ) <- ! std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
   begin
     def factorial_step : Thk (
       Thk (StdInt -> Ret StdInt) ->

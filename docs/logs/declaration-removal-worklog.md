@@ -538,8 +538,8 @@ resumes the selected closure with zero, one, or two arguments.
 This boundary supports comparison and split branches, string observation and conversion, I/O continuations,
 random integers, and the lazy argument fold without jumping out of a live Rust frame.
 
-`lib/std/std.zy` is the first ordinary standard-library term.
-It is a thunked package-dependent function from Builtin to a public value package.
+`lib/std/std.zy` is an ordinary standard-library term.
+It is a pure package-dependent function from Builtin to a public value package.
 The public signature uses manifest existential fields for the four host types, so clients receive transparent
 equations while the package remains self-describing. It also imports the Boolean, optional-value, and list
 components exactly once and re-exports their abstract type witnesses and operations.
@@ -791,7 +791,8 @@ A focused StackIR test checks the index directly, while the migrated addition pr
 closure-conversion and repeated-normalization pipeline.
 
 `lib/std/bool.zy`, `option.zy`, and `list.zy` establish the first reusable algebraic component boundaries.
-Each file returns a pure existential value package and keeps its constructors lexical to the provider.
+Each file is a pure package-dependent function that produces an existential value package and keeps its
+constructors lexical to the provider.
 The Boolean package exports introduction values, ordinary operations, and a computation-polymorphic `branch`.
 The other two packages abstract type constructors at kind `VType -> VType` and expose introduction functions
 plus one-layer eliminators. `List` is recursive, so this also verifies that a recursive type constructor can
@@ -827,13 +828,19 @@ explicit package telescope extends witness scope over the result.
 
 Block elaboration already lowers `param` to abstraction, `let` and `def` to scoped bindings, and `begin ... end` to
 its residual term. With the two pure classifiers available, those forms can now produce types and values directly as
-well as computations. `lib/std/monad.zy` is the representative migration: its Builtin parameter, transparent type
-definitions, and manifest result package no longer use an outer thunk or `ret`. Consumers apply it as a value and
-open the result with `let`; the exported monad operations remain computation-typed.
+well as computations. `lib/std/monad.zy`, the algebraic component modules, and the aggregate `lib/std/std.zy` use
+this boundary: their Builtin parameters, transparent type definitions, and result packages need no outer thunk or
+`ret`. Consumers apply each module as a value and open the result with `let`; exported operations remain
+computation-typed.
 
 Focused checks cover explicit and synthesized pure universals, package-dependent value application, nested
 existential escape rejection, monadic translation, interpreter erasure, Stack IR lowering, and a parameterized block
 that combines type definitions, value definitions, local bindings, and a pure package result.
+
+Checker-only library fixtures now end in the value or manifest package they expose. Their integration harness
+requires a value root and invokes only `zydeco check`; it neither supplies the executable contract nor evaluates the
+term. Focused static snippets likewise expose the type, value, package, or suspended computation under examination.
+Executable fixtures retain an exit only when its status represents an observed runtime assertion.
 
 ### Transparent and abstract interfaces remain explicit
 

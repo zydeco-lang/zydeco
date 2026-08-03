@@ -192,5 +192,8 @@ begin
   -- } end
 -- end module OS
 
-  ! exit 0
+  (
+    halt = halt,
+    panic = panic,
+  )
 end

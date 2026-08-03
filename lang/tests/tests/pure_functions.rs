@@ -34,7 +34,7 @@ fn synthesizes_a_pure_identity_function_and_application() {
 begin
   let identity = fn value -> value that
   let result = identity () that
-  ! exit 0
+  result
 end
 "#,
     );
@@ -47,7 +47,7 @@ fn checks_explicit_pure_function_types() {
 begin
   let identity : Unit -> Unit = fn (value : Unit) -> value that
   let result : Unit = identity () that
-  ! exit 0
+  result
 end
 "#,
     );
@@ -61,7 +61,7 @@ begin
   let apply = fn function -> function () that
   let identity = fn value -> value that
   let result = apply identity that
-  ! exit 0
+  result
 end
 "#,
     );
@@ -75,7 +75,7 @@ begin
   let forward = fn function -> function that
   let identity = forward (fn value -> value) that
   let result = identity () that
-  ! exit 0
+  result
 end
 "#,
     );
@@ -86,10 +86,10 @@ fn pure_functions_capture_their_lexical_environment() {
     PureFunctionCase::run(
         r#"
 begin
-  let captured : Unit = () that
-  let constant : Unit -> Unit = fn (_ : Unit) -> captured that
-  let result : Unit = constant () that
-  ! exit 0
+  let captured : Int = 0 that
+  let constant : Unit -> Int = fn (_ : Unit) -> captured that
+  let result : Int = constant () that
+  ! exit result
 end
 "#,
     );
@@ -101,7 +101,7 @@ fn pure_function_bodies_reject_computations() {
         r#"
 begin
   let invalid : Unit -> Unit = fn (_ : Unit) -> ret () that
-  ! exit 0
+  invalid
 end
 "#,
     );
@@ -115,7 +115,7 @@ begin
   let identity = fn value -> value that
   let first = identity () that
   let second = identity 0 that
-  ! exit 0
+  (first, second)
 end
 "#,
     );
@@ -127,7 +127,7 @@ fn rejects_an_unconstrained_pure_parameter() {
         r#"
 begin
   let ignore = fn value -> () that
-  ! exit 0
+  ignore
 end
 "#,
     );
@@ -140,7 +140,7 @@ fn rejects_pure_self_application_during_the_occurs_check() {
 begin
   let identity = fn value -> value that
   let result = identity identity that
-  ! exit 0
+  result
 end
 "#,
     );
@@ -153,8 +153,8 @@ fn synthesizes_a_pure_package_dependent_arrow() {
 begin
   let Box = exists (X : VType) . X that
   let unpack = fn ((X, value) : Box) -> value that
-  let unit : Unit = unpack (Unit, ()) that
-  ! exit 0
+  let result : Int = unpack (Int, 0) that
+  ! exit result
 end
 "#,
     );
@@ -171,9 +171,9 @@ begin
   let identity_thunk : forall (B : CType) . Thk B -> Thk B =
     fn (B : CType) -> fn (value : Thk B) -> value
   that
-  let unit : Unit = identity Unit () that
+  let status : Int = identity Int 0 that
   let top : Thk Top = identity_thunk Top triv that
-  ! exit 0
+  ! exit status
 end
 "#,
     );
@@ -199,9 +199,10 @@ begin
     end
   that
 
-  let (B, identity = identity, selected) = make (Unit, ()) that
+  let (B, identity = identity, selected) = make (Int, 0) that
   let result : B = identity selected that
-  ! exit 0
+  let status : Int = result that
+  ! exit status
 end
 "#,
     );
@@ -228,12 +229,12 @@ begin
       in
       let Box = exists (A : VType) . A in
       let unpack = fn ((A, value) : Box) -> value in
-      ret (identity Unit (unpack (Unit, ())))
+      ret (identity Int (unpack (Int, 0)))
     end
   that
 
-  do _ <- ! translated Ret { ! ret_monad };
-  ! exit 0
+  do status <- ! translated Ret { ! ret_monad };
+  ! exit status
 end
 "#,
     );
@@ -246,7 +247,7 @@ fn rejects_a_nested_existential_escape_from_a_pure_function() {
 begin
   let Nested = Unit * (exists (A : VType) . A) that
   let invalid = fn ((_, (A, value)) : Nested) -> value that
-  ! exit 0
+  invalid
 end
 "#,
     );

@@ -32,7 +32,6 @@ begin
       ! (api/exit) 1
     }
   that
-  let exit = api/exit that
 
   def LList' (A : VType) : VType =
     data
@@ -65,5 +64,5 @@ begin
     { ! panic "unreachable" }
   that
 
-  ! exit 0
+  (loopy = { ! loopy })
 end

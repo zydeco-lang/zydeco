@@ -1,10 +1,9 @@
 -- module List
-{
 param (
   (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
   @[import("builtin.zy")] _
 ) in
-ret begin
+begin
   def List (A : VType) : VType =
     data
     | +Nil : Unit
@@ -81,5 +80,4 @@ ret begin
     fold = fold,
   ) : Interface
 end
-}
 -- end module List

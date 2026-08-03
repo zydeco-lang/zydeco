@@ -3,17 +3,17 @@ begin
   let option = @[import("option.zy")] _ that
   let list = @[import("list.zy")] _ that
 
-  {
+  begin
     param (
       (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
       @[import("builtin.zy")] _
     ) in
-      do (Bool = Bool, bool_api) <-
-        ! bool (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
-      do (Option = Option, option_api) <-
-        ! option (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
-      do (List = List, list_api) <-
-        ! list (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api);
+      let (Bool = Bool, bool_api) =
+        bool (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
+      let (Option = Option, option_api) =
+        option (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
+      let (List = List, list_api) =
+        list (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
       let primitive_add = api/add in
       let primitive_int_eq = api/int_eq_branch in
       let primitive_int_lt = api/int_lt_branch in
@@ -257,7 +257,7 @@ begin
           (os :: OSModule PublicOption PublicList PublicInt PublicString PublicOS) *
           Unit
       in
-      ret ((
+      ((
         Bool = Bool,
         Option = Option,
         List = List,
@@ -323,5 +323,5 @@ begin
         ),
         (),
       ) : Public)
-  }
+  end
 end

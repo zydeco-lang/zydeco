@@ -219,6 +219,10 @@ erased before evaluation. Consequently, `param`, `let`, `def`, and `begin ... en
 package directly whenever their residual term is pure. Computation-producing packages continue to use the CBPV
 forms required by their effects.
 
+The standard-library components and their aggregate package use this pure boundary. Importing `bool.zy`,
+`option.zy`, `list.zy`, or `std.zy` yields a value-level package function; clients apply it and open its result with
+`let`. The operations exported inside those packages retain their computation types.
+
 ## Relative Monads and Monadic Blocks
 
 Relative monads are defined as codata in the standard library (see

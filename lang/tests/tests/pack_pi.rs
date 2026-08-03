@@ -52,7 +52,10 @@ begin
     pi ((OS, _) : Core) . OS
   that
 
-  ! exit 0
+  let Export =
+    exists (PublicBinary as Binary : CType) . Unit
+  that
+  (Binary, ()) : Export
 end
 "#,
     )
@@ -72,7 +75,10 @@ begin
     pi ((OS, _) : Core) . OS
   that
 
-  ! exit 0
+  let Export =
+    exists (PublicBinary as Binary : CType) . Unit
+  that
+  (Binary, ()) : Export
 end
 "#,
     )
@@ -94,7 +100,10 @@ begin
     pi ((A, OS, _) : Core) . A -> OS
   that
 
-  ! exit 0
+  let Export =
+    exists (PublicBinary as Binary : CType) . Unit
+  that
+  (Binary, ()) : Export
 end
 "#,
     )
@@ -114,7 +123,7 @@ begin
     pi ((OS, payload) : Core) . payload
   that
 
-  ! exit 0
+  ()
 end
 "#,
     );
@@ -139,8 +148,7 @@ begin
 
   def boxed : Box = (Int, 41) that
 
-  do value <- ! unbox boxed;
-  ! exit value
+  { ! unbox boxed }
 end
 "#,
     )
@@ -162,8 +170,7 @@ begin
 
   def boxed : Box = (Int, 41) that
 
-  do value <- ! unbox boxed;
-  ! exit value
+  { ! unbox boxed }
 end
 "#,
     )
@@ -191,8 +198,7 @@ begin
 
   def boxed : PairBox = (Int, Char, 41, 'z') that
 
-  do (value, _) <- ! unbox_pair boxed;
-  ! exit value
+  { ! unbox_pair boxed }
 end
 "#,
     )
@@ -230,8 +236,7 @@ begin
     { fn (value : Int) -> ret value },
   ) that
 
-  do status <- ! consume_twice boxed;
-  ! exit status
+  { ! consume_twice boxed }
 end
 "#,
     )
@@ -257,8 +262,7 @@ begin
 
   def boxed : Box = (Int, 41) that
 
-  do value <- ! unbox boxed;
-  ! exit value
+  { ! unbox boxed }
 end
 "#,
     )
@@ -288,7 +292,7 @@ begin
       ret 0
   } that
 
-  ! exit 0
+  hidden
 end
 "#,
     );
@@ -313,7 +317,7 @@ begin
     end
   } that
 
-  ! exit 0
+  translated
 end
 "#,
     )
@@ -347,7 +351,7 @@ begin
     end
   } that
 
-  ! exit 0
+  translated
 end
 "#,
     )
@@ -460,7 +464,7 @@ begin
     end
   } that
 
-  ! exit 0
+  translated
 end
 "#,
     )
@@ -489,7 +493,7 @@ begin
     end
   } that
 
-  ! exit 0
+  translated
 end
 "#,
     )
@@ -517,7 +521,7 @@ begin
     end
   } that
 
-  ! exit 0
+  translated
 end
 "#,
     )
@@ -576,16 +580,16 @@ begin
           ! execute value
       } in
       ! run (
-        Unit,
-        Ret Unit,
-        (),
-        { fn (_ : Unit) -> ret () },
+        Int,
+        Ret Int,
+        0,
+        { fn (value : Int) -> ret value },
       )
     end
   } that
 
-  do _ <- ! translated Ret { ! mo_ret };
-  ! exit 0
+  do status <- ! translated Ret { ! mo_ret };
+  ! exit status
 end
 "#,
     )

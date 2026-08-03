@@ -36,6 +36,16 @@ impl RepositorySourceFiles {
             .collect::<std::io::Result<Vec<_>>>()
             .map(|paths| paths.into_iter().flatten().collect())
     }
+
+    fn assert_pure_package(relative: impl AsRef<Path>) {
+        use zydeco_statics::tyck::syntax::{Fillable, TermAnnId, Type};
+
+        let checked = SourceDriver::check(repository_source(relative)).unwrap();
+        let TermAnnId::Value(_, root_type) = checked.root else {
+            panic!("expected a pure package value")
+        };
+        assert!(matches!(checked.statics.types_pre[&root_type], Fillable::Done(Type::VPackPi(_))));
+    }
 }
 
 impl SourceFixture {
@@ -1261,6 +1271,8 @@ fn foundational_argument_fold_preserves_sequence_without_constructing_list() {
 
 #[test]
 fn standard_library_package_composes_as_an_ordinary_imported_term() {
+    RepositorySourceFiles::assert_pure_package("std/std.zy");
+
     let root = repository_source("tests/std/minimal.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
     let mut input = std::io::empty();
@@ -1437,8 +1449,7 @@ fn recursive_nominal_types_port_to_a_declaration_free_block() {
 
 #[test]
 fn abstract_bool_package_exports_values_and_an_eliminator() {
-    let library = SourceDriver::check(repository_source("std/bool.zy")).unwrap();
-    assert!(matches!(library.root, zydeco_statics::tyck::syntax::TermAnnId::Value(_, _)));
+    RepositorySourceFiles::assert_pure_package("std/bool.zy");
 
     let root = repository_source("tests/std/bool.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
@@ -1459,8 +1470,7 @@ fn abstract_bool_package_exports_values_and_an_eliminator() {
 
 #[test]
 fn abstract_option_package_exports_a_type_constructor_and_an_eliminator() {
-    let library = SourceDriver::check(repository_source("std/option.zy")).unwrap();
-    assert!(matches!(library.root, zydeco_statics::tyck::syntax::TermAnnId::Value(_, _)));
+    RepositorySourceFiles::assert_pure_package("std/option.zy");
 
     let root = repository_source("tests/std/option.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
@@ -1481,8 +1491,7 @@ fn abstract_option_package_exports_a_type_constructor_and_an_eliminator() {
 
 #[test]
 fn abstract_list_package_exports_case_analysis_and_a_recursive_fold() {
-    let library = SourceDriver::check(repository_source("std/list.zy")).unwrap();
-    assert!(matches!(library.root, zydeco_statics::tyck::syntax::TermAnnId::Value(_, _)));
+    RepositorySourceFiles::assert_pure_package("std/list.zy");
 
     let root = repository_source("tests/std/list.zy");
     let dynamics = SourceDriver::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
@@ -1837,13 +1846,13 @@ fn algebra_translation_exec_example_uses_the_lexical_library_basis() {
 }
 
 #[test]
-fn generated_exception_transformer_uses_lexical_types_in_a_monadic_block() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/oopsla/exnt.zydeco");
+fn generated_exception_transformer_exports_a_pure_package() {
+    RepositorySourceFiles::assert_pure_package("tests/oopsla/exnt.zydeco");
 }
 
 #[test]
-fn generated_continuation_exception_transformer_uses_lexical_types_in_a_monadic_block() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/oopsla/exnkt.zydeco");
+fn generated_continuation_exception_transformer_exports_a_pure_package() {
+    RepositorySourceFiles::assert_pure_package("tests/oopsla/exnkt.zydeco");
 }
 
 #[test]

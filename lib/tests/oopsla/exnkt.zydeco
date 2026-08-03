@@ -155,6 +155,9 @@ begin
     end
   that
 
-  ! (api/exit) 0
+  (
+    generated = { ! mt_exnk },
+    manual = { ! mt_exnk_manual },
+  )
 end
 end
