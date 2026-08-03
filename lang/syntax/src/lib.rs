@@ -120,57 +120,6 @@ impl std::fmt::Display for IntrinsicRole {
     }
 }
 
-/// A decoded `intrinsic(role)` splice annotation.
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct IntrinsicMeta {
-    pub role: IntrinsicRole,
-}
-
-impl IntrinsicMeta {
-    pub fn new(role: IntrinsicRole) -> Self {
-        Self { role }
-    }
-
-    pub fn decode(meta: &Meta) -> Result<Option<Self>, IntrinsicMetaError> {
-        match meta {
-            | Meta::Intrinsic(meta) => Ok(Some(*meta)),
-            | Meta::Ident(callee) if callee == "intrinsic" => {
-                Err(IntrinsicMetaError::RoleArity { found: 0 })
-            }
-            | Meta::Apply { callee, args } if callee == "intrinsic" => match args.as_slice() {
-                | [Meta::Ident(role)] => IntrinsicRole::from_source_name(role)
-                    .map(Self::new)
-                    .map(Some)
-                    .ok_or_else(|| IntrinsicMetaError::UnknownRole(role.clone())),
-                | [_] => Err(IntrinsicMetaError::RoleNotIdentifier),
-                | args => Err(IntrinsicMetaError::RoleArity { found: args.len() }),
-            },
-            | Meta::Ident(_) | Meta::String(_) | Meta::Apply { .. } | Meta::Builtin(_) => Ok(None),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum IntrinsicMetaError {
-    RoleArity { found: usize },
-    RoleNotIdentifier,
-    UnknownRole(String),
-}
-
-impl std::fmt::Display for IntrinsicMetaError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            | Self::RoleArity { found } => {
-                write!(f, "intrinsic expects one role identifier, but found {found} arguments")
-            }
-            | Self::RoleNotIdentifier => write!(f, "intrinsic role must be an identifier"),
-            | Self::UnknownRole(role) => write!(f, "unknown intrinsic role `{role}`"),
-        }
-    }
-}
-
-impl std::error::Error for IntrinsicMetaError {}
-
 /// Compiler-defined roles for host-provided abstract types in the Builtin
 /// package signature.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -402,67 +351,23 @@ impl std::fmt::Display for BuiltinRole {
     }
 }
 
-/// A decoded Builtin role annotation.
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct BuiltinMeta {
-    pub role: BuiltinRole,
-}
-
-impl BuiltinMeta {
-    pub fn new(role: BuiltinRole) -> Self {
-        Self { role }
-    }
-
-    /// Decode `builtin(role)` while leaving unrelated metadata untouched.
-    pub fn decode(meta: &Meta) -> Result<Option<Self>, BuiltinMetaError> {
-        match meta {
-            | Meta::Builtin(meta) => Ok(Some(*meta)),
-            | Meta::Ident(callee) if callee == "builtin" => {
-                Err(BuiltinMetaError::RoleArity { found: 0 })
-            }
-            | Meta::Apply { callee, args } if callee == "builtin" => match args.as_slice() {
-                | [Meta::Ident(role)] => BuiltinRole::from_source_name(role)
-                    .map(Self::new)
-                    .map(Some)
-                    .ok_or_else(|| BuiltinMetaError::UnknownRole(role.clone())),
-                | [_] => Err(BuiltinMetaError::RoleNotIdentifier),
-                | args => Err(BuiltinMetaError::RoleArity { found: args.len() }),
-            },
-            | Meta::Ident(_) | Meta::String(_) | Meta::Apply { .. } | Meta::Intrinsic(_) => {
-                Ok(None)
-            }
-        }
-    }
-}
-
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum BuiltinMetaError {
-    RoleArity { found: usize },
-    RoleNotIdentifier,
-    UnknownRole(String),
-}
-
-impl std::fmt::Display for BuiltinMetaError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            | Self::RoleArity { found } => {
-                write!(f, "builtin expects one role identifier, but found {found} arguments")
-            }
-            | Self::RoleNotIdentifier => write!(f, "builtin role must be an identifier"),
-            | Self::UnknownRole(role) => write!(f, "unknown builtin role `{role}`"),
-        }
-    }
-}
-
-impl std::error::Error for BuiltinMetaError {}
-
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum Meta {
     Ident(String),
     String(String),
     Apply { callee: String, args: Vec<Meta> },
-    Intrinsic(IntrinsicMeta),
-    Builtin(BuiltinMeta),
+}
+
+/// Assigns a downstream, typed meaning to structurally parsed metadata.
+///
+/// The syntax crate recognizes only a callee and recursively structured
+/// arguments. Implementors choose a callee name and validate its arguments
+/// without adding concrete annotation variants to [`Meta`].
+pub trait SpecializeMeta: Sized {
+    const NAME: &'static str;
+    type Error;
+
+    fn from_arguments(arguments: &[Meta]) -> Result<Self, Self::Error>;
 }
 
 impl Meta {
@@ -478,27 +383,17 @@ impl Meta {
         Self::Apply { callee: callee.into(), args: args.into_iter().collect() }
     }
 
-    pub fn builtin(role: BuiltinRole) -> Self {
-        Self::Builtin(BuiltinMeta::new(role))
-    }
-
-    pub fn intrinsic(role: IntrinsicRole) -> Self {
-        Self::Intrinsic(IntrinsicMeta::new(role))
-    }
-
     pub fn callee(&self) -> Option<&str> {
         match self {
             | Self::Ident(name) | Self::Apply { callee: name, .. } => Some(name),
             | Self::String(_) => None,
-            | Self::Intrinsic(_) => Some("intrinsic"),
-            | Self::Builtin(_) => Some("builtin"),
         }
     }
 
     pub fn arguments(&self) -> &[Self] {
         match self {
             | Self::Apply { args, .. } => args,
-            | Self::Ident(_) | Self::String(_) | Self::Intrinsic(_) | Self::Builtin(_) => &[],
+            | Self::Ident(_) | Self::String(_) => &[],
         }
     }
 
@@ -509,57 +404,22 @@ impl Meta {
     pub fn as_string(&self) -> Option<&str> {
         match self {
             | Self::String(value) => Some(value),
-            | Self::Ident(_) | Self::Apply { .. } | Self::Intrinsic(_) | Self::Builtin(_) => None,
+            | Self::Ident(_) | Self::Apply { .. } => None,
         }
     }
 
     pub fn as_ident(&self) -> Option<&str> {
         match self {
             | Self::Ident(value) => Some(value),
-            | Self::String(_) | Self::Apply { .. } | Self::Intrinsic(_) | Self::Builtin(_) => None,
+            | Self::String(_) | Self::Apply { .. } => None,
         }
     }
 
-    pub fn as_intrinsic(&self) -> Option<IntrinsicRole> {
-        match self {
-            | Self::Intrinsic(meta) => Some(meta.role),
-            | Self::Ident(_) | Self::String(_) | Self::Apply { .. } | Self::Builtin(_) => None,
-        }
-    }
-
-    pub fn as_builtin(&self) -> Option<BuiltinRole> {
-        match self {
-            | Self::Builtin(meta) => Some(meta.role),
-            | Self::Ident(_) | Self::String(_) | Self::Apply { .. } | Self::Intrinsic(_) => None,
-        }
-    }
-}
-
-/// The typed meaning of a `@[doc]` or `@[doc(...)]` annotation.
-///
-/// Arguments remain ordinary metadata values so documentation renderers can
-/// define presentation policies without extending the surface parser.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct DocMeta {
-    pub arguments: Vec<Meta>,
-}
-
-impl DocMeta {
-    pub fn new(arguments: impl IntoIterator<Item = Meta>) -> Self {
-        Self { arguments: arguments.into_iter().collect() }
-    }
-
-    /// Decode documentation metadata while leaving unrelated metadata untouched.
-    pub fn decode(meta: &Meta) -> Option<Self> {
-        match meta {
-            | Meta::Ident(callee) if callee == "doc" => Some(Self::new([])),
-            | Meta::Apply { callee, args } if callee == "doc" => Some(Self::new(args.clone())),
-            | Meta::Ident(_)
-            | Meta::String(_)
-            | Meta::Apply { .. }
-            | Meta::Intrinsic(_)
-            | Meta::Builtin(_) => None,
-        }
+    pub fn specialize<S>(&self) -> Result<Option<S>, S::Error>
+    where
+        S: SpecializeMeta,
+    {
+        if self.is(S::NAME) { S::from_arguments(self.arguments()).map(Some) } else { Ok(None) }
     }
 }
 
@@ -573,8 +433,6 @@ impl std::fmt::Display for Meta {
                 "{callee}({})",
                 args.iter().map(ToString::to_string).collect::<Vec<_>>().join(",")
             ),
-            | Self::Intrinsic(meta) => write!(f, "intrinsic({})", meta.role),
-            | Self::Builtin(meta) => write!(f, "builtin({})", meta.role),
         }
     }
 }

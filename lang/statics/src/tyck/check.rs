@@ -10,6 +10,7 @@ use {
         surface_syntax::{PrimDefs, ScopedArena, SpanArena},
         *,
     },
+    zydeco_surface::metadata::BuiltinMeta,
     zydeco_utils::prelude::{ArenaAccess, IdAllocator},
 };
 
@@ -2304,8 +2305,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
             | Tm::Meta(term) => {
                 let su::MetaT(meta, term) = term;
                 let res = self.mk(term).tyck_k(tycker, Action::switch(switch))?;
-                if let Some(role) = meta.as_builtin() {
-                    BuiltinAttachment::new(role, res).register_k(tycker, &self.info)?;
+                if let Some(meta) = meta
+                    .specialize::<BuiltinMeta>()
+                    .expect("builtin metadata is validated during desugaring")
+                {
+                    BuiltinAttachment::new(meta.role, res).register_k(tycker, &self.info)?;
                 }
                 if meta.is("debug") {
                     print!("[debug printing] ");

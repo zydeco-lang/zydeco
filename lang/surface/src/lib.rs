@@ -3,6 +3,9 @@ pub mod arena {
     pub use zydeco_utils::arena::*;
 }
 
+/// Typed interpretations of structurally parsed metadata annotations.
+pub mod metadata;
+
 /// Defines common syntax in the surface language
 pub mod syntax;
 

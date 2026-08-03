@@ -1,9 +1,10 @@
 use crate::{
     bitter::{syntax as b, *},
+    metadata::{BuiltinMeta, IntrinsicMeta},
     textual::syntax as t,
 };
 use derive_more::{AsMut, AsRef};
-use zydeco_syntax::{BuiltinMeta, IntrinsicMeta, IntrinsicRole, Meta, SpanView};
+use zydeco_syntax::{IntrinsicRole, SpanView};
 use zydeco_utils::prelude::{Allocates, ArenaId, CompilerPass, IdAllocator};
 
 /// Desugar a textual node into bitter syntax using a shared `Desugarer`.
@@ -334,7 +335,7 @@ impl Desugar for t::TermId {
         let res = match term {
             | Tm::Meta(term) => {
                 let t::MetaT(meta, term) = term;
-                match IntrinsicMeta::decode(&meta) {
+                match meta.specialize::<IntrinsicMeta>() {
                     | Ok(Some(meta)) => {
                         if !matches!(desugarer.lookup_term(term), Tm::Hole(_)) {
                             return Err(DesugarError::IntrinsicPayloadNotHole(
@@ -351,16 +352,15 @@ impl Desugar for t::TermId {
                         });
                     }
                 }
-                let meta = match BuiltinMeta::decode(&meta) {
-                    | Ok(Some(meta)) => Meta::Builtin(meta),
-                    | Ok(None) => meta,
+                match meta.specialize::<BuiltinMeta>() {
+                    | Ok(Some(_)) | Ok(None) => {}
                     | Err(source) => {
                         return Err(DesugarError::InvalidBuiltinMeta {
                             term: self.span(desugarer.spans).clone().make(self),
                             source,
                         });
                     }
-                };
+                }
                 let term = term.desugar(desugarer)?;
                 Alloc::alloc(desugarer, b::MetaT(meta, term).into(), self.into())
             }

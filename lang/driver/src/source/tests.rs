@@ -398,7 +398,7 @@ fn source_graph_rejects_an_unknown_builtin_role() {
     assert!(matches!(
         error,
         zydeco_surface::textual::BuiltinDirectiveError::Invalid {
-            source: zydeco_syntax::BuiltinMetaError::UnknownRole(_),
+            source: zydeco_surface::metadata::BuiltinMetaError::UnknownRole(_),
             ..
         }
     ));
@@ -416,7 +416,7 @@ fn source_graph_rejects_a_roleless_intrinsic_splice() {
     assert!(matches!(
         error,
         zydeco_surface::textual::IntrinsicDirectiveError::Invalid {
-            source: zydeco_syntax::IntrinsicMetaError::RoleArity { found: 0 },
+            source: zydeco_surface::metadata::IntrinsicMetaError::RoleArity { found: 0 },
             ..
         }
     ));
@@ -444,7 +444,7 @@ fn program_assembly_consumes_import_directives_and_preserves_a_source_boundary()
 }
 
 #[test]
-fn builtin_roles_remain_typed_through_name_resolution() {
+fn builtin_roles_remain_specializable_through_name_resolution() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "@[builtin(int)] _");
     let assembly = SourceGraph::load(root).unwrap().assemble().unwrap();
@@ -453,11 +453,11 @@ fn builtin_roles_remain_typed_through_name_resolution() {
     let zydeco_surface::scoped::syntax::Term::Meta(zydeco_syntax::MetaT(meta, payload)) =
         &resolved.arena.terms[&resolved.root]
     else {
-        panic!("expected a typed Builtin metadata term")
+        panic!("expected a Builtin metadata term")
     };
 
     assert_eq!(
-        meta.as_builtin(),
+        meta.specialize::<zydeco_surface::metadata::BuiltinMeta>().unwrap().map(|meta| meta.role),
         Some(zydeco_syntax::BuiltinRole::Type(zydeco_syntax::BuiltinTypeRole::Int))
     );
     assert!(matches!(resolved.arena.terms[payload], zydeco_surface::scoped::syntax::Term::Hole(_)));

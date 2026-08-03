@@ -1,10 +1,13 @@
-use crate::textual::{
-    arena::TextualScope,
-    syntax::{
-        Ann, Appli, Block, BuiltinMetaError, BuiltinRole, BuiltinTypeRole, CoPatId, ContextBind,
-        DefId, DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists, Hole, IntrinsicMeta,
-        IntrinsicMetaError, IntrinsicRole, Label, Literal, ManifestParameter, Meta, MetaT, Named,
-        Param, Paren, Parser, PatId, Pattern, Placement, Prod, Proj, SourceUnit, Term, TermId,
+use crate::{
+    metadata::{BuiltinMetaError, IntrinsicMeta, IntrinsicMetaError},
+    textual::{
+        arena::TextualScope,
+        syntax::{
+            Ann, Appli, Block, BuiltinRole, BuiltinTypeRole, CoPatId, ContextBind, DefId,
+            DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists, Hole, IntrinsicRole,
+            Label, Literal, ManifestParameter, Meta, MetaT, Named, Param, Paren, Parser, PatId,
+            Pattern, Placement, Prod, Proj, SourceUnit, Term, TermId,
+        },
     },
 };
 use zydeco_utils::{arena::IdAllocator, span::LocationCtx};
@@ -481,7 +484,7 @@ fn parses_manifest_existential_with_an_inferred_classifier() {
 
     assert_eq!(parser.arena.defs[binder].plain(), "VType");
     assert_eq!(
-        IntrinsicMeta::decode(meta).unwrap().map(|meta| meta.role),
+        meta.specialize::<IntrinsicMeta>().unwrap().map(|meta| meta.role),
         Some(IntrinsicRole::VType)
     );
     assert!(classifier.is_none());

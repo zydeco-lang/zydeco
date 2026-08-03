@@ -1,5 +1,6 @@
 use super::lexer::{LexicalToken, LexicalTokenKind, LexicalTokens};
 use super::syntax::*;
+use crate::metadata::{BuiltinMeta, BuiltinMetaError, DocMeta, IntrinsicMeta, IntrinsicMetaError};
 use std::{ops::Range, path::PathBuf};
 use thiserror::Error;
 
@@ -198,7 +199,9 @@ impl DocumentationSite {
         term: TermId, meta: &Meta, payload: TermId, spans: &SpanArena,
         comments: &DocumentationComments<'_>,
     ) -> Option<Self> {
-        let meta = DocMeta::decode(meta)?;
+        let meta = meta
+            .specialize::<DocMeta>()
+            .expect("documentation metadata specialization is infallible")?;
         let span = spans[&EntityId::Term(term)].clone();
         let (start, _) = span.get_cursor1();
         let comment = comments.preceding(start);
@@ -294,7 +297,7 @@ impl BuiltinSite {
     fn decode(
         term: TermId, meta: &Meta, payload: TermId, spans: &SpanArena,
     ) -> Option<Result<Self, BuiltinDirectiveError>> {
-        match BuiltinMeta::decode(meta) {
+        match meta.specialize::<BuiltinMeta>() {
             | Ok(Some(meta)) => {
                 let span = spans[&EntityId::Term(term)].clone();
                 Some(Ok(Self {
@@ -316,7 +319,7 @@ impl IntrinsicSite {
     fn decode(
         term: TermId, meta: &Meta, payload: TermId, arena: &TextArena, spans: &SpanArena,
     ) -> Option<Result<Self, IntrinsicDirectiveError>> {
-        match IntrinsicMeta::decode(meta) {
+        match meta.specialize::<IntrinsicMeta>() {
             | Ok(Some(meta)) => {
                 let span = spans[&EntityId::Term(term)].clone();
                 Some(if matches!(arena.terms[&payload], Term::Hole(Hole)) {

@@ -23,6 +23,9 @@ resolution.
 - `SourceUnit` identifies the single complete term in one source file. It
   decodes typed metadata directives attached to holes and collects `@[doc]`
   attachments for arbitrary terms without assigning them a presentation.
+- Parsed `Meta` values remain structural across the syntax arenas. Concrete
+  interpretations live in `zydeco_surface::metadata`, implement
+  `SpecializeMeta`, and are requested explicitly by the phases that consume them.
 - `SpanArena` stores `Span` values for every textual entity so later phases can
   report precise locations; it is storage-only and retains no ID allocator.
 - `Parser` combines `TextArena` and `SpanArena` and is passed through the

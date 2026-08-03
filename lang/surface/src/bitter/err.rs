@@ -1,7 +1,7 @@
 use super::syntax as b;
+use crate::metadata::{BuiltinMetaError, IntrinsicMetaError};
 use crate::textual::syntax as t;
 use thiserror::Error;
-use zydeco_syntax::{BuiltinMetaError, IntrinsicMetaError};
 use zydeco_utils::span::Sp;
 
 #[derive(Error, Debug, Clone)]
