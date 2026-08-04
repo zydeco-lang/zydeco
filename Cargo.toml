@@ -75,6 +75,7 @@ serde_json = "1.0"
 toml = "1.1"
 toml_edit = "0.25"
 # parallelism
+salsa = "0.26.2"
 # logging
 log = "0.4"
 env_logger = "0.11"

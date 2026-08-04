@@ -24,6 +24,8 @@ derive_more = { workspace = true, features = ["display", "from"] }
 thiserror = { workspace = true }
 ariadne = { workspace = true }
 sculptor = { workspace = true }
+dashmap = { workspace = true }
+salsa = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
 

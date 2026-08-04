@@ -1,9 +1,11 @@
 use crate::source::{ImportCycle, ImportCycleStep, SourceLoadError};
 use std::{
     collections::{HashMap, HashSet},
+    ops::Deref,
     path::{Path, PathBuf},
+    sync::Arc,
 };
-use zydeco_surface::textual::{DocumentationSite, syntax as t};
+use zydeco_surface::textual::{DocumentationSite, ImportSite, syntax as t};
 use zydeco_utils::prelude::{ArenaDense, ArenaSchema, DepGraph};
 
 zydeco_utils::new_key_type! {
@@ -22,8 +24,9 @@ impl ArenaSchema<SourceImportId> for SourceGraphScope {
     type Item = SourceImport;
 }
 
+/// Parsed contents shared by every fresh occurrence of one canonical source file.
 #[derive(Debug)]
-pub struct SourceFile {
+pub struct SourceTemplate {
     pub path: PathBuf,
     pub source: String,
     pub hash: String,
@@ -31,7 +34,22 @@ pub struct SourceFile {
     pub arena: t::TextArena,
     pub unit: t::SourceUnit,
     pub documentation: Vec<DocumentationSite>,
+    pub import_sites: Vec<ImportSite>,
+}
+
+/// One source-graph node referring to a shared parsed template.
+#[derive(Debug)]
+pub struct SourceFile {
+    pub template: Arc<SourceTemplate>,
     pub imports: Vec<SourceImportId>,
+}
+
+impl Deref for SourceFile {
+    type Target = SourceTemplate;
+
+    fn deref(&self) -> &Self::Target {
+        &self.template
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -80,8 +98,11 @@ impl SourceGraph {
         root: impl AsRef<Path>, overrides: &HashMap<PathBuf, String>,
         progress: impl FnMut(SourceLoadProgress),
     ) -> Result<Self, SourceLoadError> {
-        super::loader::SourceGraphLoader::with_overrides(overrides, progress)
-            .load_root(root.as_ref())
+        super::loader::SourceGraphLoader::with_provider(
+            super::loader::FilesystemSourceProvider::with_overrides(overrides),
+            progress,
+        )
+        .load_root(root.as_ref())
     }
 
     pub fn provider_order(&self) -> Vec<SourceId> {

@@ -12,6 +12,33 @@ use zydeco_surface::textual::{
 };
 use zydeco_utils::span::Span;
 
+/// A deterministic source-template error suitable for memoized parsing.
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+pub enum SourceParseError {
+    #[error("cannot lex source `{}`: {message}", path.display())]
+    Lex { path: PathBuf, message: String },
+    #[error("cannot parse source `{}`: {message}", path.display())]
+    Parse { path: PathBuf, message: String },
+    #[error("invalid source directive in `{}`: {error}", path.display())]
+    Directive {
+        path: PathBuf,
+        #[source]
+        error: ImportDirectiveError,
+    },
+    #[error("invalid Builtin directive in `{}`: {error}", path.display())]
+    BuiltinDirective {
+        path: PathBuf,
+        #[source]
+        error: BuiltinDirectiveError,
+    },
+    #[error("invalid intrinsic directive in `{}`: {error}", path.display())]
+    IntrinsicDirective {
+        path: PathBuf,
+        #[source]
+        error: IntrinsicDirectiveError,
+    },
+}
+
 #[derive(Debug, Error)]
 pub enum SourceLoadError {
     #[error("cannot resolve root source `{}`: {source}", path.display())]
@@ -64,7 +91,23 @@ pub enum SourceLoadError {
     Cycle(#[from] ImportCycle),
 }
 
-#[derive(Debug, Error)]
+impl From<SourceParseError> for SourceLoadError {
+    fn from(error: SourceParseError) -> Self {
+        match error {
+            | SourceParseError::Lex { path, message } => Self::Lex { path, message },
+            | SourceParseError::Parse { path, message } => Self::Parse { path, message },
+            | SourceParseError::Directive { path, error } => Self::Directive { path, error },
+            | SourceParseError::BuiltinDirective { path, error } => {
+                Self::BuiltinDirective { path, error }
+            }
+            | SourceParseError::IntrinsicDirective { path, error } => {
+                Self::IntrinsicDirective { path, error }
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Error)]
 pub enum ProgramAssemblyError {
     #[error("source `{}` has no import edge for term {term:?}", path.display())]
     MissingImport { path: PathBuf, term: zydeco_surface::textual::syntax::TermId },
