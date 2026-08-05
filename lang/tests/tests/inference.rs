@@ -1,5 +1,4 @@
-use zydeco_driver::{BuildError, check::err::CompileError};
-use zydeco_tests::utils::SourceCase;
+use zydeco_tests::utils::{CaseError, SourceCase};
 
 struct InferenceCase;
 
@@ -12,11 +11,9 @@ impl InferenceCase {
         Self::assert_type_result(SourceCase::check(source));
     }
 
-    fn assert_type_result(result: Result<(), BuildError>) {
+    fn assert_type_result(result: Result<(), CaseError>) {
         match result {
-            | Err(BuildError::CompileError(
-                CompileError::TyckErrorReports { .. } | CompileError::TyckErrors(_),
-            )) => {}
+            | Err(error) if error.is_type_error() => {}
             | Ok(()) => panic!("expected a type error, but the program was accepted"),
             | Err(error) => panic!("expected a type error, found: {error:?}"),
         }

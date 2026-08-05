@@ -8,4 +8,4 @@ edition = "2021"
 [dependencies]
 yew = { version = "0.21", features = ["csr"] }
 web-sys = "0.3"
-zydeco-driver = { workspace = true }
+zydeco-session = { workspace = true }

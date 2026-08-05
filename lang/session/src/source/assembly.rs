@@ -1,10 +1,8 @@
 use crate::source::{ProgramAssemblyError, SourceGraph, SourceId};
-use std::{collections::HashMap, path::PathBuf};
 use zydeco_surface::textual::syntax as t;
 use zydeco_utils::span::Span;
 
 pub struct ProgramAssembly {
-    pub sources: HashMap<PathBuf, String>,
     pub spans: t::SpanArena,
     pub arena: t::TextArena,
     pub unit: t::SourceUnit,
@@ -28,14 +26,8 @@ impl<'graph> ProgramAssembler<'graph> {
 
     fn assemble(mut self) -> Result<ProgramAssembly, ProgramAssemblyError> {
         let root = self.term(self.graph.root, self.graph.sources[&self.graph.root].unit.root)?;
-        let sources = self
-            .graph
-            .sources
-            .iter()
-            .map(|(_, source)| (source.path.clone(), source.source.clone()))
-            .collect();
         let (spans, arena) = self.parser.finish();
-        Ok(ProgramAssembly { sources, spans, arena, unit: t::SourceUnit { root } })
+        Ok(ProgramAssembly { spans, arena, unit: t::SourceUnit { root } })
     }
 
     fn span(&self, source: SourceId, entity: t::EntityId) -> Span {

@@ -381,7 +381,6 @@ impl Substitute<SubstAssignments> for Computation<NonJoin> {
         //     let doc = assignments.pretty(&fmt);
         //     let mut buf = String::new();
         //     doc.render_fmt(100, &mut buf).unwrap();
-        //     // log::trace!("assignments:\n{}", buf);
         // }
 
         // Beta reduction of assignments over computation.

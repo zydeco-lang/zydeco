@@ -12,7 +12,18 @@ description = "Command-line interface for the Zydeco programming language"
 
 [dependencies]
 clap = { workspace = true }
-zydeco-driver = { workspace = true }
+zydeco-session = { workspace = true }
+zydeco-syntax = { workspace = true }
+zydeco-surface = { workspace = true }
+zydeco-statics = { workspace = true }
+zydeco-dynamics = { workspace = true }
+zydeco-stackir = { workspace = true }
+zydeco-assembly = { workspace = true }
+zydeco-amd64 = { workspace = true }
+zydeco-llvm = { workspace = true }
+zydeco-utils = { workspace = true }
+ariadne = { workspace = true }
+thiserror = { workspace = true }
 
 [build-dependencies]
 clap = { workspace = true }

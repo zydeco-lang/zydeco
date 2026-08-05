@@ -3,7 +3,10 @@ use {
     super::{
         arena::StaticsScope,
         env::{MonadicTypeBasis, TyEnv},
-        syntax::{AbstId, AnnId, FillId, Fillable, PatAnnId, StaticsArena, TermAnnId, TyEnvT},
+        syntax::{
+            AbstId, AnnId, FillId, Fillable, InferenceSite, PatAnnId, StaticsArena, TermAnnId,
+            TyEnvT,
+        },
         *,
     },
     crate::{
@@ -34,24 +37,24 @@ pub struct Tycker<'a> {
     pub metas: im::Vector<su::Meta>,
     /// a writer monad for error handling
     pub errors: Vec<TyckErrorEntry>,
-    hole_solution_output: HoleSolutionOutput,
+    observations: Vec<TyckObservation>,
 }
 
 pub type TyckReports =
     Vec<ariadne::Report<'static, (zydeco_utils::span::PathDisplay, std::ops::Range<usize>)>>;
 
-/// How a type-checking run exposes inferred solutions for source holes.
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
-pub enum HoleSolutionOutput {
-    #[default]
-    Stdout,
-    Silent,
+/// A source-directed observation produced during type checking.
+#[derive(Clone, Debug)]
+pub enum TyckObservation {
+    HoleSolution { site: InferenceSite, solution: Option<AnnId> },
+    Debug { metadata: zydeco_syntax::Meta, result: TermAnnId },
 }
 
 /// The typed result of checking one complete source term.
 pub struct CheckedSource {
     pub statics: StaticsArena,
     pub root: TermAnnId,
+    pub observations: Vec<TyckObservation>,
 }
 
 /// A failed source check together with the static facts established before
@@ -59,6 +62,7 @@ pub struct CheckedSource {
 pub struct RejectedSource {
     pub statics: StaticsArena,
     pub reports: TyckReports,
+    pub observations: Vec<TyckObservation>,
 }
 
 /// The recoverable result of checking one complete source term.
@@ -282,14 +286,8 @@ impl<'a> Tycker<'a> {
             tasks: im::Vector::new(),
             metas: im::Vector::new(),
             errors: Vec::new(),
-            hole_solution_output: HoleSolutionOutput::default(),
+            observations: Vec::new(),
         }
-    }
-
-    /// Select how inferred source-hole solutions are exposed by this run.
-    pub fn with_hole_solution_output(mut self, output: HoleSolutionOutput) -> Self {
-        self.hole_solution_output = output;
-        self
     }
 
     #[track_caller]
@@ -346,12 +344,18 @@ impl<'a> Tycker<'a> {
     /// Check a source while retaining static facts from a rejected term.
     pub fn check_source_outcome(mut self, root: su::TermId) -> SourceCheckOutcome {
         match self.run_source_k(root) {
-            | Ok(root) => {
-                SourceCheckOutcome::Checked(CheckedSource { statics: self.statics, root })
-            }
+            | Ok(root) => SourceCheckOutcome::Checked(CheckedSource {
+                statics: self.statics,
+                root,
+                observations: self.observations,
+            }),
             | Err(()) => {
                 let reports = self.error_reports();
-                SourceCheckOutcome::Rejected(RejectedSource { statics: self.statics, reports })
+                SourceCheckOutcome::Rejected(RejectedSource {
+                    statics: self.statics,
+                    reports,
+                    observations: self.observations,
+                })
             }
         }
     }
@@ -359,8 +363,7 @@ impl<'a> Tycker<'a> {
     fn finish_check_k(&mut self) -> ResultKont<()> {
         // before we go, resolve all holes with solutions (including nested ones)
         self.do_resolve_holes();
-        // and also, print all hole solutions as a reference for the user
-        self.do_print_hole_solutions();
+        self.collect_hole_solutions();
         // normalize all kinds
         {
             let kind_ids: Vec<_> =
@@ -417,51 +420,13 @@ impl<'a> Tycker<'a> {
             self.statics.types_pre.replace_existing(id, ty);
         }
     }
-    /// Print all hole solutions as a reference for the user.
-    #[inline]
-    pub fn do_print_hole_solutions(&self) {
-        if self.hole_solution_output == HoleSolutionOutput::Silent {
-            return;
-        }
-        if self.statics.fill_hints.len() > 0 {
-            println!("Hole Solutions:");
-        }
-        for (id, ()) in &self.statics.fill_hints {
-            let site = self.statics.fills[id];
-            let site_text = {
-                use zydeco_surface::scoped::fmt::*;
-                match site {
-                    | ss::InferenceSite::Term(term) => term.ugly(&Formatter::new(self.scoped)),
-                    | ss::InferenceSite::Pattern(pattern) => {
-                        pattern.ugly(&Formatter::new(self.scoped))
-                    }
-                }
-            };
-            let site_span = {
-                use zydeco_syntax::*;
-                match site {
-                    | ss::InferenceSite::Term(term) => term.span(self),
-                    | ss::InferenceSite::Pattern(pattern) => pattern.span(self),
-                }
-            };
-            let site_solu = match self.statics.solus.get(id) {
-                | Some(ann) => {
-                    use super::fmt::*;
-                    ann.ugly(&Formatter::new(self.scoped, &self.statics))
-                }
-                | None => "???".to_string(),
-            };
-            println!(
-                "{} {} {} : {}",
-                site_text,
-                {
-                    use colored::Colorize;
-                    "@".green()
-                },
-                site_span,
-                site_solu
-            );
-        }
+    fn collect_hole_solutions(&mut self) {
+        self.observations.extend(self.statics.fill_hints.iter().map(|(id, ())| {
+            TyckObservation::HoleSolution {
+                site: self.statics.fills[id],
+                solution: self.statics.solus.get(id).copied(),
+            }
+        }));
     }
 }
 
@@ -1284,19 +1249,6 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
 
     fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
         let PatternAction { switch, skolems } = action;
-        // // Debug: print
-        // {
-        //     use colored::Colorize;
-        //     use zydeco_surface::scoped::fmt::*;
-        //     println!("{}", "=".repeat(80));
-        //     println!(
-        //         "\t{}",
-        //         &tycker.scoped.ctxs_pat_local[&self.inner].ugly(&Formatter::new(&tycker.scoped))
-        //     );
-        //     println!("   {}\t{}", "|-".green(), self.inner.ugly(&Formatter::new(&tycker.scoped)));
-        //     println!("{}", "=".repeat(80));
-        //     println!();
-        // }
         use su::Pattern as Pat;
         let elaboration = match tycker.scoped.pats[&self.inner].clone() {
             | Pat::Ann(pat) => {
@@ -2199,39 +2151,6 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
     fn tyck_inner_k(
         &self, tycker: &mut Tycker<'a>, Action { mut switch }: Self::Action,
     ) -> ResultKont<Self::Out> {
-        // // Debug: print
-        // {
-        //     use zydeco_surface::scoped::fmt::*;
-        //     println!("{}", "=".repeat(80));
-        //     // use colored::Colorize;
-        //     // println!(
-        //     //     "\t{}",
-        //     //     &tycker.scoped.coctxs_term_local[&self.inner].ugly(&Formatter::new(&tycker.scoped))
-        //     // );
-        //     // println!("   {}\t{}", "-|".green(), self.inner.ugly(&Formatter::new(&tycker.scoped)));
-
-        //     use zydeco_syntax::SpanView;
-        //     println!(
-        //         "{} @ ({})",
-        //         self.inner.ugly(&Formatter::new(&tycker.scoped)),
-        //         self.inner.span(tycker)
-        //     );
-        //     match switch {
-        //         | Switch::Syn => {
-        //             println!("\t>> (syn)")
-        //         }
-        //         | Switch::Ana(ana) => {
-        //             use crate::fmt::*;
-        //             println!(
-        //                 "\t>> (ana: {})",
-        //                 ana.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
-        //             )
-        //         }
-        //     }
-        //     println!("{}", "=".repeat(80));
-        //     println!();
-        // }
-
         // check if we're analyzing against an unfilled type
         match switch {
             | Switch::Syn => {}
@@ -2277,29 +2196,6 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
         }
         // the switch should contain no unfilled from here on
 
-        // // Debug: print
-        // {
-        //     use zydeco_surface::scoped::fmt::*;
-        //     use zydeco_syntax::SpanView;
-        //     println!(
-        //         "{} @ ({})",
-        //         self.inner.ugly(&Formatter::new(&tycker.scoped)),
-        //         self.inner.span(tycker)
-        //     );
-        //     match switch {
-        //         | Switch::Syn => {
-        //             println!("\t>> (syn)")
-        //         }
-        //         | Switch::Ana(ana) => {
-        //             use crate::fmt::*;
-        //             println!(
-        //                 "\t>> (ana: {})",
-        //                 ana.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
-        //             )
-        //         }
-        //     }
-        // }
-
         use su::Term as Tm;
         let out_ann = match tycker.scoped.terms[&self.inner].to_owned() {
             | Tm::Meta(term) => {
@@ -2312,39 +2208,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     BuiltinAttachment::new(meta.role, res).register_k(tycker, &self.info)?;
                 }
                 if meta.is("debug") {
-                    print!("[debug printing] ");
-                    for argument in meta.arguments() {
-                        print!("{argument}");
-                    }
-                    match res {
-                        | TermAnnId::Hole(fill) => {
-                            println!(" (hole): {}", fill.concise());
-                        }
-                        | TermAnnId::Kind(kind) => {
-                            println!(" (kind): {}", tycker.pretty_statics(kind));
-                        }
-                        | TermAnnId::Type(ty, kd) => {
-                            println!(
-                                " (type):{}\nof kind:{}",
-                                tycker.pretty_statics_nested(ty, "\t"),
-                                tycker.pretty_statics_nested(kd, "\t"),
-                            );
-                        }
-                        | TermAnnId::Value(val, ty) => {
-                            println!(
-                                " (value):{}\nof type:{}",
-                                tycker.pretty_statics_nested(val, "\t"),
-                                tycker.pretty_statics_nested(ty, "\t"),
-                            );
-                        }
-                        | TermAnnId::Compu(compu, ty) => {
-                            println!(
-                                " (computation):{}\nof type:{}",
-                                tycker.pretty_statics_nested(compu, "\t"),
-                                tycker.pretty_statics_nested(ty, "\t"),
-                            );
-                        }
-                    }
+                    tycker
+                        .observations
+                        .push(TyckObservation::Debug { metadata: meta, result: res });
                 }
                 res
             }
@@ -3435,18 +3301,6 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         },
                                     }
                                 };
-                                // // Debug: print
-                                // {
-                                //     use crate::fmt::*;
-                                //     println!(
-                                //         "Applying\n\t{}\nwith\n\t{}\ngetting\n\t{}\n\n",
-                                //         f_ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
-                                //         _a_ty
-                                //             .ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
-                                //         ty_out
-                                //             .ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
-                                //     );
-                                // }
                                 let app =
                                     Alloc::alloc(tycker, ss::App(f_out, a_out), ty_out, &self.info);
                                 TermAnnId::Compu(app, ty_out)
@@ -3465,15 +3319,6 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 let payload = binder.pattern.bind_argument_k(tycker, a_ty)?;
                                 let body_ty_subst =
                                     ty_body.subst_abst_k(tycker, (binder.witness, payload))?;
-                                // // Debug: print
-                                // {
-                                //     println!(
-                                //         "Substituting\n\t{}\nwith\n\t{}\ngetting\n\t{}\n\n",
-                                //         tycker.dump_statics(f_ty),
-                                //         tycker.dump_statics(a_ty),
-                                //         tycker.dump_statics(body_ty_subst),
-                                //     );
-                                // }
                                 let ty_out = {
                                     match switch {
                                         | Switch::Syn => body_ty_subst,
@@ -4328,15 +4173,6 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     &self.info,
                 );
 
-                // // Debug: print
-                // {
-                //     println!("{}", ">".repeat(40));
-                //     println!("{}", tycker.pretty_statics(body));
-                //     println!("{}", "=".repeat(40));
-                //     println!("{}", tycker.pretty_statics(res_body));
-                //     println!("{}", "<".repeat(40));
-                // }
-
                 TermAnnId::Compu(res_body, res_body_ty)
             }
             | Tm::Data(term) => {
@@ -4795,46 +4631,13 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
             tycker.statics.terms.ensure(self.inner, out);
 
             // check if the term is global
-            let coctx = tycker.scoped.coctxs_term_local[&self.inner].to_owned();
-
-            let mut non_global = Vec::new();
-            for def in coctx.into_iter() {
-                if tycker.statics.global_defs.get(&def).is_none() {
-                    non_global.push(def);
-                }
-            }
-            let global = non_global.is_empty();
-            // // a better way to check if the term is global
-            // let global = 'out: {
-            //     for (def, ()) in coctx.into_iter() {
-            //         if !tycker.statics.global_defs.get(&def).is_some() {
-            //             break 'out false;
-            //         }
-            //     }
-            //     true
-            // };
+            let global = tycker.scoped.coctxs_term_local[&self.inner]
+                .iter()
+                .all(|def| tycker.statics.global_defs.get(def).is_some());
 
             if global {
                 tycker.statics.global_terms.ensure(out);
             }
-            // if !global {
-            //     // Debug: print
-            //     {
-            //         println!(
-            //             "non-global term: {}",
-            //             tycker.dump_statics(out)
-            //         );
-            //         println!(
-            //             "non-global defs: {}",
-            //             non_global
-            //                 .iter()
-            //                 .map(|def| tycker.dump_statics(def))
-            //                 .collect::<Vec<_>>()
-            //                 .join(", ")
-            //         );
-            //         println!();
-            //     }
-            // }
         }
 
         Ok(out_ann)

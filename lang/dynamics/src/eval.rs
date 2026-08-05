@@ -147,13 +147,6 @@ impl<'rt> Eval<'rt> for Value {
                 panic!("Hole in value")
             }
             | Value::Var(var) => {
-                // // Debug: print
-                // {
-                //     for (def, _) in runtime.env.iter() {
-                //         println!("\t{}", runtime.arena.defs[def]);
-                //     }
-                //     println!("==> {}", runtime.arena.defs[&var]);
-                // }
                 Step::Done(runtime.env.get(&var).expect("variable does not exist").clone())
             }
             | Value::Let(Let { binder, bindee, tail }) => {

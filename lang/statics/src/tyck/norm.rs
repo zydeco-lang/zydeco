@@ -279,13 +279,7 @@ impl TypeId {
                         | AnnId::Set | AnnId::Kind(_) => {
                             tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?
                         }
-                        | AnnId::Type(with) => {
-                            // // Debug: print
-                            // {
-                            //     println!("[var] {} -> {}", tycker.dump_statics(def), tycker.dump_statics(with));
-                            // }
-                            *with
-                        }
+                        | AnnId::Type(with) => *with,
                     },
                     | None => *self,
                 },
@@ -449,23 +443,7 @@ impl TypeId {
                     }
                 }
                 | Type::Data(id) => {
-                    // // Debug: print
-                    // {
-                    //     println!("{}", ">".repeat(20));
-                    //     println!("target: {}", tycker.dump_statics(id));
-                    //     println!("{}", "=".repeat(20));
-                    //     for (def, ty) in env.iter() {
-                    //         println!("{} := {}", tycker.dump_statics(def), tycker.dump_statics(ty));
-                    //     }
-                    //     println!("{}", "-".repeat(20));
-                    // }
                     let arms = tycker.statics.datas[&id].clone();
-                    // // Debug: print
-                    // {
-                    //     for (ctor, ty) in arms.iter() {
-                    //         println!("{} : {}", tycker.dump_statics(ctor), tycker.dump_statics(ty));
-                    //     }
-                    // }
                     // let mut unchanged = true;
                     let arms_ = arms
                         .into_iter()
@@ -484,24 +462,7 @@ impl TypeId {
                     //     *self
                     // } else
                     {
-                        // // Debug: print
-                        // {
-                        //     for (ctor, ty_) in arms_.iter() {
-                        //         println!("{}", "-".repeat(20));
-                        //         println!(
-                        //             "{} : {}",
-                        //             tycker.dump_statics(ctor),
-                        //             tycker.dump_statics(ty_)
-                        //         );
-                        //     }
-                        // }
                         let id_ = tycker.statics.datas.alloc(Data::new(arms_));
-                        // // Debug: print
-                        // {
-                        //     println!("{}", "-".repeat(20));
-                        //     println!("{}", tycker.dump_statics(id_));
-                        //     println!("{}", "<".repeat(20));
-                        // }
                         Alloc::alloc(tycker, id_, kd, env)
                     }
                 }

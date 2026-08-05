@@ -33,15 +33,11 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
         }
         'zydeco;run' {
             [CompletionResult]::new('--dry', '--dry', [CompletionResultType]::ParameterName, 'Dry run (don''t execute)')
-            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Level of verbosity')
-            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Level of verbosity')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
         'zydeco;check' {
-            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Level of verbosity')
-            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Level of verbosity')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -49,19 +45,15 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
         'zydeco;build' {
             [CompletionResult]::new('--target-os', '--target-os', [CompletionResultType]::ParameterName, 'Target OS (defaults to host OS)')
             [CompletionResult]::new('--target-arch', '--target-arch', [CompletionResultType]::ParameterName, 'Target architecture (defaults to host architecture)')
-            [CompletionResult]::new('-t', '-t', [CompletionResultType]::ParameterName, 'Target backend (zir, zasm, asm, llvm, exe, llvm-exe)')
-            [CompletionResult]::new('--target', '--target', [CompletionResultType]::ParameterName, 'Target backend (zir, zasm, asm, llvm, exe, llvm-exe)')
+            [CompletionResult]::new('-t', '-t', [CompletionResultType]::ParameterName, 'Target backend')
+            [CompletionResult]::new('--target', '--target', [CompletionResultType]::ParameterName, 'Target backend')
             [CompletionResult]::new('-b', '-b', [CompletionResultType]::ParameterName, 'Build Directory')
             [CompletionResult]::new('--build-dir', '--build-dir', [CompletionResultType]::ParameterName, 'Build Directory')
             [CompletionResult]::new('-r', '-r', [CompletionResultType]::ParameterName, 'Runtime directory')
             [CompletionResult]::new('--runtime-dir', '--runtime-dir', [CompletionResultType]::ParameterName, 'Runtime directory')
-            [CompletionResult]::new('--link-existing', '--link-existing', [CompletionResultType]::ParameterName, 'Skip dumping assembly and only link existing files')
             [CompletionResult]::new('-x', '-x', [CompletionResultType]::ParameterName, 'Run the program after building')
             [CompletionResult]::new('--execute', '--execute', [CompletionResultType]::ParameterName, 'Run the program after building')
-            [CompletionResult]::new('--dry', '--dry', [CompletionResultType]::ParameterName, 'Dry run (don''t execute)')
             [CompletionResult]::new('--no-cps', '--no-cps', [CompletionResultType]::ParameterName, 'Skip CPS translation in the StackIR pipeline')
-            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Level of verbosity')
-            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Level of verbosity')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break

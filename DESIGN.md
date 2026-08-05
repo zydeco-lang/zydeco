@@ -180,10 +180,16 @@ representation.
 
 Every Zydeco source file contains exactly one complete term. Imports are typed
 metadata on holes, such as `@[import("library.zy")] _`, rather than namespace
-operations. The driver discovers a file dependency graph, orders providers
+operations. A compiler session discovers a file dependency graph, orders providers
 before their consumers, and substitutes a freshly cloned provider term at each
-import occurrence. A source boundary around each clone prevents free names and
+import occurrence. Parsed templates are memoized by source input, while each assembled
+occurrence remains fresh. A source boundary around each clone prevents free names and
 mobile block bindings from crossing the file boundary.
+
+The session owns revisioned source inputs and immutable frontend analysis results shared by
+the CLI and language server. Lowering schedules live with Stack IR and assembly, while the
+CLI owns diagnostic rendering, native tool invocation, runtime packaging, and process policy.
+This boundary keeps editor analysis independent of executable-building concerns.
 
 Libraries use ordinary term abstractions and package types. Transparent
 definitions travel through products and manifest package signatures; abstract

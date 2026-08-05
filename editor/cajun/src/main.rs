@@ -9,8 +9,6 @@ struct Arguments;
 #[tokio::main]
 async fn main() {
     Arguments::parse();
-    env_logger::init();
-
     let (service, socket) = LspService::build(Cajun::new).finish();
 
     let stdin = tokio::io::stdin();

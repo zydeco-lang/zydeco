@@ -144,8 +144,6 @@ extern "sysv64" fn zydeco_abort() -> ! {
 extern "sysv64" fn zydeco_alloc(size: usize) -> *mut u8 {
     HEAP.with(|heap| {
         HEAP_SIZE.with(|heap_size| unsafe {
-            #[cfg(feature = "log_rt")]
-            log::trace!("[zydeco_alloc]");
             let heap_ptr = *heap.get();
             let heap_size_ptr = heap_size.get();
             let ptr = heap_ptr.add(*heap_size_ptr);
@@ -156,13 +154,6 @@ extern "sysv64" fn zydeco_alloc(size: usize) -> *mut u8 {
             );
             *heap_size_ptr += size * 8;
             assert!(*heap_size_ptr <= BUFFER_SIZE, "Zydeco heap exhausted");
-            #[cfg(feature = "log_rt")]
-            log::trace!(
-                "[zydeco_alloc] ptr: {:p}, heap_ptr: {:p}, heap_size: 0x{:x}",
-                ptr,
-                heap_ptr,
-                *heap_size_ptr
-            );
             ptr
         })
     })
@@ -281,16 +272,12 @@ extern "sysv64" fn zydeco_str_split_n_branch(
 
 #[unsafe(export_name = "\x01zydeco_read_line")]
 extern "sysv64" fn zydeco_read_line(continuation: Word) -> Word {
-    #[cfg(feature = "log_rt")]
-    log::trace!("[zydeco_read_line]");
     let line = Input::line();
     ControlTransfer::with_one_argument(continuation, HostString::leak(line))
 }
 
 #[unsafe(export_name = "\x01zydeco_read_line_as_int")]
 extern "sysv64" fn zydeco_read_line_as_int(continuation: Word) -> Word {
-    #[cfg(feature = "log_rt")]
-    log::trace!("[zydeco_read_line_as_int]");
     let integer = Input::line().parse::<i64>().expect("invalid integer");
     ControlTransfer::with_one_argument(continuation, integer as Word)
 }
@@ -376,18 +363,10 @@ fn init_buffer() -> *mut u8 {
 }
 
 fn main() {
-    #[cfg(feature = "log_rt")]
-    env_logger::init();
-    #[cfg(feature = "log_rt")]
-    log::trace!("[main]");
     ENV.with(|environment| {
-        HEAP.with(|heap| unsafe {
+        unsafe {
             let environment = *environment.get();
-            let _heap = *heap.get();
-            #[cfg(feature = "log_rt")]
-            log::trace!("[environment: {:p}, heap: {:p}]", environment, _heap);
-            let output = entry(environment);
-            println!("{output}");
-        })
+            entry(environment);
+        }
     });
 }

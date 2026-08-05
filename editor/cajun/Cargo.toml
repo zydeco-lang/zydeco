@@ -14,9 +14,8 @@ zydeco-utils = { workspace = true }
 zydeco-syntax = { workspace = true }
 zydeco-surface = { workspace = true }
 zydeco-statics = { workspace = true }
-zydeco-driver = { workspace = true }
+zydeco-session = { workspace = true }
 clap = { workspace = true }
-env_logger = { workspace = true }
 tokio = { workspace = true }
 tower-lsp = { workspace = true }
 

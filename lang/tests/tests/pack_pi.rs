@@ -1,5 +1,4 @@
-use zydeco_driver::{BuildError, check::err::CompileError};
-use zydeco_tests::utils::SourceCase;
+use zydeco_tests::utils::{CaseError, SourceCase};
 
 struct PackPiCase;
 
@@ -16,23 +15,21 @@ def mo_ret : Thk (Monad Ret) = {
 } that
 "#;
 
-    fn check(source: &str) -> Result<(), BuildError> {
+    fn check(source: &str) -> Result<(), CaseError> {
         SourceCase::check(source)
     }
 
-    fn check_monadic(source: &str) -> Result<(), BuildError> {
+    fn check_monadic(source: &str) -> Result<(), CaseError> {
         SourceCase::check_monadic(source)
     }
 
-    fn run(source: &str) -> Result<(), BuildError> {
+    fn run(source: &str) -> Result<(), CaseError> {
         SourceCase::run_monadic(&format!("begin\n{}\n{}\nend", Self::RET_MONAD, source))
     }
 
     fn assert_type_error(source: &str) {
         match Self::check(source) {
-            | Err(BuildError::CompileError(
-                CompileError::TyckErrorReports { .. } | CompileError::TyckErrors(_),
-            )) => {}
+            | Err(error) if error.is_type_error() => {}
             | Ok(()) => panic!("expected a type error, but the program was accepted"),
             | Err(error) => panic!("expected a type error, found: {error:?}"),
         }

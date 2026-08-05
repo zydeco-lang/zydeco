@@ -1,4 +1,3 @@
-use zydeco_driver::{BuildError, check::err::CompileError};
 use zydeco_tests::utils::SourceCase;
 
 struct PureFunctionCase;
@@ -18,9 +17,7 @@ impl PureFunctionCase {
 
     fn assert_type_error(source: &str) {
         match SourceCase::check(source) {
-            | Err(BuildError::CompileError(
-                CompileError::TyckErrorReports { .. } | CompileError::TyckErrors(_),
-            )) => {}
+            | Err(error) if error.is_type_error() => {}
             | Ok(()) => panic!("expected a type error, but the program was accepted"),
             | Err(error) => panic!("expected a type error, found: {error:?}"),
         }

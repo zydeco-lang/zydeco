@@ -61,26 +61,26 @@ _zydeco() {
             return 0
             ;;
         zydeco__build)
-            opts="-t -b -r -x -v -h --target-os --target-arch --target --build-dir --runtime-dir --link-existing --execute --dry --no-cps --verbose --help <FILE>"
+            opts="-t -b -r -x -h --target-os --target-arch --target --build-dir --runtime-dir --execute --no-cps --help <FILE>"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 --target-os)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "linux macos" -- "${cur}"))
                     return 0
                     ;;
                 --target-arch)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "x86-64 aarch64" -- "${cur}"))
                     return 0
                     ;;
                 --target)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "zir zasm asm llvm exe llvm-exe" -- "${cur}"))
                     return 0
                     ;;
                 -t)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "zir zasm asm llvm exe llvm-exe" -- "${cur}"))
                     return 0
                     ;;
                 --build-dir)
@@ -107,7 +107,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__check)
-            opts="-v -h --verbose --help <FILE>"
+            opts="-h --help <FILE>"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -191,7 +191,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__run)
-            opts="-v -h --dry --verbose --help <FILE> [ARGS]..."
+            opts="-h --dry --help <FILE> [ARGS]..."
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0

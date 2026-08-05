@@ -154,6 +154,17 @@ where
     marker: PhantomData<fn() -> (Scope, Id)>,
 }
 
+impl<Scope, Id> Clone for ArenaDense<Scope, Id>
+where
+    Id: ArenaId,
+    Scope: ArenaSchema<Id>,
+    Scope::Item: Clone,
+{
+    fn clone(&self) -> Self {
+        Self { key_space: self.key_space, arena: self.arena.clone(), marker: PhantomData }
+    }
+}
+
 /// Sparse owning storage for externally issued IDs.
 /// Allocation belongs to the pass that owns the appropriate [`IdAllocator`].
 #[derive(Debug, Index, IntoIterator)]
@@ -166,6 +177,17 @@ where
     #[into_iterator(owned, ref)]
     map: HashMap<Id, Scope::Item>,
     marker: PhantomData<fn() -> Scope>,
+}
+
+impl<Scope, Id> Clone for ArenaSparse<Scope, Id>
+where
+    Id: ArenaId,
+    Scope: ArenaSchema<Id>,
+    Scope::Item: Clone,
+{
+    fn clone(&self) -> Self {
+        Self { map: self.map.clone(), marker: PhantomData }
+    }
 }
 
 /// An arena that maps keys of externally-owned data to their properties.

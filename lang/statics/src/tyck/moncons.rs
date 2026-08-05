@@ -932,19 +932,6 @@ where
         let (env, abs) = abs.mbuild(tycker, env)?;
         let abs_ty = tycker.statics.annotations_compu[&abs];
         let Some((binder, body_ty)) = abs_ty.destruct_forall_binder(tycker) else { unreachable!() };
-        // Fixme: is this necessary?
-        // let (env, abst, body_ty) = match env.subst_abst.get(&abst).cloned() {
-        //     | Some(new) => {
-        //         log::warn!(
-        //             "abst hit: {} -> {}",
-        //             tycker.dump_statics(abst),
-        //             tycker.dump_statics(new)
-        //         );
-        //         let (env, new_abst) = new.mbuild(tycker, env)?;
-        //         (env, abst, body_ty.subst_abst(tycker, (abst, new_abst))?)
-        //     }
-        //     | None => (env, abst, body_ty),
-        // };
         let (env, arg) = arg.mbuild(tycker, env)?;
         // Todo: check if the substitution is necessary
         // let arg = arg.subst_env(tycker, &env.ty)?;

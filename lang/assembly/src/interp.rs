@@ -84,12 +84,8 @@ impl Eval for Terminator {
     type Output = Output;
     fn eval(self, interp: &mut Interpreter) -> Result<Self::Output, Error> {
         match self {
-            | Terminator::Jump(Jump(prog)) => {
-                log::trace!("jump: {:?}", prog);
-                prog.eval(interp)
-            }
+            | Terminator::Jump(Jump(prog)) => prog.eval(interp),
             | Terminator::PopJump(PopJump) => {
-                log::trace!("popjump");
                 let value = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 let Value::Atom(Atom::Sym(sym)) = value else {
                     Err(Error::TypeError(format!("expected symbol, got {:?}", value)))?
@@ -101,7 +97,6 @@ impl Eval for Terminator {
                 prog.eval(interp)
             }
             | Terminator::LeapJump(LeapJump) => {
-                log::trace!("leapjmp");
                 let kept = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 let address = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 interp.runtime.stack.push(kept);
@@ -115,7 +110,6 @@ impl Eval for Terminator {
                 prog.eval(interp)
             }
             | Terminator::PopBranch(PopBranch(arms)) => {
-                log::trace!("popbranch");
                 let value = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 let Value::Tag(tag) = value else {
                     Err(Error::TypeError(format!("expected tag, got {:?}", value)))?
@@ -124,7 +118,7 @@ impl Eval for Terminator {
                 arm.1.eval(interp)
             }
             | Terminator::Extern(Extern { name, arity, mode }) => {
-                log::trace!("extern: {:?}, {:?}, {:?}", name, arity, mode);
+                let _ = (name, arity, mode);
                 todo!()
             }
             | Terminator::Abort(Abort) => todo!(),
@@ -137,7 +131,6 @@ impl Eval for Instruction {
     fn eval(self, interp: &mut Interpreter) -> Result<Self::Output, Error> {
         match self {
             | Instruction::PackProduct(Pack(layout)) => {
-                log::trace!("packproduct: {:?}", layout);
                 let pointer = interp.runtime.heap.len();
                 for index in 0..layout.elements {
                     let value = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
@@ -170,7 +163,6 @@ impl Eval for Instruction {
                 Ok(())
             }
             | Instruction::UnpackProduct(Unpack(layout)) => {
-                log::trace!("unpackproduct: {:?}", layout);
                 let value = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 let Value::Pointer(pointer) = value else {
                     Err(Error::TypeError(format!("expected pointer, got {:?}", value)))?
@@ -194,30 +186,24 @@ impl Eval for Instruction {
                 Ok(())
             }
             | Instruction::PushContext(Push(ContextMarker)) => {
-                log::trace!("pushcontext");
                 todo!()
             }
             | Instruction::PopContext(Pop(ContextMarker)) => {
-                log::trace!("popcontext");
                 todo!()
             }
             | Instruction::AllocContext(Alloc(ContextMarker)) => {
-                log::trace!("alloccontext");
                 todo!()
             }
             | Instruction::PushArg(Push(atom)) => {
-                log::trace!("pusharg: {:?}", atom);
                 interp.runtime.stack.push(Value::Atom(atom));
                 Ok(())
             }
             | Instruction::PopArg(Pop(var)) => {
-                log::trace!("poparg: {:?}", var);
                 let value = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 interp.runtime.context.insert(var, value);
                 Ok(())
             }
             | Instruction::PushTag(Push(tag)) => {
-                log::trace!("pushtag: {:?}", tag);
                 interp.runtime.stack.push(Value::Tag(tag));
                 Ok(())
             }
@@ -227,7 +213,6 @@ impl Eval for Instruction {
                 todo!()
             }
             | Instruction::Swap(Swap) => {
-                log::trace!("swap");
                 let a = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 let b = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 interp.runtime.stack.push(b);
@@ -235,7 +220,6 @@ impl Eval for Instruction {
                 Ok(())
             }
             | Instruction::Clear(context) => {
-                log::trace!("clear: {:?}", context);
                 for var in context {
                     interp.runtime.context.remove(&var);
                 }

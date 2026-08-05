@@ -19,26 +19,6 @@ pub enum TargetFormat {
     MachO,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct EmitDiagnostics {
-    dump_instruction_scc_graph: bool,
-}
-
-impl EmitDiagnostics {
-    pub const fn new() -> Self {
-        Self { dump_instruction_scc_graph: false }
-    }
-
-    pub const fn with_instruction_scc_graph(mut self, enabled: bool) -> Self {
-        self.dump_instruction_scc_graph = enabled;
-        self
-    }
-
-    pub const fn dump_instruction_scc_graph(self) -> bool {
-        self.dump_instruction_scc_graph
-    }
-}
-
 pub trait Emit<'a> {
     type Env;
     fn emit(&self, env: Self::Env, em: &mut Emitter);
@@ -57,7 +37,6 @@ pub struct Emitter<'e> {
     pub asm: AsmFile,
 
     target_format: TargetFormat,
-    diagnostics: EmitDiagnostics,
     tables: Vec<JumpTable>,
     visited: HashSet<ProgId>,
 }
@@ -75,15 +54,9 @@ impl<'e> Emitter<'e> {
             assembly,
             asm: AsmFile::default(),
             target_format,
-            diagnostics: EmitDiagnostics::new(),
             tables: Vec::new(),
             visited: HashSet::new(),
         }
-    }
-
-    pub fn with_diagnostics(mut self, diagnostics: EmitDiagnostics) -> Self {
-        self.diagnostics = diagnostics;
-        self
     }
 }
 
@@ -167,37 +140,6 @@ impl<'e> CompilerPass for Emitter<'e> {
         let (entry, ()) = self.assembly.entry.iter().next().unwrap();
         entry.emit((), &mut self);
 
-        if self.diagnostics.dump_instruction_scc_graph() {
-            use std::fmt::Write;
-            let mut buf = String::new();
-            let mut scc = zydeco_utils::graph::Kosaraju::new(&self.assembly.deps).run();
-            let mut count = 0;
-            writeln!(&mut buf, "instruction SCC graph:").unwrap();
-            loop {
-                let query = scc.top().into_iter().flatten().collect::<Vec<_>>();
-                for prog in query.iter() {
-                    if let Some(label) = self.assembly.prog_label(prog) {
-                        writeln!(&mut buf, "{}:", label).unwrap();
-                    }
-                    let mut buf_doc = String::new();
-                    use zydeco_assembly::fmt::*;
-                    let fmter = Formatter::new(self.assembly, None, None);
-                    let doc = match &self.assembly.programs[prog] {
-                        | Program::Terminator(terminator) => terminator.pretty(&fmter),
-                        | Program::Instruction(instruction, _) => instruction.pretty(&fmter),
-                    };
-                    doc.render_fmt(usize::MAX, &mut buf_doc).unwrap();
-                    writeln!(&mut buf, "{} - {}", count, buf_doc).unwrap();
-                    count += 1;
-                }
-                if query.is_empty() {
-                    break;
-                } else {
-                    scc.release(query);
-                }
-            }
-            log::trace!("{}", buf);
-        }
         // Emit the named blocks
         for (prog_id, _) in &self.assembly.programs {
             if let Some(label) = self.assembly.prog_label(prog_id) {
@@ -642,25 +584,6 @@ impl<'a> Emit<'a> for Atom {
                     var_name.plain(),
                     var_id.concise()
                 )));
-                // log::trace!("varmap: {{ {} }}", {
-                //     env.0
-                //         .iter()
-                //         .map(|(var_id, idx)| {
-                //             format!(
-                //                 "{}{}={}",
-                //                 em.assembly.variables[var_id].plain(),
-                //                 var_id.concise(),
-                //                 idx
-                //             )
-                //         })
-                //         .collect::<Vec<_>>()
-                //         .join(", ")
-                // });
-                // log::trace!("instrs:");
-                // for instr in em.asm.text.iter() {
-                //     log::trace!("\t{}", instr);
-                // }
-                // log::trace!("var: {}{}", var_name.plain(), var_id.concise());
                 let idx = em.assembly.contexts[&id]
                     .iter()
                     .position(|var| var == var_id)

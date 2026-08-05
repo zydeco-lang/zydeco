@@ -962,10 +962,6 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
                         (env, alloc)
                     }
                     | None => {
-                        // log::warn!(
-                        //     "carrier translation of {} may leak",
-                        //     tycker.dump_statics(abst)
-                        // );
                         let alloc = Alloc::alloc(tycker, abst, kd, &env.ty);
                         (env, alloc)
                     }

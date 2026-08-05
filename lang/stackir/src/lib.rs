@@ -10,6 +10,9 @@ pub mod arena;
 pub mod builtin;
 pub use builtin::*;
 
+mod pipeline;
+pub use pipeline::{CpsMode, OptimizationPipeline};
+
 /// Deep cloning of nodes in stack IR.
 pub mod clone;
 

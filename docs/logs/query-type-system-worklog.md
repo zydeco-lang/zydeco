@@ -1,7 +1,7 @@
 # Query Type-System Worklog
 
-Status: active; the first coarse-grained query slice is complete and editor integration is underway,
-2026-08-03.
+Status: active; the shared session boundary, CLI migration, and editor integration are complete,
+2026-08-05. Finer-grained static queries remain future work.
 
 ## Objective
 
@@ -16,7 +16,7 @@ not expose unresolved metavariables, local skolems, mutable compiler inputs, or 
 
 ## Starting Position
 
-The source driver already records two useful dependency structures. `SourceGraph` represents canonical source files
+The original source driver already recorded two useful dependency structures. `SourceGraph` represents source files
 and their import edges, while each scoped `BindingContext` retains the condensation DAG of one `begin` block. These
 graphs answer different questions and will remain separate: source queries discover and instantiate files, while
 static queries order definitions and recursive components inside one term.
@@ -111,13 +111,14 @@ those observations will become diagnostics or trace events rendered by the CLI a
 - [x] Preserve partial static facts when checking reports type errors.
 - [x] Test reuse after no changes, unrelated-file edits, root edits, and imported-provider edits.
 
-This stage is intentionally compatible with the existing `SourceDriver`. Native lowering and execution continue to
-consume owned pipeline values until frozen query results have a suitable lowering interface.
+This stage now has no compatibility driver. `zydeco-session` owns source composition and frontend analysis;
+an owned `ExecutableProgram` is the explicit handoff to consumers that perform mutable lowering.
 
 ### 1. Integrate a durable editor database
 
 - [x] Give Cajun one long-lived database rather than rebuilding a project for each request.
 - [x] Route open-document overrides through source-text input setters.
+- [x] Allow overlay-only roots and imports before files exist on disk.
 - [x] Restore a cached disk input when its editor override closes.
 - [ ] Refresh cached disk inputs when watched files change outside the editor.
 - [x] Keep a consistent query snapshot for each editor request.
@@ -128,8 +129,8 @@ consume owned pipeline values until frozen query results have a suitable lowerin
 
 - [ ] Replace `Tycker`'s mutable scoped input with an immutable scoped view and a synthetic-definition output arena.
 - [ ] Separate immutable checker dependencies from mutable inference state.
-- [ ] Replace checker printing with returned diagnostic and trace values.
-- [ ] Introduce an explicit `freeze` operation and a frozen whole-program result.
+- [x] Replace checker printing with returned typed observations.
+- [x] Publish an immutable whole-program analysis and an owned lowering handoff.
 - [ ] Prevent `FillId` and local skolem identities from escaping the frozen result.
 - [ ] Adapt statics formatting and downstream inspection through a semantic facade.
 
@@ -155,8 +156,8 @@ consume owned pipeline values until frozen query results have a suitable lowerin
 
 - [ ] Normalize only closed frozen types and kinds.
 - [ ] Replace direct `types_normalized` indexing with semantic-model accessors.
-- [ ] Route hover, semantic tokens, definition lookup, and diagnostics through query-backed indexes.
-- [ ] Give lowering a frozen checked-program view without mutable access to query inputs.
+- [x] Route hover, semantic tokens, and definition lookup through query-owned analysis.
+- [x] Give lowering a frozen checked-program view without mutable access to query inputs.
 - [ ] Retire the eager whole-arena normalization pass after all consumers use the semantic facade.
 
 ## Validation Strategy
@@ -186,11 +187,11 @@ will wait until query-local mutation and deterministic result ordering are estab
   diagnostics, block SCC representation, lowering consumers, and Cajun's rebuild behavior.
 - Chose a coarse root analysis query as the compatibility boundary and per-file parsing as the first reusable query.
 - Chose Salsa for database revisions, memoization, on-demand inputs, cancellation support, and future interning.
-- Registered Salsa at the workspace level and added a `CompilerDatabase` with canonical, on-demand source inputs.
+- Registered Salsa at the workspace level and added a `CompilerSession` with canonical, on-demand source inputs.
 - Split `SourceTemplate` from `SourceFile`. Parsed text, spans, syntax, documentation, and import sites are shared by
   canonical path, while graph assembly still freshens every import occurrence before name resolution.
 - Added memoized parsing, root graph, and root analysis queries. The analysis query runs `Tycker` as a private local
-  transaction, silences hole-printing side effects, and publishes an owned `SourceAnalysis`.
+  transaction and publishes an owned `ProgramAnalysis`.
 - Retained the checked root on success and the checker's partial `StaticsArena` plus reports on rejection.
 - Used Salsa's non-`Update` result escape hatch only for owned, `'static` compiler results. These queries use `no_eq`,
   so every actual recomputation invalidates dependents until frozen structural result equality is available.
@@ -200,8 +201,38 @@ will wait until query-local mutation and deterministic result ordering are estab
   errors. Existing progress event shapes remain intact; execution-aware phase progress awaits finer phase queries.
 - Added invalidation tests for identical inputs, unrelated edits, provider edits, root edits, shared parse-template
   reuse, and rejected-source recovery.
-- Validated the slice with all 123 `zydeco-driver` tests and all 21 Cajun unit and stdio tests.
+- Validated the initial slice against all 123 source-pipeline tests and all 21 Cajun unit and stdio tests.
+
+### 2026-08-05
+
+- Removed `zydeco-driver` rather than retaining a compatibility facade. The replacement crate is named
+  `zydeco-session` because its responsibility is a revisioned analysis lifetime shared by tools, not the complete
+  compilation pipeline.
+- Reduced the shared production boundary to source inputs, parsed templates, import graphs, source assembly,
+  frontend queries, immutable semantic results, and typed observations. Backend policy and subprocess logic no
+  longer appear in that dependency graph.
+- Added disk-backed and overlay-backed source states. Overlay-only roots and imports can be analyzed before their
+  files exist, while closing an overlay returns the input to its current disk state.
+- Replaced type-checker `print!` and `println!` effects with `TyckObservation` values for inferred holes and explicit
+  debug metadata. The CLI renders those values; Cajun can ignore or reinterpret them without redirecting process I/O.
+- Published `ProgramAnalysis` as the immutable query result and `ExecutableProgram` as an owned clone for consumers
+  whose lowering passes allocate synthetic definitions. This makes the ownership break between a local `Tycker`
+  transaction and a frozen result explicit without pretending that `FillId` is a durable cross-revision identity.
+- Moved the Stack IR optimization schedule into `zydeco-stackir` and assembly lowering and stack analysis into
+  `zydeco-assembly`. These crates now own their semantic pass order without driver logging or dump configuration.
+- Rebuilt the CLI as an adapter over `CompilerSession`. It owns typed target selection, source-aware diagnostic
+  rendering, native artifact paths, runtime-file copying, external tool invocation, and process exit policy.
+- Removed inert verbosity, build-dry-run, link-existing, stage-dump, runtime-trace, and logger configuration paths.
+  The dormant REPL source and its commented integration points remain in place unchanged in purpose.
+- Migrated Cajun to request-consistent session snapshots and immutable `ProgramAnalysis` values. Hover, definition,
+  references, document symbols, semantic tokens, and partial facts after type errors use the same query-owned arenas.
+- Kept the former end-to-end assertions as test-only fixtures instead of exporting production compatibility wrappers.
+  The production driver-plus-CLI layer fell from 2,859 Rust lines to 2,469 lines, including the newly
+  typed CLI diagnostics and native adapters, before further fine-query work.
+- Validated the complete workspace test suite, including all 124 session tests, both CLI integration tests, all 21
+  Cajun unit and stdio tests, and the native amd64 link-and-run matrix after removing runtime logging. The workspace
+  also passes `cargo check --workspace --all-targets` and the repository's `cargo clippy-all` workflow.
 
 The remaining disk-input item is intentionally still open. Closing an editor override reloads the file today, but
 Cajun does not yet watch unopened imported files for changes made by another process. The next editor step should
-connect file-watch events to `reload_source_text` without polling every cached input or invalidating unrelated roots.
+connect file-watch events to `refresh_disk` without polling every cached input or invalidating unrelated roots.

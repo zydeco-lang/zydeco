@@ -1,5 +1,5 @@
 [package]
-name = "zydeco-driver"
+name = "zydeco-session"
 version = { workspace = true }
 rust-version = { workspace = true }
 authors = { workspace = true }
@@ -8,29 +8,23 @@ edition = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
 readme = { workspace = true }
-description = "the source-file compiler pipeline for zydeco"
+description = "revisioned source and semantic analysis sessions for zydeco"
 
 [dependencies]
 zydeco-utils = { workspace = true }
-zydeco-syntax = { workspace = true }
 zydeco-surface = { workspace = true }
 zydeco-statics = { workspace = true }
-zydeco-dynamics = { workspace = true }
-zydeco-amd64 = { workspace = true }
-zydeco-llvm = { workspace = true }
-zydeco-assembly = { workspace = true }
-zydeco-stackir = { workspace = true }
-derive_more = { workspace = true, features = ["display", "from"] }
 thiserror = { workspace = true }
-ariadne = { workspace = true }
-sculptor = { workspace = true }
 dashmap = { workspace = true }
 salsa = { workspace = true }
-log = { workspace = true }
-env_logger = { workspace = true }
 
 [lib]
 doctest = false
 
 [dev-dependencies]
 tempfile = { workspace = true }
+zydeco-syntax = { workspace = true }
+zydeco-dynamics = { workspace = true }
+zydeco-stackir = { workspace = true }
+zydeco-assembly = { workspace = true }
+zydeco-amd64 = { workspace = true }

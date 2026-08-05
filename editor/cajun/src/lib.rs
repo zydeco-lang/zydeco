@@ -30,7 +30,7 @@ use tower_lsp::{
         TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Url,
     },
 };
-use zydeco_driver::source::CompilerDatabase;
+use zydeco_session::CompilerSession;
 
 struct ZydecoDocument;
 
@@ -52,7 +52,7 @@ impl ZydecoDocument {
 /// with in-memory editor contents overriding the corresponding files on disk.
 pub struct Cajun {
     client: Client,
-    database: Arc<Mutex<CompilerDatabase>>,
+    session: Arc<Mutex<CompilerSession>>,
     projects: RwLock<HashMap<PathBuf, ProjectState>>,
     open_documents: RwLock<HashMap<PathBuf, String>>,
     work_done_progress: AtomicBool,
@@ -63,7 +63,7 @@ impl Cajun {
     pub fn new(client: Client) -> Self {
         Self {
             client,
-            database: Arc::new(Mutex::new(CompilerDatabase::default())),
+            session: Arc::new(Mutex::new(CompilerSession::default())),
             projects: RwLock::new(HashMap::new()),
             open_documents: RwLock::new(HashMap::new()),
             work_done_progress: AtomicBool::new(false),
@@ -80,9 +80,9 @@ impl Cajun {
     ) -> std::result::Result<PathBuf, String> {
         let path = Self::path(uri)?;
         let analysis_path = path.clone();
-        let database = self.database.clone().lock_owned().await;
+        let snapshot = self.session.lock().await.snapshot();
         let analysis = tokio::task::spawn_blocking(move || {
-            ProjectState::load_from_database(&analysis_path, &database, |update| {
+            ProjectState::load_from_session(&analysis_path, &snapshot, |update| {
                 progress.report(update)
             })
         })
@@ -132,7 +132,7 @@ impl Cajun {
 
     async fn set_document(&self, uri: &Url, text: String) -> Option<PathBuf> {
         let path = Self::path(uri).ok()?;
-        self.database.lock().await.set_source_text(&path, text.clone()).ok()?;
+        self.session.lock().await.set_overlay(&path, text.clone()).ok()?;
         self.open_documents.write().await.insert(path.clone(), text);
         Some(path)
     }
@@ -245,7 +245,7 @@ impl LanguageServer for Cajun {
         }
         if let Ok(path) = Self::path(&uri) {
             self.open_documents.write().await.remove(&path);
-            let _ = self.database.lock().await.reload_source_text(&path);
+            let _ = self.session.lock().await.clear_overlay(&path);
             self.projects.write().await.remove(&path);
         }
         self.client.publish_diagnostics(uri, Vec::new(), None).await;

@@ -32,19 +32,17 @@ fn textual_entities_retain_their_category_tags() {
 fn parsing_1() {
     let source = "!(!1)";
     let mut parser = Parser::new();
-    let t = parser::SingleTermParser::new()
+    let _ = parser::SingleTermParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
         .unwrap();
-    println!("{:?}", &parser.arena.terms[&t]);
 }
 #[test]
 fn parsing_2() {
     let source = "{ let x = 1 in ! exit x }";
     let mut parser = Parser::new();
-    let t = parser::SourceUnitParser::new()
+    let _ = parser::SourceUnitParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
         .unwrap();
-    println!("{:?}", t);
 }
 
 #[test]

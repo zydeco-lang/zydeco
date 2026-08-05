@@ -7,3 +7,6 @@ pub mod fmt;
 pub mod lower;
 pub mod analyze;
 pub mod interp;
+
+mod pipeline;
+pub use pipeline::LoweringPipeline;

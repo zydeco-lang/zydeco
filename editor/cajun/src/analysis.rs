@@ -7,13 +7,14 @@ use tower_lsp::lsp_types::{
     DocumentSymbol, Hover, HoverContents, Location, MarkupContent, MarkupKind, Position, Range,
     SemanticToken, SymbolKind, Url,
 };
-use zydeco_driver::source::{CompilerDatabase, SourceAnalysis, SourceLoadProgress, SourceScoped};
+use zydeco_session::{CompilerSession, ProgramAnalysis};
 use zydeco_statics::tyck::{
     arena::StaticsArena,
     fmt::{Formatter, SealedTypeEquation},
     syntax::AbstId,
 };
 use zydeco_surface::{
+    scoped::arena::ScopedArena,
     scoped::syntax::{DefId, Term, TermId},
     textual::syntax::EntityId,
 };
@@ -25,14 +26,14 @@ use zydeco_utils::{
 
 use crate::{
     hover::{HoverSignature, SealedTypeEquationPreview, TypeDefinitionLink, TypeDefinitionPreview},
-    progress::AnalysisProgress,
+    progress::{AnalysisProgress, SourceDiscovery},
     semantic::SemanticHighlighter,
     type_links::TypeReferenceCollector,
 };
 
 /// Compiler analysis state for one editor root.
 pub(crate) struct ProjectState {
-    analysis: Arc<SourceAnalysis>,
+    analysis: Arc<ProgramAnalysis>,
     file_infos: HashMap<PathBuf, FileInfo>,
     semantic_path: PathBuf,
     semantic_tokens: Vec<SemanticToken>,
@@ -57,20 +58,20 @@ impl ProjectState {
         source_path: &Path, overrides: &HashMap<PathBuf, String>,
         progress: impl FnMut(AnalysisProgress),
     ) -> Result<Self, String> {
-        let mut database = CompilerDatabase::default();
+        let mut session = CompilerSession::default();
         overrides.iter().try_for_each(|(path, source)| {
-            database.set_source_text(path, source.clone()).map_err(|error| error.to_string())
+            session.set_overlay(path, source.clone()).map_err(|error| error.to_string())
         })?;
-        Self::load_from_database(source_path, &database, progress)
+        Self::load_from_session(source_path, &session, progress)
     }
 
-    pub(crate) fn load_from_database(
-        source_path: &Path, database: &CompilerDatabase, mut progress: impl FnMut(AnalysisProgress),
+    pub(crate) fn load_from_session(
+        source_path: &Path, session: &CompilerSession, mut progress: impl FnMut(AnalysisProgress),
     ) -> Result<Self, String> {
-        let graph = database.source_graph(source_path).map_err(|error| error.to_string())?;
+        let graph = session.graph(source_path).map_err(|error| error.to_string())?;
         let source_count = graph.sources.len();
         graph.sources.iter().enumerate().for_each(|(index, (_, source))| {
-            progress(AnalysisProgress::Parsing(SourceLoadProgress {
+            progress(AnalysisProgress::Parsing(SourceDiscovery {
                 path: source.path.clone(),
                 discovered: index + 1,
             }))
@@ -79,12 +80,11 @@ impl ProjectState {
         progress(AnalysisProgress::Desugaring { source_count });
         progress(AnalysisProgress::Resolving { source_count });
         progress(AnalysisProgress::Tycking { source_count });
-        let analysis = database.analyze(source_path).map_err(|error| error.to_string())?;
-        let scoped = &analysis.scoped;
-        let statics = &analysis.statics;
-        let file_infos = scoped
-            .sources
-            .iter()
+        let analysis = session.analyze(source_path).map_err(|error| error.to_string())?;
+        let scoped = analysis.scoped();
+        let statics = analysis.statics();
+        let file_infos = analysis
+            .sources()
             .map(|(path, source)| {
                 let path = Self::normalize_path(path);
                 let info = FileInfo::new(source, Some(Arc::new(path.clone())));
@@ -92,21 +92,15 @@ impl ProjectState {
             })
             .collect();
         let source_path = Self::normalize_path(source_path);
-        let source = scoped
-            .sources
-            .get(&source_path)
-            .or_else(|| {
-                scoped.sources.iter().find_map(|(path, source)| {
-                    (Self::normalize_path(path) == source_path).then_some(source)
-                })
-            })
+        let source = analysis
+            .source(&source_path)
             .ok_or_else(|| format!("assembled source graph omitted `{}`", source_path.display()))?;
         progress(AnalysisProgress::Highlighting { path: source_path.clone() });
         let tokens = SemanticHighlighter::compiler_refined(
             source,
             &source_path,
-            &scoped.spans,
-            &scoped.arena,
+            analysis.spans(),
+            scoped,
             Some(statics),
         );
         let semantic_path = source_path;
@@ -128,7 +122,6 @@ impl ProjectState {
             include_declaration.then(|| self.definition_location(definition)).into_iter().flatten();
         let uses = self
             .scoped()
-            .arena
             .users
             .forth(&definition)
             .iter()
@@ -138,9 +131,9 @@ impl ProjectState {
 
     pub(crate) fn hover(&self, file_path: &Path, position: Position) -> Option<Hover> {
         let occurrence = self.symbol_at(file_path, position)?;
-        let name = &self.scoped().arena.defs[&occurrence.definition];
+        let name = &self.scoped().defs[&occurrence.definition];
         let annotation = self.statics().annotations_var.get(&occurrence.definition)?;
-        let formatter = Formatter::new(&self.scoped().arena, self.statics());
+        let formatter = Formatter::new(self.scoped(), self.statics());
         let mut annotation_text = String::new();
         annotation.pretty(&formatter).render_fmt(100, &mut annotation_text).ok()?;
         let definition_type = self.statics().type_definitions.get(&occurrence.definition).copied();
@@ -180,12 +173,11 @@ impl ProjectState {
         let file_path = Self::normalize_path(file_path);
         let mut symbols = self
             .scoped()
-            .arena
             .defs
             .iter()
             .filter_map(|(definition, name)| {
-                let entity = self.scoped().arena.textual.back(&(*definition).into())?;
-                let span = &self.scoped().spans[entity];
+                let entity = self.scoped().textual.back(&(*definition).into())?;
+                let span = &self.analysis.spans()[entity];
                 (span.get_path().map(|path| Self::normalize_path(path)) == Some(file_path.clone()))
                     .then(|| {
                         let range = self.span_range(span)?;
@@ -213,16 +205,16 @@ impl ProjectState {
     fn symbol_at(&self, file_path: &Path, position: Position) -> Option<SymbolOccurrence> {
         let file_path = Self::normalize_path(file_path);
         let offset = self.offset(&file_path, position)?;
-        let definitions = self.scoped().arena.defs.iter().filter_map(|(definition, _)| {
-            let entity = self.scoped().arena.textual.back(&(*definition).into())?;
-            Some((*definition, &self.scoped().spans[entity]))
+        let definitions = self.scoped().defs.iter().filter_map(|(definition, _)| {
+            let entity = self.scoped().textual.back(&(*definition).into())?;
+            Some((*definition, &self.analysis.spans()[entity]))
         });
-        let uses = self.scoped().arena.terms.iter().filter_map(|(term, body)| {
+        let uses = self.scoped().terms.iter().filter_map(|(term, body)| {
             let Term::Var(definition) = body else {
                 return None;
             };
-            let entity = self.scoped().arena.textual.back(&(*term).into())?;
-            Some((*definition, &self.scoped().spans[entity]))
+            let entity = self.scoped().textual.back(&(*term).into())?;
+            Some((*definition, &self.analysis.spans()[entity]))
         });
         definitions
             .chain(uses)
@@ -249,12 +241,12 @@ impl ProjectState {
     }
 
     fn definition_location(&self, definition: DefId) -> Option<Location> {
-        let entity = self.scoped().arena.textual.back(&definition.into())?;
+        let entity = self.scoped().textual.back(&definition.into())?;
         self.entity_location(entity)
     }
 
     fn type_definition_link(&self, definition: DefId) -> Option<TypeDefinitionLink> {
-        let name = self.scoped().arena.defs.get(&definition)?.0.clone();
+        let name = self.scoped().defs.get(&definition)?.0.clone();
         let location = self.definition_location(definition)?;
         let mut target = location.uri;
         target.set_fragment(Some(&format!("L{}", location.range.start.line + 1)));
@@ -273,12 +265,12 @@ impl ProjectState {
     }
 
     fn term_location(&self, term: TermId) -> Option<Location> {
-        let entity = self.scoped().arena.textual.back(&term.into())?;
+        let entity = self.scoped().textual.back(&term.into())?;
         self.entity_location(entity)
     }
 
     fn entity_location(&self, entity: &EntityId) -> Option<Location> {
-        let span = &self.scoped().spans[entity];
+        let span = &self.analysis.spans()[entity];
         let path = Self::normalize_path(span.get_path()?);
         Some(Location { uri: Url::from_file_path(path).ok()?, range: self.span_range(span)? })
     }
@@ -305,7 +297,7 @@ impl ProjectState {
     }
 
     fn offset(&self, file_path: &Path, position: Position) -> Option<usize> {
-        let source = self.scoped().sources.get(file_path)?;
+        let source = self.analysis.source(file_path)?;
         self.file_infos.get(file_path)?.trans_span1_utf16(
             source,
             Cursor2 { line: position.line as usize, column: position.character as usize },
@@ -314,7 +306,7 @@ impl ProjectState {
 
     fn span_range(&self, span: &Span) -> Option<Range> {
         let path = Self::normalize_path(span.get_path()?);
-        let source = self.scoped().sources.get(&path)?;
+        let source = self.analysis.source(&path)?;
         let file_info = self.file_infos.get(&path)?;
         let (start, end) = span.get_cursor1();
         Some(Range::new(
@@ -331,12 +323,12 @@ impl ProjectState {
         path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
     }
 
-    fn scoped(&self) -> &SourceScoped {
-        &self.analysis.scoped
+    fn scoped(&self) -> &ScopedArena {
+        self.analysis.scoped()
     }
 
     fn statics(&self) -> &StaticsArena {
-        &self.analysis.statics
+        self.analysis.statics()
     }
 
     #[allow(deprecated)]
@@ -357,10 +349,12 @@ impl ProjectState {
 #[cfg(test)]
 mod tests {
     use super::ProjectState;
-    use crate::{progress::AnalysisProgress, semantic::SemanticHighlighter};
+    use crate::{
+        progress::{AnalysisProgress, SourceDiscovery},
+        semantic::SemanticHighlighter,
+    };
     use std::{collections::HashMap, path::Path};
     use tower_lsp::lsp_types::{HoverContents, Position, SemanticToken, SemanticTokensLegend, Url};
-    use zydeco_driver::source::SourceLoadProgress;
     use zydeco_utils::span::{Cursor2, FileInfo};
 
     struct DecodedToken {
@@ -440,8 +434,8 @@ mod tests {
         assert_eq!(
             progress,
             vec![
-                AnalysisProgress::Parsing(SourceLoadProgress { path: root.clone(), discovered: 1 }),
-                AnalysisProgress::Parsing(SourceLoadProgress { path: library, discovered: 2 }),
+                AnalysisProgress::Parsing(SourceDiscovery { path: root.clone(), discovered: 1 }),
+                AnalysisProgress::Parsing(SourceDiscovery { path: library, discovered: 2 }),
                 AnalysisProgress::Assembling { source_count: 2 },
                 AnalysisProgress::Desugaring { source_count: 2 },
                 AnalysisProgress::Resolving { source_count: 2 },

@@ -31,8 +31,6 @@ _zydeco() {
             (run)
 _arguments "${_arguments_options[@]}" : \
 '--dry[Dry run (don'\''t execute)]' \
-'*-v[Level of verbosity]' \
-'*--verbose[Level of verbosity]' \
 '-h[Print help]' \
 '--help[Print help]' \
 ':file -- Path to the file to run:_files' \
@@ -41,8 +39,6 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (check)
 _arguments "${_arguments_options[@]}" : \
-'*-v[Level of verbosity]' \
-'*--verbose[Level of verbosity]' \
 '-h[Print help]' \
 '--help[Print help]' \
 ':file -- Path to the file to check:_files' \
@@ -50,21 +46,17 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (build)
 _arguments "${_arguments_options[@]}" : \
-'--target-os=[Target OS (defaults to host OS)]:TARGET_OS:_default' \
-'--target-arch=[Target architecture (defaults to host architecture)]:TARGET_ARCH:_default' \
-'-t+[Target backend (zir, zasm, asm, llvm, exe, llvm-exe)]:TARGET:_default' \
-'--target=[Target backend (zir, zasm, asm, llvm, exe, llvm-exe)]:TARGET:_default' \
+'--target-os=[Target OS (defaults to host OS)]:TARGET_OS:(linux macos)' \
+'--target-arch=[Target architecture (defaults to host architecture)]:TARGET_ARCH:(x86-64 aarch64)' \
+'-t+[Target backend]:TARGET:(zir zasm asm llvm exe llvm-exe)' \
+'--target=[Target backend]:TARGET:(zir zasm asm llvm exe llvm-exe)' \
 '-b+[Build Directory]:BUILD_DIR:_files' \
 '--build-dir=[Build Directory]:BUILD_DIR:_files' \
 '-r+[Runtime directory]:RUNTIME_DIR:_files' \
 '--runtime-dir=[Runtime directory]:RUNTIME_DIR:_files' \
-'--link-existing[Skip dumping assembly and only link existing files]' \
 '-x[Run the program after building]' \
 '--execute[Run the program after building]' \
-'--dry[Dry run (don'\''t execute)]' \
 '--no-cps[Skip CPS translation in the StackIR pipeline]' \
-'*-v[Level of verbosity]' \
-'*--verbose[Level of verbosity]' \
 '-h[Print help]' \
 '--help[Print help]' \
 ':file -- Path to the file to compile:_files' \

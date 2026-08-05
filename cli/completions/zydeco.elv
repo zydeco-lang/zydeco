@@ -29,33 +29,25 @@ set edit:completion:arg-completer[zydeco] = {|@words|
         }
         &'zydeco;run'= {
             cand --dry 'Dry run (don''t execute)'
-            cand -v 'Level of verbosity'
-            cand --verbose 'Level of verbosity'
             cand -h 'Print help'
             cand --help 'Print help'
         }
         &'zydeco;check'= {
-            cand -v 'Level of verbosity'
-            cand --verbose 'Level of verbosity'
             cand -h 'Print help'
             cand --help 'Print help'
         }
         &'zydeco;build'= {
             cand --target-os 'Target OS (defaults to host OS)'
             cand --target-arch 'Target architecture (defaults to host architecture)'
-            cand -t 'Target backend (zir, zasm, asm, llvm, exe, llvm-exe)'
-            cand --target 'Target backend (zir, zasm, asm, llvm, exe, llvm-exe)'
+            cand -t 'Target backend'
+            cand --target 'Target backend'
             cand -b 'Build Directory'
             cand --build-dir 'Build Directory'
             cand -r 'Runtime directory'
             cand --runtime-dir 'Runtime directory'
-            cand --link-existing 'Skip dumping assembly and only link existing files'
             cand -x 'Run the program after building'
             cand --execute 'Run the program after building'
-            cand --dry 'Dry run (don''t execute)'
             cand --no-cps 'Skip CPS translation in the StackIR pipeline'
-            cand -v 'Level of verbosity'
-            cand --verbose 'Level of verbosity'
             cand -h 'Print help'
             cand --help 'Print help'
         }

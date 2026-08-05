@@ -1,116 +1,155 @@
 use clap::Parser;
-// use zydeco_cli::{Cli, Commands, Repl};
-use zydeco_cli::{Cli, Commands};
-use zydeco_driver::{BuildConf, PipelineConf, ProgKont, SourceDriver, Verbosity};
+// use zydeco_cli::Repl;
+use std::path::{Path, PathBuf};
+use thiserror::Error;
+use zydeco_cli::{
+    BackendProgram, BuildOptions, BuildTarget, Cli, CommandCompiler, Commands, CompileError,
+    DiagnosticRenderer, NativeError, TargetArchitecture, TargetOs,
+};
+use zydeco_dynamics::ProgKont;
+use zydeco_stackir::CpsMode;
 
-fn main() -> Result<(), ()> {
-    let command = Cli::parse().command;
-    let verbosity = Verbosity::new(command.verbosity());
-    verbosity.init_logger();
-
-    let res = match command {
-        | Commands::Run { file, dry, verbose: _, args } => run_file(file, dry, args),
-        | Commands::Check { file, verbose: _ } => check_file(file),
-        // | Commands::Repl { .. } => Repl::launch(),
-        | Commands::Build {
-            file,
-            target_os,
-            target_arch,
-            target,
-            build_dir,
-            runtime_dir,
-            link_existing,
-            execute,
-            dry,
-            no_cps,
-            verbose: _,
-        } => {
-            let build_conf = BuildConf::default()
-                .with_build_dir(build_dir)
-                .with_runtime_dir(runtime_dir)
-                .with_link_existing(link_existing)
-                .with_target_os(target_os)
-                .with_target_arch(target_arch);
-            let pipeline_conf = PipelineConf::default().with_cps(!no_cps);
-            build_file(file, target, build_conf, pipeline_conf, execute, dry, verbosity)
-        }
-    };
-    match res {
-        | Ok(x) => {
-            std::process::exit(x);
-        }
-        | Err(e) => {
-            e.print_ariadne();
-            Ok(())
+fn main() {
+    let result = Application::default().run(Cli::parse().command);
+    match result {
+        | Ok(code) => std::process::exit(code),
+        | Err(error) => {
+            error.render();
+            std::process::exit(1);
         }
     }
 }
 
-fn run_file(path: std::path::PathBuf, dry: bool, args: Vec<String>) -> zydeco_driver::Result<i32> {
-    match SourceDriver::run(path, &args, dry)? {
-        | ProgKont::Dry => Ok(0),
-        | ProgKont::Ret(_) => unreachable!("an executable source root must return `OS`"),
-        | ProgKont::ExitCode(code) => Ok(code),
+#[derive(Default)]
+struct Application {
+    compiler: CommandCompiler,
+}
+
+impl Application {
+    fn run(&self, command: Commands) -> Result<i32, ApplicationError> {
+        match command {
+            | Commands::Run { file, dry, args } => self.run_source(&file, dry, &args),
+            | Commands::Check { file } => self.check_source(&file),
+            // | Commands::Repl { .. } => Repl::launch().map_err(ApplicationError::Repl),
+            | Commands::Build {
+                file,
+                target_os,
+                target_arch,
+                target,
+                build_dir,
+                runtime_dir,
+                execute,
+                no_cps,
+            } => self.build_source(
+                &file,
+                target,
+                BuildOptions::new(
+                    build_dir.unwrap_or_else(|| PathBuf::from("build")),
+                    runtime_dir.unwrap_or_else(|| PathBuf::from("runtime")),
+                    target_arch
+                        .map_or_else(TargetArchitecture::host, Ok)
+                        .map_err(NativeError::UnsupportedHostArchitecture)?,
+                    target_os
+                        .map_or_else(TargetOs::host, Ok)
+                        .map_err(NativeError::UnsupportedHostOperatingSystem)?,
+                ),
+                execute,
+                if no_cps { CpsMode::Disabled } else { CpsMode::Enabled },
+            ),
+        }
+    }
+
+    fn analyze(
+        &self, path: &Path,
+    ) -> Result<std::sync::Arc<zydeco_session::ProgramAnalysis>, ApplicationError> {
+        let analysis = self.compiler.analyze(path)?;
+        DiagnosticRenderer::observations(&analysis);
+        Ok(analysis)
+    }
+
+    fn check_source(&self, path: &Path) -> Result<i32, ApplicationError> {
+        self.analyze(path)?;
+        Ok(0)
+    }
+
+    fn run_source(
+        &self, path: &Path, dry: bool, arguments: &[String],
+    ) -> Result<i32, ApplicationError> {
+        let executable =
+            self.analyze(path)?.executable_program().map_err(CompileError::Executable)?;
+        match CommandCompiler::interpret_program(executable, arguments, dry)? {
+            | ProgKont::Dry => Ok(0),
+            | ProgKont::ExitCode(code) => Ok(code),
+            | ProgKont::Ret(_) => unreachable!("an executable source root must return `OS`"),
+        }
+    }
+
+    fn build_source(
+        &self, path: &Path, target: BuildTarget, options: BuildOptions, execute: bool, cps: CpsMode,
+    ) -> Result<i32, ApplicationError> {
+        let executable =
+            self.analyze(path)?.executable_program().map_err(CompileError::Executable)?;
+        let backend = BackendProgram::lower(executable, cps)?;
+        match target {
+            | BuildTarget::Zir => println!("{}", backend.render_stackir()),
+            | BuildTarget::Zasm if execute => println!("{}", backend.execute_assembly()?),
+            | BuildTarget::Zasm => println!("{}", backend.render_assembly()),
+            | BuildTarget::Asm => {
+                if options.architecture != TargetArchitecture::X86_64 {
+                    return Err(
+                        NativeError::UnsupportedAmd64Architecture(options.architecture).into()
+                    );
+                }
+                println!("{}", backend.emit_amd64(options.operating_system));
+            }
+            | BuildTarget::Llvm => {
+                println!("{}", backend.emit_llvm(options.architecture, options.operating_system)?)
+            }
+            | BuildTarget::Exe => {
+                let artifact = Self::artifact_name(path)?;
+                let assembly = backend.emit_amd64(options.operating_system);
+                let executable = options.link_amd64(&artifact, &assembly)?;
+                if execute {
+                    return Ok(executable.run(&[])?.code().unwrap_or(0));
+                }
+            }
+            | BuildTarget::LlvmExe => {
+                let artifact = Self::artifact_name(path)?;
+                let ir = backend.emit_llvm(options.architecture, options.operating_system)?;
+                let executable = options.link_llvm(&artifact, &ir)?;
+                if execute {
+                    return Ok(executable.run(&[])?.code().unwrap_or(0));
+                }
+            }
+        }
+        Ok(0)
+    }
+
+    fn artifact_name(path: &Path) -> Result<String, ApplicationError> {
+        path.file_stem()
+            .and_then(|stem| stem.to_str())
+            .map(str::to_owned)
+            .ok_or_else(|| ApplicationError::InvalidArtifactName(path.to_path_buf()))
     }
 }
 
-fn check_file(path: std::path::PathBuf) -> zydeco_driver::Result<i32> {
-    SourceDriver::check(path)?;
-    Ok(0)
+#[derive(Debug, Error)]
+enum ApplicationError {
+    #[error(transparent)]
+    Compile(#[from] CompileError),
+    #[error(transparent)]
+    Native(#[from] NativeError),
+    #[error("source root path `{}` does not have a valid UTF-8 artifact name", .0.display())]
+    InvalidArtifactName(PathBuf),
+    // #[error("REPL error: {0}")]
+    // Repl(String),
 }
 
-fn build_file(
-    path: std::path::PathBuf, target: String, build_conf: BuildConf, pipeline_conf: PipelineConf,
-    execute: bool, _dry: bool, verbosity: Verbosity,
-) -> zydeco_driver::Result<i32> {
-    build_source(&path, target, build_conf, pipeline_conf, execute, verbosity)
-}
-
-fn build_source(
-    path: &std::path::Path, target: String, build_conf: BuildConf, pipeline_conf: PipelineConf,
-    execute: bool, verbosity: Verbosity,
-) -> zydeco_driver::Result<i32> {
-    match target.as_str() {
-        | "zir" => {
-            let stackir = SourceDriver::zir(path, &pipeline_conf, verbosity)?;
-            println!("{}", stackir.render());
-            Ok(0)
+impl ApplicationError {
+    fn render(&self) {
+        match self {
+            | Self::Compile(error) => DiagnosticRenderer::error(error),
+            | _ => eprintln!("{self}"),
         }
-        | "zasm" => {
-            let assembly = SourceDriver::zasm(path, &pipeline_conf, verbosity)?;
-            if execute {
-                println!("{}", assembly.execute()?);
-            } else {
-                println!("{}", assembly.render());
-            }
-            Ok(0)
-        }
-        | "asm" => {
-            SourceDriver::amd64(path, &pipeline_conf, build_conf, verbosity)?;
-            Ok(0)
-        }
-        | "llvm" => {
-            SourceDriver::llvm(path, &pipeline_conf, build_conf, verbosity)?;
-            Ok(0)
-        }
-        | "exe" => {
-            let executable =
-                SourceDriver::amd64(path, &pipeline_conf, build_conf, verbosity)?.link()?;
-            if !execute {
-                return Ok(0);
-            }
-            let status = executable.run()?;
-            Ok(status.code().unwrap_or(0))
-        }
-        | "llvm-exe" => {
-            let executable =
-                SourceDriver::llvm(path, &pipeline_conf, build_conf, verbosity)?.link()?;
-            if !execute {
-                return Ok(0);
-            }
-            let status = executable.run()?;
-            Ok(status.code().unwrap_or(0))
-        }
-        | _ => Err(zydeco_driver::err::BuildError::UnsupportedTarget(target)),
     }
 }

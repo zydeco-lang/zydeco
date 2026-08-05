@@ -96,13 +96,15 @@ The output is written to `target/doc/`.
 ├── Cargo.toml
 ├── lang
 │  ├── derive
-│  ├── driver
-│  ├── dynamics
-│  ├── lib
-│  ├── src
-│  ├── statics
-│  ├── surface
 │  ├── syntax
+│  ├── surface
+│  ├── statics
+│  ├── session
+│  ├── dynamics
+│  ├── stackir
+│  ├── assembly
+│  ├── amd64
+│  ├── llvm
 │  ├── tests
 │  └── utils
 ├── cli

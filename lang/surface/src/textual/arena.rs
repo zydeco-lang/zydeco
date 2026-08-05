@@ -24,7 +24,7 @@ impl ArenaSchema<TermId> for TextualScope {
     type Item = Term;
 }
 /// Parsed nodes keyed by textual IDs.
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct TextArena {
     pub defs: ArenaSparse<TextualScope, DefId>,
     pub pats: ArenaSparse<TextualScope, PatId>,
@@ -33,7 +33,7 @@ pub struct TextArena {
 }
 
 /// Span storage keyed by textual entity IDs.
-#[derive(Default, Debug, derive_more::AddAssign, derive_more::Index)]
+#[derive(Clone, Default, Debug, derive_more::AddAssign, derive_more::Index)]
 pub struct SpanArena {
     spans: ArenaAssoc<EntityId, Span>,
 }

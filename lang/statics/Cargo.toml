@@ -28,8 +28,6 @@ im = { workspace = true }
 indexmap = { workspace = true }
 thiserror = { workspace = true }
 ariadne = { workspace = true }
-colored = { workspace = true }
-log = { workspace = true }
 pretty = { workspace = true }
 
 [lib]

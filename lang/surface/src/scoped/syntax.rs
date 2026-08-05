@@ -83,7 +83,7 @@ impl ContextNode {
 }
 
 /// A term together with the context that it inhabits.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ContextualTerm<C, B> {
     pub context: C,
     pub body: B,

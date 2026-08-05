@@ -1,7 +1,34 @@
 pub mod utils {
     use std::path::PathBuf;
-    use zydeco_driver::{BuildConf, BuildError, PipelineConf, SourceDriver, Verbosity};
+    use thiserror::Error;
+    use zydeco_cli::{
+        BuildOptions, CommandCompiler, CompileError, NativeError, TargetArchitecture, TargetOs,
+    };
+    use zydeco_session::AnalysisError;
+    use zydeco_stackir::CpsMode;
     use zydeco_statics::tyck::syntax::{Fillable, TermAnnId, Type};
+
+    #[derive(Debug, Error)]
+    pub enum CaseError {
+        #[error(transparent)]
+        Compile(#[from] CompileError),
+        #[error(transparent)]
+        Native(#[from] NativeError),
+        #[error(transparent)]
+        Io(#[from] std::io::Error),
+        #[error("native source test exited with {0}")]
+        NativeExit(std::process::ExitStatus),
+    }
+
+    impl CaseError {
+        pub fn is_type_error(&self) -> bool {
+            matches!(self, Self::Compile(CompileError::Rejected(_)))
+        }
+
+        pub fn is_resolve_error(&self) -> bool {
+            matches!(self, Self::Compile(CompileError::Analysis(AnalysisError::Resolve { .. })))
+        }
+    }
 
     #[derive(Clone, Copy, Debug)]
     pub enum TestBackend {
@@ -25,9 +52,10 @@ pub mod utils {
         }
 
         pub fn check(self) {
-            let checked = SourceDriver::check(&self.path).unwrap_or_else(|error| {
+            let analysis = CommandCompiler::default().analyze(&self.path).unwrap_or_else(|error| {
                 panic!("Error checking source {}: {error}", self.path.display())
             });
+            let checked = analysis.checked_program().expect("successful analysis must be checked");
             let TermAnnId::Value(_, root_type) = checked.root else {
                 panic!("Library source {} must export a value", self.path.display());
             };
@@ -62,7 +90,9 @@ pub mod utils {
 
         pub fn test(self, backend: TestBackend) {
             let result = match backend {
-                | TestBackend::Interpreter => SourceDriver::test(&self.path, &self.arguments),
+                | TestBackend::Interpreter => CommandCompiler::default()
+                    .test(&self.path, &self.arguments)
+                    .map_err(CaseError::Compile),
                 | TestBackend::Amd64 => self.test_amd64(),
             };
             if let Err(error) = result {
@@ -70,28 +100,22 @@ pub mod utils {
             }
         }
 
-        fn test_amd64(&self) -> Result<(), BuildError> {
-            let native = SourceDriver::amd64(
-                &self.path,
-                &PipelineConf::default(),
-                Self::build_conf(),
-                Verbosity::new(3),
-            )?;
-            let status = native.link()?.run_with_args(&self.arguments)?;
-            if status.success() { Ok(()) } else { Err(BuildError::Amd64RunError(status)) }
-        }
-
-        fn build_conf() -> BuildConf {
+        fn test_amd64(&self) -> Result<(), CaseError> {
             let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            let build_dir = tempfile::tempdir().unwrap().keep();
-            println!("build_dir: {}", build_dir.display());
-            BuildConf {
-                build_dir,
-                runtime_dir: workspace.join("../../runtime"),
-                target_arch: "x86_64".to_string(),
-                target_os: std::env::consts::OS.to_string(),
-                link_existing: false,
-            }
+            let build_directory = tempfile::tempdir()?;
+            let operating_system =
+                TargetOs::host().map_err(NativeError::UnsupportedHostOperatingSystem)?;
+            let options = BuildOptions::new(
+                build_directory.path().to_path_buf(),
+                workspace.join("../../runtime"),
+                TargetArchitecture::X86_64,
+                operating_system,
+            );
+            let backend = CommandCompiler::default().lower(&self.path, CpsMode::Enabled)?;
+            let assembly = backend.emit_amd64(operating_system);
+            let executable = options.link_amd64("test", &assembly)?;
+            let status = executable.run(&self.arguments)?;
+            if status.success() { Ok(()) } else { Err(CaseError::NativeExit(status)) }
         }
     }
 
@@ -105,38 +129,42 @@ pub mod utils {
     pub struct SourceCase;
 
     impl SourceCase {
-        pub fn check(source: &str) -> Result<(), BuildError> {
-            Self::with_source(SourceCasePrelude::Core, source, |path| SourceDriver::check(path))
-                .map(|_| ())
+        pub fn check(source: &str) -> Result<(), CaseError> {
+            Self::with_source(SourceCasePrelude::Core, source, |path| {
+                CommandCompiler::default().analyze(path).map(|_| ()).map_err(CaseError::Compile)
+            })
         }
 
-        pub fn check_monadic(source: &str) -> Result<(), BuildError> {
-            Self::with_source(SourceCasePrelude::Monadic, source, |path| SourceDriver::check(path))
-                .map(|_| ())
+        pub fn check_monadic(source: &str) -> Result<(), CaseError> {
+            Self::with_source(SourceCasePrelude::Monadic, source, |path| {
+                CommandCompiler::default().analyze(path).map(|_| ()).map_err(CaseError::Compile)
+            })
         }
 
-        pub fn check_with_import(source: &str, imported: &str) -> Result<(), BuildError> {
+        pub fn check_with_import(source: &str, imported: &str) -> Result<(), CaseError> {
             let directory = tempfile::tempdir()?;
             std::fs::write(directory.path().join("imported.zy"), imported)?;
             let root = directory.path().join("case.zy");
             std::fs::write(&root, Self::wrap(SourceCasePrelude::Core, source))?;
-            SourceDriver::check(&root).map(|_| ())
+            CommandCompiler::default().analyze(&root).map(|_| ()).map_err(CaseError::Compile)
         }
 
-        pub fn run(source: &str) -> Result<(), BuildError> {
-            Self::with_source(SourceCasePrelude::Core, source, |path| SourceDriver::test(path, &[]))
+        pub fn run(source: &str) -> Result<(), CaseError> {
+            Self::with_source(SourceCasePrelude::Core, source, |path| {
+                CommandCompiler::default().test(path, &[]).map_err(CaseError::Compile)
+            })
         }
 
-        pub fn run_monadic(source: &str) -> Result<(), BuildError> {
+        pub fn run_monadic(source: &str) -> Result<(), CaseError> {
             Self::with_source(SourceCasePrelude::Monadic, source, |path| {
-                SourceDriver::test(path, &[])
+                CommandCompiler::default().test(path, &[]).map_err(CaseError::Compile)
             })
         }
 
         fn with_source<T>(
             prelude: SourceCasePrelude, source: &str,
-            action: impl FnOnce(&std::path::Path) -> Result<T, BuildError>,
-        ) -> Result<T, BuildError> {
+            action: impl FnOnce(&std::path::Path) -> Result<T, CaseError>,
+        ) -> Result<T, CaseError> {
             let directory = tempfile::tempdir()?;
             let path = directory.path().join("case.zy");
             std::fs::write(&path, Self::wrap(prelude, source))?;

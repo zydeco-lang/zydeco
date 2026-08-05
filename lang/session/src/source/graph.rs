@@ -1,12 +1,12 @@
-use crate::source::{ImportCycle, ImportCycleStep, SourceLoadError};
+use crate::source::{ImportCycle, ImportCycleStep};
 use std::{
     collections::{HashMap, HashSet},
     ops::Deref,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::Arc,
 };
 use zydeco_surface::textual::{DocumentationSite, ImportSite, syntax as t};
-use zydeco_utils::prelude::{ArenaDense, ArenaSchema, DepGraph};
+use zydeco_utils::prelude::{ArenaDense, ArenaSchema};
 
 zydeco_utils::new_key_type! {
     pub struct SourceId;
@@ -25,11 +25,10 @@ impl ArenaSchema<SourceImportId> for SourceGraphScope {
 }
 
 /// Parsed contents shared by every fresh occurrence of one canonical source file.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SourceTemplate {
     pub path: PathBuf,
     pub source: String,
-    pub hash: String,
     pub spans: t::SpanArena,
     pub arena: t::TextArena,
     pub unit: t::SourceUnit,
@@ -38,7 +37,7 @@ pub struct SourceTemplate {
 }
 
 /// One source-graph node referring to a shared parsed template.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SourceFile {
     pub template: Arc<SourceTemplate>,
     pub imports: Vec<SourceImportId>,
@@ -57,61 +56,19 @@ pub struct SourceImport {
     pub importer: SourceId,
     pub imported: SourceId,
     pub term: t::TermId,
-    pub path: PathBuf,
     pub span: t::Span,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SourceGraph {
     pub root: SourceId,
     pub sources: ArenaDense<SourceGraphScope, SourceId>,
     pub imports: ArenaDense<SourceGraphScope, SourceImportId>,
-    pub dependencies: DepGraph<SourceId>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SourceLoadProgress {
-    pub path: PathBuf,
-    pub discovered: usize,
 }
 
 impl SourceGraph {
-    pub fn load(root: impl AsRef<Path>) -> Result<Self, SourceLoadError> {
-        let overrides = HashMap::new();
-        Self::load_with_overrides(root, &overrides)
-    }
-
-    pub fn load_with_progress(
-        root: impl AsRef<Path>, progress: impl FnMut(SourceLoadProgress),
-    ) -> Result<Self, SourceLoadError> {
-        let overrides = HashMap::new();
-        Self::load_with_overrides_and_progress(root, &overrides, progress)
-    }
-
-    pub fn load_with_overrides(
-        root: impl AsRef<Path>, overrides: &HashMap<PathBuf, String>,
-    ) -> Result<Self, SourceLoadError> {
-        Self::load_with_overrides_and_progress(root, overrides, |_| {})
-    }
-
-    pub fn load_with_overrides_and_progress(
-        root: impl AsRef<Path>, overrides: &HashMap<PathBuf, String>,
-        progress: impl FnMut(SourceLoadProgress),
-    ) -> Result<Self, SourceLoadError> {
-        super::loader::SourceGraphLoader::with_provider(
-            super::loader::FilesystemSourceProvider::with_overrides(overrides),
-            progress,
-        )
-        .load_root(root.as_ref())
-    }
-
     pub fn provider_order(&self) -> Vec<SourceId> {
         ProviderOrder::new(self).run()
-    }
-
-    pub fn source_by_path(&self, path: impl AsRef<Path>) -> Option<SourceId> {
-        let canonical = path.as_ref().canonicalize().ok()?;
-        self.sources.iter().find_map(|(source, file)| (file.path == canonical).then_some(source))
     }
 
     pub(crate) fn ensure_acyclic(&self) -> Result<(), ImportCycle> {

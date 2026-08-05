@@ -61,7 +61,7 @@ pub use zydeco_surface::scoped::arena::*;
 
 /// Static associations introduced by `@[builtin(...)]` package-signature
 /// annotations.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct BuiltinRoles {
     witnesses: ArenaAssoc<AbstId, BuiltinRole>,
     values: ArenaAssoc<TypeId, BuiltinValueRole>,
@@ -116,7 +116,7 @@ impl BuiltinRoles {
 
 /// Canonical static identities for the CBPV structure built into the
 /// language.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct IntrinsicStatics {
     pub(crate) vtype: Option<KindId>,
     pub(crate) ctype: Option<KindId>,
@@ -126,7 +126,7 @@ pub struct IntrinsicStatics {
 }
 
 /// Typed arena plus annotation tables and translation metadata.
-#[derive(Debug, Default, AsRefSelf, AsMutSelf)]
+#[derive(Clone, Debug, Default, AsRefSelf, AsMutSelf)]
 pub struct StaticsArena {
     /// kind arena before normalization
     pub kinds_pre: ArenaSparse<StaticsScope, KindId>,

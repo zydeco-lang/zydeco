@@ -1,18 +1,15 @@
-use zydeco_driver::{BuildError, check::err::CompileError};
-use zydeco_tests::utils::SourceCase;
+use zydeco_tests::utils::{CaseError, SourceCase};
 
 struct ExistentialCase;
 
 impl ExistentialCase {
-    fn check(source: &str) -> Result<(), BuildError> {
+    fn check(source: &str) -> Result<(), CaseError> {
         SourceCase::check(source)
     }
 
     fn assert_type_error(source: &str) {
         match Self::check(source) {
-            | Err(BuildError::CompileError(
-                CompileError::TyckErrorReports { .. } | CompileError::TyckErrors(_),
-            )) => {}
+            | Err(error) if error.is_type_error() => {}
             | Ok(()) => panic!("expected a type error, but the program was accepted"),
             | Err(error) => panic!("expected a type error, found: {error:?}"),
         }

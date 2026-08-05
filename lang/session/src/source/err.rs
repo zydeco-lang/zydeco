@@ -4,9 +4,10 @@ use std::{
     fmt::{Display, Formatter},
     io,
     path::PathBuf,
+    sync::Arc,
 };
 use thiserror::Error;
-use zydeco_statics::tyck::syntax::{TermAnnId, TypeId};
+use zydeco_statics::tyck::syntax::TermAnnId;
 use zydeco_surface::textual::{
     BuiltinDirectiveError, ImportDirectiveError, IntrinsicDirectiveError,
 };
@@ -15,8 +16,6 @@ use zydeco_utils::span::Span;
 /// A deterministic source-template error suitable for memoized parsing.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum SourceParseError {
-    #[error("cannot lex source `{}`: {message}", path.display())]
-    Lex { path: PathBuf, message: String },
     #[error("cannot parse source `{}`: {message}", path.display())]
     Parse { path: PathBuf, message: String },
     #[error("invalid source directive in `{}`: {error}", path.display())]
@@ -39,13 +38,13 @@ pub enum SourceParseError {
     },
 }
 
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum SourceLoadError {
     #[error("cannot resolve root source `{}`: {source}", path.display())]
     RootPath {
         path: PathBuf,
         #[source]
-        source: io::Error,
+        source: Arc<io::Error>,
     },
     #[error(
         "cannot resolve import `{}` from `{}` at {span}: {source}",
@@ -57,54 +56,18 @@ pub enum SourceLoadError {
         requested: PathBuf,
         span: Span,
         #[source]
-        source: io::Error,
+        source: Arc<io::Error>,
     },
     #[error("cannot read source `{}`: {source}", path.display())]
     Read {
         path: PathBuf,
         #[source]
-        source: io::Error,
-    },
-    #[error("cannot lex source `{}`: {message}", path.display())]
-    Lex { path: PathBuf, message: String },
-    #[error("cannot parse source `{}`: {message}", path.display())]
-    Parse { path: PathBuf, message: String },
-    #[error("invalid source directive in `{}`: {error}", path.display())]
-    Directive {
-        path: PathBuf,
-        #[source]
-        error: ImportDirectiveError,
-    },
-    #[error("invalid Builtin directive in `{}`: {error}", path.display())]
-    BuiltinDirective {
-        path: PathBuf,
-        #[source]
-        error: BuiltinDirectiveError,
-    },
-    #[error("invalid intrinsic directive in `{}`: {error}", path.display())]
-    IntrinsicDirective {
-        path: PathBuf,
-        #[source]
-        error: IntrinsicDirectiveError,
+        source: Arc<io::Error>,
     },
     #[error(transparent)]
+    Parse(#[from] SourceParseError),
+    #[error(transparent)]
     Cycle(#[from] ImportCycle),
-}
-
-impl From<SourceParseError> for SourceLoadError {
-    fn from(error: SourceParseError) -> Self {
-        match error {
-            | SourceParseError::Lex { path, message } => Self::Lex { path, message },
-            | SourceParseError::Parse { path, message } => Self::Parse { path, message },
-            | SourceParseError::Directive { path, error } => Self::Directive { path, error },
-            | SourceParseError::BuiltinDirective { path, error } => {
-                Self::BuiltinDirective { path, error }
-            }
-            | SourceParseError::IntrinsicDirective { path, error } => {
-                Self::IntrinsicDirective { path, error }
-            }
-        }
-    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -144,18 +107,6 @@ impl Display for CheckedRootSort {
             | Self::Computation => write!(f, "a computation"),
         }
     }
-}
-
-#[derive(Debug, Error)]
-pub enum SourceLowerError {
-    #[error("cannot execute or lower a source root classified as {found}")]
-    NonComputation { found: CheckedRootSort },
-    #[error("Builtin execution requires a package-dependent root, but found type {found:?}")]
-    NonBuiltinExecutable { found: TypeId },
-    #[error(transparent)]
-    BuiltinPackage(#[from] zydeco_dynamics::BuiltinPackageError),
-    #[error(transparent)]
-    BuiltinStack(#[from] zydeco_stackir::BuiltinPackageLowerError),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

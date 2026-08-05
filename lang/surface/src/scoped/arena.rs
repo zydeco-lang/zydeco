@@ -28,7 +28,7 @@ impl ArenaSchema<ContextNodeId> for ScopedScope {
 }
 
 /// The condensation DAG carried by a contextual term.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct BindingContext {
     pub nodes: ArenaSparse<ScopedScope, ContextNodeId>,
     graph: SccGraph<ContextNodeId>,
@@ -168,7 +168,7 @@ pub trait ArenaScoped {
 }
 
 /// Resolved arena plus name-resolution metadata and dependency/context analysis.
-#[derive(Debug, Default, AsRefSelf, AsMutSelf)]
+#[derive(Clone, Debug, Default, AsRefSelf, AsMutSelf)]
 pub struct ScopedArena {
     // arenas
     pub defs: ArenaSparse<ScopedScope, DefId>,

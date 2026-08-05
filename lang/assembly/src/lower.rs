@@ -174,9 +174,6 @@ impl<'a> Lower<'a> for sk::ValueId {
         match value {
             | Value::Hole(Hole) => Abort.build(lo, cx),
             | Value::Var(def_id) => {
-                // Retrieve the variable from the context
-                let _name = lo.scoped.defs[&def_id].clone();
-                // log::trace!("lowering var: {}{}", _name.plain(), def_id.concise());
                 let atom = match lo.arena.defs.forth(&def_id).clone() {
                     | DefId::Var(var_id) => Atom::Var(var_id),
                     | DefId::Sym(sym_id) => Atom::Sym(sym_id),

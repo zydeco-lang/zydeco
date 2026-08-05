@@ -1,4 +1,5 @@
-use clap::{CommandFactory, ValueEnum};
+use clap::CommandFactory;
+use clap::ValueEnum as _;
 use clap_complete::{Shell, generate_to};
 use std::io;
 

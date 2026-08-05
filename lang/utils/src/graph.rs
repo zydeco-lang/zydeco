@@ -320,7 +320,6 @@ impl<Id: Hash + Eq + Clone> SccGraph<Id>
         let mut top = Vec::new();
         for root in &self.roots {
             let Some(scc) = &self.strongs.get(root) else {
-                // eprintln!("invalid scc id: {:?}", root);
                 continue;
             };
             top.push(scc.iter().cloned().collect());
@@ -330,27 +329,21 @@ impl<Id: Hash + Eq + Clone> SccGraph<Id>
     /// Remove given ids from the graph.
     pub fn release(&mut self, ids: impl IntoIterator<Item = Id>) {
         let ids = ids.into_iter().collect::<HashSet<_>>();
-        // println!(">>> releasing: {:?}", ids);
         for id in ids {
             let Some(scc_id) = self.belongs.remove(&id) else { unreachable!() };
             let Some(scc) = &mut self.strongs.get_mut(&scc_id) else { unreachable!() };
             scc.remove(&id);
-            // println!("scc_id: {:?}, scc: {:?}", scc_id, scc);
             if scc.is_empty() {
-                // println!("empty: {:?}", scc_id);
                 self.strongs.remove(&scc_id);
                 self.roots.remove(&scc_id);
                 let Some(mut next) = self.srcs.map.remove(&scc_id) else { continue };
-                // println!("next?: {:?}", next);
                 for n in &next {
                     self.deps.map.get_mut(n).unwrap().remove(&scc_id);
                 }
                 next.retain(|x| self.deps.query(x).is_empty());
-                // println!("next: {:?}", next);
                 self.roots.extend(next);
             }
         }
-        // println!("<<<");
     }
     /// Mark given ids and all their dependents (requiring given ids) as unreachable
     /// and thereafter remove them from the graph.
@@ -447,7 +440,6 @@ mod tests {
         let mut deps = DepGraph::new();
         deps.add(1, []);
         let mut scc = Kosaraju::new(&deps).run();
-        println!("{:?}", scc);
         assert_eq!(scc.top(), vec![[1].into_iter().collect()]);
         scc.release([1]);
         assert_eq!(scc.top(), vec![]);
@@ -482,17 +474,14 @@ mod tests {
         deps.add(9, [7]);
         // let mut scc = Tarjan::run(&deps);
         let mut scc = Kosaraju::new(&deps).run();
-        // println!("{:?}", scc);
         for s in scc.top() {
             assert_eq!(s.len(), 1);
             let n = s.into_iter().next().unwrap();
             assert!(n == 4 || n == 6);
         }
         scc.release([4]);
-        // println!("{:?}", scc);
         assert_eq!(scc.top(), vec![[6].into_iter().collect()]);
         scc.release([6]);
-        // println!("{:?}", scc);
         assert_eq!(scc.top(), vec![[5].into_iter().collect()]);
         scc.release([5]);
         assert_eq!(scc.top(), vec![[3].into_iter().collect()]);

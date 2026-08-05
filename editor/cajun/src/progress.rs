@@ -16,15 +16,19 @@ use tower_lsp::{
         WorkDoneProgressReport, notification, request,
     },
 };
-use zydeco_driver::source::SourceLoadProgress;
-
 const PROGRESS_TITLE: &str = "Zydeco";
 const DISPLAY_DELAY: Duration = Duration::from_millis(150);
 const REPORT_INTERVAL: Duration = Duration::from_millis(120);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct SourceDiscovery {
+    pub path: PathBuf,
+    pub discovered: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum AnalysisProgress {
-    Parsing(SourceLoadProgress),
+    Parsing(SourceDiscovery),
     Assembling { source_count: usize },
     Desugaring { source_count: usize },
     Resolving { source_count: usize },
@@ -228,10 +232,8 @@ impl ProgressMessageFormatter {
 
 #[cfg(test)]
 mod tests {
-    use super::{AnalysisProgress, PROGRESS_TITLE, ProgressMessageFormatter};
+    use super::{AnalysisProgress, PROGRESS_TITLE, ProgressMessageFormatter, SourceDiscovery};
     use std::path::{Path, PathBuf};
-    use zydeco_driver::source::SourceLoadProgress;
-
     #[test]
     fn progress_uses_the_zydeco_title_and_truthful_phase_messages() {
         let formatter = ProgressMessageFormatter::new(Path::new("/workspace/main.zy"));
@@ -239,7 +241,7 @@ mod tests {
 
         assert_eq!(PROGRESS_TITLE, "Zydeco");
         assert_eq!(
-            message(AnalysisProgress::Parsing(SourceLoadProgress {
+            message(AnalysisProgress::Parsing(SourceDiscovery {
                 path: PathBuf::from("/workspace/lib/list.zy"),
                 discovered: 2,
             })),

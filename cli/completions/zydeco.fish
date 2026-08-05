@@ -31,20 +31,22 @@ complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "check" -d 'Check a zy
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "build"
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -l dry -d 'Dry run (don\'t execute)'
-complete -c zydeco -n "__fish_zydeco_using_subcommand run" -s v -l verbose -d 'Level of verbosity'
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -s h -l help -d 'Print help'
-complete -c zydeco -n "__fish_zydeco_using_subcommand check" -s v -l verbose -d 'Level of verbosity'
 complete -c zydeco -n "__fish_zydeco_using_subcommand check" -s h -l help -d 'Print help'
-complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l target-os -d 'Target OS (defaults to host OS)' -r
-complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l target-arch -d 'Target architecture (defaults to host architecture)' -r
-complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s t -l target -d 'Target backend (zir, zasm, asm, llvm, exe, llvm-exe)' -r
+complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l target-os -d 'Target OS (defaults to host OS)' -r -f -a "linux\t''
+macos\t''"
+complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l target-arch -d 'Target architecture (defaults to host architecture)' -r -f -a "x86-64\t''
+aarch64\t''"
+complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s t -l target -d 'Target backend' -r -f -a "zir\t''
+zasm\t''
+asm\t''
+llvm\t''
+exe\t''
+llvm-exe\t''"
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s b -l build-dir -d 'Build Directory' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s r -l runtime-dir -d 'Runtime directory' -r -F
-complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l link-existing -d 'Skip dumping assembly and only link existing files'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s x -l execute -d 'Run the program after building'
-complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l dry -d 'Dry run (don\'t execute)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l no-cps -d 'Skip CPS translation in the StackIR pipeline'
-complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s v -l verbose -d 'Level of verbosity'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from run check build help" -f -a "run" -d 'Run a zydeco program'
 complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from run check build help" -f -a "check" -d 'Check a zydeco program'

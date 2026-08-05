@@ -49,7 +49,7 @@ cargo test-all
 
 ## Repository Layout
 
-- `lang/`: parser, type checker, interpreter, driver, and tests.
+- `lang/`: parser, type checker, analysis session, interpreter, backends, and tests.
 - `lib/`: standard library, example programs, and test projects under
   `lib/tests/`.
 - `cli/`: command-line interface.

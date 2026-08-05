@@ -17,3 +17,13 @@ fn a_root_term_builds_without_project_configuration() {
     );
     assert!(String::from_utf8_lossy(&output.stdout).contains("[entry]"));
 }
+
+#[test]
+fn a_rejected_root_returns_a_failure_status_with_source_diagnostics() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib/tests/fail/annotation.zy");
+    let output =
+        Command::new(env!("CARGO_BIN_EXE_zydeco")).arg("check").arg(root).output().unwrap();
+
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Missing annotation"));
+}

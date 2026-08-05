@@ -4,6 +4,9 @@ version = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-zydeco-driver = { workspace = true }
+zydeco-session = { workspace = true }
 zydeco-statics = { workspace = true }
+zydeco-cli = { path = "../../cli" }
+zydeco-stackir = { workspace = true }
+thiserror = { workspace = true }
 tempfile = { workspace = true }

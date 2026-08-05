@@ -395,37 +395,6 @@ impl<'source> Iterator for Lexer<'source> {
     }
 }
 
-/// Token stream wrapper that formats tokens into a deterministic string.
-pub struct HashLexer<'source> {
-    inner: Lexer<'source>,
-}
-
-impl<'source> HashLexer<'source> {
-    /// Create a new hashing lexer for a source string.
-    pub fn new(source: &'source str) -> Self {
-        Self { inner: Lexer::new(source) }
-    }
-    /// Serialize the token stream into a single string.
-    pub fn hash_string(self) -> Result<String, String> {
-        let mut h = String::new();
-        for (_, t, _) in self {
-            h += &format!("{}", t);
-        }
-        Ok(h)
-    }
-}
-
-impl<'source> Iterator for HashLexer<'source> {
-    type Item = (usize, Tok<'source>, usize);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.inner.next() {
-            | Some((l, tok, r)) => Some((l, tok, r)),
-            | _ => None,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tooling_tests {
     use super::{LexicalToken, LexicalTokenKind, LexicalTokens};
@@ -466,17 +435,5 @@ mod tooling_tests {
             assert_eq!(tokens[0].kind, LexicalTokenKind::Comment);
             assert_eq!(fixture.text(&tokens[0]), source);
         });
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_lexer_simple() {
-        let src = "--| aeioa`s`nkl\nlet x = 1 in -- ` \n /- ` /- `x` \n-/\n\n -/ \n ret x`\n\n";
-        let toks: Vec<_> = Lexer::new(src).map(|(_, x, _)| format!("{}", x)).collect();
-        println!("{}", toks.join(", "))
     }
 }
