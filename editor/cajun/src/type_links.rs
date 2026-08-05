@@ -1,5 +1,5 @@
 use std::collections::BTreeSet;
-use zydeco_statics::tyck::{
+use zydeco_statics::{
     arena::StaticsArena,
     syntax::{
         AbstId, AnnId, CoDataId, DataId, ExistsMode, Fillable, KPatId, Kind, KindId, KindPattern,

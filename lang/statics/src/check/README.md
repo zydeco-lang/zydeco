@@ -1,14 +1,14 @@
-# Type Checker (tyck)
+# Type Checking
 
-`tyck` implements the static semantics of Zydeco. It consumes the scoped surface
+`check` implements Zydeco's bidirectional kind and type checking. It consumes scoped surface
 syntax, elaborates it into typed syntax (kinds, types, values, computations),
 and records the resulting annotations in a `StaticsArena`.
 
 ## Role in the pipeline
 
 ```markdown
-textual -> bitter -> scoped -> tyck -+-> dynamics
-                                     +-> stackir -> assembly -> amd64 / llvm
+textual -> bitter -> scoped -> check -+-> dynamics
+                                      +-> stackir -> assembly -> amd64 / llvm
 ```
 
 The type checker is the first phase that separates term categories and assigns
@@ -39,12 +39,15 @@ Monadic blocks are elaborated during type checking via the algebra translation
 implemented in `monadic`. This translation uses a monadic construction API and
 specialized environments to lift terms into a user-supplied monad.
 
-## Helper modules
+## Neighboring statics modules
 
-- `env`: typing environments, substitution maps, and monadic environments.
-- `alloc`: typed arena allocation with annotation tracking.
-- `construct`/`moncons`: HOAS-style builders for internal transformations.
-- `destruct`: destructors and helpers for inspecting typed nodes.
-- `syntactic`: syntactic checks for annotations, seals, and usage.
-- `lub`, `norm`: least-upper-bound and normalization/substitution utilities.
-- `err`, `fmt`, `span`: error reporting, formatting, and span lookup.
+- `syntax` and `arena`: the durable typed representation and its annotation tables.
+- `environment`: typing, substitution, structure, and monadic environments.
+- `alloc`, `construct`, and `destruct`: typed allocation, construction, and inspection APIs.
+- `normalize`: substitution, hole solving, scope support, and definitional normalization.
+- `elaborate::monadic`: the algebra translation and its specialized construction API.
+- `validate`: whole-program checks that consume typed syntax after local checking.
+- `fmt` and `source_span`: source-aware formatting and span lookup; the latter remains crate-private.
+
+The `check` module itself retains the checking rules, structured errors, least-upper-bound operations,
+syntactic queries needed by those rules, and diagnostic dump helpers.

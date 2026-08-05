@@ -4,6 +4,7 @@
 
 use super::syntax::*;
 use crate::surface_syntax as su;
+use crate::{SkolemScope, TyEnv};
 
 use zydeco_derive::{AsMutSelf, AsRefSelf};
 pub use zydeco_surface::arena::*;

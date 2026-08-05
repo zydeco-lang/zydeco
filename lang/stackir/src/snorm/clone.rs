@@ -255,7 +255,7 @@ where
 mod tests {
     use super::*;
     use crate::snorm::substitute::Substitutor;
-    use zydeco_statics::tyck::arena::StaticsArena;
+    use zydeco_statics::arena::StaticsArena;
     use zydeco_syntax::VarName;
 
     #[test]

@@ -1,7 +1,7 @@
 mod common;
 
 use common::TestFixture;
-use zydeco_statics::{Alloc, Lub, Tycker, tyck::syntax::*};
+use zydeco_statics::{Alloc, Lub, Tycker, environment::*, syntax::*};
 use zydeco_utils::prelude::IdAllocator;
 
 impl TestFixture {

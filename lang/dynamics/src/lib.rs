@@ -1,7 +1,7 @@
 #![doc = include_str!("README.md")]
 
 pub mod statics_syntax {
-    pub use zydeco_statics::tyck::syntax::*;
+    pub use zydeco_statics::syntax::*;
 }
 
 /// Dynamic syntax and runtime state for the evaluator.

@@ -9,8 +9,8 @@ use std::{
     cmp::{Ordering, PartialEq, PartialOrd},
     collections::{BTreeSet, VecDeque},
 };
+use zydeco_statics::arena::StaticsArena;
 use zydeco_statics::surface_syntax::ScopedArena;
-use zydeco_statics::tyck::arena::StaticsArena;
 use zydeco_utils::pass::CompilerPass;
 
 /// Assignments of values and stacks.

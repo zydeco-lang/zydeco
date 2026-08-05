@@ -1,11 +1,12 @@
 pub use zydeco_syntax::*;
 
-use crate::statics_syntax::{self as ss, Env};
+use crate::statics_syntax as ss;
 use derive_more::From;
 use std::{
     io::{BufRead, Write},
     rc::Rc,
 };
+use zydeco_statics::environment::Env;
 use zydeco_utils::prelude::{ArenaSchema, ArenaSparse};
 
 /* ------------------------------- Identifier ------------------------------- */

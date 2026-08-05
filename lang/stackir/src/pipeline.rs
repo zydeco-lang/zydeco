@@ -1,5 +1,5 @@
 use crate::{ClosureConverter, CpsTranslator, Elaborator, StackirArena, Substitutor};
-use zydeco_statics::tyck::arena::StaticsArena;
+use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax::SpanArena};
 use zydeco_utils::pass::CompilerPass;
 

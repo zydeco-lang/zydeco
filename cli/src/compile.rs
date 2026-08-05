@@ -10,7 +10,7 @@ use zydeco_session::{
 use zydeco_stackir::{
     BuiltinPackageLowerError, BuiltinRootLowerer, CpsMode, OptimizationPipeline, StackirArena,
 };
-use zydeco_statics::tyck::arena::StaticsArena;
+use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax::SpanArena};
 use zydeco_utils::pass::CompilerPass;
 

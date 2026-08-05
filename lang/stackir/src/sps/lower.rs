@@ -1,8 +1,6 @@
 use super::syntax::*;
 use derive_more::{AsMut, AsRef};
-use zydeco_statics::tyck::{
-    BuiltinPackagePlan, BuiltinPackageValue, arena::StaticsArena, syntax as ss,
-};
+use zydeco_statics::{BuiltinPackagePlan, BuiltinPackageValue, arena::StaticsArena, syntax as ss};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_utils::pass::CompilerPass;
 
@@ -450,7 +448,7 @@ impl Lower for ss::CompuId {
                 let def_id = match &lo.statics.vpats[&param] {
                     | VPat::Var(def) => *def,
                     | _ => {
-                        let fmt = zydeco_statics::tyck::fmt::Formatter::new(lo.scoped, lo.statics);
+                        let fmt = zydeco_statics::fmt::Formatter::new(lo.scoped, lo.statics);
                         let param_str = param.ugly(&fmt);
                         panic!("Fix param must be a variable, found:\n{}", param_str);
                     }
@@ -542,14 +540,15 @@ impl Lower for ss::CompuId {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use zydeco_statics::arena::StaticsScope;
     use zydeco_utils::prelude::IdAllocator;
 
     #[test]
     fn computation_roots_lower_without_declaration_entries() {
-        let mut allocator = IdAllocator::<ss::StaticsScope>::new();
+        let mut allocator = IdAllocator::<StaticsScope>::new();
         let value = allocator.alloc();
         let root = allocator.alloc();
-        let mut statics = ss::StaticsArena::default();
+        let mut statics = StaticsArena::default();
         statics.values.insert_new(value, ss::Triv.into());
         statics.compus.insert_new(root, ss::Return(value).into());
         let spans = SpanArena::default();

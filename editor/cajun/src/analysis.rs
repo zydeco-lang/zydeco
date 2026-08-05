@@ -8,7 +8,7 @@ use tower_lsp::lsp_types::{
     SemanticToken, SymbolKind, Url,
 };
 use zydeco_session::{CompilerSession, ProgramAnalysis};
-use zydeco_statics::tyck::{
+use zydeco_statics::{
     arena::StaticsArena,
     fmt::{Formatter, SealedTypeEquation},
     syntax::AbstId,

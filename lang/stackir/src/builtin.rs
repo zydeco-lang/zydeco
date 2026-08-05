@@ -10,7 +10,7 @@ pub type BuiltinMap = HashMap<&'static str, Builtin>;
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum BuiltinPackageLowerError {
     #[error(transparent)]
-    Plan(#[from] zydeco_statics::tyck::BuiltinPackagePlanError),
+    Plan(#[from] zydeco_statics::BuiltinPackagePlanError),
     #[error("host operation `{role}` has no Stack IR implementation")]
     UnsupportedOperation { role: BuiltinValueRole },
 }

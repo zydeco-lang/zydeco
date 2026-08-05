@@ -167,7 +167,7 @@ pub mod syntax {
     /// SCons
     pub struct SCons<T, F>(pub T, pub F);
 
-    pub use crate::tyck::monadic::syntax::*;
+    pub use crate::elaborate::monadic::syntax::*;
 }
 
 /// Trivial [`Construct`] construction

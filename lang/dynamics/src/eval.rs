@@ -1,5 +1,6 @@
-use crate::{statics_syntax::Env, syntax::*};
+use crate::syntax::*;
 use std::io::{BufRead, Write};
+use zydeco_statics::environment::Env;
 
 /// Trait for stepping a term until a result is produced.
 pub trait Eval<'rt>: Sized {

@@ -237,8 +237,8 @@ type package, so importing and opening it requires neither a thunk nor a returne
 implements *monadic blocks*, a
 generalized do-notation. A monadic block is translated during type checking
 via the algebra translation implemented in
-`lang/statics/src/tyck/monadic.rs` and invoked from
-`lang/statics/src/tyck/check.rs`.
+`lang/statics/src/elaborate/monadic/mod.rs` and invoked from
+`lang/statics/src/check/mod.rs`.
 
 Each monadic block resolves `Monad` and `Algebra` as ordinary types at its lexical site.
 The checker verifies their expected higher kinds and records the selected constructors in the block's
@@ -263,13 +263,16 @@ Zydeco is implemented as a pipeline with an interpreter and native-code branch:
 The phases are spread across several core crates:
 
 - `zydeco-surface` (surface syntax, parsing, desugaring, name resolution)
-- `zydeco-statics` (static semantics and algebra translation)
+- `zydeco-statics` (typed representation, static semantics, normalization, and type-directed elaboration)
 - `zydeco-dynamics` (operational semantics and interpreter)
 - `zydeco-stackir` and `zydeco-assembly` (lowered, stack-oriented IRs)
 - `zydeco-amd64` and `zydeco-llvm` (native-code backends)
 
-Common patterns in each phase include `syntax`, `arena`, `err`, `fmt`, and
-`span` modules.
+Within `zydeco-statics`, `syntax`, `environment`, and `arena` define the durable typed representation.
+`check` owns local kinding and typing rules, `normalize` owns substitution and definitional normalization,
+`elaborate` owns type-directed source translations, and `validate` is reserved for post-check whole-program
+properties. This separation lets later validation passes consume typed syntax without becoming more type-checking
+branches.
 
 ### Arena and ID invariants
 

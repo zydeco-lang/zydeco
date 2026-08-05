@@ -1,5 +1,3 @@
-pub use super::arena::*;
-pub use super::env::*;
 pub use zydeco_syntax::*;
 pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
@@ -100,8 +98,7 @@ pub enum StaticTermId {
 }
 
 mod impls_identifiers {
-    use super::{super::*, *};
-    use crate::*;
+    use super::*;
 
     impl AnnId {
         pub fn as_type(self) -> TypeId {
@@ -158,38 +155,6 @@ mod impls_identifiers {
                 | PatAnnId::Value(pat, _) => PatId::Value(pat),
             }
         }
-        pub fn mk_hole(tycker: &mut Tycker<'_>, env: &TyEnv, ann: AnnId) -> Self {
-            match ann {
-                | ss::AnnId::Set => {
-                    let tm = Alloc::alloc(tycker, Hole, (), env);
-                    PatAnnId::Kind(tm)
-                }
-                | ss::AnnId::Kind(kd) => {
-                    let tm = Alloc::alloc(tycker, Hole, kd, env);
-                    PatAnnId::Type(tm, kd)
-                }
-                | ss::AnnId::Type(ty) => {
-                    let tm = Alloc::alloc(tycker, Hole, ty, env);
-                    PatAnnId::Value(tm, ty)
-                }
-            }
-        }
-        pub fn mk_var(tycker: &mut Tycker<'_>, env: &TyEnv, def: DefId, ann: AnnId) -> Self {
-            match ann {
-                | ss::AnnId::Set => {
-                    let tm = Alloc::alloc(tycker, def, (), env);
-                    PatAnnId::Kind(tm)
-                }
-                | ss::AnnId::Kind(kd) => {
-                    let tm = Alloc::alloc(tycker, def, kd, env);
-                    PatAnnId::Type(tm, kd)
-                }
-                | ss::AnnId::Type(ty) => {
-                    let tm = Alloc::alloc(tycker, def, ty, env);
-                    PatAnnId::Value(tm, ty)
-                }
-            }
-        }
         pub fn as_type(self) -> (TPatId, KindId) {
             match self {
                 | PatAnnId::Type(pat, kd) => (pat, kd),
@@ -200,33 +165,6 @@ mod impls_identifiers {
             match self {
                 | PatAnnId::Value(pat, ty) => (pat, ty),
                 | PatAnnId::Kind(_) | PatAnnId::Type(_, _) => unreachable!(),
-            }
-        }
-        pub fn try_as_kind(
-            self, tycker: &mut Tycker<'_>, err: TyckError,
-            blame: &'static std::panic::Location<'static>,
-        ) -> ResultKont<KPatId> {
-            match self {
-                | PatAnnId::Kind(pat) => Ok(pat),
-                | PatAnnId::Type(_, _) | PatAnnId::Value(_, _) => tycker.err_k(err, blame),
-            }
-        }
-        pub fn try_as_type(
-            self, tycker: &mut Tycker<'_>, err: TyckError,
-            blame: &'static std::panic::Location<'static>,
-        ) -> ResultKont<(TPatId, KindId)> {
-            match self {
-                | PatAnnId::Type(pat, kd) => Ok((pat, kd)),
-                | PatAnnId::Kind(_) | PatAnnId::Value(_, _) => tycker.err_k(err, blame),
-            }
-        }
-        pub fn try_as_value(
-            self, tycker: &mut Tycker<'_>, err: TyckError,
-            blame: &'static std::panic::Location<'static>,
-        ) -> ResultKont<(VPatId, TypeId)> {
-            match self {
-                | PatAnnId::Value(pat, ty) => Ok((pat, ty)),
-                | PatAnnId::Kind(_) | PatAnnId::Type(_, _) => tycker.err_k(err, blame),
             }
         }
     }
@@ -249,54 +187,6 @@ mod impls_identifiers {
                 | TermAnnId::Hole(_) | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
                     unreachable!()
                 }
-            }
-        }
-        pub fn try_as_kind(
-            self, tycker: &mut Tycker<'_>, err: TyckError,
-            blame: &'static std::panic::Location<'static>,
-        ) -> ResultKont<KindId> {
-            match self {
-                | TermAnnId::Kind(kd) => Ok(kd),
-                | TermAnnId::Hole(_)
-                | TermAnnId::Type(_, _)
-                | TermAnnId::Value(_, _)
-                | TermAnnId::Compu(_, _) => tycker.err_k(err, blame),
-            }
-        }
-        pub fn try_as_type(
-            self, tycker: &mut Tycker<'_>, err: TyckError,
-            blame: &'static std::panic::Location<'static>,
-        ) -> ResultKont<(TypeId, KindId)> {
-            match self {
-                | TermAnnId::Type(ty, kd) => Ok((ty, kd)),
-                | TermAnnId::Hole(_)
-                | TermAnnId::Kind(_)
-                | TermAnnId::Value(_, _)
-                | TermAnnId::Compu(_, _) => tycker.err_k(err, blame),
-            }
-        }
-        pub fn try_as_value(
-            self, tycker: &mut Tycker<'_>, err: TyckError,
-            blame: &'static std::panic::Location<'static>,
-        ) -> ResultKont<(ValueId, TypeId)> {
-            match self {
-                | TermAnnId::Value(val, ty) => Ok((val, ty)),
-                | TermAnnId::Hole(_)
-                | TermAnnId::Kind(_)
-                | TermAnnId::Type(_, _)
-                | TermAnnId::Compu(_, _) => tycker.err_k(err, blame),
-            }
-        }
-        pub fn try_as_compu(
-            self, tycker: &mut Tycker<'_>, err: TyckError,
-            blame: &'static std::panic::Location<'static>,
-        ) -> ResultKont<(CompuId, TypeId)> {
-            match self {
-                | TermAnnId::Compu(com, ty) => Ok((com, ty)),
-                | TermAnnId::Hole(_)
-                | TermAnnId::Kind(_)
-                | TermAnnId::Type(_, _)
-                | TermAnnId::Value(_, _) => tycker.err_k(err, blame),
             }
         }
     }

@@ -6,7 +6,7 @@ use super::{arena::*, substitute::*, syntax::*};
 use derive_more::{AsMut, AsRef};
 use std::{collections::HashMap, convert::Infallible};
 use {
-    zydeco_statics::tyck::{arena::StaticsArena, syntax as ss},
+    zydeco_statics::{arena::StaticsArena, syntax as ss},
     zydeco_surface::scoped::arena::ScopedArena,
     zydeco_syntax::VarName,
     zydeco_utils::prelude::{CoContext, CompilerPass},

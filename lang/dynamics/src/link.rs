@@ -2,10 +2,8 @@ use crate::{builtin::BuiltinRuntime, syntax::DynamicsArena, *};
 use std::rc::Rc;
 use thiserror::Error;
 use zydeco_statics::{
+    BuiltinPackagePlan, BuiltinPackagePlanError, BuiltinPackageValue, arena::StaticsArena,
     surface_syntax::ScopedArena,
-    tyck::{
-        BuiltinPackagePlan, BuiltinPackagePlanError, BuiltinPackageValue, syntax::StaticsArena,
-    },
 };
 use zydeco_syntax::*;
 
@@ -269,14 +267,15 @@ impl Link for ss::CompuId {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use zydeco_statics::arena::StaticsScope;
     use zydeco_utils::prelude::IdAllocator;
 
     #[test]
     fn computation_roots_link_and_evaluate_without_declarations() {
-        let mut allocator = IdAllocator::<ss::StaticsScope>::new();
+        let mut allocator = IdAllocator::<StaticsScope>::new();
         let value = allocator.alloc();
         let root = allocator.alloc();
-        let mut statics = ss::StaticsArena::default();
+        let mut statics = StaticsArena::default();
         statics.values.insert_new(value, ss::Triv.into());
         statics.compus.insert_new(root, ss::Return(value).into());
 

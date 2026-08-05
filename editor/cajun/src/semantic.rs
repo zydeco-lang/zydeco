@@ -6,7 +6,7 @@ use std::{
 use tower_lsp::lsp_types::{
     SemanticToken, SemanticTokenModifier, SemanticTokenType, SemanticTokensLegend,
 };
-use zydeco_statics::tyck::{
+use zydeco_statics::{
     arena::StaticsArena,
     syntax::{AnnId, Fillable, Kind, KindId},
 };

@@ -6,7 +6,7 @@ pub mod utils {
     };
     use zydeco_session::AnalysisError;
     use zydeco_stackir::CpsMode;
-    use zydeco_statics::tyck::syntax::{Fillable, TermAnnId, Type};
+    use zydeco_statics::syntax::{Fillable, TermAnnId, Type};
 
     #[derive(Debug, Error)]
     pub enum CaseError {

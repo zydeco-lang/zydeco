@@ -2,7 +2,7 @@ use crate::CompileError;
 use ariadne::FnCache;
 use std::{collections::HashMap, path::PathBuf};
 use zydeco_session::{AnalysisError, ProgramAnalysis, SourceGraph};
-use zydeco_statics::tyck::{TyckObservation, fmt as static_fmt, syntax as ss};
+use zydeco_statics::{TyckObservation, fmt as static_fmt, syntax as ss};
 use zydeco_syntax::{Pretty, SpanView, Ugly};
 use zydeco_utils::span::PathDisplay;
 

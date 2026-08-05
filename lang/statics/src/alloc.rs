@@ -25,7 +25,7 @@ pub trait Alloc<Arena, T> {
     /// The environment of this allocation.
     type Env;
     /// Allocates the value in the arena in the [`Tycker`] and returns the allocated value.
-    /// See the documentation of trait [`Alloc`] and [`crate::tyck::alloc`] for more details.
+    /// See the documentation of trait [`Alloc`] and [`crate::alloc`] for more details.
     fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> T;
 }
 

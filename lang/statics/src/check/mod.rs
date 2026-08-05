@@ -1,21 +1,29 @@
 use derive_more::{AsMut, AsRef, Deref};
 use {
     super::{
-        arena::StaticsScope,
-        env::{MonadicTypeBasis, TyEnv},
-        syntax::{
-            AbstId, AnnId, FillId, Fillable, InferenceSite, PatAnnId, StaticsArena, TermAnnId,
-            TyEnvT,
-        },
+        arena::{StaticsArena, StaticsScope},
+        environment::{MonadicTypeBasis, TyEnv, TyEnvT},
+        syntax::{AbstId, AnnId, FillId, Fillable, InferenceSite, PatAnnId, TermAnnId},
         *,
     },
-    crate::{
-        surface_syntax::{PrimDefs, ScopedArena, SpanArena},
-        *,
-    },
+    crate::surface_syntax::{PrimDefs, ScopedArena, SpanArena},
     zydeco_surface::metadata::BuiltinMeta,
     zydeco_utils::prelude::{ArenaAccess, IdAllocator},
 };
+
+/// Type-checker error definitions and reporting.
+pub mod error;
+pub use error::*;
+/// Checker-dependent construction and projection of typed annotations.
+mod annotation;
+/// Least-upper-bound operations for kinds and types.
+pub mod lub;
+pub use lub::*;
+/// Syntactic checks for annotations, seals, and usage.
+pub mod syntactic;
+pub use syntactic::*;
+/// Debug dump helpers used by diagnostics.
+mod dump;
 
 /// Type-checking driver that consumes scoped syntax and produces typed arenas.
 #[derive(AsRef, AsMut)]
@@ -4127,7 +4135,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     Alloc::alloc(tycker, ss::VarName("mo".to_string()), monad_impl_ty.into(), &());
                 let monad_impl = cs::Value(monad_impl_var).build(tycker, &self.info);
 
-                use super::env::*;
+                use crate::environment::*;
                 let (_menv, body_lift) = cs::TermLift { tm: body }.mbuild_k(
                     tycker,
                     MonEnv {
@@ -4647,7 +4655,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
 #[cfg(test)]
 mod source_boundary_tests {
     use super::*;
-    use crate::tyck::env::TyEnv;
+    use crate::environment::TyEnv;
 
     #[test]
     fn expected_kinds_flow_through_source_boundaries() {

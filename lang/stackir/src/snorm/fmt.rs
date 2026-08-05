@@ -2,7 +2,7 @@
 
 use super::syntax::*;
 use crate::sps::{fmt as sps_fmt, syntax::*};
-use zydeco_statics::tyck::arena::StaticsArena;
+use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::scoped::syntax::ScopedArena;
 
 /* -------------------------------- Formatter ------------------------------- */
@@ -101,7 +101,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
             ])
             .group(),
             | Value::Ctor(Ctor(ctor, val)) => {
-                let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
+                let statics_fmt = zydeco_statics::fmt::Formatter::new(f.scoped, f.statics);
                 RcDoc::concat([
                     RcDoc::text(ctor.name.ugly(&statics_fmt)),
                     RcDoc::text("("),
@@ -116,7 +116,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
                 RcDoc::text(")"),
             ]),
             | Value::Literal(lit) => {
-                let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
+                let statics_fmt = zydeco_statics::fmt::Formatter::new(f.scoped, f.statics);
                 RcDoc::text(lit.ugly(&statics_fmt))
             }
             | Value::Complex(Complex { operator, operands }) => {
@@ -161,7 +161,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Stack {
                 stack.pretty(f),
             ]),
             | Stack::Tag(Cons(dtor, stack)) => {
-                let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
+                let statics_fmt = zydeco_statics::fmt::Formatter::new(f.scoped, f.statics);
                 RcDoc::concat([
                     RcDoc::text("tag("),
                     RcDoc::text(dtor.name.ugly(&statics_fmt)),
@@ -265,7 +265,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation<NonJoin> {
                 ])
             }
             | Computation::CoCase(SCoMatch { scrut, arms }) => {
-                let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
+                let statics_fmt = zydeco_statics::fmt::Formatter::new(f.scoped, f.statics);
                 RcDoc::concat([
                     RcDoc::text("cocase"),
                     RcDoc::space(),

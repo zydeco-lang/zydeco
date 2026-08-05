@@ -10,7 +10,7 @@ use super::{
 };
 use derive_more::{AsMut, AsRef};
 use zydeco_stackir::{StackirArena, sps::syntax as sk};
-use zydeco_statics::tyck::arena::StaticsArena;
+use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_utils::with::With;
 

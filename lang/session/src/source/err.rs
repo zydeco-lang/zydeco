@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 use thiserror::Error;
-use zydeco_statics::tyck::syntax::TermAnnId;
+use zydeco_statics::syntax::TermAnnId;
 use zydeco_surface::textual::{
     BuiltinDirectiveError, ImportDirectiveError, IntrinsicDirectiveError,
 };

@@ -1,7 +1,7 @@
 mod common;
 
 use common::TestFixture;
-use zydeco_statics::{Alloc, Lub, tyck::syntax::*};
+use zydeco_statics::{Alloc, Lub, environment::*, syntax::*};
 use zydeco_utils::prelude::{ArenaAccess, IdAllocator};
 
 fn source_site() -> zydeco_statics::surface_syntax::TermId {

@@ -1,7 +1,7 @@
 use super::syntax::*;
 use crate::sps::syntax::*;
 use derive_more::{AsMut, AsRef};
-use zydeco_statics::tyck::arena::StaticsArena;
+use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::textual::arena::SpanArena;
 use zydeco_utils::pass::CompilerPass;
 

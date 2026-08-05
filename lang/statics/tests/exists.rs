@@ -1,7 +1,7 @@
 mod common;
 
 use common::TestFixture;
-use zydeco_statics::{Alloc, Lub, Tycker, tyck::syntax::*};
+use zydeco_statics::{Alloc, Lub, Tycker, environment::*, syntax::*};
 
 impl TestFixture {
     fn abst(tycker: &mut Tycker<'_>, kind: KindId) -> (AbstId, TypeId) {

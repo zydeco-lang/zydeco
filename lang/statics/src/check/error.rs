@@ -1,7 +1,7 @@
 //! Error messages in the type checker.
 //! Shows the error message, where to look at in the source code, and the stack trace.
 
-use super::{syntax::*, *};
+use crate::{syntax::*, *};
 use ariadne::{Label, Report, ReportKind};
 use std::ops::Range;
 use zydeco_utils::span::PathDisplay;

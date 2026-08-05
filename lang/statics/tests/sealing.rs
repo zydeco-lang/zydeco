@@ -3,10 +3,9 @@ mod common;
 use common::TestFixture;
 use zydeco_statics::{
     Alloc,
-    tyck::{
-        fmt::{Formatter, SealedTypeEquation},
-        syntax::*,
-    },
+    environment::*,
+    fmt::{Formatter, SealedTypeEquation},
+    syntax::*,
 };
 use zydeco_syntax::Pretty;
 

@@ -8,7 +8,7 @@ edition = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
 readme = { workspace = true }
-description = "statics for zydeco"
+description = "static semantics and typed elaboration for Zydeco"
 
 [dependencies]
 zydeco-utils = { workspace = true }

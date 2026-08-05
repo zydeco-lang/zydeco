@@ -1,6 +1,6 @@
 #![doc = include_str!("README.md")]
 
-use zydeco_statics::tyck::syntax as static_syntax;
+use zydeco_statics::syntax as static_syntax;
 
 /// Stack IR syntax and identifiers.
 pub mod syntax;

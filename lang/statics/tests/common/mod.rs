@@ -1,7 +1,7 @@
 use zydeco_statics::{
     Alloc, Tycker,
     surface_syntax::{PrimDefs, ScopedArena, SpanArena},
-    tyck::syntax::*,
+    syntax::*,
 };
 
 pub struct TestFixture;

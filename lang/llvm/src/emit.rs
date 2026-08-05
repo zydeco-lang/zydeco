@@ -8,7 +8,7 @@ use zydeco_assembly::{
     syntax::{self as sa, Atom, Instruction, Intrinsic, ProgId, Program, Symbol, Terminator},
 };
 use zydeco_stackir::StackirArena;
-use zydeco_statics::tyck::arena::StaticsArena;
+use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_syntax::*;
 

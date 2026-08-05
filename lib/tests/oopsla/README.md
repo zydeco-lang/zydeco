@@ -379,14 +379,14 @@ Observe how the implementations are passed in as function arguments in the last 
 
 #### Algebra Translation
 
-To implement the monadic blocks, in the paper we introduced the algebra translation in Section 5.3. The corresponding implementation is located in [`lang/statics/src/tyck/monadic.rs`](../../../lang/statics/src/tyck/monadic.rs). To briefly summarize,
+To implement the monadic blocks, in the paper we introduced the algebra translation in Section 5.3. The corresponding implementation is located in [`lang/statics/src/elaborate/monadic/mod.rs`](../../../lang/statics/src/elaborate/monadic/mod.rs). To briefly summarize,
 
 + The signature translation in Figure 20 is implemented in the function `signature_translation`
 + The carrier translation in Figure 21 is implemented in the function `type_pattern_translation` and `type_translation`
 + The structure translation in Figure 22 is implemented in the function `structure_translation`
 + The value term translation in Figure 23 is implemented in the function `value_translation`
 + The computation term translation in Figure 24 is implemented in the function `value_pattern_translation` and `computation_translation`
-+ The monadic block translation in Figure 25 is implemented through direct invocation of the above functions during the type checking phase in [`lang/statics/src/tyck/check.rs`](../../../lang/statics/src/tyck/check.rs)
++ The monadic block translation in Figure 25 is implemented through direct invocation of the above functions during the type checking phase in [`lang/statics/src/check/mod.rs`](../../../lang/statics/src/check/mod.rs)
 
 #### Using *Global* Types and Terms in Monadic Blocks
 

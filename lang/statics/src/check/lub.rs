@@ -1,4 +1,4 @@
-use super::{syntax::*, *};
+use crate::{syntax::*, *};
 use derive_more::From;
 use std::collections::HashMap;
 

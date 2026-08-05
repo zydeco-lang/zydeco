@@ -1,7 +1,7 @@
 mod common;
 
 use common::TestFixture;
-use zydeco_statics::{Alloc, tyck::syntax::*};
+use zydeco_statics::{Alloc, environment::*, syntax::*};
 
 #[test]
 fn type_application_beta_reduces() {

@@ -10,7 +10,7 @@ use std::{
     sync::Arc,
 };
 use thiserror::Error;
-use zydeco_statics::tyck::{
+use zydeco_statics::{
     CheckedSource, RejectedSource, TyckObservation, TyckReports, Tycker,
     arena::StaticsArena,
     syntax::{Fillable, PackPi, TermAnnId, Type},
@@ -133,7 +133,7 @@ pub struct ExecutableProgram {
     pub spans: SpanArena,
     pub scoped: ScopedArena,
     pub statics: StaticsArena,
-    pub root: zydeco_statics::tyck::syntax::CompuId,
+    pub root: zydeco_statics::syntax::CompuId,
     pub signature: PackPi,
 }
 
@@ -144,7 +144,7 @@ pub enum ExecutableError {
     #[error("cannot execute or lower a source root classified as {found}")]
     NonComputation { found: CheckedRootSort },
     #[error("Builtin execution requires a package-dependent root, but found type {found:?}")]
-    NonBuiltinExecutable { found: zydeco_statics::tyck::syntax::TypeId },
+    NonBuiltinExecutable { found: zydeco_statics::syntax::TypeId },
 }
 
 /// A failure in a phase that prevents type checking from starting.
@@ -355,12 +355,12 @@ fn analyze_source(
         bitter.resolve().map_err(|error| AnalysisError::Resolve { error, graph: graph.clone() })?;
     let checked = Tycker::new(&spans, &prim, &mut arena).check_source_outcome(root);
     let (statics, outcome, observations) = match checked {
-        | zydeco_statics::tyck::SourceCheckOutcome::Checked(CheckedSource {
+        | zydeco_statics::SourceCheckOutcome::Checked(CheckedSource {
             statics,
             root,
             observations,
         }) => (statics, AnalysisOutcome::Checked { root }, observations),
-        | zydeco_statics::tyck::SourceCheckOutcome::Rejected(RejectedSource {
+        | zydeco_statics::SourceCheckOutcome::Rejected(RejectedSource {
             statics,
             reports,
             observations,

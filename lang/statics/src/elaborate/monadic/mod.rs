@@ -4,8 +4,10 @@
 //! + Core Idea: [section 5.3 of oopsla25](https://dl.acm.org/doi/10.1145/3720434)
 //! + Detailed Implementation: [appendix D of the extended version](https://arxiv.org/abs/2502.15031)
 
-use super::{syntax::*, *};
-use crate::*;
+use crate::{syntax::*, *};
+
+/// Monadic constructors used by algebra translation.
+pub mod construct;
 
 pub mod syntax {
     /// signature translation

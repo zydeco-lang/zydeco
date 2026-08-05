@@ -7,8 +7,8 @@ type SourceScoped = ScopedProgram;
 struct SourceChecked {
     spans: zydeco_surface::textual::syntax::SpanArena,
     scoped: zydeco_surface::scoped::arena::ScopedArena,
-    statics: zydeco_statics::tyck::arena::StaticsArena,
-    root: zydeco_statics::tyck::syntax::TermAnnId,
+    statics: zydeco_statics::arena::StaticsArena,
+    root: zydeco_statics::syntax::TermAnnId,
 }
 
 struct SourceDynamics {
@@ -18,14 +18,14 @@ struct SourceDynamics {
 struct SourceStack {
     spans: zydeco_surface::textual::syntax::SpanArena,
     scoped: zydeco_surface::scoped::arena::ScopedArena,
-    statics: zydeco_statics::tyck::arena::StaticsArena,
+    statics: zydeco_statics::arena::StaticsArena,
     stackir: zydeco_stackir::StackirArena,
 }
 
 struct SourceAssembly {
     spans: zydeco_surface::textual::syntax::SpanArena,
     scoped: zydeco_surface::scoped::arena::ScopedArena,
-    statics: zydeco_statics::tyck::arena::StaticsArena,
+    statics: zydeco_statics::arena::StaticsArena,
     stackir: zydeco_stackir::StackirArena,
     assembly: zydeco_assembly::syntax::AssemblyArena,
 }
@@ -50,17 +50,16 @@ enum TestPipelineError {
 }
 
 impl ScopedProgram {
-    fn check(self) -> Result<SourceChecked, zydeco_statics::tyck::TyckReports> {
+    fn check(self) -> Result<SourceChecked, zydeco_statics::TyckReports> {
         let Self { spans, mut arena, prim, root } = self;
-        let checked =
-            zydeco_statics::tyck::Tycker::new(&spans, &prim, &mut arena).check_source(root)?;
+        let checked = zydeco_statics::Tycker::new(&spans, &prim, &mut arena).check_source(root)?;
         Ok(SourceChecked { spans, scoped: arena, statics: checked.statics, root: checked.root })
     }
 }
 
 impl SourceChecked {
     fn dynamics(self) -> Result<SourceDynamics, TestPipelineError> {
-        let zydeco_statics::tyck::syntax::TermAnnId::Compu(root, _) = self.root else {
+        let zydeco_statics::syntax::TermAnnId::Compu(root, _) = self.root else {
             return Err(TestPipelineError::Executable(ExecutableError::NonComputation {
                 found: self.root.into(),
             }));
@@ -72,7 +71,7 @@ impl SourceChecked {
     }
 
     fn dynamics_with_builtin(self) -> Result<SourceDynamics, TestPipelineError> {
-        use zydeco_statics::tyck::syntax::{Fillable, TermAnnId, Type};
+        use zydeco_statics::syntax::{Fillable, TermAnnId, Type};
 
         let TermAnnId::Compu(root, ty) = self.root else {
             return Err(TestPipelineError::Executable(ExecutableError::NonComputation {
@@ -96,7 +95,7 @@ impl SourceChecked {
     }
 
     fn stackir(self) -> Result<SourceStack, TestPipelineError> {
-        let zydeco_statics::tyck::syntax::TermAnnId::Compu(root, _) = self.root else {
+        let zydeco_statics::syntax::TermAnnId::Compu(root, _) = self.root else {
             return Err(TestPipelineError::Executable(ExecutableError::NonComputation {
                 found: self.root.into(),
             }));
@@ -111,7 +110,7 @@ impl SourceChecked {
     }
 
     fn stackir_with_builtin(self) -> Result<SourceStack, TestPipelineError> {
-        use zydeco_statics::tyck::syntax::{Fillable, TermAnnId, Type};
+        use zydeco_statics::syntax::{Fillable, TermAnnId, Type};
 
         let TermAnnId::Compu(root, ty) = self.root else {
             return Err(TestPipelineError::Executable(ExecutableError::NonComputation {
@@ -274,7 +273,7 @@ impl RepositorySourceFiles {
     }
 
     fn assert_pure_package(relative: impl AsRef<Path>) {
-        use zydeco_statics::tyck::syntax::{Fillable, TermAnnId, Type};
+        use zydeco_statics::syntax::{Fillable, TermAnnId, Type};
 
         let checked = TestPipeline::check(repository_source(relative)).unwrap();
         let TermAnnId::Value(_, root_type) = checked.root else {
@@ -310,10 +309,10 @@ fn resolve_assembly(
 }
 
 fn checked_trivial_computation() -> SourceChecked {
-    use zydeco_statics::tyck::{arena::StaticsArena, syntax as ss};
+    use zydeco_statics::{arena::StaticsArena, syntax as ss};
     use zydeco_utils::prelude::IdAllocator;
 
-    let mut allocator = IdAllocator::<ss::StaticsScope>::new();
+    let mut allocator = IdAllocator::<zydeco_statics::arena::StaticsScope>::new();
     let value = allocator.alloc();
     let root = allocator.alloc();
     let ty = allocator.alloc();
@@ -918,7 +917,7 @@ fn the_declaration_free_annotation_fixture_fails_during_type_checking() {
 
 #[test]
 fn explicit_intrinsic_splices_produce_canonical_cbpv_terms() {
-    use zydeco_statics::tyck::syntax::{Fillable, Kind, TermAnnId, Type};
+    use zydeco_statics::syntax::{Fillable, Kind, TermAnnId, Type};
 
     [
         ("@[intrinsic(vtype)] _", "vtype"),
@@ -995,7 +994,7 @@ fn a_zero_dependency_source_program_checks_and_runs_as_one_term() {
         .check()
         .unwrap();
 
-    assert!(matches!(checked.root, zydeco_statics::tyck::syntax::TermAnnId::Compu(_, _)));
+    assert!(matches!(checked.root, zydeco_statics::syntax::TermAnnId::Compu(_, _)));
 
     let SourceDynamics { arena, .. } = checked.dynamics().unwrap();
     let mut input = std::io::empty();
@@ -1051,7 +1050,7 @@ fn a_builtin_type_role_classifies_literals_inside_its_package_scope() {
         .check()
         .unwrap();
 
-    assert!(matches!(checked.root, zydeco_statics::tyck::syntax::TermAnnId::Compu(_, _)));
+    assert!(matches!(checked.root, zydeco_statics::syntax::TermAnnId::Compu(_, _)));
 }
 
 #[test]
@@ -1168,7 +1167,7 @@ fn a_builtin_operation_role_attaches_to_its_named_classifier() {
         .unwrap()
         .check()
         .unwrap();
-    let zydeco_statics::tyck::syntax::TermAnnId::Type(entry, _) = checked.root else {
+    let zydeco_statics::syntax::TermAnnId::Type(entry, _) = checked.root else {
         panic!("a named classifier must check as a type")
     };
 
@@ -1263,7 +1262,7 @@ end
 
     let checked = TestPipeline::check(root).unwrap();
 
-    assert!(matches!(checked.root, zydeco_statics::tyck::syntax::TermAnnId::Compu(_, _)));
+    assert!(matches!(checked.root, zydeco_statics::syntax::TermAnnId::Compu(_, _)));
 }
 
 #[test]
@@ -1361,7 +1360,7 @@ fn authored_sources_define_each_intrinsic_once_in_the_canonical_builtin_signatur
 
 #[test]
 fn canonical_builtin_signature_exports_intrinsics_as_static_manifest_fields() {
-    use zydeco_statics::tyck::syntax::{ExistsMode, Fillable, Kind, ManifestKind, TermAnnId, Type};
+    use zydeco_statics::syntax::{ExistsMode, Fillable, Kind, ManifestKind, TermAnnId, Type};
     use zydeco_syntax::{BuiltinRole, BuiltinTypeRole};
 
     #[derive(Clone, Copy)]

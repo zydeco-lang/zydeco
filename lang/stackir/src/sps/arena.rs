@@ -20,7 +20,7 @@ impl ArenaSchema<CompuId> for StackirScope {
 
 /// All arenas for the stack-passing style ZIR.
 /// The definitions and patterns are equivalent to the ones in
-/// [`zydeco_statics::tyck::syntax::StaticsArena`].
+/// [`zydeco_statics::arena::StaticsArena`].
 #[derive(Debug, Default, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct StackirArena {
     /// administrative arena

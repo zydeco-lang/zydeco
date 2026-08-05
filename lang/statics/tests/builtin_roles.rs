@@ -2,8 +2,8 @@ mod common;
 
 use common::TestFixture;
 use zydeco_statics::{
-    Alloc, Tycker,
-    tyck::{BuiltinClassifierError, BuiltinSignatureValidator, DuplicateBuiltinRole, syntax::*},
+    Alloc, BuiltinClassifierError, BuiltinSignatureValidator, DuplicateBuiltinRole, Tycker,
+    environment::*, syntax::*,
 };
 
 impl TestFixture {
