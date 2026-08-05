@@ -11,6 +11,19 @@ where
         self.iter().map(|x| x.deep_clone(desugarer)).collect()
     }
 }
+impl DeepClone for b::CoPatternItem {
+    fn deep_clone(&self, desugarer: &mut Desugarer) -> Self {
+        match self {
+            | Self::Pat(pattern) => Self::Pat(pattern.deep_clone(desugarer)),
+            | Self::Dtor(dtor) => Self::Dtor(dtor.clone()),
+        }
+    }
+}
+impl DeepClone for b::CoPatternSpine {
+    fn deep_clone(&self, desugarer: &mut Desugarer) -> Self {
+        Self { head: self.head.deep_clone(desugarer), tail: self.tail.deep_clone(desugarer) }
+    }
+}
 impl DeepClone for b::DefId {
     fn deep_clone(&self, desugarer: &mut Desugarer) -> Self {
         let def = desugarer.bitter.defs[self].clone();
@@ -283,6 +296,17 @@ impl DeepClone for b::TermId {
                     })
                     .collect();
                 b::Match { scrut, arms }.into()
+            }
+            | b::Term::CoMatchClauses(term) => {
+                let b::CoMatchClauses { clauses } = term;
+                let clauses = clauses
+                    .iter()
+                    .map(|b::CoPatternClause { spine, tail }| b::CoPatternClause {
+                        spine: spine.deep_clone(desugarer),
+                        tail: tail.deep_clone(desugarer),
+                    })
+                    .collect();
+                b::CoMatchClauses { clauses }.into()
             }
             | b::Term::CoMatch(term) => {
                 let b::CoMatch { arms } = term;

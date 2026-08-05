@@ -1487,6 +1487,7 @@ fn computation_translation(
     tycker: &mut Tycker, env: MonEnv, compu: CompuId,
 ) -> Result<(MonEnv, CompuId)> {
     use Computation as Compu;
+    let copattern_match = tycker.statics.copattern_matches.get(&compu).is_some();
     let (env, ty) = cs::TypeOf(compu).mbuild(tycker, env)?;
 
     let (env, res) = match tycker.statics.compus[&compu].to_owned() {
@@ -1617,5 +1618,8 @@ fn computation_translation(
         }
     };
 
+    if copattern_match {
+        let _ = tycker.statics.copattern_matches.upsert(res, ());
+    }
     Ok((env, res))
 }

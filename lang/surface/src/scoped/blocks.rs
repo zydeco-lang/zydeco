@@ -155,6 +155,20 @@ impl<'a> BlockCandidateCollector<'a> {
                 .chain(arms.iter().flat_map(|arm| [self.pattern(arm.binder), self.term(arm.tail)]))
                 .flatten()
                 .collect(),
+            | Term::CoMatchClauses(b::CoMatchClauses { clauses }) => clauses
+                .iter()
+                .flat_map(|clause| {
+                    clause
+                        .spine
+                        .iter()
+                        .filter_map(|item| match item {
+                            | b::CoPatternItem::Pat(pattern) => Some(self.pattern(*pattern)),
+                            | b::CoPatternItem::Dtor(_) => None,
+                        })
+                        .chain(std::iter::once(self.term(clause.tail)))
+                })
+                .flatten()
+                .collect(),
             | Term::CoMatch(b::CoMatch { arms }) => {
                 arms.iter().flat_map(|arm| self.term(arm.tail)).collect()
             }

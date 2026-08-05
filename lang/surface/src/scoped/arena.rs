@@ -485,6 +485,24 @@ impl LocalFoldScoped<Context> for Collector {
                 let co_scrut = self.coctxs_term_local[&scrut].to_owned();
                 self.coctxs_term_local.insert_new(term, co_arms + co_scrut);
             }
+            | Term::CoMatchClauses(inner) => {
+                let CoMatchClauses { clauses } = inner;
+                let co_clauses = CoContext::from_iter(clauses.into_iter().flat_map(
+                    |CoPatternClause { spine, tail }| {
+                        spine.iter().rev().fold(
+                            self.coctxs_term_local[&tail].to_owned(),
+                            |free, item| match item {
+                                | CoPatternItem::Pat(pattern) => {
+                                    free - self.ctxs_pat_local[pattern].to_owned()
+                                        + self.coctxs_pat_local[pattern].to_owned()
+                                }
+                                | CoPatternItem::Dtor(_) => free,
+                            },
+                        )
+                    },
+                ));
+                self.coctxs_term_local.insert_new(term, co_clauses);
+            }
             | Term::CoMatch(inner) => {
                 let CoMatch { arms } = inner;
                 let co_arms = CoContext::from_iter(arms.into_iter().flat_map(
@@ -731,6 +749,17 @@ mod impl_obverse_local_post {
                     scrut.obverse_local_post(f, ctx);
                     for Matcher { binder, tail } in arms {
                         binder.obverse_local_post(f, ctx);
+                        tail.obverse_local_post(f, ctx);
+                    }
+                }
+                | Term::CoMatchClauses(inner) => {
+                    let CoMatchClauses { clauses } = inner;
+                    for CoPatternClause { spine, tail } in clauses {
+                        for item in spine.into_items() {
+                            if let CoPatternItem::Pat(pattern) = item {
+                                pattern.obverse_local_post(f, ctx);
+                            }
+                        }
                         tail.obverse_local_post(f, ctx);
                     }
                 }

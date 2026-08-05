@@ -442,6 +442,19 @@ impl Resolve for TermId {
                 }
                 term.into()
             }
+            | Term::CoMatchClauses(term) => {
+                let CoMatchClauses { clauses } = &term;
+                for CoPatternClause { spine, tail } in clauses {
+                    let mut clause_local = local.clone();
+                    for item in spine.iter() {
+                        if let CoPatternItem::Pat(pattern) = item {
+                            clause_local = pattern.resolve(resolver, (clause_local, global))?;
+                        }
+                    }
+                    let () = tail.resolve(resolver, (clause_local, global))?;
+                }
+                term.into()
+            }
             | Term::CoMatch(term) => {
                 let CoMatch { arms } = &term;
                 for arm in arms {

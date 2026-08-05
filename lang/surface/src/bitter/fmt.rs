@@ -71,6 +71,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
             | Term::CoData(t) => s += &t.ugly(f),
             | Term::Ctor(t) => s += &t.ugly(f),
             | Term::Match(t) => s += &t.ugly(f),
+            | Term::CoMatchClauses(t) => s += &t.ugly(f),
             | Term::CoMatch(t) => s += &t.ugly(f),
             | Term::Dtor(t) => s += &t.ugly(f),
             | Term::Proj(t) => s += &t.ugly(f),
@@ -505,6 +506,35 @@ impl<'a> Ugly<'a, Formatter<'a>> for CoMatch<DtorName, TermId> {
         for CoMatcher { dtor, tail } in arms {
             s += " | ";
             s += &dtor.ugly(f);
+            s += " -> ";
+            s += &tail.ugly(f);
+        }
+        s += " end";
+        s
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for CoPatternItem {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        match self {
+            | Self::Pat(pattern) => pattern.ugly(f),
+            | Self::Dtor(dtor) => dtor.ugly(f),
+        }
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for CoPatternSpine {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        self.iter().map(|item| item.ugly(f)).collect::<Vec<_>>().join(" ")
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for CoMatchClauses {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let mut s = String::from("comatch");
+        for CoPatternClause { spine, tail } in &self.clauses {
+            s += " | ";
+            s += &spine.ugly(f);
             s += " -> ";
             s += &tail.ugly(f);
         }

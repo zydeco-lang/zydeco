@@ -662,38 +662,17 @@ impl Desugar for t::TermId {
             }
             | Tm::CoMatch(term) => {
                 let t::CoMatchParam { arms } = term;
-                let arms = arms
+                let clauses = arms
                     .into_iter()
                     .map(|t::CoMatcherParam { params, tail }| {
                         let b::Appli(params) = params.desugar(desugarer)?;
-                        let mut tail = tail.desugar(desugarer)?;
-                        let mut iter = params.into_iter();
-                        let Some(b::CoPatternItem::Dtor(dtor)) = iter.next() else {
-                            unimplemented!("handle error where no dtor in comatch params")
-                        };
-                        for param in iter.rev() {
-                            match param {
-                                | b::CoPatternItem::Pat(pat) => {
-                                    tail = Alloc::alloc(
-                                        desugarer,
-                                        b::Abs(pat, tail).into(),
-                                        self.into(),
-                                    )
-                                }
-                                | b::CoPatternItem::Dtor(dtor) => {
-                                    tail = Alloc::alloc(
-                                        desugarer,
-                                        b::CoMatch { arms: vec![b::CoMatcher { dtor, tail }] }
-                                            .into(),
-                                        self.into(),
-                                    )
-                                }
-                            }
-                        }
-                        Ok(b::CoMatcher { dtor, tail })
+                        let spine = b::CoPatternSpine::from_items(params)
+                            .expect("parsed comatch clauses have a nonempty copattern spine");
+                        let tail = tail.desugar(desugarer)?;
+                        Ok(b::CoPatternClause { spine, tail })
                     })
                     .collect::<Result<Vec<_>>>()?;
-                Alloc::alloc(desugarer, b::CoMatch { arms }.into(), self.into())
+                Alloc::alloc(desugarer, b::CoMatchClauses { clauses }.into(), self.into())
             }
             | Tm::Dtor(term) => {
                 let t::Dtor(term, name) = term;

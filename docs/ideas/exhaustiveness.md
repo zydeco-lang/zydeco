@@ -26,11 +26,13 @@ resolved relative to the expected data type, tuple syntax is interpreted using i
 existential packages distinguish erased static witnesses from their dynamic payload. The type checker has already
 made these decisions and rejected unknown constructors before coverage validation begins.
 
-The typed arena records three facts used by the validator:
+The typed arena records the following facts used by the validator:
 
 - `data_hints` associates a match scrutinee with its `DataId`.
 - `data_pat_hints` associates each constructor pattern with the data definition that owns it.
 - `codata_hints` associates a comatch computation with its `CoDataId`.
+- `copattern_matches` identifies matches generated from generalized comatch argument patterns.
+- `copattern_pack_pi_binders` identifies package-dependent copatterns checked as direct abstractions.
 
 The first hint supplies the complete constructor space even when a match has no arms. The second disambiguates
 nested constructor patterns. Because coverage starts only after normalization and only when local checking has no
@@ -199,20 +201,67 @@ for a diagnostic and computes one additional pattern to determine whether the li
 diagnostic construction; it does not weaken the exhaustiveness decision. An exhaustive matrix still requires every
 finite branch to close, while a non-exhaustive matrix needs only one witness to establish failure.
 
-## Codata Completeness
+## Coverage for Generalized Comatches
 
-Codata comatches use a simpler dual check because an arm selects a destructor name rather than decomposing a nested
-value pattern. The validator compares the declared destructors with the supplied arms, reports every missing name,
-and separately reports each destructor that occurs more than once. Unknown destructor names remain local type errors
-and never reach this pass.
+A source comatch clause may describe an entire observation path, mixing value patterns, type patterns, and
+destructors in the order required by the computation type. For example, these clauses first select `.route`, inspect
+its input, and then select one of the destructors of the returned codata computation:
+
+```zydeco
+comatch
+| .route +First(x)  .left  -> ret x
+| .route +First(x)  .right -> ret x
+| .route +Second(x) .left  -> ret x
+| .route +Second(x) .right -> ret x
+end
+```
+
+The next meaningful copattern item depends on the residual type at that point in the path. Desugaring therefore
+retains each clause spine instead of prematurely turning every source clause into nested abstractions and singleton
+comatches. The type checker then elaborates the clause matrix according to the expected computation type:
+
+1. At a codata type, it requires a destructor, groups clauses with the same destructor, and recursively checks each
+   group against that destructor's result type. It emits one typed comatch arm for the whole group.
+2. At an arrow type, it requires a value pattern, introduces one shared argument, and checks every clause pattern
+   against the arrow domain. The patterns remain pending while elaboration follows the rest of each observation path.
+3. At a universal type, it consumes a type abstraction pattern and checks the remaining path under the introduced
+   type argument.
+4. At a package-dependent arrow, it consumes the existential package pattern, checks that its dynamic payload is
+   exhaustive, and makes its witnesses available to the dependent result. The current elaborator admits one clause
+   at this boundary.
+5. When a group reaches its clause bodies, it checks the pending value patterns as one match. Several arrow arguments
+   become a right-associated product scrutinee, so the ordinary pattern-matrix algorithm retains correlations between
+   arguments.
+
+Delaying the value match is important. Two clauses such as `.choose +False(_)` and `.choose +True(_)` are not duplicate
+`.choose` definitions. Together they define one `.choose` observation whose argument match is exhaustive. Conversely,
+the rows `.choose +True(_) _` and `.choose _ +False(_)` leave the correlated input
+`(+False(_), +True(_))` uncovered, just as the corresponding product patterns do in an ordinary match.
+
+Every generated typed comatch records its residual codata definition. Generated argument matches and direct
+package-dependent binders are visited by the same post-check coverage pass as a source match. Exhaustiveness is
+therefore compositional: each codata point must contain every declared destructor, and the argument matrix for every
+complete observation path must cover all inputs. The generated-node hints let diagnostics describe the latter as
+comatch argument gaps. A missing nested destructor and a missing constructor case beneath a destructor are both
+reported at the original source comatch.
+
+The typed core still has one arm per destructor. Its codata validator compares those unique arms with the declared
+destructor set and also rejects duplicate typed arms defensively. Unknown destructor names and copattern items that
+do not agree with the residual type remain local type errors and never reach post-check validation.
 
 ## Current Boundary
 
-The validator answers whether a data match covers all inputs and whether a codata comatch supplies each destructor
-exactly once. It does not yet report redundant or unreachable data arms. Redundancy can be added with the dual
-*usefulness* query over the same matrix operations: an arm is redundant when adding its row covers no value that the
-preceding rows leave uncovered.
+The validator answers whether a data match covers all inputs and whether every generalized comatch observation is
+defined. It does not yet report redundant or unreachable pattern rows. Redundancy can be added with the dual
+*usefulness* query over the same matrix operations: a row is redundant when it covers no value that preceding rows
+leave uncovered.
 
-The implementation lives in
-[`lang/statics/src/validate/coverage.rs`](../../lang/statics/src/validate/coverage.rs), with focused examples in
-[`lang/tests/tests/coverage.rs`](../../lang/tests/tests/coverage.rs).
+Package-dependent arrows currently accept one copattern clause because their result type can depend on existential
+witnesses opened by the argument pattern. Supporting several such clauses requires a dependent form of the generated
+argument match; ordinary arrows, universal arguments, and arbitrarily nested destructor paths already share the
+generalized coverage procedure above.
+
+Type-directed clause elaboration lives in
+[`lang/statics/src/check/copattern.rs`](../../lang/statics/src/check/copattern.rs), and the shared pattern-matrix pass
+lives in [`lang/statics/src/validate/coverage.rs`](../../lang/statics/src/validate/coverage.rs). Focused examples are
+in [`lang/tests/tests/coverage.rs`](../../lang/tests/tests/coverage.rs).

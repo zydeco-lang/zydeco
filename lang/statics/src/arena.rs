@@ -182,6 +182,10 @@ pub struct StaticsArena {
     pub data_pat_hints: ArenaAssoc<VPatId, DataId>,
     /// hints for computations that need codata annotations
     pub codata_hints: ArenaAssoc<CompuId, CoDataId>,
+    /// matches generated to cover value patterns in generalized comatch clauses
+    pub copattern_matches: ArenaAssoc<CompuId, ()>,
+    /// package-dependent binders consumed directly from generalized comatch clauses
+    pub copattern_pack_pi_binders: ArenaAssoc<CompuId, VPatId>,
     /// immutable value aliases available to static inspection
     pub value_aliases: ArenaAssoc<DefId, ValueId>,
     /// checked bodies of type definitions available to static inspection

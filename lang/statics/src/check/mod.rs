@@ -25,6 +25,9 @@ pub mod syntactic;
 pub use syntactic::*;
 /// Debug dump helpers used by diagnostics.
 mod dump;
+/// Type-directed elaboration of generalized comatch clauses.
+mod copattern;
+use copattern::CopatternElaborator;
 
 /// Type-checking driver that consumes scoped syntax and produces typed arenas.
 #[derive(AsRef, AsMut)]
@@ -4378,6 +4381,19 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     );
                     TermAnnId::Compu(whole_term, whole_ty)
                 }
+            }
+            | Tm::CoMatchClauses(term) => {
+                let expected = match switch {
+                    | Switch::Syn => tycker
+                        .err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?,
+                    | Switch::Ana(AnnId::Type(expected)) => expected,
+                    | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
+                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                    }
+                };
+                let computation = CopatternElaborator::new(self.inner, term, expected, &self.info)
+                    .elaborate_k(tycker)?;
+                TermAnnId::Compu(computation, expected)
             }
             | Tm::CoMatch(term) => {
                 let su::CoMatch { arms: comatchers } = term;

@@ -16,7 +16,9 @@ explicit kinds and types.
 
 After local checking and normalization succeed, `validate::coverage` inspects the typed
 representation. Data matches must cover every inhabitant, including gaps created by nested
-constructor and product patterns. Codata comatches must provide each declared destructor exactly once.
+constructor and product patterns. Generalized comatch clauses may mix abstraction patterns and
+destructors; each observation path must cover its arguments and every residual codata type must
+provide all of its destructors.
 
 ## Core data structures
 
@@ -54,4 +56,6 @@ specialized environments to lift terms into a user-supplied monad.
 - `fmt` and `source_span`: source-aware formatting and span lookup; the latter remains crate-private.
 
 The `check` module itself retains the checking rules, structured errors, least-upper-bound operations,
-syntactic queries needed by those rules, and diagnostic dump helpers.
+syntactic queries needed by those rules, and diagnostic dump helpers. Its `copattern` component
+type-directs generalized comatch spines and elaborates them into ordinary typed abstractions, matches,
+and comatches before whole-program coverage validation.

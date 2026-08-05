@@ -271,10 +271,12 @@ The phases are spread across several core crates:
 Within `zydeco-statics`, `syntax`, `environment`, and `arena` define the durable typed representation.
 `check` owns local kinding and typing rules, `normalize` owns substitution and definitional normalization,
 `elaborate` owns type-directed source translations, and `validate` owns post-check whole-program properties.
-Its coverage pass checks data matches with a typed pattern matrix and checks codata comatches for missing or
-duplicate destructor arms. The [exhaustiveness design note](docs/ideas/exhaustiveness.md) explains matrix
-specialization, counterexample construction, and the invariants supplied by typed syntax. This separation lets
-validation consume completed typed syntax without becoming more type-checking branches.
+Its coverage pass checks data matches with a typed pattern matrix. Generalized comatch clauses are first elaborated
+type-directly into shared argument matches and unique codata arms, after which the same pass checks argument coverage
+and missing destructors along every observation path. The
+[exhaustiveness design note](docs/ideas/exhaustiveness.md) explains matrix specialization, copattern elaboration,
+counterexample construction, and the invariants supplied by typed syntax. This separation lets validation consume
+completed typed syntax without becoming more type-checking branches.
 
 ### Arena and ID invariants
 

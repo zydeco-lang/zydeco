@@ -46,6 +46,29 @@ pub enum CoPatternItem {
     Dtor(DtorName),
 }
 
+/// A nonempty sequence of observations on the left of a comatch clause.
+#[derive(Clone, Debug)]
+pub struct CoPatternSpine {
+    pub head: CoPatternItem,
+    pub tail: Vec<CoPatternItem>,
+}
+
+impl CoPatternSpine {
+    pub fn from_items(items: Vec<CoPatternItem>) -> Option<Self> {
+        let mut items = items.into_iter();
+        let head = items.next()?;
+        Some(Self { head, tail: items.collect() })
+    }
+
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = &CoPatternItem> {
+        std::iter::once(&self.head).chain(self.tail.iter())
+    }
+
+    pub fn into_items(self) -> impl DoubleEndedIterator<Item = CoPatternItem> {
+        std::iter::once(self.head).chain(self.tail)
+    }
+}
+
 /* ---------------------------------- Term ---------------------------------- */
 
 /// One binder of a desugared `pi` telescope.
@@ -135,6 +158,19 @@ pub struct CoDataArm {
     pub out: TermId,
 }
 
+/// One generalized comatch clause.
+#[derive(Clone, Debug)]
+pub struct CoPatternClause {
+    pub spine: CoPatternSpine,
+    pub tail: TermId,
+}
+
+/// Source comatch clauses retained until type-directed elaboration.
+#[derive(Clone, Debug)]
+pub struct CoMatchClauses {
+    pub clauses: Vec<CoPatternClause>,
+}
+
 #[derive(From, Clone, Debug)]
 pub enum Term<Ref> {
     Meta(MetaT<TermId>),
@@ -174,6 +210,7 @@ pub enum Term<Ref> {
     CoData(CoData),
     Ctor(Ctor<CtorName, TermId>),
     Match(Match<TermId, PatId, TermId>),
+    CoMatchClauses(CoMatchClauses),
     CoMatch(CoMatch<DtorName, TermId>),
     Dtor(Dtor<TermId, DtorName>),
     Proj(Proj<TermId, FieldName>),

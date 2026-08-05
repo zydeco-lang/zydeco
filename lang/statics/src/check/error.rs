@@ -9,6 +9,42 @@ use zydeco_utils::span::PathDisplay;
 
 pub use zydeco_utils::err::*;
 
+/// The shape required at the next step of a generalized copattern clause.
+#[derive(Debug, Clone, Copy)]
+pub enum CopatternStepKind {
+    Pattern,
+    Destructor,
+    Body,
+}
+
+impl std::fmt::Display for CopatternStepKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            | Self::Pattern => write!(f, "an abstraction pattern"),
+            | Self::Destructor => write!(f, "a destructor"),
+            | Self::Body => write!(f, "the clause body"),
+        }
+    }
+}
+
+/// The source item found at one generalized copattern step.
+#[derive(Debug, Clone)]
+pub enum CopatternStep {
+    Pattern,
+    Destructor(DtorName),
+    End,
+}
+
+impl std::fmt::Display for CopatternStep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            | Self::Pattern => write!(f, "an abstraction pattern"),
+            | Self::Destructor(dtor) => write!(f, "destructor .{dtor}"),
+            | Self::End => write!(f, "the end of the copattern"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum TyckError {
     MissingAnnotation,
@@ -26,6 +62,10 @@ pub enum TyckError {
     DuplicateNamedField { field: FieldName, found: TypeId },
     UnknownDataConstructor(CtorName),
     UnknownCoDataDestructor(DtorName),
+    CopatternStepMismatch { expected: CopatternStepKind, found: CopatternStep },
+    OverlappingCopatternClauses,
+    MultiplePackPiCopatternClauses,
+    NonExhaustiveCopattern { expected: TypeId },
     Coverage(CoverageError),
     PackageWitnessesUnavailable { package: ValueId },
     PackageWitnessArityMismatch { expected: usize, found: usize },
@@ -144,6 +184,19 @@ impl<'a> Tycker<'a> {
             | TyckError::UnknownCoDataDestructor(dtor) => {
                 format!("Unknown codata destructor: .{dtor}")
             }
+            | TyckError::CopatternStepMismatch { expected, found } => {
+                format!("Copattern step mismatch: expected {expected}, found {found}")
+            }
+            | TyckError::OverlappingCopatternClauses => {
+                "Overlapping copattern clauses have the same observation path".to_string()
+            }
+            | TyckError::MultiplePackPiCopatternClauses => {
+                "Package-dependent arrows currently accept one copattern clause".to_string()
+            }
+            | TyckError::NonExhaustiveCopattern { expected } => format!(
+                "Non-exhaustive copattern clauses for {}",
+                self.pretty_statics_nested(expected, "\t")
+            ),
             | TyckError::Coverage(error) => error.to_string(),
             | TyckError::PackageWitnessesUnavailable { package } => {
                 format!(
@@ -435,6 +488,19 @@ impl<'a> Tycker<'a> {
             | TyckError::UnknownCoDataDestructor(dtor) => {
                 format!("Unknown codata destructor `.{dtor}`")
             }
+            | TyckError::CopatternStepMismatch { expected, found } => {
+                format!("Copattern step mismatch: expected {expected}, found {found}")
+            }
+            | TyckError::OverlappingCopatternClauses => {
+                "Overlapping copattern clauses have the same observation path".to_string()
+            }
+            | TyckError::MultiplePackPiCopatternClauses => {
+                "Package-dependent arrows currently accept one copattern clause".to_string()
+            }
+            | TyckError::NonExhaustiveCopattern { expected } => format!(
+                "Non-exhaustive copattern clauses for {}",
+                self.pretty_statics_nested(*expected, "")
+            ),
             | TyckError::Coverage(error) => error.to_string(),
             | TyckError::PackageWitnessesUnavailable { package } => format!(
                 "Package-dependent application requires manifest existential witnesses, \

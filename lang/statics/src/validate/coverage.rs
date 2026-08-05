@@ -44,15 +44,31 @@ impl fmt::Display for CoveragePattern {
 /// A post-check coverage failure tied to one typed computation.
 #[derive(Clone, Debug)]
 pub enum CoverageError {
-    NonExhaustiveMatch { computation: CompuId, missing: Vec<CoveragePattern>, truncated: bool },
-    NonExhaustiveCoMatch { computation: CompuId, missing: Vec<DtorName> },
-    DuplicateCoMatchArms { computation: CompuId, duplicates: Vec<DtorName> },
+    NonExhaustiveMatch {
+        computation: CompuId,
+        missing: Vec<CoveragePattern>,
+        truncated: bool,
+    },
+    NonExhaustiveCopatternMatch {
+        computation: CompuId,
+        missing: Vec<CoveragePattern>,
+        truncated: bool,
+    },
+    NonExhaustiveCoMatch {
+        computation: CompuId,
+        missing: Vec<DtorName>,
+    },
+    DuplicateCoMatchArms {
+        computation: CompuId,
+        duplicates: Vec<DtorName>,
+    },
 }
 
 impl CoverageError {
     pub fn computation(&self) -> CompuId {
         match self {
             | Self::NonExhaustiveMatch { computation, .. }
+            | Self::NonExhaustiveCopatternMatch { computation, .. }
             | Self::NonExhaustiveCoMatch { computation, .. }
             | Self::DuplicateCoMatchArms { computation, .. } => *computation,
         }
@@ -61,20 +77,31 @@ impl CoverageError {
     fn destructor_list(destructors: &[DtorName]) -> String {
         destructors.iter().map(|name| format!(".{name}")).collect::<Vec<_>>().join(", ")
     }
+
+    fn write_missing(
+        f: &mut fmt::Formatter<'_>, subject: &str, missing: &[CoveragePattern], truncated: bool,
+    ) -> fmt::Result {
+        let missing = missing.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
+        if truncated {
+            write!(f, "{subject}; examples of missing patterns: {missing}, ...")
+        } else {
+            write!(f, "{subject}; missing pattern(s): {missing}")
+        }
+    }
 }
 
 impl fmt::Display for CoverageError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             | Self::NonExhaustiveMatch { missing, truncated, .. } => {
-                let missing =
-                    missing.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
-                if *truncated {
-                    write!(f, "Non-exhaustive match; examples of missing patterns: {missing}, ...")
-                } else {
-                    write!(f, "Non-exhaustive match; missing pattern(s): {missing}")
-                }
+                Self::write_missing(f, "Non-exhaustive match", missing, *truncated)
             }
+            | Self::NonExhaustiveCopatternMatch { missing, truncated, .. } => Self::write_missing(
+                f,
+                "Non-exhaustive comatch argument patterns",
+                missing,
+                *truncated,
+            ),
             | Self::NonExhaustiveCoMatch { missing, .. } => write!(
                 f,
                 "Non-exhaustive comatch; missing destructor arm(s): {}",
@@ -108,27 +135,51 @@ impl<'a> CoverageChecker<'a> {
     }
 
     fn validate_computation(&self, computation: CompuId, term: &Computation) -> Vec<CoverageError> {
-        match term {
+        let term_errors = match term {
             | Computation::Match(Match { scrut, arms }) => {
                 self.validate_match(computation, *scrut, arms)
             }
             | Computation::CoMatch(CoMatch { arms }) => self.validate_comatch(computation, arms),
             | _ => Vec::new(),
-        }
+        };
+        let binder_errors = self
+            .statics
+            .copattern_pack_pi_binders
+            .get(&computation)
+            .copied()
+            .map(|binder| {
+                self.validate_pattern_matrix(
+                    computation,
+                    std::iter::once(binder),
+                    Some(HeadSpace::Package),
+                    true,
+                )
+            })
+            .unwrap_or_default();
+        term_errors.into_iter().chain(binder_errors).collect()
     }
 
     fn validate_match(
         &self, computation: CompuId, scrutinee: ValueId, arms: &[Matcher<VPatId, CompuId>],
     ) -> Vec<CoverageError> {
-        let Some(data) = self.statics.data_hints.get(&scrutinee).copied() else {
-            return Vec::new();
-        };
-        let matrix = arms
-            .iter()
-            .map(|Matcher { binder, .. }| vec![MatrixPattern::from_typed(*binder, self.statics)])
+        let expected = self.statics.data_hints.get(&scrutinee).copied().map(HeadSpace::Data);
+        self.validate_pattern_matrix(
+            computation,
+            arms.iter().map(|Matcher { binder, .. }| *binder),
+            expected,
+            self.statics.copattern_matches.get(&computation).is_some(),
+        )
+    }
+
+    fn validate_pattern_matrix(
+        &self, computation: CompuId, binders: impl IntoIterator<Item = VPatId>,
+        expected: Option<HeadSpace>, copattern: bool,
+    ) -> Vec<CoverageError> {
+        let matrix = binders
+            .into_iter()
+            .map(|binder| vec![MatrixPattern::from_typed(binder, self.statics)])
             .collect();
-        let mut missing =
-            CoverageMatrix::new(self.statics).uncovered(matrix, 1, Some(HeadSpace::Data(data)));
+        let mut missing = CoverageMatrix::new(self.statics).uncovered(matrix, 1, expected);
         let truncated = missing.len() > MAX_REPORTED_MISSING_PATTERNS;
         missing.truncate(MAX_REPORTED_MISSING_PATTERNS);
         let missing = missing
@@ -141,7 +192,13 @@ impl<'a> CoverageChecker<'a> {
             })
             .collect::<Vec<_>>();
         (!missing.is_empty())
-            .then_some(CoverageError::NonExhaustiveMatch { computation, missing, truncated })
+            .then_some({
+                if copattern {
+                    CoverageError::NonExhaustiveCopatternMatch { computation, missing, truncated }
+                } else {
+                    CoverageError::NonExhaustiveMatch { computation, missing, truncated }
+                }
+            })
             .into_iter()
             .collect()
     }
