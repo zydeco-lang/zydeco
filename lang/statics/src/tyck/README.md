@@ -7,7 +7,8 @@ and records the resulting annotations in a `StaticsArena`.
 ## Role in the pipeline
 
 ```markdown
-textual -> bitter -> scoped -> tyck -> wf
+textual -> bitter -> scoped -> tyck -+-> dynamics
+                                     +-> stackir -> assembly -> amd64 / llvm
 ```
 
 The type checker is the first phase that separates term categories and assigns
