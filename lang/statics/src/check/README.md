@@ -7,12 +7,16 @@ and records the resulting annotations in a `StaticsArena`.
 ## Role in the pipeline
 
 ```markdown
-textual -> bitter -> scoped -> check -+-> dynamics
-                                      +-> stackir -> assembly -> amd64 / llvm
+textual -> bitter -> scoped -> check -> validate -+-> dynamics
+                                                  +-> stackir -> assembly -> amd64 / llvm
 ```
 
 The type checker is the first phase that separates term categories and assigns
 explicit kinds and types.
+
+After local checking and normalization succeed, `validate::coverage` inspects the typed
+representation. Data matches must cover every inhabitant, including gaps created by nested
+constructor and product patterns. Codata comatches must provide each declared destructor exactly once.
 
 ## Core data structures
 
@@ -46,7 +50,7 @@ specialized environments to lift terms into a user-supplied monad.
 - `alloc`, `construct`, and `destruct`: typed allocation, construction, and inspection APIs.
 - `normalize`: substitution, hole solving, scope support, and definitional normalization.
 - `elaborate::monadic`: the algebra translation and its specialized construction API.
-- `validate`: whole-program checks that consume typed syntax after local checking.
+- `validate`: whole-program checks over typed syntax, including data/codata coverage and exhaustiveness.
 - `fmt` and `source_span`: source-aware formatting and span lookup; the latter remains crate-private.
 
 The `check` module itself retains the checking rules, structured errors, least-upper-bound operations,

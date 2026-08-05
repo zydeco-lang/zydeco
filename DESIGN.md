@@ -254,7 +254,7 @@ Zydeco is implemented as a pipeline with an interpreter and native-code branch:
 1. parsing (`lang/surface/src/textual`)
 2. desugaring (`lang/surface/src/bitter`)
 3. name resolution (`lang/surface/src/scoped`)
-4. type checking (`lang/statics/src`)
+4. type checking and post-check validation (`lang/statics/src`)
 5. linking and evaluation (`lang/dynamics/src`), or
 6. Stack IR and substitution normalization (`lang/stackir/src`)
 7. assembly lowering (`lang/assembly/src`)
@@ -270,9 +270,11 @@ The phases are spread across several core crates:
 
 Within `zydeco-statics`, `syntax`, `environment`, and `arena` define the durable typed representation.
 `check` owns local kinding and typing rules, `normalize` owns substitution and definitional normalization,
-`elaborate` owns type-directed source translations, and `validate` is reserved for post-check whole-program
-properties. This separation lets later validation passes consume typed syntax without becoming more type-checking
-branches.
+`elaborate` owns type-directed source translations, and `validate` owns post-check whole-program properties.
+Its coverage pass checks data matches with a typed pattern matrix and checks codata comatches for missing or
+duplicate destructor arms. The [exhaustiveness design note](docs/ideas/exhaustiveness.md) explains matrix
+specialization, counterexample construction, and the invariants supplied by typed syntax. This separation lets
+validation consume completed typed syntax without becoming more type-checking branches.
 
 ### Arena and ID invariants
 

@@ -1,6 +1,7 @@
 //! Error messages in the type checker.
 //! Shows the error message, where to look at in the source code, and the stack trace.
 
+use crate::validate::CoverageError;
 use crate::{syntax::*, *};
 use ariadne::{Label, Report, ReportKind};
 use std::ops::Range;
@@ -23,9 +24,9 @@ pub enum TyckError {
     NamedLabelMismatch { expected: FieldName, found: FieldName },
     MissingNamedField { field: FieldName, found: TypeId },
     DuplicateNamedField { field: FieldName, found: TypeId },
-    MissingDataArm(CtorName),
-    MissingCoDataArm(DtorName),
-    NonExhaustiveCoDataArms(std::collections::HashMap<DtorName, TypeId>),
+    UnknownDataConstructor(CtorName),
+    UnknownCoDataDestructor(DtorName),
+    Coverage(CoverageError),
     PackageWitnessesUnavailable { package: ValueId },
     PackageWitnessArityMismatch { expected: usize, found: usize },
     EscapingExistential { witnesses: Vec<AbstId>, result: TypeId },
@@ -137,11 +138,13 @@ impl<'a> Tycker<'a> {
                     self.pretty_statics_nested(found, "\t")
                 )
             }
-            | TyckError::MissingDataArm(ctor) => format!("Missing data arm: {:?}", ctor),
-            | TyckError::MissingCoDataArm(dtor) => format!("Missing codata arm: {:?}", dtor),
-            | TyckError::NonExhaustiveCoDataArms(arms) => {
-                format!("Non-exhaustive data arms: {:?}", arms)
+            | TyckError::UnknownDataConstructor(ctor) => {
+                format!("Unknown data constructor: +{ctor}")
             }
+            | TyckError::UnknownCoDataDestructor(dtor) => {
+                format!("Unknown codata destructor: .{dtor}")
+            }
+            | TyckError::Coverage(error) => error.to_string(),
             | TyckError::PackageWitnessesUnavailable { package } => {
                 format!(
                     "Package-dependent application requires manifest existential witnesses, \
@@ -345,7 +348,9 @@ impl<'a> Tycker<'a> {
     }
 
     /// Get the primary span for an error (where the error actually occurred).
-    fn error_primary_span(&self, error: &TyckError) -> Option<(PathDisplay, Range<usize>)> {
+    pub(super) fn error_primary_span(
+        &self, error: &TyckError,
+    ) -> Option<(PathDisplay, Range<usize>)> {
         match error {
             | TyckError::TypeMismatch { expected: _, found } => {
                 // Use the found type's span as primary
@@ -371,12 +376,15 @@ impl<'a> Tycker<'a> {
                 use zydeco_utils::arena::ArenaAccess;
                 self.statics.abst_hints.get(abst).map(|hint| hint.span(self).to_ariadne_span())
             }
+            | TyckError::Coverage(error) => {
+                self.statics_term_ariadne_span(error.computation().into())
+            }
             | _ => None,
         }
     }
 
     /// Get the error message text.
-    fn error_message(&self, error: &TyckError) -> String {
+    pub(super) fn error_message(&self, error: &TyckError) -> String {
         match error {
             | TyckError::MissingAnnotation => "Missing annotation".to_string(),
             | TyckError::MissingSeal => "Missing seal".to_string(),
@@ -421,11 +429,13 @@ impl<'a> Tycker<'a> {
                     self.pretty_statics_nested(*found, "")
                 )
             }
-            | TyckError::MissingDataArm(ctor) => format!("Missing data arm: {:?}", ctor),
-            | TyckError::MissingCoDataArm(dtor) => format!("Missing codata arm: {:?}", dtor),
-            | TyckError::NonExhaustiveCoDataArms(arms) => {
-                format!("Non-exhaustive codata arms: {} missing", arms.len())
+            | TyckError::UnknownDataConstructor(ctor) => {
+                format!("Unknown data constructor `+{ctor}`")
             }
+            | TyckError::UnknownCoDataDestructor(dtor) => {
+                format!("Unknown codata destructor `.{dtor}`")
+            }
+            | TyckError::Coverage(error) => error.to_string(),
             | TyckError::PackageWitnessesUnavailable { package } => format!(
                 "Package-dependent application requires manifest existential witnesses, \
                  but they are hidden by {}",

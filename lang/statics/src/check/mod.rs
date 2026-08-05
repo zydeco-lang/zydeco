@@ -7,6 +7,7 @@ use {
         *,
     },
     crate::surface_syntax::{PrimDefs, ScopedArena, SpanArena},
+    crate::validate::CoverageChecker,
     zydeco_surface::metadata::BuiltinMeta,
     zydeco_utils::prelude::{ArenaAccess, IdAllocator},
 };
@@ -279,7 +280,6 @@ impl CheckedPatternExt for CheckedPattern {
 // Todo: use async to cut all tycker functions into small segments (returning futures)
 // and achieve better concurrency
 
-// Todo: implement a better coverage checker
 // Todo: use hole solution to implement the confluence checker (well-formedness checker)
 
 impl<'a> Tycker<'a> {
@@ -388,6 +388,16 @@ impl<'a> Tycker<'a> {
                 id.do_normalize_filled_k(self)?;
             }
         }
+        if self.errors.is_empty() {
+            let blame = std::panic::Location::caller();
+            self.errors.extend(CoverageChecker::new(&self.statics).validate().into_iter().map(
+                |error| TyckErrorEntry {
+                    error: TyckError::Coverage(error),
+                    blame,
+                    stack: im::Vector::new(),
+                },
+            ));
+        }
         if !self.errors.is_empty() {
             Err(())?
         }
@@ -397,11 +407,23 @@ impl<'a> Tycker<'a> {
     fn error_reports(&self) -> TyckReports {
         use std::collections::HashSet;
 
-        let mut seen = HashSet::new();
+        let mut seen_blame = HashSet::new();
+        let mut seen_coverage = HashSet::new();
         self.errors
             .iter()
-            .filter(|error| {
-                seen.insert((error.blame.file(), error.blame.line(), error.blame.column()))
+            .filter(|entry| {
+                if matches!(entry.error, TyckError::Coverage(_)) {
+                    let span = self
+                        .error_primary_span(&entry.error)
+                        .map(|(path, range)| (path, range.start, range.end));
+                    seen_coverage.insert((span, self.error_message(&entry.error)))
+                } else {
+                    seen_blame.insert((
+                        entry.blame.file(),
+                        entry.blame.line(),
+                        entry.blame.column(),
+                    ))
+                }
             })
             .cloned()
             .map(|entry| self.error_entry_report(entry))
@@ -1471,7 +1493,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                     {
                         | Some(ty) => ty,
                         | None => tycker.err_k(
-                            TyckError::MissingDataArm(ctor.clone()),
+                            TyckError::UnknownDataConstructor(ctor.clone()),
                             std::panic::Location::caller(),
                         )?,
                     };
@@ -4254,7 +4276,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 let arg_ty = match tycker.statics.datas[&data_id].get(&ctor) {
                     | Some(ty) => ty.to_owned(),
                     | None => tycker.err_k(
-                        TyckError::MissingDataArm(ctor.clone()),
+                        TyckError::UnknownDataConstructor(ctor.clone()),
                         std::panic::Location::caller(),
                     )?,
                 };
@@ -4379,17 +4401,13 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         std::panic::Location::caller(),
                     )?
                 };
-                use std::collections::HashMap;
-                let mut arms = tycker.statics.codatas[&codata_id]
-                    .clone()
-                    .into_iter()
-                    .collect::<HashMap<_, _>>();
+                let arms = tycker.statics.codatas[&codata_id].clone();
                 let mut comatchers_new = Vec::new();
                 for su::CoMatcher { dtor, tail } in comatchers {
-                    let arm_ty = match arms.remove(&dtor) {
+                    let arm_ty = match arms.get(&dtor) {
                         | Some(arm_ty) => arm_ty,
                         | None => tycker.err_k(
-                            TyckError::MissingCoDataArm(dtor.clone()),
+                            TyckError::UnknownCoDataDestructor(dtor.clone()),
                             std::panic::Location::caller(),
                         )?,
                     };
@@ -4398,12 +4416,6 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     };
                     comatchers_new.push(ss::CoMatcher { dtor, tail });
-                }
-                if !arms.is_empty() {
-                    tycker.err_k(
-                        TyckError::NonExhaustiveCoDataArms(arms),
-                        std::panic::Location::caller(),
-                    )?
                 }
                 let whole_term =
                     Alloc::alloc(tycker, ss::CoMatch { arms: comatchers_new }, ana_ty, &self.info);
@@ -4432,7 +4444,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 let whole_ty = match tycker.statics.codatas[&codata_id].get(&dtor) {
                     | Some(ty) => ty.to_owned(),
                     | None => tycker.err_k(
-                        TyckError::MissingCoDataArm(dtor.clone()),
+                        TyckError::UnknownCoDataDestructor(dtor.clone()),
                         std::panic::Location::caller(),
                     )?,
                 };
