@@ -1,6 +1,6 @@
 -- module Bool
 param (
-  (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+  (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
   @[import("builtin.zy")] _
 ) in
 begin

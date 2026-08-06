@@ -1,39 +1,77 @@
 begin
   let std = @[import("../../std/std.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   let (
     Bool = StdBool,
     Option = StdOption,
+    Result = StdResult,
     List = StdList,
     Int = StdInt,
     Char = StdChar,
     String = StdString,
+    Bytes = StdBytes,
+    Reader = StdReader,
+    Writer = StdWriter,
+    Path = StdPath,
+    IoErrorKind = StdIoErrorKind,
+    IoError = StdIoError,
     OS = StdOS,
     std
-  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
-  ! (std/os/read_line_as_int) {
+  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+  let ! read_int (continuation : Thk (StdOption StdInt -> StdOS)) : StdOS =
+    ! (std/stdio/read_line) {
+      fn read =>
+        ! (std/result/fold)
+          (StdOption StdString)
+          StdIoError
+          StdOS
+          read
+          {
+            fn line =>
+              ! (std/option/fold)
+                StdString
+                StdOS
+                line
+                {
+                  do absent <- ! (std/option/none) StdInt;
+                  ! continuation absent
+                }
+                {
+                  fn string =>
+                    do parsed <- ! (std/string/parse_int) string;
+                    ! continuation parsed
+                }
+          }
+          {
+            fn _ =>
+              do absent <- ! (std/option/none) StdInt;
+              ! continuation absent
+          }
+    }
+  in
+  ! read_int {
     fn first =>
       ! (std/option/fold)
         StdInt
         StdOS
         first
-        { ! (std/os/exit) 1 }
+        { ! (std/process/exit) 1 }
         {
           fn integer =>
-            ! (std/os/read_line_as_int) {
+            ! read_int {
               fn second =>
                 ! (std/option/fold)
                   StdInt
                   StdOS
                   second
-                  { ! (std/os/exit) 0 }
+                  { ! (std/process/exit) 0 }
                   {
                     fn unexpected =>
-                      ! (std/os/exit) 1
+                      ! (std/process/exit) 1
                   }
             }
         }

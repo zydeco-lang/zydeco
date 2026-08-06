@@ -7,6 +7,8 @@ pub mod statics_syntax {
 /// Dynamic syntax and runtime state for the evaluator.
 pub mod syntax;
 pub use syntax::{ProgKont, Runtime};
+/// Host-owned values and capabilities used by runtime primitives.
+pub mod host;
 /// Registry for runtime builtin primitives.
 pub mod builtin;
 /// Implementations of runtime builtin primitives.

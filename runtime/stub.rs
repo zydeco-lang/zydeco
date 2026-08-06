@@ -1,6 +1,8 @@
 use std::{
-    cell::UnsafeCell,
-    io::{BufRead, Read, Write},
+    cell::{RefCell, UnsafeCell},
+    collections::HashMap,
+    fs::{File, OpenOptions},
+    io::{self, BufRead, BufReader, Read, Write},
 };
 
 type Word = usize;
@@ -50,12 +52,181 @@ impl HostString {
     }
 }
 
+struct HostBytes;
+
+impl HostBytes {
+    fn leak(bytes: Vec<u8>) -> Word {
+        Box::into_raw(Box::new(bytes)) as Word
+    }
+
+    unsafe fn borrow<'a>(raw: Word) -> &'a [u8] {
+        unsafe { &*(raw as *const Vec<u8>) }.as_slice()
+    }
+}
+
+const STDIN_HANDLE: Word = 0;
+const STDOUT_HANDLE: Word = 0;
+const STDERR_HANDLE: Word = 1;
+
+struct HostIoRuntime {
+    next_reader: Word,
+    next_writer: Word,
+    readers: HashMap<Word, BufReader<File>>,
+    writers: HashMap<Word, File>,
+}
+
+impl HostIoRuntime {
+    fn new() -> Self {
+        Self { next_reader: 1, next_writer: 2, readers: HashMap::new(), writers: HashMap::new() }
+    }
+
+    fn open_reader(&mut self, path: &str) -> io::Result<Word> {
+        let reader = BufReader::new(File::open(path)?);
+        let handle = self.next_reader;
+        self.next_reader += 1;
+        self.readers.insert(handle, reader);
+        Ok(handle)
+    }
+
+    fn create_writer(&mut self, path: &str) -> io::Result<Word> {
+        self.open_writer(path, false)
+    }
+
+    fn append_writer(&mut self, path: &str) -> io::Result<Word> {
+        self.open_writer(path, true)
+    }
+
+    fn open_writer(&mut self, path: &str, append: bool) -> io::Result<Word> {
+        let writer = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(!append)
+            .append(append)
+            .open(path)?;
+        let handle = self.next_writer;
+        self.next_writer += 1;
+        self.writers.insert(handle, writer);
+        Ok(handle)
+    }
+
+    fn read<T>(
+        &mut self, handle: Word, operation: impl FnOnce(&mut dyn BufRead) -> io::Result<T>,
+    ) -> io::Result<T> {
+        if handle == STDIN_HANDLE {
+            operation(&mut std::io::stdin().lock())
+        } else {
+            let reader = self.readers.get_mut(&handle).ok_or_else(HostIoError::closed)?;
+            operation(reader)
+        }
+    }
+
+    fn write<T>(
+        &mut self, handle: Word, operation: impl FnOnce(&mut dyn Write) -> io::Result<T>,
+    ) -> io::Result<T> {
+        match handle {
+            | STDOUT_HANDLE => operation(&mut std::io::stdout().lock()),
+            | STDERR_HANDLE => operation(&mut std::io::stderr().lock()),
+            | handle => {
+                let writer = self.writers.get_mut(&handle).ok_or_else(HostIoError::closed)?;
+                operation(writer)
+            }
+        }
+    }
+
+    fn close_reader(&mut self, handle: Word) -> io::Result<()> {
+        if handle == STDIN_HANDLE || self.readers.remove(&handle).is_some() {
+            Ok(())
+        } else {
+            Err(HostIoError::closed())
+        }
+    }
+
+    fn close_writer(&mut self, handle: Word) -> io::Result<()> {
+        if matches!(handle, STDOUT_HANDLE | STDERR_HANDLE) {
+            self.write(handle, |writer| writer.flush())
+        } else if let Some(mut writer) = self.writers.remove(&handle) {
+            writer.flush()
+        } else {
+            Err(HostIoError::closed())
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+#[repr(i64)]
+enum HostIoErrorKind {
+    NotFound = 0,
+    PermissionDenied = 1,
+    AlreadyExists = 2,
+    InvalidInput = 3,
+    InvalidData = 4,
+    BrokenPipe = 5,
+    Closed = 6,
+    Other = 7,
+}
+
+impl HostIoErrorKind {
+    fn from_error(error: &io::Error) -> Self {
+        match error.kind() {
+            | io::ErrorKind::NotFound => Self::NotFound,
+            | io::ErrorKind::PermissionDenied => Self::PermissionDenied,
+            | io::ErrorKind::AlreadyExists => Self::AlreadyExists,
+            | io::ErrorKind::InvalidInput => Self::InvalidInput,
+            | io::ErrorKind::InvalidData => Self::InvalidData,
+            | io::ErrorKind::BrokenPipe => Self::BrokenPipe,
+            | io::ErrorKind::NotConnected => Self::Closed,
+            | _ => Self::Other,
+        }
+    }
+}
+
+struct HostIoError;
+
+impl HostIoError {
+    fn closed() -> io::Error {
+        io::Error::new(io::ErrorKind::NotConnected, "I/O capability is closed")
+    }
+}
+
+struct IoBranch;
+
+impl IoBranch {
+    fn error(continuation: Word, error: io::Error) -> Word {
+        ControlTransfer::with_two_arguments(
+            continuation,
+            HostIoErrorKind::from_error(&error) as Word,
+            HostString::leak(error.to_string()),
+        )
+    }
+
+    fn unit(result: io::Result<()>, when_error: Word, when_success: Word) -> Word {
+        match result {
+            | Ok(()) => ControlTransfer::without_arguments(when_success),
+            | Err(error) => Self::error(when_error, error),
+        }
+    }
+
+    fn value(result: io::Result<Word>, when_error: Word, when_success: Word) -> Word {
+        match result {
+            | Ok(value) => ControlTransfer::with_one_argument(when_success, value),
+            | Err(error) => Self::error(when_error, error),
+        }
+    }
+}
+
 struct Input;
 
 impl Input {
     fn line() -> String {
-        let mut line = String::new();
-        std::io::stdin().lock().read_line(&mut line).unwrap();
+        let mut line = HOST_IO
+            .with(|runtime| {
+                runtime.borrow_mut().read(STDIN_HANDLE, |reader| {
+                    let mut line = String::new();
+                    reader.read_line(&mut line)?;
+                    Ok(line)
+                })
+            })
+            .expect("legacy standard-input read failed");
         if line.ends_with('\n') {
             line.pop();
             if line.ends_with('\r') {
@@ -66,9 +237,15 @@ impl Input {
     }
 
     fn remaining() -> String {
-        let mut input = String::new();
-        std::io::stdin().lock().read_to_string(&mut input).unwrap();
-        input
+        HOST_IO
+            .with(|runtime| {
+                runtime.borrow_mut().read(STDIN_HANDLE, |reader| {
+                    let mut input = String::new();
+                    reader.read_to_string(&mut input)?;
+                    Ok(input)
+                })
+            })
+            .expect("legacy standard-input read failed")
     }
 }
 
@@ -255,6 +432,40 @@ extern "sysv64" fn zydeco_str_parse_int_branch(
     }
 }
 
+#[unsafe(export_name = "\x01zydeco_bytes_empty")]
+extern "sysv64" fn zydeco_bytes_empty() -> Word {
+    HostBytes::leak(Vec::new())
+}
+
+#[unsafe(export_name = "\x01zydeco_bytes_length")]
+extern "sysv64" fn zydeco_bytes_length(bytes: Word) -> i64 {
+    unsafe { HostBytes::borrow(bytes) }.len() as i64
+}
+
+#[unsafe(export_name = "\x01zydeco_bytes_append")]
+extern "sysv64" fn zydeco_bytes_append(first: Word, second: Word) -> Word {
+    HostBytes::leak(
+        [unsafe { HostBytes::borrow(first) }, unsafe { HostBytes::borrow(second) }].concat(),
+    )
+}
+
+#[unsafe(export_name = "\x01zydeco_bytes_from_str")]
+extern "sysv64" fn zydeco_bytes_from_str(string: Word) -> Word {
+    HostBytes::leak(unsafe { HostString::borrow(string) }.as_bytes().to_vec())
+}
+
+#[unsafe(export_name = "\x01zydeco_bytes_to_str_branch")]
+extern "sysv64" fn zydeco_bytes_to_str_branch(
+    bytes: Word, when_invalid: Word, when_valid: Word,
+) -> Word {
+    match std::str::from_utf8(unsafe { HostBytes::borrow(bytes) }) {
+        | Err(_) => ControlTransfer::without_arguments(when_invalid),
+        | Ok(string) => {
+            ControlTransfer::with_one_argument(when_valid, HostString::leak(string.to_string()))
+        }
+    }
+}
+
 /* -------------------------------- Branches -------------------------------- */
 
 macro_rules! integer_branch {
@@ -301,6 +512,140 @@ extern "sysv64" fn zydeco_str_split_at_branch(
 
 /* ----------------------------------- IO ----------------------------------- */
 
+#[unsafe(export_name = "\x01zydeco_stdin")]
+extern "sysv64" fn zydeco_stdin() -> Word {
+    STDIN_HANDLE
+}
+
+#[unsafe(export_name = "\x01zydeco_stdout")]
+extern "sysv64" fn zydeco_stdout() -> Word {
+    STDOUT_HANDLE
+}
+
+#[unsafe(export_name = "\x01zydeco_stderr")]
+extern "sysv64" fn zydeco_stderr() -> Word {
+    STDERR_HANDLE
+}
+
+#[unsafe(export_name = "\x01zydeco_io_read")]
+extern "sysv64" fn zydeco_io_read(
+    reader: Word, count: i64, when_error: Word, when_success: Word,
+) -> Word {
+    let count = match u64::try_from(count) {
+        | Ok(count) => count,
+        | Err(_) => {
+            return IoBranch::error(
+                when_error,
+                io::Error::new(io::ErrorKind::InvalidInput, "byte count cannot be negative"),
+            );
+        }
+    };
+    let result = HOST_IO.with(|runtime| {
+        runtime.borrow_mut().read(reader, |reader| {
+            let mut bytes = Vec::new();
+            reader.take(count).read_to_end(&mut bytes)?;
+            Ok(HostBytes::leak(bytes))
+        })
+    });
+    IoBranch::value(result, when_error, when_success)
+}
+
+#[unsafe(export_name = "\x01zydeco_io_read_line")]
+extern "sysv64" fn zydeco_io_read_line(
+    reader: Word, when_error: Word, when_eof: Word, when_line: Word,
+) -> Word {
+    let result = HOST_IO.with(|runtime| {
+        runtime.borrow_mut().read(reader, |reader| {
+            let mut bytes = Vec::new();
+            let read = reader.read_until(b'\n', &mut bytes)?;
+            if bytes.last() == Some(&b'\n') {
+                bytes.pop();
+                if bytes.last() == Some(&b'\r') {
+                    bytes.pop();
+                }
+            }
+            Ok((read, bytes))
+        })
+    });
+    match result {
+        | Ok((0, _)) => ControlTransfer::without_arguments(when_eof),
+        | Ok((_, bytes)) => ControlTransfer::with_one_argument(when_line, HostBytes::leak(bytes)),
+        | Err(error) => IoBranch::error(when_error, error),
+    }
+}
+
+#[unsafe(export_name = "\x01zydeco_io_read_all")]
+extern "sysv64" fn zydeco_io_read_all(reader: Word, when_error: Word, when_success: Word) -> Word {
+    let result = HOST_IO.with(|runtime| {
+        runtime.borrow_mut().read(reader, |reader| {
+            let mut bytes = Vec::new();
+            reader.read_to_end(&mut bytes)?;
+            Ok(HostBytes::leak(bytes))
+        })
+    });
+    IoBranch::value(result, when_error, when_success)
+}
+
+#[unsafe(export_name = "\x01zydeco_io_write_all")]
+extern "sysv64" fn zydeco_io_write_all(
+    writer: Word, bytes: Word, when_error: Word, when_success: Word,
+) -> Word {
+    let result = HOST_IO.with(|runtime| {
+        runtime
+            .borrow_mut()
+            .write(writer, |writer| writer.write_all(unsafe { HostBytes::borrow(bytes) }))
+    });
+    IoBranch::unit(result, when_error, when_success)
+}
+
+#[unsafe(export_name = "\x01zydeco_io_flush")]
+extern "sysv64" fn zydeco_io_flush(writer: Word, when_error: Word, when_success: Word) -> Word {
+    let result =
+        HOST_IO.with(|runtime| runtime.borrow_mut().write(writer, |writer| writer.flush()));
+    IoBranch::unit(result, when_error, when_success)
+}
+
+#[unsafe(export_name = "\x01zydeco_io_close_reader")]
+extern "sysv64" fn zydeco_io_close_reader(
+    reader: Word, when_error: Word, when_success: Word,
+) -> Word {
+    let result = HOST_IO.with(|runtime| runtime.borrow_mut().close_reader(reader));
+    IoBranch::unit(result, when_error, when_success)
+}
+
+#[unsafe(export_name = "\x01zydeco_io_close_writer")]
+extern "sysv64" fn zydeco_io_close_writer(
+    writer: Word, when_error: Word, when_success: Word,
+) -> Word {
+    let result = HOST_IO.with(|runtime| runtime.borrow_mut().close_writer(writer));
+    IoBranch::unit(result, when_error, when_success)
+}
+
+#[unsafe(export_name = "\x01zydeco_fs_open_reader")]
+extern "sysv64" fn zydeco_fs_open_reader(path: Word, when_error: Word, when_success: Word) -> Word {
+    let result = HOST_IO
+        .with(|runtime| runtime.borrow_mut().open_reader(unsafe { HostString::borrow(path) }));
+    IoBranch::value(result, when_error, when_success)
+}
+
+#[unsafe(export_name = "\x01zydeco_fs_create_writer")]
+extern "sysv64" fn zydeco_fs_create_writer(
+    path: Word, when_error: Word, when_success: Word,
+) -> Word {
+    let result = HOST_IO
+        .with(|runtime| runtime.borrow_mut().create_writer(unsafe { HostString::borrow(path) }));
+    IoBranch::value(result, when_error, when_success)
+}
+
+#[unsafe(export_name = "\x01zydeco_fs_append_writer")]
+extern "sysv64" fn zydeco_fs_append_writer(
+    path: Word, when_error: Word, when_success: Word,
+) -> Word {
+    let result = HOST_IO
+        .with(|runtime| runtime.borrow_mut().append_writer(unsafe { HostString::borrow(path) }));
+    IoBranch::value(result, when_error, when_success)
+}
+
 #[unsafe(export_name = "\x01zydeco_read_line")]
 extern "sysv64" fn zydeco_read_line(continuation: Word) -> Word {
     let line = Input::line();
@@ -322,25 +667,40 @@ extern "sysv64" fn zydeco_read_till_eof(continuation: Word) -> Word {
 
 #[unsafe(export_name = "\x01zydeco_write_str")]
 extern "sysv64" fn zydeco_write_str(string: Word, continuation: Word) -> Word {
-    let mut stdout = std::io::stdout().lock();
-    stdout.write_all(unsafe { HostString::borrow(string) }.as_bytes()).unwrap();
-    stdout.flush().unwrap();
+    HOST_IO
+        .with(|runtime| {
+            runtime.borrow_mut().write(STDOUT_HANDLE, |writer| {
+                writer.write_all(unsafe { HostString::borrow(string) }.as_bytes())?;
+                writer.flush()
+            })
+        })
+        .expect("legacy standard-output write failed");
     ControlTransfer::without_arguments(continuation)
 }
 
 #[unsafe(export_name = "\x01zydeco_write_int")]
 extern "sysv64" fn zydeco_write_int(integer: i64, continuation: Word) -> Word {
-    let mut stdout = std::io::stdout().lock();
-    write!(stdout, "{integer}").unwrap();
-    stdout.flush().unwrap();
+    HOST_IO
+        .with(|runtime| {
+            runtime.borrow_mut().write(STDOUT_HANDLE, |writer| {
+                write!(writer, "{integer}")?;
+                writer.flush()
+            })
+        })
+        .expect("legacy standard-output write failed");
     ControlTransfer::without_arguments(continuation)
 }
 
 #[unsafe(export_name = "\x01zydeco_write_line")]
 extern "sysv64" fn zydeco_write_line(line: Word, continuation: Word) -> Word {
-    let mut stdout = std::io::stdout().lock();
-    writeln!(stdout, "{}", unsafe { HostString::borrow(line) }).unwrap();
-    stdout.flush().unwrap();
+    HOST_IO
+        .with(|runtime| {
+            runtime.borrow_mut().write(STDOUT_HANDLE, |writer| {
+                writeln!(writer, "{}", unsafe { HostString::borrow(line) })?;
+                writer.flush()
+            })
+        })
+        .expect("legacy standard-output write failed");
     ControlTransfer::without_arguments(continuation)
 }
 
@@ -375,6 +735,7 @@ thread_local! {
     static ENV: UnsafeCell<*mut u8> = UnsafeCell::new(init_buffer());
     static HEAP: UnsafeCell<*mut u8> = UnsafeCell::new(init_buffer());
     static HEAP_SIZE: UnsafeCell<usize> = const { UnsafeCell::new(0) };
+    static HOST_IO: RefCell<HostIoRuntime> = RefCell::new(HostIoRuntime::new());
 }
 
 fn init_buffer() -> *mut u8 {
@@ -388,10 +749,8 @@ fn init_buffer() -> *mut u8 {
 }
 
 fn main() {
-    ENV.with(|environment| {
-        unsafe {
-            let environment = *environment.get();
-            entry(environment);
-        }
+    ENV.with(|environment| unsafe {
+        let environment = *environment.get();
+        entry(environment);
     });
 }

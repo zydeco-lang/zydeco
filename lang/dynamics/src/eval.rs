@@ -30,7 +30,15 @@ impl<'rt> Runtime<'rt> {
         input: &'rt mut dyn BufRead, output: &'rt mut dyn Write, args: &'rt [String],
         arena: DynamicsArena,
     ) -> Self {
-        Runtime { input, output, args, stack: im::Vector::new(), env: Env::new(), arena }
+        Runtime {
+            input,
+            output,
+            args,
+            host: crate::host::HostRuntime::new(),
+            stack: im::Vector::new(),
+            env: Env::new(),
+            arena,
+        }
     }
     /// Evaluate the program's computation root.
     pub fn run(mut self) -> Vec<ProgKont> {
@@ -70,7 +78,8 @@ impl<'rt> Eval<'rt> for Assign<RcVPat, SemValue> {
                 | SemValue::Thunk(_)
                 | SemValue::Triv(_)
                 | SemValue::VCons(_)
-                | SemValue::Literal(_) => unreachable!(),
+                | SemValue::Literal(_)
+                | SemValue::Host(_) => unreachable!(),
             },
             | VPat::Triv(Triv) => match sem {
                 | SemValue::Triv(Triv) => {}
@@ -78,7 +87,8 @@ impl<'rt> Eval<'rt> for Assign<RcVPat, SemValue> {
                 | SemValue::Thunk(_)
                 | SemValue::Ctor(_)
                 | SemValue::VCons(_)
-                | SemValue::Literal(_) => {
+                | SemValue::Literal(_)
+                | SemValue::Host(_) => {
                     return Step::Done(Err(()));
                 }
             },
@@ -106,7 +116,8 @@ impl<'rt> Eval<'rt> for Assign<RcVPat, SemValue> {
                 | SemValue::Thunk(_)
                 | SemValue::Ctor(_)
                 | SemValue::Triv(_)
-                | SemValue::Literal(_) => unreachable!(),
+                | SemValue::Literal(_)
+                | SemValue::Host(_) => unreachable!(),
             },
         }
         Step::Done(Ok(()))
@@ -293,7 +304,7 @@ impl<'rt> Eval<'rt> for Computation {
                     };
                     args.push(arg);
                 }
-                match body(args, runtime.input, runtime.output, runtime.args) {
+                match body(args, runtime.input, runtime.output, runtime.args, &mut runtime.host) {
                     | Ok(e) => Step::Step(e),
                     | Err(exit_code) => Step::Done(ProgKont::ExitCode(exit_code)),
                 }

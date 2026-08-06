@@ -8,7 +8,7 @@
 begin
   let std = @[import("../../lib/std/std.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
 
@@ -39,13 +39,20 @@ begin
   let (
     Bool = StdBool,
     Option = StdOption,
+    Result = StdResult,
     List = StdList,
     Int = StdInt,
     Char = StdChar,
     String = StdString,
+    Bytes = StdBytes,
+    Reader = StdReader,
+    Writer = StdWriter,
+    Path = StdPath,
+    IoErrorKind = StdIoErrorKind,
+    IoError = StdIoError,
     OS = StdOS,
     std
-  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
+  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
   begin
     def factorial_step : Thk (
       Thk (StdInt -> Ret StdInt) ->
@@ -78,15 +85,15 @@ begin
           StdOS
           correct
           { ! continuation }
-          { ! (std/os/exit) 1 }
+          { ! (std/process/exit) 1 }
     } that
 
     do factorial <-
       ! fixed_point (StdInt -> Ret StdInt) factorial_step;
     ! check factorial 5 120 {
       ! check factorial 10 3628800 {
-        ! (std/os/write_line) "factorial results are correct" {
-          ! (std/os/exit) 0
+        ! (std/stdio/write_line) "factorial results are correct" {
+          fn _ => ! (std/process/exit) 0
         }
       }
     }

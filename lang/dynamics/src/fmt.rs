@@ -137,6 +137,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for SemValue {
             | SemValue::Triv(v) => v.ugly(f),
             | SemValue::VCons(v) => v.ugly(f),
             | SemValue::Literal(v) => format!("{:?}", v),
+            | SemValue::Host(v) => format!("<{v:?}>"),
         }
     }
 }

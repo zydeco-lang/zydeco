@@ -1,7 +1,7 @@
 -- The public standard-library package type, kept separate from its implementation.
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
     @[import("builtin.zy")] _
   ) in
     let Prelude =
@@ -84,6 +84,61 @@ begin
       (is_none :: Thk (
         forall (A : VType) .
           PublicOption A -> Ret PublicBool
+      ))
+    in
+    let ResultModule
+      (PublicBool : VType)
+      (PublicResult : (VType) -> (VType) -> (VType)) =
+      (ok :: Thk (
+        forall (A : VType) .
+        forall (E : VType) .
+          A -> Ret (PublicResult A E)
+      )) *
+      (err :: Thk (
+        forall (A : VType) .
+        forall (E : VType) .
+          E -> Ret (PublicResult A E)
+      )) *
+      (fold :: Thk (
+        forall (A : VType) .
+        forall (E : VType) .
+        forall (B : CType) .
+          PublicResult A E -> Thk (A -> B) -> Thk (E -> B) -> B
+      )) *
+      (map :: Thk (
+        forall (A : VType) .
+        forall (B : VType) .
+        forall (E : VType) .
+          PublicResult A E -> Thk (A -> Ret B) -> Ret (PublicResult B E)
+      )) *
+      (map_err :: Thk (
+        forall (A : VType) .
+        forall (E : VType) .
+        forall (F : VType) .
+          PublicResult A E -> Thk (E -> Ret F) -> Ret (PublicResult A F)
+      )) *
+      (and_then :: Thk (
+        forall (A : VType) .
+        forall (B : VType) .
+        forall (E : VType) .
+          PublicResult A E ->
+          Thk (A -> Ret (PublicResult B E)) ->
+          Ret (PublicResult B E)
+      )) *
+      (unwrap_or :: Thk (
+        forall (A : VType) .
+        forall (E : VType) .
+          PublicResult A E -> A -> Ret A
+      )) *
+      (is_ok :: Thk (
+        forall (A : VType) .
+        forall (E : VType) .
+          PublicResult A E -> Ret PublicBool
+      )) *
+      (is_err :: Thk (
+        forall (A : VType) .
+        forall (E : VType) .
+          PublicResult A E -> Ret PublicBool
       ))
     in
     let ListModule
@@ -219,21 +274,166 @@ begin
       (from_chars :: Thk (PublicList PublicChar -> Ret PublicString)) *
       (parse_int :: Thk (PublicString -> Ret (PublicOption PublicInt)))
     in
-    let OSModule
+    let BytesModule
       (PublicOption : (VType) -> (VType))
+      (PublicInt : VType)
+      (PublicString : VType)
+      (PublicBytes : VType) =
+      (empty :: Thk (Ret PublicBytes)) *
+      (length :: Thk (PublicBytes -> Ret PublicInt)) *
+      (append :: Thk (PublicBytes -> PublicBytes -> Ret PublicBytes)) *
+      (from_string :: Thk (PublicString -> Ret PublicBytes)) *
+      (to_string :: Thk (PublicBytes -> Ret (PublicOption PublicString)))
+    in
+    let IoModule
+      (PublicBool : VType)
+      (PublicOption : (VType) -> (VType))
+      (PublicResult : (VType) -> (VType) -> (VType))
+      (PublicInt : VType)
+      (PublicString : VType)
+      (PublicBytes : VType)
+      (PublicReader : VType)
+      (PublicWriter : VType)
+      (PublicIoErrorKind : VType)
+      (PublicIoError : VType)
+      (PublicOS : CType) =
+      (not_found :: PublicIoErrorKind) *
+      (permission_denied :: PublicIoErrorKind) *
+      (already_exists :: PublicIoErrorKind) *
+      (invalid_input :: PublicIoErrorKind) *
+      (invalid_data :: PublicIoErrorKind) *
+      (broken_pipe :: PublicIoErrorKind) *
+      (closed :: PublicIoErrorKind) *
+      (other :: PublicIoErrorKind) *
+      (kind_eq :: Thk (
+        PublicIoErrorKind -> PublicIoErrorKind -> Ret PublicBool
+      )) *
+      (error_kind :: Thk (PublicIoError -> Ret PublicIoErrorKind)) *
+      (error_message :: Thk (PublicIoError -> Ret PublicString)) *
+      (read :: Thk (
+        PublicReader -> PublicInt ->
+        Thk (PublicResult PublicBytes PublicIoError -> PublicOS) ->
+        PublicOS
+      )) *
+      (read_line :: Thk (
+        PublicReader ->
+        Thk (PublicResult (PublicOption PublicBytes) PublicIoError -> PublicOS) ->
+        PublicOS
+      )) *
+      (read_all :: Thk (
+        PublicReader ->
+        Thk (PublicResult PublicBytes PublicIoError -> PublicOS) ->
+        PublicOS
+      )) *
+      (write_all :: Thk (
+        PublicWriter -> PublicBytes ->
+        Thk (PublicResult Unit PublicIoError -> PublicOS) ->
+        PublicOS
+      )) *
+      (flush :: Thk (
+        PublicWriter ->
+        Thk (PublicResult Unit PublicIoError -> PublicOS) ->
+        PublicOS
+      )) *
+      (close_reader :: Thk (
+        PublicReader ->
+        Thk (PublicResult Unit PublicIoError -> PublicOS) ->
+        PublicOS
+      )) *
+      (close_writer :: Thk (
+        PublicWriter ->
+        Thk (PublicResult Unit PublicIoError -> PublicOS) ->
+        PublicOS
+      ))
+    in
+    let FsModule
+      (PublicResult : (VType) -> (VType) -> (VType))
+      (PublicString : VType)
+      (PublicBytes : VType)
+      (PublicReader : VType)
+      (PublicWriter : VType)
+      (PublicPath : VType)
+      (PublicIoError : VType)
+      (PublicOS : CType) =
+      (path :: Thk (PublicString -> Ret PublicPath)) *
+      (path_string :: Thk (PublicPath -> Ret PublicString)) *
+      (open_reader :: Thk (
+        PublicPath ->
+        Thk (PublicResult PublicReader PublicIoError -> PublicOS) ->
+        PublicOS
+      )) *
+      (create_writer :: Thk (
+        PublicPath ->
+        Thk (PublicResult PublicWriter PublicIoError -> PublicOS) ->
+        PublicOS
+      )) *
+      (append_writer :: Thk (
+        PublicPath ->
+        Thk (PublicResult PublicWriter PublicIoError -> PublicOS) ->
+        PublicOS
+      )) *
+      (read_bytes :: Thk (
+        PublicPath ->
+        Thk (PublicResult PublicBytes PublicIoError -> PublicOS) ->
+        PublicOS
+      )) *
+      (read_text :: Thk (
+        PublicPath ->
+        Thk (PublicResult PublicString PublicIoError -> PublicOS) ->
+        PublicOS
+      )) *
+      (write_bytes :: Thk (
+        PublicPath -> PublicBytes ->
+        Thk (PublicResult Unit PublicIoError -> PublicOS) ->
+        PublicOS
+      )) *
+      (write_text :: Thk (
+        PublicPath -> PublicString ->
+        Thk (PublicResult Unit PublicIoError -> PublicOS) ->
+        PublicOS
+      ))
+    in
+    let StdioModule
+      (PublicOption : (VType) -> (VType))
+      (PublicResult : (VType) -> (VType) -> (VType))
+      (PublicString : VType)
+      (PublicReader : VType)
+      (PublicWriter : VType)
+      (PublicIoError : VType)
+      (PublicOS : CType) =
+      (stdin :: Thk (Ret PublicReader)) *
+      (stdout :: Thk (Ret PublicWriter)) *
+      (stderr :: Thk (Ret PublicWriter)) *
+      (read_line :: Thk (
+        Thk (PublicResult (PublicOption PublicString) PublicIoError -> PublicOS) ->
+        PublicOS
+      )) *
+      (write :: Thk (
+        PublicString ->
+        Thk (PublicResult Unit PublicIoError -> PublicOS) ->
+        PublicOS
+      )) *
+      (write_line :: Thk (
+        PublicString ->
+        Thk (PublicResult Unit PublicIoError -> PublicOS) ->
+        PublicOS
+      )) *
+      (write_error :: Thk (
+        PublicString ->
+        Thk (PublicResult Unit PublicIoError -> PublicOS) ->
+        PublicOS
+      )) *
+      (write_error_line :: Thk (
+        PublicString ->
+        Thk (PublicResult Unit PublicIoError -> PublicOS) ->
+        PublicOS
+      ))
+    in
+    let ProcessModule
       (PublicList : (VType) -> (VType))
       (PublicInt : VType)
       (PublicString : VType)
       (PublicOS : CType) =
-      (write :: Thk (PublicString -> Thk PublicOS -> PublicOS)) *
-      (write_int :: Thk (PublicInt -> Thk PublicOS -> PublicOS)) *
-      (write_int_line :: Thk (PublicInt -> Thk PublicOS -> PublicOS)) *
-      (write_line :: Thk (PublicString -> Thk PublicOS -> PublicOS)) *
-      (read_line :: Thk (Thk (PublicString -> PublicOS) -> PublicOS)) *
-      (read_line_as_int :: Thk (
-        Thk (PublicOption PublicInt -> PublicOS) -> PublicOS
-      )) *
-      (read_till_eof :: Thk (Thk (PublicString -> PublicOS) -> PublicOS)) *
       (arg_list :: Thk (Thk (PublicList PublicString -> PublicOS) -> PublicOS)) *
       (random_int :: Thk (Thk (PublicInt -> PublicOS) -> PublicOS)) *
       (halt :: Thk PublicOS) *
@@ -247,22 +447,42 @@ begin
         (VType) -> (VType)
       ) .
       exists (
+        Result = PublicResult :
+        (VType) -> (VType) -> (VType)
+      ) .
+      exists (
         List = PublicList :
         (VType) -> (VType)
       ) .
       exists (Int = PublicInt as Int : VType) .
       exists (Char = PublicChar as Char : VType) .
       exists (String = PublicString as String : VType) .
+      exists (Bytes = PublicBytes as Bytes : VType) .
+      exists (Reader = PublicReader as Reader : VType) .
+      exists (Writer = PublicWriter as Writer : VType) .
+      exists (Path = PublicPath : VType) .
+      exists (IoErrorKind = PublicIoErrorKind : VType) .
+      exists (IoError = PublicIoError : VType) .
       exists (OS = PublicOS as OS : CType) .
         (prelude :: Prelude) *
         (bool :: BoolModule PublicBool) *
         (option :: OptionModule PublicBool PublicOption) *
+        (result :: ResultModule PublicBool PublicResult) *
         (list :: ListModule PublicBool PublicOption PublicList PublicInt) *
         (int :: IntModule PublicBool PublicInt PublicString) *
         (char :: CharModule PublicOption PublicChar PublicInt PublicString) *
         (string :: StringModule
           PublicBool PublicOption PublicList PublicInt PublicChar PublicString) *
-        (os :: OSModule PublicOption PublicList PublicInt PublicString PublicOS) *
+        (bytes :: BytesModule PublicOption PublicInt PublicString PublicBytes) *
+        (io :: IoModule
+          PublicBool PublicOption PublicResult PublicInt PublicString PublicBytes PublicReader
+          PublicWriter PublicIoErrorKind PublicIoError PublicOS) *
+        (fs :: FsModule
+          PublicResult PublicString PublicBytes PublicReader PublicWriter PublicPath PublicIoError
+          PublicOS) *
+        (stdio :: StdioModule
+          PublicOption PublicResult PublicString PublicReader PublicWriter PublicIoError PublicOS) *
+        (process :: ProcessModule PublicList PublicInt PublicString PublicOS) *
         Unit
     in
     let Interface =

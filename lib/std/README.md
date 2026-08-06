@@ -2,13 +2,13 @@
 
 The standard library has two boundaries. [`builtin.zy`](builtin.zy) is the typed contract between Zydeco programs
 and the host runtime. Its operations expose representation-independent observations and effects, but never
-construct library-defined `Bool`, `Option`, or `List` values. [`interface.zy`](interface.zy) defines the public
+construct library-defined `Bool`, `Option`, `Result`, or `List` values. [`interface.zy`](interface.zy) defines the public
 package independently from its implementation. [`std.zy`](std.zy) applies the ordinary Zydeco modules in this
 directory, derives the higher-level operations, and assembles a value of that public package type.
 
 This separation keeps algebraic data in the language. The interpreter and native runtime only need to agree on
-the small Builtin ABI, while `bool.zy`, `option.zy`, `list.zy`, and the derived operations in `std.zy` remain ordinary
-Zydeco code.
+the small Builtin ABI, while `bool.zy`, `option.zy`, `result.zy`, `list.zy`, and the derived operations in `std.zy`
+remain ordinary Zydeco code.
 
 ## Text model
 
@@ -50,11 +50,21 @@ operations. A future numeric module should expose checked arithmetic before addi
 
 - `bool`: constants, logical connectives, equality, and conditional elimination.
 - `option`: construction, elimination, mapping, chaining, defaults, and zipping.
+- `result`: successful and failed results, elimination, mapping, chaining, defaults, and predicates.
 - `list`: construction, right and left folds, append, map, reverse, length, safe indexing, head, and tail.
 - `int`: arithmetic, complete comparisons, successor/predecessor, negation, extrema, and string rendering.
 - `char`: UTF-8 text rendering and checked Unicode codepoint conversion.
 - `string`: scalar-aware observation, safe decomposition, character-list conversion, concatenation, and parsing.
-- `os`: text and integer output, input, process arguments, randomness, successful halt, failure, and explicit exit.
+- `bytes`: immutable octet buffers, concatenation, length, UTF-8 encoding, and checked UTF-8 decoding.
+- `io`: shared byte-stream reads and writes, flushing, closing, and structured I/O errors.
+- `fs`: typed paths, file-backed capabilities, and whole-file byte and UTF-8 text operations.
+- `stdio`: standard stream capabilities and UTF-8 terminal conveniences built from `io` operations.
+- `process`: process arguments, randomness, successful halt, panic, and explicit exit.
+
+Filesystem contents are bytes by default. Text conveniences explicitly validate or produce UTF-8, and every
+fallible operation reports `Result A IoError` to its `OS` continuation. EOF is represented as `Option` by line reads;
+it is not conflated with an empty line or an I/O failure. The full rationale and lifecycle contract are documented
+in [`docs/ideas/filesystem.md`](../../docs/ideas/filesystem.md).
 
 The component files are independently importable pure package functions. `std.zy` is the composition root used by
 most programs and re-exports their abstract type witnesses in one package. Keeping the interface separate makes

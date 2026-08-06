@@ -3,11 +3,11 @@ begin
   let F = Ret that
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
-    monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
+    monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
   begin
   let Ret = F that
   let add = api/add that

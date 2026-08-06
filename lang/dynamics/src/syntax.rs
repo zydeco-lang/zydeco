@@ -1,5 +1,6 @@
 pub use zydeco_syntax::*;
 
+use crate::host::{HostRuntime, HostValue};
 use crate::statics_syntax as ss;
 use derive_more::From;
 use std::{
@@ -52,8 +53,13 @@ pub enum Value {
 /* ------------------------------- Computation ------------------------------ */
 
 /// Function signature for builtin primitives.
-pub type PrimComp =
-    fn(Vec<SemValue>, &mut dyn BufRead, &mut dyn Write, &[String]) -> Result<Computation, i32>;
+pub type PrimComp = fn(
+    Vec<SemValue>,
+    &mut dyn BufRead,
+    &mut dyn Write,
+    &[String],
+    &mut HostRuntime,
+) -> Result<Computation, i32>;
 
 /// A primitive function together with its arity.
 #[derive(Clone, Debug)]
@@ -121,6 +127,7 @@ pub enum SemValue {
     Triv(Triv),
     VCons(ConsN<SemValue, Box<SemValue>>),
     Literal(Literal),
+    Host(HostValue),
 }
 
 /// Runtime stack frames for computations.
@@ -136,6 +143,7 @@ pub struct Runtime<'rt> {
     pub input: &'rt mut dyn BufRead,
     pub output: &'rt mut dyn Write,
     pub args: &'rt [String],
+    pub(crate) host: HostRuntime,
     pub stack: im::Vector<SemCompu>,
     pub env: Env<SemValue>,
     pub arena: DynamicsArena,

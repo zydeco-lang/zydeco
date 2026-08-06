@@ -1390,6 +1390,9 @@ fn canonical_builtin_signature_exports_intrinsics_as_static_manifest_fields() {
         ExpectedField::Abstract(BuiltinTypeRole::Int),
         ExpectedField::Abstract(BuiltinTypeRole::Char),
         ExpectedField::Abstract(BuiltinTypeRole::String),
+        ExpectedField::Abstract(BuiltinTypeRole::Bytes),
+        ExpectedField::Abstract(BuiltinTypeRole::Reader),
+        ExpectedField::Abstract(BuiltinTypeRole::Writer),
         ExpectedField::Abstract(BuiltinTypeRole::OS),
     ];
     let (tail, abstract_witnesses) = fields.into_iter().fold(
@@ -1458,7 +1461,7 @@ fn canonical_builtin_signature_exports_intrinsics_as_static_manifest_fields() {
         .map(|witness| checked.statics.builtin_roles.witness(*witness))
         .collect::<Vec<_>>();
     assert_eq!(abstract_roles, opened_roles);
-    assert_eq!(opened_roles.len(), 4);
+    assert_eq!(opened_roles.len(), 7);
     assert!(matches!(checked.statics.types_pre[&tail], Fillable::Done(Type::Prod(_))));
 }
 

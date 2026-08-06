@@ -1,5 +1,5 @@
 param (
-  (VType, CType, Thk, Ret, Unit, Int, Char, String, OS,
+  (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS,
    = add, = sub, = mul, = div, = mod,
    = int_eq_branch, = int_lt_branch, = int_gt_branch,
    = str_scalar_length, = str_byte_length, = str_append,
@@ -7,6 +7,12 @@ param (
    = str_eq_branch, = str_get_branch,
    = int_to_str, = char_to_str, = char_codepoint, = char_from_codepoint_branch,
    = str_parse_int_branch,
+   = bytes_empty, = bytes_length, = bytes_append, = bytes_from_str,
+   = bytes_to_str_branch,
+   = stdin, = stdout, = stderr,
+   = io_read, = io_read_line, = io_read_all, = io_write_all, = io_flush,
+   = io_close_reader, = io_close_writer,
+   = fs_open_reader, = fs_create_writer, = fs_append_writer,
    = write_str, = write_int, = write_line,
    = read_line, = read_line_as_int_branch, = read_till_eof, = arg_fold,
    = random_int, = exit) :

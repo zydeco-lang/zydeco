@@ -17,6 +17,9 @@ pub enum BuiltinValueAtom {
     Int,
     Char,
     String,
+    Bytes,
+    Reader,
+    Writer,
 }
 
 impl BuiltinValueAtom {
@@ -25,6 +28,9 @@ impl BuiltinValueAtom {
             | Self::Int => BuiltinTypeRole::Int,
             | Self::Char => BuiltinTypeRole::Char,
             | Self::String => BuiltinTypeRole::String,
+            | Self::Bytes => BuiltinTypeRole::Bytes,
+            | Self::Reader => BuiltinTypeRole::Reader,
+            | Self::Writer => BuiltinTypeRole::Writer,
         }
     }
 }
@@ -101,6 +107,42 @@ impl BuiltinOperationAbi {
             | Role::CharCodepoint => Self::pure([Atom::Char], Atom::Int),
             | Role::CharFromCodepoint => Self::optional([Atom::Int], Atom::Char),
             | Role::StrParseInt => Self::optional([Atom::String], Atom::Int),
+            | Role::BytesEmpty => Self::pure([], Atom::Bytes),
+            | Role::BytesLength => Self::pure([Atom::Bytes], Atom::Int),
+            | Role::BytesAppend => Self::pure([Atom::Bytes, Atom::Bytes], Atom::Bytes),
+            | Role::BytesFromStr => Self::pure([Atom::String], Atom::Bytes),
+            | Role::BytesToStr => Self::optional([Atom::Bytes], Atom::String),
+            | Role::Stdin => Self::pure([], Atom::Reader),
+            | Role::Stdout | Role::Stderr => Self::pure([], Atom::Writer),
+            | Role::IoRead => Self::io_effect(
+                [Self::atom(Atom::Reader), Self::atom(Atom::Int)],
+                Self::continuation(Atom::Bytes),
+            ),
+            | Role::IoReadAll => {
+                Self::io_effect([Self::atom(Atom::Reader)], Self::continuation(Atom::Bytes))
+            }
+            | Role::IoReadLine => Self::effect([
+                Self::atom(Atom::Reader),
+                Self::io_error_continuation(),
+                Self::os_continuation(),
+                Self::continuation(Atom::Bytes),
+            ]),
+            | Role::IoWriteAll => Self::io_effect(
+                [Self::atom(Atom::Writer), Self::atom(Atom::Bytes)],
+                Self::os_continuation(),
+            ),
+            | Role::IoFlush | Role::IoCloseWriter => {
+                Self::io_effect([Self::atom(Atom::Writer)], Self::os_continuation())
+            }
+            | Role::IoCloseReader => {
+                Self::io_effect([Self::atom(Atom::Reader)], Self::os_continuation())
+            }
+            | Role::FsOpenReader => {
+                Self::io_effect([Self::atom(Atom::String)], Self::continuation(Atom::Reader))
+            }
+            | Role::FsCreateWriter | Role::FsAppendWriter => {
+                Self::io_effect([Self::atom(Atom::String)], Self::continuation(Atom::Writer))
+            }
             | Role::WriteStr => Self::effect([Self::atom(Atom::String), Self::os_continuation()]),
             | Role::WriteInt => Self::effect([Self::atom(Atom::Int), Self::os_continuation()]),
             | Role::WriteLine => Self::effect([Self::atom(Atom::String), Self::os_continuation()]),
@@ -193,10 +235,27 @@ impl BuiltinOperationAbi {
     }
 
     fn continuation(argument: BuiltinValueAtom) -> BuiltinValueClassifier {
-        Self::thunk(BuiltinComputationClassifier::Arrow(
-            Self::atom(argument),
-            Box::new(BuiltinComputationClassifier::OS),
+        Self::continuation_with([argument])
+    }
+
+    fn continuation_with(
+        arguments: impl IntoIterator<Item = BuiltinValueAtom>,
+    ) -> BuiltinValueClassifier {
+        Self::thunk(Self::arrows(
+            arguments.into_iter().map(Self::atom),
+            BuiltinComputationClassifier::OS,
         ))
+    }
+
+    fn io_error_continuation() -> BuiltinValueClassifier {
+        Self::continuation_with([BuiltinValueAtom::Int, BuiltinValueAtom::String])
+    }
+
+    fn io_effect(
+        parameters: impl IntoIterator<Item = BuiltinValueClassifier>,
+        success: BuiltinValueClassifier,
+    ) -> BuiltinValueClassifier {
+        Self::effect(parameters.into_iter().chain([Self::io_error_continuation(), success]))
     }
 
     fn os_continuation() -> BuiltinValueClassifier {

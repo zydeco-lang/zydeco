@@ -189,7 +189,10 @@ pub mod utils {
                 | SourceCasePrelude::Monadic => concat!(
                     "let (= Monad, = Algebra, ()) =\n",
                     "  monadic_basis ",
-                    "(VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in\n",
+                    concat!(
+                        "(VType, CType, Thk, Ret, Unit, Int, Char, String, ",
+                        "Bytes, Reader, Writer, OS, api) in\n",
+                    ),
                 )
                 .to_string(),
             };
@@ -197,7 +200,7 @@ pub mod utils {
             format!(
                 r#"let Builtin = @[import("{builtin}")] _ in
 {monadic}param (
-  (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+  (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
   Builtin
 ) in
 let Thunk = Thk in

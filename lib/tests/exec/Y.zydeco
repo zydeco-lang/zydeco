@@ -1,7 +1,7 @@
 begin
   let std = @[import("../../std/std.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
   def Y (B : CType) : CType =
@@ -27,13 +27,20 @@ begin
   let (
     Bool = StdBool,
     Option = StdOption,
+    Result = StdResult,
     List = StdList,
     Int = StdInt,
     Char = StdChar,
     String = StdString,
+    Bytes = StdBytes,
+    Reader = StdReader,
+    Writer = StdWriter,
+    Path = StdPath,
+    IoErrorKind = StdIoErrorKind,
+    IoError = StdIoError,
     OS = StdOS,
     std
-  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
+  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
   -- good old factorial
   def ! fact (f : Thk (StdInt -> Ret StdInt)) (n : StdInt) : Ret StdInt =
     do is_zero <- ! (std/int/eq) n 0;
@@ -65,13 +72,13 @@ begin
         do msg <- ! (std/string/append) msg expected;
         do msg <- ! (std/string/append) msg ", got ";
         do msg <- ! (std/string/append) msg got;
-        ! (std/os/write_line) msg { ! (std/os/exit) 1 }
+        ! (std/stdio/write_line) msg { fn _ => ! (std/process/exit) 1 }
       }
   in
 
   ! demo 5 120 {
     ! demo 10 3628800 {
-      ! (std/os/exit) 0
+      ! (std/process/exit) 0
     }
   }
 end

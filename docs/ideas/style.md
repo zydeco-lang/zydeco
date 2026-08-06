@@ -19,7 +19,7 @@ before producing a computation or package:
 begin
   let std = @[import("../std/std.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
     @[import("../std/builtin.zy")] _
   ) that
 

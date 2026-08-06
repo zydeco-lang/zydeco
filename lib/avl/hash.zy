@@ -1,20 +1,27 @@
 begin
   let std = @[import("../std/std.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
     @[import("../std/builtin.zy")] _
   ) that
 
   let (
     Bool = StdBool,
     Option = StdOption,
+    Result = StdResult,
     List = StdList,
     Int = StdInt,
     Char = StdChar,
     String = StdString,
+    Bytes = StdBytes,
+    Reader = StdReader,
+    Writer = StdWriter,
+    Path = StdPath,
+    IoErrorKind = StdIoErrorKind,
+    IoError = StdIoError,
     OS = StdOS,
     std
-  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
+  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
   begin
     let Cmp (A : VType) =
       Thk (A -> A -> Ret StdBool)
@@ -312,10 +319,11 @@ begin
         do with_label <- ! (std/string/append) rendered_value " h:";
         do rendered_height <- ! (std/int/to_string) tree_height;
         do line <- ! (std/string/append) with_label rendered_height;
-        ! (std/os/write_line) line {
-          ! pre_traversal A left format {
-            ! pre_traversal A right format continuation
-          }
+        ! (std/stdio/write_line) line {
+          fn _ =>
+            ! pre_traversal A left format {
+              ! pre_traversal A right format continuation
+            }
         }
       end
     that
@@ -464,14 +472,14 @@ begin
       StdString
       StdOS
       first
-      { ! (std/os/exit) 1 }
+      { ! (std/process/exit) 1 }
       {
         fn first_value =>
           ! (std/option/fold)
             StdString
             StdOS
             second
-            { ! (std/os/exit) 1 }
+            { ! (std/process/exit) 1 }
             {
               fn second_value =>
                 do values_equal <- ! (std/string/eq) first_value second_value;
@@ -479,8 +487,8 @@ begin
                 ! (std/bool/if)
                   StdOS
                   result
-                  { ! (std/os/exit) 0 }
-                  { ! (std/os/exit) 1 }
+                  { ! (std/process/exit) 0 }
+                  { ! (std/process/exit) 1 }
             }
       }
   end

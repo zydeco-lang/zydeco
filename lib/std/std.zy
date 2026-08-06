@@ -1,22 +1,34 @@
 begin
   let bool = @[import("bool.zy")] _ that
   let option = @[import("option.zy")] _ that
+  let result = @[import("result.zy")] _ that
   let list = @[import("list.zy")] _ that
+  let io_types = @[import("io-types.zy")] _ that
   let interface = @[import("interface.zy")] _ that
 
   begin
     param (
-      (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+      (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
       @[import("builtin.zy")] _
     ) in
       let (Bool = Bool, bool_api) =
-        bool (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
+        bool (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
       let (Option = Option, option_api) =
-        option (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
+        option (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+      let (Result = Result, result_api) =
+        result (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
       let (List = List, list_api) =
-        list (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
+        list (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+      let (
+        IoErrorKind = IoErrorKind,
+        IoError = IoError,
+        Path = Path,
+        io_types_api
+      ) = io_types (
+        VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
+      ) in
       let (= Prelude, = Public, ()) =
-        interface (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
+        interface (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
       let primitive_add = api/add in
       let primitive_int_eq = api/int_eq_branch in
       let primitive_int_lt = api/int_lt_branch in
@@ -27,7 +39,7 @@ begin
       let primitive_str_get = api/str_get_branch in
       let primitive_char_from_codepoint = api/char_from_codepoint_branch in
       let primitive_str_parse_int = api/str_parse_int_branch in
-      let primitive_read_line_as_int = api/read_line_as_int_branch in
+      let primitive_bytes_to_str = api/bytes_to_str_branch in
       let primitive_arg_fold = api/arg_fold in
       let ! increment (value : Int) : Ret Int =
         ! primitive_add value 1
@@ -97,6 +109,27 @@ begin
       let ! option_is_none (A : VType) (option : Option A) : Ret Bool =
         do present <- ! option_is_some A option;
         ! (bool_api/not) present
+      in
+      let ! result_is_ok
+        (A : VType)
+        (E : VType)
+        (result : Result A E)
+        : Ret Bool =
+        ! (result_api/fold)
+          A
+          E
+          (Ret Bool)
+          result
+          { fn _ => ret (bool_api/true) }
+          { fn _ => ret (bool_api/false) }
+      in
+      let ! result_is_err
+        (A : VType)
+        (E : VType)
+        (result : Result A E)
+        : Ret Bool =
+        do successful <- ! result_is_ok A E result;
+        ! (bool_api/not) successful
       in
       let ! list_is_empty (A : VType) (list : List A) : Ret Bool =
         ! (list_api/case)
@@ -253,17 +286,389 @@ begin
               ! (api/str_append) head rest
           }
       in
-      let ! read_line_as_int (continuation : Thk (Option Int -> OS)) : OS =
-        ! primitive_read_line_as_int
+      let ! bytes_to_string (bytes : Bytes) : Ret (Option String) =
+        ! primitive_bytes_to_str
+          (Ret (Option String))
+          bytes
+          { ! (option_api/none) String }
+          { fn string => ! (option_api/some) String string }
+      in
+      let ! make_io_error (code : Int) (message : String) : Ret IoError =
+        do kind <- ! (io_types_api/from_code) code;
+        ! (io_types_api/error) kind message
+      in
+      let ! io_kind_eq (left : IoErrorKind) (right : IoErrorKind) : Ret Bool =
+        ! (io_types_api/kind_eq_branch)
+          (Ret Bool)
+          left
+          right
+          { ret (bool_api/true) }
+          { ret (bool_api/false) }
+      in
+      let ! continue_io_ok
+        (A : VType)
+        (continuation : Thk (Result A IoError -> OS))
+        (value : A)
+        : OS =
+        do result <- ! (result_api/ok) A IoError value;
+        ! continuation result
+      in
+      let ! continue_io_error
+        (A : VType)
+        (continuation : Thk (Result A IoError -> OS))
+        (error : IoError)
+        : OS =
+        do result <- ! (result_api/err) A IoError error;
+        ! continuation result
+      in
+      let ! continue_host_error
+        (A : VType)
+        (continuation : Thk (Result A IoError -> OS))
+        (code : Int)
+        (message : String)
+        : OS =
+        do error <- ! make_io_error code message;
+        ! continue_io_error A continuation error
+      in
+      let ! io_read
+        (reader : Reader)
+        (count : Int)
+        (continuation : Thk (Result Bytes IoError -> OS))
+        : OS =
+        ! (api/io_read)
+          reader
+          count
+          { fn code message => ! continue_host_error Bytes continuation code message }
+          { fn bytes => ! continue_io_ok Bytes continuation bytes }
+      in
+      let ! io_read_line
+        (reader : Reader)
+        (continuation : Thk (Result (Option Bytes) IoError -> OS))
+        : OS =
+        ! (api/io_read_line)
+          reader
           {
-            do absent <- ! (option_api/none) Int;
-            ! continuation absent
+            fn code message =>
+              ! continue_host_error (Option Bytes) continuation code message
           }
           {
-            fn integer =>
-              do present <- ! (option_api/some) Int integer;
-              ! continuation present
+            do absent <- ! (option_api/none) Bytes;
+            ! continue_io_ok (Option Bytes) continuation absent
           }
+          {
+            fn bytes =>
+              do present <- ! (option_api/some) Bytes bytes;
+              ! continue_io_ok (Option Bytes) continuation present
+          }
+      in
+      let ! io_read_all
+        (reader : Reader)
+        (continuation : Thk (Result Bytes IoError -> OS))
+        : OS =
+        ! (api/io_read_all)
+          reader
+          { fn code message => ! continue_host_error Bytes continuation code message }
+          { fn bytes => ! continue_io_ok Bytes continuation bytes }
+      in
+      let ! io_write_all
+        (writer : Writer)
+        (bytes : Bytes)
+        (continuation : Thk (Result Unit IoError -> OS))
+        : OS =
+        ! (api/io_write_all)
+          writer
+          bytes
+          { fn code message => ! continue_host_error Unit continuation code message }
+          { ! continue_io_ok Unit continuation () }
+      in
+      let ! io_flush
+        (writer : Writer)
+        (continuation : Thk (Result Unit IoError -> OS))
+        : OS =
+        ! (api/io_flush)
+          writer
+          { fn code message => ! continue_host_error Unit continuation code message }
+          { ! continue_io_ok Unit continuation () }
+      in
+      let ! io_close_reader
+        (reader : Reader)
+        (continuation : Thk (Result Unit IoError -> OS))
+        : OS =
+        ! (api/io_close_reader)
+          reader
+          { fn code message => ! continue_host_error Unit continuation code message }
+          { ! continue_io_ok Unit continuation () }
+      in
+      let ! io_close_writer
+        (writer : Writer)
+        (continuation : Thk (Result Unit IoError -> OS))
+        : OS =
+        ! (api/io_close_writer)
+          writer
+          { fn code message => ! continue_host_error Unit continuation code message }
+          { ! continue_io_ok Unit continuation () }
+      in
+      let ! fs_open_reader
+        (path : Path)
+        (continuation : Thk (Result Reader IoError -> OS))
+        : OS =
+        do string <- ! (io_types_api/path_string) path;
+        ! (api/fs_open_reader)
+          string
+          { fn code message => ! continue_host_error Reader continuation code message }
+          { fn reader => ! continue_io_ok Reader continuation reader }
+      in
+      let ! fs_create_writer
+        (path : Path)
+        (continuation : Thk (Result Writer IoError -> OS))
+        : OS =
+        do string <- ! (io_types_api/path_string) path;
+        ! (api/fs_create_writer)
+          string
+          { fn code message => ! continue_host_error Writer continuation code message }
+          { fn writer => ! continue_io_ok Writer continuation writer }
+      in
+      let ! fs_append_writer
+        (path : Path)
+        (continuation : Thk (Result Writer IoError -> OS))
+        : OS =
+        do string <- ! (io_types_api/path_string) path;
+        ! (api/fs_append_writer)
+          string
+          { fn code message => ! continue_host_error Writer continuation code message }
+          { fn writer => ! continue_io_ok Writer continuation writer }
+      in
+      let ! finish_reader
+        (A : VType)
+        (reader : Reader)
+        (operation : Result A IoError)
+        (continuation : Thk (Result A IoError -> OS))
+        : OS =
+        ! (result_api/fold)
+          A
+          IoError
+          OS
+          operation
+          {
+            fn value =>
+              ! io_close_reader reader {
+                fn close_result =>
+                  ! (result_api/fold)
+                    Unit
+                    IoError
+                    OS
+                    close_result
+                    { fn _ => ! continue_io_ok A continuation value }
+                    { fn error => ! continue_io_error A continuation error }
+              }
+          }
+          {
+            fn operation_error =>
+              ! io_close_reader reader {
+                fn _ => ! continue_io_error A continuation operation_error
+              }
+          }
+      in
+      let ! finish_writer
+        (writer : Writer)
+        (operation : Result Unit IoError)
+        (continuation : Thk (Result Unit IoError -> OS))
+        : OS =
+        ! (result_api/fold)
+          Unit
+          IoError
+          OS
+          operation
+          {
+            fn _ =>
+              ! io_close_writer writer continuation
+          }
+          {
+            fn operation_error =>
+              ! io_close_writer writer {
+                fn _ => ! continue_io_error Unit continuation operation_error
+              }
+          }
+      in
+      let ! fs_read_bytes
+        (path : Path)
+        (continuation : Thk (Result Bytes IoError -> OS))
+        : OS =
+        ! fs_open_reader path {
+          fn opened =>
+            ! (result_api/fold)
+              Reader
+              IoError
+              OS
+              opened
+              {
+                fn reader =>
+                  ! io_read_all reader {
+                    fn operation => ! finish_reader Bytes reader operation continuation
+                  }
+              }
+              { fn error => ! continue_io_error Bytes continuation error }
+        }
+      in
+      let ! fs_read_text
+        (path : Path)
+        (continuation : Thk (Result String IoError -> OS))
+        : OS =
+        ! fs_read_bytes path {
+          fn result =>
+            ! (result_api/fold)
+              Bytes
+              IoError
+              OS
+              result
+              {
+                fn bytes =>
+                  ! primitive_bytes_to_str
+                    OS
+                    bytes
+                    {
+                      do error <- ! (io_types_api/error)
+                        (io_types_api/invalid_data)
+                        "file is not valid UTF-8";
+                      ! continue_io_error String continuation error
+                    }
+                    { fn string => ! continue_io_ok String continuation string }
+              }
+              { fn error => ! continue_io_error String continuation error }
+        }
+      in
+      let ! fs_write_bytes
+        (path : Path)
+        (bytes : Bytes)
+        (continuation : Thk (Result Unit IoError -> OS))
+        : OS =
+        ! fs_create_writer path {
+          fn opened =>
+            ! (result_api/fold)
+              Writer
+              IoError
+              OS
+              opened
+              {
+                fn writer =>
+                  ! io_write_all writer bytes {
+                    fn operation => ! finish_writer writer operation continuation
+                  }
+              }
+              { fn error => ! continue_io_error Unit continuation error }
+        }
+      in
+      let ! fs_write_text
+        (path : Path)
+        (string : String)
+        (continuation : Thk (Result Unit IoError -> OS))
+        : OS =
+        do bytes <- ! (api/bytes_from_str) string;
+        ! fs_write_bytes path bytes continuation
+      in
+      let ! write_bytes_and_flush
+        (writer : Writer)
+        (bytes : Bytes)
+        (continuation : Thk (Result Unit IoError -> OS))
+        : OS =
+        ! io_write_all writer bytes {
+          fn written =>
+            ! (result_api/fold)
+              Unit
+              IoError
+              OS
+              written
+              { fn _ => ! io_flush writer continuation }
+              { fn error => ! continue_io_error Unit continuation error }
+        }
+      in
+      let ! stdio_write_to
+        (writer : Writer)
+        (string : String)
+        (continuation : Thk (Result Unit IoError -> OS))
+        : OS =
+        do bytes <- ! (api/bytes_from_str) string;
+        ! write_bytes_and_flush writer bytes continuation
+      in
+      let ! stdio_write_line_to
+        (writer : Writer)
+        (string : String)
+        (continuation : Thk (Result Unit IoError -> OS))
+        : OS =
+        do bytes <- ! (api/bytes_from_str) string;
+        do newline <- ! (api/bytes_from_str) "\n";
+        do line <- ! (api/bytes_append) bytes newline;
+        ! write_bytes_and_flush writer line continuation
+      in
+      let ! stdio_read_line
+        (continuation : Thk (Result (Option String) IoError -> OS))
+        : OS =
+        do reader <- ! (api/stdin);
+        ! io_read_line reader {
+          fn result =>
+            ! (result_api/fold)
+              (Option Bytes)
+              IoError
+              OS
+              result
+              {
+                fn line =>
+                  ! (option_api/fold)
+                    Bytes
+                    OS
+                    line
+                    {
+                      do absent <- ! (option_api/none) String;
+                      ! continue_io_ok (Option String) continuation absent
+                    }
+                    {
+                      fn bytes =>
+                        ! primitive_bytes_to_str
+                          OS
+                          bytes
+                          {
+                            do error <- ! (io_types_api/error)
+                              (io_types_api/invalid_data)
+                              "standard input is not valid UTF-8";
+                            ! continue_io_error (Option String) continuation error
+                          }
+                          {
+                            fn string =>
+                              do present <- ! (option_api/some) String string;
+                              ! continue_io_ok (Option String) continuation present
+                          }
+                    }
+              }
+              { fn error => ! continue_io_error (Option String) continuation error }
+        }
+      in
+      let ! stdio_write
+        (string : String)
+        (continuation : Thk (Result Unit IoError -> OS))
+        : OS =
+        do writer <- ! (api/stdout);
+        ! stdio_write_to writer string continuation
+      in
+      let ! stdio_write_line
+        (string : String)
+        (continuation : Thk (Result Unit IoError -> OS))
+        : OS =
+        do writer <- ! (api/stdout);
+        ! stdio_write_line_to writer string continuation
+      in
+      let ! stdio_write_error
+        (string : String)
+        (continuation : Thk (Result Unit IoError -> OS))
+        : OS =
+        do writer <- ! (api/stderr);
+        ! stdio_write_to writer string continuation
+      in
+      let ! stdio_write_error_line
+        (string : String)
+        (continuation : Thk (Result Unit IoError -> OS))
+        : OS =
+        do writer <- ! (api/stderr);
+        ! stdio_write_line_to writer string continuation
       in
       let ! arg_list (continuation : Thk (List String -> OS)) : OS =
         do arguments <- ! primitive_arg_fold
@@ -276,14 +681,9 @@ begin
           };
         ! continuation arguments
       in
-      let ! write_int_line (integer : Int) (continuation : Thk OS) : OS =
-        ! (api/write_int) integer {
-          ! (api/write_line) "" continuation
-        }
-      in
       let halt : Thk OS = { ! (api/exit) 0 } in
       let ! panic (message : String) : OS =
-        ! (api/write_line) message { ! (api/exit) 1 }
+        ! stdio_write_error_line message { fn _ => ! (api/exit) 1 }
       in
       let prelude : Prelude = (
         Thunk = Thk,
@@ -294,10 +694,17 @@ begin
       ((
         Bool = Bool,
         Option = Option,
+        Result = Result,
         List = List,
         Int = Int,
         Char = Char,
         String = String,
+        Bytes = Bytes,
+        Reader = Reader,
+        Writer = Writer,
+        Path = Path,
+        IoErrorKind = IoErrorKind,
+        IoError = IoError,
         OS = OS,
         prelude = prelude,
         bool = (
@@ -323,6 +730,17 @@ begin
           zip = option_api/zip,
           is_some = option_is_some,
           is_none = option_is_none,
+        ),
+        result = (
+          ok = result_api/ok,
+          err = result_api/err,
+          fold = result_api/fold,
+          map = result_api/map,
+          map_err = result_api/map_err,
+          and_then = result_api/and_then,
+          unwrap_or = result_api/unwrap_or,
+          is_ok = result_is_ok,
+          is_err = result_is_err,
         ),
         list = (
           nil = list_api/nil,
@@ -381,14 +799,55 @@ begin
           from_chars = str_from_chars,
           parse_int = str_parse_int,
         ),
-        os = (
-          write = api/write_str,
-          write_int = api/write_int,
-          write_int_line = write_int_line,
-          write_line = api/write_line,
-          read_line = api/read_line,
-          read_line_as_int = read_line_as_int,
-          read_till_eof = api/read_till_eof,
+        bytes = (
+          empty = api/bytes_empty,
+          length = api/bytes_length,
+          append = api/bytes_append,
+          from_string = api/bytes_from_str,
+          to_string = bytes_to_string,
+        ),
+        io = (
+          not_found = io_types_api/not_found,
+          permission_denied = io_types_api/permission_denied,
+          already_exists = io_types_api/already_exists,
+          invalid_input = io_types_api/invalid_input,
+          invalid_data = io_types_api/invalid_data,
+          broken_pipe = io_types_api/broken_pipe,
+          closed = io_types_api/closed,
+          other = io_types_api/other,
+          kind_eq = io_kind_eq,
+          error_kind = io_types_api/error_kind,
+          error_message = io_types_api/error_message,
+          read = io_read,
+          read_line = io_read_line,
+          read_all = io_read_all,
+          write_all = io_write_all,
+          flush = io_flush,
+          close_reader = io_close_reader,
+          close_writer = io_close_writer,
+        ),
+        fs = (
+          path = io_types_api/path,
+          path_string = io_types_api/path_string,
+          open_reader = fs_open_reader,
+          create_writer = fs_create_writer,
+          append_writer = fs_append_writer,
+          read_bytes = fs_read_bytes,
+          read_text = fs_read_text,
+          write_bytes = fs_write_bytes,
+          write_text = fs_write_text,
+        ),
+        stdio = (
+          stdin = api/stdin,
+          stdout = api/stdout,
+          stderr = api/stderr,
+          read_line = stdio_read_line,
+          write = stdio_write,
+          write_line = stdio_write_line,
+          write_error = stdio_write_error,
+          write_error_line = stdio_write_error_line,
+        ),
+        process = (
           arg_list = arg_list,
           random_int = api/random_int,
           halt = halt,

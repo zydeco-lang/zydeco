@@ -1,28 +1,35 @@
 begin
   let std = @[import("../../std/std.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   let (
     Bool = StdBool,
     Option = StdOption,
+    Result = StdResult,
     List = StdList,
     Int = StdInt,
     Char = StdChar,
     String = StdString,
+    Bytes = StdBytes,
+    Reader = StdReader,
+    Writer = StdWriter,
+    Path = StdPath,
+    IoErrorKind = StdIoErrorKind,
+    IoError = StdIoError,
     OS = StdOS,
     std
-  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
+  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
   do value <- ! (std/option/some) StdInt 0;
   ! (std/option/fold)
     StdInt
     StdOS
     value
-    { ! (std/os/exit) 1 }
+    { ! (std/process/exit) 1 }
     {
       fn status =>
-        ! (std/os/exit) status
+        ! (std/process/exit) status
     }
 end
