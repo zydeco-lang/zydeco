@@ -71,6 +71,10 @@ pub struct Triv;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ConsN<S, T>(pub Vec<S>, pub T);
 
+/// Several patterns that all observe the same bindee, in source order.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct Alias<T>(pub ConsN<T, T>);
+
 /// a * b shaped product
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Prod<S, T>(pub S, pub T);

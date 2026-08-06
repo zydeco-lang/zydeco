@@ -32,10 +32,21 @@ impl<'a> Ugly<'a, Formatter<'a>> for PatId {
             | Pattern::Var(p) => s += &p.ugly(f),
             | Pattern::Named(p) => s += &p.ugly(f),
             | Pattern::Ctor(p) => s += &p.ugly(f),
+            | Pattern::Alias(p) => s += &p.ugly(f),
             | Pattern::Triv(p) => s += &p.ugly(f),
             | Pattern::Cons(p) => s += &p.ugly(f),
         }
         s
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for Alias<PatId> {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let Alias(patterns) = self;
+        format!(
+            "({})",
+            patterns.iter().map(|pattern| pattern.ugly(f)).collect::<Vec<_>>().join("; ")
+        )
     }
 }
 

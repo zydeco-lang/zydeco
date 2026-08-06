@@ -59,6 +59,10 @@ impl<'a> Elaborate for VPatId {
                 let tail = tail.elaborate(el);
                 Ctor(name, tail).sbuild(el, self, ())
             }
+            | ValuePattern::Alias(Alias(patterns)) => {
+                let patterns = patterns.into_iter().map(|pattern| pattern.elaborate(el)).collect();
+                Alias(ConsN::from_vec(patterns).unwrap()).sbuild(el, self, ())
+            }
             | ValuePattern::Triv(Triv) => Triv.sbuild(el, self, ()),
             | ValuePattern::VCons(VCons { items: ConsN(items, tail), layout }) => {
                 let items = items.into_iter().map(|item| item.elaborate(el)).collect();

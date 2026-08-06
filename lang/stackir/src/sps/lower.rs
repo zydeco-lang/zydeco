@@ -293,6 +293,10 @@ impl Lower for ss::VPatId {
                 let ctor_idx = CtorIdx { idx, name };
                 Ctor(ctor_idx, tail_vpat).into()
             }
+            | SSVPat::Alias(Alias(patterns)) => {
+                let patterns = patterns.into_iter().map(|pattern| pattern.lower(lo, ())).collect();
+                Alias(ConsN::from_vec(patterns).unwrap()).into()
+            }
             | SSVPat::Triv(Triv) => Triv.into(),
             | SSVPat::VCons(ss::ConsN(items, tail)) => {
                 let items = items.into_iter().map(|item| item.lower(lo, ())).collect();

@@ -263,6 +263,14 @@ impl Desugar for t::PatId {
                 let pat = pat.desugar(desugarer)?;
                 Alloc::alloc(desugarer, b::Ctor(name, pat).into(), self.into())
             }
+            | Pat::Alias(t::Alias(patterns)) => {
+                let patterns = patterns
+                    .into_iter()
+                    .map(|pattern| pattern.desugar(desugarer))
+                    .collect::<Result<Vec<_>>>()?;
+                let patterns = b::ConsN::from_vec(patterns).unwrap();
+                Alloc::alloc(desugarer, b::Alias(patterns).into(), self.into())
+            }
             | Pat::Paren(pat) => {
                 let t::Paren(pats) = pat;
                 let mut pats = pats.desugar(desugarer)?;

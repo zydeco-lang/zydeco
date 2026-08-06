@@ -349,11 +349,37 @@ impl FieldProjectionResolver {
     }
 }
 
+/// The initial backend representation can repeat guaranteed destructuring,
+/// but it does not yet encode conjunction between competing constructors.
+struct PatternAliasValidator;
+
+impl PatternAliasValidator {
+    fn is_irrefutable(tycker: &Tycker<'_>, pattern: ss::VPatId) -> bool {
+        match &tycker.statics.vpats[&pattern] {
+            | ss::ValuePattern::Hole(_) | ss::ValuePattern::Var(_) | ss::ValuePattern::Triv(_) => {
+                true
+            }
+            | ss::ValuePattern::Named(ss::Named(_, inner)) => Self::is_irrefutable(tycker, *inner),
+            | ss::ValuePattern::Ctor(_) => false,
+            | ss::ValuePattern::Alias(ss::Alias(patterns)) => {
+                patterns.iter().all(|pattern| Self::is_irrefutable(tycker, *pattern))
+            }
+            | ss::ValuePattern::VCons(patterns) => {
+                patterns.iter().all(|pattern| Self::is_irrefutable(tycker, *pattern))
+            }
+            | ss::ValuePattern::SCons(ss::ConsN(_, body)) => Self::is_irrefutable(tycker, *body),
+        }
+    }
+}
+
 impl Tycker<'_> {
     fn pattern_has_payload_annotation(&self, pattern: su::PatId) -> bool {
-        match self.scoped.pats[&pattern] {
+        match self.scoped.pats[&pattern].clone() {
             | su::Pattern::Ann(_) => true,
             | su::Pattern::Named(su::Named(_, inner)) => self.pattern_has_payload_annotation(inner),
+            | su::Pattern::Alias(su::Alias(patterns)) => {
+                patterns.iter().any(|pattern| self.pattern_has_payload_annotation(*pattern))
+            }
             | su::Pattern::Hole(_)
             | su::Pattern::Var(_)
             | su::Pattern::Ctor(_)
@@ -1227,6 +1253,7 @@ impl PackPiPatternSkolems {
             | su::Pattern::Hole(_)
             | su::Pattern::Var(_)
             | su::Pattern::Ctor(_)
+            | su::Pattern::Alias(_)
             | su::Pattern::Triv(_) => tycker.err_k(
                 TyckError::PackageWitnessArityMismatch {
                     expected: self.signature.witnesses.len(),
@@ -1685,6 +1712,46 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                     tycker.statics.data_pat_hints.insert_new(pat, data_id.to_owned());
                     args_out_ann.with_annotation(PatAnnId::Value(pat, ann_ty))
                 }
+            },
+            | Pat::Alias(su::Alias(patterns)) => match switch {
+                | Switch::Syn => {
+                    tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
+                }
+                | Switch::Ana(AnnId::Type(expected)) => {
+                    let initial = (self.info.clone(), Vec::new(), Vec::new());
+                    let (pattern_env, output, opened) = patterns.into_iter().try_fold(
+                        initial,
+                        |(pattern_env, mut output, mut opened), pattern| -> ResultKont<_> {
+                            let checked = TyEnvT::new(pattern_env, pattern).tyck_k(
+                                tycker,
+                                PatternAction::ana(expected.into()).with_skolems(skolems.clone()),
+                            )?;
+                            let TyEnvT { info, inner } = checked;
+                            let (pattern, _) = inner.annotation.try_as_value(
+                                tycker,
+                                TyckError::SortMismatch,
+                                std::panic::Location::caller(),
+                            )?;
+                            if !PatternAliasValidator::is_irrefutable(tycker, pattern) {
+                                tycker.err_k(
+                                    TyckError::RefutablePatternAlias,
+                                    std::panic::Location::caller(),
+                                )?
+                            }
+                            output.push(pattern);
+                            opened.extend(inner.opened);
+                            Ok((info, output, opened))
+                        },
+                    )?;
+                    let patterns = ss::ConsN::from_vec(output).unwrap();
+                    let alias = Alloc::alloc(tycker, ss::Alias(patterns), expected, &self.info);
+                    TyEnvT::new(
+                        pattern_env,
+                        PatternCheck::with_opened(PatAnnId::Value(alias, expected), opened),
+                    )
+                }
+                | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker
+                    .err_k(TyckError::PatternAliasRequiresValue, std::panic::Location::caller())?,
             },
             | Pat::Triv(su::Triv) => {
                 let unit = ss::UnitTy.build(tycker, &self.info);

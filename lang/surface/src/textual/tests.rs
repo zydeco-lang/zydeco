@@ -3,7 +3,7 @@ use crate::{
     textual::{
         arena::TextualScope,
         syntax::{
-            Ann, Appli, Block, BuiltinRole, BuiltinTypeRole, CoPatId, ContextBind, DefId,
+            Alias, Ann, Appli, Block, BuiltinRole, BuiltinTypeRole, CoPatId, ContextBind, DefId,
             DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists, Hole, IntrinsicRole,
             Label, Literal, ManifestParameter, Meta, MetaT, Named, Param, Paren, Parser, PatId,
             Pattern, Placement, Prod, Proj, SourceUnit, Term, TermId,
@@ -934,6 +934,30 @@ fn parses_named_pattern_fields() {
         fields,
         vec![("x".to_string(), "left".to_string()), ("y".to_string(), "right".to_string()),]
     );
+}
+
+#[test]
+fn parses_semicolon_pattern_aliases_in_source_order() {
+    let source = "(whole; first; second)";
+    let mut parser = Parser::new();
+    let pattern = parser::SinglePatternParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Pattern::Alias(Alias(patterns)) = &parser.arena.pats[&pattern] else {
+        panic!("expected a pattern alias")
+    };
+    let names = patterns
+        .iter()
+        .map(|pattern| {
+            let Pattern::Var(definition) = parser.arena.pats[pattern] else {
+                panic!("expected a variable alias member")
+            };
+            parser.arena.defs[&definition].plain()
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(names, ["whole", "first", "second"]);
 }
 
 #[test]

@@ -197,6 +197,14 @@ Pattern: Pattern = {
     <Hole> => <>.into(),
     <DefId> => <>.into(),
     <ctor:CtorName> <pat:PatId> => Ctor(<>).into(),
+    "(" <first:PatternAnnId> ";" <second:PatternAnnId>
+        <rest:(";" <PatternAnnId>)*> ")" => {
+        let patterns = std::iter::once(first)
+            .chain(std::iter::once(second))
+            .chain(rest)
+            .collect::<Vec<_>>();
+        Alias(ConsN::from_vec(patterns).unwrap()).into()
+    },
     <Paren<PatternAnnId>> => <>.into(),
 };
 

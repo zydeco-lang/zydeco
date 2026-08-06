@@ -62,6 +62,8 @@ pub enum TyckError {
     AmbiguousNamedTypeField { field: FieldName, found: KindId },
     MissingNamedField { field: FieldName, found: TypeId },
     DuplicateNamedField { field: FieldName, found: TypeId },
+    PatternAliasRequiresValue,
+    RefutablePatternAlias,
     UnknownDataConstructor(CtorName),
     UnknownCoDataDestructor(DtorName),
     CopatternStepMismatch { expected: CopatternStepKind, found: CopatternStep },
@@ -191,6 +193,12 @@ impl<'a> Tycker<'a> {
                     "Ambiguous named field `{field}` in {}",
                     self.pretty_statics_nested(found, "\t")
                 )
+            }
+            | TyckError::PatternAliasRequiresValue => {
+                "Pattern aliasing currently requires a value pattern".to_string()
+            }
+            | TyckError::RefutablePatternAlias => {
+                "Pattern alias members must currently be irrefutable".to_string()
             }
             | TyckError::UnknownDataConstructor(ctor) => {
                 format!("Unknown data constructor: +{ctor}")
@@ -507,6 +515,12 @@ impl<'a> Tycker<'a> {
                     "Ambiguous named field `{field}` in {}",
                     self.pretty_statics_nested(*found, "")
                 )
+            }
+            | TyckError::PatternAliasRequiresValue => {
+                "Pattern aliasing currently requires a value pattern".to_string()
+            }
+            | TyckError::RefutablePatternAlias => {
+                "Pattern alias members must currently be irrefutable".to_string()
             }
             | TyckError::UnknownDataConstructor(ctor) => {
                 format!("Unknown data constructor `+{ctor}`")

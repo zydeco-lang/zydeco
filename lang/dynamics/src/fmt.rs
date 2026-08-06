@@ -26,6 +26,10 @@ impl<'a> Ugly<'a, Formatter<'a>> for ValuePattern {
             | VPat::Hole(Hole) => "_".to_string(),
             | VPat::Var(def) => def.ugly(f),
             | VPat::Ctor(vpat) => vpat.ugly(f),
+            | VPat::Alias(Alias(patterns)) => format!(
+                "({})",
+                patterns.iter().map(|pattern| pattern.ugly(f)).collect::<Vec<_>>().join("; ")
+            ),
             | VPat::Triv(Triv) => "()".to_string(),
             | VPat::VCons(vpat) => vpat.ugly(f),
         }

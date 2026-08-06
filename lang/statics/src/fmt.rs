@@ -129,6 +129,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for VPatId {
             | VPat::Var(vpat) => vpat.ugly(f),
             | VPat::Named(vpat) => vpat.ugly(f),
             | VPat::Ctor(vpat) => vpat.ugly(f),
+            | VPat::Alias(vpat) => vpat.ugly(f),
             | VPat::Triv(vpat) => vpat.ugly(f),
             | VPat::VCons(vpat) => vpat.ugly(f),
             | VPat::SCons(vpat) => vpat.ugly(f),
@@ -383,6 +384,16 @@ where
         let mut items = items.iter().map(|item| item.ugly(f)).collect::<Vec<_>>();
         items.push(tail.ugly(f));
         format!("({})", items.join(", "))
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for Alias<VPatId> {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let Alias(patterns) = self;
+        format!(
+            "({})",
+            patterns.iter().map(|pattern| pattern.ugly(f)).collect::<Vec<_>>().join("; ")
+        )
     }
 }
 
@@ -738,6 +749,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
             | VPat::Var(vpat) => vpat.pretty(f),
             | VPat::Named(vpat) => vpat.pretty(f),
             | VPat::Ctor(vpat) => vpat.pretty(f),
+            | VPat::Alias(vpat) => vpat.pretty(f),
             | VPat::Triv(vpat) => vpat.pretty(f),
             | VPat::VCons(vpat) => vpat.pretty(f),
             | VPat::SCons(vpat) => vpat.pretty(f),
@@ -1038,6 +1050,17 @@ where
         RcDoc::concat([
             RcDoc::text("("),
             RcDoc::intersperse(items, RcDoc::text(", ")),
+            RcDoc::text(")"),
+        ])
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Alias<VPatId> {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let Alias(patterns) = self;
+        RcDoc::concat([
+            RcDoc::text("("),
+            RcDoc::intersperse(patterns.iter().map(|pattern| pattern.pretty(f)), RcDoc::text("; ")),
             RcDoc::text(")"),
         ])
     }

@@ -238,7 +238,7 @@ impl Resolve for PatId {
                 let Ctor(_ctor, args) = pat;
                 args.resolve(resolver, (local, global))?
             }
-            | Pattern::Cons(pat) => {
+            | Pattern::Alias(Alias(pat)) | Pattern::Cons(pat) => {
                 // Later items can depend on binders introduced by earlier items.
                 for item in pat {
                     local = item.resolve(resolver, (local, global))?;

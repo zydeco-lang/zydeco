@@ -412,6 +412,7 @@ impl VPatId {
             | VPat::Var(def) => (Some(def), ty),
             | VPat::Named(_) => (None, ty),
             | VPat::Ctor(_) => (None, ty),
+            | VPat::Alias(_) => (None, ty),
             | VPat::Triv(_) => (None, ty),
             | VPat::VCons(_) => (None, ty),
             | VPat::SCons(_) => (None, ty),
@@ -429,6 +430,11 @@ impl VPatId {
             match tycker.statics.vpats[&pattern].to_owned() {
                 | ValuePattern::Named(Named(_, inner)) => pattern = inner,
                 | ValuePattern::SCons(ConsN(witnesses, _)) => return Some(witnesses.len()),
+                | ValuePattern::Alias(Alias(patterns)) => {
+                    return patterns
+                        .iter()
+                        .find_map(|pattern| pattern.package_witness_arity(tycker));
+                }
                 | ValuePattern::Hole(_)
                 | ValuePattern::Var(_)
                 | ValuePattern::Ctor(_)
@@ -457,6 +463,9 @@ impl VPatId {
                 let Ctor(ctor, vpat) = vpat;
                 let vpat_ = vpat.reify(tycker);
                 Alloc::alloc(tycker, Ctor(ctor, vpat_), ty, &env)
+            }
+            | VPat::Alias(Alias(patterns)) => {
+                patterns.iter().next().expect("an alias pattern is non-empty").reify(tycker)
             }
             | VPat::VCons(vpat) => {
                 let ConsN(items, tail) = vpat;

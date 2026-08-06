@@ -254,7 +254,9 @@ enum MatrixPattern {
 impl MatrixPattern {
     fn from_typed(pattern: VPatId, statics: &StaticsArena) -> Self {
         match &statics.vpats[&pattern] {
-            | ValuePattern::Hole(_) | ValuePattern::Var(_) => Self::Wildcard,
+            | ValuePattern::Hole(_) | ValuePattern::Var(_) | ValuePattern::Alias(_) => {
+                Self::Wildcard
+            }
             | ValuePattern::Named(Named(name, inner)) => {
                 Self::Named(name.clone(), Box::new(Self::from_typed(*inner, statics)))
             }

@@ -44,6 +44,7 @@ interp_source!(num, "tests/exec/num.zy");
 interp_source!(oo, "tests/exec/oo.zydeco");
 interp_source!(optiont, "tests/exec/optiont.zy");
 interp_source!(partial_annotation, "tests/exec/partial-annotation.zy");
+interp_source!(pattern_alias, "tests/exec/pattern-alias.zy");
 interp_source!(regex, "tests/exec/regex.zy");
 interp_source!(ret, "tests/exec/ret.zydeco");
 interp_source!(trans, "tests/exec/trans.zy");

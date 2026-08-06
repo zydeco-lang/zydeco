@@ -54,8 +54,8 @@ The slash would mean that `x` is located by the same recursive, exactly-one-matc
 to the right of `=` would then be checked against the selected payload. This differs from `x = pattern`, which
 requires the bindee itself to have `x` as its outer named wrapper.
 
-A projection pattern is intended to be one pattern terminal. Multiple observations of the same bindee would be
-formed by the proposed semicolon aliasing construct:
+A projection pattern is intended to be one pattern terminal. Multiple observations of the same bindee are formed
+by the semicolon construct described in [Pattern Aliasing](aliasing.md):
 
 ```zydeco
 let (/x = x; /z = z; whole) = nested in body

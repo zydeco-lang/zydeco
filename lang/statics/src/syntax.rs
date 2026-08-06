@@ -491,6 +491,7 @@ pub enum ValuePattern {
     Var(DefId),
     Named(Named<FieldName, VPatId>),
     Ctor(Ctor<CtorName, VPatId>),
+    Alias(Alias<VPatId>),
     Triv(Triv),
     VCons(ConsN<VPatId, VPatId>),
     SCons(ConsN<StaticPatId, VPatId>),

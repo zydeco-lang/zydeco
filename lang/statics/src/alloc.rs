@@ -422,6 +422,7 @@ AllocValuePattern! {
     DefId
     Named<FieldName, VPatId>
     Ctor<CtorName, VPatId>
+    Alias<VPatId>
     Triv
     ConsN<VPatId, VPatId>
     ConsN<StaticPatId, VPatId>

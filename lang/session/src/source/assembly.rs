@@ -56,6 +56,13 @@ impl<'graph> ProgramAssembler<'graph> {
             | t::Pattern::Ctor(t::Ctor(name, inner)) => {
                 t::Ctor(name, self.pattern(source, inner)?).into()
             }
+            | t::Pattern::Alias(t::Alias(patterns)) => {
+                let patterns = patterns
+                    .into_iter()
+                    .map(|pattern| self.pattern(source, pattern))
+                    .collect::<Result<Vec<_>, _>>()?;
+                t::Alias(t::ConsN::from_vec(patterns).unwrap()).into()
+            }
             | t::Pattern::Paren(t::Paren(patterns)) => t::Paren(
                 patterns
                     .into_iter()

@@ -32,7 +32,7 @@ impl Binders for PatId {
                 let Ctor(_ctor, args) = pat;
                 args.binders(arena)
             }
-            | Pattern::Cons(pat) => pat
+            | Pattern::Alias(Alias(pat)) | Pattern::Cons(pat) => pat
                 .iter()
                 .fold(im::HashMap::new(), |binders, item| binders.union(item.binders(arena))),
         }

@@ -201,6 +201,10 @@ mod impls {
                 | (VPat::Ctor(Ctor(ctor, _)), _) => {
                     unreachable!("ctor patterns ({}) are not expected in assignments", ctor.name)
                 }
+                | (VPat::Alias(Alias(patterns)), _) => patterns
+                    .into_iter()
+                    .flat_map(|pat| AssignPattern { pat, value: self.value }.normalize(arena))
+                    .collect(),
                 | (VPat::Triv(Triv), _) => Vec::new(),
                 | (VPat::VCons(_), Value::Hole(_) | Value::Var(_)) => {
                     vec![AssignItem::Pattern(AssignPattern { pat: self.pat, value: self.value })]
@@ -568,6 +572,11 @@ impl Substitute<()> for VPatId {
             | VPat::Ctor(Ctor(ctor, body)) => {
                 let body = body.substitute(su, ());
                 Ctor(ctor, body).build(su, None)
+            }
+            | VPat::Alias(Alias(patterns)) => {
+                let patterns =
+                    patterns.into_iter().map(|pattern| pattern.substitute(su, ())).collect();
+                Alias(ConsN::from_vec(patterns).unwrap()).build(su, None)
             }
             | VPat::Triv(Triv) => Triv.build(su, None),
             | VPat::VCons(VCons { items: ConsN(items, tail), layout }) => {

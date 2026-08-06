@@ -65,6 +65,7 @@ pub enum ValuePattern {
     Hole(Hole),
     Var(DefId),
     Ctor(Ctor<CtorIdx, VPatId>),
+    Alias(Alias<VPatId>),
     Triv(Triv),
     VCons(VCons<VPatId>),
 }

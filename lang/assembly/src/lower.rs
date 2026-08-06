@@ -146,6 +146,22 @@ impl<'a> Lower<'a> for sk::VPatId {
                 //     }),
                 // )
             }
+            | VPat::Alias(Alias(patterns)) => {
+                let alias = VarName::from("__alias__").build(lo, None);
+                let kont = patterns.into_iter().rev().fold(
+                    kont,
+                    |kont: Kont<'a, Lowerer<'a>>, pattern| {
+                        Box::new(move |lo, cx| {
+                            let pattern_kont: Kont<'a, Lowerer<'a>> =
+                                Box::new(move |lo, cx| pattern.lower(lo, With::new(cx, kont)));
+                            Push(Atom::Var(alias))
+                                .build(lo, With::new(cx, CxKont::same(pattern_kont)))
+                        })
+                    },
+                );
+                let incr = Box::new(move |cx: &Context| cx.clone() + [alias]);
+                Pop(alias).build(lo, With::new(cx, CxKont { incr, kont }))
+            }
             | VPat::Triv(Triv) => {
                 let var = VarName::from("_").build(lo, None);
                 let incr = Box::new(move |cx: &Context| cx.clone() + [var]);

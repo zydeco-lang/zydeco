@@ -149,6 +149,12 @@ classifier used to the right of `:` must itself be parenthesized. The same paren
 from capturing the right side of ordinary operators: `(field :: A) * B` labels only `A`, whereas
 `field :: A * B` means `field :: (A * B)`.
 
+A parenthesized semicolon pattern applies every member to the same bindee. For example,
+`((left, right); whole; copy)` destructures a pair and binds the complete pair twice. Semicolon is same-bindee
+composition, whereas comma assigns successive product components. Members retain source order and extend the
+pattern environment from left to right. The initial implementation admits irrefutable value members; constructor,
+type, and kind aliases remain future extensions.
+
 Named projection recursively searches transparent named classifiers and product components. It requires exactly
 one matching field across the complete structure and exposes the payload beneath `Named`; missing and ambiguous
 matches are distinct static errors. Other type constructors are opacity boundaries. An explicit chain performs a

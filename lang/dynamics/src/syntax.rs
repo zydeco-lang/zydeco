@@ -29,6 +29,7 @@ pub enum ValuePattern {
     Hole(Hole),
     Var(DefId),
     Ctor(Ctor<CtorName, RcVPat>),
+    Alias(Alias<RcVPat>),
     Triv(Triv),
     VCons(ConsN<RcVPat, RcVPat>),
 }

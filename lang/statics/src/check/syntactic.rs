@@ -31,6 +31,9 @@ impl SyntacticallyUsed for su::PatId {
                 let su::Ctor(_ctor, pat) = pat;
                 pat.syntactically_used(tycker)
             }
+            | Pat::Alias(su::Alias(patterns)) => {
+                patterns.into_iter().any(|pattern| pattern.syntactically_used(tycker))
+            }
             | Pat::Cons(pat) => pat.into_iter().any(|item| item.syntactically_used(tycker)),
         }
     }
@@ -67,6 +70,9 @@ impl SyntacticallyUsed for ss::VPatId {
             | Pat::Ctor(pat) => {
                 let ss::Ctor(_ctor, pat) = pat;
                 pat.syntactically_used(tycker)
+            }
+            | Pat::Alias(ss::Alias(patterns)) => {
+                patterns.into_iter().any(|pattern| pattern.syntactically_used(tycker))
             }
             | Pat::VCons(pat) => pat.into_iter().any(|item| item.syntactically_used(tycker)),
             | Pat::SCons(pat) => {

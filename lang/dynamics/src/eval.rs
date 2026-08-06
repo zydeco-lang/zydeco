@@ -81,6 +81,14 @@ impl<'rt> Eval<'rt> for Assign<RcVPat, SemValue> {
                 | SemValue::Literal(_)
                 | SemValue::Host(_) => unreachable!(),
             },
+            | VPat::Alias(Alias(patterns)) => {
+                for pattern in patterns {
+                    match Assign(pattern.to_owned(), sem.clone()).eval(runtime) {
+                        | Ok(()) => {}
+                        | Err(()) => return Step::Done(Err(())),
+                    }
+                }
+            }
             | VPat::Triv(Triv) => match sem {
                 | SemValue::Triv(Triv) => {}
                 | SemValue::Closure(_)

@@ -54,6 +54,10 @@ impl DeepClone for b::PatId {
                 let pat = pat.deep_clone(desugarer);
                 b::Ctor(name.clone(), pat).into()
             }
+            | b::Pattern::Alias(b::Alias(patterns)) => {
+                let patterns = patterns.iter().map(|pat| pat.deep_clone(desugarer)).collect();
+                b::Alias(b::ConsN::from_vec(patterns).unwrap()).into()
+            }
             | b::Pattern::Cons(pat) => {
                 let b::ConsN(pats, tail) = pat;
                 b::ConsN(pats.deep_clone(desugarer), tail.deep_clone(desugarer)).into()

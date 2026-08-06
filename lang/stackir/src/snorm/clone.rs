@@ -43,6 +43,11 @@ where
                 let pat = pat.deep_clone(arena, map);
                 build(Ctor(ctor, pat), arena)
             }
+            | VPat::Alias(Alias(patterns)) => {
+                let patterns =
+                    patterns.iter().map(|pattern| pattern.deep_clone(arena, map)).collect();
+                build(Alias(ConsN::from_vec(patterns).unwrap()), arena)
+            }
             | VPat::Triv(Triv) => build(Triv, arena),
             | VPat::VCons(VCons { items: ConsN(items, tail), layout }) => {
                 let items = items.iter().map(|item| item.deep_clone(arena, map)).collect();

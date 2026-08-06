@@ -53,6 +53,14 @@ impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
                     RcDoc::text(")"),
                 ])
             }
+            | VPat::Alias(Alias(patterns)) => RcDoc::concat([
+                RcDoc::text("("),
+                RcDoc::intersperse(
+                    patterns.iter().map(|pattern| pattern.pretty(f)),
+                    RcDoc::text("; "),
+                ),
+                RcDoc::text(")"),
+            ]),
             | VPat::Triv(_) => RcDoc::text("()"),
             | VPat::VCons(VCons { items, layout: _ }) => RcDoc::concat([
                 RcDoc::text("("),

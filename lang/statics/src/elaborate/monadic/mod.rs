@@ -587,6 +587,7 @@ impl PackPiPatternTranslation {
             | ValuePattern::Hole(_)
             | ValuePattern::Var(_)
             | ValuePattern::Ctor(_)
+            | ValuePattern::Alias(_)
             | ValuePattern::Triv(_)
             | ValuePattern::VCons(_) => tycker.err(
                 TyckError::PackageWitnessArityMismatch { expected: self.layout.len(), found: 0 },
@@ -1366,6 +1367,19 @@ fn value_pattern_translation(
             let Ctor(ctor, body) = vpat;
             let body_ = cs::TermLift { tm: body };
             cs::Pat(cs::Ctor(ctor, body_), ty_).mbuild(tycker, env)?
+        }
+        | VPat::Alias(Alias(patterns)) => {
+            let (env, patterns) = patterns.into_iter().try_fold(
+                (env, Vec::new()),
+                |(env, mut output), pattern| -> Result<_> {
+                    let (env, pattern) = value_pattern_translation(tycker, env, pattern)?;
+                    output.push(pattern);
+                    Ok((env, output))
+                },
+            )?;
+            let alias = Alias(ConsN::from_vec(patterns).unwrap());
+            let pattern = Alloc::alloc(tycker, alias, ty_, &env.ty);
+            (env, pattern)
         }
         | VPat::Triv(Triv) => Triv.mbuild(tycker, env)?,
         | VPat::VCons(vpat) => {

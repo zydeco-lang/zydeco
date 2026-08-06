@@ -274,7 +274,7 @@ impl LocalFoldScoped<Context> for Collector {
                 self.ctxs_pat_local.insert_new(pat, self.ctxs_pat_local[&body].to_owned());
                 self.coctxs_pat_local.insert_new(pat, self.coctxs_pat_local[&body].to_owned());
             }
-            | Pattern::Cons(inner) => {
+            | Pattern::Alias(Alias(inner)) | Pattern::Cons(inner) => {
                 let local = inner
                     .iter()
                     .fold(Context::new(), |ctx, item| ctx + self.ctxs_pat_local[item].to_owned());
@@ -592,7 +592,7 @@ mod impl_obverse_local_post {
                     let Ctor(_ctorv, body) = inner;
                     body.obverse_local_post(f, ctx);
                 }
-                | Pattern::Cons(inner) => {
+                | Pattern::Alias(Alias(inner)) | Pattern::Cons(inner) => {
                     for item in inner {
                         item.obverse_local_post(f, ctx);
                     }

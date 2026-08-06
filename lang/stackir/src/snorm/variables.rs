@@ -12,6 +12,10 @@ impl Vars for VPatId {
             | ValuePattern::Hole(Hole) => Context::new(),
             | ValuePattern::Var(def_id) => Context::singleton(def_id),
             | ValuePattern::Ctor(Ctor(_ctor, body)) => body.vars(arena),
+            | ValuePattern::Alias(Alias(patterns)) => patterns
+                .into_iter()
+                .map(|pattern| pattern.vars(arena))
+                .fold(Context::new(), |vars, pattern| vars + pattern),
             | ValuePattern::Triv(Triv) => Context::new(),
             | ValuePattern::VCons(VCons { items, layout: _ }) => items
                 .into_iter()

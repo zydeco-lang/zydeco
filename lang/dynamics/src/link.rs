@@ -97,6 +97,10 @@ impl Link for ss::VPatId {
                 let pat = pat.link(statics);
                 Ctor(ctor, pat).into()
             }
+            | VPat::Alias(Alias(patterns)) => {
+                let patterns = patterns.iter().map(|pattern| pattern.link(statics)).collect();
+                Alias(ds::ConsN::from_vec(patterns).unwrap()).into()
+            }
             | VPat::Triv(Triv) => Triv.into(),
             | VPat::VCons(ss::ConsN(items, tail)) => {
                 let items = items.iter().map(|item| item.link(statics)).collect();
