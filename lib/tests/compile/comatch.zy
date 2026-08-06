@@ -11,7 +11,7 @@ begin
   that
 
   (comatch
-  | .left -> ! (api/exit) 10
-  | .right i -> ! (api/exit) i
+  | .left => ! (api/exit) 10
+  | .right i => ! (api/exit) i
   end : Choice) .right 0
 end

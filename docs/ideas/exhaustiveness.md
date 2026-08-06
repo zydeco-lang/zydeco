@@ -9,8 +9,8 @@ For example, these arms mention both Boolean constructors in both fields, but th
 
 ```zydeco
 match pair
-| +Pair(+True(_), _) -> ...
-| +Pair(_, +False(_)) -> ...
+| +Pair(+True(_), _) => ...
+| +Pair(_, +False(_)) => ...
 end
 ```
 
@@ -209,10 +209,10 @@ its input, and then select one of the destructors of the returned codata computa
 
 ```zydeco
 comatch
-| .route +First(x)  .left  -> ret x
-| .route +First(x)  .right -> ret x
-| .route +Second(x) .left  -> ret x
-| .route +Second(x) .right -> ret x
+| .route +First(x)  .left  => ret x
+| .route +First(x)  .right => ret x
+| .route +Second(x) .left  => ret x
+| .route +Second(x) .right => ret x
 end
 ```
 

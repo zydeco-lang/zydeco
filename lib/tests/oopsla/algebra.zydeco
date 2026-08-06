@@ -46,13 +46,13 @@ begin
 
   -- Algebra IO OS exists
   def ! alg_io : Algebra IO OS =
-    fn A m k ->
+    fn A m k =>
       ! m .run k
   that
 
   -- Algebra Ret R always exists
   def ! alg_ret (R : CType) : Algebra Ret R =
-    fn A m k ->
+    fn A m k =>
       do a <- ! m;
       ! k a
   that
@@ -67,7 +67,7 @@ begin
     (V : VType)
     (mo : Thk (Monad M))
     : Algebra M (M V) =
-    fn A m k ->
+    fn A m k =>
       ! mo .bind A V m k
   that
 
@@ -82,9 +82,9 @@ begin
     (A : VType)
     (alg : Thk (Algebra M R))
     : Algebra M (A -> R) =
-    fn A' m' f a ->
+    fn A' m' f a =>
       ! alg A' m' {
-        fn a' ->
+        fn a' =>
           ! f a' a
       }
   that
@@ -101,16 +101,16 @@ begin
     (algl : Thk (Algebra M L))
     (algr : Thk (Algebra M R))
     : Algebra M (With L R) =
-    fn A m f ->
+    fn A m f =>
       comatch
-      | .l ->
+      | .l =>
         ! algl A m {
-          fn a ->
+          fn a =>
             ! f a .l
         }
-      | .r ->
+      | .r =>
         ! algr A m {
-          fn a ->
+          fn a =>
             ! f a .r
         }
       end
@@ -127,20 +127,20 @@ begin
     (alg : Thk (Algebra M R))
     (V : VType)
     : Algebra M (FnVar V R) =
-    fn A m ka ->
+    fn A m ka =>
       let fix loop (
         ka :
         Thk (A -> FnVar V R)
       ) : FnVar V R =
         comatch
-        | .more v ->
+        | .more v =>
           ! loop {
-            fn a ->
+            fn a =>
               ! ka a .more v
           }
-        | .done ->
+        | .done =>
           ! alg A m {
-            fn a ->
+            fn a =>
               ! ka a .done
           }
         end
@@ -171,44 +171,44 @@ begin
   that
   def fix mo_exnde (E : VType) : Monad (ExnDe E) =
     comatch
-    | .return ->
-      fn A a ->
+    | .return =>
+      fn A a =>
         comatch
-        | .try ->
-          fn E' k ->
+        | .try =>
+          fn E' k =>
             ! mo_exnde E' .return A a
-        | .kont ->
-          fn A' k ->
+        | .kont =>
+          fn A' k =>
             ! k a
-        | .done -> ret +Right(a)
+        | .done => ret +Right(a)
         end
-    | .bind ->
-      fn A A' m f ->
+    | .bind =>
+      fn A A' m f =>
         ! m .kont A' f
     end
   that
   def fix err_exnde (E : VType) : MonadErr E (ExnDe E) =
     comatch
-    | .fail ->
-      fn A e ->
+    | .fail =>
+      fn A e =>
         comatch
-        | .try ->
-          fn E' k ->
+        | .try =>
+          fn E' k =>
             ! k e
-        | .kont ->
-          fn A' k ->
+        | .kont =>
+          fn A' k =>
             ! err_exnde E .fail A' e
-        | .done -> ret +Left(e)
+        | .done => ret +Left(e)
         end
     end
   that
   -- Algebra of the defunctionalized exception type on OS
   def ! alg_exn : Algebra (ExnDe String) OS =
-    fn A m k ->
+    fn A m k =>
       do a? <- ! m .done;
       match a?
-      | +Left(s) -> ! panic s
-      | +Right(a) -> ! k a
+      | +Left(s) => ! panic s
+      | +Right(a) => ! k a
       end
   that
   (

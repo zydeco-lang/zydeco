@@ -49,8 +49,8 @@ begin
   --| Removing the need of trivial algebra for generated monads
   def ! detriv-mo (M: VType -> CType) (mo: Thk (Monad' M)) : Monad M =
     comatch
-    | .return A -> ! mo .return A triv
-    | .bind A A' -> ! mo .bind A triv A' triv
+    | .return A => ! mo .return A triv
+    | .bind A A' => ! mo .bind A triv A' triv
     end
   that
 
@@ -72,9 +72,9 @@ begin
 
   --| Removing the need of trivial algebra for generated monad transformers
   def ! detriv-mt (T: (VType -> CType) -> VType -> CType) (mt: Thk (MonadTrans' T)) : MonadTrans T =
-    fn (M: VType -> CType) (mo: Thk (Monad M)) -> comatch
-    | .monad -> ! detriv-mo (T M) { ! mt M mo .monad }
-    | .lift A -> ! mt M mo .lift A triv
+    fn (M: VType -> CType) (mo: Thk (Monad M)) => comatch
+    | .monad => ! detriv-mo (T M) { ! mt M mo .monad }
+    | .lift A => ! mt M mo .lift A triv
     end
   that
 -- end module Monad
@@ -138,13 +138,13 @@ begin
 
   --| Conversions
   def unit_to_str : Thk(Unit -> Ret String) = {
-    fn (_u : Unit) -> ret "()"
+    fn (_u : Unit) => ret "()"
   } that
   def bool_to_str : Thk(Bool -> Ret String) = {
-    fn (b : Bool) ->
+    fn (b : Bool) =>
       match b
-      | +True() -> ret "True"
-      | +False() -> ret "False"
+      | +True() => ret "True"
+      | +False() => ret "False"
       end
   } that
   let int_to_str = api/int_to_str that
@@ -160,7 +160,7 @@ begin
   def ! read_line_as_int (k : Thk(Option Int -> OS)) : OS =
     ! (api/read_line_as_int_branch)
       { ! k +None() }
-      { fn i -> ! k +Some(i) }
+      { fn i => ! k +Some(i) }
   that
   let random_int = api/random_int that
   let exit = api/exit that
@@ -168,25 +168,25 @@ begin
   def halt : Thk OS = { ! exit 0 } that
 
   def panic : Thk(String -> OS) = {
-    fn (msg: String) ->
+    fn (msg: String) =>
       do msg <- ! str_append "Program panicked with message: " msg;
       ! write_line msg { ! exit 1 }
   } that
 
   def write_line : Thk(String -> Thk OS -> OS) = {
-    fn (s: String) (k: Thk OS) ->
+    fn (s: String) (k: Thk OS) =>
       do s <- ! str_append s "\n";
       ! write_str s k
   } that
 
   def write_int : Thk(Int -> Thk OS -> OS) = {
-    fn (i: Int) (k: Thk OS) ->
+    fn (i: Int) (k: Thk OS) =>
       do s <- ! int_to_str i;
       ! write_str s k
   } that
 
   def write_int_line : Thk(Int -> Thk OS -> OS) = {
-    fn (i: Int) (k: Thk OS) ->
+    fn (i: Int) (k: Thk OS) =>
       do s <- ! int_to_str i;
       ! write_line s k
   } that

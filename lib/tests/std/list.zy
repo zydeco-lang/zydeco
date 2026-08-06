@@ -24,14 +24,14 @@ begin
     values
     { ! (std/os/exit) 1 }
     {
-      fn head tail ->
+      fn head tail =>
         do total <- ! (std/list/fold)
           StdInt
           (Ret StdInt)
           tail
           { ret head }
           {
-            fn value rest ->
+            fn value rest =>
               do subtotal <- ! rest;
               ! (std/int/add) value subtotal
           };

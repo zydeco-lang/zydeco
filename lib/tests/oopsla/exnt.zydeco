@@ -81,18 +81,18 @@ begin
   that
   def ! detriv-mo (M : (VType) -> (CType)) (mo : Thk (Monad' M)) : Monad M =
     comatch
-    | .return A -> ! mo .return A triv
-    | .bind A A' -> ! mo .bind A triv A' triv
+    | .return A => ! mo .return A triv
+    | .bind A A' => ! mo .bind A triv A' triv
     end
   that
   def ! detriv-mt
     (T : ((VType) -> (CType)) -> (VType) -> (CType))
     (mt : Thk (MonadTrans' T))
     : MonadTrans T =
-    fn (M : (VType) -> (CType)) (mo : Thk (Monad M)) ->
+    fn (M : (VType) -> (CType)) (mo : Thk (Monad M)) =>
       comatch
-      | .monad -> ! detriv-mo (T M) { ! mt M mo .monad }
-      | .lift A -> ! mt M mo .lift A triv
+      | .monad => ! detriv-mo (T M) { ! mt M mo .monad }
+      | .lift A => ! mt M mo .lift A triv
       end
   that
 
@@ -108,12 +108,12 @@ begin
   --| Monad implementation for `Exn`
   let ! mo_exn (E: VType) : Monad (Exn E) =
     comatch
-    | .return A a -> ret +Right(a)
-    | .bind A A' m f ->
+    | .return A a => ret +Right(a)
+    | .bind A A' m f =>
       do a? <- ! m;
       match a?
-      | +Left(e) -> ret +Left(e)
-      | +Right(a) -> ! f a
+      | +Left(e) => ret +Left(e)
+      | +Right(a) => ! f a
       end
     end
   that
@@ -130,22 +130,22 @@ begin
       -- Readers can utilize this feature to observe the generated code,
       -- and verify that the algebra translation is correct.
       @[debug("generated and applied")]
-      monadic fn (E: VType) ->
+      monadic fn (E: VType) =>
         @[debug("original")]
         let ! mo_exn (E: VType) : Monad (Exn E) =
           comatch
-          | .return A a -> ret +Right(a)
-          | .bind A A' m f ->
+          | .return A a => ret +Right(a)
+          | .bind A A' m f =>
             do a? <- ! m;
             match a?
-            | +Left(e) -> ret +Left(e)
-            | +Right(a) -> ! f a
+            | +Left(e) => ret +Left(e)
+            | +Right(a) => ! f a
             end
           end
         in
         comatch
-        | .monad -> ! mo_exn E
-        | .lift A m ->
+        | .monad => ! mo_exn E
+        | .lift A m =>
           do a <- ! m; ! mo_exn E .return A a
         end
       :
@@ -164,23 +164,23 @@ begin
   --| Manual implementation of the monad transformer for `ExnT`
   --|
   --| Provided for reference.
-  def ! mt_exn_manual (E: VType) : MonadTrans (ExnT E) = fn M mo ->
+  def ! mt_exn_manual (E: VType) : MonadTrans (ExnT E) = fn M mo =>
     comatch
-    | .monad ->
+    | .monad =>
       comatch
-      | .return A a ->
+      | .return A a =>
         ! mo .return (Either E A) +Right(a)
-      | .bind A A' m f ->
+      | .bind A A' m f =>
         ! mo .bind (Either E A) (Either E A') { ! m }
-        { fn a? ->
+        { fn a? =>
             match a?
-            | +Left(e) -> ! mo .return (Either E A') +Left(e)
-            | +Right(a) -> ! f a
+            | +Left(e) => ! mo .return (Either E A') +Left(e)
+            | +Right(a) => ! f a
             end }
       end
-    | .lift A m ->
+    | .lift A m =>
       ! mo .bind A (Either E A) m
-      { fn a ->
+      { fn a =>
         ! mo .return (Either E A) +Right(a) }
     end
   that

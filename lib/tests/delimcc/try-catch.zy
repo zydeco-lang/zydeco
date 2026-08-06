@@ -13,9 +13,9 @@ begin
   that
   def ! mret : Monad Ret =
     comatch
-    | .return A a ->
+    | .return A a =>
       ret a
-    | .bind A A' m f ->
+    | .bind A A' m f =>
       do a <- ! m;
       ! f a
     end
@@ -30,7 +30,7 @@ begin
     (expression : Thk (Kont (M A) A))
     : M A =
     ! expression {
-      fn value ->
+      fn value =>
         ! monad .return A value
     }
   that
@@ -47,11 +47,11 @@ begin
       Kont (M B) B
     ))
     : Kont (M B) A =
-    fn continuation ->
+    fn continuation =>
       ! handler
         continuation
         {
-          fn value ->
+          fn value =>
             ! monad .return B value
         }
   that
@@ -71,14 +71,14 @@ begin
       A
       {
         ! reset M monad (Thk (Kont (M A) E)) {
-          fn ignored ->
+          fn ignored =>
             ! monad .return
               (Thk (Kont (M A) E))
               computation
         }
       }
       {
-        fn suspended ->
+        fn suspended =>
           ! suspended handler
       }
   that
@@ -93,7 +93,7 @@ begin
     (exception : E)
     : Kont (M A) E =
     ! shift M monad E A {
-      fn continuation ignored ->
+      fn continuation ignored =>
         ! continuation exception
     }
   that
@@ -101,20 +101,20 @@ begin
   do i <- ! attempt Ret mret Int Int
     {
       ! throw Ret mret Int Int 42
-    -- fn _ -> ret 0
+    -- fn _ => ret 0
     }
     {
-      fn x ->
+      fn x =>
         ! (api/sub) x 42
     };
   do j <- ! attempt Ret mret Int Int
     {
       -- ! throw Ret mret Int Int 42
-      fn _ ->
+      fn _ =>
         ret 0
     }
     {
-      fn x ->
+      fn x =>
         ! (api/sub) x 42
     };
   ! (api/int_eq_branch)

@@ -28,10 +28,10 @@ begin
     List Int ->
     Ret (Option Int)
   ) = {
-    fn values ->
+    fn values =>
       match values
-      | +Nil() -> ret +None()
-      | +Cons(head, _) -> ret +Some(head)
+      | +Nil() => ret +None()
+      | +Cons(head, _) => ret +Some(head)
       end
   } that
   def values : List Int =
@@ -56,16 +56,16 @@ begin
   that
   def lazy_values : Thk (LazyList Int) = {
     comatch
-    | .run ->
+    | .run =>
       ret +LazyCons(0, {
         comatch
-        | .run ->
+        | .run =>
           ret +LazyCons(2, {
             comatch
-            | .run ->
+            | .run =>
               ret +LazyCons(4, {
                 comatch
-                | .run -> ret +LazyNil()
+                | .run => ret +LazyNil()
                 end
               })
             end
@@ -77,8 +77,8 @@ begin
   def lazy_first_value : Thk (Ret (Option Int)) = {
     do layer <- ! lazy_values .run;
     match layer
-    | +LazyNil() -> ret +None()
-    | +LazyCons(head, _) -> ret +Some(head)
+    | +LazyNil() => ret +None()
+    | +LazyCons(head, _) => ret +Some(head)
     end
   } that
 
@@ -97,11 +97,11 @@ begin
         List Int ->
         Ret Int
       )
-    ) ->
-      fn combine accumulated remaining ->
+    ) =>
+      fn combine accumulated remaining =>
         match remaining
-        | +Nil() -> ret accumulated
-        | +Cons(head, tail) ->
+        | +Nil() => ret accumulated
+        | +Cons(head, tail) =>
           do next <- ! combine accumulated head;
           ! fold_left combine next tail
         end
@@ -120,12 +120,12 @@ begin
         Thk (LazyList Int) ->
         Ret Int
       )
-    ) ->
-      fn combine base remaining ->
+    ) =>
+      fn combine base remaining =>
         do layer <- ! remaining .run;
         match layer
-        | +LazyNil() -> ! base
-        | +LazyCons(head, tail) ->
+        | +LazyNil() => ! base
+        | +LazyCons(head, tail) =>
           ! combine head {
             ! fold_right combine base tail
           }
@@ -141,7 +141,7 @@ begin
     List Int ->
     Ret Int
   ) = {
-    fn _ _ _ ->
+    fn _ _ _ =>
       ret 6
   } that
   def fold_right_exercise : Thk (
@@ -150,7 +150,7 @@ begin
     Thk (LazyList Int) ->
     Ret Int
   ) = {
-    fn _ _ _ ->
+    fn _ _ _ =>
       ret 6
   } that
 
@@ -165,7 +165,7 @@ begin
     Thk (Ret Int) ->
     Ret Int
   ) = {
-    fn left right ->
+    fn left right =>
       do right <- ! right;
       ! (api/add) left right
   } that
@@ -176,7 +176,7 @@ begin
     Thk OS ->
     OS
   ) = {
-    fn expected actual label continuation ->
+    fn expected actual label continuation =>
       ! (api/int_eq_branch)
         OS
         expected

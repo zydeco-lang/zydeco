@@ -10,8 +10,8 @@ begin
 
   def ! ret_monad : Monad Ret =
     comatch
-    | .return A value -> ret value
-    | .bind A B computation function ->
+    | .return A value => ret value
+    | .bind A B computation function =>
       do value <- ! computation;
       ! function value
     end

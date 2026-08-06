@@ -28,22 +28,22 @@ begin
 
   def ! mo-exn (E : VType) : Monad (Exn E) =
     comatch
-    | .return A a ->
+    | .return A a =>
       ret +Right(a)
-    | .bind A A' m f ->
+    | .bind A A' m f =>
       do a? <- ! m;
       match a?
-      | +Left(e) -> ret +Left(e)
-      | +Right(a) -> ! f a
+      | +Left(e) => ret +Left(e)
+      | +Right(a) => ! f a
       end
     end
   that
   def ! alg-exn-os (E : VType) : Algebra (Exn E) OS =
-    fn X m f ->
+    fn X m f =>
       do a? <- ! m;
       match a?
-      | +Left(e) -> ! (api/exit) 1
-      | +Right(a) -> ! f a
+      | +Left(e) => ! (api/exit) 1
+      | +Right(a) => ! f a
       end
   that
   -- test algebra generation for ret and bind
@@ -74,7 +74,7 @@ begin
       -- use mo
       monadic
         do _ <- ret 1;
-        (fn (x : Thk _) -> ! x) {
+        (fn (x : Thk _) => ! x) {
           ret 1
         }
       end
@@ -92,7 +92,7 @@ begin
       -- use mo
       monadic
         do _ <- ret -1;
-        fn (X : VType) (a : X) ->
+        fn (X : VType) (a : X) =>
           ret a
       end
     in
@@ -107,17 +107,17 @@ begin
     Thk X ->
     X =
     let ! translated =
-      -- ( comatch .bindA X m f -> fn (Y: CType) (strY: U (Algebra _ Y)) ->
-      --   ( comatch .bindA X m f -> fn (a: U Y) ->
-      --     ! strY .bindA X m { fn x -> ! f x a }
-      --   end : Algebra (Exn E) (U Y -> Y)) .bindA X m { fn x -> ! f x Y strY }
+      -- ( comatch .bindA X m f => fn (Y: CType) (strY: U (Algebra _ Y)) =>
+      --   ( comatch .bindA X m f => fn (a: U Y) =>
+      --     ! strY .bindA X m { fn x => ! f x a }
+      --   end : Algebra (Exn E) (U Y -> Y)) .bindA X m { fn x => ! f x Y strY }
       -- end : Algebra (Exn E) (forall (X: CType) . U (Algebra (Exn E) X) -> U X -> X))
       -- .bindA Int { ! mo .return Int -1 }
-      -- { fn (_: Int) -> fn (X: CType) (algX: U (Algebra (Exn E) X)) (b: U X) -> ! b }
+      -- { fn (_: Int) => fn (X: CType) (algX: U (Algebra (Exn E) X)) (b: U X) => ! b }
       -- use mo
       monadic
         do _ <- ret -1;
-        fn (X : CType) (b : Thk X) ->
+        fn (X : CType) (b : Thk X) =>
           ! b
       end
     in
@@ -149,7 +149,7 @@ begin
   --     --   U (forall (Y: CType) . U (Algebra M Y) -> Algebra M (X Y)) ->
   --     --     forall (Y: CType) . U (Algebra M Y) ->
   --     --       U (X Y) -> X Y
-  --     fn (X: CType -> CType) (Y: CType) (b: U (X Y)) -> ! b
+  --     fn (X: CType -> CType) (Y: CType) (b: U (X Y)) => ! b
   --   end
   -- end
   -- -- run it
@@ -160,7 +160,7 @@ begin
   -- def ! mo-prim-id (M: VType -> CType) (mo: U (Monad M)) : forall (A: VType) . A -> M A =
   --   use mo
   --     import id : Thunk (forall (A: VType) . A -> Ret A) = ({
-  --       comatch A a ->
+  --       comatch A a =>
   --         do a <- ! id A a;
   --         ! mo .return A a
   --       end
@@ -173,15 +173,15 @@ begin
   -- def ! _mo-prim-id : OS =
   --   do i? <- ! mo-prim-id (Exn String) { ! mo-exn String } Int 0;
   --   match i?
-  --   | +Left(e) -> ! panic "error"
-  --   | +Right(i) -> ! exit i
+  --   | +Left(e) => ! panic "error"
+  --   | +Right(i) => ! exit i
   --   end
   -- end
   -- -- using primitive id~
   -- def ! mo-prim-id~ (M: VType -> CType) (mo: U (Monad M)) : forall (B: CType) . Thunk (Algebra M B) -> Thunk B -> B =
   --   use mo
   --     import id~ : Thunk (forall (B: CType) . Thunk B -> B) = ({
-  --       comatch B algB b ->
+  --       comatch B algB b =>
   --         ! id~ B b
   --       end
   --     } : Thunk (forall (B: CType) . Thunk (Algebra M B) -> Thunk B -> B))
@@ -207,8 +207,8 @@ begin
   -- : forall (A: VType) . U (M A) -> M A =
   --   with mo with alg
   --     import dethunk : Thunk (forall (A: VType) . Thunk (Ret A) -> Ret A) = ({
-  --       comatch A ma ->
-  --         ! alg .bindA A ma { fn a -> do a <- ! dethunk A { ret a }; ! mo .return A a }
+  --       comatch A ma =>
+  --         ! alg .bindA A ma { fn a => do a <- ! dethunk A { ret a }; ! mo .return A a }
   --       end
   --     } : Thunk (forall (A: VType) . Thunk (M A) -> M A))
   --   monadic
@@ -223,8 +223,8 @@ begin
   -- ! _mo-prim-id~'
   do returned <- ! mo-return String { ! mo-exn String };
   match returned
-  | +Left(_) -> ! (api/exit) 1
-  | +Right(returned) ->
+  | +Left(_) => ! (api/exit) 1
+  | +Right(returned) =>
     ! (api/int_eq_branch)
       OS
       returned
@@ -232,8 +232,8 @@ begin
       {
         do thunked <- ! mo-thunk String { ! mo-exn String };
         match thunked
-        | +Left(_) -> ! (api/exit) 1
-        | +Right(thunked) ->
+        | +Left(_) => ! (api/exit) 1
+        | +Right(thunked) =>
           ! (api/int_eq_branch)
             OS
             thunked
@@ -243,8 +243,8 @@ begin
                 ! mo-exn String
               };
               match argument
-              | +Left(_) -> ! (api/exit) 1
-              | +Right(argument) ->
+              | +Left(_) => ! (api/exit) 1
+              | +Right(argument) =>
                 ! (api/int_eq_branch)
                   OS
                   argument
@@ -257,8 +257,8 @@ begin
                       top
                       0;
                     match quantified
-                    | +Left(_) -> ! (api/exit) 1
-                    | +Right(quantified) ->
+                    | +Left(_) => ! (api/exit) 1
+                    | +Right(quantified) =>
                       ! (api/int_eq_branch)
                         OS
                         quantified

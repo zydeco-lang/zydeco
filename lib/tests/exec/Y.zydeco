@@ -18,7 +18,7 @@ begin
   def ! fix' (B : CType) (f : Thk (Thk B -> B)) : Ret (Thk B) =
     let ! prim : Y B =
         comatch
-      | .y x -> ! f { ! x .y x }
+      | .y x => ! f { ! x .y x }
       end
       in
     ret { ! prim .y prim }

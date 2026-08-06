@@ -74,7 +74,7 @@ We can also define a function using `let`.
 ```
 > mod
 mod : Thunk(Int -> Int -> Ret(Int))
-> let mod10 = {fn (n : Int) -> ! mod n 10} in ! mod10 54
+> let mod10 = {fn (n : Int) => ! mod n 10} in ! mod10 54
 4
 ```
 `mod` is a built-in function and we can define a function taking an `x : Int` and calculating `x mod 10`. The type of defined function `mod10` should also be `Thunk B`. Therefore, we add `{}` at each side of the definition part.
@@ -99,19 +99,19 @@ pub extern define read_line : Thunk(Thunk(String -> OS) -> OS);
 ! write_line "hello world" {! exit 0}
 
 # echo what users just input in an infinite loop
-let rec loop : OS = ! read_line { fn (str : String) ->
+let rec loop : OS = ! read_line { fn (str : String) =>
   ! write_line str {! loop} 
 } in
 ! loop
 
 # echo what users just input in an infinite loop until the input string is "exit"
 let loop : OS = {
-  rec loop -> ! read_line {
-    fn (str : String) -> (
+  rec loop => ! read_line {
+    fn (str : String) => (
       do b <- ! str_eq str "exit";
       match b
-      | +True() -> ! write_line str { ! exit 0 }
-      | +False() -> ! write_line str { ! loop }
+      | +True() => ! write_line str { ! exit 0 }
+      | +False() => ! write_line str { ! loop }
       end
     )
   }
@@ -135,13 +135,13 @@ data ListInt where
 end
 
 # Here's a function print every element in the ListInt seperated by a ' '
-# Notice that for each possible branch, the type after "->" must be the same
+# Notice that for each possible branch, the type after "=>" must be the same
 let printListInt = {
-  rec (printReal : Thunk(ListInt -> OS)) ->
-    fn myList ->
+  rec (printReal : Thunk(ListInt -> OS)) =>
+    fn myList =>
       match myList
-      | +NoInt() -> ! exit 0
-      | +Cons(x, xs) ->
+      | +NoInt() => ! exit 0
+      | +Cons(x, xs) =>
         do wx_ <- ! int_to_str x;
         do wx <- ! str_append wx_ ' ';
         ! write_str wx { ! printReal xs }
@@ -162,26 +162,26 @@ end
 
 # Since Summer includes the return type Ret(Int), it can be used directly instead of using the original return type.
 def rec retSummer : Int -> Summer =
-  fn (n : Int) ->
+  fn (n : Int) =>
     comatch
-    | .done   -> ret n
-    | .addN x ->
+    | .done   => ret n
+    | .addN x =>
       do n' <- ! add n x;
       ! retSummer n'
     end
 end
 
 def rec sumOk : NumList -> Summer =
-  fn (xs : NumList) ->
+  fn (xs : NumList) =>
     match xs
-    | +Empty()     -> ! retSummer 0 # When none of the elements remains, add a zero(.done) at the end of stack
-    | +Cons(x, xs) -> ! sumOk xs .addN x; # As we call sumOk recursively, the label of .addN x is appended at the end of stack until xs is empty
+    | +Empty()     => ! retSummer 0 # When none of the elements remains, add a zero(.done) at the end of stack
+    | +Cons(x, xs) => ! sumOk xs .addN x; # As we call sumOk recursively, the label of .addN x is appended at the end of stack until xs is empty
     end
 end
 ```
 
 ## System F_ω
 
-We have `forall (Y: CType) . B` and `exists (Y: CType) . A` just as normal system F. The term level syntax for types are the same as terms. For example, `(fn (X: VType) -> ...) Int` introduces a forall-typed function which takes Int as an argument; `match (Int, ...) | (X, x) -> ... end` works similarly (though to actually use them, you'll need more type annotation).
+We have `forall (Y: CType) . B` and `exists (Y: CType) . A` just as normal system F. The term level syntax for types are the same as terms. For example, `(fn (X: VType) => ...) Int` introduces a forall-typed function which takes Int as an argument; `match (Int, ...) | (X, x) => ... end` works similarly (though to actually use them, you'll need more type annotation).
 
-Besides base kinds, `K -> K` are also valid kinds, for example, type (constructor) `(fn (X: VType) -> Ret X)` as kind `VType -> CType`. The syntax for type level is the same as term level.
+Besides base kinds, `K -> K` are also valid kinds, for example, type (constructor) `(fn (X: VType) => Ret X)` as kind `VType -> CType`. The syntax for type level is the same as term level.

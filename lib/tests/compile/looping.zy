@@ -4,6 +4,6 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  fix (loop : Thk OS) ->
+  fix (loop : Thk OS) =>
     ! loop
 end

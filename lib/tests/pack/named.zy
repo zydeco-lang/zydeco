@@ -15,7 +15,7 @@ begin
     Counter = Int,
     zero = 0,
     increment = {
-      fn (value : Int) ->
+      fn (value : Int) =>
         ! (api/add) value 1
     },
   ) that

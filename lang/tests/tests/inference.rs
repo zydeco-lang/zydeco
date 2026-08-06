@@ -25,7 +25,7 @@ fn infers_an_unannotated_parameter_from_its_body() {
     InferenceCase::check(
         r#"
 begin
-  let consume = { fn value -> ! exit value } that
+  let consume = { fn value => ! exit value } that
   ret ()
 end
 "#,
@@ -37,7 +37,7 @@ fn accepts_compatible_constraints_from_several_body_uses() {
     InferenceCase::check(
         r#"
 begin
-  let duplicate = { fn value -> ret (value, value) } that
+  let duplicate = { fn value => ret (value, value) } that
   do _ <- ! duplicate ();
   ret ()
 end
@@ -51,7 +51,7 @@ fn rejects_incompatible_constraints_from_the_body() {
         r#"
 begin
   let impossible = {
-    fn value ->
+    fn value =>
       let (_ : Unit) = value in
       ! exit value
   } that
@@ -66,7 +66,7 @@ fn infers_an_unannotated_parameter_from_a_call_site() {
     InferenceCase::check(
         r#"
 begin
-  let identity = { fn value -> ret value } that
+  let identity = { fn value => ret value } that
   do result <- ! identity ();
   ret result
 end
@@ -79,7 +79,7 @@ fn accepts_compatible_call_site_constraints() {
     InferenceCase::check(
         r#"
 begin
-  let identity = { fn value -> ret value } that
+  let identity = { fn value => ret value } that
   do _ <- ! identity ();
   do result <- ! identity ();
   ret result
@@ -93,7 +93,7 @@ fn rejects_incompatible_call_site_constraints() {
     InferenceCase::assert_type_error(
         r#"
 begin
-  let identity = { fn value -> ret value } that
+  let identity = { fn value => ret value } that
   do _ <- ! identity ();
   do _ <- ! identity 0;
   ret ()
@@ -107,7 +107,7 @@ fn synthesizes_ordinary_tuple_patterns_componentwise() {
     InferenceCase::check(
         r#"
 begin
-  let swap = { fn (first, second) -> ret (second, first) } that
+  let swap = { fn (first, second) => ret (second, first) } that
   do _ <- ! swap ((), ());
   ret ()
 end
@@ -120,7 +120,7 @@ fn synthesizes_named_patterns_from_their_payload() {
     InferenceCase::check(
         r#"
 begin
-  let unwrap = { fn (field = value) -> ret value } that
+  let unwrap = { fn (field = value) => ret value } that
   do result <- ! unwrap (field = ());
   ret result
 end
@@ -134,7 +134,7 @@ fn refines_an_inferred_parameter_through_thunk_and_return_shapes() {
         r#"
 begin
   let run = {
-    fn thunk ->
+    fn thunk =>
       do result <- ! thunk;
       ret result
   } that
@@ -150,8 +150,8 @@ fn refines_an_inferred_computation_into_an_arrow() {
     InferenceCase::check(
         r#"
 begin
-  let apply = { fn thunk -> ! thunk () } that
-  do result <- ! apply { fn (_ : Unit) -> ret () };
+  let apply = { fn thunk => ! thunk () } that
+  do result <- ! apply { fn (_ : Unit) => ret () };
   ret result
 end
 "#,
@@ -164,7 +164,7 @@ fn refines_an_inferred_value_into_a_product() {
         r#"
 begin
   let first = {
-    fn pair ->
+    fn pair =>
       let (head, _) = pair in
       ret head
   } that
@@ -181,9 +181,9 @@ fn permits_an_inner_inference_variable_to_alias_an_outer_one() {
         r#"
 begin
   let outer = {
-    fn value ->
+    fn value =>
       begin
-        let identity = { fn inner -> ret inner } that
+        let identity = { fn inner => ret inner } that
         ! identity value
       end
   } that
@@ -200,7 +200,7 @@ fn rejects_call_site_inference_across_a_block_boundary() {
         r#"
 let identity =
   begin
-    { fn value -> ret value }
+    { fn value => ret value }
   end
 in
 ! identity ()
@@ -215,7 +215,7 @@ fn rejects_call_site_inference_across_an_imported_source_boundary() {
 let identity = @[import("imported.zy")] _ in
 ! identity ()
 "#,
-        r#"{ fn value -> ret value }"#,
+        r#"{ fn value => ret value }"#,
     ));
 }
 
@@ -224,7 +224,7 @@ fn rejects_an_unconstrained_parameter_at_its_block_boundary() {
     InferenceCase::assert_type_error(
         r#"
 begin
-  let ignore = { fn value -> ret () } that
+  let ignore = { fn value => ret () } that
   ret ()
 end
 "#,
@@ -236,7 +236,7 @@ fn retains_explicit_parameter_annotations() {
     InferenceCase::check(
         r#"
 begin
-  let ignore = { fn (value : Unit) -> ret () } that
+  let ignore = { fn (value : Unit) => ret () } that
   ret ()
 end
 "#,
@@ -254,7 +254,7 @@ begin
     | +Some : Unit
     end
   that
-  let unwrap = { fn +Some value -> ret value } that
+  let unwrap = { fn +Some value => ret value } that
   ret ()
 end
 "#,
@@ -266,7 +266,7 @@ fn rejects_self_application_during_the_occurs_check() {
     InferenceCase::assert_type_error(
         r#"
 begin
-  let identity = { fn value -> ret value } that
+  let identity = { fn value => ret value } that
   ! identity identity
 end
 "#,
@@ -280,10 +280,10 @@ fn rejects_an_existential_witness_escaping_through_an_inferred_domain() {
 begin
   let Box = exists (X : VType) . X that
   def boxed : Box = (Int, 0) that
-  let identity = { fn value -> ret value } that
+  let identity = { fn value => ret value } that
 
   match boxed
-  | (X, value) -> ! identity value
+  | (X, value) => ! identity value
   end
 end
 "#,

@@ -28,8 +28,8 @@ begin
 
   def fix sumBad (xs : List Int) : Ret Int =
     match xs
-    | +Nil() -> ret 0
-    | +Cons(x, xs) ->
+    | +Nil() => ret 0
+    | +Cons(x, xs) =>
       do n <- ! sumBad xs;
       ! (api/add) n x
     end
@@ -46,16 +46,16 @@ begin
   -- and changing the implementation as follows:
   def fix retSummer (n : Int) : Summer =
     comatch
-    | .done -> ret n
-    | .addN x ->
+    | .done => ret n
+    | .addN x =>
       do n' <- ! (api/add) n x;
       ! retSummer n'
     end
   that
   def fix sumOk (xs : List Int) : Summer =
     match xs
-    | +Nil() -> ! retSummer 0
-    | +Cons(x, xs) -> ! sumOk xs .addN x
+    | +Nil() => ! retSummer 0
+    | +Cons(x, xs) => ! sumOk xs .addN x
     end
   that
   -- Now instead of pushing a "real" continuation we add a "method"
@@ -82,19 +82,19 @@ begin
   -- it to `z` and not increased the size of the stack(!)
   def fix sumBetter (xs : List Int) : Summer =
     match xs
-    | +Nil() -> ! retSummer 0
-    | +Cons(x, xs) ->
+    | +Nil() => ! retSummer 0
+    | +Cons(x, xs) =>
       comatch
-      | .done -> ! sumBetter xs .addN x .done
-      | .addN y ->
+      | .done => ! sumBetter xs .addN x .done
+      | .addN y =>
         do xPlusy <- ! (api/add) x y;
         ! sumBetter xs .addN xPlusy
       end
     end
   that
   def ! sumBest : List Int -> Summer' =
-    fix (sumBest : Thk (List Int -> Summer')) ->
-      fn xs ->
+    fix (sumBest : Thk (List Int -> Summer')) =>
+      fn xs =>
         -- This is better in that it uses *constant* space to implement the
         -- same algorithm, but we can make a couple of more improvements:
         -- 1. We are branching on what the stack is every time we have a
@@ -107,13 +107,13 @@ begin
         -- We can implement the .done method from before by pushing .add(0)
         -- (using that it is the additive unit).
         match xs
-        | +Nil() ->
+        | +Nil() =>
           comatch
-          | .add n -> ret n
+          | .add n => ret n
           end
-        | +Cons(x, xs) ->
+        | +Cons(x, xs) =>
           comatch
-          | .add n ->
+          | .add n =>
             do n' <- ! (api/add) x n;
             ! sumBest xs .add n'
           end

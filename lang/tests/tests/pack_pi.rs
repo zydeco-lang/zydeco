@@ -6,9 +6,9 @@ impl PackPiCase {
     const RET_MONAD: &str = r#"
 def mo_ret : Thk (Monad Ret) = {
   comatch
-  | .return A value ->
+  | .return A value =>
     ret value
-  | .bind A B computation continuation ->
+  | .bind A B computation continuation =>
     do value <- ! computation;
     ! continuation value
   end
@@ -140,7 +140,7 @@ begin
   that
 
   def unbox : Thk Unbox = {
-    fn ((X, value) : Box) -> ret value
+    fn ((X, value) : Box) => ret value
   } that
 
   def boxed : Box = (Int, 41) that
@@ -162,7 +162,7 @@ begin
   that
 
   def unbox = {
-    fn ((X, value) : Box) -> ret value
+    fn ((X, value) : Box) => ret value
   } that
 
   def boxed : Box = (Int, 41) that
@@ -190,7 +190,7 @@ begin
   that
 
   def unbox_pair : Thk UnboxPair = {
-    fn ((X, Y, x, y) : PairBox) -> ret (x, y)
+    fn ((X, Y, x, y) : PairBox) => ret (x, y)
   } that
 
   def boxed : PairBox = (Int, Char, 41, 'z') that
@@ -217,11 +217,11 @@ begin
   that
 
   def reveal : Thk Reveal = {
-    fn ((X, value, _) : Box) -> ret value
+    fn ((X, value, _) : Box) => ret value
   } that
 
   def consume_twice : Thk (Box -> Ret Int) = {
-    fn ((X, value, consume) : Box) ->
+    fn ((X, value, consume) : Box) =>
       do first <- ! reveal (X, value, consume);
       do second <- ! reveal (X, first, consume);
       ! consume second
@@ -230,7 +230,7 @@ begin
   def boxed : Box = (
     Int,
     41,
-    { fn (value : Int) -> ret value },
+    { fn (value : Int) => ret value },
   ) that
 
   { ! consume_twice boxed }
@@ -254,7 +254,7 @@ begin
   that
 
   def unbox : Thk Unbox = {
-    fn ((X, value) : Box) -> ret value
+    fn ((X, value) : Box) => ret value
   } that
 
   def boxed : Box = (Int, 41) that
@@ -280,11 +280,11 @@ begin
   that
 
   def unbox : Thk Unbox = {
-    fn ((X, value) : Box) -> ret value
+    fn ((X, value) : Box) => ret value
   } that
 
   def hidden : Thk (Box -> Ret Int) = {
-    fn (boxed : Box) ->
+    fn (boxed : Box) =>
       do _ <- ! unbox boxed;
       ret 0
   } that
@@ -308,7 +308,7 @@ begin
     monadic
       let unbox = {
         do _ <- ret ();
-        fn ((X, value) : Box) -> ret value
+        fn ((X, value) : Box) => ret value
       } in
       ! unbox (Unit, ())
     end
@@ -336,14 +336,14 @@ begin
     monadic
       let run = {
         do _ <- ret ();
-        fn ((A, OS, value, execute) : Core) ->
+        fn ((A, OS, value, execute) : Core) =>
           ! execute value
       } in
       ! run (
         Unit,
         Ret Unit,
         (),
-        { fn (_ : Unit) -> ret () },
+        { fn (_ : Unit) => ret () },
       )
     end
   } that
@@ -374,8 +374,8 @@ begin
     monadic
       do _ <- ret ();
       (comatch
-      | .unbox ->
-        fn ((X, value) : Box) -> ret value
+      | .unbox =>
+        fn ((X, value) : Box) => ret value
       end : Service)
     end
   } that
@@ -408,8 +408,8 @@ begin
     forall (R : CType) .
       Algebra Ret R
   ) = {
-    fn (R : CType) ->
-      comatch X computation continuation ->
+    fn (R : CType) =>
+      comatch X computation continuation =>
         do value <- ! computation;
         ! continuation value
       end
@@ -419,8 +419,8 @@ begin
     monadic
       do _ <- ret ();
       (comatch
-      | .run ->
-        fn ((OS, computation) : Core) -> ! computation
+      | .run =>
+        fn ((OS, computation) : Core) => ! computation
       end : Runner)
     end
   } that
@@ -455,7 +455,7 @@ begin
     monadic
       let first = {
         do _ <- ret ();
-        fn ((X, value, _) : NestedBox) -> ret value
+        fn ((X, value, _) : NestedBox) => ret value
       } in
       ! first (Unit, (), (Unit, ()))
     end
@@ -484,7 +484,7 @@ begin
     monadic
       let reveal = {
         do _ <- ret ();
-        fn ((Y, X, Z, value) : Mixed) -> ret value
+        fn ((Y, X, Z, value) : Mixed) => ret value
       } in
       ! reveal (Unit, Unit, Unit, ())
     end
@@ -510,9 +510,9 @@ begin
     monadic
       let reveal = {
         do _ <- ret ();
-        fn ((X, value) : Box) -> ret value
+        fn ((X, value) : Box) => ret value
       } in
-      fn ((X, value) : Box) ->
+      fn ((X, value) : Box) =>
         do first <- ! reveal (X, value);
         ! reveal (X, first)
     end
@@ -543,8 +543,8 @@ begin
   def translated = {
     monadic
       (comatch
-      | .unbox ->
-        fn ((X, value) : Box) -> ret value
+      | .unbox =>
+        fn ((X, value) : Box) => ret value
       end : Service)
     end
   } that
@@ -573,14 +573,14 @@ begin
     monadic
       let run = {
         do _ <- ret ();
-        fn ((A, OS, value, execute) : Core) ->
+        fn ((A, OS, value, execute) : Core) =>
           ! execute value
       } in
       ! run (
         Int,
         Ret Int,
         0,
-        { fn (value : Int) -> ret value },
+        { fn (value : Int) => ret value },
       )
     end
   } that
@@ -609,7 +609,7 @@ begin
   def translated = {
     monadic
       do _ <- ret ();
-      fn ((X, value, _) : NestedBox) -> ret value
+      fn ((X, value, _) : NestedBox) => ret value
     end
   } that
 
@@ -640,9 +640,9 @@ begin
     monadic
       let reveal = {
         do _ <- ret ();
-        fn ((X, value) : Box) -> ret value
+        fn ((X, value) : Box) => ret value
       } in
-      fn ((X, value) : Box) ->
+      fn ((X, value) : Box) =>
         do first <- ! reveal (X, value);
         ! reveal (X, first)
     end

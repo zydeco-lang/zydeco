@@ -295,7 +295,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Abs<PatId, TermId> {
         let Abs(p, t) = self;
         s += "fn ";
         s += &p.ugly(f);
-        s += " -> ";
+        s += " => ";
         s += &t.ugly(f);
         s
     }
@@ -307,7 +307,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Fix<PatId, TermId> {
         let Fix(p, t) = self;
         s += "fix ";
         s += &p.ugly(f);
-        s += " -> ";
+        s += " => ";
         s += &t.ugly(f);
         s
     }
@@ -483,7 +483,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Match<TermId, PatId, TermId> {
         for Matcher { binder, tail } in arms {
             s += " | ";
             s += &binder.ugly(f);
-            s += " -> ";
+            s += " => ";
             s += &tail.ugly(f);
         }
         s += " end";
@@ -499,7 +499,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for CoMatch<DtorName, TermId> {
         for CoMatcher { dtor, tail } in arms {
             s += " | ";
             s += &dtor.ugly(f);
-            s += " -> ";
+            s += " => ";
             s += &tail.ugly(f);
         }
         s += " end";
@@ -528,7 +528,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for CoMatchClauses {
         for CoPatternClause { spine, tail } in &self.clauses {
             s += " | ";
             s += &spine.ugly(f);
-            s += " -> ";
+            s += " => ";
             s += &tail.ugly(f);
         }
         s += " end";

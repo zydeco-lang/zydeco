@@ -16,8 +16,8 @@ begin
   that
   def ! is_nonzero (value : Nat) : Ret Bool =
     match value
-    | +Z(_) -> ret +False()
-    | +S(_) -> ret +True()
+    | +Z(_) => ret +False()
+    | +S(_) => ret +True()
     end
   that
   param (
@@ -28,7 +28,7 @@ begin
   do one <- ! successor +Z();
   do result <- ! is_nonzero one;
   match result
-  | +False(_) -> ! (api/exit) 1
-  | +True(_) -> ! (api/exit) 0
+  | +False(_) => ! (api/exit) 1
+  | +True(_) => ! (api/exit) 0
   end
 end

@@ -9,12 +9,12 @@ begin
     @[import("../std/builtin.zy")] _
   ) that
 
-  (fix (loop : Thk (Int -> OS)) ->
-    fn sum ->
+  (fix (loop : Thk (Int -> OS)) =>
+    fn sum =>
       ! (api/read_line_as_int_branch)
         { ! (api/exit) 0 }
         {
-          fn i ->
+          fn i =>
             do sum <- ! (api/add) i sum;
             ! (api/write_int) sum {
               ! (api/write_line) " = sum" {

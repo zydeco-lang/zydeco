@@ -58,17 +58,17 @@ begin
   that
   def ! mnlist : Monoid MList =
     comatch
-    | .empty A ->
-      fn .done ->
+    | .empty A =>
+      fn .done =>
         ret +Nil()
-    | .append A m1 m2 ->
-      fn .done ->
+    | .append A m1 m2 =>
+      fn .done =>
         do xs <- ! m1 .done;
         do ys <- ! m2 .done;
         let fix loop (xs : List A) : Ret (List A) =
           match xs
-          | +Nil() -> ret ys
-          | +Cons(x, xs) ->
+          | +Nil() => ret ys
+          | +Cons(x, xs) =>
             do ys <- ! loop xs;
             ret +Cons(x, ys)
           end
@@ -78,18 +78,18 @@ begin
   that
   def ! mlist : Monad MList =
     comatch
-    | .return A a ->
-      fn .done ->
+    | .return A a =>
+      fn .done =>
         ret +Cons(a, +Nil())
-    | .bind A A' m f ->
+    | .bind A A' m f =>
       do xs <- ! m .done;
       let fix loop (xs : List A) (g : Thk (Thk (MList A') -> MList A')) : MList A' =
         match xs
-        | +Nil() ->
+        | +Nil() =>
           ! g { ! mnlist .empty A' }
-        | +Cons(x, xs) ->
+        | +Cons(x, xs) =>
           ! loop xs {
-            fn ys ->
+            fn ys =>
               ! g {
                 ! mnlist .append A'
                   { ! f x }
@@ -99,19 +99,19 @@ begin
         end
       in
       ! loop xs {
-        fn ys ->
+        fn ys =>
           ! ys
       }
     end
   that
   def ! choose (xs : List Int) : MList Int =
-    fn .done ->
+    fn .done =>
       ret xs
   that
   def ! guard (b : Bool) : MList Unit =
     match b
-    | +True() -> ! mlist .return Unit ()
-    | +False() -> ! mnlist .empty Unit
+    | +True() => ! mlist .return Unit ()
+    | +False() => ! mnlist .empty Unit
     end
   that
 
@@ -119,11 +119,11 @@ begin
     ! mlist .bind Int (Pair Int Int)
       { ! choose +Cons(1, +Cons(2, +Nil())) }
       {
-        fn x ->
+        fn x =>
           ! mlist .bind Int (Pair Int Int)
             { ! choose +Cons(3, +Cons(4, +Nil())) }
             {
-              fn y ->
+              fn y =>
                 ! mlist .bind Unit (Pair Int Int)
                   {
                     do r <- ! (api/add) x y;
@@ -131,7 +131,7 @@ begin
                     ! guard b
                   }
                   {
-                    fn _ ->
+                    fn _ =>
                       ! mlist .return
                         (Pair Int Int)
                         +Cons(x, y)
@@ -142,10 +142,10 @@ begin
   do ps <- ! demo .done;
   let fix print (ps : List (Pair Int Int)) (kont : Thk OS) : OS =
     match ps
-    | +Nil() -> ! kont
-    | +Cons(p, ps) ->
+    | +Nil() => ! kont
+    | +Cons(p, ps) =>
       match p
-      | +Cons(x, y) ->
+      | +Cons(x, y) =>
         ! (api/write_int) x {
           ! (api/write_str) " + " {
             ! (api/write_int) y {

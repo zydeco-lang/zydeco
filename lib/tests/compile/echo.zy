@@ -4,9 +4,9 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  fix (loop : Thk OS) ->
+  fix (loop : Thk OS) =>
     ! (api/read_line) {
-      fn line ->
+      fn line =>
         ! (api/write_line) line loop
     }
 end

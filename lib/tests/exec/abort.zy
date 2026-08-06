@@ -12,8 +12,8 @@ begin
   that
   def fix abort (x : Int) : Stack Int =
     comatch
-    | .app _ -> ! abort x
-    | .return -> ret x
+    | .app _ => ! abort x
+    | .return => ret x
     end
   that
 

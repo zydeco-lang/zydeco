@@ -23,8 +23,8 @@ begin
     (when_some : Thk (A -> B))
     : B =
     match option
-    | +None(_) -> ! when_none
-    | +Some(value) -> ! when_some value
+    | +None(_) => ! when_none
+    | +Some(value) => ! when_some value
     end
   that
   let Interface =

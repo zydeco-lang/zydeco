@@ -24,10 +24,10 @@ begin
       Ret (Thk B)
   ) = {
     fn (B : CType)
-       (function : Thk (Thk B -> B)) ->
+       (function : Thk (Thk B -> B)) =>
       let self_application : Thk (Y B) = {
         comatch
-        | .apply recursive ->
+        | .apply recursive =>
           ! function { ! recursive .apply recursive }
         end
       } in
@@ -52,7 +52,7 @@ begin
       StdInt ->
       Ret StdInt
     ) = {
-      fn recursive number ->
+      fn recursive number =>
         do is_zero <- ! (std/int/eq) number 0;
         ! (std/bool/if)
           (Ret StdInt)
@@ -71,7 +71,7 @@ begin
       Thk StdOS ->
       StdOS
     ) = {
-      fn factorial input expected continuation ->
+      fn factorial input expected continuation =>
         do actual <- ! factorial input;
         do correct <- ! (std/int/eq) actual expected;
         ! (std/bool/if)

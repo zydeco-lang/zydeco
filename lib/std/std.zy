@@ -61,7 +61,7 @@ begin
           separator
           { ! (option_api/none) (String * String) }
           {
-            fn first second ->
+            fn first second =>
               ! (option_api/some) (String * String) (first, second)
           }
       in
@@ -72,7 +72,7 @@ begin
           index
           { ! (option_api/none) (String * String) }
           {
-            fn first second ->
+            fn first second =>
               ! (option_api/some) (String * String) (first, second)
           }
       in
@@ -83,7 +83,7 @@ begin
             ! continuation absent
           }
           {
-            fn integer ->
+            fn integer =>
               do present <- ! (option_api/some) Int integer;
               ! continuation present
           }
@@ -93,7 +93,7 @@ begin
           (Ret (List String))
           { ! (list_api/nil) String }
           {
-            fn argument remaining ->
+            fn argument remaining =>
               do tail <- ! remaining;
               ! (list_api/cons) String argument tail
           };

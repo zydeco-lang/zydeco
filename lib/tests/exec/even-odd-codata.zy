@@ -24,22 +24,22 @@ begin
   that
   def fix eo : OddEven =
     comatch
-    | .even n ->
+    | .even n =>
       match n
-      | +Z() -> ret +True()
-      | +S(n) -> ! eo .odd n
+      | +Z() => ret +True()
+      | +S(n) => ! eo .odd n
       end
-    | .odd n ->
+    | .odd n =>
       match n
-      | +Z() -> ret +False()
-      | +S(n) -> ! eo .even n
+      | +Z() => ret +False()
+      | +S(n) => ! eo .even n
       end
     end
   that
 
   do b <- ! eo .even +S(+S(+S(+S(+Z()))));
   match b
-  | +True() -> ! (api/exit) 0
-  | +False() -> ! (api/exit) 1
+  | +True() => ! (api/exit) 0
+  | +False() => ! (api/exit) 1
   end
 end

@@ -46,6 +46,44 @@ fn parsing_2() {
 }
 
 #[test]
+fn separates_term_body_arrows_from_type_arrows() {
+    [
+        "A -> B",
+        "fn value => ret value",
+        "fix recur => ret ()",
+        "match value | _ => ret () end",
+        "comatch | .read => ret () end",
+        "comatch value => ret value end",
+    ]
+    .into_iter()
+    .for_each(|source| {
+        let mut parser = Parser::new();
+        parser::SingleTermParser::new()
+            .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+            .unwrap_or_else(|error| panic!("expected `{source}` to parse: {error}"));
+    });
+
+    [
+        "A => B",
+        "fn value -> ret value",
+        "fix recur -> ret ()",
+        "match value | _ -> ret () end",
+        "comatch | .read -> ret () end",
+        "comatch value -> ret value end",
+    ]
+    .into_iter()
+    .for_each(|source| {
+        let mut parser = Parser::new();
+        assert!(
+            parser::SingleTermParser::new()
+                .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+                .is_err(),
+            "expected `{source}` to be rejected"
+        );
+    });
+}
+
+#[test]
 fn metadata_preserves_identifiers_strings_and_applications() {
     let source = r#"@[debug(name,"value",nested("path"))] _"#;
     let mut parser = Parser::new();

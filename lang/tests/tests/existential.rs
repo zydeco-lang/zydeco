@@ -26,7 +26,7 @@ begin
   that
   def packed : Transparent = (Int, 42) that
   def consume : Thk (Transparent -> Ret Int) = {
-    fn ((X, value) : Transparent) -> ret value
+    fn ((X, value) : Transparent) => ret value
   } that
 
   { ! consume packed }
@@ -66,7 +66,7 @@ begin
     zero = 0,
   ) that
   def consume : Thk (CounterLibrary -> Ret Int) = {
-    fn ((= Counter, = zero) : CounterLibrary) -> ret zero
+    fn ((= Counter, = zero) : CounterLibrary) => ret zero
   } that
 
   { ! consume library }
@@ -88,7 +88,7 @@ begin
   that
   def packed : Mixed = (Int, Int, 7) that
   def unpack = {
-    fn ((X, Y, value) : Mixed) -> ret value
+    fn ((X, Y, value) : Mixed) => ret value
   } that
 
   { ! unpack packed }
@@ -110,7 +110,7 @@ begin
   that
   def packed : Mixed = (Int, Int, 9) that
   def unpack = {
-    fn ((Y, X, value) : Mixed) -> ret value
+    fn ((Y, X, value) : Mixed) => ret value
   } that
 
   { ! unpack packed }
@@ -131,12 +131,12 @@ begin
   def boxed : Box = (
     Int,
     0,
-    { fn (x : Int) -> ret x },
+    { fn (x : Int) => ret x },
   ) that
 
   {
     match boxed
-    | (X, value, consume) ->
+    | (X, value, consume) =>
       do status <- ! consume value;
       ret status
     end
@@ -158,10 +158,10 @@ begin
   def boxed : Box = (
     Int,
     0,
-    { fn (x : Int) -> ret x },
+    { fn (x : Int) => ret x },
   ) that
   def consume_box : Thk (Box -> Ret Int) = {
-    fn ((X, value, consume) : Box) -> ! consume value
+    fn ((X, value, consume) : Box) => ! consume value
   } that
 
   {
@@ -187,7 +187,7 @@ begin
   def boxed : Box = (
     Int,
     0,
-    { fn (x : Int) -> ret x },
+    { fn (x : Int) => ret x },
   ) that
   def yield_box : Thk (Ret Box) = {
     ret boxed
@@ -215,19 +215,19 @@ begin
   def ints : Box = (
     Int,
     0,
-    { fn (x : Int) -> ret x },
+    { fn (x : Int) => ret x },
   ) that
   def chars : Box = (
     Char,
     'z',
-    { fn (_ : Char) -> ret 0 },
+    { fn (_ : Char) => ret 0 },
   ) that
 
   {
     match ints
-    | (XI, xi, _) ->
+    | (XI, xi, _) =>
       match chars
-      | (XC, _, from_char) ->
+      | (XC, _, from_char) =>
         do status <- ! from_char xi;
         ret status
       end
@@ -249,7 +249,7 @@ begin
   def boxed : Box = (Int, 0) that
   def leak = {
     match boxed
-    | (X, value) -> ret value
+    | (X, value) => ret value
     end
   } that
 
@@ -268,7 +268,7 @@ begin
     exists (X : VType) . X
   that
   def unpack = {
-    fn ((X, value) : Box) -> ret value
+    fn ((X, value) : Box) => ret value
   } that
 
   unpack
@@ -287,9 +287,9 @@ begin
     exists (X : VType) . X
   that
   def repack : Thk (Box -> Ret Box) = {
-    fn (boxed : Box) ->
+    fn (boxed : Box) =>
       match boxed
-      | (X, value) -> ret (X, value)
+      | (X, value) => ret (X, value)
       end
   } that
 

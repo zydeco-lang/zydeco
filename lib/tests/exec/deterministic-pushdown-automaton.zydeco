@@ -40,22 +40,22 @@ begin
 
   def ! bool_eq (left : Bool) (right : Bool) : Ret Bool =
     match left
-    | +True() ->
+    | +True() =>
       match right
-      | +True() -> ret +True()
-      | +False() -> ret +False()
+      | +True() => ret +True()
+      | +False() => ret +False()
       end
-    | +False() ->
+    | +False() =>
       match right
-      | +True() -> ret +False()
-      | +False() -> ret +True()
+      | +True() => ret +False()
+      | +False() => ret +True()
       end
     end
   that
   def ! bool_to_str (b : Bool) : Ret String =
     match b
-    | +True() -> ret "true"
-    | +False() -> ret "false"
+    | +True() => ret "true"
+    | +False() => ret "false"
     end
   that
   def fix paren_foldr
@@ -65,38 +65,38 @@ begin
     : ParenCounterTrans =
     do l <- ! ll;
     match l
-    | +Nil() -> ! final
-    | +Cons(c, k) ->
+    | +Nil() => ! final
+    | +Cons(c, k) =>
       ! step c { ! paren_foldr k step final }
     end
   that
   def fix reject : ParenCounterStk =
     comatch
-    | .none -> ret +False()
-    | .some -> ! reject
+    | .none => ret +False()
+    | .some => ! reject
     end
   that
   def ! try_accept : ParenCounterStk =
     comatch
-    | .none -> ret +True()
-    | .some -> ! reject
+    | .none => ret +True()
+    | .some => ! reject
     end
   that
   def ! accept_or_not (s : ParenCounterState) : ParenCounterStk =
     match s
-    | +Ok() -> ! try_accept
-    | +Reject() -> ! reject
+    | +Ok() => ! try_accept
+    | +Reject() => ! reject
     end
   that
   def ! paren_counter_step (c : Tok) (k : Thk ParenCounterTrans) : ParenCounterTrans =
-    fn state ->
+    fn state =>
       match c
-      | +LParen() -> ! k state .some
-      | +RParen() ->
+      | +LParen() => ! k state .some
+      | +RParen() =>
         (comatch
-        | .none -> ! k (+Reject() : ParenCounterState) .none
+        | .none => ! k (+Reject() : ParenCounterState) .none
         -- Note: would be more efficient to just ! reject here
-        | .some -> ! k state
+        | .some => ! k state
         end)
       end
   that
@@ -112,12 +112,12 @@ begin
       .none;
     do pass <- ! bool_eq expect b;
     match pass
-    | +True() ->
+    | +True() =>
       do s <- ! bool_to_str b;
       ! (api/write_line) s' {
         ! (api/write_line) s t
       }
-    | +False() ->
+    | +False() =>
       ! (api/write_line) "WRONG ANSWER" { ! (api/exit) 1 }
     end
   that

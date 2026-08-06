@@ -122,7 +122,7 @@ Zydeco supports both line comments and block comments.
 `<A>` is used to denote value types, and `<B>` is used to denote computation types; `<T>` is used to denote types.
 Conventionally, PascalCase is used as type variables, but it's not enforced.
 
-Type abstraction: `fn (X: <K>) -> <T>`
+Type abstraction: `fn (X: <K>) => <T>`
 Type application: `<T> <T>`
 
 The primitive value types are:
@@ -138,7 +138,7 @@ User-defined data types are also value types. We'll see them in the abstract mac
 The following is an example of the `Either` type.
 
 ```zydeco
-fn (E: VType) (A: VType) ->
+fn (E: VType) (A: VType) =>
   data
   | +Left : E
   | +Right : A
@@ -171,16 +171,16 @@ Their elimination forms are computations:
 + forcing a thunk `v`: `! v`
 + unit `v`: `let () = v in <M>`
 + product `v`: `let (x1, x2, ...) = v in <M>`
-+ pack `v`: `match v | (X, x) -> <M> end`
-+ data constructor `v`: `match v | +Ctor1 x -> <M> | +Ctor2 x -> <M> | ... end`
++ pack `v`: `match v | (X, x) => <M> end`
++ data constructor `v`: `match v | +Ctor1 x => <M> | +Ctor2 x => <M> | ... end`
 
 Other computation terms are:
 + return: `ret <V>`
 + do-binding: `do x <- <M>; <M>`
-+ term function: `fn (x: <T>) -> <M>`
-+ type function: `fn (X: <K>) -> <M>`
++ term function: `fn (x: <T>) => <M>`
++ type function: `fn (X: <K>) => <M>`
 + function application: `<M> <V>` and `<M> <T>`
-+ comatch (terms of codata types): `comatch | .dtor1 -> <M> | .dtor2 -> <M> | ... end`
++ comatch (terms of codata types): `comatch | .dtor1 => <M> | .dtor2 => <M> | ... end`
 + codata destructor: `<M> .dtor`
 
 The artifact-level wrappers for primitive functions that deal with integers, characters, strings, and operating
@@ -214,7 +214,7 @@ In Section 2 of the paper, we demonstrated how to use Zydeco to perform stack-ma
 #### Implementing a Polynomial Function
 The first example [`polynomial.zydeco`](polynomial.zydeco) is a simple function that computes the polynomial `f(x) = x^2 + x + 10`.
 ```zydeco
-fn (x: Int) ->
+fn (x: Int) =>
   do s <- ! times x x;
   do y <- ! add x 10;
   ! add s y
@@ -234,7 +234,7 @@ The top-level in Zydeco are either declarations, definitions, or the program ent
 
 ```zydeco
 def poly = {
-  fn (x: Int) ->
+  fn (x: Int) =>
     do s <- ! times x x;
     do y <- ! add x 10;
     ! add s y
@@ -350,7 +350,7 @@ end
 where `ret ()` is just an arbitrary computation. The whole block will then be translated into a computation that overloads the ambient monad inside the monadic block.
 
 ```zydeco
-fn (M: VType -> CType) (mo: Thk (Monad M)) ->
+fn (M: VType -> CType) (mo: Thk (Monad M)) =>
   ! mo .return Unit ()
 ```
 
@@ -358,7 +358,7 @@ The reader may have noticed that the monad type and its implementation are not d
 
 ```zydeco
 monadic
-  fn (E: VType) (raise: Thk (forall (A: VType) . E -> Ret A)) ->
+  fn (E: VType) (raise: Thk (forall (A: VType) . E -> Ret A)) =>
     ...
 end
 ```
@@ -368,7 +368,7 @@ In such way, the user can require a monad instance that supports `raise`, and la
 A caveat is that the monadic blocks don't naturally support any reference to variables defined outside the monadic blocks. Only primitive CBPV constructs like `VType`, `CType`, `Thk`, `Ret`, units and products, functions, and exists and forall types are allowed inside the monadic blocks, noticably excluding all abstract primitive types like the `String` and `OS` type. All other terms used in the monadic block must also be passed in. Below is an example of a monadic block that raises an exception:
 
 ```zydeco
-monadic fn (Str: VType) (raise: Thk (forall (A: VType) . Str -> Ret A)) (msg: Str) ->
+monadic fn (Str: VType) (raise: Thk (forall (A: VType) . Str -> Ret A)) (msg: Str) =>
   do x <- ! raise Unit msg;
   ret x
 end Exn mo-exn String triv { ! exn-raise String } "error"
@@ -397,12 +397,12 @@ When global types and terms are referenced inside the monadic block, they have a
 As an example of using global types and terms in monadic blocks, we can define an identity function:
 ```zydeco
 monadic
-  ! { fn (A: VType) (x: A) -> ret x }
+  ! { fn (A: VType) (x: A) => ret x }
 end
 ```
 and observe how we can move the definition out of the monadic block:
 ```zydeco
-let id = { fn (A: VType) (x: A) -> ret x } in
+let id = { fn (A: VType) (x: A) => ret x } in
 monadic
   ! id
 end

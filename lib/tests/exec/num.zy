@@ -11,9 +11,9 @@ begin
     end
   that
 
-  do x <- (fn x -> ret 1 : Bool -> Ret Int) +True();
-  do y <- (fn x -> ret +True() : Int -> Ret Bool) +123;
-  do z <- (fn x -> ret +True() : Int -> Ret Bool) -123;
+  do x <- (fn x => ret 1 : Bool -> Ret Int) +True();
+  do y <- (fn x => ret +True() : Int -> Ret Bool) +123;
+  do z <- (fn x => ret +True() : Int -> Ret Bool) -123;
   do x <- ! (api/mul) x -1;
   do x <- ! (api/add) 1 x;
   ! (api/exit) x

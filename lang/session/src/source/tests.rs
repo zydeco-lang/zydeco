@@ -713,7 +713,7 @@ fn program_assembly_freshens_each_import_occurrence() {
     use zydeco_surface::textual::syntax::{Abs, CoPattern, Paren, Pattern, SourceBoundary, Term};
 
     let fixture = SourceFixture::new();
-    fixture.write("library.zy", "fn value -> value");
+    fixture.write("library.zy", "fn value => value");
     let root =
         fixture.write("main.zy", r#"(@[import("library.zy")] _, @[import("library.zy")] _)"#);
 
@@ -751,7 +751,7 @@ fn program_assembly_retains_importer_and_provider_spans() {
     use zydeco_surface::textual::syntax::{SourceBoundary, Term};
 
     let fixture = SourceFixture::new();
-    fixture.write("library.zy", "fn value -> value");
+    fixture.write("library.zy", "fn value => value");
     let root = fixture.write("main.zy", r#"@[import("library.zy")] _"#);
 
     let assembly = SourceGraph::load(root).unwrap().assemble().unwrap();
@@ -839,7 +839,7 @@ fn imported_mobile_bindings_do_not_move_into_an_importer_block() {
 #[test]
 fn a_self_contained_imported_term_resolves_normally() {
     let fixture = SourceFixture::new();
-    fixture.write("library.zy", "fn value -> value");
+    fixture.write("library.zy", "fn value => value");
     let root = fixture.write("main.zy", r#"@[import("library.zy")] _"#);
     let assembly = SourceGraph::load(root).unwrap().assemble().unwrap();
 
@@ -857,7 +857,7 @@ fn importing_once_and_binding_once_shares_one_lexical_identity() {
     use zydeco_surface::scoped::syntax::{Let, Pattern, Term};
 
     let fixture = SourceFixture::new();
-    fixture.write("library.zy", "fn value -> value");
+    fixture.write("library.zy", "fn value => value");
     let root = fixture
         .write("main.zy", r#"let library = @[import("library.zy")] _ in (library, library)"#);
     let assembly = SourceGraph::load(root).unwrap().assemble().unwrap();

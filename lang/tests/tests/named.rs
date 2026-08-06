@@ -121,7 +121,7 @@ begin
       A -> Ret A
   ) = {
     fn ((item = A) : (item :: VType))
-       (value : A) ->
+       (value : A) =>
       ret value
   } that
 
@@ -139,8 +139,8 @@ fn translates_named_type_applications_in_monadic_blocks() {
 begin
   def mo_ret : Thk (Monad Ret) = {
     comatch
-    | .return A value -> ret value
-    | .bind A B computation continuation ->
+    | .return A value => ret value
+    | .bind A B computation continuation =>
       do value <- ! computation;
       ! continuation value
     end
@@ -150,7 +150,7 @@ begin
     (monadic
       let named_identity = {
         fn ((item = A) : (item :: VType))
-           (value : A) ->
+           (value : A) =>
           ret value
       } in
       ! named_identity (item = Unit) ()
@@ -166,7 +166,7 @@ begin
     (monadic
       do _ <- ret ();
       fn ((item = A) : (item :: VType))
-         (value : A) ->
+         (value : A) =>
         ret value
     end)
     Ret
@@ -231,7 +231,7 @@ begin
   that
 
   def reveal : Thk Reveal = {
-    fn ((item = A, value) : Box) -> ret value
+    fn ((item = A, value) : Box) => ret value
   } that
 
   def boxed : Box = (item = Int, 41) that

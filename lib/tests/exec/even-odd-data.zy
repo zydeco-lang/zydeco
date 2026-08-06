@@ -26,22 +26,22 @@ begin
       {
         do fp <- ! fp;
         match fp
-        | +OddEven(odd, even) ->
-          fn (x : Nat) ->
+        | +OddEven(odd, even) =>
+          fn (x : Nat) =>
             match x
-            | +Z() -> ret +False()
-            | +S(x) -> ! even x
+            | +Z() => ret +False()
+            | +S(x) => ! even x
             end
         end
       },
       {
         do fp <- ! fp;
         match fp
-        | +OddEven(odd, even) ->
-          fn (x : Nat) ->
+        | +OddEven(odd, even) =>
+          fn (x : Nat) =>
             match x
-            | +Z() -> ret +True()
-            | +S(x) -> ! odd x
+            | +Z() => ret +True()
+            | +S(x) => ! odd x
             end
         end
       },
@@ -51,12 +51,12 @@ begin
   do odd <- (
     do fp <- ! fp;
     match fp
-    | +OddEven(odd, even) -> ret { ! odd }
+    | +OddEven(odd, even) => ret { ! odd }
     end
   );
   do b <- ! odd +S(+S(+S(+Z())));
   match b
-  | +True() -> ! (api/exit) 0
-  | +False() -> ! (api/exit) 1
+  | +True() => ! (api/exit) 0
+  | +False() => ! (api/exit) 1
   end
 end

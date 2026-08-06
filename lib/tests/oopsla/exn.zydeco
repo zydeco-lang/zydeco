@@ -52,64 +52,64 @@ begin
 
   def ! mexn (E : VType) : Monad (Exn E) =
     comatch
-    | .return A a ->
-      fn .done ->
+    | .return A a =>
+      fn .done =>
         ret +Right(a)
-    | .bind A A' m f ->
+    | .bind A A' m f =>
       do a? <- ! m .done;
       match a?
-      | +Left(e) ->
-        fn .done ->
+      | +Left(e) =>
+        fn .done =>
           ret +Left(e)
-      | +Right(a) ->
-        fn .done ->
+      | +Right(a) =>
+        fn .done =>
           ! f a .done
       end
     end
   that
   def ! mexnk (E : VType) : Monad (ExnK E) =
     comatch
-    | .return A a ->
-      fn .run R ke ka ->
+    | .return A a =>
+      fn .run R ke ka =>
         ! ka a
-    | .bind A A' m f ->
-      fn .run R ke ka ->
+    | .bind A A' m f =>
+      fn .run R ke ka =>
         ! m .run R ke {
-          fn a ->
+          fn a =>
             ! f a .run R ke ka
         }
     end
   that
   def fix mexnde (E : VType) : Monad (ExnDe E) =
     comatch
-    | .return ->
-      fn A a ->
+    | .return =>
+      fn A a =>
         comatch
-        | .try ->
-          fn E' k ->
+        | .try =>
+          fn E' k =>
             ! mexnde E' .return A a
-        | .kont ->
-          fn A' k ->
+        | .kont =>
+          fn A' k =>
             ! k a
-        | .done -> ret +Right(a)
+        | .done => ret +Right(a)
         end
-    | .bind ->
-      fn A A' m f ->
+    | .bind =>
+      fn A A' m f =>
         ! m .kont A' f
     end
   that
   def fix mexnde_err (E : VType) : MonadErr E (ExnDe E) =
     comatch
-    | .fail ->
-      fn A e ->
+    | .fail =>
+      fn A e =>
         comatch
-        | .try ->
-          fn E' k ->
+        | .try =>
+          fn E' k =>
             ! k e
-        | .kont ->
-          fn A' k ->
+        | .kont =>
+          fn A' k =>
             ! mexnde_err E .fail A' e
-        | .done -> ret +Left(e)
+        | .done => ret +Left(e)
         end
     end
   that
@@ -117,20 +117,20 @@ begin
   --| the defunctionalized exception monad above
   def fix count_kont (E : VType) (A : VType) (i : Int) (fi : Thk (Int -> ExnDe E A)) : ExnDe E A =
     comatch
-    | .try ->
-      fn E' ke ->
+    | .try =>
+      fn E' ke =>
         ! count_kont E' A i {
-          fn i ->
+          fn i =>
             ! fi i .try E' ke
         }
-    | .kont ->
-      fn A' ka ->
+    | .kont =>
+      fn A' ka =>
         do i' <- ! (api/add) i 1;
         ! count_kont E A' i' {
-          fn i ->
+          fn i =>
             ! fi i .kont A' ka
         }
-    | .done -> ! fi i .done
+    | .done => ! fi i .done
     end
   that
   def ! bench (impl : Thk (Thk ExnCounter -> ExnCounter)) : Ret Int =
@@ -140,8 +140,8 @@ begin
       }
     } .done;
     match i?
-    | +Left(e) -> ret -1
-    | +Right(i) -> ret i
+    | +Left(e) => ret -1
+    | +Right(i) => ret i
     end
   that
   -- LHS and RHS of the associativity law
@@ -162,7 +162,7 @@ begin
     (m : Thk (ExnDe Unit Int))
     : ExnDe Unit Int =
     ! mexnde Unit .bind Int Int m {
-      fn i ->
+      fn i =>
         ! mexnde Unit .bind Int Int { ! f i } g
     }
   that
@@ -172,11 +172,11 @@ begin
     ! mexnde Unit .return Int
   in
   do a <- ! bench {
-    fn i ->
+    fn i =>
       ! lhs triv triv i
   };
   do b <- ! bench {
-    fn i ->
+    fn i =>
       ! rhs triv triv i
   };
   -- syntactic sugar:

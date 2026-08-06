@@ -66,7 +66,8 @@ extern {
         "+" => Tok::Plus,
         "*" => Tok::Star,
         "." => Tok::Dot,
-        "->" => Tok::Arrow,
+        "=>" => Tok::TermArrow,
+        "->" => Tok::TypeArrow,
         "<-" => Tok::Assign,
         "_" => Tok::Hole,
         "@" => Tok::At,
@@ -258,10 +259,10 @@ CoDataArm: CoDataArm = {
 };
 
 Matcher: Matcher<PatId, TermId> = {
-    "|" <binder:PatId> "->" <tail:TermId> => Matcher {<>},
+    "|" <binder:PatId> "=>" <tail:TermId> => Matcher {<>},
 };
 CoMatcher: CoMatcherParam = {
-    "|" <params:CoPatId> "->" <tail:TermId> => CoMatcherParam {<>},
+    "|" <params:CoPatId> "=>" <tail:TermId> => CoMatcherParam {<>},
 };
 
 #[inline]
@@ -317,7 +318,7 @@ Term: Term = {
     // context-forming block
     "begin" <TermAnnId> "end" => Block(<>).into(),
     // abstraction (alternative syntax)
-    "comatch" <params:CoPatId> "->" <term:TermId> "end" => Abs(<>).into(),
+    "comatch" <params:CoPatId> "=>" <term:TermId> "end" => Abs(<>).into(),
     // structural types
     "data" <Data> "end" => <>.into(),
     "codata" <CoData> "end" => <>.into(),
@@ -366,9 +367,9 @@ Term: Term = {
     // Bindings are loosest to capture the largest possible tail.
     #[precedence(level="6")]
     // abstraction
-    "fn" <params:CoPatId> "->" <term:TermGen<Term>> => Abs(<>).into(),
+    "fn" <params:CoPatId> "=>" <term:TermGen<Term>> => Abs(<>).into(),
     // fixed point
-    "fix" <binder:PatId> "->" <term:TermGen<Term>> => Fix(<>).into(),
+    "fix" <binder:PatId> "=>" <term:TermGen<Term>> => Fix(<>).into(),
     // monadically
     "monadically" <TermGen<Term>> => MoBlock(<>).into(),
     // kont call

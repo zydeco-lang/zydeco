@@ -471,7 +471,7 @@ pub struct Let<Br, Be, Tail> {
     pub tail: Tail,
 }
 
-/// `fix (x: A) -> b`
+/// `fix (x: A) => b`
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Fix<P, Tm>(pub P, pub Tm);
 
@@ -479,7 +479,7 @@ pub struct Fix<P, Tm>(pub P, pub Tm);
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Ctor<Tag, Tail>(pub Tag, pub Tail);
 
-/// `match a | p -> b_1 | ... end`
+/// `match a | p => b_1 | ... end`
 #[derive(Clone, Debug)]
 pub struct Match<Sc, Br, Tail> {
     pub scrut: Sc,
@@ -491,7 +491,7 @@ pub struct Matcher<Br, Tail> {
     pub tail: Tail,
 }
 
-/// `comatch | .d_1 -> b_1 | ... end`
+/// `comatch | .d_1 => b_1 | ... end`
 #[derive(Clone, Debug)]
 pub struct CoMatch<Tag, Tail> {
     pub arms: Vec<CoMatcher<Tag, Tail>>,

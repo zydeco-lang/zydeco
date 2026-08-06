@@ -2,12 +2,12 @@ let tt = (+True() : Bool) in
 let ff : Bool = +False() in
 let not_ = {
     let not__: Thunk(Bool -> Ret Bool) = {
-      fn x -> match x
-        | +True() -> ret ff
-        | +False() -> ret tt
+      fn x => match x
+        | +True() => ret ff
+        | +False() => ret tt
       end
     } in
-    (fn x -> ! not__ x : Bool -> Ret Bool)
+    (fn x => ! not__ x : Bool -> Ret Bool)
 } in
 let not = { ! not_ } in
 let a = 1 in

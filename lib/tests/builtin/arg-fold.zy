@@ -8,7 +8,7 @@ begin
     (Ret String)
     { ret "" }
     {
-      fn argument remaining ->
+      fn argument remaining =>
         do suffix <- ! remaining;
         ! (api/str_append) argument suffix
     };

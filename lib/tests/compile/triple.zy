@@ -11,7 +11,7 @@ begin
   that
 
   match packed
-  | (Left, Right, x, y, status) ->
+  | (Left, Right, x, y, status) =>
     let flat = (x, status, y) in
     let (a, (code, c)) = flat in
     let nested = (a, (code, c)) in

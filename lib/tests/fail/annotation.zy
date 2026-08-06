@@ -11,7 +11,7 @@ begin
   that
 
   match +True()
-  | +True() -> ! (api/exit) 0
-  | +False() -> ! (api/exit) 1
+  | +True() => ! (api/exit) 0
+  | +False() => ! (api/exit) 1
   end
 end

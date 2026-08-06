@@ -10,20 +10,20 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
   def ! f : Bool -> Thk (Int -> OS) -> OS =
-    fn (b : Bool) (k : Thk (Int -> OS)) ->
+    fn (b : Bool) (k : Thk (Int -> OS)) =>
       -- k might be large
       match b
-      | +True(_) -> ! k 0
-      | +False(_) -> ! k 1
+      | +True(_) => ! k 0
+      | +False(_) => ! k 1
       end
   that
 
   ! f (+True()) {
     -- a large continuation gets inlined
-    fn x ->
+    fn x =>
       match (+True() : Bool)
-      | +True(_) -> ! (api/exit) x
-      | +False(_) -> ! (api/exit) 0
+      | +True(_) => ! (api/exit) x
+      | +False(_) => ! (api/exit) 0
       end
   }
 end

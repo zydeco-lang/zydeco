@@ -242,7 +242,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Abs<CoPatId, TermId> {
         let Abs(p, t) = self;
         s += "fn ";
         s += &p.ugly(f);
-        s += " -> ";
+        s += " => ";
         s += &t.ugly(f);
         s
     }
@@ -266,7 +266,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Fix<PatId, TermId> {
         let Fix(p, t) = self;
         s += "fix ";
         s += &p.ugly(f);
-        s += " -> ";
+        s += " => ";
         s += &t.ugly(f);
         s
     }
@@ -567,7 +567,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Match<TermId, PatId, TermId> {
         for Matcher { binder, tail } in arms {
             s += " | ";
             s += &binder.ugly(f);
-            s += " -> ";
+            s += " => ";
             s += &tail.ugly(f);
         }
         s += " end";
@@ -583,7 +583,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for CoMatchParam {
         for CoMatcherParam { params, tail } in arms {
             s += " | ";
             s += &params.ugly(f);
-            s += " -> ";
+            s += " => ";
             s += &tail.ugly(f);
         }
         s += " end";

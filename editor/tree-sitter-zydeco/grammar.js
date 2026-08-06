@@ -157,7 +157,7 @@ module.exports = grammar({
     block_abstraction: $ => seq(
       'comatch',
       field('parameters', $.copattern),
-      '->',
+      '=>',
       field('body', $._term),
       'end',
     ),
@@ -204,7 +204,7 @@ module.exports = grammar({
     match_arm: $ => seq(
       '|',
       field('pattern', $._pattern),
-      '->',
+      '=>',
       field('body', $._term),
     ),
 
@@ -217,7 +217,7 @@ module.exports = grammar({
     comatch_arm: $ => seq(
       '|',
       field('parameters', $.copattern),
-      '->',
+      '=>',
       field('body', $._term),
     ),
 
@@ -299,14 +299,14 @@ module.exports = grammar({
     lambda_expression: $ => prec.right(PREC.binding, seq(
       'fn',
       field('parameters', $.copattern),
-      '->',
+      '=>',
       field('body', $._term),
     )),
 
     fix_expression: $ => prec.right(PREC.binding, seq(
       'fix',
       field('binder', $._pattern),
-      '->',
+      '=>',
       field('body', $._term),
     )),
 

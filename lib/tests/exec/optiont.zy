@@ -23,7 +23,7 @@ begin
   that
   def ! o : Option' Int =
     comatch
-    | .trans ->
+    | .trans =>
       ret +Some(1)
     end
   that

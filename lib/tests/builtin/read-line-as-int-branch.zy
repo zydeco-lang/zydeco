@@ -5,7 +5,7 @@ param (
   ! (api/read_line_as_int_branch)
     { ! (api/exit) 1 }
     {
-      fn integer ->
+      fn integer =>
         ! (api/int_eq_branch)
           OS
           integer
@@ -14,7 +14,7 @@ param (
             ! (api/read_line_as_int_branch)
               { ! (api/exit) 0 }
               {
-                fn unexpected ->
+                fn unexpected =>
                   ! (api/exit) 1
               }
           }

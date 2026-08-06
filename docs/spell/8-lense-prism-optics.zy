@@ -43,13 +43,13 @@ begin
        (A : VType)
        lens
        function
-       source ->
+       source =>
       (! lens
         Identity
         {
-          fn focused ->
+          fn focused =>
             comatch
-            | .identity -> ! function focused
+            | .identity => ! function focused
             end
         }
         source)
@@ -65,13 +65,13 @@ begin
     fn (S : VType)
        (A : VType)
        lens
-       source ->
+       source =>
       (! lens
         (Const A)
         {
-          fn focused ->
+          fn focused =>
             comatch
-            | .constant -> ret focused
+            | .constant => ret focused
             end
         }
         source)

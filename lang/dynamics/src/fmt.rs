@@ -41,7 +41,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Value {
                 format!("let {} = {} in {}", binder.ugly(f), bindee.ugly(f), tail.ugly(f))
             }
             | Value::VAbs(Abs(param, body)) => {
-                format!("fn {} -> {}", param.ugly(f), body.ugly(f))
+                format!("fn {} => {}", param.ugly(f), body.ugly(f))
             }
             | Value::VApp(App(function, argument)) => {
                 format!("({} {})", function.ugly(f), argument.ugly(f))
@@ -71,13 +71,13 @@ impl<'a> Ugly<'a, Formatter<'a>> for Computation {
         match self {
             | Compu::Hole(Hole) => "_".to_string(),
             | Compu::VAbs(Abs(param, body)) => {
-                format!("fn {} -> {}", param.ugly(f), body.ugly(f))
+                format!("fn {} => {}", param.ugly(f), body.ugly(f))
             }
             | Compu::VApp(App(body, arg)) => {
                 format!("({} {})", body.ugly(f), arg.ugly(f))
             }
             | Compu::Fix(Fix(param, body)) => {
-                format!("fix {} -> {}", param.ugly(f), body.ugly(f))
+                format!("fix {} => {}", param.ugly(f), body.ugly(f))
             }
             | Compu::Force(Force(body)) => {
                 format!("! {}", body.ugly(f))
@@ -98,7 +98,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Computation {
                 for Matcher { binder, tail } in arms {
                     s += " | ";
                     s += &binder.ugly(f);
-                    s += " -> ";
+                    s += " => ";
                     s += &tail.ugly(f);
                 }
                 s += " end";
@@ -111,7 +111,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Computation {
                     s += " | ";
                     let DtorName(name) = dtor;
                     s += name;
-                    s += " -> ";
+                    s += " => ";
                     s += &tail.ugly(f);
                 }
                 s += " end";

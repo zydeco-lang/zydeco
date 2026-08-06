@@ -37,8 +37,8 @@ begin
   {BOOL_DECLARATION}
   let value : Bool = +True() that
   match value
-  | +False(_) -> ret ()
-  | +True(_) -> ret ()
+  | +False(_) => ret ()
+  | +True(_) => ret ()
   end
 end
 "#,
@@ -53,7 +53,7 @@ begin
   {BOOL_DECLARATION}
   let value : Bool = +True() that
   match value
-  | +True(_) -> ret ()
+  | +True(_) => ret ()
   end
 end
 "#,
@@ -68,7 +68,7 @@ begin
   {BOOL_DECLARATION}
   let value : Bool = +True() that
   match value
-  | _ -> ret ()
+  | _ => ret ()
   end
 end
 "#,
@@ -84,8 +84,8 @@ begin
   let Pair = data | +Pair : Bool * Bool end that
   let value : Pair = +Pair(+True(), +False()) that
   match value
-  | +Pair(+False(_), _) -> ret ()
-  | +Pair(+True(_), _) -> ret ()
+  | +Pair(+False(_), _) => ret ()
+  | +Pair(+True(_), _) => ret ()
   end
 end
 "#,
@@ -101,8 +101,8 @@ begin
   let Triple = data | +Triple : Bool * Bool * Bool end that
   let value : Triple = +Triple(+True(), +False(), +True()) that
   match value
-  | +Triple(+False(_), _, _) -> ret ()
-  | +Triple(+True(_), (_, _)) -> ret ()
+  | +Triple(+False(_), _, _) => ret ()
+  | +Triple(+True(_), (_, _)) => ret ()
   end
 end
 "#,
@@ -118,8 +118,8 @@ begin
   let Pair = data | +Pair : Bool * Bool end that
   let value : Pair = +Pair(+True(), +False()) that
   match value
-  | +Pair(+True(_), _) -> ret ()
-  | +Pair(_, +False(_)) -> ret ()
+  | +Pair(+True(_), _) => ret ()
+  | +Pair(_, +False(_)) => ret ()
   end
 end
 "#,
@@ -133,7 +133,7 @@ fn accepts_elimination_from_an_empty_data_type() {
 begin
   let Void = data end that
   let absurd : Thk (Void -> Ret Unit) = {
-    fn value -> match value end
+    fn value => match value end
   } that
   ret ()
 end
@@ -153,8 +153,8 @@ begin
     end
   that
   (comatch
-  | .left -> ret ()
-  | .right -> ret ()
+  | .left => ret ()
+  | .right => ret ()
   end : Choice)
 end
 "#,
@@ -173,7 +173,7 @@ begin
     end
   that
   (comatch
-  | .left -> ret ()
+  | .left => ret ()
   end : Choice)
 end
 "#,
@@ -192,9 +192,9 @@ begin
     end
   that
   (comatch
-  | .left -> ret ()
-  | .left -> ret ()
-  | .right -> ret ()
+  | .left => ret ()
+  | .left => ret ()
+  | .right => ret ()
   end : Choice)
 end
 "#,
@@ -208,8 +208,8 @@ fn accepts_function_copattern_clauses() {
 begin
   {BOOL_DECLARATION}
   (comatch
-  | +False(_) -> ret ()
-  | +True(_) -> ret ()
+  | +False(_) => ret ()
+  | +True(_) => ret ()
   end : Bool -> Ret Unit)
 end
 "#,
@@ -250,9 +250,9 @@ begin
     end
   that
   (comatch
-  | .choose +False(_) -> ret ()
-  | .choose +True(_) -> ret ()
-  | .reset -> ret ()
+  | .choose +False(_) => ret ()
+  | .choose +True(_) => ret ()
+  | .reset => ret ()
   end : Observer)
 end
 "#,
@@ -271,7 +271,7 @@ begin
     end
   that
   (comatch
-  | .choose +True(_) -> ret ()
+  | .choose +True(_) => ret ()
   end : Observer)
 end
 "#,
@@ -295,8 +295,8 @@ begin
     end
   that
   (comatch
-  | .open .left -> ret ()
-  | .open .right -> ret ()
+  | .open .left => ret ()
+  | .open .right => ret ()
   end : Outer)
 end
 "#,
@@ -320,7 +320,7 @@ begin
     end
   that
   (comatch
-  | .open .left -> ret ()
+  | .open .left => ret ()
   end : Outer)
 end
 "#,
@@ -339,8 +339,8 @@ begin
     end
   that
   (comatch
-  | .choose +False(_) _ -> ret ()
-  | .choose +True(_) _ -> ret ()
+  | .choose +False(_) _ => ret ()
+  | .choose +True(_) _ => ret ()
   end : Observer)
 end
 "#,
@@ -356,8 +356,8 @@ begin
     end
   that
   (comatch
-  | .choose +True(_) _ -> ret ()
-  | .choose _ +False(_) -> ret ()
+  | .choose +True(_) _ => ret ()
+  | .choose _ +False(_) => ret ()
   end : Observer)
 end
 "#,
@@ -381,8 +381,8 @@ begin
     end
   that
   (comatch
-  | .open A (value : A) .get -> ret value
-  | .open A _ .ignore -> ret ()
+  | .open A (value : A) .get => ret value
+  | .open A _ .ignore => ret ()
   end : Poly)
 end
 "#,
@@ -402,8 +402,8 @@ begin
   that
   do _ <-
     (comatch
-    | .open +False(_) A -> ret ()
-    | .open +True(_) A -> ret ()
+    | .open +False(_) A => ret ()
+    | .open +True(_) A => ret ()
     end : Poly) .open +True() Unit;
   ! (api/exit) 0
 end
@@ -426,7 +426,7 @@ begin
   that
   do status <-
     (comatch
-    | .unbox ((A, value) : Box) -> ret value
+    | .unbox ((A, value) : Box) => ret value
     end : Service) .unbox (Int, 0);
   ! (api/exit) status
 end
@@ -449,7 +449,7 @@ begin
     end
   that
   (comatch
-  | .inspect ((A, +True(_)) : Box) -> ret ()
+  | .inspect ((A, +True(_)) : Box) => ret ()
   end : Service)
 end
 "#,
@@ -480,10 +480,10 @@ begin
   that
   do status <-
     (comatch
-    | .route +First(value) .left -> ret 1
-    | .route +First(value) .right -> ret value
-    | .route +Second(_) .left -> ret 1
-    | .route +Second(_) .right -> ret 1
+    | .route +First(value) .left => ret 1
+    | .route +First(value) .right => ret value
+    | .route +Second(_) .left => ret 1
+    | .route +Second(_) .right => ret 1
     end : Router) .route +First(0) .right;
   ! (api/exit) status
 end

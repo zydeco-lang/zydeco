@@ -120,7 +120,7 @@
     },
     "operators": {
       "name": "keyword.operator.zydeco",
-      "match": "::|->|<-|[!/:=|+*]"
+      "match": "::|=>|->|<-|[!/:=|+*]"
     }
   }
 }

@@ -41,7 +41,7 @@ begin
   that
 
   def fix iota : Int -> F(LList' Int) =
-    fn (i: Int) ->
+    fn (i: Int) =>
       do i+1 <- ! add i 1;
       ret +Cons(i, { ! iota i+1 })
   that
@@ -49,15 +49,15 @@ begin
   def fix llist_foldr (ll: U(F(LList' Int))) (f: U(Int -> U OS -> OS)) (b: U OS) : OS =
     do llv <- ! ll;
     match llv
-    | +Nil() -> ! b
-    | +Cons(a, ll) -> ! f a { ! llist_foldr ll f b }
+    | +Nil() => ! b
+    | +Cons(a, ll) => ! f a { ! llist_foldr ll f b }
     end
   that
 
   def ! loopy =
     ! llist_foldr
     { ! iota 0 }
-    { fn (x: Int) (b: U OS) ->
+    { fn (x: Int) (b: U OS) =>
       do next? <- ! int_lt x 10;
       ! write_int_line x b
     }

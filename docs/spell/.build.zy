@@ -17,16 +17,16 @@ begin
     fn (B : CType)
        condition
        when_true
-       when_false ->
+       when_false =>
       match condition
-      | +True() -> ! when_true
-      | +False() -> ! when_false
+      | +True() => ! when_true
+      | +False() => ! when_false
       end
   } that
   def int_equal : Thk (
     Int -> Int -> Ret Bool
   ) = {
-    fn left right ->
+    fn left right =>
       ! (api/int_eq_branch)
         (Ret Bool)
         left
@@ -37,7 +37,7 @@ begin
   def int_less : Thk (
     Int -> Int -> Ret Bool
   ) = {
-    fn left right ->
+    fn left right =>
       ! (api/int_lt_branch)
         (Ret Bool)
         left
@@ -48,7 +48,7 @@ begin
   def string_equal : Thk (
     String -> String -> Ret Bool
   ) = {
-    fn left right ->
+    fn left right =>
       ! (api/str_eq_branch)
         (Ret Bool)
         left
@@ -62,7 +62,7 @@ begin
     String ->
     Ret (String * Bool)
   ) = {
-    fn line ->
+    fn line =>
       do length <- ! (api/str_length) line;
       do too_short <- ! int_less length 3;
       ! branch
@@ -83,7 +83,7 @@ begin
             3
             { ret (line, +False()) }
             {
-              fn prefix remainder ->
+              fn prefix remainder =>
                 do is_comment <- ! string_equal prefix "-- ";
                 ! branch
                   (Ret (String * Bool))
@@ -96,7 +96,7 @@ begin
   def string_empty : Thk (
     String -> Ret Bool
   ) = {
-    fn string ->
+    fn string =>
       do length <- ! (api/str_length) string;
       ! int_equal length 0
   } that
@@ -113,29 +113,29 @@ begin
         Bool ->
         OS
       )
-    ) ->
-      fn remaining in_code ->
+    ) =>
+      fn remaining in_code =>
         ! (api/str_split_once_branch)
           OS
           remaining
           '\n'
           {
             match in_code
-            | +True() ->
+            | +True() =>
               ! (api/write_str) "\n```\n" {
                 ! (api/exit) 0
               }
-            | +False() -> ! (api/exit) 0
+            | +False() => ! (api/exit) 0
             end
           }
           {
-            fn line rest ->
+            fn line rest =>
               do classified <- ! classify_line line;
               match classified
-              | (content, comment) ->
+              | (content, comment) =>
                 do empty <- ! string_empty content;
                 match in_code
-                | +False() ->
+                | +False() =>
                   ! branch
                     OS
                     empty
@@ -163,7 +163,7 @@ begin
                           }
                         }
                     }
-                | +True() ->
+                | +True() =>
                   ! branch
                     OS
                     empty
@@ -199,7 +199,7 @@ begin
   } that
 
   ! (api/read_till_eof) {
-    fn file ->
+    fn file =>
       ! loop file +False()
   }
 end

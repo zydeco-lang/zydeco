@@ -307,7 +307,7 @@ where
 {
     fn ugly(&self, f: &'a Formatter) -> String {
         let Abs(s, t) = self;
-        format!("fn {} -> {}", s.ugly(f), t.ugly(f))
+        format!("fn {} => {}", s.ugly(f), t.ugly(f))
     }
 }
 
@@ -468,7 +468,7 @@ where
 {
     fn ugly(&self, f: &'a Formatter) -> String {
         let Fix(p, tm) = self;
-        format!("fix {} -> {}", p.ugly(f), tm.ugly(f))
+        format!("fix {} => {}", p.ugly(f), tm.ugly(f))
     }
 }
 
@@ -606,7 +606,7 @@ where
         let mut s = String::new();
         s += &format!("match {}", scrut.ugly(f));
         for Matcher { binder, tail } in arms.iter() {
-            s += &format!(" | {} -> {}", binder.ugly(f), tail.ugly(f));
+            s += &format!(" | {} => {}", binder.ugly(f), tail.ugly(f));
         }
         s += &" end".to_string();
         s
@@ -622,7 +622,7 @@ where
         let mut s = String::new();
         s += &"comatch".to_string();
         for CoMatcher { dtor, tail } in arms.iter() {
-            s += &format!(" | {} -> {}", dtor.ugly(f), tail.ugly(f));
+            s += &format!(" | {} => {}", dtor.ugly(f), tail.ugly(f));
         }
         s += &" end".to_string();
         s
@@ -934,7 +934,7 @@ where
             RcDoc::space(),
             binder.pretty(f),
             RcDoc::space(),
-            RcDoc::text("->"),
+            RcDoc::text("=>"),
             RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent),
         ])
     }
@@ -1166,7 +1166,7 @@ where
             RcDoc::space(),
             p.pretty(f),
             RcDoc::space(),
-            RcDoc::text("->"),
+            RcDoc::text("=>"),
             RcDoc::concat([RcDoc::line(), tm.pretty(f)]).nest(f.indent).group(),
         ])
     }
@@ -1368,7 +1368,7 @@ where
                     RcDoc::space(),
                     binder.pretty(f),
                     RcDoc::space(),
-                    RcDoc::text("->"),
+                    RcDoc::text("=>"),
                     RcDoc::concat([RcDoc::line(), tail.pretty(f)]).nest(f.indent),
                 ])
             })),
@@ -1395,7 +1395,7 @@ where
                     RcDoc::space(),
                     dtor.pretty(f),
                     RcDoc::space(),
-                    RcDoc::text("->"),
+                    RcDoc::text("=>"),
                     RcDoc::concat([RcDoc::line(), tail.pretty(f)]).nest(f.indent),
                 ])
             })),

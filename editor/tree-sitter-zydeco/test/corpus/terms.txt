@@ -30,8 +30,8 @@ Definitions, binders, and matching
 begin
   def ! fix map (A : VType) (xs : List A) : Ret (List A) =
     match xs
-    | +Nil () -> ret +Nil ()
-    | +Cons (x, tail) ->
+    | +Nil () => ret +Nil ()
+    | +Cons (x, tail) =>
       do rest <- ! map A tail;
       ret +Cons (x, rest)
     end

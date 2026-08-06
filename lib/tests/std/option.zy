@@ -22,7 +22,7 @@ begin
     value
     { ! (std/os/exit) 1 }
     {
-      fn status ->
+      fn status =>
         ! (std/os/exit) status
     }
 end

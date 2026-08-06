@@ -21,14 +21,14 @@ begin
   that
   def ! ifz (z : Bool) (pred : Thk (Nat -> Ret Bool)) (x : Nat) : Ret Bool =
     match x
-    | +Z() -> ret z
-    | +S(x) -> ! pred x
+    | +Z() => ret z
+    | +S(x) => ! pred x
     end
   that
   def ! ifz' (x : Nat) : Ret Bool =
     ! ifz
       +False()
-      { fn (_ : Nat) -> ret +True() }
+      { fn (_ : Nat) => ret +True() }
       x
   that
 
@@ -40,21 +40,21 @@ begin
   do zero' <- ! ifz' zero;
   do b <- (
     match two'
-    | +True() ->
+    | +True() =>
       match one'
-      | +True() ->
+      | +True() =>
         match zero'
-        | +False() -> ret +True()
-        | +True() -> ret +False()
+        | +False() => ret +True()
+        | +True() => ret +False()
         end
-      | +False() -> ret +False()
+      | +False() => ret +False()
       end
-    | +False() -> ret +False()
+    | +False() => ret +False()
     end
     : Ret Bool
   );
   match b
-  | +True() -> ! (api/exit) 0
-  | +False() -> ! (api/exit) 1
+  | +True() => ! (api/exit) 0
+  | +False() => ! (api/exit) 1
   end
 end

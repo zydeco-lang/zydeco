@@ -5,9 +5,9 @@ begin
   ) that
 
   let captured : Int = 0 that
-  let constant : Int -> Int = fn (_ : Int) -> captured that
+  let constant : Int -> Int = fn (_ : Int) => captured that
   let apply : (Int -> Int) -> Int -> Int =
-    fn function -> fn argument -> function argument
+    fn function => fn argument => function argument
   that
   let result : Int = apply constant 42 that
 

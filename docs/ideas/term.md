@@ -126,7 +126,7 @@ end
 The reference to `seed` induces an ordering constraint, and the block elaborates to
 
 ```zydeco
-fn seed -> let answer = seed in answer
+fn seed => let answer = seed in answer
 ```
 
 The example writes `answer` before its dependency `seed`.
@@ -147,7 +147,7 @@ end
 The block closes as
 
 ```zydeco
-fn a b c d -> let x = a + c in d
+fn a b c d => let x = a + c in d
 ```
 
 Here the four `param` forms declare the block's interface.

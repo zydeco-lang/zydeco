@@ -19,8 +19,8 @@ begin
     : B =
     do llv <- ! ll;
     match llv
-    | +Nil() -> ! b
-    | +Cons(a, ll) ->
+    | +Nil() => ! b
+    | +Cons(a, ll) =>
       ! f a { ! foldr~ A B ll f b }
     end
   that
@@ -52,7 +52,7 @@ begin
       StdOS
       { ! iota 0 }
       {
-        fn x b ->
+        fn x b =>
           do next? <- ! (std/int/lt) x 10;
           ! (std/bool/if)
             StdOS

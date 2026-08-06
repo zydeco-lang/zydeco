@@ -3,8 +3,8 @@
 pub def rec fn foldl (A : VType) (B : CType) (xs : U(LList A)) (b : U B) (f : U(A -> U B -> B)) : B =
   do xsv <- ! xs .run;
   match xsv
-  | +Nil() -> ! b
-  | +Cons(hd, tl) ->
+  | +Nil() => ! b
+  | +Cons(hd, tl) =>
     ! foldl @(A) @(B) tl {! f hd b} f
   end
 end
@@ -12,16 +12,16 @@ end
 pub def fn tail (A : VType) (xs : U(LList A)) : LList A =
   do xs' <- ! xs .run;
   match xs'
-  | +Nil() -> ! nil @(A)
-  | +Cons(x, tl) -> ! tl
+  | +Nil() => ! nil @(A)
+  | +Cons(x, tl) => ! tl
   end
 end 
 
 pub def rec fn list_to_str (s : U(LList Char)) : F String =
   do s' <- ! s .run;
   match s'
-  | +Nil() -> ret ""
-  | +Cons(c, tl) ->
+  | +Nil() => ret ""
+  | +Cons(c, tl) =>
     do s <- ! list_to_str tl;
     do c <- ! char_to_str c;
     ! str_append c s
@@ -32,17 +32,17 @@ end
 alias Parser (A : VType) = String -> (LList (Pair A String)) end
 
 def fn result (A : VType) (v : A) : Parser A =
-  fn (input : String) ->
+  fn (input : String) =>
     ! LList.singleton_list @(Pair A String) (+Cons(v, input))
 end
 
 def fn zero (A : VType) : Parser A =
-  fn (input : String) ->
+  fn (input : String) =>
     ! LList.nil @(Pair A String)
 end
 
 def fn item : Parser Char =
-  fn (input : String) ->
+  fn (input : String) =>
     ! if~ @(LList (Pair Char String)) {! str_eq "" input} {
       ! LList.nil @(Pair Char String)
     } {
@@ -54,11 +54,11 @@ def fn item : Parser Char =
 end
 
 def fn bind' (A : VType) (B : VType) (p : U(Parser A)) (f : U(A -> Parser B)) : Parser B =
-  fn (input : String) ->
+  fn (input : String) =>
     let ps = {! p input} in
-    ! LList.bind @(Pair A String) @(Pair B String) ps {fn (pa : Pair A String) ->
+    ! LList.bind @(Pair A String) @(Pair B String) ps {fn (pa : Pair A String) =>
       match pa
-      | +Cons(a, input) ->
+      | +Cons(a, input) =>
         ! f a input
       end
      }
@@ -67,16 +67,16 @@ end
 // dont know why it's always wrong
 // def fn seq (A : VType) (B : VType) (p : U(Parser A)) (q : U(Parser B)) : Parser (Pair A B) =
 //   ! bind' @(A) @(Pair A B) p {
-//     fn x -> 
+//     fn x =>
 //       ! bind' @(B) @(Pair A B) q {
-//         fn y -> 
+//         fn y =>
 //           ! result @(Pair A B) (+Cons(x, y))
 //       }
 //     }
 // end
 
 def fn sat (p : U(Char -> F Bool)) : Parser Char =
-  ! bind' @(Char) @(Char) item {fn (x : Char) ->
+  ! bind' @(Char) @(Char) item {fn (x : Char) =>
     ! if~ @(Parser Char) {! p x} {
       ! result @(Char) x
     } {
@@ -86,12 +86,12 @@ def fn sat (p : U(Char -> F Bool)) : Parser Char =
 end
 
 def fn char (x : Char) : Parser Char =
-  ! sat {fn y -> ! char_eq x y}
+  ! sat {fn y => ! char_eq x y}
 end
 
 def fn digit : Parser Char =
   ! sat {
-    fn x ->
+    fn x =>
       do n <- ! char_to_int x;
       do b1 <- ! int_lt n 58;
       do b2 <- ! int_gt n 47;
@@ -101,7 +101,7 @@ end
 
 def fn lower : Parser Char =
   ! sat {
-    fn x ->
+    fn x =>
       do n <- ! char_to_int x;
       do b1 <- ! int_lt n 123;
       do b2 <- ! int_gt n 96;
@@ -111,7 +111,7 @@ end
 
 def fn upper : Parser Char =
   ! sat {
-    fn x ->
+    fn x =>
       do n <- ! char_to_int x;
       do b1 <- ! int_lt n 91;
       do b2 <- ! int_gt n 64;
@@ -120,7 +120,7 @@ def fn upper : Parser Char =
 end
 
 def fn plus (A : VType) (p : U(Parser A)) (q : U(Parser A)) : Parser A =
-  fn (input : String) ->
+  fn (input : String) =>
     ! LList.append @(Pair A String) {! p input} {! q input}
 end
 
@@ -135,9 +135,9 @@ end
 def rec fn word : Parser String =
   ! plus @(String) { ! result @(String) ""} {
     ! bind' @(Char) @(String) {! letter} {
-      fn x ->
+      fn x =>
         ! bind' @(String) @(String) {! word} {
-          fn xs ->
+          fn xs =>
             do x' <- ! char_to_str x;
             do xs' <- ! str_append x' xs;
             ! result @(String) xs'
@@ -154,9 +154,9 @@ def rec fn string (s : String) : Parser String =
     do len <- ! str_length s;
     do xs <- ! str_slice s 1 len;
     ! bind' @(Char) @(String) {! char x} {
-      fn _ ->
+      fn _ =>
       ! bind' @(String) @(String) {! string xs} {
-        fn _ ->
+        fn _ =>
         ! result @(String) s
       }
     }
@@ -167,9 +167,9 @@ end
 def rec fn many (A : VType) (p : U(Parser A)) : Parser (U(LList A)) =
   ! plus @(U(LList A)) { ! result @(U(LList A)) {! LList.nil @(A)}} {
     ! bind' @(A) @(U(LList A)) p {
-      fn x ->
+      fn x =>
         ! bind' @(U(LList A)) @(U(LList A)) {! many @(A) p} {
-          fn xs ->
+          fn xs =>
             ! result @(U(LList A)) {! LList.cons @(A) x xs}
         }
     }
@@ -178,9 +178,9 @@ end
 
 def fn many1 (A : VType) (p : U(Parser A)) : Parser (U(LList A)) =
   ! bind' @(A) @(U(LList A)) p {
-    fn x ->
+    fn x =>
       ! bind' @(U(LList A)) @(U(LList A)) {! many @(A) p} {
-        fn xs ->
+        fn xs =>
           ! result @(U(LList A)) {! LList.cons @(A) x xs}
       }
   }
@@ -188,7 +188,7 @@ end
 
 def fn nat : Parser Int =
   ! bind' @(U(LList Char)) @(Int) {! many1 @(Char) digit} {
-    fn xs ->
+    fn xs =>
       do xs' <- ! list_to_str xs;
       do n <- ! str_to_int xs';
       ! result @(Int) n
@@ -198,16 +198,16 @@ end
 def fn int : Parser Int =
   let op = {
     ! plus @(U(Int -> F Int)) {
-      ! bind' @(Char) @(U(Int -> F Int)) {! char '-'} {fn _ -> ! result @(U(Int -> F Int)) {fn x -> ! sub 0 x}}
+      ! bind' @(Char) @(U(Int -> F Int)) {! char '-'} {fn _ => ! result @(U(Int -> F Int)) {fn x => ! sub 0 x}}
     } {
-      ! result @(U(Int -> F Int)) {fn x -> ret x}
+      ! result @(U(Int -> F Int)) {fn x => ret x}
     }
   }
   in
   ! bind' @(U(Int -> F Int)) @(Int) op {
-    fn f ->
+    fn f =>
       ! bind' @(Int) @(Int) {! nat} {
-        fn n ->
+        fn n =>
           do n' <- ! f n;
           ! result @(Int) n'
       }
@@ -216,20 +216,20 @@ end
 
 def fn ints1 : Parser (U(LList Int)) =
   ! bind' @(Char) @(U(LList Int)) {! char '['} {
-    fn _ ->
+    fn _ =>
       ! bind' @(Int) @(U(LList Int)) {! int} {
-        fn n ->
+        fn n =>
           ! bind' @(U(LList Int)) @(U(LList Int)) {! many @(Int) {
             ! bind' @(Char) @(Int) {! char ','} {
-              fn _ ->
+              fn _ =>
                 ! bind' @(Int) @(Int) {! int} {
-                  fn n ->
+                  fn n =>
                     ! result @(Int) n
                 }
             }}} {
-            fn ns ->
+            fn ns =>
               ! bind' @(Char) @(U(LList Int)) {! char ']'} {
-                fn _ ->
+                fn _ =>
                   ! result @(U(LList Int)) {! LList.cons @(Int) n ns}
               }
           }
@@ -239,16 +239,16 @@ end
 
 def fn sepby1 (A : VType) (S : VType) (p : U(Parser A)) (sep : U(Parser S)) : Parser (U(LList A)) =
   ! bind' @(A) @(U(LList A)) p {
-    fn x ->
+    fn x =>
       ! bind' @(U(LList A)) @(U(LList A)) {! many @(A) {
         ! bind' @(S) @(A) sep {
-          fn _ ->
+          fn _ =>
             ! bind' @(A) @(A) p {
-              fn y ->
+              fn y =>
                 ! result @(A) y
             }
         }}} {
-        fn xs ->
+        fn xs =>
           ! result @(U(LList A)) {! LList.cons @(A) x xs}
       }
   }
@@ -256,11 +256,11 @@ end
 
 def fn ints2 : Parser (U(LList Int)) =
   ! bind' @(Char) @(U(LList Int)) {! char '['} {
-    fn _ ->
+    fn _ =>
       ! bind' @(U(LList Int)) @(U(LList Int)) {! sepby1 @(Int) @(Char) {! int} {! char ','}} {
-        fn ns ->
+        fn ns =>
           ! bind' @(Char) @(U(LList Int)) {! char ']'} {
-            fn _ ->
+            fn _ =>
               ! result @(U(LList Int)) ns
           }
       }
@@ -269,11 +269,11 @@ end
 
 def fn bracket (M : VType) (A : VType) (N : VType) (open : U(Parser M)) (p : U(Parser A)) (close : U(Parser N)) : Parser A =
   ! bind' @(M) @(A) open {
-    fn _ ->
+    fn _ =>
       ! bind' @(A) @(A) p {
-        fn x ->
+        fn x =>
           ! bind' @(N) @(A) close {
-            fn _ ->
+            fn _ =>
               ! result @(A) x
           }
       }
@@ -292,28 +292,28 @@ end
 
 
 def rec fn foldl' (A : VType) (R : VType) (g : U(A -> R -> F R)) (a : R) (xs : U(LList A)) : F R =
-  ! LList.foldl @(A) @(F R) xs {ret a} {fn x acc -> do acc' <- ! acc;! g x acc'}
+  ! LList.foldl @(A) @(F R) xs {ret a} {fn x acc => do acc' <- ! acc;! g x acc'}
 end
 
 def rec fn chainl1 (A : VType) (p : U(Parser A)) (op : U(Parser (U(A -> A -> F A)))) : Parser A =
   ! bind' @(A) @(A) p {
-    fn x ->
+    fn x =>
       ! bind' @(U(LList (Pair (U(A -> A -> F A)) A))) @(A) {
         ! many @(Pair (U(A -> A -> F A)) A) {
           ! bind' @(U(A -> A -> F A)) @(Pair (U(A -> A -> F A)) A) op {
-            fn f ->
+            fn f =>
               ! bind' @(A) @(Pair (U(A -> A -> F A)) A) p {
-                fn y ->
+                fn y =>
                   ! result @(Pair (U(A -> A -> F A)) A) +Cons(f, y)
               }
           }
         }
       } {
-        fn fys ->
+        fn fys =>
           do res <- ! foldl' @(Pair (U(A -> A -> F A)) A) @(A) {
-            fn p acc ->
+            fn p acc =>
               match p
-              | +Cons(f,y) ->
+              | +Cons(f,y) =>
                 ! f acc y
               end
           } x fys;
@@ -324,13 +324,13 @@ end
 
 def rec fn chainr1 (A : VType) (p : U(Parser A)) (op : U(Parser (U (A -> A -> F A)))) : Parser A =
   ! bind' @(A) @(A) p {
-    fn x ->
+    fn x =>
       ! plus @(A) {! result @(A) x} {! bind' @(U (A -> A -> F A)) @(A) op {
-        fn f ->
+        fn f =>
           ! bind' @(A) @(A) {
             ! chainr1 @(A) p op
           } {
-            fn y ->
+            fn y =>
               do res <- ! f x y;
               ! result @(A) res
           }
@@ -342,9 +342,9 @@ end
 
 def fn addop : Parser (U(Int -> Int -> F Int)) =
   ! plus @(U(Int -> Int -> F Int)) {
-    ! bind' @(Char) @(U(Int -> Int -> F Int)) {! char '+'} {fn _ -> ! result @(U(Int -> Int -> F Int)) add}
+    ! bind' @(Char) @(U(Int -> Int -> F Int)) {! char '+'} {fn _ => ! result @(U(Int -> Int -> F Int)) add}
   } {
-    ! bind' @(Char) @(U(Int -> Int -> F Int)) {! char '-'} {fn _ -> ! result @(U(Int -> Int -> F Int)) sub}
+    ! bind' @(Char) @(U(Int -> Int -> F Int)) {! char '-'} {fn _ => ! result @(U(Int -> Int -> F Int)) sub}
   }
 end
 
@@ -373,7 +373,7 @@ end
 
 
 def fn expop : Parser (U(Int -> Int -> F Int)) =
-  ! bind' @(Char) @(U(Int -> Int -> F Int)) {! char '^'} {fn _ -> ! result @(U(Int -> Int -> F Int)) pow}
+  ! bind' @(Char) @(U(Int -> Int -> F Int)) {! char '^'} {fn _ => ! result @(U(Int -> Int -> F Int)) pow}
 end
 
 def rec fn expr_int : Parser Int =
@@ -407,11 +407,11 @@ end
 def fn eval' : Parser Int =
   let add' = {
     ! bind' @(Int) @(Int) {! nat} {
-      fn x ->
+      fn x =>
         ! bind' @(Char) @(Int) {! char '+'} {
-          fn _ ->
+          fn _ =>
             ! bind' @(Int) @(Int) {! nat} {
-              fn y ->
+              fn y =>
                 do res <- ! add x y;
                 ! result @(Int) res
             }
@@ -420,11 +420,11 @@ def fn eval' : Parser Int =
   } in
   let sub' = {
     ! bind' @(Int) @(Int) {! nat} {
-      fn x ->
+      fn x =>
         ! bind' @(Char) @(Int) {! char '-'} {
-          fn _ ->
+          fn _ =>
             ! bind' @(Int) @(Int) {! nat} {
-              fn y ->
+              fn y =>
                 do res <- ! sub x y;
                 ! result @(Int) res
             }
@@ -437,11 +437,11 @@ end
 // efficient: left and right factorization
 def fn eval : Parser Int =
   ! bind' @(Int) @(Int) {! nat} {
-    fn x ->
+    fn x =>
       ! bind' @(U(Int -> Int -> F Int)) @(Int) {! addop} {
-        fn f ->
+        fn f =>
           ! bind' @(Int) @(Int) {! nat} {
-            fn y ->
+            fn y =>
               do res <- ! f x y;
               ! result @(Int) res
           }
@@ -452,15 +452,15 @@ end
 //improving laziness
 
 def fn force (A : VType) (p : U(Parser A)) : Parser A =
-  fn (input : String) ->
+  fn (input : String) =>
     let x = {! p input} in
     do hd <- ! LList.head @(Pair A String) x;
     let tl = {! LList.tail @(Pair A String) x} in
     match hd
-    | +None() -> ! LList.nil @(Pair A String)
-    | +Some(p) ->
+    | +None() => ! LList.nil @(Pair A String)
+    | +Some(p) =>
       match p
-      | +Cons(a, input) ->
+      | +Cons(a, input) =>
         ! LList.cons @(Pair A String) (+Cons(a, input)) tl
       end
     end
@@ -470,11 +470,11 @@ def rec fn many' (A : VType) (p : U(Parser A)) : Parser (U(LList A)) =
   ! force @(U(LList A)) {
     ! plus @(U(LList A)) {
       ! bind' @(A) @(U(LList A)) p {
-        fn x ->
+        fn x =>
           ! bind' @(U(LList A)) @(U(LList A)) {
             ! many' @(A) p
           } {
-            fn xs ->
+            fn xs =>
               ! result @(U(LList A)) {! LList.cons @(A) x xs}
           }
       }
@@ -492,11 +492,11 @@ end
 
 // first p only returns the first result of p (if there is any)
 def fn first (A : VType) (p : U(Parser A)) : Parser A =
-  fn (input : String) ->
+  fn (input : String) =>
     do xs <- ! {! p input} .run;
     match xs
-    | +Nil() -> ! LList.nil @(Pair A String)
-    | +Cons(hd, tl) ->
+    | +Nil() => ! LList.nil @(Pair A String)
+    | +Cons(hd, tl) =>
       ! LList.singleton_list @(Pair A String) hd
     end
 end
@@ -512,21 +512,21 @@ end
 // lexical: White space, comments, and keywords
 def fn space : Parser Unit =
   let is_space : U(Char -> F Bool) = {
-    fn x ->
+    fn x =>
       do b1 <- ! char_eq x ' ';
       do b2 <- ! char_eq x '\n';
       do b3 <- ! char_eq x '\t';
       do b' <- ! or b2 b3;
       ! or b1 b'
   } in
-  ! bind' @(U(LList Char)) @(Unit) {! many1 @(Char) {! sat is_space}} {fn _ -> ! result @(Unit) +Unit()}
+  ! bind' @(U(LList Char)) @(Unit) {! many1 @(Char) {! sat is_space}} {fn _ => ! result @(Unit) +Unit()}
 end
 
 def fn comment : Parser Unit =
   ! bind' @(String) @(Unit) {! string "--"} {
-    fn _ ->
-      ! bind' @(U(LList Char)) @(Unit) {! many @(Char) {! sat {fn x -> ! not~ {! char_eq '\n' x}}}} {
-        fn _ ->
+    fn _ =>
+      ! bind' @(U(LList Char)) @(Unit) {! many @(Char) {! sat {fn x => ! not~ {! char_eq '\n' x}}}} {
+        fn _ =>
           ! result @(Unit) +Unit()
       }
   }
@@ -534,7 +534,7 @@ end
 
 def fn junk : Parser Unit =
   ! bind' @(U(LList Unit)) @(Unit) {! many @(Unit) {! dplus @(Unit) {! space} {! comment}}} {
-    fn _ ->
+    fn _ =>
       ! result @(Unit) +Unit()
   }
 end
@@ -542,9 +542,9 @@ end
 // parse removes junk before applying a given parser
 def fn parse (A : VType) (p : U(Parser A)) : Parser A =
   ! bind' @(Unit) @(A) {! junk} {
-    fn _ ->
+    fn _ =>
       ! bind' @(A) @(A) {! p} {
-        fn v ->
+        fn v =>
           ! result @(A) v
       }
   }
@@ -553,9 +553,9 @@ end
 // token applies a parser and then removes trailing junk
 def fn token (A : VType) (p : U(Parser A)) : Parser A =
   ! bind' @(A) @(A) {! p} {
-    fn v ->
+    fn v =>
       ! bind' @(Unit) @(A) {! junk} {
-        fn _ ->
+        fn _ =>
           ! result @(A) v
       }
   }
@@ -576,9 +576,9 @@ end
 def fn ident : Parser String =
   // ! parse @(String) {! token @(String) {
     ! bind' @(Char) @(String) {! lower} {
-      fn x ->
+      fn x =>
         ! bind' @(U(LList Char)) @(String) {! many' @(Char) alphanum} {
-          fn xs ->
+          fn xs =>
             do x' <- ! char_to_str x;
             do xs' <- ! list_to_str xs;
             do xs'' <- ! str_append x' xs';
@@ -591,8 +591,8 @@ end
 def fn identifier (xs : U(LList String)) : Parser String =
   ! token @(String) {
     ! bind' @(String) @(String) {! ident} {
-      fn x ->
-        ! if~ @(Parser String) {! LList.any @(String) {fn s -> ! str_eq x s} xs} {
+      fn x =>
+        ! if~ @(Parser String) {! LList.any @(String) {fn s => ! str_eq x s} xs} {
           ! zero @(String)
         } {
           ! result @(String) x
@@ -620,20 +620,20 @@ def fn variable : Parser String =
 end
 
 def fn appop : Parser (U(Expr -> Expr -> F Expr)) =
-  ! bind' @(Char) @(U(Expr -> Expr -> F Expr)) {! char '.'} {fn _ -> ! result @(U(Expr -> Expr -> F Expr)) {fn x y -> ret +App(x, y)}}
+  ! bind' @(Char) @(U(Expr -> Expr -> F Expr)) {! char '.'} {fn _ => ! result @(U(Expr -> Expr -> F Expr)) {fn x y => ret +App(x, y)}}
 end
 
 def rec fn expr : Parser Expr =
   let atom = {
     let lam = {
       ! bind' @(String) @(Expr) {! symbol "|"} {
-        fn _ ->
+        fn _ =>
           ! bind' @(String) @(Expr) {! variable} {
-            fn x ->
+            fn x =>
               ! bind' @(String) @(Expr) {! symbol "->"} {
-                fn _ ->
+                fn _ =>
                   ! bind' @(Expr) @(Expr) {! expr} {
-                    fn e ->
+                    fn e =>
                       ! result @(Expr) +Lam(x, e)
                   }
               }
@@ -642,17 +642,17 @@ def rec fn expr : Parser Expr =
     } in
     let local = {
       ! bind' @(String) @(Expr) {! symbol "let"} {
-        fn _ ->
+        fn _ =>
           ! bind' @(String) @(Expr) {! variable} {
-            fn x ->
+            fn x =>
               ! bind' @(String) @(Expr) {! symbol "="} {
-                fn _ ->
+                fn _ =>
                   ! bind' @(Expr) @(Expr) {! expr} {
-                    fn e1 ->
+                    fn e1 =>
                       ! bind' @(String) @(Expr) {! symbol " in"} {
-                        fn _ ->
+                        fn _ =>
                           ! bind' @(Expr) @(Expr) {! expr} {
-                            fn e2 ->
+                            fn e2 =>
                               ! result @(Expr) +Let(x, e1, e2)
                           }
                       }
@@ -663,7 +663,7 @@ def rec fn expr : Parser Expr =
     } in
     let var = {
       ! bind' @(String) @(Expr) {! variable} {
-        fn x ->
+        fn x =>
           ! result @(Expr) +Var(x)
       }
     } in
@@ -683,10 +683,10 @@ end
 def rec fn print_parser_hd (A : VType) (fmt : U(A -> F String)) (res : U(LList (Pair A String))) (next : U OS) : OS =
   do hd <- ! LList.head @(Pair A String) res;
   match hd
-  | +None() -> ! next
-  | +Some(p) ->
+  | +None() => ! next
+  | +Some(p) =>
     match p
-    | +Cons(a, str) ->
+    | +Cons(a, str) =>
       do str' <- ! fmt a;
       do bf <- ! str_append str' ",";
       do res <- ! str_append bf str;
@@ -698,10 +698,10 @@ end
 def rec fn print_parser_all (A : VType) (fmt : U(A -> F String)) (res : U(LList (Pair A String))) (next : U OS) : OS =
   do ll <- ! res .run;
   match ll
-  | +Nil() -> ! next
-  | +Cons(p, tl) ->
+  | +Nil() => ! next
+  | +Cons(p, tl) =>
     match p
-    | +Cons(a, str) ->
+    | +Cons(a, str) =>
       do str' <- ! fmt a;
       do bf <- ! str_append str' ",";
       do res <- ! str_append bf str;
@@ -712,7 +712,7 @@ end
 
 def rec fn expr_fmt (e : Expr) : F String =
   match e 
-  | +App(e1, e2) ->
+  | +App(e1, e2) =>
     do e1' <- ! expr_fmt e1;
     do e2' <- ! expr_fmt e2;
     do res <- ! str_append e1' ", ";
@@ -720,14 +720,14 @@ def rec fn expr_fmt (e : Expr) : F String =
     do res <- ! str_append res ")";
     do res <- ! str_append "App(" res;
     ret res
-  | +Lam(x, e) ->
+  | +Lam(x, e) =>
     do e' <- ! expr_fmt e;
     do res <- ! str_append e' ")";
     do res <- ! str_append ", " res;
     do res <- ! str_append x res;
     do res <- ! str_append "Lam(" res;
     ret res
-  | +Let(x, e1, e2) ->
+  | +Let(x, e1, e2) =>
     do e1' <- ! expr_fmt e1;
     do e2' <- ! expr_fmt e2;
     do res <- ! str_append e1' ", ";
@@ -737,7 +737,7 @@ def rec fn expr_fmt (e : Expr) : F String =
     do res <- ! str_append x res;
     do res <- ! str_append "Let(" res;
     ret res
-  | +Var(x) ->
+  | +Var(x) =>
     do res <- ! str_append x ")";
     do res <- ! str_append "Var(" res;
     ret res
@@ -750,11 +750,11 @@ end
 
 def fn symbol_parser : Parser Symbol =
   ! bind' @(String) @(Symbol) {! symbol "def"} {
-    fn _ ->
+    fn _ =>
       ! bind' @(String) @(Symbol) {! variable} {
-        fn x ->
+        fn x =>
           ! bind' @(String) @(Symbol) {! symbol "end"} {
-            fn _ ->
+            fn _ =>
             ! result @(Symbol) +Def(x)
       }
     }
@@ -763,7 +763,7 @@ end
 
 def fn symbol_fmt (s : Symbol) : F String =
   match s
-  | +Def(x) ->
+  | +Def(x) =>
     do res <- ! str_append x ")";
     do res <- ! str_append "Def(" res;
     ret res
@@ -780,7 +780,7 @@ end
 data SynComp where
   | +If(SynVal, SynComp, SynComp) // if v then c1 else c2
   | +Force(SynVal) // ! v
-  | +Lam(String, SynComp) // | x -> c
+  | +Lam(String, SynComp) // | x => c
   | +App(SynComp, SynVal) // c v
   | +Return(SynVal) // ret v
   | +Bind(SynComp, String, SynComp) // do x <- c1; c2
@@ -790,19 +790,19 @@ def rec fn synComp : Parser SynComp =
     let rec value : Parser SynVal =
       let var = {
         ! bind' @(String) @(SynVal) {! variable} {
-          fn x ->
+          fn x =>
             ! result @(SynVal) +Var(x)
         }
       } in
       let true_val = {
         ! bind' @(String) @(SynVal) {! symbol "True()"} {
-          fn _ ->
+          fn _ =>
             ! result @(SynVal) +True()
         }
       } in
       let false_val = {
         ! bind' @(String) @(SynVal) {! symbol "False()"} {
-          fn _ ->
+          fn _ =>
             ! result @(SynVal) +False()
         }
       } in
@@ -813,7 +813,7 @@ def rec fn synComp : Parser SynComp =
         ! bind' @(SynComp) @(SynVal) {
           ! bracket @(String) @(SynComp) @(String) {! symbol "{"} {! synComp} {! symbol "}"}
         } {
-          fn c ->
+          fn c =>
             ! result @(SynVal) +ThunkV(c)
         }
       } in
@@ -827,17 +827,17 @@ def rec fn synComp : Parser SynComp =
     in
     let if = {
       ! bind' @(String) @(SynComp) {! symbol "if"} {
-        fn _ ->
+        fn _ =>
           ! bind' @(SynVal) @(SynComp) {! value} {
-            fn v ->
+            fn v =>
               ! bind' @(String) @(SynComp) {! symbol " then"} {
-                fn _ ->
+                fn _ =>
                   ! bind' @(SynComp) @(SynComp) {! synComp} {
-                    fn c1 ->
+                    fn c1 =>
                       ! bind' @(String) @(SynComp) {! symbol " else"} {
-                        fn _ ->
+                        fn _ =>
                           ! bind' @(SynComp) @(SynComp) {! synComp} {
-                            fn c2 ->
+                            fn c2 =>
                               ! result @(SynComp) +If(v, c1, c2)
                           }
                       }
@@ -848,22 +848,22 @@ def rec fn synComp : Parser SynComp =
     } in
     let force = {
       ! bind' @(String) @(SynComp) {! symbol "!"} {
-        fn _ ->
+        fn _ =>
           ! bind' @(SynVal) @(SynComp) {! value} {
-            fn v ->
+            fn v =>
               ! result @(SynComp) +Force(v)
           }
       }
     } in
     let lam = {
       ! bind' @(String) @(SynComp) {! symbol "|"} {
-        fn _ ->
+        fn _ =>
           ! bind' @(String) @(SynComp) {! variable} {
-            fn x ->
+            fn x =>
               ! bind' @(String) @(SynComp) {! symbol "->"} {
-                fn _ ->
+                fn _ =>
                   ! bind' @(SynComp) @(SynComp) {! synComp} {
-                    fn c ->
+                    fn c =>
                       ! result @(SynComp) +Lam(x, c)
                   }
               }
@@ -872,26 +872,26 @@ def rec fn synComp : Parser SynComp =
     } in
     let return = {
       ! bind' @(String) @(SynComp) {! symbol "ret"} {
-        fn _ ->
+        fn _ =>
           ! bind' @(SynVal) @(SynComp) {! value} {
-            fn v ->
+            fn v =>
               ! result @(SynComp) +Return(v)
           }
       }
     } in
     let bind_ = {
       ! bind' @(String) @(SynComp) {! symbol "do"} {
-        fn _ ->
+        fn _ =>
           ! bind' @(String) @(SynComp) {! variable} {
-            fn x ->
+            fn x =>
               ! bind' @(String) @(SynComp) {! symbol "<-"} {
-                fn _ ->
+                fn _ =>
                   ! bind' @(SynComp) @(SynComp) {! synComp} {
-                    fn c1 ->
+                    fn c1 =>
                       ! bind' @(String) @(SynComp) {! symbol ";"} {
-                        fn _ ->
+                        fn _ =>
                           ! bind' @(SynComp) @(SynComp) {! synComp} {
-                            fn c2 ->
+                            fn c2 =>
                               ! result @(SynComp) +Bind(c1, x, c2)
                           }
                       }
@@ -905,13 +905,13 @@ def rec fn synComp : Parser SynComp =
     } in
     let appop_cbpv = {
       ! bind' @(String) @(SynComp) {! symbol "ap"} {
-        fn _ ->
+        fn _ =>
         ! bind' @(SynComp) @(SynComp) {! synComp} {
-          fn c ->
+          fn c =>
           ! bind' @(String) @(SynComp) {! symbol "to"} {
-           fn _ ->
+           fn _ =>
             ! bind' @(SynVal) @(SynComp) {! value} {
-              fn v ->
+              fn v =>
                 ! result @(SynComp) +App(c, v)
             }
           }
@@ -935,23 +935,23 @@ end
 
 def fn synVal_fmt (v : SynVal) : F String =
   match v
-  | +Var(x) ->
+  | +Var(x) =>
     ret x // variable
-  | +True() ->
+  | +True() =>
     ret "True()" // True()
-  | +False() ->
+  | +False() =>
     ret "False()" // False()
-  | +ThunkV(c) ->
+  | +ThunkV(c) =>
     ret "Thunk" // { c }
   end
 end
 
 def rec fn synComp_fmt (c : SynComp) : F String =
   match c
-  | +Return(v) ->
+  | +Return(v) =>
     do v' <- ! synVal_fmt v;
     ! str_append "ret " v'
-  | +If(v, c1, c2) -> // if v then c1 else c2
+  | +If(v, c1, c2) => // if v then c1 else c2
     do v' <- ! synVal_fmt v;
     do c1' <- ! synComp_fmt c1;
     do c2' <- ! synComp_fmt c2;
@@ -960,21 +960,21 @@ def rec fn synComp_fmt (c : SynComp) : F String =
     do s3 <- ! str_append " else2 " c2';
     do s <- ! str_append s2 s3;
     ! str_append s1 s
-  | +Force(v) ->
+  | +Force(v) =>
     do v' <- ! synVal_fmt v;
     ! str_append "! " v'
-  | +Lam(x, c) ->
+  | +Lam(x, c) =>
     do s2 <- ! synComp_fmt c;
     do s2 <- ! str_append " -> " s2;
     do s <- ! str_append x s2; // | x -> c
     ! str_append "| " s
-  | +App(c, v) ->
+  | +App(c, v) =>
     do c' <- ! synComp_fmt c;
     do v' <- ! synVal_fmt v;
     do s <- ! str_append "app " c';
     do s <- ! str_append s " to ";
     ! str_append s v'
-  | +Bind(c1, x, c2) ->
+  | +Bind(c1, x, c2) =>
     do s1 <- ! synComp_fmt c1;
     do s2 <- ! synComp_fmt c2;
     do s <- ! str_append "do " x;
@@ -1028,94 +1028,94 @@ end
 
 def fn sem_val_to_str (s : SemVal) : F String =
   match s
-  | +True() -> ret "true"
-  | +False() -> ret "false"
-  | +ThunkV(_) -> ret "<thunk>"
+  | +True() => ret "true"
+  | +False() => ret "false"
+  | +ThunkV(_) => ret "<thunk>"
   end
 end
 
 def rec fn lookup (x : String) (g : Env) : Ret(Answer SemVal) =
   match g
-  | +Empty() -> ret +Err()
-  | +Cons(y,v,g) ->
+  | +Empty() => ret +Err()
+  | +Cons(y,v,g) =>
     do b <- ! str_eq x y;
     match b
-    | +True() -> ret +Ok(v)
-    | +False() -> ! lookup x g
+    | +True() => ret +Ok(v)
+    | +False() => ! lookup x g
     end
   end
 end
 
 def rec error: SemComp =
   comatch
-    | .app _ -> ! error
-    | .bind -> ret +Err()
+    | .app _ => ! error
+    | .bind => ret +Err()
   end
 end
 
 def rec interp: Interpreter =
   comatch
-    | .valu v g ->
+    | .valu v g =>
       match v
-      | +Var(x) -> ! lookup x g
-      | +True() -> ret +Ok(+True())
-      | +False() -> ret +Ok(+False())
+      | +Var(x) => ! lookup x g
+      | +True() => ret +Ok(+True())
+      | +False() => ret +Ok(+False())
       # Here we use the meta-language closures to capture the environment g 
-      | +ThunkV(m) -> ret +Ok(+ThunkV({ ! interp .comp m g }))
+      | +ThunkV(m) => ret +Ok(+ThunkV({ ! interp .comp m g }))
       end
-    | .comp m g ->
+    | .comp m g =>
       match m
-      | +If(cond, mt, mf) ->
+      | +If(cond, mt, mf) =>
         match cond
-        | +Var(x) ->
+        | +Var(x) =>
           do v? <- ! lookup x g;
           match v?
-          | +Ok(v) -> (
+          | +Ok(v) => (
             match v
-            | +True() -> ! interp .comp mt g
-            | +False() -> ! interp .comp mf g
-            | +ThunkV(_) -> ! error
+            | +True() => ! interp .comp mt g
+            | +False() => ! interp .comp mf g
+            | +ThunkV(_) => ! error
             end)
-          | +Err() -> ! error
+          | +Err() => ! error
           end
-        | +True() -> ! interp .comp mt g
-        | +False() -> ! interp .comp mf g
-        | +ThunkV(_) -> ! error
+        | +True() => ! interp .comp mt g
+        | +False() => ! interp .comp mf g
+        | +ThunkV(_) => ! error
         end
-      | +Force(syn_val) ->
+      | +Force(syn_val) =>
         do v? <- ! interp .valu syn_val g;
         match v?
-        | +Ok(v) -> (
+        | +Ok(v) => (
           match v
-          | +ThunkV(t) -> ! t
-          | +True() -> ! error
-          | +False() -> ! error
+          | +ThunkV(t) => ! t
+          | +True() => ! error
+          | +False() => ! error
           end
         )
-        | +Err() -> ! error
+        | +Err() => ! error
         end
-      | +Return(syn_val) ->
+      | +Return(syn_val) =>
         do v <- ! interp .valu syn_val g;
         comatch
-          | .bind -> ret v
-          | .app _ -> ! error
+          | .bind => ret v
+          | .app _ => ! error
         end
-      | +Bind(m, x, k) ->
+      | +Bind(m, x, k) =>
         do v? <- ! interp .comp m g .bind;
         match v?
-        | +Ok(v) -> ! interp .comp k +Cons(x, v, g)
-        | +Err() -> ! error
+        | +Ok(v) => ! interp .comp k +Cons(x, v, g)
+        | +Err() => ! error
         end
-      | +Lam(x, m) ->
+      | +Lam(x, m) =>
         comatch
-          | .app v -> (! interp .comp m +Cons(x, v, g))
-          | .bind -> ret +Err()
+          | .app v => (! interp .comp m +Cons(x, v, g))
+          | .bind => ret +Err()
         end
-      | +App(m, v) ->
+      | +App(m, v) =>
         do v? <- ! interp .valu v g;
         match v?
-        | +Ok(v) -> ! interp .comp m g .app v
-        | +Err() -> ! error
+        | +Ok(v) => ! interp .comp m g .app v
+        | +Err() => ! error
         end
       end
     end
@@ -1192,14 +1192,14 @@ main
   ! print_parser_all @(SynComp) synComp_fmt m {
   do hd <- ! LList.head @(Pair SynComp String) m;
   match hd
-  | +None() -> ! exit 0
-  | +Some(p) ->
+  | +None() => ! exit 0
+  | +Some(p) =>
     match p
-    | +Cons(m, _) ->
+    | +Cons(m, _) =>
       do x <- ! interp .comp m +Empty() .bind;
       match x
-      | +Err() -> ! panic "ERROR"
-      | +Ok(sv) ->
+      | +Err() => ! panic "ERROR"
+      | +Ok(sv) =>
         do s <- ! sem_val_to_str sv;
         do ! write_line "evaluated to:";
         do ! write_line s;

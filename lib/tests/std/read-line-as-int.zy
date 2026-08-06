@@ -16,23 +16,23 @@ begin
     std
   ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
   ! (std/os/read_line_as_int) {
-    fn first ->
+    fn first =>
       ! (std/option/fold)
         StdInt
         StdOS
         first
         { ! (std/os/exit) 1 }
         {
-          fn integer ->
+          fn integer =>
             ! (std/os/read_line_as_int) {
-              fn second ->
+              fn second =>
                 ! (std/option/fold)
                   StdInt
                   StdOS
                   second
                   { ! (std/os/exit) 0 }
                   {
-                    fn unexpected ->
+                    fn unexpected =>
                       ! (std/os/exit) 1
                   }
             }

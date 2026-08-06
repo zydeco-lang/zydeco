@@ -30,18 +30,18 @@ begin
   that
 
   def even_odd : Thk EvenOdd = {
-    fix (even_odd : Thk EvenOdd) ->
+    fix (even_odd : Thk EvenOdd) =>
       comatch
-      | .even number ->
+      | .even number =>
         match number
-        | +Zero() -> ret +True()
-        | +Successor(predecessor) ->
+        | +Zero() => ret +True()
+        | +Successor(predecessor) =>
           ! even_odd .odd predecessor
         end
-      | .odd number ->
+      | .odd number =>
         match number
-        | +Zero() -> ret +False()
-        | +Successor(predecessor) ->
+        | +Zero() => ret +False()
+        | +Successor(predecessor) =>
           ! even_odd .even predecessor
         end
       end
@@ -49,11 +49,11 @@ begin
 
   -- These wrappers are ordinary projections from the shared recursive object.
   def even : Thk (Nat -> Ret Bool) = {
-    fn number ->
+    fn number =>
       ! even_odd .even number
   } that
   def odd : Thk (Nat -> Ret Bool) = {
-    fn number ->
+    fn number =>
       ! even_odd .odd number
   } that
 
@@ -63,17 +63,17 @@ begin
     Thk OS ->
     OS
   ) = {
-    fn actual expected continuation ->
+    fn actual expected continuation =>
       match actual
-      | +True() ->
+      | +True() =>
         match expected
-        | +True() -> ! continuation
-        | +False() -> ! (api/exit) 1
+        | +True() => ! continuation
+        | +False() => ! (api/exit) 1
         end
-      | +False() ->
+      | +False() =>
         match expected
-        | +True() -> ! (api/exit) 1
-        | +False() -> ! continuation
+        | +True() => ! (api/exit) 1
+        | +False() => ! continuation
         end
       end
   } that

@@ -48,20 +48,20 @@ begin
 
   def ! mfree : Monad (Free Handlers) =
     comatch
-    | .return A a ->
-      fn .run R ->
-        fn .eff print fail flip k ->
+    | .return A a =>
+      fn .run R =>
+        fn .eff print fail flip k =>
           ! k a
-    | .bind A A' m f ->
-      fn .run R ->
-        fn .eff print fail flip k' ->
+    | .bind A A' m f =>
+      fn .run R =>
+        fn .eff print fail flip k' =>
           ! m .run R
             .eff
             print
             fail
             flip
             {
-              fn a ->
+              fn a =>
                 ! f a .run R
                   .eff
                   print
@@ -72,18 +72,18 @@ begin
     end
   that
   def ! print (string : String) : Free Handlers Bool =
-    fn .run R ->
-      fn .eff print fail flip ->
+    fn .run R =>
+      fn .eff print fail flip =>
         ! print string
   that
   def ! fail (error : Err) : Free Handlers Empty =
-    fn .run R ->
-      fn .eff print fail flip ->
+    fn .run R =>
+      fn .eff print fail flip =>
         ! fail error
   that
   def ! flip : Free Handlers Bool =
-    fn .run R ->
-      fn .eff print fail flip ->
+    fn .run R =>
+      fn .eff print fail flip =>
         ! flip ()
   that
   def ! print-os (string : String) (k : Thk (Bool -> OS)) : OS =
@@ -95,13 +95,13 @@ begin
   that
   def ! fail-os (error : Err) (continuation : Thk (Empty -> OS)) : OS =
     match error
-    | +Msg(message) ->
+    | +Msg(message) =>
       ! (api/write_line) message { ! (api/exit) 1 }
     end
   that
   def ! flip-os (unit : Unit) (continuation : Thk (Bool -> OS)) : OS =
     ! (api/random_int) {
-      fn random ->
+      fn random =>
         do remainder <- ! (api/mod) random 2;
         ! (api/int_eq_branch)
           OS
@@ -116,24 +116,24 @@ begin
     ! mfree .bind Bool Unit
       { ! print "a" }
       {
-        fn _ ->
+        fn _ =>
           ! mfree .bind Bool Unit
             { ! print "b" }
             {
-              fn _ ->
+              fn _ =>
                 ! mfree .bind Bool Unit
                   { ! flip }
                   {
-                    fn choice ->
+                    fn choice =>
                       ! mfree .bind Bool Unit
                         {
                           match choice
-                          | +True() -> ! print "+"
-                          | +False() -> ! print "-"
+                          | +True() => ! print "+"
+                          | +False() => ! print "-"
                           end
                         }
                         {
-                          fn _ ->
+                          fn _ =>
                             ! mfree .return Unit ()
                         }
                   }
@@ -141,7 +141,7 @@ begin
       }
   in
   ! m .run OS .eff print-os fail-os flip-os {
-    fn _ ->
+    fn _ =>
       ! (api/exit) 0
   }
 end

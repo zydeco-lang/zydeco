@@ -24,8 +24,8 @@ begin
     (when_cons : Thk (A -> List A -> B))
     : B =
     match list
-    | +Nil(_) -> ! when_nil
-    | +Cons(head, tail) -> ! when_cons head tail
+    | +Nil(_) => ! when_nil
+    | +Cons(head, tail) => ! when_cons head tail
     end
   that
   def fix fold
@@ -36,8 +36,8 @@ begin
     (when_cons : Thk (A -> Thk B -> B))
     : B =
     match list
-    | +Nil(_) -> ! when_nil
-    | +Cons(head, tail) ->
+    | +Nil(_) => ! when_nil
+    | +Cons(head, tail) =>
       ! when_cons head { ! fold A B tail when_nil when_cons }
     end
   that

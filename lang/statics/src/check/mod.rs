@@ -4175,7 +4175,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 )?;
                 let body_lift_ty = cs::TypeOf(body_lift).build(tycker, &self.info);
 
-                // <monad_impl_to_body_lift> = fn (mo: Thk (Monad M)) -> Lift(body)
+                // <monad_impl_to_body_lift> = fn (mo: Thk (Monad M)) => Lift(body)
                 let monad_impl_vpat: ss::VPatId =
                     Alloc::alloc(tycker, monad_impl_var, monad_impl_ty, &self.info);
                 let monad_impl_to_body_lift_ty =
@@ -4187,7 +4187,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     &self.info,
                 );
 
-                // fn (M : VType -> CType) -> <monad_impl_to_body_lift>
+                // fn (M : VType -> CType) => <monad_impl_to_body_lift>
                 let monad_ty_tpat: ss::TPatId =
                     Alloc::alloc(tycker, monad_ty_var, monad_ty_kd, &self.info);
                 let res_body_ty = Alloc::alloc(

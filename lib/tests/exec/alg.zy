@@ -24,10 +24,10 @@ begin
     (B : CType)
     (alg : Thk (Algebra M B))
     : Algebra M (A -> B) =
-    comatch X m f ->
-      fn a ->
+    comatch X m f =>
+      fn a =>
         ! alg X m {
-          fn x ->
+          fn x =>
             ! f x a
         }
     end
@@ -42,16 +42,16 @@ begin
     (B2 : CType)
     (alg2 : Thk (Algebra M B2))
     : Algebra M (With B1 B2) =
-    comatch X m f ->
+    comatch X m f =>
       comatch
-      | .l ->
+      | .l =>
         ! alg1 X m {
-          fn x ->
+          fn x =>
             ! f x .l
         }
-      | .r ->
+      | .r =>
         ! alg2 X m {
-          fn x ->
+          fn x =>
             ! f x .r
         }
       end
@@ -65,7 +65,7 @@ begin
     (mo : Thk (Monad M))
     (A : VType)
     : Algebra M (M A) =
-    comatch X m f ->
+    comatch X m f =>
       ! mo .bind X A m f
     end
   that
@@ -88,10 +88,10 @@ begin
         Thk (Algebra M Y) ->
         S Y
     ) =
-    comatch X m f ->
-      comatch Y algY ->
+    comatch X m f =>
+      comatch Y algY =>
         ! algS Y algY X m {
-          fn a ->
+          fn a =>
             ! f a Y algY
         }
       end
@@ -133,17 +133,17 @@ begin
         ) ->
         S F
     ) =
-    comatch X m f ->
-      comatch F algZFZ ->
+    comatch X m f =>
+      comatch F algZFZ =>
         ! algS F algZFZ X m {
-          fn a ->
+          fn a =>
             ! f a F algZFZ
         }
       end
     end
   that
   def ! alg_of_ret (R : CType) : Algebra Ret R =
-    comatch X m f ->
+    comatch X m f =>
       do x <- ! m;
       ! f x
     end
@@ -154,7 +154,7 @@ begin
     Int
     { ret 0 }
     {
-      fn x ->
+      fn x =>
         ret x
     };
   ! (api/exit) x

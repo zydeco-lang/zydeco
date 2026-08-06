@@ -22,7 +22,7 @@ begin
       xs
       { ret i }
       {
-        fn s xs ->
+        fn s xs =>
           do i' <- ! (std/string/length) s;
           do i' <- ! (std/int/add) i i';
           ! foldl xs i'

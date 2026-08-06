@@ -13,20 +13,20 @@ begin
   that
   def ! mkont (R : CType) : Monad (Kont R) =
     comatch
-    | .return A a ->
-      fn k ->
+    | .return A a =>
+      fn k =>
         ! k a
-    | .bind A A' m f ->
-      fn k ->
+    | .bind A A' m f =>
+      fn k =>
         ! m {
-          fn a ->
+          fn a =>
             ! f a k
         }
     end
   that
   def ! reset' (A : VType) (e : Thk (Kont (Ret A) A)) : Ret A =
     ! e {
-      fn x ->
+      fn x =>
         ret x
     }
   that
@@ -38,11 +38,11 @@ begin
       Kont (Ret A') A'
     ))
     : Kont (Ret A') A =
-    fn ka' ->
+    fn ka' =>
       ! e
         ka'
         {
-          fn x' ->
+          fn x' =>
             ret x'
         }
   that
@@ -50,7 +50,7 @@ begin
   -- example:
   -- def ! _ : F Int =
   --   ! reset' {
-  --     do x <- ! shift' { fn cont ->
+  --     do x <- ! shift' { fn cont =>
   --       do y <- ! cont { ret 4 };
   --       ! add 17 y
   --     };
@@ -62,14 +62,14 @@ begin
       ! mkont (Ret Int) .bind Int Int
         {
           ! shift' Int Int {
-            fn cont ->
+            fn cont =>
               do y <- ! cont 4;
               do res <- ! (api/add) 17 y;
               ! mkont (Ret Int) .return Int res
           }
         }
         {
-          fn x ->
+          fn x =>
             do res <- ! (api/mul) 2 x;
             ! mkont (Ret Int) .return Int res
         }

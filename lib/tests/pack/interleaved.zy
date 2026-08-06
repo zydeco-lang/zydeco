@@ -41,7 +41,7 @@ begin
         x,
         y
       ) : Interleaved
-    ) ->
+    ) =>
       ret (x, y)
   that
   def packed : Interleaved = (

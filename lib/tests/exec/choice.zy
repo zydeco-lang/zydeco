@@ -35,13 +35,13 @@ begin
   ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
   def beep : Choice (Thk StdOS -> StdOS) =
     +L({
-      fn k ->
+      fn k =>
         ! (std/os/write_line) "0" k
     })
   in
   def boop : Choice (Thk StdOS -> StdOS) =
     +R({
-      fn k ->
+      fn k =>
         ! (std/os/write_line) "1" k
     })
   in
@@ -56,9 +56,9 @@ begin
   in
   def fix walk (t : Tree StdString) (p : Path (Choice (Thk StdOS -> StdOS))) : StdOS =
     match t
-    | +Final(res) ->
+    | +Final(res) =>
       match p
-      | +Nil() ->
+      | +Nil() =>
         ! (std/os/write_line) res {
           do correct <- ! (std/string/eq) res "o";
           ! (std/bool/if)
@@ -67,15 +67,15 @@ begin
             { ! (std/os/exit) 0 }
             { ! (std/os/exit) 1 }
         }
-      | +Cons(_, _) -> ! (std/os/exit) 2
+      | +Cons(_, _) => ! (std/os/exit) 2
       end
-    | +Fork(tl, tr) ->
+    | +Fork(tl, tr) =>
       match p
-      | +Nil() -> ! (std/os/exit) 3
-      | +Cons(c, p') ->
+      | +Nil() => ! (std/os/exit) 3
+      | +Cons(c, p') =>
         match c
-        | +L(k) -> ! k { ! walk tl p' }
-        | +R(k) -> ! k { ! walk tr p' }
+        | +L(k) => ! k { ! walk tl p' }
+        | +R(k) => ! k { ! walk tr p' }
         end
       end
     end

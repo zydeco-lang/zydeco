@@ -77,28 +77,28 @@ begin
   that
   def fix lookup (x : String) (g : Env) : Ret Answer =
     match g
-    | +Empty() -> ret +Err()
-    | +Cons(y, v, g) ->
+    | +Empty() => ret +Err()
+    | +Cons(y, v, g) =>
       do b <- ! str_eq x y;
       match b
-      | +True() -> ret +Ok(v)
-      | +False() -> ! lookup x g
+      | +True() => ret +Ok(v)
+      | +False() => ! lookup x g
       end
     end
   that
   def ! value_to_str (v : Value) : Ret String =
     match v
-    | +True() -> ret "true"
-    | +False() -> ret "false"
-    | +Closure(_) -> ret "<closure>"
+    | +True() => ret "true"
+    | +False() => ret "false"
+    | +Closure(_) => ret "<closure>"
     end
   that
   def fix error : Machine =
     comatch
-    | .fun _ -> ! error
-    | .app _ -> ! error
-    | .if _ -> ! error
-    | .bind -> ret +Err()
+    | .fun _ => ! error
+    | .app _ => ! error
+    | .if _ => ! error
+    | .bind => ret +Err()
     end
   that
   --| The abstract machine is a codata type that describes the interpreter state:
@@ -107,51 +107,51 @@ begin
   --| codata-typed term `interp`.
   def fix interp : Interp =
     comatch
-    | .descend (expr, env) ->
+    | .descend (expr, env) =>
       match expr
-      | +Var(x) ->
+      | +Var(x) =>
         do v <- ! lookup x env;
         match v
-        | +Err(_) -> ! error
-        | +Ok(v) -> ! interp .ascend v
+        | +Err(_) => ! error
+        | +Ok(v) => ! interp .ascend v
         end
-      | +True() -> ! interp .ascend +True()
-      | +False() -> ! interp .ascend +False()
-      | +Lam(x, expr) ->
+      | +True() => ! interp .ascend +True()
+      | +False() => ! interp .ascend +False()
+      | +Lam(x, expr) =>
         -- creates a host language thunk that runs the function body with an
         -- extended environment
         ! interp .ascend +Closure({
-          fn v ->
+          fn v =>
             ! interp .descend (expr, +Cons(x, v, env))
         })
-      | +App(f, a) ->
+      | +App(f, a) =>
         ! interp .descend (f, env) .fun (a, env)
-      | +If(c, t, f) ->
+      | +If(c, t, f) =>
         ! interp
           .descend
           (c, env)
           .if
           (t, f, env)
       end
-    | .ascend v ->
+    | .ascend v =>
       comatch
-      | .fun (a, env) ->
+      | .fun (a, env) =>
         ! interp .descend (a, env) .app v
-      | .app f ->
+      | .app f =>
         match f
-        | +True(_) -> ! error
-        | +False(_) -> ! error
-        | +Closure(fun) ->
+        | +True(_) => ! error
+        | +False(_) => ! error
+        | +Closure(fun) =>
           -- call the function and follow its continuation
           ! fun v
         end
-      | .if (t, f, env) ->
+      | .if (t, f, env) =>
         match v
-        | +True(_) -> ! interp .descend (t, env)
-        | +False(_) -> ! interp .descend (f, env)
-        | +Closure(_) -> ! error
+        | +True(_) => ! interp .descend (t, env)
+        | +False(_) => ! interp .descend (f, env)
+        | +Closure(_) => ! error
         end
-      | .bind -> ret +Ok(v)
+      | .bind => ret +Ok(v)
       end
     end
   that
@@ -194,8 +194,8 @@ begin
   -- should return +True()
   do x <- ! interp .descend (if_true, +Empty()) .bind;
   match x
-  | +Err(_) -> ! panic "ERROR"
-  | +Ok(v) ->
+  | +Err(_) => ! panic "ERROR"
+  | +Ok(v) =>
     do s <- ! value_to_str v;
     ! (api/write_line) s {
       ! (api/exit) 0

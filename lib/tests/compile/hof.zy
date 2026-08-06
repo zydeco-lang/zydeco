@@ -7,6 +7,6 @@ begin
     ! f x
   that
 
-  do x <- ! apply Int (Ret Int) { fn x -> ret x } 0;
+  do x <- ! apply Int (Ret Int) { fn x => ret x } 0;
   ! (api/exit) x
 end

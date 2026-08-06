@@ -34,8 +34,8 @@ begin
     that
     def ! height (A : VType) (tree : Avl A) : Ret StdInt =
       match tree
-      | +Leaf() -> ret 0
-      | +Node(_, _, value, _) -> ret value
+      | +Leaf() => ret 0
+      | +Node(_, _, value, _) => ret value
       end
     that
     def ! int_max (left : StdInt) (right : StdInt) : Ret StdInt =
@@ -48,8 +48,8 @@ begin
     that
     def ! fix_height (A : VType) (tree : Avl A) : Ret (Avl A) =
       match tree
-      | +Leaf() -> ret +Leaf()
-      | +Node(left, value, old_height, right) ->
+      | +Leaf() => ret +Leaf()
+      | +Node(left, value, old_height, right) =>
         do left_height <- ! height A left;
         do right_height <- ! height A right;
         do child_height <- ! int_max left_height right_height;
@@ -59,8 +59,8 @@ begin
     that
     def ! balance_factor (A : VType) (tree : Avl A) : Ret StdInt =
       match tree
-      | +Leaf() -> ret 0
-      | +Node(left, _, _, right) ->
+      | +Leaf() => ret 0
+      | +Node(left, _, _, right) =>
         do left_height <- ! height A left;
         do right_height <- ! height A right;
         ! (std/int/sub) left_height right_height
@@ -68,20 +68,20 @@ begin
     that
     def ! left (A : VType) (tree : Avl A) : Ret (Avl A) =
       match tree
-      | +Leaf() -> ret +Leaf()
-      | +Node(value, _, _, _) -> ret value
+      | +Leaf() => ret +Leaf()
+      | +Node(value, _, _, _) => ret value
       end
     that
     def ! right (A : VType) (tree : Avl A) : Ret (Avl A) =
       match tree
-      | +Leaf() -> ret +Leaf()
-      | +Node(_, _, _, value) -> ret value
+      | +Leaf() => ret +Leaf()
+      | +Node(_, _, _, value) => ret value
       end
     that
     def fix min_element (A : VType) (tree : Avl A) (comparison : Cmp A) : Ret (StdOption A) =
       match tree
-      | +Leaf() -> ! (std/option/none) A
-      | +Node(left, value, _, _) ->
+      | +Leaf() => ! (std/option/none) A
+      | +Node(left, value, _, _) =>
         do minimum <- ! min_element A left comparison;
         ! (std/option/fold)
           A
@@ -89,18 +89,18 @@ begin
           minimum
           { ! (std/option/some) A value }
           {
-            fn found ->
+            fn found =>
               ! (std/option/some) A found
           }
       end
     that
     def ! rotate_right (A : VType) (tree : Avl A) : Ret (Avl A) =
       match tree
-      | +Leaf() -> ret +Leaf()
-      | +Node(left, value, tree_height, right) ->
+      | +Leaf() => ret +Leaf()
+      | +Node(left, value, tree_height, right) =>
         match left
-        | +Leaf() -> ret +Leaf()
-        | +Node(left_left, left_value, left_height, left_right) ->
+        | +Leaf() => ret +Leaf()
+        | +Node(left_left, left_value, left_height, left_right) =>
           do new_right <- ! fix_height A +Node(left_right, value, tree_height, right);
           ! fix_height A +Node(left_left, left_value, left_height, new_right)
         end
@@ -108,11 +108,11 @@ begin
     that
     def ! rotate_left (A : VType) (tree : Avl A) : Ret (Avl A) =
       match tree
-      | +Leaf() -> ret +Leaf()
-      | +Node(left, value, tree_height, right) ->
+      | +Leaf() => ret +Leaf()
+      | +Node(left, value, tree_height, right) =>
         match right
-        | +Leaf() -> ret +Leaf()
-        | +Node(right_left, right_value, right_height, right_right) ->
+        | +Leaf() => ret +Leaf()
+        | +Node(right_left, right_value, right_height, right_right) =>
           do new_left <- ! fix_height A +Node(left, value, tree_height, right_left);
           ! fix_height A +Node(new_left, right_value, right_height, right_right)
         end
@@ -120,8 +120,8 @@ begin
     that
     def ! balance (A : VType) (tree : Avl A) : Ret (Avl A) =
       match tree
-      | +Leaf() -> ret +Leaf()
-      | +Node(left, value, _, right) ->
+      | +Leaf() => ret +Leaf()
+      | +Node(left, value, _, right) =>
         do factor <- ! balance_factor A tree;
         do left_heavy <- ! (std/int/gt) factor 1;
         ! (std/bool/if)
@@ -164,8 +164,8 @@ begin
     that
     def fix insert (A : VType) (item : A) (tree : Avl A) (comparison : Cmp A) : Ret (Avl A) =
       match tree
-      | +Leaf() -> ! singleton A item
-      | +Node(left, value, tree_height, right) ->
+      | +Leaf() => ! singleton A item
+      | +Node(left, value, tree_height, right) =>
         do goes_left <- ! comparison item value;
         ! (std/bool/if)
           (Ret (Avl A))
@@ -184,8 +184,8 @@ begin
     that
     def fix search (A : VType) (item : A) (tree : Avl A) (equal : Cmp A) (less : Cmp A) : Ret (StdOption A) =
       match tree
-      | +Leaf() -> ! (std/option/none) A
-      | +Node(left, value, _, right) ->
+      | +Leaf() => ! (std/option/none) A
+      | +Node(left, value, _, right) =>
         do found <- ! equal item value;
         ! (std/bool/if)
           (Ret (StdOption A))
@@ -203,8 +203,8 @@ begin
     that
     def fix change (A : VType) (item : A) (tree : Avl A) (equal : Cmp A) (less : Cmp A) : Ret (Avl A) =
       match tree
-      | +Leaf() -> ret tree
-      | +Node(left, value, tree_height, right) ->
+      | +Leaf() => ret tree
+      | +Node(left, value, tree_height, right) =>
         do found <- ! equal item value;
         ! (std/bool/if)
           (Ret (Avl A))
@@ -228,19 +228,19 @@ begin
     that
     def fix delete (A : VType) (item : A) (tree : Avl A) (equal : Cmp A) (less : Cmp A) : Ret (Avl A) =
       match tree
-      | +Leaf() -> ret tree
-      | +Node(left, value, tree_height, right) ->
+      | +Leaf() => ret tree
+      | +Node(left, value, tree_height, right) =>
         do found <- ! equal item value;
         ! (std/bool/if)
           (Ret (Avl A))
           found
           {
             match left
-            | +Leaf() -> ret right
-            | +Node(_, _, _, _) ->
+            | +Leaf() => ret right
+            | +Node(_, _, _, _) =>
               match right
-              | +Leaf() -> ret left
-              | +Node(_, _, _, _) ->
+              | +Leaf() => ret left
+              | +Node(_, _, _, _) =>
                 do minimum <- ! min_element A right less;
                 ! (std/option/fold)
                   A
@@ -248,7 +248,7 @@ begin
                   minimum
                   { ret left }
                   {
-                    fn replacement ->
+                    fn replacement =>
                       do new_right <- ! delete A replacement right equal less;
                       do unbalanced <-
                         ! fix_height A +Node(left, replacement, tree_height, new_right);
@@ -277,15 +277,15 @@ begin
     that
     def fix equal (A : VType) (first : Avl A) (second : Avl A) (item_equal : Cmp A) : Ret StdBool =
       match first
-      | +Leaf() ->
+      | +Leaf() =>
         match second
-        | +Leaf() -> ret (std/bool/true)
-        | +Node(_, _, _, _) -> ret (std/bool/false)
+        | +Leaf() => ret (std/bool/true)
+        | +Node(_, _, _, _) => ret (std/bool/false)
         end
-      | +Node(first_left, first_value, _, first_right) ->
+      | +Node(first_left, first_value, _, first_right) =>
         match second
-        | +Leaf() -> ret (std/bool/false)
-        | +Node(second_left, second_value, _, second_right) ->
+        | +Leaf() => ret (std/bool/false)
+        | +Node(second_left, second_value, _, second_right) =>
           do values_equal <- ! item_equal first_value second_value;
           ! (std/bool/if)
             (Ret StdBool)
@@ -306,8 +306,8 @@ begin
       (continuation : Thk StdOS)
       : StdOS =
       match tree
-      | +Leaf() -> ! continuation
-      | +Node(left, value, tree_height, right) ->
+      | +Leaf() => ! continuation
+      | +Node(left, value, tree_height, right) =>
         do rendered_value <- ! format value;
         do with_label <- ! (std/string/append) rendered_value " h:";
         do rendered_height <- ! (std/int/to_str) tree_height;
@@ -340,31 +340,31 @@ begin
       ret +Hash(
         body,
         {
-          fn first second ->
+          fn first second =>
             match first
-            | (first_key, _) ->
+            | (first_key, _) =>
               match second
-              | (second_key, _) ->
+              | (second_key, _) =>
                 ! insert_key_less first_key second_key
               end
             end
         },
         {
-          fn first second ->
+          fn first second =>
             match first
-            | (first_key, _) ->
+            | (first_key, _) =>
               match second
-              | (second_key, _) ->
+              | (second_key, _) =>
                 ! search_key_equal first_key second_key
               end
             end
         },
         {
-          fn first second ->
+          fn first second =>
             match first
-            | (first_key, first_value) ->
+            | (first_key, first_value) =>
               match second
-              | (second_key, second_value) ->
+              | (second_key, second_value) =>
                 do values_equal <- ! value_equal first_value second_value;
                 do keys_equal <- ! search_key_equal first_key second_key;
                 ! (std/bool/and) values_equal keys_equal
@@ -375,7 +375,7 @@ begin
     that
     def ! hash_insert (K : VType) (V : VType) (key : K) (value : V) (hash : Hash K V) : Ret (Hash K V) =
       match hash
-      | +Hash(body, insert_less, search_equal, item_equal) ->
+      | +Hash(body, insert_less, search_equal, item_equal) =>
         do new_body <- ! insert (K * V) (key, value) body insert_less;
         ret +Hash(new_body, insert_less, search_equal, item_equal)
       end
@@ -383,7 +383,7 @@ begin
     --| in search, a default value for v is needed, because the type of v is unknown
     def ! hash_search (K : VType) (V : VType) (key : K) (default : V) (hash : Hash K V) : Ret (StdOption V) =
       match hash
-      | +Hash(body, insert_less, search_equal, _) ->
+      | +Hash(body, insert_less, search_equal, _) =>
         do result <- ! search (K * V) (key, default) body search_equal insert_less;
         ! (std/option/fold)
           (K * V)
@@ -391,32 +391,32 @@ begin
           result
           { ! (std/option/none) V }
           {
-            fn pair ->
+            fn pair =>
               match pair
-              | (_, value) -> ! (std/option/some) V value
+              | (_, value) => ! (std/option/some) V value
               end
           }
       end
     that
     def ! hash_delete (K : VType) (V : VType) (key : K) (default : V) (hash : Hash K V) : Ret (Hash K V) =
       match hash
-      | +Hash(body, insert_less, search_equal, item_equal) ->
+      | +Hash(body, insert_less, search_equal, item_equal) =>
         do new_body <- ! delete (K * V) (key, default) body search_equal insert_less;
         ret +Hash(new_body, insert_less, search_equal, item_equal)
       end
     that
     def ! hash_change (K : VType) (V : VType) (key : K) (value : V) (hash : Hash K V) : Ret (Hash K V) =
       match hash
-      | +Hash(body, insert_less, search_equal, item_equal) ->
+      | +Hash(body, insert_less, search_equal, item_equal) =>
         do new_body <- ! change (K * V) (key, value) body search_equal insert_less;
         ret +Hash(new_body, insert_less, search_equal, item_equal)
       end
     that
     def ! hash_equal (K : VType) (V : VType) (first : Hash K V) (second : Hash K V) : Ret StdBool =
       match first
-      | +Hash(first_body, _, _, first_item_equal) ->
+      | +Hash(first_body, _, _, first_item_equal) =>
         match second
-        | +Hash(second_body, _, _, _) ->
+        | +Hash(second_body, _, _, _) =>
           ! equal (K * V) first_body second_body first_item_equal
         end
       end
@@ -466,14 +466,14 @@ begin
       first
       { ! (std/os/exit) 1 }
       {
-        fn first_value ->
+        fn first_value =>
           ! (std/option/fold)
             StdString
             StdOS
             second
             { ! (std/os/exit) 1 }
             {
-              fn second_value ->
+              fn second_value =>
                 do values_equal <- ! (std/string/eq) first_value second_value;
                 do result <- ! (std/bool/and) hashes_equal values_equal;
                 ! (std/bool/if)

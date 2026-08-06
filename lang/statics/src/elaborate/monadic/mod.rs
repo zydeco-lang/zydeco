@@ -654,7 +654,7 @@ impl MonConstruct<CompuId> for PackPiStructureBody {
 /// Structure translation for a package-dependent computation arrow:
 ///
 /// `Str(PackPi(P; As. B)) Z mz f`
-/// `  = fn package -> Str(B) Z mz { fn z -> ! f z package }`.
+/// `  = fn package => Str(B) Z mz { fn z => ! f z package }`.
 ///
 /// Translating `package` also binds the structures associated with `As`, so
 /// `Str(B)` is formed in precisely the environment selected by that package.
@@ -729,7 +729,7 @@ fn structure_translation(
                 .mbuild(tycker, env)?
         }
         | Type::Abs(ty) => {
-            // input: fn (X : K) -> S
+            // input: fn (X : K) => S
             let Abs(tpat, ty) = ty;
             let svar = {
                 let (tvar, _) = tpat.try_destruct_def(tycker);
@@ -738,7 +738,7 @@ fn structure_translation(
                     | None => "str".to_string(),
                 }
             };
-            // output: fn (X : K) (str_X : Thk (Sig_K(X))) -> Str(S)
+            // output: fn (X : K) (str_X : Thk (Sig_K(X))) => Str(S)
             Abs(cs::Ty(cs::TypeLift { ty: tpat }), move |_tvar, abst| {
                 Abs(cs::StrPat(svar, abst, None), move |_str: VPatId| cs::Structure { ty })
             })
@@ -772,7 +772,7 @@ fn structure_translation(
         // the thunk type is itself a type constructor,
         // so its structure takes a type and the type's structure as arguments
         | Type::Thk(ThkTy) => {
-            // output: fn (X : CType) (_ : Thk (Sig_CType(X))) -> <top>
+            // output: fn (X : CType) (_ : Thk (Sig_CType(X))) => <top>
             Abs(cs::Ty(cs::Pat("_", CType)), move |_tvar, abst| {
                 let thk_sig = cs::Thk(cs::Signature { ty: cs::Type(abst) });
                 Abs(cs::Pat("_", thk_sig), move |_var| {
@@ -785,11 +785,11 @@ fn structure_translation(
         // the os type is a primitive computation type and thus not allowed in monadic blocks
         | Type::OS(_) => unreachable!(),
         | Type::Ret(RetTy) => {
-            // output: fn (X : VType) (_ : Thk (Sig_VType(X))) -> <monadic_bind>
+            // output: fn (X : VType) (_ : Thk (Sig_VType(X))) => <monadic_bind>
             Abs(cs::Ty(cs::Pat("_", VType)), |_tvar, abst_x| {
                 let thk_sig = cs::Thk(cs::Signature { ty: abst_x });
                 Abs(cs::Pat("_", thk_sig), move |_var| {
-                    // <monadic_bind> = fn (Z : VType) -> ! monad_impl .bind Z X
+                    // <monadic_bind> = fn (Z : VType) => ! monad_impl .bind Z X
                     Abs(cs::Ty(cs::Pat("Z", VType)), move |_tvar, abst_z| {
                         let body = cs::Dtor(Force(monad_impl), ".bind");
                         App(App(body, cs::Ty(abst_z)), cs::Ty(abst_x))
@@ -804,7 +804,7 @@ fn structure_translation(
         | Type::Arrow(ty) => {
             // input: A -> B
             let Arrow(ty_a, ty_b) = ty;
-            // output: fn (Z : VType) (mz : Thk (M Z)) (f : Thk (Z -> [A] -> [B])) -> <body>
+            // output: fn (Z : VType) (mz : Thk (M Z)) (f : Thk (Z -> [A] -> [B])) => <body>
             Abs(cs::Ty(cs::Pat("Z", VType)), move |_tvar, abst_z| {
                 let mz_ty = cs::Thk(App(env.monad_ty, abst_z));
                 Abs(cs::Pat("mz", mz_ty), move |mz: VPatId| {
@@ -812,7 +812,7 @@ fn structure_translation(
                     let ty_b_ = cs::TypeLift { ty: ty_b };
                     let f_ty = cs::Thk(Arrow(abst_z, Arrow(ty_a_, ty_b_)));
                     Abs(cs::Pat("f", f_ty), move |f: VPatId| {
-                        // <body> = fn (x : [A]) -> Str(B) Z mz { fn (z : Z) -> ! f z x }
+                        // <body> = fn (x : [A]) => Str(B) Z mz { fn (z : Z) => ! f z x }
                         Abs(cs::Pat("x", ty_a_), move |x: VPatId| {
                             let alg_b = cs::Structure { ty: ty_b };
                             let kont = Abs(cs::Pat("z", abst_z), move |z: VPatId| {
@@ -831,7 +831,7 @@ fn structure_translation(
             let abst = binder.witness;
             let source_pattern = binder.pattern;
             let kd = cs::TypeOf(abst);
-            // output: fn (Z : VType) (mz : Thk (M Z)) (f : <f_ty>) -> <body>
+            // output: fn (Z : VType) (mz : Thk (M Z)) (f : <f_ty>) => <body>
             Abs(cs::Ty(cs::Pat("Z", VType)), move |_tvar, abst_z| {
                 Abs(cs::Pat("mz", cs::Thk(App(env.monad_ty, abst_z))), move |mz: VPatId| {
                     // construct abstract type X first
@@ -854,7 +854,7 @@ fn structure_translation(
                             },
                         ));
                         Abs(cs::Pat("f", f_ty), move |f: VPatId| {
-                            // <body> = fn (X : K) (str_X : Thk (Sig_K(X))) -> Str(B) Z mz <kont>
+                            // <body> = fn (X : K) (str_X : Thk (Sig_K(X))) => Str(B) Z mz <kont>
                             Abs(
                                 cs::Ty((
                                     cs::ReboundTypePattern {
@@ -865,7 +865,7 @@ fn structure_translation(
                                 )),
                                 move |_, abst_x: AbstId| {
                                     Abs(cs::StrPat("str_X", abst_x, None), move |str_x: VPatId| {
-                                        // <kont> = { fn (z : Z) -> ! f z X str_X }
+                                        // <kont> = { fn (z : Z) => ! f z X str_X }
                                         let kont = Abs(cs::Pat("z", abst_z), move |z: VPatId| {
                                             let f = cs::Value(f);
                                             let z = cs::Value(z);

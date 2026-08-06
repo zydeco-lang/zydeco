@@ -18,13 +18,13 @@ begin
 
   def ! mkont (R : CType) : Monad (Kont R) =
     comatch
-    | .return A a ->
-      fn k ->
+    | .return A a =>
+      fn k =>
         ! k a
-    | .bind A A' m f ->
-      fn k ->
+    | .bind A A' m f =>
+      fn k =>
         ! m {
-          fn a ->
+          fn a =>
             ! f a k
         }
     end
@@ -36,15 +36,15 @@ begin
     )
     : Monad (Free H) =
     comatch
-    | .return A a ->
-      fn R h ->
+    | .return A a =>
+      fn R h =>
         ! mkont R .return A a
-    | .bind A A' m f ->
-      fn R h ->
+    | .bind A A' m f =>
+      fn R h =>
         ! mkont R .bind A A'
           { ! m R h }
           {
-            fn a ->
+            fn a =>
               ! f a R h
           }
     end

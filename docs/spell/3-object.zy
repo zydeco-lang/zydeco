@@ -21,16 +21,16 @@ begin
   -- `make_counter` closes over `current`. The local fixed point named `this`
   -- permits one method to invoke another method on the same object.
   def make_counter : Thk (Int -> Counter) = {
-    fix (make_counter : Thk (Int -> Counter)) ->
-      fn current ->
-        fix (this : Thk Counter) ->
+    fix (make_counter : Thk (Int -> Counter)) =>
+      fn current =>
+        fix (this : Thk Counter) =>
           comatch
-          | .number -> ret current
-          | .increment amount ->
+          | .number => ret current
+          | .increment amount =>
             do previous <- ! this .number;
             do next <- ! (api/add) previous amount;
             ! make_counter next
-          | .format ->
+          | .format =>
             do value <- ! this .number;
             ! (api/int_to_str) value
           end

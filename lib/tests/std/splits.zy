@@ -22,7 +22,7 @@ begin
     present
     { ret 1 }
     {
-      fn pair ->
+      fn pair =>
         ret 0
     };
   do absent <- ! (std/string/split_n) "short" 99;
@@ -32,7 +32,7 @@ begin
     absent
     { ret 0 }
     {
-      fn pair ->
+      fn pair =>
         ret 1
     };
   do status <- ! (std/int/add) present_status absent_status;

@@ -17,13 +17,13 @@ begin
   def ! fix' (B : CType) (f : Thk (Thk B -> B)) : B =
     let ! prim : Y B =
         comatch
-      | .y x -> ! f { ! x .y x }
+      | .y x => ! f { ! x .y x }
       end
       in
     ! prim .y prim
   that
   def ! m : OS =
-    ! fix' OS { fn loop -> ! loop }
+    ! fix' OS { fn loop => ! loop }
   that
 
   ! (api/exit) 0

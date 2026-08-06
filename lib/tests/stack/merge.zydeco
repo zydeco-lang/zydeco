@@ -12,11 +12,11 @@ begin
   that
   def fix merge (a : List Int) (b : List Int) : Ret (List Int) =
     match a
-    | +Nil() -> ret b
-    | +Cons(a_head, a_tail) ->
+    | +Nil() => ret b
+    | +Cons(a_head, a_tail) =>
       match b
-      | +Nil() -> ret a
-      | +Cons(b_head, b_tail) ->
+      | +Nil() => ret a
+      | +Cons(b_head, b_tail) =>
         ! (api/int_gt_branch)
           (Ret (List Int))
           a_head

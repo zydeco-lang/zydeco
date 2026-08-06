@@ -12,14 +12,14 @@ begin
   that
   def fix add (x : Nat) (y : Nat) : Ret Nat =
     match x
-    | +Z() -> ret y
-    | +S(x) -> ! add x +S(y)
+    | +Z() => ret y
+    | +S(x) => ! add x +S(y)
     end
   that
   def ! add' (x : Nat) (y : Nat) : Ret Nat =
     match x
-    | +Z() -> ret y
-    | +S(x) -> ! add x +S(y)
+    | +Z() => ret y
+    | +S(x) => ! add x +S(y)
     end
   that
 

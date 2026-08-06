@@ -108,8 +108,10 @@ pub enum Tok<'input> {
     Star,
     #[token(".")]
     Dot,
+    #[token("=>")]
+    TermArrow,
     #[token("->")]
-    Arrow,
+    TypeArrow,
     #[token("<-")]
     Assign,
     #[token("_")]
@@ -234,7 +236,8 @@ impl<'source> LexicalTokens<'source> {
             | Tok::Plus
             | Tok::Star
             | Tok::Dot
-            | Tok::Arrow
+            | Tok::TermArrow
+            | Tok::TypeArrow
             | Tok::Assign
             | Tok::CommentClose => Kind::Operator,
             | Tok::Hole => Kind::Hole,
@@ -343,7 +346,8 @@ impl Display for Tok<'_> {
             | Tok::Plus => write!(f, "+"),
             | Tok::Star => write!(f, "*"),
             | Tok::Dot => write!(f, "."),
-            | Tok::Arrow => write!(f, "->"),
+            | Tok::TermArrow => write!(f, "=>"),
+            | Tok::TypeArrow => write!(f, "->"),
             | Tok::Assign => write!(f, "<-"),
             | Tok::Hole => write!(f, "_"),
             | Tok::At => write!(f, "@"),

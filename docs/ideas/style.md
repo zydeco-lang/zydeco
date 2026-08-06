@@ -7,6 +7,7 @@ In particular, the source should reveal where a name is available,
 whether its definition remains transparent, and where computation is sequenced.
 
 The conventions below favor Zydeco's direct forms and use annotations where they clarify a type-system boundary.
+The [surface syntax principles](syntax.md) explain the language-design choices behind the notation itself.
 
 ## The Shape of a Source File
 
@@ -95,7 +96,7 @@ In that case the remaining `fn` communicates the introduction form of the alias:
 
 ```zydeco
 def ! algebra (R : CType) : Algebra Ret R =
-  fn A computation continuation ->
+  fn A computation continuation =>
     ...
 that
 ```
@@ -117,7 +118,7 @@ Zydeco's value/computation distinction should remain visible in ordinary code:
 | `ret value` | a computation that returns `value` |
 | `do pattern <- M; N` | run `M`, bind its result, then continue with `N` |
 | `do~ M; N` | run `M`, discard its result, then continue with `N` |
-| `fn pattern -> M` | the abstraction required by the residual computation type |
+| `fn pattern => M` | the abstraction required by the residual computation type |
 
 These forms also reveal evaluation order. Mobile block entries contribute types and values to a context;
 application, `do`, matching, and relative-monad operations order computations within that context.
@@ -201,14 +202,14 @@ def fix fold
   (step : Thk (A -> Thk B -> B))
   : B =
   match list
-  | +Nil(_) -> ! empty
-  | +Cons(head, tail) ->
+  | +Nil(_) => ! empty
+  | +Cons(head, tail) =>
     ! step head { ! fold A B tail empty step }
   end
 that
 ```
 
-Use spaces around `:`, `=`, `->`, and `*`, and after commas.
+Use spaces around `:`, `=`, `->`, `=>`, and `*`, and after commas.
 Constructor and destructor sigils stay attached to their names.
 A short thunk such as `{ ret value }` fits naturally on one line;
 a multiline thunk receives one additional indentation level.

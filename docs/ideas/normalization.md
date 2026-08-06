@@ -8,7 +8,7 @@ begin
   let Counter = Int that
   let zero : Counter = 0 that
   let inc : Thk (Counter -> Ret Counter) =
-    { fn n -> ! add n 1 }
+    { fn n => ! add n 1 }
   that
 
   (= Counter, = zero, = inc)

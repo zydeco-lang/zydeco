@@ -41,11 +41,11 @@ begin
         Thk OS ->
         OS
       )
-    ) ->
-      fn remaining continuation ->
+    ) =>
+      fn remaining continuation =>
         match remaining
-        | +Nil() -> ! continuation
-        | +Cons(head, tail) ->
+        | +Nil() => ! continuation
+        | +Cons(head, tail) =>
           ! (api/write_line) head {
             ! print_list tail continuation
           }

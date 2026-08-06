@@ -22,8 +22,8 @@ begin
   -- a normal invert without tail-call opt.
   def fix invert (A : VType) (tree : Tree A) : Ret (Tree A) =
     match tree
-    | +Leaf() -> ret +Leaf()
-    | +Node(l, a, r) ->
+    | +Leaf() => ret +Leaf()
+    | +Node(l, a, r) =>
       do l <- ! invert A l;
       do r <- ! invert A r;
       ret +Node(r, a, l)
@@ -32,18 +32,18 @@ begin
   -- now we have the tree kont version of invert, tail recursive by default
   def fix invert_tree_kont (A : VType) (tree : Tree A) : TreeKont A =
     match tree
-    | +Leaf() ->
+    | +Leaf() =>
       comatch
-      | .run k ->
+      | .run k =>
         ! k +Leaf()
       end
-    | +Node(l, a, r) ->
+    | +Node(l, a, r) =>
       comatch
-      | .run k ->
+      | .run k =>
         ! invert_tree_kont A l .run {
-          fn l ->
+          fn l =>
             ! invert_tree_kont A r .run {
-              fn r ->
+              fn r =>
                 ! k +Node(r, a, l)
             }
         }
@@ -52,19 +52,19 @@ begin
   that
   def ! invert' (A : VType) (tree : Tree A) : Ret (Tree A) =
     ! invert_tree_kont A tree .run {
-      fn t ->
+      fn t =>
         ret t
     }
   that
   -- and below is the correct cps solution
   def fix invert_kont (A : VType) (tree : Tree A) (k : Thk (Tree A -> Ret (Tree A))) : Ret (Tree A) =
     match tree
-    | +Leaf() -> ! k +Leaf()
-    | +Node(l, a, r) ->
+    | +Leaf() => ! k +Leaf()
+    | +Node(l, a, r) =>
       ! invert_kont A l {
-        fn l ->
+        fn l =>
           ! invert_kont A r {
-            fn r ->
+            fn r =>
               ! k +Node(r, a, l)
           }
       }
@@ -72,7 +72,7 @@ begin
   that
   def ! invert'' (A : VType) (tree : Tree A) : Ret (Tree A) =
     ! invert_kont A tree {
-      fn t ->
+      fn t =>
         ret t
     }
   that
@@ -90,9 +90,9 @@ begin
   that
   def fix write_tree (t : Tree Int) (k : Thk OS) : OS =
     match t
-    | +Leaf() ->
+    | +Leaf() =>
       ! (api/write_str) "()" k
-    | +Node(l, a, r) ->
+    | +Node(l, a, r) =>
       ! (api/write_str) "(" {
         ! write_tree l {
           ! (api/write_int) a {

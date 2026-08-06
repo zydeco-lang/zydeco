@@ -16,14 +16,14 @@ begin
     std
   ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
   ! (std/os/arg_list) {
-    fn arguments ->
+    fn arguments =>
       ! (std/list/case)
         StdString
         StdOS
         arguments
         { ! (std/os/exit) 1 }
         {
-          fn first remaining ->
+          fn first remaining =>
             do first_matches <- ! (std/string/eq) first "alpha";
             ! (std/bool/if)
               StdOS

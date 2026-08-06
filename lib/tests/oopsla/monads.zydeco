@@ -58,101 +58,101 @@ begin
   --| The Ret monad (mret in the paper)
   def ! mo-return : Monad Ret =
     comatch
-    | .return A a -> ret a
-    | .bind A A' m f ->
+    | .return A a => ret a
+    | .bind A A' m f =>
       do a <- ! m;
       ! f a
     end
   that
   def ! mo-kont (R : CType) : Monad (Kont R) =
     comatch
-    | .return A a ->
-      fn .run k ->
+    | .return A a =>
+      fn .run k =>
         ! k a
-    | .bind A A' m f ->
-      fn .run k ->
-        do~ ! m .run; fn a ->
+    | .bind A A' m f =>
+      fn .run k =>
+        do~ ! m .run; fn a =>
         ! f a .run k
     end
   that
   def ! mo-polykont : Monad PolyKont =
     comatch
-    | .return A a ->
-      fn .bind R k ->
+    | .return A a =>
+      fn .bind R k =>
         ! k a
-    | .bind A A' m f ->
-      fn .bind R k' ->
+    | .bind A A' m f =>
+      fn .bind R k' =>
         ! m .bind R {
-          fn a ->
+          fn a =>
             ! f a .bind R k'
         }
     end
   that
   def ! mo-state (S : VType) : Monad (State S) =
     comatch
-    | .return A a ->
-      fn s ->
+    | .return A a =>
+      fn s =>
         ret (a, s)
-    | .bind A A' m f ->
-      fn s ->
+    | .bind A A' m f =>
+      fn s =>
         do (a, s') <- ! m s;
         ! f a s'
     end
   that
   def ! mo-statek (S : VType) : Monad (StateK S) =
     comatch
-    | .return A a ->
-      fn .run R s k ->
+    | .return A a =>
+      fn .run R s k =>
         ! k s a
-    | .bind A A' m f ->
-      fn .run R s k' ->
+    | .bind A A' m f =>
+      fn .run R s k' =>
         ! m .run R s {
-          fn s' a ->
+          fn s' a =>
             ! f a .run R s' k'
         }
     end
   that
   def ! state (S : VType) : MonadState S (State S) =
     comatch
-    | .get ->
-      fn s ->
+    | .get =>
+      fn s =>
         ret (s, s)
-    | .put s' ->
-      fn _ ->
+    | .put s' =>
+      fn _ =>
         let u = () in
         ret (u, s')
     end
   that
   def ! statek (S : VType) : MonadState S (StateK S) =
     comatch
-    | .get ->
-      fn .run R s k ->
+    | .get =>
+      fn .run R s k =>
         ! k s s
-    | .put s' ->
-      fn .run R s k ->
+    | .put s' =>
+      fn .run R s k =>
         ! k s' ()
     end
   that
   def ! mo-io : Monad IO =
     comatch
-    | .return A a ->
-      fn .run k ->
+    | .return A a =>
+      fn .run k =>
         ! k a
-    | .bind A A' m f ->
-      fn .run ka' ->
+    | .bind A A' m f =>
+      fn .run ka' =>
         ! m .run {
-          fn a ->
+          fn a =>
             ! f a .run ka'
         }
     end
   that
   def ! io : MonadIO IO =
     comatch
-    | .read ->
-      fn .run ka ->
+    | .read =>
+      fn .run ka =>
         ! (api/read_line) ka
-    | .write s ->
-      fn .run ku ->
+    | .write s =>
+      fn .run ku =>
         ! (api/write_line) s {
           ! ku ()
         }
@@ -160,7 +160,7 @@ begin
   that
 
   ! io .write "Hello, world!" .run {
-    fn _ ->
+    fn _ =>
       ! (api/exit) 0
   }
 end

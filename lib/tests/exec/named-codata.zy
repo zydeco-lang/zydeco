@@ -17,9 +17,9 @@ begin
   that
   def ! gauge : Gauge =
     comatch
-    | .read ->
+    | .read =>
       ret (reading = 12 : Int, 13 : Int)
-    | .shift (delta = delta : Int) ->
+    | .shift (delta = delta : Int) =>
       ret (reading = delta : Int)
     end
   that

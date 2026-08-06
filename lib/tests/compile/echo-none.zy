@@ -3,6 +3,6 @@ param (
   @[import("../../std/builtin.zy")] _
 ) in
   ! (api/read_line) {
-    fn _ ->
+    fn _ =>
       ! (api/exit) 0
   }

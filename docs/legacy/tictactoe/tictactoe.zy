@@ -49,7 +49,7 @@ end
 
 def ! row_fmt (row : Row) : Ret String =
   match row
-  | +Row(c1, c2, c3) ->
+  | +Row(c1, c2, c3) =>
     do s1 <- ! int_to_ox c1;
     do s <- ! str_append s1 " ";
     do s2 <- ! int_to_ox c2;
@@ -63,7 +63,7 @@ end
 
 def ! board_fmt (board : Board) : Ret String =
   match board
-  | +Board(r1, r2, r3) ->
+  | +Board(r1, r2, r3) =>
     do s1 <- ! row_fmt r1;
     do s <- ! str_append s1 "\n";
     do s2 <- ! row_fmt r2;
@@ -77,7 +77,7 @@ end
 
 def ! loc_fmt (loc : Loc) : Ret String =
   match loc
-  | +Cons(r, c) ->
+  | +Cons(r, c) =>
     do sr <- ! int_to_str r;
     do sc <- ! int_to_str c;
     do s <- ! str_append sr " ";
@@ -90,7 +90,7 @@ end
 
 def fix gt_fmt (gt : TicTacToe) : Ret String =
   match gt
-  | +Leaf(s, m) ->
+  | +Leaf(s, m) =>
     do ss <- ! int_to_str s;
     do loc_str <- ! loc_fmt m;
     do s <- ! str_append "Leaf(score: " ss;
@@ -99,8 +99,8 @@ def fix gt_fmt (gt : TicTacToe) : Ret String =
     do s <- ! str_append s loc_str;
     do s <- ! str_append s ")\n";
     ret s
-  | +Sons(l, m) ->
-    do gts <- ! foldr (TicTacToe) (Ret String) l {ret ""} {fn gt b -> do b <- ! b; do gt_str <- ! gt_fmt gt;do gt_str <- ! str_append "-" gt_str; ! str_append gt_str b};
+  | +Sons(l, m) =>
+    do gts <- ! foldr (TicTacToe) (Ret String) l {ret ""} {fn gt b => do b <- ! b; do gt_str <- ! gt_fmt gt;do gt_str <- ! str_append "-" gt_str; ! str_append gt_str b};
     do loc_str <- ! loc_fmt m;
     do s <- ! str_append "Sons(\nmove: " loc_str;
     do s <- ! str_append s ",\n";
@@ -117,7 +117,7 @@ end
 
 def ! sum_row (r : Row) : Ret Int =
   match r
-  | +Row(c1, c2, c3) -> 
+  | +Row(c1, c2, c3) =>
     ! sum_three c1 c2 c3
   end
 end
@@ -129,7 +129,7 @@ end
 
 def ! print_board (b : Board) (next : Thk OS) : OS =
   match b
-  | +Board(r1, r2, r3) ->
+  | +Board(r1, r2, r3) =>
     ! print_row r1 {
       ! print_row r2 {
         ! print_row r3 next
@@ -141,7 +141,7 @@ end
 def ! check_win (b : Board) (is_black : Bool) : Ret Bool =
   do win <- ! if (Ret Int) is_black {ret 3} {ret -3};
   match b
-  | +Board(r1, r2, r3) ->
+  | +Board(r1, r2, r3) =>
     do s1 <- ! sum_row r1;
     do s2 <- ! sum_row r2;
     do s3 <- ! sum_row r3;
@@ -155,11 +155,11 @@ def ! check_win (b : Board) (is_black : Bool) : Ret Bool =
           ret +True()
         } {
           match r1
-          | +Row(c11, c12, c13) ->
+          | +Row(c11, c12, c13) =>
             match r2
-            | +Row(c21, c22, c23) ->
+            | +Row(c21, c22, c23) =>
               match r3
-              | +Row(c31, c32, c33) ->
+              | +Row(c31, c32, c33) =>
                 do s4 <- ! sum_three c11 c21 c31;
                 do s5 <- ! sum_three c12 c22 c32;
                 do s6 <- ! sum_three c13 c23 c33;
@@ -197,7 +197,7 @@ end
 
 def ! get_holes_row_num (r : Row) : Ret Int =
   match r
-  | +Row(c1, c2, c3) ->
+  | +Row(c1, c2, c3) =>
     do s1 <- ! if~ (Ret Int) {! int_eq c1 0} {ret 1} {ret 0};
     do s2 <- ! if~ (Ret Int) {! int_eq c2 0} {ret 1} {ret 0};
     do s3 <- ! if~ (Ret Int) {! int_eq c3 0} {ret 1} {ret 0};
@@ -208,7 +208,7 @@ end
 
 def ! get_holes_num (b : Board) : Ret Int =
   match b
-  | +Board(r1, r2, r3) ->
+  | +Board(r1, r2, r3) =>
     do s1 <- ! get_holes_row_num r1;
     do s2 <- ! get_holes_row_num r2;
     do s3 <- ! get_holes_row_num r3;
@@ -235,7 +235,7 @@ end
 
 def ! get_holes_row (r : Row) (rn : Int) : LList Loc =
   match r
-  | +Row(c1, c2, c3) ->
+  | +Row(c1, c2, c3) =>
     let res = {! if~ (LList Loc) {! int_eq c1 0} {
       ! cons (Loc) +Cons(rn, 1) {! nil (Loc)}} {! nil (Loc)}} in
     let res = {! if~ (LList Loc) {! int_eq c2 0} {
@@ -247,7 +247,7 @@ end
 
 def ! get_holes (b : Board) : LList Loc =
   match b
-  | +Board(r1, r2, r3) ->
+  | +Board(r1, r2, r3) =>
     let res1 = {! get_holes_row r1 1} in
     let res2 = {! get_holes_row r2 2} in
     let res3 = {! get_holes_row r3 3} in
@@ -258,7 +258,7 @@ end
 
 def ! play_row (r : Row) (c : Int) (change : Int) : Ret Row =
   match r
-  | +Row(c1, c2, c3) ->
+  | +Row(c1, c2, c3) =>
     ! if~ (Ret Row) {! int_eq c 1} {
       ret +Row(change, c2, c3)
     } {
@@ -274,7 +274,7 @@ end
 def ! play (b : Board) (r : Int) (c : Int) (is_black : Bool) : Ret Board =
   do change <- ! if (Ret Int) is_black {ret 1} {ret -1};
   match b
-  | +Board(r1, r2, r3) ->
+  | +Board(r1, r2, r3) =>
     ! if~ (Ret Board) {! int_eq r 1} {
       do r1' <- ! play_row r1 c change;
       ret +Board(r1', r2, r3)
@@ -298,9 +298,9 @@ def fix generate_gametree (b : Board) (move : Loc) (is_black : Bool) : Ret TicTa
       ret +Leaf(sc, move)
     } {
     ret +Sons({! map (Loc) (TicTacToe) {
-      fn (p : Loc) ->
+      fn (p : Loc) =>
         match p
-        | +Cons(r, c) ->
+        | +Cons(r, c) =>
           do nb <- ! play b r c is_black;
           do is_white <- ! not is_black;
           ! generate_gametree nb p is_white
@@ -315,9 +315,9 @@ end
 
 def ! pair_lt (a : BestSol) (b : BestSol) : Ret Bool =
   match a
-  | +Cons(a1, a2, a3) ->
+  | +Cons(a1, a2, a3) =>
     match b
-    | +Cons(b1, b2, b3) ->
+    | +Cons(b1, b2, b3) =>
       ! int_lt a2 b2
     end
   end
@@ -330,33 +330,33 @@ end
 
 def ! get_loc (gt : TicTacToe) : Ret Loc =
   match gt
-  | +Leaf(s, m) -> ret m
-  | +Sons(l, m) -> ret m
+  | +Leaf(s, m) => ret m
+  | +Sons(l, m) => ret m
   end
 end
 
 def fix minimax : MinMax =
   comatch
-  | .min -> (fn x ->
+  | .min => (fn x =>
     match x
-    | +Leaf(a, loc) -> ret +Cons(loc, a, 0)
-    | +Sons(l, loc) ->
+    | +Leaf(a, loc) => ret +Cons(loc, a, 0)
+    | +Sons(l, loc) =>
       // first use map to get a list of thunk of best solution, the score is calculated when needed
       let sol~ = {! map (TicTacToe) (Pair (U(Ret BestSol)) Loc) {
-        fn gt ->
+        fn gt =>
           do cur_loc <- ! get_loc gt;
           let sol~ = {! minimax .max gt} in
           ret +Cons(sol~, cur_loc)
       } l} in
       do best <- ! foldl_break (Pair (U(Ret BestSol)) Loc) (BestSol) sol~ +Cons(+Cons(22,22), 10, 10) {
-        fn p acc ->
+        fn p acc =>
           match p
-          | +Cons(sol~, cur_loc) ->
+          | +Cons(sol~, cur_loc) =>
           do sol <- ! sol~; // U (Ret BestSol) is forced here
           match sol
-          | +Cons(loc, sc, depth) ->
+          | +Cons(loc, sc, depth) =>
             match acc
-            | +Cons(loc', sc', depth') ->
+            | +Cons(loc', sc', depth') =>
               ! if~ (Ret BestSol) {! int_lt sc sc'} {
                 ret +Cons(cur_loc, sc, depth)
               } {
@@ -372,39 +372,39 @@ def fix minimax : MinMax =
             end
           end
           end
-      } { fn sol ->
+      } { fn sol =>
         match sol
-        | +Cons(loc, sc, depth) -> 
+        | +Cons(loc, sc, depth) =>
           do m1 <- ! int_lt sc 0;
           do m2 <- ! int_eq depth 0; 
           ! and m1 m2
         end
       };
       match best
-      | +Cons(loc, sc, depth) ->
+      | +Cons(loc, sc, depth) =>
         do depth' <- ! add depth 1;
         ret +Cons(loc, sc, depth')
       end
     end)
-  | .max -> (fn x ->
+  | .max => (fn x =>
     match x
-    | +Leaf(a, loc) -> ret +Cons(loc, a, 0)
-    | +Sons(l, loc) ->
+    | +Leaf(a, loc) => ret +Cons(loc, a, 0)
+    | +Sons(l, loc) =>
       let sol~ = {! map (TicTacToe) (Pair (U(Ret BestSol)) Loc) {
-        fn gt ->
+        fn gt =>
           do cur_loc <- ! get_loc gt;
           let sol~ = {! minimax .min gt} in
           ret +Cons(sol~, cur_loc)
       } l} in
       do best <- ! foldl_break (Pair (U(Ret BestSol)) Loc) (BestSol) sol~ +Cons(+Cons(22,22), -10, 10) {
-        fn p acc ->
+        fn p acc =>
           match p
-          | +Cons(sol~, cur_loc) ->
+          | +Cons(sol~, cur_loc) =>
           do sol <- ! sol~; // U (Ret BestSol) is forced here
           match sol
-          | +Cons(loc, sc, depth) ->
+          | +Cons(loc, sc, depth) =>
             match acc
-            | +Cons(loc', sc', depth') ->
+            | +Cons(loc', sc', depth') =>
               ! if~ (Ret BestSol) {! int_gt sc sc'} {
                 ret +Cons(cur_loc, sc, depth)
               } {
@@ -420,16 +420,16 @@ def fix minimax : MinMax =
             end
           end
           end
-      } { fn sol ->
+      } { fn sol =>
         match sol
-        | +Cons(loc, sc, depth) -> 
+        | +Cons(loc, sc, depth) =>
           do m1 <- ! int_gt sc 0;
           do m2 <- ! int_eq depth 0; 
           ! and m1 m2
         end
       };
       match best
-      | +Cons(loc, sc, depth) ->
+      | +Cons(loc, sc, depth) =>
         do depth' <- ! add depth 1;
         ret +Cons(loc, sc, depth')
       end
@@ -447,9 +447,9 @@ end
 
 def ! max_sol (a : BestSol) (b : BestSol) : Ret BestSol =
   match a
-  | +Cons(loc, sc, depth) ->
+  | +Cons(loc, sc, depth) =>
     match b
-    | +Cons(loc', sc', depth') ->
+    | +Cons(loc', sc', depth') =>
       ! if~ (Ret BestSol) {! int_gt sc sc'} {
         ret a
       } {
@@ -468,9 +468,9 @@ end
 
 def ! min_sol (a : BestSol) (b : BestSol) : Ret BestSol =
   match a
-  | +Cons(loc, sc, depth) ->
+  | +Cons(loc, sc, depth) =>
     match b
-    | +Cons(loc', sc', depth') ->
+    | +Cons(loc', sc', depth') =>
       ! if~ (Ret BestSol) {! int_lt sc sc'} {
         ret a
       } {
@@ -489,9 +489,9 @@ end
 
 def ! sol_lt (a : BestSol) (b : BestSol) : Ret Bool =
   match a
-  | +Cons(loc, sc, depth) ->
+  | +Cons(loc, sc, depth) =>
     match b
-    | +Cons(loc', sc', depth') ->
+    | +Cons(loc', sc', depth') =>
       do m1 <- ! int_lt sc sc';
       ! if (Ret Bool) m1 {
         ret +True()
@@ -506,9 +506,9 @@ end
 
 def ! sol_gt (a : BestSol) (b : BestSol) : Ret Bool =
   match a
-  | +Cons(loc, sc, depth) ->
+  | +Cons(loc, sc, depth) =>
     match b
-    | +Cons(loc', sc', depth') ->
+    | +Cons(loc', sc', depth') =>
       do m1 <- ! int_gt sc sc';
       ! if (Ret Bool) m1 {
         ret +True()
@@ -523,36 +523,36 @@ end
 
 def fix minimax' : MinMax' =
   comatch
-  | .fmax -> fn a b x ->
+  | .fmax => fn a b x =>
     match x
-    | +Leaf(sc, move) -> 
+    | +Leaf(sc, move) =>
       do minbx <- ! min_sol b +Cons(move, sc, 0);
       ! max_sol a minbx
       // ret +Cons(move, sc, 0)
-    | +Sons(l, move) ->
+    | +Sons(l, move) =>
       ! minimax' .gmax a b +Cons(l, move)
     end
-  | .fmin -> fn a b x ->
+  | .fmin => fn a b x =>
     match x
-    | +Leaf(sc, move) -> 
+    | +Leaf(sc, move) =>
       do maxax <- ! max_sol a +Cons(move, sc, 0);
       ! min_sol maxax b
       // ret +Cons(move, sc, 0)
-    | +Sons(l, move) ->
+    | +Sons(l, move) =>
       ! minimax' .gmin a b +Cons(l, move)
     end
-  | .gmax -> fn a b p ->
+  | .gmax => fn a b p =>
     match p
-    | +Cons(l~, cur_mv) ->
+    | +Cons(l~, cur_mv) =>
       do l <- ! l~ .run;
       match l
-      | +Nil() -> ret a // should not happen
-      | +Cons(hd, tl) ->
+      | +Nil() => ret a // should not happen
+      | +Cons(hd, tl) =>
         ! if~ (Ret BestSol) {! is_empty (TicTacToe) tl} {
           match hd
-          | +Leaf(sc, move) ->
+          | +Leaf(sc, move) =>
             ! minimax' .fmin a b +Leaf(sc, cur_mv)
-          | +Sons(nl, move) ->
+          | +Sons(nl, move) =>
             ! minimax' .fmin a b +Sons(nl, cur_mv)
           end
         } {
@@ -563,18 +563,18 @@ def fix minimax' : MinMax' =
         }
       end
     end
-  | .gmin -> fn a b p ->
+  | .gmin => fn a b p =>
     match p
-    | +Cons(l~, cur_mv) ->
+    | +Cons(l~, cur_mv) =>
       do l <- ! l~ .run;
       match l
-      | +Nil() -> ret a // should not happen
-      | +Cons(hd, tl) ->
+      | +Nil() => ret a // should not happen
+      | +Cons(hd, tl) =>
         ! if~ (Ret BestSol) {! is_empty (TicTacToe) tl} {
           match hd
-          | +Leaf(sc, move) ->
+          | +Leaf(sc, move) =>
             ! minimax' .fmax a b +Leaf(sc, cur_mv)
-          | +Sons(nl, move) ->
+          | +Sons(nl, move) =>
             ! minimax' .fmax a b +Sons(nl, cur_mv)
           end
         } {
@@ -590,8 +590,8 @@ end
 
 def fix take_turn : TakeTurn =
   comatch
-  | .ai -> (
-    fn b is_black is_auto next ->
+  | .ai => (
+    fn b is_black is_auto next =>
       ! write_line "------AI turn------" {
         do find_str <- ! if (Ret String) is_black {ret "black"} {ret "white"};
         ! write_line find_str {
@@ -603,7 +603,7 @@ def fix take_turn : TakeTurn =
         let beta : BestSol = +Cons(+Cons(0,0), 10, 0) in
         // do gt_str <- ! gt_fmt gt;
         match gt
-        | +Leaf((sc, _)) ->
+        | +Leaf((sc, _)) =>
           ! write_line "Game Over!" {
             do win_state <- ! if (Ret Int) is_black {ret 1} {ret -1};
             do lose_state <- ! mul win_state -1;
@@ -623,13 +623,13 @@ def fix take_turn : TakeTurn =
               }
             }
           }
-        | +Sons(s, loc) ->
+        | +Sons(s, loc) =>
           do sol <- ! if (Ret BestSol) is_black {! minimax' .fmax alpha beta gt} {! minimax' .fmin alpha beta gt};
           // do sol <- ! if (Ret BestSol) is_black {! minimax .max gt} {! minimax .min gt};
           match sol
-          | +Cons(loc, sc, depth) ->
+          | +Cons(loc, sc, depth) =>
             match loc
-            | +Cons(r, c) ->
+            | +Cons(r, c) =>
               do nb <- ! play b r c is_black;
               ! write_line "AI played:" {
                 do loc_str <- ! loc_fmt loc;
@@ -638,8 +638,8 @@ def fix take_turn : TakeTurn =
                   do is_white <- ! not is_black;
                   ! print_board nb {
                     do sc <- ! get_score nb;
-                    let is_win = {! if (Int -> Ret Bool) is_black {fn x -> ! int_gt x 0} {fn x -> ! int_lt x 0}} in
-                    let is_loss = {! if (Int -> Ret Bool) is_black {fn x -> ! int_lt x 0} {fn x -> ! int_gt x 0}} in
+                    let is_win = {! if (Int -> Ret Bool) is_black {fn x => ! int_gt x 0} {fn x => ! int_lt x 0}} in
+                    let is_loss = {! if (Int -> Ret Bool) is_black {fn x => ! int_lt x 0} {fn x => ! int_gt x 0}} in
                     // do win_state <- ! if (Ret Int) is_black {ret 1} {ret -1};
                     // do lose_state <- ! mul win_state -1;
                     ! if~ (OS) {! is_win sc} {
@@ -673,23 +673,23 @@ def fix take_turn : TakeTurn =
           end
         end
   }})
-  | .player -> (
-    fn b is_black is_auto next ->
+  | .player => (
+    fn b is_black is_auto next =>
       ! write_line "------Your turn------" {
         ! write_line "Enter row number(1-3)" {
           ! read_line {
-            fn (input : String) ->
+            fn (input : String) =>
               do r <- ! str_to_int input;
               ! write_line "Enter column number(1-3)" {
                 ! read_line {
-                  fn (input : String) ->
+                  fn (input : String) =>
                     do c <- ! str_to_int input;
                     do nb <- ! play b r c is_black;
                     do is_white <- ! not is_black;
                     ! print_board nb {
                       do sc <- ! get_score nb;
-                      let is_win = {! if (Int -> Ret Bool) is_black {fn x -> ! int_gt x 0} {fn x -> ! int_lt x 0}} in
-                      let is_loss = {! if (Int -> Ret Bool) is_black {fn x -> ! int_lt x 0} {fn x -> ! int_gt x 0}} in
+                      let is_win = {! if (Int -> Ret Bool) is_black {fn x => ! int_gt x 0} {fn x => ! int_lt x 0}} in
+                      let is_loss = {! if (Int -> Ret Bool) is_black {fn x => ! int_lt x 0} {fn x => ! int_gt x 0}} in
                       ! if~ (OS) {! is_win sc} {
                         ! write_line "You win!" {
                           ! next
@@ -723,14 +723,14 @@ main
                                +Row(-1,1,0), 
                                +Row(1,0,-1)) in
   let fix turn : U OS -> OS =
-    fn next ->
+    fn next =>
     ! write_line "Welcome to Tic Tac Toe!\n1. Play With AI\n2. Watch AI Play\n3. Exit" {
       ! read_line {
-        fn (input : String) ->
+        fn (input : String) =>
           ! if~ (OS) {! str_eq "1" input} {
             ! write_line "Starting Game...\n1. AI play first\n2. You play first" {
               ! read_line {
-                fn (input : String) ->
+                fn (input : String) =>
                   ! if~ (OS) {! str_eq "1" input} {
                     ! write_line "AI play first" {
                       ! take_turn .ai initial +True() +False() next

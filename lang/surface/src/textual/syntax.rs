@@ -172,7 +172,7 @@ pub struct CoDataArm {
     pub out: TermId,
 }
 
-/// `comatch | .d_1 -> b_1 | ... end`
+/// `comatch | .d_1 => b_1 | ... end`
 #[derive(Clone, Debug)]
 pub struct CoMatchParam {
     pub arms: Vec<CoMatcherParam>,

@@ -81,18 +81,18 @@ begin
   that
   def ! detriv-mo (M : (VType) -> (CType)) (mo : Thk (Monad' M)) : Monad M =
     comatch
-    | .return A -> ! mo .return A triv
-    | .bind A A' -> ! mo .bind A triv A' triv
+    | .return A => ! mo .return A triv
+    | .bind A A' => ! mo .bind A triv A' triv
     end
   that
   def ! detriv-mt
     (T : ((VType) -> (CType)) -> (VType) -> (CType))
     (mt : Thk (MonadTrans' T))
     : MonadTrans T =
-    fn (M : (VType) -> (CType)) (mo : Thk (Monad M)) ->
+    fn (M : (VType) -> (CType)) (mo : Thk (Monad M)) =>
       comatch
-      | .monad -> ! detriv-mo (T M) { ! mt M mo .monad }
-      | .lift A -> ! mt M mo .lift A triv
+      | .monad => ! detriv-mo (T M) { ! mt M mo .monad }
+      | .lift A => ! mt M mo .lift A triv
       end
   that
 
@@ -108,10 +108,10 @@ begin
   --| Monad implementation for `ExnK`
   let ! mo_exnk (E: VType) : Monad (ExnK E) =
     comatch
-    | .return A a -> fn R ke ka ->
+    | .return A a => fn R ke ka =>
       ! ka a
-    | .bind A A' m f -> fn R ke ka ->
-      ! m R ke { fn a -> ! f a R ke ka }
+    | .bind A A' m f => fn R ke ka =>
+      ! m R ke { fn a => ! f a R ke ka }
     end
   that
 
@@ -119,19 +119,19 @@ begin
   def ! mt_exnk (E: VType) : MonadTrans (ExnKT E) =
     let ! mt' (M: VType -> CType) (mo: Thk (Monad M)) =
       @[debug("generated and applied")]
-      monadic fn (E: VType) ->
+      monadic fn (E: VType) =>
         @[debug("original")]
         let ! mo_exnk (E: VType) : Monad (ExnK E) =
           comatch
-          | .return A a -> fn R ke ka ->
+          | .return A a => fn R ke ka =>
             ! ka a
-          | .bind A A' m f -> fn R ke ka ->
-            ! m R ke { fn a -> ! f a R ke ka }
+          | .bind A A' m f => fn R ke ka =>
+            ! m R ke { fn a => ! f a R ke ka }
           end
         in
         comatch
-        | .monad -> ! mo_exnk E
-        | .lift A m ->
+        | .monad => ! mo_exnk E
+        | .lift A m =>
           do a <- ! m; ! mo_exnk E .return A a
         end
       :
@@ -142,15 +142,15 @@ begin
   that
 
   --| Manual implementation of the monad transformer for `ExnKT`
-  def ! mt_exnk_manual (E: VType) : MonadTrans (ExnKT E) = fn M mo ->
+  def ! mt_exnk_manual (E: VType) : MonadTrans (ExnKT E) = fn M mo =>
     comatch
-    | .monad ->
+    | .monad =>
       comatch
-      | .return A a -> fn R alg -> fn ke ka -> ! ka a
-      | .bind A A' m f -> fn R alg -> fn ke ka' ->
-        ! m R alg ke { fn a -> ! f a R alg ke ka' }
+      | .return A a => fn R alg => fn ke ka => ! ka a
+      | .bind A A' m f => fn R alg => fn ke ka' =>
+        ! m R alg ke { fn a => ! f a R alg ke ka' }
       end
-    | .lift A m -> fn R alg -> fn ke ka ->
+    | .lift A m => fn R alg => fn ke ka =>
       ! alg A m ka
     end
   that

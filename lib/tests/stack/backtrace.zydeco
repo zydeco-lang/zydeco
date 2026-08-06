@@ -23,8 +23,8 @@ begin
   that
   def fix trace (A : VType) (t : Tree A) (stk : List A) : Ret (Tree (List A)) =
     match t
-    | +Leaf() -> ret +Leaf()
-    | +Node(l, a, r) ->
+    | +Leaf() => ret +Leaf()
+    | +Node(l, a, r) =>
       let stk : List A = +Cons(a, stk) in
       do l <- ! trace A l stk;
       do r <- ! trace A r stk;
@@ -46,8 +46,8 @@ begin
   def ! write_list (A : VType) (write : Thk (A -> Thk OS -> OS)) (l : List A) (k : Thk OS) : OS =
     let fix write_list_aux (l : List A) (k : Thk OS) : OS =
         match l
-      | +Nil() -> ! k
-      | +Cons(a, l) ->
+      | +Nil() => ! k
+      | +Cons(a, l) =>
         ! write a {
           ! (api/write_str) "," {
             ! write_list_aux l k
@@ -63,9 +63,9 @@ begin
   that
   def fix write_tree (A : VType) (write : Thk (A -> Thk OS -> OS)) (t : Tree A) (k : Thk OS) : OS =
     match t
-    | +Leaf() ->
+    | +Leaf() =>
       ! (api/write_str) "()" k
-    | +Node(l, a, r) ->
+    | +Node(l, a, r) =>
       ! (api/write_str) "(" {
         ! write_tree A write l {
           ! write a {

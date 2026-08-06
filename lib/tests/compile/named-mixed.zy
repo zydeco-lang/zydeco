@@ -70,9 +70,9 @@ begin
   that
   def ! gauge : Gauge =
     comatch
-    | .read ->
+    | .read =>
       ret (reading = 12 : Int, 13 : Int)
-    | .shift (delta = delta : Int) ->
+    | .shift (delta = delta : Int) =>
       ret (reading = delta : Int)
     end
   that
@@ -121,7 +121,7 @@ begin
       kind = kind : Int,
       body : Int,
       payload = payload : Int
-    ) ->
+    ) =>
     do packet_checksum <- ! checksum3 kind body payload;
     do packet_check <- ! (api/sub) packet_checksum 987;
 
@@ -164,7 +164,7 @@ begin
     do total <- ! (api/add) total shift_pattern_check;
     do total <- ! (api/add) total shift_projection_check;
     ! (api/exit) total
-  | +Empty() ->
+  | +Empty() =>
     ! (api/exit) 1
   end
 end

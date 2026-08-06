@@ -1,0 +1,54 @@
+==================
+Term bodies and type arrows
+==================
+
+(
+  A -> B,
+  fn value => ret value,
+  fix recur => ret (),
+  comatch value => ret value end,
+  match input | _ => ret () end,
+  comatch | .read => ret () end,
+)
+
+---
+
+(source_file
+  (parenthesized_term
+    (function_type
+      (variable
+        (upper_identifier))
+      (variable
+        (upper_identifier)))
+    (lambda_expression
+      (copattern
+        (variable_pattern
+          (lower_identifier)))
+      (return_expression
+        (variable
+          (lower_identifier))))
+    (fix_expression
+      (variable_pattern
+        (lower_identifier))
+      (return_expression
+        (parenthesized_term)))
+    (block_abstraction
+      (copattern
+        (variable_pattern
+          (lower_identifier)))
+      (return_expression
+        (variable
+          (lower_identifier))))
+    (match_expression
+      (variable
+        (lower_identifier))
+      (match_arm
+        (hole_pattern)
+        (return_expression
+          (parenthesized_term))))
+    (comatch_expression
+      (comatch_arm
+        (copattern
+          (destructor_identifier))
+        (return_expression
+          (parenthesized_term))))))

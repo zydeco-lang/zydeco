@@ -21,6 +21,10 @@ The core types include:
 
 The main program is required to have type `OS`.
 
+Surface notation distinguishes classifier arrows from term bodies while leaving constructor and destructor
+spines whitespace-guided. The [surface syntax principles](docs/ideas/syntax.md) record the rationale and the
+intended use of juxtaposition, grouping, and block delimiters.
+
 ## Products and Existential Packages
 
 Parenthesized comma sequences are preserved by the surface `Cons` variant using
@@ -159,8 +163,8 @@ Type patterns make one additional distinction visible. A named pattern
 and type-function binders retain this pattern shape. Consequently:
 
 ```text
-(fn (field = X) -> B) (field = A)  ↦  B[A/X]
-(fn Whole -> B) (field = A)        ↦  B[(field = A)/Whole]
+(fn (field = X) => B) (field = A)  ↦  B[A/X]
+(fn Whole => B) (field = A)        ↦  B[(field = A)/Whole]
 ```
 
 The same payload extraction is used when existential witnesses instantiate a

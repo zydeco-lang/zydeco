@@ -5,7 +5,7 @@ begin
   ) that
 
   ! (api/read_line) {
-    fn line ->
+    fn line =>
       let ! f (z : Int) : OS =
         let line = line in
         ! (api/exit) z

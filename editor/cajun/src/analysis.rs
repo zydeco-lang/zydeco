@@ -535,7 +535,7 @@ mod tests {
                 concat!(
                     "```zydeco\n",
                     "Option : VType -> VType =\n",
-                    "  fn A ->\n",
+                    "  fn A =>\n",
                     "    data\n",
                     "    | +None : Unit\n",
                     "    | +Some : A\n",

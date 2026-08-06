@@ -38,7 +38,7 @@ begin
     Thk (Ret Int) ->
     Ret Int
   ) = {
-    fn suspended ->
+    fn suspended =>
       do value <- ! suspended;
       ! (api/sub) value 1
   } that

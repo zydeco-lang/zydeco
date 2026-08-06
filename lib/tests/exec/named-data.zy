@@ -22,14 +22,14 @@ begin
       tag = tag : Int,
       body : Int,
       payload = payload : Int
-    ) ->
+    ) =>
     do tag_check <- ! (api/sub) tag 7;
     do body_check <- ! (api/sub) body 8;
     do payload_check <- ! (api/sub) payload 9;
     do total <- ! (api/add) tag_check body_check;
     do total <- ! (api/add) total payload_check;
     ! (api/exit) total
-  | +Empty() ->
+  | +Empty() =>
     ! (api/exit) 1
   end
 end

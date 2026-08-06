@@ -58,19 +58,19 @@ begin
     (mo : Thk (Monad M))
     : Monad (ReaderT R M) =
     comatch
-    | .return A a ->
+    | .return A a =>
       -- goal: ReaderT R M A
       comatch
-      | .run _ -> ! mo .return A a
+      | .run _ => ! mo .return A a
       end
-    | .bind A A' m f -> -- m: U (ReaderT R M A), f: U (A -> ReaderT R M A')
+    | .bind A A' m f => -- m: U (ReaderT R M A), f: U (A -> ReaderT R M A')
       -- goal: ReaderT R M A'
       comatch
-      | .run r ->
+      | .run r =>
         ! mo .bind A A'
           { ! m .run r }
           {
-            fn a ->
+            fn a =>
               ! f a .run r
           }
       end
@@ -78,10 +78,10 @@ begin
   that
   def ! reader_t_trans (R : VType) : MonadTrans'' (ReaderT R) =
     comatch
-    | .lift M A mo m ->
+    | .lift M A mo m =>
       -- goal: ReaderT R M A
       comatch
-      | .run _ -> ! m
+      | .run _ => ! m
       -- basically ignoring the reader input
       end
     end
@@ -94,24 +94,24 @@ begin
     (mo : Thk (Monad M))
     : Monad (OptionT M) =
     comatch
-    | .return A a ->
+    | .return A a =>
       -- goal: OptionT M A
       comatch
-      | .run -> ! mo .return (Option A) +Some(a)
+      | .run => ! mo .return (Option A) +Some(a)
       end
-    | .bind A A' m f -> -- m: U (OptionT M A), f: U (A -> OptionT M A')
+    | .bind A A' m f => -- m: U (OptionT M A), f: U (A -> OptionT M A')
       -- goal: OptionT M A'
       comatch
-      | .run ->
+      | .run =>
         ! mo .bind
           (Option A)
           (Option A')
           { ! m .run }
           {
-            fn a? ->
+            fn a? =>
               match a?
-              | +Some(a) -> ! f a .run
-              | +None() -> ! mo .return (Option A') +None()
+              | +Some(a) => ! f a .run
+              | +None() => ! mo .return (Option A') +None()
               end
           }
       end
@@ -119,11 +119,11 @@ begin
   that
   def ! option_t_trans : MonadTrans'' OptionT =
     comatch
-    | .lift M A mo m ->
+    | .lift M A mo m =>
       comatch
-      | .run ->
+      | .run =>
         ! mo .bind A (Option A) m {
-          fn a ->
+          fn a =>
             ! mo .return (Option A) +Some(a)
         }
       end
@@ -131,9 +131,9 @@ begin
   that
   def ! koption_t_trans : MonadTrans'' KOptionT =
     comatch
-    | .lift M A mo m -> -- m : U(M A)
+    | .lift M A mo m => -- m : U(M A)
       comatch
-      | .run R bAlg kS kE -> -- kS : U(A -> R), bAlg : Algebra M B
+      | .run R bAlg kS kE => -- kS : U(A -> R), bAlg : Algebra M B
         ! bAlg A m kS
       end
     end
@@ -146,19 +146,19 @@ begin
     (monadM : Thk (Monad M))
     : Monad (KOptionT M) =
     comatch
-    | .return A a ->
+    | .return A a =>
       comatch
-      | .run R bAlg kS kE ->
+      | .run R bAlg kS kE =>
         ! kS a
       end
-    | .bind A A' m k -> -- m : U(KOptT M A), k : U(A -> KOptT M A'), goal: KOptT M A'
+    | .bind A A' m k => -- m : U(KOptT M A), k : U(A -> KOptT M A'), goal: KOptT M A'
       comatch
-      | .run R bAlg kS kE -> -- kS : U(A' -> R), kE: U R, bAlg: Algebra M R, goal: R
+      | .run R bAlg kS kE => -- kS : U(A' -> R), kE: U R, bAlg: Algebra M R, goal: R
         ! m .run
           R
           bAlg
           {
-            fn a ->
+            fn a =>
               ! k a .run R bAlg kS kE
           }
           kE
