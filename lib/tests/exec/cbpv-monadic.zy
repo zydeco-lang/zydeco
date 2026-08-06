@@ -12,12 +12,11 @@ begin
   let Ret = F that
   let add = api/add that
   let mul = api/mul that
-  let str_length = api/str_length that
+  let str_scalar_length = api/str_scalar_length that
   let str_append = api/str_append that
-  let str_index = api/str_index that
   let int_to_str = api/int_to_str that
   let char_to_str = api/char_to_str that
-  let char_to_int = api/char_to_int that
+  let char_codepoint = api/char_codepoint that
   let write_str = api/write_str that
   let write_line = api/write_line that
   let read_line = api/read_line that
@@ -34,6 +33,14 @@ begin
     | +None : Unit
     | +Some : A
     end
+  that
+  def ! str_get_or_space (string : String) (index : Int) : Ret Char =
+    ! (api/str_get_branch)
+      (Ret Char)
+      string
+      index
+      { ret ' ' }
+      { fn character => ret character }
   that
   def List (A : VType) : VType =
     data
@@ -90,8 +97,8 @@ begin
       { ret +False() }
   that
   def ! char_eq (left : Char) (right : Char) : Ret Bool =
-    do left <- ! char_to_int left;
-    do right <- ! char_to_int right;
+    do left <- ! char_codepoint left;
+    do right <- ! char_codepoint right;
     ! int_eq left right
   that
   def ! bool_eq (left : Bool) (right : Bool) : Ret Bool =
@@ -597,7 +604,7 @@ begin
 
   def ! mp-cnt (A : VType) (cnt : Int) (m : U (Parser A)) : Parser A =
     comatch | .run s i =>
-      do len <- ! str_length s;
+      do len <- ! str_scalar_length s;
       do i' <- ! add i cnt;
       ! if~ (MExnOS (Pair A Int)) { ! int_le i' len } {
         ! m .run s i
@@ -611,7 +618,7 @@ begin
     ! mp-cnt (Char) 1 {
       comatch | .run s i =>
         ! if~ (MExnOS (Pair Char Int)) {
-          do c' <- ! str_index s i;
+          do c' <- ! str_get_or_space s i;
           ! char_eq c' c
         } {
           do i' <- ! add i 1;
@@ -627,7 +634,7 @@ begin
   that
 
   def ! p_word (w : String) : Parser String =
-    do len <- ! str_length w;
+    do len <- ! str_scalar_length w;
     ! mp-cnt (String) len {
       comatch | .run s i =>
         let fix word_match (j: Int) =
@@ -635,8 +642,8 @@ begin
             ret +True()
           } {
             do l <- ! add i j;
-            do c1 <- ! str_index s l;
-            do c2 <- ! str_index w j;
+            do c1 <- ! str_get_or_space s l;
+            do c2 <- ! str_get_or_space w j;
             ! if~ (Ret Bool) { ! char_eq c1 c2 } {
               do j' <- ! add j 1;
               ! word_match j'
@@ -659,7 +666,7 @@ begin
 
   def ! p_var : Parser String =
     let ! p_vc (c: Char) : Ret (Option Char) =
-      do ascii <- ! char_to_int c;
+      do ascii <- ! char_codepoint c;
       let ! digit =
         ! and~ { ! int_lt 47 ascii } { ! int_lt ascii 58 }
       in
@@ -676,13 +683,13 @@ begin
     in
     comatch | .run s i =>
       let fix var (v: String) (i: Int) =
-        do c <- ! str_index s i;
+        do c <- ! str_get_or_space s i;
         do c? <- ! p_vc c;
         do i' <- ! add i 1;
         match c?
         | +None() =>
           ! if~ (MExnOS (Pair String Int)) {
-            do len <- ! str_length v;
+            do len <- ! str_scalar_length v;
             ! int_eq len 0
           } {
             ! mexn-err .fail (Pair String Int) +ParseError(i, "variable of length 0")
@@ -819,7 +826,7 @@ begin
     match sci
     | +Cons(sc, i) =>
       ! if~ (MExnOS SCompu) {
-        do len <- ! str_length s;
+        do len <- ! str_scalar_length s;
         ! int_eq i len
       } {
         ! mexn .return (SCompu) sc

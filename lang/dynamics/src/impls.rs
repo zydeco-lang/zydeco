@@ -7,10 +7,22 @@ use std::{
 type ZValue = SemValue;
 type ZCompute = Computation;
 
-/// Box helper for constructing semantic values.
-fn mk_box<T>(t: T) -> Box<T> {
-    Box::new(t)
+struct Input;
+
+impl Input {
+    fn line(reader: &mut dyn BufRead) -> String {
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        if line.ends_with('\n') {
+            line.pop();
+            if line.ends_with('\r') {
+                line.pop();
+            }
+        }
+        line
+    }
 }
+
 #[inline]
 /// Rc helper for constructing shared computations.
 fn mk_rc<T>(t: T) -> Rc<T> {
@@ -26,33 +38,10 @@ fn ret<E>(value: ZValue) -> Result<ZCompute, E> {
 fn app(body: Rc<ZCompute>, arg: ZValue) -> ZCompute {
     App(body, mk_rc(arg.into())).into()
 }
-/// Construct a constructor value from a list of arguments.
-fn ctor(ctor: &str, args: Vec<Rc<ZValue>>) -> ZValue {
-    let args = match args.len() {
-        | 0 => mk_box(Triv.into()),
-        | 1 => mk_box(args[0].as_ref().to_owned()),
-        | _ => {
-            let args = args.into_iter().map(|arg| arg.as_ref().to_owned()).collect();
-            let ConsN(items, tail) = ConsN::from_vec(args).expect("non-empty constructor payload");
-            mk_box(ConsN(items, Box::new(tail)).into())
-        }
-    };
-    Ctor(CtorName(ctor.to_string()), args).into()
-}
 #[allow(unused)]
 /// Apply a destructor to a computation.
 fn dtor(body: Rc<ZCompute>, dtor: &str) -> ZCompute {
     Dtor(body, DtorName(dtor.to_string())).into()
-}
-
-// /* Bool */
-/// Encode a Rust boolean as a Zydeco boolean constructor.
-fn bool(b: bool) -> ZValue {
-    let b = match b {
-        | true => "+True",
-        | false => "+False",
-    };
-    ctor(b, vec![])
 }
 
 // /* Arithmetic */
@@ -78,27 +67,6 @@ arith!(sub, -);
 arith!(mul, *);
 arith!(div, /);
 arith!(modulo, %);
-
-/// Generate integer comparison primitives.
-macro_rules! intcomp {
-    ( $name:ident, $op:tt ) => {
-        pub fn $name(
-            args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _:&[String],
-        ) -> Result<ZCompute, i32> {
-            match args.as_slice() {
-                [
-                    ZValue::Literal(Literal::Int(a)),
-                    ZValue::Literal(Literal::Int(b))
-                ] => ret(bool(a $op b)),
-                _ => unreachable!(""),
-            }
-        }
-    };
-}
-
-intcomp!(int_eq, ==);
-intcomp!(int_lt, <);
-intcomp!(int_gt, >);
 
 struct Branch;
 
@@ -132,12 +100,24 @@ intcomp_branch!(int_lt_branch, <);
 intcomp_branch!(int_gt_branch, >);
 
 // /* Strings */
-/// Return the length of a string as an integer literal.
-pub fn str_length(
+/// Return the number of Unicode scalar values in a string.
+pub fn str_scalar_length(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        | [ZValue::Literal(Literal::String(a))] => ret(Literal::Int(a.len() as i64).into()),
+        | [ZValue::Literal(Literal::String(a))] => ret(Literal::Int(a.scalar_len() as i64).into()),
+        | _ => unreachable!(""),
+    }
+}
+
+/// Return the number of bytes in a string's UTF-8 encoding.
+pub fn str_byte_length(
+    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
+) -> Result<ZCompute, i32> {
+    match args.as_slice() {
+        | [ZValue::Literal(Literal::String(string))] => {
+            ret(Literal::Int(string.byte_len() as i64).into())
+        }
         | _ => unreachable!(""),
     }
 }
@@ -148,58 +128,7 @@ pub fn str_append(
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::String(a)), ZValue::Literal(Literal::String(b))] => {
-            let mut a = a.to_owned();
-            a.extend(b);
-            ret(Literal::String(a).into())
-        }
-        | _ => unreachable!(""),
-    }
-}
-
-/// Split a string once on the given delimiter, returning an option pair.
-pub fn str_split_once(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
-) -> Result<ZCompute, i32> {
-    match args.as_slice() {
-        | [ZValue::Literal(Literal::String(s)), ZValue::Literal(Literal::Char(p))] => {
-            match s.iter().collect::<String>().split_once(p.to_owned()) {
-                | Some((a, b)) => ret(ctor(
-                    "+Some",
-                    vec![mk_rc(ctor(
-                        "+Cons",
-                        vec![
-                            mk_rc(Literal::String(a.chars().collect()).into()),
-                            mk_rc(Literal::String(b.chars().collect()).into()),
-                        ],
-                    ))],
-                )),
-                | None => ret(ctor("+None", vec![])),
-            }
-        }
-        | _ => unreachable!(""),
-    }
-}
-
-/// Split a string at index `n`, returning an option pair.
-pub fn str_split_n(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
-) -> Result<ZCompute, i32> {
-    match args.as_slice() {
-        | [ZValue::Literal(Literal::String(s)), ZValue::Literal(Literal::Int(n))] => {
-            if n.is_negative() {
-                return ret(ctor("+None", vec![]));
-            }
-            let (a, b) = s.split_at(*n as usize);
-            ret(ctor(
-                "+Some",
-                vec![mk_rc(ctor(
-                    "+Cons",
-                    vec![
-                        mk_rc(Literal::String(a.to_owned()).into()),
-                        mk_rc(Literal::String(b.to_owned()).into()),
-                    ],
-                ))],
-            ))
+            ret(Literal::String([a.as_str(), b.as_str()].concat().into()).into())
         }
         | _ => unreachable!(""),
     }
@@ -209,7 +138,7 @@ struct OptionalPairBranch;
 
 impl OptionalPairBranch {
     fn select(
-        pair: Option<(Vec<char>, Vec<char>)>, when_none: &ZValue, when_some: &ZValue,
+        pair: Option<(Utf8String, Utf8String)>, when_none: &ZValue, when_some: &ZValue,
     ) -> Result<ZCompute, i32> {
         match pair {
             | None => Ok(Force(mk_rc(when_none.clone().into())).into()),
@@ -234,10 +163,10 @@ pub fn str_split_once_branch(
             when_none @ ZValue::Thunk(_),
             when_some @ ZValue::Thunk(_),
         ] => {
-            let pair =
-                string.iter().collect::<String>().split_once(*separator).map(|(first, second)| {
-                    (first.chars().collect::<Vec<_>>(), second.chars().collect::<Vec<_>>())
-                });
+            let pair = string
+                .as_str()
+                .split_once(*separator)
+                .map(|(first, second)| (first.into(), second.into()));
             OptionalPairBranch::select(pair, when_none, when_some)
         }
         | _ => unreachable!(""),
@@ -246,7 +175,7 @@ pub fn str_split_once_branch(
 
 /// Split at an index and select a computation without constructing a
 /// library-defined optional pair.
-pub fn str_split_n_branch(
+pub fn str_split_at_branch(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
@@ -256,25 +185,8 @@ pub fn str_split_n_branch(
             when_none @ ZValue::Thunk(_),
             when_some @ ZValue::Thunk(_),
         ] => {
-            let pair = usize::try_from(*index).ok().and_then(|index| {
-                (index <= string.len()).then(|| {
-                    let (first, second) = string.split_at(index);
-                    (first.to_vec(), second.to_vec())
-                })
-            });
+            let pair = usize::try_from(*index).ok().and_then(|index| string.split_at_scalar(index));
             OptionalPairBranch::select(pair, when_none, when_some)
-        }
-        | _ => unreachable!(""),
-    }
-}
-
-/// Test two strings for equality.
-pub fn str_eq(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
-) -> Result<ZCompute, i32> {
-    match args.as_slice() {
-        | [ZValue::Literal(Literal::String(a)), ZValue::Literal(Literal::String(b))] => {
-            ret(bool(a == b))
         }
         | _ => unreachable!(""),
     }
@@ -296,13 +208,38 @@ pub fn str_eq_branch(
     }
 }
 
-/// Index a string by position and return the character literal.
-pub fn str_index(
+struct OptionalValueBranch;
+
+impl OptionalValueBranch {
+    fn select(
+        value: Option<ZValue>, when_none: &ZValue, when_some: &ZValue,
+    ) -> Result<ZCompute, i32> {
+        match value {
+            | None => Ok(Force(mk_rc(when_none.clone().into())).into()),
+            | Some(value) => {
+                let continuation = Force(mk_rc(when_some.clone().into())).into();
+                Ok(app(mk_rc(continuation), value))
+            }
+        }
+    }
+}
+
+/// Safely index a string by Unicode scalar position and select a continuation.
+pub fn str_get_branch(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        | [ZValue::Literal(Literal::String(a)), ZValue::Literal(Literal::Int(b))] => {
-            ret(Literal::Char(*a.iter().nth(*b as usize).unwrap()).into())
+        | [
+            ZValue::Literal(Literal::String(string)),
+            ZValue::Literal(Literal::Int(index)),
+            when_none @ ZValue::Thunk(_),
+            when_some @ ZValue::Thunk(_),
+        ] => {
+            let character = usize::try_from(*index)
+                .ok()
+                .and_then(|index| string.scalar(index))
+                .map(|character| Literal::Char(character).into());
+            OptionalValueBranch::select(character, when_none, when_some)
         }
         | _ => unreachable!(""),
     }
@@ -313,9 +250,7 @@ pub fn int_to_str(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        | [ZValue::Literal(Literal::Int(a))] => {
-            ret(Literal::String(a.to_string().chars().collect()).into())
-        }
+        | [ZValue::Literal(Literal::Int(a))] => ret(Literal::String(a.to_string().into()).into()),
         | _ => unreachable!(""),
     }
 }
@@ -325,30 +260,54 @@ pub fn char_to_str(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        | [ZValue::Literal(Literal::Char(a))] => {
-            ret(Literal::String(a.to_string().chars().collect()).into())
-        }
+        | [ZValue::Literal(Literal::Char(a))] => ret(Literal::String((*a).into()).into()),
         | _ => unreachable!(""),
     }
 }
 
 /// Convert a character literal to its integer codepoint.
-pub fn char_to_int(
+pub fn char_codepoint(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        | [ZValue::Literal(Literal::Char(a))] => ret(Literal::Int((*a as u8) as i64).into()),
+        | [ZValue::Literal(Literal::Char(a))] => ret(Literal::Int(*a as u32 as i64).into()),
         | _ => unreachable!(""),
     }
 }
 
-/// Parse a string literal into an integer literal.
-pub fn str_to_int(
+/// Validate an integer as a Unicode scalar value and select a continuation.
+pub fn char_from_codepoint_branch(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        | [ZValue::Literal(Literal::String(s))] => {
-            ret(Literal::Int(s.iter().collect::<String>().parse().unwrap()).into())
+        | [
+            ZValue::Literal(Literal::Int(codepoint)),
+            when_none @ ZValue::Thunk(_),
+            when_some @ ZValue::Thunk(_),
+        ] => {
+            let character = u32::try_from(*codepoint)
+                .ok()
+                .and_then(char::from_u32)
+                .map(|character| Literal::Char(character).into());
+            OptionalValueBranch::select(character, when_none, when_some)
+        }
+        | _ => unreachable!(""),
+    }
+}
+
+/// Parse a string as an integer and select a continuation without panicking.
+pub fn str_parse_int_branch(
+    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
+) -> Result<ZCompute, i32> {
+    match args.as_slice() {
+        | [
+            ZValue::Literal(Literal::String(string)),
+            when_none @ ZValue::Thunk(_),
+            when_some @ ZValue::Thunk(_),
+        ] => {
+            let integer =
+                string.as_str().parse::<i64>().ok().map(|integer| Literal::Int(integer).into());
+            OptionalValueBranch::select(integer, when_none, when_some)
         }
         | _ => unreachable!(""),
     }
@@ -361,7 +320,7 @@ pub fn write_str(
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::String(s)), e @ ZValue::Thunk(..)] => {
-            write!(w, "{}", s.iter().collect::<String>()).unwrap();
+            write!(w, "{s}").unwrap();
             w.flush().unwrap();
             Ok(Force(mk_rc(e.clone().into())).into())
         }
@@ -389,7 +348,7 @@ pub fn write_line(
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::String(line)), e @ ZValue::Thunk(..)] => {
-            writeln!(w, "{}", line.iter().collect::<String>()).unwrap();
+            writeln!(w, "{line}").unwrap();
             w.flush().unwrap();
             Ok(Force(mk_rc(e.clone().into())).into())
         }
@@ -403,37 +362,11 @@ pub fn read_line(
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [e @ ZValue::Thunk(_)] => {
-            let mut line = String::new();
-            r.read_line(&mut line).unwrap();
-            line.pop();
+            let line = Input::line(r);
             Ok(app(
                 mk_rc(Force(mk_rc(e.clone().into())).into()),
-                Literal::String(line.chars().collect()).into(),
+                Literal::String(line.into()).into(),
             ))
-        }
-        | _ => unreachable!(""),
-    }
-}
-
-/// Read a line and attempt to parse it as an integer.
-pub fn read_line_as_int(
-    args: Vec<ZValue>, r: &mut dyn BufRead, _w: &mut dyn Write, _: &[String],
-) -> Result<ZCompute, i32> {
-    match args.as_slice() {
-        | [e @ ZValue::Thunk(_)] => {
-            let mut line = String::new();
-            r.read_line(&mut line).unwrap();
-            line.pop();
-            let i: Option<i64> = line.parse().ok();
-            match i {
-                | Some(i) => Ok(app(
-                    mk_rc(Force(mk_rc(e.clone().into())).into()),
-                    ctor("+Some", vec![mk_rc(Literal::Int(i).into())]),
-                )),
-                | None => {
-                    Ok(app(mk_rc(Force(mk_rc(e.clone().into())).into()), ctor("+None", vec![])))
-                }
-            }
         }
         | _ => unreachable!(""),
     }
@@ -446,9 +379,7 @@ pub fn read_line_as_int_branch(
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [failure @ ZValue::Thunk(_), success @ ZValue::Thunk(_)] => {
-            let mut line = String::new();
-            r.read_line(&mut line).unwrap();
-            match line.trim_end_matches(['\r', '\n']).parse::<i64>() {
+            match Input::line(r).parse::<i64>() {
                 | Ok(integer) => Ok(app(
                     mk_rc(Force(mk_rc(success.clone().into())).into()),
                     Literal::Int(integer).into(),
@@ -470,27 +401,8 @@ pub fn read_till_eof(
             r.read_to_string(&mut line).unwrap();
             Ok(app(
                 mk_rc(Force(mk_rc(e.clone().into())).into()),
-                Literal::String(line.chars().collect()).into(),
+                Literal::String(line.into()).into(),
             ))
-        }
-        | _ => unreachable!(""),
-    }
-}
-
-/// Build a Zydeco list of command-line arguments and pass it to the continuation.
-pub fn arg_list(
-    args: Vec<ZValue>, _r: &mut dyn BufRead, _w: &mut dyn Write, argv: &[String],
-) -> Result<ZCompute, i32> {
-    match args.as_slice() {
-        | [k] => {
-            let mut z_arg_list = ctor("+Nil", vec![]);
-            for arg in argv.iter().rev() {
-                z_arg_list = ctor(
-                    "+Cons",
-                    vec![mk_rc(Literal::String(arg.chars().collect()).into()), mk_rc(z_arg_list)],
-                );
-            }
-            Ok(app(mk_rc(Force(mk_rc(k.clone().into())).into()), z_arg_list))
         }
         | _ => unreachable!(""),
     }
@@ -505,7 +417,7 @@ impl ArgumentFold {
 
     fn item(step: &ZValue, argument: &str, tail: ZCompute) -> ZCompute {
         let step: ZCompute = Force(mk_rc(step.clone().into())).into();
-        let with_argument = app(mk_rc(step), Literal::String(argument.chars().collect()).into());
+        let with_argument = app(mk_rc(step), Literal::String(argument.into()).into());
         App(mk_rc(with_argument), Self::tail(tail)).into()
     }
 
@@ -551,5 +463,20 @@ pub fn exit(
     match args.as_slice() {
         | [ZValue::Literal(Literal::Int(a))] => Err(*a as i32),
         | _ => unreachable!(""),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Input;
+    use std::io::Cursor;
+
+    #[test]
+    fn line_input_removes_one_line_ending_and_preserves_other_content() {
+        for (source, expected) in
+            [("text\n", "text"), ("text\r\n", "text"), ("text", "text"), ("text\r", "text\r")]
+        {
+            assert_eq!(Input::line(&mut Cursor::new(source)), expected);
+        }
     }
 }

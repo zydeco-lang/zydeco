@@ -56,7 +56,12 @@ impl Input {
     fn line() -> String {
         let mut line = String::new();
         std::io::stdin().lock().read_line(&mut line).unwrap();
-        line.truncate(line.trim_end_matches(['\r', '\n']).len());
+        if line.ends_with('\n') {
+            line.pop();
+            if line.ends_with('\r') {
+                line.pop();
+            }
+        }
         line
     }
 
@@ -177,9 +182,14 @@ extern "sysv64" fn zydeco_exit(code: i64) -> ! {
 
 /* ---------------------------------- Pure ---------------------------------- */
 
-#[unsafe(export_name = "\x01zydeco_str_length")]
-extern "sysv64" fn zydeco_str_length(string: Word) -> i64 {
+#[unsafe(export_name = "\x01zydeco_str_scalar_length")]
+extern "sysv64" fn zydeco_str_scalar_length(string: Word) -> i64 {
     unsafe { HostString::borrow(string) }.chars().count() as i64
+}
+
+#[unsafe(export_name = "\x01zydeco_str_byte_length")]
+extern "sysv64" fn zydeco_str_byte_length(string: Word) -> i64 {
+    unsafe { HostString::borrow(string) }.len() as i64
 }
 
 #[unsafe(export_name = "\x01zydeco_string_literal")]
@@ -196,11 +206,17 @@ extern "sysv64" fn zydeco_str_append(first: Word, second: Word) -> Word {
     HostString::leak([first, second].concat())
 }
 
-#[unsafe(export_name = "\x01zydeco_str_index")]
-extern "sysv64" fn zydeco_str_index(string: Word, index: i64) -> Word {
-    let index = usize::try_from(index).expect("negative string index");
-    unsafe { HostString::borrow(string) }.chars().nth(index).expect("string index out of bounds")
-        as Word
+#[unsafe(export_name = "\x01zydeco_str_get_branch")]
+extern "sysv64" fn zydeco_str_get_branch(
+    string: Word, index: i64, when_none: Word, when_some: Word,
+) -> Word {
+    let character = usize::try_from(index)
+        .ok()
+        .and_then(|index| unsafe { HostString::borrow(string) }.chars().nth(index));
+    match character {
+        | None => ControlTransfer::without_arguments(when_none),
+        | Some(character) => ControlTransfer::with_one_argument(when_some, character as Word),
+    }
 }
 
 #[unsafe(export_name = "\x01zydeco_int_to_str")]
@@ -214,14 +230,29 @@ extern "sysv64" fn zydeco_char_to_str(character: Word) -> Word {
     HostString::leak(character.to_string())
 }
 
-#[unsafe(export_name = "\x01zydeco_char_to_int")]
-extern "sysv64" fn zydeco_char_to_int(character: Word) -> i64 {
+#[unsafe(export_name = "\x01zydeco_char_codepoint")]
+extern "sysv64" fn zydeco_char_codepoint(character: Word) -> i64 {
     character as i64
 }
 
-#[unsafe(export_name = "\x01zydeco_str_to_int")]
-extern "sysv64" fn zydeco_str_to_int(string: Word) -> i64 {
-    unsafe { HostString::borrow(string) }.parse().expect("invalid integer")
+#[unsafe(export_name = "\x01zydeco_char_from_codepoint_branch")]
+extern "sysv64" fn zydeco_char_from_codepoint_branch(
+    codepoint: i64, when_none: Word, when_some: Word,
+) -> Word {
+    match u32::try_from(codepoint).ok().and_then(char::from_u32) {
+        | None => ControlTransfer::without_arguments(when_none),
+        | Some(character) => ControlTransfer::with_one_argument(when_some, character as Word),
+    }
+}
+
+#[unsafe(export_name = "\x01zydeco_str_parse_int_branch")]
+extern "sysv64" fn zydeco_str_parse_int_branch(
+    string: Word, when_none: Word, when_some: Word,
+) -> Word {
+    match unsafe { HostString::borrow(string) }.parse::<i64>() {
+        | Err(_) => ControlTransfer::without_arguments(when_none),
+        | Ok(integer) => ControlTransfer::with_one_argument(when_some, integer as Word),
+    }
 }
 
 /* -------------------------------- Branches -------------------------------- */
@@ -260,8 +291,8 @@ extern "sysv64" fn zydeco_str_split_once_branch(
     OptionalPairBranch::select(pair, when_none, when_some)
 }
 
-#[unsafe(export_name = "\x01zydeco_str_split_n_branch")]
-extern "sysv64" fn zydeco_str_split_n_branch(
+#[unsafe(export_name = "\x01zydeco_str_split_at_branch")]
+extern "sysv64" fn zydeco_str_split_at_branch(
     string: Word, index: i64, when_none: Word, when_some: Word,
 ) -> Word {
     let pair = OptionalPairBranch::split_at(unsafe { HostString::borrow(string) }, index);
@@ -274,12 +305,6 @@ extern "sysv64" fn zydeco_str_split_n_branch(
 extern "sysv64" fn zydeco_read_line(continuation: Word) -> Word {
     let line = Input::line();
     ControlTransfer::with_one_argument(continuation, HostString::leak(line))
-}
-
-#[unsafe(export_name = "\x01zydeco_read_line_as_int")]
-extern "sysv64" fn zydeco_read_line_as_int(continuation: Word) -> Word {
-    let integer = Input::line().parse::<i64>().expect("invalid integer");
-    ControlTransfer::with_one_argument(continuation, integer as Word)
 }
 
 #[unsafe(export_name = "\x01zydeco_read_line_as_int_branch")]

@@ -41,6 +41,59 @@ begin
       ! when_cons head { ! fold A B tail when_nil when_cons }
     end
   that
+  def ! singleton (A : VType) (value : A) : Ret (List A) =
+    do empty <- ! nil A;
+    ! cons A value empty
+  that
+  def fix append (A : VType) (left : List A) (right : List A) : Ret (List A) =
+    match left
+    | +Nil(_) => ret right
+    | +Cons(head, tail) =>
+      do rest <- ! append A tail right;
+      ! cons A head rest
+    end
+  that
+  def fix map
+    (A : VType)
+    (B : VType)
+    (list : List A)
+    (transform : Thk (A -> Ret B))
+    : Ret (List B) =
+    match list
+    | +Nil(_) => ! nil B
+    | +Cons(head, tail) =>
+      do transformed <- ! transform head;
+      do rest <- ! map A B tail transform;
+      ! cons B transformed rest
+    end
+  that
+  def fix fold_left
+    (A : VType)
+    (B : VType)
+    (list : List A)
+    (initial : B)
+    (combine : Thk (B -> A -> Ret B))
+    : Ret B =
+    match list
+    | +Nil(_) => ret initial
+    | +Cons(head, tail) =>
+      do next <- ! combine initial head;
+      ! fold_left A B tail next combine
+    end
+  that
+  def ! reverse (A : VType) (list : List A) : Ret (List A) =
+    do empty <- ! nil A;
+    ! fold_left A (List A) list empty {
+      fn reversed value =>
+        ! cons A value reversed
+    }
+  that
+  def ! length (A : VType) (list : List A) : Ret Int =
+    ! fold_left A Int list 0 {
+      fn count _ =>
+        ! (api/add) count 1
+    }
+  that
   let Interface =
     exists (
       List = AbstractList :
@@ -69,6 +122,32 @@ begin
           Thk B ->
           Thk (A -> Thk B -> B) ->
           B
+      )) *
+      (singleton :: Thk (
+        forall (A : VType) .
+          A -> Ret (AbstractList A)
+      )) *
+      (append :: Thk (
+        forall (A : VType) .
+          AbstractList A -> AbstractList A -> Ret (AbstractList A)
+      )) *
+      (map :: Thk (
+        forall (A : VType) .
+        forall (B : VType) .
+          AbstractList A -> Thk (A -> Ret B) -> Ret (AbstractList B)
+      )) *
+      (fold_left :: Thk (
+        forall (A : VType) .
+        forall (B : VType) .
+          AbstractList A -> B -> Thk (B -> A -> Ret B) -> Ret B
+      )) *
+      (reverse :: Thk (
+        forall (A : VType) .
+          AbstractList A -> Ret (AbstractList A)
+      )) *
+      (length :: Thk (
+        forall (A : VType) .
+          AbstractList A -> Ret Int
       ))
   that
 
@@ -78,6 +157,12 @@ begin
     cons = cons,
     case = case,
     fold = fold,
+    singleton = singleton,
+    append = append,
+    map = map,
+    fold_left = fold_left,
+    reverse = reverse,
+    length = length,
   ) : Interface
 end
 -- end module List

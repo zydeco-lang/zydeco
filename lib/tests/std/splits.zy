@@ -25,7 +25,7 @@ begin
       fn pair =>
         ret 0
     };
-  do absent <- ! (std/string/split_n) "short" 99;
+  do absent <- ! (std/string/split_at) "short" 99;
   do absent_status <- ! (std/option/fold)
     (StdString * StdString)
     (Ret StdInt)

@@ -4,7 +4,7 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  do unicode_length <- ! (api/str_length) "λx";
+  do unicode_length <- ! (api/str_scalar_length) "λx";
   do joined <- ! (api/str_append) "uniform " "terms";
   ! (api/int_eq_branch)
     OS

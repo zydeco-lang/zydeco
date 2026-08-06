@@ -156,7 +156,7 @@ pub struct NamedSymbol {
 pub enum Symbol {
     Undefined(Undefined),
     Prog(ProgId),
-    StringLiteral(Vec<char>),
+    StringLiteral(Utf8String),
 }
 
 #[derive(Clone, Debug)]

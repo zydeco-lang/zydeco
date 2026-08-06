@@ -6,14 +6,28 @@ begin
 
   do twelve <- ! (api/int_to_str) 12;
   do combined <- ! (api/str_append) twelve twelve;
-  do length <- ! (api/str_length) combined;
-  do parsed <- ! (api/str_to_int) combined;
-  do first <- ! (api/str_index) combined 0;
-  do first_code <- ! (api/char_to_int) first;
+  do length <- ! (api/str_scalar_length) combined;
+  do parsed <- ! (api/str_parse_int_branch)
+    (Ret Int)
+    combined
+    { ret 0 }
+    { fn integer => ret integer };
+  do first <- ! (api/str_get_branch)
+    (Ret Char)
+    combined
+    0
+    { ret ' ' }
+    { fn character => ret character };
+  do first_code <- ! (api/char_codepoint) first;
   do first_string <- ! (api/char_to_str) first;
   do one_string <- ! (api/int_to_str) 1;
   do negative <- ! (api/int_to_str) -1;
-  do dash <- ! (api/str_index) negative 0;
+  do dash <- ! (api/str_get_branch)
+    (Ret Char)
+    negative
+    0
+    { ret ' ' }
+    { fn character => ret character };
   do fold_status <- ! (api/arg_fold)
     (Ret Int)
     { ret 0 }
@@ -39,7 +53,7 @@ begin
         { ! (api/exit) 1 }
         {
           fn prefix suffix =>
-            do prefix_length <- ! (api/str_length) prefix;
+            do prefix_length <- ! (api/str_scalar_length) prefix;
             ! (api/int_eq_branch)
               OS
               prefix_length
@@ -50,7 +64,7 @@ begin
                   suffix
                   one_string
                   {
-                    ! (api/str_split_n_branch)
+                    ! (api/str_split_at_branch)
                       OS
                       combined
                       2

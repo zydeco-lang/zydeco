@@ -18,6 +18,29 @@ pub trait Emit<'a> {
     fn emit(&self, env: Self::Env, em: &mut Emitter<'a>);
 }
 
+struct LlvmStringLiteral<'a>(&'a Utf8String);
+
+impl<'a> LlvmStringLiteral<'a> {
+    fn new(string: &'a Utf8String) -> Self {
+        Self(string)
+    }
+
+    fn encoded_len(&self) -> usize {
+        self.0.byte_len() + 1
+    }
+
+    fn escaped_bytes(&self) -> String {
+        self.0
+            .as_bytes()
+            .iter()
+            .copied()
+            .chain(std::iter::once(0))
+            .map(|byte| format!("\\{byte:02X}"))
+            .collect::<Vec<_>>()
+            .concat()
+    }
+}
+
 /// LLVM IR module representation
 #[derive(Clone, Default, Display)]
 #[display("{ir}")]
@@ -389,14 +412,13 @@ impl<'a> Emit<'a> for Atom {
                         unreachable!("undefined symbol should never be emitted")
                     }
                     | Symbol::StringLiteral(s) => {
-                        let s: String = s.iter().collect();
-                        let escaped = s.replace('\\', "\\\\").replace('"', "\\\"");
+                        let literal = LlvmStringLiteral::new(&s);
                         let global_name = format!("@.str{}", sym_id.concise_inner());
                         let global_ir = format!(
-                            "{} = private constant [{} x i8] c\"{}\0\"",
+                            "{} = private constant [{} x i8] c\"{}\"",
                             global_name,
-                            s.len() + 1,
-                            escaped
+                            literal.encoded_len(),
+                            literal.escaped_bytes()
                         );
                         em.add_declaration(global_ir);
                         em.emit_push(global_name);
@@ -447,5 +469,20 @@ impl<'a> Emit<'a> for Intrinsic {
             }
             | _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LlvmStringLiteral;
+    use zydeco_syntax::Utf8String;
+
+    #[test]
+    fn string_literals_escape_encoded_bytes() {
+        let string = Utf8String::from("é\"\\");
+        let literal = LlvmStringLiteral::new(&string);
+
+        assert_eq!(literal.encoded_len(), 5);
+        assert_eq!(literal.escaped_bytes(), "\\C3\\A9\\22\\5C\\00");
     }
 }

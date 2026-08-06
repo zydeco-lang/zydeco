@@ -63,7 +63,7 @@ begin
     Ret (String * Bool)
   ) = {
     fn line =>
-      do length <- ! (api/str_length) line;
+      do length <- ! (api/str_scalar_length) line;
       do too_short <- ! int_less length 3;
       ! branch
         (Ret (String * Bool))
@@ -77,7 +77,7 @@ begin
             { ret (line, +False()) }
         }
         {
-          ! (api/str_split_n_branch)
+          ! (api/str_split_at_branch)
             (Ret (String * Bool))
             line
             3
@@ -97,7 +97,7 @@ begin
     String -> Ret Bool
   ) = {
     fn string =>
-      do length <- ! (api/str_length) string;
+      do length <- ! (api/str_scalar_length) string;
       ! int_equal length 0
   } that
 

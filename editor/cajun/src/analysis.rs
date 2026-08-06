@@ -548,7 +548,7 @@ mod tests {
             )
         );
 
-        let long = project.hover(&path, Position::new(29, 7)).unwrap();
+        let long = project.hover(&path, Position::new(84, 7)).unwrap();
         let HoverContents::Markup(long) = long.contents else {
             panic!("type hover should use markup content")
         };

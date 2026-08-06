@@ -33,6 +33,6 @@ begin
   do empty_and_ys <- ! (std/list/cons) StdString "" ys;
   do xs <- ! (std/list/cons) StdString "abc" empty_and_ys;
   do l <- ! foldl xs 0;
-  do s <- ! (std/int/to_str) l;
+  do s <- ! (std/int/to_string) l;
   ! (std/os/write_line) s { ! (std/os/exit) 0 }
 end

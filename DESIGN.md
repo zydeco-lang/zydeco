@@ -233,6 +233,12 @@ The standard-library components and their aggregate package use this pure bounda
 `option.zy`, `list.zy`, or `std.zy` yields a value-level package function; clients apply it and open its result with
 `let`. The operations exported inside those packages retain their computation types.
 
+Strings are immutable, shared UTF-8 values throughout the compiler and interpreter. The foundational text ABI
+distinguishes encoded byte length from Unicode scalar length, and all source-level positions refer to scalar
+boundaries. Potentially invalid observations use computation-polymorphic Builtin branches; the standard library
+reifies them as `Option` for safe indexing, splitting, integer parsing, and codepoint conversion. The native runtime
+uses the same rules, so interpreted and compiled programs agree without exposing either backend's storage layout.
+
 ## Relative Monads and Monadic Blocks
 
 Relative monads are defined as codata in the standard library (see

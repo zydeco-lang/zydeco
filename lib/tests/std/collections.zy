@@ -1,0 +1,97 @@
+begin
+  let std = @[import("../../std/std.zy")] _ that
+  param (
+    (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  let (
+    Bool = StdBool,
+    Option = StdOption,
+    List = StdList,
+    Int = StdInt,
+    Char = StdChar,
+    String = StdString,
+    OS = StdOS,
+    std
+  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
+  let ! status (condition : StdBool) : Ret StdInt =
+    ! (std/bool/if)
+      (Ret StdInt)
+      condition
+      { ret 0 }
+      { ret 1 }
+  in
+
+  do empty <- ! (std/list/nil) StdInt;
+  do one <- ! (std/list/singleton) StdInt 3;
+  do two <- ! (std/list/cons) StdInt 2 one;
+  do three <- ! (std/list/cons) StdInt 1 two;
+  do joined <- ! (std/list/append) StdInt three empty;
+  do mapped <- ! (std/list/map)
+    StdInt
+    StdInt
+    joined
+    { fn value => ! (std/int/increment) value };
+  do reversed <- ! (std/list/reverse) StdInt mapped;
+
+  do length <- ! (std/list/length) StdInt reversed;
+  do length_ok <- ! (std/int/eq) length 3;
+  do length_status <- ! status length_ok;
+
+  do middle <- ! (std/list/get) StdInt reversed 1;
+  do middle_status <- ! (std/option/fold)
+    StdInt
+    (Ret StdInt)
+    middle
+    { ret 1 }
+    {
+      fn value =>
+        do correct <- ! (std/int/eq) value 3;
+        ! status correct
+    };
+
+  do head <- ! (std/list/head) StdInt reversed;
+  do head_status <- ! (std/option/fold)
+    StdInt
+    (Ret StdInt)
+    head
+    { ret 1 }
+    {
+      fn value =>
+        do correct <- ! (std/int/eq) value 4;
+        ! status correct
+    };
+
+  do negative <- ! (std/list/get) StdInt reversed -1;
+  do negative_ok <- ! (std/option/is_none) StdInt negative;
+  do negative_status <- ! status negative_ok;
+
+  do present <- ! (std/option/some) StdInt 2;
+  do transformed <- ! (std/option/map)
+    StdInt
+    StdInt
+    present
+    { fn value => ! (std/int/increment) value };
+  do transformed_value <- ! (std/option/unwrap_or) StdInt transformed 0;
+  do transformed_ok <- ! (std/int/eq) transformed_value 3;
+  do transformed_status <- ! status transformed_ok;
+
+  do exclusive <- ! (std/bool/xor) (std/bool/true) (std/bool/false);
+  do exclusive_status <- ! status exclusive;
+
+  do minimum <- ! (std/int/min) -3 4;
+  do maximum <- ! (std/int/max) -3 4;
+  do minimum_ok <- ! (std/int/eq) minimum -3;
+  do maximum_ok <- ! (std/int/eq) maximum 4;
+  do extrema_ok <- ! (std/bool/and) minimum_ok maximum_ok;
+  do extrema_status <- ! status extrema_ok;
+
+  do first <- ! (std/int/add) length_status middle_status;
+  do second <- ! (std/int/add) head_status negative_status;
+  do third <- ! (std/int/add) transformed_status exclusive_status;
+  do first_half <- ! (std/int/add) first second;
+  do second_half <- ! (std/int/add) third extrema_status;
+  do result <- ! (std/int/add) first_half second_half;
+  ! (std/os/exit) result
+end

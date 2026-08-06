@@ -2,6 +2,7 @@ begin
   let bool = @[import("bool.zy")] _ that
   let option = @[import("option.zy")] _ that
   let list = @[import("list.zy")] _ that
+  let interface = @[import("interface.zy")] _ that
 
   begin
     param (
@@ -14,17 +15,28 @@ begin
         option (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
       let (List = List, list_api) =
         list (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
+      let (= Prelude, = Public, ()) =
+        interface (VType, CType, Thk, Ret, Unit, Int, Char, String, OS, api) in
       let primitive_add = api/add in
       let primitive_int_eq = api/int_eq_branch in
       let primitive_int_lt = api/int_lt_branch in
       let primitive_int_gt = api/int_gt_branch in
       let primitive_str_split_once = api/str_split_once_branch in
-      let primitive_str_split_n = api/str_split_n_branch in
+      let primitive_str_split_at = api/str_split_at_branch in
       let primitive_str_eq = api/str_eq_branch in
+      let primitive_str_get = api/str_get_branch in
+      let primitive_char_from_codepoint = api/char_from_codepoint_branch in
+      let primitive_str_parse_int = api/str_parse_int_branch in
       let primitive_read_line_as_int = api/read_line_as_int_branch in
       let primitive_arg_fold = api/arg_fold in
       let ! increment (value : Int) : Ret Int =
         ! primitive_add value 1
+      in
+      let ! decrement (value : Int) : Ret Int =
+        ! (api/sub) value 1
+      in
+      let ! negate (value : Int) : Ret Int =
+        ! (api/sub) 0 value
       in
       let ! compare
         (A : VType)
@@ -51,8 +63,90 @@ begin
       let ! int_gt (left : Int) (right : Int) : Ret Bool =
         ! compare Int primitive_int_gt left right
       in
+      let ! int_ne (left : Int) (right : Int) : Ret Bool =
+        do equal <- ! int_eq left right;
+        ! (bool_api/not) equal
+      in
+      let ! int_le (left : Int) (right : Int) : Ret Bool =
+        do greater <- ! int_gt left right;
+        ! (bool_api/not) greater
+      in
+      let ! int_ge (left : Int) (right : Int) : Ret Bool =
+        do less <- ! int_lt left right;
+        ! (bool_api/not) less
+      in
+      let ! int_min (left : Int) (right : Int) : Ret Int =
+        do less <- ! int_lt left right;
+        ! (bool_api/if) (Ret Int) less { ret left } { ret right }
+      in
+      let ! int_max (left : Int) (right : Int) : Ret Int =
+        do greater <- ! int_gt left right;
+        ! (bool_api/if) (Ret Int) greater { ret left } { ret right }
+      in
       let ! str_eq (left : String) (right : String) : Ret Bool =
         ! compare String primitive_str_eq left right
+      in
+      let ! option_is_some (A : VType) (option : Option A) : Ret Bool =
+        ! (option_api/fold)
+          A
+          (Ret Bool)
+          option
+          { ret (bool_api/false) }
+          { fn _ => ret (bool_api/true) }
+      in
+      let ! option_is_none (A : VType) (option : Option A) : Ret Bool =
+        do present <- ! option_is_some A option;
+        ! (bool_api/not) present
+      in
+      let ! list_is_empty (A : VType) (list : List A) : Ret Bool =
+        ! (list_api/case)
+          A
+          (Ret Bool)
+          list
+          { ret (bool_api/true) }
+          { fn _ _ => ret (bool_api/false) }
+      in
+      let ! list_head (A : VType) (list : List A) : Ret (Option A) =
+        ! (list_api/case)
+          A
+          (Ret (Option A))
+          list
+          { ! (option_api/none) A }
+          { fn head _ => ! (option_api/some) A head }
+      in
+      let ! list_tail (A : VType) (list : List A) : Ret (Option (List A)) =
+        ! (list_api/case)
+          A
+          (Ret (Option (List A)))
+          list
+          { ! (option_api/none) (List A) }
+          { fn _ tail => ! (option_api/some) (List A) tail }
+      in
+      let fix list_get (A : VType) (list : List A) (index : Int) : Ret (Option A) =
+        do negative <- ! int_lt index 0;
+        ! (bool_api/if)
+          (Ret (Option A))
+          negative
+          { ! (option_api/none) A }
+          {
+            ! (list_api/case)
+              A
+              (Ret (Option A))
+              list
+              { ! (option_api/none) A }
+              {
+                fn head tail =>
+                  do zero <- ! int_eq index 0;
+                  ! (bool_api/if)
+                    (Ret (Option A))
+                    zero
+                    { ! (option_api/some) A head }
+                    {
+                      do previous <- ! (api/sub) index 1;
+                      ! list_get A tail previous
+                    }
+              }
+          }
       in
       let ! str_split_once (string : String) (separator : Char) : Ret (Option (String * String)) =
         ! primitive_str_split_once
@@ -65,8 +159,8 @@ begin
               ! (option_api/some) (String * String) (first, second)
           }
       in
-      let ! str_split_n (string : String) (index : Int) : Ret (Option (String * String)) =
-        ! primitive_str_split_n
+      let ! str_split_at (string : String) (index : Int) : Ret (Option (String * String)) =
+        ! primitive_str_split_at
           (Ret (Option (String * String)))
           string
           index
@@ -74,6 +168,89 @@ begin
           {
             fn first second =>
               ! (option_api/some) (String * String) (first, second)
+          }
+      in
+      let ! str_get (string : String) (index : Int) : Ret (Option Char) =
+        ! primitive_str_get
+          (Ret (Option Char))
+          string
+          index
+          { ! (option_api/none) Char }
+          { fn character => ! (option_api/some) Char character }
+      in
+      let ! char_from_codepoint (codepoint : Int) : Ret (Option Char) =
+        ! primitive_char_from_codepoint
+          (Ret (Option Char))
+          codepoint
+          { ! (option_api/none) Char }
+          { fn character => ! (option_api/some) Char character }
+      in
+      let ! str_parse_int (string : String) : Ret (Option Int) =
+        ! primitive_str_parse_int
+          (Ret (Option Int))
+          string
+          { ! (option_api/none) Int }
+          { fn integer => ! (option_api/some) Int integer }
+      in
+      let ! str_is_empty (string : String) : Ret Bool =
+        do length <- ! (api/str_scalar_length) string;
+        ! int_eq length 0
+      in
+      let ! str_head (string : String) : Ret (Option Char) =
+        ! str_get string 0
+      in
+      let ! str_uncons (string : String) : Ret (Option (Char * String)) =
+        do character <- ! str_get string 0;
+        ! (option_api/and_then)
+          Char
+          (Char * String)
+          character
+          {
+            fn head =>
+              do split <- ! str_split_at string 1;
+              ! (option_api/map)
+                (String * String)
+                (Char * String)
+                split
+                { fn (_, tail) => ret (head, tail) }
+          }
+      in
+      let fix str_to_chars (string : String) : Ret (List Char) =
+        do first <- ! str_uncons string;
+        ! (option_api/fold)
+          (Char * String)
+          (Ret (List Char))
+          first
+          { ! (list_api/nil) Char }
+          {
+            fn (head, tail) =>
+              do rest <- ! str_to_chars tail;
+              ! (list_api/cons) Char head rest
+          }
+      in
+      let fix str_from_chars (characters : List Char) : Ret String =
+        ! (list_api/case)
+          Char
+          (Ret String)
+          characters
+          { ret "" }
+          {
+            fn head tail =>
+              do first <- ! (api/char_to_str) head;
+              do rest <- ! str_from_chars tail;
+              ! (api/str_append) first rest
+          }
+      in
+      let ! str_concat (strings : List String) : Ret String =
+        ! (list_api/fold)
+          String
+          (Ret String)
+          strings
+          { ret "" }
+          {
+            fn head tail =>
+              do rest <- ! tail;
+              ! (api/str_append) head rest
           }
       in
       let ! read_line_as_int (continuation : Thk (Option Int -> OS)) : OS =
@@ -99,20 +276,14 @@ begin
           };
         ! continuation arguments
       in
-      let Prelude =
-        exists (
-          Thunk = PublicThunk as Thk :
-          (CType) -> (VType)
-        ) .
-        exists (
-          U = PublicU as Thk :
-          (CType) -> (VType)
-        ) .
-        exists (
-          F = PublicF as Ret :
-          (VType) -> (CType)
-        ) .
-          Unit
+      let ! write_int_line (integer : Int) (continuation : Thk OS) : OS =
+        ! (api/write_int) integer {
+          ! (api/write_line) "" continuation
+        }
+      in
+      let halt : Thk OS = { ! (api/exit) 0 } in
+      let ! panic (message : String) : OS =
+        ! (api/write_line) message { ! (api/exit) 1 }
       in
       let prelude : Prelude = (
         Thunk = Thk,
@@ -120,143 +291,6 @@ begin
         F = Ret,
         ()
       ) in
-      let BoolModule (PublicBool : VType) =
-        (true :: PublicBool) *
-        (false :: PublicBool) *
-        (not :: Thk (PublicBool -> Ret PublicBool)) *
-        (and :: Thk (PublicBool -> PublicBool -> Ret PublicBool)) *
-        (or :: Thk (PublicBool -> PublicBool -> Ret PublicBool)) *
-        (if :: Thk (
-          forall (B : CType) .
-            PublicBool -> Thk B -> Thk B -> B
-        ))
-      in
-      let OptionModule (PublicOption : (VType) -> (VType)) =
-        (none :: Thk (
-          forall (A : VType) .
-            Ret (PublicOption A)
-        )) *
-        (some :: Thk (
-          forall (A : VType) .
-            A -> Ret (PublicOption A)
-        )) *
-        (fold :: Thk (
-          forall (A : VType) .
-          forall (B : CType) .
-            PublicOption A -> Thk B -> Thk (A -> B) -> B
-        ))
-      in
-      let ListModule (PublicList : (VType) -> (VType)) =
-        (nil :: Thk (
-          forall (A : VType) .
-            Ret (PublicList A)
-        )) *
-        (cons :: Thk (
-          forall (A : VType) .
-            A -> PublicList A -> Ret (PublicList A)
-        )) *
-        (case :: Thk (
-          forall (A : VType) .
-          forall (B : CType) .
-            PublicList A ->
-            Thk B ->
-            Thk (A -> PublicList A -> B) ->
-            B
-        )) *
-        (fold :: Thk (
-          forall (A : VType) .
-          forall (B : CType) .
-            PublicList A ->
-            Thk B ->
-            Thk (A -> Thk B -> B) ->
-            B
-        ))
-      in
-      --| Conversions
-      let IntModule (PublicBool : VType) (PublicInt : VType) (PublicString : VType) =
-        (add :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
-        (sub :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
-        (mul :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
-        (div :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
-        (mod :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
-        (eq :: Thk (PublicInt -> PublicInt -> Ret PublicBool)) *
-        (lt :: Thk (PublicInt -> PublicInt -> Ret PublicBool)) *
-        (gt :: Thk (PublicInt -> PublicInt -> Ret PublicBool)) *
-        (increment :: Thk (PublicInt -> Ret PublicInt)) *
-        (to_str :: Thk (PublicInt -> Ret PublicString))
-      in
-      let CharModule (PublicChar : VType) (PublicInt : VType) (PublicString : VType) =
-        (to_str :: Thk (PublicChar -> Ret PublicString)) *
-        (to_int :: Thk (PublicChar -> Ret PublicInt))
-      in
-      -- module String
-      let StringModule
-        (PublicBool : VType)
-        (PublicOption : (VType) -> (VType))
-        (PublicInt : VType)
-        (PublicChar : VType)
-        (PublicString : VType) =
-        (length :: Thk (PublicString -> Ret PublicInt)) *
-        (append :: Thk (PublicString -> PublicString -> Ret PublicString)) *
-        (split_once :: Thk (
-          PublicString ->
-          PublicChar ->
-          Ret (PublicOption (PublicString * PublicString))
-        )) *
-        (split_n :: Thk (
-          PublicString ->
-          PublicInt ->
-          Ret (PublicOption (PublicString * PublicString))
-        )) *
-        (eq :: Thk (PublicString -> PublicString -> Ret PublicBool)) *
-        (index :: Thk (PublicString -> PublicInt -> Ret PublicChar)) *
-        (to_int :: Thk (PublicString -> Ret PublicInt))
-      in
-      -- end module String
-      -- module OS
-      let OSModule
-        (PublicOption : (VType) -> (VType))
-        (PublicList : (VType) -> (VType))
-        (PublicInt : VType)
-        (PublicString : VType)
-        (PublicOS : CType) =
-        (write_str :: Thk (PublicString -> Thk PublicOS -> PublicOS)) *
-        (write_int :: Thk (PublicInt -> Thk PublicOS -> PublicOS)) *
-        (write_line :: Thk (PublicString -> Thk PublicOS -> PublicOS)) *
-        (read_line :: Thk (Thk (PublicString -> PublicOS) -> PublicOS)) *
-        (read_line_as_int :: Thk (
-          Thk (PublicOption PublicInt -> PublicOS) -> PublicOS
-        )) *
-        (read_till_eof :: Thk (Thk (PublicString -> PublicOS) -> PublicOS)) *
-        (arg_list :: Thk (Thk (PublicList PublicString -> PublicOS) -> PublicOS)) *
-        (random_int :: Thk (Thk (PublicInt -> PublicOS) -> PublicOS)) *
-        (exit :: Thk (PublicInt -> PublicOS))
-      in
-      -- end module OS
-      let Public =
-        exists (Bool = PublicBool : VType) .
-        exists (
-          Option = PublicOption :
-          (VType) -> (VType)
-        ) .
-        exists (
-          List = PublicList :
-          (VType) -> (VType)
-        ) .
-        exists (Int = PublicInt as Int : VType) .
-        exists (Char = PublicChar as Char : VType) .
-        exists (String = PublicString as String : VType) .
-        exists (OS = PublicOS as OS : CType) .
-          (prelude :: Prelude) *
-          (bool :: BoolModule PublicBool) *
-          (option :: OptionModule PublicOption) *
-          (list :: ListModule PublicList) *
-          (int :: IntModule PublicBool PublicInt PublicString) *
-          (char :: CharModule PublicChar PublicInt PublicString) *
-          (string :: StringModule PublicBool PublicOption PublicInt PublicChar PublicString) *
-          (os :: OSModule PublicOption PublicList PublicInt PublicString PublicOS) *
-          Unit
-      in
       ((
         Bool = Bool,
         Option = Option,
@@ -272,18 +306,39 @@ begin
           not = bool_api/not,
           and = bool_api/and,
           or = bool_api/or,
+          eq = bool_api/eq,
+          xor = bool_api/xor,
+          nand = bool_api/nand,
+          nor = bool_api/nor,
           if = bool_api/if,
         ),
         option = (
           none = option_api/none,
           some = option_api/some,
           fold = option_api/fold,
+          map = option_api/map,
+          and_then = option_api/and_then,
+          unwrap_or = option_api/unwrap_or,
+          or_else = option_api/or_else,
+          zip = option_api/zip,
+          is_some = option_is_some,
+          is_none = option_is_none,
         ),
         list = (
           nil = list_api/nil,
           cons = list_api/cons,
           case = list_api/case,
           fold = list_api/fold,
+          singleton = list_api/singleton,
+          append = list_api/append,
+          map = list_api/map,
+          fold_left = list_api/fold_left,
+          reverse = list_api/reverse,
+          length = list_api/length,
+          is_empty = list_is_empty,
+          head = list_head,
+          tail = list_tail,
+          get = list_get,
         ),
         int = (
           add = primitive_add,
@@ -292,33 +347,52 @@ begin
           div = api/div,
           mod = api/mod,
           eq = int_eq,
+          ne = int_ne,
           lt = int_lt,
+          le = int_le,
           gt = int_gt,
+          ge = int_ge,
           increment = increment,
-          to_str = api/int_to_str,
+          decrement = decrement,
+          negate = negate,
+          min = int_min,
+          max = int_max,
+          to_string = api/int_to_str,
         ),
         char = (
-          to_str = api/char_to_str,
-          to_int = api/char_to_int,
+          to_string = api/char_to_str,
+          codepoint = api/char_codepoint,
+          from_codepoint = char_from_codepoint,
         ),
         string = (
-          length = api/str_length,
+          empty = "",
+          length = api/str_scalar_length,
+          byte_length = api/str_byte_length,
+          is_empty = str_is_empty,
           append = api/str_append,
+          concat = str_concat,
           split_once = str_split_once,
-          split_n = str_split_n,
+          split_at = str_split_at,
           eq = str_eq,
-          index = api/str_index,
-          to_int = api/str_to_int,
+          get = str_get,
+          head = str_head,
+          uncons = str_uncons,
+          to_chars = str_to_chars,
+          from_chars = str_from_chars,
+          parse_int = str_parse_int,
         ),
         os = (
-          write_str = api/write_str,
+          write = api/write_str,
           write_int = api/write_int,
+          write_int_line = write_int_line,
           write_line = api/write_line,
           read_line = api/read_line,
           read_line_as_int = read_line_as_int,
           read_till_eof = api/read_till_eof,
           arg_list = arg_list,
           random_int = api/random_int,
+          halt = halt,
+          panic = panic,
           exit = api/exit,
         ),
         (),

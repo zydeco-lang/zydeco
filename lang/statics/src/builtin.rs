@@ -90,16 +90,17 @@ impl BuiltinOperationAbi {
                 Self::pure([Atom::Int, Atom::Int], Atom::Int)
             }
             | Role::IntEq | Role::IntLt | Role::IntGt => Self::branch([Atom::Int, Atom::Int]),
-            | Role::StrLength => Self::pure([Atom::String], Atom::Int),
+            | Role::StrScalarLength | Role::StrByteLength => Self::pure([Atom::String], Atom::Int),
             | Role::StrAppend => Self::pure([Atom::String, Atom::String], Atom::String),
             | Role::StrSplitOnce => Self::optional_pair([Atom::String, Atom::Char]),
-            | Role::StrSplitN => Self::optional_pair([Atom::String, Atom::Int]),
-            | Role::StrIndex => Self::pure([Atom::String, Atom::Int], Atom::Char),
+            | Role::StrSplitAt => Self::optional_pair([Atom::String, Atom::Int]),
+            | Role::StrGet => Self::optional([Atom::String, Atom::Int], Atom::Char),
             | Role::StrEq => Self::branch([Atom::String, Atom::String]),
             | Role::IntToStr => Self::pure([Atom::Int], Atom::String),
             | Role::CharToStr => Self::pure([Atom::Char], Atom::String),
-            | Role::CharToInt => Self::pure([Atom::Char], Atom::Int),
-            | Role::StrToInt => Self::pure([Atom::String], Atom::Int),
+            | Role::CharCodepoint => Self::pure([Atom::Char], Atom::Int),
+            | Role::CharFromCodepoint => Self::optional([Atom::Int], Atom::Char),
+            | Role::StrParseInt => Self::optional([Atom::String], Atom::Int),
             | Role::WriteStr => Self::effect([Self::atom(Atom::String), Self::os_continuation()]),
             | Role::WriteInt => Self::effect([Self::atom(Atom::Int), Self::os_continuation()]),
             | Role::WriteLine => Self::effect([Self::atom(Atom::String), Self::os_continuation()]),
@@ -152,6 +153,19 @@ impl BuiltinOperationAbi {
             [Self::atom(BuiltinValueAtom::String), Self::atom(BuiltinValueAtom::String)],
             result.clone(),
         ));
+        let body = Self::arrows(
+            parameters.into_iter().map(Self::atom).chain([when_none, when_some]),
+            result,
+        );
+        Self::thunk(BuiltinComputationClassifier::ForallCType(Box::new(body)))
+    }
+
+    fn optional(
+        parameters: impl IntoIterator<Item = BuiltinValueAtom>, result_atom: BuiltinValueAtom,
+    ) -> BuiltinValueClassifier {
+        let result = BuiltinComputationClassifier::Bound(0);
+        let when_none = Self::thunk(result.clone());
+        let when_some = Self::thunk(Self::arrows([Self::atom(result_atom)], result.clone()));
         let body = Self::arrows(
             parameters.into_iter().map(Self::atom).chain([when_none, when_some]),
             result,

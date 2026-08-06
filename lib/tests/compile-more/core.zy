@@ -129,10 +129,10 @@ begin
 
 
 -- module String
-  -- pub extern def str_length : Thk(String -> Ret Int) end
+  -- pub extern def str_scalar_length : Thk(String -> Ret Int) end
   -- pub extern def str_append : Thk(String -> String -> Ret String) end
   -- pub extern def str_eq : Thk(String -> String -> Ret Bool) end
-  -- pub extern def str_index : Thk(String -> Int -> Ret Char) end
+  -- pub extern def str_get : Thk(String -> Int -> Ret(Option Char)) end
 
   -- --| Conversions
   -- pub def unit_to_str : Thk(Unit -> Ret String) = {
@@ -147,8 +147,8 @@ begin
   -- } end
   -- pub extern def int_to_str : Thk(Int -> Ret String) end
 --   pub extern def char_to_str : Thk(Char -> Ret String) end
---   pub extern def char_to_int : Thk(Char -> Ret Int) end
---   pub extern def str_to_int : Thk(String -> Ret Int) end
+--   pub extern def char_codepoint : Thk(Char -> Ret Int) end
+--   pub extern def str_parse_int : Thk(String -> Ret(Option Int)) end
 -- end module String
 
 

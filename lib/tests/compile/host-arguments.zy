@@ -10,7 +10,7 @@ begin
     {
       fn argument remaining =>
         do suffix_length <- ! remaining;
-        do argument_length <- ! (api/str_length) argument;
+        do argument_length <- ! (api/str_scalar_length) argument;
         ! (api/add) argument_length suffix_length
     };
   ! (api/int_eq_branch)

@@ -57,9 +57,9 @@ begin
       correct
       { ! t }
       {
-        do input <- ! (std/int/to_str) input;
-        do expected <- ! (std/int/to_str) expected;
-        do got <- ! (std/int/to_str) x;
+        do input <- ! (std/int/to_string) input;
+        do expected <- ! (std/int/to_string) expected;
+        do got <- ! (std/int/to_string) x;
         do msg <- ! (std/string/append) "f " input;
         do msg <- ! (std/string/append) msg " = ";
         do msg <- ! (std/string/append) msg expected;

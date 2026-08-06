@@ -129,12 +129,19 @@ begin
 
 
 -- module String
-  let str_length = api/str_length that
+  let str_scalar_length = api/str_scalar_length that
   let str_append = api/str_append that
   def ! str_eq (x : String) (y : String) : Ret Bool =
     ! (api/str_eq_branch) (Ret Bool) x y { ret +True() } { ret +False() }
   that
-  let str_index = api/str_index that
+  def ! str_get_or_space (string : String) (index : Int) : Ret Char =
+    ! (api/str_get_branch)
+      (Ret Char)
+      string
+      index
+      { ret ' ' }
+      { fn character => ret character }
+  that
 
   --| Conversions
   def unit_to_str : Thk(Unit -> Ret String) = {
@@ -149,8 +156,7 @@ begin
   } that
   let int_to_str = api/int_to_str that
   let char_to_str = api/char_to_str that
-  let char_to_int = api/char_to_int that
-  let str_to_int = api/str_to_int that
+  let char_codepoint = api/char_codepoint that
 -- end module String
 
 

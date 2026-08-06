@@ -4,6 +4,9 @@ pub use fmt::*;
 pub mod span;
 pub use span::*;
 
+pub mod text;
+pub use text::*;
+
 mod impls;
 use derive_more::From;
 
@@ -182,16 +185,18 @@ pub enum BuiltinValueRole {
     IntEq,
     IntLt,
     IntGt,
-    StrLength,
+    StrScalarLength,
+    StrByteLength,
     StrAppend,
     StrSplitOnce,
-    StrSplitN,
+    StrSplitAt,
     StrEq,
-    StrIndex,
+    StrGet,
     IntToStr,
     CharToStr,
-    CharToInt,
-    StrToInt,
+    CharCodepoint,
+    CharFromCodepoint,
+    StrParseInt,
     WriteStr,
     WriteInt,
     WriteLine,
@@ -213,16 +218,18 @@ impl BuiltinValueRole {
         Self::IntEq,
         Self::IntLt,
         Self::IntGt,
-        Self::StrLength,
+        Self::StrScalarLength,
+        Self::StrByteLength,
         Self::StrAppend,
         Self::StrSplitOnce,
-        Self::StrSplitN,
+        Self::StrSplitAt,
         Self::StrEq,
-        Self::StrIndex,
+        Self::StrGet,
         Self::IntToStr,
         Self::CharToStr,
-        Self::CharToInt,
-        Self::StrToInt,
+        Self::CharCodepoint,
+        Self::CharFromCodepoint,
+        Self::StrParseInt,
         Self::WriteStr,
         Self::WriteInt,
         Self::WriteLine,
@@ -244,16 +251,18 @@ impl BuiltinValueRole {
             | "int_eq" => Some(Self::IntEq),
             | "int_lt" => Some(Self::IntLt),
             | "int_gt" => Some(Self::IntGt),
-            | "str_length" => Some(Self::StrLength),
+            | "str_scalar_length" => Some(Self::StrScalarLength),
+            | "str_byte_length" => Some(Self::StrByteLength),
             | "str_append" => Some(Self::StrAppend),
             | "str_split_once" => Some(Self::StrSplitOnce),
-            | "str_split_n" => Some(Self::StrSplitN),
+            | "str_split_at" => Some(Self::StrSplitAt),
             | "str_eq" => Some(Self::StrEq),
-            | "str_index" => Some(Self::StrIndex),
+            | "str_get" => Some(Self::StrGet),
             | "int_to_str" => Some(Self::IntToStr),
             | "char_to_str" => Some(Self::CharToStr),
-            | "char_to_int" => Some(Self::CharToInt),
-            | "str_to_int" => Some(Self::StrToInt),
+            | "char_codepoint" => Some(Self::CharCodepoint),
+            | "char_from_codepoint" => Some(Self::CharFromCodepoint),
+            | "str_parse_int" => Some(Self::StrParseInt),
             | "write_str" => Some(Self::WriteStr),
             | "write_int" => Some(Self::WriteInt),
             | "write_line" => Some(Self::WriteLine),
@@ -277,16 +286,18 @@ impl BuiltinValueRole {
             | Self::IntEq => "int_eq",
             | Self::IntLt => "int_lt",
             | Self::IntGt => "int_gt",
-            | Self::StrLength => "str_length",
+            | Self::StrScalarLength => "str_scalar_length",
+            | Self::StrByteLength => "str_byte_length",
             | Self::StrAppend => "str_append",
             | Self::StrSplitOnce => "str_split_once",
-            | Self::StrSplitN => "str_split_n",
+            | Self::StrSplitAt => "str_split_at",
             | Self::StrEq => "str_eq",
-            | Self::StrIndex => "str_index",
+            | Self::StrGet => "str_get",
             | Self::IntToStr => "int_to_str",
             | Self::CharToStr => "char_to_str",
-            | Self::CharToInt => "char_to_int",
-            | Self::StrToInt => "str_to_int",
+            | Self::CharCodepoint => "char_codepoint",
+            | Self::CharFromCodepoint => "char_from_codepoint",
+            | Self::StrParseInt => "str_parse_int",
             | Self::WriteStr => "write_str",
             | Self::WriteInt => "write_int",
             | Self::WriteLine => "write_line",
@@ -300,16 +311,19 @@ impl BuiltinValueRole {
     }
 
     /// Runtime symbol used when the role is materialized in the foundational
-    /// Builtin package. This may differ from the legacy external name when the
-    /// package uses a representation-independent classifier.
+    /// Builtin package. This may differ from the source annotation name when
+    /// the package uses a representation-independent classifier.
     pub fn host_name(self) -> &'static str {
         match self {
             | Self::IntEq => "int_eq_branch",
             | Self::IntLt => "int_lt_branch",
             | Self::IntGt => "int_gt_branch",
             | Self::StrSplitOnce => "str_split_once_branch",
-            | Self::StrSplitN => "str_split_n_branch",
+            | Self::StrSplitAt => "str_split_at_branch",
             | Self::StrEq => "str_eq_branch",
+            | Self::StrGet => "str_get_branch",
+            | Self::CharFromCodepoint => "char_from_codepoint_branch",
+            | Self::StrParseInt => "str_parse_int_branch",
             | Self::ReadLineAsInt => "read_line_as_int_branch",
             | Self::ArgList => "arg_fold",
             | role => role.source_name(),
@@ -514,7 +528,6 @@ pub struct Proj<Head, Tag>(pub Head, pub Tag);
 #[derive(From, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum Literal {
     Int(i64),
-    // Note: for real dude?
-    String(Vec<char>),
+    String(Utf8String),
     Char(char),
 }

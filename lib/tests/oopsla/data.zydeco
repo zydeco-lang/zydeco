@@ -30,14 +30,21 @@ begin
   def ! int_gt (x : Int) (y : Int) : Ret Bool =
     ! (api/int_gt_branch) (Ret Bool) x y { ret +True() } { ret +False() }
   that
-  let str_length = api/str_length that
+  let str_scalar_length = api/str_scalar_length that
   let str_append = api/str_append that
   def ! str_eq (x : String) (y : String) : Ret Bool =
     ! (api/str_eq_branch) (Ret Bool) x y { ret +True() } { ret +False() }
   that
-  let str_index = api/str_index that
+  def ! str_get_or_space (string : String) (index : Int) : Ret Char =
+    ! (api/str_get_branch)
+      (Ret Char)
+      string
+      index
+      { ret ' ' }
+      { fn character => ret character }
+  that
   let char_to_str = api/char_to_str that
-  let char_to_int = api/char_to_int that
+  let char_codepoint = api/char_codepoint that
   let write_str = api/write_str that
   --| identity functions
   def id : Thunk(forall (A : VType) . A -> Ret A) = {
@@ -478,11 +485,11 @@ begin
   that
 
   def ! str_to_list (s : String) : LList Char =
-    do sz <- ! str_length s;
+    do sz <- ! str_scalar_length s;
     let indexes = {! range 0 sz} in
     ! foldr (Int) (LList Char) indexes {! nil (Char)} {
       fn i acc =>
-        do c <- ! str_index s i;
+        do c <- ! str_get_or_space s i;
         ! cons (Char) c acc
     }  
   that
@@ -521,8 +528,8 @@ begin
       { ret +None() }
       { fn s1 s2 => ret +Some(+Cons(s1, s2)) }
   that
-  def ! str_split_n (str : String) (index : Int) : Ret (Option (Pair String String)) =
-    ! (api/str_split_n_branch)
+  def ! str_split_at (str : String) (index : Int) : Ret (Option (Pair String String)) =
+    ! (api/str_split_at_branch)
       (Ret (Option (Pair String String)))
       str
       index
@@ -557,7 +564,7 @@ begin
   def fix str_slice (str : String) (left : Int) (right : Int) : F String =
     do cond <- ! int_lt left right;
     ! if (F String) cond {
-      do c <- ! str_index str left;
+      do c <- ! str_get_or_space str left;
       do c' <- ! char_to_str c;
       do left' <- ! add left 1;
       do s <- ! str_slice str left' right;

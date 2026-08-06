@@ -310,7 +310,7 @@ begin
       | +Node(left, value, tree_height, right) =>
         do rendered_value <- ! format value;
         do with_label <- ! (std/string/append) rendered_value " h:";
-        do rendered_height <- ! (std/int/to_str) tree_height;
+        do rendered_height <- ! (std/int/to_string) tree_height;
         do line <- ! (std/string/append) with_label rendered_height;
         ! (std/os/write_line) line {
           ! pre_traversal A left format {

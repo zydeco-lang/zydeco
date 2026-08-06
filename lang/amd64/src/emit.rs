@@ -204,8 +204,8 @@ struct NativeStringLiteral {
 }
 
 impl NativeStringLiteral {
-    fn new(label: String, characters: &[char]) -> Self {
-        let bytes = characters.iter().collect::<String>().into_bytes();
+    fn new(label: String, string: &Utf8String) -> Self {
+        let bytes = string.as_bytes().to_vec();
         Self { label, bytes }
     }
 

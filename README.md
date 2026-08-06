@@ -114,8 +114,7 @@ The output is written to `target/doc/`.
 
 - `lang/`: the library implementing the parser, type checker and
 interpreter for the Zydeco language.
-- `lib/`: standard library, reusable examples, and `lib/tests/` regression
-  projects
+- `lib/`: [standard library](lib/std/README.md), reusable examples, and `lib/tests/` regression projects
 - `cli/` Command-line interface
 - `web/` Web interface
 

@@ -47,9 +47,17 @@ begin
       { ret +True() }
       { ret +False() }
   that
+  def ! str_get_or_space (string : String) (index : Int) : Ret Char =
+    ! (api/str_get_branch)
+      (Ret Char)
+      string
+      index
+      { ret ' ' }
+      { fn character => ret character }
+  that
   def ! char_eq (left : Char) (right : Char) : Ret Bool =
-    do left <- ! (api/char_to_int) left;
-    do right <- ! (api/char_to_int) right;
+    do left <- ! (api/char_codepoint) left;
+    do right <- ! (api/char_codepoint) right;
     ! (api/int_eq_branch)
       (Ret Bool)
       left
@@ -58,13 +66,13 @@ begin
       { ret +False() }
   that
   def ! str_chop_hd (s : String) (i : Int) : Ret String =
-    do l <- ! (api/str_length) s;
+    do l <- ! (api/str_scalar_length) s;
     let fix str_collect (s : String) (i : Int) (r : String) : Ret String =
       do continue? <- ! int_lt i l;
       match continue?
       | +False() => ret r
       | +True() =>
-        do tl <- ! (api/str_index) s i;
+        do tl <- ! str_get_or_space s i;
         do tl <- ! (api/char_to_str) tl;
         do r <- ! (api/str_append) r tl;
         do i+1 <- ! (api/add) i 1;
@@ -74,14 +82,14 @@ begin
     ! str_collect s i ""
   that
   def ! str_eq_at (a : String) (b : String) (i : Int) : Ret Bool =
-    do ai <- ! (api/str_index) a i;
-    do bi <- ! (api/str_index) b i;
+    do ai <- ! str_get_or_space a i;
+    do bi <- ! str_get_or_space b i;
     ! char_eq ai bi
   that
   def ! str_match (s : String) (p : String) : Ret (Option String) =
     let fix str_match (i : Int) (s : String) (p : String) : Ret (Option String) =
-        do s_len <- ! (api/str_length) s;
-      do p_len <- ! (api/str_length) p;
+        do s_len <- ! (api/str_scalar_length) s;
+      do p_len <- ! (api/str_scalar_length) p;
       do i_lt_s <- ! int_lt i s_len;
       do i_lt_p <- ! int_lt i p_len;
       match i_lt_p
