@@ -6,7 +6,7 @@
 -- call-by-push-value.
 
 begin
-  let std = @[import("../../lib/std/std.zy")] _ that
+  let make_std = @[import("../../lib/std/std.zy")] _ that
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
     @[import("../../lib/std/builtin.zy")] _
@@ -37,22 +37,16 @@ begin
   -- The standard-library term is an ordinary dependency. Opening its result
   -- establishes abstract Boolean, option, and list types in the lexical tail.
   let (
-    Bool = StdBool,
-    Option = StdOption,
-    Result = StdResult,
-    List = StdList,
-    Int = StdInt,
-    Char = StdChar,
-    String = StdString,
-    Bytes = StdBytes,
-    Reader = StdReader,
-    Writer = StdWriter,
-    Path = StdPath,
-    IoErrorKind = StdIoErrorKind,
-    IoError = StdIoError,
-    OS = StdOS,
-    std
-  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+    /Int = StdInt;
+    /OS = StdOS;
+    /bool;
+    /int;
+    /string;
+    /stdio;
+    /process
+  ) = make_std (
+    VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
+  ) in
   begin
     def factorial_step : Thk (
       Thk (StdInt -> Ret StdInt) ->
@@ -60,15 +54,15 @@ begin
       Ret StdInt
     ) = {
       fn recursive number =>
-        do is_zero <- ! (std/int/eq) number 0;
-        ! (std/bool/if)
+        do is_zero <- ! (int/eq) number 0;
+        ! (bool/if)
           (Ret StdInt)
           is_zero
           { ret 1 }
           {
-            do predecessor <- ! (std/int/sub) number 1;
+            do predecessor <- ! (int/sub) number 1;
             do rest <- ! recursive predecessor;
-            ! (std/int/mul) number rest
+            ! (int/mul) number rest
           }
     } that
     def check : Thk (
@@ -80,20 +74,20 @@ begin
     ) = {
       fn factorial input expected continuation =>
         do actual <- ! factorial input;
-        do correct <- ! (std/int/eq) actual expected;
-        ! (std/bool/if)
+        do correct <- ! (int/eq) actual expected;
+        ! (bool/if)
           StdOS
           correct
           { ! continuation }
-          { ! (std/process/exit) 1 }
+          { ! (process/exit) 1 }
     } that
 
     do factorial <-
       ! fixed_point (StdInt -> Ret StdInt) factorial_step;
     ! check factorial 5 120 {
       ! check factorial 10 3628800 {
-        ! (std/stdio/write_line) "factorial results are correct" {
-          fn _ => ! (std/process/exit) 0
+        ! (stdio/write_line) "factorial results are correct" {
+          fn _ => ! (process/exit) 0
         }
       }
     }

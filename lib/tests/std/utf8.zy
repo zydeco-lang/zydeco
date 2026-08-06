@@ -1,120 +1,117 @@
 begin
-  let std = @[import("../../std/std.zy")] _ that
+  let make_std = @[import("../../std/std.zy")] _ that
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   let (
-    Bool = StdBool,
-    Option = StdOption,
-    Result = StdResult,
-    List = StdList,
-    Int = StdInt,
-    Char = StdChar,
-    String = StdString,
-    Bytes = StdBytes,
-    Reader = StdReader,
-    Writer = StdWriter,
-    Path = StdPath,
-    IoErrorKind = StdIoErrorKind,
-    IoError = StdIoError,
-    OS = StdOS,
-    std
-  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+    /Bool = StdBool;
+    /Int = StdInt;
+    /Char = StdChar;
+    /String = StdString;
+    /bool;
+    /option;
+    /int;
+    /char;
+    /string;
+    /process
+  ) = make_std (
+    VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
+  ) in
   let ! status (condition : StdBool) : Ret StdInt =
-    ! (std/bool/if)
+    ! (bool/if)
       (Ret StdInt)
       condition
       { ret 0 }
       { ret 1 }
   in
 
-  do scalar_length <- ! (std/string/length) "éλ🙂";
-  do scalar_length_ok <- ! (std/int/eq) scalar_length 3;
+  do scalar_length <- ! (string/length) "éλ🙂";
+  do scalar_length_ok <- ! (int/eq) scalar_length 3;
   do scalar_length_status <- ! status scalar_length_ok;
 
-  do byte_length <- ! (std/string/byte_length) "éλ🙂";
-  do byte_length_ok <- ! (std/int/eq) byte_length 8;
+  do byte_length <- ! (string/byte_length) "éλ🙂";
+  do byte_length_ok <- ! (int/eq) byte_length 8;
   do byte_length_status <- ! status byte_length_ok;
 
-  do middle <- ! (std/string/get) "éλ🙂" 1;
-  do middle_status <- ! (std/option/fold)
+  do middle <- ! (string/get) "éλ🙂" 1;
+  do middle_status <- ! (option/fold)
     StdChar
     (Ret StdInt)
     middle
     { ret 1 }
     {
       fn character =>
-        do codepoint <- ! (std/char/codepoint) character;
-        do correct <- ! (std/int/eq) codepoint 955;
+        do codepoint <- ! (char/codepoint) character;
+        do correct <- ! (int/eq) codepoint 955;
         ! status correct
     };
 
-  do missing <- ! (std/string/get) "éλ🙂" 3;
-  do missing_ok <- ! (std/option/is_none) StdChar missing;
+  do missing <- ! (string/get) "éλ🙂" 3;
+  do missing_ok <- ! (option/is_none) StdChar missing;
   do missing_status <- ! status missing_ok;
 
-  do split <- ! (std/string/split_at) "éλ🙂" 2;
-  do split_status <- ! (std/option/fold)
+  do split <- ! (string/split_at) "éλ🙂" 2;
+  do split_status <- ! (option/fold)
     (StdString * StdString)
     (Ret StdInt)
     split
     { ret 1 }
     {
       fn (left, right) =>
-        do left_ok <- ! (std/string/eq) left "éλ";
-        do right_ok <- ! (std/string/eq) right "🙂";
-        do correct <- ! (std/bool/and) left_ok right_ok;
+        do left_ok <- ! (string/eq) left "éλ";
+        do right_ok <- ! (string/eq) right "🙂";
+        do correct <- ! (bool/and) left_ok right_ok;
         ! status correct
     };
 
-  do characters <- ! (std/string/to_chars) "hé🙂";
-  do rebuilt <- ! (std/string/from_chars) characters;
-  do roundtrip_ok <- ! (std/string/eq) rebuilt "hé🙂";
+  do characters <- ! (string/to_chars) "hé🙂";
+  do rebuilt <- ! (string/from_chars) characters;
+  do roundtrip_ok <- ! (string/eq) rebuilt "hé🙂";
   do roundtrip_status <- ! status roundtrip_ok;
 
-  do parsed <- ! (std/string/parse_int) "-42";
-  do parsed_status <- ! (std/option/fold)
+  do parsed <- ! (string/parse_int) "-42";
+  do parsed_status <- ! (option/fold)
     StdInt
     (Ret StdInt)
     parsed
     { ret 1 }
     {
       fn integer =>
-        do correct <- ! (std/int/eq) integer -42;
+        do correct <- ! (int/eq) integer -42;
         ! status correct
     };
 
-  do invalid_integer <- ! (std/string/parse_int) "forty-two";
-  do invalid_integer_ok <- ! (std/option/is_none) StdInt invalid_integer;
+  do invalid_integer <- ! (string/parse_int) "forty-two";
+  do invalid_integer_ok <- ! (option/is_none) StdInt invalid_integer;
   do invalid_integer_status <- ! status invalid_integer_ok;
 
-  do smile <- ! (std/char/from_codepoint) 128578;
-  do smile_status <- ! (std/option/fold)
+  do smile <- ! (char/from_codepoint) 128578;
+  do smile_status <- ! (option/fold)
     StdChar
     (Ret StdInt)
     smile
     { ret 1 }
     {
       fn character =>
-        do rendered <- ! (std/char/to_string) character;
-        do correct <- ! (std/string/eq) rendered "🙂";
+        do rendered <- ! (char/to_string) character;
+        do correct <- ! (string/eq) rendered "🙂";
         ! status correct
     };
 
-  do surrogate <- ! (std/char/from_codepoint) 55296;
-  do surrogate_ok <- ! (std/option/is_none) StdChar surrogate;
+  do surrogate <- ! (char/from_codepoint) 55296;
+  do surrogate_ok <- ! (option/is_none) StdChar surrogate;
   do surrogate_status <- ! status surrogate_ok;
 
-  do first <- ! (std/int/add) scalar_length_status byte_length_status;
-  do second <- ! (std/int/add) middle_status missing_status;
-  do third <- ! (std/int/add) split_status roundtrip_status;
-  do fourth <- ! (std/int/add) parsed_status invalid_integer_status;
-  do fifth <- ! (std/int/add) smile_status surrogate_status;
-  do first_half <- ! (std/int/add) first second;
-  do second_half <- ! (std/int/add) third fourth;
-  do almost <- ! (std/int/add) first_half second_half;
-  do result <- ! (std/int/add) almost fifth;
-  ! (std/process/exit) result
+  do first <- ! (int/add) scalar_length_status byte_length_status;
+  do second <- ! (int/add) middle_status missing_status;
+  do third <- ! (int/add) split_status roundtrip_status;
+  do fourth <- ! (int/add) parsed_status invalid_integer_status;
+  do fifth <- ! (int/add) smile_status surrogate_status;
+  do first_half <- ! (int/add) first second;
+  do second_half <- ! (int/add) third fourth;
+  do almost <- ! (int/add) first_half second_half;
+  do result <- ! (int/add) almost fifth;
+  ! (process/exit) result
 end

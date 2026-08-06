@@ -77,6 +77,109 @@ end
 }
 
 #[test]
+fn projection_patterns_select_types_and_values_from_one_package_opening() {
+    ExistentialCase::check(
+        r#"
+begin
+  let Box =
+    exists (Item = Hidden : VType) .
+      (value :: Hidden) *
+      (consume :: Thk (Hidden -> Ret Int))
+  that
+  def boxed : Box = (
+    Item = Int,
+    value = 41,
+    consume = { fn value => ret value },
+  ) that
+
+  {
+    let (/Item; /value; /consume) = boxed in
+    ! consume value
+  }
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn projection_patterns_treat_plain_existential_binders_as_punned_fields() {
+    ExistentialCase::check(
+        r#"
+begin
+  let Box =
+    exists (Item : VType) .
+      (value :: Item)
+  that
+  def boxed : Box = (Int, value = 42) that
+
+  let (/Item; /value) = boxed in
+  def selected : Item = value in
+  ()
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn projection_patterns_can_name_one_type_field_twice() {
+    ExistentialCase::check(
+        r#"
+begin
+  let Box =
+    exists (Item : VType) .
+      (value :: Item)
+  that
+  def boxed : Box = (Int, value = 42) that
+
+  let (/Item = Left; /Item = Right; /value) = boxed in
+  def left : Left = value in
+  def right : Right = left in
+  ()
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn projection_patterns_reject_a_missing_package_field() {
+    ExistentialCase::assert_type_error(
+        r#"
+begin
+  let Box =
+    exists (Item : VType) .
+      (value :: Item)
+  that
+  def boxed : Box = (Int, value = 42) that
+
+  let (/Missing) = boxed in
+  ()
+end
+"#,
+    );
+}
+
+#[test]
+fn projection_patterns_reject_an_ambiguous_static_and_value_field() {
+    ExistentialCase::assert_type_error(
+        r#"
+begin
+  let Box =
+    exists (Item : VType) .
+      (Item :: Item)
+  that
+  def boxed : Box = (Int, Item = 42) that
+
+  let (/Item) = boxed in
+  ()
+end
+"#,
+    );
+}
+
+#[test]
 fn substitutes_an_outer_abstract_witness_through_a_manifest_definition() {
     ExistentialCase::check(
         r#"

@@ -17,9 +17,10 @@ wrapped/inner
 ```
 
 The search descends through named classifiers and through every component of a product. Other type constructors
-are opacity boundaries: lookup does not inspect function arguments, thunk results, data constructor payloads, or
-unopened existential packages. Thus structural lookup exposes declared record-like structure without turning `/`
-into an unrestricted search through every type reachable from the receiver.
+are opacity boundaries: term lookup does not inspect function arguments, thunk results, data constructor payloads,
+or unopened existential packages. Thus structural lookup exposes declared record-like structure without turning
+`/` into an unrestricted search through every type reachable from the receiver. A projection pattern can explicitly
+open an existential package, as described below; ordinary `package/field` term projection does not do so implicitly.
 
 Lookup succeeds only when the complete search has exactly one match. No matches produce a missing-field static
 error, while two or more matches produce an ambiguity static error even when the matches occur at different depths.
@@ -77,6 +78,35 @@ receiver. A missing or ambiguous stage is rejected statically by the same resolv
 After resolving the unique route, type checking elaborates a projection pattern into ordinary named and product
 patterns. Product components away from the route become typed holes. No projection-pattern node enters typed
 runtime syntax, which keeps matching, coverage checking, and backend layout on the existing pattern machinery.
+
+## Existential Package Selection
+
+When the bindee's expected type starts with an existential telescope, a semicolon group of direct field projection
+patterns selectively opens that package:
+
+```zydeco
+let (
+  /Item = LocalItem;
+  /value;
+  /consume
+) = package in
+...
+```
+
+The type checker opens the complete leading telescope once, using anonymous witnesses for unselected abstract
+fields. `/Item` selects the named existential field and binds its payload pattern to that opening's witness. After
+substituting every opened field through the package body, `/value` and `/consume` use the ordinary structural value
+resolver. The selected types and values consequently refer to one shared package introduction.
+
+A plain binder such as `exists (Item : VType) . Body` supplies the punned field name `Item`. For an explicitly named
+binder such as `exists (Item = Hidden : VType) . Body`, selection uses the public label `Item`. The punned projection
+`/Item` binds a local `Item`; `/Item = LocalItem` gives it a different source name.
+
+Missing and ambiguous selections use the same static errors as ordinary projection. Distinct package eliminations
+still allocate distinct abstract witnesses, while manifest existential fields retain their disclosed definitions.
+The opening elaborates to the existing existential `SCons` pattern, and its selected value projections elaborate to
+the existing product and alias patterns. This is the package-use convention described in
+[Package Modularization](package-modularization.md), rather than a separate `use` construct.
 
 The initial implementation requires the payload to be irrefutable. Variable and structural payloads cover the
 field-binding use case; constructor payloads are deferred until backend matching supports general nested

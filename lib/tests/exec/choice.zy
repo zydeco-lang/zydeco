@@ -1,5 +1,5 @@
 begin
-  let std = @[import("../../std/std.zy")] _ that
+  let make_std = @[import("../../std/std.zy")] _ that
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
     @[import("../../std/builtin.zy")] _
@@ -24,32 +24,25 @@ begin
   that
 
   let (
-    Bool = StdBool,
-    Option = StdOption,
-    Result = StdResult,
-    List = StdList,
-    Int = StdInt,
-    Char = StdChar,
-    String = StdString,
-    Bytes = StdBytes,
-    Reader = StdReader,
-    Writer = StdWriter,
-    Path = StdPath,
-    IoErrorKind = StdIoErrorKind,
-    IoError = StdIoError,
-    OS = StdOS,
-    std
-  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+    /String = StdString;
+    /OS = StdOS;
+    /bool;
+    /string;
+    /stdio;
+    /process
+  ) = make_std (
+    VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
+  ) in
   def beep : Choice (Thk StdOS -> StdOS) =
     +L({
       fn k =>
-        ! (std/stdio/write_line) "0" { fn _ => ! k }
+        ! (stdio/write_line) "0" { fn _ => ! k }
     })
   in
   def boop : Choice (Thk StdOS -> StdOS) =
     +R({
       fn k =>
-        ! (std/stdio/write_line) "1" { fn _ => ! k }
+        ! (stdio/write_line) "1" { fn _ => ! k }
     })
   in
   def tree : Tree StdString =
@@ -66,20 +59,20 @@ begin
     | +Final(res) =>
       match p
       | +Nil() =>
-        ! (std/stdio/write_line) res {
+        ! (stdio/write_line) res {
           fn _ =>
-            do correct <- ! (std/string/eq) res "o";
-            ! (std/bool/if)
+            do correct <- ! (string/eq) res "o";
+            ! (bool/if)
               StdOS
               correct
-              { ! (std/process/exit) 0 }
-              { ! (std/process/exit) 1 }
+              { ! (process/exit) 0 }
+              { ! (process/exit) 1 }
         }
-      | +Cons(_, _) => ! (std/process/exit) 2
+      | +Cons(_, _) => ! (process/exit) 2
       end
     | +Fork(tl, tr) =>
       match p
-      | +Nil() => ! (std/process/exit) 3
+      | +Nil() => ! (process/exit) 3
       | +Cons(c, p') =>
         match c
         | +L(k) => ! k { ! walk tl p' }

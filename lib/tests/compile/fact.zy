@@ -1,42 +1,28 @@
 begin
-  let std = @[import("../../std/std.zy")] _ that
+  let make_std = @[import("../../std/std.zy")] _ that
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (
-    Bool = StdBool,
-    Option = StdOption,
-    Result = StdResult,
-    List = StdList,
-    Int = StdInt,
-    Char = StdChar,
-    String = StdString,
-    Bytes = StdBytes,
-    Reader = StdReader,
-    Writer = StdWriter,
-    Path = StdPath,
-    IoErrorKind = StdIoErrorKind,
-    IoError = StdIoError,
-    OS = StdOS,
-    std
-  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+  let (/Int = StdInt; /bool; /int; /process) =
+    make_std (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api)
+  in
   let fix fact (i : StdInt) : Ret StdInt =
     -- extern def add : Thk (Int -> Int -> Ret Int) end
-    do zero? <- ! (std/int/eq) i 0;
-    ! (std/bool/if)
+    do zero? <- ! (int/eq) i 0;
+    ! (bool/if)
       (Ret StdInt)
       zero?
       { ret 1 }
       {
         -- do i <- ret i;
-        do i' <- ! (std/int/sub) i 1;
+        do i' <- ! (int/sub) i 1;
         do acc <- ! fact i';
-        ! (std/int/mul) i acc
+        ! (int/mul) i acc
       }
   in
   do x <- ! fact 10;
-  do r <- ! (std/int/sub) x 3628800;
-  ! (std/process/exit) r
+  do r <- ! (int/sub) x 3628800;
+  ! (process/exit) r
 end

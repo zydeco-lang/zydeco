@@ -1,104 +1,111 @@
 begin
-  let std = @[import("../../std/std.zy")] _ that
+  let make_std = @[import("../../std/std.zy")] _ that
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   let (
-    Bool = StdBool,
-    Option = StdOption,
-    Result = StdResult,
-    List = StdList,
-    Int = StdInt,
-    Char = StdChar,
-    String = StdString,
-    Bytes = StdBytes,
-    Reader = StdReader,
-    Writer = StdWriter,
-    Path = StdPath,
-    IoErrorKind = StdIoErrorKind,
-    IoError = StdIoError,
-    OS = StdOS,
-    std
-  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+    /Bool = StdBool;
+    /Result = StdResult;
+    /Int = StdInt;
+    /String = StdString;
+    /Bytes = StdBytes;
+    /Writer = StdWriter;
+    /Path = StdPath;
+    /IoError = StdIoError;
+    /OS = StdOS;
+    /bool;
+    /option;
+    /result = results;
+    /list;
+    /int;
+    /string;
+    /bytes;
+    /io;
+    /fs;
+    /stdio;
+    /process
+  ) = make_std (
+    VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
+  ) in
   let ! expect_ok
     (A : VType)
     (result : StdResult A StdIoError)
     (continuation : Thk (A -> StdOS))
     : StdOS =
-    ! (std/result/fold)
+    ! (results/fold)
       A
       StdIoError
       StdOS
       result
       continuation
-      { fn _ => ! (std/process/exit) 1 }
+      { fn _ => ! (process/exit) 1 }
   in
   let ! require (condition : StdBool) (continuation : Thk StdOS) : StdOS =
-    ! (std/bool/if)
+    ! (bool/if)
       StdOS
       condition
       continuation
-      { ! (std/process/exit) 2 }
+      { ! (process/exit) 2 }
   in
   let ! verify_stdio : StdOS =
-    ! (std/stdio/write) "" {
+    ! (stdio/write) "" {
       fn written =>
-        ! expect_ok Unit written { fn _ => ! (std/process/exit) 0 }
+        ! expect_ok Unit written { fn _ => ! (process/exit) 0 }
     }
   in
   let ! verify_missing (path_string : StdString) : StdOS =
-    do missing_string <- ! (std/string/append) path_string ".missing";
-    do missing_path <- ! (std/fs/path) missing_string;
-    ! (std/fs/read_bytes) missing_path {
+    do missing_string <- ! (string/append) path_string ".missing";
+    do missing_path <- ! (fs/path) missing_string;
+    ! (fs/read_bytes) missing_path {
       fn result =>
-        ! (std/result/fold)
+        ! (results/fold)
           StdBytes
           StdIoError
           StdOS
           result
-          { fn _ => ! (std/process/exit) 3 }
+          { fn _ => ! (process/exit) 3 }
           {
             fn error =>
-              do kind <- ! (std/io/error_kind) error;
-              do correct <- ! (std/io/kind_eq) kind (std/io/not_found);
+              do kind <- ! (io/error_kind) error;
+              do correct <- ! (io/kind_eq) kind (io/not_found);
               ! require correct { ! verify_stdio }
           }
     }
   in
   let ! verify_invalid_utf8 (path_string : StdString) : StdOS =
-    do invalid_string <- ! (std/string/append) path_string ".invalid";
-    do invalid_path <- ! (std/fs/path) invalid_string;
-    ! (std/fs/read_text) invalid_path {
+    do invalid_string <- ! (string/append) path_string ".invalid";
+    do invalid_path <- ! (fs/path) invalid_string;
+    ! (fs/read_text) invalid_path {
       fn result =>
-        ! (std/result/fold)
+        ! (results/fold)
           StdString
           StdIoError
           StdOS
           result
-          { fn _ => ! (std/process/exit) 6 }
+          { fn _ => ! (process/exit) 6 }
           {
             fn error =>
-              do kind <- ! (std/io/error_kind) error;
-              do correct <- ! (std/io/kind_eq) kind (std/io/invalid_data);
+              do kind <- ! (io/error_kind) error;
+              do correct <- ! (io/kind_eq) kind (io/invalid_data);
               ! require correct { ! verify_missing path_string }
           }
     }
   in
   let ! verify_contents (path : StdPath) (path_string : StdString) : StdOS =
-    ! (std/fs/read_text) path {
+    ! (fs/read_text) path {
       fn read =>
         ! expect_ok StdString read {
           fn contents =>
-            do text_correct <- ! (std/string/eq) contents "hé🙂!";
+            do text_correct <- ! (string/eq) contents "hé🙂!";
             ! require text_correct {
-              ! (std/fs/read_bytes) path {
+              ! (fs/read_bytes) path {
                 fn read_bytes =>
                   ! expect_ok StdBytes read_bytes {
-                    fn bytes =>
-                      do length <- ! (std/bytes/length) bytes;
-                      do length_correct <- ! (std/int/eq) length 8;
+                  fn contents =>
+                      do length <- ! (bytes/length) contents;
+                      do length_correct <- ! (int/eq) length 8;
                       ! require length_correct { ! verify_invalid_utf8 path_string }
                   }
               }
@@ -111,33 +118,33 @@ begin
     (path_string : StdString)
     (writer : StdWriter)
     : StdOS =
-    ! (std/io/close_writer) writer {
+    ! (io/close_writer) writer {
       fn closed_again =>
-        ! (std/result/fold)
+        ! (results/fold)
           Unit
           StdIoError
           StdOS
           closed_again
-          { fn _ => ! (std/process/exit) 4 }
+          { fn _ => ! (process/exit) 4 }
           {
             fn error =>
-              do kind <- ! (std/io/error_kind) error;
-              do correct <- ! (std/io/kind_eq) kind (std/io/closed);
+              do kind <- ! (io/error_kind) error;
+              do correct <- ! (io/kind_eq) kind (io/closed);
               ! require correct { ! verify_contents path path_string }
           }
     }
   in
   let ! append_marker (path : StdPath) (path_string : StdString) : StdOS =
-    ! (std/fs/append_writer) path {
+    ! (fs/append_writer) path {
       fn opened =>
         ! expect_ok StdWriter opened {
           fn writer =>
-            do marker <- ! (std/bytes/from_string) "!";
-            ! (std/io/write_all) writer marker {
+            do marker <- ! (bytes/from_string) "!";
+            ! (io/write_all) writer marker {
               fn written =>
                 ! expect_ok Unit written {
                   fn _ =>
-                    ! (std/io/close_writer) writer {
+                    ! (io/close_writer) writer {
                       fn closed =>
                         ! expect_ok Unit closed {
                           fn _ => ! verify_closed path path_string writer
@@ -149,8 +156,8 @@ begin
     }
   in
   let ! exercise (path_string : StdString) : StdOS =
-    do path <- ! (std/fs/path) path_string;
-    ! (std/fs/write_text) path "hé🙂" {
+    do path <- ! (fs/path) path_string;
+    ! (fs/write_text) path "hé🙂" {
       fn written =>
         ! expect_ok Unit written {
           fn _ => ! append_marker path path_string
@@ -158,14 +165,14 @@ begin
     }
   in
 
-  ! (std/process/arg_list) {
+  ! (process/arg_list) {
     fn arguments =>
-      do first <- ! (std/list/head) StdString arguments;
-      ! (std/option/fold)
+      do first <- ! (list/head) StdString arguments;
+      ! (option/fold)
         StdString
         StdOS
         first
-        { ! (std/process/exit) 5 }
+        { ! (process/exit) 5 }
         { fn path => ! exercise path }
   }
 end

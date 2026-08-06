@@ -1,29 +1,22 @@
 begin
-  let std = @[import("../../std/std.zy")] _ that
+  let make_std = @[import("../../std/std.zy")] _ that
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   let (
-    Bool = StdBool,
-    Option = StdOption,
-    Result = StdResult,
-    List = StdList,
-    Int = StdInt,
-    Char = StdChar,
-    String = StdString,
-    Bytes = StdBytes,
-    Reader = StdReader,
-    Writer = StdWriter,
-    Path = StdPath,
-    IoErrorKind = StdIoErrorKind,
-    IoError = StdIoError,
-    OS = StdOS,
-    std
-  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
-  do present <- ! (std/string/split_once) "left:right" ':';
-  do present_status <- ! (std/option/fold)
+    /Int = StdInt;
+    /String = StdString;
+    /option;
+    /int;
+    /string;
+    /process
+  ) = make_std (
+    VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
+  ) in
+  do present <- ! (string/split_once) "left:right" ':';
+  do present_status <- ! (option/fold)
     (StdString * StdString)
     (Ret StdInt)
     present
@@ -32,8 +25,8 @@ begin
       fn pair =>
         ret 0
     };
-  do absent <- ! (std/string/split_at) "short" 99;
-  do absent_status <- ! (std/option/fold)
+  do absent <- ! (string/split_at) "short" 99;
+  do absent_status <- ! (option/fold)
     (StdString * StdString)
     (Ret StdInt)
     absent
@@ -42,6 +35,6 @@ begin
       fn pair =>
         ret 1
     };
-  do status <- ! (std/int/add) present_status absent_status;
-  ! (std/process/exit) status
+  do status <- ! (int/add) present_status absent_status;
+  ! (process/exit) status
 end

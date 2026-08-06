@@ -152,14 +152,16 @@ from capturing the right side of ordinary operators: `(field :: A) * B` labels o
 A parenthesized semicolon pattern applies every member to the same bindee. For example,
 `((left, right); whole; copy)` destructures a pair and binds the complete pair twice. Semicolon is same-bindee
 composition, whereas comma assigns successive product components. Members retain source order and extend the
-pattern environment from left to right. The initial implementation admits irrefutable value members; constructor,
-type, and kind aliases remain future extensions.
+pattern environment from left to right. The initial implementation admits irrefutable value members. A group of
+direct field projections may additionally select static and dynamic fields while opening one existential package;
+general constructor aliases and arbitrary static aliases remain future extensions.
 
 Named projection recursively searches transparent named classifiers and product components. It requires exactly
 one matching field across the complete structure and exposes the payload beneath `Named`; missing and ambiguous
-matches are distinct static errors. Other type constructors are opacity boundaries. An explicit chain performs a
-fresh search at each slash, so `term/outer/inner` can state or disambiguate a path. Type projection is the static
-counterpart over nested named kinds: if `T : (field :: K)`, then `T/field : K`. A concrete projection
+matches are distinct static errors. Other type constructors, including unopened existential packages, are opacity
+boundaries for term projection. An explicit chain performs a fresh search at each slash, so `term/outer/inner` can
+state or disambiguate a path. Type projection is the static counterpart over nested named kinds: if
+`T : (field :: K)`, then `T/field : K`. A concrete projection
 `(field = A)/field` reduces to `A`. Projection from an abstract named type remains explicit in the typed syntax and
 reduces when the abstract type is later instantiated.
 
@@ -168,6 +170,15 @@ payload. It associates to the right, allowing `/outer = /inner = payload` to exp
 elaborates the result into ordinary named and product patterns with typed holes outside the selected path. The
 pun `/field` expands to `/field = field`, while `/field : Type` annotates that generated payload binder. The initial
 payload restriction is irrefutability; nested constructor matching remains a backend extension.
+
+When a same-bindee group of direct projection patterns is checked against an existential package, it is also the
+package's selective elimination form. The checker opens the leading existential telescope once, allocates anonymous
+witnesses for unselected abstract fields, binds selected static payloads to those witnesses or to manifest
+definitions, substitutes the opening through the package body, and then resolves selected dynamic fields
+structurally. Thus `let (/Item; /value; /consume) = package in ...` gives all three selections one package identity
+without naming every intervening field. Plain existential binders contribute their binder name as a punned field;
+explicitly named existential binders contribute their public label. Missing and ambiguous package fields use the
+ordinary projection errors.
 
 Type patterns make one additional distinction visible. A named pattern
 `(field = X) : (field :: K)` binds `X : K` to the payload, whereas a plain pattern
@@ -188,7 +199,8 @@ Named structure does not enter StackIR. Type checking resolves each projection t
 positions on its unique path; a path may be empty when only named wrappers are traversed. Lowering erases named
 steps and translates each product step to an ordinary full-arity tuple pattern and `let`. Subsequent backends
 therefore see only the existing tuple representation and layout. Named types, named kinds, and static projections
-are also compile-time-only and have no runtime representation.
+are also compile-time-only and have no runtime representation. Selective package patterns use the existing
+existential `SCons` plus value-pattern aliases, so they likewise add no runtime module representation.
 
 ### Source Organization and Modules
 

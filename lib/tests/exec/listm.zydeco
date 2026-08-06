@@ -1,5 +1,5 @@
 begin
-  let std = @[import("../../std/std.zy")] _ that
+  let make_std = @[import("../../std/std.zy")] _ that
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
     @[import("../../std/builtin.zy")] _
@@ -26,29 +26,22 @@ begin
   that
 
   let (
-    Bool = StdBool,
-    Option = StdOption,
-    Result = StdResult,
-    List = StdList,
-    Int = StdInt,
-    Char = StdChar,
-    String = StdString,
-    Bytes = StdBytes,
-    Reader = StdReader,
-    Writer = StdWriter,
-    Path = StdPath,
-    IoErrorKind = StdIoErrorKind,
-    IoError = StdIoError,
-    OS = StdOS,
-    std
-  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+    /Int = StdInt;
+    /OS = StdOS;
+    /bool;
+    /int;
+    /stdio;
+    /process
+  ) = make_std (
+    VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
+  ) in
   -- List~ is actually coinductive type
   def fix loop : Ret (List~ StdInt) =
     ret +Cons(0, loop)
   in
   -- Since it's coinductive, here's iota
   def fix iota (i : StdInt) : Ret (List~ StdInt) =
-    do i+1 <- ! (std/int/add) i 1;
+    do i+1 <- ! (int/add) i 1;
     ret +Cons(i, { ! iota i+1 })
   in
 
@@ -60,17 +53,17 @@ begin
       { ! iota 0 }
       {
         fn x b =>
-          do next? <- ! (std/int/lt) x 10;
-          ! (std/bool/if)
+          do next? <- ! (int/lt) x 10;
+          ! (bool/if)
             StdOS
             next?
             {
-              do rendered <- ! (std/int/to_string) x;
-              ! (std/stdio/write_line) rendered { fn _ => ! b }
+              do rendered <- ! (int/to_string) x;
+              ! (stdio/write_line) rendered { fn _ => ! b }
             }
-            { ! (std/process/exit) 0 }
+            { ! (process/exit) 0 }
       }
-      { ! (std/process/exit) 1 }
+      { ! (process/exit) 1 }
   in
 
   ! loopy

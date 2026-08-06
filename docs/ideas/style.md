@@ -17,7 +17,7 @@ before producing a computation or package:
 
 ```zydeco
 begin
-  let std = @[import("../std/std.zy")] _ that
+  let make_std = @[import("../std/std.zy")] _ that
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
     @[import("../std/builtin.zy")] _
@@ -132,7 +132,7 @@ A named projection uses `/`, while a computation destructor uses `.`.
 Parentheses make a projected operation pleasant to scan at a forcing site:
 
 ```zydeco
-! (std/int/eq) left right
+! (int/eq) left right
 ! monad .bind A B computation function
 ```
 
@@ -182,6 +182,42 @@ The order of these components forms a telescope and remains significant.
 
 Library packages are easiest to use when their components are named.
 Small local products may remain positional when their order is evident at the construction and elimination sites.
+
+Use a field projection pattern when a consumer needs selected named fields without restating their product layout.
+The punned form `/field` binds the selected payload as `field`; combine several projections with a semicolon alias
+group because every projection observes the same bindee:
+
+```zydeco
+match tree
+| +Leaf() => ret +Leaf()
+| +Node(/left; /value; /right) =>
+  ...
+end
+```
+
+Write `/field = local_name` when the local role deserves a different name, or chain projections to disambiguate a
+nested field. Keep an ordinary comma product pattern when the positional structure is itself meaningful and every
+component is used. Ordinary term projections traverse transparent named products and stop at an unopened
+existential package. At a package boundary, use one projection-pattern group to open the existential telescope once
+and bind only the public types and module values the consumer needs:
+
+```zydeco
+let (
+  /Int = StdInt;
+  /OS = StdOS;
+  /int;
+  /process
+) = make_std (
+  VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
+) in
+...
+```
+
+Selected type fields and module values share the same package opening. Keep all related selections in that group,
+place type fields before value modules, and retain their interface order when it makes the list easier to compare
+with the provider. The `/Int = StdInt` spelling selects the public field `Int` under a local name; plain `/Int` is
+the pun when no rename is useful. This projection-pattern idiom serves the role of package `use` without adding a
+separate binding form.
 
 The canonical builtin package is the single source of `@[intrinsic]` and `@[builtin(...)]` metadata.
 Other sources acquire intrinsic kinds, types, and host operations by importing and unpacking that package,

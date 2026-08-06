@@ -1,38 +1,30 @@
 begin
-  let std = @[import("../../std/std.zy")] _ that
+  let make_std = @[import("../../std/std.zy")] _ that
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   let (
-    Bool = StdBool,
-    Option = StdOption,
-    Result = StdResult,
-    List = StdList,
-    Int = StdInt,
-    Char = StdChar,
-    String = StdString,
-    Bytes = StdBytes,
-    Reader = StdReader,
-    Writer = StdWriter,
-    Path = StdPath,
-    IoErrorKind = StdIoErrorKind,
-    IoError = StdIoError,
-    OS = StdOS,
-    std
-  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
-  do empty <- ! (std/list/nil) StdInt;
-  do one <- ! (std/list/cons) StdInt 1 empty;
-  do values <- ! (std/list/cons) StdInt 2 one;
-  ! (std/list/case)
+    /Int = StdInt;
+    /OS = StdOS;
+    /list;
+    /int;
+    /process
+  ) = make_std (
+    VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
+  ) in
+  do empty <- ! (list/nil) StdInt;
+  do one <- ! (list/cons) StdInt 1 empty;
+  do values <- ! (list/cons) StdInt 2 one;
+  ! (list/case)
     StdInt
     StdOS
     values
-    { ! (std/process/exit) 1 }
+    { ! (process/exit) 1 }
     {
       fn head tail =>
-        do total <- ! (std/list/fold)
+        do total <- ! (list/fold)
           StdInt
           (Ret StdInt)
           tail
@@ -40,9 +32,9 @@ begin
           {
             fn value rest =>
               do subtotal <- ! rest;
-              ! (std/int/add) value subtotal
+              ! (int/add) value subtotal
           };
-        do status <- ! (std/int/sub) total 3;
-        ! (std/process/exit) status
+        do status <- ! (int/sub) total 3;
+        ! (process/exit) status
     }
 end

@@ -106,20 +106,20 @@ begin
   that
   def IoError =
     data
-    | +IoError : IoErrorKind * String
+    | +IoError : (kind :: IoErrorKind) * (message :: String)
     end
   that
   def ! error (kind : IoErrorKind) (message : String) : Ret IoError =
-    ret +IoError(kind, message)
+    ret +IoError(= kind, = message)
   that
   def ! error_kind (error : IoError) : Ret IoErrorKind =
     match error
-    | +IoError(kind, _) => ret kind
+    | +IoError(/kind) => ret kind
     end
   that
   def ! error_message (error : IoError) : Ret String =
     match error
-    | +IoError(_, message) => ret message
+    | +IoError(/message) => ret message
     end
   that
   def Path =

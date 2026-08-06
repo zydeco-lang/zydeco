@@ -1,45 +1,40 @@
 begin
-  let std = @[import("../../std/std.zy")] _ that
+  let make_std = @[import("../../std/std.zy")] _ that
   param (
     (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   let (
-    Bool = StdBool,
-    Option = StdOption,
-    Result = StdResult,
-    List = StdList,
-    Int = StdInt,
-    Char = StdChar,
-    String = StdString,
-    Bytes = StdBytes,
-    Reader = StdReader,
-    Writer = StdWriter,
-    Path = StdPath,
-    IoErrorKind = StdIoErrorKind,
-    IoError = StdIoError,
-    OS = StdOS,
-    std
-  ) = std (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+    /List = StdList;
+    /Int = StdInt;
+    /String = StdString;
+    /list;
+    /int;
+    /string;
+    /stdio;
+    /process
+  ) = make_std (
+    VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
+  ) in
   def fix foldl (xs : StdList StdString) (i : StdInt) : Ret StdInt =
-    ! (std/list/case)
+    ! (list/case)
       StdString
       (Ret StdInt)
       xs
       { ret i }
       {
         fn s xs =>
-          do i' <- ! (std/string/length) s;
-          do i' <- ! (std/int/add) i i';
+          do i' <- ! (string/length) s;
+          do i' <- ! (int/add) i i';
           ! foldl xs i'
       }
   in
-  do nil <- ! (std/list/nil) StdString;
-  do ys <- ! (std/list/cons) StdString "y" nil;
-  do empty_and_ys <- ! (std/list/cons) StdString "" ys;
-  do xs <- ! (std/list/cons) StdString "abc" empty_and_ys;
+  do nil <- ! (list/nil) StdString;
+  do ys <- ! (list/cons) StdString "y" nil;
+  do empty_and_ys <- ! (list/cons) StdString "" ys;
+  do xs <- ! (list/cons) StdString "abc" empty_and_ys;
   do l <- ! foldl xs 0;
-  do s <- ! (std/int/to_string) l;
-  ! (std/stdio/write_line) s { fn _ => ! (std/process/exit) 0 }
+  do s <- ! (int/to_string) l;
+  ! (stdio/write_line) s { fn _ => ! (process/exit) 0 }
 end
