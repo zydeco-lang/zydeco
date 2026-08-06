@@ -1,7 +1,7 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (/VType; /CType; /Thk; /Ret; /Int; /exit; builtin) :
+    (/VType; /CType; /Thk; /Ret; /Int; /process; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
@@ -157,6 +157,6 @@ begin
       fn x =>
         ret x
     };
-  ! (exit) x
+  ! (process/exit) x
 end
 end

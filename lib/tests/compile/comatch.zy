@@ -1,6 +1,6 @@
 begin
   param (
-    (/Int; /OS; /exit) :
+    (/Int; /OS; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
   def Choice =
@@ -11,7 +11,7 @@ begin
   that
 
   (comatch
-  | .left => ! (exit) 10
-  | .right i => ! (exit) i
+  | .left => ! (process/exit) 10
+  | .right i => ! (process/exit) i
   end : Choice) .right 0
 end

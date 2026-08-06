@@ -6,13 +6,13 @@ begin
     end
   that
   param (
-    (/Unit; /exit) :
+    (/Unit; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   let x : Bool = +False() in
   match x
-  | +True(_) => ! (exit) 10
-  | +False(_) => ! (exit) 0
+  | +True(_) => ! (process/exit) 10
+  | +False(_) => ! (process/exit) 0
   end
 end

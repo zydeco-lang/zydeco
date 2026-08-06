@@ -5,10 +5,10 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (/OS = StdOS; /bool; /process) = make_std builtin in
+  let (/bool; /process) = make_std builtin in
   do result <- ! (bool/not) (bool/false);
   ! (bool/if)
-    StdOS
+    OS
     result
     { ! (process/exit) 0 }
     { ! (process/exit) 1 }

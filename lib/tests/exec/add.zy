@@ -1,6 +1,6 @@
 begin
   param (
-    (/VType; /Ret; /Unit; /exit) :
+    (/VType; /Ret; /Unit; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -25,5 +25,5 @@ begin
 
   do x <- ! add +S(+S(+Z())) +S(+Z());
   do y <- ! add' x +S(+S(+S(+Z())));
-  ! (exit) 0
+  ! (process/exit) 0
 end

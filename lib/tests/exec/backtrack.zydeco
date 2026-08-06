@@ -1,14 +1,7 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (
-      /VType; /CType; /Thk; /Ret;
-      /Unit; /Int; /OS;
-      /add; /int_eq_branch;
-      /write_str; /write_int; /write_line;
-      /exit;
-      builtin
-    ) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /OS; /int; /stdio; /process; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
@@ -56,7 +49,7 @@ begin
   that
 
   def ! int_eq (left : Int) (right : Int) : Ret Bool =
-    ! (int_eq_branch)
+    ! (int/eq)
       (Ret Bool)
       left
       right
@@ -133,7 +126,7 @@ begin
               fn y =>
                 ! mlist .bind Unit (Pair Int Int)
                   {
-                    do r <- ! (add) x y;
+                    do r <- ! (int/add) x y;
                     do b <- ! int_eq r 5;
                     ! guard b
                   }
@@ -153,10 +146,10 @@ begin
     | +Cons(p, ps) =>
       match p
       | +Cons(x, y) =>
-        ! (write_int) x {
-          ! (write_str) " + " {
-            ! (write_int) y {
-              ! (write_line) "" {
+        ! (stdio/write_int) x {
+          ! (stdio/write) " + " {
+            ! (stdio/write_int) y {
+              ! (stdio/write_line) "" {
                 ! print ps kont
               }
             }
@@ -165,6 +158,6 @@ begin
       end
     end
   in
-  ! print ps { ! (exit) 0 }
+  ! print ps { ! (process/exit) 0 }
 end
 end

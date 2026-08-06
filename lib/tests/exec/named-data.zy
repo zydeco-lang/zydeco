@@ -1,7 +1,7 @@
 -- Data constructors treat a named tuple as an ordinary payload type.
 begin
   param (
-    (/Unit; /Int; /add; /sub; /exit) :
+    (/Unit; /Int; /int; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -23,13 +23,13 @@ begin
       body : Int,
       payload = payload : Int
     ) =>
-    do tag_check <- ! (sub) tag 7;
-    do body_check <- ! (sub) body 8;
-    do payload_check <- ! (sub) payload 9;
-    do total <- ! (add) tag_check body_check;
-    do total <- ! (add) total payload_check;
-    ! (exit) total
+    do tag_check <- ! (int/sub) tag 7;
+    do body_check <- ! (int/sub) body 8;
+    do payload_check <- ! (int/sub) payload 9;
+    do total <- ! (int/add) tag_check body_check;
+    do total <- ! (int/add) total payload_check;
+    ! (process/exit) total
   | +Empty() =>
-    ! (exit) 1
+    ! (process/exit) 1
   end
 end

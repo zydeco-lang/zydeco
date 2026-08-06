@@ -5,14 +5,14 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (/Int = StdInt; /bool; /int; /process) =
+  let (/bool; /int; /process) =
     make_std builtin
   in
-  let fix fact (i : StdInt) : Ret StdInt =
+  let fix fact (i : Int) : Ret Int =
     -- extern def add : Thk (Int -> Int -> Ret Int) end
     do zero? <- ! (int/eq) i 0;
     ! (bool/if)
-      (Ret StdInt)
+      (Ret Int)
       zero?
       { ret 1 }
       {

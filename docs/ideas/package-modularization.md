@@ -15,10 +15,7 @@ begin
     (/VType; /Thk; /String; /OS; builtin) :
     @[import("../../std/builtin.zy")] _
   ) in
-  let (
-    /Result = StdResult; /String = StdString; /Path = StdPath; /IoError = StdIoError; /OS = StdOS;
-    /result; /fs; /stdio; /process
-  ) = make_std builtin in
+  let (/Result; /Path; /IoError; /result; /fs; /stdio; /process) = make_std builtin in
 
   ...
 end
@@ -39,11 +36,11 @@ Opening the public standard package positionally gives a source name to every en
 
 ```zydeco
 let (
-  Bool = StdBool,
-  Option = StdOption,
-  Result = StdResult,
-  List = StdList,
-  Int = StdInt,
+  Bool = Bool,
+  Option = Option,
+  Result = Result,
+  List = List,
+  Int = Int,
   ...,
   (/bool; /option; /result; /list; /int; ...; /process)
 ) = make_std builtin in
@@ -74,30 +71,36 @@ The pun `/String` binds the selected type identity as `String`, and `/fs` binds 
 The explicit payload form renames either kind of selection:
 
 ```zydeco
-let (/String = Text; /Path = LocalPath; /fs = filesystem) = package in
+let (/String = Text; /Path = FilePath; /fs = filesystem) = package in
 ...
 ```
 
+The package boundary already explains where a selected identity came from. Names such as `LocalPath`,
+`PublicPath`, and `StdPath` repeat that provenance without adding a source-level role, so ordinary selections keep
+the punned name. An explicit rename should describe how the consumer uses the field, as `Text`, `FilePath`, or
+`filesystem` does above.
+
 The same elimination form works directly in an annotated parameter. This is the important case for Builtin,
-because a source can state its primitive dependencies without copying the complete host ABI:
+because a source can state its capability dependencies without copying the complete host ABI:
 
 ```zydeco
 param (
-  (/Bytes; /Reader; /io_read; builtin) :
+  (/Bytes; /Reader; /io; builtin) :
   @[import("builtin.zy")] _
 ) in
 ...
 ```
 
-`/Bytes`, `/Reader`, and `/io_read` are the only local bindings introduced from the package. The final `builtin`
-is an ordinary same-bindee alias for the complete package value. It is useful when this source must pass its
-dependency to another package-dependent function; it can be omitted in a leaf module. The checker associates that
-alias with the witnesses opened by the projections, so `dependency builtin` preserves the same type identities.
+`/Bytes`, `/Reader`, and `/io` are the only local bindings introduced from the package. Operations remain qualified,
+so this source calls `io/read` rather than introducing a generic `read` binding. The final `builtin` is an ordinary
+same-bindee alias for the complete package value. It is useful when this source forwards its dependency to another
+package-dependent function and can be omitted in a leaf module. The checker associates that alias with the
+witnesses opened by the projections, so `dependency builtin` preserves the same type identities.
 
 After selection, ordinary term projection keeps module operations qualified:
 
 ```zydeco
-def ! load (path : LocalPath) : StdOS =
+def ! load (path : FilePath) : OS =
   ! (filesystem/read_text) path {
     fn result => ...
   }
@@ -129,11 +132,11 @@ following steps:
 Consequently, selected values and selected types agree on the hidden identities they share. In this pattern:
 
 ```zydeco
-let (/Path = LocalPath; /fs) = package in
+let (/Path; /fs) = package in
 ...
 ```
 
-`LocalPath` is exactly the abstract identity mentioned by the selected `fs` operations. Unselected identities also
+`Path` is exactly the abstract identity mentioned by the selected `fs` operations. Unselected identities also
 remain available internally while the body is checked, so selecting `/fs` does not require naming every type that
 occurs in its signature.
 
@@ -146,7 +149,20 @@ produced package values retains the ordinary generative existential semantics.
 
 ## Standard-library organization
 
-The public standard package exposes shared type identities once and groups operations into named module values:
+Builtin exposes host operations through small capability modules while keeping their shared base types at the
+package boundary:
+
+```text
+types:        Unit Int Char String Bytes Reader Writer OS
+capabilities: int char string bytes io fs stdio args random process
+```
+
+A source selects the types needed in annotations and the capability modules it calls. Individual operations stay
+qualified, such as `int/eq`, `string/append`, and `fs/open_reader`; this prevents generic names such as `eq`, `read`,
+and `write` from occupying every consumer's scope.
+
+The public standard package builds on that boundary. It exposes shared type identities once and groups its own
+operations into named module values:
 
 ```text
 types:   Bool Option Result List Int Char String Bytes Reader Writer
@@ -168,16 +184,13 @@ do status <- ! (int/sub) one 1;
 A filesystem consumer can select more capabilities while retaining the same shape:
 
 ```zydeco
-let (
-  /Result = StdResult; /Bytes = StdBytes; /Path = StdPath; /IoError = StdIoError; /OS = StdOS;
-  /result; /bytes; /io; /fs; /process
-) = make_std builtin in
+let (/Result; /Path; /IoError; /result; /bytes; /io; /fs; /process) = make_std builtin in
 ...
 ```
 
-The implementation uses the same rule. Each standard-library source selects its own Builtin dependencies, and
-`std.zy` retains a whole alias while forwarding the package to its component modules. The complete positional
-telescope remains only in the provider representation and host/runtime construction boundary.
+The implementation uses the same rule. Each standard-library source selects its own Builtin capability modules,
+and `std.zy` retains a whole alias while forwarding the package to its component modules. The complete telescope
+remains only in the provider representation and host/runtime construction boundary.
 
 ## Elaboration and runtime representation
 
@@ -187,8 +200,8 @@ projection patterns, and their semicolon group becomes the existing pattern-alia
 occupy unselected static positions without introducing source names.
 
 Static witnesses and manifest equations erase as before. Value projections lower to ordinary tuple patterns with
-resolved physical paths. The interpreter, Stack IR, and native runtime therefore require no module object, field
-table, or new calling convention.
+resolved physical paths. The Builtin materializer recursively follows the same nested product shape in the
+interpreter and Stack IR. No module object, field table, or new calling convention is required.
 
 Term projection deliberately retains its existing boundary: `package/fs` does not search through an unopened
 existential package. Opening changes type identity and scope, so the source must show it with a pattern. This keeps
@@ -213,7 +226,7 @@ The resulting convention stays within Zydeco's uniform term language:
 ```zydeco
 let (/TypeField; /module_value) = package in body
 
-param ((/TypeField; /operation; whole) : Package) in body
+param ((/TypeField; /module_value; whole) : Package) in body
 ```
 
 A module remains a value, a type field remains an existential component, and an import remains metadata on a hole.

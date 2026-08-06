@@ -1,6 +1,6 @@
 begin
   param (
-    (/VType; /Ret; /Int; /exit) :
+    (/VType; /Ret; /Int; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
   let x = 100 that
@@ -13,5 +13,5 @@ begin
   that
 
   do x <- ! one 20;
-  ! (exit) x
+  ! (process/exit) x
 end

@@ -1,12 +1,6 @@
 begin
   param (
-    (
-      /VType; /Thk; /Ret;
-      /Unit; /Int; /String; /OS;
-      /add = primitive_add; /int_lt_branch;
-      /write_int = primitive_write_int; /write_line = primitive_write_line;
-      /exit
-    ) :
+    (/VType; /Thk; /Ret; /Unit; /Int; /String; /OS; /int; /stdio; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
   let U = Thk that
@@ -17,25 +11,22 @@ begin
     | +False : Unit
     end
   that
-  let add = primitive_add that
   def ! int_lt (x : Int) (y : Int) : Ret Bool =
-    ! (int_lt_branch)
+    ! (int/lt)
       (Ret Bool)
       x
       y
       { ret +True() }
       { ret +False() }
   that
-  let write_int = primitive_write_int that
-  let write_line = primitive_write_line that
   def ! write_int_line (x : Int) (b : U OS) : OS =
-    ! write_int x {
-      ! write_line "" b
+    ! (stdio/write_int) x {
+      ! (stdio/write_line) "" b
     }
   that
   def ! panic (msg : String) : OS =
-    ! write_line msg {
-      ! (exit) 1
+    ! (stdio/write_line) msg {
+      ! (process/exit) 1
     }
   that
 
@@ -48,7 +39,7 @@ begin
 
   def fix iota : Int -> F(LList' Int) =
     fn (i: Int) =>
-      do i+1 <- ! add i 1;
+      do i+1 <- ! (int/add) i 1;
       ret +Cons(i, { ! iota i+1 })
   that
 

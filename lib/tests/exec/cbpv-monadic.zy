@@ -6,13 +6,7 @@ begin
     (
       /VType; /CType; /Thk; /Ret;
       /Unit; /Int; /Char; /String; /OS;
-      /add = primitive_add; /mul = primitive_mul; /int_eq_branch; /int_lt_branch; /int_gt_branch;
-      /int_to_str = primitive_int_to_str;
-      /char_to_str = primitive_char_to_str; /char_codepoint = primitive_char_codepoint;
-      /str_scalar_length = primitive_str_scalar_length; /str_append = primitive_str_append; /str_eq_branch;
-      /str_get_branch;
-      /write_str = primitive_write_str; /write_line = primitive_write_line; /read_line = primitive_read_line;
-      /exit = primitive_exit;
+      /int; /char; /string; /stdio; /process;
       builtin
     ) :
     @[import("../../std/builtin.zy")] _
@@ -21,18 +15,6 @@ begin
     monadic_basis builtin in
   begin
   let Ret = F that
-  let add = primitive_add that
-  let mul = primitive_mul that
-  let str_scalar_length = primitive_str_scalar_length that
-  let str_append = primitive_str_append that
-  let int_to_str = primitive_int_to_str that
-  let char_to_str = primitive_char_to_str that
-  let char_codepoint = primitive_char_codepoint that
-  let write_str = primitive_write_str that
-  let write_line = primitive_write_line that
-  let read_line = primitive_read_line that
-  let exit = primitive_exit that
-
   def Bool =
     data
     | +True : Unit
@@ -45,10 +27,10 @@ begin
     | +Some : A
     end
   that
-  def ! str_get_or_space (string : String) (index : Int) : Ret Char =
-    ! (str_get_branch)
+  def ! str_get_or_space (text : String) (index : Int) : Ret Char =
+    ! (string/get)
       (Ret Char)
-      string
+      text
       index
       { ret ' ' }
       { fn character => ret character }
@@ -76,7 +58,7 @@ begin
     ! if B condition consequent alternative
   that
   def ! int_eq (left : Int) (right : Int) : Ret Bool =
-    ! (int_eq_branch)
+    ! (int/eq)
       (Ret Bool)
       left
       right
@@ -84,7 +66,7 @@ begin
       { ret +False() }
   that
   def ! int_lt (left : Int) (right : Int) : Ret Bool =
-    ! (int_lt_branch)
+    ! (int/lt)
       (Ret Bool)
       left
       right
@@ -92,7 +74,7 @@ begin
       { ret +False() }
   that
   def ! int_le (left : Int) (right : Int) : Ret Bool =
-    ! (int_gt_branch)
+    ! (int/gt)
       (Ret Bool)
       left
       right
@@ -100,7 +82,7 @@ begin
       { ret +True() }
   that
   def ! str_eq (left : String) (right : String) : Ret Bool =
-    ! (str_eq_branch)
+    ! (string/eq)
       (Ret Bool)
       left
       right
@@ -108,8 +90,8 @@ begin
       { ret +False() }
   that
   def ! char_eq (left : Char) (right : Char) : Ret Bool =
-    do left <- ! char_codepoint left;
-    do right <- ! char_codepoint right;
+    do left <- ! (char/codepoint) left;
+    do right <- ! (char/codepoint) right;
     ! int_eq left right
   that
   def ! bool_eq (left : Bool) (right : Bool) : Ret Bool =
@@ -157,8 +139,8 @@ begin
     end
   that
   def ! panic (message : String) : OS =
-    ! write_line message {
-      ! exit 1
+    ! (stdio/write_line) message {
+      ! (process/exit) 1
     }
   that
 
@@ -298,7 +280,7 @@ begin
     | .print s =>
       comatch
       | .run ka _ =>
-        do~ ! write_line s;
+        do~ ! (stdio/write_line) s;
         ! ka ()
       end
     end
@@ -367,67 +349,67 @@ begin
     comatch
     | .value sv kont =>
       match sv
-      | +Var(x) => ! write_str x kont
-      | +Bool(b) => ! if (OS) b { ! write_str "true" kont } { ! write_str "false" kont }
+      | +Var(x) => ! (stdio/write) x kont
+      | +Bool(b) => ! if (OS) b { ! (stdio/write) "true" kont } { ! (stdio/write) "false" kont }
       | +Int(i) =>
-        do i <- ! int_to_str i;
-        ! write_str i kont
+        do i <- ! (int/to_string) i;
+        ! (stdio/write) i kont
       | +Thunk(sc) =>
         -- Note: `do <comp1>; <comp2>` is a syntactic sugar for `<comp1> { <comp2> }`
-        do~ ! write_str "{ ";
+        do~ ! (stdio/write) "{ ";
         do~ ! print-scbpv .compu sc;
-        do~ ! write_str " }";
+        do~ ! (stdio/write) " }";
         ! kont
       end
     | .compu sc kont =>
       match sc
       | +Lam(x, sc) =>
-        do~ ! write_str "fn ";
-        do~ ! write_str x;
-        do~ ! write_str " -> ";
+        do~ ! (stdio/write) "fn ";
+        do~ ! (stdio/write) x;
+        do~ ! (stdio/write) " -> ";
         do~ ! print-scbpv .compu sc;
         ! kont
       | +App(sc, sv) =>
-        do~ ! write_str "(";
+        do~ ! (stdio/write) "(";
         do~ ! print-scbpv .compu sc;
-        do~ ! write_str " ";
+        do~ ! (stdio/write) " ";
         do~ ! print-scbpv .value sv;
-        do~ ! write_str ")";
+        do~ ! (stdio/write) ")";
         ! kont
       | +Ret(sv) =>
-        do~ ! write_str "ret ";
+        do~ ! (stdio/write) "ret ";
         do~ ! print-scbpv .value sv;
         ! kont
       | +Bind(sc1, x, sc2) =>
-        do m <- ! str_append "bind " x;
-        do m <- ! str_append m " <- ";
-        do~ ! write_str m;
+        do m <- ! (string/append) "bind " x;
+        do m <- ! (string/append) m " <- ";
+        do~ ! (stdio/write) m;
         do~ ! print-scbpv .compu sc1;
-        do~ ! write_str "; ";
+        do~ ! (stdio/write) "; ";
         do~ ! print-scbpv .compu sc2;
         ! kont
       | +Force(sv) =>
-        do~ ! write_str "! ";
+        do~ ! (stdio/write) "! ";
         do~ ! print-scbpv .value sv;
         ! kont
       | +Rec(x, sc) =>
-        do~ ! write_str "fix ";
-        do~ ! write_str x;
-        do~ ! write_str " -> ";
+        do~ ! (stdio/write) "fix ";
+        do~ ! (stdio/write) x;
+        do~ ! (stdio/write) " -> ";
         do~ ! print-scbpv .compu sc;
         ! kont
       | +If(sv, sc1, sc2) =>
-        do~ ! write_str "if ";
+        do~ ! (stdio/write) "if ";
         do~ ! print-scbpv .value sv;
-        do~ ! write_str " then ";
+        do~ ! (stdio/write) " then ";
         do~ ! print-scbpv .compu sc1;
-        do~ ! write_str " else ";
+        do~ ! (stdio/write) " else ";
         do~ ! print-scbpv .compu sc2;
         ! kont
       | +Env(sc) =>
-        do~ ! write_str "env[";
+        do~ ! (stdio/write) "env[";
         do~ ! print-scbpv .compu sc;
-        do~ ! write_str "]";
+        do~ ! (stdio/write) "]";
         ! kont
       end
     end
@@ -449,18 +431,18 @@ begin
     comatch
     | .value v kont =>
       match v
-      | +Bool(b) => ! if (OS) b { ! write_str "true" kont } { ! write_str "false" kont }
+      | +Bool(b) => ! if (OS) b { ! (stdio/write) "true" kont } { ! (stdio/write) "false" kont }
       | +Int(i) =>
-        do i <- ! int_to_str i;
-        ! write_str i kont
+        do i <- ! (int/to_string) i;
+        ! (stdio/write) i kont
       | +Thunk(c) =>
-        do~ ! write_str "{ ";
+        do~ ! (stdio/write) "{ ";
         do~ ! print-cbpv .compu c;
-        do~ ! write_str " }";
+        do~ ! (stdio/write) " }";
         ! kont
       end
     | .compu c kont =>
-      ! write_str "<compu>" kont
+      ! (stdio/write) "<compu>" kont
     end
   that
   def ! print-value : Value -> U OS -> OS =
@@ -502,15 +484,15 @@ begin
     | .extend x v =>
       ! envo +Extend(x, v, env)
     | .print k =>
-      do~ ! write_line "[";
+      do~ ! (stdio/write_line) "[";
       (fix (p : U (EnvT -> OS)) => fn env => match env
-      | +Empty() => ! write_line "]" k
+      | +Empty() => ! (stdio/write_line) "]" k
       | +Extend(x, v, env') =>
-        do~ ! write_str "  ";
-        do~ ! write_str x;
-        do~ ! write_str " = ";
+        do~ ! (stdio/write) "  ";
+        do~ ! (stdio/write) x;
+        do~ ! (stdio/write) " = ";
         do~ ! print-value v;
-        do~ ! write_line ",";
+        do~ ! (stdio/write_line) ",";
         ! p env'
       end) env
     end
@@ -536,27 +518,27 @@ begin
   def ! traceo (items : List TraceItem) : TraceO =
     comatch
     | .print kont =>
-      do~ ! write_line "[";
+      do~ ! (stdio/write_line) "[";
       do kont <-
         do~ ! foldl (TraceItem) (U OS) items { fn item kont => ret {
           match item
           | +App(v) =>
             -- | +App(_sv, v) =>
-            do~ ! write_str "  app ";
+            do~ ! (stdio/write) "  app ";
             do~ ! print-value v;
-            do~ ! write_line ",";
+            do~ ! (stdio/write_line) ",";
             ! kont
           -- | +Bind(_k) =>
           | +Bind(x, sc, _k) =>
-            do~ ! write_str "  bind ";
-            do~ ! write_str x;
-            do~ ! write_str ". ";
+            do~ ! (stdio/write) "  bind ";
+            do~ ! (stdio/write) x;
+            do~ ! (stdio/write) ". ";
             do~ ! print-scompu sc;
-            do~ ! write_line ",";
+            do~ ! (stdio/write_line) ",";
             ! kont
           end
         }};
-        ! write_line "]" kont
+        ! (stdio/write_line) "]" kont
       ;
       ! kont
     end
@@ -615,8 +597,8 @@ begin
 
   def ! mp-cnt (A : VType) (cnt : Int) (m : U (Parser A)) : Parser A =
     comatch | .run s i =>
-      do len <- ! str_scalar_length s;
-      do i' <- ! add i cnt;
+      do len <- ! (string/length) s;
+      do i' <- ! (int/add) i cnt;
       ! if~ (MExnOS (Pair A Int)) { ! int_le i' len } {
         ! m .run s i
       } {
@@ -632,12 +614,12 @@ begin
           do c' <- ! str_get_or_space s i;
           ! char_eq c' c
         } {
-          do i' <- ! add i 1;
+          do i' <- ! (int/add) i 1;
           ! mexn .return (Pair Char Int) +Cons(c, i')
         } {
-          do msg <- ! char_to_str c;
-          do msg <- ! str_append "missing `" msg;
-          do msg <- ! str_append msg "`";
+          do msg <- ! (char/to_string) c;
+          do msg <- ! (string/append) "missing `" msg;
+          do msg <- ! (string/append) msg "`";
           ! mexn-err .fail (Pair Char Int) +ParseError(i, msg)
         }
       end
@@ -645,18 +627,18 @@ begin
   that
 
   def ! p_word (w : String) : Parser String =
-    do len <- ! str_scalar_length w;
+    do len <- ! (string/length) w;
     ! mp-cnt (String) len {
       comatch | .run s i =>
         let fix word_match (j: Int) =
           ! if~ (Ret Bool) { ! int_eq j len } {
             ret +True()
           } {
-            do l <- ! add i j;
+            do l <- ! (int/add) i j;
             do c1 <- ! str_get_or_space s l;
             do c2 <- ! str_get_or_space w j;
             ! if~ (Ret Bool) { ! char_eq c1 c2 } {
-              do j' <- ! add j 1;
+              do j' <- ! (int/add) j 1;
               ! word_match j'
             } {
               ret +False()
@@ -664,11 +646,11 @@ begin
           }
         in
         ! if~ (MExnOS (Pair String Int)) { ! word_match 0 } {
-          do i' <- ! add i len;
+          do i' <- ! (int/add) i len;
           ! mexn .return (Pair String Int) +Cons(w, i')
         } {
-          do msg <- ! str_append "word `" w;
-          do msg <- ! str_append msg "` mismatch";
+          do msg <- ! (string/append) "word `" w;
+          do msg <- ! (string/append) msg "` mismatch";
           ! mexn-err .fail (Pair String Int) +ParseError(i, msg)
         }
       end
@@ -677,7 +659,7 @@ begin
 
   def ! p_var : Parser String =
     let ! p_vc (c: Char) : Ret (Option Char) =
-      do ascii <- ! char_codepoint c;
+      do ascii <- ! (char/codepoint) c;
       let ! digit =
         ! and~ { ! int_lt 47 ascii } { ! int_lt ascii 58 }
       in
@@ -696,11 +678,11 @@ begin
       let fix var (v: String) (i: Int) =
         do c <- ! str_get_or_space s i;
         do c? <- ! p_vc c;
-        do i' <- ! add i 1;
+        do i' <- ! (int/add) i 1;
         match c?
         | +None() =>
           ! if~ (MExnOS (Pair String Int)) {
-            do len <- ! str_scalar_length v;
+            do len <- ! (string/length) v;
             ! int_eq len 0
           } {
             ! mexn-err .fail (Pair String Int) +ParseError(i, "variable of length 0")
@@ -708,8 +690,8 @@ begin
             ! mexn .return (Pair String Int) +Cons(v, i)
           }
         | +Some(c) =>
-          do c <- ! char_to_str c;
-          do v <- ! str_append v c;
+          do c <- ! (char/to_string) c;
+          do v <- ! (string/append) v c;
           ! var v i'
         end
       in
@@ -837,7 +819,7 @@ begin
     match sci
     | +Cons(sc, i) =>
       ! if~ (MExnOS SCompu) {
-        do len <- ! str_scalar_length s;
+        do len <- ! (string/length) s;
         ! int_eq i len
       } {
         ! mexn .return (SCompu) sc
@@ -934,16 +916,16 @@ match sc
     | .os =>
       let ! mp : MExnOS Unit =
         comatch | .run ka _ =>
-          do~ ! write_line "[[DEBUG]]";
-          do~ ! write_str "[env]: ";
+          do~ ! (stdio/write_line) "[[DEBUG]]";
+          do~ ! (stdio/write) "[env]: ";
           do~ ! env .print;
-          do~ ! write_str "[term]: ";
+          do~ ! (stdio/write) "[term]: ";
           do~ ! print-scompu sc;
-          do~ ! write_line "";
-          do~ ! write_str "[stack]: ";
+          do~ ! (stdio/write_line) "";
+          do~ ! (stdio/write) "[stack]: ";
           do~ ! traceo items .print;
-          do~ ! write_str "Continue? ";
-          do~ ! read_line; fn _ =>
+          do~ ! (stdio/write) "Continue? ";
+          do~ ! (stdio/read_line); fn _ =>
           ! ka ()
         end
       in
@@ -975,7 +957,7 @@ match sc
       ! panic "expected int value"
     in
     let ! correct =
-      ! write_line "\\^o^/" k
+      ! (stdio/write_line) "\\^o^/" k
     in
     match v1
     | +Bool(b1) =>
@@ -987,9 +969,9 @@ match sc
         | +False() =>
           do b1 <- ! bool_to_str b1;
           do b2 <- ! bool_to_str b2;
-          do msg <- ! str_append b1 " != ";
-          do msg <- ! str_append msg b2;
-          do msg <- ! str_append "wrong bool value: " msg;
+          do msg <- ! (string/append) b1 " != ";
+          do msg <- ! (string/append) msg b2;
+          do msg <- ! (string/append) "wrong bool value: " msg;
           ! panic msg
         end
       | +Int(_) => ! expect-bool-panic
@@ -1003,11 +985,11 @@ match sc
         match eq?
         | +True() => ! correct
         | +False() =>
-          do i1 <- ! int_to_str i1;
-          do i2 <- ! int_to_str i2;
-          do msg <- ! str_append i1 " != ";
-          do msg <- ! str_append msg i2;
-          do msg <- ! str_append "wrong int value: " msg;
+          do i1 <- ! (int/to_string) i1;
+          do i2 <- ! (int/to_string) i2;
+          do msg <- ! (string/append) i1 " != ";
+          do msg <- ! (string/append) msg i2;
+          do msg <- ! (string/append) "wrong int value: " msg;
           ! panic msg
         end
       | +Thunk(_) => ! expect-int-panic
@@ -1019,9 +1001,9 @@ match sc
   def ! report (e : Exception) : OS =
     match e
     | +ParseError(loc, msg) =>
-      do loc <- ! int_to_str loc;
-      do loc <- ! str_append loc ": ";
-      do msg <- ! str_append loc msg;
+      do loc <- ! (int/to_string) loc;
+      do loc <- ! (string/append) loc ": ";
+      do msg <- ! (string/append) loc msg;
       ! panic msg
     | +FreeVariable() => ! panic "free variable"
     | +TypeError() => ! panic "type error"
@@ -1062,11 +1044,11 @@ match sc
   in
   ! envo +Extend("add", +Thunk({
     do~ ! int-op; fn i1 i2 =>
-    do i <- ! add i1 i2;
+    do i <- ! (int/add) i1 i2;
     ret +Int(i)
   }), +Extend("mul", +Thunk({
     do~ ! int-op; fn i1 i2 =>
-    do i <- ! mul i1 i2;
+    do i <- ! (int/mul) i1 i2;
     ret +Int(i)
   }), +Extend("eq", +Thunk({
     do~ ! int-op; fn i1 i2 =>
@@ -1154,6 +1136,6 @@ match sc
   --     ))
   --   )
   -- )))), +Int(1)), +Int(6)) +Int(720);
-  ! exit 0
+  ! (process/exit) 0
 end
 end

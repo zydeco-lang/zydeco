@@ -6,7 +6,7 @@
 
 begin
   param (
-    (/CType; /Thk; /Ret; /Int; /String; /add; /int_to_str; /write_line; /exit) :
+    (/CType; /Thk; /Ret; /Int; /String; /int; /stdio; /process) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
 
@@ -28,11 +28,11 @@ begin
           | .number => ret current
           | .increment amount =>
             do previous <- ! this .number;
-            do next <- ! (add) previous amount;
+            do next <- ! (int/add) previous amount;
             ! make_counter next
           | .format =>
             do value <- ! this .number;
-            ! (int_to_str) value
+            ! (int/to_string) value
           end
   } that
 
@@ -40,9 +40,9 @@ begin
     ! make_counter 42
   } in
   do rendered <- ! counter_42 .format;
-  ! (write_line) rendered {
+  ! (stdio/write_line) rendered {
     do zero <- ! counter_42 .increment -42 .number;
-    ! (exit) zero
+    ! (process/exit) zero
   }
 end
 

@@ -3,7 +3,7 @@
 -- the numbers in a list.
 begin
   param (
-    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /add; /int_to_str; /write_line; /exit) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /int; /stdio; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -31,7 +31,7 @@ begin
     | +Nil() => ret 0
     | +Cons(x, xs) =>
       do n <- ! sumBad xs;
-      ! (add) n x
+      ! (int/add) n x
     end
   that
   -- This is a bad algorithm because it uses stack space linear in the
@@ -39,7 +39,7 @@ begin
   -- a *bind*, which pushes a kontinuation onto the stack. So if we have a list
   -- +Cons(5, +Cons(13, Nil))
   -- when we get to the recursive call, the stack looks like:
-  -- (n <- -. ! add n 13) :: (n <- -. ! add n 5) :: CALLERS_KONT
+  -- (n <- -. ! int/add n 13) :: (n <- -. ! int/add n 5) :: CALLERS_KONT
   -- We can make this recursive stack structure explicit in the program
   -- by changing the return type from Ret(Int) to a new special codata
   -- type Summer (see above)
@@ -48,7 +48,7 @@ begin
     comatch
     | .done => ret n
     | .addN x =>
-      do n' <- ! (add) n x;
+      do n' <- ! (int/add) n x;
       ! retSummer n'
     end
   that
@@ -87,7 +87,7 @@ begin
       comatch
       | .done => ! sumBetter xs .addN x .done
       | .addN y =>
-        do xPlusy <- ! (add) x y;
+        do xPlusy <- ! (int/add) x y;
         ! sumBetter xs .addN xPlusy
       end
     end
@@ -102,7 +102,7 @@ begin
         --    .add n on the stack so we wouldn't have to guess? We can do this
         --    by changing our codata type to only have one case (see above, Summer'):
         -- This no longer needs to be recursive because we know there will only
-        -- be at most one add, i.e., because we use constant stack space!
+        -- be at most one int/add, i.e., because we use constant stack space!
         --
         -- We can implement the .done method from before by pushing .add(0)
         -- (using that it is the additive unit).
@@ -114,7 +114,7 @@ begin
         | +Cons(x, xs) =>
           comatch
           | .add n =>
-            do n' <- ! (add) x n;
+            do n' <- ! (int/add) x n;
             ! sumBest xs .add n'
           end
         end
@@ -124,6 +124,6 @@ begin
   that
 
   do n <- ! sum (+Cons(5, +Cons(13, +Nil())));
-  do s <- ! (int_to_str) n;
-  ! (write_line) s { ! (exit) 0 }
+  do s <- ! (int/to_string) n;
+  ! (stdio/write_line) s { ! (process/exit) 0 }
 end

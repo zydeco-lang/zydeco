@@ -1,6 +1,6 @@
 begin
   param (
-    (/VType; /Ret; /Unit; /Int; /sub; /exit) :
+    (/VType; /Ret; /Unit; /Int; /int; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -34,15 +34,15 @@ begin
       Secret
     end
   that
-  let LocalList =
+  let RecursiveList =
     begin
-      def LocalList : VType =
+      def RecursiveList : VType =
         data
         | +Nil : Unit
-        | +Cons : Int * LocalList
+        | +Cons : Int * RecursiveList
         end
       that
-      LocalList
+      RecursiveList
     end
   that
   def plain : Int = begin 42 end that
@@ -56,8 +56,8 @@ begin
     param (value : Int) in
     def expected : Int = 42 in
     let answer = value in
-    do status <- ! (sub) answer expected;
-    ! (exit) status
+    do status <- ! (int/sub) answer expected;
+    ! (process/exit) status
   that
   def ! run =
     begin
@@ -67,8 +67,8 @@ begin
       let Number = A that
       param (A : VType) that
       def Opaque : VType = Int that
-      do status <- ! (sub) expected 42;
-      ! (exit) status
+      do status <- ! (int/sub) expected 42;
+      ! (process/exit) status
     end
   that
 

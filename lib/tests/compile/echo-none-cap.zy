@@ -1,14 +1,14 @@
 begin
   param (
-    (/Int; /OS; /read_line; /exit) :
+    (/Int; /OS; /stdio; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  ! (read_line) {
+  ! (stdio/read_line) {
     fn line =>
       let ! f (z : Int) : OS =
         let line = line in
-        ! (exit) z
+        ! (process/exit) z
       in
       ! f 0
   }

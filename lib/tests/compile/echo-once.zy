@@ -1,8 +1,8 @@
 param (
-  (/write_line; /read_line; /exit) :
+  (/stdio; /process) :
   @[import("../../std/builtin.zy")] _
 ) in
-  ! (read_line) {
+  ! (stdio/read_line) {
     fn line =>
-      ! (write_line) line { ! (exit) 0 }
+      ! (stdio/write_line) line { ! (process/exit) 0 }
   }

@@ -1,12 +1,10 @@
 begin
   param (
-    (
-      /exit
-    ) :
+    (/process) :
     @[import("../../std/builtin.zy")] _
   ) that
   let pair = (10, 0) that
   let (_, status) = pair that
 
-  ! (exit) status
+  ! (process/exit) status
 end

@@ -1,5 +1,5 @@
 param (
-  (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /int_eq_branch) :
+  (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /int) :
   @[import("builtin.zy")] _
 ) in
 begin
@@ -32,43 +32,43 @@ begin
   def other : IoErrorKind = +Other()
   that
   def ! from_code (code : Int) : Ret IoErrorKind =
-    ! (int_eq_branch)
+    ! (int/eq)
       (Ret IoErrorKind)
       code
       0
       { ret not_found }
       {
-        ! (int_eq_branch)
+        ! (int/eq)
           (Ret IoErrorKind)
           code
           1
           { ret permission_denied }
           {
-            ! (int_eq_branch)
+            ! (int/eq)
               (Ret IoErrorKind)
               code
               2
               { ret already_exists }
               {
-                ! (int_eq_branch)
+                ! (int/eq)
                   (Ret IoErrorKind)
                   code
                   3
                   { ret invalid_input }
                   {
-                    ! (int_eq_branch)
+                    ! (int/eq)
                       (Ret IoErrorKind)
                       code
                       4
                       { ret invalid_data }
                       {
-                        ! (int_eq_branch)
+                        ! (int/eq)
                           (Ret IoErrorKind)
                           code
                           5
                           { ret broken_pipe }
                           {
-                            ! (int_eq_branch)
+                            ! (int/eq)
                               (Ret IoErrorKind)
                               code
                               6
@@ -102,7 +102,7 @@ begin
     : R =
     do left_code <- ! kind_code left;
     do right_code <- ! kind_code right;
-    ! (int_eq_branch) R left_code right_code when_equal when_different
+    ! (int/eq) R left_code right_code when_equal when_different
   that
   def IoError =
     data

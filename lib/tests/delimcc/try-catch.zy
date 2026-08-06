@@ -1,7 +1,7 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (/VType; /CType; /Thk; /Ret; /Int; /OS; /sub; /int_eq_branch; /exit; builtin) :
+    (/VType; /CType; /Thk; /Ret; /Int; /OS; /int; /process; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
@@ -105,7 +105,7 @@ begin
     }
     {
       fn x =>
-        ! (sub) x 42
+        ! (int/sub) x 42
     };
   do j <- ! attempt Ret mret Int Int
     {
@@ -115,20 +115,20 @@ begin
     }
     {
       fn x =>
-        ! (sub) x 42
+        ! (int/sub) x 42
     };
-  ! (int_eq_branch)
+  ! (int/eq)
     OS
     i
     0
     {
-      ! (int_eq_branch)
+      ! (int/eq)
         OS
         j
         0
-        { ! (exit) 0 }
-        { ! (exit) 2 }
+        { ! (process/exit) 0 }
+        { ! (process/exit) 2 }
     }
-    { ! (exit) 1 }
+    { ! (process/exit) 1 }
 end
 end

@@ -1,6 +1,6 @@
 begin
   param (
-    (/VType; /CType; /Thk; /Unit; /String; /OS; /write_line; /exit) :
+    (/VType; /CType; /Thk; /Unit; /String; /OS; /stdio; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -52,7 +52,7 @@ begin
     match xs
     | +Nil() => ! kont
     | +Cons(x, xs) =>
-      ! (write_line) x { ! printl xs kont }
+      ! (stdio/write_line) x { ! printl xs kont }
     end
   that
   def ! printv : Variadic String (Thk OS -> OS) =
@@ -72,6 +72,6 @@ begin
         .more "hello"
         .more "world"
         .done
-        { ! (exit) 0 }
+        { ! (process/exit) 0 }
     }
 end

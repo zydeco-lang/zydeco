@@ -5,35 +5,35 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (/Bool = StdBool; /Int = StdInt; /bool; /option; /list; /int; /process) = make_std builtin in
-  let ! status (condition : StdBool) : Ret StdInt =
+  let (/Bool; /bool; /option; /list; /int; /process) = make_std builtin in
+  let ! status (condition : Bool) : Ret Int =
     ! (bool/if)
-      (Ret StdInt)
+      (Ret Int)
       condition
       { ret 0 }
       { ret 1 }
   in
 
-  do empty <- ! (list/nil) StdInt;
-  do one <- ! (list/singleton) StdInt 3;
-  do two <- ! (list/cons) StdInt 2 one;
-  do three <- ! (list/cons) StdInt 1 two;
-  do joined <- ! (list/append) StdInt three empty;
+  do empty <- ! (list/nil) Int;
+  do one <- ! (list/singleton) Int 3;
+  do two <- ! (list/cons) Int 2 one;
+  do three <- ! (list/cons) Int 1 two;
+  do joined <- ! (list/append) Int three empty;
   do mapped <- ! (list/map)
-    StdInt
-    StdInt
+    Int
+    Int
     joined
     { fn value => ! (int/increment) value };
-  do reversed <- ! (list/reverse) StdInt mapped;
+  do reversed <- ! (list/reverse) Int mapped;
 
-  do length <- ! (list/length) StdInt reversed;
+  do length <- ! (list/length) Int reversed;
   do length_ok <- ! (int/eq) length 3;
   do length_status <- ! status length_ok;
 
-  do middle <- ! (list/get) StdInt reversed 1;
+  do middle <- ! (list/get) Int reversed 1;
   do middle_status <- ! (option/fold)
-    StdInt
-    (Ret StdInt)
+    Int
+    (Ret Int)
     middle
     { ret 1 }
     {
@@ -42,10 +42,10 @@ begin
         ! status correct
     };
 
-  do head <- ! (list/head) StdInt reversed;
+  do head <- ! (list/head) Int reversed;
   do head_status <- ! (option/fold)
-    StdInt
-    (Ret StdInt)
+    Int
+    (Ret Int)
     head
     { ret 1 }
     {
@@ -54,17 +54,17 @@ begin
         ! status correct
     };
 
-  do negative <- ! (list/get) StdInt reversed -1;
-  do negative_ok <- ! (option/is_none) StdInt negative;
+  do negative <- ! (list/get) Int reversed -1;
+  do negative_ok <- ! (option/is_none) Int negative;
   do negative_status <- ! status negative_ok;
 
-  do present <- ! (option/some) StdInt 2;
+  do present <- ! (option/some) Int 2;
   do transformed <- ! (option/map)
-    StdInt
-    StdInt
+    Int
+    Int
     present
     { fn value => ! (int/increment) value };
-  do transformed_value <- ! (option/unwrap_or) StdInt transformed 0;
+  do transformed_value <- ! (option/unwrap_or) Int transformed 0;
   do transformed_ok <- ! (int/eq) transformed_value 3;
   do transformed_status <- ! status transformed_ok;
 

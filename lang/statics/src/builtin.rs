@@ -438,9 +438,11 @@ impl<'a> BuiltinSignatureValidator<'a> {
                 | ss::Type::ManifestKind(ss::ManifestKind { body, .. }) => pending.push(body),
                 | ss::Type::Prod(Prod(head, tail)) => pending.extend([tail, head]),
                 | ss::Type::Named(Named(_, inner)) => pending.push(inner),
-                | ss::Type::Label(_) => {
+                | ss::Type::Label(zydeco_syntax::Label(_, inner)) => {
                     if let Some(role) = self.statics.builtin_roles.value(ty) {
                         self.values.entry(role).or_default().push(ty);
+                    } else {
+                        pending.push(inner);
                     }
                 }
                 | ss::Type::Var(def) => {
@@ -663,12 +665,17 @@ impl BuiltinPackagePlanner<'_> {
                     tail: Box::new(tail),
                 }))
             }
-            | ss::Type::Label(_) => self
-                .statics
-                .builtin_roles
-                .value(ty)
-                .map(BuiltinPackageValue::Operation)
-                .ok_or(BuiltinPackagePlanError::MissingOperationRole { entry: ty }),
+            | ss::Type::Label(zydeco_syntax::Label(_, inner)) => {
+                match self.statics.builtin_roles.value(ty) {
+                    | Some(role) => Ok(BuiltinPackageValue::Operation(role)),
+                    | None => self.value(inner).map_err(|error| match error {
+                        | BuiltinPackagePlanError::UnsupportedSignatureType { .. } => {
+                            BuiltinPackagePlanError::MissingOperationRole { entry: ty }
+                        }
+                        | error => error,
+                    }),
+                }
+            }
             | ss::Type::Named(Named(_, inner)) => self.value(inner),
             | ss::Type::Unit(_) => Ok(BuiltinPackageValue::Unit),
             | ss::Type::Var(def) => match self.statics.annotations_var.get(&def).copied() {

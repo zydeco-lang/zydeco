@@ -2,7 +2,7 @@
 -- use named value types, and slash can project from a returned named value.
 begin
   param (
-    (/Thk; /Ret; /Int; /add; /sub; /exit) :
+    (/Thk; /Ret; /Int; /int; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -37,15 +37,15 @@ begin
     reading = reading : Int,
     drift : Int
   ) = observation in
-  do reading_check <- ! (sub) reading 12;
-  do drift_check <- ! (sub) drift 13;
+  do reading_check <- ! (int/sub) reading 12;
+  do drift_check <- ! (int/sub) drift 13;
   do shifted <- ! active_gauge .shift (delta = 14 : Int);
   let (reading = shifted_reading : Int) = shifted in
-  do shifted_pattern_check <- ! (sub) shifted_reading 14;
-  do shifted_projection_check <- ! (sub) shifted/reading 14;
-  do total <- ! (add) marker reading_check;
-  do total <- ! (add) total drift_check;
-  do total <- ! (add) total shifted_pattern_check;
-  do total <- ! (add) total shifted_projection_check;
-  ! (exit) total
+  do shifted_pattern_check <- ! (int/sub) shifted_reading 14;
+  do shifted_projection_check <- ! (int/sub) shifted/reading 14;
+  do total <- ! (int/add) marker reading_check;
+  do total <- ! (int/add) total drift_check;
+  do total <- ! (int/add) total shifted_pattern_check;
+  do total <- ! (int/add) total shifted_projection_check;
+  ! (process/exit) total
 end

@@ -1,13 +1,13 @@
 begin
   param (
-    (/add; /sub; /div; /mod; /exit) :
+    (/int; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  do quotient <- ! (div) -7 3;
-  do remainder <- ! (mod) -7 3;
-  do quotient_error <- ! (sub) quotient -2;
-  do remainder_error <- ! (sub) remainder -1;
-  do status <- ! (add) quotient_error remainder_error;
-  ! (exit) status
+  do quotient <- ! (int/div) -7 3;
+  do remainder <- ! (int/mod) -7 3;
+  do quotient_error <- ! (int/sub) quotient -2;
+  do remainder_error <- ! (int/sub) remainder -1;
+  do status <- ! (int/add) quotient_error remainder_error;
+  ! (process/exit) status
 end

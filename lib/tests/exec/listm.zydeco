@@ -25,28 +25,28 @@ begin
     end
   that
 
-  let (/Int = StdInt; /OS = StdOS; /bool; /int; /stdio; /process) = make_std builtin in
+  let (/bool; /int; /stdio; /process) = make_std builtin in
   -- List~ is actually coinductive type
-  def fix loop : Ret (List~ StdInt) =
+  def fix loop : Ret (List~ Int) =
     ret +Cons(0, loop)
   in
   -- Since it's coinductive, here's iota
-  def fix iota (i : StdInt) : Ret (List~ StdInt) =
+  def fix iota (i : Int) : Ret (List~ Int) =
     do i+1 <- ! (int/add) i 1;
     ret +Cons(i, { ! iota i+1 })
   in
 
   -- foldr~ and an example of summing up the list and exiting with the sum
-  let ! loopy : StdOS =
+  let ! loopy : OS =
     ! foldr~
-      StdInt
-      StdOS
+      Int
+      OS
       { ! iota 0 }
       {
         fn x b =>
           do next? <- ! (int/lt) x 10;
           ! (bool/if)
-            StdOS
+            OS
             next?
             {
               do rendered <- ! (int/to_string) x;

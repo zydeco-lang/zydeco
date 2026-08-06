@@ -99,7 +99,9 @@ fn one_package_signature_rejects_duplicate_operation_roles() {
             Alloc::alloc(tycker, Label(FieldName::from("first"), unit), vtype, &TyEnv::new());
         let second =
             Alloc::alloc(tycker, Label(FieldName::from("second"), unit), vtype, &TyEnv::new());
-        let domain = Alloc::alloc(tycker, Prod(first, second), vtype, &TyEnv::new());
+        let operations = Alloc::alloc(tycker, Prod(first, second), vtype, &TyEnv::new());
+        let domain =
+            Alloc::alloc(tycker, Label(FieldName::from("int"), operations), vtype, &TyEnv::new());
         tycker.statics.builtin_roles.attach_value(first, BuiltinValueRole::Add).unwrap();
         tycker.statics.builtin_roles.attach_value(second, BuiltinValueRole::Add).unwrap();
         let signature =

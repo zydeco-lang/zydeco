@@ -1,6 +1,6 @@
 begin
   param (
-    (/VType; /Ret; /Int; /exit) :
+    (/VType; /Ret; /Int; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -28,5 +28,5 @@ begin
   that
 
   do x <- ! fn_opt_int .zero;
-  ! (exit) x
+  ! (process/exit) x
 end

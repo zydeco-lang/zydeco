@@ -1,104 +1,95 @@
 begin
   param (
-    (
-      /Ret;
-      /Int; /Char; /OS;
-      /add; /sub; /int_eq_branch; /int_to_str;
-      /char_to_str; /char_codepoint;
-      /str_scalar_length; /str_append; /str_split_once_branch; /str_split_at_branch; /str_eq_branch;
-      /str_get_branch; /str_parse_int_branch;
-      /arg_fold;
-      /exit
-    ) :
+    (/Ret; /Int; /Char; /OS; /int; /char; /string; /args; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  do twelve <- ! (int_to_str) 12;
-  do combined <- ! (str_append) twelve twelve;
-  do length <- ! (str_scalar_length) combined;
-  do parsed <- ! (str_parse_int_branch)
+  do twelve <- ! (int/to_string) 12;
+  do combined <- ! (string/append) twelve twelve;
+  do length <- ! (string/length) combined;
+  do parsed <- ! (string/parse_int)
     (Ret Int)
     combined
     { ret 0 }
     { fn integer => ret integer };
-  do first <- ! (str_get_branch)
+  do first <- ! (string/get)
     (Ret Char)
     combined
     0
     { ret ' ' }
     { fn character => ret character };
-  do first_code <- ! (char_codepoint) first;
-  do first_string <- ! (char_to_str) first;
-  do one_string <- ! (int_to_str) 1;
-  do negative <- ! (int_to_str) -1;
-  do dash <- ! (str_get_branch)
+  do first_code <- ! (char/codepoint) first;
+  do first_string <- ! (char/to_string) first;
+  do one_string <- ! (int/to_string) 1;
+  do negative <- ! (int/to_string) -1;
+  do dash <- ! (string/get)
     (Ret Char)
     negative
     0
     { ret ' ' }
     { fn character => ret character };
-  do fold_status <- ! (arg_fold)
+  do fold_status <- ! (args/fold)
     (Ret Int)
     { ret 0 }
     {
       fn argument remaining =>
         ret 1
     };
-  do length_status <- ! (sub) length 4;
-  do parsed_status <- ! (sub) parsed 1212;
-  do first_status <- ! (sub) first_code 49;
-  do status <- ! (add) length_status parsed_status;
-  do status <- ! (add) status first_status;
-  do status <- ! (add) status fold_status;
-  ! (str_eq_branch)
+  do length_status <- ! (int/sub) length 4;
+  do parsed_status <- ! (int/sub) parsed 1212;
+  do first_status <- ! (int/sub) first_code 49;
+  do status <- ! (int/add) length_status parsed_status;
+  do status <- ! (int/add) status first_status;
+  do status <- ! (int/add) status fold_status;
+  ! (string/eq)
     OS
     first_string
     one_string
     {
-      ! (str_split_once_branch)
+      ! (string/split_once)
         OS
         negative
         dash
-        { ! (exit) 1 }
+        { ! (process/exit) 1 }
         {
           fn prefix suffix =>
-            do prefix_length <- ! (str_scalar_length) prefix;
-            ! (int_eq_branch)
+            do prefix_length <- ! (string/length) prefix;
+            ! (int/eq)
               OS
               prefix_length
               0
               {
-                ! (str_eq_branch)
+                ! (string/eq)
                   OS
                   suffix
                   one_string
                   {
-                    ! (str_split_at_branch)
+                    ! (string/split_at)
                       OS
                       combined
                       2
-                      { ! (exit) 1 }
+                      { ! (process/exit) 1 }
                       {
                         fn left right =>
-                          ! (str_eq_branch)
+                          ! (string/eq)
                             OS
                             left
                             twelve
                             {
-                              ! (str_eq_branch)
+                              ! (string/eq)
                                 OS
                                 right
                                 twelve
-                                { ! (exit) status }
-                                { ! (exit) 1 }
+                                { ! (process/exit) status }
+                                { ! (process/exit) 1 }
                             }
-                            { ! (exit) 1 }
+                            { ! (process/exit) 1 }
                       }
                   }
-                  { ! (exit) 1 }
+                  { ! (process/exit) 1 }
               }
-              { ! (exit) 1 }
+              { ! (process/exit) 1 }
         }
     }
-    { ! (exit) 1 }
+    { ! (process/exit) 1 }
 end

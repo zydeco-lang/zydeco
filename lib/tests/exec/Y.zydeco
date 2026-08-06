@@ -24,12 +24,12 @@ begin
     ret { ! prim .y prim }
   that
 
-  let (/Int = StdInt; /OS = StdOS; /bool; /int; /string; /stdio; /process) = make_std builtin in
+  let (/bool; /int; /string; /stdio; /process) = make_std builtin in
   -- good old factorial
-  def ! fact (f : Thk (StdInt -> Ret StdInt)) (n : StdInt) : Ret StdInt =
+  def ! fact (f : Thk (Int -> Ret Int)) (n : Int) : Ret Int =
     do is_zero <- ! (int/eq) n 0;
     ! (bool/if)
-      (Ret StdInt)
+      (Ret Int)
       is_zero
       { ret 1 }
       {
@@ -38,13 +38,13 @@ begin
         ! (int/mul) n rest
       }
   in
-  do fact <- ! fix' (StdInt -> Ret StdInt) fact;
+  do fact <- ! fix' (Int -> Ret Int) fact;
   -- tests
-  def ! demo (input : StdInt) (expected : StdInt) (t : Thk StdOS) : StdOS =
+  def ! demo (input : Int) (expected : Int) (t : Thk OS) : OS =
     do x <- ! fact input;
     do correct <- ! (int/eq) x expected;
     ! (bool/if)
-      StdOS
+      OS
       correct
       { ! t }
       {

@@ -1,7 +1,7 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (/VType; /CType; /Thk; /Ret; /Int; /OS; /add; /sub; /mul; /int_to_str; /write_line; /exit; builtin) :
+    (/VType; /CType; /Thk; /Ret; /Int; /OS; /int; /stdio; /process; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
@@ -64,9 +64,9 @@ begin
   --   ! reset' {
   --     do x <- ! shift' { fn cont =>
   --       do y <- ! cont { ret 4 };
-  --       ! add 17 y
+  --       ! int/add 17 y
   --     };
-  --     ! mul 2 x
+  --     ! int/mul 2 x
   --   }
   -- end
   def ! ex
@@ -81,14 +81,14 @@ begin
                 { ! cont 4 (Ret Int) }
                 {
                   fn y =>
-                    do res <- ! (add) 17 y;
+                    do res <- ! (int/add) 17 y;
                     ! mkont (Ret Int) .return Int res
                 }
           }
         }
         {
           fn x =>
-            do res <- ! (mul) 2 x;
+            do res <- ! (int/mul) 2 x;
             ! mkont (Ret Int) .return Int res
         }
     }
@@ -96,10 +96,10 @@ begin
 
   ! ex OS {
     fn x =>
-      do s <- ! (int_to_str) x;
-      ! (write_line) s {
-        do zero <- ! (sub) x 25;
-        ! (exit) zero
+      do s <- ! (int/to_string) x;
+      ! (stdio/write_line) s {
+        do zero <- ! (int/sub) x 25;
+        ! (process/exit) zero
       }
   }
 end

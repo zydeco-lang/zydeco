@@ -5,13 +5,13 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (/Int = StdInt; /prelude; /process) = make_std builtin in
+  let (/prelude; /process) = make_std builtin in
   let (= Thunk, = U, = F, ()) = prelude in
-  let ! first : F StdInt =
+  let ! first : F Int =
     ret 0
   in
   do first <- ! first;
-  let ! second : Ret StdInt =
+  let ! second : Ret Int =
     ret first
   in
   do status <- ! second;

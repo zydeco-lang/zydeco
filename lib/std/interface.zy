@@ -6,489 +6,489 @@ begin
   ) in
     let Prelude =
       exists (
-        Thunk = PublicThunk as Thk :
+        Thunk = ThunkType as Thk :
         (CType) -> (VType)
       ) .
       exists (
-        U = PublicU as Thk :
+        U = UType as Thk :
         (CType) -> (VType)
       ) .
       exists (
-        F = PublicF as Ret :
+        F = FType as Ret :
         (VType) -> (CType)
       ) .
         Unit
     in
-    let BoolModule (PublicBool : VType) =
-      (true :: PublicBool) *
-      (false :: PublicBool) *
-      (not :: Thk (PublicBool -> Ret PublicBool)) *
-      (and :: Thk (PublicBool -> PublicBool -> Ret PublicBool)) *
-      (or :: Thk (PublicBool -> PublicBool -> Ret PublicBool)) *
-      (eq :: Thk (PublicBool -> PublicBool -> Ret PublicBool)) *
-      (xor :: Thk (PublicBool -> PublicBool -> Ret PublicBool)) *
-      (nand :: Thk (PublicBool -> PublicBool -> Ret PublicBool)) *
-      (nor :: Thk (PublicBool -> PublicBool -> Ret PublicBool)) *
+    let BoolModule (Bool : VType) =
+      (true :: Bool) *
+      (false :: Bool) *
+      (not :: Thk (Bool -> Ret Bool)) *
+      (and :: Thk (Bool -> Bool -> Ret Bool)) *
+      (or :: Thk (Bool -> Bool -> Ret Bool)) *
+      (eq :: Thk (Bool -> Bool -> Ret Bool)) *
+      (xor :: Thk (Bool -> Bool -> Ret Bool)) *
+      (nand :: Thk (Bool -> Bool -> Ret Bool)) *
+      (nor :: Thk (Bool -> Bool -> Ret Bool)) *
       (if :: Thk (
         forall (B : CType) .
-          PublicBool -> Thk B -> Thk B -> B
+          Bool -> Thk B -> Thk B -> B
       ))
     in
     let OptionModule
-      (PublicBool : VType)
-      (PublicOption : (VType) -> (VType)) =
+      (Bool : VType)
+      (Option : (VType) -> (VType)) =
       (none :: Thk (
         forall (A : VType) .
-          Ret (PublicOption A)
+          Ret (Option A)
       )) *
       (some :: Thk (
         forall (A : VType) .
-          A -> Ret (PublicOption A)
+          A -> Ret (Option A)
       )) *
       (fold :: Thk (
         forall (A : VType) .
         forall (B : CType) .
-          PublicOption A -> Thk B -> Thk (A -> B) -> B
+          Option A -> Thk B -> Thk (A -> B) -> B
       )) *
       (map :: Thk (
         forall (A : VType) .
         forall (B : VType) .
-          PublicOption A -> Thk (A -> Ret B) -> Ret (PublicOption B)
+          Option A -> Thk (A -> Ret B) -> Ret (Option B)
       )) *
       (and_then :: Thk (
         forall (A : VType) .
         forall (B : VType) .
-          PublicOption A ->
-          Thk (A -> Ret (PublicOption B)) ->
-          Ret (PublicOption B)
+          Option A ->
+          Thk (A -> Ret (Option B)) ->
+          Ret (Option B)
       )) *
       (unwrap_or :: Thk (
         forall (A : VType) .
-          PublicOption A -> A -> Ret A
+          Option A -> A -> Ret A
       )) *
       (or_else :: Thk (
         forall (A : VType) .
-          PublicOption A ->
-          Thk (Ret (PublicOption A)) ->
-          Ret (PublicOption A)
+          Option A ->
+          Thk (Ret (Option A)) ->
+          Ret (Option A)
       )) *
       (zip :: Thk (
         forall (A : VType) .
         forall (B : VType) .
-          PublicOption A -> PublicOption B -> Ret (PublicOption (A * B))
+          Option A -> Option B -> Ret (Option (A * B))
       )) *
       (is_some :: Thk (
         forall (A : VType) .
-          PublicOption A -> Ret PublicBool
+          Option A -> Ret Bool
       )) *
       (is_none :: Thk (
         forall (A : VType) .
-          PublicOption A -> Ret PublicBool
+          Option A -> Ret Bool
       ))
     in
     let ResultModule
-      (PublicBool : VType)
-      (PublicResult : (VType) -> (VType) -> (VType)) =
+      (Bool : VType)
+      (Result : (VType) -> (VType) -> (VType)) =
       (ok :: Thk (
         forall (A : VType) .
         forall (E : VType) .
-          A -> Ret (PublicResult A E)
+          A -> Ret (Result A E)
       )) *
       (err :: Thk (
         forall (A : VType) .
         forall (E : VType) .
-          E -> Ret (PublicResult A E)
+          E -> Ret (Result A E)
       )) *
       (fold :: Thk (
         forall (A : VType) .
         forall (E : VType) .
         forall (B : CType) .
-          PublicResult A E -> Thk (A -> B) -> Thk (E -> B) -> B
+          Result A E -> Thk (A -> B) -> Thk (E -> B) -> B
       )) *
       (map :: Thk (
         forall (A : VType) .
         forall (B : VType) .
         forall (E : VType) .
-          PublicResult A E -> Thk (A -> Ret B) -> Ret (PublicResult B E)
+          Result A E -> Thk (A -> Ret B) -> Ret (Result B E)
       )) *
       (map_err :: Thk (
         forall (A : VType) .
         forall (E : VType) .
         forall (F : VType) .
-          PublicResult A E -> Thk (E -> Ret F) -> Ret (PublicResult A F)
+          Result A E -> Thk (E -> Ret F) -> Ret (Result A F)
       )) *
       (and_then :: Thk (
         forall (A : VType) .
         forall (B : VType) .
         forall (E : VType) .
-          PublicResult A E ->
-          Thk (A -> Ret (PublicResult B E)) ->
-          Ret (PublicResult B E)
+          Result A E ->
+          Thk (A -> Ret (Result B E)) ->
+          Ret (Result B E)
       )) *
       (unwrap_or :: Thk (
         forall (A : VType) .
         forall (E : VType) .
-          PublicResult A E -> A -> Ret A
+          Result A E -> A -> Ret A
       )) *
       (is_ok :: Thk (
         forall (A : VType) .
         forall (E : VType) .
-          PublicResult A E -> Ret PublicBool
+          Result A E -> Ret Bool
       )) *
       (is_err :: Thk (
         forall (A : VType) .
         forall (E : VType) .
-          PublicResult A E -> Ret PublicBool
+          Result A E -> Ret Bool
       ))
     in
     let ListModule
-      (PublicBool : VType)
-      (PublicOption : (VType) -> (VType))
-      (PublicList : (VType) -> (VType))
-      (PublicInt : VType) =
+      (Bool : VType)
+      (Option : (VType) -> (VType))
+      (List : (VType) -> (VType))
+      (Int : VType) =
       (nil :: Thk (
         forall (A : VType) .
-          Ret (PublicList A)
+          Ret (List A)
       )) *
       (cons :: Thk (
         forall (A : VType) .
-          A -> PublicList A -> Ret (PublicList A)
+          A -> List A -> Ret (List A)
       )) *
       (case :: Thk (
         forall (A : VType) .
         forall (B : CType) .
-          PublicList A ->
+          List A ->
           Thk B ->
-          Thk (A -> PublicList A -> B) ->
+          Thk (A -> List A -> B) ->
           B
       )) *
       (fold :: Thk (
         forall (A : VType) .
         forall (B : CType) .
-          PublicList A ->
+          List A ->
           Thk B ->
           Thk (A -> Thk B -> B) ->
           B
       )) *
       (singleton :: Thk (
         forall (A : VType) .
-          A -> Ret (PublicList A)
+          A -> Ret (List A)
       )) *
       (append :: Thk (
         forall (A : VType) .
-          PublicList A -> PublicList A -> Ret (PublicList A)
+          List A -> List A -> Ret (List A)
       )) *
       (map :: Thk (
         forall (A : VType) .
         forall (B : VType) .
-          PublicList A -> Thk (A -> Ret B) -> Ret (PublicList B)
+          List A -> Thk (A -> Ret B) -> Ret (List B)
       )) *
       (fold_left :: Thk (
         forall (A : VType) .
         forall (B : VType) .
-          PublicList A -> B -> Thk (B -> A -> Ret B) -> Ret B
+          List A -> B -> Thk (B -> A -> Ret B) -> Ret B
       )) *
       (reverse :: Thk (
         forall (A : VType) .
-          PublicList A -> Ret (PublicList A)
+          List A -> Ret (List A)
       )) *
       (length :: Thk (
         forall (A : VType) .
-          PublicList A -> Ret PublicInt
+          List A -> Ret Int
       )) *
       (is_empty :: Thk (
         forall (A : VType) .
-          PublicList A -> Ret PublicBool
+          List A -> Ret Bool
       )) *
       (head :: Thk (
         forall (A : VType) .
-          PublicList A -> Ret (PublicOption A)
+          List A -> Ret (Option A)
       )) *
       (tail :: Thk (
         forall (A : VType) .
-          PublicList A -> Ret (PublicOption (PublicList A))
+          List A -> Ret (Option (List A))
       )) *
       (get :: Thk (
         forall (A : VType) .
-          PublicList A -> PublicInt -> Ret (PublicOption A)
+          List A -> Int -> Ret (Option A)
       ))
     in
-    let IntModule (PublicBool : VType) (PublicInt : VType) (PublicString : VType) =
-      (add :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
-      (sub :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
-      (mul :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
-      (div :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
-      (mod :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
-      (eq :: Thk (PublicInt -> PublicInt -> Ret PublicBool)) *
-      (ne :: Thk (PublicInt -> PublicInt -> Ret PublicBool)) *
-      (lt :: Thk (PublicInt -> PublicInt -> Ret PublicBool)) *
-      (le :: Thk (PublicInt -> PublicInt -> Ret PublicBool)) *
-      (gt :: Thk (PublicInt -> PublicInt -> Ret PublicBool)) *
-      (ge :: Thk (PublicInt -> PublicInt -> Ret PublicBool)) *
-      (increment :: Thk (PublicInt -> Ret PublicInt)) *
-      (decrement :: Thk (PublicInt -> Ret PublicInt)) *
-      (negate :: Thk (PublicInt -> Ret PublicInt)) *
-      (min :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
-      (max :: Thk (PublicInt -> PublicInt -> Ret PublicInt)) *
-      (to_string :: Thk (PublicInt -> Ret PublicString))
+    let IntModule (Bool : VType) (Int : VType) (String : VType) =
+      (add :: Thk (Int -> Int -> Ret Int)) *
+      (sub :: Thk (Int -> Int -> Ret Int)) *
+      (mul :: Thk (Int -> Int -> Ret Int)) *
+      (div :: Thk (Int -> Int -> Ret Int)) *
+      (mod :: Thk (Int -> Int -> Ret Int)) *
+      (eq :: Thk (Int -> Int -> Ret Bool)) *
+      (ne :: Thk (Int -> Int -> Ret Bool)) *
+      (lt :: Thk (Int -> Int -> Ret Bool)) *
+      (le :: Thk (Int -> Int -> Ret Bool)) *
+      (gt :: Thk (Int -> Int -> Ret Bool)) *
+      (ge :: Thk (Int -> Int -> Ret Bool)) *
+      (increment :: Thk (Int -> Ret Int)) *
+      (decrement :: Thk (Int -> Ret Int)) *
+      (negate :: Thk (Int -> Ret Int)) *
+      (min :: Thk (Int -> Int -> Ret Int)) *
+      (max :: Thk (Int -> Int -> Ret Int)) *
+      (to_string :: Thk (Int -> Ret String))
     in
     let CharModule
-      (PublicOption : (VType) -> (VType))
-      (PublicChar : VType)
-      (PublicInt : VType)
-      (PublicString : VType) =
-      (to_string :: Thk (PublicChar -> Ret PublicString)) *
-      (codepoint :: Thk (PublicChar -> Ret PublicInt)) *
-      (from_codepoint :: Thk (PublicInt -> Ret (PublicOption PublicChar)))
+      (Option : (VType) -> (VType))
+      (Char : VType)
+      (Int : VType)
+      (String : VType) =
+      (to_string :: Thk (Char -> Ret String)) *
+      (codepoint :: Thk (Char -> Ret Int)) *
+      (from_codepoint :: Thk (Int -> Ret (Option Char)))
     in
     let StringModule
-      (PublicBool : VType)
-      (PublicOption : (VType) -> (VType))
-      (PublicList : (VType) -> (VType))
-      (PublicInt : VType)
-      (PublicChar : VType)
-      (PublicString : VType) =
-      (empty :: PublicString) *
-      (length :: Thk (PublicString -> Ret PublicInt)) *
-      (byte_length :: Thk (PublicString -> Ret PublicInt)) *
-      (is_empty :: Thk (PublicString -> Ret PublicBool)) *
-      (append :: Thk (PublicString -> PublicString -> Ret PublicString)) *
-      (concat :: Thk (PublicList PublicString -> Ret PublicString)) *
+      (Bool : VType)
+      (Option : (VType) -> (VType))
+      (List : (VType) -> (VType))
+      (Int : VType)
+      (Char : VType)
+      (String : VType) =
+      (empty :: String) *
+      (length :: Thk (String -> Ret Int)) *
+      (byte_length :: Thk (String -> Ret Int)) *
+      (is_empty :: Thk (String -> Ret Bool)) *
+      (append :: Thk (String -> String -> Ret String)) *
+      (concat :: Thk (List String -> Ret String)) *
       (split_once :: Thk (
-        PublicString ->
-        PublicChar ->
-        Ret (PublicOption (PublicString * PublicString))
+        String ->
+        Char ->
+        Ret (Option (String * String))
       )) *
       (split_at :: Thk (
-        PublicString ->
-        PublicInt ->
-        Ret (PublicOption (PublicString * PublicString))
+        String ->
+        Int ->
+        Ret (Option (String * String))
       )) *
-      (eq :: Thk (PublicString -> PublicString -> Ret PublicBool)) *
-      (get :: Thk (PublicString -> PublicInt -> Ret (PublicOption PublicChar))) *
-      (head :: Thk (PublicString -> Ret (PublicOption PublicChar))) *
+      (eq :: Thk (String -> String -> Ret Bool)) *
+      (get :: Thk (String -> Int -> Ret (Option Char))) *
+      (head :: Thk (String -> Ret (Option Char))) *
       (uncons :: Thk (
-        PublicString -> Ret (PublicOption (PublicChar * PublicString))
+        String -> Ret (Option (Char * String))
       )) *
-      (to_chars :: Thk (PublicString -> Ret (PublicList PublicChar))) *
-      (from_chars :: Thk (PublicList PublicChar -> Ret PublicString)) *
-      (parse_int :: Thk (PublicString -> Ret (PublicOption PublicInt)))
+      (to_chars :: Thk (String -> Ret (List Char))) *
+      (from_chars :: Thk (List Char -> Ret String)) *
+      (parse_int :: Thk (String -> Ret (Option Int)))
     in
     let BytesModule
-      (PublicOption : (VType) -> (VType))
-      (PublicInt : VType)
-      (PublicString : VType)
-      (PublicBytes : VType) =
-      (empty :: Thk (Ret PublicBytes)) *
-      (length :: Thk (PublicBytes -> Ret PublicInt)) *
-      (append :: Thk (PublicBytes -> PublicBytes -> Ret PublicBytes)) *
-      (from_string :: Thk (PublicString -> Ret PublicBytes)) *
-      (to_string :: Thk (PublicBytes -> Ret (PublicOption PublicString)))
+      (Option : (VType) -> (VType))
+      (Int : VType)
+      (String : VType)
+      (Bytes : VType) =
+      (empty :: Thk (Ret Bytes)) *
+      (length :: Thk (Bytes -> Ret Int)) *
+      (append :: Thk (Bytes -> Bytes -> Ret Bytes)) *
+      (from_string :: Thk (String -> Ret Bytes)) *
+      (to_string :: Thk (Bytes -> Ret (Option String)))
     in
     let IoModule
-      (PublicBool : VType)
-      (PublicOption : (VType) -> (VType))
-      (PublicResult : (VType) -> (VType) -> (VType))
-      (PublicInt : VType)
-      (PublicString : VType)
-      (PublicBytes : VType)
-      (PublicReader : VType)
-      (PublicWriter : VType)
-      (PublicIoErrorKind : VType)
-      (PublicIoError : VType)
-      (PublicOS : CType) =
-      (not_found :: PublicIoErrorKind) *
-      (permission_denied :: PublicIoErrorKind) *
-      (already_exists :: PublicIoErrorKind) *
-      (invalid_input :: PublicIoErrorKind) *
-      (invalid_data :: PublicIoErrorKind) *
-      (broken_pipe :: PublicIoErrorKind) *
-      (closed :: PublicIoErrorKind) *
-      (other :: PublicIoErrorKind) *
+      (Bool : VType)
+      (Option : (VType) -> (VType))
+      (Result : (VType) -> (VType) -> (VType))
+      (Int : VType)
+      (String : VType)
+      (Bytes : VType)
+      (Reader : VType)
+      (Writer : VType)
+      (IoErrorKind : VType)
+      (IoError : VType)
+      (OS : CType) =
+      (not_found :: IoErrorKind) *
+      (permission_denied :: IoErrorKind) *
+      (already_exists :: IoErrorKind) *
+      (invalid_input :: IoErrorKind) *
+      (invalid_data :: IoErrorKind) *
+      (broken_pipe :: IoErrorKind) *
+      (closed :: IoErrorKind) *
+      (other :: IoErrorKind) *
       (kind_eq :: Thk (
-        PublicIoErrorKind -> PublicIoErrorKind -> Ret PublicBool
+        IoErrorKind -> IoErrorKind -> Ret Bool
       )) *
-      (error_kind :: Thk (PublicIoError -> Ret PublicIoErrorKind)) *
-      (error_message :: Thk (PublicIoError -> Ret PublicString)) *
+      (error_kind :: Thk (IoError -> Ret IoErrorKind)) *
+      (error_message :: Thk (IoError -> Ret String)) *
       (read :: Thk (
-        PublicReader -> PublicInt ->
-        Thk (PublicResult PublicBytes PublicIoError -> PublicOS) ->
-        PublicOS
+        Reader -> Int ->
+        Thk (Result Bytes IoError -> OS) ->
+        OS
       )) *
       (read_line :: Thk (
-        PublicReader ->
-        Thk (PublicResult (PublicOption PublicBytes) PublicIoError -> PublicOS) ->
-        PublicOS
+        Reader ->
+        Thk (Result (Option Bytes) IoError -> OS) ->
+        OS
       )) *
       (read_all :: Thk (
-        PublicReader ->
-        Thk (PublicResult PublicBytes PublicIoError -> PublicOS) ->
-        PublicOS
+        Reader ->
+        Thk (Result Bytes IoError -> OS) ->
+        OS
       )) *
       (write_all :: Thk (
-        PublicWriter -> PublicBytes ->
-        Thk (PublicResult Unit PublicIoError -> PublicOS) ->
-        PublicOS
+        Writer -> Bytes ->
+        Thk (Result Unit IoError -> OS) ->
+        OS
       )) *
       (flush :: Thk (
-        PublicWriter ->
-        Thk (PublicResult Unit PublicIoError -> PublicOS) ->
-        PublicOS
+        Writer ->
+        Thk (Result Unit IoError -> OS) ->
+        OS
       )) *
       (close_reader :: Thk (
-        PublicReader ->
-        Thk (PublicResult Unit PublicIoError -> PublicOS) ->
-        PublicOS
+        Reader ->
+        Thk (Result Unit IoError -> OS) ->
+        OS
       )) *
       (close_writer :: Thk (
-        PublicWriter ->
-        Thk (PublicResult Unit PublicIoError -> PublicOS) ->
-        PublicOS
+        Writer ->
+        Thk (Result Unit IoError -> OS) ->
+        OS
       ))
     in
     let FsModule
-      (PublicResult : (VType) -> (VType) -> (VType))
-      (PublicString : VType)
-      (PublicBytes : VType)
-      (PublicReader : VType)
-      (PublicWriter : VType)
-      (PublicPath : VType)
-      (PublicIoError : VType)
-      (PublicOS : CType) =
-      (path :: Thk (PublicString -> Ret PublicPath)) *
-      (path_string :: Thk (PublicPath -> Ret PublicString)) *
+      (Result : (VType) -> (VType) -> (VType))
+      (String : VType)
+      (Bytes : VType)
+      (Reader : VType)
+      (Writer : VType)
+      (Path : VType)
+      (IoError : VType)
+      (OS : CType) =
+      (path :: Thk (String -> Ret Path)) *
+      (path_string :: Thk (Path -> Ret String)) *
       (open_reader :: Thk (
-        PublicPath ->
-        Thk (PublicResult PublicReader PublicIoError -> PublicOS) ->
-        PublicOS
+        Path ->
+        Thk (Result Reader IoError -> OS) ->
+        OS
       )) *
       (create_writer :: Thk (
-        PublicPath ->
-        Thk (PublicResult PublicWriter PublicIoError -> PublicOS) ->
-        PublicOS
+        Path ->
+        Thk (Result Writer IoError -> OS) ->
+        OS
       )) *
       (append_writer :: Thk (
-        PublicPath ->
-        Thk (PublicResult PublicWriter PublicIoError -> PublicOS) ->
-        PublicOS
+        Path ->
+        Thk (Result Writer IoError -> OS) ->
+        OS
       )) *
       (read_bytes :: Thk (
-        PublicPath ->
-        Thk (PublicResult PublicBytes PublicIoError -> PublicOS) ->
-        PublicOS
+        Path ->
+        Thk (Result Bytes IoError -> OS) ->
+        OS
       )) *
       (read_text :: Thk (
-        PublicPath ->
-        Thk (PublicResult PublicString PublicIoError -> PublicOS) ->
-        PublicOS
+        Path ->
+        Thk (Result String IoError -> OS) ->
+        OS
       )) *
       (write_bytes :: Thk (
-        PublicPath -> PublicBytes ->
-        Thk (PublicResult Unit PublicIoError -> PublicOS) ->
-        PublicOS
+        Path -> Bytes ->
+        Thk (Result Unit IoError -> OS) ->
+        OS
       )) *
       (write_text :: Thk (
-        PublicPath -> PublicString ->
-        Thk (PublicResult Unit PublicIoError -> PublicOS) ->
-        PublicOS
+        Path -> String ->
+        Thk (Result Unit IoError -> OS) ->
+        OS
       ))
     in
     let StdioModule
-      (PublicOption : (VType) -> (VType))
-      (PublicResult : (VType) -> (VType) -> (VType))
-      (PublicString : VType)
-      (PublicReader : VType)
-      (PublicWriter : VType)
-      (PublicIoError : VType)
-      (PublicOS : CType) =
-      (stdin :: Thk (Ret PublicReader)) *
-      (stdout :: Thk (Ret PublicWriter)) *
-      (stderr :: Thk (Ret PublicWriter)) *
+      (Option : (VType) -> (VType))
+      (Result : (VType) -> (VType) -> (VType))
+      (String : VType)
+      (Reader : VType)
+      (Writer : VType)
+      (IoError : VType)
+      (OS : CType) =
+      (stdin :: Thk (Ret Reader)) *
+      (stdout :: Thk (Ret Writer)) *
+      (stderr :: Thk (Ret Writer)) *
       (read_line :: Thk (
-        Thk (PublicResult (PublicOption PublicString) PublicIoError -> PublicOS) ->
-        PublicOS
+        Thk (Result (Option String) IoError -> OS) ->
+        OS
       )) *
       (write :: Thk (
-        PublicString ->
-        Thk (PublicResult Unit PublicIoError -> PublicOS) ->
-        PublicOS
+        String ->
+        Thk (Result Unit IoError -> OS) ->
+        OS
       )) *
       (write_line :: Thk (
-        PublicString ->
-        Thk (PublicResult Unit PublicIoError -> PublicOS) ->
-        PublicOS
+        String ->
+        Thk (Result Unit IoError -> OS) ->
+        OS
       )) *
       (write_error :: Thk (
-        PublicString ->
-        Thk (PublicResult Unit PublicIoError -> PublicOS) ->
-        PublicOS
+        String ->
+        Thk (Result Unit IoError -> OS) ->
+        OS
       )) *
       (write_error_line :: Thk (
-        PublicString ->
-        Thk (PublicResult Unit PublicIoError -> PublicOS) ->
-        PublicOS
+        String ->
+        Thk (Result Unit IoError -> OS) ->
+        OS
       ))
     in
     let ProcessModule
-      (PublicList : (VType) -> (VType))
-      (PublicInt : VType)
-      (PublicString : VType)
-      (PublicOS : CType) =
-      (arg_list :: Thk (Thk (PublicList PublicString -> PublicOS) -> PublicOS)) *
-      (random_int :: Thk (Thk (PublicInt -> PublicOS) -> PublicOS)) *
-      (halt :: Thk PublicOS) *
-      (panic :: Thk (PublicString -> PublicOS)) *
-      (exit :: Thk (PublicInt -> PublicOS))
+      (List : (VType) -> (VType))
+      (Int : VType)
+      (String : VType)
+      (OS : CType) =
+      (arg_list :: Thk (Thk (List String -> OS) -> OS)) *
+      (random_int :: Thk (Thk (Int -> OS) -> OS)) *
+      (halt :: Thk OS) *
+      (panic :: Thk (String -> OS)) *
+      (exit :: Thk (Int -> OS))
     in
-    let Public =
-      exists (Bool = PublicBool : VType) .
+    let Std =
+      exists (Bool = BoolType : VType) .
       exists (
-        Option = PublicOption :
+        Option = OptionType :
         (VType) -> (VType)
       ) .
       exists (
-        Result = PublicResult :
+        Result = ResultType :
         (VType) -> (VType) -> (VType)
       ) .
       exists (
-        List = PublicList :
+        List = ListType :
         (VType) -> (VType)
       ) .
-      exists (Int = PublicInt as Int : VType) .
-      exists (Char = PublicChar as Char : VType) .
-      exists (String = PublicString as String : VType) .
-      exists (Bytes = PublicBytes as Bytes : VType) .
-      exists (Reader = PublicReader as Reader : VType) .
-      exists (Writer = PublicWriter as Writer : VType) .
-      exists (Path = PublicPath : VType) .
-      exists (IoErrorKind = PublicIoErrorKind : VType) .
-      exists (IoError = PublicIoError : VType) .
-      exists (OS = PublicOS as OS : CType) .
+      exists (Int = IntType as Int : VType) .
+      exists (Char = CharType as Char : VType) .
+      exists (String = StringType as String : VType) .
+      exists (Bytes = BytesType as Bytes : VType) .
+      exists (Reader = ReaderType as Reader : VType) .
+      exists (Writer = WriterType as Writer : VType) .
+      exists (Path = PathType : VType) .
+      exists (IoErrorKind = IoErrorKindType : VType) .
+      exists (IoError = IoErrorType : VType) .
+      exists (OS = OSType as OS : CType) .
         (prelude :: Prelude) *
-        (bool :: BoolModule PublicBool) *
-        (option :: OptionModule PublicBool PublicOption) *
-        (result :: ResultModule PublicBool PublicResult) *
-        (list :: ListModule PublicBool PublicOption PublicList PublicInt) *
-        (int :: IntModule PublicBool PublicInt PublicString) *
-        (char :: CharModule PublicOption PublicChar PublicInt PublicString) *
+        (bool :: BoolModule BoolType) *
+        (option :: OptionModule BoolType OptionType) *
+        (result :: ResultModule BoolType ResultType) *
+        (list :: ListModule BoolType OptionType ListType IntType) *
+        (int :: IntModule BoolType IntType StringType) *
+        (char :: CharModule OptionType CharType IntType StringType) *
         (string :: StringModule
-          PublicBool PublicOption PublicList PublicInt PublicChar PublicString) *
-        (bytes :: BytesModule PublicOption PublicInt PublicString PublicBytes) *
+          BoolType OptionType ListType IntType CharType StringType) *
+        (bytes :: BytesModule OptionType IntType StringType BytesType) *
         (io :: IoModule
-          PublicBool PublicOption PublicResult PublicInt PublicString PublicBytes PublicReader
-          PublicWriter PublicIoErrorKind PublicIoError PublicOS) *
+          BoolType OptionType ResultType IntType StringType BytesType ReaderType
+          WriterType IoErrorKindType IoErrorType OSType) *
         (fs :: FsModule
-          PublicResult PublicString PublicBytes PublicReader PublicWriter PublicPath PublicIoError
-          PublicOS) *
+          ResultType StringType BytesType ReaderType WriterType PathType IoErrorType
+          OSType) *
         (stdio :: StdioModule
-          PublicOption PublicResult PublicString PublicReader PublicWriter PublicIoError PublicOS) *
-        (process :: ProcessModule PublicList PublicInt PublicString PublicOS) *
+          OptionType ResultType StringType ReaderType WriterType IoErrorType OSType) *
+        (process :: ProcessModule ListType IntType StringType OSType) *
         Unit
     in
     let Interface =
-      exists (Prelude = ExportedPrelude as Prelude : VType) .
-      exists (Public = ExportedPublic as Public : VType) .
+      exists (Prelude = PreludeType as Prelude : VType) .
+      exists (Std = PackageType as Std : VType) .
         Unit
     in
-    ((Prelude = Prelude, Public = Public, ()) : Interface)
+    ((Prelude = Prelude, Std = Std, ()) : Interface)
 end

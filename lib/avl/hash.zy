@@ -5,13 +5,10 @@ begin
     @[import("../std/builtin.zy")] _
   ) that
 
-  let (
-    /Bool = StdBool; /Option = StdOption; /Int = StdInt; /String = StdString; /OS = StdOS;
-    /bool; /option; /int; /string; /stdio; /process
-  ) = make_std builtin in
+  let (/Bool; /Option; /bool; /option; /int; /string; /stdio; /process) = make_std builtin in
   begin
     let Cmp (A : VType) =
-      Thk (A -> A -> Ret StdBool)
+      Thk (A -> A -> Ret Bool)
     that
     --| AvlTree
     def Avl (A : VType) : VType =
@@ -20,7 +17,7 @@ begin
       | +Node :
         (left :: Avl A) *
         (value :: A) *
-        (tree_height :: StdInt) *
+        (tree_height :: Int) *
         (right :: Avl A)
       end
     that
@@ -35,16 +32,16 @@ begin
         right = +Leaf()
       )
     that
-    def ! height (A : VType) (tree : Avl A) : Ret StdInt =
+    def ! height (A : VType) (tree : Avl A) : Ret Int =
       match tree
       | +Leaf() => ret 0
       | +Node(/tree_height) => ret tree_height
       end
     that
-    def ! int_max (left : StdInt) (right : StdInt) : Ret StdInt =
+    def ! int_max (left : Int) (right : Int) : Ret Int =
       do greater <- ! (int/gt) left right;
       ! (bool/if)
-        (Ret StdInt)
+        (Ret Int)
         greater
         { ret left }
         { ret right }
@@ -60,7 +57,7 @@ begin
         ret +Node(= left, = value, tree_height = new_height, = right)
       end
     that
-    def ! balance_factor (A : VType) (tree : Avl A) : Ret StdInt =
+    def ! balance_factor (A : VType) (tree : Avl A) : Ret Int =
       match tree
       | +Leaf() => ret 0
       | +Node(/left; /right) =>
@@ -81,14 +78,14 @@ begin
       | +Node(/right) => ret right
       end
     that
-    def fix min_element (A : VType) (tree : Avl A) (comparison : Cmp A) : Ret (StdOption A) =
+    def fix min_element (A : VType) (tree : Avl A) (comparison : Cmp A) : Ret (Option A) =
       match tree
       | +Leaf() => ! (option/none) A
       | +Node(/left; /value) =>
         do minimum <- ! min_element A left comparison;
         ! (option/fold)
           A
-          (Ret (StdOption A))
+          (Ret (Option A))
           minimum
           { ! (option/some) A value }
           {
@@ -217,19 +214,19 @@ begin
           }
       end
     that
-    def fix search (A : VType) (item : A) (tree : Avl A) (equal : Cmp A) (less : Cmp A) : Ret (StdOption A) =
+    def fix search (A : VType) (item : A) (tree : Avl A) (equal : Cmp A) (less : Cmp A) : Ret (Option A) =
       match tree
       | +Leaf() => ! (option/none) A
       | +Node(/left; /value; /right) =>
         do found <- ! equal item value;
         ! (bool/if)
-          (Ret (StdOption A))
+          (Ret (Option A))
           found
           { ! (option/some) A value }
           {
             do goes_left <- ! less item value;
             ! (bool/if)
-              (Ret (StdOption A))
+              (Ret (Option A))
               goes_left
               { ! search A item left equal less }
               { ! search A item right equal less }
@@ -324,7 +321,7 @@ begin
           }
       end
     that
-    def fix equal (A : VType) (first : Avl A) (second : Avl A) (item_equal : Cmp A) : Ret StdBool =
+    def fix equal (A : VType) (first : Avl A) (second : Avl A) (item_equal : Cmp A) : Ret Bool =
       match first
       | +Leaf() =>
         match second
@@ -337,7 +334,7 @@ begin
         | +Node(/left = second_left; /value = second_value; /right = second_right) =>
           do values_equal <- ! item_equal first_value second_value;
           ! (bool/if)
-            (Ret StdBool)
+            (Ret Bool)
             values_equal
             {
               do left_equal <- ! equal A first_left second_left item_equal;
@@ -351,9 +348,9 @@ begin
     def fix pre_traversal
       (A : VType)
       (tree : Avl A)
-      (format : Thk (A -> Ret StdString))
-      (continuation : Thk StdOS)
-      : StdOS =
+      (format : Thk (A -> Ret String))
+      (continuation : Thk OS)
+      : OS =
       match tree
       | +Leaf() => ! continuation
       | +Node(/left; /value; /tree_height; /right) =>
@@ -431,13 +428,13 @@ begin
       end
     that
     --| in search, a default value for v is needed, because the type of v is unknown
-    def ! hash_search (K : VType) (V : VType) (key : K) (default : V) (hash : Hash K V) : Ret (StdOption V) =
+    def ! hash_search (K : VType) (V : VType) (key : K) (default : V) (hash : Hash K V) : Ret (Option V) =
       match hash
       | +Hash(/body; /insert_less; /search_equal) =>
         do result <- ! search (K * V) (key, default) body search_equal insert_less;
         ! (option/fold)
           (K * V)
-          (Ret (StdOption V))
+          (Ret (Option V))
           result
           { ! (option/none) V }
           {
@@ -462,7 +459,7 @@ begin
         ret +Hash(body = new_body, = insert_less, = search_equal, = item_equal)
       end
     that
-    def ! hash_equal (K : VType) (V : VType) (first : Hash K V) (second : Hash K V) : Ret StdBool =
+    def ! hash_equal (K : VType) (V : VType) (first : Hash K V) (second : Hash K V) : Ret Bool =
       match first
       | +Hash(/body = first_body; /item_equal = first_item_equal) =>
         match second
@@ -472,54 +469,54 @@ begin
       end
     that
 
-    do hash <- ! hash_new StdInt StdString
+    do hash <- ! hash_new Int String
       (int/lt)
       (int/eq)
       (string/eq);
-    do hash <- ! hash_insert StdInt StdString 1 "one" hash;
-    do hash <- ! hash_insert StdInt StdString 2 "two" hash;
-    do hash <- ! hash_insert StdInt StdString 3 "three" hash;
-    do hash <- ! hash_insert StdInt StdString 4 "four" hash;
-    do hash <- ! hash_insert StdInt StdString 5 "five" hash;
-    do hash <- ! hash_insert StdInt StdString 6 "six" hash;
-    do hash <- ! hash_insert StdInt StdString 7 "seven" hash;
-    do hash <- ! hash_insert StdInt StdString 8 "eight" hash;
-    do hash <- ! hash_insert StdInt StdString 9 "nine" hash;
-    do hash <- ! hash_insert StdInt StdString 10 "ten" hash;
+    do hash <- ! hash_insert Int String 1 "one" hash;
+    do hash <- ! hash_insert Int String 2 "two" hash;
+    do hash <- ! hash_insert Int String 3 "three" hash;
+    do hash <- ! hash_insert Int String 4 "four" hash;
+    do hash <- ! hash_insert Int String 5 "five" hash;
+    do hash <- ! hash_insert Int String 6 "six" hash;
+    do hash <- ! hash_insert Int String 7 "seven" hash;
+    do hash <- ! hash_insert Int String 8 "eight" hash;
+    do hash <- ! hash_insert Int String 9 "nine" hash;
+    do hash <- ! hash_insert Int String 10 "ten" hash;
 
     -- answer
-    do expected <- ! hash_new StdInt StdString
+    do expected <- ! hash_new Int String
       (int/lt)
       (int/eq)
       (string/eq);
-    do expected <- ! hash_insert StdInt StdString 1 "one change" expected;
-    do expected <- ! hash_insert StdInt StdString 2 "two" expected;
-    do expected <- ! hash_insert StdInt StdString 3 "three" expected;
-    do expected <- ! hash_insert StdInt StdString 4 "four change" expected;
-    do expected <- ! hash_insert StdInt StdString 7 "seven" expected;
-    do expected <- ! hash_insert StdInt StdString 8 "eight" expected;
-    do expected <- ! hash_insert StdInt StdString 9 "nine" expected;
-    do expected <- ! hash_insert StdInt StdString 10 "ten change" expected;
+    do expected <- ! hash_insert Int String 1 "one change" expected;
+    do expected <- ! hash_insert Int String 2 "two" expected;
+    do expected <- ! hash_insert Int String 3 "three" expected;
+    do expected <- ! hash_insert Int String 4 "four change" expected;
+    do expected <- ! hash_insert Int String 7 "seven" expected;
+    do expected <- ! hash_insert Int String 8 "eight" expected;
+    do expected <- ! hash_insert Int String 9 "nine" expected;
+    do expected <- ! hash_insert Int String 10 "ten change" expected;
 
     -- start deleting, changing and searching
-    do hash <- ! hash_delete StdInt StdString 5 "default" hash;
-    do hash <- ! hash_delete StdInt StdString 6 "default" hash;
-    do hash <- ! hash_change StdInt StdString 1 "one change" hash;
-    do hash <- ! hash_change StdInt StdString 4 "four change" hash;
-    do hash <- ! hash_change StdInt StdString 10 "ten change" hash;
-    do hashes_equal <- ! hash_equal StdInt StdString hash expected;
-    do first <- ! hash_search StdInt StdString 1 "default" hash;
-    do second <- ! hash_search StdInt StdString 1 "default" hash;
+    do hash <- ! hash_delete Int String 5 "default" hash;
+    do hash <- ! hash_delete Int String 6 "default" hash;
+    do hash <- ! hash_change Int String 1 "one change" hash;
+    do hash <- ! hash_change Int String 4 "four change" hash;
+    do hash <- ! hash_change Int String 10 "ten change" hash;
+    do hashes_equal <- ! hash_equal Int String hash expected;
+    do first <- ! hash_search Int String 1 "default" hash;
+    do second <- ! hash_search Int String 1 "default" hash;
     ! (option/fold)
-      StdString
-      StdOS
+      String
+      OS
       first
       { ! (process/exit) 1 }
       {
         fn first_value =>
           ! (option/fold)
-            StdString
-            StdOS
+            String
+            OS
             second
             { ! (process/exit) 1 }
             {
@@ -527,7 +524,7 @@ begin
                 do values_equal <- ! (string/eq) first_value second_value;
                 do result <- ! (bool/and) hashes_equal values_equal;
                 ! (bool/if)
-                  StdOS
+                  OS
                   result
                   { ! (process/exit) 0 }
                   { ! (process/exit) 1 }

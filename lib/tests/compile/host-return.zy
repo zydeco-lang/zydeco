@@ -1,27 +1,22 @@
 begin
   param (
-    (
-      /add; /sub; /int_to_str;
-      /char_to_str; /char_codepoint;
-      /str_scalar_length; /str_byte_length; /str_append;
-      /exit
-    ) :
+    (/int; /char; /string; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  do twelve <- ! (int_to_str) 12;
-  do combined <- ! (str_append) twelve twelve;
-  do length <- ! (str_scalar_length) combined;
-  do bytes <- ! (str_byte_length) combined;
-  do first_code <- ! (char_codepoint) '1';
-  do first_string <- ! (char_to_str) '1';
-  do first_length <- ! (str_scalar_length) first_string;
-  do length_status <- ! (sub) length 4;
-  do bytes_status <- ! (sub) bytes 4;
-  do first_status <- ! (sub) first_code 49;
-  do first_length_status <- ! (sub) first_length 1;
-  do status <- ! (add) length_status bytes_status;
-  do status <- ! (add) status first_status;
-  do status <- ! (add) status first_length_status;
-  ! (exit) status
+  do twelve <- ! (int/to_string) 12;
+  do combined <- ! (string/append) twelve twelve;
+  do length <- ! (string/length) combined;
+  do bytes <- ! (string/byte_length) combined;
+  do first_code <- ! (char/codepoint) '1';
+  do first_string <- ! (char/to_string) '1';
+  do first_length <- ! (string/length) first_string;
+  do length_status <- ! (int/sub) length 4;
+  do bytes_status <- ! (int/sub) bytes 4;
+  do first_status <- ! (int/sub) first_code 49;
+  do first_length_status <- ! (int/sub) first_length 1;
+  do status <- ! (int/add) length_status bytes_status;
+  do status <- ! (int/add) status first_status;
+  do status <- ! (int/add) status first_length_status;
+  ! (process/exit) status
 end

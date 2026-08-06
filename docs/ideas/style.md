@@ -210,17 +210,18 @@ param (
   (/VType; /Thk; /String; builtin) :
   @[import("../std/builtin.zy")] _
 ) in
-let (/Int = StdInt; /OS = StdOS; /int; /process) = make_std builtin in
+let (/int; /process) = make_std builtin in
 ...
 ```
 
 Selected type fields and module values share the same package opening. Keep all related selections in that group,
 place type fields before value modules, and retain their interface order when it makes the list easier to compare
-with the provider. The `/Int = StdInt` spelling selects the public field `Int` under a local name; plain `/Int` is
-the pun when no rename is useful. A final ordinary pattern such as `builtin` retains the complete package for
-forwarding while the preceding projections introduce only the requested local names. Omit that alias when the
-consumer does not forward the package. This projection-pattern idiom serves the role of package `use` without
-adding a separate binding form.
+with the provider. Plain `/Int` selects the public field `Int` under the same local name. Use an explicit rename
+such as `/String = Text` only when the consumer has a clearer role name. Select Builtin operations as module values
+and keep individual calls qualified, such as `int/add` and `process/exit`. A final ordinary pattern such as `builtin`
+retains the complete package for forwarding, while the preceding projections introduce only the requested local
+names. Omit that alias when the consumer does not forward the package. This projection-pattern idiom serves the
+role of package `use` without adding a separate binding form.
 
 The canonical builtin package is the single source of `@[intrinsic]` and `@[builtin(...)]` metadata.
 Other sources acquire intrinsic kinds, types, and host operations by importing that package and projecting only

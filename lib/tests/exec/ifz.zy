@@ -1,6 +1,6 @@
 begin
   param (
-    (/VType; /Thk; /Ret; /Unit; /exit) :
+    (/VType; /Thk; /Ret; /Unit; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -54,7 +54,7 @@ begin
     : Ret Bool
   );
   match b
-  | +True() => ! (exit) 0
-  | +False() => ! (exit) 1
+  | +True() => ! (process/exit) 0
+  | +False() => ! (process/exit) 1
   end
 end

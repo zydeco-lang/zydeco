@@ -2,7 +2,7 @@
 -- syntax form. The inferred payload is resolved according to its context.
 begin
   param (
-    (/VType; /Int; /add; /sub; /exit) :
+    (/VType; /Int; /int; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -42,16 +42,16 @@ begin
   let (
     outer = (= pun_inner : Int)
   ) = wrapped in
-  do value_check <- ! (sub) pun_value 4;
-  do upper_value_check <- ! (sub) PunValue 5;
-  do upper_projection_check <- ! (sub) upper_slot/PunValue 5;
-  do x_check <- ! (sub) pun_x 10;
-  do y_check <- ! (sub) pun_y 11;
-  do inner_check <- ! (sub) pun_inner 12;
-  do total <- ! (add) value_check x_check;
-  do total <- ! (add) total upper_value_check;
-  do total <- ! (add) total upper_projection_check;
-  do total <- ! (add) total y_check;
-  do total <- ! (add) total inner_check;
-  ! (exit) total
+  do value_check <- ! (int/sub) pun_value 4;
+  do upper_value_check <- ! (int/sub) PunValue 5;
+  do upper_projection_check <- ! (int/sub) upper_slot/PunValue 5;
+  do x_check <- ! (int/sub) pun_x 10;
+  do y_check <- ! (int/sub) pun_y 11;
+  do inner_check <- ! (int/sub) pun_inner 12;
+  do total <- ! (int/add) value_check x_check;
+  do total <- ! (int/add) total upper_value_check;
+  do total <- ! (int/add) total upper_projection_check;
+  do total <- ! (int/add) total y_check;
+  do total <- ! (int/add) total inner_check;
+  ! (process/exit) total
 end

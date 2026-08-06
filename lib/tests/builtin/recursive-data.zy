@@ -21,14 +21,14 @@ begin
     end
   that
   param (
-    (/VType; /Ret; /Unit; /exit) :
+    (/VType; /Ret; /Unit; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   do one <- ! successor +Z();
   do result <- ! is_nonzero one;
   match result
-  | +False(_) => ! (exit) 1
-  | +True(_) => ! (exit) 0
+  | +False(_) => ! (process/exit) 1
+  | +True(_) => ! (process/exit) 0
   end
 end

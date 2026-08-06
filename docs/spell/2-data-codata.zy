@@ -7,14 +7,7 @@
 
 begin
   param (
-    (
-      /VType; /CType; /Thk; /Ret;
-      /Unit; /Int; /String; /OS;
-      /add; /int_eq_branch;
-      /str_append;
-      /write_line;
-      /exit
-    ) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /OS; /int; /string; /stdio; /process) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
 
@@ -174,7 +167,7 @@ begin
   ) = {
     fn left right =>
       do right <- ! right;
-      ! (add) left right
+      ! (int/add) left right
   } that
   def check_result : Thk (
     Int ->
@@ -184,27 +177,27 @@ begin
     OS
   ) = {
     fn expected actual label continuation =>
-      ! (int_eq_branch)
+      ! (int/eq)
         OS
         expected
         actual
         { ! continuation }
         {
-          do message <- ! (str_append) label " is not correct";
-          ! (write_line) message {
-            ! (exit) 1
+          do message <- ! (string/append) label " is not correct";
+          ! (stdio/write_line) message {
+            ! (process/exit) 1
           }
         }
   } that
 
-  do strict_expected <- ! fold_left (add) 0 values;
-  do strict_actual <- ! fold_left_exercise (add) 0 values;
+  do strict_expected <- ! fold_left (int/add) 0 values;
+  do strict_actual <- ! fold_left_exercise (int/add) 0 values;
   do lazy_expected <- ! fold_right add_lazy { ret 0 } lazy_values;
   do lazy_actual <- ! fold_right_exercise add_lazy { ret 0 } lazy_values;
   ! check_result strict_expected strict_actual "fold_left exercise" {
     ! check_result lazy_expected lazy_actual "fold_right exercise" {
-      ! (write_line) "all tests passed" {
-        ! (exit) 0
+      ! (stdio/write_line) "all tests passed" {
+        ! (process/exit) 0
       }
     }
   }

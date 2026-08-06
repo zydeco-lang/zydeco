@@ -5,26 +5,23 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (
-    /Option = StdOption; /Int = StdInt; /String = StdString; /IoError = StdIoError; /OS = StdOS;
-    /option; /result; /string; /stdio; /process
-  ) = make_std builtin in
-  let ! read_int (continuation : Thk (StdOption StdInt -> StdOS)) : StdOS =
+  let (/Option; /IoError; /option; /result; /string; /stdio; /process) = make_std builtin in
+  let ! read_int (continuation : Thk (Option Int -> OS)) : OS =
     ! (stdio/read_line) {
       fn read =>
         ! (result/fold)
-          (StdOption StdString)
-          StdIoError
-          StdOS
+          (Option String)
+          IoError
+          OS
           read
           {
             fn line =>
               ! (option/fold)
-                StdString
-                StdOS
+                String
+                OS
                 line
                 {
-                  do absent <- ! (option/none) StdInt;
+                  do absent <- ! (option/none) Int;
                   ! continuation absent
                 }
                 {
@@ -35,7 +32,7 @@ begin
           }
           {
             fn _ =>
-              do absent <- ! (option/none) StdInt;
+              do absent <- ! (option/none) Int;
               ! continuation absent
           }
     }
@@ -43,8 +40,8 @@ begin
   ! read_int {
     fn first =>
       ! (option/fold)
-        StdInt
-        StdOS
+        Int
+        OS
         first
         { ! (process/exit) 1 }
         {
@@ -52,8 +49,8 @@ begin
             ! read_int {
               fn second =>
                 ! (option/fold)
-                  StdInt
-                  StdOS
+                  Int
+                  OS
                   second
                   { ! (process/exit) 0 }
                   {

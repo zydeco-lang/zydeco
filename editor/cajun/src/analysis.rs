@@ -638,7 +638,10 @@ mod tests {
         assert!(has("Int", "typeParameter", "valueType"));
         assert!(has("OS", "typeParameter", "computationType"));
         assert!(has("x", "variable", "value"));
-        assert!(has("exit", "parameter", "value"));
+        assert!(has("process", "parameter", "value"));
+        assert!(
+            decoded.iter().any(|token| { token.text == "exit" && token.token_type == "property" })
+        );
         assert!(decoded.iter().any(|token| {
             token.text == "x" && token.modifiers.iter().any(|modifier| modifier == "declaration")
         }));
@@ -651,7 +654,7 @@ mod tests {
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
-        let broken = source.replace("! id~ OS { ! (exit) x }", "x x");
+        let broken = source.replace("! id~ OS { ! (process/exit) x }", "x x");
         assert_ne!(source, broken);
         let overrides = HashMap::from([(path.clone(), broken.clone())]);
         let project = ProjectState::load(&path, &overrides).unwrap();

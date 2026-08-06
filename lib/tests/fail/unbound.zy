@@ -1,10 +1,8 @@
 begin
   param (
-    (
-      /exit
-    ) :
+    (/process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  ! (exit) x
+  ! (process/exit) x
 end

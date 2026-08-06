@@ -1,15 +1,7 @@
 -- module Identity
 begin
   param (
-    (
-      /VType; /CType; /Thk; /Ret;
-      /Unit; /Int; /Char; /String; /OS;
-      /add = primitive_add; /sub = primitive_sub; /int_eq_branch; /int_lt_branch; /int_gt_branch;
-      /char_to_str = primitive_char_to_str; /char_codepoint = primitive_char_codepoint;
-      /str_scalar_length = primitive_str_scalar_length; /str_append = primitive_str_append;
-      /str_split_once_branch; /str_split_at_branch; /str_eq_branch; /str_get_branch;
-      /write_str = primitive_write_str
-    ) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /Char; /String; /OS; /int; /char; /string; /stdio) :
     @[import("../../std/builtin.zy")] _
   ) that
   let Thunk = Thk that
@@ -27,33 +19,26 @@ begin
     | +False : Unit
     end
   that
-  let add = primitive_add that
-  let sub = primitive_sub that
   def ! int_eq (x : Int) (y : Int) : Ret Bool =
-    ! (int_eq_branch) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! (int/eq) (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! int_lt (x : Int) (y : Int) : Ret Bool =
-    ! (int_lt_branch) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! (int/lt) (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! int_gt (x : Int) (y : Int) : Ret Bool =
-    ! (int_gt_branch) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! (int/gt) (Ret Bool) x y { ret +True() } { ret +False() }
   that
-  let str_scalar_length = primitive_str_scalar_length that
-  let str_append = primitive_str_append that
   def ! str_eq (x : String) (y : String) : Ret Bool =
-    ! (str_eq_branch) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! (string/eq) (Ret Bool) x y { ret +True() } { ret +False() }
   that
-  def ! str_get_or_space (string : String) (index : Int) : Ret Char =
-    ! (str_get_branch)
+  def ! str_get_or_space (text : String) (index : Int) : Ret Char =
+    ! (string/get)
       (Ret Char)
-      string
+      text
       index
       { ret ' ' }
       { fn character => ret character }
   that
-  let char_to_str = primitive_char_to_str that
-  let char_codepoint = primitive_char_codepoint that
-  let write_str = primitive_write_str that
   --| identity functions
   def id : Thunk(forall (A : VType) . A -> Ret A) = {
     fn A a => ret a
@@ -222,7 +207,7 @@ begin
     match xs
     | +Nil() => ret +None()
     | +Cons(hd, tl) =>
-      do minus1 <- ! sub index 1;
+      do minus1 <- ! (int/sub) index 1;
       ! if~ (F(Option A)) {! int_eq 0 index} {ret +Some(hd)} {
         ! get_rec A tl minus1
       }
@@ -308,7 +293,7 @@ begin
                 !if~ (LList A)
                     { ! int_lt n 1 }
                     { ! nil A }
-                    { do n <- ! sub n 1;
+                    { do n <- ! (int/sub) n 1;
                       ! cons A x { ! take_xs n }
                     }
             }
@@ -384,16 +369,16 @@ begin
   def fix print_list (A : VType) (fmt : U(A -> F String)) (xs : U(LList A)) (next : U OS) : OS =
     do xs' <- ! xs .run;
     match xs'
-    | +Nil() => ! write_str "\n" next
+    | +Nil() => ! (stdio/write) "\n" next
     | +Cons(x, tl) =>
       do s <- ! fmt x;
-      do st <- ! str_append s " ";
-      ! write_str st {! print_list A fmt tl next}
+      do st <- ! (string/append) s " ";
+      ! (stdio/write) st {! print_list A fmt tl next}
     end
   that
 
   def ! length (A : VType) (xs : U(LList A)) : F(Int) =
-    ! foldr A (F Int) xs {ret 0} {fn x b => do b' <- !b; ! add b' 1}
+    ! foldr A (F Int) xs {ret 0} {fn x b => do b' <- !b; ! (int/add) b' 1}
   that
 
   let Cmp (A : VType) : VType = U(A -> A -> F(Bool)) that
@@ -413,7 +398,7 @@ begin
           match c
           | +True() => ret +Some(+Cons(x, 0))
           | +False() =>
-            do i <- ! add 1 i;
+            do i <- ! (int/add) 1 i;
             ret +Some(+Cons(m', i))
           end
         end
@@ -435,7 +420,7 @@ begin
           do c <- ! cmp x m';
           match c
           | +True() =>
-            do i <- ! add 1 i;
+            do i <- ! (int/add) 1 i;
             ret +Some(+Cons(m', i))
           | +False() => ret +Some(+Cons(x, 0))
           end
@@ -455,7 +440,7 @@ begin
     ! if~ (LList A) {! int_eq 0 n} {
       ! nil A
     } {
-      do n1 <- ! sub n 1;
+      do n1 <- ! (int/sub) n 1;
       ! cons A x {! repeat A x n1}
     }
   that
@@ -464,7 +449,7 @@ begin
     ! if~ (LList Int) {! int_eq left right} {
       ! nil (Int)
     } {
-      do n1 <- ! add left 1;
+      do n1 <- ! (int/add) left 1;
       ! cons (Int) left {! range n1 right}
     }
   that
@@ -493,7 +478,7 @@ begin
   that
 
   def ! str_to_list (s : String) : LList Char =
-    do sz <- ! str_scalar_length s;
+    do sz <- ! (string/length) s;
     let indexes = {! range 0 sz} in
     ! foldr (Int) (LList Char) indexes {! nil (Char)} {
       fn i acc =>
@@ -529,7 +514,7 @@ begin
 
 -- module String
   def ! str_split_once (str : String) (sep : Char) : Ret (Option (Pair String String)) =
-    ! (str_split_once_branch)
+    ! (string/split_once)
       (Ret (Option (Pair String String)))
       str
       sep
@@ -537,7 +522,7 @@ begin
       { fn s1 s2 => ret +Some(+Cons(s1, s2)) }
   that
   def ! str_split_at (str : String) (index : Int) : Ret (Option (Pair String String)) =
-    ! (str_split_at_branch)
+    ! (string/split_at)
       (Ret (Option (Pair String String)))
       str
       index
@@ -547,8 +532,8 @@ begin
 
   def char_eq: Thunk(Char -> Char -> Ret Bool) = {
     fn (c: Char) (c': Char) =>
-      do c <- ! char_to_str c;
-      do c' <- ! char_to_str c';
+      do c <- ! (char/to_string) c;
+      do c' <- ! (char/to_string) c';
       ! str_eq c c'
   } that
 
@@ -573,10 +558,10 @@ begin
     do cond <- ! int_lt left right;
     ! if (F String) cond {
       do c <- ! str_get_or_space str left;
-      do c' <- ! char_to_str c;
-      do left' <- ! add left 1;
+      do c' <- ! (char/to_string) c;
+      do left' <- ! (int/add) left 1;
       do s <- ! str_slice str left' right;
-      do s <- ! str_append c' s;
+      do s <- ! (string/append) c' s;
       ret s
     } {
       ret ""

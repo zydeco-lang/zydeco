@@ -85,7 +85,7 @@ When the bindee's expected type starts with an existential telescope, a semicolo
 patterns selectively opens that package:
 
 ```zydeco
-let (/Item = LocalItem; /value; /consume) = package in
+let (/Item; /value; /consume) = package in
 ...
 ```
 
@@ -96,7 +96,8 @@ resolver. The selected types and values consequently refer to one shared package
 
 A plain binder such as `exists (Item : VType) . Body` supplies the punned field name `Item`. For an explicitly named
 binder such as `exists (Item = Hidden : VType) . Body`, selection uses the public label `Item`. The punned projection
-`/Item` binds a local `Item`; `/Item = LocalItem` gives it a different source name.
+`/Item` binds the selected identity directly as `Item`; `/Item = Element` gives it a different source name when
+that name expresses a useful role in the consumer.
 
 Missing and ambiguous selections use the same static errors as ordinary projection. Distinct package eliminations
 still allocate distinct abstract witnesses, while manifest existential fields retain their disclosed definitions.

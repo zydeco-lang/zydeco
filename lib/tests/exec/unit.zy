@@ -1,7 +1,7 @@
 -- Unit defined in std.zydeco
 begin
   param (
-    (/Ret; /Unit; /String; /write_line; /exit) :
+    (/Ret; /Unit; /String; /stdio; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -11,5 +11,5 @@ begin
 
   let v : Unit = () in
   do x <- ! unit_to_str v;
-  ! (write_line) x { ! (exit) 0 }
+  ! (stdio/write_line) x { ! (process/exit) 0 }
 end

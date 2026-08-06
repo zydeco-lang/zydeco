@@ -2,7 +2,7 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /add; /write_str; /write_int; /exit; builtin) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /int; /stdio; /process; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
@@ -125,7 +125,7 @@ begin
         }
     | .kont =>
       fn A' ka =>
-        do i' <- ! (add) i 1;
+        do i' <- ! (int/add) i 1;
         ! count_kont E A' i' {
           fn i =>
             ! fi i .kont A' ka
@@ -181,11 +181,11 @@ begin
   };
   -- syntactic sugar:
   -- do~ M; N ==> M { N }
-  ! (write_int) a {
-    ! (write_str) " != " {
-      ! (write_int) b {
-        ! (write_str) "\n" {
-          ! (exit) 0
+  ! (stdio/write_int) a {
+    ! (stdio/write) " != " {
+      ! (stdio/write_int) b {
+        ! (stdio/write) "\n" {
+          ! (process/exit) 0
         }
       }
     }

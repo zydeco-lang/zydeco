@@ -1,15 +1,7 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (
-      /VType; /CType; /Thk; /Ret;
-      /Unit; /Int; /String; /OS;
-      /add;
-      /str_append; /str_eq_branch;
-      /write_line;
-      /exit;
-      builtin
-    ) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /OS; /int; /string; /stdio; /process; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
@@ -117,7 +109,7 @@ begin
       fn s =>
         match s
         | +State(c, o) =>
-          do c' <- ! (add) c 1;
+          do c' <- ! (int/add) c 1;
           ret +Cons(
             +State(c', o),
             +Right({ ! kret v })
@@ -130,7 +122,7 @@ begin
       fn s =>
         match s
         | +State(c, o) =>
-          do o' <- ! (str_append) o str;
+          do o' <- ! (string/append) o str;
           ret +Cons(
             +State(c, o'),
             +Right({ ! kret v })
@@ -177,7 +169,7 @@ begin
     end
   that
   def ! str_eq (left : String) (right : String) : Ret Bool =
-    ! (str_eq_branch)
+    ! (string/eq)
       (Ret Bool)
       left
       right
@@ -276,7 +268,7 @@ begin
   match sv?
   | +Cons(s, v?) =>
     match v?
-    | +Left(_) => ! (exit) 1
+    | +Left(_) => ! (process/exit) 1
     | +Right(k) =>
       ! k OS {
         fn v =>
@@ -284,12 +276,12 @@ begin
           | +Bool(b) =>
             match b
             | +True() =>
-              ! (write_line) "\\^o^/" {
-                ! (exit) 0
+              ! (stdio/write_line) "\\^o^/" {
+                ! (process/exit) 0
               }
-            | +False() => ! (exit) 1
+            | +False() => ! (process/exit) 1
             end
-          | +Lam(_, _, _) => ! (exit) 1
+          | +Lam(_, _, _) => ! (process/exit) 1
           end
       }
     end

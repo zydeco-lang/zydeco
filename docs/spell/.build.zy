@@ -1,13 +1,6 @@
 begin
   param (
-    (
-      /VType; /CType; /Thk; /Ret;
-      /Unit; /Int; /String; /OS;
-      /int_eq_branch; /int_lt_branch;
-      /str_scalar_length; /str_split_once_branch; /str_split_at_branch; /str_eq_branch;
-      /write_str; /read_till_eof;
-      /exit
-    ) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /OS; /int; /string; /stdio; /process) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
 
@@ -34,7 +27,7 @@ begin
     Int -> Int -> Ret Bool
   ) = {
     fn left right =>
-      ! (int_eq_branch)
+      ! (int/eq)
         (Ret Bool)
         left
         right
@@ -45,7 +38,7 @@ begin
     Int -> Int -> Ret Bool
   ) = {
     fn left right =>
-      ! (int_lt_branch)
+      ! (int/lt)
         (Ret Bool)
         left
         right
@@ -56,7 +49,7 @@ begin
     String -> String -> Ret Bool
   ) = {
     fn left right =>
-      ! (str_eq_branch)
+      ! (string/eq)
         (Ret Bool)
         left
         right
@@ -70,7 +63,7 @@ begin
     Ret (String * Bool)
   ) = {
     fn line =>
-      do length <- ! (str_scalar_length) line;
+      do length <- ! (string/length) line;
       do too_short <- ! int_less length 3;
       ! branch
         (Ret (String * Bool))
@@ -84,7 +77,7 @@ begin
             { ret (line, +False()) }
         }
         {
-          ! (str_split_at_branch)
+          ! (string/split_at)
             (Ret (String * Bool))
             line
             3
@@ -103,8 +96,8 @@ begin
   def string_empty : Thk (
     String -> Ret Bool
   ) = {
-    fn string =>
-      do length <- ! (str_scalar_length) string;
+    fn text =>
+      do length <- ! (string/length) text;
       ! int_equal length 0
   } that
 
@@ -122,17 +115,17 @@ begin
       )
     ) =>
       fn remaining in_code =>
-        ! (str_split_once_branch)
+        ! (string/split_once)
           OS
           remaining
           '\n'
           {
             match in_code
             | +True() =>
-              ! (write_str) "\n```\n" {
-                ! (exit) 0
+              ! (stdio/write) "\n```\n" {
+                ! (process/exit) 0
               }
-            | +False() => ! (exit) 0
+            | +False() => ! (process/exit) 0
             end
           }
           {
@@ -147,7 +140,7 @@ begin
                     OS
                     empty
                     {
-                      ! (write_str) "\n\n" {
+                      ! (stdio/write) "\n\n" {
                         ! loop rest in_code
                       }
                     }
@@ -156,15 +149,15 @@ begin
                         OS
                         comment
                         {
-                          ! (write_str) content {
-                            ! (write_str) " " {
+                          ! (stdio/write) content {
+                            ! (stdio/write) " " {
                               ! loop rest in_code
                             }
                           }
                         }
                         {
-                          ! (write_str) "\n```zydeco\n" {
-                            ! (write_str) content {
+                          ! (stdio/write) "\n```zydeco\n" {
+                            ! (stdio/write) content {
                               ! loop rest +True()
                             }
                           }
@@ -175,7 +168,7 @@ begin
                     OS
                     empty
                     {
-                      ! (write_str) "\n" {
+                      ! (stdio/write) "\n" {
                         ! loop rest in_code
                       }
                     }
@@ -184,17 +177,17 @@ begin
                         OS
                         comment
                         {
-                          ! (write_str) "\n```\n\n" {
-                            ! (write_str) content {
-                              ! (write_str) " " {
+                          ! (stdio/write) "\n```\n\n" {
+                            ! (stdio/write) content {
+                              ! (stdio/write) " " {
                                 ! loop rest +False()
                               }
                             }
                           }
                         }
                         {
-                          ! (write_str) "\n" {
-                            ! (write_str) content {
+                          ! (stdio/write) "\n" {
+                            ! (stdio/write) content {
                               ! loop rest in_code
                             }
                           }
@@ -205,7 +198,7 @@ begin
           }
   } that
 
-  ! (read_till_eof) {
+  ! (stdio/read_all) {
     fn file =>
       ! loop file +False()
   }

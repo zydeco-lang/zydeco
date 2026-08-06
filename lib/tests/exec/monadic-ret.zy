@@ -1,7 +1,7 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (/Ret; /exit; builtin) :
+    (/Ret; /process; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
@@ -23,6 +23,6 @@ begin
   that
 
   do _ <- ! translated Ret { ! ret_monad };
-  ! (exit) 0
+  ! (process/exit) 0
 end
 end

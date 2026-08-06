@@ -23,29 +23,29 @@ begin
     end
   that
 
-  let (/String = StdString; /OS = StdOS; /bool; /string; /stdio; /process) = make_std builtin in
-  def beep : Choice (Thk StdOS -> StdOS) =
+  let (/bool; /string; /stdio; /process) = make_std builtin in
+  def beep : Choice (Thk OS -> OS) =
     +L({
       fn k =>
         ! (stdio/write_line) "0" { fn _ => ! k }
     })
   in
-  def boop : Choice (Thk StdOS -> StdOS) =
+  def boop : Choice (Thk OS -> OS) =
     +R({
       fn k =>
         ! (stdio/write_line) "1" { fn _ => ! k }
     })
   in
-  def tree : Tree StdString =
+  def tree : Tree String =
     +Fork(
       +Fork(+Final("x"), +Final("o")),
       +Final("x")
     )
   in
-  def path : Path (Choice (Thk StdOS -> StdOS)) =
+  def path : Path (Choice (Thk OS -> OS)) =
     +Cons(beep, +Cons(boop, +Nil()))
   in
-  def fix walk (t : Tree StdString) (p : Path (Choice (Thk StdOS -> StdOS))) : StdOS =
+  def fix walk (t : Tree String) (p : Path (Choice (Thk OS -> OS))) : OS =
     match t
     | +Final(res) =>
       match p
@@ -54,7 +54,7 @@ begin
           fn _ =>
             do correct <- ! (string/eq) res "o";
             ! (bool/if)
-              StdOS
+              OS
               correct
               { ! (process/exit) 0 }
               { ! (process/exit) 1 }

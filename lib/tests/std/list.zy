@@ -5,20 +5,20 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (/Int = StdInt; /OS = StdOS; /list; /int; /process) = make_std builtin in
-  do empty <- ! (list/nil) StdInt;
-  do one <- ! (list/cons) StdInt 1 empty;
-  do values <- ! (list/cons) StdInt 2 one;
+  let (/list; /int; /process) = make_std builtin in
+  do empty <- ! (list/nil) Int;
+  do one <- ! (list/cons) Int 1 empty;
+  do values <- ! (list/cons) Int 2 one;
   ! (list/case)
-    StdInt
-    StdOS
+    Int
+    OS
     values
     { ! (process/exit) 1 }
     {
       fn head tail =>
         do total <- ! (list/fold)
-          StdInt
-          (Ret StdInt)
+          Int
+          (Ret Int)
           tail
           { ret head }
           {

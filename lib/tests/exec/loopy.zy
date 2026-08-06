@@ -1,6 +1,6 @@
 begin
   param (
-    (/VType; /CType; /Thk; /Ret; /OS; /exit) :
+    (/VType; /CType; /Thk; /Ret; /OS; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -26,5 +26,5 @@ begin
     ! fix' OS { fn loop => ! loop }
   that
 
-  ! (exit) 0
+  ! (process/exit) 0
 end

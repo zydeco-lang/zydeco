@@ -1,6 +1,6 @@
 begin
   param (
-    (/VType; /CType; /Thk; /Ret; /Unit; /String; /OS; /str_append; /write_line; /exit) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /String; /OS; /string; /stdio; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -101,7 +101,7 @@ begin
       end
   that
   def ! demonstrate (s : String) (expect : Bool) (toks : Thk (Ret (LList' Tok))) (t : Thk OS) : OS =
-    do s' <- ! (str_append)
+    do s' <- ! (string/append)
       "The following parens are balanced? "
       s;
     do b <- ! paren_foldr
@@ -114,11 +114,11 @@ begin
     match pass
     | +True() =>
       do s <- ! bool_to_str b;
-      ! (write_line) s' {
-        ! (write_line) s t
+      ! (stdio/write_line) s' {
+        ! (stdio/write_line) s t
       }
     | +False() =>
-      ! (write_line) "WRONG ANSWER" { ! (exit) 1 }
+      ! (stdio/write_line) "WRONG ANSWER" { ! (process/exit) 1 }
     end
   that
 
@@ -235,7 +235,7 @@ begin
                                 ""
                                 (+True() : Bool)
                                 { ret +Nil() }
-                                { ! (exit) 0 }
+                                { ! (process/exit) 0 }
                             }
                         }
                     }

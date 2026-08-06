@@ -5,11 +5,11 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (/Int = StdInt; /String = StdString; /option; /int; /string; /process) = make_std builtin in
+  let (/option; /int; /string; /process) = make_std builtin in
   do present <- ! (string/split_once) "left:right" ':';
   do present_status <- ! (option/fold)
-    (StdString * StdString)
-    (Ret StdInt)
+    (String * String)
+    (Ret Int)
     present
     { ret 1 }
     {
@@ -18,8 +18,8 @@ begin
     };
   do absent <- ! (string/split_at) "short" 99;
   do absent_status <- ! (option/fold)
-    (StdString * StdString)
-    (Ret StdInt)
+    (String * String)
+    (Ret Int)
     absent
     { ret 0 }
     {

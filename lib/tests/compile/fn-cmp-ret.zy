@@ -1,10 +1,10 @@
 begin
   param (
-    (/Ret; /Int; /int_eq_branch; /exit) :
+    (/Ret; /Int; /int; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
   def ! f (x : Int) : Ret Int =
-    ! (int_eq_branch)
+    ! (int/eq)
       (Ret Int)
       x
       0
@@ -13,5 +13,5 @@ begin
   that
 
   do z <- ! f 0;
-  ! (exit) z
+  ! (process/exit) z
 end

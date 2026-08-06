@@ -1,6 +1,6 @@
 begin
   param (
-    (/Unit; /exit) :
+    (/Unit; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
   def Bool =
@@ -11,7 +11,7 @@ begin
   that
 
   match +True()
-  | +True() => ! (exit) 0
-  | +False() => ! (exit) 1
+  | +True() => ! (process/exit) 0
+  | +False() => ! (process/exit) 1
   end
 end

@@ -1,6 +1,6 @@
 begin
   param (
-    (/VType; /Ret; /Int; /sub; /exit) :
+    (/VType; /Ret; /Int; /int; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
   let Transparent =
@@ -16,6 +16,6 @@ begin
   that
 
   do value <- ! reveal packed;
-  do status <- ! (sub) value 42;
-  ! (exit) status
+  do status <- ! (int/sub) value 42;
+  ! (process/exit) status
 end

@@ -1,12 +1,12 @@
 param (
-  (/add; /sub; /exit) :
+  (/int; /process) :
   @[import("../../std/builtin.zy")] _
 ) in
   do x <- ret 40;
   do y <- ret 30;
   do z <-
-    do a <- ! (add) x y;
-    do b <- ! (add) a 10;
+    do a <- ! (int/add) x y;
+    do b <- ! (int/add) a 10;
     ret x;
-  do r <- ! (sub) z 40;
-  ! (exit) r
+  do r <- ! (int/sub) z 40;
+  ! (process/exit) r

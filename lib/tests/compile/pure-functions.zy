@@ -1,6 +1,6 @@
 begin
   param (
-    (/Int; /exit) :
+    (/Int; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -11,5 +11,5 @@ begin
   that
   let result : Int = apply constant 42 that
 
-  ! (exit) result
+  ! (process/exit) result
 end

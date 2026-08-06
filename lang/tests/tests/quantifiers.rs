@@ -44,7 +44,7 @@ begin
   that
 
   let Export =
-    exists (PublicMixedPackage as MixedPackage : VType) . Unit
+    exists (MixedPackageType as MixedPackage : VType) . Unit
   that
   (MixedPackage, ()) : Export
 end

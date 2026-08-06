@@ -330,14 +330,19 @@ fn checked_trivial_computation() -> SourceChecked {
 fn builtin_add_exit_source() -> &'static str {
     r#"
 param (
-  (Int, OS, = add, = exit) :
+  (/Int; /OS; /int; /process) :
   @[builtin(int)] exists (Int : @[intrinsic(vtype)] _) .
     (@[builtin(os)] exists (OS : @[intrinsic(ctype)] _) .
-      ((@[builtin(add)] (add :: (@[intrinsic(thk)] _) (Int -> Int -> (@[intrinsic(ret)] _) Int))) *
-       (@[builtin(exit)] (exit :: (@[intrinsic(thk)] _) (Int -> OS)))))
+      ((int ::
+        (@[builtin(add)] (add ::
+          (@[intrinsic(thk)] _) (Int -> Int -> (@[intrinsic(ret)] _) Int))) *
+        (@[builtin(sub)] (sub ::
+          (@[intrinsic(thk)] _) (Int -> Int -> (@[intrinsic(ret)] _) Int)))) *
+       (process ::
+        @[builtin(exit)] (exit :: (@[intrinsic(thk)] _) (Int -> OS)))))
 ) in
-  do sum <- ! add 1 2;
-  ! exit sum
+  do sum <- ! (int/add) 1 2;
+  ! (process/exit) sum
 "#
 }
 
@@ -1217,16 +1222,16 @@ fn continuation_io_uses_its_foundational_builtin_classifier() {
         "main.zy",
         r#"
 param (
-  (Int, OS, = write_int, = exit) :
+  (/Int; /OS; /stdio; /process) :
   @[builtin(int)] exists (Int : @[intrinsic(vtype)] _) .
     (@[builtin(os)] exists (OS : @[intrinsic(ctype)] _) .
-      ((@[builtin(write_int)]
+      ((stdio :: @[builtin(write_int)]
           (write_int :: (@[intrinsic(thk)] _)
             (Int -> (@[intrinsic(thk)] _) OS -> OS))) *
-       (@[builtin(exit)]
+       (process :: @[builtin(exit)]
           (exit :: (@[intrinsic(thk)] _) (Int -> OS)))))
 ) in
-  ! write_int 7 { ! exit 0 }
+  ! (stdio/write_int) 7 { ! (process/exit) 0 }
 "#,
     );
     let dynamics = TestPipeline::check(root).unwrap().dynamics_with_builtin().unwrap().arena;
@@ -1248,14 +1253,14 @@ begin
   let Thk = @[intrinsic(thk)] _ that
   let Ret = @[intrinsic(ret)] _ that
   param (
-    (Int, OS, = add, = exit) :
+    (/Int; /OS; /int; /process) :
     @[builtin(int)] exists (Int : @[intrinsic(vtype)] _) .
       (@[builtin(os)] exists (OS : @[intrinsic(ctype)] _) .
-        ((@[builtin(add)] (add :: Thk (Int -> Int -> Ret Int))) *
-         (@[builtin(exit)] (exit :: Thk (Int -> OS)))))
+        ((int :: @[builtin(add)] (add :: Thk (Int -> Int -> Ret Int))) *
+         (process :: @[builtin(exit)] (exit :: Thk (Int -> OS)))))
   ) in
-    do sum <- ! add 1 2;
-    ! exit sum
+    do sum <- ! (int/add) 1 2;
+    ! (process/exit) sum
 end
 "#,
     );

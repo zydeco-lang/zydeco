@@ -1,8 +1,6 @@
 begin
   param (
-    (
-      /exit
-    ) :
+    (/process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -51,5 +49,5 @@ begin
   do a <- ret a;
   do a <- ret a;
   do a <- ret a;
-  ! (exit) a
+  ! (process/exit) a
 end

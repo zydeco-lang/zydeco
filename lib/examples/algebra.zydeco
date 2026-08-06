@@ -8,14 +8,7 @@
 begin
   let monadic_basis = @[import("../std/monad.zy")] _ that
   param (
-    (
-      /VType; /CType; /Thk; /Ret;
-      /Int; /String; /OS;
-      /add; /int_lt_branch;
-      /write_int; /write_line; /read_line_as_int_branch;
-      /exit;
-      builtin
-    ) :
+    (/VType; /CType; /Thk; /Ret; /Int; /String; /OS; /int; /stdio; /process; builtin) :
     @[import("../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
@@ -74,8 +67,8 @@ begin
   that
 
   def ! panic (msg : String) : OS =
-    ! (write_line) msg {
-      ! (exit) 1
+    ! (stdio/write_line) msg {
+      ! (process/exit) 1
     }
   that
 
@@ -226,8 +219,8 @@ begin
   that
   -- add_of errors if the sum >= 256 (8-bit overflow)
   def ! add_of (i : Int) (sum : Int) : ExnDe String Int =
-    do sum <- ! (add) i sum;
-    ! (int_lt_branch)
+    do sum <- ! (int/add) i sum;
+    ! (int/lt)
       (ExnDe String Int)
       sum
       256
@@ -237,14 +230,14 @@ begin
 
   (fix (loop : Thk (Int -> OS)) =>
     fn sum =>
-      ! (read_line_as_int_branch)
-        { ! (exit) 0 }
+      ! (stdio/read_int)
+        { ! (process/exit) 0 }
         {
           fn i =>
             ! alg_exn Int { ! add_of i sum } {
               fn sum =>
-                ! (write_int) sum {
-                  ! (write_line) " = sum" {
+                ! (stdio/write_int) sum {
+                  ! (stdio/write_line) " = sum" {
                     ! loop sum
                   }
                 }

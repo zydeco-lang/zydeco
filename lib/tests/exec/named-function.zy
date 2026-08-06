@@ -3,7 +3,7 @@
 -- a named tuple component.
 begin
   param (
-    (/Thk; /Ret; /Int; /add; /sub; /exit) :
+    (/Thk; /Ret; /Int; /int; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -17,7 +17,7 @@ begin
     (apply :: Thk (Arguments -> Ret FunctionResult)) * Int
   that
   def ! combine ((lhs = lhs : Int, rhs : Int) : Arguments) : Ret FunctionResult =
-    do sum <- ! (add) lhs rhs;
+    do sum <- ! (int/add) lhs rhs;
     ret (lhs, sum = sum : Int)
   that
   def function_box : FunctionBox = (
@@ -34,9 +34,9 @@ begin
     echoed : Int,
     sum = sum : Int
   ) = result in
-  do echoed_check <- ! (sub) echoed 10;
-  do sum_check <- ! (sub) sum 21;
-  do total <- ! (add) marker echoed_check;
-  do total <- ! (add) total sum_check;
-  ! (exit) total
+  do echoed_check <- ! (int/sub) echoed 10;
+  do sum_check <- ! (int/sub) sum 21;
+  do total <- ! (int/add) marker echoed_check;
+  do total <- ! (int/add) total sum_check;
+  ! (process/exit) total
 end

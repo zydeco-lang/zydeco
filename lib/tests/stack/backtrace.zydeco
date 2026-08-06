@@ -1,7 +1,7 @@
 -- a binary tree
 begin
   param (
-    (/VType; /Thk; /Ret; /Unit; /Int; /OS; /write_str; /write_int; /write_line; /exit) :
+    (/VType; /Thk; /Ret; /Unit; /Int; /OS; /stdio; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -49,28 +49,28 @@ begin
       | +Nil() => ! k
       | +Cons(a, l) =>
         ! write a {
-          ! (write_str) "," {
+          ! (stdio/write) "," {
             ! write_list_aux l k
           }
         }
       end
       in
-    ! (write_str) "[" {
+    ! (stdio/write) "[" {
       ! write_list_aux l {
-        ! (write_str) "]" k
+        ! (stdio/write) "]" k
       }
     }
   that
   def fix write_tree (A : VType) (write : Thk (A -> Thk OS -> OS)) (t : Tree A) (k : Thk OS) : OS =
     match t
     | +Leaf() =>
-      ! (write_str) "()" k
+      ! (stdio/write) "()" k
     | +Node(l, a, r) =>
-      ! (write_str) "(" {
+      ! (stdio/write) "(" {
         ! write_tree A write l {
           ! write a {
             ! write_tree A write r {
-              ! (write_str) ")" k
+              ! (stdio/write) ")" k
             }
           }
         }
@@ -79,15 +79,15 @@ begin
   that
 
   do t1 <- ! trace Int t0 +Nil();
-  ! write_tree Int (write_int) t0 {
-    ! (write_line) "" {
+  ! write_tree Int (stdio/write_int) t0 {
+    ! (stdio/write_line) "" {
       ! write_tree
         (List Int)
-        { ! write_list Int (write_int) }
+        { ! write_list Int (stdio/write_int) }
         t1
         {
-          ! (write_line) "" {
-            ! (exit) 0
+          ! (stdio/write_line) "" {
+            ! (process/exit) 0
           }
         }
     }

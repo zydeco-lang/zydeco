@@ -1,7 +1,7 @@
 -- a binary tree
 begin
   param (
-    (/VType; /Thk; /Ret; /Unit; /Int; /OS; /write_str; /write_int; /write_line; /exit) :
+    (/VType; /Thk; /Ret; /Unit; /Int; /OS; /stdio; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -91,13 +91,13 @@ begin
   def fix write_tree (t : Tree Int) (k : Thk OS) : OS =
     match t
     | +Leaf() =>
-      ! (write_str) "()" k
+      ! (stdio/write) "()" k
     | +Node(l, a, r) =>
-      ! (write_str) "(" {
+      ! (stdio/write) "(" {
         ! write_tree l {
-          ! (write_int) a {
+          ! (stdio/write_int) a {
             ! write_tree r {
-              ! (write_str) ")" k
+              ! (stdio/write) ")" k
             }
           }
         }
@@ -109,14 +109,14 @@ begin
   do t2 <- ! invert' Int t0;
   do t3 <- ! invert'' Int t0;
   ! write_tree t0 {
-    ! (write_line) "" {
+    ! (stdio/write_line) "" {
       ! write_tree t1 {
-        ! (write_line) "" {
+        ! (stdio/write_line) "" {
           ! write_tree t2 {
-            ! (write_line) "" {
+            ! (stdio/write_line) "" {
               ! write_tree t3 {
-                ! (write_line) "" {
-                  ! (exit) 0
+                ! (stdio/write_line) "" {
+                  ! (process/exit) 0
                 }
               }
             }

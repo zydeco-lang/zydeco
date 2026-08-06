@@ -2,7 +2,7 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (/VType; /CType; /Thk; /Ret; /Unit; /String; /OS; /str_eq_branch; /write_line; /exit; builtin) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /String; /OS; /string; /stdio; /process; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
@@ -131,7 +131,7 @@ begin
     | .print s =>
       comatch
       | .run ka _ =>
-        ! (write_line) s {
+        ! (stdio/write_line) s {
           ! ka ()
         }
       end
@@ -152,7 +152,7 @@ begin
     end
   that
   def ! str_eq (left : String) (right : String) : Ret Bool =
-    ! (str_eq_branch)
+    ! (string/eq)
       (Ret Bool)
       left
       right
@@ -300,16 +300,16 @@ begin
   in
   let ! report (e : Exception) : OS =
     match e
-    | +TypeError() => ! (exit) 1
-    | +FreeVariable() => ! (exit) 1
+    | +TypeError() => ! (process/exit) 1
+    | +FreeVariable() => ! (process/exit) 1
     end
   in
   let ! value-eq (v1 : Value) (v2 : Value) (k : Thk OS) : OS =
     let ! bool-value-panic =
-        ! (exit) 1
+        ! (process/exit) 1
       in
     let ! thunk-panic =
-      ! (exit) 1
+      ! (process/exit) 1
     in
     match v1
     | +Bool(b1) =>
@@ -318,7 +318,7 @@ begin
         do eq? <- ! bool_eq b1 b2;
         match eq?
         | +True() =>
-          ! (write_line) "\\^o^/" k
+          ! (stdio/write_line) "\\^o^/" k
         | +False() => ! bool-value-panic
         end
       | +Thunk(_) => ! thunk-panic
@@ -364,7 +364,7 @@ begin
   let ans2 : Value = +Bool(+True()) in
   ! demo term1 ans1 {
     ! demo term2 ans2 {
-      ! (exit) 0
+      ! (process/exit) 0
     }
   }
 end

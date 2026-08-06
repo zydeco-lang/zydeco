@@ -5,19 +5,19 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (/String = StdString; /OS = StdOS; /bool; /list; /string; /process) = make_std builtin in
+  let (/bool; /list; /string; /process) = make_std builtin in
   ! (process/arg_list) {
     fn arguments =>
       ! (list/case)
-        StdString
-        StdOS
+        String
+        OS
         arguments
         { ! (process/exit) 1 }
         {
           fn first remaining =>
             do first_matches <- ! (string/eq) first "alpha";
             ! (bool/if)
-              StdOS
+              OS
               first_matches
               { ! (process/exit) 0 }
               { ! (process/exit) 1 }

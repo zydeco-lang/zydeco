@@ -5,12 +5,12 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (/Int = StdInt; /OS = StdOS; /process) =
+  let (/process) =
     make_std builtin
   in
   begin
-    let Num = StdInt that
-    def ! done (x : Num) : StdOS =
+    let Num = Int that
+    def ! done (x : Num) : OS =
       ! (process/exit) x
     that
 

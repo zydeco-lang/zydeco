@@ -1,7 +1,7 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (/VType; /CType; /Thk; /Ret; /Int; /String; /OS; /int_eq_branch; /exit; builtin) :
+    (/VType; /CType; /Thk; /Ret; /Int; /String; /OS; /int; /process; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
@@ -42,7 +42,7 @@ begin
     fn X m f =>
       do a? <- ! m;
       match a?
-      | +Left(e) => ! (exit) 1
+      | +Left(e) => ! (process/exit) 1
       | +Right(a) => ! f a
       end
   that
@@ -154,7 +154,7 @@ begin
   -- end
   -- -- run it
   -- def ! _mo-forallcc : OS =
-  --   ! mo-forallcc String { ! mo-exn String } IdCType OS { ! alg-exn-os String } { ! exit 0 }
+  --   ! mo-forallcc String { ! mo-exn String } IdCType OS { ! alg-exn-os String } { ! process/exit 0 }
   -- end
   -- -- using primitive id
   -- def ! mo-prim-id (M: VType -> CType) (mo: U (Monad M)) : forall (A: VType) . A -> M A =
@@ -174,7 +174,7 @@ begin
   --   do i? <- ! mo-prim-id (Exn String) { ! mo-exn String } Int 0;
   --   match i?
   --   | +Left(e) => ! panic "error"
-  --   | +Right(i) => ! exit i
+  --   | +Right(i) => ! process/exit i
   --   end
   -- end
   -- -- using primitive id~
@@ -191,11 +191,11 @@ begin
   -- end
   -- -- run it
   -- def ! _mo-prim-id~ : OS =
-  --   ! mo-prim-id~ (Exn String) { ! mo-exn String } OS { ! alg-exn-os String } { ! exit 0 }
+  --   ! mo-prim-id~ (Exn String) { ! mo-exn String } OS { ! alg-exn-os String } { ! process/exit 0 }
   -- end
   -- def ! _mo-prim-id~' : OS =
   --   do i <- ! mo-prim-id~ (Exn String) { ! mo-exn String } (Ret Int) { _ } { ret 0 };
-  --   ! exit i
+  --   ! process/exit i
   -- end
   -- -- primitive ret in contravariant position
   -- def ! dethunk (A: VType) (a : Thunk (Ret A)) : Ret A =
@@ -223,18 +223,18 @@ begin
   -- ! _mo-prim-id~'
   do returned <- ! mo-return String { ! mo-exn String };
   match returned
-  | +Left(_) => ! (exit) 1
+  | +Left(_) => ! (process/exit) 1
   | +Right(returned) =>
-    ! (int_eq_branch)
+    ! (int/eq)
       OS
       returned
       1
       {
         do thunked <- ! mo-thunk String { ! mo-exn String };
         match thunked
-        | +Left(_) => ! (exit) 1
+        | +Left(_) => ! (process/exit) 1
         | +Right(thunked) =>
-          ! (int_eq_branch)
+          ! (int/eq)
             OS
             thunked
             1
@@ -243,9 +243,9 @@ begin
                 ! mo-exn String
               };
               match argument
-              | +Left(_) => ! (exit) 1
+              | +Left(_) => ! (process/exit) 1
               | +Right(argument) =>
-                ! (int_eq_branch)
+                ! (int/eq)
                   OS
                   argument
                   1
@@ -257,9 +257,9 @@ begin
                       top
                       0;
                     match quantified
-                    | +Left(_) => ! (exit) 1
+                    | +Left(_) => ! (process/exit) 1
                     | +Right(quantified) =>
-                      ! (int_eq_branch)
+                      ! (int/eq)
                         OS
                         quantified
                         0
@@ -270,18 +270,18 @@ begin
                             { ! mo-exn String }
                             OS
                             { ! alg-exn-os String }
-                            { ! (exit) 0 }
+                            { ! (process/exit) 0 }
                         }
-                        { ! (exit) 1 }
+                        { ! (process/exit) 1 }
                     end
                   }
-                  { ! (exit) 1 }
+                  { ! (process/exit) 1 }
               end
             }
-            { ! (exit) 1 }
+            { ! (process/exit) 1 }
         end
       }
-      { ! (exit) 1 }
+      { ! (process/exit) 1 }
   end
 end
 end

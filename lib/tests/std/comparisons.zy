@@ -5,28 +5,28 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (/Int = StdInt; /bool; /int; /string; /process) = make_std builtin in
+  let (/bool; /int; /string; /process) = make_std builtin in
   do equal <- ! (int/eq) 3 3;
   do equal_status <- ! (bool/if)
-    (Ret StdInt)
+    (Ret Int)
     equal
     { ret 0 }
     { ret 1 };
   do less <- ! (int/lt) 2 3;
   do less_status <- ! (bool/if)
-    (Ret StdInt)
+    (Ret Int)
     less
     { ret 0 }
     { ret 1 };
   do greater <- ! (int/gt) 3 2;
   do greater_status <- ! (bool/if)
-    (Ret StdInt)
+    (Ret Int)
     greater
     { ret 0 }
     { ret 1 };
   do string_equal <- ! (string/eq) "zydeco" "zydeco";
   do string_status <- ! (bool/if)
-    (Ret StdInt)
+    (Ret Int)
     string_equal
     { ret 0 }
     { ret 1 };

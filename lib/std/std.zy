@@ -1,70 +1,46 @@
 begin
-  let bool = @[import("bool.zy")] _ that
-  let option = @[import("option.zy")] _ that
-  let result = @[import("result.zy")] _ that
-  let list = @[import("list.zy")] _ that
-  let io_types = @[import("io-types.zy")] _ that
-  let interface = @[import("interface.zy")] _ that
+  let make_bool = @[import("bool.zy")] _ that
+  let make_option = @[import("option.zy")] _ that
+  let make_result = @[import("result.zy")] _ that
+  let make_list = @[import("list.zy")] _ that
+  let make_io_types = @[import("io-types.zy")] _ that
+  let make_interface = @[import("interface.zy")] _ that
 
   begin
     param (
       (
         /VType; /CType; /Thk; /Ret;
         /Unit; /Int; /Char; /String; /Bytes; /Reader; /Writer; /OS;
-        /add; /sub; /mul; /div; /mod; /int_eq_branch; /int_lt_branch; /int_gt_branch; /int_to_str;
-        /char_to_str; /char_codepoint; /char_from_codepoint_branch;
-        /str_scalar_length; /str_byte_length; /str_append; /str_split_once_branch; /str_split_at_branch;
-        /str_eq_branch; /str_get_branch; /str_parse_int_branch;
-        /bytes_empty; /bytes_length; /bytes_append; /bytes_from_str; /bytes_to_str_branch;
-        /stdin; /stdout; /stderr; /io_read = primitive_io_read; /io_read_line = primitive_io_read_line;
-        /io_read_all = primitive_io_read_all; /io_write_all = primitive_io_write_all;
-        /io_flush = primitive_io_flush; /io_close_reader = primitive_io_close_reader;
-        /io_close_writer = primitive_io_close_writer;
-        /fs_open_reader = primitive_fs_open_reader; /fs_create_writer = primitive_fs_create_writer;
-        /fs_append_writer = primitive_fs_append_writer;
-        /arg_fold;
-        /random_int;
-        /exit;
+        /int; /char; /string; /bytes;
+        /io; /fs; /stdio; /args; /random; /process;
         builtin
       ) :
       @[import("builtin.zy")] _
     ) in
-      let (Bool = Bool, bool_api) =
-        bool builtin in
-      let (Option = Option, option_api) =
-        option builtin in
-      let (Result = Result, result_api) =
-        result builtin in
-      let (List = List, list_api) =
-        list builtin in
+      let (Bool = Bool, bool) =
+        make_bool builtin in
+      let (Option = Option, option) =
+        make_option builtin in
+      let (Result = Result, result) =
+        make_result builtin in
+      let (List = List, list) =
+        make_list builtin in
       let (
         IoErrorKind = IoErrorKind,
         IoError = IoError,
         Path = Path,
-        io_types_api
-      ) = io_types builtin in
-      let (= Prelude, = Public, ()) =
-        interface builtin in
-      let primitive_add = add in
-      let primitive_int_eq = int_eq_branch in
-      let primitive_int_lt = int_lt_branch in
-      let primitive_int_gt = int_gt_branch in
-      let primitive_str_split_once = str_split_once_branch in
-      let primitive_str_split_at = str_split_at_branch in
-      let primitive_str_eq = str_eq_branch in
-      let primitive_str_get = str_get_branch in
-      let primitive_char_from_codepoint = char_from_codepoint_branch in
-      let primitive_str_parse_int = str_parse_int_branch in
-      let primitive_bytes_to_str = bytes_to_str_branch in
-      let primitive_arg_fold = arg_fold in
+        io_types
+      ) = make_io_types builtin in
+      let (= Prelude, = Std, ()) =
+        make_interface builtin in
       let ! increment (value : Int) : Ret Int =
-        ! primitive_add value 1
+        ! (int/add) value 1
       in
       let ! decrement (value : Int) : Ret Int =
-        ! (sub) value 1
+        ! (int/sub) value 1
       in
       let ! negate (value : Int) : Ret Int =
-        ! (sub) 0 value
+        ! (int/sub) 0 value
       in
       let ! compare
         (A : VType)
@@ -79,219 +55,219 @@ begin
           (Ret Bool)
           left
           right
-          { ret (bool_api/true) }
-          { ret (bool_api/false) }
+          { ret (bool/true) }
+          { ret (bool/false) }
       in
       let ! int_eq (left : Int) (right : Int) : Ret Bool =
-        ! compare Int primitive_int_eq left right
+        ! compare Int (int/eq) left right
       in
       let ! int_lt (left : Int) (right : Int) : Ret Bool =
-        ! compare Int primitive_int_lt left right
+        ! compare Int (int/lt) left right
       in
       let ! int_gt (left : Int) (right : Int) : Ret Bool =
-        ! compare Int primitive_int_gt left right
+        ! compare Int (int/gt) left right
       in
       let ! int_ne (left : Int) (right : Int) : Ret Bool =
         do equal <- ! int_eq left right;
-        ! (bool_api/not) equal
+        ! (bool/not) equal
       in
       let ! int_le (left : Int) (right : Int) : Ret Bool =
         do greater <- ! int_gt left right;
-        ! (bool_api/not) greater
+        ! (bool/not) greater
       in
       let ! int_ge (left : Int) (right : Int) : Ret Bool =
         do less <- ! int_lt left right;
-        ! (bool_api/not) less
+        ! (bool/not) less
       in
       let ! int_min (left : Int) (right : Int) : Ret Int =
         do less <- ! int_lt left right;
-        ! (bool_api/if) (Ret Int) less { ret left } { ret right }
+        ! (bool/if) (Ret Int) less { ret left } { ret right }
       in
       let ! int_max (left : Int) (right : Int) : Ret Int =
         do greater <- ! int_gt left right;
-        ! (bool_api/if) (Ret Int) greater { ret left } { ret right }
+        ! (bool/if) (Ret Int) greater { ret left } { ret right }
       in
       let ! str_eq (left : String) (right : String) : Ret Bool =
-        ! compare String primitive_str_eq left right
+        ! compare String string/eq left right
       in
-      let ! option_is_some (A : VType) (option : Option A) : Ret Bool =
-        ! (option_api/fold)
+      let ! option_is_some (A : VType) (value : Option A) : Ret Bool =
+        ! (option/fold)
           A
           (Ret Bool)
-          option
-          { ret (bool_api/false) }
-          { fn _ => ret (bool_api/true) }
+          value
+          { ret (bool/false) }
+          { fn _ => ret (bool/true) }
       in
-      let ! option_is_none (A : VType) (option : Option A) : Ret Bool =
-        do present <- ! option_is_some A option;
-        ! (bool_api/not) present
+      let ! option_is_none (A : VType) (value : Option A) : Ret Bool =
+        do present <- ! option_is_some A value;
+        ! (bool/not) present
       in
       let ! result_is_ok
         (A : VType)
         (E : VType)
-        (result : Result A E)
+        (value : Result A E)
         : Ret Bool =
-        ! (result_api/fold)
+        ! (result/fold)
           A
           E
           (Ret Bool)
-          result
-          { fn _ => ret (bool_api/true) }
-          { fn _ => ret (bool_api/false) }
+          value
+          { fn _ => ret (bool/true) }
+          { fn _ => ret (bool/false) }
       in
       let ! result_is_err
         (A : VType)
         (E : VType)
-        (result : Result A E)
+        (value : Result A E)
         : Ret Bool =
-        do successful <- ! result_is_ok A E result;
-        ! (bool_api/not) successful
+        do successful <- ! result_is_ok A E value;
+        ! (bool/not) successful
       in
-      let ! list_is_empty (A : VType) (list : List A) : Ret Bool =
-        ! (list_api/case)
+      let ! list_is_empty (A : VType) (values : List A) : Ret Bool =
+        ! (list/case)
           A
           (Ret Bool)
-          list
-          { ret (bool_api/true) }
-          { fn _ _ => ret (bool_api/false) }
+          values
+          { ret (bool/true) }
+          { fn _ _ => ret (bool/false) }
       in
-      let ! list_head (A : VType) (list : List A) : Ret (Option A) =
-        ! (list_api/case)
+      let ! list_head (A : VType) (values : List A) : Ret (Option A) =
+        ! (list/case)
           A
           (Ret (Option A))
-          list
-          { ! (option_api/none) A }
-          { fn head _ => ! (option_api/some) A head }
+          values
+          { ! (option/none) A }
+          { fn head _ => ! (option/some) A head }
       in
-      let ! list_tail (A : VType) (list : List A) : Ret (Option (List A)) =
-        ! (list_api/case)
+      let ! list_tail (A : VType) (values : List A) : Ret (Option (List A)) =
+        ! (list/case)
           A
           (Ret (Option (List A)))
-          list
-          { ! (option_api/none) (List A) }
-          { fn _ tail => ! (option_api/some) (List A) tail }
+          values
+          { ! (option/none) (List A) }
+          { fn _ tail => ! (option/some) (List A) tail }
       in
-      let fix list_get (A : VType) (list : List A) (index : Int) : Ret (Option A) =
+      let fix list_get (A : VType) (values : List A) (index : Int) : Ret (Option A) =
         do negative <- ! int_lt index 0;
-        ! (bool_api/if)
+        ! (bool/if)
           (Ret (Option A))
           negative
-          { ! (option_api/none) A }
+          { ! (option/none) A }
           {
-            ! (list_api/case)
+            ! (list/case)
               A
               (Ret (Option A))
-              list
-              { ! (option_api/none) A }
+              values
+              { ! (option/none) A }
               {
                 fn head tail =>
                   do zero <- ! int_eq index 0;
-                  ! (bool_api/if)
+                  ! (bool/if)
                     (Ret (Option A))
                     zero
-                    { ! (option_api/some) A head }
+                    { ! (option/some) A head }
                     {
-                      do previous <- ! (sub) index 1;
+                      do previous <- ! (int/sub) index 1;
                       ! list_get A tail previous
                     }
               }
           }
       in
-      let ! str_split_once (string : String) (separator : Char) : Ret (Option (String * String)) =
-        ! primitive_str_split_once
+      let ! str_split_once (text : String) (separator : Char) : Ret (Option (String * String)) =
+        ! (string/split_once)
           (Ret (Option (String * String)))
-          string
+          text
           separator
-          { ! (option_api/none) (String * String) }
+          { ! (option/none) (String * String) }
           {
             fn first second =>
-              ! (option_api/some) (String * String) (first, second)
+              ! (option/some) (String * String) (first, second)
           }
       in
-      let ! str_split_at (string : String) (index : Int) : Ret (Option (String * String)) =
-        ! primitive_str_split_at
+      let ! str_split_at (text : String) (index : Int) : Ret (Option (String * String)) =
+        ! (string/split_at)
           (Ret (Option (String * String)))
-          string
+          text
           index
-          { ! (option_api/none) (String * String) }
+          { ! (option/none) (String * String) }
           {
             fn first second =>
-              ! (option_api/some) (String * String) (first, second)
+              ! (option/some) (String * String) (first, second)
           }
       in
-      let ! str_get (string : String) (index : Int) : Ret (Option Char) =
-        ! primitive_str_get
+      let ! str_get (text : String) (index : Int) : Ret (Option Char) =
+        ! (string/get)
           (Ret (Option Char))
-          string
+          text
           index
-          { ! (option_api/none) Char }
-          { fn character => ! (option_api/some) Char character }
+          { ! (option/none) Char }
+          { fn character => ! (option/some) Char character }
       in
       let ! char_from_codepoint (codepoint : Int) : Ret (Option Char) =
-        ! primitive_char_from_codepoint
+        ! (char/from_codepoint)
           (Ret (Option Char))
           codepoint
-          { ! (option_api/none) Char }
-          { fn character => ! (option_api/some) Char character }
+          { ! (option/none) Char }
+          { fn character => ! (option/some) Char character }
       in
-      let ! str_parse_int (string : String) : Ret (Option Int) =
-        ! primitive_str_parse_int
+      let ! str_parse_int (text : String) : Ret (Option Int) =
+        ! (string/parse_int)
           (Ret (Option Int))
-          string
-          { ! (option_api/none) Int }
-          { fn integer => ! (option_api/some) Int integer }
+          text
+          { ! (option/none) Int }
+          { fn integer => ! (option/some) Int integer }
       in
-      let ! str_is_empty (string : String) : Ret Bool =
-        do length <- ! (str_scalar_length) string;
+      let ! str_is_empty (text : String) : Ret Bool =
+        do length <- ! (string/length) text;
         ! int_eq length 0
       in
-      let ! str_head (string : String) : Ret (Option Char) =
-        ! str_get string 0
+      let ! str_head (text : String) : Ret (Option Char) =
+        ! str_get text 0
       in
-      let ! str_uncons (string : String) : Ret (Option (Char * String)) =
-        do character <- ! str_get string 0;
-        ! (option_api/and_then)
+      let ! str_uncons (text : String) : Ret (Option (Char * String)) =
+        do character <- ! str_get text 0;
+        ! (option/and_then)
           Char
           (Char * String)
           character
           {
             fn head =>
-              do split <- ! str_split_at string 1;
-              ! (option_api/map)
+              do split <- ! str_split_at text 1;
+              ! (option/map)
                 (String * String)
                 (Char * String)
                 split
                 { fn (_, tail) => ret (head, tail) }
           }
       in
-      let fix str_to_chars (string : String) : Ret (List Char) =
-        do first <- ! str_uncons string;
-        ! (option_api/fold)
+      let fix str_to_chars (text : String) : Ret (List Char) =
+        do first <- ! str_uncons text;
+        ! (option/fold)
           (Char * String)
           (Ret (List Char))
           first
-          { ! (list_api/nil) Char }
+          { ! (list/nil) Char }
           {
             fn (head, tail) =>
               do rest <- ! str_to_chars tail;
-              ! (list_api/cons) Char head rest
+              ! (list/cons) Char head rest
           }
       in
       let fix str_from_chars (characters : List Char) : Ret String =
-        ! (list_api/case)
+        ! (list/case)
           Char
           (Ret String)
           characters
           { ret "" }
           {
             fn head tail =>
-              do first <- ! (char_to_str) head;
+              do first <- ! (char/to_string) head;
               do rest <- ! str_from_chars tail;
-              ! (str_append) first rest
+              ! (string/append) first rest
           }
       in
       let ! str_concat (strings : List String) : Ret String =
-        ! (list_api/fold)
+        ! (list/fold)
           String
           (Ret String)
           strings
@@ -299,34 +275,34 @@ begin
           {
             fn head tail =>
               do rest <- ! tail;
-              ! (str_append) head rest
+              ! (string/append) head rest
           }
       in
-      let ! bytes_to_string (bytes : Bytes) : Ret (Option String) =
-        ! primitive_bytes_to_str
+      let ! bytes_to_string (value : Bytes) : Ret (Option String) =
+        ! (bytes/to_string)
           (Ret (Option String))
-          bytes
-          { ! (option_api/none) String }
-          { fn string => ! (option_api/some) String string }
+          value
+          { ! (option/none) String }
+          { fn string => ! (option/some) String string }
       in
       let ! make_io_error (code : Int) (message : String) : Ret IoError =
-        do kind <- ! (io_types_api/from_code) code;
-        ! (io_types_api/error) kind message
+        do kind <- ! (io_types/from_code) code;
+        ! (io_types/error) kind message
       in
       let ! io_kind_eq (left : IoErrorKind) (right : IoErrorKind) : Ret Bool =
-        ! (io_types_api/kind_eq_branch)
+        ! (io_types/kind_eq_branch)
           (Ret Bool)
           left
           right
-          { ret (bool_api/true) }
-          { ret (bool_api/false) }
+          { ret (bool/true) }
+          { ret (bool/false) }
       in
       let ! continue_io_ok
         (A : VType)
         (continuation : Thk (Result A IoError -> OS))
         (value : A)
         : OS =
-        do result <- ! (result_api/ok) A IoError value;
+        do result <- ! (result/ok) A IoError value;
         ! continuation result
       in
       let ! continue_io_error
@@ -334,7 +310,7 @@ begin
         (continuation : Thk (Result A IoError -> OS))
         (error : IoError)
         : OS =
-        do result <- ! (result_api/err) A IoError error;
+        do result <- ! (result/err) A IoError error;
         ! continuation result
       in
       let ! continue_host_error
@@ -351,29 +327,29 @@ begin
         (count : Int)
         (continuation : Thk (Result Bytes IoError -> OS))
         : OS =
-        ! (primitive_io_read)
+        ! (io/read)
           reader
           count
           { fn code message => ! continue_host_error Bytes continuation code message }
-          { fn bytes => ! continue_io_ok Bytes continuation bytes }
+          { fn chunk => ! continue_io_ok Bytes continuation chunk }
       in
       let ! io_read_line
         (reader : Reader)
         (continuation : Thk (Result (Option Bytes) IoError -> OS))
         : OS =
-        ! (primitive_io_read_line)
+        ! (io/read_line)
           reader
           {
             fn code message =>
               ! continue_host_error (Option Bytes) continuation code message
           }
           {
-            do absent <- ! (option_api/none) Bytes;
+            do absent <- ! (option/none) Bytes;
             ! continue_io_ok (Option Bytes) continuation absent
           }
           {
-            fn bytes =>
-              do present <- ! (option_api/some) Bytes bytes;
+            fn chunk =>
+              do present <- ! (option/some) Bytes chunk;
               ! continue_io_ok (Option Bytes) continuation present
           }
       in
@@ -381,19 +357,19 @@ begin
         (reader : Reader)
         (continuation : Thk (Result Bytes IoError -> OS))
         : OS =
-        ! (primitive_io_read_all)
+        ! (io/read_all)
           reader
           { fn code message => ! continue_host_error Bytes continuation code message }
-          { fn bytes => ! continue_io_ok Bytes continuation bytes }
+          { fn chunk => ! continue_io_ok Bytes continuation chunk }
       in
       let ! io_write_all
         (writer : Writer)
-        (bytes : Bytes)
+        (chunk : Bytes)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        ! (primitive_io_write_all)
+        ! (io/write_all)
           writer
-          bytes
+          chunk
           { fn code message => ! continue_host_error Unit continuation code message }
           { ! continue_io_ok Unit continuation () }
       in
@@ -401,7 +377,7 @@ begin
         (writer : Writer)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        ! (primitive_io_flush)
+        ! (io/flush)
           writer
           { fn code message => ! continue_host_error Unit continuation code message }
           { ! continue_io_ok Unit continuation () }
@@ -410,7 +386,7 @@ begin
         (reader : Reader)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        ! (primitive_io_close_reader)
+        ! (io/close_reader)
           reader
           { fn code message => ! continue_host_error Unit continuation code message }
           { ! continue_io_ok Unit continuation () }
@@ -419,7 +395,7 @@ begin
         (writer : Writer)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        ! (primitive_io_close_writer)
+        ! (io/close_writer)
           writer
           { fn code message => ! continue_host_error Unit continuation code message }
           { ! continue_io_ok Unit continuation () }
@@ -428,8 +404,8 @@ begin
         (path : Path)
         (continuation : Thk (Result Reader IoError -> OS))
         : OS =
-        do string <- ! (io_types_api/path_string) path;
-        ! (primitive_fs_open_reader)
+        do string <- ! (io_types/path_string) path;
+        ! (fs/open_reader)
           string
           { fn code message => ! continue_host_error Reader continuation code message }
           { fn reader => ! continue_io_ok Reader continuation reader }
@@ -438,8 +414,8 @@ begin
         (path : Path)
         (continuation : Thk (Result Writer IoError -> OS))
         : OS =
-        do string <- ! (io_types_api/path_string) path;
-        ! (primitive_fs_create_writer)
+        do string <- ! (io_types/path_string) path;
+        ! (fs/create_writer)
           string
           { fn code message => ! continue_host_error Writer continuation code message }
           { fn writer => ! continue_io_ok Writer continuation writer }
@@ -448,8 +424,8 @@ begin
         (path : Path)
         (continuation : Thk (Result Writer IoError -> OS))
         : OS =
-        do string <- ! (io_types_api/path_string) path;
-        ! (primitive_fs_append_writer)
+        do string <- ! (io_types/path_string) path;
+        ! (fs/append_writer)
           string
           { fn code message => ! continue_host_error Writer continuation code message }
           { fn writer => ! continue_io_ok Writer continuation writer }
@@ -460,7 +436,7 @@ begin
         (operation : Result A IoError)
         (continuation : Thk (Result A IoError -> OS))
         : OS =
-        ! (result_api/fold)
+        ! (result/fold)
           A
           IoError
           OS
@@ -469,7 +445,7 @@ begin
             fn value =>
               ! io_close_reader reader {
                 fn close_result =>
-                  ! (result_api/fold)
+                  ! (result/fold)
                     Unit
                     IoError
                     OS
@@ -490,7 +466,7 @@ begin
         (operation : Result Unit IoError)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        ! (result_api/fold)
+        ! (result/fold)
           Unit
           IoError
           OS
@@ -512,7 +488,7 @@ begin
         : OS =
         ! fs_open_reader path {
           fn opened =>
-            ! (result_api/fold)
+            ! (result/fold)
               Reader
               IoError
               OS
@@ -531,20 +507,20 @@ begin
         (continuation : Thk (Result String IoError -> OS))
         : OS =
         ! fs_read_bytes path {
-          fn result =>
-            ! (result_api/fold)
+          fn read_result =>
+            ! (result/fold)
               Bytes
               IoError
               OS
-              result
+              read_result
               {
-                fn bytes =>
-                  ! primitive_bytes_to_str
+                fn contents =>
+                  ! (bytes/to_string)
                     OS
-                    bytes
+                    contents
                     {
-                      do error <- ! (io_types_api/error)
-                        (io_types_api/invalid_data)
+                      do error <- ! (io_types/error)
+                        (io_types/invalid_data)
                         "file is not valid UTF-8";
                       ! continue_io_error String continuation error
                     }
@@ -555,19 +531,19 @@ begin
       in
       let ! fs_write_bytes
         (path : Path)
-        (bytes : Bytes)
+        (chunk : Bytes)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
         ! fs_create_writer path {
           fn opened =>
-            ! (result_api/fold)
+            ! (result/fold)
               Writer
               IoError
               OS
               opened
               {
                 fn writer =>
-                  ! io_write_all writer bytes {
+                  ! io_write_all writer chunk {
                     fn operation => ! finish_writer writer operation continuation
                   }
               }
@@ -579,17 +555,17 @@ begin
         (string : String)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        do bytes <- ! (bytes_from_str) string;
-        ! fs_write_bytes path bytes continuation
+        do encoded <- ! (bytes/from_string) string;
+        ! fs_write_bytes path encoded continuation
       in
       let ! write_bytes_and_flush
         (writer : Writer)
-        (bytes : Bytes)
+        (chunk : Bytes)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        ! io_write_all writer bytes {
+        ! io_write_all writer chunk {
           fn written =>
-            ! (result_api/fold)
+            ! (result/fold)
               Unit
               IoError
               OS
@@ -603,54 +579,54 @@ begin
         (string : String)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        do bytes <- ! (bytes_from_str) string;
-        ! write_bytes_and_flush writer bytes continuation
+        do encoded <- ! (bytes/from_string) string;
+        ! write_bytes_and_flush writer encoded continuation
       in
       let ! stdio_write_line_to
         (writer : Writer)
         (string : String)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        do bytes <- ! (bytes_from_str) string;
-        do newline <- ! (bytes_from_str) "\n";
-        do line <- ! (bytes_append) bytes newline;
+        do encoded <- ! (bytes/from_string) string;
+        do newline <- ! (bytes/from_string) "\n";
+        do line <- ! (bytes/append) encoded newline;
         ! write_bytes_and_flush writer line continuation
       in
       let ! stdio_read_line
         (continuation : Thk (Result (Option String) IoError -> OS))
         : OS =
-        do reader <- ! (stdin);
+        do reader <- ! (stdio/stdin);
         ! io_read_line reader {
-          fn result =>
-            ! (result_api/fold)
+          fn read_result =>
+            ! (result/fold)
               (Option Bytes)
               IoError
               OS
-              result
+              read_result
               {
                 fn line =>
-                  ! (option_api/fold)
+                  ! (option/fold)
                     Bytes
                     OS
                     line
                     {
-                      do absent <- ! (option_api/none) String;
+                      do absent <- ! (option/none) String;
                       ! continue_io_ok (Option String) continuation absent
                     }
                     {
-                      fn bytes =>
-                        ! primitive_bytes_to_str
+                      fn line_bytes =>
+                        ! (bytes/to_string)
                           OS
-                          bytes
+                          line_bytes
                           {
-                            do error <- ! (io_types_api/error)
-                              (io_types_api/invalid_data)
+                            do error <- ! (io_types/error)
+                              (io_types/invalid_data)
                               "standard input is not valid UTF-8";
                             ! continue_io_error (Option String) continuation error
                           }
                           {
                             fn string =>
-                              do present <- ! (option_api/some) String string;
+                              do present <- ! (option/some) String string;
                               ! continue_io_ok (Option String) continuation present
                           }
                     }
@@ -662,44 +638,44 @@ begin
         (string : String)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        do writer <- ! (stdout);
+        do writer <- ! (stdio/stdout);
         ! stdio_write_to writer string continuation
       in
       let ! stdio_write_line
         (string : String)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        do writer <- ! (stdout);
+        do writer <- ! (stdio/stdout);
         ! stdio_write_line_to writer string continuation
       in
       let ! stdio_write_error
         (string : String)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        do writer <- ! (stderr);
+        do writer <- ! (stdio/stderr);
         ! stdio_write_to writer string continuation
       in
       let ! stdio_write_error_line
         (string : String)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        do writer <- ! (stderr);
+        do writer <- ! (stdio/stderr);
         ! stdio_write_line_to writer string continuation
       in
       let ! arg_list (continuation : Thk (List String -> OS)) : OS =
-        do arguments <- ! primitive_arg_fold
+        do arguments <- ! (args/fold)
           (Ret (List String))
-          { ! (list_api/nil) String }
+          { ! (list/nil) String }
           {
             fn argument remaining =>
               do tail <- ! remaining;
-              ! (list_api/cons) String argument tail
+              ! (list/cons) String argument tail
           };
         ! continuation arguments
       in
-      let halt : Thk OS = { ! (exit) 0 } in
+      let halt : Thk OS = { ! (process/exit) 0 } in
       let ! panic (message : String) : OS =
-        ! stdio_write_error_line message { fn _ => ! (exit) 1 }
+        ! stdio_write_error_line message { fn _ => ! (process/exit) 1 }
       in
       let prelude : Prelude = (
         Thunk = Thk,
@@ -724,62 +700,62 @@ begin
         OS = OS,
         prelude = prelude,
         bool = (
-          true = bool_api/true,
-          false = bool_api/false,
-          not = bool_api/not,
-          and = bool_api/and,
-          or = bool_api/or,
-          eq = bool_api/eq,
-          xor = bool_api/xor,
-          nand = bool_api/nand,
-          nor = bool_api/nor,
-          if = bool_api/if,
+          true = bool/true,
+          false = bool/false,
+          not = bool/not,
+          and = bool/and,
+          or = bool/or,
+          eq = bool/eq,
+          xor = bool/xor,
+          nand = bool/nand,
+          nor = bool/nor,
+          if = bool/if,
         ),
         option = (
-          none = option_api/none,
-          some = option_api/some,
-          fold = option_api/fold,
-          map = option_api/map,
-          and_then = option_api/and_then,
-          unwrap_or = option_api/unwrap_or,
-          or_else = option_api/or_else,
-          zip = option_api/zip,
+          none = option/none,
+          some = option/some,
+          fold = option/fold,
+          map = option/map,
+          and_then = option/and_then,
+          unwrap_or = option/unwrap_or,
+          or_else = option/or_else,
+          zip = option/zip,
           is_some = option_is_some,
           is_none = option_is_none,
         ),
         result = (
-          ok = result_api/ok,
-          err = result_api/err,
-          fold = result_api/fold,
-          map = result_api/map,
-          map_err = result_api/map_err,
-          and_then = result_api/and_then,
-          unwrap_or = result_api/unwrap_or,
+          ok = result/ok,
+          err = result/err,
+          fold = result/fold,
+          map = result/map,
+          map_err = result/map_err,
+          and_then = result/and_then,
+          unwrap_or = result/unwrap_or,
           is_ok = result_is_ok,
           is_err = result_is_err,
         ),
         list = (
-          nil = list_api/nil,
-          cons = list_api/cons,
-          case = list_api/case,
-          fold = list_api/fold,
-          singleton = list_api/singleton,
-          append = list_api/append,
-          map = list_api/map,
-          fold_left = list_api/fold_left,
-          reverse = list_api/reverse,
-          length = list_api/length,
+          nil = list/nil,
+          cons = list/cons,
+          case = list/case,
+          fold = list/fold,
+          singleton = list/singleton,
+          append = list/append,
+          map = list/map,
+          fold_left = list/fold_left,
+          reverse = list/reverse,
+          length = list/length,
           is_empty = list_is_empty,
           head = list_head,
           tail = list_tail,
           get = list_get,
         ),
         int = (
-          add = primitive_add,
-          sub = sub,
-          mul = mul,
-          div = div,
-          mod = mod,
+          add = int/add,
+          sub = int/sub,
+          mul = int/mul,
+          div = int/div,
+          mod = int/mod,
           eq = int_eq,
           ne = int_ne,
           lt = int_lt,
@@ -791,19 +767,19 @@ begin
           negate = negate,
           min = int_min,
           max = int_max,
-          to_string = int_to_str,
+          to_string = int/to_string,
         ),
         char = (
-          to_string = char_to_str,
-          codepoint = char_codepoint,
+          to_string = char/to_string,
+          codepoint = char/codepoint,
           from_codepoint = char_from_codepoint,
         ),
         string = (
           empty = "",
-          length = str_scalar_length,
-          byte_length = str_byte_length,
+          length = string/length,
+          byte_length = string/byte_length,
           is_empty = str_is_empty,
-          append = str_append,
+          append = string/append,
           concat = str_concat,
           split_once = str_split_once,
           split_at = str_split_at,
@@ -816,24 +792,24 @@ begin
           parse_int = str_parse_int,
         ),
         bytes = (
-          empty = bytes_empty,
-          length = bytes_length,
-          append = bytes_append,
-          from_string = bytes_from_str,
+          empty = bytes/empty,
+          length = bytes/length,
+          append = bytes/append,
+          from_string = bytes/from_string,
           to_string = bytes_to_string,
         ),
         io = (
-          not_found = io_types_api/not_found,
-          permission_denied = io_types_api/permission_denied,
-          already_exists = io_types_api/already_exists,
-          invalid_input = io_types_api/invalid_input,
-          invalid_data = io_types_api/invalid_data,
-          broken_pipe = io_types_api/broken_pipe,
-          closed = io_types_api/closed,
-          other = io_types_api/other,
+          not_found = io_types/not_found,
+          permission_denied = io_types/permission_denied,
+          already_exists = io_types/already_exists,
+          invalid_input = io_types/invalid_input,
+          invalid_data = io_types/invalid_data,
+          broken_pipe = io_types/broken_pipe,
+          closed = io_types/closed,
+          other = io_types/other,
           kind_eq = io_kind_eq,
-          error_kind = io_types_api/error_kind,
-          error_message = io_types_api/error_message,
+          error_kind = io_types/error_kind,
+          error_message = io_types/error_message,
           read = io_read,
           read_line = io_read_line,
           read_all = io_read_all,
@@ -843,8 +819,8 @@ begin
           close_writer = io_close_writer,
         ),
         fs = (
-          path = io_types_api/path,
-          path_string = io_types_api/path_string,
+          path = io_types/path,
+          path_string = io_types/path_string,
           open_reader = fs_open_reader,
           create_writer = fs_create_writer,
           append_writer = fs_append_writer,
@@ -854,9 +830,9 @@ begin
           write_text = fs_write_text,
         ),
         stdio = (
-          stdin = stdin,
-          stdout = stdout,
-          stderr = stderr,
+          stdin = stdio/stdin,
+          stdout = stdio/stdout,
+          stderr = stdio/stderr,
           read_line = stdio_read_line,
           write = stdio_write,
           write_line = stdio_write_line,
@@ -865,12 +841,12 @@ begin
         ),
         process = (
           arg_list = arg_list,
-          random_int = random_int,
+          random_int = random/generate,
           halt = halt,
           panic = panic,
-          exit = exit,
+          exit = process/exit,
         ),
         (),
-      ) : Public)
+      ) : Std)
   end
 end

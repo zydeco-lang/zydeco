@@ -2,7 +2,7 @@
 -- Funciton Type
 begin
   param (
-    (/VType; /CType; /Thk; /Ret; /Int; /exit) :
+    (/VType; /CType; /Thk; /Ret; /Int; /process) :
     @[import("../std/builtin.zy")] _
   ) that
 
@@ -38,5 +38,5 @@ begin
   that
 
   do i <- ! abort Int 0 .more 1 .more 2 .done;
-  ! (exit) i
+  ! (process/exit) i
 end

@@ -2,7 +2,7 @@
 -- unnamed components but preserves their physical positions.
 begin
   param (
-    (/Int; /add; /sub; /mul; /exit) :
+    (/Int; /int; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -20,14 +20,14 @@ begin
     middle : Int,
     right = right : Int
   ) = mixed in
-  do tens <- ! (mul) middle 10;
-  do hundreds <- ! (mul) right 100;
-  do low <- ! (add) left tens;
-  do checksum <- ! (add) low hundreds;
-  do layout_check <- ! (sub) checksum 432;
-  do left_projection_check <- ! (sub) mixed/left 2;
-  do right_projection_check <- ! (sub) mixed/right 4;
-  do total <- ! (add) layout_check left_projection_check;
-  do total <- ! (add) total right_projection_check;
-  ! (exit) total
+  do tens <- ! (int/mul) middle 10;
+  do hundreds <- ! (int/mul) right 100;
+  do low <- ! (int/add) left tens;
+  do checksum <- ! (int/add) low hundreds;
+  do layout_check <- ! (int/sub) checksum 432;
+  do left_projection_check <- ! (int/sub) mixed/left 2;
+  do right_projection_check <- ! (int/sub) mixed/right 4;
+  do total <- ! (int/add) layout_check left_projection_check;
+  do total <- ! (int/add) total right_projection_check;
+  ! (process/exit) total
 end

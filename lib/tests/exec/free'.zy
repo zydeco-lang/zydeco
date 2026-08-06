@@ -1,16 +1,7 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (
-      /VType; /CType; /Thk; /Ret;
-      /Unit; /String; /OS;
-      /mod; /int_eq_branch;
-      /str_append;
-      /write_line;
-      /random_int;
-      /exit;
-      builtin
-    ) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /String; /OS; /int; /string; /stdio; /random; /process; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
@@ -96,23 +87,23 @@ begin
         ! flip ()
   that
   def ! print-os (string : String) (k : Thk (Bool -> OS)) : OS =
-    ! (write_line) string { ! k +True() }
+    ! (stdio/write_line) string { ! k +True() }
   that
-  def ! print-str (string : String) (k : Thk (Bool -> Ret String)) : Ret String =
+  def ! print-str (text : String) (k : Thk (Bool -> Ret String)) : Ret String =
     do suffix <- ! k +True();
-    ! (str_append) string suffix
+    ! (string/append) text suffix
   that
   def ! fail-os (error : Err) (continuation : Thk (Empty -> OS)) : OS =
     match error
     | +Msg(message) =>
-      ! (write_line) message { ! (exit) 1 }
+      ! (stdio/write_line) message { ! (process/exit) 1 }
     end
   that
   def ! flip-os (unit : Unit) (continuation : Thk (Bool -> OS)) : OS =
-    ! (random_int) {
+    ! (random/generate) {
       fn random =>
-        do remainder <- ! (mod) random 2;
-        ! (int_eq_branch)
+        do remainder <- ! (int/mod) random 2;
+        ! (int/eq)
           OS
           remainder
           0
@@ -151,7 +142,7 @@ begin
   in
   ! m .run OS .eff print-os fail-os flip-os {
     fn _ =>
-      ! (exit) 0
+      ! (process/exit) 0
   }
 end
 end

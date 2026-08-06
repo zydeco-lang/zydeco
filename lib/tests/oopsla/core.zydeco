@@ -4,19 +4,7 @@ begin
   --| Thunk Type and Return Type
   --| Primitive Base Types
   param (
-    (
-      /VType; /CType; /Thk; /Ret;
-      /Unit; /Int; /Char; /String; /OS;
-      /add = primitive_add; /sub = primitive_sub; /mul = primitive_mul; /div = primitive_div;
-      /mod = primitive_mod; /int_eq_branch; /int_lt_branch; /int_gt_branch;
-      /int_to_str = primitive_int_to_str;
-      /char_to_str = primitive_char_to_str; /char_codepoint = primitive_char_codepoint;
-      /str_scalar_length = primitive_str_scalar_length; /str_append = primitive_str_append; /str_eq_branch;
-      /str_get_branch;
-      /write_str = primitive_write_str; /read_line = primitive_read_line; /read_line_as_int_branch;
-      /random_int = primitive_random_int;
-      /exit = primitive_exit
-    ) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /Char; /String; /OS; /int; /string; /stdio; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
   let Thunk (B : CType) = Thk B that
@@ -120,36 +108,26 @@ begin
 
 
 -- module Arith
-  let add = primitive_add that
-  let sub = primitive_sub that
-  let mul = primitive_mul that
-  def mult = mul that
-  def times = mul that
-  let div = primitive_div that
-  let mod = primitive_mod that
-
   def ! int_eq (x : Int) (y : Int) : Ret Bool =
-    ! (int_eq_branch) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! (int/eq) (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! int_lt (x : Int) (y : Int) : Ret Bool =
-    ! (int_lt_branch) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! (int/lt) (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! int_gt (x : Int) (y : Int) : Ret Bool =
-    ! (int_gt_branch) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! (int/gt) (Ret Bool) x y { ret +True() } { ret +False() }
   that
 -- end module Arith
 
 
 -- module String
-  let str_scalar_length = primitive_str_scalar_length that
-  let str_append = primitive_str_append that
   def ! str_eq (x : String) (y : String) : Ret Bool =
-    ! (str_eq_branch) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! (string/eq) (Ret Bool) x y { ret +True() } { ret +False() }
   that
-  def ! str_get_or_space (string : String) (index : Int) : Ret Char =
-    ! (str_get_branch)
+  def ! str_get_or_space (text : String) (index : Int) : Ret Char =
+    ! (string/get)
       (Ret Char)
-      string
+      text
       index
       { ret ' ' }
       { fn character => ret character }
@@ -166,55 +144,35 @@ begin
       | +False() => ret "False"
       end
   } that
-  let int_to_str = primitive_int_to_str that
-  let char_to_str = primitive_char_to_str that
-  let char_codepoint = primitive_char_codepoint that
 -- end module String
 
 
 -- module OS
-  let write_str = primitive_write_str that
-  let read_line = primitive_read_line that
   def ! read_line_as_int (k : Thk(Option Int -> OS)) : OS =
-    ! (read_line_as_int_branch)
+    ! (stdio/read_int)
       { ! k +None() }
       { fn i => ! k +Some(i) }
   that
-  let random_int = primitive_random_int that
-  let exit = primitive_exit that
-
-  def halt : Thk OS = { ! exit 0 } that
+  def halt : Thk OS = { ! (process/exit) 0 } that
 
   def panic : Thk(String -> OS) = {
     fn (msg: String) =>
-      do msg <- ! str_append "Program panicked with message: " msg;
-      ! write_line msg { ! exit 1 }
-  } that
-
-  def write_line : Thk(String -> Thk OS -> OS) = {
-    fn (s: String) (k: Thk OS) =>
-      do s <- ! str_append s "\n";
-      ! write_str s k
-  } that
-
-  def write_int : Thk(Int -> Thk OS -> OS) = {
-    fn (i: Int) (k: Thk OS) =>
-      do s <- ! int_to_str i;
-      ! write_str s k
+      do msg <- ! (string/append) "Program panicked with message: " msg;
+      ! (stdio/write_line) msg { ! (process/exit) 1 }
   } that
 
   def write_int_line : Thk(Int -> Thk OS -> OS) = {
     fn (i: Int) (k: Thk OS) =>
-      do s <- ! int_to_str i;
-      ! write_line s k
+      do s <- ! (int/to_string) i;
+      ! (stdio/write_line) s k
   } that
 -- end module OS
 
   (
     halt = halt,
     panic = panic,
-    write_line = write_line,
-    write_int = write_int,
+    write_line = stdio/write_line,
+    write_int = stdio/write_int,
     write_int_line = write_int_line,
   )
 end

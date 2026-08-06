@@ -50,7 +50,7 @@ begin
   that
 
   let Export =
-    exists (PublicBinary as Binary : CType) . Unit
+    exists (BinaryType as Binary : CType) . Unit
   that
   (Binary, ()) : Export
 end
@@ -73,7 +73,7 @@ begin
   that
 
   let Export =
-    exists (PublicBinary as Binary : CType) . Unit
+    exists (BinaryType as Binary : CType) . Unit
   that
   (Binary, ()) : Export
 end
@@ -98,7 +98,7 @@ begin
   that
 
   let Export =
-    exists (PublicBinary as Binary : CType) . Unit
+    exists (BinaryType as Binary : CType) . Unit
   that
   (Binary, ()) : Export
 end
@@ -278,11 +278,11 @@ begin
     fn ((
       /VType = SelectedVType;
       /Bytes = SelectedBytes;
-      /bytes_empty;
+      /bytes;
       builtin
     ) : Builtin) =>
       let Selected : SelectedVType = SelectedBytes in
-      ! bytes_empty
+      ! (bytes/empty)
   } that
 
   selective

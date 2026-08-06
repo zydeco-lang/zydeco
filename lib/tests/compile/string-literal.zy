@@ -1,22 +1,22 @@
 begin
   param (
-    (/OS; /int_eq_branch; /str_scalar_length; /str_append; /str_eq_branch; /exit) :
+    (/OS; /int; /string; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  do unicode_length <- ! (str_scalar_length) "λx";
-  do joined <- ! (str_append) "uniform " "terms";
-  ! (int_eq_branch)
+  do unicode_length <- ! (string/length) "λx";
+  do joined <- ! (string/append) "uniform " "terms";
+  ! (int/eq)
     OS
     unicode_length
     2
     {
-      ! (str_eq_branch)
+      ! (string/eq)
         OS
         joined
         "uniform terms"
-        { ! (exit) 0 }
-        { ! (exit) 2 }
+        { ! (process/exit) 0 }
+        { ! (process/exit) 2 }
     }
-    { ! (exit) 1 }
+    { ! (process/exit) 1 }
 end

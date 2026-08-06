@@ -5,14 +5,11 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (
-    /List = StdList; /Int = StdInt; /String = StdString;
-    /list; /int; /string; /stdio; /process
-  ) = make_std builtin in
-  def fix foldl (xs : StdList StdString) (i : StdInt) : Ret StdInt =
+  let (/List; /list; /int; /string; /stdio; /process) = make_std builtin in
+  def fix foldl (xs : List String) (i : Int) : Ret Int =
     ! (list/case)
-      StdString
-      (Ret StdInt)
+      String
+      (Ret Int)
       xs
       { ret i }
       {
@@ -22,10 +19,10 @@ begin
           ! foldl xs i'
       }
   in
-  do nil <- ! (list/nil) StdString;
-  do ys <- ! (list/cons) StdString "y" nil;
-  do empty_and_ys <- ! (list/cons) StdString "" ys;
-  do xs <- ! (list/cons) StdString "abc" empty_and_ys;
+  do nil <- ! (list/nil) String;
+  do ys <- ! (list/cons) String "y" nil;
+  do empty_and_ys <- ! (list/cons) String "" ys;
+  do xs <- ! (list/cons) String "abc" empty_and_ys;
   do l <- ! foldl xs 0;
   do s <- ! (int/to_string) l;
   ! (stdio/write_line) s { fn _ => ! (process/exit) 0 }
