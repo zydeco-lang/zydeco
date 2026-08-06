@@ -6,7 +6,7 @@ use crate::{
             Alias, Ann, Appli, Block, BuiltinRole, BuiltinTypeRole, CoPatId, ContextBind, DefId,
             DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists, Hole, IntrinsicRole,
             Label, Literal, ManifestParameter, Meta, MetaT, Named, Param, Paren, Parser, PatId,
-            Pattern, Placement, Prod, Proj, SourceUnit, Term, TermId,
+            Pattern, Placement, Prod, Proj, ProjectionPattern, SourceUnit, Term, TermId,
         },
     },
 };
@@ -958,6 +958,62 @@ fn parses_semicolon_pattern_aliases_in_source_order() {
         .collect::<Vec<_>>();
 
     assert_eq!(names, ["whole", "first", "second"]);
+}
+
+#[test]
+fn parses_field_projection_patterns_as_alias_members() {
+    let source = "(/x = left; /y = right; whole)";
+    let mut parser = Parser::new();
+    let pattern = parser::SinglePatternParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Pattern::Alias(Alias(patterns)) = &parser.arena.pats[&pattern] else {
+        panic!("expected a pattern alias")
+    };
+    let fields = patterns
+        .iter()
+        .take(2)
+        .map(|pattern| {
+            let Pattern::Project(ProjectionPattern(field, payload)) = &parser.arena.pats[pattern]
+            else {
+                panic!("expected a field projection pattern")
+            };
+            let Pattern::Var(payload) = &parser.arena.pats[payload] else {
+                panic!("expected a variable projection payload")
+            };
+            (field.plain(), parser.arena.defs[payload].plain())
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        fields,
+        [("x".to_string(), "left".to_string()), ("y".to_string(), "right".to_string())]
+    );
+}
+
+#[test]
+fn parses_chained_field_projection_patterns_right_associatively() {
+    let source = "(/outer = /inner = payload)";
+    let mut parser = Parser::new();
+    let pattern = parser::SinglePatternParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Pattern::Paren(Paren(patterns)) = &parser.arena.pats[&pattern] else {
+        panic!("expected a parenthesized projection pattern")
+    };
+    let [pattern] = patterns.as_slice() else { panic!("expected one pattern") };
+    let Pattern::Project(ProjectionPattern(outer, inner)) = &parser.arena.pats[pattern] else {
+        panic!("expected an outer projection pattern")
+    };
+    let Pattern::Project(ProjectionPattern(inner_name, payload)) = &parser.arena.pats[inner] else {
+        panic!("expected an inner projection pattern")
+    };
+
+    assert_eq!(outer.plain(), "outer");
+    assert_eq!(inner_name.plain(), "inner");
+    assert!(matches!(parser.arena.pats[payload], Pattern::Var(_)));
 }
 
 #[test]

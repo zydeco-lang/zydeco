@@ -44,3 +44,53 @@ end
 "#,
     );
 }
+
+#[test]
+fn rejects_missing_field_projection_patterns() {
+    PatternAliasCase::assert_type_error(
+        r#"
+begin
+  let Point = (x :: Int) * (y :: Int) that
+  def point : Point = (x = 1, y = 2) that
+  let (/z = missing) = point in
+  missing
+end
+"#,
+    );
+}
+
+#[test]
+fn rejects_ambiguous_field_projection_patterns() {
+    PatternAliasCase::assert_type_error(
+        r#"
+begin
+  let Ambiguous = (left :: (x :: Int)) * (right :: (x :: Int)) that
+  def ambiguous : Ambiguous = (left = x = 1, right = x = 2) that
+  let (/x = duplicate) = ambiguous in
+  duplicate
+end
+"#,
+    );
+}
+
+#[test]
+fn rejects_refutable_field_projection_payloads() {
+    PatternAliasCase::assert_type_error(
+        r#"
+begin
+  def Maybe : VType =
+    data
+    | +Some : Int
+    | +None : Unit
+    end
+  that
+  let Box = (value :: Maybe) that
+  def boxed : Box = (value = +Some(1)) that
+  match boxed
+  | (/value = +Some(payload)) => ret payload
+  | (/value = +None()) => ret 0
+  end
+end
+"#,
+    );
+}

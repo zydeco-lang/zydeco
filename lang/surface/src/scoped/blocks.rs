@@ -73,6 +73,7 @@ impl<'a> BlockCandidateCollector<'a> {
             | b::Pattern::Named(b::Named(_, inner)) | b::Pattern::Ctor(b::Ctor(_, inner)) => {
                 self.pattern(*inner)
             }
+            | b::Pattern::Project(b::ProjectionPattern(_, inner)) => self.pattern(*inner),
             | b::Pattern::Alias(b::Alias(patterns)) | b::Pattern::Cons(patterns) => {
                 patterns.iter().flat_map(|pattern| self.pattern(*pattern)).collect()
             }

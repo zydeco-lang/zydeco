@@ -10,7 +10,7 @@ For example, neither the left-hand product nesting nor the outer named wrapper m
 ```zydeco
 let Inner = (x :: Int) * Int that
 let Outer = Inner * (z :: Int) that
-let Wrapped = outer :: inner :: Int that
+let Wrapped = (outer :: inner :: Int) that
 
 nested/x
 wrapped/inner
@@ -44,15 +44,15 @@ physical arity.
 
 ## Projection Patterns
 
-The planned pattern counterpart uses `/field = pattern`:
+The pattern counterpart uses `/field = pattern`:
 
 ```zydeco
 let (/x = x) = nested in body
 ```
 
-The slash would mean that `x` is located by the same recursive, exactly-one-match rule as `nested/x`; the pattern
-to the right of `=` would then be checked against the selected payload. This differs from `x = pattern`, which
-requires the bindee itself to have `x` as its outer named wrapper.
+The slash means that `x` is located by the same recursive, exactly-one-match rule as `nested/x`; the pattern to the
+right of `=` is then checked against the selected payload. This differs from `x = pattern`, which requires the
+bindee itself to have `x` as its outer named wrapper.
 
 A projection pattern is intended to be one pattern terminal. Multiple observations of the same bindee are formed
 by the semicolon construct described in [Pattern Aliasing](aliasing.md):
@@ -64,3 +64,15 @@ let (/x = x; /z = z; whole) = nested in body
 Every member receives the original bindee. This separation lets slash retain one consistent `Has` meaning while
 the aliasing operator supplies same-bindee composition and preserves source order for possible future sequencing
 rules.
+
+Projection patterns associate to the right, so `/outer = /inner = payload` performs two staged searches just like
+`value/outer/inner`. This gives an explicit way to disambiguate a name that occurs more than once in the complete
+receiver. A missing or ambiguous stage is rejected statically by the same resolver used for term projection.
+
+After resolving the unique route, type checking elaborates a projection pattern into ordinary named and product
+patterns. Product components away from the route become typed holes. No projection-pattern node enters typed
+runtime syntax, which keeps matching, coverage checking, and backend layout on the existing pattern machinery.
+
+The initial implementation requires the payload to be irrefutable. Variable and structural payloads cover the
+field-binding use case; constructor payloads are deferred until backend matching supports general nested
+fallthrough.

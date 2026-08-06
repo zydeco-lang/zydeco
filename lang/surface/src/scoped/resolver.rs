@@ -238,6 +238,9 @@ impl Resolve for PatId {
                 let Ctor(_ctor, args) = pat;
                 args.resolve(resolver, (local, global))?
             }
+            | Pattern::Project(ProjectionPattern(_, pattern)) => {
+                pattern.resolve(resolver, (local, global))?
+            }
             | Pattern::Alias(Alias(pat)) | Pattern::Cons(pat) => {
                 // Later items can depend on binders introduced by earlier items.
                 for item in pat {

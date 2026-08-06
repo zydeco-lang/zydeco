@@ -189,6 +189,10 @@ PatternAnn: Pattern = {
     },
     #[precedence(level="2")] #[assoc(side="right")]
     <name:FieldName> "=" <inner:PatternGen<PatternAnn>> => Named(name, inner).into(),
+    #[precedence(level="2")] #[assoc(side="right")]
+    "/" <name:FieldName> "=" <inner:PatternGen<PatternAnn>> => {
+        ProjectionPattern(name, inner).into()
+    },
 };
 
 #[inline]

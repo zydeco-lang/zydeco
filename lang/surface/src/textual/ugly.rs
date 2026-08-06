@@ -29,6 +29,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for PatId {
             | Pattern::Var(p) => s += &p.ugly(f),
             | Pattern::Named(p) => s += &p.ugly(f),
             | Pattern::Ctor(p) => s += &p.ugly(f),
+            | Pattern::Project(p) => s += &p.ugly(f),
             | Pattern::Alias(p) => s += &p.ugly(f),
             | Pattern::Paren(p) => s += &p.ugly(f),
         }
@@ -209,6 +210,16 @@ where
             "({})",
             patterns.iter().map(|pattern| pattern.ugly(f)).collect::<Vec<_>>().join("; ")
         )
+    }
+}
+
+impl<'a, T> Ugly<'a, Formatter<'a>> for ProjectionPattern<FieldName, T>
+where
+    T: Ugly<'a, Formatter<'a>>,
+{
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let ProjectionPattern(field, pattern) = self;
+        format!("/{} = {}", field.ugly(f), pattern.ugly(f))
     }
 }
 

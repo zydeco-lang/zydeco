@@ -176,13 +176,20 @@ impl PatternCheck {
 
 #[derive(Clone)]
 struct ValueFieldCandidate {
-    target: ss::ProjTarget,
+    route: Vec<ValueFieldStep>,
     projected: ss::TypeId,
+}
+
+#[derive(Clone)]
+enum ValueFieldStep {
+    Named { name: FieldName, whole: ss::TypeId },
+    Product { product: ss::TypeId, components: Vec<ss::TypeId>, position: usize },
 }
 
 #[derive(Clone)]
 struct TypeFieldStep {
     name: FieldName,
+    whole: ss::KindId,
     projected: ss::KindId,
 }
 
@@ -225,7 +232,7 @@ impl FieldProjectionResolver {
 
     fn value_candidates_k(
         tycker: &mut Tycker<'_>, env: &ss::TyEnv, current: ss::TypeId, field: &FieldName,
-        products: &[ss::ProductProjection], active: &mut std::collections::HashSet<ss::TypeId>,
+        route: &[ValueFieldStep], active: &mut std::collections::HashSet<ss::TypeId>,
     ) -> ResultKont<Vec<ValueFieldCandidate>> {
         let view = current.unroll_k(tycker)?.subst_env_k(tycker, env)?;
         if !active.insert(view) {
@@ -234,25 +241,34 @@ impl FieldProjectionResolver {
         let structure = tycker.type_filled_k(&view)?.to_owned();
         let candidates = match structure {
             | ss::Type::Label(ss::Label(found, projected)) => {
-                let direct = (found == *field).then(|| ValueFieldCandidate {
-                    target: ss::ProjTarget { products: products.to_vec() },
-                    projected,
-                });
+                let route = route
+                    .iter()
+                    .cloned()
+                    .chain([ValueFieldStep::Named { name: found.clone(), whole: view }])
+                    .collect::<Vec<_>>();
+                let direct = (found == *field)
+                    .then(|| ValueFieldCandidate { route: route.clone(), projected });
                 let nested =
-                    Self::value_candidates_k(tycker, env, projected, field, products, active)?;
+                    Self::value_candidates_k(tycker, env, projected, field, &route, active)?;
                 direct.into_iter().chain(nested).collect()
             }
             | ss::Type::Prod(_) => {
-                let branches = Self::product_components_k(tycker, env, view)?
-                    .into_iter()
+                let components = Self::product_components_k(tycker, env, view)?;
+                let branches = components
+                    .iter()
+                    .copied()
                     .enumerate()
                     .map(|(position, component)| {
-                        let products = products
+                        let route = route
                             .iter()
                             .cloned()
-                            .chain([ss::ProductProjection { product: view, position }])
+                            .chain([ValueFieldStep::Product {
+                                product: view,
+                                components: components.clone(),
+                                position,
+                            }])
                             .collect::<Vec<_>>();
-                        Self::value_candidates_k(tycker, env, component, field, &products, active)
+                        Self::value_candidates_k(tycker, env, component, field, &route, active)
                     })
                     .collect::<ResultKont<Vec<_>>>()?;
                 branches.into_iter().flatten().collect()
@@ -320,7 +336,7 @@ impl FieldProjectionResolver {
                 let path = path
                     .iter()
                     .cloned()
-                    .chain([TypeFieldStep { name: found.clone(), projected }])
+                    .chain([TypeFieldStep { name: found.clone(), whole: current, projected }])
                     .collect::<Vec<_>>();
                 let direct =
                     (found == *field).then(|| TypeFieldCandidate { path: path.clone(), projected });
@@ -340,10 +356,68 @@ impl FieldProjectionResolver {
         let final_step = candidate.path.len() - 1;
         candidate.path.into_iter().enumerate().try_fold(
             head,
-            |head, (index, TypeFieldStep { name, projected: step_kind })| {
+            |head, (index, TypeFieldStep { name, projected: step_kind, .. })| {
                 let step_kind = if index == final_step { projected } else { step_kind };
                 let result = head.project_named(tycker, &name, step_kind);
                 tycker.err_p_to_k(result)
+            },
+        )
+    }
+
+    fn value_target(candidate: &ValueFieldCandidate) -> ss::ProjTarget {
+        let products = candidate
+            .route
+            .iter()
+            .filter_map(|step| match step {
+                | ValueFieldStep::Named { .. } => None,
+                | ValueFieldStep::Product { product, position, .. } => {
+                    Some(ss::ProductProjection { product: *product, position: *position })
+                }
+            })
+            .collect();
+        ss::ProjTarget { products }
+    }
+
+    fn value_pattern(
+        tycker: &mut Tycker<'_>, env: &ss::TyEnv, root: ss::TypeId, candidate: ValueFieldCandidate,
+        payload: ss::VPatId,
+    ) -> ss::VPatId {
+        candidate.route.into_iter().enumerate().rev().fold(payload, |payload, (index, step)| {
+            match step {
+                | ValueFieldStep::Named { name, whole } => {
+                    let annotation = if index == 0 { root } else { whole };
+                    Alloc::alloc(tycker, ss::Named(name, payload), annotation, env)
+                }
+                | ValueFieldStep::Product { product, components, position } => {
+                    let patterns = components
+                        .into_iter()
+                        .enumerate()
+                        .map(|(component_index, component)| {
+                            if component_index == position {
+                                payload
+                            } else {
+                                Alloc::alloc(tycker, ss::Hole, component, env)
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    let patterns = ss::ConsN::from_vec(patterns)
+                        .expect("a product projection route has at least two components");
+                    let annotation = if index == 0 { root } else { product };
+                    Alloc::alloc(tycker, patterns, annotation, env)
+                }
+            }
+        })
+    }
+
+    fn type_pattern(
+        tycker: &mut Tycker<'_>, env: &ss::TyEnv, root: ss::KindId, candidate: TypeFieldCandidate,
+        payload: ss::TPatId,
+    ) -> ss::TPatId {
+        candidate.path.into_iter().enumerate().rev().fold(
+            payload,
+            |payload, (index, TypeFieldStep { name, whole, .. })| {
+                let annotation = if index == 0 { root } else { whole };
+                Alloc::alloc(tycker, ss::Named(name, payload), annotation, env)
             },
         )
     }
@@ -351,9 +425,9 @@ impl FieldProjectionResolver {
 
 /// The initial backend representation can repeat guaranteed destructuring,
 /// but it does not yet encode conjunction between competing constructors.
-struct PatternAliasValidator;
+struct ValuePatternShape;
 
-impl PatternAliasValidator {
+impl ValuePatternShape {
     fn is_irrefutable(tycker: &Tycker<'_>, pattern: ss::VPatId) -> bool {
         match &tycker.statics.vpats[&pattern] {
             | ss::ValuePattern::Hole(_) | ss::ValuePattern::Var(_) | ss::ValuePattern::Triv(_) => {
@@ -377,6 +451,9 @@ impl Tycker<'_> {
         match self.scoped.pats[&pattern].clone() {
             | su::Pattern::Ann(_) => true,
             | su::Pattern::Named(su::Named(_, inner)) => self.pattern_has_payload_annotation(inner),
+            | su::Pattern::Project(su::ProjectionPattern(_, inner)) => {
+                self.pattern_has_payload_annotation(inner)
+            }
             | su::Pattern::Alias(su::Alias(patterns)) => {
                 patterns.iter().any(|pattern| self.pattern_has_payload_annotation(*pattern))
             }
@@ -1253,6 +1330,7 @@ impl PackPiPatternSkolems {
             | su::Pattern::Hole(_)
             | su::Pattern::Var(_)
             | su::Pattern::Ctor(_)
+            | su::Pattern::Project(_)
             | su::Pattern::Alias(_)
             | su::Pattern::Triv(_) => tycker.err_k(
                 TyckError::PackageWitnessArityMismatch {
@@ -1669,6 +1747,55 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                     }
                 }
             }
+            | Pat::Project(su::ProjectionPattern(field, inner)) => match switch {
+                | Switch::Syn => {
+                    tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
+                }
+                | Switch::Ana(AnnId::Kind(expected)) => {
+                    let candidate = FieldProjectionResolver::r#type(tycker, expected, &field)?;
+                    let checked = self.mk(inner).tyck_k(
+                        tycker,
+                        PatternAction::ana(candidate.projected.into())
+                            .with_skolems(skolems.clone()),
+                    )?;
+                    let (payload, _) = checked.try_as_type(
+                        tycker,
+                        TyckError::SortMismatch,
+                        std::panic::Location::caller(),
+                    )?;
+                    let pattern = FieldProjectionResolver::type_pattern(
+                        tycker, &self.info, expected, candidate, payload,
+                    );
+                    checked.with_annotation(PatAnnId::Type(pattern, expected))
+                }
+                | Switch::Ana(AnnId::Type(expected)) => {
+                    let candidate =
+                        FieldProjectionResolver::value_k(tycker, &self.info, expected, &field)?;
+                    let checked = self.mk(inner).tyck_k(
+                        tycker,
+                        PatternAction::ana(candidate.projected.into())
+                            .with_skolems(skolems.clone()),
+                    )?;
+                    let (payload, _) = checked.try_as_value(
+                        tycker,
+                        TyckError::SortMismatch,
+                        std::panic::Location::caller(),
+                    )?;
+                    if !ValuePatternShape::is_irrefutable(tycker, payload) {
+                        tycker.err_k(
+                            TyckError::RefutableFieldProjectionPattern,
+                            std::panic::Location::caller(),
+                        )?
+                    }
+                    let pattern = FieldProjectionResolver::value_pattern(
+                        tycker, &self.info, expected, candidate, payload,
+                    );
+                    checked.with_annotation(PatAnnId::Value(pattern, expected))
+                }
+                | Switch::Ana(AnnId::Set) => {
+                    tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                }
+            },
             | Pat::Ctor(pat) => match switch {
                 | Switch::Syn => {
                     tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
@@ -1732,7 +1859,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                 TyckError::SortMismatch,
                                 std::panic::Location::caller(),
                             )?;
-                            if !PatternAliasValidator::is_irrefutable(tycker, pattern) {
+                            if !ValuePatternShape::is_irrefutable(tycker, pattern) {
                                 tycker.err_k(
                                     TyckError::RefutablePatternAlias,
                                     std::panic::Location::caller(),
@@ -4746,8 +4873,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         TermAnnId::Type(projected, payload_kind)
                     }
                     | TermAnnId::Value(head, head_ty) => {
-                        let ValueFieldCandidate { target, projected: projected_ty } =
+                        let candidate =
                             FieldProjectionResolver::value_k(tycker, &self.info, head_ty, &name)?;
+                        let target = FieldProjectionResolver::value_target(&candidate);
+                        let projected_ty = candidate.projected;
                         let projected_ty = match switch {
                             | Switch::Syn => projected_ty,
                             | Switch::Ana(AnnId::Type(expected)) => {

@@ -31,6 +31,7 @@ impl SyntacticallyUsed for su::PatId {
                 let su::Ctor(_ctor, pat) = pat;
                 pat.syntactically_used(tycker)
             }
+            | Pat::Project(su::ProjectionPattern(_, pattern)) => pattern.syntactically_used(tycker),
             | Pat::Alias(su::Alias(patterns)) => {
                 patterns.into_iter().any(|pattern| pattern.syntactically_used(tycker))
             }

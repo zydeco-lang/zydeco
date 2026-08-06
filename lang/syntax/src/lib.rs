@@ -75,6 +75,10 @@ pub struct ConsN<S, T>(pub Vec<S>, pub T);
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Alias<T>(pub ConsN<T, T>);
 
+/// `/field = pattern` searches one bindee for a uniquely named payload.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct ProjectionPattern<Tag, Inner>(pub Tag, pub Inner);
+
 /// a * b shaped product
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Prod<S, T>(pub S, pub T);

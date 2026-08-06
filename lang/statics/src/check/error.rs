@@ -64,6 +64,7 @@ pub enum TyckError {
     DuplicateNamedField { field: FieldName, found: TypeId },
     PatternAliasRequiresValue,
     RefutablePatternAlias,
+    RefutableFieldProjectionPattern,
     UnknownDataConstructor(CtorName),
     UnknownCoDataDestructor(DtorName),
     CopatternStepMismatch { expected: CopatternStepKind, found: CopatternStep },
@@ -199,6 +200,9 @@ impl<'a> Tycker<'a> {
             }
             | TyckError::RefutablePatternAlias => {
                 "Pattern alias members must currently be irrefutable".to_string()
+            }
+            | TyckError::RefutableFieldProjectionPattern => {
+                "Field projection payload patterns must currently be irrefutable".to_string()
             }
             | TyckError::UnknownDataConstructor(ctor) => {
                 format!("Unknown data constructor: +{ctor}")
@@ -521,6 +525,9 @@ impl<'a> Tycker<'a> {
             }
             | TyckError::RefutablePatternAlias => {
                 "Pattern alias members must currently be irrefutable".to_string()
+            }
+            | TyckError::RefutableFieldProjectionPattern => {
+                "Field projection payload patterns must currently be irrefutable".to_string()
             }
             | TyckError::UnknownDataConstructor(ctor) => {
                 format!("Unknown data constructor `+{ctor}`")

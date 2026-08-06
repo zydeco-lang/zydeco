@@ -56,6 +56,9 @@ impl<'graph> ProgramAssembler<'graph> {
             | t::Pattern::Ctor(t::Ctor(name, inner)) => {
                 t::Ctor(name, self.pattern(source, inner)?).into()
             }
+            | t::Pattern::Project(t::ProjectionPattern(field, inner)) => {
+                t::ProjectionPattern(field, self.pattern(source, inner)?).into()
+            }
             | t::Pattern::Alias(t::Alias(patterns)) => {
                 let patterns = patterns
                     .into_iter()

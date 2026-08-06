@@ -32,7 +32,8 @@ future extension with guards or other genuinely sequential observations without 
 The implemented form currently aliases value patterns whose members are irrefutable. Variables, holes, named
 wrappers, unit, products, existential packages, and compositions of those shapes are irrefutable after type
 checking: every value of the expected type has that shape. Constructors remain refutable and are rejected within
-an alias group for now. Type and kind pattern aliases are also deferred.
+an alias group for now. Field projection patterns with irrefutable payloads belong to this set. Type and kind
+pattern aliases are also deferred.
 
 This boundary covers whole-value aliases and the motivating multi-field projection patterns. General conjunction
 of refutable patterns raises additional questions. Two constructor members may agree and refine the same payload,

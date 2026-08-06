@@ -274,6 +274,10 @@ impl LocalFoldScoped<Context> for Collector {
                 self.ctxs_pat_local.insert_new(pat, self.ctxs_pat_local[&body].to_owned());
                 self.coctxs_pat_local.insert_new(pat, self.coctxs_pat_local[&body].to_owned());
             }
+            | Pattern::Project(ProjectionPattern(_, inner)) => {
+                self.ctxs_pat_local.insert_new(pat, self.ctxs_pat_local[&inner].to_owned());
+                self.coctxs_pat_local.insert_new(pat, self.coctxs_pat_local[&inner].to_owned());
+            }
             | Pattern::Alias(Alias(inner)) | Pattern::Cons(inner) => {
                 let local = inner
                     .iter()
@@ -591,6 +595,9 @@ mod impl_obverse_local_post {
                 | Pattern::Ctor(inner) => {
                     let Ctor(_ctorv, body) = inner;
                     body.obverse_local_post(f, ctx);
+                }
+                | Pattern::Project(ProjectionPattern(_, inner)) => {
+                    inner.obverse_local_post(f, ctx);
                 }
                 | Pattern::Alias(Alias(inner)) | Pattern::Cons(inner) => {
                     for item in inner {

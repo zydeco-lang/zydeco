@@ -163,6 +163,11 @@ counterpart over nested named kinds: if `T : (field :: K)`, then `T/field : K`. 
 `(field = A)/field` reduces to `A`. Projection from an abstract named type remains explicit in the typed syntax and
 reduces when the abstract type is later instantiated.
 
+The pattern `/field = pattern` uses the same search against its bindee, then checks `pattern` against the unique
+payload. It associates to the right, allowing `/outer = /inner = payload` to express a staged path. Type checking
+elaborates the result into ordinary named and product patterns with typed holes outside the selected path. The
+initial payload restriction is irrefutability; nested constructor matching remains a backend extension.
+
 Type patterns make one additional distinction visible. A named pattern
 `(field = X) : (field :: K)` binds `X : K` to the payload, whereas a plain pattern
 `Whole : (field :: K)` binds the complete named type. Typed `forall`, `exists`,
