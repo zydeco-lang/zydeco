@@ -12,25 +12,12 @@ only the type identities and module values it needs:
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (
-      /VType;
-      /Thk;
-      /String;
-      /OS;
-      builtin
-    ) :
+    (/VType; /Thk; /String; /OS; builtin) :
     @[import("../../std/builtin.zy")] _
   ) in
   let (
-    /Result = StdResult;
-    /String = StdString;
-    /Path = StdPath;
-    /IoError = StdIoError;
-    /OS = StdOS;
-    /result;
-    /fs;
-    /stdio;
-    /process
+    /Result = StdResult; /String = StdString; /Path = StdPath; /IoError = StdIoError; /OS = StdOS;
+    /result; /fs; /stdio; /process
   ) = make_std builtin in
 
   ...
@@ -79,12 +66,7 @@ type begins with an existential telescope, the same pattern can also select a na
 Several selections are combined with the existing same-bindee semicolon pattern:
 
 ```zydeco
-let (
-  /String;
-  /Path;
-  /fs;
-  /process
-) = package in
+let (/String; /Path; /fs; /process) = package in
 ...
 ```
 
@@ -92,11 +74,7 @@ The pun `/String` binds the selected type identity as `String`, and `/fs` binds 
 The explicit payload form renames either kind of selection:
 
 ```zydeco
-let (
-  /String = Text;
-  /Path = LocalPath;
-  /fs = filesystem
-) = package in
+let (/String = Text; /Path = LocalPath; /fs = filesystem) = package in
 ...
 ```
 
@@ -105,12 +83,7 @@ because a source can state its primitive dependencies without copying the comple
 
 ```zydeco
 param (
-  (
-    /Bytes;
-    /Reader;
-    /io_read;
-    builtin
-  ) :
+  (/Bytes; /Reader; /io_read; builtin) :
   @[import("builtin.zy")] _
 ) in
 ...
@@ -196,16 +169,8 @@ A filesystem consumer can select more capabilities while retaining the same shap
 
 ```zydeco
 let (
-  /Result = StdResult;
-  /Bytes = StdBytes;
-  /Path = StdPath;
-  /IoError = StdIoError;
-  /OS = StdOS;
-  /result;
-  /bytes;
-  /io;
-  /fs;
-  /process
+  /Result = StdResult; /Bytes = StdBytes; /Path = StdPath; /IoError = StdIoError; /OS = StdOS;
+  /result; /bytes; /io; /fs; /process
 ) = make_std builtin in
 ...
 ```

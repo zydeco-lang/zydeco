@@ -4,17 +4,7 @@
 -- and computations
 begin
   param (
-    (
-      /VType;
-      /CType;
-      /Thk;
-      /Ret;
-      /Unit;
-      /String;
-      /str_eq_branch;
-      /write_line;
-      /exit
-    ) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /String; /str_eq_branch; /write_line; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
 

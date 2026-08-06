@@ -2,22 +2,11 @@ begin
   param (
     (
       /Ret;
-      /Int;
-      /Char;
-      /OS;
-      /add;
-      /sub;
-      /int_eq_branch;
-      /str_scalar_length;
-      /str_append;
-      /str_split_once_branch;
-      /str_split_at_branch;
-      /str_eq_branch;
-      /str_get_branch;
-      /int_to_str;
-      /char_to_str;
-      /char_codepoint;
-      /str_parse_int_branch;
+      /Int; /Char; /OS;
+      /add; /sub; /int_eq_branch; /int_to_str;
+      /char_to_str; /char_codepoint;
+      /str_scalar_length; /str_append; /str_split_once_branch; /str_split_at_branch; /str_eq_branch;
+      /str_get_branch; /str_parse_int_branch;
       /arg_fold;
       /exit
     ) :

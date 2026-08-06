@@ -1,10 +1,6 @@
 begin
   param (
-    (
-      /Int;
-      /add;
-      /exit
-    ) :
+    (/Int; /add; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
   let Point = (x :: Int) * (y :: Int) that

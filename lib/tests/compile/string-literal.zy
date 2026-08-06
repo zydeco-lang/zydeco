@@ -1,13 +1,6 @@
 begin
   param (
-    (
-      /OS;
-      /int_eq_branch;
-      /str_scalar_length;
-      /str_append;
-      /str_eq_branch;
-      /exit
-    ) :
+    (/OS; /int_eq_branch; /str_scalar_length; /str_append; /str_eq_branch; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
 

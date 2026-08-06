@@ -8,13 +8,7 @@ begin
   that
   let IdentityResult = TypeIdentity Int that
   param (
-    (
-      /VType;
-      /Int;
-      /OS;
-      /add;
-      /exit
-    ) :
+    (/VType; /Int; /OS; /add; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
   def ! run

@@ -195,6 +195,10 @@ match tree
 end
 ```
 
+Keep a short projection group on one line. When the group exceeds the line width, use a few lines organized by
+role, such as foundational classifiers, shared types, and module values. Avoid giving every projection its own line
+when several short fields form one readable topic.
+
 Write `/field = local_name` when the local role deserves a different name, or chain projections to disambiguate a
 nested field. Keep an ordinary comma product pattern when the positional structure is itself meaningful and every
 component is used. Ordinary term projections traverse transparent named products and stop at an unopened
@@ -206,12 +210,7 @@ param (
   (/VType; /Thk; /String; builtin) :
   @[import("../std/builtin.zy")] _
 ) in
-let (
-  /Int = StdInt;
-  /OS = StdOS;
-  /int;
-  /process
-) = make_std builtin in
+let (/Int = StdInt; /OS = StdOS; /int; /process) = make_std builtin in
 ...
 ```
 

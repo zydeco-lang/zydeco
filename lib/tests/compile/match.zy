@@ -6,10 +6,7 @@ begin
     end
   that
   param (
-    (
-      /Unit;
-      /exit
-    ) :
+    (/Unit; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
 

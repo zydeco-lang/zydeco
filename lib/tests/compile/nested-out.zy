@@ -1,9 +1,5 @@
 param (
-  (
-    /add;
-    /sub;
-    /exit
-  ) :
+  (/add; /sub; /exit) :
   @[import("../../std/builtin.zy")] _
 ) in
   do x <- ret 40;

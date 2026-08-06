@@ -1,14 +1,6 @@
 begin
   param (
-    (
-      /VType;
-      /Ret;
-      /Unit;
-      /Int;
-      /Char;
-      /sub;
-      /exit
-    ) :
+    (/VType; /Ret; /Unit; /Int; /Char; /sub; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
   let Interleaved =

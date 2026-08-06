@@ -7,12 +7,7 @@
 
 begin
   param (
-    (
-      /VType;
-      /Thk;
-      /Ret;
-      /Unit
-    ) :
+    (/VType; /Thk; /Ret; /Unit) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
   def Option (A : VType) =

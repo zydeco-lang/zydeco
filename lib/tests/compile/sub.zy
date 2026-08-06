@@ -1,8 +1,5 @@
 param (
-  (
-    /sub;
-    /exit
-  ) :
+  (/sub; /exit) :
   @[import("../../std/builtin.zy")] _
 ) in
   do x <- ! (sub) 10 4;

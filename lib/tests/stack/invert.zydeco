@@ -1,18 +1,7 @@
 -- a binary tree
 begin
   param (
-    (
-      /VType;
-      /Thk;
-      /Ret;
-      /Unit;
-      /Int;
-      /OS;
-      /write_str;
-      /write_int;
-      /write_line;
-      /exit
-    ) :
+    (/VType; /Thk; /Ret; /Unit; /Int; /OS; /write_str; /write_int; /write_line; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
 

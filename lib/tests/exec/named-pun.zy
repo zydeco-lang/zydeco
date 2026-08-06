@@ -2,13 +2,7 @@
 -- syntax form. The inferred payload is resolved according to its context.
 begin
   param (
-    (
-      /VType;
-      /Int;
-      /add;
-      /sub;
-      /exit
-    ) :
+    (/VType; /Int; /add; /sub; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
 

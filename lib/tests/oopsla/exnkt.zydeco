@@ -7,13 +7,7 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (
-      /VType;
-      /CType;
-      /Thk;
-      /Ret;
-      builtin
-    ) :
+    (/VType; /CType; /Thk; /Ret; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =

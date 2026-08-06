@@ -5,16 +5,7 @@
 -- If the input is not a number, the program exits.
 begin
   param (
-    (
-      /Thk;
-      /Int;
-      /OS;
-      /add;
-      /write_int;
-      /write_line;
-      /read_line_as_int_branch;
-      /exit
-    ) :
+    (/Thk; /Int; /OS; /add; /write_int; /write_line; /read_line_as_int_branch; /exit) :
     @[import("../std/builtin.zy")] _
   ) that
 

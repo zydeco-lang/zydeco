@@ -1,9 +1,5 @@
 param (
-  (
-    /sub;
-    /mul;
-    /exit
-  ) :
+  (/sub; /mul; /exit) :
   @[import("../../std/builtin.zy")] _
 ) in
   do z <- ! (mul) 10 10;

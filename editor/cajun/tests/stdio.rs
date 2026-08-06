@@ -266,7 +266,7 @@ fn stdio_hover_links_referenced_type_definitions() {
         .unwrap();
     let source = std::fs::read_to_string(&path).unwrap();
     let mut definition = Url::from_file_path(&path).unwrap();
-    definition.set_fragment(Some("L15"));
+    definition.set_fragment(Some("L7"));
     let uri = Url::from_file_path(&path).unwrap().to_string();
     let mut server = LspProcess::start();
 
@@ -297,7 +297,7 @@ fn stdio_hover_links_referenced_type_definitions() {
         "textDocument/hover",
         json!({
             "textDocument": { "uri": uri },
-            "position": { "line": 15, "character": 9 },
+            "position": { "line": 7, "character": 9 },
         }),
     );
     assert_eq!(hover["result"]["contents"]["kind"], "markdown");

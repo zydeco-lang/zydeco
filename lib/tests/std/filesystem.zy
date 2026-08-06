@@ -1,41 +1,14 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (
-      /VType;
-      /Thk;
-      /Unit;
-      /Int;
-      /String;
-      /Bytes;
-      /Writer;
-      /OS;
-      builtin
-    ) :
+    (/VType; /Thk; /Unit; /Int; /String; /Bytes; /Writer; /OS; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   let (
-    /Bool = StdBool;
-    /Result = StdResult;
-    /Int = StdInt;
-    /String = StdString;
-    /Bytes = StdBytes;
-    /Writer = StdWriter;
-    /Path = StdPath;
-    /IoError = StdIoError;
-    /OS = StdOS;
-    /bool;
-    /option;
-    /result = results;
-    /list;
-    /int;
-    /string;
-    /bytes;
-    /io;
-    /fs;
-    /stdio;
-    /process
+    /Bool = StdBool; /Result = StdResult; /Int = StdInt; /String = StdString; /Bytes = StdBytes;
+    /Writer = StdWriter; /Path = StdPath; /IoError = StdIoError; /OS = StdOS;
+    /bool; /option; /result = results; /list; /int; /string; /bytes; /io; /fs; /stdio; /process
   ) = make_std builtin in
   let ! expect_ok
     (A : VType)

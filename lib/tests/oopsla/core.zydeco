@@ -5,33 +5,15 @@ begin
   --| Primitive Base Types
   param (
     (
-      /VType;
-      /CType;
-      /Thk;
-      /Ret;
-      /Unit;
-      /Int;
-      /Char;
-      /String;
-      /OS;
-      /add = primitive_add;
-      /sub = primitive_sub;
-      /mul = primitive_mul;
-      /div = primitive_div;
-      /mod = primitive_mod;
-      /int_eq_branch;
-      /int_lt_branch;
-      /int_gt_branch;
-      /str_scalar_length = primitive_str_scalar_length;
-      /str_append = primitive_str_append;
-      /str_eq_branch;
-      /str_get_branch;
+      /VType; /CType; /Thk; /Ret;
+      /Unit; /Int; /Char; /String; /OS;
+      /add = primitive_add; /sub = primitive_sub; /mul = primitive_mul; /div = primitive_div;
+      /mod = primitive_mod; /int_eq_branch; /int_lt_branch; /int_gt_branch;
       /int_to_str = primitive_int_to_str;
-      /char_to_str = primitive_char_to_str;
-      /char_codepoint = primitive_char_codepoint;
-      /write_str = primitive_write_str;
-      /read_line = primitive_read_line;
-      /read_line_as_int_branch;
+      /char_to_str = primitive_char_to_str; /char_codepoint = primitive_char_codepoint;
+      /str_scalar_length = primitive_str_scalar_length; /str_append = primitive_str_append; /str_eq_branch;
+      /str_get_branch;
+      /write_str = primitive_write_str; /read_line = primitive_read_line; /read_line_as_int_branch;
       /random_int = primitive_random_int;
       /exit = primitive_exit
     ) :

@@ -1,13 +1,7 @@
 -- Unit defined in std.zydeco
 begin
   param (
-    (
-      /Ret;
-      /Unit;
-      /String;
-      /write_line;
-      /exit
-    ) :
+    (/Ret; /Unit; /String; /write_line; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
 

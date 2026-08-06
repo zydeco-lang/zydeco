@@ -8,16 +8,9 @@
 begin
   param (
     (
-      /VType;
-      /CType;
-      /Thk;
-      /Ret;
-      /Unit;
-      /Int;
-      /String;
-      /OS;
-      /add;
-      /int_eq_branch;
+      /VType; /CType; /Thk; /Ret;
+      /Unit; /Int; /String; /OS;
+      /add; /int_eq_branch;
       /str_append;
       /write_line;
       /exit

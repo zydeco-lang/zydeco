@@ -3,14 +3,7 @@
 -- a named tuple component.
 begin
   param (
-    (
-      /Thk;
-      /Ret;
-      /Int;
-      /add;
-      /sub;
-      /exit
-    ) :
+    (/Thk; /Ret; /Int; /add; /sub; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
 

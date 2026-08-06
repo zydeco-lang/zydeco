@@ -2,17 +2,7 @@
 -- e.g. define a Counter that can incr and project out Int or String
 begin
   param (
-    (
-      /CType;
-      /Thk;
-      /Ret;
-      /Int;
-      /String;
-      /add;
-      /int_to_str;
-      /write_line;
-      /exit
-    ) :
+    (/CType; /Thk; /Ret; /Int; /String; /add; /int_to_str; /write_line; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
 

@@ -1,20 +1,7 @@
 -- The public standard-library package type, kept separate from its implementation.
 begin
   param (
-    (
-      /VType;
-      /CType;
-      /Thk;
-      /Ret;
-      /Unit;
-      /Int;
-      /Char;
-      /String;
-      /Bytes;
-      /Reader;
-      /Writer;
-      /OS
-    ) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /Char; /String; /Bytes; /Reader; /Writer; /OS) :
     @[import("builtin.zy")] _
   ) in
     let Prelude =

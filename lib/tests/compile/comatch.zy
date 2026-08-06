@@ -1,10 +1,6 @@
 begin
   param (
-    (
-      /Int;
-      /OS;
-      /exit
-    ) :
+    (/Int; /OS; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
   def Choice =

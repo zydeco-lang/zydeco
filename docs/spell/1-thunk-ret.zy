@@ -7,14 +7,7 @@
 
 begin
   param (
-    (
-      /Thk;
-      /Ret;
-      /Int;
-      /add;
-      /sub;
-      /exit
-    ) :
+    (/Thk; /Ret; /Int; /add; /sub; /exit) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
 

@@ -2,13 +2,7 @@
 -- wrappers support chained patterns and projections.
 begin
   param (
-    (
-      /Int;
-      /add;
-      /sub;
-      /mul;
-      /exit
-    ) :
+    (/Int; /add; /sub; /mul; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -63,10 +57,7 @@ begin
     /outer = /inner = chained_projected_inner : Int;
     projected_wrapped
   ) = wrapped in
-  let (
-    /left = /x = left_x : Int;
-    /right = /x = right_x : Int
-  ) = ambiguous in
+  let (/left = /x = left_x : Int; /right = /x = right_x : Int) = ambiguous in
   let (
     /punned : Int;
     punnable_whole

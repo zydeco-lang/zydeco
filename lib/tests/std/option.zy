@@ -1,20 +1,11 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (
-      /Int;
-      /OS;
-      builtin
-    ) :
+    (/Int; /OS; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (
-    /Int = StdInt;
-    /OS = StdOS;
-    /option;
-    /process
-  ) = make_std builtin in
+  let (/Int = StdInt; /OS = StdOS; /option; /process) = make_std builtin in
   do value <- ! (option/some) StdInt 0;
   ! (option/fold)
     StdInt

@@ -1,27 +1,13 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (
-      /Thk;
-      /Int;
-      /String;
-      /OS;
-      builtin
-    ) :
+    (/Thk; /Int; /String; /OS; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   let (
-    /Option = StdOption;
-    /Int = StdInt;
-    /String = StdString;
-    /IoError = StdIoError;
-    /OS = StdOS;
-    /option;
-    /result;
-    /string;
-    /stdio;
-    /process
+    /Option = StdOption; /Int = StdInt; /String = StdString; /IoError = StdIoError; /OS = StdOS;
+    /option; /result; /string; /stdio; /process
   ) = make_std builtin in
   let ! read_int (continuation : Thk (StdOption StdInt -> StdOS)) : StdOS =
     ! (stdio/read_line) {

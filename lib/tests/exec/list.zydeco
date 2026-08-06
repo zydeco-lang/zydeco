@@ -1,24 +1,13 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (
-      /Ret;
-      /Int;
-      /String;
-      builtin
-    ) :
+    (/Ret; /Int; /String; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   let (
-    /List = StdList;
-    /Int = StdInt;
-    /String = StdString;
-    /list;
-    /int;
-    /string;
-    /stdio;
-    /process
+    /List = StdList; /Int = StdInt; /String = StdString;
+    /list; /int; /string; /stdio; /process
   ) = make_std builtin in
   def fix foldl (xs : StdList StdString) (i : StdInt) : Ret StdInt =
     ! (list/case)

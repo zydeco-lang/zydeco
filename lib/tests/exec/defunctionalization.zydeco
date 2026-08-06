@@ -3,18 +3,7 @@
 -- the numbers in a list.
 begin
   param (
-    (
-      /VType;
-      /CType;
-      /Thk;
-      /Ret;
-      /Unit;
-      /Int;
-      /add;
-      /int_to_str;
-      /write_line;
-      /exit
-    ) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /add; /int_to_str; /write_line; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
 

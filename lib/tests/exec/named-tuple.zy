@@ -2,13 +2,7 @@
 -- unnamed components but preserves their physical positions.
 begin
   param (
-    (
-      /Int;
-      /add;
-      /sub;
-      /mul;
-      /exit
-    ) :
+    (/Int; /add; /sub; /mul; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
 

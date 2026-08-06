@@ -482,12 +482,12 @@ mod tests {
             .canonicalize()
             .unwrap();
         let project = ProjectState::load(&path, &HashMap::new()).unwrap();
-        let hover = project.hover(&path, Position::new(15, 9)).unwrap();
+        let hover = project.hover(&path, Position::new(7, 9)).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
         let mut definition = Url::from_file_path(&path).unwrap();
-        definition.set_fragment(Some("L15"));
+        definition.set_fragment(Some("L7"));
 
         assert_eq!(
             contents.value,
@@ -502,12 +502,12 @@ mod tests {
             .canonicalize()
             .unwrap();
         let project = ProjectState::load(&path, &HashMap::new()).unwrap();
-        let hover = project.hover(&path, Position::new(23, 11)).unwrap();
+        let hover = project.hover(&path, Position::new(17, 11)).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
         let mut definition = Url::from_file_path(&path).unwrap();
-        definition.set_fragment(Some("L21"));
+        definition.set_fragment(Some("L15"));
 
         assert_eq!(
             contents.value,
@@ -523,9 +523,9 @@ mod tests {
             .unwrap();
         let project = ProjectState::load(&path, &HashMap::new()).unwrap();
         let mut parameter = Url::from_file_path(&path).unwrap();
-        parameter.set_fragment(Some("L12"));
+        parameter.set_fragment(Some("L6"));
 
-        let short = project.hover(&path, Position::new(11, 7)).unwrap();
+        let short = project.hover(&path, Position::new(5, 7)).unwrap();
         let HoverContents::Markup(short) = short.contents else {
             panic!("type hover should use markup content")
         };
@@ -548,7 +548,7 @@ mod tests {
             )
         );
 
-        let long = project.hover(&path, Position::new(90, 7)).unwrap();
+        let long = project.hover(&path, Position::new(84, 7)).unwrap();
         let HoverContents::Markup(long) = long.contents else {
             panic!("type hover should use markup content")
         };

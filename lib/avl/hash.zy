@@ -1,31 +1,13 @@
 begin
   let make_std = @[import("../std/std.zy")] _ that
   param (
-    (
-      /VType;
-      /Thk;
-      /Ret;
-      /Unit;
-      /Int;
-      /String;
-      /OS;
-      builtin
-    ) :
+    (/VType; /Thk; /Ret; /Unit; /Int; /String; /OS; builtin) :
     @[import("../std/builtin.zy")] _
   ) that
 
   let (
-    /Bool = StdBool;
-    /Option = StdOption;
-    /Int = StdInt;
-    /String = StdString;
-    /OS = StdOS;
-    /bool;
-    /option;
-    /int;
-    /string;
-    /stdio;
-    /process
+    /Bool = StdBool; /Option = StdOption; /Int = StdInt; /String = StdString; /OS = StdOS;
+    /bool; /option; /int; /string; /stdio; /process
   ) = make_std builtin in
   begin
     let Cmp (A : VType) =
@@ -121,12 +103,7 @@ begin
       | +Node(/left; /value; /tree_height; /right) =>
         match left
         | +Leaf() => ret +Leaf()
-        | +Node(
-            /left = left_left;
-            /value = left_value;
-            /tree_height = left_height;
-            /right = left_right
-          ) =>
+        | +Node(/left = left_left; /value = left_value; /tree_height = left_height; /right = left_right) =>
           do new_right <- ! fix_height A +Node(
             left = left_right,
             = value,
@@ -149,10 +126,7 @@ begin
         match right
         | +Leaf() => ret +Leaf()
         | +Node(
-            /left = right_left;
-            /value = right_value;
-            /tree_height = right_height;
-            /right = right_right
+            /left = right_left; /value = right_value; /tree_height = right_height; /right = right_right
           ) =>
           do new_left <- ! fix_height A +Node(
             = left,
@@ -357,18 +331,10 @@ begin
         | +Leaf() => ret (bool/true)
         | +Node(_) => ret (bool/false)
         end
-      | +Node(
-          /left = first_left;
-          /value = first_value;
-          /right = first_right
-        ) =>
+      | +Node(/left = first_left; /value = first_value; /right = first_right) =>
         match second
         | +Leaf() => ret (bool/false)
-        | +Node(
-            /left = second_left;
-            /value = second_value;
-            /right = second_right
-          ) =>
+        | +Node(/left = second_left; /value = second_value; /right = second_right) =>
           do values_equal <- ! item_equal first_value second_value;
           ! (bool/if)
             (Ret StdBool)

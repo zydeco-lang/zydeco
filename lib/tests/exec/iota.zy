@@ -1,17 +1,10 @@
 begin
   param (
     (
-      /VType;
-      /Thk;
-      /Ret;
-      /Unit;
-      /Int;
-      /String;
-      /OS;
-      /add = primitive_add;
-      /int_lt_branch;
-      /write_int = primitive_write_int;
-      /write_line = primitive_write_line;
+      /VType; /Thk; /Ret;
+      /Unit; /Int; /String; /OS;
+      /add = primitive_add; /int_lt_branch;
+      /write_int = primitive_write_int; /write_line = primitive_write_line;
       /exit
     ) :
     @[import("../../std/builtin.zy")] _

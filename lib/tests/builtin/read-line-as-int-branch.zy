@@ -1,10 +1,5 @@
 param (
-  (
-    /OS;
-    /int_eq_branch;
-    /read_line_as_int_branch;
-    /exit
-  ) :
+  (/OS; /int_eq_branch; /read_line_as_int_branch; /exit) :
   @[import("../../std/builtin.zy")] _
 ) in
   ! (read_line_as_int_branch)

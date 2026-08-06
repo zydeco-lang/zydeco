@@ -1,14 +1,9 @@
 begin
   param (
     (
-      /add;
-      /sub;
-      /str_scalar_length;
-      /str_byte_length;
-      /str_append;
-      /int_to_str;
-      /char_to_str;
-      /char_codepoint;
+      /add; /sub; /int_to_str;
+      /char_to_str; /char_codepoint;
+      /str_scalar_length; /str_byte_length; /str_append;
       /exit
     ) :
     @[import("../../std/builtin.zy")] _

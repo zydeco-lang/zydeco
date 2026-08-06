@@ -3,18 +3,7 @@
 --| As it is a CBV language, our syntax only contains expressions.
 begin
   param (
-    (
-      /VType;
-      /CType;
-      /Thk;
-      /Ret;
-      /Unit;
-      /String;
-      /OS;
-      /str_eq_branch;
-      /write_line;
-      /exit
-    ) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /String; /OS; /str_eq_branch; /write_line; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
 

@@ -1,10 +1,6 @@
 begin
   param (
-    (
-      /add;
-      /sub;
-      /exit
-    ) :
+    (/add; /sub; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
 

@@ -9,18 +9,10 @@ begin
   let monadic_basis = @[import("../std/monad.zy")] _ that
   param (
     (
-      /VType;
-      /CType;
-      /Thk;
-      /Ret;
-      /Int;
-      /String;
-      /OS;
-      /add;
-      /int_lt_branch;
-      /write_int;
-      /write_line;
-      /read_line_as_int_branch;
+      /VType; /CType; /Thk; /Ret;
+      /Int; /String; /OS;
+      /add; /int_lt_branch;
+      /write_int; /write_line; /read_line_as_int_branch;
       /exit;
       builtin
     ) :

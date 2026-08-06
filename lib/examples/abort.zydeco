@@ -2,14 +2,7 @@
 -- Funciton Type
 begin
   param (
-    (
-      /VType;
-      /CType;
-      /Thk;
-      /Ret;
-      /Int;
-      /exit
-    ) :
+    (/VType; /CType; /Thk; /Ret; /Int; /exit) :
     @[import("../std/builtin.zy")] _
   ) that
 

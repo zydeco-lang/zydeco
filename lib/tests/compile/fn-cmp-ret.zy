@@ -1,11 +1,6 @@
 begin
   param (
-    (
-      /Ret;
-      /Int;
-      /int_eq_branch;
-      /exit
-    ) :
+    (/Ret; /Int; /int_eq_branch; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
   def ! f (x : Int) : Ret Int =

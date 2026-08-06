@@ -6,13 +6,7 @@ begin
     end
   that
   param (
-    (
-      /Thk;
-      /Unit;
-      /Int;
-      /OS;
-      /exit
-    ) :
+    (/Thk; /Unit; /Int; /OS; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
   def ! f : Bool -> Thk (Int -> OS) -> OS =

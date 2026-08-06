@@ -1,23 +1,11 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (
-      /Ret;
-      /Int;
-      builtin
-    ) :
+    (/Ret; /Int; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (
-    /Bool = StdBool;
-    /Int = StdInt;
-    /bool;
-    /option;
-    /list;
-    /int;
-    /process
-  ) = make_std builtin in
+  let (/Bool = StdBool; /Int = StdInt; /bool; /option; /list; /int; /process) = make_std builtin in
   let ! status (condition : StdBool) : Ret StdInt =
     ! (bool/if)
       (Ret StdInt)

@@ -1,22 +1,11 @@
 begin
   param (
     (
-      /VType;
-      /Thk;
-      /Ret;
-      /Unit;
-      /Int;
-      /Char;
-      /String;
-      /OS;
-      /add;
-      /int_eq_branch;
-      /int_lt_branch;
-      /str_scalar_length;
-      /str_append;
-      /str_get_branch;
-      /char_to_str;
-      /char_codepoint;
+      /VType; /Thk; /Ret;
+      /Unit; /Int; /Char; /String; /OS;
+      /add; /int_eq_branch; /int_lt_branch;
+      /char_to_str; /char_codepoint;
+      /str_scalar_length; /str_append; /str_get_branch;
       /write_line;
       /exit
     ) :

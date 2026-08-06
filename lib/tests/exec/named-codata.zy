@@ -2,14 +2,7 @@
 -- use named value types, and slash can project from a returned named value.
 begin
   param (
-    (
-      /Thk;
-      /Ret;
-      /Int;
-      /add;
-      /sub;
-      /exit
-    ) :
+    (/Thk; /Ret; /Int; /add; /sub; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
 

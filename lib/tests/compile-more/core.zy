@@ -5,25 +5,12 @@ begin
   --| Primitive Base Types
   param (
     (
-      /VType;
-      /CType;
-      /Thk;
-      /Ret;
-      /Unit;
-      /Int;
-      /String;
-      /OS;
-      /add = primitive_add;
-      /sub = primitive_sub;
-      /mul = primitive_mul;
-      /int_eq_branch;
-      /int_lt_branch;
+      /VType; /CType; /Thk; /Ret;
+      /Unit; /Int; /String; /OS;
+      /add = primitive_add; /sub = primitive_sub; /mul = primitive_mul; /int_eq_branch; /int_lt_branch;
       /int_gt_branch;
-      /write_str = primitive_write_str;
-      /write_int = primitive_write_int;
-      /write_line = primitive_write_line;
-      /read_line = primitive_read_line;
-      /read_line_as_int_branch;
+      /write_str = primitive_write_str; /write_int = primitive_write_int; /write_line = primitive_write_line;
+      /read_line = primitive_read_line; /read_line_as_int_branch;
       /random_int = primitive_random_int;
       /exit = primitive_exit
     ) :

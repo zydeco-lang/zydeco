@@ -8,14 +8,7 @@
 begin
   let make_std = @[import("../../lib/std/std.zy")] _ that
   param (
-    (
-      /CType;
-      /Thk;
-      /Ret;
-      /Int;
-      /OS;
-      builtin
-    ) :
+    (/CType; /Thk; /Ret; /Int; /OS; builtin) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
 
@@ -43,15 +36,7 @@ begin
 
   -- The standard-library term is an ordinary dependency. Opening its result
   -- establishes abstract Boolean, option, and list types in the lexical tail.
-  let (
-    /Int = StdInt;
-    /OS = StdOS;
-    /bool;
-    /int;
-    /string;
-    /stdio;
-    /process
-  ) = make_std builtin in
+  let (/Int = StdInt; /OS = StdOS; /bool; /int; /string; /stdio; /process) = make_std builtin in
   begin
     def factorial_step : Thk (
       Thk (StdInt -> Ret StdInt) ->

@@ -1,9 +1,5 @@
 param (
-  (
-    /write_line;
-    /read_line;
-    /exit
-  ) :
+  (/write_line; /read_line; /exit) :
   @[import("../../std/builtin.zy")] _
 ) in
   ! (read_line) {

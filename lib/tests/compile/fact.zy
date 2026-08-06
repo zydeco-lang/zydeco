@@ -1,11 +1,7 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (
-      /Ret;
-      /Int;
-      builtin
-    ) :
+    (/Ret; /Int; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
 

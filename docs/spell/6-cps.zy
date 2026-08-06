@@ -6,15 +6,7 @@
 
 begin
   param (
-    (
-      /VType;
-      /Thk;
-      /Unit;
-      /String;
-      /OS;
-      /write_line;
-      /exit
-    ) :
+    (/VType; /Thk; /Unit; /String; /OS; /write_line; /exit) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
 

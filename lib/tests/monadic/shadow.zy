@@ -1,10 +1,7 @@
 begin
   let outer_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (
-      /Unit = _;
-      builtin
-    ) :
+    (/Unit = _; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =

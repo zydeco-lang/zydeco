@@ -1,12 +1,6 @@
 begin
   param (
-    (
-      /VType;
-      /Ret;
-      /Int;
-      /sub;
-      /exit
-    ) :
+    (/VType; /Ret; /Int; /sub; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
   let Transparent =

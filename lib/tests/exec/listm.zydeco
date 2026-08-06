@@ -1,16 +1,7 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (
-      /VType;
-      /CType;
-      /Thk;
-      /Ret;
-      /Unit;
-      /Int;
-      /OS;
-      builtin
-    ) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /OS; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
   def List~ (A : VType) : VType =
@@ -34,14 +25,7 @@ begin
     end
   that
 
-  let (
-    /Int = StdInt;
-    /OS = StdOS;
-    /bool;
-    /int;
-    /stdio;
-    /process
-  ) = make_std builtin in
+  let (/Int = StdInt; /OS = StdOS; /bool; /int; /stdio; /process) = make_std builtin in
   -- List~ is actually coinductive type
   def fix loop : Ret (List~ StdInt) =
     ret +Cons(0, loop)

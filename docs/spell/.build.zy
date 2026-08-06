@@ -1,22 +1,11 @@
 begin
   param (
     (
-      /VType;
-      /CType;
-      /Thk;
-      /Ret;
-      /Unit;
-      /Int;
-      /String;
-      /OS;
-      /int_eq_branch;
-      /int_lt_branch;
-      /str_scalar_length;
-      /str_split_once_branch;
-      /str_split_at_branch;
-      /str_eq_branch;
-      /write_str;
-      /read_till_eof;
+      /VType; /CType; /Thk; /Ret;
+      /Unit; /Int; /String; /OS;
+      /int_eq_branch; /int_lt_branch;
+      /str_scalar_length; /str_split_once_branch; /str_split_at_branch; /str_eq_branch;
+      /write_str; /read_till_eof;
       /exit
     ) :
     @[import("../../lib/std/builtin.zy")] _

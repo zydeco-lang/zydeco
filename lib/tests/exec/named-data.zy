@@ -1,13 +1,7 @@
 -- Data constructors treat a named tuple as an ordinary payload type.
 begin
   param (
-    (
-      /Unit;
-      /Int;
-      /add;
-      /sub;
-      /exit
-    ) :
+    (/Unit; /Int; /add; /sub; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
 

@@ -2,12 +2,7 @@
 -- whole-pattern annotations, and holes alongside unnamed patterns.
 begin
   param (
-    (
-      /Int;
-      /add;
-      /sub;
-      /exit
-    ) :
+    (/Int; /add; /sub; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
 

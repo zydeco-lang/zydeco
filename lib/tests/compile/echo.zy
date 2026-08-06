@@ -1,11 +1,6 @@
 begin
   param (
-    (
-      /Thk;
-      /OS;
-      /write_line;
-      /read_line
-    ) :
+    (/Thk; /OS; /write_line; /read_line) :
     @[import("../../std/builtin.zy")] _
   ) that
 

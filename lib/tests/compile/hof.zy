@@ -1,13 +1,6 @@
 begin
   param (
-    (
-      /VType;
-      /CType;
-      /Thk;
-      /Ret;
-      /Int;
-      /exit
-    ) :
+    (/VType; /CType; /Thk; /Ret; /Int; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
   def ! apply (A : VType) (B : CType) (f : Thk (A -> B)) (x : A) : B =

@@ -1,23 +1,11 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (
-      /Ret;
-      /Int;
-      /String;
-      builtin
-    ) :
+    (/Ret; /Int; /String; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (
-    /Int = StdInt;
-    /String = StdString;
-    /option;
-    /int;
-    /string;
-    /process
-  ) = make_std builtin in
+  let (/Int = StdInt; /String = StdString; /option; /int; /string; /process) = make_std builtin in
   do present <- ! (string/split_once) "left:right" ':';
   do present_status <- ! (option/fold)
     (StdString * StdString)

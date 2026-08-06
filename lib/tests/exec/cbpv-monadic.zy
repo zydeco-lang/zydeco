@@ -4,30 +4,14 @@ begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
     (
-      /VType;
-      /CType;
-      /Thk;
-      /Ret;
-      /Unit;
-      /Int;
-      /Char;
-      /String;
-      /OS;
-      /add = primitive_add;
-      /mul = primitive_mul;
-      /int_eq_branch;
-      /int_lt_branch;
-      /int_gt_branch;
-      /str_scalar_length = primitive_str_scalar_length;
-      /str_append = primitive_str_append;
-      /str_eq_branch;
-      /str_get_branch;
+      /VType; /CType; /Thk; /Ret;
+      /Unit; /Int; /Char; /String; /OS;
+      /add = primitive_add; /mul = primitive_mul; /int_eq_branch; /int_lt_branch; /int_gt_branch;
       /int_to_str = primitive_int_to_str;
-      /char_to_str = primitive_char_to_str;
-      /char_codepoint = primitive_char_codepoint;
-      /write_str = primitive_write_str;
-      /write_line = primitive_write_line;
-      /read_line = primitive_read_line;
+      /char_to_str = primitive_char_to_str; /char_codepoint = primitive_char_codepoint;
+      /str_scalar_length = primitive_str_scalar_length; /str_append = primitive_str_append; /str_eq_branch;
+      /str_get_branch;
+      /write_str = primitive_write_str; /write_line = primitive_write_line; /read_line = primitive_read_line;
       /exit = primitive_exit;
       builtin
     ) :

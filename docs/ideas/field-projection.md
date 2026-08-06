@@ -85,11 +85,7 @@ When the bindee's expected type starts with an existential telescope, a semicolo
 patterns selectively opens that package:
 
 ```zydeco
-let (
-  /Item = LocalItem;
-  /value;
-  /consume
-) = package in
+let (/Item = LocalItem; /value; /consume) = package in
 ...
 ```
 

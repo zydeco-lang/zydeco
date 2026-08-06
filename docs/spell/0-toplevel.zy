@@ -17,14 +17,7 @@ begin
   -- `that` lets this parameter move within the current block according to the
   -- dependency graph, so later definitions may use its fields.
   param (
-    (
-      /VType;
-      /Thk;
-      /Ret;
-      /Int;
-      /String;
-      /exit
-    ) :
+    (/VType; /Thk; /Ret; /Int; /String; /exit) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
 

@@ -1,21 +1,11 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (
-      /Ret;
-      /Int;
-      builtin
-    ) :
+    (/Ret; /Int; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (
-    /Int = StdInt;
-    /bool;
-    /int;
-    /string;
-    /process
-  ) = make_std builtin in
+  let (/Int = StdInt; /bool; /int; /string; /process) = make_std builtin in
   do equal <- ! (int/eq) 3 3;
   do equal_status <- ! (bool/if)
     (Ret StdInt)

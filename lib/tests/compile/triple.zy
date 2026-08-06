@@ -1,10 +1,6 @@
 begin
   param (
-    (
-      /VType;
-      /Int;
-      /exit
-    ) :
+    (/VType; /Int; /exit) :
     @[import("../../std/builtin.zy")] _
   ) that
   def packed :

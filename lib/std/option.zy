@@ -1,11 +1,5 @@
 param (
-  (
-    /VType;
-    /CType;
-    /Thk;
-    /Ret;
-    /Unit
-  ) :
+  (/VType; /CType; /Thk; /Ret; /Unit) :
   @[import("builtin.zy")] _
 ) in
 begin
