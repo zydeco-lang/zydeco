@@ -89,6 +89,9 @@ begin
     (outer = (inner = Int))
   that
   let NestedProjectedInt : VType =
+    NestedNamedInt/inner
+  that
+  let NestedChainedProjectedInt : VType =
     NestedNamedInt/outer/inner
   that
 
@@ -96,6 +99,7 @@ begin
   def pattern_value : PatternProjectedInt = 1 that
   def whole_value : WholeProjectedInt = 2 that
   def nested_value : NestedProjectedInt = 3 that
+  def nested_chained_value : NestedChainedProjectedInt = 3 that
   def punned_value : PunnedProjectedInt = 4 that
 
   (
@@ -103,6 +107,7 @@ begin
     pattern_value = pattern_value,
     whole_value = whole_value,
     nested_value = nested_value,
+    nested_chained_value = nested_chained_value,
     punned_value = punned_value,
   )
 end
@@ -387,6 +392,34 @@ begin
   let DuplicateFields = (x :: Int) * (x :: Int) that
   def duplicate : DuplicateFields = (x = 0, x = 1) that
   duplicate/x
+end
+"#,
+    );
+}
+
+#[test]
+fn rejects_ambiguous_nested_named_projection() {
+    NamedCase::assert_type_error(
+        r#"
+begin
+  let DuplicateFields = ((x :: Int) * Int) * (outer :: (x :: Int)) that
+  def duplicate : DuplicateFields = ((x = 0, 1), outer = x = 2) that
+  duplicate/x
+end
+"#,
+    );
+}
+
+#[test]
+fn rejects_ambiguous_nested_named_type_projection() {
+    NamedCase::assert_type_error(
+        r#"
+begin
+  let DuplicateFields : (x :: (x :: VType)) =
+    (x = (x = Int))
+  that
+  let InvalidProjection : VType = DuplicateFields/x that
+  ()
 end
 "#,
     );

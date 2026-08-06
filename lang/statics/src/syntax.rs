@@ -519,7 +519,7 @@ pub enum Value {
 /// A statically resolved named projection.
 ///
 /// The field name remains available for typed formatting, while `target`
-/// records how the projection is erased.
+/// records the product projections that remain after named wrappers erase.
 #[derive(Clone, Debug)]
 pub struct ResolvedField {
     pub name: FieldName,
@@ -527,9 +527,15 @@ pub struct ResolvedField {
 }
 
 #[derive(Clone, Debug)]
-pub enum ProjTarget {
-    Direct,
-    Product(usize),
+pub struct ProjTarget {
+    pub products: Vec<ProductProjection>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProductProjection {
+    /// The product receiver at this step, retained for physical layout.
+    pub product: TypeId,
+    pub position: usize,
 }
 
 /* ------------------------------- Computation ------------------------------ */

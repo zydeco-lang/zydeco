@@ -174,6 +174,181 @@ impl PatternCheck {
     }
 }
 
+#[derive(Clone)]
+struct ValueFieldCandidate {
+    target: ss::ProjTarget,
+    projected: ss::TypeId,
+}
+
+#[derive(Clone)]
+struct TypeFieldStep {
+    name: FieldName,
+    projected: ss::KindId,
+}
+
+#[derive(Clone)]
+struct TypeFieldCandidate {
+    path: Vec<TypeFieldStep>,
+    projected: ss::KindId,
+}
+
+/// Structural lookup shared by named projections.
+///
+/// Labels are transparent search nodes. Products contribute runtime path
+/// steps, and every other type constructor is an opacity boundary.
+struct FieldProjectionResolver;
+
+impl FieldProjectionResolver {
+    fn value_k(
+        tycker: &mut Tycker<'_>, env: &ss::TyEnv, root: ss::TypeId, field: &FieldName,
+    ) -> ResultKont<ValueFieldCandidate> {
+        let candidates = Self::value_candidates_k(
+            tycker,
+            env,
+            root,
+            field,
+            &[],
+            &mut std::collections::HashSet::new(),
+        )?;
+        match candidates.as_slice() {
+            | [] => tycker.err_k(
+                TyckError::MissingNamedField { field: field.clone(), found: root },
+                std::panic::Location::caller(),
+            ),
+            | [candidate] => Ok(candidate.clone()),
+            | _ => tycker.err_k(
+                TyckError::DuplicateNamedField { field: field.clone(), found: root },
+                std::panic::Location::caller(),
+            ),
+        }
+    }
+
+    fn value_candidates_k(
+        tycker: &mut Tycker<'_>, env: &ss::TyEnv, current: ss::TypeId, field: &FieldName,
+        products: &[ss::ProductProjection], active: &mut std::collections::HashSet<ss::TypeId>,
+    ) -> ResultKont<Vec<ValueFieldCandidate>> {
+        let view = current.unroll_k(tycker)?.subst_env_k(tycker, env)?;
+        if !active.insert(view) {
+            return Ok(Vec::new());
+        }
+        let structure = tycker.type_filled_k(&view)?.to_owned();
+        let candidates = match structure {
+            | ss::Type::Label(ss::Label(found, projected)) => {
+                let direct = (found == *field).then(|| ValueFieldCandidate {
+                    target: ss::ProjTarget { products: products.to_vec() },
+                    projected,
+                });
+                let nested =
+                    Self::value_candidates_k(tycker, env, projected, field, products, active)?;
+                direct.into_iter().chain(nested).collect()
+            }
+            | ss::Type::Prod(_) => {
+                let branches = Self::product_components_k(tycker, env, view)?
+                    .into_iter()
+                    .enumerate()
+                    .map(|(position, component)| {
+                        let products = products
+                            .iter()
+                            .cloned()
+                            .chain([ss::ProductProjection { product: view, position }])
+                            .collect::<Vec<_>>();
+                        Self::value_candidates_k(tycker, env, component, field, &products, active)
+                    })
+                    .collect::<ResultKont<Vec<_>>>()?;
+                branches.into_iter().flatten().collect()
+            }
+            | _ => Vec::new(),
+        };
+        active.remove(&view);
+        Ok(candidates)
+    }
+
+    fn product_components_k(
+        tycker: &mut Tycker<'_>, env: &ss::TyEnv, product: ss::TypeId,
+    ) -> ResultKont<Vec<ss::TypeId>> {
+        let mut next = Some(product);
+        std::iter::from_fn(|| {
+            let current = next.take()?;
+            let view = match current.unroll_k(tycker).and_then(|ty| ty.subst_env_k(tycker, env)) {
+                | Ok(view) => view,
+                | Err(()) => return Some(Err(())),
+            };
+            match tycker.type_filled_k(&view) {
+                | Ok(ss::Type::Prod(ss::Prod(item, tail))) => {
+                    next = Some(tail);
+                    Some(Ok(item))
+                }
+                | Ok(_) => Some(Ok(view)),
+                | Err(()) => Some(Err(())),
+            }
+        })
+        .collect()
+    }
+
+    fn r#type(
+        tycker: &mut Tycker<'_>, root: ss::KindId, field: &FieldName,
+    ) -> ResultKont<TypeFieldCandidate> {
+        let candidates = Self::type_candidates_k(
+            tycker,
+            root,
+            field,
+            &[],
+            &mut std::collections::HashSet::new(),
+        )?;
+        match candidates.as_slice() {
+            | [] => tycker.err_k(
+                TyckError::MissingNamedTypeField { field: field.clone(), found: root },
+                std::panic::Location::caller(),
+            ),
+            | [candidate] => Ok(candidate.clone()),
+            | _ => tycker.err_k(
+                TyckError::AmbiguousNamedTypeField { field: field.clone(), found: root },
+                std::panic::Location::caller(),
+            ),
+        }
+    }
+
+    fn type_candidates_k(
+        tycker: &mut Tycker<'_>, current: ss::KindId, field: &FieldName, path: &[TypeFieldStep],
+        active: &mut std::collections::HashSet<ss::KindId>,
+    ) -> ResultKont<Vec<TypeFieldCandidate>> {
+        if !active.insert(current) {
+            return Ok(Vec::new());
+        }
+        let candidates = match tycker.kind_filled_k(&current)?.to_owned() {
+            | ss::Kind::Label(ss::Label(found, projected)) => {
+                let path = path
+                    .iter()
+                    .cloned()
+                    .chain([TypeFieldStep { name: found.clone(), projected }])
+                    .collect::<Vec<_>>();
+                let direct =
+                    (found == *field).then(|| TypeFieldCandidate { path: path.clone(), projected });
+                let nested = Self::type_candidates_k(tycker, projected, field, &path, active)?;
+                direct.into_iter().chain(nested).collect()
+            }
+            | _ => Vec::new(),
+        };
+        active.remove(&current);
+        Ok(candidates)
+    }
+
+    fn project_type_k(
+        tycker: &mut Tycker<'_>, head: ss::TypeId, candidate: TypeFieldCandidate,
+        projected: ss::KindId,
+    ) -> ResultKont<ss::TypeId> {
+        let final_step = candidate.path.len() - 1;
+        candidate.path.into_iter().enumerate().try_fold(
+            head,
+            |head, (index, TypeFieldStep { name, projected: step_kind })| {
+                let step_kind = if index == final_step { projected } else { step_kind };
+                let result = head.project_named(tycker, &name, step_kind);
+                tycker.err_p_to_k(result)
+            },
+        )
+    }
+}
+
 impl Tycker<'_> {
     fn pattern_has_payload_annotation(&self, pattern: su::PatId) -> bool {
         match self.scoped.pats[&pattern] {
@@ -4486,119 +4661,26 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 let checked = self.mk(head).tyck_k(tycker, Action::syn())?;
                 match checked {
                     | TermAnnId::Type(head, head_kind) => {
-                        let ss::Kind::Label(ss::Label(found, payload_kind)) =
-                            tycker.kind_filled_k(&head_kind)?.to_owned()
-                        else {
-                            tycker.err_k(TyckError::KindMismatch, std::panic::Location::caller())?
-                        };
-                        if name != found {
-                            tycker.err_k(
-                                TyckError::NamedLabelMismatch {
-                                    expected: found,
-                                    found: name.clone(),
-                                },
-                                std::panic::Location::caller(),
-                            )?
-                        }
+                        let candidate = FieldProjectionResolver::r#type(tycker, head_kind, &name)?;
                         let payload_kind = match switch {
-                            | Switch::Syn => payload_kind,
+                            | Switch::Syn => candidate.projected,
                             | Switch::Ana(AnnId::Kind(expected)) => {
-                                Lub::lub_k(payload_kind, expected, tycker)?
+                                Lub::lub_k(candidate.projected, expected, tycker)?
                             }
                             | Switch::Ana(AnnId::Set | AnnId::Type(_)) => tycker
                                 .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
                         };
-                        let projected = head.project_named(tycker, &name, payload_kind);
-                        let projected = tycker.err_p_to_k(projected)?;
+                        let projected = FieldProjectionResolver::project_type_k(
+                            tycker,
+                            head,
+                            candidate,
+                            payload_kind,
+                        )?;
                         TermAnnId::Type(projected, payload_kind)
                     }
                     | TermAnnId::Value(head, head_ty) => {
-                        let head_view =
-                            head_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
-                        let (target, projected_ty) =
-                            match tycker.type_filled_k(&head_view)?.to_owned() {
-                                | ss::Type::Label(ss::Label(found, projected_ty)) => {
-                                    if name != found {
-                                        tycker.err_k(
-                                            TyckError::MissingNamedField {
-                                                field: name.clone(),
-                                                found: head_ty,
-                                            },
-                                            std::panic::Location::caller(),
-                                        )?
-                                    }
-                                    (ss::ProjTarget::Direct, projected_ty)
-                                }
-                                | ss::Type::Prod(_) => {
-                                    let mut next = Some(head_view);
-                                    let components = std::iter::from_fn(|| {
-                                        let current = next.take()?;
-                                        let view = match current
-                                            .unroll_k(tycker)
-                                            .and_then(|ty| ty.subst_env_k(tycker, &self.info))
-                                        {
-                                            | Ok(view) => view,
-                                            | Err(()) => return Some(Err(())),
-                                        };
-                                        match tycker.type_filled_k(&view) {
-                                            | Ok(ss::Type::Prod(ss::Prod(item, tail))) => {
-                                                next = Some(tail);
-                                                Some(Ok(item))
-                                            }
-                                            | Ok(_) => Some(Ok(view)),
-                                            | Err(()) => Some(Err(())),
-                                        }
-                                    })
-                                    .collect::<ResultKont<Vec<_>>>()?;
-                                    let matches = components
-                                        .into_iter()
-                                        .enumerate()
-                                        .map(|(position, component)| -> ResultKont<_> {
-                                            let view = component
-                                                .unroll_k(tycker)?
-                                                .subst_env_k(tycker, &self.info)?;
-                                            Ok(match tycker.type_filled_k(&view)?.to_owned() {
-                                                | ss::Type::Label(ss::Label(
-                                                    found,
-                                                    projected_ty,
-                                                )) if found == name => {
-                                                    Some((position, projected_ty))
-                                                }
-                                                | _ => None,
-                                            })
-                                        })
-                                        .collect::<ResultKont<Vec<_>>>()?
-                                        .into_iter()
-                                        .flatten()
-                                        .collect::<Vec<_>>();
-                                    match matches.as_slice() {
-                                        | [] => tycker.err_k(
-                                            TyckError::MissingNamedField {
-                                                field: name.clone(),
-                                                found: head_ty,
-                                            },
-                                            std::panic::Location::caller(),
-                                        )?,
-                                        | [(position, projected_ty)] => {
-                                            (ss::ProjTarget::Product(*position), *projected_ty)
-                                        }
-                                        | _ => tycker.err_k(
-                                            TyckError::DuplicateNamedField {
-                                                field: name.clone(),
-                                                found: head_ty,
-                                            },
-                                            std::panic::Location::caller(),
-                                        )?,
-                                    }
-                                }
-                                | _ => tycker.err_k(
-                                    TyckError::MissingNamedField {
-                                        field: name.clone(),
-                                        found: head_ty,
-                                    },
-                                    std::panic::Location::caller(),
-                                )?,
-                            };
+                        let ValueFieldCandidate { target, projected: projected_ty } =
+                            FieldProjectionResolver::value_k(tycker, &self.info, head_ty, &name)?;
                         let projected_ty = match switch {
                             | Switch::Syn => projected_ty,
                             | Switch::Ana(AnnId::Type(expected)) => {

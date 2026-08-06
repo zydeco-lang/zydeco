@@ -58,6 +58,8 @@ pub enum TyckError {
     TypeMismatch { expected: TypeId, found: TypeId },
     TypeExpected { expected: String, found: TypeId },
     NamedLabelMismatch { expected: FieldName, found: FieldName },
+    MissingNamedTypeField { field: FieldName, found: KindId },
+    AmbiguousNamedTypeField { field: FieldName, found: KindId },
     MissingNamedField { field: FieldName, found: TypeId },
     DuplicateNamedField { field: FieldName, found: TypeId },
     UnknownDataConstructor(CtorName),
@@ -166,6 +168,18 @@ impl<'a> Tycker<'a> {
             | TyckError::NamedLabelMismatch { expected, found } => {
                 format!("Named label mismatch: expected `{expected}`, found `{found}`")
             }
+            | TyckError::MissingNamedTypeField { field, found } => {
+                format!(
+                    "Missing named type field `{field}` in {}",
+                    self.pretty_statics_nested(found, "\t")
+                )
+            }
+            | TyckError::AmbiguousNamedTypeField { field, found } => {
+                format!(
+                    "Ambiguous named type field `{field}` in {}",
+                    self.pretty_statics_nested(found, "\t")
+                )
+            }
             | TyckError::MissingNamedField { field, found } => {
                 format!(
                     "Missing named field `{field}` in {}",
@@ -174,7 +188,7 @@ impl<'a> Tycker<'a> {
             }
             | TyckError::DuplicateNamedField { field, found } => {
                 format!(
-                    "Duplicate named field `{field}` in {}",
+                    "Ambiguous named field `{field}` in {}",
                     self.pretty_statics_nested(found, "\t")
                 )
             }
@@ -470,6 +484,18 @@ impl<'a> Tycker<'a> {
             | TyckError::NamedLabelMismatch { expected, found } => {
                 format!("Named label mismatch: expected `{expected}`, found `{found}`")
             }
+            | TyckError::MissingNamedTypeField { field, found } => {
+                format!(
+                    "Missing named type field `{field}` in {}",
+                    self.pretty_statics_nested(*found, "")
+                )
+            }
+            | TyckError::AmbiguousNamedTypeField { field, found } => {
+                format!(
+                    "Ambiguous named type field `{field}` in {}",
+                    self.pretty_statics_nested(*found, "")
+                )
+            }
             | TyckError::MissingNamedField { field, found } => {
                 format!(
                     "Missing named field `{field}` in {}",
@@ -478,7 +504,7 @@ impl<'a> Tycker<'a> {
             }
             | TyckError::DuplicateNamedField { field, found } => {
                 format!(
-                    "Duplicate named field `{field}` in {}",
+                    "Ambiguous named field `{field}` in {}",
                     self.pretty_statics_nested(*found, "")
                 )
             }

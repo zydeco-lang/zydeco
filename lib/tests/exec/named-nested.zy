@@ -39,12 +39,14 @@ begin
   do low <- ! (api/add) x tens;
   do checksum <- ! (api/add) low hundreds;
   do layout_check <- ! (api/sub) checksum 765;
-  do inner_projection_check <- ! (api/sub) inner/x 5;
+  do nested_projection_check <- ! (api/sub) nested/x 5;
   do outer_projection_check <- ! (api/sub) nested/z 7;
+  do recursive_label_projection_check <- ! (api/sub) wrapped/inner 8;
   do chained_projection_check <- ! (api/sub) wrapped/outer/inner 8;
   do chained_pattern_check <- ! (api/sub) wrapped_value 8;
-  do total <- ! (api/add) layout_check inner_projection_check;
+  do total <- ! (api/add) layout_check nested_projection_check;
   do total <- ! (api/add) total outer_projection_check;
+  do total <- ! (api/add) total recursive_label_projection_check;
   do total <- ! (api/add) total chained_projection_check;
   do total <- ! (api/add) total chained_pattern_check;
   ! (api/exit) total

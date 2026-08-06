@@ -55,9 +55,9 @@ produce the same `Bytes` understood by the bytes module. `Result`, `Option`, and
 boundaries. Reopening separately sealed packages would lose those equalities unless their common witnesses remained
 visible outside the modules.
 
-Current named projection also searches only an immediate product spine. It cannot project through an unopened
-existential telescope, and `PackPi` currently translates only the leading existential prefix opened by a pattern.
-The desired ergonomics therefore require a package-binding rule rather than only a standard-library rearrangement.
+Structural named projection searches transparent labels and products, but it cannot project through an unopened
+existential telescope. `PackPi` currently translates only the leading existential prefix opened by a pattern. The
+desired ergonomics therefore require a package-binding rule rather than only a standard-library rearrangement.
 
 ## Stable bindings
 

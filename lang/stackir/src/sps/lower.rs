@@ -381,16 +381,14 @@ impl Lower for ss::ValueId {
                 // Type cons values are erased.
                 inner.lower(lo, ())
             }
-            | ss::Value::Proj(Proj(head, field)) => match field.target {
-                | ss::ProjTarget::Direct => head.lower(lo, ()),
-                | ss::ProjTarget::Product(position) => {
-                    let layout = lo.product_layout(lo.statics.annotations_value[&head]);
-                    let head = head.lower(lo, ());
+            | ss::Value::Proj(Proj(head, field)) => {
+                field.target.products.into_iter().fold(head.lower(lo, ()), |head, projection| {
+                    let layout = lo.product_layout(projection.product);
                     let (binding, projected) =
-                        lo.projection_binding(head.value, position, layout, site);
+                        lo.projection_binding(head.value, projection.position, layout, site);
                     head.with_binding(binding, projected)
-                }
-            },
+                })
+            }
             | ss::Value::Lit(lit) => ValuePlan::pure(lit.build(lo, site)),
         }
     }

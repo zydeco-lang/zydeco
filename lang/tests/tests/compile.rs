@@ -27,6 +27,7 @@ e2e_sources!({
     uniform => "tests/compile/uniform.zy",
     named_mixed => "tests/compile/named-mixed.zy",
     named => "tests/compile/named.zy",
+    named_nested => "tests/exec/named-nested.zy",
     host_return => "tests/compile/host-return.zy",
     host_runtime => "tests/compile/host-runtime.zy",
     string_literal => "tests/compile/string-literal.zy",

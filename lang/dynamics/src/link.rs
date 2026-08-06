@@ -168,10 +168,9 @@ impl Link for ss::ValueId {
             }
             | Value::Proj(Proj(head, field)) => {
                 let head = head.link(statics);
-                match field.target {
-                    | ss::ProjTarget::Product(position) => Proj(head, position).into(),
-                    | ss::ProjTarget::Direct => head.as_ref().to_owned(),
-                }
+                return field.target.products.iter().fold(head, |head, projection| {
+                    Rc::new(Proj(head, projection.position).into())
+                });
             }
             | Value::Lit(lit) => lit.to_owned().into(),
         };

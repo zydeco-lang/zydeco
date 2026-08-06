@@ -149,13 +149,13 @@ classifier used to the right of `:` must itself be parenthesized. The same paren
 from capturing the right side of ordinary operators: `(field :: A) * B` labels only `A`, whereas
 `field :: A * B` means `field :: (A * B)`.
 
-Named projection accepts a directly named value or searches only the immediate
-product spine. It requires exactly one matching field and exposes the payload
-beneath `Named`; missing and duplicate matches are distinct type errors. Type
-projection is the static counterpart: if `T : (field :: K)`, then `T/field : K`.
-A concrete projection `(field = A)/field` reduces to `A`. Projection from an
-abstract named type remains explicit in the typed syntax and reduces when the
-abstract type is later instantiated.
+Named projection recursively searches transparent named classifiers and product components. It requires exactly
+one matching field across the complete structure and exposes the payload beneath `Named`; missing and ambiguous
+matches are distinct static errors. Other type constructors are opacity boundaries. An explicit chain performs a
+fresh search at each slash, so `term/outer/inner` can state or disambiguate a path. Type projection is the static
+counterpart over nested named kinds: if `T : (field :: K)`, then `T/field : K`. A concrete projection
+`(field = A)/field` reduces to `A`. Projection from an abstract named type remains explicit in the typed syntax and
+reduces when the abstract type is later instantiated.
 
 Type patterns make one additional distinction visible. A named pattern
 `(field = X) : (field :: K)` binds `X : K` to the payload, whereas a plain pattern
@@ -172,13 +172,11 @@ package-dependent result. Retaining the pattern is necessary for sound
 substitution; reducing every type pattern to one abstract identifier would
 confuse the payload kind `K` with the whole named kind `field :: K`.
 
-Named structure does not enter StackIR. Type checking resolves each projection
-either to the payload of a directly named value or to a physical product
-position. Lowering erases the former as an identity and the latter as an
-ordinary full-arity tuple pattern and `let`; subsequent backends therefore see
-only the existing tuple representation and layout. Named types, named kinds,
-and static projections are also compile-time-only and have no runtime
-representation.
+Named structure does not enter StackIR. Type checking resolves each projection to the sequence of physical product
+positions on its unique path; a path may be empty when only named wrappers are traversed. Lowering erases named
+steps and translates each product step to an ordinary full-arity tuple pattern and `let`. Subsequent backends
+therefore see only the existing tuple representation and layout. Named types, named kinds, and static projections
+are also compile-time-only and have no runtime representation.
 
 ### Source Organization and Modules
 
