@@ -166,7 +166,8 @@ reduces when the abstract type is later instantiated.
 The pattern `/field = pattern` uses the same search against its bindee, then checks `pattern` against the unique
 payload. It associates to the right, allowing `/outer = /inner = payload` to express a staged path. Type checking
 elaborates the result into ordinary named and product patterns with typed holes outside the selected path. The
-initial payload restriction is irrefutability; nested constructor matching remains a backend extension.
+pun `/field` expands to `/field = field`, while `/field : Type` annotates that generated payload binder. The initial
+payload restriction is irrefutability; nested constructor matching remains a backend extension.
 
 Type patterns make one additional distinction visible. A named pattern
 `(field = X) : (field :: K)` binds `X : K` to the payload, whereas a plain pattern

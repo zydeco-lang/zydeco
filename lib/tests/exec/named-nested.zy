@@ -18,6 +18,9 @@ begin
   let Ambiguous =
     (left :: (x :: Int)) * (right :: (x :: Int))
   that
+  let Punnable =
+    (punned :: Int)
+  that
   def nested : Outer = (
     (x = 5 : Int, 6 : Int),
     z = 7 : Int
@@ -28,6 +31,9 @@ begin
   def ambiguous : Ambiguous = (
     left = x = 9 : Int,
     right = x = 10 : Int
+  ) that
+  def punnable : Punnable = (
+    punned = 11 : Int
   ) that
 
   let (
@@ -55,6 +61,10 @@ begin
     /left = /x = left_x : Int;
     /right = /x = right_x : Int
   ) = ambiguous in
+  let (
+    /punned : Int;
+    punnable_whole
+  ) = punnable in
   do tens <- ! (api/mul) y 10;
   do hundreds <- ! (api/mul) z 100;
   do low <- ! (api/add) x tens;
@@ -73,6 +83,8 @@ begin
   do wrapped_alias_check <- ! (api/sub) projected_wrapped/inner 8;
   do disambiguated_left_check <- ! (api/sub) left_x 9;
   do disambiguated_right_check <- ! (api/sub) right_x 10;
+  do punned_projection_pattern_check <- ! (api/sub) punned 11;
+  do punned_alias_check <- ! (api/sub) punnable_whole/punned 11;
   do total <- ! (api/add) layout_check nested_projection_check;
   do total <- ! (api/add) total outer_projection_check;
   do total <- ! (api/add) total recursive_label_projection_check;
@@ -86,5 +98,7 @@ begin
   do total <- ! (api/add) total wrapped_alias_check;
   do total <- ! (api/add) total disambiguated_left_check;
   do total <- ! (api/add) total disambiguated_right_check;
+  do total <- ! (api/add) total punned_projection_pattern_check;
+  do total <- ! (api/add) total punned_alias_check;
   ! (api/exit) total
 end

@@ -54,11 +54,16 @@ The slash means that `x` is located by the same recursive, exactly-one-match rul
 right of `=` is then checked against the selected payload. This differs from `x = pattern`, which requires the
 bindee itself to have `x` as its outer named wrapper.
 
+When the payload binder has the same name as the selected field, `/field` is the punned form of
+`/field = field`. An annotation still describes the payload, so `/field : Type` expands to
+`/field = field : Type`. As with named-field punning, the parser performs this expansion directly and the later
+language phases only see the ordinary projection pattern.
+
 A projection pattern is intended to be one pattern terminal. Multiple observations of the same bindee are formed
 by the semicolon construct described in [Pattern Aliasing](aliasing.md):
 
 ```zydeco
-let (/x = x; /z = z; whole) = nested in body
+let (/x; /z; whole) = nested in body
 ```
 
 Every member receives the original bindee. This separation lets slash retain one consistent `Has` meaning while

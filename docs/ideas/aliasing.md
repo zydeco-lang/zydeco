@@ -18,7 +18,7 @@ can appear and can nest inside another pattern. This terminal role is what allow
 compose without giving slash its own multi-field list syntax:
 
 ```zydeco
-let (/x = x; /y = y; whole) = point in
+let (/x; /y; whole) = point in
 ...
 ```
 

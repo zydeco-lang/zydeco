@@ -304,15 +304,26 @@ impl Parser {
     /// Expand `= field` into a named pattern whose payload is a fresh
     /// same-spelled binder, optionally annotated.
     pub fn pun_pattern(&mut self, field: Sp<FieldName>, ty: Option<Sp<TermId>>) -> Pattern {
+        let inner = self.punned_pattern_payload(&field, ty);
+        Named(field.inner, inner).into()
+    }
+    /// Expand `/field` into a projection pattern whose payload is a fresh
+    /// same-spelled binder, optionally annotated.
+    pub fn pun_projection_pattern(
+        &mut self, field: Sp<FieldName>, ty: Option<Sp<TermId>>,
+    ) -> Pattern {
+        let inner = self.punned_pattern_payload(&field, ty);
+        ProjectionPattern(field.inner, inner).into()
+    }
+    fn punned_pattern_payload(&mut self, field: &Sp<FieldName>, ty: Option<Sp<TermId>>) -> PatId {
         let binder = self.def(field.mk(VarName(field.inner.0.clone())));
         let variable = self.pat(field.mk(binder.into()));
-        let inner = match ty {
+        match ty {
             | Some(ty) => {
                 let annotation = Ann { tm: variable, ty: ty.inner };
                 self.pat(ty.mk(annotation.into()))
             }
             | None => variable,
-        };
-        Named(field.inner, inner).into()
+        }
     }
 }

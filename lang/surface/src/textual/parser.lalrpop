@@ -190,6 +190,14 @@ PatternAnn: Pattern = {
     #[precedence(level="2")] #[assoc(side="right")]
     <name:FieldName> "=" <inner:PatternGen<PatternAnn>> => Named(name, inner).into(),
     #[precedence(level="2")] #[assoc(side="right")]
+    "/" <l:@L> <field:Sp<FieldName>> <ty:(":" <TermId>)?> <r:@R> => {
+        let ty = ty.map(|ty| Sp {
+            info: Span::new(l, r).under_loc_ctx(loc),
+            inner: ty,
+        });
+        parser.pun_projection_pattern(field, ty)
+    },
+    #[precedence(level="2")] #[assoc(side="right")]
     "/" <name:FieldName> "=" <inner:PatternGen<PatternAnn>> => {
         ProjectionPattern(name, inner).into()
     },

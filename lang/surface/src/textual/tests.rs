@@ -993,6 +993,43 @@ fn parses_field_projection_patterns_as_alias_members() {
 }
 
 #[test]
+fn parses_punned_field_projection_patterns_and_payload_annotations() {
+    let source = "(/left : Int; /Right; whole)";
+    let mut parser = Parser::new();
+    let pattern = parser::SinglePatternParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Pattern::Alias(Alias(patterns)) = &parser.arena.pats[&pattern] else {
+        panic!("expected a pattern alias")
+    };
+    let patterns = patterns.iter().copied().collect::<Vec<_>>();
+    let [left, right, _whole] = patterns.as_slice() else { panic!("expected three alias members") };
+    let Pattern::Project(ProjectionPattern(left_name, left)) = &parser.arena.pats[left] else {
+        panic!("expected a punned left projection")
+    };
+    let Pattern::Ann(Ann { tm: left, ty }) = &parser.arena.pats[left] else {
+        panic!("expected the left payload to be annotated")
+    };
+    let Pattern::Var(left) = &parser.arena.pats[left] else {
+        panic!("expected a generated left binder")
+    };
+    let Term::Var(ty) = &parser.arena.terms[ty] else { panic!("expected a variable annotation") };
+    let Pattern::Project(ProjectionPattern(right_name, right)) = &parser.arena.pats[right] else {
+        panic!("expected a punned right projection")
+    };
+    let Pattern::Var(right) = &parser.arena.pats[right] else {
+        panic!("expected a generated right binder")
+    };
+
+    assert_eq!(left_name.plain(), "left");
+    assert_eq!(parser.arena.defs[left].plain(), "left");
+    assert_eq!(ty.plain(), "Int");
+    assert_eq!(right_name.plain(), "Right");
+    assert_eq!(parser.arena.defs[right].plain(), "Right");
+}
+
+#[test]
 fn parses_chained_field_projection_patterns_right_associatively() {
     let source = "(/outer = /inner = payload)";
     let mut parser = Parser::new();

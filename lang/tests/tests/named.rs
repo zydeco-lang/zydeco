@@ -97,6 +97,9 @@ begin
   let (/inner = NestedPatternProjectedInt) =
     NestedNamedInt
   that
+  let (/inner) =
+    NestedNamedInt
+  that
 
   def value : ProjectedInt = 0 that
   def pattern_value : PatternProjectedInt = 1 that
@@ -104,6 +107,7 @@ begin
   def nested_value : NestedProjectedInt = 3 that
   def nested_chained_value : NestedChainedProjectedInt = 3 that
   def nested_pattern_value : NestedPatternProjectedInt = 3 that
+  def nested_punned_pattern_value : inner = 3 that
   def punned_value : PunnedProjectedInt = 4 that
 
   (
@@ -113,6 +117,7 @@ begin
     nested_value = nested_value,
     nested_chained_value = nested_chained_value,
     nested_pattern_value = nested_pattern_value,
+    nested_punned_pattern_value = nested_punned_pattern_value,
     punned_value = punned_value,
   )
 end
