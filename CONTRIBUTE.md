@@ -33,7 +33,7 @@ zydeco run lib/tests/oopsla/polynomial.zydeco
 The repository provides an aggregate test command:
 
 ```sh
-cargo test-all --release
+cargo test-workspace --release
 ```
 
 ## Check the Tree-sitter Grammar
@@ -87,12 +87,12 @@ The HTML output is written to `target/doc/`.
 
 ## Pre-commit hooks
 
-Optional hooks run `cargo fmt -- --check` and `cargo check-all` before each
+Optional hooks run `cargo fmt -- --check` and `cargo check-workspace` before each
 commit. Install [pre-commit](https://pre-commit.com), then from the repo root:
 
 ```sh
 pre-commit install
 ```
 
-To format and fix before committing, run `cargo fmt` and `cargo check-all`
+To format and fix before committing, run `cargo fmt` and `cargo check-workspace`
 yourself when the hook fails.

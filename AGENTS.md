@@ -34,7 +34,7 @@ cargo fmt --all
 ```
 Lint the codebase:
 ```sh
-cargo clippy-all
+cargo clippy-workspace
 ```
 
 Run a Zydeco program:
@@ -44,7 +44,7 @@ zydeco run path/to/main.zy
 
 Run the test suite:
 ```sh
-cargo test-all
+cargo test-workspace
 ```
 
 ## Repository Layout

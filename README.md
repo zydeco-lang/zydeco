@@ -65,7 +65,7 @@ some example programs.
 
 To run all tests
 ```bash
-cargo test-all
+cargo test-workspace
 ```
 
 ## Editor Support

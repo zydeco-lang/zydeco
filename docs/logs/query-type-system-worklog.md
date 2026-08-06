@@ -231,7 +231,7 @@ will wait until query-local mutation and deterministic result ordering are estab
   typed CLI diagnostics and native adapters, before further fine-query work.
 - Validated the complete workspace test suite, including all 124 session tests, both CLI integration tests, all 21
   Cajun unit and stdio tests, and the native amd64 link-and-run matrix after removing runtime logging. The workspace
-  also passes `cargo check --workspace --all-targets` and the repository's `cargo clippy-all` workflow.
+  also passes `cargo check --workspace --all-targets` and the repository's `cargo clippy-workspace` workflow.
 
 The remaining disk-input item is intentionally still open. Closing an editor override reloads the file today, but
 Cajun does not yet watch unopened imported files for changes made by another process. The next editor step should

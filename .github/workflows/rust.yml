@@ -26,9 +26,9 @@ jobs:
     - name: Check format
       run: cargo fmt -- --check
     - name: Build
-      run: cargo build-all --verbose
+      run: cargo build-workspace --verbose
     - name: Run Tests
-      run: cargo test-all --verbose
+      run: cargo test-workspace --verbose
 
   tree-sitter:
 
