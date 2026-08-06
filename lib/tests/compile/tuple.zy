@@ -1,7 +1,9 @@
 param (
-  (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+  (
+    /exit
+  ) :
   @[import("../../std/builtin.zy")] _
 ) in
   let x = (10, 0) in
   let (y, z) = x in
-  ! (api/exit) z
+  ! (exit) z

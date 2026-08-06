@@ -1,10 +1,14 @@
 param (
-  (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+  (
+    /OS;
+    /int_eq_branch;
+    /exit
+  ) :
   @[import("../../std/builtin.zy")] _
 ) in
-  ! (api/int_eq_branch)
+  ! (int_eq_branch)
     OS
     0
     0
-    { ! (api/exit) 0 }
-    { ! (api/exit) 1 }
+    { ! (exit) 0 }
+    { ! (exit) 1 }

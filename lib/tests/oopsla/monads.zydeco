@@ -3,11 +3,23 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /CType;
+      /Thk;
+      /Ret;
+      /Unit;
+      /String;
+      /OS;
+      /write_line;
+      /read_line;
+      /exit;
+      builtin
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
-    monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+    monadic_basis builtin in
   begin
 
   --| The continuation monad
@@ -150,10 +162,10 @@ begin
     comatch
     | .read =>
       fn .run ka =>
-        ! (api/read_line) ka
+        ! (read_line) ka
     | .write s =>
       fn .run ku =>
-        ! (api/write_line) s {
+        ! (write_line) s {
           ! ku ()
         }
     end
@@ -161,7 +173,7 @@ begin
 
   ! io .write "Hello, world!" .run {
     fn _ =>
-      ! (api/exit) 0
+      ! (exit) 0
   }
 end
 end

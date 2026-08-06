@@ -1,7 +1,11 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /String;
+      /OS;
+      builtin
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -12,9 +16,7 @@ begin
     /list;
     /string;
     /process
-  ) = make_std (
-    VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
-  ) in
+  ) = make_std builtin in
   ! (process/arg_list) {
     fn arguments =>
       ! (list/case)

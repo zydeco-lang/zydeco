@@ -1,7 +1,11 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Ret;
+      /Int;
+      builtin
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -9,9 +13,7 @@ begin
     /Int = StdInt;
     /prelude;
     /process
-  ) = make_std (
-    VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
-  ) in
+  ) = make_std builtin in
   let (= Thunk, = U, = F, ()) = prelude in
   let ! first : F StdInt =
     ret 0

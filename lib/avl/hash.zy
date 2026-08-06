@@ -1,7 +1,16 @@
 begin
   let make_std = @[import("../std/std.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /Thk;
+      /Ret;
+      /Unit;
+      /Int;
+      /String;
+      /OS;
+      builtin
+    ) :
     @[import("../std/builtin.zy")] _
   ) that
 
@@ -17,9 +26,7 @@ begin
     /string;
     /stdio;
     /process
-  ) = make_std (
-    VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
-  ) in
+  ) = make_std builtin in
   begin
     let Cmp (A : VType) =
       Thk (A -> A -> Ret StdBool)

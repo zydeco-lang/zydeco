@@ -188,6 +188,8 @@ pub struct StaticsArena {
     pub copattern_pack_pi_binders: ArenaAssoc<CompuId, VPatId>,
     /// immutable value aliases available to static inspection
     pub value_aliases: ArenaAssoc<DefId, ValueId>,
+    /// package witnesses retained by whole-value aliases in selective package patterns
+    pub package_aliases: ArenaAssoc<DefId, Vec<StaticTermId>>,
     /// checked bodies of type definitions available to static inspection
     pub type_definitions: ArenaAssoc<DefId, TypeId>,
     /// arena for inlinable definitions, typically global (necessity modality) definitions

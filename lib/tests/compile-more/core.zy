@@ -4,7 +4,29 @@ begin
   --| Thunk Type and Return Type
   --| Primitive Base Types
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /CType;
+      /Thk;
+      /Ret;
+      /Unit;
+      /Int;
+      /String;
+      /OS;
+      /add = primitive_add;
+      /sub = primitive_sub;
+      /mul = primitive_mul;
+      /int_eq_branch;
+      /int_lt_branch;
+      /int_gt_branch;
+      /write_str = primitive_write_str;
+      /write_int = primitive_write_int;
+      /write_line = primitive_write_line;
+      /read_line = primitive_read_line;
+      /read_line_as_int_branch;
+      /random_int = primitive_random_int;
+      /exit = primitive_exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   let Thunk (B : CType) = Thk B that
@@ -108,22 +130,22 @@ begin
 
 
 -- module Arith
-  let add = api/add that
-  let sub = api/sub that
-  let mul = api/mul that
+  let add = primitive_add that
+  let sub = primitive_sub that
+  let mul = primitive_mul that
   def mult = mul that
   def times = mul that
   -- pub extern def div : Thk(Int -> Int -> Ret Int) end
   -- pub extern def mod : Thk(Int -> Int -> Ret Int) end
 
   def ! int_eq (x : Int) (y : Int) : Ret Bool =
-    ! (api/int_eq_branch) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! (int_eq_branch) (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! int_lt (x : Int) (y : Int) : Ret Bool =
-    ! (api/int_lt_branch) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! (int_lt_branch) (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! int_gt (x : Int) (y : Int) : Ret Bool =
-    ! (api/int_gt_branch) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! (int_gt_branch) (Ret Bool) x y { ret +True() } { ret +False() }
   that
 -- end module Arith
 
@@ -153,17 +175,17 @@ begin
 
 
 -- module OS
-  let write_str = api/write_str that
-  let write_int = api/write_int that
-  let write_line = api/write_line that
-  let read_line = api/read_line that
+  let write_str = primitive_write_str that
+  let write_int = primitive_write_int that
+  let write_line = primitive_write_line that
+  let read_line = primitive_read_line that
   def ! read_line_as_int (k : Thk(Option Int -> OS)) : OS =
-    ! (api/read_line_as_int_branch)
+    ! (read_line_as_int_branch)
       { ! k +None() }
       { fn i => ! k +Some(i) }
   that
-  let random_int = api/random_int that
-  let exit = api/exit that
+  let random_int = primitive_random_int that
+  let exit = primitive_exit that
 
   def halt : Thk OS = { ! exit 0 } that
 

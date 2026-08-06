@@ -21,14 +21,19 @@ begin
     end
   that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /Ret;
+      /Unit;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   do one <- ! successor +Z();
   do result <- ! is_nonzero one;
   match result
-  | +False(_) => ! (api/exit) 1
-  | +True(_) => ! (api/exit) 0
+  | +False(_) => ! (exit) 1
+  | +True(_) => ! (exit) 0
   end
 end

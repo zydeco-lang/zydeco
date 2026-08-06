@@ -2,7 +2,15 @@
 -- `Ret' A` and the `Ret A` primitive are isomorphic to each other.
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /CType;
+      /Thk;
+      /Ret;
+      /Int;
+      /OS;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -31,5 +39,5 @@ begin
     Int
     { fn (R : CType) ar => ! ar n }
     OS
-    (api/exit)
+    (exit)
 end

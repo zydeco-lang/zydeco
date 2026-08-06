@@ -153,8 +153,9 @@ A parenthesized semicolon pattern applies every member to the same bindee. For e
 `((left, right); whole; copy)` destructures a pair and binds the complete pair twice. Semicolon is same-bindee
 composition, whereas comma assigns successive product components. Members retain source order and extend the
 pattern environment from left to right. The initial implementation admits irrefutable value members. A group of
-direct field projections may additionally select static and dynamic fields while opening one existential package;
-general constructor aliases and arbitrary static aliases remain future extensions.
+direct field projections may additionally select static and dynamic fields while opening one package telescope.
+Irrefutable whole-value members retain that package for forwarding; general constructor aliases and arbitrary
+static aliases remain future extensions.
 
 Named projection recursively searches transparent named classifiers and product components. It requires exactly
 one matching field across the complete structure and exposes the payload beneath `Named`; missing and ambiguous
@@ -171,14 +172,16 @@ elaborates the result into ordinary named and product patterns with typed holes 
 pun `/field` expands to `/field = field`, while `/field : Type` annotates that generated payload binder. The initial
 payload restriction is irrefutability; nested constructor matching remains a backend extension.
 
-When a same-bindee group of direct projection patterns is checked against an existential package, it is also the
-package's selective elimination form. The checker opens the leading existential telescope once, allocates anonymous
-witnesses for unselected abstract fields, binds selected static payloads to those witnesses or to manifest
-definitions, substitutes the opening through the package body, and then resolves selected dynamic fields
-structurally. Thus `let (/Item; /value; /consume) = package in ...` gives all three selections one package identity
-without naming every intervening field. Plain existential binders contribute their binder name as a punned field;
-explicitly named existential binders contribute their public label. Missing and ambiguous package fields use the
-ordinary projection errors.
+When a same-bindee group of direct projection patterns is checked against a package, it is also the package's
+selective elimination form. The checker opens the leading static telescope once, including manifest-kind and
+existential entries. Unselected abstract fields receive anonymous witnesses, while checking a package-dependent
+abstraction reuses the canonical witnesses of its arrow. Selected static payloads bind those same witnesses or
+manifest definitions; the checker substitutes the opening through the package body and resolves selected dynamic
+fields structurally. Thus `let (/Item; /value; /consume) = package in ...` gives all three selections one package
+identity without naming every intervening field. A whole-value member in the group retains the opened witness
+prefix, allowing the package to be forwarded without reconstructing its positional telescope. Plain existential
+binders contribute their binder name as a punned field; explicitly named binders contribute their public label.
+Missing and ambiguous package fields use the ordinary projection errors.
 
 Type patterns make one additional distinction visible. A named pattern
 `(field = X) : (field :: K)` binds `X : K` to the payload, whereas a plain pattern

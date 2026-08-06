@@ -1,11 +1,22 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /CType;
+      /Thk;
+      /Ret;
+      /Int;
+      /String;
+      /OS;
+      /int_eq_branch;
+      /exit;
+      builtin
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
-    monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+    monadic_basis builtin in
   begin
 
   def Either (E : VType) (A : VType) =
@@ -42,7 +53,7 @@ begin
     fn X m f =>
       do a? <- ! m;
       match a?
-      | +Left(e) => ! (api/exit) 1
+      | +Left(e) => ! (exit) 1
       | +Right(a) => ! f a
       end
   that
@@ -223,18 +234,18 @@ begin
   -- ! _mo-prim-id~'
   do returned <- ! mo-return String { ! mo-exn String };
   match returned
-  | +Left(_) => ! (api/exit) 1
+  | +Left(_) => ! (exit) 1
   | +Right(returned) =>
-    ! (api/int_eq_branch)
+    ! (int_eq_branch)
       OS
       returned
       1
       {
         do thunked <- ! mo-thunk String { ! mo-exn String };
         match thunked
-        | +Left(_) => ! (api/exit) 1
+        | +Left(_) => ! (exit) 1
         | +Right(thunked) =>
-          ! (api/int_eq_branch)
+          ! (int_eq_branch)
             OS
             thunked
             1
@@ -243,9 +254,9 @@ begin
                 ! mo-exn String
               };
               match argument
-              | +Left(_) => ! (api/exit) 1
+              | +Left(_) => ! (exit) 1
               | +Right(argument) =>
-                ! (api/int_eq_branch)
+                ! (int_eq_branch)
                   OS
                   argument
                   1
@@ -257,9 +268,9 @@ begin
                       top
                       0;
                     match quantified
-                    | +Left(_) => ! (api/exit) 1
+                    | +Left(_) => ! (exit) 1
                     | +Right(quantified) =>
-                      ! (api/int_eq_branch)
+                      ! (int_eq_branch)
                         OS
                         quantified
                         0
@@ -270,18 +281,18 @@ begin
                             { ! mo-exn String }
                             OS
                             { ! alg-exn-os String }
-                            { ! (api/exit) 0 }
+                            { ! (exit) 0 }
                         }
-                        { ! (api/exit) 1 }
+                        { ! (exit) 1 }
                     end
                   }
-                  { ! (api/exit) 1 }
+                  { ! (exit) 1 }
               end
             }
-            { ! (api/exit) 1 }
+            { ! (exit) 1 }
         end
       }
-      { ! (api/exit) 1 }
+      { ! (exit) 1 }
   end
 end
 end

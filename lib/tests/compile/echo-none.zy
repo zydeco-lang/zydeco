@@ -1,8 +1,11 @@
 param (
-  (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+  (
+    /read_line;
+    /exit
+  ) :
   @[import("../../std/builtin.zy")] _
 ) in
-  ! (api/read_line) {
+  ! (read_line) {
     fn _ =>
-      ! (api/exit) 0
+      ! (exit) 0
   }

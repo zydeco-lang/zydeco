@@ -1,12 +1,16 @@
 param (
-  (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+  (
+    /add;
+    /sub;
+    /exit
+  ) :
   @[import("../../std/builtin.zy")] _
 ) in
   do x <- ret 40;
   do y <- ret 30;
   do z <-
-    do a <- ! (api/add) x y;
-    do b <- ! (api/add) a 10;
+    do a <- ! (add) x y;
+    do b <- ! (add) a 10;
     ret x;
-  do r <- ! (api/sub) z 40;
-  ! (api/exit) r
+  do r <- ! (sub) z 40;
+  ! (exit) r

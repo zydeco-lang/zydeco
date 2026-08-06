@@ -1,11 +1,26 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /CType;
+      /Thk;
+      /Ret;
+      /Unit;
+      /Int;
+      /String;
+      /OS;
+      /add;
+      /str_append;
+      /str_eq_branch;
+      /write_line;
+      /exit;
+      builtin
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
-    monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+    monadic_basis builtin in
   begin
 
   def Bool =
@@ -109,7 +124,7 @@ begin
       fn s =>
         match s
         | +State(c, o) =>
-          do c' <- ! (api/add) c 1;
+          do c' <- ! (add) c 1;
           ret +Cons(
             +State(c', o),
             +Right({ ! kret v })
@@ -122,7 +137,7 @@ begin
       fn s =>
         match s
         | +State(c, o) =>
-          do o' <- ! (api/str_append) o str;
+          do o' <- ! (str_append) o str;
           ret +Cons(
             +State(c, o'),
             +Right({ ! kret v })
@@ -169,7 +184,7 @@ begin
     end
   that
   def ! str_eq (left : String) (right : String) : Ret Bool =
-    ! (api/str_eq_branch)
+    ! (str_eq_branch)
       (Ret Bool)
       left
       right
@@ -268,7 +283,7 @@ begin
   match sv?
   | +Cons(s, v?) =>
     match v?
-    | +Left(_) => ! (api/exit) 1
+    | +Left(_) => ! (exit) 1
     | +Right(k) =>
       ! k OS {
         fn v =>
@@ -276,12 +291,12 @@ begin
           | +Bool(b) =>
             match b
             | +True() =>
-              ! (api/write_line) "\\^o^/" {
-                ! (api/exit) 0
+              ! (write_line) "\\^o^/" {
+                ! (exit) 0
               }
-            | +False() => ! (api/exit) 1
+            | +False() => ! (exit) 1
             end
-          | +Lam(_, _, _) => ! (api/exit) 1
+          | +Lam(_, _, _) => ! (exit) 1
           end
       }
     end

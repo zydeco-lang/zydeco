@@ -424,19 +424,55 @@ impl FieldProjectionResolver {
 }
 
 #[derive(Clone)]
-struct ExistentialProjectionMember {
-    source: su::PatId,
-    field: FieldName,
-    payload: su::PatId,
+enum ExistentialProjectionMember {
+    Project { source: su::PatId, field: FieldName, payload: su::PatId },
+    Whole(su::PatId),
 }
 
-struct ExistentialProjectionSlot {
-    field: Option<FieldName>,
-    source_pattern: ss::TPatId,
-    payload_kind: ss::KindId,
-    payload: ss::TypeId,
-    pattern: ss::TPatId,
-    skolem: Option<ss::AbstId>,
+enum ExistentialProjectionSlot {
+    Kind {
+        field: Option<FieldName>,
+        definition: ss::KindId,
+        pattern: ss::KPatId,
+    },
+    Type {
+        field: Option<FieldName>,
+        source_pattern: ss::TPatId,
+        payload_kind: ss::KindId,
+        payload: ss::TypeId,
+        pattern: ss::TPatId,
+        skolem: Option<ss::AbstId>,
+    },
+}
+
+impl ExistentialProjectionSlot {
+    fn field(&self) -> Option<&FieldName> {
+        match self {
+            | Self::Kind { field, .. } | Self::Type { field, .. } => field.as_ref(),
+        }
+    }
+
+    fn pattern(&self) -> ss::StaticPatId {
+        match self {
+            | Self::Kind { pattern, .. } => (*pattern).into(),
+            | Self::Type { pattern, .. } => (*pattern).into(),
+        }
+    }
+
+    fn term(&self) -> ss::StaticTermId {
+        match self {
+            | Self::Kind { definition, .. } => (*definition).into(),
+            | Self::Type { payload, .. } => (*payload).into(),
+        }
+    }
+
+    fn set_pattern(&mut self, pattern: ss::StaticPatId) {
+        match (self, pattern) {
+            | (Self::Kind { pattern, .. }, ss::StaticPatId::Kind(selected)) => *pattern = selected,
+            | (Self::Type { pattern, .. }, ss::StaticPatId::Type(selected)) => *pattern = selected,
+            | _ => unreachable!("a selected package field retains its static sort"),
+        }
+    }
 }
 
 struct ExistentialProjectionOpening {
@@ -447,38 +483,52 @@ struct ExistentialProjectionOpening {
     opened: Vec<ss::AbstId>,
 }
 
-/// Select fields from one existential package without spelling its telescope.
+/// Select fields from one package without spelling its static telescope.
 ///
-/// Every abstract witness is opened once under an anonymous skolem. Selected
-/// type fields bind source names to those skolems, while selected value fields
-/// become ordinary projection patterns over the instantiated package body.
-/// The resulting typed pattern is the same `SCons` representation produced by
-/// an explicit package pattern, so no package construct reaches the backends.
+/// Manifest kind and type entries are substituted transparently, and every
+/// abstract witness is opened once under an anonymous or canonical skolem.
+/// Selected static fields bind source names to those entries, while selected
+/// value fields become ordinary projection patterns over the instantiated
+/// package body. Whole-value alias members retain the opened witnesses so the
+/// package can be forwarded without reconstructing its telescope.
 struct ExistentialProjectionPattern;
 
 impl ExistentialProjectionPattern {
     fn members(
         tycker: &Tycker<'_>, patterns: impl IntoIterator<Item = su::PatId>,
     ) -> Option<Vec<ExistentialProjectionMember>> {
-        patterns
+        let members = patterns
             .into_iter()
             .map(|source| match tycker.scoped.pats[&source].to_owned() {
                 | su::Pattern::Project(su::ProjectionPattern(field, payload)) => {
-                    Some(ExistentialProjectionMember { source, field, payload })
+                    ExistentialProjectionMember::Project { source, field, payload }
                 }
-                | _ => None,
+                | _ => ExistentialProjectionMember::Whole(source),
             })
-            .collect()
+            .collect::<Vec<_>>();
+        members
+            .iter()
+            .any(|member| matches!(member, ExistentialProjectionMember::Project { .. }))
+            .then_some(members)
     }
 
     fn applies_k(
         tycker: &mut Tycker<'_>, env: &ss::TyEnv, expected: ss::TypeId,
     ) -> ResultKont<bool> {
         let view = expected.unroll_k(tycker)?.subst_env_k(tycker, env)?;
-        Ok(matches!(tycker.type_filled_k(&view)?, ss::Type::Exists(_)))
+        Ok(matches!(tycker.type_filled_k(&view)?, ss::Type::ManifestKind(_) | ss::Type::Exists(_)))
     }
 
-    fn field_name(tycker: &Tycker<'_>, binder: &ss::TypeBinder) -> Option<FieldName> {
+    fn kind_field_name(tycker: &Tycker<'_>, pattern: ss::KPatId) -> Option<FieldName> {
+        match tycker.statics.kpats[&pattern] {
+            | ss::KindPattern::Var(definition) => {
+                Some(tycker.scoped.defs[&definition].plain().into())
+            }
+            | ss::KindPattern::Hole(_) => None,
+        }
+    }
+
+    fn type_field_name(tycker: &Tycker<'_>, binder: &ss::TypeBinder) -> Option<FieldName> {
         match tycker.statics.tpats[&binder.pattern].to_owned() {
             | ss::TypePattern::Named(ss::Named(field, _)) => Some(field),
             | ss::TypePattern::Var(definition) => {
@@ -493,7 +543,7 @@ impl ExistentialProjectionPattern {
     }
 
     fn open_k(
-        tycker: &mut Tycker<'_>, env: &ss::TyEnv, expected: ss::TypeId,
+        tycker: &mut Tycker<'_>, env: &ss::TyEnv, expected: ss::TypeId, skolems: &PatternSkolems,
     ) -> ResultKont<ExistentialProjectionOpening> {
         let mut body = expected;
         let mut body_env = env.clone();
@@ -502,45 +552,61 @@ impl ExistentialProjectionPattern {
 
         loop {
             let view = body.unroll_k(tycker)?.subst_env_k(tycker, &body_env)?;
-            let ss::Type::Exists(ss::Exists { binder, mode, body: next }) =
-                tycker.type_filled_k(&view)?.to_owned()
-            else {
-                break;
-            };
-            let domain_kind = binder.domain_kind(tycker);
-            let payload_kind = binder.payload_kind(tycker);
-            let pattern = Alloc::alloc(tycker, ss::Hole, domain_kind, &body_env);
-            let field = Self::field_name(tycker, &binder);
-
-            let (payload, skolem) = match mode {
-                | ss::ExistsMode::Abstract => {
-                    let skolem = Alloc::alloc(tycker, None, payload_kind, &());
-                    tycker.transfer_builtin_role_k(binder.witness, skolem)?;
-                    tycker.statics.existential_skolems.ensure(skolem);
-                    body_env = body_env.with_skolem(skolem);
-                    let payload = Alloc::alloc(tycker, skolem, payload_kind, &body_env);
-                    opened.push(skolem);
-                    (payload, Some(skolem))
+            match tycker.type_filled_k(&view)?.to_owned() {
+                | ss::Type::ManifestKind(ss::ManifestKind { binder, definition, body: next }) => {
+                    let field = Self::kind_field_name(tycker, binder);
+                    body_env =
+                        TyEnvT::new(body_env, Assign(binder, definition)).tyck_k(tycker, ())?.info;
+                    body = next;
+                    slots.push(ExistentialProjectionSlot::Kind {
+                        field,
+                        definition,
+                        pattern: binder,
+                    });
                 }
-                | ss::ExistsMode::Manifest(definition) => {
-                    let definition_kind = tycker.statics.annotations_type[&definition];
-                    Lub::lub_k(payload_kind, definition_kind, tycker)?;
-                    (definition, None)
+                | ss::Type::Exists(ss::Exists { binder, mode, body: next }) => {
+                    let payload_kind = binder.payload_kind(tycker);
+                    let field = Self::type_field_name(tycker, &binder);
+                    let (payload, skolem) = match mode {
+                        | ss::ExistsMode::Abstract => {
+                            let skolem = match skolems.get_witness(&binder.witness) {
+                                | Some(skolem) => {
+                                    let canonical_kind = tycker.statics.annotations_abst[&skolem];
+                                    Lub::lub_k(canonical_kind, payload_kind, tycker)?;
+                                    skolem
+                                }
+                                | None => Alloc::alloc(tycker, None, payload_kind, &()),
+                            };
+                            tycker.transfer_builtin_role_k(binder.witness, skolem)?;
+                            tycker.statics.existential_skolems.ensure(skolem);
+                            body_env = body_env.with_skolem(skolem);
+                            let payload = Alloc::alloc(tycker, skolem, payload_kind, &body_env);
+                            opened.push(skolem);
+                            (payload, Some(skolem))
+                        }
+                        | ss::ExistsMode::Manifest(definition) => {
+                            let definition_kind = tycker.statics.annotations_type[&definition];
+                            Lub::lub_k(payload_kind, definition_kind, tycker)?;
+                            (definition, None)
+                        }
+                    };
+                    let full_payload = binder.pattern.introduce_payload(tycker, payload);
+                    let full_payload = tycker.err_p_to_k(full_payload)?;
+                    body_env = TyEnvT::new(body_env, Assign(binder.pattern, full_payload))
+                        .tyck_k(tycker, ())?
+                        .info;
+                    body = next.subst_abst_k(tycker, (binder.witness, payload))?;
+                    slots.push(ExistentialProjectionSlot::Type {
+                        field,
+                        source_pattern: binder.pattern,
+                        payload_kind,
+                        payload,
+                        pattern: binder.pattern,
+                        skolem,
+                    });
                 }
-            };
-            let full_payload = binder.pattern.introduce_payload(tycker, payload);
-            let full_payload = tycker.err_p_to_k(full_payload)?;
-            body_env =
-                TyEnvT::new(body_env, Assign(pattern, full_payload)).tyck_k(tycker, ())?.info;
-            body = next.subst_abst_k(tycker, (binder.witness, payload))?;
-            slots.push(ExistentialProjectionSlot {
-                field,
-                source_pattern: binder.pattern,
-                payload_kind,
-                payload,
-                pattern,
-                skolem,
-            });
+                | _ => break,
+            }
         }
 
         Ok(ExistentialProjectionOpening { expected, body, slots, env: body_env, opened })
@@ -563,15 +629,40 @@ impl ExistentialProjectionPattern {
         tycker: &mut Tycker<'_>, env: &ss::TyEnv, expected: ss::TypeId,
         members: Vec<ExistentialProjectionMember>, skolems: PatternSkolems,
     ) -> ResultKont<CheckedPattern> {
-        let mut opening = Self::open_k(tycker, env, expected)?;
+        let mut opening = Self::open_k(tycker, env, expected, &skolems)?;
         let mut body_patterns = Vec::new();
+        let mut whole_patterns = Vec::new();
+        let mut package_aliases = Vec::new();
 
-        for ExistentialProjectionMember { source, field, payload } in members {
+        for member in members {
+            let ExistentialProjectionMember::Project { source, field, payload } = member else {
+                let ExistentialProjectionMember::Whole(source) = member else { unreachable!() };
+                let checked = TyEnvT::new(opening.env.clone(), source).tyck_k(
+                    tycker,
+                    PatternAction::ana(expected.into()).with_skolems(skolems.clone()),
+                )?;
+                let (pattern, _) = checked.try_as_value(
+                    tycker,
+                    TyckError::SortMismatch,
+                    std::panic::Location::caller(),
+                )?;
+                if !ValuePatternShape::is_irrefutable(tycker, pattern) {
+                    tycker
+                        .err_k(TyckError::RefutablePatternAlias, std::panic::Location::caller())?
+                }
+                opening.env = checked.info;
+                opening.opened.extend(checked.inner.opened);
+                if let Some(definition) = Self::whole_definition(tycker, pattern) {
+                    package_aliases.push(definition);
+                }
+                whole_patterns.push(pattern);
+                continue;
+            };
             let static_candidates = opening
                 .slots
                 .iter()
                 .enumerate()
-                .filter_map(|(index, slot)| (slot.field.as_ref() == Some(&field)).then_some(index))
+                .filter_map(|(index, slot)| (slot.field() == Some(&field)).then_some(index))
                 .collect::<Vec<_>>();
             let value_candidates = FieldProjectionResolver::value_candidates_k(
                 tycker,
@@ -588,33 +679,65 @@ impl ExistentialProjectionPattern {
                     std::panic::Location::caller(),
                 )?,
                 | ([slot_index], []) => {
-                    let slot = &opening.slots[*slot_index];
-                    let checked = TyEnvT::new(opening.env.clone(), payload).tyck_k(
-                        tycker,
-                        PatternAction::ana(slot.payload_kind.into()).with_skolems(skolems.clone()),
-                    )?;
-                    let (payload_pattern, _) = checked.try_as_type(
-                        tycker,
-                        TyckError::SortMismatch,
-                        std::panic::Location::caller(),
-                    )?;
-                    opening.env = TyEnvT::new(checked.info, Assign(payload_pattern, slot.payload))
-                        .tyck_k(tycker, ())?
-                        .info;
-                    if let (Some(skolem), (Some(definition), _)) =
-                        (slot.skolem, payload_pattern.try_destruct_def(tycker))
-                        && tycker.statics.abst_hints.get(&skolem).is_none()
-                    {
-                        tycker.statics.abst_hints.insert_new(skolem, definition);
-                    }
-                    let full_pattern = Self::wrap_type_pattern(
-                        tycker,
-                        &opening.env,
-                        slot.source_pattern,
-                        payload_pattern,
-                    );
-                    opening.slots[*slot_index].pattern = full_pattern;
-                    tycker.statics.pats.ensure(source, full_pattern.into());
+                    let selected = match &opening.slots[*slot_index] {
+                        | ExistentialProjectionSlot::Kind { definition, .. } => {
+                            let checked = TyEnvT::new(opening.env.clone(), payload).tyck_k(
+                                tycker,
+                                PatternAction::ana(AnnId::Set).with_skolems(skolems.clone()),
+                            )?;
+                            let payload_pattern = checked.annotation.try_as_kind(
+                                tycker,
+                                TyckError::SortMismatch,
+                                std::panic::Location::caller(),
+                            )?;
+                            opening.env =
+                                TyEnvT::new(checked.info, Assign(payload_pattern, *definition))
+                                    .tyck_k(tycker, ())?
+                                    .info;
+                            ss::StaticPatId::Kind(payload_pattern)
+                        }
+                        | ExistentialProjectionSlot::Type {
+                            source_pattern,
+                            payload_kind,
+                            payload: slot_payload,
+                            skolem,
+                            ..
+                        } => {
+                            let checked = TyEnvT::new(opening.env.clone(), payload).tyck_k(
+                                tycker,
+                                PatternAction::ana((*payload_kind).into())
+                                    .with_skolems(skolems.clone()),
+                            )?;
+                            let (payload_pattern, _) = checked.try_as_type(
+                                tycker,
+                                TyckError::SortMismatch,
+                                std::panic::Location::caller(),
+                            )?;
+                            opening.env =
+                                TyEnvT::new(checked.info, Assign(payload_pattern, *slot_payload))
+                                    .tyck_k(tycker, ())?
+                                    .info;
+                            if let (Some(skolem), (Some(definition), _)) =
+                                (*skolem, payload_pattern.try_destruct_def(tycker))
+                                && tycker.statics.abst_hints.get(&skolem).is_none()
+                            {
+                                tycker.statics.abst_hints.insert_new(skolem, definition);
+                            }
+                            let full_pattern = Self::wrap_type_pattern(
+                                tycker,
+                                &opening.env,
+                                *source_pattern,
+                                payload_pattern,
+                            );
+                            ss::StaticPatId::Type(full_pattern)
+                        }
+                    };
+                    opening.slots[*slot_index].set_pattern(selected);
+                    let selected = match selected {
+                        | ss::StaticPatId::Kind(pattern) => ss::PatId::Kind(pattern),
+                        | ss::StaticPatId::Type(pattern) => ss::PatId::Type(pattern),
+                    };
+                    tycker.statics.pats.ensure(source, selected);
                 }
                 | ([], [candidate]) => {
                     let checked = TyEnvT::new(opening.env.clone(), payload).tyck_k(
@@ -660,14 +783,41 @@ impl ExistentialProjectionPattern {
                 Alloc::alloc(tycker, ss::Alias(patterns), opening.body, &opening.env)
             }
         };
+        let package_terms: Vec<ss::StaticTermId> =
+            opening.slots.iter().map(ExistentialProjectionSlot::term).collect();
         let static_patterns: Vec<ss::StaticPatId> =
-            opening.slots.into_iter().map(|slot| slot.pattern.into()).collect();
-        let pattern =
+            opening.slots.iter().map(ExistentialProjectionSlot::pattern).collect();
+        let package_pattern =
             Alloc::alloc(tycker, ss::ConsN(static_patterns, body_pattern), opening.expected, env);
+        for definition in package_aliases {
+            let _ = tycker.statics.package_aliases.upsert(definition, package_terms.clone());
+        }
+        let pattern = if whole_patterns.is_empty() {
+            package_pattern
+        } else {
+            let patterns = ss::ConsN::from_vec(
+                std::iter::once(package_pattern).chain(whole_patterns).collect(),
+            )
+            .unwrap();
+            Alloc::alloc(tycker, ss::Alias(patterns), opening.expected, env)
+        };
         Ok(TyEnvT::new(
             opening.env,
             PatternCheck::with_opened(PatAnnId::Value(pattern, opening.expected), opening.opened),
         ))
+    }
+
+    fn whole_definition(tycker: &Tycker<'_>, pattern: ss::VPatId) -> Option<ss::DefId> {
+        match tycker.statics.vpats[&pattern].to_owned() {
+            | ss::ValuePattern::Var(definition) => Some(definition),
+            | ss::ValuePattern::Named(ss::Named(_, inner)) => Self::whole_definition(tycker, inner),
+            | ss::ValuePattern::Hole(_)
+            | ss::ValuePattern::Ctor(_)
+            | ss::ValuePattern::Alias(_)
+            | ss::ValuePattern::Triv(_)
+            | ss::ValuePattern::VCons(_)
+            | ss::ValuePattern::SCons(_) => None,
+        }
     }
 }
 
@@ -1289,15 +1439,28 @@ impl BuiltinAttachment {
 
 /// Canonical existential identities assigned to package-pattern components.
 #[derive(Clone, Debug, Default)]
-struct PatternSkolems(im::HashMap<su::PatId, ss::AbstId>);
+struct PatternSkolems {
+    patterns: im::HashMap<su::PatId, ss::AbstId>,
+    witnesses: im::HashMap<ss::AbstId, ss::AbstId>,
+}
 
 impl PatternSkolems {
-    fn new(assignments: impl IntoIterator<Item = (su::PatId, ss::AbstId)>) -> Self {
-        Self(assignments.into_iter().collect())
+    fn new(
+        patterns: impl IntoIterator<Item = (su::PatId, ss::AbstId)>,
+        witnesses: impl IntoIterator<Item = (ss::AbstId, ss::AbstId)>,
+    ) -> Self {
+        Self {
+            patterns: patterns.into_iter().collect(),
+            witnesses: witnesses.into_iter().collect(),
+        }
     }
 
     fn get(&self, pattern: &su::PatId) -> Option<ss::AbstId> {
-        self.0.get(pattern).copied()
+        self.patterns.get(pattern).copied()
+    }
+
+    fn get_witness(&self, witness: &ss::AbstId) -> Option<ss::AbstId> {
+        self.witnesses.get(witness).copied()
     }
 }
 
@@ -1489,6 +1652,62 @@ struct PackPiPatternSkolems {
     signature: PackageSignature,
 }
 
+/// Associate each abstract witness in a package domain with the canonical
+/// identity stored by its package-dependent arrow.
+struct PackPiWitnessSkolems<'a> {
+    witnesses: &'a [ss::AbstId],
+    domain: ss::TypeId,
+    expected: usize,
+}
+
+impl<'a> PackPiWitnessSkolems<'a> {
+    fn new(witnesses: &'a [ss::AbstId], domain: ss::TypeId) -> Self {
+        Self { witnesses, domain, expected: witnesses.len() }
+    }
+
+    fn collect_k(
+        self, tycker: &mut Tycker<'_>, env: &ss::TyEnv,
+    ) -> ResultKont<Vec<(ss::AbstId, ss::AbstId)>> {
+        if self.witnesses.is_empty() {
+            return Ok(Vec::new());
+        }
+        let view = self.domain.unroll_k(tycker)?.subst_env_k(tycker, env)?;
+        match tycker.type_filled_k(&view)?.to_owned() {
+            | ss::Type::ManifestKind(ss::ManifestKind { body, .. }) => {
+                Self { witnesses: self.witnesses, domain: body, expected: self.expected }
+                    .collect_k(tycker, env)
+            }
+            | ss::Type::Exists(ss::Exists { binder, mode: ss::ExistsMode::Abstract, body }) => {
+                let Some((&canonical, witnesses)) = self.witnesses.split_first() else {
+                    unreachable!()
+                };
+                let kind = tycker.statics.annotations_abst[&canonical];
+                let payload = Alloc::alloc(tycker, canonical, kind, env);
+                let domain = body.subst_abst_k(tycker, (binder.witness, payload))?;
+                let tail =
+                    Self { witnesses, domain, expected: self.expected }.collect_k(tycker, env)?;
+                Ok(std::iter::once((binder.witness, canonical)).chain(tail).collect())
+            }
+            | ss::Type::Exists(ss::Exists {
+                binder,
+                mode: ss::ExistsMode::Manifest(definition),
+                body,
+            }) => {
+                let domain = body.subst_abst_k(tycker, (binder.witness, definition))?;
+                Self { witnesses: self.witnesses, domain, expected: self.expected }
+                    .collect_k(tycker, env)
+            }
+            | _ => tycker.err_k(
+                TyckError::PackageWitnessArityMismatch {
+                    expected: self.expected,
+                    found: self.expected - self.witnesses.len(),
+                },
+                std::panic::Location::caller(),
+            ),
+        }
+    }
+}
+
 /// Traverse a package pattern and its domain in lockstep until every abstract
 /// witness in a `PackPi` has a corresponding pattern component.
 struct PackPiPatternAssignments<'a> {
@@ -1575,10 +1794,16 @@ impl PackPiPatternSkolems {
                 PackPiPatternAssignments::new(&items, &witnesses, self.signature.domain)
                     .collect_k(tycker, env)
             }
+            | su::Pattern::Project(_) => Ok(Vec::new()),
+            | su::Pattern::Alias(su::Alias(patterns))
+                if ExistentialProjectionPattern::members(tycker, patterns.iter().copied())
+                    .is_some() =>
+            {
+                Ok(Vec::new())
+            }
             | su::Pattern::Hole(_)
             | su::Pattern::Var(_)
             | su::Pattern::Ctor(_)
-            | su::Pattern::Project(_)
             | su::Pattern::Alias(_)
             | su::Pattern::Triv(_) => tycker.err_k(
                 TyckError::PackageWitnessArityMismatch {
@@ -1611,8 +1836,11 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiPatternSkolems> {
     type Action = ();
 
     fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<Self::Out> {
-        let assignments = self.inner.assignments_k(tycker, &self.info, self.inner.pattern)?;
-        Ok(PatternSkolems::new(assignments))
+        let patterns = self.inner.assignments_k(tycker, &self.info, self.inner.pattern)?;
+        let canonical = self.inner.signature.witnesses.iter().copied().collect::<Vec<_>>();
+        let witnesses = PackPiWitnessSkolems::new(&canonical, self.inner.signature.domain)
+            .collect_k(tycker, &self.info)?;
+        Ok(PatternSkolems::new(patterns, witnesses))
     }
 }
 

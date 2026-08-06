@@ -1,6 +1,13 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /Ret;
+      /Unit;
+      /Int;
+      /int_gt_branch;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -17,7 +24,7 @@ begin
       match b
       | +Nil() => ret a
       | +Cons(b_head, b_tail) =>
-        ! (api/int_gt_branch)
+        ! (int_gt_branch)
           (Ret (List Int))
           a_head
           b_head
@@ -33,5 +40,5 @@ begin
     end
   that
 
-  ! (api/exit) 0
+  ! (exit) 0
 end

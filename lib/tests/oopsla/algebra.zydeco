@@ -8,11 +8,21 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /CType;
+      /Thk;
+      /Ret;
+      /String;
+      /OS;
+      /write_line;
+      /exit;
+      builtin
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
-    monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+    monadic_basis builtin in
   begin
 
   def Either (E : VType) (A : VType) =
@@ -39,8 +49,8 @@ begin
     end
   that
   def ! panic (msg : String) : OS =
-    ! (api/write_line) msg {
-      ! (api/exit) 1
+    ! (write_line) msg {
+      ! (exit) 1
     }
   that
 

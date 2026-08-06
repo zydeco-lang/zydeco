@@ -5,19 +5,28 @@
 -- If the input is not a number, the program exits.
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Thk;
+      /Int;
+      /OS;
+      /add;
+      /write_int;
+      /write_line;
+      /read_line_as_int_branch;
+      /exit
+    ) :
     @[import("../std/builtin.zy")] _
   ) that
 
   (fix (loop : Thk (Int -> OS)) =>
     fn sum =>
-      ! (api/read_line_as_int_branch)
-        { ! (api/exit) 0 }
+      ! (read_line_as_int_branch)
+        { ! (exit) 0 }
         {
           fn i =>
-            do sum <- ! (api/add) i sum;
-            ! (api/write_int) sum {
-              ! (api/write_line) " = sum" {
+            do sum <- ! (add) i sum;
+            ! (write_int) sum {
+              ! (write_line) " = sum" {
                 ! loop sum
               }
             }

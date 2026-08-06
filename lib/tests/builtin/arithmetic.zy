@@ -1,13 +1,19 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /add;
+      /sub;
+      /div;
+      /mod;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  do quotient <- ! (api/div) -7 3;
-  do remainder <- ! (api/mod) -7 3;
-  do quotient_error <- ! (api/sub) quotient -2;
-  do remainder_error <- ! (api/sub) remainder -1;
-  do status <- ! (api/add) quotient_error remainder_error;
-  ! (api/exit) status
+  do quotient <- ! (div) -7 3;
+  do remainder <- ! (mod) -7 3;
+  do quotient_error <- ! (sub) quotient -2;
+  do remainder_error <- ! (sub) remainder -1;
+  do status <- ! (add) quotient_error remainder_error;
+  ! (exit) status
 end

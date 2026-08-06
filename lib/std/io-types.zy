@@ -1,5 +1,14 @@
 param (
-  (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+  (
+    /VType;
+    /CType;
+    /Thk;
+    /Ret;
+    /Unit;
+    /Int;
+    /String;
+    /int_eq_branch
+  ) :
   @[import("builtin.zy")] _
 ) in
 begin
@@ -32,43 +41,43 @@ begin
   def other : IoErrorKind = +Other()
   that
   def ! from_code (code : Int) : Ret IoErrorKind =
-    ! (api/int_eq_branch)
+    ! (int_eq_branch)
       (Ret IoErrorKind)
       code
       0
       { ret not_found }
       {
-        ! (api/int_eq_branch)
+        ! (int_eq_branch)
           (Ret IoErrorKind)
           code
           1
           { ret permission_denied }
           {
-            ! (api/int_eq_branch)
+            ! (int_eq_branch)
               (Ret IoErrorKind)
               code
               2
               { ret already_exists }
               {
-                ! (api/int_eq_branch)
+                ! (int_eq_branch)
                   (Ret IoErrorKind)
                   code
                   3
                   { ret invalid_input }
                   {
-                    ! (api/int_eq_branch)
+                    ! (int_eq_branch)
                       (Ret IoErrorKind)
                       code
                       4
                       { ret invalid_data }
                       {
-                        ! (api/int_eq_branch)
+                        ! (int_eq_branch)
                           (Ret IoErrorKind)
                           code
                           5
                           { ret broken_pipe }
                           {
-                            ! (api/int_eq_branch)
+                            ! (int_eq_branch)
                               (Ret IoErrorKind)
                               code
                               6
@@ -102,7 +111,7 @@ begin
     : R =
     do left_code <- ! kind_code left;
     do right_code <- ! kind_code right;
-    ! (api/int_eq_branch) R left_code right_code when_equal when_different
+    ! (int_eq_branch) R left_code right_code when_equal when_different
   that
   def IoError =
     data

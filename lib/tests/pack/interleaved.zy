@@ -1,6 +1,14 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /Ret;
+      /Unit;
+      /Int;
+      /Char;
+      /sub;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   let Interleaved =
@@ -56,6 +64,6 @@ begin
   ) that
 
   do (value, _) <- ! reveal packed;
-  do status <- ! (api/sub) value 40;
-  ! (api/exit) status
+  do status <- ! (sub) value 40;
+  ! (exit) status
 end

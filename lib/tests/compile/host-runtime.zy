@@ -1,95 +1,115 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Ret;
+      /Int;
+      /Char;
+      /OS;
+      /add;
+      /sub;
+      /int_eq_branch;
+      /str_scalar_length;
+      /str_append;
+      /str_split_once_branch;
+      /str_split_at_branch;
+      /str_eq_branch;
+      /str_get_branch;
+      /int_to_str;
+      /char_to_str;
+      /char_codepoint;
+      /str_parse_int_branch;
+      /arg_fold;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  do twelve <- ! (api/int_to_str) 12;
-  do combined <- ! (api/str_append) twelve twelve;
-  do length <- ! (api/str_scalar_length) combined;
-  do parsed <- ! (api/str_parse_int_branch)
+  do twelve <- ! (int_to_str) 12;
+  do combined <- ! (str_append) twelve twelve;
+  do length <- ! (str_scalar_length) combined;
+  do parsed <- ! (str_parse_int_branch)
     (Ret Int)
     combined
     { ret 0 }
     { fn integer => ret integer };
-  do first <- ! (api/str_get_branch)
+  do first <- ! (str_get_branch)
     (Ret Char)
     combined
     0
     { ret ' ' }
     { fn character => ret character };
-  do first_code <- ! (api/char_codepoint) first;
-  do first_string <- ! (api/char_to_str) first;
-  do one_string <- ! (api/int_to_str) 1;
-  do negative <- ! (api/int_to_str) -1;
-  do dash <- ! (api/str_get_branch)
+  do first_code <- ! (char_codepoint) first;
+  do first_string <- ! (char_to_str) first;
+  do one_string <- ! (int_to_str) 1;
+  do negative <- ! (int_to_str) -1;
+  do dash <- ! (str_get_branch)
     (Ret Char)
     negative
     0
     { ret ' ' }
     { fn character => ret character };
-  do fold_status <- ! (api/arg_fold)
+  do fold_status <- ! (arg_fold)
     (Ret Int)
     { ret 0 }
     {
       fn argument remaining =>
         ret 1
     };
-  do length_status <- ! (api/sub) length 4;
-  do parsed_status <- ! (api/sub) parsed 1212;
-  do first_status <- ! (api/sub) first_code 49;
-  do status <- ! (api/add) length_status parsed_status;
-  do status <- ! (api/add) status first_status;
-  do status <- ! (api/add) status fold_status;
-  ! (api/str_eq_branch)
+  do length_status <- ! (sub) length 4;
+  do parsed_status <- ! (sub) parsed 1212;
+  do first_status <- ! (sub) first_code 49;
+  do status <- ! (add) length_status parsed_status;
+  do status <- ! (add) status first_status;
+  do status <- ! (add) status fold_status;
+  ! (str_eq_branch)
     OS
     first_string
     one_string
     {
-      ! (api/str_split_once_branch)
+      ! (str_split_once_branch)
         OS
         negative
         dash
-        { ! (api/exit) 1 }
+        { ! (exit) 1 }
         {
           fn prefix suffix =>
-            do prefix_length <- ! (api/str_scalar_length) prefix;
-            ! (api/int_eq_branch)
+            do prefix_length <- ! (str_scalar_length) prefix;
+            ! (int_eq_branch)
               OS
               prefix_length
               0
               {
-                ! (api/str_eq_branch)
+                ! (str_eq_branch)
                   OS
                   suffix
                   one_string
                   {
-                    ! (api/str_split_at_branch)
+                    ! (str_split_at_branch)
                       OS
                       combined
                       2
-                      { ! (api/exit) 1 }
+                      { ! (exit) 1 }
                       {
                         fn left right =>
-                          ! (api/str_eq_branch)
+                          ! (str_eq_branch)
                             OS
                             left
                             twelve
                             {
-                              ! (api/str_eq_branch)
+                              ! (str_eq_branch)
                                 OS
                                 right
                                 twelve
-                                { ! (api/exit) status }
-                                { ! (api/exit) 1 }
+                                { ! (exit) status }
+                                { ! (exit) 1 }
                             }
-                            { ! (api/exit) 1 }
+                            { ! (exit) 1 }
                       }
                   }
-                  { ! (api/exit) 1 }
+                  { ! (exit) 1 }
               }
-              { ! (api/exit) 1 }
+              { ! (exit) 1 }
         }
     }
-    { ! (api/exit) 1 }
+    { ! (exit) 1 }
 end

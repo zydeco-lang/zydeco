@@ -1,11 +1,26 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /CType;
+      /Thk;
+      /Ret;
+      /Unit;
+      /String;
+      /OS;
+      /mod;
+      /int_eq_branch;
+      /str_append;
+      /write_line;
+      /random_int;
+      /exit;
+      builtin
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
-    monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+    monadic_basis builtin in
   begin
 
   let Kont (R : CType) (A : VType) =
@@ -87,23 +102,23 @@ begin
         ! flip ()
   that
   def ! print-os (string : String) (k : Thk (Bool -> OS)) : OS =
-    ! (api/write_line) string { ! k +True() }
+    ! (write_line) string { ! k +True() }
   that
   def ! print-str (string : String) (k : Thk (Bool -> Ret String)) : Ret String =
     do suffix <- ! k +True();
-    ! (api/str_append) string suffix
+    ! (str_append) string suffix
   that
   def ! fail-os (error : Err) (continuation : Thk (Empty -> OS)) : OS =
     match error
     | +Msg(message) =>
-      ! (api/write_line) message { ! (api/exit) 1 }
+      ! (write_line) message { ! (exit) 1 }
     end
   that
   def ! flip-os (unit : Unit) (continuation : Thk (Bool -> OS)) : OS =
-    ! (api/random_int) {
+    ! (random_int) {
       fn random =>
-        do remainder <- ! (api/mod) random 2;
-        ! (api/int_eq_branch)
+        do remainder <- ! (mod) random 2;
+        ! (int_eq_branch)
           OS
           remainder
           0
@@ -142,7 +157,7 @@ begin
   in
   ! m .run OS .eff print-os fail-os flip-os {
     fn _ =>
-      ! (api/exit) 0
+      ! (exit) 0
   }
 end
 end

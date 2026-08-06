@@ -1,12 +1,17 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Thk;
+      /OS;
+      /write_line;
+      /read_line
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   fix (loop : Thk OS) =>
-    ! (api/read_line) {
+    ! (read_line) {
       fn line =>
-        ! (api/write_line) line loop
+        ! (write_line) line loop
     }
 end

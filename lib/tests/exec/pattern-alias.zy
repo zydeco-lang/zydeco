@@ -1,7 +1,14 @@
 -- Semicolon patterns observe one bindee repeatedly while preserving source order.
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Thk;
+      /Ret;
+      /Int;
+      /add;
+      /sub;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -12,15 +19,15 @@ begin
     fn ((left : Int, right : Int); whole; copy) =>
       let (whole_left : Int, whole_right : Int) = whole in
       let (copy_left : Int, copy_right : Int) = copy in
-      do direct <- ! (api/add) left right;
-      do through_whole <- ! (api/add) whole_left whole_right;
-      do through_copy <- ! (api/add) copy_left copy_right;
-      do whole_delta <- ! (api/sub) direct through_whole;
-      do copy_delta <- ! (api/sub) direct through_copy;
-      do total <- ! (api/add) whole_delta copy_delta;
+      do direct <- ! (add) left right;
+      do through_whole <- ! (add) whole_left whole_right;
+      do through_copy <- ! (add) copy_left copy_right;
+      do whole_delta <- ! (sub) direct through_whole;
+      do copy_delta <- ! (sub) direct through_copy;
+      do total <- ! (add) whole_delta copy_delta;
       ret total
   } that
 
   do result <- ! compare_aliases pair;
-  ! (api/exit) result
+  ! (exit) result
 end

@@ -1,6 +1,11 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /Ret;
+      /Unit;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -25,5 +30,5 @@ begin
 
   do x <- ! add +S(+S(+Z())) +S(+Z());
   do y <- ! add' x +S(+S(+S(+Z())));
-  ! (api/exit) 0
+  ! (exit) 0
 end

@@ -1,6 +1,14 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /Thk;
+      /Ret;
+      /Int;
+      /add;
+      /sub;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   let CounterLibrary =
@@ -16,7 +24,7 @@ begin
     zero = 0,
     increment = {
       fn (value : Int) =>
-        ! (api/add) value 1
+        ! (add) value 1
     },
   ) that
   def ! use_counter ((= Counter, = zero, = increment) : CounterLibrary) : Ret Int =
@@ -24,6 +32,6 @@ begin
   that
 
   do value <- ! use_counter counter;
-  do status <- ! (api/sub) value 1;
-  ! (api/exit) status
+  do status <- ! (sub) value 1;
+  ! (exit) status
 end

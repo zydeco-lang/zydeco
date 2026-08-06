@@ -1,11 +1,24 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /CType;
+      /Thk;
+      /Ret;
+      /Int;
+      /add;
+      /sub;
+      /mul;
+      /int_to_str;
+      /write_line;
+      /exit;
+      builtin
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
-    monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+    monadic_basis builtin in
   begin
 
   let Kont (R : CType) (A : VType) =
@@ -64,23 +77,23 @@ begin
           ! shift' Int Int {
             fn cont =>
               do y <- ! cont 4;
-              do res <- ! (api/add) 17 y;
+              do res <- ! (add) 17 y;
               ! mkont (Ret Int) .return Int res
           }
         }
         {
           fn x =>
-            do res <- ! (api/mul) 2 x;
+            do res <- ! (mul) 2 x;
             ! mkont (Ret Int) .return Int res
         }
     }
   that
 
   do x <- ! ex;
-  do s <- ! (api/int_to_str) x;
-  ! (api/write_line) s {
-    do zero <- ! (api/sub) x 25;
-    ! (api/exit) zero
+  do s <- ! (int_to_str) x;
+  ! (write_line) s {
+    do zero <- ! (sub) x 25;
+    ! (exit) zero
   }
 end
 end

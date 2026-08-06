@@ -1,6 +1,13 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /CType;
+      /Thk;
+      /Ret;
+      /OS;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -26,5 +33,5 @@ begin
     ! fix' OS { fn loop => ! loop }
   that
 
-  ! (api/exit) 0
+  ! (exit) 0
 end

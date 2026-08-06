@@ -7,7 +7,14 @@
 
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Thk;
+      /Ret;
+      /Int;
+      /add;
+      /sub;
+      /exit
+    ) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
 
@@ -26,7 +33,7 @@ begin
   def lazy_add_one_zero : Thk (Ret Int) = {
     do x <- ! lazy_one;
     do y <- ret zero;
-    ! (api/add) x y
+    ! (add) x y
   } that
 
   -- `do x <- computation; tail` eliminates `Ret A`, binding the returned value
@@ -40,14 +47,14 @@ begin
   ) = {
     fn suspended =>
       do value <- ! suspended;
-      ! (api/sub) value 1
+      ! (sub) value 1
   } that
 
   -- The dependency order differs from the presentation order without changing
   -- lexical meaning: all four definitions are candidates within this block.
   -- The final computation forces them and returns an `OS` result.
   do result <- ! decrement lazy_add_one_zero;
-  ! (api/exit) result
+  ! (exit) result
 end
 
 -- `Thk` and `Ret` are core CBPV constructors bound by opening the Builtin

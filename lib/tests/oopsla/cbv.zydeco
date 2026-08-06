@@ -3,7 +3,18 @@
 --| As it is a CBV language, our syntax only contains expressions.
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /CType;
+      /Thk;
+      /Ret;
+      /Unit;
+      /String;
+      /OS;
+      /str_eq_branch;
+      /write_line;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -63,7 +74,7 @@ begin
   that
 
   def ! str_eq (left : String) (right : String) : Ret Bool =
-    ! (api/str_eq_branch)
+    ! (str_eq_branch)
       (Ret Bool)
       left
       right
@@ -71,8 +82,8 @@ begin
       { ret +False() }
   that
   def ! panic (msg : String) : OS =
-    ! (api/write_line) msg {
-      ! (api/exit) 1
+    ! (write_line) msg {
+      ! (exit) 1
     }
   that
   def fix lookup (x : String) (g : Env) : Ret Answer =
@@ -197,8 +208,8 @@ begin
   | +Err(_) => ! panic "ERROR"
   | +Ok(v) =>
     do s <- ! value_to_str v;
-    ! (api/write_line) s {
-      ! (api/exit) 0
+    ! (write_line) s {
+      ! (exit) 0
     }
   end
 end

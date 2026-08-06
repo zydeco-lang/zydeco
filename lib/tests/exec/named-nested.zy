@@ -2,7 +2,13 @@
 -- wrappers support chained patterns and projections.
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Int;
+      /add;
+      /sub;
+      /mul;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -65,40 +71,40 @@ begin
     /punned : Int;
     punnable_whole
   ) = punnable in
-  do tens <- ! (api/mul) y 10;
-  do hundreds <- ! (api/mul) z 100;
-  do low <- ! (api/add) x tens;
-  do checksum <- ! (api/add) low hundreds;
-  do layout_check <- ! (api/sub) checksum 765;
-  do nested_projection_check <- ! (api/sub) nested/x 5;
-  do outer_projection_check <- ! (api/sub) nested/z 7;
-  do recursive_label_projection_check <- ! (api/sub) wrapped/inner 8;
-  do chained_projection_check <- ! (api/sub) wrapped/outer/inner 8;
-  do chained_pattern_check <- ! (api/sub) wrapped_value 8;
-  do x_pattern_check <- ! (api/sub) projected_x 5;
-  do z_pattern_check <- ! (api/sub) projected_z 7;
-  do nested_alias_check <- ! (api/sub) projected_nested/x 5;
-  do inner_pattern_check <- ! (api/sub) projected_inner 8;
-  do chained_projection_pattern_check <- ! (api/sub) chained_projected_inner 8;
-  do wrapped_alias_check <- ! (api/sub) projected_wrapped/inner 8;
-  do disambiguated_left_check <- ! (api/sub) left_x 9;
-  do disambiguated_right_check <- ! (api/sub) right_x 10;
-  do punned_projection_pattern_check <- ! (api/sub) punned 11;
-  do punned_alias_check <- ! (api/sub) punnable_whole/punned 11;
-  do total <- ! (api/add) layout_check nested_projection_check;
-  do total <- ! (api/add) total outer_projection_check;
-  do total <- ! (api/add) total recursive_label_projection_check;
-  do total <- ! (api/add) total chained_projection_check;
-  do total <- ! (api/add) total chained_pattern_check;
-  do total <- ! (api/add) total x_pattern_check;
-  do total <- ! (api/add) total z_pattern_check;
-  do total <- ! (api/add) total nested_alias_check;
-  do total <- ! (api/add) total inner_pattern_check;
-  do total <- ! (api/add) total chained_projection_pattern_check;
-  do total <- ! (api/add) total wrapped_alias_check;
-  do total <- ! (api/add) total disambiguated_left_check;
-  do total <- ! (api/add) total disambiguated_right_check;
-  do total <- ! (api/add) total punned_projection_pattern_check;
-  do total <- ! (api/add) total punned_alias_check;
-  ! (api/exit) total
+  do tens <- ! (mul) y 10;
+  do hundreds <- ! (mul) z 100;
+  do low <- ! (add) x tens;
+  do checksum <- ! (add) low hundreds;
+  do layout_check <- ! (sub) checksum 765;
+  do nested_projection_check <- ! (sub) nested/x 5;
+  do outer_projection_check <- ! (sub) nested/z 7;
+  do recursive_label_projection_check <- ! (sub) wrapped/inner 8;
+  do chained_projection_check <- ! (sub) wrapped/outer/inner 8;
+  do chained_pattern_check <- ! (sub) wrapped_value 8;
+  do x_pattern_check <- ! (sub) projected_x 5;
+  do z_pattern_check <- ! (sub) projected_z 7;
+  do nested_alias_check <- ! (sub) projected_nested/x 5;
+  do inner_pattern_check <- ! (sub) projected_inner 8;
+  do chained_projection_pattern_check <- ! (sub) chained_projected_inner 8;
+  do wrapped_alias_check <- ! (sub) projected_wrapped/inner 8;
+  do disambiguated_left_check <- ! (sub) left_x 9;
+  do disambiguated_right_check <- ! (sub) right_x 10;
+  do punned_projection_pattern_check <- ! (sub) punned 11;
+  do punned_alias_check <- ! (sub) punnable_whole/punned 11;
+  do total <- ! (add) layout_check nested_projection_check;
+  do total <- ! (add) total outer_projection_check;
+  do total <- ! (add) total recursive_label_projection_check;
+  do total <- ! (add) total chained_projection_check;
+  do total <- ! (add) total chained_pattern_check;
+  do total <- ! (add) total x_pattern_check;
+  do total <- ! (add) total z_pattern_check;
+  do total <- ! (add) total nested_alias_check;
+  do total <- ! (add) total inner_pattern_check;
+  do total <- ! (add) total chained_projection_pattern_check;
+  do total <- ! (add) total wrapped_alias_check;
+  do total <- ! (add) total disambiguated_left_check;
+  do total <- ! (add) total disambiguated_right_check;
+  do total <- ! (add) total punned_projection_pattern_check;
+  do total <- ! (add) total punned_alias_check;
+  ! (exit) total
 end

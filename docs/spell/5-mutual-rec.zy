@@ -6,7 +6,14 @@
 
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /Thk;
+      /Ret;
+      /Unit;
+      /OS;
+      /exit
+    ) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
 
@@ -68,11 +75,11 @@ begin
       | +True() =>
         match expected
         | +True() => ! continuation
-        | +False() => ! (api/exit) 1
+        | +False() => ! (exit) 1
         end
       | +False() =>
         match expected
-        | +True() => ! (api/exit) 1
+        | +True() => ! (exit) 1
         | +False() => ! continuation
         end
       end
@@ -87,7 +94,7 @@ begin
     ! assert_equal odd_three +True() {
       ! assert_equal even_one +False() {
         ! assert_equal odd_two +False() {
-          ! (api/exit) 0
+          ! (exit) 0
         }
       }
     }

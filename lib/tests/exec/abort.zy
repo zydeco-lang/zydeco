@@ -1,6 +1,12 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /CType;
+      /Ret;
+      /Int;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -18,5 +24,5 @@ begin
   that
 
   do x <- ! abort 0 .app 1 .app 2 .app 3 .return;
-  ! (api/exit) x
+  ! (exit) x
 end

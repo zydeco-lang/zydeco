@@ -6,13 +6,16 @@ begin
     end
   that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Unit;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   let x : Bool = +False() in
   match x
-  | +True(_) => ! (api/exit) 10
-  | +False(_) => ! (api/exit) 0
+  | +True(_) => ! (exit) 10
+  | +False(_) => ! (exit) 0
   end
 end

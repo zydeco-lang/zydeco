@@ -1,23 +1,30 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Ret;
+      /Int;
+      /add;
+      /sub;
+      /int_eq_branch;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   def fix sum (i : Int) (acc : Int) : Ret Int =
-    ! (api/int_eq_branch)
+    ! (int_eq_branch)
       (Ret Int)
       i
       0
       { ret acc }
       {
         -- do i <- ret i;
-        do i' <- ! (api/sub) i 1;
-        do acc' <- ! (api/add) i acc;
+        do i' <- ! (sub) i 1;
+        do acc' <- ! (add) i acc;
         ! sum i' acc'
       }
   that
 
   do z <- ! sum 10 0;
-  do r <- ! (api/sub) z 55;
-  ! (api/exit) r
+  do r <- ! (sub) z 55;
+  ! (exit) r
 end

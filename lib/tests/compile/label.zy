@@ -1,6 +1,11 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /Ret;
+      /Int;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   def ! id (A : VType) (a : A) : Ret A =
@@ -8,5 +13,5 @@ begin
   that
 
   do x <- ! id Int 0;
-  ! (api/exit) x
+  ! (exit) x
 end

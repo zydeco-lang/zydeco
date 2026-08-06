@@ -1,22 +1,31 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Ret;
+      /Int;
+      /OS;
+      /add;
+      /int_eq_branch;
+      /str_scalar_length;
+      /arg_fold;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  do length <- ! (api/arg_fold)
+  do length <- ! (arg_fold)
     (Ret Int)
     { ret 0 }
     {
       fn argument remaining =>
         do suffix_length <- ! remaining;
-        do argument_length <- ! (api/str_scalar_length) argument;
-        ! (api/add) argument_length suffix_length
+        do argument_length <- ! (str_scalar_length) argument;
+        ! (add) argument_length suffix_length
     };
-  ! (api/int_eq_branch)
+  ! (int_eq_branch)
     OS
     length
     9
-    { ! (api/exit) 0 }
-    { ! (api/exit) 1 }
+    { ! (exit) 0 }
+    { ! (exit) 1 }
 end

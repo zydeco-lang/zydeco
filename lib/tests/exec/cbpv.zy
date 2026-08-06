@@ -2,11 +2,23 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /CType;
+      /Thk;
+      /Ret;
+      /Unit;
+      /String;
+      /OS;
+      /str_eq_branch;
+      /write_line;
+      /exit;
+      builtin
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
-    monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+    monadic_basis builtin in
   begin
 
   def Bool =
@@ -131,7 +143,7 @@ begin
     | .print s =>
       comatch
       | .run ka _ =>
-        ! (api/write_line) s {
+        ! (write_line) s {
           ! ka ()
         }
       end
@@ -152,7 +164,7 @@ begin
     end
   that
   def ! str_eq (left : String) (right : String) : Ret Bool =
-    ! (api/str_eq_branch)
+    ! (str_eq_branch)
       (Ret Bool)
       left
       right
@@ -300,16 +312,16 @@ begin
   in
   let ! report (e : Exception) : OS =
     match e
-    | +TypeError() => ! (api/exit) 1
-    | +FreeVariable() => ! (api/exit) 1
+    | +TypeError() => ! (exit) 1
+    | +FreeVariable() => ! (exit) 1
     end
   in
   let ! value-eq (v1 : Value) (v2 : Value) (k : Thk OS) : OS =
     let ! bool-value-panic =
-        ! (api/exit) 1
+        ! (exit) 1
       in
     let ! thunk-panic =
-      ! (api/exit) 1
+      ! (exit) 1
     in
     match v1
     | +Bool(b1) =>
@@ -318,7 +330,7 @@ begin
         do eq? <- ! bool_eq b1 b2;
         match eq?
         | +True() =>
-          ! (api/write_line) "\\^o^/" k
+          ! (write_line) "\\^o^/" k
         | +False() => ! bool-value-panic
         end
       | +Thunk(_) => ! thunk-panic
@@ -364,7 +376,7 @@ begin
   let ans2 : Value = +Bool(+True()) in
   ! demo term1 ans1 {
     ! demo term2 ans2 {
-      ! (api/exit) 0
+      ! (exit) 0
     }
   }
 end

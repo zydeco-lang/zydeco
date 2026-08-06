@@ -1,7 +1,10 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /OS;
+      builtin
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -9,9 +12,7 @@ begin
     /OS = StdOS;
     /bool;
     /process
-  ) = make_std (
-    VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
-  ) in
+  ) = make_std builtin in
   do result <- ! (bool/not) (bool/false);
   ! (bool/if)
     StdOS

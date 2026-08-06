@@ -1,21 +1,29 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Ret;
+      /String;
+      /OS;
+      /str_append;
+      /str_eq_branch;
+      /arg_fold;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  do joined <- ! (api/arg_fold)
+  do joined <- ! (arg_fold)
     (Ret String)
     { ret "" }
     {
       fn argument remaining =>
         do suffix <- ! remaining;
-        ! (api/str_append) argument suffix
+        ! (str_append) argument suffix
     };
-  ! (api/str_eq_branch)
+  ! (str_eq_branch)
     OS
     joined
     "alphabeta"
-    { ! (api/exit) 0 }
-    { ! (api/exit) 1 }
+    { ! (exit) 0 }
+    { ! (exit) 1 }
 end

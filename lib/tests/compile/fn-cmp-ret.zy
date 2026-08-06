@@ -1,10 +1,15 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Ret;
+      /Int;
+      /int_eq_branch;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   def ! f (x : Int) : Ret Int =
-    ! (api/int_eq_branch)
+    ! (int_eq_branch)
       (Ret Int)
       x
       0
@@ -13,5 +18,5 @@ begin
   that
 
   do z <- ! f 0;
-  ! (api/exit) z
+  ! (exit) z
 end

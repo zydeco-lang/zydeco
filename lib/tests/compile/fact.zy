@@ -1,12 +1,16 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Ret;
+      /Int;
+      builtin
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   let (/Int = StdInt; /bool; /int; /process) =
-    make_std (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api)
+    make_std builtin
   in
   let fix fact (i : StdInt) : Ret StdInt =
     -- extern def add : Thk (Int -> Int -> Ret Int) end

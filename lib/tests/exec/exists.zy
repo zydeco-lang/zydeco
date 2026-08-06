@@ -1,6 +1,13 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /Thk;
+      /Ret;
+      /Int;
+      /Char;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -37,7 +44,7 @@ begin
       | +Seal(of, to) =>
         do n <- ! of 0;
         do i <- ! to n;
-        ! (api/exit) i
+        ! (exit) i
       end
     end
   end

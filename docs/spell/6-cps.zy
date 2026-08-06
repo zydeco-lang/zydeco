@@ -6,7 +6,15 @@
 
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /Thk;
+      /Unit;
+      /String;
+      /OS;
+      /write_line;
+      /exit
+    ) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
 
@@ -46,14 +54,14 @@ begin
         match remaining
         | +Nil() => ! continuation
         | +Cons(head, tail) =>
-          ! (api/write_line) head {
+          ! (write_line) head {
             ! print_list tail continuation
           }
         end
   } that
 
   ! print_list values {
-    ! (api/exit) 0
+    ! (exit) 0
   }
 end
 

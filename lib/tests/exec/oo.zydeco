@@ -2,7 +2,17 @@
 -- e.g. define a Counter that can incr and project out Int or String
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /CType;
+      /Thk;
+      /Ret;
+      /Int;
+      /String;
+      /add;
+      /int_to_str;
+      /write_line;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -20,11 +30,11 @@ begin
       | .num => ret n
       | .incr i =>
         do j <- ! this .num;
-        do n <- ! (api/add) i j;
+        do n <- ! (add) i j;
         ! mk_counter n
       | .fmt =>
         do n <- ! this .num;
-        ! (api/int_to_str) n
+        ! (int_to_str) n
       end
   that
 
@@ -32,8 +42,8 @@ begin
     ! mk_counter 42
   in
   do s <- ! counter_42 .fmt;
-  ! (api/write_line) s {
+  ! (write_line) s {
     do n <- ! counter_42 .incr -42 .num;
-    ! (api/exit) n
+    ! (exit) n
   }
 end

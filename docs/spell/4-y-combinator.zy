@@ -8,7 +8,14 @@
 begin
   let make_std = @[import("../../lib/std/std.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /CType;
+      /Thk;
+      /Ret;
+      /Int;
+      /OS;
+      builtin
+    ) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
 
@@ -44,9 +51,7 @@ begin
     /string;
     /stdio;
     /process
-  ) = make_std (
-    VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
-  ) in
+  ) = make_std builtin in
   begin
     def factorial_step : Thk (
       Thk (StdInt -> Ret StdInt) ->

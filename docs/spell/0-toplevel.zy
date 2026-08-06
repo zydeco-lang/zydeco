@@ -17,7 +17,14 @@ begin
   -- `that` lets this parameter move within the current block according to the
   -- dependency graph, so later definitions may use its fields.
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /Thk;
+      /Ret;
+      /Int;
+      /String;
+      /exit
+    ) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
 
@@ -59,7 +66,7 @@ begin
   do pair <- ! sample .second;
   match pair
   | +Pair(status, _) =>
-    ! (api/exit) status
+    ! (exit) status
   end
 end
 

@@ -1,6 +1,9 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Int;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -11,5 +14,5 @@ begin
   that
   let result : Int = apply constant 42 that
 
-  ! (api/exit) result
+  ! (exit) result
 end

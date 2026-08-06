@@ -3,7 +3,18 @@
 -- the numbers in a list.
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /CType;
+      /Thk;
+      /Ret;
+      /Unit;
+      /Int;
+      /add;
+      /int_to_str;
+      /write_line;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -31,7 +42,7 @@ begin
     | +Nil() => ret 0
     | +Cons(x, xs) =>
       do n <- ! sumBad xs;
-      ! (api/add) n x
+      ! (add) n x
     end
   that
   -- This is a bad algorithm because it uses stack space linear in the
@@ -48,7 +59,7 @@ begin
     comatch
     | .done => ret n
     | .addN x =>
-      do n' <- ! (api/add) n x;
+      do n' <- ! (add) n x;
       ! retSummer n'
     end
   that
@@ -87,7 +98,7 @@ begin
       comatch
       | .done => ! sumBetter xs .addN x .done
       | .addN y =>
-        do xPlusy <- ! (api/add) x y;
+        do xPlusy <- ! (add) x y;
         ! sumBetter xs .addN xPlusy
       end
     end
@@ -114,7 +125,7 @@ begin
         | +Cons(x, xs) =>
           comatch
           | .add n =>
-            do n' <- ! (api/add) x n;
+            do n' <- ! (add) x n;
             ! sumBest xs .add n'
           end
         end
@@ -124,6 +135,6 @@ begin
   that
 
   do n <- ! sum (+Cons(5, +Cons(13, +Nil())));
-  do s <- ! (api/int_to_str) n;
-  ! (api/write_line) s { ! (api/exit) 0 }
+  do s <- ! (int_to_str) n;
+  ! (write_line) s { ! (exit) 0 }
 end

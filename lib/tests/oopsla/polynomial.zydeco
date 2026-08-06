@@ -1,19 +1,26 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Ret;
+      /Int;
+      /add;
+      /sub;
+      /mul;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   def ! poly (x : Int) : Ret Int =
     -- f(x) = x^2 + x + 10
-    do s <- ! (api/mul) x x;
-    do y <- ! (api/add) x 10;
-    ! (api/add) s y
+    do s <- ! (mul) x x;
+    do y <- ! (add) x 10;
+    ! (add) s y
   that
 
   -- the exit code should be 0 for the test to pass
   do r <- ! poly 10;
   -- since f(10) = 120, we minus the result by 120 to get 0
-  do e <- ! (api/sub) r 120;
-  ! (api/exit) e
+  do e <- ! (sub) r 120;
+  ! (exit) e
 end

@@ -2,11 +2,23 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /CType;
+      /Thk;
+      /Ret;
+      /Unit;
+      /Int;
+      /add;
+      /write_str;
+      /write_int;
+      /exit;
+      builtin
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
-    monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+    monadic_basis builtin in
   begin
 
   def Either (E : VType) (A : VType) =
@@ -125,7 +137,7 @@ begin
         }
     | .kont =>
       fn A' ka =>
-        do i' <- ! (api/add) i 1;
+        do i' <- ! (add) i 1;
         ! count_kont E A' i' {
           fn i =>
             ! fi i .kont A' ka
@@ -181,11 +193,11 @@ begin
   };
   -- syntactic sugar:
   -- do~ M; N ==> M { N }
-  ! (api/write_int) a {
-    ! (api/write_str) " != " {
-      ! (api/write_int) b {
-        ! (api/write_str) "\n" {
-          ! (api/exit) 0
+  ! (write_int) a {
+    ! (write_str) " != " {
+      ! (write_int) b {
+        ! (write_str) "\n" {
+          ! (exit) 0
         }
       }
     }

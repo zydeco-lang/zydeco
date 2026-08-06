@@ -2,7 +2,12 @@
 -- whole-pattern annotations, and holes alongside unnamed patterns.
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Int;
+      /add;
+      /sub;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -38,16 +43,16 @@ begin
     _,
     right = _
   ) = pattern_target in
-  do direct_left_check <- ! (api/sub) direct_left 1;
-  do direct_middle_check <- ! (api/sub) direct_middle 2;
-  do direct_right_check <- ! (api/sub) direct_right 3;
-  do opaque_left_check <- ! (api/sub) opaque_left 1;
-  do opaque_middle_check <- ! (api/sub) opaque_middle 2;
-  do opaque_right_check <- ! (api/sub) opaque_right 3;
-  do total <- ! (api/add) direct_left_check direct_middle_check;
-  do total <- ! (api/add) total direct_right_check;
-  do total <- ! (api/add) total opaque_left_check;
-  do total <- ! (api/add) total opaque_middle_check;
-  do total <- ! (api/add) total opaque_right_check;
-  ! (api/exit) total
+  do direct_left_check <- ! (sub) direct_left 1;
+  do direct_middle_check <- ! (sub) direct_middle 2;
+  do direct_right_check <- ! (sub) direct_right 3;
+  do opaque_left_check <- ! (sub) opaque_left 1;
+  do opaque_middle_check <- ! (sub) opaque_middle 2;
+  do opaque_right_check <- ! (sub) opaque_right 3;
+  do total <- ! (add) direct_left_check direct_middle_check;
+  do total <- ! (add) total direct_right_check;
+  do total <- ! (add) total opaque_left_check;
+  do total <- ! (add) total opaque_middle_check;
+  do total <- ! (add) total opaque_right_check;
+  ! (exit) total
 end

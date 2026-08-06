@@ -4,7 +4,37 @@ begin
   --| Thunk Type and Return Type
   --| Primitive Base Types
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /CType;
+      /Thk;
+      /Ret;
+      /Unit;
+      /Int;
+      /Char;
+      /String;
+      /OS;
+      /add = primitive_add;
+      /sub = primitive_sub;
+      /mul = primitive_mul;
+      /div = primitive_div;
+      /mod = primitive_mod;
+      /int_eq_branch;
+      /int_lt_branch;
+      /int_gt_branch;
+      /str_scalar_length = primitive_str_scalar_length;
+      /str_append = primitive_str_append;
+      /str_eq_branch;
+      /str_get_branch;
+      /int_to_str = primitive_int_to_str;
+      /char_to_str = primitive_char_to_str;
+      /char_codepoint = primitive_char_codepoint;
+      /write_str = primitive_write_str;
+      /read_line = primitive_read_line;
+      /read_line_as_int_branch;
+      /random_int = primitive_random_int;
+      /exit = primitive_exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   let Thunk (B : CType) = Thk B that
@@ -108,34 +138,34 @@ begin
 
 
 -- module Arith
-  let add = api/add that
-  let sub = api/sub that
-  let mul = api/mul that
+  let add = primitive_add that
+  let sub = primitive_sub that
+  let mul = primitive_mul that
   def mult = mul that
   def times = mul that
-  let div = api/div that
-  let mod = api/mod that
+  let div = primitive_div that
+  let mod = primitive_mod that
 
   def ! int_eq (x : Int) (y : Int) : Ret Bool =
-    ! (api/int_eq_branch) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! (int_eq_branch) (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! int_lt (x : Int) (y : Int) : Ret Bool =
-    ! (api/int_lt_branch) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! (int_lt_branch) (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! int_gt (x : Int) (y : Int) : Ret Bool =
-    ! (api/int_gt_branch) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! (int_gt_branch) (Ret Bool) x y { ret +True() } { ret +False() }
   that
 -- end module Arith
 
 
 -- module String
-  let str_scalar_length = api/str_scalar_length that
-  let str_append = api/str_append that
+  let str_scalar_length = primitive_str_scalar_length that
+  let str_append = primitive_str_append that
   def ! str_eq (x : String) (y : String) : Ret Bool =
-    ! (api/str_eq_branch) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! (str_eq_branch) (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! str_get_or_space (string : String) (index : Int) : Ret Char =
-    ! (api/str_get_branch)
+    ! (str_get_branch)
       (Ret Char)
       string
       index
@@ -154,22 +184,22 @@ begin
       | +False() => ret "False"
       end
   } that
-  let int_to_str = api/int_to_str that
-  let char_to_str = api/char_to_str that
-  let char_codepoint = api/char_codepoint that
+  let int_to_str = primitive_int_to_str that
+  let char_to_str = primitive_char_to_str that
+  let char_codepoint = primitive_char_codepoint that
 -- end module String
 
 
 -- module OS
-  let write_str = api/write_str that
-  let read_line = api/read_line that
+  let write_str = primitive_write_str that
+  let read_line = primitive_read_line that
   def ! read_line_as_int (k : Thk(Option Int -> OS)) : OS =
-    ! (api/read_line_as_int_branch)
+    ! (read_line_as_int_branch)
       { ! k +None() }
       { fn i => ! k +Some(i) }
   that
-  let random_int = api/random_int that
-  let exit = api/exit that
+  let random_int = primitive_random_int that
+  let exit = primitive_exit that
 
   def halt : Thk OS = { ! exit 0 } that
 

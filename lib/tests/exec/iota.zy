@@ -1,6 +1,19 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /Thk;
+      /Ret;
+      /Unit;
+      /Int;
+      /String;
+      /OS;
+      /add = primitive_add;
+      /int_lt_branch;
+      /write_int = primitive_write_int;
+      /write_line = primitive_write_line;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   let U = Thk that
@@ -11,17 +24,17 @@ begin
     | +False : Unit
     end
   that
-  let add = api/add that
+  let add = primitive_add that
   def ! int_lt (x : Int) (y : Int) : Ret Bool =
-    ! (api/int_lt_branch)
+    ! (int_lt_branch)
       (Ret Bool)
       x
       y
       { ret +True() }
       { ret +False() }
   that
-  let write_int = api/write_int that
-  let write_line = api/write_line that
+  let write_int = primitive_write_int that
+  let write_line = primitive_write_line that
   def ! write_int_line (x : Int) (b : U OS) : OS =
     ! write_int x {
       ! write_line "" b
@@ -29,7 +42,7 @@ begin
   that
   def ! panic (msg : String) : OS =
     ! write_line msg {
-      ! (api/exit) 1
+      ! (exit) 1
     }
   that
 

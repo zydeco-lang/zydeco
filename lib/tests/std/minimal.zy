@@ -1,12 +1,15 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Int = _;
+      builtin
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   let (/int; /process) =
-    make_std (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api)
+    make_std builtin
   in
   do one <- ! (int/increment) 0;
   do status <- ! (int/sub) one 1;

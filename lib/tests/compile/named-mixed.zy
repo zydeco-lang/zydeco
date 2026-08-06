@@ -1,6 +1,15 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Thk;
+      /Ret;
+      /Unit;
+      /Int;
+      /add;
+      /sub;
+      /mul;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -49,7 +58,7 @@ begin
     (apply :: Thk (FunctionInput -> Ret FunctionOutput)) * Int
   that
   def ! transform ((lhs = lhs : Int, rhs : Int) : FunctionInput) : Ret FunctionOutput =
-    do result <- ! (api/add) lhs rhs;
+    do result <- ! (add) lhs rhs;
     ret (lhs, result = result)
   that
   def function_box : FunctionBox = (
@@ -83,10 +92,10 @@ begin
 
   -- Positional weighting makes an accidental field permutation visible.
   def ! checksum3 (a : Int) (b : Int) (c : Int) : Ret Int =
-    do tens <- ! (api/mul) b 10;
-    do hundreds <- ! (api/mul) c 100;
-    do low <- ! (api/add) a tens;
-    ! (api/add) low hundreds
+    do tens <- ! (mul) b 10;
+    do hundreds <- ! (mul) c 100;
+    do low <- ! (add) a tens;
+    ! (add) low hundreds
   that
 
   let (
@@ -95,7 +104,7 @@ begin
     third = third : Int
   ) = flat_mixed in
   do flat_checksum <- ! checksum3 first middle third;
-  do flat_check <- ! (api/sub) flat_checksum 321;
+  do flat_check <- ! (sub) flat_checksum 321;
 
   -- A variable pattern may bind a named component opaquely. It can then be
   -- opened by either a whole-pattern annotation or a payload annotation.
@@ -107,14 +116,14 @@ begin
   let ((first = opaque_first) : (first :: Int)) = first_field in
   let (third = opaque_third : Int) = third_field in
   do opaque_checksum <- ! checksum3 opaque_first opaque_middle opaque_third;
-  do opaque_check <- ! (api/sub) opaque_checksum 321;
+  do opaque_check <- ! (sub) opaque_checksum 321;
 
   let (
     (left = left : Int, center : Int),
     right = right : Int
   ) = nested_mixed in
   do nested_checksum <- ! checksum3 left center right;
-  do nested_check <- ! (api/sub) nested_checksum 654;
+  do nested_check <- ! (sub) nested_checksum 654;
 
   match packet
   | +Packet(
@@ -123,7 +132,7 @@ begin
       payload = payload : Int
     ) =>
     do packet_checksum <- ! checksum3 kind body payload;
-    do packet_check <- ! (api/sub) packet_checksum 987;
+    do packet_check <- ! (sub) packet_checksum 987;
 
     let (
       apply = apply : Thk (FunctionInput -> Ret FunctionOutput),
@@ -135,7 +144,7 @@ begin
       result = result : Int
     ) = transformed in
     do function_checksum <- ! checksum3 echoed result 0;
-    do function_check <- ! (api/sub) function_checksum 220;
+    do function_check <- ! (sub) function_checksum 220;
 
     let (
       gauge_marker : Int,
@@ -147,24 +156,24 @@ begin
       drift : Int
     ) = observation in
     do gauge_checksum <- ! checksum3 reading drift 0;
-    do gauge_check <- ! (api/sub) gauge_checksum 142;
+    do gauge_check <- ! (sub) gauge_checksum 142;
 
     do shifted <- ! active_gauge .shift (delta = 14 : Int);
     let (reading = shifted_reading : Int) = shifted in
-    do shift_pattern_check <- ! (api/sub) shifted_reading 14;
-    do shift_projection_check <- ! (api/sub) shifted/reading 14;
+    do shift_pattern_check <- ! (sub) shifted_reading 14;
+    do shift_projection_check <- ! (sub) shifted/reading 14;
 
-    do total <- ! (api/add) flat_check nested_check;
-    do total <- ! (api/add) total opaque_check;
-    do total <- ! (api/add) total packet_check;
-    do total <- ! (api/add) total function_marker;
-    do total <- ! (api/add) total function_check;
-    do total <- ! (api/add) total gauge_marker;
-    do total <- ! (api/add) total gauge_check;
-    do total <- ! (api/add) total shift_pattern_check;
-    do total <- ! (api/add) total shift_projection_check;
-    ! (api/exit) total
+    do total <- ! (add) flat_check nested_check;
+    do total <- ! (add) total opaque_check;
+    do total <- ! (add) total packet_check;
+    do total <- ! (add) total function_marker;
+    do total <- ! (add) total function_check;
+    do total <- ! (add) total gauge_marker;
+    do total <- ! (add) total gauge_check;
+    do total <- ! (add) total shift_pattern_check;
+    do total <- ! (add) total shift_projection_check;
+    ! (exit) total
   | +Empty() =>
-    ! (api/exit) 1
+    ! (exit) 1
   end
 end

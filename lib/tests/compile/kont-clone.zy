@@ -6,7 +6,13 @@ begin
     end
   that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Thk;
+      /Unit;
+      /Int;
+      /OS;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   def ! f : Bool -> Thk (Int -> OS) -> OS =
@@ -22,8 +28,8 @@ begin
     -- a large continuation gets inlined
     fn x =>
       match (+True() : Bool)
-      | +True(_) => ! (api/exit) x
-      | +False(_) => ! (api/exit) 0
+      | +True(_) => ! (exit) x
+      | +False(_) => ! (exit) 0
       end
   }
 end

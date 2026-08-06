@@ -1,12 +1,16 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Int;
+      /OS;
+      builtin
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   let (/Int = StdInt; /OS = StdOS; /process) =
-    make_std (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api)
+    make_std builtin
   in
   begin
     let Num = StdInt that

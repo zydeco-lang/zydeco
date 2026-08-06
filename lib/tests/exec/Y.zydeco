@@ -1,7 +1,14 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /CType;
+      /Thk;
+      /Ret;
+      /Int;
+      /OS;
+      builtin
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   def Y (B : CType) : CType =
@@ -32,9 +39,7 @@ begin
     /string;
     /stdio;
     /process
-  ) = make_std (
-    VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
-  ) in
+  ) = make_std builtin in
   -- good old factorial
   def ! fact (f : Thk (StdInt -> Ret StdInt)) (n : StdInt) : Ret StdInt =
     do is_zero <- ! (int/eq) n 0;

@@ -1,6 +1,14 @@
 -- module List
 param (
-  (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+  (
+    /VType;
+    /CType;
+    /Thk;
+    /Ret;
+    /Unit;
+    /Int;
+    /add
+  ) :
   @[import("builtin.zy")] _
 ) in
 begin
@@ -91,7 +99,7 @@ begin
   def ! length (A : VType) (list : List A) : Ret Int =
     ! fold_left A Int list 0 {
       fn count _ =>
-        ! (api/add) count 1
+        ! (add) count 1
     }
   that
   let Interface =

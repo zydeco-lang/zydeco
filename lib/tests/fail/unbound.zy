@@ -1,8 +1,10 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  ! (api/exit) x
+  ! (exit) x
 end

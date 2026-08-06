@@ -1,6 +1,13 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /Ret;
+      /Unit;
+      /Int;
+      /sub;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -56,8 +63,8 @@ begin
     param (value : Int) in
     def expected : Int = 42 in
     let answer = value in
-    do status <- ! (api/sub) answer expected;
-    ! (api/exit) status
+    do status <- ! (sub) answer expected;
+    ! (exit) status
   that
   def ! run =
     begin
@@ -67,8 +74,8 @@ begin
       let Number = A that
       param (A : VType) that
       def Opaque : VType = Int that
-      do status <- ! (api/sub) expected 42;
-      ! (api/exit) status
+      do status <- ! (sub) expected 42;
+      ! (exit) status
     end
   that
 

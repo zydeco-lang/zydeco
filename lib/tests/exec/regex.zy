@@ -1,6 +1,25 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /Thk;
+      /Ret;
+      /Unit;
+      /Int;
+      /Char;
+      /String;
+      /OS;
+      /add;
+      /int_eq_branch;
+      /int_lt_branch;
+      /str_scalar_length;
+      /str_append;
+      /str_get_branch;
+      /char_to_str;
+      /char_codepoint;
+      /write_line;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -40,7 +59,7 @@ begin
   that
 
   def ! int_lt (left : Int) (right : Int) : Ret Bool =
-    ! (api/int_lt_branch)
+    ! (int_lt_branch)
       (Ret Bool)
       left
       right
@@ -48,7 +67,7 @@ begin
       { ret +False() }
   that
   def ! str_get_or_space (string : String) (index : Int) : Ret Char =
-    ! (api/str_get_branch)
+    ! (str_get_branch)
       (Ret Char)
       string
       index
@@ -56,9 +75,9 @@ begin
       { fn character => ret character }
   that
   def ! char_eq (left : Char) (right : Char) : Ret Bool =
-    do left <- ! (api/char_codepoint) left;
-    do right <- ! (api/char_codepoint) right;
-    ! (api/int_eq_branch)
+    do left <- ! (char_codepoint) left;
+    do right <- ! (char_codepoint) right;
+    ! (int_eq_branch)
       (Ret Bool)
       left
       right
@@ -66,16 +85,16 @@ begin
       { ret +False() }
   that
   def ! str_chop_hd (s : String) (i : Int) : Ret String =
-    do l <- ! (api/str_scalar_length) s;
+    do l <- ! (str_scalar_length) s;
     let fix str_collect (s : String) (i : Int) (r : String) : Ret String =
       do continue? <- ! int_lt i l;
       match continue?
       | +False() => ret r
       | +True() =>
         do tl <- ! str_get_or_space s i;
-        do tl <- ! (api/char_to_str) tl;
-        do r <- ! (api/str_append) r tl;
-        do i+1 <- ! (api/add) i 1;
+        do tl <- ! (char_to_str) tl;
+        do r <- ! (str_append) r tl;
+        do i+1 <- ! (add) i 1;
         ! str_collect s i+1 r
       end
     in
@@ -88,8 +107,8 @@ begin
   that
   def ! str_match (s : String) (p : String) : Ret (Option String) =
     let fix str_match (i : Int) (s : String) (p : String) : Ret (Option String) =
-        do s_len <- ! (api/str_scalar_length) s;
-      do p_len <- ! (api/str_scalar_length) p;
+        do s_len <- ! (str_scalar_length) s;
+      do p_len <- ! (str_scalar_length) p;
       do i_lt_s <- ! int_lt i s_len;
       do i_lt_p <- ! int_lt i p_len;
       match i_lt_p
@@ -104,7 +123,7 @@ begin
           match eq?
           | +False() => ret +None()
           | +True() =>
-            do i+1 <- ! (api/add) i 1;
+            do i+1 <- ! (add) i 1;
             ! str_match i+1 s p
           end
         end
@@ -149,8 +168,8 @@ begin
   def ! demo (syn : Syn) (str : String) (kont : Thk OS) : OS =
     do res <- ! regex .run str .bind syn;
     match res
-    | +Some(s) => ! (api/write_line) s kont
-    | +None() => ! (api/exit) 1
+    | +Some(s) => ! (write_line) s kont
+    | +None() => ! (exit) 1
     end
   that
 
@@ -164,5 +183,5 @@ begin
       )
     )
     "pppqqqsox\\^o^/"
-    { ! (api/exit) 0 }
+    { ! (exit) 0 }
 end

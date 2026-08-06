@@ -12,7 +12,13 @@ only the type identities and module values it needs:
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /Thk;
+      /String;
+      /OS;
+      builtin
+    ) :
     @[import("../../std/builtin.zy")] _
   ) in
   let (
@@ -25,16 +31,15 @@ begin
     /fs;
     /stdio;
     /process
-  ) = make_std (
-    VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
-  ) in
+  ) = make_std builtin in
 
   ...
 end
 ```
 
-The semicolon group is the package-use idiom. It is an ordinary `let` whose pattern applies several field
-projections to the same bindee. No `use`, `open`, module declaration, or import-specific binding form is added.
+The semicolon group is the package-use idiom. The `param` selects only the Builtin fields used by this source and
+retains the complete argument as `builtin` for `make_std`. The following `let` applies the same pattern form to the
+public standard package. No `use`, `open`, module declaration, or import-specific binding form is added.
 
 ## The problem with complete unpacking
 
@@ -54,9 +59,7 @@ let (
   Int = StdInt,
   ...,
   (/bool; /option; /result; /list; /int; ...; /process)
-) = make_std (
-  VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
-) in
+) = make_std builtin in
 ...
 ```
 
@@ -97,6 +100,27 @@ let (
 ...
 ```
 
+The same elimination form works directly in an annotated parameter. This is the important case for Builtin,
+because a source can state its primitive dependencies without copying the complete host ABI:
+
+```zydeco
+param (
+  (
+    /Bytes;
+    /Reader;
+    /io_read;
+    builtin
+  ) :
+  @[import("builtin.zy")] _
+) in
+...
+```
+
+`/Bytes`, `/Reader`, and `/io_read` are the only local bindings introduced from the package. The final `builtin`
+is an ordinary same-bindee alias for the complete package value. It is useful when this source must pass its
+dependency to another package-dependent function; it can be omitted in a leaf module. The checker associates that
+alias with the witnesses opened by the projections, so `dependency builtin` preserves the same type identities.
+
 After selection, ordinary term projection keeps module operations qualified:
 
 ```zydeco
@@ -122,11 +146,12 @@ The same rules already govern projection from named products.
 The entire projection group opens the existential telescope once. Conceptually, checking the pattern performs the
 following steps:
 
-1. Open every leading existential binder under one fresh package introduction.
-2. Give each unselected abstract field an anonymous witness and retain each manifest field's disclosed definition.
-3. Bind selected type payload patterns to those same witnesses or definitions.
-4. Substitute all opened fields through the remaining telescope and the package body.
-5. Resolve selected value fields against that instantiated body.
+1. Traverse the package's complete leading static telescope under one package introduction.
+2. Substitute leading manifest kind and type fields by their disclosed definitions.
+3. Give each abstract field one fresh witness, or reuse the package arrow's canonical witness during checking.
+4. Bind selected static payload patterns to those same definitions or witnesses.
+5. Substitute the opening through the remaining telescope and resolve selected value fields in its body.
+6. Attach the complete witness prefix to any whole-package alias in the same pattern.
 
 Consequently, selected values and selected types agree on the hidden identities they share. In this pattern:
 
@@ -161,9 +186,7 @@ Consumers select the shared types used in annotations and the modules used for o
 integer program needs no complete public telescope:
 
 ```zydeco
-let (/int; /process) = make_std (
-  VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
-) in
+let (/int; /process) = make_std builtin in
 do one <- ! (int/increment) 0;
 do status <- ! (int/sub) one 1;
 ! (process/exit) status
@@ -183,21 +206,20 @@ let (
   /io;
   /fs;
   /process
-) = make_std (
-  VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
-) in
+) = make_std builtin in
 ...
 ```
 
-The implementation may continue to unpack Builtin while constructing the standard package. That detail belongs at
-the host/runtime boundary and no longer determines the public pattern used by each application.
+The implementation uses the same rule. Each standard-library source selects its own Builtin dependencies, and
+`std.zy` retains a whole alias while forwarding the package to its component modules. The complete positional
+telescope remains only in the provider representation and host/runtime construction boundary.
 
 ## Elaboration and runtime representation
 
 Selective package patterns elaborate to existing typed patterns. The opened static prefix becomes the same
 existential `SCons` pattern produced by explicit unpacking. Selected value fields become resolved structural
-projection patterns, and their semicolon group becomes the existing pattern-alias representation. Anonymous holes
-occupy unselected positions.
+projection patterns, and their semicolon group becomes the existing pattern-alias representation. Internal patterns
+occupy unselected static positions without introducing source names.
 
 Static witnesses and manifest equations erase as before. Value projections lower to ordinary tuple patterns with
 resolved physical paths. The interpreter, Stack IR, and native runtime therefore require no module object, field
@@ -207,21 +229,26 @@ Term projection deliberately retains its existing boundary: `package/fs` does no
 existential package. Opening changes type identity and scope, so the source must show it with a pattern. This keeps
 ordinary `value/field` lookup simple and makes the one generative opening visible at the dependency boundary.
 
-The current application boundary still spells the Builtin parameter telescope explicitly. Selective elimination of
-a package-dependent `param`, including the leading manifest kind components used by Builtin, is a separate extension.
-The standard-package consumer case needs no such extension because `make_std` has already instantiated Builtin.
+At a package-dependent `param`, the checker maps the domain's abstract witnesses to the canonical witness telescope
+of the expected arrow. A selective parameter therefore checks against the same type as an explicit positional
+parameter. A whole alias retains the manifest prefix used by package application, so forwarding does not reconstruct
+or reopen the package. Leading manifest kind components such as Builtin's `VType` and `CType` participate in the same
+selection algorithm and remain erased.
 
 ## Why ordinary `let` is sufficient
 
-`let` already states the relevant facts: evaluate or bind one provider term, eliminate its package in one pattern,
-and scope the selected names over the tail after `in`. The semicolon group already states that every selection sees
-the same bindee. Adding `use package` would duplicate those binding and scoping rules while hiding the pattern that
-determines which members become local.
+`let` already states the relevant facts for a produced package: bind one provider term, eliminate its package in one
+pattern, and scope the selected names over the tail after `in`. `param` uses that same pattern for an incoming
+package. The semicolon group states that every selection and optional whole alias sees the same bindee. Adding
+`use package` would duplicate those binding and scoping rules while hiding the pattern that determines which members
+become local.
 
 The resulting convention stays within Zydeco's uniform term language:
 
 ```zydeco
 let (/TypeField; /module_value) = package in body
+
+param ((/TypeField; /operation; whole) : Package) in body
 ```
 
 A module remains a value, a type field remains an existential component, and an import remains metadata on a hole.

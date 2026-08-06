@@ -8,11 +8,26 @@
 begin
   let monadic_basis = @[import("../std/monad.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /CType;
+      /Thk;
+      /Ret;
+      /Int;
+      /String;
+      /OS;
+      /add;
+      /int_lt_branch;
+      /write_int;
+      /write_line;
+      /read_line_as_int_branch;
+      /exit;
+      builtin
+    ) :
     @[import("../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
-    monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+    monadic_basis builtin in
   begin
 
   def Either (E : VType) (A : VType) =
@@ -67,8 +82,8 @@ begin
   that
 
   def ! panic (msg : String) : OS =
-    ! (api/write_line) msg {
-      ! (api/exit) 1
+    ! (write_line) msg {
+      ! (exit) 1
     }
   that
 
@@ -219,8 +234,8 @@ begin
   that
   -- add_of errors if the sum >= 256 (8-bit overflow)
   def ! add_of (i : Int) (sum : Int) : ExnDe String Int =
-    do sum <- ! (api/add) i sum;
-    ! (api/int_lt_branch)
+    do sum <- ! (add) i sum;
+    ! (int_lt_branch)
       (ExnDe String Int)
       sum
       256
@@ -230,14 +245,14 @@ begin
 
   (fix (loop : Thk (Int -> OS)) =>
     fn sum =>
-      ! (api/read_line_as_int_branch)
-        { ! (api/exit) 0 }
+      ! (read_line_as_int_branch)
+        { ! (exit) 0 }
         {
           fn i =>
             ! alg_exn Int { ! add_of i sum } {
               fn sum =>
-                ! (api/write_int) sum {
-                  ! (api/write_line) " = sum" {
+                ! (write_int) sum {
+                  ! (write_line) " = sum" {
                     ! loop sum
                   }
                 }

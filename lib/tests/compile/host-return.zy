@@ -1,22 +1,32 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /add;
+      /sub;
+      /str_scalar_length;
+      /str_byte_length;
+      /str_append;
+      /int_to_str;
+      /char_to_str;
+      /char_codepoint;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  do twelve <- ! (api/int_to_str) 12;
-  do combined <- ! (api/str_append) twelve twelve;
-  do length <- ! (api/str_scalar_length) combined;
-  do bytes <- ! (api/str_byte_length) combined;
-  do first_code <- ! (api/char_codepoint) '1';
-  do first_string <- ! (api/char_to_str) '1';
-  do first_length <- ! (api/str_scalar_length) first_string;
-  do length_status <- ! (api/sub) length 4;
-  do bytes_status <- ! (api/sub) bytes 4;
-  do first_status <- ! (api/sub) first_code 49;
-  do first_length_status <- ! (api/sub) first_length 1;
-  do status <- ! (api/add) length_status bytes_status;
-  do status <- ! (api/add) status first_status;
-  do status <- ! (api/add) status first_length_status;
-  ! (api/exit) status
+  do twelve <- ! (int_to_str) 12;
+  do combined <- ! (str_append) twelve twelve;
+  do length <- ! (str_scalar_length) combined;
+  do bytes <- ! (str_byte_length) combined;
+  do first_code <- ! (char_codepoint) '1';
+  do first_string <- ! (char_to_str) '1';
+  do first_length <- ! (str_scalar_length) first_string;
+  do length_status <- ! (sub) length 4;
+  do bytes_status <- ! (sub) bytes 4;
+  do first_status <- ! (sub) first_code 49;
+  do first_length_status <- ! (sub) first_length 1;
+  do status <- ! (add) length_status bytes_status;
+  do status <- ! (add) status first_status;
+  do status <- ! (add) status first_length_status;
+  ! (exit) status
 end

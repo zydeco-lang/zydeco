@@ -1,6 +1,10 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Int;
+      /add;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   let Point = (x :: Int) * (y :: Int) that
@@ -21,11 +25,11 @@ begin
   let (inner, outer = _) = nested in
   let pair = (triple/first, triple/last) in
   let (first, last) = pair in
-  do total <- ! (api/add) first triple/middle;
-  do total <- ! (api/add) total last;
-  do total <- ! (api/add) total inner/inner_y;
-  do total <- ! (api/add) total direct/code;
-  do total <- ! (api/add) total first_global;
-  do total <- ! (api/add) total status_field/status;
-  ! (api/exit) total
+  do total <- ! (add) first triple/middle;
+  do total <- ! (add) total last;
+  do total <- ! (add) total inner/inner_y;
+  do total <- ! (add) total direct/code;
+  do total <- ! (add) total first_global;
+  do total <- ! (add) total status_field/status;
+  ! (exit) total
 end

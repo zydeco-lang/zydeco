@@ -19,7 +19,7 @@ before producing a computation or package:
 begin
   let make_std = @[import("../std/std.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (/VType; /Thk; /String; /OS; builtin) :
     @[import("../std/builtin.zy")] _
   ) that
 
@@ -202,26 +202,31 @@ existential package. At a package boundary, use one projection-pattern group to 
 and bind only the public types and module values the consumer needs:
 
 ```zydeco
+param (
+  (/VType; /Thk; /String; builtin) :
+  @[import("../std/builtin.zy")] _
+) in
 let (
   /Int = StdInt;
   /OS = StdOS;
   /int;
   /process
-) = make_std (
-  VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
-) in
+) = make_std builtin in
 ...
 ```
 
 Selected type fields and module values share the same package opening. Keep all related selections in that group,
 place type fields before value modules, and retain their interface order when it makes the list easier to compare
 with the provider. The `/Int = StdInt` spelling selects the public field `Int` under a local name; plain `/Int` is
-the pun when no rename is useful. This projection-pattern idiom serves the role of package `use` without adding a
-separate binding form.
+the pun when no rename is useful. A final ordinary pattern such as `builtin` retains the complete package for
+forwarding while the preceding projections introduce only the requested local names. Omit that alias when the
+consumer does not forward the package. This projection-pattern idiom serves the role of package `use` without
+adding a separate binding form.
 
 The canonical builtin package is the single source of `@[intrinsic]` and `@[builtin(...)]` metadata.
-Other sources acquire intrinsic kinds, types, and host operations by importing and unpacking that package,
-which keeps their names subject to ordinary language-level resolution.
+Other sources acquire intrinsic kinds, types, and host operations by importing that package and projecting only
+their dependencies, which keeps the names subject to ordinary language-level resolution without repeating the
+complete host interface.
 
 ## Layout and Comments
 

@@ -482,12 +482,12 @@ mod tests {
             .canonicalize()
             .unwrap();
         let project = ProjectState::load(&path, &HashMap::new()).unwrap();
-        let hover = project.hover(&path, Position::new(7, 9)).unwrap();
+        let hover = project.hover(&path, Position::new(15, 9)).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
         let mut definition = Url::from_file_path(&path).unwrap();
-        definition.set_fragment(Some("L7"));
+        definition.set_fragment(Some("L15"));
 
         assert_eq!(
             contents.value,
@@ -502,12 +502,12 @@ mod tests {
             .canonicalize()
             .unwrap();
         let project = ProjectState::load(&path, &HashMap::new()).unwrap();
-        let hover = project.hover(&path, Position::new(17, 11)).unwrap();
+        let hover = project.hover(&path, Position::new(23, 11)).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
         let mut definition = Url::from_file_path(&path).unwrap();
-        definition.set_fragment(Some("L15"));
+        definition.set_fragment(Some("L21"));
 
         assert_eq!(
             contents.value,
@@ -523,9 +523,9 @@ mod tests {
             .unwrap();
         let project = ProjectState::load(&path, &HashMap::new()).unwrap();
         let mut parameter = Url::from_file_path(&path).unwrap();
-        parameter.set_fragment(Some("L6"));
+        parameter.set_fragment(Some("L12"));
 
-        let short = project.hover(&path, Position::new(5, 7)).unwrap();
+        let short = project.hover(&path, Position::new(11, 7)).unwrap();
         let HoverContents::Markup(short) = short.contents else {
             panic!("type hover should use markup content")
         };
@@ -548,7 +548,7 @@ mod tests {
             )
         );
 
-        let long = project.hover(&path, Position::new(84, 7)).unwrap();
+        let long = project.hover(&path, Position::new(90, 7)).unwrap();
         let HoverContents::Markup(long) = long.contents else {
             panic!("type hover should use markup content")
         };
@@ -619,7 +619,7 @@ mod tests {
     #[test]
     fn semantic_tokens_refine_resolved_names_with_cbpv_classes() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/tests/builtin/tuple.zy")
+            .join("../../lib/tests/exec/forall.zy")
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
@@ -637,21 +637,21 @@ mod tests {
         assert!(has("VType", "typeParameter", "kind"));
         assert!(has("Int", "typeParameter", "valueType"));
         assert!(has("OS", "typeParameter", "computationType"));
-        assert!(has("pair", "variable", "value"));
-        assert!(decoded.iter().any(|token| token.text == "exit" && token.token_type == "property"));
+        assert!(has("x", "variable", "value"));
+        assert!(has("exit", "parameter", "value"));
         assert!(decoded.iter().any(|token| {
-            token.text == "pair" && token.modifiers.iter().any(|modifier| modifier == "declaration")
+            token.text == "x" && token.modifiers.iter().any(|modifier| modifier == "declaration")
         }));
     }
 
     #[test]
     fn semantic_tokens_retain_established_static_classes_after_type_errors() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/tests/builtin/tuple.zy")
+            .join("../../lib/tests/exec/forall.zy")
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
-        let broken = source.replace("! (api/exit) status", "pair pair");
+        let broken = source.replace("! id~ OS { ! (exit) x }", "x x");
         assert_ne!(source, broken);
         let overrides = HashMap::from([(path.clone(), broken.clone())]);
         let project = ProjectState::load(&path, &overrides).unwrap();

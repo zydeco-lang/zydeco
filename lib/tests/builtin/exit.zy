@@ -1,6 +1,9 @@
 param (
-  (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+  (
+    /add;
+    /exit
+  ) :
   @[import("../../std/builtin.zy")] _
 ) in
-  do status <- ! (api/add) 1 2;
-  ! (api/exit) status
+  do status <- ! (add) 1 2;
+  ! (exit) status

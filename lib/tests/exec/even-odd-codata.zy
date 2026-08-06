@@ -1,6 +1,11 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /Ret;
+      /Unit;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -39,7 +44,7 @@ begin
 
   do b <- ! eo .even +S(+S(+S(+S(+Z()))));
   match b
-  | +True() => ! (api/exit) 0
-  | +False() => ! (api/exit) 1
+  | +True() => ! (exit) 0
+  | +False() => ! (exit) 1
   end
 end

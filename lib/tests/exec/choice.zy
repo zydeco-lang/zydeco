@@ -1,7 +1,15 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /CType;
+      /Thk;
+      /Unit;
+      /String;
+      /OS;
+      builtin
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   def Tree (A : VType) : VType =
@@ -30,9 +38,7 @@ begin
     /string;
     /stdio;
     /process
-  ) = make_std (
-    VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
-  ) in
+  ) = make_std builtin in
   def beep : Choice (Thk StdOS -> StdOS) =
     +L({
       fn k =>

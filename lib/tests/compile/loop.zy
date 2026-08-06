@@ -1,6 +1,8 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /OS
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   def fix loop : OS =

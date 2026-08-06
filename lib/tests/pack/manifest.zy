@@ -1,6 +1,12 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /Ret;
+      /Int;
+      /sub;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   let Transparent =
@@ -16,6 +22,6 @@ begin
   that
 
   do value <- ! reveal packed;
-  do status <- ! (api/sub) value 42;
-  ! (api/exit) status
+  do status <- ! (sub) value 42;
+  ! (exit) status
 end

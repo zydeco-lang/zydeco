@@ -497,7 +497,12 @@ impl ValueId {
                 return None;
             }
             match tycker.statics.values[&value].to_owned() {
-                | Value::Var(def) => value = *tycker.statics.value_aliases.get(&def)?,
+                | Value::Var(def) => {
+                    if let Some(witnesses) = tycker.statics.package_aliases.get(&def) {
+                        return Some(witnesses.clone());
+                    }
+                    value = *tycker.statics.value_aliases.get(&def)?;
+                }
                 | Value::Named(Named(_, inner)) => value = inner,
                 | Value::Let(Let { tail, .. }) => value = tail,
                 | Value::SCons(ConsN(witnesses, _)) => return Some(witnesses),

@@ -4,7 +4,17 @@
 -- and computations
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /CType;
+      /Thk;
+      /Ret;
+      /Unit;
+      /String;
+      /str_eq_branch;
+      /write_line;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -75,7 +85,7 @@ begin
     match g
     | +Empty() => ret +Err()
     | +Cons(y, v, g) =>
-      ! (api/str_eq_branch)
+      ! (str_eq_branch)
         (Ret (Answer SemVal))
         x
         y
@@ -166,9 +176,9 @@ begin
     +Empty()
     .bind;
   match x
-  | +Err(_) => ! (api/exit) 1
+  | +Err(_) => ! (exit) 1
   | +Ok(sv) =>
     do s <- ! sem_val_to_str sv;
-    ! (api/write_line) s { ! (api/exit) 0 }
+    ! (write_line) s { ! (exit) 0 }
   end
 end

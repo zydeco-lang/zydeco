@@ -3,24 +3,51 @@ begin
   let F = Ret that
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /CType;
+      /Thk;
+      /Ret;
+      /Unit;
+      /Int;
+      /Char;
+      /String;
+      /OS;
+      /add = primitive_add;
+      /mul = primitive_mul;
+      /int_eq_branch;
+      /int_lt_branch;
+      /int_gt_branch;
+      /str_scalar_length = primitive_str_scalar_length;
+      /str_append = primitive_str_append;
+      /str_eq_branch;
+      /str_get_branch;
+      /int_to_str = primitive_int_to_str;
+      /char_to_str = primitive_char_to_str;
+      /char_codepoint = primitive_char_codepoint;
+      /write_str = primitive_write_str;
+      /write_line = primitive_write_line;
+      /read_line = primitive_read_line;
+      /exit = primitive_exit;
+      builtin
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
-    monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+    monadic_basis builtin in
   begin
   let Ret = F that
-  let add = api/add that
-  let mul = api/mul that
-  let str_scalar_length = api/str_scalar_length that
-  let str_append = api/str_append that
-  let int_to_str = api/int_to_str that
-  let char_to_str = api/char_to_str that
-  let char_codepoint = api/char_codepoint that
-  let write_str = api/write_str that
-  let write_line = api/write_line that
-  let read_line = api/read_line that
-  let exit = api/exit that
+  let add = primitive_add that
+  let mul = primitive_mul that
+  let str_scalar_length = primitive_str_scalar_length that
+  let str_append = primitive_str_append that
+  let int_to_str = primitive_int_to_str that
+  let char_to_str = primitive_char_to_str that
+  let char_codepoint = primitive_char_codepoint that
+  let write_str = primitive_write_str that
+  let write_line = primitive_write_line that
+  let read_line = primitive_read_line that
+  let exit = primitive_exit that
 
   def Bool =
     data
@@ -35,7 +62,7 @@ begin
     end
   that
   def ! str_get_or_space (string : String) (index : Int) : Ret Char =
-    ! (api/str_get_branch)
+    ! (str_get_branch)
       (Ret Char)
       string
       index
@@ -65,7 +92,7 @@ begin
     ! if B condition consequent alternative
   that
   def ! int_eq (left : Int) (right : Int) : Ret Bool =
-    ! (api/int_eq_branch)
+    ! (int_eq_branch)
       (Ret Bool)
       left
       right
@@ -73,7 +100,7 @@ begin
       { ret +False() }
   that
   def ! int_lt (left : Int) (right : Int) : Ret Bool =
-    ! (api/int_lt_branch)
+    ! (int_lt_branch)
       (Ret Bool)
       left
       right
@@ -81,7 +108,7 @@ begin
       { ret +False() }
   that
   def ! int_le (left : Int) (right : Int) : Ret Bool =
-    ! (api/int_gt_branch)
+    ! (int_gt_branch)
       (Ret Bool)
       left
       right
@@ -89,7 +116,7 @@ begin
       { ret +True() }
   that
   def ! str_eq (left : String) (right : String) : Ret Bool =
-    ! (api/str_eq_branch)
+    ! (str_eq_branch)
       (Ret Bool)
       left
       right

@@ -1,10 +1,12 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   let pair = (10, 0) that
   let (_, status) = pair that
 
-  ! (api/exit) status
+  ! (exit) status
 end

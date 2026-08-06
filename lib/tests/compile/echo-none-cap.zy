@@ -1,14 +1,19 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Int;
+      /OS;
+      /read_line;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  ! (api/read_line) {
+  ! (read_line) {
     fn line =>
       let ! f (z : Int) : OS =
         let line = line in
-        ! (api/exit) z
+        ! (exit) z
       in
       ! f 0
   }

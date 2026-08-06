@@ -1,7 +1,31 @@
 -- module Identity
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /CType;
+      /Thk;
+      /Ret;
+      /Unit;
+      /Int;
+      /Char;
+      /String;
+      /OS;
+      /add = primitive_add;
+      /sub = primitive_sub;
+      /int_eq_branch;
+      /int_lt_branch;
+      /int_gt_branch;
+      /str_scalar_length = primitive_str_scalar_length;
+      /str_append = primitive_str_append;
+      /str_split_once_branch;
+      /str_split_at_branch;
+      /str_eq_branch;
+      /str_get_branch;
+      /char_to_str = primitive_char_to_str;
+      /char_codepoint = primitive_char_codepoint;
+      /write_str = primitive_write_str
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   let Thunk = Thk that
@@ -19,33 +43,33 @@ begin
     | +False : Unit
     end
   that
-  let add = api/add that
-  let sub = api/sub that
+  let add = primitive_add that
+  let sub = primitive_sub that
   def ! int_eq (x : Int) (y : Int) : Ret Bool =
-    ! (api/int_eq_branch) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! (int_eq_branch) (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! int_lt (x : Int) (y : Int) : Ret Bool =
-    ! (api/int_lt_branch) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! (int_lt_branch) (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! int_gt (x : Int) (y : Int) : Ret Bool =
-    ! (api/int_gt_branch) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! (int_gt_branch) (Ret Bool) x y { ret +True() } { ret +False() }
   that
-  let str_scalar_length = api/str_scalar_length that
-  let str_append = api/str_append that
+  let str_scalar_length = primitive_str_scalar_length that
+  let str_append = primitive_str_append that
   def ! str_eq (x : String) (y : String) : Ret Bool =
-    ! (api/str_eq_branch) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! (str_eq_branch) (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! str_get_or_space (string : String) (index : Int) : Ret Char =
-    ! (api/str_get_branch)
+    ! (str_get_branch)
       (Ret Char)
       string
       index
       { ret ' ' }
       { fn character => ret character }
   that
-  let char_to_str = api/char_to_str that
-  let char_codepoint = api/char_codepoint that
-  let write_str = api/write_str that
+  let char_to_str = primitive_char_to_str that
+  let char_codepoint = primitive_char_codepoint that
+  let write_str = primitive_write_str that
   --| identity functions
   def id : Thunk(forall (A : VType) . A -> Ret A) = {
     fn A a => ret a
@@ -521,7 +545,7 @@ begin
 
 -- module String
   def ! str_split_once (str : String) (sep : Char) : Ret (Option (Pair String String)) =
-    ! (api/str_split_once_branch)
+    ! (str_split_once_branch)
       (Ret (Option (Pair String String)))
       str
       sep
@@ -529,7 +553,7 @@ begin
       { fn s1 s2 => ret +Some(+Cons(s1, s2)) }
   that
   def ! str_split_at (str : String) (index : Int) : Ret (Option (Pair String String)) =
-    ! (api/str_split_at_branch)
+    ! (str_split_at_branch)
       (Ret (Option (Pair String String)))
       str
       index

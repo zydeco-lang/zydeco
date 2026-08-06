@@ -1,6 +1,13 @@
 begin
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /CType;
+      /Thk;
+      /Ret;
+      /Int;
+      /exit
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   def ! apply (A : VType) (B : CType) (f : Thk (A -> B)) (x : A) : B =
@@ -8,5 +15,5 @@ begin
   that
 
   do x <- ! apply Int (Ret Int) { fn x => ret x } 0;
-  ! (api/exit) x
+  ! (exit) x
 end

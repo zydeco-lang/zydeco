@@ -241,6 +241,58 @@ end
 }
 
 #[test]
+fn checks_selective_package_patterns_against_canonical_witnesses() {
+    PackPiCase::check(
+        r#"
+begin
+  let Box =
+    exists (Item : VType) .
+      (value :: Item)
+  that
+
+  let Reveal =
+    pi ((Item, _) : Box) . Ret Item
+  that
+
+  def reveal : Thk Reveal = {
+    fn ((Item, = value) : Box) => ret value
+  } that
+
+  def forward : Thk Reveal = {
+    fn ((/Item; /value; whole) : Box) => ! reveal whole
+  } that
+
+  forward
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn selective_builtin_parameters_bind_manifest_kinds_and_requested_fields() {
+    PackPiCase::check(
+        r#"
+begin
+  def selective = {
+    fn ((
+      /VType = SelectedVType;
+      /Bytes = SelectedBytes;
+      /bytes_empty;
+      builtin
+    ) : Builtin) =>
+      let Selected : SelectedVType = SelectedBytes in
+      ! bytes_empty
+  } that
+
+  selective
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
 fn infers_a_hole_in_the_package_dependent_codomain() {
     PackPiCase::check(
         r#"

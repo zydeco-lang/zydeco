@@ -1,11 +1,17 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /Ret;
+      /OS;
+      /int_eq_branch;
+      /exit;
+      builtin
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
-    monadic_basis (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+    monadic_basis builtin in
   begin
 
   def ! ret_monad : Monad Ret =
@@ -24,11 +30,11 @@ begin
   that
 
   do value <- ! translated Ret { ! ret_monad };
-  ! (api/int_eq_branch)
+  ! (int_eq_branch)
     OS
     value
     1
-    { ! (api/exit) 0 }
-    { ! (api/exit) 1 }
+    { ! (exit) 0 }
+    { ! (exit) 1 }
 end
 end

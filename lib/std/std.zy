@@ -8,47 +8,100 @@ begin
 
   begin
     param (
-      (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+      (
+        /VType;
+        /CType;
+        /Thk;
+        /Ret;
+        /Unit;
+        /Int;
+        /Char;
+        /String;
+        /Bytes;
+        /Reader;
+        /Writer;
+        /OS;
+        /add;
+        /sub;
+        /mul;
+        /div;
+        /mod;
+        /int_eq_branch;
+        /int_lt_branch;
+        /int_gt_branch;
+        /str_scalar_length;
+        /str_byte_length;
+        /str_append;
+        /str_split_once_branch;
+        /str_split_at_branch;
+        /str_eq_branch;
+        /str_get_branch;
+        /int_to_str;
+        /char_to_str;
+        /char_codepoint;
+        /char_from_codepoint_branch;
+        /str_parse_int_branch;
+        /bytes_empty;
+        /bytes_length;
+        /bytes_append;
+        /bytes_from_str;
+        /bytes_to_str_branch;
+        /stdin;
+        /stdout;
+        /stderr;
+        /io_read = primitive_io_read;
+        /io_read_line = primitive_io_read_line;
+        /io_read_all = primitive_io_read_all;
+        /io_write_all = primitive_io_write_all;
+        /io_flush = primitive_io_flush;
+        /io_close_reader = primitive_io_close_reader;
+        /io_close_writer = primitive_io_close_writer;
+        /fs_open_reader = primitive_fs_open_reader;
+        /fs_create_writer = primitive_fs_create_writer;
+        /fs_append_writer = primitive_fs_append_writer;
+        /arg_fold;
+        /random_int;
+        /exit;
+        builtin
+      ) :
       @[import("builtin.zy")] _
     ) in
       let (Bool = Bool, bool_api) =
-        bool (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+        bool builtin in
       let (Option = Option, option_api) =
-        option (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+        option builtin in
       let (Result = Result, result_api) =
-        result (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+        result builtin in
       let (List = List, list_api) =
-        list (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
+        list builtin in
       let (
         IoErrorKind = IoErrorKind,
         IoError = IoError,
         Path = Path,
         io_types_api
-      ) = io_types (
-        VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
-      ) in
+      ) = io_types builtin in
       let (= Prelude, = Public, ()) =
-        interface (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) in
-      let primitive_add = api/add in
-      let primitive_int_eq = api/int_eq_branch in
-      let primitive_int_lt = api/int_lt_branch in
-      let primitive_int_gt = api/int_gt_branch in
-      let primitive_str_split_once = api/str_split_once_branch in
-      let primitive_str_split_at = api/str_split_at_branch in
-      let primitive_str_eq = api/str_eq_branch in
-      let primitive_str_get = api/str_get_branch in
-      let primitive_char_from_codepoint = api/char_from_codepoint_branch in
-      let primitive_str_parse_int = api/str_parse_int_branch in
-      let primitive_bytes_to_str = api/bytes_to_str_branch in
-      let primitive_arg_fold = api/arg_fold in
+        interface builtin in
+      let primitive_add = add in
+      let primitive_int_eq = int_eq_branch in
+      let primitive_int_lt = int_lt_branch in
+      let primitive_int_gt = int_gt_branch in
+      let primitive_str_split_once = str_split_once_branch in
+      let primitive_str_split_at = str_split_at_branch in
+      let primitive_str_eq = str_eq_branch in
+      let primitive_str_get = str_get_branch in
+      let primitive_char_from_codepoint = char_from_codepoint_branch in
+      let primitive_str_parse_int = str_parse_int_branch in
+      let primitive_bytes_to_str = bytes_to_str_branch in
+      let primitive_arg_fold = arg_fold in
       let ! increment (value : Int) : Ret Int =
         ! primitive_add value 1
       in
       let ! decrement (value : Int) : Ret Int =
-        ! (api/sub) value 1
+        ! (sub) value 1
       in
       let ! negate (value : Int) : Ret Int =
-        ! (api/sub) 0 value
+        ! (sub) 0 value
       in
       let ! compare
         (A : VType)
@@ -175,7 +228,7 @@ begin
                     zero
                     { ! (option_api/some) A head }
                     {
-                      do previous <- ! (api/sub) index 1;
+                      do previous <- ! (sub) index 1;
                       ! list_get A tail previous
                     }
               }
@@ -226,7 +279,7 @@ begin
           { fn integer => ! (option_api/some) Int integer }
       in
       let ! str_is_empty (string : String) : Ret Bool =
-        do length <- ! (api/str_scalar_length) string;
+        do length <- ! (str_scalar_length) string;
         ! int_eq length 0
       in
       let ! str_head (string : String) : Ret (Option Char) =
@@ -269,9 +322,9 @@ begin
           { ret "" }
           {
             fn head tail =>
-              do first <- ! (api/char_to_str) head;
+              do first <- ! (char_to_str) head;
               do rest <- ! str_from_chars tail;
-              ! (api/str_append) first rest
+              ! (str_append) first rest
           }
       in
       let ! str_concat (strings : List String) : Ret String =
@@ -283,7 +336,7 @@ begin
           {
             fn head tail =>
               do rest <- ! tail;
-              ! (api/str_append) head rest
+              ! (str_append) head rest
           }
       in
       let ! bytes_to_string (bytes : Bytes) : Ret (Option String) =
@@ -335,7 +388,7 @@ begin
         (count : Int)
         (continuation : Thk (Result Bytes IoError -> OS))
         : OS =
-        ! (api/io_read)
+        ! (primitive_io_read)
           reader
           count
           { fn code message => ! continue_host_error Bytes continuation code message }
@@ -345,7 +398,7 @@ begin
         (reader : Reader)
         (continuation : Thk (Result (Option Bytes) IoError -> OS))
         : OS =
-        ! (api/io_read_line)
+        ! (primitive_io_read_line)
           reader
           {
             fn code message =>
@@ -365,7 +418,7 @@ begin
         (reader : Reader)
         (continuation : Thk (Result Bytes IoError -> OS))
         : OS =
-        ! (api/io_read_all)
+        ! (primitive_io_read_all)
           reader
           { fn code message => ! continue_host_error Bytes continuation code message }
           { fn bytes => ! continue_io_ok Bytes continuation bytes }
@@ -375,7 +428,7 @@ begin
         (bytes : Bytes)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        ! (api/io_write_all)
+        ! (primitive_io_write_all)
           writer
           bytes
           { fn code message => ! continue_host_error Unit continuation code message }
@@ -385,7 +438,7 @@ begin
         (writer : Writer)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        ! (api/io_flush)
+        ! (primitive_io_flush)
           writer
           { fn code message => ! continue_host_error Unit continuation code message }
           { ! continue_io_ok Unit continuation () }
@@ -394,7 +447,7 @@ begin
         (reader : Reader)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        ! (api/io_close_reader)
+        ! (primitive_io_close_reader)
           reader
           { fn code message => ! continue_host_error Unit continuation code message }
           { ! continue_io_ok Unit continuation () }
@@ -403,7 +456,7 @@ begin
         (writer : Writer)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        ! (api/io_close_writer)
+        ! (primitive_io_close_writer)
           writer
           { fn code message => ! continue_host_error Unit continuation code message }
           { ! continue_io_ok Unit continuation () }
@@ -413,7 +466,7 @@ begin
         (continuation : Thk (Result Reader IoError -> OS))
         : OS =
         do string <- ! (io_types_api/path_string) path;
-        ! (api/fs_open_reader)
+        ! (primitive_fs_open_reader)
           string
           { fn code message => ! continue_host_error Reader continuation code message }
           { fn reader => ! continue_io_ok Reader continuation reader }
@@ -423,7 +476,7 @@ begin
         (continuation : Thk (Result Writer IoError -> OS))
         : OS =
         do string <- ! (io_types_api/path_string) path;
-        ! (api/fs_create_writer)
+        ! (primitive_fs_create_writer)
           string
           { fn code message => ! continue_host_error Writer continuation code message }
           { fn writer => ! continue_io_ok Writer continuation writer }
@@ -433,7 +486,7 @@ begin
         (continuation : Thk (Result Writer IoError -> OS))
         : OS =
         do string <- ! (io_types_api/path_string) path;
-        ! (api/fs_append_writer)
+        ! (primitive_fs_append_writer)
           string
           { fn code message => ! continue_host_error Writer continuation code message }
           { fn writer => ! continue_io_ok Writer continuation writer }
@@ -563,7 +616,7 @@ begin
         (string : String)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        do bytes <- ! (api/bytes_from_str) string;
+        do bytes <- ! (bytes_from_str) string;
         ! fs_write_bytes path bytes continuation
       in
       let ! write_bytes_and_flush
@@ -587,7 +640,7 @@ begin
         (string : String)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        do bytes <- ! (api/bytes_from_str) string;
+        do bytes <- ! (bytes_from_str) string;
         ! write_bytes_and_flush writer bytes continuation
       in
       let ! stdio_write_line_to
@@ -595,15 +648,15 @@ begin
         (string : String)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        do bytes <- ! (api/bytes_from_str) string;
-        do newline <- ! (api/bytes_from_str) "\n";
-        do line <- ! (api/bytes_append) bytes newline;
+        do bytes <- ! (bytes_from_str) string;
+        do newline <- ! (bytes_from_str) "\n";
+        do line <- ! (bytes_append) bytes newline;
         ! write_bytes_and_flush writer line continuation
       in
       let ! stdio_read_line
         (continuation : Thk (Result (Option String) IoError -> OS))
         : OS =
-        do reader <- ! (api/stdin);
+        do reader <- ! (stdin);
         ! io_read_line reader {
           fn result =>
             ! (result_api/fold)
@@ -646,28 +699,28 @@ begin
         (string : String)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        do writer <- ! (api/stdout);
+        do writer <- ! (stdout);
         ! stdio_write_to writer string continuation
       in
       let ! stdio_write_line
         (string : String)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        do writer <- ! (api/stdout);
+        do writer <- ! (stdout);
         ! stdio_write_line_to writer string continuation
       in
       let ! stdio_write_error
         (string : String)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        do writer <- ! (api/stderr);
+        do writer <- ! (stderr);
         ! stdio_write_to writer string continuation
       in
       let ! stdio_write_error_line
         (string : String)
         (continuation : Thk (Result Unit IoError -> OS))
         : OS =
-        do writer <- ! (api/stderr);
+        do writer <- ! (stderr);
         ! stdio_write_line_to writer string continuation
       in
       let ! arg_list (continuation : Thk (List String -> OS)) : OS =
@@ -681,9 +734,9 @@ begin
           };
         ! continuation arguments
       in
-      let halt : Thk OS = { ! (api/exit) 0 } in
+      let halt : Thk OS = { ! (exit) 0 } in
       let ! panic (message : String) : OS =
-        ! stdio_write_error_line message { fn _ => ! (api/exit) 1 }
+        ! stdio_write_error_line message { fn _ => ! (exit) 1 }
       in
       let prelude : Prelude = (
         Thunk = Thk,
@@ -760,10 +813,10 @@ begin
         ),
         int = (
           add = primitive_add,
-          sub = api/sub,
-          mul = api/mul,
-          div = api/div,
-          mod = api/mod,
+          sub = sub,
+          mul = mul,
+          div = div,
+          mod = mod,
           eq = int_eq,
           ne = int_ne,
           lt = int_lt,
@@ -775,19 +828,19 @@ begin
           negate = negate,
           min = int_min,
           max = int_max,
-          to_string = api/int_to_str,
+          to_string = int_to_str,
         ),
         char = (
-          to_string = api/char_to_str,
-          codepoint = api/char_codepoint,
+          to_string = char_to_str,
+          codepoint = char_codepoint,
           from_codepoint = char_from_codepoint,
         ),
         string = (
           empty = "",
-          length = api/str_scalar_length,
-          byte_length = api/str_byte_length,
+          length = str_scalar_length,
+          byte_length = str_byte_length,
           is_empty = str_is_empty,
-          append = api/str_append,
+          append = str_append,
           concat = str_concat,
           split_once = str_split_once,
           split_at = str_split_at,
@@ -800,10 +853,10 @@ begin
           parse_int = str_parse_int,
         ),
         bytes = (
-          empty = api/bytes_empty,
-          length = api/bytes_length,
-          append = api/bytes_append,
-          from_string = api/bytes_from_str,
+          empty = bytes_empty,
+          length = bytes_length,
+          append = bytes_append,
+          from_string = bytes_from_str,
           to_string = bytes_to_string,
         ),
         io = (
@@ -838,9 +891,9 @@ begin
           write_text = fs_write_text,
         ),
         stdio = (
-          stdin = api/stdin,
-          stdout = api/stdout,
-          stderr = api/stderr,
+          stdin = stdin,
+          stdout = stdout,
+          stderr = stderr,
           read_line = stdio_read_line,
           write = stdio_write,
           write_line = stdio_write_line,
@@ -849,10 +902,10 @@ begin
         ),
         process = (
           arg_list = arg_list,
-          random_int = api/random_int,
+          random_int = random_int,
           halt = halt,
           panic = panic,
-          exit = api/exit,
+          exit = exit,
         ),
         (),
       ) : Public)

@@ -1,7 +1,17 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+    (
+      /VType;
+      /Thk;
+      /Unit;
+      /Int;
+      /String;
+      /Bytes;
+      /Writer;
+      /OS;
+      builtin
+    ) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -26,9 +36,7 @@ begin
     /fs;
     /stdio;
     /process
-  ) = make_std (
-    VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api
-  ) in
+  ) = make_std builtin in
   let ! expect_ok
     (A : VType)
     (result : StdResult A StdIoError)
