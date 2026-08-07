@@ -1,4 +1,3 @@
--- module Bool
 param (
   (/VType; /CType; /Thk; /Ret; /Unit) :
   @[import("builtin.zy")] _

@@ -1,4 +1,3 @@
--- module Builtin
 exists
   --| VType and CType
   (VType as @[intrinsic(vtype)] _)

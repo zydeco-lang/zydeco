@@ -1,4 +1,3 @@
--- module Monad
 param (
   (/VType; /CType; /Thk; /Unit) :
   @[import("builtin.zy")] _
