@@ -16,162 +16,162 @@ exists
 .
   @[builtin(int)] exists (Int : VType) .
   @[builtin(float)] exists (Float : VType) .
-    (@[builtin(char)] exists (Char : VType) .
-      (@[builtin(string)] exists (String : VType) .
-        (@[builtin(bytes)] exists (Bytes : VType) .
-          (@[builtin(reader)] exists (Reader : VType) .
-            (@[builtin(writer)] exists (Writer : VType) .
-              (@[builtin(os)] exists (OS : CType) .
-                ((int ::
-                  (@[builtin(add)] (add :: Thk (Int -> Int -> Ret Int))) *
-                  (@[builtin(sub)] (sub :: Thk (Int -> Int -> Ret Int))) *
-                  (@[builtin(mul)] (mul :: Thk (Int -> Int -> Ret Int))) *
-                  (@[builtin(div)] (div :: Thk (Int -> Int -> Ret Int))) *
-                  (@[builtin(mod)] (mod :: Thk (Int -> Int -> Ret Int))) *
-                  (@[builtin(int_eq)] (eq :: Thk (
-                    forall (R : CType) .
-                      Int -> Int -> Thk R -> Thk R -> R
-                  ))) *
-                  (@[builtin(int_lt)] (lt :: Thk (
-                    forall (R : CType) .
-                      Int -> Int -> Thk R -> Thk R -> R
-                  ))) *
-                  (@[builtin(int_gt)] (gt :: Thk (
-                    forall (R : CType) .
-                      Int -> Int -> Thk R -> Thk R -> R
-                  ))) *
-                  (@[builtin(int_to_str)] (to_string :: Thk (Int -> Ret String)))) *
-                (float ::
-                  (@[builtin(float_add)] (add :: Thk (Float -> Float -> Ret Float))) *
-                  (@[builtin(float_sub)] (sub :: Thk (Float -> Float -> Ret Float))) *
-                  (@[builtin(float_mul)] (mul :: Thk (Float -> Float -> Ret Float))) *
-                  (@[builtin(float_div)] (div :: Thk (Float -> Float -> Ret Float))) *
-                  (@[builtin(float_eq)] (eq :: Thk (
-                    forall (R : CType) .
-                      Float -> Float -> Thk R -> Thk R -> R
-                  ))) *
-                  (@[builtin(float_lt)] (lt :: Thk (
-                    forall (R : CType) .
-                      Float -> Float -> Thk R -> Thk R -> R
-                  ))) *
-                  (@[builtin(float_gt)] (gt :: Thk (
-                    forall (R : CType) .
-                      Float -> Float -> Thk R -> Thk R -> R
-                  ))) *
-                  (@[builtin(float_to_str)] (to_string :: Thk (Float -> Ret String)))) *
-                (char ::
-                  (@[builtin(char_to_str)] (to_string :: Thk (Char -> Ret String))) *
-                  (@[builtin(char_codepoint)] (codepoint :: Thk (Char -> Ret Int))) *
-                  (@[builtin(char_from_codepoint)] (from_codepoint :: Thk (
-                    forall (R : CType) .
-                      Int -> Thk R -> Thk (Char -> R) -> R
-                  )))) *
-                (string ::
-                  (@[builtin(str_scalar_length)] (length :: Thk (String -> Ret Int))) *
-                  (@[builtin(str_byte_length)] (byte_length :: Thk (String -> Ret Int))) *
-                  (@[builtin(str_append)] (append :: Thk (String -> String -> Ret String))) *
-                  (@[builtin(str_split_once)] (split_once :: Thk (
-                    forall (R : CType) .
-                      String -> Char -> Thk R -> Thk (String -> String -> R) -> R
-                  ))) *
-                  (@[builtin(str_split_at)] (split_at :: Thk (
-                    forall (R : CType) .
-                      String -> Int -> Thk R -> Thk (String -> String -> R) -> R
-                  ))) *
-                  (@[builtin(str_eq)] (eq :: Thk (
-                    forall (R : CType) .
-                      String -> String -> Thk R -> Thk R -> R
-                  ))) *
-                  (@[builtin(str_get)] (get :: Thk (
-                    forall (R : CType) .
-                      String -> Int -> Thk R -> Thk (Char -> R) -> R
-                  ))) *
-                  (@[builtin(str_parse_int)] (parse_int :: Thk (
-                    forall (R : CType) .
-                      String -> Thk R -> Thk (Int -> R) -> R
-                  )))) *
-                (bytes ::
-                  (@[builtin(bytes_empty)] (empty :: Thk (Ret Bytes))) *
-                  (@[builtin(bytes_length)] (length :: Thk (Bytes -> Ret Int))) *
-                  (@[builtin(bytes_append)] (append :: Thk (Bytes -> Bytes -> Ret Bytes))) *
-                  (@[builtin(bytes_from_str)] (from_string :: Thk (String -> Ret Bytes))) *
-                  (@[builtin(bytes_to_str)] (to_string :: Thk (
-                    forall (R : CType) .
-                      Bytes -> Thk R -> Thk (String -> R) -> R
-                  )))) *
-                (io ::
-                  (@[builtin(io_read)] (read :: Thk (
-                    Reader -> Int ->
-                    Thk (Int -> String -> OS) ->
-                    Thk (Bytes -> OS) ->
-                    OS
-                  ))) *
-                  (@[builtin(io_read_line)] (read_line :: Thk (
-                    Reader ->
-                    Thk (Int -> String -> OS) ->
-                    Thk OS ->
-                    Thk (Bytes -> OS) ->
-                    OS
-                  ))) *
-                  (@[builtin(io_read_all)] (read_all :: Thk (
-                    Reader ->
-                    Thk (Int -> String -> OS) ->
-                    Thk (Bytes -> OS) ->
-                    OS
-                  ))) *
-                  (@[builtin(io_write_all)] (write_all :: Thk (
-                    Writer -> Bytes ->
-                    Thk (Int -> String -> OS) ->
-                    Thk OS ->
-                    OS
-                  ))) *
-                  (@[builtin(io_flush)] (flush :: Thk (
-                    Writer -> Thk (Int -> String -> OS) -> Thk OS -> OS
-                  ))) *
-                  (@[builtin(io_close_reader)] (close_reader :: Thk (
-                    Reader -> Thk (Int -> String -> OS) -> Thk OS -> OS
-                  ))) *
-                  (@[builtin(io_close_writer)] (close_writer :: Thk (
-                    Writer -> Thk (Int -> String -> OS) -> Thk OS -> OS
-                  )))) *
-                (fs ::
-                  (@[builtin(fs_open_reader)] (open_reader :: Thk (
-                    String ->
-                    Thk (Int -> String -> OS) ->
-                    Thk (Reader -> OS) ->
-                    OS
-                  ))) *
-                  (@[builtin(fs_create_writer)] (create_writer :: Thk (
-                    String ->
-                    Thk (Int -> String -> OS) ->
-                    Thk (Writer -> OS) ->
-                    OS
-                  ))) *
-                  (@[builtin(fs_append_writer)] (append_writer :: Thk (
-                    String ->
-                    Thk (Int -> String -> OS) ->
-                    Thk (Writer -> OS) ->
-                    OS
-                  )))) *
-                (stdio ::
-                  (@[builtin(stdin)] (stdin :: Thk (Ret Reader))) *
-                  (@[builtin(stdout)] (stdout :: Thk (Ret Writer))) *
-                  (@[builtin(stderr)] (stderr :: Thk (Ret Writer))) *
-                  (@[builtin(write_str)] (write :: Thk (String -> Thk OS -> OS))) *
-                  (@[builtin(write_int)] (write_int :: Thk (Int -> Thk OS -> OS))) *
-                  (@[builtin(write_line)] (write_line :: Thk (String -> Thk OS -> OS))) *
-                  (@[builtin(read_line)] (read_line :: Thk (Thk (String -> OS) -> OS))) *
-                  (@[builtin(read_line_as_int)] (read_int :: Thk (
-                    Thk OS -> Thk (Int -> OS) -> OS
-                  ))) *
-                  (@[builtin(read_till_eof)] (read_all :: Thk (Thk (String -> OS) -> OS)))) *
-                (args ::
-                  @[builtin(arg_list)] (fold :: Thk (
-                    forall (R : CType) .
-                      Thk R -> Thk (String -> Thk R -> R) -> R
-                  ))) *
-                (random ::
-                  @[builtin(random_int)] (generate :: Thk (Thk (Int -> OS) -> OS))) *
-                (process ::
-                  @[builtin(exit)] (exit :: Thk (Int -> OS))))))))))
+  @[builtin(char)] exists (Char : VType) .
+  @[builtin(string)] exists (String : VType) .
+  @[builtin(bytes)] exists (Bytes : VType) .
+  @[builtin(reader)] exists (Reader : VType) .
+  @[builtin(writer)] exists (Writer : VType) .
+  @[builtin(os)] exists (OS : CType) .
+  (int ::
+    (@[builtin(add)] (add :: Thk (Int -> Int -> Ret Int))) *
+    (@[builtin(sub)] (sub :: Thk (Int -> Int -> Ret Int))) *
+    (@[builtin(mul)] (mul :: Thk (Int -> Int -> Ret Int))) *
+    (@[builtin(div)] (div :: Thk (Int -> Int -> Ret Int))) *
+    (@[builtin(mod)] (mod :: Thk (Int -> Int -> Ret Int))) *
+    (@[builtin(int_eq)] (eq :: Thk (
+      forall (R : CType) .
+        Int -> Int -> Thk R -> Thk R -> R
+    ))) *
+    (@[builtin(int_lt)] (lt :: Thk (
+      forall (R : CType) .
+        Int -> Int -> Thk R -> Thk R -> R
+    ))) *
+    (@[builtin(int_gt)] (gt :: Thk (
+      forall (R : CType) .
+        Int -> Int -> Thk R -> Thk R -> R
+    ))) *
+    (@[builtin(int_to_str)] (to_string :: Thk (Int -> Ret String)))) *
+  (float ::
+    (@[builtin(float_add)] (add :: Thk (Float -> Float -> Ret Float))) *
+    (@[builtin(float_sub)] (sub :: Thk (Float -> Float -> Ret Float))) *
+    (@[builtin(float_mul)] (mul :: Thk (Float -> Float -> Ret Float))) *
+    (@[builtin(float_div)] (div :: Thk (Float -> Float -> Ret Float))) *
+    (@[builtin(float_eq)] (eq :: Thk (
+      forall (R : CType) .
+        Float -> Float -> Thk R -> Thk R -> R
+    ))) *
+    (@[builtin(float_lt)] (lt :: Thk (
+      forall (R : CType) .
+        Float -> Float -> Thk R -> Thk R -> R
+    ))) *
+    (@[builtin(float_gt)] (gt :: Thk (
+      forall (R : CType) .
+        Float -> Float -> Thk R -> Thk R -> R
+    ))) *
+    (@[builtin(float_to_str)] (to_string :: Thk (Float -> Ret String)))) *
+  (char ::
+    (@[builtin(char_to_str)] (to_string :: Thk (Char -> Ret String))) *
+    (@[builtin(char_codepoint)] (codepoint :: Thk (Char -> Ret Int))) *
+    (@[builtin(char_from_codepoint)] (from_codepoint :: Thk (
+      forall (R : CType) .
+        Int -> Thk R -> Thk (Char -> R) -> R
+    )))) *
+  (string ::
+    (@[builtin(str_scalar_length)] (length :: Thk (String -> Ret Int))) *
+    (@[builtin(str_byte_length)] (byte_length :: Thk (String -> Ret Int))) *
+    (@[builtin(str_append)] (append :: Thk (String -> String -> Ret String))) *
+    (@[builtin(str_split_once)] (split_once :: Thk (
+      forall (R : CType) .
+        String -> Char -> Thk R -> Thk (String -> String -> R) -> R
+    ))) *
+    (@[builtin(str_split_at)] (split_at :: Thk (
+      forall (R : CType) .
+        String -> Int -> Thk R -> Thk (String -> String -> R) -> R
+    ))) *
+    (@[builtin(str_eq)] (eq :: Thk (
+      forall (R : CType) .
+        String -> String -> Thk R -> Thk R -> R
+    ))) *
+    (@[builtin(str_get)] (get :: Thk (
+      forall (R : CType) .
+        String -> Int -> Thk R -> Thk (Char -> R) -> R
+    ))) *
+    (@[builtin(str_parse_int)] (parse_int :: Thk (
+      forall (R : CType) .
+        String -> Thk R -> Thk (Int -> R) -> R
+    )))) *
+  (bytes ::
+    (@[builtin(bytes_empty)] (empty :: Thk (Ret Bytes))) *
+    (@[builtin(bytes_length)] (length :: Thk (Bytes -> Ret Int))) *
+    (@[builtin(bytes_append)] (append :: Thk (Bytes -> Bytes -> Ret Bytes))) *
+    (@[builtin(bytes_from_str)] (from_string :: Thk (String -> Ret Bytes))) *
+    (@[builtin(bytes_to_str)] (to_string :: Thk (
+      forall (R : CType) .
+        Bytes -> Thk R -> Thk (String -> R) -> R
+    )))) *
+  (io ::
+    (@[builtin(io_read)] (read :: Thk (
+      Reader -> Int ->
+      Thk (Int -> String -> OS) ->
+      Thk (Bytes -> OS) ->
+      OS
+    ))) *
+    (@[builtin(io_read_line)] (read_line :: Thk (
+      Reader ->
+      Thk (Int -> String -> OS) ->
+      Thk OS ->
+      Thk (Bytes -> OS) ->
+      OS
+    ))) *
+    (@[builtin(io_read_all)] (read_all :: Thk (
+      Reader ->
+      Thk (Int -> String -> OS) ->
+      Thk (Bytes -> OS) ->
+      OS
+    ))) *
+    (@[builtin(io_write_all)] (write_all :: Thk (
+      Writer -> Bytes ->
+      Thk (Int -> String -> OS) ->
+      Thk OS ->
+      OS
+    ))) *
+    (@[builtin(io_flush)] (flush :: Thk (
+      Writer -> Thk (Int -> String -> OS) -> Thk OS -> OS
+    ))) *
+    (@[builtin(io_close_reader)] (close_reader :: Thk (
+      Reader -> Thk (Int -> String -> OS) -> Thk OS -> OS
+    ))) *
+    (@[builtin(io_close_writer)] (close_writer :: Thk (
+      Writer -> Thk (Int -> String -> OS) -> Thk OS -> OS
+    )))) *
+  (fs ::
+    (@[builtin(fs_open_reader)] (open_reader :: Thk (
+      String ->
+      Thk (Int -> String -> OS) ->
+      Thk (Reader -> OS) ->
+      OS
+    ))) *
+    (@[builtin(fs_create_writer)] (create_writer :: Thk (
+      String ->
+      Thk (Int -> String -> OS) ->
+      Thk (Writer -> OS) ->
+      OS
+    ))) *
+    (@[builtin(fs_append_writer)] (append_writer :: Thk (
+      String ->
+      Thk (Int -> String -> OS) ->
+      Thk (Writer -> OS) ->
+      OS
+    )))) *
+  (stdio ::
+    (@[builtin(stdin)] (stdin :: Thk (Ret Reader))) *
+    (@[builtin(stdout)] (stdout :: Thk (Ret Writer))) *
+    (@[builtin(stderr)] (stderr :: Thk (Ret Writer))) *
+    (@[builtin(write_str)] (write :: Thk (String -> Thk OS -> OS))) *
+    (@[builtin(write_int)] (write_int :: Thk (Int -> Thk OS -> OS))) *
+    (@[builtin(write_line)] (write_line :: Thk (String -> Thk OS -> OS))) *
+    (@[builtin(read_line)] (read_line :: Thk (Thk (String -> OS) -> OS))) *
+    (@[builtin(read_line_as_int)] (read_int :: Thk (
+      Thk OS -> Thk (Int -> OS) -> OS
+    ))) *
+    (@[builtin(read_till_eof)] (read_all :: Thk (Thk (String -> OS) -> OS)))) *
+  (args ::
+    @[builtin(arg_list)] (fold :: Thk (
+      forall (R : CType) .
+        Thk R -> Thk (String -> Thk R -> R) -> R
+    ))) *
+  (random ::
+    @[builtin(random_int)] (generate :: Thk (Thk (Int -> OS) -> OS))) *
+  (process ::
+    @[builtin(exit)] (exit :: Thk (Int -> OS)))
 -- end module Builtin
