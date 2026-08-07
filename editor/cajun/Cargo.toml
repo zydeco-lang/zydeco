@@ -16,6 +16,7 @@ zydeco-surface = { workspace = true }
 zydeco-statics = { workspace = true }
 zydeco-session = { workspace = true }
 clap = { workspace = true }
+salsa = { workspace = true }
 tokio = { workspace = true }
 tower-lsp = { workspace = true }
 

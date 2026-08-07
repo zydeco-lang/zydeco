@@ -1,5 +1,6 @@
 use serde_json::{Value, json};
 use std::{
+    collections::BTreeSet,
     io::{BufRead, BufReader, Read, Write},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
 };
@@ -305,6 +306,70 @@ fn stdio_hover_links_referenced_type_definitions() {
         hover["result"]["contents"]["value"],
         format!("```zydeco\nvalue : A\n```\n\nTypes:\n\n- [`A` ↗](<{definition}>)")
     );
+
+    server.finish();
+}
+
+#[test]
+fn stdio_server_treats_overlapping_open_analyses_as_superseded() {
+    let repository =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
+    let documents = [
+        "lib/std/bool.zy",
+        "lib/std/builtin.zy",
+        "lib/std/list.zy",
+        "lib/std/monad.zy",
+        "lib/std/std.zy",
+    ]
+    .into_iter()
+    .map(|relative| {
+        let path = repository.join(relative).canonicalize().unwrap();
+        let uri = Url::from_file_path(&path).unwrap().to_string();
+        let source = std::fs::read_to_string(path).unwrap();
+        (uri, source)
+    })
+    .collect::<Vec<_>>();
+    let mut server = LspProcess::start();
+
+    server.request(
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": Url::from_file_path(&repository).unwrap(),
+            "capabilities": {},
+        }),
+    );
+    server.notify("initialized", json!({}));
+    documents.iter().for_each(|(uri, source)| {
+        server.notify(
+            "textDocument/didOpen",
+            json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "zydeco",
+                    "version": 1,
+                    "text": source,
+                },
+            }),
+        )
+    });
+
+    let published = (0..documents.len())
+        .map(|_| server.notification("textDocument/publishDiagnostics"))
+        .collect::<Vec<_>>();
+    published.iter().for_each(|notification| {
+        let diagnostics = notification["params"]["diagnostics"].as_array().unwrap();
+        assert!(
+            diagnostics.is_empty(),
+            "cancelled analysis leaked as a diagnostic: {notification}"
+        );
+    });
+    let expected = documents.iter().map(|(uri, _)| uri.clone()).collect::<BTreeSet<_>>();
+    let reported = published
+        .iter()
+        .map(|notification| notification["params"]["uri"].as_str().unwrap().to_owned())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(reported, expected);
 
     server.finish();
 }

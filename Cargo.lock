@@ -189,6 +189,7 @@ name = "cajun"
 version = "0.2.2"
 dependencies = [
  "clap",
+ "salsa",
  "serde_json",
  "tempfile",
  "tokio",

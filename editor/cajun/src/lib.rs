@@ -9,6 +9,7 @@ use progress::{AnalysisProgressReporter, AnalysisProgressSession};
 use semantic::SemanticHighlighter;
 use std::{
     collections::HashMap,
+    panic::{self, AssertUnwindSafe},
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -45,6 +46,28 @@ impl ZydecoDocument {
     }
 }
 
+enum AnalysisTask<T> {
+    Completed(T),
+    Cancelled,
+}
+
+impl<T> AnalysisTask<T> {
+    fn run(operation: impl FnOnce() -> T) -> Self {
+        // The operation owns a disposable Salsa snapshot. Cancellation drops
+        // that snapshot, while `Cancelled::catch` resumes every unrelated panic.
+        match salsa::Cancelled::catch(AssertUnwindSafe(operation)) {
+            | Ok(output) => Self::Completed(output),
+            | Err(salsa::Cancelled::Local | salsa::Cancelled::PendingWrite) => Self::Cancelled,
+            | Err(cancelled) => panic::resume_unwind(Box::new(cancelled)),
+        }
+    }
+}
+
+enum RefreshOutcome {
+    Updated(PathBuf),
+    Cancelled,
+}
+
 /// The Cajun Zydeco language server.
 ///
 /// Cajun treats every open source file as a potential root term. Its imported
@@ -71,32 +94,35 @@ impl Cajun {
         }
     }
 
-    async fn refresh(&self, uri: &Url) -> std::result::Result<PathBuf, String> {
+    async fn refresh(&self, uri: &Url) -> std::result::Result<RefreshOutcome, String> {
         self.refresh_with_progress(uri, AnalysisProgressReporter::default()).await
     }
 
     async fn refresh_with_progress(
         &self, uri: &Url, progress: AnalysisProgressReporter,
-    ) -> std::result::Result<PathBuf, String> {
+    ) -> std::result::Result<RefreshOutcome, String> {
         let path = Self::path(uri)?;
         let analysis_path = path.clone();
         let snapshot = self.session.lock().await.snapshot();
         let analysis = tokio::task::spawn_blocking(move || {
-            ProjectState::load_from_session(&analysis_path, &snapshot, |update| {
-                progress.report(update)
+            AnalysisTask::run(move || {
+                ProjectState::load_from_session(&analysis_path, &snapshot, |update| {
+                    progress.report(update)
+                })
             })
         })
         .await
         .map_err(|error| format!("analysis task failed: {error}"))?;
         match analysis {
-            | Ok(project) => {
+            | AnalysisTask::Completed(Ok(project)) => {
                 self.projects.write().await.insert(path.clone(), project);
-                Ok(path)
+                Ok(RefreshOutcome::Updated(path))
             }
-            | Err(error) => {
+            | AnalysisTask::Completed(Err(error)) => {
                 self.projects.write().await.remove(&path);
                 Err(error)
             }
+            | AnalysisTask::Cancelled => Ok(RefreshOutcome::Cancelled),
         }
     }
 
@@ -106,7 +132,7 @@ impl Cajun {
         let reporter =
             progress.as_mut().map(|progress| progress.take_reporter()).unwrap_or_default();
         let diagnostics = match self.refresh_with_progress(&uri, reporter).await {
-            | Ok(_) => Vec::new(),
+            | Ok(RefreshOutcome::Updated(_) | RefreshOutcome::Cancelled) => Vec::new(),
             | Err(message) => vec![Diagnostic {
                 range: Range::new(Position::new(0, 0), Position::new(0, 1)),
                 severity: Some(DiagnosticSeverity::ERROR),
@@ -259,8 +285,8 @@ impl LanguageServer for Cajun {
             return Ok(None);
         }
         let path = match self.refresh(&target.text_document.uri).await {
-            | Ok(path) => path,
-            | Err(_) => return Ok(None),
+            | Ok(RefreshOutcome::Updated(path)) => path,
+            | Ok(RefreshOutcome::Cancelled) | Err(_) => return Ok(None),
         };
         let projects = self.projects.read().await;
         let location =
@@ -275,8 +301,8 @@ impl LanguageServer for Cajun {
             return Ok(None);
         }
         let path = match self.refresh(&target.text_document.uri).await {
-            | Ok(path) => path,
-            | Err(_) => return Ok(None),
+            | Ok(RefreshOutcome::Updated(path)) => path,
+            | Ok(RefreshOutcome::Cancelled) | Err(_) => return Ok(None),
         };
         let projects = self.projects.read().await;
         Ok(projects
@@ -290,8 +316,8 @@ impl LanguageServer for Cajun {
             return Ok(None);
         }
         let path = match self.refresh(&target.text_document.uri).await {
-            | Ok(path) => path,
-            | Err(_) => return Ok(None),
+            | Ok(RefreshOutcome::Updated(path)) => path,
+            | Ok(RefreshOutcome::Cancelled) | Err(_) => return Ok(None),
         };
         let projects = self.projects.read().await;
         Ok(projects.get(&path).and_then(|project| project.hover(&path, target.position)))
@@ -304,8 +330,8 @@ impl LanguageServer for Cajun {
             return Ok(None);
         }
         let path = match self.refresh(&params.text_document.uri).await {
-            | Ok(path) => path,
-            | Err(_) => return Ok(None),
+            | Ok(RefreshOutcome::Updated(path)) => path,
+            | Ok(RefreshOutcome::Cancelled) | Err(_) => return Ok(None),
         };
         let projects = self.projects.read().await;
         let symbols =
@@ -349,8 +375,17 @@ impl LanguageServer for Cajun {
 
 #[cfg(test)]
 mod tests {
-    use super::ZydecoDocument;
+    use super::{AnalysisTask, ZydecoDocument};
+    use std::panic;
     use tower_lsp::lsp_types::Url;
+
+    #[test]
+    fn pending_write_cancellation_is_an_analysis_outcome() {
+        let outcome: AnalysisTask<()> =
+            AnalysisTask::run(|| panic::resume_unwind(Box::new(salsa::Cancelled::PendingWrite)));
+
+        assert!(matches!(outcome, AnalysisTask::Cancelled));
+    }
 
     #[test]
     fn accepts_only_zydeco_source_extensions() {
