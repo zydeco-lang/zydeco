@@ -190,7 +190,7 @@ pub mod utils {
                     "let (= Monad, = Algebra, ()) =\n",
                     "  monadic_basis ",
                     concat!(
-                        "(VType, CType, Thk, Ret, Unit, Int, Char, String, ",
+                        "(VType, CType, Thk, Ret, Unit, Int, Float, Char, String, ",
                         "Bytes, Reader, Writer, OS, api) in\n",
                     ),
                 )
@@ -200,7 +200,7 @@ pub mod utils {
             format!(
                 r#"let Builtin = @[import("{builtin}")] _ in
 {monadic}param (
-  (VType, CType, Thk, Ret, Unit, Int, Char, String, Bytes, Reader, Writer, OS, api) :
+  (VType, CType, Thk, Ret, Unit, Int, Float, Char, String, Bytes, Reader, Writer, OS, api) :
   Builtin
 ) in
 let Thunk = Thk in

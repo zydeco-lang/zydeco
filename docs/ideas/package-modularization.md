@@ -28,9 +28,9 @@ public standard package. No `use`, `open`, module declaration, or import-specifi
 ## The problem with complete unpacking
 
 The canonical Builtin signature is an existential telescope. Its abstract entries establish the identities of
-`Int`, `Char`, `String`, `Bytes`, `Reader`, `Writer`, and `OS`; later operation fields refer to those identities. The
-standard library adds another telescope for `Bool`, `Option`, `Result`, `List`, `Path`, and the I/O error types,
-followed by its module values.
+`Int`, `Float`, `Char`, `String`, `Bytes`, `Reader`, `Writer`, and `OS`; later operation fields refer to those
+identities. The standard library adds another telescope for `Bool`, `Option`, `Result`, `List`, `Path`, and the I/O
+error types, followed by its module values.
 
 Opening the public standard package positionally gives a source name to every entry:
 
@@ -153,8 +153,8 @@ Builtin exposes host operations through small capability modules while keeping t
 package boundary:
 
 ```text
-types:        Unit Int Char String Bytes Reader Writer OS
-capabilities: int char string bytes io fs stdio args random process
+types:        Unit Int Float Char String Bytes Reader Writer OS
+capabilities: int float char string bytes io fs stdio args random process
 ```
 
 A source selects the types needed in annotations and the capability modules it calls. Individual operations stay
@@ -165,10 +165,10 @@ The public standard package builds on that boundary. It exposes shared type iden
 operations into named module values:
 
 ```text
-types:   Bool Option Result List Int Char String Bytes Reader Writer
+types:   Bool Option Result List Int Float Char String Bytes Reader Writer
          Path IoErrorKind IoError OS
 
-modules: prelude bool option result list int char string bytes io fs stdio process
+modules: prelude bool option result list int float char string bytes io fs stdio process
 ```
 
 Consumers select the shared types used in annotations and the modules used for operations. For example, a minimal

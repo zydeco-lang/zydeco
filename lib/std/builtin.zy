@@ -15,6 +15,7 @@ exists
   (Unit as @[intrinsic(unit)] _)
 .
   @[builtin(int)] exists (Int : VType) .
+  @[builtin(float)] exists (Float : VType) .
     (@[builtin(char)] exists (Char : VType) .
       (@[builtin(string)] exists (String : VType) .
         (@[builtin(bytes)] exists (Bytes : VType) .
@@ -40,6 +41,24 @@ exists
                       Int -> Int -> Thk R -> Thk R -> R
                   ))) *
                   (@[builtin(int_to_str)] (to_string :: Thk (Int -> Ret String)))) *
+                (float ::
+                  (@[builtin(float_add)] (add :: Thk (Float -> Float -> Ret Float))) *
+                  (@[builtin(float_sub)] (sub :: Thk (Float -> Float -> Ret Float))) *
+                  (@[builtin(float_mul)] (mul :: Thk (Float -> Float -> Ret Float))) *
+                  (@[builtin(float_div)] (div :: Thk (Float -> Float -> Ret Float))) *
+                  (@[builtin(float_eq)] (eq :: Thk (
+                    forall (R : CType) .
+                      Float -> Float -> Thk R -> Thk R -> R
+                  ))) *
+                  (@[builtin(float_lt)] (lt :: Thk (
+                    forall (R : CType) .
+                      Float -> Float -> Thk R -> Thk R -> R
+                  ))) *
+                  (@[builtin(float_gt)] (gt :: Thk (
+                    forall (R : CType) .
+                      Float -> Float -> Thk R -> Thk R -> R
+                  ))) *
+                  (@[builtin(float_to_str)] (to_string :: Thk (Float -> Ret String)))) *
                 (char ::
                   (@[builtin(char_to_str)] (to_string :: Thk (Char -> Ret String))) *
                   (@[builtin(char_codepoint)] (codepoint :: Thk (Char -> Ret Int))) *

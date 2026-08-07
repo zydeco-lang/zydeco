@@ -250,6 +250,10 @@ impl<'a> Lower<'a> for sk::ValueId {
                 let atom = Atom::Imm(Imm::Int(i));
                 Push(atom).build(lo, With::new(cx, CxKont::same(kont)))
             }
+            | Value::Literal(Literal::Float(value)) => {
+                let atom = Atom::Imm(Imm::Float(value));
+                Push(atom).build(lo, With::new(cx, CxKont::same(kont)))
+            }
             | Value::Literal(Literal::Char(c)) => {
                 // Push the literal value onto the stack
                 let atom = Atom::Imm(Imm::Char(c));

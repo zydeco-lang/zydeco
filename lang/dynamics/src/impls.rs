@@ -108,6 +108,63 @@ intcomp_branch!(int_eq_branch, ==);
 intcomp_branch!(int_lt_branch, <);
 intcomp_branch!(int_gt_branch, >);
 
+macro_rules! float_arith {
+    ( $name:ident, $op:tt ) => {
+        pub fn $name(
+            args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
+            _: &mut HostRuntime,
+        ) -> Result<ZCompute, i32> {
+            match args.as_slice() {
+                [
+                    ZValue::Literal(Literal::Float(a)),
+                    ZValue::Literal(Literal::Float(b)),
+                ] => ret(Literal::Float((a.value() $op b.value()).into()).into()),
+                | _ => unreachable!(""),
+            }
+        }
+    };
+}
+
+float_arith!(float_add, +);
+float_arith!(float_sub, -);
+float_arith!(float_mul, *);
+float_arith!(float_div, /);
+
+macro_rules! floatcomp_branch {
+    ( $name:ident, $op:tt ) => {
+        pub fn $name(
+            args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
+            _: &mut HostRuntime,
+        ) -> Result<ZCompute, i32> {
+            match args.as_slice() {
+                [
+                    ZValue::Literal(Literal::Float(a)),
+                    ZValue::Literal(Literal::Float(b)),
+                    when_true @ ZValue::Thunk(_),
+                    when_false @ ZValue::Thunk(_),
+                ] => Branch::select(a.value() $op b.value(), when_true, when_false),
+                | _ => unreachable!(""),
+            }
+        }
+    };
+}
+
+floatcomp_branch!(float_eq_branch, ==);
+floatcomp_branch!(float_lt_branch, <);
+floatcomp_branch!(float_gt_branch, >);
+
+/// Convert a floating-point literal to its shortest round-trippable decimal form.
+pub fn float_to_str(
+    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
+) -> Result<ZCompute, i32> {
+    match args.as_slice() {
+        | [ZValue::Literal(Literal::Float(value))] => {
+            ret(Literal::String(value.to_string().into()).into())
+        }
+        | _ => unreachable!(""),
+    }
+}
+
 // /* Strings */
 /// Return the number of Unicode scalar values in a string.
 pub fn str_scalar_length(

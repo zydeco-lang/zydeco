@@ -136,6 +136,7 @@ impl std::fmt::Display for IntrinsicRole {
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BuiltinTypeRole {
     Int,
+    Float,
     Char,
     String,
     Bytes,
@@ -154,6 +155,7 @@ impl BuiltinTypeRole {
     pub fn from_source_name(name: &str) -> Option<Self> {
         match name {
             | "int" => Some(Self::Int),
+            | "float" => Some(Self::Float),
             | "char" => Some(Self::Char),
             | "string" => Some(Self::String),
             | "bytes" => Some(Self::Bytes),
@@ -167,6 +169,7 @@ impl BuiltinTypeRole {
     pub fn source_name(self) -> &'static str {
         match self {
             | Self::Int => "int",
+            | Self::Float => "float",
             | Self::Char => "char",
             | Self::String => "string",
             | Self::Bytes => "bytes",
@@ -178,9 +181,13 @@ impl BuiltinTypeRole {
 
     pub fn universe(self) -> BuiltinTypeUniverse {
         match self {
-            | Self::Int | Self::Char | Self::String | Self::Bytes | Self::Reader | Self::Writer => {
-                BuiltinTypeUniverse::Value
-            }
+            | Self::Int
+            | Self::Float
+            | Self::Char
+            | Self::String
+            | Self::Bytes
+            | Self::Reader
+            | Self::Writer => BuiltinTypeUniverse::Value,
             | Self::OS => BuiltinTypeUniverse::Computation,
         }
     }
@@ -204,6 +211,14 @@ pub enum BuiltinValueRole {
     IntEq,
     IntLt,
     IntGt,
+    FloatAdd,
+    FloatSub,
+    FloatMul,
+    FloatDiv,
+    FloatEq,
+    FloatLt,
+    FloatGt,
+    FloatToStr,
     StrScalarLength,
     StrByteLength,
     StrAppend,
@@ -255,6 +270,14 @@ impl BuiltinValueRole {
         Self::IntEq,
         Self::IntLt,
         Self::IntGt,
+        Self::FloatAdd,
+        Self::FloatSub,
+        Self::FloatMul,
+        Self::FloatDiv,
+        Self::FloatEq,
+        Self::FloatLt,
+        Self::FloatGt,
+        Self::FloatToStr,
         Self::StrScalarLength,
         Self::StrByteLength,
         Self::StrAppend,
@@ -306,6 +329,14 @@ impl BuiltinValueRole {
             | "int_eq" => Some(Self::IntEq),
             | "int_lt" => Some(Self::IntLt),
             | "int_gt" => Some(Self::IntGt),
+            | "float_add" => Some(Self::FloatAdd),
+            | "float_sub" => Some(Self::FloatSub),
+            | "float_mul" => Some(Self::FloatMul),
+            | "float_div" => Some(Self::FloatDiv),
+            | "float_eq" => Some(Self::FloatEq),
+            | "float_lt" => Some(Self::FloatLt),
+            | "float_gt" => Some(Self::FloatGt),
+            | "float_to_str" => Some(Self::FloatToStr),
             | "str_scalar_length" => Some(Self::StrScalarLength),
             | "str_byte_length" => Some(Self::StrByteLength),
             | "str_append" => Some(Self::StrAppend),
@@ -359,6 +390,14 @@ impl BuiltinValueRole {
             | Self::IntEq => "int_eq",
             | Self::IntLt => "int_lt",
             | Self::IntGt => "int_gt",
+            | Self::FloatAdd => "float_add",
+            | Self::FloatSub => "float_sub",
+            | Self::FloatMul => "float_mul",
+            | Self::FloatDiv => "float_div",
+            | Self::FloatEq => "float_eq",
+            | Self::FloatLt => "float_lt",
+            | Self::FloatGt => "float_gt",
+            | Self::FloatToStr => "float_to_str",
             | Self::StrScalarLength => "str_scalar_length",
             | Self::StrByteLength => "str_byte_length",
             | Self::StrAppend => "str_append",
@@ -409,6 +448,9 @@ impl BuiltinValueRole {
             | Self::IntEq => "int_eq_branch",
             | Self::IntLt => "int_lt_branch",
             | Self::IntGt => "int_gt_branch",
+            | Self::FloatEq => "float_eq_branch",
+            | Self::FloatLt => "float_lt_branch",
+            | Self::FloatGt => "float_gt_branch",
             | Self::StrSplitOnce => "str_split_once_branch",
             | Self::StrSplitAt => "str_split_at_branch",
             | Self::StrEq => "str_eq_branch",
@@ -620,6 +662,46 @@ pub struct Proj<Head, Tag>(pub Head, pub Tag);
 #[derive(From, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum Literal {
     Int(i64),
+    Float(FloatLiteral),
     String(Utf8String),
     Char(char),
+}
+
+/// An IEEE-754 binary64 literal with bitwise equality and hashing.
+///
+/// Keeping the bits as the structural representation preserves signed zero and
+/// NaN payloads while allowing literals to participate in syntax identities.
+#[derive(Copy, Clone, Default, Hash, PartialEq, Eq)]
+pub struct FloatLiteral(u64);
+
+impl FloatLiteral {
+    pub fn from_bits(bits: u64) -> Self {
+        Self(bits)
+    }
+
+    pub fn to_bits(self) -> u64 {
+        self.0
+    }
+
+    pub fn value(self) -> f64 {
+        f64::from_bits(self.0)
+    }
+}
+
+impl From<f64> for FloatLiteral {
+    fn from(value: f64) -> Self {
+        Self(value.to_bits())
+    }
+}
+
+impl std::fmt::Debug for FloatLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.value().fmt(f)
+    }
+}
+
+impl std::fmt::Display for FloatLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.value().fmt(f)
+    }
 }

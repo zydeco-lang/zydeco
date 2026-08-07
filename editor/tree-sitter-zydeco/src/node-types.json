@@ -8,6 +8,10 @@
         "named": true
       },
       {
+        "type": "float_literal",
+        "named": true
+      },
+      {
         "type": "integer_literal",
         "named": true
       },
@@ -2024,6 +2028,10 @@
   {
     "type": "fix",
     "named": false
+  },
+  {
+    "type": "float_literal",
+    "named": true
   },
   {
     "type": "fn",

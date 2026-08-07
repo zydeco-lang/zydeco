@@ -45,6 +45,7 @@ extern {
         "exists" => Tok::Exists,
         "sigma" => Tok::Sigma,
 
+        "FloatLit" => Tok::FloatLit(<&'input str>),
         "IntLit" => Tok::IntLit(<&'input str>),
         "StrLit" => Tok::StrLit(<&'input str>),
         "CharLit" => Tok::CharLit(<&'input str>),
@@ -95,6 +96,7 @@ SepByDelim<Start, Sep, T, End>: Vec<T> = {
 //* -------------------------------- Terminals ------------------------------- */
 
 Int: i64 = <"IntLit"> => <>.parse().unwrap();
+Float: FloatLiteral = <"FloatLit"> => <>.parse::<f64>().unwrap().into();
 String: String = <s:"StrLit"> => {
     escape::apply_string_escapes(&s[1..s.len()-1])
 };
@@ -102,6 +104,7 @@ Char: char = <"CharLit"> => escape::apply_char_escapes(<>);
 
 Literal: Literal = {
     <Int> => <>.into(),
+    <Float> => <>.into(),
     <String> => Utf8String::from(<>).into(),
     <Char> => <>.into(),
 };

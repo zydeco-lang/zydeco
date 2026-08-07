@@ -2054,6 +2054,10 @@
       "members": [
         {
           "type": "SYMBOL",
+          "name": "float_literal"
+        },
+        {
+          "type": "SYMBOL",
           "name": "integer_literal"
         },
         {
@@ -2065,6 +2069,13 @@
           "name": "character_literal"
         }
       ]
+    },
+    "float_literal": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PATTERN",
+        "value": "[+-]?([0-9]+\\.[0-9]+([eE][+-]?[0-9]+)?|[0-9]+[eE][+-]?[0-9]+)"
+      }
     },
     "integer_literal": {
       "type": "TOKEN",

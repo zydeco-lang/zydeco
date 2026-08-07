@@ -701,6 +701,7 @@ impl Desugar for t::TermId {
                 let lit_term = Alloc::alloc(desugarer, term.clone().into(), self.into());
                 let ty = match term {
                     | Lit::Int(_) => desugarer.int(self.into()),
+                    | Lit::Float(_) => desugarer.float(self.into()),
                     | Lit::String(_) => desugarer.string(self.into()),
                     | Lit::Char(_) => desugarer.char(self.into()),
                 };
@@ -885,6 +886,10 @@ mod impls {
         pub(crate) fn int(&mut self, prev: t::EntityId) -> b::TermId {
             let term = Alloc::alloc(self, b::Internal::Int.into(), prev);
             *self.prim.int.extend_one(term)
+        }
+        pub(crate) fn float(&mut self, prev: t::EntityId) -> b::TermId {
+            let term = Alloc::alloc(self, b::Internal::Float.into(), prev);
+            *self.prim.float.extend_one(term)
         }
         pub(crate) fn char(&mut self, prev: t::EntityId) -> b::TermId {
             let term = Alloc::alloc(self, b::Internal::Char.into(), prev);

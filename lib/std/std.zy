@@ -10,8 +10,8 @@ begin
     param (
       (
         /VType; /CType; /Thk; /Ret;
-        /Unit; /Int; /Char; /String; /Bytes; /Reader; /Writer; /OS;
-        /int; /char; /string; /bytes;
+        /Unit; /Int; /Float; /Char; /String; /Bytes; /Reader; /Writer; /OS;
+        /int; /float; /char; /string; /bytes;
         /io; /fs; /stdio; /args; /random; /process;
         builtin
       ) :
@@ -86,6 +86,32 @@ begin
       let ! int_max (left : Int) (right : Int) : Ret Int =
         do greater <- ! int_gt left right;
         ! (bool/if) (Ret Int) greater { ret left } { ret right }
+      in
+      let ! float_eq (left : Float) (right : Float) : Ret Bool =
+        ! compare Float (float/eq) left right
+      in
+      let ! float_lt (left : Float) (right : Float) : Ret Bool =
+        ! compare Float (float/lt) left right
+      in
+      let ! float_gt (left : Float) (right : Float) : Ret Bool =
+        ! compare Float (float/gt) left right
+      in
+      let ! float_ne (left : Float) (right : Float) : Ret Bool =
+        do equal <- ! float_eq left right;
+        ! (bool/not) equal
+      in
+      let ! float_le (left : Float) (right : Float) : Ret Bool =
+        do less <- ! float_lt left right;
+        do equal <- ! float_eq left right;
+        ! (bool/or) less equal
+      in
+      let ! float_ge (left : Float) (right : Float) : Ret Bool =
+        do greater <- ! float_gt left right;
+        do equal <- ! float_eq left right;
+        ! (bool/or) greater equal
+      in
+      let ! float_negate (value : Float) : Ret Float =
+        ! (float/sub) 0.0 value
       in
       let ! str_eq (left : String) (right : String) : Ret Bool =
         ! compare String string/eq left right
@@ -689,6 +715,7 @@ begin
         Result = Result,
         List = List,
         Int = Int,
+        Float = Float,
         Char = Char,
         String = String,
         Bytes = Bytes,
@@ -768,6 +795,20 @@ begin
           min = int_min,
           max = int_max,
           to_string = int/to_string,
+        ),
+        float = (
+          add = float/add,
+          sub = float/sub,
+          mul = float/mul,
+          div = float/div,
+          eq = float_eq,
+          ne = float_ne,
+          lt = float_lt,
+          le = float_le,
+          gt = float_gt,
+          ge = float_ge,
+          negate = float_negate,
+          to_string = float/to_string,
         ),
         char = (
           to_string = char/to_string,

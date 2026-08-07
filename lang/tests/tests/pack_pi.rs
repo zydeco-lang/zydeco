@@ -433,7 +433,7 @@ begin
   } that
 
   do value <- ! translated Ret { ! mo_ret } .unbox (Int, triv, 41);
-  do status <- ! (api/sub) value 41;
+  do status <- ! (api/int/sub) value 41;
   ! exit status
 end
 "#,
@@ -482,7 +482,7 @@ begin
     { ! ret_algebra (Ret Int) },
     { ret 41 },
   );
-  do status <- ! (api/sub) value 41;
+  do status <- ! (api/int/sub) value 41;
   ! exit status
 end
 "#,
@@ -602,7 +602,7 @@ begin
   } that
 
   do value <- ! translated Ret { ! mo_ret } .unbox (Int, triv, 41);
-  do status <- ! (api/sub) value 41;
+  do status <- ! (api/int/sub) value 41;
   ! exit status
 end
 "#,
@@ -671,7 +671,7 @@ begin
     41,
     (Unit, triv, ()),
   );
-  do status <- ! (api/sub) value 41;
+  do status <- ! (api/int/sub) value 41;
   ! exit status
 end
 "#,
@@ -701,7 +701,7 @@ begin
   } that
 
   do value <- ! translated Ret { ! mo_ret } (Int, triv, 41);
-  do status <- ! (api/sub) value 41;
+  do status <- ! (api/int/sub) value 41;
   ! exit status
 end
 "#,

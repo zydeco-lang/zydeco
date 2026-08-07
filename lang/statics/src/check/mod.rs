@@ -1302,6 +1302,9 @@ impl InternalTerm {
                 TermAnnId::Type(ty, tycker.statics.annotations_type[&ty])
             }
             | su::Internal::Int => self.builtin_type_k(tycker, env, ss::BuiltinTypeRole::Int)?,
+            | su::Internal::Float => {
+                self.builtin_type_k(tycker, env, ss::BuiltinTypeRole::Float)?
+            }
             | su::Internal::Char => self.builtin_type_k(tycker, env, ss::BuiltinTypeRole::Char)?,
             | su::Internal::String => {
                 self.builtin_type_k(tycker, env, ss::BuiltinTypeRole::String)?
@@ -5425,6 +5428,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         let ty =
                             literal_type_k(tycker, &self.info, switch, ss::BuiltinTypeRole::Int)?;
                         (Lit::Int(i), ty)
+                    }
+                    | Lit::Float(value) => {
+                        let ty =
+                            literal_type_k(tycker, &self.info, switch, ss::BuiltinTypeRole::Float)?;
+                        (Lit::Float(value), ty)
                     }
                     | Lit::String(s) => {
                         let ty = literal_type_k(

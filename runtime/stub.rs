@@ -52,6 +52,18 @@ impl HostString {
     }
 }
 
+struct HostFloat;
+
+impl HostFloat {
+    fn decode(word: Word) -> f64 {
+        f64::from_bits(word as u64)
+    }
+
+    fn encode(value: f64) -> Word {
+        value.to_bits() as Word
+    }
+}
+
 struct HostBytes;
 
 impl HostBytes {
@@ -401,6 +413,25 @@ extern "sysv64" fn zydeco_int_to_str(integer: i64) -> Word {
     HostString::leak(integer.to_string())
 }
 
+macro_rules! float_arithmetic {
+    ($name:ident, $symbol:literal, $operation:tt) => {
+        #[unsafe(export_name = $symbol)]
+        extern "sysv64" fn $name(first: Word, second: Word) -> Word {
+            HostFloat::encode(HostFloat::decode(first) $operation HostFloat::decode(second))
+        }
+    };
+}
+
+float_arithmetic!(zydeco_float_add, "\x01zydeco_float_add", +);
+float_arithmetic!(zydeco_float_sub, "\x01zydeco_float_sub", -);
+float_arithmetic!(zydeco_float_mul, "\x01zydeco_float_mul", *);
+float_arithmetic!(zydeco_float_div, "\x01zydeco_float_div", /);
+
+#[unsafe(export_name = "\x01zydeco_float_to_str")]
+extern "sysv64" fn zydeco_float_to_str(value: Word) -> Word {
+    HostString::leak(HostFloat::decode(value).to_string())
+}
+
 #[unsafe(export_name = "\x01zydeco_char_to_str")]
 extern "sysv64" fn zydeco_char_to_str(character: Word) -> Word {
     let character = char::from_u32(character as u32).expect("invalid character");
@@ -482,6 +513,25 @@ macro_rules! integer_branch {
 integer_branch!(zydeco_int_eq_branch, "\x01zydeco_int_eq_branch", ==);
 integer_branch!(zydeco_int_lt_branch, "\x01zydeco_int_lt_branch", <);
 integer_branch!(zydeco_int_gt_branch, "\x01zydeco_int_gt_branch", >);
+
+macro_rules! float_branch {
+    ($name:ident, $symbol:literal, $operation:tt) => {
+        #[unsafe(export_name = $symbol)]
+        extern "sysv64" fn $name(
+            first: Word, second: Word, when_true: Word, when_false: Word,
+        ) -> Word {
+            Branch::select(
+                HostFloat::decode(first) $operation HostFloat::decode(second),
+                when_true,
+                when_false,
+            )
+        }
+    };
+}
+
+float_branch!(zydeco_float_eq_branch, "\x01zydeco_float_eq_branch", ==);
+float_branch!(zydeco_float_lt_branch, "\x01zydeco_float_lt_branch", <);
+float_branch!(zydeco_float_gt_branch, "\x01zydeco_float_gt_branch", >);
 
 #[unsafe(export_name = "\x01zydeco_str_eq_branch")]
 extern "sysv64" fn zydeco_str_eq_branch(

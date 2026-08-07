@@ -15,6 +15,7 @@ use zydeco_utils::arena::ArenaAccess;
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum BuiltinValueAtom {
     Int,
+    Float,
     Char,
     String,
     Bytes,
@@ -26,6 +27,7 @@ impl BuiltinValueAtom {
     fn role(self) -> BuiltinTypeRole {
         match self {
             | Self::Int => BuiltinTypeRole::Int,
+            | Self::Float => BuiltinTypeRole::Float,
             | Self::Char => BuiltinTypeRole::Char,
             | Self::String => BuiltinTypeRole::String,
             | Self::Bytes => BuiltinTypeRole::Bytes,
@@ -96,6 +98,13 @@ impl BuiltinOperationAbi {
                 Self::pure([Atom::Int, Atom::Int], Atom::Int)
             }
             | Role::IntEq | Role::IntLt | Role::IntGt => Self::branch([Atom::Int, Atom::Int]),
+            | Role::FloatAdd | Role::FloatSub | Role::FloatMul | Role::FloatDiv => {
+                Self::pure([Atom::Float, Atom::Float], Atom::Float)
+            }
+            | Role::FloatEq | Role::FloatLt | Role::FloatGt => {
+                Self::branch([Atom::Float, Atom::Float])
+            }
+            | Role::FloatToStr => Self::pure([Atom::Float], Atom::String),
             | Role::StrScalarLength | Role::StrByteLength => Self::pure([Atom::String], Atom::Int),
             | Role::StrAppend => Self::pure([Atom::String, Atom::String], Atom::String),
             | Role::StrSplitOnce => Self::optional_pair([Atom::String, Atom::Char]),

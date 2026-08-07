@@ -109,6 +109,10 @@
     "literals": {
       "patterns": [
         {
+          "name": "constant.numeric.float.zydeco",
+          "match": "[+-]?(?:[0-9]+\\.[0-9]+(?:[eE][+-]?[0-9]+)?|[0-9]+[eE][+-]?[0-9]+)"
+        },
+        {
           "name": "constant.numeric.integer.zydeco",
           "match": "[+-]?[0-9]+"
         },

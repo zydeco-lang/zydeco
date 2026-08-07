@@ -46,6 +46,29 @@ fn parsing_2() {
 }
 
 #[test]
+fn parses_decimal_and_scientific_float_literals() {
+    [("1.25", 1.25), ("-2.5e1", -25.0), ("1e3", 1000.0)].into_iter().for_each(
+        |(source, expected)| {
+            let mut parser = Parser::new();
+            let term = parser::SingleTermParser::new()
+                .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+                .unwrap();
+            let Term::Lit(Literal::Float(value)) = parser.arena.terms[&term] else {
+                panic!("expected `{source}` to parse as a float literal")
+            };
+            assert_eq!(value.value(), expected);
+        },
+    );
+
+    let source = "1";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+    assert!(matches!(parser.arena.terms[&term], Term::Lit(Literal::Int(1))));
+}
+
+#[test]
 fn separates_term_body_arrows_from_type_arrows() {
     [
         "A -> B",

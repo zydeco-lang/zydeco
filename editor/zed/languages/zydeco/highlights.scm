@@ -5,7 +5,10 @@
   (block_comment)
 ] @comment
 
-(integer_literal) @number
+[
+  (integer_literal)
+  (float_literal)
+] @number
 [
   (string_literal)
   (character_literal)

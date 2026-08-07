@@ -46,6 +46,11 @@ and malformed input does not panic the host runtime.
 Integer division and remainder still inherit the machine integer domain and are not yet wrapped in checked
 operations. A future numeric module should expose checked arithmetic before adding more integer representations.
 
+`Float` is an IEEE-754 binary64 value. Decimal literals such as `1.5` and scientific literals such as `2e3` have
+type `Float`. The `float` module provides arithmetic, comparisons, negation, and shortest round-trippable decimal
+rendering. Division by zero, infinities, signed zero, and NaN follow IEEE-754 behavior. In particular, every ordered
+comparison with NaN is false, while `float/ne` reports true.
+
 ## Public modules
 
 - `bool`: constants, logical connectives, equality, and conditional elimination.
@@ -53,6 +58,7 @@ operations. A future numeric module should expose checked arithmetic before addi
 - `result`: successful and failed results, elimination, mapping, chaining, defaults, and predicates.
 - `list`: construction, right and left folds, append, map, reverse, length, safe indexing, head, and tail.
 - `int`: arithmetic, complete comparisons, successor/predecessor, negation, extrema, and string rendering.
+- `float`: binary64 arithmetic, IEEE-754 comparisons, negation, and string rendering.
 - `char`: UTF-8 text rendering and checked Unicode codepoint conversion.
 - `string`: scalar-aware observation, safe decomposition, character-list conversion, concatenation, and parsing.
 - `bytes`: immutable octet buffers, concatenation, length, UTF-8 encoding, and checked UTF-8 decoding.

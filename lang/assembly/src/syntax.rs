@@ -166,6 +166,7 @@ pub struct Undefined;
 pub enum Imm {
     Triv(Triv),
     Int(i64),
+    Float(FloatLiteral),
     Char(char),
 }
 

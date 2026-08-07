@@ -485,10 +485,10 @@ The easiest program we can write is a term that accepts the Builtin package and 
 `lib/playground/main.zydeco`
 ```zydeco
 param (
-  (Int, Char, String, OS, api) :
+  (/process) :
   @[import("../std/builtin.zy")] _
 ) in
-  ! (api/exit) 42
+  ! (process/exit) 42
 ```
 
 Run `cargo run --bin=zydeco --release -- run lib/playground/main.zydeco` to run the Zydeco program.

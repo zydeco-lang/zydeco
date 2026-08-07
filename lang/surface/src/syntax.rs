@@ -13,6 +13,7 @@ pub enum Internal {
     Ret,
     Unit,
     Int,
+    Float,
     Char,
     String,
     OS,

@@ -524,6 +524,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Literal {
         let mut s = String::new();
         match self {
             | Literal::Int(i) => s += &format!("{:?}", i),
+            | Literal::Float(value) => s += &format!("{:?}", value),
             // Fixme: escape string
             | Literal::String(str) => s += &format!("{:?}", str),
             | Literal::Char(c) => s += &format!("{:?}", c),

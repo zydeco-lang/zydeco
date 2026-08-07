@@ -59,10 +59,10 @@ Source dependencies are ordinary term imports written at their use sites:
 
 ```zydeco
 param (
-  (Int, Char, String, OS, api) :
+  (/process) :
   @[import("../std/builtin.zy")] _
 ) in
-  ! (api/exit) 42
+  ! (process/exit) 42
 ```
 
 The launcher supplies the declared Builtin package when this term is run.

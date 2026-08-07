@@ -42,6 +42,20 @@ end
             name: (lower_identifier)))))))
 
 ==================
+Float literals
+==================
+
+(1.25, -2.5e1, 1e3)
+
+---
+
+(source_file
+  body: (parenthesized_term
+    (float_literal)
+    (float_literal)
+    (float_literal)))
+
+==================
 Nested and unfinished comments
 ==================
 

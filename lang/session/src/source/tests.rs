@@ -1393,6 +1393,7 @@ fn canonical_builtin_signature_exports_intrinsics_as_static_manifest_fields() {
         ExpectedField::Ret,
         ExpectedField::Unit,
         ExpectedField::Abstract(BuiltinTypeRole::Int),
+        ExpectedField::Abstract(BuiltinTypeRole::Float),
         ExpectedField::Abstract(BuiltinTypeRole::Char),
         ExpectedField::Abstract(BuiltinTypeRole::String),
         ExpectedField::Abstract(BuiltinTypeRole::Bytes),
@@ -1466,7 +1467,7 @@ fn canonical_builtin_signature_exports_intrinsics_as_static_manifest_fields() {
         .map(|witness| checked.statics.builtin_roles.witness(*witness))
         .collect::<Vec<_>>();
     assert_eq!(abstract_roles, opened_roles);
-    assert_eq!(opened_roles.len(), 7);
+    assert_eq!(opened_roles.len(), 8);
     assert!(matches!(checked.statics.types_pre[&tail], Fillable::Done(Type::Prod(_))));
 }
 

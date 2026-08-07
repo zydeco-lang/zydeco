@@ -649,6 +649,13 @@ impl<'a> Emit<'a> for Atom {
                     em.asm.text.push(Instr::Comment(format!("push_imm_int {:?}", i)));
                     em.asm.text.extend([Instr::Push(Arg32::Signed(i as i32))]);
                 }
+                | sa::Imm::Float(value) => {
+                    em.asm.text.push(Instr::Comment(format!("push_imm_float {:?}", value)));
+                    em.asm.text.extend([
+                        Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(value.to_bits()))),
+                        Instr::Push(Arg32::Reg(Reg::Rax)),
+                    ]);
+                }
                 | sa::Imm::Char(c) => {
                     em.asm.text.push(Instr::Comment(format!("push_imm_char {:?}", c)));
                     em.asm.text.extend([Instr::Push(Arg32::Signed(c as i32))]);

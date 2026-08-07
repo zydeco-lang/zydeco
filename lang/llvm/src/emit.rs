@@ -432,6 +432,9 @@ impl<'a> Emit<'a> for Atom {
                 | sa::Imm::Int(i) => {
                     em.emit_push(format!("{}", i));
                 }
+                | sa::Imm::Float(value) => {
+                    em.emit_push(format!("{}", value.to_bits()));
+                }
                 | sa::Imm::Char(c) => {
                     em.emit_push(format!("{}", c as u64));
                 }

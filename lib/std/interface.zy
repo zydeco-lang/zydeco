@@ -1,7 +1,7 @@
 -- The public standard-library package type, kept separate from its implementation.
 begin
   param (
-    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /Char; /String; /Bytes; /Reader; /Writer; /OS) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /Float; /Char; /String; /Bytes; /Reader; /Writer; /OS) :
     @[import("builtin.zy")] _
   ) in
     let Prelude =
@@ -232,6 +232,20 @@ begin
       (max :: Thk (Int -> Int -> Ret Int)) *
       (to_string :: Thk (Int -> Ret String))
     in
+    let FloatModule (Bool : VType) (Float : VType) (String : VType) =
+      (add :: Thk (Float -> Float -> Ret Float)) *
+      (sub :: Thk (Float -> Float -> Ret Float)) *
+      (mul :: Thk (Float -> Float -> Ret Float)) *
+      (div :: Thk (Float -> Float -> Ret Float)) *
+      (eq :: Thk (Float -> Float -> Ret Bool)) *
+      (ne :: Thk (Float -> Float -> Ret Bool)) *
+      (lt :: Thk (Float -> Float -> Ret Bool)) *
+      (le :: Thk (Float -> Float -> Ret Bool)) *
+      (gt :: Thk (Float -> Float -> Ret Bool)) *
+      (ge :: Thk (Float -> Float -> Ret Bool)) *
+      (negate :: Thk (Float -> Ret Float)) *
+      (to_string :: Thk (Float -> Ret String))
+    in
     let CharModule
       (Option : (VType) -> (VType))
       (Char : VType)
@@ -455,6 +469,7 @@ begin
         (VType) -> (VType)
       ) .
       exists (Int = IntType as Int : VType) .
+      exists (Float = FloatType as Float : VType) .
       exists (Char = CharType as Char : VType) .
       exists (String = StringType as String : VType) .
       exists (Bytes = BytesType as Bytes : VType) .
@@ -470,6 +485,7 @@ begin
         (result :: ResultModule BoolType ResultType) *
         (list :: ListModule BoolType OptionType ListType IntType) *
         (int :: IntModule BoolType IntType StringType) *
+        (float :: FloatModule BoolType FloatType StringType) *
         (char :: CharModule OptionType CharType IntType StringType) *
         (string :: StringModule
           BoolType OptionType ListType IntType CharType StringType) *

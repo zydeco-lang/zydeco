@@ -485,10 +485,13 @@ module.exports = grammar({
     ),
 
     _literal: $ => choice(
+      $.float_literal,
       $.integer_literal,
       $.string_literal,
       $.character_literal,
     ),
+
+    float_literal: _ => token(/[+-]?([0-9]+\.[0-9]+([eE][+-]?[0-9]+)?|[0-9]+[eE][+-]?[0-9]+)/),
 
     integer_literal: _ => token(/[+-]?[0-9]+/),
 
