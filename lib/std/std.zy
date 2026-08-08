@@ -31,8 +31,17 @@ begin
         Path = Path,
         io_types
       ) = make_io_types builtin in
-      let (= Prelude, = Std, ()) =
-        make_interface builtin in
+      let (
+        = Prelude,
+        = Additive,
+        = Multiplicative,
+        = PartialEquality,
+        = PartialOrder,
+        = Numeric,
+        = NumericInstance,
+        = Std,
+        ()
+      ) = make_interface builtin in
       let ! increment (value : Int) : Ret Int =
         ! (int/add) value 1
       in
@@ -725,6 +734,12 @@ begin
         IoErrorKind = IoErrorKind,
         IoError = IoError,
         OS = OS,
+        Additive = Additive,
+        Multiplicative = Multiplicative,
+        PartialEquality = PartialEquality,
+        PartialOrder = PartialOrder,
+        Numeric = Numeric,
+        NumericInstance = NumericInstance,
         prelude = prelude,
         bool = (
           true = bool/true,
@@ -776,6 +791,63 @@ begin
           head = list_head,
           tail = list_tail,
           get = list_get,
+        ),
+        numeric = (
+          int_instance = (
+            Scalar = Int,
+            dictionary = (
+              additive = (
+                zero = 0,
+                add = int/add,
+                sub = int/sub,
+                negate = negate,
+              ),
+              multiplicative = (
+                one = 1,
+                mul = int/mul,
+              ),
+              order = (
+                equality = (
+                  eq = int_eq,
+                  ne = int_ne,
+                ),
+                lt = int_lt,
+                le = int_le,
+                gt = int_gt,
+                ge = int_ge,
+              ),
+              (),
+            ),
+            (),
+          ),
+          float_instance = (
+            Scalar = Float,
+            dictionary = (
+              additive = (
+                zero = 0.0,
+                add = float/add,
+                sub = float/sub,
+                negate = float_negate,
+              ),
+              multiplicative = (
+                one = 1.0,
+                mul = float/mul,
+              ),
+              order = (
+                equality = (
+                  eq = float_eq,
+                  ne = float_ne,
+                ),
+                lt = float_lt,
+                le = float_le,
+                gt = float_gt,
+                ge = float_ge,
+              ),
+              (),
+            ),
+            (),
+          ),
+          (),
         ),
         int = (
           add = int/add,

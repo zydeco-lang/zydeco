@@ -213,6 +213,38 @@ begin
           List A -> Int -> Ret (Option A)
       ))
     in
+    let Additive (A : VType) =
+      (zero :: A) *
+      (add :: Thk (A -> A -> Ret A)) *
+      (sub :: Thk (A -> A -> Ret A)) *
+      (negate :: Thk (A -> Ret A))
+    in
+    let Multiplicative (A : VType) =
+      (one :: A) *
+      (mul :: Thk (A -> A -> Ret A))
+    in
+    let PartialEquality (Bool : VType) (A : VType) =
+      (eq :: Thk (A -> A -> Ret Bool)) *
+      (ne :: Thk (A -> A -> Ret Bool))
+    in
+    let PartialOrder (Bool : VType) (A : VType) =
+      (equality :: PartialEquality Bool A) *
+      (lt :: Thk (A -> A -> Ret Bool)) *
+      (le :: Thk (A -> A -> Ret Bool)) *
+      (gt :: Thk (A -> A -> Ret Bool)) *
+      (ge :: Thk (A -> A -> Ret Bool))
+    in
+    let Numeric (Bool : VType) (A : VType) =
+      (additive :: Additive A) *
+      (multiplicative :: Multiplicative A) *
+      (order :: PartialOrder Bool A) *
+      Unit
+    in
+    let NumericInstance (Bool : VType) (Representation : VType) =
+      exists (Scalar = ScalarType as Representation : VType) .
+        (dictionary :: Numeric Bool ScalarType) *
+        Unit
+    in
     let IntModule (Bool : VType) (Int : VType) (String : VType) =
       (add :: Thk (Int -> Int -> Ret Int)) *
       (sub :: Thk (Int -> Int -> Ret Int)) *
@@ -479,11 +511,39 @@ begin
       exists (IoErrorKind = IoErrorKindType : VType) .
       exists (IoError = IoErrorType : VType) .
       exists (OS = OSType as OS : CType) .
+      exists (
+        Additive = AdditiveType as Additive :
+        (VType) -> (VType)
+      ) .
+      exists (
+        Multiplicative = MultiplicativeType as Multiplicative :
+        (VType) -> (VType)
+      ) .
+      exists (
+        PartialEquality = PartialEqualityType as PartialEquality :
+        (VType) -> (VType) -> (VType)
+      ) .
+      exists (
+        PartialOrder = PartialOrderType as PartialOrder :
+        (VType) -> (VType) -> (VType)
+      ) .
+      exists (
+        Numeric = NumericType as Numeric :
+        (VType) -> (VType) -> (VType)
+      ) .
+      exists (
+        NumericInstance = NumericInstanceType as NumericInstance :
+        (VType) -> (VType) -> (VType)
+      ) .
         (prelude :: Prelude) *
         (bool :: BoolModule BoolType) *
         (option :: OptionModule BoolType OptionType) *
         (result :: ResultModule BoolType ResultType) *
         (list :: ListModule BoolType OptionType ListType IntType) *
+        (numeric ::
+          (int_instance :: NumericInstanceType BoolType IntType) *
+          (float_instance :: NumericInstanceType BoolType FloatType) *
+          Unit) *
         (int :: IntModule BoolType IntType StringType) *
         (float :: FloatModule BoolType FloatType StringType) *
         (char :: CharModule OptionType CharType IntType StringType) *
@@ -503,8 +563,42 @@ begin
     in
     let Interface =
       exists (Prelude = PreludeType as Prelude : VType) .
+      exists (
+        Additive = AdditiveType as Additive :
+        (VType) -> (VType)
+      ) .
+      exists (
+        Multiplicative = MultiplicativeType as Multiplicative :
+        (VType) -> (VType)
+      ) .
+      exists (
+        PartialEquality = PartialEqualityType as PartialEquality :
+        (VType) -> (VType) -> (VType)
+      ) .
+      exists (
+        PartialOrder = PartialOrderType as PartialOrder :
+        (VType) -> (VType) -> (VType)
+      ) .
+      exists (
+        Numeric = NumericType as Numeric :
+        (VType) -> (VType) -> (VType)
+      ) .
+      exists (
+        NumericInstance = NumericInstanceType as NumericInstance :
+        (VType) -> (VType) -> (VType)
+      ) .
       exists (Std = PackageType as Std : VType) .
         Unit
     in
-    ((Prelude = Prelude, Std = Std, ()) : Interface)
+    ((
+      Prelude = Prelude,
+      Additive = Additive,
+      Multiplicative = Multiplicative,
+      PartialEquality = PartialEquality,
+      PartialOrder = PartialOrder,
+      Numeric = Numeric,
+      NumericInstance = NumericInstance,
+      Std = Std,
+      ()
+    ) : Interface)
 end

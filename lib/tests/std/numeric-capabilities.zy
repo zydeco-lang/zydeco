@@ -1,0 +1,57 @@
+begin
+  let make_std = @[import("../../std/std.zy")] _ that
+  param (
+    (/VType; /Ret; /Int; /Float; /OS; builtin) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+
+  let (/Bool; /Numeric; /numeric; /bool; /process) = make_std builtin in
+  let ! multiply_add_equal
+    (A : VType)
+    (dictionary : Numeric Bool A)
+    (left : A)
+    (right : A)
+    (offset : A)
+    (expected : A)
+    : Ret Bool =
+    do product <- ! (dictionary/multiplicative/mul) left right;
+    do total <- ! (dictionary/additive/add) product offset;
+    ! (dictionary/order/equality/eq) total expected
+  in
+  let ! strictly_less
+    (A : VType)
+    (dictionary : Numeric Bool A)
+    (left : A)
+    (right : A)
+    : Ret Bool =
+    ! (dictionary/order/lt) left right
+  in
+
+  let (
+    Scalar = IntScalar,
+    dictionary = int_dictionary,
+    ()
+  ) = numeric/int_instance in
+  do int_arithmetic <- ! multiply_add_equal
+    IntScalar int_dictionary 6 7 0 42;
+  do int_order <- ! strictly_less IntScalar int_dictionary 41 42;
+  do int_ok <- ! (bool/and) int_arithmetic int_order;
+
+  let (
+    Scalar = FloatScalar,
+    dictionary = float_dictionary,
+    ()
+  ) = numeric/float_instance in
+  do float_arithmetic <- ! multiply_add_equal
+    FloatScalar float_dictionary 1.5 2.0 0.5 3.5;
+  do float_order <- ! strictly_less
+    FloatScalar float_dictionary 3.5 4.0;
+  do float_ok <- ! (bool/and) float_arithmetic float_order;
+
+  do success <- ! (bool/and) int_ok float_ok;
+  ! (bool/if)
+    OS
+    success
+    { ! (process/exit) 0 }
+    { ! (process/exit) 1 }
+end

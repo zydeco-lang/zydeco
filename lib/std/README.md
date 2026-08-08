@@ -44,12 +44,18 @@ successful branch with `option/some` and a failed branch with `option/none`. Nei
 and malformed input does not panic the host runtime.
 
 Integer division and remainder still inherit the machine integer domain and are not yet wrapped in checked
-operations. A future numeric module should expose checked arithmetic before adding more integer representations.
+operations. The generic numeric capability layer deliberately excludes them; a future checked-arithmetic
+capability should make their failure behavior explicit before more integer representations are added.
 
 `Float` is an IEEE-754 binary64 value. Decimal literals such as `1.5` and scientific literals such as `2e3` have
 type `Float`. The `float` module provides arithmetic, comparisons, negation, and shortest round-trippable decimal
 rendering. Division by zero, infinities, signed zero, and NaN follow IEEE-754 behavior. In particular, every ordered
 comparison with NaN is false, while `float/ne` reports true.
+
+The `numeric` module contains explicit dictionaries for the common `Int` and `Float` operation families. Each
+instance discloses its `Scalar` carrier through a manifest type and nests additive, multiplicative, equality, and
+ordering capabilities. Generic functions accept these dictionaries as ordinary arguments; the standard library
+does not perform implicit instance search.
 
 ## Public modules
 
@@ -57,6 +63,7 @@ comparison with NaN is false, while `float/ne` reports true.
 - `option`: construction, elimination, mapping, chaining, defaults, and zipping.
 - `result`: successful and failed results, elimination, mapping, chaining, defaults, and predicates.
 - `list`: construction, right and left folds, append, map, reverse, length, safe indexing, head, and tail.
+- `numeric`: manifest `Int` and `Float` instances for explicitly passed, nested capability dictionaries.
 - `int`: arithmetic, complete comparisons, successor/predecessor, negation, extrema, and string rendering.
 - `float`: binary64 arithmetic, IEEE-754 comparisons, negation, and string rendering.
 - `char`: UTF-8 text rendering and checked Unicode codepoint conversion.
