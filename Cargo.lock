@@ -2235,6 +2235,7 @@ dependencies = [
  "ariadne",
  "clap",
  "clap_complete",
+ "tempfile",
  "thiserror",
  "zydeco-amd64",
  "zydeco-assembly",

@@ -22,6 +22,9 @@ _zydeco() {
             zydeco,check)
                 cmd="zydeco__check"
                 ;;
+            zydeco,fmt)
+                cmd="zydeco__fmt"
+                ;;
             zydeco,help)
                 cmd="zydeco__help"
                 ;;
@@ -33,6 +36,9 @@ _zydeco() {
                 ;;
             zydeco__help,check)
                 cmd="zydeco__help__check"
+                ;;
+            zydeco__help,fmt)
+                cmd="zydeco__help__fmt"
                 ;;
             zydeco__help,help)
                 cmd="zydeco__help__help"
@@ -47,7 +53,7 @@ _zydeco() {
 
     case "${cmd}" in
         zydeco)
-            opts="-h -V --help --version run check build help"
+            opts="-h -V --help --version fmt run check build help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -120,8 +126,22 @@ _zydeco() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        zydeco__fmt)
+            opts="-h --help <FILE>..."
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         zydeco__help)
-            opts="run check build help"
+            opts="fmt run check build help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -149,6 +169,20 @@ _zydeco() {
             return 0
             ;;
         zydeco__help__check)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        zydeco__help__fmt)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )

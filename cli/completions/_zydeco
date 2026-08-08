@@ -28,7 +28,14 @@ _zydeco() {
         (( CURRENT += 1 ))
         curcontext="${curcontext%:*:*}:zydeco-command-$line[1]:"
         case $line[1] in
-            (run)
+            (fmt)
+_arguments "${_arguments_options[@]}" : \
+'-h[Print help]' \
+'--help[Print help]' \
+'*::files -- Paths to the files to format:_files' \
+&& ret=0
+;;
+(run)
 _arguments "${_arguments_options[@]}" : \
 '--dry[Dry run (don'\''t execute)]' \
 '-h[Print help]' \
@@ -74,7 +81,11 @@ _arguments "${_arguments_options[@]}" : \
         (( CURRENT += 1 ))
         curcontext="${curcontext%:*:*}:zydeco-help-command-$line[1]:"
         case $line[1] in
-            (run)
+            (fmt)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(run)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
@@ -102,6 +113,7 @@ esac
 (( $+functions[_zydeco_commands] )) ||
 _zydeco_commands() {
     local commands; commands=(
+'fmt:Format Zydeco source files in place' \
 'run:Run a zydeco program' \
 'check:Check a zydeco program' \
 'build:' \
@@ -119,9 +131,15 @@ _zydeco__check_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco check commands' commands "$@"
 }
+(( $+functions[_zydeco__fmt_commands] )) ||
+_zydeco__fmt_commands() {
+    local commands; commands=()
+    _describe -t commands 'zydeco fmt commands' commands "$@"
+}
 (( $+functions[_zydeco__help_commands] )) ||
 _zydeco__help_commands() {
     local commands; commands=(
+'fmt:Format Zydeco source files in place' \
 'run:Run a zydeco program' \
 'check:Check a zydeco program' \
 'build:' \
@@ -138,6 +156,11 @@ _zydeco__help__build_commands() {
 _zydeco__help__check_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco help check commands' commands "$@"
+}
+(( $+functions[_zydeco__help__fmt_commands] )) ||
+_zydeco__help__fmt_commands() {
+    local commands; commands=()
+    _describe -t commands 'zydeco help fmt commands' commands "$@"
 }
 (( $+functions[_zydeco__help__help_commands] )) ||
 _zydeco__help__help_commands() {

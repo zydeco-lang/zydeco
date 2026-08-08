@@ -56,6 +56,12 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Format Zydeco source files in place
+    Fmt {
+        /// Paths to the files to format
+        #[arg(value_name = "FILE", required = true)]
+        files: Vec<PathBuf>,
+    },
     /// Run a zydeco program
     Run {
         /// Path to the file to run

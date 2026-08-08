@@ -22,10 +22,15 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand --help 'Print help'
             cand -V 'Print version'
             cand --version 'Print version'
+            cand fmt 'Format Zydeco source files in place'
             cand run 'Run a zydeco program'
             cand check 'Check a zydeco program'
             cand build 'build'
             cand help 'Print this message or the help of the given subcommand(s)'
+        }
+        &'zydeco;fmt'= {
+            cand -h 'Print help'
+            cand --help 'Print help'
         }
         &'zydeco;run'= {
             cand --dry 'Dry run (don''t execute)'
@@ -52,10 +57,13 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand --help 'Print help'
         }
         &'zydeco;help'= {
+            cand fmt 'Format Zydeco source files in place'
             cand run 'Run a zydeco program'
             cand check 'Check a zydeco program'
             cand build 'build'
             cand help 'Print this message or the help of the given subcommand(s)'
+        }
+        &'zydeco;help;fmt'= {
         }
         &'zydeco;help;run'= {
         }

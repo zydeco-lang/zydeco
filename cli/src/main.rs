@@ -4,7 +4,8 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 use zydeco_cli::{
     BackendProgram, BuildOptions, BuildTarget, Cli, CommandCompiler, Commands, CompileError,
-    DiagnosticRenderer, NativeError, TargetArchitecture, TargetOs,
+    DiagnosticRenderer, NativeError, SourceFormatError, SourceFormatter, TargetArchitecture,
+    TargetOs,
 };
 use zydeco_dynamics::ProgKont;
 use zydeco_stackir::CpsMode;
@@ -28,6 +29,7 @@ struct Application {
 impl Application {
     fn run(&self, command: Commands) -> Result<i32, ApplicationError> {
         match command {
+            | Commands::Fmt { files } => self.format_sources(&files),
             | Commands::Run { file, dry, args } => self.run_source(&file, dry, &args),
             | Commands::Check { file } => self.check_source(&file),
             // | Commands::Repl { .. } => Repl::launch().map_err(ApplicationError::Repl),
@@ -57,6 +59,12 @@ impl Application {
                 if no_cps { CpsMode::Disabled } else { CpsMode::Enabled },
             ),
         }
+    }
+
+    fn format_sources(&self, paths: &[PathBuf]) -> Result<i32, ApplicationError> {
+        let formatter = SourceFormatter::default();
+        paths.iter().try_for_each(|path| formatter.format_path(path).map(|_| ()))?;
+        Ok(0)
     }
 
     fn analyze(
@@ -136,6 +144,8 @@ impl Application {
 
 #[derive(Debug, Error)]
 enum ApplicationError {
+    #[error(transparent)]
+    Format(#[from] SourceFormatError),
     #[error(transparent)]
     Compile(#[from] CompileError),
     #[error(transparent)]

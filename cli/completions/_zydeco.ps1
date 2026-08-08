@@ -25,10 +25,16 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')
             [CompletionResult]::new('--version', '--version', [CompletionResultType]::ParameterName, 'Print version')
+            [CompletionResult]::new('fmt', 'fmt', [CompletionResultType]::ParameterValue, 'Format Zydeco source files in place')
             [CompletionResult]::new('run', 'run', [CompletionResultType]::ParameterValue, 'Run a zydeco program')
             [CompletionResult]::new('check', 'check', [CompletionResultType]::ParameterValue, 'Check a zydeco program')
             [CompletionResult]::new('build', 'build', [CompletionResultType]::ParameterValue, 'build')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'zydeco;fmt' {
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
         'zydeco;run' {
@@ -59,10 +65,14 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             break
         }
         'zydeco;help' {
+            [CompletionResult]::new('fmt', 'fmt', [CompletionResultType]::ParameterValue, 'Format Zydeco source files in place')
             [CompletionResult]::new('run', 'run', [CompletionResultType]::ParameterValue, 'Run a zydeco program')
             [CompletionResult]::new('check', 'check', [CompletionResultType]::ParameterValue, 'Check a zydeco program')
             [CompletionResult]::new('build', 'build', [CompletionResultType]::ParameterValue, 'build')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'zydeco;help;fmt' {
             break
         }
         'zydeco;help;run' {

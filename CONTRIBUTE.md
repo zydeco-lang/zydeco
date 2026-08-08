@@ -14,6 +14,14 @@ cargo build --bin=zydeco --release
 
 The resulting binary is located at `target/release/zydeco`.
 
+## Format Source Files
+
+Format one or more Zydeco source files in place:
+
+```sh
+zydeco fmt path/to/main.zy path/to/library.zy
+```
+
 ## Run Programs and Examples
 
 Run a Zydeco source file directly:

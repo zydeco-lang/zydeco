@@ -25,6 +25,9 @@ zydeco-utils = { workspace = true }
 ariadne = { workspace = true }
 thiserror = { workspace = true }
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [build-dependencies]
 clap = { workspace = true }
 clap_complete = { workspace = true }
