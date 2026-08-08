@@ -126,6 +126,7 @@ fn stdio_server_synchronizes_documents_and_answers_navigation_requests() {
     assert_eq!(capabilities["referencesProvider"], true);
     assert_eq!(capabilities["hoverProvider"], true);
     assert_eq!(capabilities["documentSymbolProvider"], true);
+    assert_eq!(capabilities["documentFormattingProvider"], true);
     assert_eq!(capabilities["semanticTokensProvider"]["full"], true);
     let semantic_legend = &capabilities["semanticTokensProvider"]["legend"];
     assert!(semantic_legend["tokenTypes"].as_array().unwrap().iter().any(|kind| kind == "keyword"));
@@ -255,6 +256,57 @@ fn stdio_server_synchronizes_documents_and_answers_navigation_requests() {
         .position(|kind| kind == "keyword")
         .unwrap();
     assert_eq!(data[0..5], [json!(0), json!(0), json!(5), json!(keyword), json!(0)]);
+
+    server.finish();
+}
+
+#[test]
+fn stdio_server_formats_the_open_document() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("main.zy");
+    let source = "(field = field, ((x)))";
+    std::fs::write(&path, source).unwrap();
+    let uri = Url::from_file_path(&path).unwrap().to_string();
+    let mut server = LspProcess::start();
+
+    let initialize = server.request(
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": Url::from_file_path(directory.path()).unwrap(),
+            "capabilities": {},
+        }),
+    );
+    assert_eq!(initialize["result"]["capabilities"]["documentFormattingProvider"], true);
+    server.notify("initialized", json!({}));
+    server.notify(
+        "textDocument/didOpen",
+        json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "zydeco",
+                "version": 1,
+                "text": source,
+            },
+        }),
+    );
+    server.notification("textDocument/publishDiagnostics");
+
+    let formatted = server.request(
+        "textDocument/formatting",
+        json!({
+            "textDocument": { "uri": uri },
+            "options": { "tabSize": 2, "insertSpaces": true },
+        }),
+    );
+    let edits = formatted["result"].as_array().unwrap();
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0]["range"]["start"], json!({ "line": 0, "character": 0 }));
+    assert_eq!(
+        edits[0]["range"]["end"],
+        json!({ "line": 0, "character": source.encode_utf16().count() })
+    );
+    assert_eq!(edits[0]["newText"], "(= field, x)\n");
 
     server.finish();
 }

@@ -1,10 +1,12 @@
 mod analysis;
+mod format;
 mod hover;
 mod progress;
 mod semantic;
 mod type_links;
 
 use analysis::ProjectState;
+use format::{DocumentFormatter, FormattingOutcome};
 use progress::{AnalysisProgressReporter, AnalysisProgressSession};
 use semantic::SemanticHighlighter;
 use std::{
@@ -22,13 +24,14 @@ use tower_lsp::{
     jsonrpc::Result,
     lsp_types::{
         Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
-        DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentSymbolParams,
-        DocumentSymbolResponse, GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverParams,
-        HoverProviderCapability, InitializeParams, InitializeResult, InitializedParams, Location,
-        MessageType, OneOf, Position, PositionEncodingKind, Range, ReferenceParams, SemanticTokens,
-        SemanticTokensFullOptions, SemanticTokensOptions, SemanticTokensParams,
-        SemanticTokensResult, ServerCapabilities, ServerInfo, TextDocumentSyncCapability,
-        TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Url,
+        DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentFormattingParams,
+        DocumentSymbolParams, DocumentSymbolResponse, GotoDefinitionParams, GotoDefinitionResponse,
+        Hover, HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
+        InitializedParams, Location, MessageType, OneOf, Position, PositionEncodingKind, Range,
+        ReferenceParams, SemanticTokens, SemanticTokensFullOptions, SemanticTokensOptions,
+        SemanticTokensParams, SemanticTokensResult, ServerCapabilities, ServerInfo,
+        TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
+        TextDocumentSyncSaveOptions, TextEdit, Url,
     },
 };
 use zydeco_session::CompilerSession;
@@ -163,6 +166,15 @@ impl Cajun {
         Some(path)
     }
 
+    async fn document_source(&self, path: &Path) -> Option<String> {
+        self.open_documents
+            .read()
+            .await
+            .get(path)
+            .cloned()
+            .or_else(|| std::fs::read_to_string(path).ok())
+    }
+
     fn path(uri: &Url) -> std::result::Result<PathBuf, String> {
         uri.to_file_path()
             .map(|path| Self::normalize_path(&path))
@@ -203,6 +215,7 @@ impl LanguageServer for Cajun {
                 references_provider: Some(OneOf::Left(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 document_symbol_provider: Some(OneOf::Left(true)),
+                document_formatting_provider: Some(OneOf::Left(true)),
                 semantic_tokens_provider: Some(
                     SemanticTokensOptions {
                         legend: SemanticHighlighter::legend(),
@@ -339,6 +352,34 @@ impl LanguageServer for Cajun {
         Ok(Some(DocumentSymbolResponse::Nested(symbols)))
     }
 
+    async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
+        let uri = params.text_document.uri;
+        if !ZydecoDocument::accepts(&uri) {
+            return Ok(None);
+        }
+        let path = match Self::path(&uri) {
+            | Ok(path) => path,
+            | Err(_) => return Ok(None),
+        };
+        let Some(source) = self.document_source(&path).await else {
+            return Ok(None);
+        };
+        let formatter = DocumentFormatter::from_lsp(&params.options);
+        match formatter.format(&source) {
+            | FormattingOutcome::Edit(edit) => Ok(Some(vec![edit])),
+            | FormattingOutcome::Unchanged => Ok(Some(Vec::new())),
+            | FormattingOutcome::Skipped(reason) => {
+                self.client
+                    .log_message(
+                        MessageType::WARNING,
+                        format!("skipped formatting {uri}: {}", reason.message()),
+                    )
+                    .await;
+                Ok(None)
+            }
+        }
+    }
+
     async fn semantic_tokens_full(
         &self, params: SemanticTokensParams,
     ) -> Result<Option<SemanticTokensResult>> {
@@ -359,13 +400,7 @@ impl LanguageServer for Cajun {
         let data = match refined {
             | Some(tokens) => tokens,
             | None => {
-                let source = self
-                    .open_documents
-                    .read()
-                    .await
-                    .get(&path)
-                    .cloned()
-                    .or_else(|| std::fs::read_to_string(&path).ok());
+                let source = self.document_source(&path).await;
                 source.map(|source| SemanticHighlighter::lexical(&source)).unwrap_or_default()
             }
         };
