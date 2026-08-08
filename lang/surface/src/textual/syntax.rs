@@ -84,9 +84,25 @@ pub struct Forall(pub CoPatId, pub TermId);
 pub struct Sigma(pub CoPatId, pub TermId);
 /// One abstract or manifest binder in an existential telescope.
 #[derive(Clone, Debug)]
-pub enum ExistentialParameter {
+pub struct ExistentialParameter {
+    /// Metadata attached to this parameter's pattern.
+    pub annotations: Vec<Sp<Meta>>,
+    pub form: ExistentialParameterForm,
+}
+
+#[derive(Clone, Debug)]
+pub enum ExistentialParameterForm {
     Abstract(PatId),
     Manifest(ManifestParameter),
+}
+
+impl ExistentialParameter {
+    pub fn binder(&self) -> PatId {
+        match &self.form {
+            | ExistentialParameterForm::Abstract(binder) => *binder,
+            | ExistentialParameterForm::Manifest(parameter) => parameter.binder,
+        }
+    }
 }
 
 /// `(X as A : K)` or `(X as A)`
@@ -97,7 +113,7 @@ pub struct ManifestParameter {
     pub classifier: Option<TermId>,
 }
 
-/// `exists (x : A) (X as B : K) . C`
+/// `exists @[meta] (x : A) (X as B : K) . C`
 #[derive(Clone, Debug)]
 pub struct Exists {
     pub parameters: Vec<ExistentialParameter>,

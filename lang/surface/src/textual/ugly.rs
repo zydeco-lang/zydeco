@@ -372,15 +372,24 @@ impl<'a> Ugly<'a, Formatter<'a>> for Exists {
 
 impl<'a> Ugly<'a, Formatter<'a>> for ExistentialParameter {
     fn ugly(&self, f: &'a Formatter) -> String {
-        match self {
-            | ExistentialParameter::Abstract(binder)
+        let annotations = self
+            .annotations
+            .iter()
+            .map(|annotation| format!("@[{}]", annotation.inner.ugly(f)))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let parameter = match &self.form {
+            | ExistentialParameterForm::Abstract(binder)
                 if matches!(f.arena.pats[binder], Pattern::Ann(_) | Pattern::Paren(_)) =>
             {
                 binder.ugly(f)
             }
-            | ExistentialParameter::Abstract(binder) => format!("({})", binder.ugly(f)),
-            | ExistentialParameter::Manifest(parameter) => parameter.ugly(f),
-        }
+            | ExistentialParameterForm::Abstract(binder) => {
+                format!("({})", binder.ugly(f))
+            }
+            | ExistentialParameterForm::Manifest(parameter) => parameter.ugly(f),
+        };
+        if annotations.is_empty() { parameter } else { format!("{annotations} {parameter}") }
     }
 }
 

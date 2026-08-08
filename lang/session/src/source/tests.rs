@@ -331,15 +331,17 @@ fn builtin_add_exit_source() -> &'static str {
     r#"
 param (
   (/Int; /OS; /int; /process) :
-  @[builtin(int)] exists (Int : @[intrinsic(vtype)] _) .
-    (@[builtin(os)] exists (OS : @[intrinsic(ctype)] _) .
-      ((int ::
-        (@[builtin(add)] (add ::
-          (@[intrinsic(thk)] _) (Int -> Int -> (@[intrinsic(ret)] _) Int))) *
-        (@[builtin(sub)] (sub ::
-          (@[intrinsic(thk)] _) (Int -> Int -> (@[intrinsic(ret)] _) Int)))) *
-       (process ::
-        @[builtin(exit)] (exit :: (@[intrinsic(thk)] _) (Int -> OS)))))
+  exists
+    @[builtin(int)] (Int : @[intrinsic(vtype)] _)
+    @[builtin(os)] (OS : @[intrinsic(ctype)] _)
+  .
+    (int ::
+      (@[builtin(add)] (add ::
+        (@[intrinsic(thk)] _) (Int -> Int -> (@[intrinsic(ret)] _) Int))) *
+      (@[builtin(sub)] (sub ::
+        (@[intrinsic(thk)] _) (Int -> Int -> (@[intrinsic(ret)] _) Int)))) *
+    (process ::
+      @[builtin(exit)] (exit :: (@[intrinsic(thk)] _) (Int -> OS)))
 ) in
   do sum <- ! (int/add) 1 2;
   ! (process/exit) sum
@@ -644,13 +646,10 @@ fn source_graph_rejects_an_unknown_builtin_role() {
     else {
         panic!("expected an invalid Builtin directive")
     };
-    assert!(matches!(
-        error,
-        zydeco_surface::textual::BuiltinDirectiveError::Invalid {
-            source: zydeco_surface::metadata::BuiltinMetaError::UnknownRole(_),
-            ..
-        }
-    ));
+    let zydeco_surface::textual::BuiltinDirectiveError::Invalid { source, .. } = error else {
+        panic!("expected an invalid Builtin role")
+    };
+    assert!(matches!(source.as_ref(), zydeco_surface::metadata::BuiltinMetaError::UnknownRole(_)));
 }
 
 #[test]
@@ -694,9 +693,9 @@ fn program_assembly_consumes_import_directives_and_preserves_a_source_boundary()
 }
 
 #[test]
-fn builtin_roles_remain_specializable_through_name_resolution() {
+fn builtin_operation_roles_remain_specializable_through_name_resolution() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", "@[builtin(int)] _");
+    let root = fixture.write("main.zy", "@[builtin(add)] _");
     let assembly = SourceGraph::load(root).unwrap().assemble().unwrap();
 
     let resolved = resolve_assembly(assembly).unwrap();
@@ -708,7 +707,7 @@ fn builtin_roles_remain_specializable_through_name_resolution() {
 
     assert_eq!(
         meta.specialize::<zydeco_surface::metadata::BuiltinMeta>().unwrap().map(|meta| meta.role),
-        Some(zydeco_syntax::BuiltinRole::Type(zydeco_syntax::BuiltinTypeRole::Int))
+        Some(zydeco_syntax::BuiltinRole::Value(zydeco_syntax::BuiltinValueRole::Add))
     );
     assert!(matches!(resolved.arena.terms[payload], zydeco_surface::scoped::syntax::Term::Hole(_)));
 }
@@ -1040,7 +1039,7 @@ fn a_builtin_type_role_classifies_literals_inside_its_package_scope() {
     let root = fixture.write(
         "main.zy",
         concat!(
-            "param ((Int, value) : @[builtin(int)] exists ",
+            "param ((Int, value) : exists @[builtin(int)] ",
             "(Int : @[intrinsic(vtype)] _) . Int) in ret 1"
         ),
     );
@@ -1074,9 +1073,9 @@ fn two_visible_builtin_type_roles_are_ambiguous_at_a_literal() {
     let root = fixture.write(
         "main.zy",
         concat!(
-            "param ((IntA, a) : @[builtin(int)] exists ",
+            "param ((IntA, a) : exists @[builtin(int)] ",
             "(IntA : @[intrinsic(vtype)] _) . IntA) in ",
-            "param ((IntB, b) : @[builtin(int)] exists ",
+            "param ((IntB, b) : exists @[builtin(int)] ",
             "(IntB : @[intrinsic(vtype)] _) . IntB) in ",
             "ret 1",
         ),
@@ -1095,8 +1094,10 @@ fn one_package_signature_rejects_duplicate_builtin_type_roles() {
         r#"
 param (
   (IntA, IntB, value) :
-  @[builtin(int)] exists (IntA : @[intrinsic(vtype)] _) .
-    (@[builtin(int)] exists (IntB : @[intrinsic(vtype)] _) . IntA)
+  exists
+    @[builtin(int)] (IntA : @[intrinsic(vtype)] _)
+    @[builtin(int)] (IntB : @[intrinsic(vtype)] _)
+  . IntA
 ) in
   ret value
 "#,
@@ -1115,7 +1116,9 @@ fn one_package_signature_rejects_duplicate_builtin_operation_roles() {
         r#"
 param (
   (Int, = first, = second) :
-  @[builtin(int)] exists (Int : @[intrinsic(vtype)] _) .
+  exists
+    @[builtin(int)] (Int : @[intrinsic(vtype)] _)
+  .
     ((@[builtin(add)] (first :: @[intrinsic(unit)] _)) *
      (@[builtin(add)] (second :: @[intrinsic(unit)] _)))
 ) in
@@ -1132,14 +1135,14 @@ param (
 fn builtin_host_type_roles_require_abstract_entries_of_the_right_kind() {
     let cases = [
         concat!(
-            "@[builtin(int)] exists (Int as (@[intrinsic(unit)] _) : ",
+            "exists @[builtin(int)] (Int as (@[intrinsic(unit)] _) : ",
             "@[intrinsic(vtype)] _) . (@[intrinsic(unit)] _)"
         ),
         concat!(
-            "@[builtin(int)] exists (Int : @[intrinsic(ctype)] _) . ",
+            "exists @[builtin(int)] (Int : @[intrinsic(ctype)] _) . ",
             "(@[intrinsic(unit)] _)"
         ),
-        concat!("@[builtin(os)] exists (OS : @[intrinsic(vtype)] _) . ", "(@[intrinsic(unit)] _)"),
+        concat!("exists @[builtin(os)] (OS : @[intrinsic(vtype)] _) . ", "(@[intrinsic(unit)] _)"),
     ];
 
     cases.into_iter().for_each(|source| {
@@ -1223,13 +1226,15 @@ fn continuation_io_uses_its_foundational_builtin_classifier() {
         r#"
 param (
   (/Int; /OS; /stdio; /process) :
-  @[builtin(int)] exists (Int : @[intrinsic(vtype)] _) .
-    (@[builtin(os)] exists (OS : @[intrinsic(ctype)] _) .
-      ((stdio :: @[builtin(write_int)]
-          (write_int :: (@[intrinsic(thk)] _)
-            (Int -> (@[intrinsic(thk)] _) OS -> OS))) *
-       (process :: @[builtin(exit)]
-          (exit :: (@[intrinsic(thk)] _) (Int -> OS)))))
+  exists
+    @[builtin(int)] (Int : @[intrinsic(vtype)] _)
+    @[builtin(os)] (OS : @[intrinsic(ctype)] _)
+  .
+    (stdio :: @[builtin(write_int)]
+      (write_int :: (@[intrinsic(thk)] _)
+        (Int -> (@[intrinsic(thk)] _) OS -> OS))) *
+    (process :: @[builtin(exit)]
+      (exit :: (@[intrinsic(thk)] _) (Int -> OS)))
 ) in
   ! (stdio/write_int) 7 { ! (process/exit) 0 }
 "#,
@@ -1254,10 +1259,12 @@ begin
   let Ret = @[intrinsic(ret)] _ that
   param (
     (/Int; /OS; /int; /process) :
-    @[builtin(int)] exists (Int : @[intrinsic(vtype)] _) .
-      (@[builtin(os)] exists (OS : @[intrinsic(ctype)] _) .
-        ((int :: @[builtin(add)] (add :: Thk (Int -> Int -> Ret Int))) *
-         (process :: @[builtin(exit)] (exit :: Thk (Int -> OS)))))
+    exists
+      @[builtin(int)] (Int : @[intrinsic(vtype)] _)
+      @[builtin(os)] (OS : @[intrinsic(ctype)] _)
+    .
+      (int :: @[builtin(add)] (add :: Thk (Int -> Int -> Ret Int))) *
+      (process :: @[builtin(exit)] (exit :: Thk (Int -> OS)))
   ) in
     do sum <- ! (int/add) 1 2;
     ! (process/exit) sum

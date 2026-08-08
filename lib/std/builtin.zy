@@ -13,15 +13,15 @@ exists
   --| are not implemented as internal constructors
 
   (Unit as @[intrinsic(unit)] _)
+  @[builtin(int)] (Int : VType)
+  @[builtin(float)] (Float : VType)
+  @[builtin(char)] (Char : VType)
+  @[builtin(string)] (String : VType)
+  @[builtin(bytes)] (Bytes : VType)
+  @[builtin(reader)] (Reader : VType)
+  @[builtin(writer)] (Writer : VType)
+  @[builtin(os)] (OS : CType)
 .
-  @[builtin(int)] exists (Int : VType) .
-  @[builtin(float)] exists (Float : VType) .
-  @[builtin(char)] exists (Char : VType) .
-  @[builtin(string)] exists (String : VType) .
-  @[builtin(bytes)] exists (Bytes : VType) .
-  @[builtin(reader)] exists (Reader : VType) .
-  @[builtin(writer)] exists (Writer : VType) .
-  @[builtin(os)] exists (OS : CType) .
   (int ::
     (@[builtin(add)] (add :: Thk (Int -> Int -> Ret Int))) *
     (@[builtin(sub)] (sub :: Thk (Int -> Int -> Ret Int))) *

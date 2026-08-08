@@ -162,6 +162,8 @@ Hole: Hole = "_" => Hole;
 //* ---------------------------------- Meta ---------------------------------- */
 
 MetaT<T>: MetaT<T> = "@" "[" <Meta> "]" <T> => MetaT(<>);
+MetaAnnotation: Sp<Meta> = <Sp<MetaAnnotationInner>>;
+MetaAnnotationInner: Meta = "@" "[" <Meta> "]" => <>;
 Meta: Meta = {
     <value:String> => Meta::string(value),
     <name:MetaId> => Meta::ident(name),
@@ -242,11 +244,21 @@ CoPatternAtom: CoPattern = {
 };
 
 ExistentialParameter: ExistentialParameter = {
-    "(" <binder:PatternAnnId> "as" <definition:TermId>
+    <annotations:MetaAnnotation*> "(" <binder:PatternAnnId> "as" <definition:TermId>
         <classifier:(":" <TermId>)?> ")" => {
-        ExistentialParameter::Manifest(ManifestParameter { binder, definition, classifier })
+        ExistentialParameter {
+            annotations,
+            form: ExistentialParameterForm::Manifest(ManifestParameter {
+                binder,
+                definition,
+                classifier,
+            }),
+        }
     },
-    "(" <binder:PatternAnnId> ")" => ExistentialParameter::Abstract(binder),
+    <annotations:MetaAnnotation*> "(" <binder:PatternAnnId> ")" => ExistentialParameter {
+        annotations,
+        form: ExistentialParameterForm::Abstract(binder),
+    },
 };
 
 //* ---------------------------------- Term ---------------------------------- */

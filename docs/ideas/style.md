@@ -228,6 +228,11 @@ Other sources acquire intrinsic kinds, types, and host operations by importing t
 their dependencies, which keeps the names subject to ordinary language-level resolution without repeating the
 complete host interface.
 
+Within that signature, host-type roles are accepted only on abstract existential patterns, as in
+`exists @[builtin(int)] (Int : VType) . ...`. This keeps the role beside the identity it classifies and allows all
+host types to inhabit one telescope. Host-operation roles are accepted only on term classifiers, where they should
+annotate the corresponding labeled classifier.
+
 ## Layout and Comments
 
 Indent by two spaces and aim for at most 110 characters per line. A short binding may occupy one line.

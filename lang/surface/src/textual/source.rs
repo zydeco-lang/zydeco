@@ -57,7 +57,7 @@ pub struct IntrinsicSite {
     pub directive: IntrinsicDirective,
 }
 
-/// A validated Builtin role annotation attached to a package-signature term.
+/// A validated Builtin role annotation attached to a package-signature site.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BuiltinDirective {
     pub role: BuiltinRole,
@@ -67,9 +67,15 @@ pub struct BuiltinDirective {
 /// A Builtin role occurrence in a parsed source unit.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BuiltinSite {
-    pub term: TermId,
-    pub payload: TermId,
+    pub location: BuiltinLocation,
     pub directive: BuiltinDirective,
+}
+
+/// The surface form carrying a Builtin role annotation.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum BuiltinLocation {
+    Term { annotation: TermId, payload: TermId },
+    ExistentialPattern { pattern: PatId },
 }
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -88,11 +94,17 @@ pub enum ImportDirectiveError {
 pub enum BuiltinDirectiveError {
     #[error("invalid builtin annotation at {span}: {source}")]
     Invalid {
-        term: TermId,
+        location: BuiltinLocation,
         span: Span,
         #[source]
-        source: BuiltinMetaError,
+        source: Box<BuiltinMetaError>,
     },
+    #[error("only `builtin(...)` metadata may annotate an existential pattern at {span}")]
+    UnsupportedExistentialPattern { pattern: PatId, span: Span },
+    #[error("builtin type role `{role}` at {span} must annotate an existential pattern")]
+    TypeRoleOnTerm { term: TermId, span: Span, role: BuiltinTypeRole },
+    #[error("builtin operation role `{role}` at {span} must annotate a term")]
+    ValueRoleOnExistentialPattern { pattern: PatId, span: Span, role: BuiltinValueRole },
 }
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -160,16 +172,32 @@ impl SourceUnit {
         &self, arena: &TextArena, spans: &SpanArena,
     ) -> Result<Vec<BuiltinSite>, BuiltinDirectiveError> {
         let _root = &arena.terms[&self.root];
-        let mut builtins = arena
+        let term_sites = arena
             .terms
             .iter()
             .filter_map(|(term, syntax)| match syntax {
                 | Term::Meta(MetaT(meta, payload)) => {
-                    BuiltinSite::decode(*term, meta, *payload, spans)
+                    BuiltinSite::decode_term(*term, meta, *payload, spans)
                 }
                 | _ => None,
             })
             .collect::<Result<Vec<_>, _>>()?;
+        let parameter_sites = arena
+            .terms
+            .iter()
+            .flat_map(|(_, syntax)| match syntax {
+                | Term::Exists(Exists { parameters, .. }) => parameters
+                    .iter()
+                    .flat_map(|parameter| {
+                        parameter.annotations.iter().map(|annotation| {
+                            BuiltinSite::decode_existential_pattern(parameter.binder(), annotation)
+                        })
+                    })
+                    .collect::<Vec<_>>(),
+                | _ => Vec::new(),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut builtins = term_sites.into_iter().chain(parameter_sites).collect::<Vec<_>>();
         builtins.sort_by_key(|site| site.directive.span.get_cursor1());
         Ok(builtins)
     }
@@ -294,23 +322,62 @@ impl ImportSite {
 }
 
 impl BuiltinSite {
-    fn decode(
+    fn decode_term(
         term: TermId, meta: &Meta, payload: TermId, spans: &SpanArena,
     ) -> Option<Result<Self, BuiltinDirectiveError>> {
+        let location = BuiltinLocation::Term { annotation: term, payload };
         match meta.specialize::<BuiltinMeta>() {
-            | Ok(Some(meta)) => {
+            | Ok(Some(BuiltinMeta { role: BuiltinRole::Value(role) })) => {
                 let span = spans[&EntityId::Term(term)].clone();
                 Some(Ok(Self {
-                    term,
-                    payload,
-                    directive: BuiltinDirective { role: meta.role, span },
+                    location,
+                    directive: BuiltinDirective { role: BuiltinRole::Value(role), span },
                 }))
+            }
+            | Ok(Some(BuiltinMeta { role: BuiltinRole::Type(role) })) => {
+                let span = spans[&EntityId::Term(term)].clone();
+                Some(Err(BuiltinDirectiveError::TypeRoleOnTerm { term, span, role }))
             }
             | Ok(None) => None,
             | Err(source) => {
                 let span = spans[&EntityId::Term(term)].clone();
-                Some(Err(BuiltinDirectiveError::Invalid { term, span, source }))
+                Some(Err(BuiltinDirectiveError::Invalid {
+                    location,
+                    span,
+                    source: Box::new(source),
+                }))
             }
+        }
+    }
+
+    fn decode_existential_pattern(
+        pattern: PatId, annotation: &Sp<Meta>,
+    ) -> Result<Self, BuiltinDirectiveError> {
+        let location = BuiltinLocation::ExistentialPattern { pattern };
+        match annotation.inner.specialize::<BuiltinMeta>() {
+            | Ok(Some(BuiltinMeta { role: BuiltinRole::Type(role) })) => Ok(Self {
+                location,
+                directive: BuiltinDirective {
+                    role: BuiltinRole::Type(role),
+                    span: annotation.info.clone(),
+                },
+            }),
+            | Ok(Some(BuiltinMeta { role: BuiltinRole::Value(role) })) => {
+                Err(BuiltinDirectiveError::ValueRoleOnExistentialPattern {
+                    pattern,
+                    span: annotation.info.clone(),
+                    role,
+                })
+            }
+            | Ok(None) => Err(BuiltinDirectiveError::UnsupportedExistentialPattern {
+                pattern,
+                span: annotation.info.clone(),
+            }),
+            | Err(source) => Err(BuiltinDirectiveError::Invalid {
+                location,
+                span: annotation.info.clone(),
+                source: Box::new(source),
+            }),
         }
     }
 }

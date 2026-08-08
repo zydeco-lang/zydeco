@@ -98,22 +98,24 @@ impl<'graph> ProgramAssembler<'graph> {
     fn existential_parameter(
         &mut self, source: SourceId, parameter: t::ExistentialParameter,
     ) -> Result<t::ExistentialParameter, ProgramAssemblyError> {
-        match parameter {
-            | t::ExistentialParameter::Abstract(binder) => {
-                Ok(t::ExistentialParameter::Abstract(self.pattern(source, binder)?))
+        let t::ExistentialParameter { annotations, form } = parameter;
+        let form = match form {
+            | t::ExistentialParameterForm::Abstract(binder) => {
+                t::ExistentialParameterForm::Abstract(self.pattern(source, binder)?)
             }
-            | t::ExistentialParameter::Manifest(t::ManifestParameter {
+            | t::ExistentialParameterForm::Manifest(t::ManifestParameter {
                 binder,
                 definition,
                 classifier,
-            }) => Ok(t::ExistentialParameter::Manifest(t::ManifestParameter {
+            }) => t::ExistentialParameterForm::Manifest(t::ManifestParameter {
                 binder: self.pattern(source, binder)?,
                 definition: self.term(source, definition)?,
                 classifier: classifier
                     .map(|classifier| self.term(source, classifier))
                     .transpose()?,
-            })),
-        }
+            }),
+        };
+        Ok(t::ExistentialParameter { annotations, form })
     }
 
     fn binding(

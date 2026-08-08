@@ -4,7 +4,7 @@ use crate::{
     textual::syntax as t,
 };
 use derive_more::{AsMut, AsRef};
-use zydeco_syntax::{IntrinsicRole, SpanView};
+use zydeco_syntax::{BuiltinRole, IntrinsicRole, SpanView};
 use zydeco_utils::prelude::{Allocates, ArenaId, CompilerPass, IdAllocator};
 
 /// Desugar a textual node into bitter syntax using a shared `Desugarer`.
@@ -135,23 +135,33 @@ impl ParameterTelescope {
     }
 }
 
-enum ExistentialParameter {
+enum ExistentialParameterForm {
     Abstract(b::PatId),
     Manifest { binder: b::PatId, definition: b::TermId },
 }
 
+struct ExistentialParameter {
+    annotations: Vec<t::Meta>,
+    form: ExistentialParameterForm,
+    source: t::EntityId,
+}
+
 impl ExistentialParameter {
     fn desugar(parameter: t::ExistentialParameter, desugarer: &mut Desugarer) -> Result<Self> {
-        match parameter {
-            | t::ExistentialParameter::Abstract(binder) => {
-                Ok(Self::Abstract(binder.desugar(desugarer)?))
-            }
-            | t::ExistentialParameter::Manifest(t::ManifestParameter {
+        let t::ExistentialParameter { annotations, form } = parameter;
+        let (form, source, pattern) = match form {
+            | t::ExistentialParameterForm::Abstract(binder) => (
+                ExistentialParameterForm::Abstract(binder.desugar(desugarer)?),
+                binder.into(),
+                binder,
+            ),
+            | t::ExistentialParameterForm::Manifest(t::ManifestParameter {
                 binder,
                 definition,
                 classifier,
             }) => {
                 let source = binder.into();
+                let pattern = binder;
                 let binder = binder.desugar(desugarer)?;
                 let definition = definition.desugar(desugarer)?;
                 let binder = match classifier {
@@ -162,9 +172,30 @@ impl ExistentialParameter {
                     }
                     | None => binder,
                 };
-                Ok(Self::Manifest { binder, definition })
+                (ExistentialParameterForm::Manifest { binder, definition }, source, pattern)
             }
-        }
+        };
+        let annotation_site = pattern.span(desugarer.spans).clone().make(pattern);
+        let annotations = annotations
+            .into_iter()
+            .map(|annotation| match annotation.inner.specialize::<BuiltinMeta>() {
+                | Ok(Some(BuiltinMeta { role: BuiltinRole::Type(_) })) => Ok(annotation.inner),
+                | Ok(Some(BuiltinMeta { role: BuiltinRole::Value(role) })) => {
+                    Err(DesugarError::BuiltinValueRoleOnExistentialPattern {
+                        pattern: annotation_site.clone(),
+                        role,
+                    })
+                }
+                | Ok(None) => {
+                    Err(DesugarError::UnsupportedExistentialPatternMeta(annotation_site.clone()))
+                }
+                | Err(source) => Err(DesugarError::InvalidBuiltinPatternMeta {
+                    pattern: annotation_site.clone(),
+                    source,
+                }),
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Self { annotations, form, source })
     }
 }
 
@@ -186,13 +217,17 @@ impl ExistentialTelescope {
 
     fn quantify(self, body: b::TermId, desugarer: &mut Desugarer) -> b::TermId {
         self.parameters.into_iter().rev().fold(body, |body, parameter| {
-            let term = match parameter {
-                | ExistentialParameter::Abstract(binder) => b::Sigma(binder, body).into(),
-                | ExistentialParameter::Manifest { binder, definition } => {
+            let ExistentialParameter { annotations, form, source } = parameter;
+            let term = match form {
+                | ExistentialParameterForm::Abstract(binder) => b::Sigma(binder, body).into(),
+                | ExistentialParameterForm::Manifest { binder, definition } => {
                     b::ManifestExists { binder, definition, body }.into()
                 }
             };
-            Alloc::alloc(desugarer, term, self.source)
+            let term = Alloc::alloc(desugarer, term, self.source);
+            annotations.into_iter().rev().fold(term, |term, meta| {
+                Alloc::alloc(desugarer, b::MetaT(meta, term).into(), source)
+            })
         })
     }
 }
@@ -365,7 +400,13 @@ impl Desugar for t::TermId {
                     }
                 }
                 match meta.specialize::<BuiltinMeta>() {
-                    | Ok(Some(_)) | Ok(None) => {}
+                    | Ok(Some(BuiltinMeta { role: BuiltinRole::Value(_) })) | Ok(None) => {}
+                    | Ok(Some(BuiltinMeta { role: BuiltinRole::Type(role) })) => {
+                        return Err(DesugarError::BuiltinTypeRoleOnTerm {
+                            term: self.span(desugarer.spans).clone().make(self),
+                            role,
+                        });
+                    }
                     | Err(source) => {
                         return Err(DesugarError::InvalidBuiltinMeta {
                             term: self.span(desugarer.spans).clone().make(self),

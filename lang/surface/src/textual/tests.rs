@@ -3,10 +3,11 @@ use crate::{
     textual::{
         arena::TextualScope,
         syntax::{
-            Alias, Ann, Appli, Block, BuiltinRole, BuiltinTypeRole, CoPatId, ContextBind, DefId,
-            DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists, Hole, IntrinsicRole,
-            Label, Literal, ManifestParameter, Meta, MetaT, Named, Param, Paren, Parser, PatId,
-            Pattern, Placement, Prod, Proj, ProjectionPattern, SourceUnit, Term, TermId,
+            Alias, Ann, Appli, Block, BuiltinRole, BuiltinValueRole, CoPatId, ContextBind, DefId,
+            DefinitionMode, Dtor, EntityId, ExistentialParameter, ExistentialParameterForm, Exists,
+            Hole, IntrinsicRole, Label, Literal, ManifestParameter, Meta, MetaT, Named, Param,
+            Paren, Parser, PatId, Pattern, Placement, Prod, Proj, ProjectionPattern, SourceUnit,
+            Term, TermId,
         },
     },
 };
@@ -285,8 +286,8 @@ fn source_unit_rejects_import_on_a_non_hole_term() {
 }
 
 #[test]
-fn source_unit_decodes_typed_builtin_roles() {
-    let source = "@[builtin(int)] _";
+fn source_unit_decodes_builtin_operation_roles_on_terms() {
+    let source = "@[builtin(add)] _";
     let mut parser = Parser::new();
     let unit = parser::SourceUnitParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
@@ -295,8 +296,11 @@ fn source_unit_decodes_typed_builtin_roles() {
     let builtins = unit.builtins(&parser.arena, &parser.spans).unwrap();
     let [site] = builtins.as_slice() else { panic!("expected one Builtin role") };
 
-    assert_eq!(site.directive.role, BuiltinRole::Type(BuiltinTypeRole::Int));
-    assert!(matches!(parser.arena.terms[&site.payload], Term::Hole(Hole)));
+    assert_eq!(site.directive.role, BuiltinRole::Value(BuiltinValueRole::Add));
+    let BuiltinLocation::Term { payload, .. } = site.location else {
+        panic!("expected a term annotation")
+    };
+    assert!(matches!(parser.arena.terms[&payload], Term::Hole(Hole)));
 }
 
 #[test]
@@ -402,24 +406,16 @@ fn source_unit_rejects_malformed_builtin_roles() {
             .unwrap();
         let error = unit.builtins(&parser.arena, &parser.spans).unwrap_err();
 
-        match (error, expected) {
+        let BuiltinDirectiveError::Invalid { source, .. } = error else {
+            panic!("expected an invalid Builtin role")
+        };
+        match (source.as_ref(), expected) {
             | (
-                BuiltinDirectiveError::Invalid {
-                    source: BuiltinMetaError::RoleArity { found },
-                    ..
-                },
+                BuiltinMetaError::RoleArity { found },
                 ExpectedBuiltinError::RoleArity(expected),
-            ) => assert_eq!(found, expected),
-            | (
-                BuiltinDirectiveError::Invalid {
-                    source: BuiltinMetaError::RoleNotIdentifier, ..
-                },
-                ExpectedBuiltinError::RoleNotIdentifier,
-            ) => {}
-            | (
-                BuiltinDirectiveError::Invalid { source: BuiltinMetaError::UnknownRole(_), .. },
-                ExpectedBuiltinError::UnknownRole,
-            ) => {}
+            ) => assert_eq!(*found, expected),
+            | (BuiltinMetaError::RoleNotIdentifier, ExpectedBuiltinError::RoleNotIdentifier)
+            | (BuiltinMetaError::UnknownRole(_), ExpectedBuiltinError::UnknownRole) => {}
             | (error, _) => panic!("unexpected Builtin error: {error}"),
         }
     });
@@ -487,11 +483,17 @@ fn parses_manifest_existential_with_a_punned_field_binder() {
     let Term::Exists(Exists { parameters, body }) = &parser.arena.terms[&term] else {
         panic!("expected a manifest existential")
     };
-    let [ExistentialParameter::Manifest(ManifestParameter { binder, definition, classifier })] =
-        parameters.as_slice()
+    let [
+        ExistentialParameter {
+            annotations,
+            form:
+                ExistentialParameterForm::Manifest(ManifestParameter { binder, definition, classifier }),
+        },
+    ] = parameters.as_slice()
     else {
         panic!("expected one manifest parameter")
     };
+    assert!(annotations.is_empty());
     let Pattern::Named(Named(field, binder)) = &parser.arena.pats[binder] else {
         panic!("expected a punned named binder")
     };
@@ -523,11 +525,17 @@ fn parses_manifest_existential_with_an_inferred_classifier() {
     let Term::Exists(Exists { parameters, body }) = &parser.arena.terms[&term] else {
         panic!("expected a manifest existential")
     };
-    let [ExistentialParameter::Manifest(ManifestParameter { binder, definition, classifier })] =
-        parameters.as_slice()
+    let [
+        ExistentialParameter {
+            annotations,
+            form:
+                ExistentialParameterForm::Manifest(ManifestParameter { binder, definition, classifier }),
+        },
+    ] = parameters.as_slice()
     else {
         panic!("expected one manifest parameter")
     };
+    assert!(annotations.is_empty());
     let Pattern::Var(binder) = &parser.arena.pats[binder] else {
         panic!("expected an ordinary kind-variable binder")
     };
@@ -564,9 +572,9 @@ fn parses_interleaved_abstract_and_manifest_existential_parameters() {
     assert!(matches!(
         parameters.as_slice(),
         [
-            ExistentialParameter::Abstract(_),
-            ExistentialParameter::Manifest(_),
-            ExistentialParameter::Abstract(_),
+            ExistentialParameter { form: ExistentialParameterForm::Abstract(_), .. },
+            ExistentialParameter { form: ExistentialParameterForm::Manifest(_), .. },
+            ExistentialParameter { form: ExistentialParameterForm::Abstract(_), .. },
         ]
     ));
     let Term::Var(body) = &parser.arena.terms[body] else {
