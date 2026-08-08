@@ -211,6 +211,46 @@ fn documentation_comments_without_an_annotation_remain_unattached() {
 }
 
 #[test]
+fn warns_for_every_documentation_block_without_an_effective_attachment() {
+    let source = concat!(
+        "(\n",
+        "  --| Attached\n",
+        "  @[doc] _,\n",
+        "  --| Separated by a blank line\n",
+        "\n",
+        "  @[doc] _,\n",
+        "  --| Interrupted by an ordinary comment\n",
+        "  -- barrier\n",
+        "  @[doc] _,\n",
+        "  --| Missing an annotation\n",
+        "  --| Still the same block\n",
+        "  _\n",
+        ")\n",
+        "--| Trailing documentation\n",
+    );
+    let mut parser = Parser::new();
+    let unit = parser::SourceUnitParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let comments = unit
+        .unattached_documentation(&parser.arena)
+        .iter()
+        .map(|warning| source[warning.range.clone()].trim_end().to_owned())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        comments,
+        [
+            "--| Separated by a blank line",
+            "--| Interrupted by an ordinary comment",
+            "--| Missing an annotation\n  --| Still the same block",
+            "--| Trailing documentation",
+        ]
+    );
+}
+
+#[test]
 fn documentation_annotation_accepts_an_explicit_empty_argument_list() {
     let source = "--| Empty argument list\n@[doc()] _";
     let mut parser = Parser::new();

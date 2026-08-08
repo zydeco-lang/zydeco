@@ -62,7 +62,8 @@ resolution.
 Line comments are canonicalized as `--` or `--|` lines, nested block comments retain their delimiters and relative
 indentation, and all comment kinds are always printed. Recorded blank separators remain blank separators after
 formatting. Only an uninterrupted adjacent `--|` block attaches to a following `@[doc]` annotation, so an ordinary
-comment continues to separate documentation prose from the annotation.
+comment continues to separate documentation prose from the annotation. Source analysis warns about every `--|`
+block without such an attachment because that block contributes no repository documentation.
 
 The pretty printer treats concise puns as canonical syntax rather than author intent. Named terms, named patterns,
 and projection patterns therefore use their punned spelling whenever their payload is the same-named variable,

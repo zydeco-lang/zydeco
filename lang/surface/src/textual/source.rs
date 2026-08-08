@@ -1,6 +1,6 @@
 use super::syntax::*;
 use crate::metadata::{BuiltinMeta, BuiltinMetaError, DocMeta, IntrinsicMeta, IntrinsicMetaError};
-use std::path::PathBuf;
+use std::{collections::HashSet, ops::Range, path::PathBuf};
 use thiserror::Error;
 
 /// A decoded `@[doc]` annotation and its optional preceding prose.
@@ -17,6 +17,12 @@ pub struct DocumentationSite {
     pub term: TermId,
     pub payload: TermId,
     pub directive: DocumentationDirective,
+}
+
+/// A `--|` block that is not consumed by an adjacent `@[doc]` annotation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnattachedDocumentationWarning {
+    pub range: Range<usize>,
 }
 
 /// A validated source import attached to one term-level splice site.
@@ -131,6 +137,33 @@ impl SourceUnit {
             .collect::<Vec<_>>();
         sites.sort_by_key(|site| site.directive.span.get_cursor1());
         sites
+    }
+
+    /// Find documentation blocks that have no semantic attachment.
+    pub fn unattached_documentation(
+        &self, arena: &TextArena,
+    ) -> Vec<UnattachedDocumentationWarning> {
+        let _root = &arena.terms[&self.root];
+        let attached = arena
+            .terms
+            .iter()
+            .filter_map(|(term, syntax)| match syntax {
+                | Term::Meta(MetaT(meta, _)) => meta
+                    .specialize::<DocMeta>()
+                    .expect("documentation metadata specialization is infallible")
+                    .and_then(|_| arena.trivia.attached_documentation((*term).into()))
+                    .map(|comment| comment.range.clone()),
+                | _ => None,
+            })
+            .collect::<HashSet<_>>();
+        let mut warnings = arena
+            .trivia
+            .documentation_comments()
+            .filter(|comment| !attached.contains(&comment.range))
+            .map(|comment| UnattachedDocumentationWarning { range: comment.range.clone() })
+            .collect::<Vec<_>>();
+        warnings.sort_by_key(|warning| (warning.range.start, warning.range.end));
+        warnings
     }
 
     /// Decode all import metadata parsed into this source unit.

@@ -4,8 +4,8 @@ use std::{
     sync::Arc,
 };
 use tower_lsp::lsp_types::{
-    DocumentSymbol, Hover, HoverContents, Location, MarkupContent, MarkupKind, Position, Range,
-    SemanticToken, SymbolKind, Url,
+    Diagnostic, DiagnosticSeverity, DocumentSymbol, Hover, HoverContents, Location, MarkupContent,
+    MarkupKind, NumberOrString, Position, Range, SemanticToken, SymbolKind, Url,
 };
 use zydeco_session::{CompilerSession, ProgramAnalysis};
 use zydeco_statics::{
@@ -202,6 +202,25 @@ impl ProjectState {
             .then(|| self.semantic_tokens.clone())
     }
 
+    pub(crate) fn diagnostics(&self, file_path: &Path) -> Vec<Diagnostic> {
+        let file_path = Self::normalize_path(file_path);
+        self.analysis
+            .warnings()
+            .into_iter()
+            .filter(|site| Self::normalize_path(site.path()) == file_path)
+            .filter_map(|site| {
+                Some(Diagnostic {
+                    range: self.byte_range(&file_path, site.warning.range().clone())?,
+                    severity: Some(DiagnosticSeverity::WARNING),
+                    code: Some(NumberOrString::String(site.warning.code().to_owned())),
+                    source: Some("zydeco".to_owned()),
+                    message: format!("{}. {}", site.warning.message(), site.warning.note()),
+                    ..Diagnostic::default()
+                })
+            })
+            .collect()
+    }
+
     fn symbol_at(&self, file_path: &Path, position: Position) -> Option<SymbolOccurrence> {
         let file_path = Self::normalize_path(file_path);
         let offset = self.offset(&file_path, position)?;
@@ -306,12 +325,16 @@ impl ProjectState {
 
     fn span_range(&self, span: &Span) -> Option<Range> {
         let path = Self::normalize_path(span.get_path()?);
-        let source = self.analysis.source(&path)?;
-        let file_info = self.file_infos.get(&path)?;
         let (start, end) = span.get_cursor1();
+        self.byte_range(&path, start..end)
+    }
+
+    fn byte_range(&self, path: &Path, range: std::ops::Range<usize>) -> Option<Range> {
+        let source = self.analysis.source(path)?;
+        let file_info = self.file_infos.get(path)?;
         Some(Range::new(
-            Self::position(file_info.trans_span2_utf16(source, start)?),
-            Self::position(file_info.trans_span2_utf16(source, end)?),
+            Self::position(file_info.trans_span2_utf16(source, range.start)?),
+            Self::position(file_info.trans_span2_utf16(source, range.end)?),
         ))
     }
 

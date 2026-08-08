@@ -135,7 +135,14 @@ impl Cajun {
         let reporter =
             progress.as_mut().map(|progress| progress.take_reporter()).unwrap_or_default();
         let diagnostics = match self.refresh_with_progress(&uri, reporter).await {
-            | Ok(RefreshOutcome::Updated(_) | RefreshOutcome::Cancelled) => Vec::new(),
+            | Ok(RefreshOutcome::Updated(path)) => self
+                .projects
+                .read()
+                .await
+                .get(&path)
+                .map(|project| project.diagnostics(&path))
+                .unwrap_or_default(),
+            | Ok(RefreshOutcome::Cancelled) => Vec::new(),
             | Err(message) => vec![Diagnostic {
                 range: Range::new(Position::new(0, 0), Position::new(0, 1)),
                 severity: Some(DiagnosticSeverity::ERROR),

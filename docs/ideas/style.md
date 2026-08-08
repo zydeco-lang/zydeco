@@ -278,7 +278,9 @@ The annotation may carry renderer-specific metadata, such as
 `@[doc(section, "collections")]`. Its payload may be any term; documentation
 renderers decide how to present the attached term from its syntax and checked
 classifier. A blank line or an ordinary comment between the documentation
-block and `@[doc]` leaves the prose unattached.
+block and `@[doc]` leaves the prose unattached. Source analysis warns about
+unattached `--|` blocks because they contribute no repository documentation;
+use `--` instead when the text is an implementation note.
 
 `--` introduces a local implementation note.
 The most useful comments explain purpose, invariants, or a typing choice

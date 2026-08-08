@@ -80,6 +80,10 @@ impl ProgramAnalysis {
         &self.observations
     }
 
+    pub fn warnings(&self) -> Vec<crate::source::SourceWarningSite<'_>> {
+        self.graph.warnings()
+    }
+
     pub fn source(&self, path: &Path) -> Option<&str> {
         let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         self.graph

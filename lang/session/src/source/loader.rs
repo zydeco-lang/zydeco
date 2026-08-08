@@ -1,6 +1,6 @@
 use crate::source::{
     SourceFile, SourceGraph, SourceGraphScope, SourceId, SourceImport, SourceImportId,
-    SourceLoadError, SourceParseError, SourceTemplate,
+    SourceLoadError, SourceParseError, SourceTemplate, SourceWarning,
 };
 use std::{
     collections::HashMap,
@@ -36,6 +36,11 @@ impl SourceTemplate {
                 message: ParseError { error, file_info: &info }.to_string(),
             })?;
         let documentation = unit.documentation(&parser.arena, &parser.spans);
+        let warnings = unit
+            .unattached_documentation(&parser.arena)
+            .into_iter()
+            .map(SourceWarning::from)
+            .collect();
         let import_sites = unit
             .imports(&parser.arena, &parser.spans)
             .map_err(|error| SourceParseError::Directive { path: path.clone(), error })?;
@@ -44,7 +49,7 @@ impl SourceTemplate {
         unit.intrinsics(&parser.arena, &parser.spans)
             .map_err(|error| SourceParseError::IntrinsicDirective { path: path.clone(), error })?;
         let (spans, arena) = parser.finish();
-        Ok(Self { path, source, spans, arena, unit, documentation, import_sites })
+        Ok(Self { path, source, spans, arena, unit, documentation, warnings, import_sites })
     }
 }
 

@@ -312,6 +312,65 @@ fn stdio_server_formats_the_open_document() {
 }
 
 #[test]
+fn stdio_server_warns_about_ineffective_documentation_comments() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("main.zy");
+    let source = "--| Ineffective documentation.\n_";
+    std::fs::write(&path, source).unwrap();
+    let uri = Url::from_file_path(&path).unwrap().to_string();
+    let mut server = LspProcess::start();
+
+    server.request(
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": Url::from_file_path(directory.path()).unwrap(),
+            "capabilities": {},
+        }),
+    );
+    server.notify("initialized", json!({}));
+    server.notify(
+        "textDocument/didOpen",
+        json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "zydeco",
+                "version": 1,
+                "text": source,
+            },
+        }),
+    );
+
+    let published = server.notification("textDocument/publishDiagnostics");
+    let diagnostics = published["params"]["diagnostics"].as_array().unwrap();
+    let [warning] = diagnostics.as_slice() else { panic!("expected one warning: {published}") };
+    assert_eq!(warning["severity"], 2);
+    assert_eq!(warning["code"], "unattached-documentation-comment");
+    assert_eq!(warning["source"], "zydeco");
+    assert!(warning["message"].as_str().unwrap().contains("has no effect"));
+    assert_eq!(
+        warning["range"],
+        json!({
+            "start": { "line": 0, "character": 0 },
+            "end": { "line": 1, "character": 0 },
+        })
+    );
+
+    let attached = "--| Effective documentation.\n@[doc] _";
+    server.notify(
+        "textDocument/didChange",
+        json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [{ "text": attached }],
+        }),
+    );
+    let published = server.notification("textDocument/publishDiagnostics");
+    assert!(published["params"]["diagnostics"].as_array().unwrap().is_empty());
+
+    server.finish();
+}
+
+#[test]
 fn stdio_hover_links_referenced_type_definitions() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../lib/tests/exec/forall.zy")
@@ -412,8 +471,8 @@ fn stdio_server_treats_overlapping_open_analyses_as_superseded() {
     published.iter().for_each(|notification| {
         let diagnostics = notification["params"]["diagnostics"].as_array().unwrap();
         assert!(
-            diagnostics.is_empty(),
-            "cancelled analysis leaked as a diagnostic: {notification}"
+            diagnostics.iter().all(|diagnostic| diagnostic["severity"] == 2),
+            "cancelled analysis leaked an error diagnostic: {notification}"
         );
     });
     let expected = documents.iter().map(|(uri, _)| uri.clone()).collect::<BTreeSet<_>>();

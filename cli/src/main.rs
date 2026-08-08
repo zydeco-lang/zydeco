@@ -63,6 +63,7 @@ impl Application {
         &self, path: &Path,
     ) -> Result<std::sync::Arc<zydeco_session::ProgramAnalysis>, ApplicationError> {
         let analysis = self.compiler.analyze(path)?;
+        DiagnosticRenderer::warnings(&analysis);
         DiagnosticRenderer::observations(&analysis);
         Ok(analysis)
     }

@@ -41,6 +41,20 @@ impl SurfaceTrivia {
             .and_then(|comment| comment.comment().as_documentation())
     }
 
+    /// Every documentation block retained from this source arena.
+    pub fn documentation_comments(&self) -> impl Iterator<Item = &DocumentationComment> {
+        self.leading_comments
+            .iter()
+            .flat_map(|(_, comments)| comments)
+            .filter_map(|comment| comment.comment().as_documentation())
+            .chain(
+                self.trailing_comments
+                    .iter()
+                    .flat_map(|(_, comments)| comments)
+                    .filter_map(|comment| comment.comment().as_documentation()),
+            )
+    }
+
     pub(crate) fn record_comments(&mut self, capture: CommentCapture) {
         capture.leading.into_iter().for_each(|(entity, comment)| {
             self.leading_comments.entry(entity).or_default().push(comment);

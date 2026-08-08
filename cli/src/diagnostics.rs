@@ -1,5 +1,5 @@
 use crate::CompileError;
-use ariadne::FnCache;
+use ariadne::{FnCache, Label, Report, ReportKind};
 use std::{collections::HashMap, path::PathBuf};
 use zydeco_session::{AnalysisError, ProgramAnalysis, SourceGraph};
 use zydeco_statics::{TyckObservation, fmt as static_fmt, syntax as ss};
@@ -13,6 +13,7 @@ impl DiagnosticRenderer {
     pub fn error(error: &CompileError) {
         match error {
             | CompileError::Rejected(analysis) => {
+                Self::warnings(analysis);
                 Self::observations(analysis);
                 if let Some(reports) = analysis.outcome().reports() {
                     reports.iter().for_each(|report| {
@@ -21,10 +22,32 @@ impl DiagnosticRenderer {
                 }
             }
             | CompileError::Analysis(AnalysisError::Resolve { error, graph }) => {
+                Self::graph_warnings(graph);
                 let _ = error.to_report().eprint(Self::graph_cache(graph));
             }
             | _ => eprintln!("{error}"),
         }
+    }
+
+    pub fn warnings(analysis: &ProgramAnalysis) {
+        Self::graph_warnings(analysis.graph());
+    }
+
+    fn graph_warnings(graph: &SourceGraph) {
+        let mut cache = Self::graph_cache(graph);
+        graph.warnings().into_iter().for_each(|site| {
+            let path = PathDisplay::from(site.path().to_path_buf());
+            let span = (path, site.warning.range().clone());
+            let report = Report::build(ReportKind::Warning, span.clone())
+                .with_message(site.warning.message())
+                .with_label(
+                    Label::new(span)
+                        .with_message("this documentation block contributes no documentation"),
+                )
+                .with_note(site.warning.note())
+                .finish();
+            let _ = report.eprint(&mut cache);
+        });
     }
 
     pub fn observations(analysis: &ProgramAnalysis) {

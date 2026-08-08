@@ -103,4 +103,36 @@ mod tests {
         );
         assert_eq!(literal_doc.term_source(), "1");
     }
+
+    #[test]
+    fn source_graph_orders_unattached_documentation_warnings_across_imports() {
+        let directory = tempdir().unwrap();
+        let provider = directory.path().join("provider.zy");
+        let root = directory.path().join("root.zy");
+        fs::write(&provider, "--| Provider warning\n_\n").unwrap();
+        fs::write(
+            &root,
+            concat!(
+                "(\n",
+                "  @[import(\"provider.zy\")] _,\n",
+                "  --| Effective documentation\n",
+                "  @[doc] _,\n",
+                "  --| Root warning\n",
+                "  _\n",
+                ")\n",
+            ),
+        )
+        .unwrap();
+
+        let graph = SourceGraph::load(&root).unwrap();
+        let warnings = graph.warnings();
+        let [provider_warning, root_warning] = warnings.as_slice() else {
+            panic!("expected one warning from each source")
+        };
+
+        assert_eq!(provider_warning.path(), provider.canonicalize().unwrap());
+        assert_eq!(provider_warning.warning_source().trim_end(), "--| Provider warning");
+        assert_eq!(root_warning.path(), root.canonicalize().unwrap());
+        assert_eq!(root_warning.warning_source().trim_end(), "--| Root warning");
+    }
 }

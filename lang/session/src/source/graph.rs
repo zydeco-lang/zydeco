@@ -1,4 +1,4 @@
-use crate::source::{ImportCycle, ImportCycleStep};
+use crate::source::{ImportCycle, ImportCycleStep, SourceWarning};
 use std::{
     collections::{HashMap, HashSet},
     ops::Deref,
@@ -33,6 +33,7 @@ pub struct SourceTemplate {
     pub arena: t::TextArena,
     pub unit: t::SourceUnit,
     pub documentation: Vec<DocumentationSite>,
+    pub warnings: Vec<SourceWarning>,
     pub import_sites: Vec<ImportSite>,
 }
 
