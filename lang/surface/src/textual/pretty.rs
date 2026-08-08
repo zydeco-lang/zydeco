@@ -75,10 +75,25 @@ impl<'arena> PrettyFormatter<'arena> {
             .iter()
             .fold(RcDoc::nil(), |prefix, comment| {
                 prefix
+                    .append(if comment.comment().as_documentation().is_some() {
+                        self.ensure_line_start()
+                    } else {
+                        RcDoc::nil()
+                    })
                     .append(self.comment(comment.comment()))
                     .append(self.line_separation(comment.separation_after()))
             })
             .append(document)
+    }
+
+    fn ensure_line_start(&self) -> RcDoc<'arena> {
+        RcDoc::column(|column| {
+            RcDoc::nesting(
+                move |nesting| {
+                    if column > nesting { RcDoc::hardline() } else { RcDoc::nil() }
+                },
+            )
+        })
     }
 
     fn with_trailing_comments(
@@ -125,6 +140,13 @@ impl<'arena> PrettyFormatter<'arena> {
             | LineSeparation::NextLine => RcDoc::hardline(),
             | LineSeparation::BlankLine => RcDoc::hardline().append(RcDoc::hardline()),
         }
+    }
+
+    fn parameter_sequence<I>(&self, parameters: I) -> RcDoc<'arena>
+    where
+        I: IntoIterator<Item = RcDoc<'arena>>,
+    {
+        RcDoc::intersperse(parameters, RcDoc::line()).nest(self.options.indent)
     }
 
     fn delimited(
@@ -234,15 +256,28 @@ impl<'arena> PrettyFormatter<'arena> {
         let document = match &self.arena.copats[&pattern] {
             | CoPattern::Pat(pattern) => self.pattern(*pattern),
             | CoPattern::Dtor(name) => self.destructor(name),
-            | CoPattern::App(Appli(patterns)) => self.group(
-                Some(pattern.into()),
-                RcDoc::intersperse(
-                    patterns.iter().map(|pattern| self.copattern(*pattern)),
-                    RcDoc::line(),
-                ),
-            ),
+            | CoPattern::App(_) => self.copattern_application(pattern).nest(self.options.indent),
         };
         self.with_leading_comments(pattern.into(), document)
+    }
+
+    fn copattern_application(&'arena self, pattern: CoPatId) -> RcDoc<'arena> {
+        let CoPattern::App(Appli(patterns)) = &self.arena.copats[&pattern] else {
+            unreachable!("copattern applications are selected before rendering")
+        };
+        self.group(
+            Some(pattern.into()),
+            RcDoc::intersperse(
+                patterns.iter().map(|pattern| match self.arena.copats[pattern] {
+                    | CoPattern::App(_) => self.with_leading_comments(
+                        (*pattern).into(),
+                        self.copattern_application(*pattern),
+                    ),
+                    | _ => self.copattern(*pattern),
+                }),
+                RcDoc::line(),
+            ),
+        )
     }
 
     fn term(&'arena self, term: TermId) -> RcDoc<'arena> {
@@ -268,7 +303,7 @@ impl<'arena> PrettyFormatter<'arena> {
             | Term::Meta(MetaT(meta, inner)) => RcDoc::text("@[")
                 .append(RcDoc::text(meta.to_string()))
                 .append(RcDoc::text("] "))
-                .append(self.term_through(*inner, TermPrecedence::Quantifier)),
+                .append(self.term_through(*inner, TermPrecedence::Binder)),
             | Term::SourceBoundary(_) => unreachable!("source boundaries return before rendering"),
             | Term::Ann(Ann { tm, ty }) => self.annotation(
                 term.into(),
@@ -304,7 +339,7 @@ impl<'arena> PrettyFormatter<'arena> {
                     .append(RcDoc::text(" =>"))
                     .append(
                         RcDoc::line()
-                            .append(self.term_through(*body, TermPrecedence::Quantifier))
+                            .append(self.term_through(*body, TermPrecedence::Binder))
                             .nest(self.options.indent),
                     ),
             ),
@@ -329,11 +364,11 @@ impl<'arena> PrettyFormatter<'arena> {
                 ")",
             ),
             | Term::KontCall(KontCall { body, tail }) => RcDoc::text("do~ ")
-                .append(self.term_through(*body, TermPrecedence::Quantifier))
+                .append(self.term_through(*body, TermPrecedence::Binder))
                 .append(RcDoc::text(";"))
                 .append(
                     RcDoc::line()
-                        .append(self.term_through(*tail, TermPrecedence::Quantifier))
+                        .append(self.term_through(*tail, TermPrecedence::Binder))
                         .nest(self.options.indent),
                 ),
             | Term::Fix(Fix(pattern, body)) => self.group(
@@ -343,7 +378,7 @@ impl<'arena> PrettyFormatter<'arena> {
                     .append(RcDoc::text(" =>"))
                     .append(
                         RcDoc::line()
-                            .append(self.term_through(*body, TermPrecedence::Quantifier))
+                            .append(self.term_through(*body, TermPrecedence::Binder))
                             .nest(self.options.indent),
                     ),
             ),
@@ -385,17 +420,17 @@ impl<'arena> PrettyFormatter<'arena> {
             | Term::Do(Bind { binder, bindee, tail }) => RcDoc::text("do ")
                 .append(self.pattern(*binder))
                 .append(RcDoc::text(" <- "))
-                .append(self.term_through(*bindee, TermPrecedence::Quantifier))
+                .append(self.term_through(*bindee, TermPrecedence::Binder))
                 .append(RcDoc::text(";"))
                 .append(
                     RcDoc::line()
-                        .append(self.term_through(*tail, TermPrecedence::Quantifier))
+                        .append(self.term_through(*tail, TermPrecedence::Binder))
                         .nest(self.options.indent),
                 ),
             | Term::Let(GenLet { binding, tail }) => {
                 RcDoc::text("let ").append(self.binding(binding)).append(RcDoc::text(" in")).append(
                     RcDoc::line()
-                        .append(self.term_through(*tail, TermPrecedence::Quantifier))
+                        .append(self.term_through(*tail, TermPrecedence::Binder))
                         .nest(self.options.indent),
                 )
             }
@@ -404,7 +439,7 @@ impl<'arena> PrettyFormatter<'arena> {
                 .append(RcDoc::text(" "))
                 .append(self.placement(*placement))
                 .append(RcDoc::hardline())
-                .append(self.term_through(*tail, TermPrecedence::Quantifier)),
+                .append(self.term_through(*tail, TermPrecedence::Binder)),
             | Term::ContextBind(ContextBind { mode, binding, placement, tail }) => {
                 let keyword = match mode {
                     | DefinitionMode::Transparent => "let ",
@@ -415,7 +450,7 @@ impl<'arena> PrettyFormatter<'arena> {
                     .append(RcDoc::hardline())
                     .append(self.placement(*placement))
                     .append(RcDoc::hardline())
-                    .append(self.term_through(*tail, TermPrecedence::Quantifier))
+                    .append(self.term_through(*tail, TermPrecedence::Binder))
             }
             | Term::Block(Block(body)) => self.block("begin", *body, "end"),
             | Term::MoBlock(MoBlock(body)) => self.block("monadic", *body, "end"),
@@ -598,7 +633,7 @@ impl<'arena> PrettyFormatter<'arena> {
                 .append(RcDoc::text(" ."))
                 .append(
                     RcDoc::line()
-                        .append(self.term_through(body, TermPrecedence::Arrow))
+                        .append(self.term_through(body, TermPrecedence::Quantifier))
                         .nest(self.options.indent),
                 ),
         )
@@ -610,7 +645,7 @@ impl<'arena> PrettyFormatter<'arena> {
         self.group(
             Some(term.into()),
             RcDoc::text("exists ")
-                .append(RcDoc::intersperse(parameters, RcDoc::line()))
+                .append(self.parameter_sequence(parameters))
                 .append(RcDoc::text(" ."))
                 .append(RcDoc::line().append(self.term(*body)).nest(self.options.indent)),
         )
@@ -1023,6 +1058,41 @@ mod tests {
     }
 
     #[test]
+    fn keeps_right_nested_terms_at_the_same_precedence_unparenthesized() {
+        let cases = [
+            (
+                "begin let first = value that let second = first that second end",
+                concat!(
+                    "begin\n",
+                    "  let first = value\n",
+                    "  that\n",
+                    "  let second = first\n",
+                    "  that\n",
+                    "  second\n",
+                    "end\n",
+                ),
+            ),
+            (
+                "forall (A : Type) . forall (B : Type) . A -> B",
+                "forall (A : Type) . forall (B : Type) . A -> B\n",
+            ),
+            ("fn x => fn y => x", "fn x => fn y => x\n"),
+            (
+                "do x <- first; do y <- second; ret y",
+                concat!("do x <- first;\n", "  do y <- second;\n", "    ret y\n"),
+            ),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Ignore);
+            assert_eq!(formatted, expected, "source: {source}");
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        });
+    }
+
+    #[test]
     fn compacts_manifest_existentials_when_grouping_is_semantically_transparent() {
         let parsed = ParsedSource::new("exists (Counter = ((Counter as Int) : VType)) . Counter");
 
@@ -1043,6 +1113,39 @@ mod tests {
 
         assert_eq!(parsed.render(LayoutIntentions::Preserve), "(\n  = first,\n  = second\n)\n");
         assert_eq!(parsed.render(LayoutIntentions::Ignore), "(= first, = second)\n");
+    }
+
+    #[test]
+    fn indents_parameters_that_wrap() {
+        let options = PrettyOptions::default()
+            .with_line_width(38)
+            .with_layout_intentions(LayoutIntentions::Ignore);
+        let cases = [
+            (
+                "fn (first : FirstClassifier) (second : SecondClassifier) => result",
+                concat!(
+                    "fn (first : FirstClassifier)\n",
+                    "  (second : SecondClassifier) =>\n",
+                    "  result\n",
+                ),
+            ),
+            (
+                "exists (first : FirstClassifier) (second : SecondClassifier) . Result",
+                concat!(
+                    "exists (first : FirstClassifier)\n",
+                    "  (second : SecondClassifier) .\n",
+                    "  Result\n",
+                ),
+            ),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render_with_options(options);
+            assert_eq!(formatted, expected, "source: {source}");
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        });
     }
 
     #[test]
@@ -1079,6 +1182,20 @@ mod tests {
             )
         );
         assert_eq!(RetainedComments::collect(source), RetainedComments::collect(&formatted));
+    }
+
+    #[test]
+    fn starts_documentation_on_the_anchored_syntax_line() {
+        let source = "fn parameter => --| Body documentation.\n@[doc] body";
+        let parsed = ParsedSource::new(source);
+        let formatted = parsed.render(LayoutIntentions::Ignore);
+
+        assert_eq!(
+            formatted,
+            concat!("fn parameter =>\n", "  --| Body documentation.\n", "  @[doc] body\n",)
+        );
+        let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
     }
 
     #[test]
