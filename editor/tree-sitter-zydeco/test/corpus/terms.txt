@@ -123,7 +123,8 @@ end
 Named terms and existential parameters
 ==================
 
-exists (Counter as Int : VType) (= State as Counter) .
+exists (Counter as Int : VType) (= State as Counter)
+  (Public = ((Hidden as Int) : VType)) .
   (state = 0, next :: Thk (State -> Ret State), = State)
 
 ---
@@ -142,6 +143,18 @@ exists (Counter as Int : VType) (= State as Counter) .
         name: (upper_identifier))
       definition: (variable
         name: (upper_identifier)))
+    parameter: (existential_parameter
+      binder: (named_pattern
+        name: (upper_identifier)
+        pattern: (parenthesized_pattern
+          (pattern_annotation
+            pattern: (manifest_pattern
+              binder: (variable_pattern
+                name: (upper_identifier))
+              definition: (variable
+                name: (upper_identifier)))
+            type: (variable
+              name: (upper_identifier))))))
     body: (parenthesized_term
       (named_term
         name: (lower_identifier)

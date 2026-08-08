@@ -48,6 +48,13 @@ impl<'graph> ProgramAssembler<'graph> {
             | t::Pattern::Ann(t::Ann { tm, ty }) => {
                 t::Ann { tm: self.pattern(source, tm)?, ty: self.term(source, ty)? }.into()
             }
+            | t::Pattern::Manifest(t::ManifestPattern { binder, definition }) => {
+                t::ManifestPattern {
+                    binder: self.pattern(source, binder)?,
+                    definition: self.term(source, definition)?,
+                }
+                .into()
+            }
             | t::Pattern::Hole(_) => t::Hole.into(),
             | t::Pattern::Var(definition) => self.definition(source, definition).into(),
             | t::Pattern::Named(t::Named(name, inner)) => {
@@ -98,24 +105,9 @@ impl<'graph> ProgramAssembler<'graph> {
     fn existential_parameter(
         &mut self, source: SourceId, parameter: t::ExistentialParameter,
     ) -> Result<t::ExistentialParameter, ProgramAssemblyError> {
-        let t::ExistentialParameter { annotations, form } = parameter;
-        let form = match form {
-            | t::ExistentialParameterForm::Abstract(binder) => {
-                t::ExistentialParameterForm::Abstract(self.pattern(source, binder)?)
-            }
-            | t::ExistentialParameterForm::Manifest(t::ManifestParameter {
-                binder,
-                definition,
-                classifier,
-            }) => t::ExistentialParameterForm::Manifest(t::ManifestParameter {
-                binder: self.pattern(source, binder)?,
-                definition: self.term(source, definition)?,
-                classifier: classifier
-                    .map(|classifier| self.term(source, classifier))
-                    .transpose()?,
-            }),
-        };
-        Ok(t::ExistentialParameter { annotations, form })
+        let t::ExistentialParameter { annotations, binder } = parameter;
+        let binder = self.pattern(source, binder)?;
+        Ok(t::ExistentialParameter { annotations, binder })
     }
 
     fn binding(

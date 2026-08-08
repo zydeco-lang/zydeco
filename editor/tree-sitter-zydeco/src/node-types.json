@@ -34,6 +34,10 @@
         "named": true
       },
       {
+        "type": "manifest_pattern",
+        "named": true
+      },
+      {
         "type": "parenthesized_pattern",
         "named": true
       },
@@ -1090,6 +1094,44 @@
         "types": [
           {
             "type": "copattern",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "manifest_pattern",
+    "named": true,
+    "fields": {
+      "binder": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_pattern",
+            "named": true
+          },
+          {
+            "type": "named_pattern",
+            "named": true
+          },
+          {
+            "type": "pattern_annotation",
+            "named": true
+          },
+          {
+            "type": "punned_pattern",
+            "named": true
+          }
+        ]
+      },
+      "definition": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_term",
             "named": true
           }
         ]

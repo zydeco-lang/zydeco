@@ -30,6 +30,7 @@ pub enum EntityId {
 #[derive(From, Clone, Debug)]
 pub enum Pattern {
     Ann(Ann<PatId, TermId>),
+    Manifest(ManifestPattern),
     Hole(Hole),
     Var(DefId),
     Named(Named<FieldName, PatId>),
@@ -37,6 +38,17 @@ pub enum Pattern {
     Project(ProjectionPattern<FieldName, PatId>),
     Alias(Alias<PatId>),
     Paren(Paren<PatId>),
+}
+
+/// A type binder whose definition is disclosed by an enclosing existential.
+///
+/// In `exists (field = X as A : K) . B`, this node represents `X as A`.
+/// Ordinary named-pattern and annotation nodes wrap it to preserve the
+/// surface structure `field = ((X as A) : K)`.
+#[derive(Clone, Debug)]
+pub struct ManifestPattern {
+    pub binder: PatId,
+    pub definition: TermId,
 }
 
 #[derive(From, Clone, Debug)]
@@ -82,35 +94,20 @@ pub struct Forall(pub CoPatId, pub TermId);
 /// `sigma (x : A) (y : B) . C`
 #[derive(Clone, Debug)]
 pub struct Sigma(pub CoPatId, pub TermId);
-/// One abstract or manifest binder in an existential telescope.
+/// One binder in an existential telescope.
 #[derive(Clone, Debug)]
 pub struct ExistentialParameter {
     /// Metadata attached to this parameter's pattern.
     pub annotations: Vec<Sp<Meta>>,
-    pub form: ExistentialParameterForm,
-}
-
-#[derive(Clone, Debug)]
-pub enum ExistentialParameterForm {
-    Abstract(PatId),
-    Manifest(ManifestParameter),
+    /// The complete binder pattern. A manifest parameter contains one
+    /// `Pattern::Manifest` beneath its ordinary named and annotation wrappers.
+    pub binder: PatId,
 }
 
 impl ExistentialParameter {
     pub fn binder(&self) -> PatId {
-        match &self.form {
-            | ExistentialParameterForm::Abstract(binder) => *binder,
-            | ExistentialParameterForm::Manifest(parameter) => parameter.binder,
-        }
+        self.binder
     }
-}
-
-/// `(X as A : K)` or `(X as A)`
-#[derive(Clone, Debug)]
-pub struct ManifestParameter {
-    pub binder: PatId,
-    pub definition: TermId,
-    pub classifier: Option<TermId>,
 }
 
 /// `exists @[meta] (x : A) (X as B : K) . C`
@@ -322,6 +319,33 @@ impl Parser {
     pub fn pun_pattern(&mut self, field: Sp<FieldName>, ty: Option<Sp<TermId>>) -> Pattern {
         let inner = self.punned_pattern_payload(&field, ty);
         Named(field.inner, inner).into()
+    }
+    /// Insert a manifest binder beneath the leading named-pattern wrappers.
+    ///
+    /// This turns the parsed prefix `field = binder` plus the existential
+    /// suffix `as definition : classifier` into the structural pattern
+    /// `field = ((binder as definition) : classifier)`.
+    pub fn manifest_pattern(
+        &mut self, binder: PatId, definition: TermId, classifier: Option<TermId>, end: usize,
+        loc: &LocationCtx,
+    ) -> PatId {
+        let (start, _) = self.spans[&EntityId::Pat(binder)].get_cursor1();
+        let span = Span::new(start, end).under_loc_ctx(loc);
+        match self.arena.pats[&binder].clone() {
+            | Pattern::Named(Named(field, inner)) => {
+                let inner = self.manifest_pattern(inner, definition, classifier, end, loc);
+                self.arena.pats[&binder] = Named(field, inner).into();
+                self.spans.replace(binder, span);
+                binder
+            }
+            | _ => {
+                let manifest = ManifestPattern { binder, definition };
+                let manifest = self.pat(span.make(manifest.into()));
+                classifier
+                    .map(|ty| self.pat(span.make(Ann { tm: manifest, ty }.into())))
+                    .unwrap_or(manifest)
+            }
+        }
     }
     /// Expand `/field` into a projection pattern whose payload is a fresh
     /// same-spelled binder, optionally annotated.

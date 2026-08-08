@@ -431,6 +431,7 @@ module.exports = grammar({
       $.hole_pattern,
       $.variable_pattern,
       $.constructor_pattern,
+      $.manifest_pattern,
       $.parenthesized_pattern,
     ),
 
@@ -449,6 +450,14 @@ module.exports = grammar({
       field('constructor', $.constructor_identifier),
       field('argument', $._pattern),
     )),
+
+    manifest_pattern: $ => seq(
+      '(',
+      field('binder', $._pattern_item),
+      'as',
+      field('definition', $._term),
+      ')',
+    ),
 
     parenthesized_pattern: $ => seq(
       '(',

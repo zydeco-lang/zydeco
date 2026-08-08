@@ -214,6 +214,9 @@ Pattern: Pattern = {
     <Hole> => <>.into(),
     <DefId> => <>.into(),
     <ctor:CtorName> <pat:PatId> => Ctor(<>).into(),
+    "(" <binder:PatternAnnId> "as" <definition:TermId> ")" => {
+        ManifestPattern { binder, definition }.into()
+    },
     "(" <first:PatternAnnId> ";" <second:PatternAnnId>
         <rest:(";" <PatternAnnId>)*> ")" => {
         let patterns = std::iter::once(first)
@@ -245,19 +248,12 @@ CoPatternAtom: CoPattern = {
 
 ExistentialParameter: ExistentialParameter = {
     <annotations:MetaAnnotation*> "(" <binder:PatternAnnId> "as" <definition:TermId>
-        <classifier:(":" <TermId>)?> ")" => {
-        ExistentialParameter {
-            annotations,
-            form: ExistentialParameterForm::Manifest(ManifestParameter {
-                binder,
-                definition,
-                classifier,
-            }),
-        }
+        <classifier:(":" <TermId>)?> <r:@R> ")" => {
+        let binder = parser.manifest_pattern(binder, definition, classifier, r, loc);
+        ExistentialParameter { annotations, binder }
     },
-    <annotations:MetaAnnotation*> "(" <binder:PatternAnnId> ")" => ExistentialParameter {
-        annotations,
-        form: ExistentialParameterForm::Abstract(binder),
+    <annotations:MetaAnnotation*> "(" <binder:PatternAnnId> ")" => {
+        ExistentialParameter { annotations, binder }
     },
 };
 

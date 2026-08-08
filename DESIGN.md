@@ -183,6 +183,12 @@ prefix, allowing the package to be forwarded without reconstructing its position
 binders contribute their binder name as a punned field; explicitly named binders contribute their public label.
 Missing and ambiguous package fields use the ordinary projection errors.
 
+Manifest existential binders compose from the same pattern constructors. The fully grouped form
+`exists (field = ((X as A) : K)) . B` places the transparent binder `X as A` inside its payload annotation,
+then wraps that payload with the ordinary named pattern `field = ...`. The compact punned spelling
+`exists (= X as A : K) . B` expands to `exists (X = ((X as A) : K)) . B`; `exists` itself adds no field-punning
+rule.
+
 Type patterns make one additional distinction visible. A named pattern
 `(field = X) : (field :: K)` binds `X : K` to the payload, whereas a plain pattern
 `Whole : (field :: K)` binds the complete named type. Typed `forall`, `exists`,

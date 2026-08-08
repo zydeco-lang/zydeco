@@ -35,6 +35,8 @@ pub enum DesugarError {
     IntrinsicPayloadNotHole(Sp<t::TermId>),
     #[error("A quantified type parameter must be a pattern")]
     QuantifierParameterNotPattern(Sp<t::CoPatId>),
+    #[error("A manifest `as` pattern is only valid as an existential parameter")]
+    ManifestPatternOutsideExistential(Sp<t::PatId>),
     #[error("The binding has both `!` and `fix` modifiers")]
     CompWhileFix(Sp<b::PatId>),
 }

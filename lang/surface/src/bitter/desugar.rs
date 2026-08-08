@@ -72,29 +72,6 @@ pub struct SourceDesugarOut {
     pub root: b::TermId,
 }
 
-struct PatternPayloadAnnotation {
-    pattern: b::PatId,
-    ty: b::TermId,
-    source: t::EntityId,
-}
-
-impl PatternPayloadAnnotation {
-    fn build(self, desugarer: &mut Desugarer) -> b::PatId {
-        match desugarer.bitter.pats[&self.pattern].clone() {
-            | b::Pattern::Named(b::Named(name, inner)) => {
-                let inner =
-                    Self { pattern: inner, ty: self.ty, source: self.source }.build(desugarer);
-                Alloc::alloc(desugarer, b::Named(name, inner).into(), self.source)
-            }
-            | _ => Alloc::alloc(
-                desugarer,
-                b::Ann { tm: self.pattern, ty: self.ty }.into(),
-                self.source,
-            ),
-        }
-    }
-}
-
 #[derive(Copy, Clone)]
 enum Quantifier {
     Pi,
@@ -140,6 +117,51 @@ enum ExistentialParameterForm {
     Manifest { binder: b::PatId, definition: b::TermId },
 }
 
+impl ExistentialParameterForm {
+    fn binder(&self) -> b::PatId {
+        match self {
+            | Self::Abstract(binder) | Self::Manifest { binder, .. } => *binder,
+        }
+    }
+
+    fn with_binder(self, binder: b::PatId) -> Self {
+        match self {
+            | Self::Abstract(_) => Self::Abstract(binder),
+            | Self::Manifest { definition, .. } => Self::Manifest { binder, definition },
+        }
+    }
+
+    fn desugar(pattern: t::PatId, desugarer: &mut Desugarer) -> Result<Self> {
+        match desugarer.lookup_pat(pattern) {
+            | t::Pattern::Ann(t::Ann { tm, ty }) => {
+                let form = Self::desugar(tm, desugarer)?;
+                let ty = ty.desugar(desugarer)?;
+                let binder = Alloc::alloc(
+                    desugarer,
+                    b::Ann { tm: form.binder(), ty }.into(),
+                    pattern.into(),
+                );
+                Ok(form.with_binder(binder))
+            }
+            | t::Pattern::Named(t::Named(field, inner)) => {
+                let form = Self::desugar(inner, desugarer)?;
+                let binder =
+                    Alloc::alloc(desugarer, b::Named(field, form.binder()).into(), pattern.into());
+                Ok(form.with_binder(binder))
+            }
+            | t::Pattern::Manifest(t::ManifestPattern { binder, definition }) => {
+                let binder = binder.desugar(desugarer)?;
+                let definition = definition.desugar(desugarer)?;
+                Ok(Self::Manifest { binder, definition })
+            }
+            | t::Pattern::Paren(t::Paren(patterns)) if patterns.len() == 1 => {
+                Self::desugar(patterns[0], desugarer)
+            }
+            | _ => Ok(Self::Abstract(pattern.desugar(desugarer)?)),
+        }
+    }
+}
+
 struct ExistentialParameter {
     annotations: Vec<t::Meta>,
     form: ExistentialParameterForm,
@@ -148,33 +170,9 @@ struct ExistentialParameter {
 
 impl ExistentialParameter {
     fn desugar(parameter: t::ExistentialParameter, desugarer: &mut Desugarer) -> Result<Self> {
-        let t::ExistentialParameter { annotations, form } = parameter;
-        let (form, source, pattern) = match form {
-            | t::ExistentialParameterForm::Abstract(binder) => (
-                ExistentialParameterForm::Abstract(binder.desugar(desugarer)?),
-                binder.into(),
-                binder,
-            ),
-            | t::ExistentialParameterForm::Manifest(t::ManifestParameter {
-                binder,
-                definition,
-                classifier,
-            }) => {
-                let source = binder.into();
-                let pattern = binder;
-                let binder = binder.desugar(desugarer)?;
-                let definition = definition.desugar(desugarer)?;
-                let binder = match classifier {
-                    | Some(classifier) => {
-                        let classifier = classifier.desugar(desugarer)?;
-                        PatternPayloadAnnotation { pattern: binder, ty: classifier, source }
-                            .build(desugarer)
-                    }
-                    | None => binder,
-                };
-                (ExistentialParameterForm::Manifest { binder, definition }, source, pattern)
-            }
-        };
+        let t::ExistentialParameter { annotations, binder: pattern } = parameter;
+        let source = pattern.into();
+        let form = ExistentialParameterForm::desugar(pattern, desugarer)?;
         let annotation_site = pattern.span(desugarer.spans).clone().make(pattern);
         let annotations = annotations
             .into_iter()
@@ -279,6 +277,10 @@ impl Desugar for t::PatId {
                 let tm = tm.desugar(desugarer)?;
                 let ty = ty.desugar(desugarer)?;
                 Alloc::alloc(desugarer, b::Ann { tm, ty }.into(), self.into())
+            }
+            | Pat::Manifest(_) => {
+                let pattern = self.span(desugarer.spans).clone().make(self);
+                return Err(DesugarError::ManifestPatternOutsideExistential(pattern));
             }
             | Pat::Hole(pat) => {
                 let t::Hole = pat;

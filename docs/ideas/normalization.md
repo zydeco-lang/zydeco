@@ -79,7 +79,16 @@ The second line is the package representation of a manifest type.
 Its witness is packaged like an existential type component,
 but its defining equation is disclosed by the package signature.
 Here `X` is an ordinary type variable.
-Manifest existential types add only the equation `X ≡ A`; they do not introduce a new pattern or naming form.
+Manifest existential types add only the equation `X ≡ A`. The `as` decoration belongs to the binder payload and
+composes with ordinary pattern structure rather than introducing a separate naming form:
+
+```text
+exists (field = ((X as A) : K)) . B
+exists (= X as A : K) . B  ≡  exists (X = ((X as A) : K)) . B
+```
+
+The second line uses ordinary named-pattern punning. Its leading `=` derives the field from the head binder `X`,
+while `as A` and `: K` remain decorations of that payload.
 
 ## Manifest Static Fields
 

@@ -53,6 +53,13 @@ mod impl_span_arena {
         {
             self.spans.insert_new(id.into(), span);
         }
+        /// Replace the span of an existing textual entity.
+        pub fn replace<Id>(&mut self, id: Id, span: Span)
+        where
+            Id: Into<EntityId>,
+        {
+            self.spans[&id.into()] = span;
+        }
         /// Iterate over stored spans with their IDs.
         pub fn iter(&self) -> impl Iterator<Item = (&EntityId, &Span)> {
             self.spans.iter()

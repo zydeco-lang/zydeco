@@ -25,6 +25,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for PatId {
         let pat = &f.arena.pats[self];
         match pat {
             | Pattern::Ann(p) => s += &p.ugly(f),
+            | Pattern::Manifest(p) => s += &p.ugly(f),
             | Pattern::Hole(p) => s += &p.ugly(f),
             | Pattern::Var(p) => s += &p.ugly(f),
             | Pattern::Named(p) => s += &p.ugly(f),
@@ -115,6 +116,13 @@ where
         s += &ty.ugly(f);
         s += ")";
         s
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for ManifestPattern {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let ManifestPattern { binder, definition } = self;
+        format!("({} as {})", binder.ugly(f), definition.ugly(f))
     }
 }
 
@@ -378,27 +386,18 @@ impl<'a> Ugly<'a, Formatter<'a>> for ExistentialParameter {
             .map(|annotation| format!("@[{}]", annotation.inner.ugly(f)))
             .collect::<Vec<_>>()
             .join(" ");
-        let parameter = match &self.form {
-            | ExistentialParameterForm::Abstract(binder)
-                if matches!(f.arena.pats[binder], Pattern::Ann(_) | Pattern::Paren(_)) =>
+        let parameter = match self.binder {
+            | binder
+                if matches!(
+                    f.arena.pats[&binder],
+                    Pattern::Ann(_) | Pattern::Manifest(_) | Pattern::Paren(_)
+                ) =>
             {
                 binder.ugly(f)
             }
-            | ExistentialParameterForm::Abstract(binder) => {
-                format!("({})", binder.ugly(f))
-            }
-            | ExistentialParameterForm::Manifest(parameter) => parameter.ugly(f),
+            | binder => format!("({})", binder.ugly(f)),
         };
         if annotations.is_empty() { parameter } else { format!("{annotations} {parameter}") }
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for ManifestParameter {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let ManifestParameter { binder, definition, classifier } = self;
-        let classifier =
-            classifier.map(|classifier| format!(" : {}", classifier.ugly(f))).unwrap_or_default();
-        format!("({} as {}{})", binder.ugly(f), definition.ugly(f), classifier)
     }
 }
 

@@ -58,7 +58,7 @@ fn composes_manifest_existentials_with_named_package_fields() {
         r#"
 begin
   let CounterLibrary =
-    exists (Counter = Representation as Int : VType) .
+    exists (Counter = ((Representation as Int) : VType)) .
       (zero :: Representation)
   that
   def library : CounterLibrary = (

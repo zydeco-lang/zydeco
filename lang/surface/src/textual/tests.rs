@@ -2,15 +2,16 @@ use crate::{
     metadata::{BuiltinMetaError, IntrinsicMeta, IntrinsicMetaError},
     textual::{
         arena::TextualScope,
+        fmt::Formatter,
         syntax::{
             Alias, Ann, Appli, Block, BuiltinRole, BuiltinValueRole, CoPatId, ContextBind, DefId,
-            DefinitionMode, Dtor, EntityId, ExistentialParameter, ExistentialParameterForm, Exists,
-            Hole, IntrinsicRole, Label, Literal, ManifestParameter, Meta, MetaT, Named, Param,
-            Paren, Parser, PatId, Pattern, Placement, Prod, Proj, ProjectionPattern, SourceUnit,
-            Term, TermId,
+            DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists, Hole, IntrinsicRole,
+            Label, Literal, ManifestPattern, Meta, MetaT, Named, Param, Paren, Parser, PatId,
+            Pattern, Placement, Prod, Proj, ProjectionPattern, SourceUnit, Term, TermId,
         },
     },
 };
+use zydeco_syntax::Ugly;
 use zydeco_utils::{arena::IdAllocator, span::LocationCtx};
 
 use super::*;
@@ -483,19 +484,19 @@ fn parses_manifest_existential_with_a_punned_field_binder() {
     let Term::Exists(Exists { parameters, body }) = &parser.arena.terms[&term] else {
         panic!("expected a manifest existential")
     };
-    let [
-        ExistentialParameter {
-            annotations,
-            form:
-                ExistentialParameterForm::Manifest(ManifestParameter { binder, definition, classifier }),
-        },
-    ] = parameters.as_slice()
-    else {
+    let [ExistentialParameter { annotations, binder }] = parameters.as_slice() else {
         panic!("expected one manifest parameter")
     };
     assert!(annotations.is_empty());
-    let Pattern::Named(Named(field, binder)) = &parser.arena.pats[binder] else {
+    let Pattern::Named(Named(field, payload)) = &parser.arena.pats[binder] else {
         panic!("expected a punned named binder")
+    };
+    let Pattern::Ann(Ann { tm: manifest, ty: kind }) = &parser.arena.pats[payload] else {
+        panic!("expected the classifier to annotate the transparent payload")
+    };
+    let Pattern::Manifest(ManifestPattern { binder, definition }) = &parser.arena.pats[manifest]
+    else {
+        panic!("expected a transparent payload binder")
     };
     let Pattern::Var(binder) = &parser.arena.pats[binder] else {
         panic!("expected the field payload to be a type variable")
@@ -503,8 +504,7 @@ fn parses_manifest_existential_with_a_punned_field_binder() {
     let Term::Var(definition) = &parser.arena.terms[definition] else {
         panic!("expected a manifest definition")
     };
-    let kind = classifier.expect("expected a binder classifier");
-    let Term::Var(kind) = &parser.arena.terms[&kind] else { panic!("expected a binder kind") };
+    let Term::Var(kind) = &parser.arena.terms[kind] else { panic!("expected a binder kind") };
     let Term::Var(body) = &parser.arena.terms[body] else { panic!("expected a package body") };
 
     assert_eq!(field.plain(), "Counter");
@@ -512,6 +512,55 @@ fn parses_manifest_existential_with_a_punned_field_binder() {
     assert_eq!(definition.plain(), "Int");
     assert_eq!(kind.plain(), "VType");
     assert_eq!(body.plain(), "Counter");
+
+    let rendered = term.ugly(&Formatter::new(&parser.arena));
+    assert_eq!(rendered, "exists (Counter = ((Counter as Int) : VType)) . Counter");
+    let mut roundtrip = Parser::new();
+    parser::SingleTermParser::new()
+        .parse(&rendered, &LocationCtx::Plain, &mut roundtrip, lexer::Lexer::new(&rendered))
+        .unwrap();
+}
+
+#[test]
+fn parses_manifest_existential_inside_an_explicit_named_pattern() {
+    let source = "exists (Counter = ((Representation as Int) : VType)) . Representation";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::Exists(Exists { parameters, .. }) = &parser.arena.terms[&term] else {
+        panic!("expected a manifest existential")
+    };
+    let [ExistentialParameter { binder, .. }] = parameters.as_slice() else {
+        panic!("expected one manifest parameter")
+    };
+    let Pattern::Named(Named(field, payload)) = &parser.arena.pats[binder] else {
+        panic!("expected an explicitly named binder")
+    };
+    let Pattern::Paren(Paren(payload)) = &parser.arena.pats[payload] else {
+        panic!("expected the explicit grouping around the annotated payload")
+    };
+    let [payload] = payload.as_slice() else { panic!("expected one grouped payload") };
+    let Pattern::Ann(Ann { tm: manifest, ty }) = &parser.arena.pats[payload] else {
+        panic!("expected an annotated named payload")
+    };
+    let Pattern::Manifest(ManifestPattern { binder, definition }) = &parser.arena.pats[manifest]
+    else {
+        panic!("expected the transparent binder inside the named pattern")
+    };
+    let Pattern::Var(binder) = &parser.arena.pats[binder] else {
+        panic!("expected a variable binder")
+    };
+    let Term::Var(definition) = &parser.arena.terms[definition] else {
+        panic!("expected a transparent definition")
+    };
+    let Term::Var(ty) = &parser.arena.terms[ty] else { panic!("expected a payload classifier") };
+
+    assert_eq!(field.plain(), "Counter");
+    assert_eq!(parser.arena.defs[binder].plain(), "Representation");
+    assert_eq!(definition.plain(), "Int");
+    assert_eq!(ty.plain(), "VType");
 }
 
 #[test]
@@ -525,17 +574,14 @@ fn parses_manifest_existential_with_an_inferred_classifier() {
     let Term::Exists(Exists { parameters, body }) = &parser.arena.terms[&term] else {
         panic!("expected a manifest existential")
     };
-    let [
-        ExistentialParameter {
-            annotations,
-            form:
-                ExistentialParameterForm::Manifest(ManifestParameter { binder, definition, classifier }),
-        },
-    ] = parameters.as_slice()
-    else {
+    let [ExistentialParameter { annotations, binder }] = parameters.as_slice() else {
         panic!("expected one manifest parameter")
     };
     assert!(annotations.is_empty());
+    let Pattern::Manifest(ManifestPattern { binder, definition }) = &parser.arena.pats[binder]
+    else {
+        panic!("expected a transparent binder without a classifier")
+    };
     let Pattern::Var(binder) = &parser.arena.pats[binder] else {
         panic!("expected an ordinary kind-variable binder")
     };
@@ -554,7 +600,6 @@ fn parses_manifest_existential_with_an_inferred_classifier() {
         meta.specialize::<IntrinsicMeta>().unwrap().map(|meta| meta.role),
         Some(IntrinsicRole::VType)
     );
-    assert!(classifier.is_none());
     assert_eq!(body.plain(), "VType");
 }
 
@@ -569,14 +614,15 @@ fn parses_interleaved_abstract_and_manifest_existential_parameters() {
     let Term::Exists(Exists { parameters, body }) = &parser.arena.terms[&term] else {
         panic!("expected an existential telescope")
     };
-    assert!(matches!(
-        parameters.as_slice(),
-        [
-            ExistentialParameter { form: ExistentialParameterForm::Abstract(_), .. },
-            ExistentialParameter { form: ExistentialParameterForm::Manifest(_), .. },
-            ExistentialParameter { form: ExistentialParameterForm::Abstract(_), .. },
-        ]
-    ));
+    let [abstract_type, manifest_type, value] = parameters.as_slice() else {
+        panic!("expected three existential parameters")
+    };
+    assert!(matches!(parser.arena.pats[&abstract_type.binder], Pattern::Ann(_)));
+    let Pattern::Ann(Ann { tm: manifest, .. }) = &parser.arena.pats[&manifest_type.binder] else {
+        panic!("expected the manifest parameter to carry its classifier")
+    };
+    assert!(matches!(parser.arena.pats[manifest], Pattern::Manifest(_)));
+    assert!(matches!(parser.arena.pats[&value.binder], Pattern::Ann(_)));
     let Term::Var(body) = &parser.arena.terms[body] else {
         panic!("expected the telescope body to be a type variable")
     };
