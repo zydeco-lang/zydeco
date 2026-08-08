@@ -38,28 +38,93 @@ impl<'arena> PrettyFormatter<'arena> {
 
     /// Render one complete source unit with a trailing newline.
     pub fn render_unit(&'arena self, unit: SourceUnit) -> String {
-        self.render_doc(unit.pretty(self).append(RcDoc::hardline()))
+        let document = self.with_trailing_comments(unit.root.into(), unit.pretty(self));
+        self.render_doc(document.append(RcDoc::hardline()))
     }
 
     /// Render one term without adding a trailing newline.
     pub fn render_term(&'arena self, term: TermId) -> String {
-        self.render_doc(term.pretty(self))
+        let document = self.with_trailing_comments(term.into(), term.pretty(self));
+        self.render_doc(document)
     }
 
     /// Render one pattern without adding a trailing newline.
     pub fn render_pattern(&'arena self, pattern: PatId) -> String {
-        self.render_doc(pattern.pretty(self))
+        let document = self.with_trailing_comments(pattern.into(), pattern.pretty(self));
+        self.render_doc(document)
     }
 
     /// Render one copattern spine without adding a trailing newline.
     pub fn render_copattern(&'arena self, pattern: CoPatId) -> String {
-        self.render_doc(pattern.pretty(self))
+        let document = self.with_trailing_comments(pattern.into(), pattern.pretty(self));
+        self.render_doc(document)
     }
 
     fn render_doc(&self, document: RcDoc<'arena>) -> String {
         let mut output = String::new();
         document.render_fmt(self.options.line_width, &mut output).unwrap();
         output
+    }
+
+    fn with_leading_comments(
+        &'arena self, entity: EntityId, document: RcDoc<'arena>,
+    ) -> RcDoc<'arena> {
+        self.arena
+            .trivia
+            .leading_comments(entity)
+            .iter()
+            .fold(RcDoc::nil(), |prefix, comment| {
+                prefix
+                    .append(self.comment(comment.comment()))
+                    .append(self.line_separation(comment.separation_after()))
+            })
+            .append(document)
+    }
+
+    fn with_trailing_comments(
+        &'arena self, entity: EntityId, document: RcDoc<'arena>,
+    ) -> RcDoc<'arena> {
+        self.arena.trivia.trailing_comments(entity).iter().fold(document, |document, comment| {
+            document
+                .append(self.line_separation(comment.separation_before()))
+                .append(self.comment(comment.comment()))
+        })
+    }
+
+    fn comment(&'arena self, comment: &'arena SurfaceComment) -> RcDoc<'arena> {
+        match comment {
+            | SurfaceComment::Documentation(comment) => {
+                self.marked_comment_lines("--|", &comment.markdown)
+            }
+            | SurfaceComment::Line(comment) => self.marked_comment_lines("--", &comment.text),
+            | SurfaceComment::Block(comment) => self.block_comment(comment),
+        }
+    }
+
+    fn marked_comment_lines(
+        &'arena self, marker: &'static str, text: &'arena str,
+    ) -> RcDoc<'arena> {
+        RcDoc::intersperse(
+            text.split('\n').map(|line| {
+                if line.is_empty() {
+                    RcDoc::text(marker)
+                } else {
+                    RcDoc::text(marker).append(RcDoc::space()).append(RcDoc::text(line))
+                }
+            }),
+            RcDoc::hardline(),
+        )
+    }
+
+    fn block_comment(&'arena self, comment: &'arena BlockComment) -> RcDoc<'arena> {
+        RcDoc::intersperse(comment.text.split('\n').map(RcDoc::text), RcDoc::hardline())
+    }
+
+    fn line_separation(&self, separation: LineSeparation) -> RcDoc<'arena> {
+        match separation {
+            | LineSeparation::NextLine => RcDoc::hardline(),
+            | LineSeparation::BlankLine => RcDoc::hardline().append(RcDoc::hardline()),
+        }
     }
 
     fn delimited(
@@ -157,15 +222,16 @@ impl<'arena> PrettyFormatter<'arena> {
                 ),
             },
         };
-        if requirement.accepts(self.rendered_pattern_class(pattern)) {
+        let document = if requirement.accepts(self.rendered_pattern_class(pattern)) {
             document
         } else {
             self.delimited(Some(pattern.into()), "(", vec![document], ",", ")")
-        }
+        };
+        self.with_leading_comments(pattern.into(), document)
     }
 
     fn copattern(&'arena self, pattern: CoPatId) -> RcDoc<'arena> {
-        match &self.arena.copats[&pattern] {
+        let document = match &self.arena.copats[&pattern] {
             | CoPattern::Pat(pattern) => self.pattern(*pattern),
             | CoPattern::Dtor(name) => self.destructor(name),
             | CoPattern::App(Appli(patterns)) => self.group(
@@ -175,7 +241,8 @@ impl<'arena> PrettyFormatter<'arena> {
                     RcDoc::line(),
                 ),
             ),
-        }
+        };
+        self.with_leading_comments(pattern.into(), document)
     }
 
     fn term(&'arena self, term: TermId) -> RcDoc<'arena> {
@@ -194,7 +261,8 @@ impl<'arena> PrettyFormatter<'arena> {
         &'arena self, term: TermId, requirement: TermRequirement,
     ) -> RcDoc<'arena> {
         if let Term::SourceBoundary(SourceBoundary(inner)) = &self.arena.terms[&term] {
-            return self.term_with_requirement(*inner, requirement);
+            let document = self.term_with_requirement(*inner, requirement);
+            return self.with_leading_comments(term.into(), document);
         }
         let document = match &self.arena.terms[&term] {
             | Term::Meta(MetaT(meta, inner)) => RcDoc::text("@[")
@@ -368,11 +436,12 @@ impl<'arena> PrettyFormatter<'arena> {
                 .append(self.field(field)),
             | Term::Lit(literal) => self.literal(literal),
         };
-        if requirement.accepts(self.rendered_term_class(term)) {
+        let document = if requirement.accepts(self.rendered_term_class(term)) {
             document
         } else {
             self.delimited(Some(term.into()), "(", vec![document], ",", ")")
-        }
+        };
+        self.with_leading_comments(term.into(), document)
     }
 
     fn named_term(&'arena self, _term: TermId, field: &FieldName, inner: TermId) -> RcDoc<'arena> {
@@ -389,12 +458,15 @@ impl<'arena> PrettyFormatter<'arena> {
 
     fn term_constructor_argument(&'arena self, constructor: TermId, body: TermId) -> RcDoc<'arena> {
         match &self.arena.terms[&body] {
-            | Term::Paren(Paren(terms)) => self.delimited(
-                Some(body.into()),
-                "(",
-                terms.iter().map(|term| self.annotated_term(*term)).collect(),
-                ",",
-                ")",
+            | Term::Paren(Paren(terms)) => self.with_leading_comments(
+                body.into(),
+                self.delimited(
+                    Some(body.into()),
+                    "(",
+                    terms.iter().map(|term| self.annotated_term(*term)).collect(),
+                    ",",
+                    ")",
+                ),
             ),
             | _ => self.delimited(
                 Some(constructor.into()),
@@ -408,12 +480,15 @@ impl<'arena> PrettyFormatter<'arena> {
 
     fn pattern_constructor_argument(&'arena self, body: PatId) -> RcDoc<'arena> {
         match &self.arena.pats[&body] {
-            | Pattern::Paren(Paren(patterns)) => self.delimited(
-                Some(body.into()),
-                "(",
-                patterns.iter().map(|pattern| self.annotated_pattern(*pattern)).collect(),
-                ",",
-                ")",
+            | Pattern::Paren(Paren(patterns)) => self.with_leading_comments(
+                body.into(),
+                self.delimited(
+                    Some(body.into()),
+                    "(",
+                    patterns.iter().map(|pattern| self.annotated_pattern(*pattern)).collect(),
+                    ",",
+                    ")",
+                ),
             ),
             | _ => {
                 self.delimited(Some(body.into()), "(", vec![self.annotated_pattern(body)], ",", ")")
@@ -643,7 +718,8 @@ impl<'arena> PrettyFormatter<'arena> {
             | Some(classifier) => binder.append(RcDoc::text(" : ")).append(self.term(classifier)),
             | None => binder,
         };
-        self.delimited(Some(entity.into()), "(", vec![binder], ",", ")")
+        let document = self.delimited(Some(entity.into()), "(", vec![binder], ",", ")");
+        self.with_leading_comments(entity.into(), document)
     }
 
     fn binding(&'arena self, binding: &GenBind<TermId>) -> RcDoc<'arena> {
@@ -676,8 +752,7 @@ impl<'arena> PrettyFormatter<'arena> {
         &'arena self, keyword: &'static str, body: TermId, end: &'static str,
     ) -> RcDoc<'arena> {
         RcDoc::text(keyword)
-            .append(RcDoc::hardline())
-            .append(self.annotated_term(body).nest(self.options.indent))
+            .append(RcDoc::hardline().append(self.annotated_term(body)).nest(self.options.indent))
             .append(RcDoc::hardline())
             .append(RcDoc::text(end))
     }
@@ -742,8 +817,9 @@ impl<'arena> PrettyFormatter<'arena> {
             .append(RcDoc::text("end"))
     }
 
-    fn definition(&self, definition: DefId) -> RcDoc<'arena> {
-        self.variable(&self.arena.defs[&definition])
+    fn definition(&'arena self, definition: DefId) -> RcDoc<'arena> {
+        let document = self.variable(&self.arena.defs[&definition]);
+        self.with_leading_comments(definition.into(), document)
     }
 
     fn variable(&self, name: &VarName) -> RcDoc<'arena> {
@@ -808,7 +884,7 @@ mod tests {
     use crate::bitter::{
         SourceUnitDesugarer, arena::BitterArena, fmt::Formatter as BitterFormatter,
     };
-    use crate::textual::{Lexer, SourceUnitParser};
+    use crate::textual::{Lexer, LexicalTokenKind, LexicalTokens, SourceUnitParser};
     use zydeco_syntax::Ugly;
     use zydeco_utils::pass::CompilerPass;
     use zydeco_utils::span::LocationCtx;
@@ -816,6 +892,27 @@ mod tests {
     struct ParsedSource {
         unit: SourceUnit,
         parser: Parser,
+    }
+
+    struct RetainedComments;
+
+    impl RetainedComments {
+        fn collect(source: &str) -> Vec<(LexicalTokenKind, String)> {
+            LexicalTokens::new(source)
+                .filter(|token| {
+                    matches!(
+                        token.kind,
+                        LexicalTokenKind::Comment | LexicalTokenKind::DocumentationComment
+                    )
+                })
+                .map(|token| {
+                    let comment = &source[token.range];
+                    let comment = comment.strip_suffix('\n').unwrap_or(comment);
+                    let comment = comment.strip_suffix('\r').unwrap_or(comment);
+                    (token.kind, comment.to_string())
+                })
+                .collect()
+        }
     }
 
     impl ParsedSource {
@@ -949,6 +1046,109 @@ mod tests {
     }
 
     #[test]
+    fn preserves_documentation_comments_around_formatted_syntax() {
+        let source = concat!(
+            "--| Package heading\n",
+            "--|\n",
+            "--| Package details.\n",
+            "@[doc] begin\n",
+            "  --| A documented binding.\n",
+            "  let value = ((1)) that\n",
+            "  --| Use the value.\n",
+            "  value\n",
+            "end\n",
+            "--| Trailing note.\n",
+        );
+        let parsed = ParsedSource::new(source);
+        let formatted = parsed.render(LayoutIntentions::Ignore);
+
+        assert_eq!(
+            formatted,
+            concat!(
+                "--| Package heading\n",
+                "--|\n",
+                "--| Package details.\n",
+                "@[doc] begin\n",
+                "  --| A documented binding.\n",
+                "  let value = 1\n",
+                "  that\n",
+                "  --| Use the value.\n",
+                "  value\n",
+                "end\n",
+                "--| Trailing note.\n",
+            )
+        );
+        assert_eq!(RetainedComments::collect(source), RetainedComments::collect(&formatted));
+    }
+
+    #[test]
+    fn preserves_ordinary_and_nested_block_comments() {
+        let source = concat!(
+            "-- Package note.\n",
+            "/- Outer note.\n",
+            "   /- Nested note. -/\n",
+            "-/\n",
+            "begin\n",
+            "  -- Binding note.\n",
+            "  let value = ((1)) that\n",
+            "  /- Use the\n",
+            "     bound value. -/\n",
+            "  value\n",
+            "end\n",
+            "-- End note.\n",
+            "/- Final note. -/\n",
+        );
+        let parsed = ParsedSource::new(source);
+        let formatted = parsed.render(LayoutIntentions::Ignore);
+
+        assert_eq!(
+            formatted,
+            concat!(
+                "-- Package note.\n",
+                "/- Outer note.\n",
+                "   /- Nested note. -/\n",
+                "-/\n",
+                "begin\n",
+                "  -- Binding note.\n",
+                "  let value = 1\n",
+                "  that\n",
+                "  /- Use the\n",
+                "     bound value. -/\n",
+                "  value\n",
+                "end\n",
+                "-- End note.\n",
+                "/- Final note. -/\n",
+            )
+        );
+        assert_eq!(RetainedComments::collect(source), RetainedComments::collect(&formatted));
+
+        let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(formatted, reparsed.render(LayoutIntentions::Ignore));
+    }
+
+    #[test]
+    fn preserves_separation_of_detached_documentation() {
+        [
+            ("--| Detached\n\n@[doc] _", "--| Detached\n\n@[doc] _\n"),
+            ("--| Detached\n-- barrier\n@[doc] _", "--| Detached\n-- barrier\n@[doc] _\n"),
+        ]
+        .into_iter()
+        .for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Ignore);
+            assert_eq!(formatted, expected);
+
+            let reparsed = ParsedSource::new(&formatted);
+            let documentation =
+                reparsed.unit.documentation(&reparsed.parser.arena, &reparsed.parser.spans);
+            let [site] = documentation.as_slice() else {
+                panic!("expected one documentation annotation")
+            };
+            assert!(site.directive.comment.is_none());
+        });
+    }
+
+    #[test]
     fn canonical_pretty_printing_round_trips_idempotently() {
         let parsed = ParsedSource::new("(field = field, = kept, renamed = other)");
         let first = parsed.render(LayoutIntentions::Ignore);
@@ -1012,6 +1212,11 @@ mod tests {
                 "formatter changed the desugared structure of {name}"
             );
             assert_eq!(first, second, "formatter is not idempotent for {name}");
+            assert_eq!(
+                RetainedComments::collect(source),
+                RetainedComments::collect(&first),
+                "formatter changed comments in {name}"
+            );
         });
     }
 }

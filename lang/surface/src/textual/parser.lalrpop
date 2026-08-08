@@ -229,7 +229,7 @@ Pattern: Pattern = {
 };
 
 pub SinglePattern: PatId = <pattern:PatId> => {
-    parser.capture_intentions(input);
+    parser.capture_source_information(input);
     pattern
 };
 
@@ -437,11 +437,11 @@ Term: Term = {
 };
 
 pub SingleTerm: TermId = <term:TermId> => {
-    parser.capture_intentions(input);
+    parser.capture_source_information(input);
     term
 };
 
 pub SourceUnit: SourceUnit = <root:TermId> => {
-    parser.capture_intentions(input);
+    parser.capture_source_information(input);
     SourceUnit { root }
 };

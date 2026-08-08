@@ -2,6 +2,7 @@
 
 pub use super::arena::*;
 pub use super::intention::*;
+pub use super::trivia::*;
 pub use crate::{arena::*, syntax::*};
 pub use zydeco_syntax::*;
 pub use zydeco_utils::span::{LocationCtx, Sp, Span};
@@ -302,24 +303,31 @@ impl Parser {
         self.arena.terms.insert_new(id, term.inner);
         id
     }
-    /// Retain source layout choices after one public parser entry point
-    /// succeeds.
+    /// Retain source presentation after one public parser entry point succeeds.
     ///
     /// Existing spans let printers reuse selected layout decisions without
     /// introducing layout-only variants into the textual AST.
-    pub fn capture_intentions(&mut self, source: &str) {
-        let layouts = self
+    pub fn capture_source_information(&mut self, source: &str) {
+        let entities = self
             .spans
             .iter()
             .filter(|(entity, _)| self.arena.intentions.line_layout(**entity).is_none())
             .filter_map(|(entity, span)| {
                 let (start, end) = span.get_cursor1();
-                let layout = if source.get(start..end)?.contains('\n') {
+                source.get(start..end)?;
+                Some(SpannedEntity::new(*entity, start, end))
+            })
+            .collect::<Vec<_>>();
+        self.arena.trivia.record_comments(CommentCapture::new(source, &entities));
+        let layouts = entities
+            .into_iter()
+            .map(|entity| {
+                let layout = if source[entity.start()..entity.end()].contains('\n') {
                     LineLayout::Multiline
                 } else {
                     LineLayout::Inline
                 };
-                Some((*entity, layout))
+                (entity.entity(), layout)
             })
             .collect::<Vec<_>>();
         layouts

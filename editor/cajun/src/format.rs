@@ -109,6 +109,30 @@ mod tests {
     }
 
     #[test]
+    fn formatting_preserves_comments() {
+        let source = concat!(
+            "--| Keep this documentation.\n",
+            "-- Keep this comment.\n",
+            "/- Keep this block. -/\n",
+            "(field = field, ((x)))",
+        );
+        let formatter = DocumentFormatter::from_lsp(&TestOptions::spaces());
+        let FormattingOutcome::Edit(edit) = formatter.format(source) else {
+            panic!("expected a formatting edit")
+        };
+
+        assert_eq!(
+            edit.new_text,
+            concat!(
+                "--| Keep this documentation.\n",
+                "-- Keep this comment.\n",
+                "/- Keep this block. -/\n",
+                "(= field, x)\n",
+            )
+        );
+    }
+
+    #[test]
     fn whole_document_range_uses_utf16_positions() {
         let edit = WholeDocumentEdit::replacing("x\n\"😀\"", "x".to_string()).unwrap();
 

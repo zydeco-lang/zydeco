@@ -14,6 +14,9 @@ pub mod textual {
     /// Author-selected layout attached to canonical textual IDs.
     pub mod intention;
     pub use intention::*;
+    /// Comments and other source material retained outside canonical syntax.
+    pub mod trivia;
+    pub use trivia::*;
     /// Surface AST, IDs, and parser allocation helpers.
     pub mod syntax;
     /// Textual arenas and span storage.

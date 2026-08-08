@@ -30,6 +30,9 @@ resolution.
   report precise locations; it is storage-only and retains no ID allocator.
 - `SurfaceIntentions` is an auxiliary arena keyed by `EntityId`. It records layout choices such as whether a
   parsed entity crossed a line boundary without adding presentation-only variants to the syntax tree.
+- `SurfaceTrivia` retains source content outside the syntax tree. Documentation, line, and nested block comments
+  are kept as typed values in one source-ordered sequence and anchored to stable textual entities, so formatters
+  can move the surrounding syntax without discarding comment content.
 - `Parser` combines `TextArena` and `SpanArena` and is passed through the
   LALRPOP-generated parser. It owns the `KeySpace` only while nodes are being
   parsed, then `finish` returns the two durable arenas and drops the issuer.
@@ -55,6 +58,11 @@ resolution.
 - `fmt::PrettyFormatter` renders the same textual arenas through compositional documents. `PrettyOptions`
   independently configures width, indentation, whether recorded line layout is consulted, and whether redundant
   singleton grouping parentheses are preserved.
+
+Line comments are canonicalized as `--` or `--|` lines, nested block comments retain their delimiters and relative
+indentation, and all comment kinds are always printed. Recorded blank separators remain blank separators after
+formatting. Only an uninterrupted adjacent `--|` block attaches to a following `@[doc]` annotation, so an ordinary
+comment continues to separate documentation prose from the annotation.
 
 The pretty printer treats concise puns as canonical syntax rather than author intent. Named terms, named patterns,
 and projection patterns therefore use their punned spelling whenever their payload is the same-named variable,

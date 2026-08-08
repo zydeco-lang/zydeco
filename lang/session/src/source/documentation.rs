@@ -78,7 +78,10 @@ mod tests {
         };
 
         assert_eq!(provider_doc.path(), provider.canonicalize().unwrap());
-        assert_eq!(provider_doc.site.directive.comment.as_ref().unwrap().markdown, "Provider term");
+        assert_eq!(
+            provider_doc.site.directive.comment.as_ref().unwrap().markdown.as_ref(),
+            "Provider term"
+        );
         assert_eq!(
             provider_doc.site.directive.meta.arguments,
             [Meta::ident("module"), Meta::string("provider")]
@@ -88,13 +91,16 @@ mod tests {
 
         assert_eq!(import_doc.path(), root.canonicalize().unwrap());
         assert_eq!(
-            import_doc.site.directive.comment.as_ref().unwrap().markdown,
+            import_doc.site.directive.comment.as_ref().unwrap().markdown.as_ref(),
             "Imported provider"
         );
         assert_eq!(import_doc.term_source(), "@[import(\"provider.zy\")] _");
         assert!(matches!(import_doc.term(), Term::Meta(MetaT(meta, _)) if meta.is("import")));
 
-        assert_eq!(literal_doc.site.directive.comment.as_ref().unwrap().markdown, "Root literal");
+        assert_eq!(
+            literal_doc.site.directive.comment.as_ref().unwrap().markdown.as_ref(),
+            "Root literal"
+        );
         assert_eq!(literal_doc.term_source(), "1");
     }
 }

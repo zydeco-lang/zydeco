@@ -35,7 +35,7 @@ impl SourceTemplate {
                 path: path.clone(),
                 message: ParseError { error, file_info: &info }.to_string(),
             })?;
-        let documentation = unit.documentation(&source, &parser.arena, &parser.spans);
+        let documentation = unit.documentation(&parser.arena, &parser.spans);
         let import_sites = unit
             .imports(&parser.arena, &parser.spans)
             .map_err(|error| SourceParseError::Directive { path: path.clone(), error })?;

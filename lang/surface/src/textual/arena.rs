@@ -1,5 +1,5 @@
-use super::SurfaceIntentions;
 use super::syntax::*;
+use super::{SurfaceIntentions, SurfaceTrivia};
 
 /* ---------------------------------- Arena --------------------------------- */
 
@@ -33,6 +33,8 @@ pub struct TextArena {
     pub terms: ArenaSparse<TextualScope, TermId>,
     /// Author-selected layout that does not change canonical syntax.
     pub intentions: SurfaceIntentions,
+    /// Source content retained without adding syntax variants.
+    pub trivia: SurfaceTrivia,
 }
 
 /// Span storage keyed by textual entity IDs.
