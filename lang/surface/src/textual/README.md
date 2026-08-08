@@ -28,6 +28,8 @@ resolution.
   `SpecializeMeta`, and are requested explicitly by the phases that consume them.
 - `SpanArena` stores `Span` values for every textual entity so later phases can
   report precise locations; it is storage-only and retains no ID allocator.
+- `SurfaceIntentions` is an auxiliary arena keyed by `EntityId`. It records layout choices such as whether a
+  parsed entity crossed a line boundary without adding presentation-only variants to the syntax tree.
 - `Parser` combines `TextArena` and `SpanArena` and is passed through the
   LALRPOP-generated parser. It owns the `KeySpace` only while nodes are being
   parsed, then `finish` returns the two durable arenas and drops the issuer.
@@ -50,3 +52,17 @@ resolution.
 - `err` formats parser errors with file path and location context.
 - `fmt::ugly` renders textual syntax back into a safe surface form for
   debugging and diagnostics.
+- `fmt::PrettyFormatter` renders the same textual arenas through compositional documents. `PrettyOptions`
+  independently configures width, indentation, whether recorded line layout is consulted, and whether redundant
+  singleton grouping parentheses are preserved.
+
+The pretty printer treats concise puns as canonical syntax rather than author intent. Named terms, named patterns,
+and projection patterns therefore use their punned spelling whenever their payload is the same-named variable,
+including the annotated forms. `NamedTermPunningAudit` can inventory explicit term fields that will become puns;
+the standard-library regression currently records 96 such fields without rewriting those source files.
+
+Minimal parenthesis formatting follows the parser's typed precedence contexts. A singleton group is removed only
+when its child is accepted in that exact grammar position, so right-associated arrows may lose redundant grouping
+while the left side of an arrow or an atomic force operand retains grouping when required. The regression suite
+also compares the original and formatted standard library after desugaring, which checks that these presentation
+changes preserve the language-level structure.

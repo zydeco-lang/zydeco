@@ -19,6 +19,7 @@ im = { workspace = true }
 unindent = { workspace = true }
 thiserror = { workspace = true }
 ariadne = { workspace = true }
+pretty = { workspace = true }
 auto_impl = { workspace = true }
 zydeco-utils = { workspace = true }
 zydeco-derive = { workspace = true }

@@ -1,3 +1,4 @@
+use super::SurfaceIntentions;
 use super::syntax::*;
 
 /* ---------------------------------- Arena --------------------------------- */
@@ -30,6 +31,8 @@ pub struct TextArena {
     pub pats: ArenaSparse<TextualScope, PatId>,
     pub copats: ArenaSparse<TextualScope, CoPatId>,
     pub terms: ArenaSparse<TextualScope, TermId>,
+    /// Author-selected layout that does not change canonical syntax.
+    pub intentions: SurfaceIntentions,
 }
 
 /// Span storage keyed by textual entity IDs.

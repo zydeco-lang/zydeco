@@ -228,7 +228,10 @@ Pattern: Pattern = {
     <Paren<PatternAnnId>> => <>.into(),
 };
 
-pub SinglePattern: PatId = PatId;
+pub SinglePattern: PatId = <pattern:PatId> => {
+    parser.capture_intentions(input);
+    pattern
+};
 
 CoPatternGen<P>: CoPatId = <Sp<P>> => parser.copat(<>);
 
@@ -433,6 +436,12 @@ Term: Term = {
     <MetaT<TermGen<Term>>> => <>.into(),
 };
 
-pub SingleTerm: TermId = TermId;
+pub SingleTerm: TermId = <term:TermId> => {
+    parser.capture_intentions(input);
+    term
+};
 
-pub SourceUnit: SourceUnit = <root:TermId> => SourceUnit { root };
+pub SourceUnit: SourceUnit = <root:TermId> => {
+    parser.capture_intentions(input);
+    SourceUnit { root }
+};

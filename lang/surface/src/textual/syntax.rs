@@ -1,6 +1,7 @@
 //! The surface syntax of zydeco.
 
 pub use super::arena::*;
+pub use super::intention::*;
 pub use crate::{arena::*, syntax::*};
 pub use zydeco_syntax::*;
 pub use zydeco_utils::span::{LocationCtx, Sp, Span};
@@ -300,6 +301,30 @@ impl Parser {
         let id = self.alloc(term.info);
         self.arena.terms.insert_new(id, term.inner);
         id
+    }
+    /// Retain source layout choices after one public parser entry point
+    /// succeeds.
+    ///
+    /// Existing spans let printers reuse selected layout decisions without
+    /// introducing layout-only variants into the textual AST.
+    pub fn capture_intentions(&mut self, source: &str) {
+        let layouts = self
+            .spans
+            .iter()
+            .filter(|(entity, _)| self.arena.intentions.line_layout(**entity).is_none())
+            .filter_map(|(entity, span)| {
+                let (start, end) = span.get_cursor1();
+                let layout = if source.get(start..end)?.contains('\n') {
+                    LineLayout::Multiline
+                } else {
+                    LineLayout::Inline
+                };
+                Some((*entity, layout))
+            })
+            .collect::<Vec<_>>();
+        layouts
+            .into_iter()
+            .for_each(|(entity, layout)| self.arena.intentions.record_line_layout(entity, layout));
     }
     /// Expand `= field` into a named term whose payload is the same-spelled
     /// variable, optionally annotated.

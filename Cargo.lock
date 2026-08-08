@@ -2349,6 +2349,7 @@ dependencies = [
  "lalrpop",
  "lalrpop-util",
  "logos",
+ "pretty",
  "regex",
  "sequence_trie",
  "thiserror",
