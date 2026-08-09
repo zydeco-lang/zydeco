@@ -188,13 +188,16 @@ impl<'arena> PrettyFormatter<'arena> {
                 && self.arena.intentions.line_layout(entity) == Some(LineLayout::Multiline))
     }
 
-    /// Whether canonical rendering of this term already supplies the
-    /// parentheses represented by a transparent singleton group.
-    fn renders_with_parentheses(&self, term: TermId) -> bool {
+    /// Whether a transparent singleton group surrounds an application.
+    /// Applications used to print their own delimiters, so recognizing this
+    /// shape also removes wrappers left by earlier formatter output.
+    fn transparently_groups_application(&self, term: TermId) -> bool {
         match &self.arena.terms[&term] {
-            | Term::SourceBoundary(SourceBoundary(inner)) => self.renders_with_parentheses(*inner),
+            | Term::SourceBoundary(SourceBoundary(inner)) => {
+                self.transparently_groups_application(*inner)
+            }
             | Term::Paren(Paren(terms)) => match terms.as_slice() {
-                | [inner] => self.renders_with_parentheses(*inner),
+                | [inner] => self.transparently_groups_application(*inner),
                 | _ => false,
             },
             | Term::App(_) => true,
@@ -339,7 +342,7 @@ impl<'arena> PrettyFormatter<'arena> {
             | Term::Paren(Paren(terms)) => match terms.as_slice() {
                 | [inner]
                     if (self.should_elide_parentheses(term.into())
-                        || self.renders_with_parentheses(*inner))
+                        || self.transparently_groups_application(*inner))
                         && self.term_requirement_accepts(requirement, *inner) =>
                 {
                     self.term_with_requirement(*inner, requirement)
@@ -363,26 +366,7 @@ impl<'arena> PrettyFormatter<'arena> {
                             .nest(self.options.indent),
                     ),
             ),
-            | Term::App(Appli(terms)) => self.delimited(
-                Some(term.into()),
-                "(",
-                terms
-                    .iter()
-                    .enumerate()
-                    .map(|(index, term)| {
-                        self.term_through(
-                            *term,
-                            if index == 0 {
-                                TermPrecedence::Application
-                            } else {
-                                TermPrecedence::Projection
-                            },
-                        )
-                    })
-                    .collect(),
-                "",
-                ")",
-            ),
+            | Term::App(Appli(terms)) => self.application(term, terms),
             | Term::KontCall(KontCall { body, tail }) => RcDoc::text("do~ ")
                 .append(self.term_through(*body, TermPrecedence::Binder))
                 .append(RcDoc::text(";"))
@@ -497,6 +481,23 @@ impl<'arena> PrettyFormatter<'arena> {
         self.with_leading_comments(term.into(), document)
     }
 
+    fn application(&'arena self, term: TermId, terms: &[TermId]) -> RcDoc<'arena> {
+        let [head, first_argument, arguments @ ..] = terms else {
+            unreachable!("application terms always contain a function and an argument")
+        };
+        let head = self.term_through(*head, TermPrecedence::Application);
+        let arguments = RcDoc::intersperse(
+            std::iter::once(first_argument)
+                .chain(arguments)
+                .map(|argument| self.term_through(*argument, TermPrecedence::Projection)),
+            RcDoc::line(),
+        );
+        self.group(
+            Some(term.into()),
+            head.append(RcDoc::line().append(arguments).nest(self.options.indent)),
+        )
+    }
+
     fn named_term(&'arena self, _term: TermId, field: &FieldName, inner: TermId) -> RcDoc<'arena> {
         let payload = Punning::new(self.arena).term_payload(field, inner);
         match payload {
@@ -590,7 +591,6 @@ impl<'arena> PrettyFormatter<'arena> {
             | Term::Hole(_)
             | Term::Var(_)
             | Term::Paren(_)
-            | Term::App(_)
             | Term::Thunk(_)
             | Term::Force(_)
             | Term::Ret(_)
@@ -603,7 +603,7 @@ impl<'arena> PrettyFormatter<'arena> {
             | Term::CoMatch(_)
             | Term::Lit(_) => RenderedTermClass::Term(TermPrecedence::Atom),
             | Term::Proj(_) => RenderedTermClass::Term(TermPrecedence::Projection),
-            | Term::Dtor(_) => RenderedTermClass::Term(TermPrecedence::Application),
+            | Term::App(_) | Term::Dtor(_) => RenderedTermClass::Term(TermPrecedence::Application),
             | Term::Prod(_) => RenderedTermClass::Term(TermPrecedence::Product),
             | Term::Arrow(_) => RenderedTermClass::Term(TermPrecedence::Arrow),
             | Term::Pi(_) | Term::Forall(_) | Term::Sigma(_) | Term::Exists(_) => {
@@ -1070,7 +1070,9 @@ mod tests {
             ("(A * B) * C", "(A * B) * C\n"),
             ("A * (B * C)", "A * B * C\n"),
             ("! (value/field)", "! (value/field)\n"),
-            ("f (value/field)", "(f value/field)\n"),
+            ("f (value/field)", "f value/field\n"),
+            ("f (g x)", "f (g x)\n"),
+            ("(f x)/field", "(f x)/field\n"),
             ("((field = field))", "(= field)\n"),
             ("comatch x => x end", "fn x => x\n"),
             ("! comatch x => x end", "! (fn x => x)\n"),
@@ -1079,7 +1081,8 @@ mod tests {
         cases.into_iter().for_each(|(source, expected)| {
             let parsed = ParsedSource::new(source);
             assert_eq!(parsed.render(LayoutIntentions::Ignore), expected, "source: {source}");
-            ParsedSource::new(expected);
+            let reparsed = ParsedSource::new(expected);
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape(), "source: {source}");
         });
 
         let parsed = ParsedSource::new("((x))");
@@ -1095,16 +1098,9 @@ mod tests {
     }
 
     #[test]
-    fn does_not_duplicate_multiline_application_parentheses() {
-        let canonical = concat!(
-            "(\n",
-            "  Thk\n",
-            "  (\n",
-            "    forall (B : CType) .\n",
-            "      B\n",
-            "  )\n",
-            ")\n",
-        );
+    fn does_not_add_parentheses_to_multiline_applications() {
+        let canonical =
+            concat!("Thk\n", "  (\n", "    forall (B : CType) .\n", "      B\n", "  )\n",);
         let parsed = ParsedSource::new(canonical);
         let formatted = parsed.render_with_options(PrettyOptions::default());
 
@@ -1167,6 +1163,10 @@ mod tests {
         let cases = [
             ("let value = item in value", "let value = item in\nvalue\n"),
             ("def value = item that value", "def value = item that\nvalue\n"),
+            (
+                "let Cmp (A : VType) =\n  Thk (A -> A -> Ret Bool)\nthat\nvalue",
+                "let Cmp (A : VType) = Thk (A -> A -> Ret Bool) that\nvalue\n",
+            ),
         ];
 
         cases.into_iter().for_each(|(source, expected)| {
