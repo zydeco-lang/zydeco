@@ -137,16 +137,13 @@ impl<'arena> PrettyFormatter<'arena> {
 
     fn line_separation(&self, separation: LineSeparation) -> RcDoc<'arena> {
         match separation {
+            | LineSeparation::SameLine => RcDoc::space(),
             | LineSeparation::NextLine => RcDoc::hardline(),
-            | LineSeparation::BlankLine => RcDoc::hardline().append(RcDoc::hardline()),
+            | LineSeparation::BlankLine => RcDoc::nesting(|nesting| {
+                let nesting = isize::try_from(nesting).unwrap_or(isize::MAX);
+                RcDoc::hardline().append(RcDoc::hardline()).nest(-nesting)
+            }),
         }
-    }
-
-    fn parameter_sequence<I>(&self, parameters: I) -> RcDoc<'arena>
-    where
-        I: IntoIterator<Item = RcDoc<'arena>>,
-    {
-        RcDoc::intersperse(parameters, RcDoc::line()).nest(self.options.indent)
     }
 
     fn delimited(
@@ -175,12 +172,20 @@ impl<'arena> PrettyFormatter<'arena> {
     fn annotation(
         &'arena self, entity: EntityId, term: RcDoc<'arena>, ty: TermId, parenthesized: bool,
     ) -> RcDoc<'arena> {
-        let annotation = term.append(RcDoc::text(" : ")).append(self.term(ty));
+        let annotation = term.append(RcDoc::text(" :")).append(RcDoc::line().append(self.term(ty)));
         if parenthesized {
             self.delimited(Some(entity), "(", vec![annotation], ",", ")")
         } else {
             self.group(Some(entity), annotation)
         }
+    }
+
+    /// Elide a transparent group unless its delimiters carry a preserved
+    /// multiline layout boundary.
+    fn should_elide_parentheses(&self, entity: EntityId) -> bool {
+        self.options.parentheses == Parentheses::Minimal
+            && !(self.options.layout_intentions == LayoutIntentions::Preserve
+                && self.arena.intentions.line_layout(entity) == Some(LineLayout::Multiline))
     }
 
     fn pattern(&'arena self, pattern: PatId) -> RcDoc<'arena> {
@@ -230,7 +235,7 @@ impl<'arena> PrettyFormatter<'arena> {
             ),
             | Pattern::Paren(Paren(patterns)) => match patterns.as_slice() {
                 | [inner]
-                    if self.options.parentheses == Parentheses::Minimal
+                    if self.should_elide_parentheses(pattern.into())
                         && self.pattern_requirement_accepts(requirement, *inner) =>
                 {
                     self.pattern_with_requirement(*inner, requirement)
@@ -319,7 +324,7 @@ impl<'arena> PrettyFormatter<'arena> {
             }
             | Term::Paren(Paren(terms)) => match terms.as_slice() {
                 | [inner]
-                    if self.options.parentheses == Parentheses::Minimal
+                    if self.should_elide_parentheses(term.into())
                         && self.term_requirement_accepts(requirement, *inner) =>
                 {
                     self.term_with_requirement(*inner, requirement)
@@ -428,7 +433,7 @@ impl<'arena> PrettyFormatter<'arena> {
                         .nest(self.options.indent),
                 ),
             | Term::Let(GenLet { binding, tail }) => {
-                RcDoc::text("let ").append(self.binding(binding)).append(RcDoc::text(" in")).append(
+                RcDoc::text("let ").append(self.placed_binding(binding, Placement::In)).append(
                     RcDoc::line()
                         .append(self.term_through(*tail, TermPrecedence::Binder))
                         .nest(self.options.indent),
@@ -446,9 +451,7 @@ impl<'arena> PrettyFormatter<'arena> {
                     | DefinitionMode::Nominal => "def ",
                 };
                 RcDoc::text(keyword)
-                    .append(self.binding(binding))
-                    .append(RcDoc::hardline())
-                    .append(self.placement(*placement))
+                    .append(self.placed_binding(binding, *placement))
                     .append(RcDoc::hardline())
                     .append(self.term_through(*tail, TermPrecedence::Binder))
             }
@@ -641,11 +644,25 @@ impl<'arena> PrettyFormatter<'arena> {
 
     fn exists(&'arena self, term: TermId, exists: &Exists) -> RcDoc<'arena> {
         let Exists { parameters, body } = exists;
-        let parameters = parameters.iter().map(|parameter| self.existential_parameter(parameter));
+        let Some((first, rest)) = parameters.split_first() else {
+            unreachable!("the parser requires at least one existential parameter")
+        };
+        let begins_with_documentation = self
+            .arena
+            .trivia
+            .leading_comments(first.binder().into())
+            .iter()
+            .any(|comment| comment.comment().as_documentation().is_some());
+        let separator = if begins_with_documentation { RcDoc::hardline() } else { RcDoc::space() };
+        let parameters = RcDoc::intersperse(
+            std::iter::once(self.existential_parameter(first))
+                .chain(rest.iter().map(|parameter| self.existential_parameter(parameter))),
+            RcDoc::line(),
+        );
         self.group(
             Some(term.into()),
-            RcDoc::text("exists ")
-                .append(self.parameter_sequence(parameters))
+            RcDoc::text("exists")
+                .append(separator.append(parameters).nest(self.options.indent))
                 .append(RcDoc::text(" ."))
                 .append(RcDoc::line().append(self.term(*body)).nest(self.options.indent)),
         )
@@ -715,7 +732,7 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn transparent_pattern_group(&self, pattern: PatId) -> PatId {
-        if self.options.parentheses == Parentheses::Minimal
+        if self.should_elide_parentheses(pattern.into())
             && let Pattern::Paren(Paren(patterns)) = &self.arena.pats[&pattern]
             && let [inner] = patterns.as_slice()
         {
@@ -757,7 +774,9 @@ impl<'arena> PrettyFormatter<'arena> {
         self.with_leading_comments(entity.into(), document)
     }
 
-    fn binding(&'arena self, binding: &GenBind<TermId>) -> RcDoc<'arena> {
+    fn placed_binding(
+        &'arena self, binding: &GenBind<TermId>, placement: Placement,
+    ) -> RcDoc<'arena> {
         let GenBind { fix, comp, binder, params, ty, bindee } = binding;
         let modifiers = [(*comp).then_some("!"), (*fix).then_some("fix")]
             .into_iter()
@@ -771,8 +790,12 @@ impl<'arena> PrettyFormatter<'arena> {
             | Some(ty) => head.append(RcDoc::text(" : ")).append(self.term(*ty)),
             | None => head,
         };
+        let bindee = self
+            .term(*bindee)
+            .append(RcDoc::line().append(self.placement(placement)).nest(-self.options.indent))
+            .group();
         head.append(RcDoc::text(" ="))
-            .append(RcDoc::line().append(self.term(*bindee)).nest(self.options.indent))
+            .append(RcDoc::line().append(bindee).nest(self.options.indent))
             .group()
     }
 
@@ -1016,8 +1039,7 @@ mod tests {
         assert_eq!(
             parsed.render(LayoutIntentions::Preserve),
             concat!(
-                "let (= field, /projected) = input\n",
-                "in\n",
+                "let (= field, /projected) = input in\n",
                 "(= field, = kept, = annotated : Type, renamed = other)\n",
             )
         );
@@ -1064,10 +1086,8 @@ mod tests {
                 "begin let first = value that let second = first that second end",
                 concat!(
                     "begin\n",
-                    "  let first = value\n",
-                    "  that\n",
-                    "  let second = first\n",
-                    "  that\n",
+                    "  let first = value that\n",
+                    "  let second = first that\n",
                     "  second\n",
                     "end\n",
                 ),
@@ -1086,6 +1106,47 @@ mod tests {
         cases.into_iter().for_each(|(source, expected)| {
             let parsed = ParsedSource::new(source);
             let formatted = parsed.render(LayoutIntentions::Ignore);
+            assert_eq!(formatted, expected, "source: {source}");
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        });
+    }
+
+    #[test]
+    fn keeps_placement_with_short_context_bindees() {
+        let cases = [
+            ("let value = item in value", "let value = item in\nvalue\n"),
+            ("def value = item that value", "def value = item that\nvalue\n"),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Ignore);
+            assert_eq!(formatted, expected, "source: {source}");
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        });
+    }
+
+    #[test]
+    fn outdents_placement_after_long_context_bindees() {
+        let options = PrettyOptions::default()
+            .with_line_width(20)
+            .with_layout_intentions(LayoutIntentions::Ignore);
+        let cases = [
+            (
+                "let value = extraordinarily_long_bindee in value",
+                concat!("let value =\n", "  extraordinarily_long_bindee\n", "in\n", "value\n"),
+            ),
+            (
+                "def value = extraordinarily_long_bindee that value",
+                concat!("def value =\n", "  extraordinarily_long_bindee\n", "that\n", "value\n",),
+            ),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render_with_options(options);
             assert_eq!(formatted, expected, "source: {source}");
             let reparsed = ParsedSource::new(&formatted);
             assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
@@ -1113,6 +1174,32 @@ mod tests {
 
         assert_eq!(parsed.render(LayoutIntentions::Preserve), "(\n  = first,\n  = second\n)\n");
         assert_eq!(parsed.render(LayoutIntentions::Ignore), "(= first, = second)\n");
+    }
+
+    #[test]
+    fn preserves_fitting_groups_inside_multiline_layout() {
+        let source = concat!(
+            "begin\n",
+            "  param (\n",
+            "    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /OS; /int; /string; /stdio; /process) :\n",
+            "    @[import(\"../../lib/std/builtin.zy\")] _\n",
+            "  ) that\n",
+            "  _\n",
+            "end\n",
+        );
+        let parsed = ParsedSource::new(source);
+        let formatted = parsed.render_with_options(PrettyOptions::default());
+
+        assert_eq!(formatted, source);
+        let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+
+        let narrow = parsed.render_with_options(PrettyOptions::default().with_line_width(90));
+        assert_ne!(narrow, source);
+        assert!(narrow.lines().all(|line| line.len() <= 90));
+        assert!(narrow.contains("\n      /VType;\n"));
+        let reparsed = ParsedSource::new(&narrow);
+        assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
     }
 
     #[test]
@@ -1149,6 +1236,54 @@ mod tests {
     }
 
     #[test]
+    fn does_not_pad_comment_driven_line_breaks() {
+        let source = concat!(
+            "exists\n",
+            "  --| Parameter documentation.\n",
+            "\n",
+            "  (Value : Type) . Value",
+        );
+        let parsed = ParsedSource::new(source);
+        let formatted = parsed.render(LayoutIntentions::Preserve);
+
+        assert_eq!(
+            formatted,
+            concat!(
+                "exists\n",
+                "  --| Parameter documentation.\n",
+                "\n",
+                "  (Value : Type) .\n",
+                "  Value\n",
+            )
+        );
+        assert!(formatted.lines().all(|line| line.trim_end() == line));
+
+        let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+    }
+
+    #[test]
+    fn preserves_a_single_line_break_after_nested_comments() {
+        let source =
+            concat!("exists\n", "  --| Parameter documentation.\n", "  (Value : Type) . Value",);
+        let parsed = ParsedSource::new(source);
+        let formatted = parsed.render(LayoutIntentions::Preserve);
+
+        assert_eq!(
+            formatted,
+            concat!(
+                "exists\n",
+                "  --| Parameter documentation.\n",
+                "  (Value : Type) .\n",
+                "  Value\n",
+            )
+        );
+
+        let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+    }
+
+    #[test]
     fn preserves_documentation_comments_around_formatted_syntax() {
         let source = concat!(
             "--| Package heading\n",
@@ -1173,8 +1308,7 @@ mod tests {
                 "--| Package details.\n",
                 "@[doc] begin\n",
                 "  --| A documented binding.\n",
-                "  let value = 1\n",
-                "  that\n",
+                "  let value = 1 that\n",
                 "  --| Use the value.\n",
                 "  value\n",
                 "end\n",
@@ -1227,8 +1361,7 @@ mod tests {
                 "-/\n",
                 "begin\n",
                 "  -- Binding note.\n",
-                "  let value = 1\n",
-                "  that\n",
+                "  let value = 1 that\n",
                 "  /- Use the\n",
                 "     bound value. -/\n",
                 "  value\n",
@@ -1241,6 +1374,26 @@ mod tests {
 
         let reparsed = ParsedSource::new(&formatted);
         assert_eq!(formatted, reparsed.render(LayoutIntentions::Ignore));
+    }
+
+    #[test]
+    fn preserves_line_separation_around_comments() {
+        let cases = [
+            ("/- Inline. -/value", "/- Inline. -/ value\n"),
+            ("/- Above. -/\nvalue", "/- Above. -/\nvalue\n"),
+            ("/- Detached. -/\n\nvalue", "/- Detached. -/\n\nvalue\n"),
+            ("value/- Trailing. -/", "value /- Trailing. -/\n"),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Ignore);
+            assert_eq!(formatted, expected, "source: {source}");
+            assert_eq!(RetainedComments::collect(source), RetainedComments::collect(&formatted));
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Ignore));
+        });
     }
 
     #[test]

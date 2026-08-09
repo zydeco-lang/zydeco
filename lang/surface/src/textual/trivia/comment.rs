@@ -50,32 +50,56 @@ impl SurfaceComment {
     }
 
     fn consumes_line_ending(&self, source: &str) -> bool {
-        source.get(self.range().clone()).is_some_and(|comment| comment.ends_with('\n'))
+        source.get(self.range().clone()).is_some_and(|comment| comment.ends_with(['\r', '\n']))
     }
 }
 
-/// The canonical vertical separation between trivia and adjacent syntax.
+/// The canonical line separation between trivia and adjacent syntax.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum LineSeparation {
+    SameLine,
     NextLine,
     BlankLine,
 }
 
 impl LineSeparation {
     fn after_comment(source: &str, comment: &SurfaceComment, end: usize) -> Self {
-        let allowed_line_breaks = usize::from(!comment.consumes_line_ending(source));
-        let adjacent = source.get(comment.range().end..end).is_some_and(|gap| {
-            gap.chars().all(Self::is_gap_whitespace)
-                && Self::line_breaks(gap) <= allowed_line_breaks
-        });
-        if adjacent { Self::NextLine } else { Self::BlankLine }
+        source.get(comment.range().end..end).map_or(Self::BlankLine, |gap| {
+            let line_breaks = Self::line_breaks(Self::whitespace_prefix(gap))
+                + usize::from(comment.consumes_line_ending(source));
+            Self::from_line_breaks(line_breaks)
+        })
     }
 
     fn before_comment(source: &str, start: usize, comment: &SurfaceComment) -> Self {
-        let adjacent = source.get(start..comment.range().start).is_some_and(|gap| {
-            gap.chars().all(Self::is_gap_whitespace) && Self::line_breaks(gap) <= 1
-        });
-        if adjacent { Self::NextLine } else { Self::BlankLine }
+        source.get(start..comment.range().start).map_or(Self::BlankLine, |gap| {
+            Self::from_line_breaks(Self::line_breaks(Self::whitespace_suffix(gap)))
+        })
+    }
+
+    fn from_line_breaks(line_breaks: usize) -> Self {
+        match line_breaks {
+            | 0 => Self::SameLine,
+            | 1 => Self::NextLine,
+            | _ => Self::BlankLine,
+        }
+    }
+
+    fn whitespace_prefix(gap: &str) -> &str {
+        let end = gap
+            .char_indices()
+            .find(|(_, character)| !Self::is_gap_whitespace(*character))
+            .map_or(gap.len(), |(index, _)| index);
+        &gap[..end]
+    }
+
+    fn whitespace_suffix(gap: &str) -> &str {
+        let start = gap
+            .char_indices()
+            .rev()
+            .find(|(_, character)| !Self::is_gap_whitespace(*character))
+            .map_or(0, |(index, character)| index + character.len_utf8());
+        &gap[start..]
     }
 
     fn line_breaks(source: &str) -> usize {
@@ -216,10 +240,18 @@ impl CommentCapture {
             .map(|anchor| {
                 comments[first_trailing..]
                     .iter()
-                    .scan(anchor.end, |previous_end, comment| {
-                        let separation =
-                            LineSeparation::before_comment(source, *previous_end, comment);
-                        *previous_end = comment.range().end;
+                    .scan(None, |previous, comment| {
+                        let separation = previous.map_or_else(
+                            || LineSeparation::before_comment(source, anchor.end, comment),
+                            |previous| {
+                                LineSeparation::after_comment(
+                                    source,
+                                    previous,
+                                    comment.range().start,
+                                )
+                            },
+                        );
+                        *previous = Some(comment);
                         Some((anchor.entity, TrailingComment::new(separation, comment.clone())))
                     })
                     .collect()

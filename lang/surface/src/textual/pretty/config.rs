@@ -16,7 +16,8 @@ pub enum Parentheses {
     /// Retain every parsed singleton grouping node.
     Preserve,
     /// Remove a grouping node exactly when the surrounding grammar position
-    /// accepts its child without the group.
+    /// accepts its child without the group. When line-layout intentions are
+    /// preserved, a multiline group remains as an indentation boundary.
     #[default]
     Minimal,
 }

@@ -56,8 +56,9 @@ resolution.
 - `fmt::ugly` renders textual syntax back into a safe surface form for
   debugging and diagnostics.
 - `fmt::PrettyFormatter` renders the same textual arenas through compositional documents. `PrettyOptions`
-  independently configures width, indentation, whether recorded line layout is consulted, and whether redundant
-  singleton grouping parentheses are preserved.
+  configures width, indentation, whether recorded line layout is consulted, and whether redundant singleton
+  grouping parentheses are preserved. Preserved multiline parentheses remain as indentation boundaries, while
+  fitting child groups stay on one line until the configured width requires a break.
 
 Line comments are canonicalized as `--` or `--|` lines, nested block comments retain their delimiters and relative
 indentation, and all comment kinds are always printed. Recorded blank separators remain blank separators after
