@@ -8,6 +8,7 @@ pub use zydeco_syntax::*;
 pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
 use derive_more::From;
+use zydeco_utils::span::FileInfo;
 
 /* ------------------------------- Identifier ------------------------------- */
 
@@ -308,10 +309,11 @@ impl Parser {
     /// Existing spans let printers reuse selected layout decisions without
     /// introducing layout-only variants into the textual AST.
     pub fn capture_source_information(&mut self, source: &str) {
+        let file_info = FileInfo::new(source, None);
         let entities = self
             .spans
             .iter()
-            .filter(|(entity, _)| self.arena.intentions.line_layout(**entity).is_none())
+            .filter(|(entity, _)| self.arena.intentions.line_extent(**entity).is_none())
             .filter_map(|(entity, span)| {
                 let (start, end) = span.get_cursor1();
                 source.get(start..end)?;
@@ -319,20 +321,18 @@ impl Parser {
             })
             .collect::<Vec<_>>();
         self.arena.trivia.record_comments(CommentCapture::new(source, &entities));
-        let layouts = entities
+        let extents = entities
             .into_iter()
             .map(|entity| {
-                let layout = if source[entity.start()..entity.end()].contains('\n') {
-                    LineLayout::Multiline
-                } else {
-                    LineLayout::Inline
-                };
-                (entity.entity(), layout)
+                let occupied_end = entity.end().saturating_sub(1).max(entity.start());
+                let first = file_info.trans_span2(entity.start()).line;
+                let last = file_info.trans_span2(occupied_end).line;
+                (entity.entity(), LineExtent::new(first, last))
             })
             .collect::<Vec<_>>();
-        layouts
+        extents
             .into_iter()
-            .for_each(|(entity, layout)| self.arena.intentions.record_line_layout(entity, layout));
+            .for_each(|(entity, extent)| self.arena.intentions.record_line_extent(entity, extent));
     }
     /// Expand `= field` into a named term whose payload is the same-spelled
     /// variable, optionally annotated.
