@@ -188,6 +188,20 @@ impl<'arena> PrettyFormatter<'arena> {
                 && self.arena.intentions.line_layout(entity) == Some(LineLayout::Multiline))
     }
 
+    /// Whether canonical rendering of this term already supplies the
+    /// parentheses represented by a transparent singleton group.
+    fn renders_with_parentheses(&self, term: TermId) -> bool {
+        match &self.arena.terms[&term] {
+            | Term::SourceBoundary(SourceBoundary(inner)) => self.renders_with_parentheses(*inner),
+            | Term::Paren(Paren(terms)) => match terms.as_slice() {
+                | [inner] => self.renders_with_parentheses(*inner),
+                | _ => false,
+            },
+            | Term::App(_) => true,
+            | _ => false,
+        }
+    }
+
     fn pattern(&'arena self, pattern: PatId) -> RcDoc<'arena> {
         self.pattern_with_requirement(pattern, PatternRequirement::Pattern)
     }
@@ -324,7 +338,8 @@ impl<'arena> PrettyFormatter<'arena> {
             }
             | Term::Paren(Paren(terms)) => match terms.as_slice() {
                 | [inner]
-                    if self.should_elide_parentheses(term.into())
+                    if (self.should_elide_parentheses(term.into())
+                        || self.renders_with_parentheses(*inner))
                         && self.term_requirement_accepts(requirement, *inner) =>
                 {
                     self.term_with_requirement(*inner, requirement)
@@ -1080,6 +1095,41 @@ mod tests {
     }
 
     #[test]
+    fn does_not_duplicate_multiline_application_parentheses() {
+        let canonical = concat!(
+            "(\n",
+            "  Thk\n",
+            "  (\n",
+            "    forall (B : CType) .\n",
+            "      B\n",
+            "  )\n",
+            ")\n",
+        );
+        let parsed = ParsedSource::new(canonical);
+        let formatted = parsed.render_with_options(PrettyOptions::default());
+
+        assert_eq!(formatted, canonical);
+        let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(formatted, reparsed.render_with_options(PrettyOptions::default()));
+        assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+
+        let redundant = concat!(
+            "(\n",
+            "  (\n",
+            "    Thk\n",
+            "    (\n",
+            "      forall (B : CType) .\n",
+            "        B\n",
+            "    )\n",
+            "  )\n",
+            ")\n",
+        );
+        let redundant = ParsedSource::new(redundant);
+        assert_eq!(redundant.render_with_options(PrettyOptions::default()), canonical);
+        assert_eq!(redundant.desugared_shape(), parsed.desugared_shape());
+    }
+
+    #[test]
     fn keeps_right_nested_terms_at_the_same_precedence_unparenthesized() {
         let cases = [
             (
@@ -1192,6 +1242,7 @@ mod tests {
 
         assert_eq!(formatted, source);
         let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(formatted, reparsed.render_with_options(PrettyOptions::default()));
         assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
 
         let narrow = parsed.render_with_options(PrettyOptions::default().with_line_width(90));
@@ -1199,6 +1250,10 @@ mod tests {
         assert!(narrow.lines().all(|line| line.len() <= 90));
         assert!(narrow.contains("\n      /VType;\n"));
         let reparsed = ParsedSource::new(&narrow);
+        assert_eq!(
+            narrow,
+            reparsed.render_with_options(PrettyOptions::default().with_line_width(90))
+        );
         assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
     }
 
