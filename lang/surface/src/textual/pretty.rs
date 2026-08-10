@@ -867,11 +867,7 @@ impl<'arena> PrettyFormatter<'arena> {
                     self.term_through_fragment(*body, TermPrecedence::Binder),
                 ))
                 .append(RcDoc::text(";"))
-                .append(
-                    RcDoc::line()
-                        .append(self.term_through(*tail, TermPrecedence::Binder))
-                        .nest(self.options.indent),
-                ),
+                .append(self.sequence_tail(*tail)),
             | Term::Fix(Fix(pattern, body)) => {
                 self.grouped_join(
                     LayoutFragment::entity(
@@ -912,24 +908,15 @@ impl<'arena> PrettyFormatter<'arena> {
                     self.term_through_fragment(*bindee, TermPrecedence::Binder),
                 ))
                 .append(RcDoc::text(";"))
-                .append(
-                    RcDoc::line()
-                        .append(self.term_through(*tail, TermPrecedence::Binder))
-                        .nest(self.options.indent),
-                ),
-            | Term::Let(GenLet { binding, tail }) => {
-                RcDoc::text("let ").append(self.placed_binding(binding, Placement::In)).append(
-                    RcDoc::line()
-                        .append(self.term_through(*tail, TermPrecedence::Binder))
-                        .nest(self.options.indent),
-                )
-            }
+                .append(self.sequence_tail(*tail)),
+            | Term::Let(GenLet { binding, tail }) => RcDoc::text("let ")
+                .append(self.placed_binding(binding, Placement::In))
+                .append(self.sequence_tail(*tail)),
             | Term::Param(Param { binder, placement, tail }) => RcDoc::text("param ")
                 .append(self.annotated_pattern(*binder))
                 .append(RcDoc::text(" "))
                 .append(self.placement(*placement))
-                .append(RcDoc::hardline())
-                .append(self.term_through(*tail, TermPrecedence::Binder)),
+                .append(self.sequence_tail(*tail)),
             | Term::ContextBind(ContextBind { mode, binding, placement, tail }) => {
                 let keyword = match mode {
                     | DefinitionMode::Transparent => "let ",
@@ -937,8 +924,7 @@ impl<'arena> PrettyFormatter<'arena> {
                 };
                 RcDoc::text(keyword)
                     .append(self.placed_binding(binding, *placement))
-                    .append(RcDoc::hardline())
-                    .append(self.term_through(*tail, TermPrecedence::Binder))
+                    .append(self.sequence_tail(*tail))
             }
             | Term::Block(Block(body)) => self.block("begin", *body, "end"),
             | Term::MoBlock(MoBlock(body)) => self.block("monadic", *body, "end"),
@@ -1369,6 +1355,10 @@ impl<'arena> PrettyFormatter<'arena> {
         ))
     }
 
+    fn sequence_tail(&'arena self, tail: TermId) -> RcDoc<'arena> {
+        RcDoc::hardline().append(self.term_through(tail, TermPrecedence::Binder))
+    }
+
     fn bindee_with_placement(
         &'arena self, bindee: RcDoc<'arena>, placement: RcDoc<'arena>,
     ) -> RcDoc<'arena> {
@@ -1781,7 +1771,7 @@ mod tests {
             ("fn x => fn y => x", "fn x => fn y => x\n"),
             (
                 "do x <- first; do y <- second; ret y",
-                concat!("do x <- first;\n", "  do y <- second;\n", "    ret y\n"),
+                concat!("do x <- first;\n", "do y <- second;\n", "ret y\n"),
             ),
         ];
 
@@ -1790,6 +1780,50 @@ mod tests {
             let formatted = parsed.render(LayoutIntentions::Ignore);
             assert_eq!(formatted, expected, "source: {source}");
             let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        });
+    }
+
+    #[test]
+    fn aligns_sequential_continuations_at_the_current_indentation() {
+        let cases = [
+            (
+                "do~ first; do~ second; ret value",
+                concat!("do~ first;\n", "do~ second;\n", "ret value\n"),
+            ),
+            (
+                "let first = one in let second = two in second",
+                concat!("let first = one in\n", "let second = two in\n", "second\n"),
+            ),
+            (
+                "let first = one that let second = two that second",
+                concat!("let first = one that\n", "let second = two that\n", "second\n"),
+            ),
+            (
+                "def first = one in def second = two in second",
+                concat!("def first = one in\n", "def second = two in\n", "second\n"),
+            ),
+            (
+                "def first = one that def second = two that second",
+                concat!("def first = one that\n", "def second = two that\n", "second\n"),
+            ),
+            (
+                "param (A : VType) in param (B : VType) in body",
+                concat!("param A : VType in\n", "param B : VType in\n", "body\n"),
+            ),
+            (
+                "param (A : VType) that param (B : VType) that body",
+                concat!("param A : VType that\n", "param B : VType that\n", "body\n"),
+            ),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Ignore);
+            assert_eq!(formatted, expected, "source: {source}");
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Ignore));
             assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
         });
     }
