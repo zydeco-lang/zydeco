@@ -1381,7 +1381,10 @@ impl<'arena> PrettyFormatter<'arena> {
                 let broken = broken.clone();
                 DOC_ALLOCATOR
                     .nesting(move |nesting| {
-                        if Self::document_fits_on_one_line(&joined, column, nesting, line_width) {
+                        let bindee_starts_own_line = column == nesting;
+                        if !bindee_starts_own_line
+                            && Self::document_fits_on_one_line(&joined, column, nesting, line_width)
+                        {
                             joined.clone()
                         } else {
                             broken.clone()
@@ -1904,7 +1907,7 @@ mod tests {
     }
 
     #[test]
-    fn breaks_placement_after_multiline_context_bindees() {
+    fn breaks_placement_after_multiline_bindings() {
         let cases = [
             (
                 "let value = A *\nB in value",
@@ -1917,6 +1920,60 @@ mod tests {
             (
                 "let value = begin\nitem\nend in value",
                 concat!("let value = begin\n", "  item\n", "end\n", "in\n", "value\n"),
+            ),
+            (
+                "let Cmp (A : VType) =\n  Thk (A -> A -> Ret Bool)\nthat\nvalue",
+                concat!(
+                    "let Cmp (A : VType) =\n",
+                    "  Thk (A -> A -> Ret Bool)\n",
+                    "that\n",
+                    "value\n",
+                ),
+            ),
+            (
+                "let Cmp (A : VType) =\n  Thk (A -> A -> Ret Bool)\nin\nvalue",
+                concat!(
+                    "let Cmp (A : VType) =\n",
+                    "  Thk (A -> A -> Ret Bool)\n",
+                    "in\n",
+                    "value\n",
+                ),
+            ),
+            (
+                "def Cmp (A : VType) =\n  Thk (A -> A -> Ret Bool)\nthat\nvalue",
+                concat!(
+                    "def Cmp (A : VType) =\n",
+                    "  Thk (A -> A -> Ret Bool)\n",
+                    "that\n",
+                    "value\n",
+                ),
+            ),
+            (
+                "def Cmp (A : VType) =\n  Thk (A -> A -> Ret Bool)\nin\nvalue",
+                concat!(
+                    "def Cmp (A : VType) =\n",
+                    "  Thk (A -> A -> Ret Bool)\n",
+                    "in\n",
+                    "value\n",
+                ),
+            ),
+            (
+                concat!(
+                    "begin\n",
+                    "  let Cmp (A : VType) =\n",
+                    "    Thk (A -> A -> Ret Bool)\n",
+                    "  that\n",
+                    "  value\n",
+                    "end",
+                ),
+                concat!(
+                    "begin\n",
+                    "  let Cmp (A : VType) =\n",
+                    "    Thk (A -> A -> Ret Bool)\n",
+                    "  that\n",
+                    "  value\n",
+                    "end\n",
+                ),
             ),
         ];
 
