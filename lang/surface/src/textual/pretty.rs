@@ -63,6 +63,12 @@ enum BoundaryMode {
     Block,
 }
 
+#[derive(Copy, Clone)]
+enum DelimiterSpacing {
+    Tight,
+    Spaced,
+}
+
 struct BoundaryLayout<'arena> {
     prefix: RcDoc<'arena>,
     joined: RcDoc<'arena>,
@@ -131,6 +137,17 @@ impl<'arena> BoundaryLayout<'arena> {
             broken: RcDoc::hardline(),
             joined_indent,
             broken_indent,
+        }
+    }
+}
+
+impl DelimiterSpacing {
+    fn boundary<'arena>(
+        self, joined_indent: isize, broken_indent: isize,
+    ) -> BoundaryLayout<'arena> {
+        match self {
+            | Self::Tight => BoundaryLayout::tight(joined_indent, broken_indent),
+            | Self::Spaced => BoundaryLayout::after("", joined_indent, broken_indent),
         }
     }
 }
@@ -544,6 +561,14 @@ impl<'arena> PrettyFormatter<'arena> {
         &'arena self, entity: Option<EntityId>, open: &'static str,
         items: Vec<LayoutFragment<'arena>>, separator: &'static str, close: &'static str,
     ) -> RcDoc<'arena> {
+        self.delimited_with_spacing(entity, open, items, separator, close, DelimiterSpacing::Tight)
+    }
+
+    fn delimited_with_spacing(
+        &'arena self, entity: Option<EntityId>, open: &'static str,
+        items: Vec<LayoutFragment<'arena>>, separator: &'static str, close: &'static str,
+        spacing: DelimiterSpacing,
+    ) -> RcDoc<'arena> {
         if items.is_empty() {
             return RcDoc::text(open).append(RcDoc::text(close));
         }
@@ -552,10 +577,10 @@ impl<'arena> PrettyFormatter<'arena> {
             .and_then(|entity| self.arena.intentions.after_start(entity, items.anchors.first));
         let before_close =
             entity.and_then(|entity| self.arena.intentions.before_end(items.anchors.last, entity));
-        let contents_layout = BoundaryLayout::tight(self.options.indent, self.options.indent);
+        let contents_layout = spacing.boundary(self.options.indent, self.options.indent);
         let contents =
             self.layout_boundary(after_open, contents_layout, items.boundary_mode, items.document);
-        let close = self.boundary(before_close, BoundaryLayout::tight(0, 0), RcDoc::text(close));
+        let close = self.boundary(before_close, spacing.boundary(0, 0), RcDoc::text(close));
         RcDoc::text(open).append(contents).append(close)
     }
 
@@ -865,9 +890,14 @@ impl<'arena> PrettyFormatter<'arena> {
             | Term::Sigma(Sigma(pattern, body)) => self.quantifier("sigma", *pattern, *body),
             | Term::Exists(exists) => self.exists(term, exists),
             | Term::Prod(_) => self.infix_chain(term, InfixOperator::Product),
-            | Term::Thunk(Thunk(body)) => {
-                self.delimited(Some(term.into()), "{", vec![self.term_fragment(*body)], ",", "}")
-            }
+            | Term::Thunk(Thunk(body)) => self.delimited_with_spacing(
+                Some(term.into()),
+                "{",
+                vec![self.term_fragment(*body)],
+                ",",
+                "}",
+                DelimiterSpacing::Spaced,
+            ),
             | Term::Force(Force(body)) => {
                 RcDoc::text("! ").append(self.term_through(*body, TermPrecedence::Atom))
             }
@@ -1619,6 +1649,35 @@ mod tests {
                 "let (= field, /projected) = input in\n",
                 "(= field, = kept, = annotated : Type, renamed = other)\n",
             )
+        );
+    }
+
+    #[test]
+    fn spaces_inline_thunk_contents_and_indents_broken_contents() {
+        let cases = [
+            ("{SomeComputation}", "{ SomeComputation }\n"),
+            ("{ SomeComputation }", "{ SomeComputation }\n"),
+            ("{\nSomeComputation\n}", "{\n  SomeComputation\n}\n"),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, expected, "source: {source}");
+            assert!(formatted.lines().all(|line| line.trim_end() == line));
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        });
+
+        let parsed = ParsedSource::new("{SomeComputation}");
+        assert_eq!(
+            parsed.render_with_options(
+                PrettyOptions::default()
+                    .with_line_width(12)
+                    .with_layout_intentions(LayoutIntentions::Ignore),
+            ),
+            "{\n  SomeComputation\n}\n"
         );
     }
 
