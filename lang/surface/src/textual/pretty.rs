@@ -1017,24 +1017,29 @@ impl<'arena> PrettyFormatter<'arena> {
 
     fn pattern_constructor_argument(&'arena self, body: PatId) -> RcDoc<'arena> {
         match &self.arena.pats[&body] {
-            | Pattern::Paren(Paren(patterns)) => self.with_leading_comments(
-                body.into(),
-                self.delimited(
-                    Some(body.into()),
-                    "(",
-                    patterns
-                        .iter()
-                        .map(|pattern| {
-                            LayoutFragment::entity(
-                                (*pattern).into(),
-                                self.annotated_pattern(*pattern),
-                            )
-                        })
-                        .collect(),
-                    ",",
-                    ")",
+            | Pattern::Alias(_) | Pattern::Manifest(_) => self.annotated_pattern(body),
+            | Pattern::Paren(Paren(patterns)) => match patterns.as_slice() {
+                | [inner] if self.should_elide_parentheses(body.into(), (*inner).into()) => self
+                    .with_leading_comments(body.into(), self.pattern_constructor_argument(*inner)),
+                | _ => self.with_leading_comments(
+                    body.into(),
+                    self.delimited(
+                        Some(body.into()),
+                        "(",
+                        patterns
+                            .iter()
+                            .map(|pattern| {
+                                LayoutFragment::entity(
+                                    (*pattern).into(),
+                                    self.annotated_pattern(*pattern),
+                                )
+                            })
+                            .collect(),
+                        ",",
+                        ")",
+                    ),
                 ),
-            ),
+            },
             | _ => self.delimited(
                 None,
                 "(",
@@ -1709,6 +1714,32 @@ mod tests {
             ),
             "((x))\n"
         );
+    }
+
+    #[test]
+    fn does_not_duplicate_constructor_pattern_parentheses() {
+        let canonical = concat!(
+            "match tree\n",
+            "| +Leaf() => ret +Leaf()\n",
+            "| +Node(/left; /value; /right) => ret +Leaf()\n",
+            "end\n",
+        );
+        let redundant = concat!(
+            "match tree\n",
+            "| +Leaf() => ret +Leaf()\n",
+            "| +Node((/left; /value; /right)) => ret +Leaf()\n",
+            "end\n",
+        );
+
+        [canonical, redundant].into_iter().for_each(|source| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Ignore);
+            assert_eq!(formatted, canonical, "source: {source}");
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Ignore));
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        });
     }
 
     #[test]
