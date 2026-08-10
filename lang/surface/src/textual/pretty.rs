@@ -514,6 +514,20 @@ impl<'arena> PrettyFormatter<'arena> {
     fn document_fits(
         document: &RcDoc<'arena>, column: usize, nesting: usize, line_width: usize,
     ) -> bool {
+        Self::render_document(document, column, nesting, line_width)
+            .is_some_and(|rendered| rendered.lines().all(|line| line.len() <= line_width))
+    }
+
+    fn document_fits_on_one_line(
+        document: &RcDoc<'arena>, column: usize, nesting: usize, line_width: usize,
+    ) -> bool {
+        Self::render_document(document, column, nesting, line_width)
+            .is_some_and(|rendered| !rendered.contains('\n') && rendered.len() <= line_width)
+    }
+
+    fn render_document(
+        document: &RcDoc<'arena>, column: usize, nesting: usize, line_width: usize,
+    ) -> Option<String> {
         let nesting = isize::try_from(nesting).unwrap_or(isize::MAX);
         let mut rendered = String::new();
         if RcDoc::text(" ".repeat(column))
@@ -521,9 +535,9 @@ impl<'arena> PrettyFormatter<'arena> {
             .render_fmt(line_width, &mut rendered)
             .is_err()
         {
-            return false;
+            return None;
         }
-        rendered.lines().all(|line| line.len() <= line_width)
+        Some(rendered)
     }
 
     fn delimited(
@@ -1315,17 +1329,37 @@ impl<'arena> PrettyFormatter<'arena> {
             | None => head,
         };
         let placement = self.placement(placement);
-        let joined_placement = RcDoc::space().append(placement.clone());
-        let broken_placement = RcDoc::hardline().append(placement).nest(-self.options.indent);
         let bindee_fragment = self.term_fragment(*bindee);
-        let bindee_document =
-            bindee_fragment.document.append(self.flexible(joined_placement, broken_placement));
+        let bindee_document = self.bindee_with_placement(bindee_fragment.document, placement);
         head.append(self.layout_boundary(
             self.arena.intentions.between(head_last, (*bindee).into()),
             BoundaryLayout::after(" =", 0, self.options.indent),
             bindee_fragment.boundary_mode,
             bindee_document,
         ))
+    }
+
+    fn bindee_with_placement(
+        &'arena self, bindee: RcDoc<'arena>, placement: RcDoc<'arena>,
+    ) -> RcDoc<'arena> {
+        let joined = bindee.clone().append(RcDoc::space()).append(placement.clone());
+        let broken = bindee.append(RcDoc::hardline().append(placement).nest(-self.options.indent));
+        let line_width = self.options.line_width;
+        DOC_ALLOCATOR
+            .column(move |column| {
+                let joined = joined.clone();
+                let broken = broken.clone();
+                DOC_ALLOCATOR
+                    .nesting(move |nesting| {
+                        if Self::document_fits_on_one_line(&joined, column, nesting, line_width) {
+                            joined.clone()
+                        } else {
+                            broken.clone()
+                        }
+                    })
+                    .into_doc()
+            })
+            .into_doc()
     }
 
     fn placement(&self, placement: Placement) -> RcDoc<'arena> {
@@ -1808,6 +1842,51 @@ mod tests {
             let reparsed = ParsedSource::new(&formatted);
             assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
         });
+    }
+
+    #[test]
+    fn breaks_placement_after_multiline_context_bindees() {
+        let cases = [
+            (
+                "let value = A *\nB in value",
+                concat!("let value =\n", "    A\n", "  * B\n", "in\n", "value\n"),
+            ),
+            (
+                "def value = A ->\nB that value",
+                concat!("def value =\n", "     A\n", "  -> B\n", "that\n", "value\n"),
+            ),
+            (
+                "let value = begin\nitem\nend in value",
+                concat!("let value = begin\n", "  item\n", "end\n", "in\n", "value\n"),
+            ),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, expected, "source: {source}");
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        });
+    }
+
+    #[test]
+    fn breaks_placement_after_width_wrapped_context_bindees() {
+        let source = "let value = Alpha * Beta * Gamma in value";
+        let expected =
+            concat!("let value =\n", "    Alpha * Beta\n", "  * Gamma\n", "in\n", "value\n");
+        let options = PrettyOptions::default()
+            .with_line_width(20)
+            .with_layout_intentions(LayoutIntentions::Ignore);
+        let parsed = ParsedSource::new(source);
+        let formatted = parsed.render_with_options(options);
+
+        assert_eq!(formatted, expected);
+        let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(formatted, reparsed.render_with_options(options));
+        assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
     }
 
     #[test]
