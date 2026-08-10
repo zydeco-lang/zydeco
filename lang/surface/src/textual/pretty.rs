@@ -9,10 +9,12 @@ pub use config::{LayoutIntentions, Parentheses, PrettyOptions};
 use context::{
     PatternRequirement, RenderedPatternClass, RenderedTermClass, TermPrecedence, TermRequirement,
 };
-use pretty::RcDoc;
+use pretty::{DocAllocator, RcAllocator, RcDoc};
 pub use punning::NamedTermPunningAudit;
 use punning::{PunnedPatternPayload, PunnedTermPayload, Punning};
 use zydeco_syntax::Pretty;
+
+static DOC_ALLOCATOR: RcAllocator = RcAllocator;
 
 /// A pretty printer over one parsed textual arena.
 pub struct PrettyFormatter<'arena> {
@@ -37,16 +39,28 @@ struct LayoutAnchors {
 struct LayoutFragment<'arena> {
     document: RcDoc<'arena>,
     anchors: LayoutAnchors,
+    boundary_mode: BoundaryMode,
 }
 
 impl<'arena> LayoutFragment<'arena> {
     fn entity(entity: EntityId, document: RcDoc<'arena>) -> Self {
-        Self { document, anchors: LayoutAnchors { first: entity, last: entity } }
+        Self {
+            document,
+            anchors: LayoutAnchors { first: entity, last: entity },
+            boundary_mode: BoundaryMode::Regular,
+        }
     }
 
-    fn spanning(first: EntityId, last: EntityId, document: RcDoc<'arena>) -> Self {
-        Self { document, anchors: LayoutAnchors { first, last } }
+    fn with_boundary_mode(mut self, boundary_mode: BoundaryMode) -> Self {
+        self.boundary_mode = boundary_mode;
+        self
     }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum BoundaryMode {
+    Regular,
+    Block,
 }
 
 struct BoundaryLayout<'arena> {
@@ -55,6 +69,48 @@ struct BoundaryLayout<'arena> {
     broken: RcDoc<'arena>,
     joined_indent: isize,
     broken_indent: isize,
+}
+
+#[derive(Copy, Clone)]
+enum InfixOperator {
+    Product,
+    Arrow,
+}
+
+impl InfixOperator {
+    fn symbol(self) -> &'static str {
+        match self {
+            | Self::Product => "*",
+            | Self::Arrow => "->",
+        }
+    }
+
+    fn left_precedence(self) -> TermPrecedence {
+        match self {
+            | Self::Product => TermPrecedence::Application,
+            | Self::Arrow => TermPrecedence::Product,
+        }
+    }
+
+    fn right_precedence(self) -> TermPrecedence {
+        match self {
+            | Self::Product => TermPrecedence::Product,
+            | Self::Arrow => TermPrecedence::Arrow,
+        }
+    }
+
+    fn split(self, term: &Term) -> Option<(TermId, TermId)> {
+        match (self, term) {
+            | (Self::Product, Term::Prod(Prod(left, right)))
+            | (Self::Arrow, Term::Arrow(Arrow(left, right))) => Some((*left, *right)),
+            | _ => None,
+        }
+    }
+}
+
+struct InfixOperand<'arena> {
+    document: RcDoc<'arena>,
+    starts_with_comment: bool,
 }
 
 impl<'arena> BoundaryLayout<'arena> {
@@ -148,6 +204,16 @@ impl<'arena> PrettyFormatter<'arena> {
         })
     }
 
+    fn require_line_start(&self) -> RcDoc<'arena> {
+        RcDoc::column(|column| {
+            RcDoc::nesting(
+                move |nesting| {
+                    if column > nesting { RcDoc::fail() } else { RcDoc::nil() }
+                },
+            )
+        })
+    }
+
     fn with_trailing_comments(
         &'arena self, entity: EntityId, document: RcDoc<'arena>,
     ) -> RcDoc<'arena> {
@@ -214,10 +280,47 @@ impl<'arena> PrettyFormatter<'arena> {
         layout.prefix.append(choice)
     }
 
+    fn block_boundary(
+        &'arena self, intention: Option<BreakIntent>, layout: BoundaryLayout<'arena>,
+        continuation: RcDoc<'arena>,
+    ) -> RcDoc<'arena> {
+        let joined = layout.joined.append(continuation.clone()).nest(layout.joined_indent);
+        let broken = layout.broken.append(continuation).nest(layout.broken_indent);
+        let choice = if self.options.layout_intentions == LayoutIntentions::Preserve
+            && intention == Some(BreakIntent::Broken)
+        {
+            broken
+        } else {
+            self.flexible_block(joined, broken)
+        };
+        layout.prefix.append(choice)
+    }
+
+    fn layout_boundary(
+        &'arena self, intention: Option<BreakIntent>, layout: BoundaryLayout<'arena>,
+        boundary_mode: BoundaryMode, continuation: RcDoc<'arena>,
+    ) -> RcDoc<'arena> {
+        match boundary_mode {
+            | BoundaryMode::Regular => self.boundary(intention, layout, continuation),
+            | BoundaryMode::Block => self.block_boundary(intention, layout, continuation),
+        }
+    }
+
+    fn fragment_boundary(
+        &'arena self, intention: Option<BreakIntent>, layout: BoundaryLayout<'arena>,
+        continuation: LayoutFragment<'arena>,
+    ) -> RcDoc<'arena> {
+        self.layout_boundary(intention, layout, continuation.boundary_mode, continuation.document)
+    }
+
     fn flexible(&'arena self, joined: RcDoc<'arena>, broken: RcDoc<'arena>) -> RcDoc<'arena> {
         // Expose the joined projection to enclosing groups while retaining a
         // complete broken alternative for a boundary whose own group overflows.
         joined.clone().union(broken).flat_alt(joined)
+    }
+
+    fn flexible_block(&'arena self, joined: RcDoc<'arena>, broken: RcDoc<'arena>) -> RcDoc<'arena> {
+        joined.union(broken)
     }
 
     fn join(
@@ -226,8 +329,14 @@ impl<'arena> PrettyFormatter<'arena> {
     ) -> LayoutFragment<'arena> {
         let intention = self.arena.intentions.between(left.anchors.last, right.anchors.first);
         let anchors = LayoutAnchors { first: left.anchors.first, last: right.anchors.last };
-        let document = left.document.append(self.boundary(intention, layout, right.document));
-        LayoutFragment { document, anchors }
+        let boundary_mode = left.boundary_mode;
+        let document = left.document.append(self.layout_boundary(
+            intention,
+            layout,
+            right.boundary_mode,
+            right.document,
+        ));
+        LayoutFragment { document, anchors, boundary_mode }
     }
 
     fn separated(
@@ -254,6 +363,7 @@ impl<'arena> PrettyFormatter<'arena> {
         LayoutFragment {
             document: if preserve_break { document } else { document.group() },
             anchors,
+            boundary_mode: left.boundary_mode,
         }
     }
 
@@ -270,6 +380,152 @@ impl<'arena> PrettyFormatter<'arena> {
         })
     }
 
+    fn infix_chain(&'arena self, root: TermId, operator: InfixOperator) -> RcDoc<'arena> {
+        let mut operands = Vec::new();
+        let mut boundaries = Vec::new();
+        let mut current = root;
+
+        loop {
+            let (left, right) = operator
+                .split(&self.arena.terms[&current])
+                .expect("infix chains start and continue with their selected operator");
+            let mut document = self.term_through(left, operator.left_precedence());
+            let mut starts_with_comment =
+                !self.arena.trivia.leading_comments(left.into()).is_empty();
+            if current != root {
+                starts_with_comment |=
+                    !self.arena.trivia.leading_comments(current.into()).is_empty();
+                document = self.with_leading_comments(current.into(), document);
+            }
+            operands.push(InfixOperand { document, starts_with_comment });
+            boundaries.push(self.arena.intentions.between(left.into(), right.into()));
+
+            if operator.split(&self.arena.terms[&right]).is_some() {
+                current = right;
+                continue;
+            }
+
+            operands.push(InfixOperand {
+                document: self.term_through(right, operator.right_precedence()),
+                starts_with_comment: !self.arena.trivia.leading_comments(right.into()).is_empty(),
+            });
+            break;
+        }
+
+        let symbol = operator.symbol();
+        let mut joined = operands[0].document.clone();
+        for operand in &operands[1..] {
+            joined = joined
+                .append(RcDoc::space())
+                .append(RcDoc::text(symbol))
+                .append(RcDoc::space())
+                .append(operand.document.clone());
+        }
+
+        let symbol_width = isize::try_from(symbol.len()).unwrap_or(isize::MAX);
+        let hanging_indent = self.options.indent.max(symbol_width.saturating_add(1));
+        let hanging_indent_usize = usize::try_from(hanging_indent).unwrap_or_default();
+        let operator_padding =
+            usize::try_from(hanging_indent.saturating_sub(symbol_width)).unwrap_or_default();
+        let mut table = operands[0].document.clone().nest(hanging_indent);
+        for (operand, intention) in operands[1..].iter().zip(boundaries.iter().copied()) {
+            let continuation = operand.document.clone().nest(hanging_indent);
+            let inline = RcDoc::space()
+                .append(RcDoc::text(symbol))
+                .append(RcDoc::space())
+                .append(continuation.clone());
+            let broken = if operand.starts_with_comment {
+                // Keep the operator trailing at a commented boundary so the
+                // comment remains aligned with the operand it annotates.
+                RcDoc::space()
+                    .append(RcDoc::text(symbol))
+                    .append(RcDoc::hardline())
+                    .append(RcDoc::text(" ".repeat(hanging_indent_usize)))
+                    .append(continuation)
+            } else {
+                RcDoc::hardline()
+                    .append(RcDoc::text(symbol))
+                    .append(RcDoc::text(" ".repeat(operator_padding)))
+                    .append(continuation)
+            };
+            let boundary = if self.options.layout_intentions == LayoutIntentions::Preserve
+                && intention == Some(BreakIntent::Broken)
+            {
+                broken
+            } else {
+                self.flexible(inline, broken)
+            };
+            table = table.append(boundary);
+        }
+        let begins_after_same_line_comment = self
+            .arena
+            .trivia
+            .leading_comments(root.into())
+            .last()
+            .is_some_and(|comment| comment.separation_after() == LineSeparation::SameLine);
+        let hanging = if begins_after_same_line_comment {
+            Self::hang_before_current_column(table, hanging_indent_usize)
+        } else {
+            self.require_line_start()
+                .append(RcDoc::text(" ".repeat(hanging_indent_usize)))
+                .append(table)
+        };
+
+        let preserves_break = self.options.layout_intentions == LayoutIntentions::Preserve
+            && boundaries.contains(&Some(BreakIntent::Broken));
+        if preserves_break {
+            return hanging;
+        }
+
+        let line_width = self.options.line_width;
+        DOC_ALLOCATOR
+            .column(move |column| {
+                let joined = joined.clone();
+                let hanging = hanging.clone();
+                DOC_ALLOCATOR
+                    .nesting(move |nesting| {
+                        if Self::document_fits(&joined, column, nesting, line_width) {
+                            joined.clone()
+                        } else {
+                            hanging.clone()
+                        }
+                    })
+                    .into_doc()
+            })
+            .into_doc()
+    }
+
+    fn hang_before_current_column(document: RcDoc<'arena>, hanging_indent: usize) -> RcDoc<'arena> {
+        DOC_ALLOCATOR
+            .column(move |column| {
+                let document = document.clone();
+                DOC_ALLOCATOR
+                    .nesting(move |nesting| {
+                        let target = column.saturating_sub(hanging_indent);
+                        let target = isize::try_from(target).unwrap_or(isize::MAX);
+                        let nesting = isize::try_from(nesting).unwrap_or(isize::MAX);
+                        document.clone().nest(target.saturating_sub(nesting))
+                    })
+                    .into_doc()
+            })
+            .into_doc()
+    }
+
+    fn document_fits(
+        document: &RcDoc<'arena>, column: usize, nesting: usize, line_width: usize,
+    ) -> bool {
+        let nesting = isize::try_from(nesting).unwrap_or(isize::MAX);
+        let mut rendered = String::new();
+        if RcDoc::text(" ".repeat(column))
+            .append(document.clone().nest(nesting))
+            .render_fmt(line_width, &mut rendered)
+            .is_err()
+        {
+            return false;
+        }
+        rendered.lines().all(|line| line.len() <= line_width)
+    }
+
     fn delimited(
         &'arena self, entity: Option<EntityId>, open: &'static str,
         items: Vec<LayoutFragment<'arena>>, separator: &'static str, close: &'static str,
@@ -282,11 +538,9 @@ impl<'arena> PrettyFormatter<'arena> {
             .and_then(|entity| self.arena.intentions.after_start(entity, items.anchors.first));
         let before_close =
             entity.and_then(|entity| self.arena.intentions.before_end(items.anchors.last, entity));
-        let contents = self.boundary(
-            after_open,
-            BoundaryLayout::tight(self.options.indent, self.options.indent),
-            items.document,
-        );
+        let contents_layout = BoundaryLayout::tight(self.options.indent, self.options.indent);
+        let contents =
+            self.layout_boundary(after_open, contents_layout, items.boundary_mode, items.document);
         let close = self.boundary(before_close, BoundaryLayout::tight(0, 0), RcDoc::text(close));
         RcDoc::text(open).append(contents).append(close)
     }
@@ -295,11 +549,8 @@ impl<'arena> PrettyFormatter<'arena> {
         &'arena self, entity: EntityId, term: LayoutFragment<'arena>, ty: TermId,
         parenthesized: bool,
     ) -> RcDoc<'arena> {
-        let annotation = self.join(
-            term,
-            BoundaryLayout::after(" :", 0, 0),
-            LayoutFragment::entity(ty.into(), self.term(ty)),
-        );
+        let ty = self.term_fragment(ty);
+        let annotation = self.join(term, BoundaryLayout::after(" :", 0, 0), ty);
         if parenthesized {
             self.delimited(Some(entity), "(", vec![annotation], ",", ")")
         } else {
@@ -352,27 +603,22 @@ impl<'arena> PrettyFormatter<'arena> {
                 *ty,
                 requirement == PatternRequirement::Pattern,
             ),
-            | Pattern::Manifest(ManifestPattern { binder, definition }) => self.delimited(
-                Some(pattern.into()),
-                "(",
-                vec![LayoutFragment::spanning(
-                    (*binder).into(),
-                    (*definition).into(),
-                    self.annotated_pattern(*binder)
-                        .append(RcDoc::text(" as "))
-                        .append(self.term(*definition)),
-                )],
-                ",",
-                ")",
-            ),
+            | Pattern::Manifest(ManifestPattern { binder, definition }) => {
+                let manifest = self.join(
+                    LayoutFragment::entity((*binder).into(), self.annotated_pattern(*binder)),
+                    BoundaryLayout::after(" as", 0, 0),
+                    self.term_fragment(*definition),
+                );
+                self.delimited(Some(pattern.into()), "(", vec![manifest], ",", ")")
+            }
             | Pattern::Hole(_) => RcDoc::text("_"),
             | Pattern::Var(definition) => self.definition(*definition),
-            | Pattern::Named(Named(field, inner)) => self.named_pattern(field, *inner),
+            | Pattern::Named(Named(field, inner)) => self.named_pattern(pattern, field, *inner),
             | Pattern::Ctor(Ctor(name, inner)) => {
                 self.constructor(name).append(self.pattern_constructor_argument(*inner))
             }
             | Pattern::Project(ProjectionPattern(field, inner)) => {
-                self.projection_pattern(field, *inner)
+                self.projection_pattern(pattern, field, *inner)
             }
             | Pattern::Alias(Alias(patterns)) => self.delimited(
                 Some(pattern.into()),
@@ -469,6 +715,53 @@ impl<'arena> PrettyFormatter<'arena> {
         self.term_with_requirement(term, TermRequirement::Through(precedence))
     }
 
+    fn term_fragment(&'arena self, term: TermId) -> LayoutFragment<'arena> {
+        self.term_fragment_with_requirement(term, TermRequirement::Any)
+    }
+
+    fn annotated_term_fragment(&'arena self, term: TermId) -> LayoutFragment<'arena> {
+        self.term_fragment_with_requirement(term, TermRequirement::Annotated)
+    }
+
+    fn term_through_fragment(
+        &'arena self, term: TermId, precedence: TermPrecedence,
+    ) -> LayoutFragment<'arena> {
+        self.term_fragment_with_requirement(term, TermRequirement::Through(precedence))
+    }
+
+    fn term_fragment_with_requirement(
+        &'arena self, term: TermId, requirement: TermRequirement,
+    ) -> LayoutFragment<'arena> {
+        LayoutFragment::entity(term.into(), self.term_with_requirement(term, requirement))
+            .with_boundary_mode(self.term_boundary_mode(term, requirement))
+    }
+
+    fn term_boundary_mode(&self, term: TermId, requirement: TermRequirement) -> BoundaryMode {
+        if !self.term_requirement_accepts(requirement, term) {
+            return BoundaryMode::Regular;
+        }
+        match &self.arena.terms[&term] {
+            | Term::SourceBoundary(SourceBoundary(inner)) => {
+                self.term_boundary_mode(*inner, requirement)
+            }
+            | Term::Ann(Ann { tm, .. }) if requirement == TermRequirement::Annotated => {
+                self.term_boundary_mode(*tm, TermRequirement::Annotated)
+            }
+            | Term::Paren(Paren(terms)) => match terms.as_slice() {
+                | [inner]
+                    if (self.should_elide_parentheses(term.into(), (*inner).into())
+                        || self.transparently_groups_application(*inner))
+                        && self.term_requirement_accepts(requirement, *inner) =>
+                {
+                    self.term_boundary_mode(*inner, requirement)
+                }
+                | _ => BoundaryMode::Regular,
+            },
+            | Term::Prod(_) | Term::Arrow(_) => BoundaryMode::Block,
+            | _ => BoundaryMode::Regular,
+        }
+    }
+
     fn term_with_requirement(
         &'arena self, term: TermId, requirement: TermRequirement,
     ) -> RcDoc<'arena> {
@@ -479,21 +772,26 @@ impl<'arena> PrettyFormatter<'arena> {
         let document = match &self.arena.terms[&term] {
             | Term::Meta(MetaT(meta, inner)) => RcDoc::text("@[")
                 .append(RcDoc::text(meta.to_string()))
-                .append(RcDoc::text("] "))
-                .append(self.term_through(*inner, TermPrecedence::Binder)),
+                .append(self.fragment_boundary(
+                    self.arena.intentions.after_start(term.into(), (*inner).into()),
+                    BoundaryLayout::after("]", 0, 0),
+                    self.term_through_fragment(*inner, TermPrecedence::Binder),
+                )),
             | Term::SourceBoundary(_) => unreachable!("source boundaries return before rendering"),
             | Term::Ann(Ann { tm, ty }) => self.annotation(
                 term.into(),
-                LayoutFragment::entity((*tm).into(), self.annotated_term(*tm)),
+                self.annotated_term_fragment(*tm),
                 *ty,
                 requirement != TermRequirement::Annotated,
             ),
             | Term::Hole(_) => RcDoc::text("_"),
             | Term::Var(name) => self.variable(name),
             | Term::Named(Named(field, inner)) => self.named_term(term, field, *inner),
-            | Term::Label(Label(field, inner)) => {
-                self.field(field).append(RcDoc::text(" :: ")).append(self.annotated_term(*inner))
-            }
+            | Term::Label(Label(field, inner)) => self.field(field).append(self.fragment_boundary(
+                self.arena.intentions.after_start(term.into(), (*inner).into()),
+                BoundaryLayout::after(" ::", 0, 0),
+                self.annotated_term_fragment(*inner),
+            )),
             | Term::Paren(Paren(terms)) => match terms.as_slice() {
                 | [inner]
                     if (self.should_elide_parentheses(term.into(), (*inner).into())
@@ -505,12 +803,7 @@ impl<'arena> PrettyFormatter<'arena> {
                 | _ => self.delimited(
                     Some(term.into()),
                     "(",
-                    terms
-                        .iter()
-                        .map(|term| {
-                            LayoutFragment::entity((*term).into(), self.annotated_term(*term))
-                        })
-                        .collect(),
+                    terms.iter().map(|term| self.annotated_term_fragment(*term)).collect(),
                     ",",
                     ")",
                 ),
@@ -522,17 +815,18 @@ impl<'arena> PrettyFormatter<'arena> {
                         RcDoc::text("fn ").append(self.copattern(*pattern)),
                     ),
                     RcDoc::text(" =>"),
-                    LayoutFragment::entity(
-                        (*body).into(),
-                        self.term_through(*body, TermPrecedence::Binder),
-                    ),
+                    self.term_through_fragment(*body, TermPrecedence::Binder),
                     self.options.indent,
                 )
                 .document
             }
             | Term::App(Appli(terms)) => self.application(terms),
-            | Term::KontCall(KontCall { body, tail }) => RcDoc::text("do~ ")
-                .append(self.term_through(*body, TermPrecedence::Binder))
+            | Term::KontCall(KontCall { body, tail }) => RcDoc::text("do~")
+                .append(self.fragment_boundary(
+                    self.arena.intentions.after_start(term.into(), (*body).into()),
+                    BoundaryLayout::after("", 0, self.options.indent),
+                    self.term_through_fragment(*body, TermPrecedence::Binder),
+                ))
                 .append(RcDoc::text(";"))
                 .append(
                     RcDoc::line()
@@ -546,55 +840,20 @@ impl<'arena> PrettyFormatter<'arena> {
                         RcDoc::text("fix ").append(self.pattern(*pattern)),
                     ),
                     RcDoc::text(" =>"),
-                    LayoutFragment::entity(
-                        (*body).into(),
-                        self.term_through(*body, TermPrecedence::Binder),
-                    ),
+                    self.term_through_fragment(*body, TermPrecedence::Binder),
                     self.options.indent,
                 )
                 .document
             }
             | Term::Pi(Pi(pattern, body)) => self.quantifier("pi", *pattern, *body),
             | Term::Forall(Forall(pattern, body)) => self.quantifier("forall", *pattern, *body),
-            | Term::Arrow(Arrow(input, output)) => {
-                self.grouped_join(
-                    LayoutFragment::entity(
-                        (*input).into(),
-                        self.term_through(*input, TermPrecedence::Product),
-                    ),
-                    RcDoc::text(" ->"),
-                    LayoutFragment::entity(
-                        (*output).into(),
-                        self.term_through(*output, TermPrecedence::Arrow),
-                    ),
-                    self.options.indent,
-                )
-                .document
-            }
+            | Term::Arrow(_) => self.infix_chain(term, InfixOperator::Arrow),
             | Term::Sigma(Sigma(pattern, body)) => self.quantifier("sigma", *pattern, *body),
             | Term::Exists(exists) => self.exists(term, exists),
-            | Term::Prod(Prod(left, right)) => {
-                self.grouped_join(
-                    LayoutFragment::entity(
-                        (*left).into(),
-                        self.term_through(*left, TermPrecedence::Application),
-                    ),
-                    RcDoc::text(" *"),
-                    LayoutFragment::entity(
-                        (*right).into(),
-                        self.term_through(*right, TermPrecedence::Product),
-                    ),
-                    self.options.indent,
-                )
-                .document
+            | Term::Prod(_) => self.infix_chain(term, InfixOperator::Product),
+            | Term::Thunk(Thunk(body)) => {
+                self.delimited(Some(term.into()), "{", vec![self.term_fragment(*body)], ",", "}")
             }
-            | Term::Thunk(Thunk(body)) => self.delimited(
-                Some(term.into()),
-                "{",
-                vec![LayoutFragment::entity((*body).into(), self.term(*body))],
-                ",",
-                "}",
-            ),
             | Term::Force(Force(body)) => {
                 RcDoc::text("! ").append(self.term_through(*body, TermPrecedence::Atom))
             }
@@ -603,8 +862,11 @@ impl<'arena> PrettyFormatter<'arena> {
             }
             | Term::Do(Bind { binder, bindee, tail }) => RcDoc::text("do ")
                 .append(self.pattern(*binder))
-                .append(RcDoc::text(" <- "))
-                .append(self.term_through(*bindee, TermPrecedence::Binder))
+                .append(self.fragment_boundary(
+                    self.arena.intentions.between((*binder).into(), (*bindee).into()),
+                    BoundaryLayout::after(" <-", 0, self.options.indent),
+                    self.term_through_fragment(*bindee, TermPrecedence::Binder),
+                ))
                 .append(RcDoc::text(";"))
                 .append(
                     RcDoc::line()
@@ -668,16 +930,16 @@ impl<'arena> PrettyFormatter<'arena> {
         let head = LayoutFragment::entity(
             (*head).into(),
             self.term_through(*head, TermPrecedence::Application),
+        )
+        .with_boundary_mode(
+            self.term_boundary_mode(*head, TermRequirement::Through(TermPrecedence::Application)),
         );
         let arguments = self
             .separated(
                 std::iter::once(first_argument)
                     .chain(arguments)
                     .map(|argument| {
-                        LayoutFragment::entity(
-                            (*argument).into(),
-                            self.term_through(*argument, TermPrecedence::Projection),
-                        )
+                        self.term_through_fragment(*argument, TermPrecedence::Projection)
                     })
                     .collect(),
                 "",
@@ -688,15 +950,22 @@ impl<'arena> PrettyFormatter<'arena> {
         self.join(head, BoundaryLayout::after("", 0, self.options.indent), arguments).document
     }
 
-    fn named_term(&'arena self, _term: TermId, field: &FieldName, inner: TermId) -> RcDoc<'arena> {
+    fn named_term(&'arena self, term: TermId, field: &FieldName, inner: TermId) -> RcDoc<'arena> {
         let payload = Punning::new(self.arena).term_payload(field, inner);
         match payload {
             | Some(PunnedTermPayload::Variable) => RcDoc::text("= ").append(self.field(field)),
-            | Some(PunnedTermPayload::Annotated(ty)) => RcDoc::text("= ")
-                .append(self.field(field))
-                .append(RcDoc::text(" : "))
-                .append(self.term(ty)),
-            | _ => self.field(field).append(RcDoc::text(" = ")).append(self.annotated_term(inner)),
+            | Some(PunnedTermPayload::Annotated(ty)) => {
+                RcDoc::text("= ").append(self.field(field)).append(self.fragment_boundary(
+                    self.arena.intentions.after_start(term.into(), ty.into()),
+                    BoundaryLayout::after(" :", 0, 0),
+                    self.term_fragment(ty),
+                ))
+            }
+            | _ => self.field(field).append(self.fragment_boundary(
+                self.arena.intentions.after_start(term.into(), inner.into()),
+                BoundaryLayout::after(" =", 0, 0),
+                self.annotated_term_fragment(inner),
+            )),
         }
     }
 
@@ -707,23 +976,12 @@ impl<'arena> PrettyFormatter<'arena> {
                 self.delimited(
                     Some(body.into()),
                     "(",
-                    terms
-                        .iter()
-                        .map(|term| {
-                            LayoutFragment::entity((*term).into(), self.annotated_term(*term))
-                        })
-                        .collect(),
+                    terms.iter().map(|term| self.annotated_term_fragment(*term)).collect(),
                     ",",
                     ")",
                 ),
             ),
-            | _ => self.delimited(
-                None,
-                "(",
-                vec![LayoutFragment::entity(body.into(), self.annotated_term(body))],
-                ",",
-                ")",
-            ),
+            | _ => self.delimited(None, "(", vec![self.annotated_term_fragment(body)], ",", ")"),
         }
     }
 
@@ -757,26 +1015,36 @@ impl<'arena> PrettyFormatter<'arena> {
         }
     }
 
-    fn named_pattern(&'arena self, field: &FieldName, inner: PatId) -> RcDoc<'arena> {
+    fn named_pattern(
+        &'arena self, pattern: PatId, field: &FieldName, inner: PatId,
+    ) -> RcDoc<'arena> {
         match Punning::new(self.arena).pattern_payload(field, inner) {
             | Some(PunnedPatternPayload::Variable) => RcDoc::text("= ").append(self.field(field)),
-            | Some(PunnedPatternPayload::Annotated(ty)) => RcDoc::text("= ")
-                .append(self.field(field))
-                .append(RcDoc::text(" : "))
-                .append(self.term(ty)),
+            | Some(PunnedPatternPayload::Annotated(ty)) => {
+                RcDoc::text("= ").append(self.field(field)).append(self.fragment_boundary(
+                    self.arena.intentions.after_start(pattern.into(), ty.into()),
+                    BoundaryLayout::after(" :", 0, 0),
+                    self.term_fragment(ty),
+                ))
+            }
             | None => {
                 self.field(field).append(RcDoc::text(" = ")).append(self.annotated_pattern(inner))
             }
         }
     }
 
-    fn projection_pattern(&'arena self, field: &FieldName, inner: PatId) -> RcDoc<'arena> {
+    fn projection_pattern(
+        &'arena self, pattern: PatId, field: &FieldName, inner: PatId,
+    ) -> RcDoc<'arena> {
         match Punning::new(self.arena).pattern_payload(field, inner) {
             | Some(PunnedPatternPayload::Variable) => RcDoc::text("/").append(self.field(field)),
-            | Some(PunnedPatternPayload::Annotated(ty)) => RcDoc::text("/")
-                .append(self.field(field))
-                .append(RcDoc::text(" : "))
-                .append(self.term(ty)),
+            | Some(PunnedPatternPayload::Annotated(ty)) => {
+                RcDoc::text("/").append(self.field(field)).append(self.fragment_boundary(
+                    self.arena.intentions.after_start(pattern.into(), ty.into()),
+                    BoundaryLayout::after(" :", 0, 0),
+                    self.term_fragment(ty),
+                ))
+            }
             | None => RcDoc::text("/")
                 .append(self.field(field))
                 .append(RcDoc::text(" = "))
@@ -856,10 +1124,7 @@ impl<'arena> PrettyFormatter<'arena> {
                 RcDoc::text(keyword).append(RcDoc::space()).append(self.copattern(pattern)),
             ),
             RcDoc::text(" ."),
-            LayoutFragment::entity(
-                body.into(),
-                self.term_through(body, TermPrecedence::Quantifier),
-            ),
+            self.term_through_fragment(body, TermPrecedence::Quantifier),
             self.options.indent,
         )
         .document
@@ -888,23 +1153,20 @@ impl<'arena> PrettyFormatter<'arena> {
         let parameter_document = if begins_with_documentation {
             RcDoc::hardline().append(parameters.document.clone()).nest(self.options.indent)
         } else {
-            self.boundary(
+            self.layout_boundary(
                 after_exists,
                 BoundaryLayout::after("", self.options.indent, self.options.indent),
+                parameters.boundary_mode,
                 parameters.document.clone(),
             )
         };
         let head = LayoutFragment {
             document: RcDoc::text("exists").append(parameter_document),
             anchors: parameters.anchors,
+            boundary_mode: BoundaryMode::Regular,
         };
-        self.grouped_join(
-            head,
-            RcDoc::text(" ."),
-            LayoutFragment::entity((*body).into(), self.term(*body)),
-            self.options.indent,
-        )
-        .document
+        self.grouped_join(head, RcDoc::text(" ."), self.term_fragment(*body), self.options.indent)
+            .document
     }
 
     fn existential_parameter(
@@ -994,7 +1256,7 @@ impl<'arena> PrettyFormatter<'arena> {
     ) -> RcDoc<'arena> {
         let ManifestParameterView { fields, binder, definition, classifier } = view;
         let binder_entity = binder;
-        let binder = fields.iter().rev().enumerate().fold(
+        let binder_document = fields.iter().rev().enumerate().fold(
             self.annotated_pattern(binder),
             |inner, (depth, field)| {
                 if depth == 0 {
@@ -1004,8 +1266,11 @@ impl<'arena> PrettyFormatter<'arena> {
                         }
                         | Some(PunnedPatternPayload::Annotated(ty)) => RcDoc::text("= ")
                             .append(self.field(field))
-                            .append(RcDoc::text(" : "))
-                            .append(self.term(ty)),
+                            .append(self.fragment_boundary(
+                                None,
+                                BoundaryLayout::after(" :", 0, 0),
+                                self.term_fragment(ty),
+                            )),
                         | None => self.field(field).append(RcDoc::text(" = ")).append(inner),
                     }
                 } else {
@@ -1013,19 +1278,18 @@ impl<'arena> PrettyFormatter<'arena> {
                 }
             },
         );
-        let binder = binder.append(RcDoc::text(" as ")).append(self.term(definition));
+        let binder = self.join(
+            LayoutFragment::entity(binder_entity.into(), binder_document),
+            BoundaryLayout::after(" as", 0, 0),
+            self.term_fragment(definition),
+        );
         let binder = match classifier {
-            | Some(classifier) => binder.append(RcDoc::text(" : ")).append(self.term(classifier)),
+            | Some(classifier) => {
+                self.join(binder, BoundaryLayout::after(" :", 0, 0), self.term_fragment(classifier))
+            }
             | None => binder,
         };
-        let last = classifier.map_or_else(|| definition.into(), Into::into);
-        let document = self.delimited(
-            Some(entity.into()),
-            "(",
-            vec![LayoutFragment::spanning(binder_entity.into(), last, binder)],
-            ",",
-            ")",
-        );
+        let document = self.delimited(Some(entity.into()), "(", vec![binder], ",", ")");
         self.with_leading_comments(entity.into(), document)
     }
 
@@ -1037,21 +1301,31 @@ impl<'arena> PrettyFormatter<'arena> {
             .into_iter()
             .flatten()
             .map(RcDoc::text);
+        let head_last = params.as_ref().map_or_else(|| (*binder).into(), |params| (*params).into());
         let head = modifiers
             .chain(std::iter::once(self.pattern(*binder)))
             .chain(params.iter().map(|params| self.copattern(*params)));
         let head = RcDoc::intersperse(head, RcDoc::space());
         let head = match ty {
-            | Some(ty) => head.append(RcDoc::text(" : ")).append(self.term(*ty)),
+            | Some(ty) => head.append(self.fragment_boundary(
+                self.arena.intentions.between(head_last, (*ty).into()),
+                BoundaryLayout::after(" :", 0, 0),
+                self.term_fragment(*ty),
+            )),
             | None => head,
         };
         let placement = self.placement(placement);
         let joined_placement = RcDoc::space().append(placement.clone());
         let broken_placement = RcDoc::hardline().append(placement).nest(-self.options.indent);
-        let bindee = self.term(*bindee).append(self.flexible(joined_placement, broken_placement));
-        let joined_bindee = RcDoc::space().append(bindee.clone());
-        let broken_bindee = RcDoc::hardline().append(bindee).nest(self.options.indent);
-        head.append(RcDoc::text(" =")).append(self.flexible(joined_bindee, broken_bindee))
+        let bindee_fragment = self.term_fragment(*bindee);
+        let bindee_document =
+            bindee_fragment.document.append(self.flexible(joined_placement, broken_placement));
+        head.append(self.layout_boundary(
+            self.arena.intentions.between(head_last, (*bindee).into()),
+            BoundaryLayout::after(" =", 0, self.options.indent),
+            bindee_fragment.boundary_mode,
+            bindee_document,
+        ))
     }
 
     fn placement(&self, placement: Placement) -> RcDoc<'arena> {
@@ -1077,8 +1351,11 @@ impl<'arena> PrettyFormatter<'arena> {
                     .append(RcDoc::hardline())
                     .append(RcDoc::text("| "))
                     .append(self.constructor(&arm.name))
-                    .append(RcDoc::text(" : "))
-                    .append(self.term(arm.param))
+                    .append(self.fragment_boundary(
+                        None,
+                        BoundaryLayout::after(" :", 0, self.options.indent),
+                        self.term_fragment(arm.param),
+                    ))
             })
             .append(RcDoc::hardline())
             .append(RcDoc::text("end"))
@@ -1092,25 +1369,33 @@ impl<'arena> PrettyFormatter<'arena> {
                     | Some(params) => arm.append(RcDoc::text(" ")).append(self.copattern(params)),
                     | None => arm,
                 };
-                document
-                    .append(RcDoc::hardline())
-                    .append(arm)
-                    .append(RcDoc::text(" : "))
-                    .append(self.term(item.out))
+                document.append(RcDoc::hardline()).append(arm).append(self.fragment_boundary(
+                    None,
+                    BoundaryLayout::after(" :", 0, self.options.indent),
+                    self.term_fragment(item.out),
+                ))
             })
             .append(RcDoc::hardline())
             .append(RcDoc::text("end"))
     }
 
     fn matcher(&'arena self, scrutinee: TermId, arms: &[Matcher<PatId, TermId>]) -> RcDoc<'arena> {
+        let head = RcDoc::text("match").append(self.fragment_boundary(
+            None,
+            BoundaryLayout::after("", 0, self.options.indent),
+            self.term_fragment(scrutinee),
+        ));
         arms.iter()
-            .fold(RcDoc::text("match ").append(self.term(scrutinee)), |document, arm| {
+            .fold(head, |document, arm| {
                 document
                     .append(RcDoc::hardline())
                     .append(RcDoc::text("| "))
                     .append(self.pattern(arm.binder))
-                    .append(RcDoc::text(" => "))
-                    .append(self.term(arm.tail))
+                    .append(self.fragment_boundary(
+                        self.arena.intentions.between(arm.binder.into(), arm.tail.into()),
+                        BoundaryLayout::after(" =>", 0, self.options.indent),
+                        self.term_fragment(arm.tail),
+                    ))
             })
             .append(RcDoc::hardline())
             .append(RcDoc::text("end"))
@@ -1123,8 +1408,11 @@ impl<'arena> PrettyFormatter<'arena> {
                     .append(RcDoc::hardline())
                     .append(RcDoc::text("| "))
                     .append(self.copattern(arm.params))
-                    .append(RcDoc::text(" => "))
-                    .append(self.term(arm.tail))
+                    .append(self.fragment_boundary(
+                        self.arena.intentions.between(arm.params.into(), arm.tail.into()),
+                        BoundaryLayout::after(" =>", 0, self.options.indent),
+                        self.term_fragment(arm.tail),
+                    ))
             })
             .append(RcDoc::hardline())
             .append(RcDoc::text("end"))
@@ -1406,6 +1694,98 @@ mod tests {
             let formatted = parsed.render(LayoutIntentions::Ignore);
             assert_eq!(formatted, expected, "source: {source}");
             let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        });
+    }
+
+    #[test]
+    fn leads_multiline_infix_operators_without_recursive_indentation() {
+        let cases = [
+            ("A *\nB *\nC", concat!("  A\n", "* B\n", "* C\n")),
+            ("A ->\nB ->\nC", concat!("   A\n", "-> B\n", "-> C\n")),
+            ("A * B *\nC", concat!("  A * B\n", "* C\n")),
+            ("A -> B *\nC", concat!("   A\n", "->   B\n", "   * C\n")),
+            ("A *\nB ->\nC", concat!("     A\n", "   * B\n", "-> C\n")),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, expected, "source: {source}");
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        });
+    }
+
+    #[test]
+    fn leads_infix_operators_when_the_inline_chain_exceeds_the_line_width() {
+        let options = PrettyOptions::default()
+            .with_line_width(12)
+            .with_layout_intentions(LayoutIntentions::Ignore);
+        let cases = [
+            ("Alpha * Beta * Gamma", concat!("  Alpha\n", "* Beta\n", "* Gamma\n")),
+            ("Alpha -> Beta -> Gamma", concat!("   Alpha\n", "-> Beta\n", "-> Gamma\n")),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render_with_options(options);
+            assert_eq!(formatted, expected, "source: {source}");
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render_with_options(options));
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        });
+    }
+
+    #[test]
+    fn starts_a_hanging_infix_chain_at_its_enclosing_layout_boundary() {
+        let cases = [
+            ("(field :: A *\nB *\nC)", concat!("(field ::\n", "    A\n", "  * B\n", "  * C)\n")),
+            (
+                "data\n| +Pair : A *\nB\nend",
+                concat!("data\n", "| +Pair :\n", "    A\n", "  * B\n", "end\n"),
+            ),
+            (
+                "codata\n| .call : A ->\nB\nend",
+                concat!("codata\n", "| .call :\n", "     A\n", "  -> B\n", "end\n"),
+            ),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+
+            assert_eq!(formatted, expected, "source: {source}");
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        });
+    }
+
+    #[test]
+    fn preserves_comments_around_hanging_infix_chains() {
+        let cases = [
+            (
+                concat!("A *\n", "-- Keep this operand note.\n", "B"),
+                concat!("  A *\n", "  -- Keep this operand note.\n", "  B\n"),
+            ),
+            (
+                "/- Keep this prefix. -/ A *\nB",
+                "/- Keep this prefix. -/ A\n                      * B\n",
+            ),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+
+            assert_eq!(formatted, expected, "source: {source}");
+            assert_eq!(RetainedComments::collect(source), RetainedComments::collect(&formatted));
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
             assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
         });
     }
