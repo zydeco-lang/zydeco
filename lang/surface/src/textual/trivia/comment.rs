@@ -209,6 +209,7 @@ impl SpannedEntity {
 pub(crate) struct CommentCapture {
     pub(super) leading: Vec<(EntityId, LeadingComment)>,
     pub(super) trailing: Vec<(EntityId, TrailingComment)>,
+    pub(super) layout_exclusions: Vec<Range<usize>>,
 }
 
 impl CommentCapture {
@@ -225,18 +226,14 @@ impl CommentCapture {
             .enumerate()
             .map(|(index, comment)| {
                 let anchor = anchors[index].expect("non-trailing comments have an anchor");
-                let next_start = comments
-                    .get(index + 1)
-                    .zip(anchors.get(index + 1))
-                    .filter(|(_, next_anchor)| **next_anchor == Some(anchor))
-                    .map(|(next, _)| next.range().start)
-                    .unwrap_or(anchor.start);
+                let next_start = Self::leading_next_start(index, &comments, &anchors, anchor);
                 let separation = LineSeparation::after_comment(source, comment, next_start);
                 (anchor.entity, LeadingComment::new(comment.clone(), separation))
             })
             .collect();
 
-        let trailing = Self::trailing_anchor(entities)
+        let trailing_anchor = Self::trailing_anchor(entities);
+        let trailing = trailing_anchor
             .map(|anchor| {
                 comments[first_trailing..]
                     .iter()
@@ -258,7 +255,40 @@ impl CommentCapture {
             })
             .unwrap_or_default();
 
-        Self { leading, trailing }
+        let comment_ranges = comments.iter().map(|comment| comment.range().clone());
+        let leading_ranges =
+            comments[..first_trailing].iter().enumerate().map(|(index, comment)| {
+                let anchor = anchors[index].expect("non-trailing comments have an anchor");
+                comment.range().end..Self::leading_next_start(index, &comments, &anchors, anchor)
+            });
+        let trailing_ranges = trailing_anchor.into_iter().flat_map(|anchor| {
+            comments[first_trailing..].iter().scan(anchor.end, |previous_end, comment| {
+                let range = *previous_end..comment.range().start;
+                *previous_end = comment.range().end;
+                Some(range)
+            })
+        });
+        let layout_exclusions =
+            comment_ranges.chain(leading_ranges).chain(trailing_ranges).collect();
+
+        Self { leading, trailing, layout_exclusions }
+    }
+
+    /// Byte ranges whose vertical whitespace is already represented by the
+    /// captured comment separations.
+    pub(crate) fn layout_exclusions(&self) -> &[Range<usize>] {
+        &self.layout_exclusions
+    }
+
+    fn leading_next_start(
+        index: usize, comments: &[SurfaceComment], anchors: &[Option<SpannedEntity>],
+        anchor: SpannedEntity,
+    ) -> usize {
+        comments
+            .get(index + 1)
+            .zip(anchors.get(index + 1))
+            .filter(|(_, next_anchor)| **next_anchor == Some(anchor))
+            .map_or(anchor.start, |(next, _)| next.range().start)
     }
 
     fn leading_anchor(

@@ -56,10 +56,11 @@ impl SurfaceTrivia {
     }
 
     pub(crate) fn record_comments(&mut self, capture: CommentCapture) {
-        capture.leading.into_iter().for_each(|(entity, comment)| {
+        let CommentCapture { leading, trailing, .. } = capture;
+        leading.into_iter().for_each(|(entity, comment)| {
             self.leading_comments.entry(entity).or_default().push(comment);
         });
-        capture.trailing.into_iter().for_each(|(entity, comment)| {
+        trailing.into_iter().for_each(|(entity, comment)| {
             self.trailing_comments.entry(entity).or_default().push(comment);
         });
     }

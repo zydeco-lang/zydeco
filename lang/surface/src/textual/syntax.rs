@@ -320,9 +320,9 @@ impl Parser {
                 Some(SpannedEntity::new(*entity, start, end))
             })
             .collect::<Vec<_>>();
-        self.arena.trivia.record_comments(CommentCapture::new(source, &entities));
+        let comments = CommentCapture::new(source, &entities);
         let extents = entities
-            .into_iter()
+            .iter()
             .map(|entity| {
                 let occupied_end = entity.end().saturating_sub(1).max(entity.start());
                 let first = file_info.trans_span2(entity.start()).line;
@@ -330,9 +330,12 @@ impl Parser {
                 (entity.entity(), LineExtent::new(first, last))
             })
             .collect::<Vec<_>>();
-        extents
-            .into_iter()
-            .for_each(|(entity, extent)| self.arena.intentions.record_line_extent(entity, extent));
+        self.arena.intentions.record_source_line_extents(
+            source,
+            comments.layout_exclusions(),
+            extents,
+        );
+        self.arena.trivia.record_comments(comments);
     }
     /// Expand `= field` into a named term whose payload is the same-spelled
     /// variable, optionally annotated.
