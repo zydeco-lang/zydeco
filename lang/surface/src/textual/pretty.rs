@@ -241,6 +241,16 @@ impl<'arena> PrettyFormatter<'arena> {
         })
     }
 
+    fn fail_at_line_start(&self) -> RcDoc<'arena> {
+        RcDoc::column(|column| {
+            RcDoc::nesting(
+                move |nesting| {
+                    if column == nesting { RcDoc::fail() } else { RcDoc::nil() }
+                },
+            )
+        })
+    }
+
     fn with_trailing_comments(
         &'arena self, entity: EntityId, document: RcDoc<'arena>,
     ) -> RcDoc<'arena> {
@@ -401,6 +411,24 @@ impl<'arena> PrettyFormatter<'arena> {
         }
     }
 
+    /// Separate a multiline binder head from the token that introduces its
+    /// scope, while retaining the compact single-line form when it fits.
+    fn scoped_join(
+        &'arena self, head: LayoutFragment<'arena>, separator: &'static str,
+        body: LayoutFragment<'arena>, continuation_indent: isize,
+    ) -> LayoutFragment<'arena> {
+        let LayoutFragment { document, anchors, boundary_mode } = head;
+        let joined = document.clone().append(RcDoc::space()).append(RcDoc::text(separator));
+        let broken = document.append(RcDoc::hardline()).append(RcDoc::text(separator));
+        let document = self.single_line_or(joined, broken);
+        self.grouped_join(
+            LayoutFragment { document, anchors, boundary_mode },
+            RcDoc::nil(),
+            body,
+            continuation_indent,
+        )
+    }
+
     fn grouped_separated(
         &'arena self, items: Vec<LayoutFragment<'arena>>, separator: &'static str,
     ) -> Option<LayoutFragment<'arena>> {
@@ -558,6 +586,32 @@ impl<'arena> PrettyFormatter<'arena> {
     ) -> bool {
         Self::render_document(document, column, nesting, line_width)
             .is_some_and(|rendered| !rendered.contains('\n') && rendered.len() <= line_width)
+    }
+
+    fn single_line_or(
+        &self, single_line: RcDoc<'arena>, multiline: RcDoc<'arena>,
+    ) -> RcDoc<'arena> {
+        let line_width = self.options.line_width;
+        DOC_ALLOCATOR
+            .column(move |column| {
+                let single_line = single_line.clone();
+                let multiline = multiline.clone();
+                DOC_ALLOCATOR
+                    .nesting(move |nesting| {
+                        if Self::document_fits_on_one_line(
+                            &single_line,
+                            column,
+                            nesting,
+                            line_width,
+                        ) {
+                            single_line.clone()
+                        } else {
+                            multiline.clone()
+                        }
+                    })
+                    .into_doc()
+            })
+            .into_doc()
     }
 
     fn render_document(
@@ -873,12 +927,12 @@ impl<'arena> PrettyFormatter<'arena> {
                 ),
             },
             | Term::Abs(Abs(pattern, body)) => {
-                self.grouped_join(
+                self.scoped_join(
                     LayoutFragment::entity(
                         (*pattern).into(),
                         RcDoc::text("fn ").append(self.copattern(*pattern)),
                     ),
-                    RcDoc::text(" =>"),
+                    "=>",
                     self.term_through_fragment(*body, TermPrecedence::Binder),
                     self.options.indent,
                 )
@@ -894,12 +948,12 @@ impl<'arena> PrettyFormatter<'arena> {
                 .append(RcDoc::text(";"))
                 .append(self.sequence_tail((*body).into(), *tail)),
             | Term::Fix(Fix(pattern, body)) => {
-                self.grouped_join(
+                self.scoped_join(
                     LayoutFragment::entity(
                         (*pattern).into(),
                         RcDoc::text("fix ").append(self.pattern(*pattern)),
                     ),
-                    RcDoc::text(" =>"),
+                    "=>",
                     self.term_through_fragment(*body, TermPrecedence::Binder),
                     self.options.indent,
                 )
@@ -1178,12 +1232,12 @@ impl<'arena> PrettyFormatter<'arena> {
     fn quantifier(
         &'arena self, keyword: &'static str, pattern: CoPatId, body: TermId,
     ) -> RcDoc<'arena> {
-        self.grouped_join(
+        self.scoped_join(
             LayoutFragment::entity(
                 pattern.into(),
                 RcDoc::text(keyword).append(RcDoc::space()).append(self.copattern(pattern)),
             ),
-            RcDoc::text(" ."),
+            ".",
             self.term_through_fragment(body, TermPrecedence::Quantifier),
             self.options.indent,
         )
@@ -1225,8 +1279,7 @@ impl<'arena> PrettyFormatter<'arena> {
             anchors: parameters.anchors,
             boundary_mode: BoundaryMode::Regular,
         };
-        self.grouped_join(head, RcDoc::text(" ."), self.term_fragment(*body), self.options.indent)
-            .document
+        self.scoped_join(head, ".", self.term_fragment(*body), self.options.indent).document
     }
 
     fn existential_parameter(
@@ -1393,27 +1446,13 @@ impl<'arena> PrettyFormatter<'arena> {
     fn bindee_with_placement(
         &'arena self, bindee: RcDoc<'arena>, placement: RcDoc<'arena>,
     ) -> RcDoc<'arena> {
-        let joined = bindee.clone().append(RcDoc::space()).append(placement.clone());
+        let joined = self
+            .fail_at_line_start()
+            .append(bindee.clone())
+            .append(RcDoc::space())
+            .append(placement.clone());
         let broken = bindee.append(RcDoc::hardline().append(placement).nest(-self.options.indent));
-        let line_width = self.options.line_width;
-        DOC_ALLOCATOR
-            .column(move |column| {
-                let joined = joined.clone();
-                let broken = broken.clone();
-                DOC_ALLOCATOR
-                    .nesting(move |nesting| {
-                        let bindee_starts_own_line = column == nesting;
-                        if !bindee_starts_own_line
-                            && Self::document_fits_on_one_line(&joined, column, nesting, line_width)
-                        {
-                            joined.clone()
-                        } else {
-                            broken.clone()
-                        }
-                    })
-                    .into_doc()
-            })
-            .into_doc()
+        self.single_line_or(joined, broken)
     }
 
     fn placement(&self, placement: Placement) -> RcDoc<'arena> {
@@ -2284,7 +2323,7 @@ mod tests {
     }
 
     #[test]
-    fn indents_parameters_that_wrap() {
+    fn places_scope_separators_after_parameters_that_wrap() {
         let options = PrettyOptions::default()
             .with_line_width(38)
             .with_layout_intentions(LayoutIntentions::Ignore);
@@ -2293,15 +2332,44 @@ mod tests {
                 "fn (first : FirstClassifier) (second : SecondClassifier) => result",
                 concat!(
                     "fn (first : FirstClassifier)\n",
-                    "  (second : SecondClassifier) =>\n",
+                    "  (second : SecondClassifier)\n",
+                    "=>\n",
                     "  result\n",
+                ),
+            ),
+            (
+                "pi (first : FirstClassifier) (second : SecondClassifier) . Result",
+                concat!(
+                    "pi (first : FirstClassifier)\n",
+                    "  (second : SecondClassifier)\n",
+                    ".\n",
+                    "  Result\n",
+                ),
+            ),
+            (
+                "forall (first : FirstClassifier) (second : SecondClassifier) . Result",
+                concat!(
+                    "forall (first : FirstClassifier)\n",
+                    "  (second : SecondClassifier)\n",
+                    ".\n",
+                    "  Result\n",
+                ),
+            ),
+            (
+                "sigma (first : FirstClassifier) (second : SecondClassifier) . Result",
+                concat!(
+                    "sigma (first : FirstClassifier)\n",
+                    "  (second : SecondClassifier)\n",
+                    ".\n",
+                    "  Result\n",
                 ),
             ),
             (
                 "exists (first : FirstClassifier) (second : SecondClassifier) . Result",
                 concat!(
                     "exists (first : FirstClassifier)\n",
-                    "  (second : SecondClassifier) .\n",
+                    "  (second : SecondClassifier)\n",
+                    ".\n",
                     "  Result\n",
                 ),
             ),
@@ -2312,8 +2380,22 @@ mod tests {
             let formatted = parsed.render_with_options(options);
             assert_eq!(formatted, expected, "source: {source}");
             let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render_with_options(options));
             assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
         });
+    }
+
+    #[test]
+    fn places_function_separator_after_a_preserved_multiline_pattern() {
+        let source = concat!("fix (\n", "  value\n", ") => result");
+        let expected = concat!("fix (\n", "  value\n", ")\n", "=>\n", "  result\n");
+        let parsed = ParsedSource::new(source);
+        let formatted = parsed.render(LayoutIntentions::Preserve);
+
+        assert_eq!(formatted, expected);
+        let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+        assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
     }
 
     #[test]
@@ -2333,7 +2415,8 @@ mod tests {
                 "exists\n",
                 "  --| Parameter documentation.\n",
                 "\n",
-                "  (Value : Type) .\n",
+                "  (Value : Type)\n",
+                ".\n",
                 "  Value\n",
             )
         );
@@ -2355,7 +2438,8 @@ mod tests {
             concat!(
                 "exists\n",
                 "  --| Parameter documentation.\n",
-                "  (Value : Type) .\n",
+                "  (Value : Type)\n",
+                ".\n",
                 "  Value\n",
             )
         );
