@@ -141,6 +141,8 @@ but avoid making repeated "not X, but Y" formulations the main mode of explanati
 
 Let paragraph and sentence length follow the needs of the argument.
 Avoid formulaic prose in which every paragraph has the same rhythm or structure.
+Use parallel construction sparingly. Keep repeated grammatical patterns only when they clarify a comparison,
+an enumeration, or a formal invariant rather than using them as a default rhetorical style.
 After revising documentation, read it from beginning to end and check that the storyline unfolds naturally,
 the information density rises gradually, and no paragraph depends on concepts introduced only later.
 

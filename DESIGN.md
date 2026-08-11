@@ -231,6 +231,8 @@ REPL commands also use root metadata rather than a second command language. `@[t
 inspection, `@[run] expression` requires immediate evaluation, and `@[help] _` and `@[quit] _` are control commands.
 Unknown metadata remains ordinary Zydeco syntax. As a result, command recognition is a frontend policy while each
 numbered expression still passes through the same source graph, resolver, checker, linker, and evaluator as a file.
+The rationale, lifecycle, and review invariants are recorded in the
+[declaration-free REPL design](docs/ideas/repl.md).
 
 The session owns revisioned source inputs and immutable frontend analysis results shared by
 the CLI, TUI, and language server. Lowering schedules live with Stack IR and assembly, while the
