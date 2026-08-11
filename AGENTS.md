@@ -5,7 +5,8 @@ This file is guidance for automated assistants working in this repository.
 ## Adding a Dependency
 
 All Rust dependencies are managed in the top-level `Cargo.toml` file, under `[workspace.dependencies]`.
-All crates then use `dependency = { workspace = true }` to refer to the workspace-registered dependencies in their own `Cargo.toml`.
+All crates then use `dependency = { workspace = true }` to refer to
+the workspace-registered dependencies in their own `Cargo.toml`.
 
 ## Project Snapshot
 
@@ -50,8 +51,7 @@ cargo test-workspace
 ## Repository Layout
 
 - `lang/`: parser, type checker, analysis session, interpreter, backends, and tests.
-- `lib/`: standard library, example programs, and test projects under
-  `lib/tests/`.
+- `lib/`: standard library, example programs, and test projects under `lib/tests/`.
 - `cli/`: command-line interface.
 - `docs/`: literate Zydeco tutorial material (see `docs/spell`).
 - `editor/`: editor integrations (TextMate grammar and VSCode extension).
@@ -68,8 +68,7 @@ The core phases are:
 5. linking (`lang/dynamics/src`)
 6. evaluation (`lang/dynamics/src`)
 
-Each phase generally includes `syntax`, `arena`, `err`, `fmt`, and `span`
-modules.
+Each phase generally includes `syntax`, `arena`, `err`, `fmt`, and `span` modules.
 
 ## Notes for Changes
 
