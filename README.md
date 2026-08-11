@@ -70,7 +70,8 @@ The REPL uses root metadata annotations for its commands:
 ```
 
 Press Enter to evaluate complete syntax or continue an incomplete term on a new line. Alt+Enter always inserts a
-newline, and Ctrl+Enter submits the current text for diagnostics.
+newline, and Ctrl+Enter submits the current text for diagnostics. A type checking error leaves the editor and input
+number unchanged so the source can be corrected and retried.
 
 ## Intro to Zydeco
 

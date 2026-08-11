@@ -27,6 +27,7 @@ const HELP: &str = concat!(
     "@[quit] _            leave the REPL\n",
     "\n",
     "Enter submits complete syntax and continues an incomplete term on a new line.\n",
+    "Type-checking errors keep the current input available for editing and retry.\n",
     "Alt+Enter always inserts a newline. Ctrl+Enter diagnoses the current text.\n",
     "Ctrl+Q or Ctrl+C quits; PageUp and PageDown scroll the transcript.",
 );
@@ -37,6 +38,7 @@ pub struct Repl {
     engine: ReplEngine,
     editor: SourceEditor,
     transcript: Vec<TranscriptItem>,
+    retry_output: Option<TranscriptEntry>,
     next_number: u64,
     transcript_scroll: usize,
     quit: bool,
@@ -58,6 +60,7 @@ impl Repl {
             transcript: vec![TranscriptItem::Notice(
                 "Declaration-free REPL ready. Use `@[help] _` for commands.".to_owned(),
             )],
+            retry_output: None,
             next_number: 1,
             transcript_scroll: 0,
             quit: false,
@@ -95,6 +98,7 @@ impl Repl {
             | (KeyCode::Char('u'), true, _) => self.editor.clear(),
             | (KeyCode::Char('l'), true, _) => {
                 self.transcript.clear();
+                self.retry_output = None;
                 self.transcript_scroll = 0;
             }
             | (KeyCode::Enter, true, _) => self.submit(true),
@@ -160,7 +164,14 @@ impl Repl {
             | Ok(input) => self.engine.evaluate(&input, mode),
             | Err(error) => EvaluationOutcome::Error(error.to_string()),
         };
-        self.finish_record(number, source, outcome);
+        match outcome {
+            | EvaluationOutcome::TypeRejected(error) => {
+                self.retain_for_retry(number, source, error)
+            }
+            | outcome @ (EvaluationOutcome::Success(_) | EvaluationOutcome::Error(_)) => {
+                self.finish_record(number, source, outcome)
+            }
+        }
     }
 
     fn record(&mut self, source: String, outcome: EvaluationOutcome) {
@@ -173,6 +184,7 @@ impl Repl {
     }
 
     fn finish_record(&mut self, number: SourceNumber, source: String, outcome: EvaluationOutcome) {
+        self.retry_output = None;
         self.transcript.push(TranscriptItem::Submission(TranscriptEntry {
             number,
             source,
@@ -183,6 +195,15 @@ impl Repl {
             self.next_number
         });
         self.editor.clear();
+        self.transcript_scroll = 0;
+    }
+
+    fn retain_for_retry(&mut self, number: SourceNumber, source: String, error: String) {
+        self.retry_output = Some(TranscriptEntry {
+            number,
+            source,
+            outcome: EvaluationOutcome::TypeRejected(error),
+        });
         self.transcript_scroll = 0;
     }
 
@@ -232,7 +253,12 @@ impl Repl {
     }
 
     fn render_transcript(&self, frame: &mut Frame, area: Rect) {
-        let lines = self.transcript.iter().flat_map(TranscriptItem::lines).collect::<Vec<_>>();
+        let lines = self
+            .transcript
+            .iter()
+            .flat_map(TranscriptItem::lines)
+            .chain(self.retry_output.iter().flat_map(TranscriptEntry::lines))
+            .collect::<Vec<_>>();
         let block =
             Block::default().borders(Borders::ALL).title(" history · import with @[import(n)] _ ");
         let inner = block.inner(area);
@@ -278,10 +304,13 @@ impl Repl {
     }
 
     fn render_footer(&self, frame: &mut Frame, area: Rect) {
-        let status = match SubmissionParser::parse(&self.editor.source()) {
+        let source = self.editor.source();
+        let retrying = self.retry_output.as_ref().is_some_and(|entry| entry.source == source);
+        let status = match SubmissionParser::parse(&source) {
             | SubmissionState::Empty => "new input",
             | SubmissionState::Incomplete => "incomplete · Enter continues",
             | SubmissionState::Invalid => "syntax error · Enter diagnoses",
+            | SubmissionState::Complete(Ok(_)) if retrying => "type error · edit and retry",
             | SubmissionState::Complete(Ok(_)) => "ready · Enter evaluates",
             | SubmissionState::Complete(Err(_)) => "invalid command · Enter diagnoses",
         };
@@ -343,7 +372,9 @@ impl TranscriptEntry {
         });
         let (marker, color, output) = match &self.outcome {
             | EvaluationOutcome::Success(output) => ("  ⇒ ", Color::Green, output),
-            | EvaluationOutcome::Error(output) => ("  × ", Color::Red, output),
+            | EvaluationOutcome::TypeRejected(output) | EvaluationOutcome::Error(output) => {
+                ("  × ", Color::Red, output)
+            }
         };
         let outcome_lines = output.lines().enumerate().map(move |(position, line)| {
             Line::from(vec![
@@ -404,6 +435,50 @@ mod tests {
 
         assert_eq!(repl.current_number().get(), 2);
         assert!(matches!(repl.transcript.last(), Some(TranscriptItem::Submission(_))));
+    }
+
+    #[test]
+    fn type_error_keeps_the_number_editor_and_cursor_for_retry() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut repl = Repl::new(directory.path().to_path_buf());
+        repl.editor.insert_str("1 2");
+        let cursor = repl.editor.cursor_position();
+
+        repl.submit(false);
+
+        assert_eq!(repl.current_number().get(), 1);
+        assert_eq!(repl.editor.source(), "1 2");
+        assert_eq!(repl.editor.cursor_position(), cursor);
+        assert!(matches!(
+            repl.retry_output.as_ref(),
+            Some(TranscriptEntry {
+                number,
+                outcome: EvaluationOutcome::TypeRejected(_),
+                ..
+            }) if number.get() == 1
+        ));
+
+        let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+        terminal.draw(|frame| repl.render(frame)).unwrap();
+        let rendered = terminal.backend().to_string();
+        assert!(rendered.contains("error occurred here"), "{rendered}");
+        assert!(rendered.contains("type error · edit and retry"), "{rendered}");
+
+        repl.editor.clear();
+        repl.editor.insert_str("1");
+        repl.submit(false);
+
+        assert_eq!(repl.current_number().get(), 2);
+        assert!(repl.editor.is_empty());
+        assert!(repl.retry_output.is_none());
+        assert!(matches!(
+            repl.transcript.last(),
+            Some(TranscriptItem::Submission(TranscriptEntry {
+                number,
+                outcome: EvaluationOutcome::Success(result),
+                ..
+            })) if number.get() == 1 && result == "1 : Int"
+        ));
     }
 
     #[test]

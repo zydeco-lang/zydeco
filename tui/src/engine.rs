@@ -20,6 +20,7 @@ use zydeco_utils::arena::ArenaAccess;
 
 pub(crate) enum EvaluationOutcome {
     Success(String),
+    TypeRejected(String),
     Error(String),
 }
 
@@ -83,7 +84,9 @@ impl ReplEngine {
                 | Ok(wrapper) if matches!(wrapper.outcome(), AnalysisOutcome::Checked { .. }) => {
                     (wrapper, true)
                 }
-                | Ok(_) => return EvaluationOutcome::Error(DiagnosticText::rejected(&direct)),
+                | Ok(_) => {
+                    return EvaluationOutcome::TypeRejected(DiagnosticText::rejected(&direct));
+                }
                 | Err(error) => {
                     return EvaluationOutcome::Error(DiagnosticText::analysis_error(&error));
                 }
@@ -426,19 +429,25 @@ mod tests {
         let first_path = engine.install(first, "1".to_owned()).unwrap();
         match engine.evaluate(&first_path, ExpressionMode::Evaluate) {
             | EvaluationOutcome::Success(result) => assert_eq!(result, "1 : Int"),
-            | EvaluationOutcome::Error(error) => panic!("first input failed: {error}"),
+            | EvaluationOutcome::TypeRejected(error) | EvaluationOutcome::Error(error) => {
+                panic!("first input failed: {error}")
+            }
         }
 
         let second_path = engine.install(second, "@[import(1)] _".to_owned()).unwrap();
         match engine.evaluate(&second_path, ExpressionMode::Evaluate) {
             | EvaluationOutcome::Success(result) => assert_eq!(result, "1 : Int"),
-            | EvaluationOutcome::Error(error) => panic!("numbered import failed: {error}"),
+            | EvaluationOutcome::TypeRejected(error) | EvaluationOutcome::Error(error) => {
+                panic!("numbered import failed: {error}")
+            }
         }
 
         let third_path = engine.install(third, "ret (@[import(1)] _)".to_owned()).unwrap();
         match engine.evaluate(&third_path, ExpressionMode::Evaluate) {
             | EvaluationOutcome::Success(result) => assert_eq!(result, "1 : Int"),
-            | EvaluationOutcome::Error(error) => panic!("nested numbered import failed: {error}"),
+            | EvaluationOutcome::TypeRejected(error) | EvaluationOutcome::Error(error) => {
+                panic!("nested numbered import failed: {error}")
+            }
         }
     }
 
@@ -451,7 +460,9 @@ mod tests {
 
         match engine.evaluate(&path, ExpressionMode::Type) {
             | EvaluationOutcome::Success(result) => assert!(result.contains("Ret Int"), "{result}"),
-            | EvaluationOutcome::Error(error) => panic!("type command failed: {error}"),
+            | EvaluationOutcome::TypeRejected(error) | EvaluationOutcome::Error(error) => {
+                panic!("type command failed: {error}")
+            }
         }
     }
 
@@ -463,7 +474,28 @@ mod tests {
 
         match engine.evaluate(&path, ExpressionMode::Evaluate) {
             | EvaluationOutcome::Success(result) => assert_eq!(result, "1 : Int"),
-            | EvaluationOutcome::Error(error) => panic!("return evaluation failed: {error}"),
+            | EvaluationOutcome::TypeRejected(error) | EvaluationOutcome::Error(error) => {
+                panic!("return evaluation failed: {error}")
+            }
+        }
+    }
+
+    #[test]
+    fn type_check_failures_have_a_retryable_outcome() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut engine = ReplEngine::new(directory.path().to_path_buf());
+        let path = engine.install(SourceNumber::new(1).unwrap(), "1 2".to_owned()).unwrap();
+
+        match engine.evaluate(&path, ExpressionMode::Evaluate) {
+            | EvaluationOutcome::TypeRejected(error) => {
+                assert!(!error.is_empty(), "type rejection should include a diagnostic")
+            }
+            | EvaluationOutcome::Success(result) => {
+                panic!("ill-typed input unexpectedly evaluated: {result}")
+            }
+            | EvaluationOutcome::Error(error) => {
+                panic!("ill-typed input was not classified as retryable: {error}")
+            }
         }
     }
 
@@ -477,6 +509,9 @@ mod tests {
         match engine.evaluate(&path, ExpressionMode::Evaluate) {
             | EvaluationOutcome::Error(error) => {
                 assert!(error.contains("REPL input [2]"), "{error}")
+            }
+            | EvaluationOutcome::TypeRejected(error) => {
+                panic!("missing input unexpectedly reached type checking: {error}")
             }
             | EvaluationOutcome::Success(result) => {
                 panic!("missing numbered input unexpectedly evaluated: {result}")
@@ -499,7 +534,9 @@ mod tests {
             | EvaluationOutcome::Success(result) => {
                 assert_eq!(result, "Program exited with code 3")
             }
-            | EvaluationOutcome::Error(error) => panic!("declaration-free program failed: {error}"),
+            | EvaluationOutcome::TypeRejected(error) | EvaluationOutcome::Error(error) => {
+                panic!("declaration-free program failed: {error}")
+            }
         }
     }
 }

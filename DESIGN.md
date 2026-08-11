@@ -225,7 +225,8 @@ Interactive sessions reuse that source model instead of maintaining a mutable de
 Ratatui REPL stores every submitted term as a session overlay with a nonzero input identity, displayed as `[1]`,
 `[2]`, and so on. The annotation `@[import(1)] _` resolves the unquoted integer to that overlay and performs the same
 fresh, hygienic term splice as a file import. A quoted target such as `@[import("1")] _` still means a filesystem
-path, so source numbers and paths remain distinct in the parsed `ImportTarget` type.
+path, so source numbers and paths remain distinct in the parsed `ImportTarget` type. A type checking rejection keeps
+the current number reserved and the editor intact. A later successful retry commits the corrected source to history.
 
 REPL commands also use root metadata rather than a second command language. `@[type] expression` requests static
 inspection, `@[run] expression` requires immediate evaluation, and `@[help] _` and `@[quit] _` are control commands.

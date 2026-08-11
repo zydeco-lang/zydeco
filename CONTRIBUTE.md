@@ -27,6 +27,7 @@ Use `cargo run -p zydeco-tui` to launch the same application directly while work
 The REPL accepts one complete source term per numbered input. Import an earlier input with `@[import(1)] _`; numeric
 targets are session inputs, while quoted targets such as `@[import("library.zy")] _` remain filesystem sources.
 Commands are ordinary root annotations: `@[type] expression`, `@[run] expression`, `@[help] _`, and `@[quit] _`.
+Type checking errors remain on the current input number so the source can be edited and submitted again.
 
 ## Format Source Files
 

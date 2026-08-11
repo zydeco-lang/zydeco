@@ -11,9 +11,10 @@ graph of source terms.
 ## A Session Is Numbered Source History
 
 The editor labels the next submission with a positive number such as `[1]`. Once submitted, its text is retained in
-an in-memory session overlay under that identity. The number advances after the submission is recorded, including
-when parsing, checking, or evaluation reports an error. Stable numbering matters because a transcript should never
-change what `[1]` refers to after the fact.
+an in-memory session overlay under that identity. The number advances when the submission becomes history. A type
+checking rejection is instead shown as retry output, with the editor text, cursor, and number left in place. The
+corrected source replaces the tentative overlay when the user submits it again. Once an entry reaches history, its
+number never changes what source it denotes.
 
 A short session can therefore look like this:
 
@@ -43,8 +44,8 @@ Import cycles use the same graph check as file cycles. Session overlays are neve
 and disappear when the process exits.
 
 Control commands do not enter numbered history. `@[help] _` leaves the current number available, and `@[quit] _`
-ends the session. This exception is narrow: anything presented as a source submission receives an identity, even
-if its diagnostic prevents a later import from checking successfully.
+ends the session. A type checking rejection also stays outside history while its diagnostic remains visible in the
+output pane. During that recovery path, the current number remains a draft.
 
 ## Commands Reuse Metadata
 
@@ -95,7 +96,8 @@ The complete path for an expression is:
 
 ```text
 editor text -> numbered overlay -> source graph -> resolution and checking
-            -> linking and evaluation -> transcript entry
+                                      -> type rejection -> edit the same input
+                                      -> checked source -> linking and evaluation -> history
 ```
 
 The `zydeco-tui` crate owns editing, transcript presentation, key handling, and command selection. Typed import
@@ -108,6 +110,10 @@ launches the TUI, so it cannot develop a second implementation of REPL semantics
 Enter submits syntax that the parser considers complete. An unexpected end of input means the term needs another
 line, so Enter inserts one instead. Alt+Enter always inserts a newline, and Ctrl+Enter forces submission to obtain a
 diagnostic. This policy uses parser state rather than indentation or delimiter heuristics.
+
+When type checking rejects the source, its diagnostic appears at the end of the output pane. Focus remains in the
+editor at the previous cursor position. Submitting a correction retries the same number; a successful retry removes
+the temporary diagnostic, records the corrected source, and advances to the next input.
 
 The transcript scrolls independently of the multiline editor. Clearing the visible transcript does not delete the
 session overlays, because display state must not change the meaning of an existing input number. Exiting the TUI
@@ -127,7 +133,7 @@ of self-contained programs.
 
 The current design is governed by a few durable invariants:
 
-- A displayed input number identifies one immutable source string for the lifetime of the session.
+- A number in committed history identifies one immutable source string for the lifetime of the session.
 - Numeric and quoted import targets remain different typed cases.
 - Importing history performs a fresh, hygienic source splice rather than sharing a runtime object.
 - Recognized REPL commands are root metadata; unknown metadata remains ordinary source syntax.
