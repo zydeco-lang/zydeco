@@ -179,8 +179,7 @@ begin
     fn i =>
       ! rhs triv triv i
   };
-  -- syntactic sugar:
-  -- do~ M; N ==> M { N }
+  -- Continuation sequencing is written as an explicit thunk argument.
   ! (stdio/write_int) a {
     ! (stdio/write) " != " {
       ! (stdio/write_int) b {

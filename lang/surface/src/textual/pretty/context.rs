@@ -50,7 +50,6 @@ impl<'arena> GrammarContext<'arena> {
             }
             | Term::Meta(_)
             | Term::Abs(_)
-            | Term::KontCall(_)
             | Term::Fix(_)
             | Term::Do(_)
             | Term::Let(_)

@@ -71,8 +71,8 @@ begin
         ! k a
     | .bind A A' m f =>
       fn .run k =>
-        do~ ! m .run; fn a =>
-        ! f a .run k
+        ! m .run { fn a =>
+          ! f a .run k }
     end
   that
   def ! mo-polykont : Monad PolyKont =

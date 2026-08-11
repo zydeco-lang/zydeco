@@ -1154,14 +1154,6 @@ impl<'arena> PrettyFormatter<'arena> {
             },
             | Term::Abs(_) => self.scoped_form(term, ScopedForm::Function),
             | Term::App(Appli(terms)) => self.application(terms),
-            | Term::KontCall(KontCall { body, tail }) => RcDoc::text("do~")
-                .append(self.fragment_boundary(
-                    BoundaryIntent::after_start(term, *body),
-                    BoundaryLayout::hanging("", self.indent()),
-                    self.term_through_fragment(*body, TermPrecedence::Binder),
-                ))
-                .append(RcDoc::text(";"))
-                .append(self.sequence_tail((*body).into(), *tail)),
             | Term::Fix(Fix(pattern, body)) => {
                 self.scoped_join(
                     LayoutFragment::entity(
@@ -2169,12 +2161,8 @@ mod tests {
     }
 
     #[test]
-    fn aligns_sequential_continuations_at_the_current_indentation() {
+    fn aligns_sequential_binders_at_the_current_indentation() {
         let cases = [
-            (
-                "do~ first; do~ second; ret value",
-                concat!("do~ first;\n", "do~ second;\n", "ret value\n"),
-            ),
             (
                 "let first = one in let second = two in second",
                 concat!("let first = one in\n", "let second = two in\n", "second\n"),

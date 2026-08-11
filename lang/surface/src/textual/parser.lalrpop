@@ -32,7 +32,6 @@ extern {
         "in" => Tok::In,
         "that" => Tok::That,
         "do" => Tok::Do,
-        "do~" => Tok::DoTilde,
         "ret" => Tok::Ret,
         "monadic" => Tok::Monadic,
         "monadically" => Tok::Monadically,
@@ -129,7 +128,6 @@ MetaId: String = {
     "in" => "in".into(),
     "that" => "that".into(),
     "do" => "do".into(),
-    "do~" => "do~".into(),
     "ret" => "ret".into(),
     "monadic" => "monadic".into(),
     "monadically" => "monadically".into(),
@@ -422,8 +420,6 @@ Term: Term = {
     "fix" <binder:PatId> "=>" <term:TermGen<Term>> => Fix(<>).into(),
     // monadically
     "monadically" <TermGen<Term>> => MoBlock(<>).into(),
-    // kont call
-    "do~" <body:TermGen<Term>> ";" <tail:TermGen<Term>> => KontCall {<>}.into(),
     // bind
     "do" <binder:PatId> "<-" <bindee:TermGen<Term>> ";" <tail:TermGen<Term>> => {
         Bind {<>}.into()

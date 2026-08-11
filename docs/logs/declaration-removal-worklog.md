@@ -696,7 +696,7 @@ matching the invariant already maintained for source-written terms.
 A nested-block regression imports the basis twice and confirms that a monadic block selects the nearest lexical
 `Monad` and `Algebra`, rather than falling back to a process-wide primitive registration.
 The transformer, free-handler, and backtracking fixtures now also run as declaration-free roots.
-Their explicit continuation structure preserves the sequencing formerly expressed by `do~`.
+Their explicit continuation applications preserve the same sequencing without dedicated surface syntax.
 The string literals in two of these programs now have a complete route through linked amd64.
 The call-by-value and CBPV interpreter fixtures now follow them.
 Their recursive environment, value, computation, and syntax types become ordinary block-level type SCCs,

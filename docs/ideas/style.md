@@ -117,7 +117,7 @@ Zydeco's value/computation distinction should remain visible in ordinary code:
 | `Ret A` | the computation type that returns a value of type `A` |
 | `ret value` | a computation that returns `value` |
 | `do pattern <- M; N` | run `M`, bind its result, then continue with `N` |
-| `do~ M; N` | run `M`, discard its result, then continue with `N` |
+| `M { N }` | pass the suspended continuation `N` directly to `M` |
 | `fn pattern => M` | the abstraction required by the residual computation type |
 
 These forms also reveal evaluation order. Mobile block entries contribute types and values to a context;

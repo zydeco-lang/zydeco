@@ -169,10 +169,6 @@ impl<'graph> ProgramAssembler<'graph> {
                     .collect::<Result<Vec<_>, _>>()?,
             )
             .into(),
-            | t::Term::KontCall(t::KontCall { body, tail }) => {
-                t::KontCall { body: self.term(source, body)?, tail: self.term(source, tail)? }
-                    .into()
-            }
             | t::Term::Fix(t::Fix(pattern, body)) => {
                 t::Fix(self.pattern(source, pattern)?, self.term(source, body)?).into()
             }

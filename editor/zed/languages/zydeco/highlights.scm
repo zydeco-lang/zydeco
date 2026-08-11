@@ -69,7 +69,6 @@
   "in"
   "that"
   "do"
-  "do~"
   "ret"
   "monadic"
   "monadically"

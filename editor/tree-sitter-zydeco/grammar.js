@@ -28,7 +28,6 @@ const KEYWORDS = [
   'in',
   'that',
   'do',
-  'do~',
   'ret',
   'monadic',
   'monadically',
@@ -83,7 +82,6 @@ module.exports = grammar({
       $.lambda_expression,
       $.fix_expression,
       $.monadically_expression,
-      $.continuation_call,
       $.do_expression,
       $.parameter_expression,
       $.context_binding,
@@ -308,13 +306,6 @@ module.exports = grammar({
 
     monadically_expression: $ => prec.right(PREC.binding, seq(
       'monadically',
-      field('body', $._term),
-    )),
-
-    continuation_call: $ => prec.right(PREC.binding, seq(
-      'do~',
-      field('value', $._term),
-      ';',
       field('body', $._term),
     )),
 

@@ -66,7 +66,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
             | Term::Paren(t) => s += &t.ugly(f),
             | Term::Abs(t) => s += &t.ugly(f),
             | Term::App(t) => s += &t.ugly(f),
-            | Term::KontCall(t) => s += &t.ugly(f),
             | Term::Fix(t) => s += &t.ugly(f),
             | Term::Pi(t) => s += &t.ugly(f),
             | Term::Arrow(t) => s += &t.ugly(f),
@@ -277,18 +276,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for Abs<CoPatId, TermId> {
         s += &p.ugly(f);
         s += " => ";
         s += &t.ugly(f);
-        s
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for KontCall {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let KontCall { body, tail } = self;
-        s += "do ";
-        s += &body.ugly(f);
-        s += "; ";
-        s += &tail.ugly(f);
         s
     }
 }

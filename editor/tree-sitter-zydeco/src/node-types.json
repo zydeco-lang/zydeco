@@ -88,10 +88,6 @@
         "named": true
       },
       {
-        "type": "continuation_call",
-        "named": true
-      },
-      {
         "type": "data_type",
         "named": true
       },
@@ -613,32 +609,6 @@
         "types": [
           {
             "type": "placement",
-            "named": true
-          }
-        ]
-      }
-    }
-  },
-  {
-    "type": "continuation_call",
-    "named": true,
-    "fields": {
-      "body": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "_term",
-            "named": true
-          }
-        ]
-      },
-      "value": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "_term",
             "named": true
           }
         ]
@@ -2224,10 +2194,6 @@
     "type": "documentation_comment",
     "named": true,
     "extra": true
-  },
-  {
-    "type": "do~",
-    "named": false
   },
   {
     "type": "end",

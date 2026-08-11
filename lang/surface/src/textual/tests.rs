@@ -48,6 +48,23 @@ fn parsing_2() {
 }
 
 #[test]
+fn rejects_retired_do_tilde_syntax() {
+    let retired = "do~ first; second";
+    let mut parser = Parser::new();
+    assert!(
+        parser::SingleTermParser::new()
+            .parse(retired, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(retired))
+            .is_err()
+    );
+
+    let explicit = "first { second }";
+    let mut parser = Parser::new();
+    parser::SingleTermParser::new()
+        .parse(explicit, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(explicit))
+        .expect("explicit continuation application must remain available");
+}
+
+#[test]
 fn parses_decimal_and_scientific_float_literals() {
     [("1.25", 1.25), ("-2.5e1", -25.0), ("1e3", 1000.0)].into_iter().for_each(
         |(source, expected)| {

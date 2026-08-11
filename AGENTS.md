@@ -78,7 +78,10 @@ Run a Zydeco program:
 zydeco run path/to/main.zy
 ```
 
-Run the test suite:
+Run focused tests for the affected crate or test target while iterating.
+Do not run `cargo test-workspace` as a routine verification step: it is CPU-intensive,
+and its native end-to-end tests may also fetch runtime dependencies from crates.io.
+Run the full workspace suite only when the user explicitly requests it:
 ```sh
 cargo test-workspace
 ```

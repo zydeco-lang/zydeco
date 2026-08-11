@@ -76,10 +76,6 @@
         },
         {
           "type": "SYMBOL",
-          "name": "continuation_call"
-        },
-        {
-          "type": "SYMBOL",
           "name": "do_expression"
         },
         {
@@ -1096,39 +1092,6 @@
         ]
       }
     },
-    "continuation_call": {
-      "type": "PREC_RIGHT",
-      "value": 1,
-      "content": {
-        "type": "SEQ",
-        "members": [
-          {
-            "type": "STRING",
-            "value": "do~"
-          },
-          {
-            "type": "FIELD",
-            "name": "value",
-            "content": {
-              "type": "SYMBOL",
-              "name": "_term"
-            }
-          },
-          {
-            "type": "STRING",
-            "value": ";"
-          },
-          {
-            "type": "FIELD",
-            "name": "body",
-            "content": {
-              "type": "SYMBOL",
-              "name": "_term"
-            }
-          }
-        ]
-      }
-    },
     "do_expression": {
       "type": "PREC_RIGHT",
       "value": 1,
@@ -1593,10 +1556,6 @@
               {
                 "type": "STRING",
                 "value": "do"
-              },
-              {
-                "type": "STRING",
-                "value": "do~"
               },
               {
                 "type": "STRING",
