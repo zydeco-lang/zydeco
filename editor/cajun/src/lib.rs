@@ -7,6 +7,7 @@ mod type_links;
 
 use analysis::ProjectState;
 use format::{DocumentFormatter, FormattingOutcome};
+use hover::HoverLineWidth;
 use progress::{AnalysisProgressReporter, AnalysisProgressSession};
 use semantic::SemanticHighlighter;
 use std::{
@@ -15,7 +16,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     },
 };
 use tokio::sync::{Mutex, RwLock};
@@ -139,6 +140,7 @@ pub struct Cajun {
     projects: RwLock<HashMap<PathBuf, CachedProject>>,
     work_done_progress: AtomicBool,
     semantic_tokens_refresh: AtomicBool,
+    hover_line_width: AtomicUsize,
     next_progress_sequence: AtomicU64,
 }
 
@@ -150,6 +152,7 @@ impl Cajun {
             projects: RwLock::new(HashMap::new()),
             work_done_progress: AtomicBool::new(false),
             semantic_tokens_refresh: AtomicBool::new(false),
+            hover_line_width: AtomicUsize::new(HoverLineWidth::DEFAULT.columns()),
             next_progress_sequence: AtomicU64::new(1),
         }
     }
@@ -272,6 +275,10 @@ impl Cajun {
         Some(AnalysisProgressSession::new(self.client.clone(), root, sequence))
     }
 
+    fn hover_line_width(&self) -> HoverLineWidth {
+        HoverLineWidth::new(self.hover_line_width.load(Ordering::Relaxed)).unwrap_or_default()
+    }
+
     async fn set_document(&self, uri: &Url, text: String) -> Option<PathBuf> {
         let path = Self::path(uri).ok()?;
         self.session.lock().await.set_document(&path, text).ok()?;
@@ -297,6 +304,8 @@ impl Cajun {
 #[tower_lsp::async_trait]
 impl LanguageServer for Cajun {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
+        let hover_line_width =
+            HoverLineWidth::from_initialization_options(params.initialization_options.as_ref());
         let work_done_progress = params
             .capabilities
             .window
@@ -312,6 +321,7 @@ impl LanguageServer for Cajun {
             .unwrap_or(false);
         self.work_done_progress.store(work_done_progress, Ordering::Relaxed);
         self.semantic_tokens_refresh.store(semantic_tokens_refresh, Ordering::Relaxed);
+        self.hover_line_width.store(hover_line_width.columns(), Ordering::Relaxed);
         Ok(InitializeResult {
             server_info: Some(ServerInfo {
                 name: "Cajun".to_string(),
@@ -450,8 +460,11 @@ impl LanguageServer for Cajun {
             | RefreshOutcome::Updated(path) => path,
             | RefreshOutcome::Failed(_) | RefreshOutcome::Superseded => return Ok(None),
         };
+        let line_width = self.hover_line_width();
         let projects = self.projects.read().await;
-        Ok(projects.get(&path).and_then(|cached| cached.project.hover(&path, target.position)))
+        Ok(projects
+            .get(&path)
+            .and_then(|cached| cached.project.hover(&path, target.position, line_width)))
     }
 
     async fn document_symbol(

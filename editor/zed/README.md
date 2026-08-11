@@ -7,8 +7,9 @@ definition and reference lookup across imported files, inferred kind and type
 information on hover with links to type definitions, and compiler-aware semantic
 highlighting.
 
-The extension does not bundle a Tree-sitter grammar. Enable Cajun's full-document
-semantic tokens for Zydeco in Zed settings:
+The extension does not activate its Tree-sitter grammar until a committed grammar
+revision is available to Zed. Enable Cajun's full-document semantic tokens for
+Zydeco in Zed settings:
 
 ```json
 {
@@ -23,6 +24,29 @@ semantic tokens for Zydeco in Zed settings:
 Cajun keeps lexical highlighting available while a file is incomplete, then
 refines resolved binders and references with kind, value-type, computation-type,
 value, and computation information when the corresponding compiler phases succeed.
+
+## Hover width
+
+Cajun returns hover signatures in `zydeco` Markdown code fences and pretty-prints
+them to the width supplied by the editor integration. Zed computes each popover's
+width locally from the current editor pane, but the LSP protocol does not report
+that live width to the server. The extension therefore uses a conservative
+72-column budget by default. For consistently narrower panes, set a matching
+column budget in Zed settings:
+
+```json
+{
+  "lsp": {
+    "cajun": {
+      "initialization_options": {
+        "hover": {
+          "lineWidth": 56
+        }
+      }
+    }
+  }
+}
+```
 
 The repository contains the Tree-sitter grammar under `../tree-sitter-zydeco`
 and Zed query files under `languages/zydeco`. Activating it in the extension is a

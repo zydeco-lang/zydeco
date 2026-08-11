@@ -43,6 +43,10 @@
     name: (_) @property)
   (punned_pattern
     name: (_) @property)
+  (projection_pattern
+    name: (_) @property)
+  (punned_projection_pattern
+    name: (_) @property)
   (projection_expression
     field: (_) @property)
 ]

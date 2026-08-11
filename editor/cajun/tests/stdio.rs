@@ -507,6 +507,71 @@ fn stdio_hover_links_referenced_type_definitions() {
 }
 
 #[test]
+fn stdio_hover_uses_the_initialized_line_width() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../lib/std/option.zy")
+        .canonicalize()
+        .unwrap();
+    let source = std::fs::read_to_string(&path).unwrap();
+    let uri = Url::from_file_path(&path).unwrap().to_string();
+    let mut server = LspProcess::start();
+
+    server.request(
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": Url::from_file_path(path.parent().unwrap()).unwrap(),
+            "capabilities": {},
+            "initializationOptions": {
+                "hover": { "lineWidth": 30 }
+            }
+        }),
+    );
+    server.notify("initialized", json!({}));
+    server.notify(
+        "textDocument/didOpen",
+        json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "zydeco",
+                "version": 1,
+                "text": source,
+            },
+        }),
+    );
+    let diagnostics = server.notification("textDocument/publishDiagnostics");
+    assert!(diagnostics["params"]["diagnostics"].as_array().unwrap().is_empty());
+
+    let hover = server.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 29, "character": 9 },
+        }),
+    );
+    assert_eq!(hover["result"]["contents"]["kind"], "markdown");
+    let markdown = hover["result"]["contents"]["value"].as_str().unwrap();
+    let fenced_sources = markdown
+        .split("```zydeco\n")
+        .skip(1)
+        .map(|fence| fence.split_once("\n```").expect("Zydeco fence should be closed").0)
+        .collect::<Vec<_>>();
+    assert!(
+        fenced_sources.first().is_some_and(|source| source.lines().count() > 1),
+        "narrow hover should wrap:\n{markdown}"
+    );
+    assert!(
+        fenced_sources
+            .iter()
+            .flat_map(|source| source.lines())
+            .all(|line| line.chars().count() <= 30),
+        "hover should honor the initialized line width:\n{markdown}"
+    );
+
+    server.finish();
+}
+
+#[test]
 fn stdio_server_treats_overlapping_open_analyses_as_superseded() {
     let repository =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();

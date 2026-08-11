@@ -17,9 +17,10 @@ zydeco-statics = { workspace = true }
 zydeco-session = { workspace = true }
 clap = { workspace = true }
 salsa = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true }
 tower-lsp = { workspace = true }
 
 [dev-dependencies]
-serde_json = { workspace = true }
 tempfile = { workspace = true }

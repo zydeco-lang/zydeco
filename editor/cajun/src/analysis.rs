@@ -25,7 +25,10 @@ use zydeco_utils::{
 };
 
 use crate::{
-    hover::{HoverSignature, SealedTypeEquationPreview, TypeDefinitionLink, TypeDefinitionPreview},
+    hover::{
+        HoverLineWidth, HoverSignature, SealedTypeEquationPreview, TypeDefinitionLink,
+        TypeDefinitionPreview,
+    },
     progress::{AnalysisProgress, SourceDiscovery},
     semantic::SemanticHighlighter,
     type_links::TypeReferenceCollector,
@@ -129,17 +132,24 @@ impl ProjectState {
         Some(Self::ordered_locations(declaration.chain(uses).collect()))
     }
 
-    pub(crate) fn hover(&self, file_path: &Path, position: Position) -> Option<Hover> {
+    pub(crate) fn hover(
+        &self, file_path: &Path, position: Position, line_width: HoverLineWidth,
+    ) -> Option<Hover> {
         let occurrence = self.symbol_at(file_path, position)?;
         let name = &self.scoped().defs[&occurrence.definition];
         let annotation = self.statics().annotations_var.get(&occurrence.definition)?;
         let formatter = Formatter::new(self.scoped(), self.statics());
-        let mut annotation_text = String::new();
-        annotation.pretty(&formatter).render_fmt(100, &mut annotation_text).ok()?;
         let definition_type = self.statics().type_definitions.get(&occurrence.definition).copied();
+        let annotation_width =
+            HoverSignature::annotation_width(&name.0, line_width, definition_type.is_some());
+        let mut annotation_text = String::new();
+        annotation.pretty(&formatter).render_fmt(annotation_width, &mut annotation_text).ok()?;
         let definition = definition_type.and_then(|definition| {
             let mut rendered = String::new();
-            definition.pretty(&formatter).render_fmt(90, &mut rendered).ok()?;
+            definition
+                .pretty(&formatter)
+                .render_fmt(HoverSignature::nested_width(line_width), &mut rendered)
+                .ok()?;
             Some(TypeDefinitionPreview::new(rendered))
         });
         let displayed_definition =
@@ -155,7 +165,7 @@ impl ProjectState {
             .filter(|sealed| {
                 self.statics().abst_hints.get(sealed).copied() != Some(occurrence.definition)
             })
-            .filter_map(|sealed| self.sealed_type_equation(sealed, &formatter));
+            .filter_map(|sealed| self.sealed_type_equation(sealed, &formatter, line_width));
         let signature = HoverSignature::with_definitions(&name.0, &annotation_text, definitions)
             .with_definition(definition)
             .with_sealed_types(sealed_types)
@@ -273,12 +283,12 @@ impl ProjectState {
     }
 
     fn sealed_type_equation(
-        &self, sealed: AbstId, formatter: &Formatter<'_>,
+        &self, sealed: AbstId, formatter: &Formatter<'_>, line_width: HoverLineWidth,
     ) -> Option<SealedTypeEquationPreview> {
         let mut rendered = String::new();
         SealedTypeEquation::new(self.statics(), sealed)?
             .pretty(formatter)
-            .render_fmt(90, &mut rendered)
+            .render_fmt(line_width.columns(), &mut rendered)
             .ok()?;
         Some(SealedTypeEquationPreview::new(rendered))
     }
@@ -373,12 +383,21 @@ impl ProjectState {
 mod tests {
     use super::ProjectState;
     use crate::{
+        hover::HoverLineWidth,
         progress::{AnalysisProgress, SourceDiscovery},
         semantic::SemanticHighlighter,
     };
     use std::{collections::HashMap, path::Path};
     use tower_lsp::lsp_types::{HoverContents, Position, SemanticToken, SemanticTokensLegend, Url};
     use zydeco_utils::span::{Cursor2, FileInfo};
+
+    fn fenced_zydeco_sources(markdown: &str) -> Vec<&str> {
+        markdown
+            .split("```zydeco\n")
+            .skip(1)
+            .map(|fence| fence.split_once("\n```").expect("Zydeco fence should be closed").0)
+            .collect()
+    }
 
     struct DecodedToken {
         text: String,
@@ -490,7 +509,8 @@ mod tests {
 
         let uses = project.references(&library, Position::new(1, 7), false).unwrap();
         assert_eq!(uses.len(), 2);
-        let hover = project.hover(&library, Position::new(2, 4)).unwrap();
+        let hover =
+            project.hover(&library, Position::new(2, 4), HoverLineWidth::default()).unwrap();
         assert_eq!(hover.range.unwrap().start, Position::new(2, 3));
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
@@ -505,7 +525,7 @@ mod tests {
             .canonicalize()
             .unwrap();
         let project = ProjectState::load(&path, &HashMap::new()).unwrap();
-        let hover = project.hover(&path, Position::new(7, 9)).unwrap();
+        let hover = project.hover(&path, Position::new(7, 9), HoverLineWidth::default()).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
@@ -525,7 +545,7 @@ mod tests {
             .canonicalize()
             .unwrap();
         let project = ProjectState::load(&path, &HashMap::new()).unwrap();
-        let hover = project.hover(&path, Position::new(17, 11)).unwrap();
+        let hover = project.hover(&path, Position::new(17, 11), HoverLineWidth::default()).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
@@ -548,7 +568,7 @@ mod tests {
         let mut parameter = Url::from_file_path(&path).unwrap();
         parameter.set_fragment(Some("L6"));
 
-        let short = project.hover(&path, Position::new(5, 7)).unwrap();
+        let short = project.hover(&path, Position::new(5, 7), HoverLineWidth::default()).unwrap();
         let HoverContents::Markup(short) = short.contents else {
             panic!("type hover should use markup content")
         };
@@ -571,11 +591,91 @@ mod tests {
             )
         );
 
-        let long = project.hover(&path, Position::new(84, 7)).unwrap();
+        let long = project.hover(&path, Position::new(84, 7), HoverLineWidth::default()).unwrap();
         let HoverContents::Markup(long) = long.contents else {
             panic!("type hover should use markup content")
         };
         assert_eq!(long.value, "```zydeco\nInterface : VType =\n  ...\n```");
+    }
+
+    #[test]
+    fn type_hover_pretty_prints_within_the_client_column_budget() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../lib/std/option.zy")
+            .canonicalize()
+            .unwrap();
+        let project = ProjectState::load(&path, &HashMap::new()).unwrap();
+        let line_width = HoverLineWidth::new(30).unwrap();
+        let hover = project.hover(&path, Position::new(29, 9), line_width).unwrap();
+        let HoverContents::Markup(contents) = hover.contents else {
+            panic!("type hover should use markup content")
+        };
+        let sources = fenced_zydeco_sources(&contents.value);
+
+        assert!(
+            sources
+                .iter()
+                .flat_map(|source| source.lines())
+                .all(|line| line.chars().count() <= line_width.columns()),
+            "every rendered line should fit the client column budget:\n{}",
+            contents.value
+        );
+        assert!(
+            sources.first().is_some_and(|source| source.lines().count() > 1),
+            "the narrow hover should wrap:\n{}",
+            contents.value
+        );
+    }
+
+    #[test]
+    fn type_hover_breaks_result_constructor_signatures_at_72_columns() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../lib/std/result.zy")
+            .canonicalize()
+            .unwrap();
+        let source = concat!(
+            "param (\n",
+            "  (/VType; /CType; /Thk; /Ret) :\n",
+            "  @[import(\"builtin.zy\")] _\n",
+            ") in\n",
+            "begin\n",
+            "  def Result (A : VType) (E : VType) =\n",
+            "    data\n",
+            "    | +Ok : A\n",
+            "    | +Err : E\n",
+            "    end\n",
+            "  that\n",
+            "  def ! ok (A : VType) (E : VType) (value : A) : Ret (Result A E) =\n",
+            "    ret +Ok(value)\n",
+            "  that\n",
+            "  ()\n",
+            "end\n",
+        );
+        let overrides = HashMap::from([(path.clone(), source.to_owned())]);
+        let project = ProjectState::load(&path, &overrides).unwrap();
+        let line_width = HoverLineWidth::new(72).unwrap();
+        let hover = project.hover(&path, Position::new(11, 9), line_width).unwrap();
+        let HoverContents::Markup(contents) = hover.contents else {
+            panic!("type hover should use markup content")
+        };
+        let sources = fenced_zydeco_sources(&contents.value);
+        let signature = sources.first().expect("type hover should contain a Zydeco code fence");
+
+        assert!(
+            signature.lines().count() > 1,
+            "the signature should be pretty-printed:\n{}",
+            contents.value
+        );
+        assert!(
+            sources
+                .iter()
+                .flat_map(|source| source.lines())
+                .all(|line| line.chars().count() <= line_width.columns()),
+            "the result hover should fit without Zed soft-wrapping it:\n{}",
+            contents.value
+        );
+        assert_eq!(sources.len(), 2, "the declaration and equation should use separate fences");
+        assert!(contents.value.contains("```\n\nwhere\n\n```zydeco\n"));
     }
 
     #[test]
@@ -585,7 +685,7 @@ mod tests {
             .canonicalize()
             .unwrap();
         let project = ProjectState::load(&path, &HashMap::new()).unwrap();
-        let hover = project.hover(&path, Position::new(1, 7)).unwrap();
+        let hover = project.hover(&path, Position::new(1, 7), HoverLineWidth::default()).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
@@ -611,7 +711,7 @@ mod tests {
             .canonicalize()
             .unwrap();
         let project = ProjectState::load(&path, &HashMap::new()).unwrap();
-        let hover = project.hover(&path, Position::new(14, 12)).unwrap();
+        let hover = project.hover(&path, Position::new(14, 12), HoverLineWidth::default()).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
@@ -624,12 +724,14 @@ mod tests {
                 concat!(
                     "```zydeco\n",
                     "value : Nat\n",
-                    "where\n",
-                    "  Nat : VType\n",
-                    "    = data\n",
-                    "      | +Z : Unit\n",
-                    "      | +S : Nat\n",
-                    "      end\n",
+                    "```\n\n",
+                    "where\n\n",
+                    "```zydeco\n",
+                    "Nat : VType\n",
+                    "  = data\n",
+                    "    | +Z : Unit\n",
+                    "    | +S : Nat\n",
+                    "    end\n",
                     "```\n\n",
                     "Types:\n\n",
                     "- [`Nat` ↗](<{definition}>)"
