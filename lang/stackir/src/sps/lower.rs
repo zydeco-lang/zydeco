@@ -285,7 +285,7 @@ impl Lower for ss::VPatId {
                 use zydeco_syntax::Ctor;
                 let Ctor(name, tail) = ctor;
                 let tail_vpat = tail.lower(lo, ());
-                let data_id = lo.statics.data_pat_hints[&self];
+                let data_id = lo.statics.data_pat_hints[self];
                 let idx = lo.statics.datas[&data_id]
                     .iter()
                     .position(|(tag_branch, _ty)| tag_branch == &name)
@@ -508,7 +508,7 @@ impl Lower for ss::CompuId {
                     .into_iter()
                     .map(|arm| {
                         let CoMatcher { dtor: name, tail } = arm;
-                        let codata_id = lo.statics.codata_hints[&self];
+                        let codata_id = lo.statics.codata_hints[self];
                         let idx = lo.statics.codatas[&codata_id]
                             .iter()
                             .position(|(tag_branch, _ty)| tag_branch == &name)

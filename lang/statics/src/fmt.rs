@@ -247,11 +247,11 @@ impl<'a> Ugly<'a, Formatter<'a>> for AbstId {
 impl<'a> Ugly<'a, Formatter<'a>> for DataId {
     fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
-        s += &"data".to_string();
+        s += "data";
         for (ctor, ty) in f.statics.datas[self].iter() {
             s += &format!(" | {} : {}", ctor.ugly(f), ty.ugly(f));
         }
-        s += &" end".to_string();
+        s += " end";
         s
     }
 }
@@ -259,11 +259,11 @@ impl<'a> Ugly<'a, Formatter<'a>> for DataId {
 impl<'a> Ugly<'a, Formatter<'a>> for CoDataId {
     fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
-        s += &"codata".to_string();
+        s += "codata";
         for (dtor, ty) in f.statics.codatas[self].iter() {
             s += &format!(" | {} : {}", dtor.ugly(f), ty.ugly(f));
         }
-        s += &" end".to_string();
+        s += " end";
         s
     }
 }
@@ -620,7 +620,7 @@ where
         for Matcher { binder, tail } in arms.iter() {
             s += &format!(" | {} => {}", binder.ugly(f), tail.ugly(f));
         }
-        s += &" end".to_string();
+        s += " end";
         s
     }
 }
@@ -632,11 +632,11 @@ where
     fn ugly(&self, f: &'a Formatter) -> String {
         let CoMatch { arms } = self;
         let mut s = String::new();
-        s += &"comatch".to_string();
+        s += "comatch";
         for CoMatcher { dtor, tail } in arms.iter() {
             s += &format!(" | {} => {}", dtor.ugly(f), tail.ugly(f));
         }
-        s += &" end".to_string();
+        s += " end";
         s
     }
 }

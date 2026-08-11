@@ -225,7 +225,7 @@ where
                     .map(|Matcher { binder, tail }| {
                         let binder = binder.deep_clone(arena, map);
                         let tail = tail.deep_clone(arena, map);
-                        Matcher { binder, tail }.into()
+                        Matcher { binder, tail }
                     })
                     .collect();
                 build(Match { scrut, arms }, new_str, arena)
@@ -243,7 +243,7 @@ where
                     .into_iter()
                     .map(|CoMatcher { dtor, tail }| {
                         let tail = tail.deep_clone(arena, map);
-                        CoMatcher { dtor, tail }.into()
+                        CoMatcher { dtor, tail }
                     })
                     .collect();
                 build(SCoMatch { scrut, arms }, new_str, arena)

@@ -56,7 +56,7 @@ impl<'a> Lowerer<'a> {
 
     pub fn run(mut self) -> AssemblyArena {
         // Lower all builtins
-        for (_, builtin) in self.stackir.admin.builtins.iter() {
+        for builtin in self.stackir.admin.builtins.values() {
             let sk::Builtin { name, arity, sort } = builtin.clone();
             if let Some(mode) = ExternMode::for_builtin(sort) {
                 self.arena.externs.push(Extern { name, arity, mode });
@@ -472,7 +472,7 @@ impl<'a> Lower<'a> for sk::CompuId {
                             let is_jump_table =
                                 arms.iter().fold(true, |acc, Matcher { binder, tail: _ }| {
                                     use sk::ValuePattern as VPat;
-                                    match lo.stackir.inner.vpats[&binder].clone() {
+                                    match lo.stackir.inner.vpats[binder].clone() {
                                         | VPat::Ctor(_) => acc,
                                         | _ => false,
                                     }

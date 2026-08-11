@@ -144,8 +144,8 @@ impl<'a> StackMeasure<'a> for ProgId {
             match program {
                 | Program::Terminator(terminator) => match terminator {
                     | Terminator::PopJump(PopJump) => {
-                        if let Some(slot_id) = layout.control.pop_back() {
-                            if matches!(
+                        if let Some(slot_id) = layout.control.pop_back()
+                            && matches!(
                                 si.slots[&slot_id],
                                 Slot::Sym(sym)
                                     if matches!(
@@ -155,7 +155,6 @@ impl<'a> StackMeasure<'a> for ProgId {
                             ) {
                                 si.inlined[&slot_id] = true;
                             }
-                        }
                     }
                     | Terminator::Jump(_)
                     | Terminator::LeapJump(_)
@@ -257,7 +256,7 @@ impl<'a> StackInline<'a> for ProgId {
                 }
                 | Program::Instruction(Instruction::PushArg(Push(_)), next) => {
                     let new_slot = si.layouts[&next].control.last().unwrap();
-                    if si.inlined[&new_slot] {
+                    if si.inlined[new_slot] {
                         let next_program = si.arena.programs[&next].to_owned();
                         si.arena.programs.replace_existing(program_id, next_program);
                     }

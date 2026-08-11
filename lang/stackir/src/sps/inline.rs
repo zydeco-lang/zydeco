@@ -61,7 +61,7 @@ impl<'a> InlineTopLevel<'a> for CompuId {
                     .map(|Matcher { binder, tail }| {
                         let binder = binder.inline_top_level(il);
                         let tail = tail.inline_top_level(il);
-                        Matcher { binder, tail }.into()
+                        Matcher { binder, tail }
                     })
                     .collect();
                 Match { scrut, arms }.build(il, None)

@@ -52,9 +52,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for AssemblyArena {
 
 impl<'a> Pretty<'a, Formatter<'a>> for ProgId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let layout = f.layouts.and_then(|layouts| layouts.get(self).map(|layout| layout.clone()));
+        let layout = f.layouts.and_then(|layouts| layouts.get(self).cloned());
         RcDoc::concat([
-            layout.map(|layout| layout.pretty(f)).unwrap_or_else(|| RcDoc::nil()),
+            layout.map(|layout| layout.pretty(f)).unwrap_or_else(RcDoc::nil),
             f.arena.programs[self].pretty(f),
         ])
     }
@@ -82,7 +82,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for SlotId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         f.slots
             .and_then(|slots| slots.get(self).map(|slot| slot.pretty(f)))
-            .unwrap_or_else(|| RcDoc::nil())
+            .unwrap_or_else(RcDoc::nil)
     }
 }
 

@@ -195,7 +195,7 @@ mod impls {
             match (pat, value) {
                 | (VPat::Hole(Hole), _) => Vec::new(),
                 | (VPat::Var(def), _) => {
-                    let value = self.value.clone();
+                    let value = self.value;
                     vec![AssignItem::Def(AssignDef { def, value })]
                 }
                 | (VPat::Ctor(Ctor(ctor, _)), _) => {
@@ -275,7 +275,7 @@ mod impls {
             let arena_ref = arena.as_ref();
             match item {
                 | AssignItem::Def(AssignDef { def, value }) => IntroRefItem {
-                    intros: Context::singleton(def.clone()),
+                    intros: Context::singleton(def),
                     mentions: value.free_vars(arena_ref),
                     item: AssignDef { def, value }.into(),
                 },
@@ -392,7 +392,7 @@ impl Substitute<SubstAssignments> for Computation<NonJoin> {
 
         let frontier = match assignments.items.front() {
             | Some(AssignItem::Stack(AssignStack { stack })) => {
-                Some(su.snorm.sstacks[&stack].clone())
+                Some(su.snorm.sstacks[stack].clone())
             }
             | _ => None,
         };

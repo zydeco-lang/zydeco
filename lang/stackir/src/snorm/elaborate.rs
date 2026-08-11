@@ -212,7 +212,7 @@ impl<'a> Elaborate for CompuId {
                     .into_iter()
                     .map(|CoMatcher { dtor, tail }| {
                         let tail = tail.elaborate(el);
-                        CoMatcher { dtor, tail }.into()
+                        CoMatcher { dtor, tail }
                     })
                     .collect();
                 SCoMatch { scrut, arms }.sbuild(el, self, SubstAssignments::new())
