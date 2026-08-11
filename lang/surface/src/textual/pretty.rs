@@ -84,6 +84,34 @@ struct BoundaryLayout<'arena> {
 }
 
 #[derive(Copy, Clone)]
+struct LeadingSeparatorLayout {
+    inline_right_indent: isize,
+    aligned_separator_indent: isize,
+    aligned_joined_indent: isize,
+    aligned_broken_indent: isize,
+}
+
+impl LeadingSeparatorLayout {
+    fn indent_right(indent: isize) -> Self {
+        Self {
+            inline_right_indent: indent,
+            aligned_separator_indent: 0,
+            aligned_joined_indent: indent,
+            aligned_broken_indent: indent,
+        }
+    }
+
+    fn outdent_separator(indent: isize) -> Self {
+        Self {
+            inline_right_indent: 0,
+            aligned_separator_indent: -indent,
+            aligned_joined_indent: 0,
+            aligned_broken_indent: indent,
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
 enum InfixOperator {
     Product,
     Arrow,
@@ -445,28 +473,36 @@ impl<'arena> PrettyFormatter<'arena> {
     /// separator's line whenever it still fits.
     fn leading_separator_join(
         &'arena self, left: LayoutFragment<'arena>, separator: &'static str,
-        right: LayoutFragment<'arena>, continuation_indent: isize,
+        right: LayoutFragment<'arena>, layout: LeadingSeparatorLayout,
     ) -> LayoutFragment<'arena> {
         let intention = self.arena.intentions.between(left.anchors.last, right.anchors.first);
         let anchors = LayoutAnchors { first: left.anchors.first, last: right.anchors.last };
         let inline_head =
             left.document.clone().append(RcDoc::space()).append(RcDoc::text(separator));
-        let aligned_head = left.document.append(RcDoc::hardline()).append(RcDoc::text(separator));
         let inline = inline_head.clone().append(self.layout_boundary(
             intention,
-            BoundaryLayout::after("", 0, continuation_indent),
+            BoundaryLayout::after("", layout.inline_right_indent, layout.inline_right_indent),
             right.boundary_mode,
             right.document.clone(),
         ));
         // An ordinary entity-to-entity break is satisfied by moving the
         // separator. A blank line still belongs between it and the right side.
         let aligned_intention = intention.filter(|intent| *intent == BreakIntent::BlankLine);
-        let aligned = aligned_head.append(self.layout_boundary(
-            aligned_intention,
-            BoundaryLayout::after("", 0, continuation_indent),
-            right.boundary_mode,
-            right.document,
-        ));
+        let aligned = left.document.append(
+            RcDoc::hardline()
+                .append(RcDoc::text(separator))
+                .append(self.layout_boundary(
+                    aligned_intention,
+                    BoundaryLayout::after(
+                        "",
+                        layout.aligned_joined_indent,
+                        layout.aligned_broken_indent,
+                    ),
+                    right.boundary_mode,
+                    right.document,
+                ))
+                .nest(layout.aligned_separator_indent),
+        );
         let document = self.select_by_single_line(inline_head, inline, aligned);
         LayoutFragment { document, anchors, boundary_mode: left.boundary_mode }
     }
@@ -1477,9 +1513,15 @@ impl<'arena> PrettyFormatter<'arena> {
                     self.term_fragment(*ty),
                     "=",
                     bindee,
-                    self.options.indent,
+                    LeadingSeparatorLayout::outdent_separator(self.options.indent),
                 );
-                self.leading_separator_join(head, ":", assignment, 0).document
+                self.leading_separator_join(
+                    head,
+                    ":",
+                    assignment,
+                    LeadingSeparatorLayout::indent_right(self.options.indent),
+                )
+                .document
             }
             | None => {
                 self.join(head, BoundaryLayout::after(" =", 0, self.options.indent), bindee)
@@ -2270,17 +2312,15 @@ mod tests {
             (
                 concat!(
                     "begin\n",
-                    "  let f (\n",
-                    "    parameter : Type\n",
-                    "  ) : Result = value in\n",
+                    "  let f (first : Type)\n",
+                    "    (second : Type) : Result = value in\n",
                     "  f\n",
                     "end",
                 ),
                 concat!(
                     "begin\n",
-                    "  let f (\n",
-                    "    parameter : Type\n",
-                    "  )\n",
+                    "  let f (first : Type)\n",
+                    "    (second : Type)\n",
                     "  : Result = value in\n",
                     "  f\n",
                     "end\n",
@@ -2298,8 +2338,8 @@ mod tests {
                 concat!(
                     "begin\n",
                     "  def f : (\n",
-                    "    Result\n",
-                    "  )\n",
+                    "      Result\n",
+                    "    )\n",
                     "  = value that\n",
                     "  f\n",
                     "end\n",
@@ -2337,8 +2377,8 @@ mod tests {
                 "def f : FirstClassifier * SecondClassifier * ThirdClassifier = value that f",
                 concat!(
                     "def f :\n",
-                    "  FirstClassifier * SecondClassifier\n",
-                    "* ThirdClassifier\n",
+                    "    FirstClassifier * SecondClassifier\n",
+                    "  * ThirdClassifier\n",
                     "= value that\n",
                     "f\n",
                 ),
