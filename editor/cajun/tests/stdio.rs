@@ -1,6 +1,6 @@
 use serde_json::{Value, json};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, VecDeque},
     io::{BufRead, BufReader, Read, Write},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
 };
@@ -10,6 +10,7 @@ struct LspProcess {
     child: Child,
     input: Option<ChildStdin>,
     output: BufReader<ChildStdout>,
+    pending: VecDeque<Value>,
     next_id: u64,
 }
 
@@ -23,7 +24,7 @@ impl LspProcess {
             .unwrap();
         let input = child.stdin.take().unwrap();
         let output = BufReader::new(child.stdout.take().unwrap());
-        Self { child, input: Some(input), output, next_id: 1 }
+        Self { child, input: Some(input), output, pending: VecDeque::new(), next_id: 1 }
     }
 
     fn request(&mut self, method: &str, params: Value) -> Value {
@@ -35,9 +36,8 @@ impl LspProcess {
             json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params })
         };
         self.send(message);
-        std::iter::from_fn(|| Some(self.receive()))
-            .find(|message| message.get("id") == Some(&json!(id)))
-            .unwrap()
+        let id = json!(id);
+        self.message(|message| message.get("id") == Some(&id) && message.get("method").is_none())
     }
 
     fn request_without_notifications(&mut self, method: &str, params: Value) -> Value {
@@ -59,9 +59,19 @@ impl LspProcess {
     }
 
     fn notification(&mut self, method: &str) -> Value {
-        std::iter::from_fn(|| Some(self.receive()))
-            .find(|message| message.get("method") == Some(&json!(method)))
-            .unwrap()
+        self.message(|message| message.get("method") == Some(&json!(method)))
+    }
+
+    fn acknowledge_server_request(&mut self, method: &str) -> Value {
+        let request = self.message(|message| {
+            message.get("method") == Some(&json!(method)) && message.get("id").is_some()
+        });
+        self.send(json!({
+            "jsonrpc": "2.0",
+            "id": request["id"],
+            "result": null,
+        }));
+        request
     }
 
     fn finish(mut self) {
@@ -78,6 +88,19 @@ impl LspProcess {
         write!(input, "Content-Length: {}\r\n\r\n", body.len()).unwrap();
         input.write_all(&body).unwrap();
         input.flush().unwrap();
+    }
+
+    fn message(&mut self, predicate: impl Fn(&Value) -> bool) -> Value {
+        if let Some(index) = self.pending.iter().position(&predicate) {
+            return self.pending.remove(index).unwrap();
+        }
+        loop {
+            let message = self.receive();
+            if predicate(&message) {
+                return message;
+            }
+            self.pending.push_back(message);
+        }
     }
 
     fn receive(&mut self) -> Value {
@@ -99,6 +122,68 @@ impl LspProcess {
         self.output.read_exact(&mut body).unwrap();
         serde_json::from_slice(&body).unwrap()
     }
+}
+
+#[test]
+fn stdio_server_invalidates_semantic_tokens_during_reanalysis_and_requests_refresh() {
+    let repository =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
+    let path = repository.join("lib/examples/algebra.zydeco").canonicalize().unwrap();
+    let changed = std::fs::read_to_string(&path).unwrap();
+    let original = "begin\n  let old = () that\n  old\nend\n";
+    let uri = Url::from_file_path(&path).unwrap().to_string();
+    let mut server = LspProcess::start();
+
+    server.request(
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": Url::from_file_path(&repository).unwrap(),
+            "capabilities": {
+                "workspace": {
+                    "semanticTokens": { "refreshSupport": true }
+                }
+            },
+        }),
+    );
+    server.notify("initialized", json!({}));
+    server.notify(
+        "textDocument/didOpen",
+        json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "zydeco",
+                "version": 1,
+                "text": original,
+            },
+        }),
+    );
+    server.notification("textDocument/publishDiagnostics");
+    server.acknowledge_server_request("workspace/semanticTokens/refresh");
+    let original_tokens = server
+        .request("textDocument/semanticTokens/full", json!({ "textDocument": { "uri": uri } }));
+
+    server.notify(
+        "textDocument/didChange",
+        json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [{ "text": changed }],
+        }),
+    );
+    let current_tokens = server
+        .request("textDocument/semanticTokens/full", json!({ "textDocument": { "uri": uri } }));
+    assert_ne!(
+        current_tokens["result"]["data"], original_tokens["result"]["data"],
+        "a token response issued after didChange reused the preceding document revision"
+    );
+
+    server.notification("textDocument/publishDiagnostics");
+    server.acknowledge_server_request("workspace/semanticTokens/refresh");
+    let analyzed_tokens = server
+        .request("textDocument/semanticTokens/full", json!({ "textDocument": { "uri": uri } }));
+    assert_ne!(analyzed_tokens["result"]["data"], original_tokens["result"]["data"]);
+
+    server.finish();
 }
 
 #[test]
