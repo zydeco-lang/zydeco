@@ -1,5 +1,4 @@
 use clap::Parser;
-// use zydeco_cli::Repl;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 use zydeco_cli::{
@@ -9,6 +8,7 @@ use zydeco_cli::{
 };
 use zydeco_dynamics::ProgKont;
 use zydeco_stackir::CpsMode;
+use zydeco_tui::{Repl, ReplError};
 
 fn main() {
     let result = Application::default().run(Cli::parse().command);
@@ -32,7 +32,7 @@ impl Application {
             | Commands::Fmt { files } => self.format_sources(&files),
             | Commands::Run { file, dry, args } => self.run_source(&file, dry, &args),
             | Commands::Check { file } => self.check_source(&file),
-            // | Commands::Repl { .. } => Repl::launch().map_err(ApplicationError::Repl),
+            | Commands::Repl => Repl::launch().map_err(ApplicationError::Repl),
             | Commands::Build {
                 file,
                 target_os,
@@ -150,10 +150,10 @@ enum ApplicationError {
     Compile(#[from] CompileError),
     #[error(transparent)]
     Native(#[from] NativeError),
+    #[error(transparent)]
+    Repl(#[from] ReplError),
     #[error("source root path `{}` does not have a valid UTF-8 artifact name", .0.display())]
     InvalidArtifactName(PathBuf),
-    // #[error("REPL error: {0}")]
-    // Repl(String),
 }
 
 impl ApplicationError {

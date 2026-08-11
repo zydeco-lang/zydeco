@@ -59,9 +59,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Value {
             | Value::Proj(Proj(head, position)) => {
                 format!("{}[{}]", head.ugly(f), position)
             }
-            | Value::Lit(lit) => {
-                format!("{:?}", lit)
-            }
+            | Value::Lit(lit) => lit.ugly(f),
             | Value::SemValue(sem) => {
                 format!("{:?}", sem)
             }
@@ -140,8 +138,19 @@ impl<'a> Ugly<'a, Formatter<'a>> for SemValue {
             | SemValue::Ctor(v) => v.ugly(f),
             | SemValue::Triv(v) => v.ugly(f),
             | SemValue::VCons(v) => v.ugly(f),
-            | SemValue::Literal(v) => format!("{:?}", v),
+            | SemValue::Literal(v) => v.ugly(f),
             | SemValue::Host(v) => format!("<{v:?}>"),
+        }
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for Literal {
+    fn ugly(&self, _: &'a Formatter) -> String {
+        match self {
+            | Literal::Int(value) => format!("{value:?}"),
+            | Literal::Float(value) => format!("{value:?}"),
+            | Literal::String(value) => format!("{value:?}"),
+            | Literal::Char(value) => format!("{value:?}"),
         }
     }
 }

@@ -503,6 +503,7 @@ impl std::fmt::Display for BuiltinRole {
 pub enum Meta {
     Ident(String),
     String(String),
+    Integer(i64),
     Apply { callee: String, args: Vec<Meta> },
 }
 
@@ -527,6 +528,10 @@ impl Meta {
         Self::String(value.into())
     }
 
+    pub fn integer(value: i64) -> Self {
+        Self::Integer(value)
+    }
+
     pub fn apply(callee: impl Into<String>, args: impl IntoIterator<Item = Self>) -> Self {
         Self::Apply { callee: callee.into(), args: args.into_iter().collect() }
     }
@@ -534,14 +539,14 @@ impl Meta {
     pub fn callee(&self) -> Option<&str> {
         match self {
             | Self::Ident(name) | Self::Apply { callee: name, .. } => Some(name),
-            | Self::String(_) => None,
+            | Self::String(_) | Self::Integer(_) => None,
         }
     }
 
     pub fn arguments(&self) -> &[Self] {
         match self {
             | Self::Apply { args, .. } => args,
-            | Self::Ident(_) | Self::String(_) => &[],
+            | Self::Ident(_) | Self::String(_) | Self::Integer(_) => &[],
         }
     }
 
@@ -552,14 +557,21 @@ impl Meta {
     pub fn as_string(&self) -> Option<&str> {
         match self {
             | Self::String(value) => Some(value),
-            | Self::Ident(_) | Self::Apply { .. } => None,
+            | Self::Ident(_) | Self::Integer(_) | Self::Apply { .. } => None,
+        }
+    }
+
+    pub fn as_integer(&self) -> Option<i64> {
+        match self {
+            | Self::Integer(value) => Some(*value),
+            | Self::Ident(_) | Self::String(_) | Self::Apply { .. } => None,
         }
     }
 
     pub fn as_ident(&self) -> Option<&str> {
         match self {
             | Self::Ident(value) => Some(value),
-            | Self::String(_) | Self::Apply { .. } => None,
+            | Self::String(_) | Self::Integer(_) | Self::Apply { .. } => None,
         }
     }
 
@@ -576,6 +588,7 @@ impl std::fmt::Display for Meta {
         match self {
             | Self::Ident(name) => write!(f, "{name}"),
             | Self::String(value) => write!(f, "{value:?}"),
+            | Self::Integer(value) => write!(f, "{value}"),
             | Self::Apply { callee, args } => write!(
                 f,
                 "{callee}({})",

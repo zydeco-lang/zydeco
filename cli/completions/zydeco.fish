@@ -29,12 +29,14 @@ complete -c zydeco -n "__fish_zydeco_needs_command" -s V -l version -d 'Print ve
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "fmt" -d 'Format Zydeco source files in place'
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "run" -d 'Run a zydeco program'
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "check" -d 'Check a zydeco program'
+complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "repl" -d 'Start the declaration-free terminal REPL'
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "build"
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand fmt" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -l dry -d 'Dry run (don\'t execute)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_using_subcommand check" -s h -l help -d 'Print help'
+complete -c zydeco -n "__fish_zydeco_using_subcommand repl" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l target-os -d 'Target OS (defaults to host OS)' -r -f -a "linux\t''
 macos\t''"
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l target-arch -d 'Target architecture (defaults to host architecture)' -r -f -a "x86-64\t''
@@ -50,8 +52,9 @@ complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s r -l runtime-dir
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s x -l execute -d 'Run the program after building'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l no-cps -d 'Skip CPS translation in the StackIR pipeline'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s h -l help -d 'Print help'
-complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from fmt run check build help" -f -a "fmt" -d 'Format Zydeco source files in place'
-complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from fmt run check build help" -f -a "run" -d 'Run a zydeco program'
-complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from fmt run check build help" -f -a "check" -d 'Check a zydeco program'
-complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from fmt run check build help" -f -a "build"
-complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from fmt run check build help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from fmt run check repl build help" -f -a "fmt" -d 'Format Zydeco source files in place'
+complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from fmt run check repl build help" -f -a "run" -d 'Run a zydeco program'
+complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from fmt run check repl build help" -f -a "check" -d 'Check a zydeco program'
+complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from fmt run check repl build help" -f -a "repl" -d 'Start the declaration-free terminal REPL'
+complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from fmt run check repl build help" -f -a "build"
+complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from fmt run check repl build help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'

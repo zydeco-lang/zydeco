@@ -14,6 +14,20 @@ cargo build --bin=zydeco --release
 
 The resulting binary is located at `target/release/zydeco`.
 
+## Use the Interactive REPL
+
+Launch the Ratatui frontend through the main CLI:
+
+```sh
+zydeco repl
+```
+
+Use `cargo run -p zydeco-tui` to launch the same application directly while working on the frontend crate.
+
+The REPL accepts one complete source term per numbered input. Import an earlier input with `@[import(1)] _`; numeric
+targets are session inputs, while quoted targets such as `@[import("library.zy")] _` remain filesystem sources.
+Commands are ordinary root annotations: `@[type] expression`, `@[run] expression`, `@[help] _`, and `@[quit] _`.
+
 ## Format Source Files
 
 Format one or more Zydeco source files in place:

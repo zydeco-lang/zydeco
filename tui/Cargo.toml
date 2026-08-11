@@ -1,0 +1,29 @@
+[package]
+name = "zydeco-tui"
+version = { workspace = true }
+rust-version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+readme = { workspace = true }
+description = "Ratatui frontend for the Zydeco declaration-free REPL"
+
+[dependencies]
+ariadne = { workspace = true }
+lalrpop-util = { workspace = true }
+ratatui = { workspace = true }
+thiserror = { workspace = true }
+zydeco-dynamics = { workspace = true }
+zydeco-session = { workspace = true }
+zydeco-statics = { workspace = true }
+zydeco-surface = { workspace = true }
+zydeco-syntax = { workspace = true }
+zydeco-utils = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[[bin]]
+name = "zydeco-tui"
+path = "src/main.rs"

@@ -80,12 +80,8 @@ pub enum Commands {
         #[arg(value_name = "FILE")]
         file: PathBuf,
     },
-    // /// Start a REPL
-    // Repl {
-    //     /// Level of verbosity
-    //     #[arg(short, long, default_value_t = false)]
-    //     verbose: bool,
-    // },
+    /// Start the declaration-free terminal REPL
+    Repl,
     Build {
         /// Path to the file to compile
         #[arg(value_name = "FILE")]

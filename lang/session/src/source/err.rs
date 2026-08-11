@@ -9,7 +9,7 @@ use std::{
 use thiserror::Error;
 use zydeco_statics::syntax::TermAnnId;
 use zydeco_surface::textual::{
-    BuiltinDirectiveError, ImportDirectiveError, IntrinsicDirectiveError,
+    BuiltinDirectiveError, ImportDirectiveError, IntrinsicDirectiveError, SourceNumber,
 };
 use zydeco_utils::span::Span;
 
@@ -54,6 +54,14 @@ pub enum SourceLoadError {
     ImportPath {
         importer: PathBuf,
         requested: PathBuf,
+        span: Span,
+        #[source]
+        source: Arc<io::Error>,
+    },
+    #[error("cannot resolve REPL input [{input}] imported from `{}` at {span}: {source}", importer.display())]
+    ImportInput {
+        importer: PathBuf,
+        input: SourceNumber,
         span: Span,
         #[source]
         source: Arc<io::Error>,

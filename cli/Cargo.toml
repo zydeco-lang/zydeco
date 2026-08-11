@@ -13,6 +13,7 @@ description = "Command-line interface for the Zydeco programming language"
 [dependencies]
 clap = { workspace = true }
 zydeco-session = { workspace = true }
+zydeco-tui = { workspace = true }
 zydeco-syntax = { workspace = true }
 zydeco-surface = { workspace = true }
 zydeco-statics = { workspace = true }

@@ -13,6 +13,7 @@ members = [
     "lang/llvm",
     "lang/session",
     "lang/tests",
+    "tui",
     "cli",
     # "web",
     # "runtime",
@@ -43,6 +44,7 @@ zydeco-llvm = { path = "lang/llvm" }
 zydeco-assembly = { path = "lang/assembly" }
 zydeco-stackir = { path = "lang/stackir" }
 zydeco-session = { path = "lang/session" }
+zydeco-tui = { path = "tui" }
 # meta
 syn = "2.0"
 quote = "1.0"
@@ -84,6 +86,7 @@ pretty = { version = "0.12", features = ["termcolor"] }
 # cli
 clap = { version = "4.5", features = ["derive"] }
 clap_complete = "4.5"
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
 # async
 tokio = { version = "1.46", features = ["full"] }
 # lsp

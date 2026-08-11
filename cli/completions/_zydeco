@@ -51,6 +51,12 @@ _arguments "${_arguments_options[@]}" : \
 ':file -- Path to the file to check:_files' \
 && ret=0
 ;;
+(repl)
+_arguments "${_arguments_options[@]}" : \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
 (build)
 _arguments "${_arguments_options[@]}" : \
 '--target-os=[Target OS (defaults to host OS)]:TARGET_OS:(linux macos)' \
@@ -93,6 +99,10 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(repl)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (build)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -116,6 +126,7 @@ _zydeco_commands() {
 'fmt:Format Zydeco source files in place' \
 'run:Run a zydeco program' \
 'check:Check a zydeco program' \
+'repl:Start the declaration-free terminal REPL' \
 'build:' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
@@ -142,6 +153,7 @@ _zydeco__help_commands() {
 'fmt:Format Zydeco source files in place' \
 'run:Run a zydeco program' \
 'check:Check a zydeco program' \
+'repl:Start the declaration-free terminal REPL' \
 'build:' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
@@ -167,10 +179,20 @@ _zydeco__help__help_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco help help commands' commands "$@"
 }
+(( $+functions[_zydeco__help__repl_commands] )) ||
+_zydeco__help__repl_commands() {
+    local commands; commands=()
+    _describe -t commands 'zydeco help repl commands' commands "$@"
+}
 (( $+functions[_zydeco__help__run_commands] )) ||
 _zydeco__help__run_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco help run commands' commands "$@"
+}
+(( $+functions[_zydeco__repl_commands] )) ||
+_zydeco__repl_commands() {
+    local commands; commands=()
+    _describe -t commands 'zydeco repl commands' commands "$@"
 }
 (( $+functions[_zydeco__run_commands] )) ||
 _zydeco__run_commands() {

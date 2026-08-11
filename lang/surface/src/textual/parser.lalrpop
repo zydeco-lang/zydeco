@@ -166,6 +166,7 @@ MetaAnnotation: Sp<Meta> = <Sp<MetaAnnotationInner>>;
 MetaAnnotationInner: Meta = "@" "[" <Meta> "]" => <>;
 Meta: Meta = {
     <value:String> => Meta::string(value),
+    <value:"IntLit"> => Meta::integer(<>.parse().unwrap()),
     <name:MetaId> => Meta::ident(name),
     <callee:MetaId> <args:SepByDelim<"(", ",", <Meta>, ")">> => Meta::apply(callee, args),
 };

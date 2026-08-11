@@ -377,6 +377,7 @@ fn analyze_source(
 mod tests {
     use super::CompilerSession;
     use std::{path::Path, sync::Arc};
+    use zydeco_surface::textual::SourceNumber;
 
     struct Fixture {
         directory: tempfile::TempDir,
@@ -487,6 +488,21 @@ mod tests {
         assert_eq!(graph.sources.len(), 2);
         assert!(graph.sources.iter().any(|(_, source)| source.path == provider));
         assert!(graph.sources.iter().any(|(_, source)| source.path == root));
+    }
+
+    #[test]
+    fn numbered_imports_resolve_session_overlay_inputs() {
+        let fixture = Fixture::new();
+        let input = SourceNumber::new(1).unwrap().overlay_path(fixture.directory.path());
+        let root = fixture.directory.path().join("root.zy");
+        let mut session = CompilerSession::default();
+        session.set_overlay(&input, "()".to_owned()).unwrap();
+        session.set_overlay(&root, "@[import(1)] _".to_owned()).unwrap();
+
+        let graph = session.graph(&root).unwrap();
+
+        assert_eq!(graph.sources.len(), 2);
+        assert!(graph.sources.iter().any(|(_, source)| source.path == input));
     }
 
     #[test]

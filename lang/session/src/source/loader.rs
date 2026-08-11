@@ -7,7 +7,9 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use zydeco_surface::textual::{ImportSite, Lexer, ParseError, SourceUnitParser, syntax as t};
+use zydeco_surface::textual::{
+    ImportSite, ImportTarget, Lexer, ParseError, SourceUnitParser, syntax as t,
+};
 use zydeco_utils::{
     prelude::ArenaDense,
     span::{FileInfo, LocationCtx},
@@ -104,29 +106,31 @@ where
     fn load_import(
         &mut self, importer: SourceId, importer_path: &Path, site: ImportSite,
     ) -> Result<SourceImportId, SourceLoadError> {
-        let written = site.directive.path;
-        let requested = if written.is_absolute() {
-            written.clone()
-        } else {
-            importer_path
-                .parent()
-                .expect("a canonical source path must have a parent")
-                .join(&written)
+        let parent = importer_path.parent().expect("a canonical source path must have a parent");
+        let target = site.directive.target;
+        let requested = match &target {
+            | ImportTarget::Path(written) if written.is_absolute() => written.clone(),
+            | ImportTarget::Path(written) => parent.join(written),
+            | ImportTarget::Input(number) => number.overlay_path(parent),
         };
-        let canonical =
-            Self::path_identity(&requested).map_err(|source| SourceLoadError::ImportPath {
-                importer: importer_path.to_path_buf(),
-                requested: requested.clone(),
-                span: site.directive.span.clone(),
-                source: source.into(),
-            })?;
-        let imported = self.load_canonical(canonical).map_err(|error| match error {
-            | SourceLoadError::Read { source, .. } => SourceLoadError::ImportPath {
+        let import_error = |source| match &target {
+            | ImportTarget::Path(_) => SourceLoadError::ImportPath {
                 importer: importer_path.to_path_buf(),
                 requested: requested.clone(),
                 span: site.directive.span.clone(),
                 source,
             },
+            | ImportTarget::Input(input) => SourceLoadError::ImportInput {
+                importer: importer_path.to_path_buf(),
+                input: *input,
+                span: site.directive.span.clone(),
+                source,
+            },
+        };
+        let canonical =
+            Self::path_identity(&requested).map_err(|source| import_error(source.into()))?;
+        let imported = self.load_canonical(canonical).map_err(|error| match error {
+            | SourceLoadError::Read { source, .. } => import_error(source),
             | error => error,
         })?;
         Ok(self.imports.alloc(SourceImport {

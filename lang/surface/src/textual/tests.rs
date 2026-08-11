@@ -109,8 +109,8 @@ fn separates_term_body_arrows_from_type_arrows() {
 }
 
 #[test]
-fn metadata_preserves_identifiers_strings_and_applications() {
-    let source = r#"@[debug(name,"value",nested("path"))] _"#;
+fn metadata_preserves_identifiers_strings_integers_and_applications() {
+    let source = r#"@[debug(name,"value",1,nested("path"))] _"#;
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
@@ -127,11 +127,12 @@ fn metadata_preserves_identifiers_strings_and_applications() {
         &[
             Meta::ident("name"),
             Meta::string("value"),
+            Meta::integer(1),
             Meta::apply("nested", [Meta::string("path")]),
         ]
     );
     assert!(matches!(parser.arena.terms[payload], Term::Hole(Hole)));
-    assert_eq!(meta.to_string(), r#"debug(name,"value",nested("path"))"#);
+    assert_eq!(meta.to_string(), r#"debug(name,"value",1,nested("path"))"#);
 }
 
 #[test]
@@ -273,27 +274,47 @@ fn source_unit_decodes_relative_and_absolute_imports() {
         .unwrap();
 
     let imports = unit.imports(&parser.arena, &parser.spans).unwrap();
-    let paths = imports.iter().map(|site| site.directive.path.as_path()).collect::<Vec<_>>();
+    let targets = imports.iter().map(|site| &site.directive.target).collect::<Vec<_>>();
 
     assert_eq!(
-        paths,
-        [std::path::Path::new("../library.zy"), std::path::Path::new("/opt/zydeco/core.zy")]
+        targets,
+        [
+            &ImportTarget::Path(std::path::PathBuf::from("../library.zy")),
+            &ImportTarget::Path(std::path::PathBuf::from("/opt/zydeco/core.zy")),
+        ]
     );
 }
 
 #[test]
-fn source_unit_rejects_import_without_one_string_path() {
+fn source_unit_decodes_a_numbered_input_import() {
+    let source = "@[import(7)] _";
+    let mut parser = Parser::new();
+    let unit = parser::SourceUnitParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let imports = unit.imports(&parser.arena, &parser.spans).unwrap();
+    let [site] = imports.as_slice() else { panic!("expected one import") };
+
+    assert_eq!(site.directive.target, ImportTarget::Input(SourceNumber::new(7).unwrap()));
+}
+
+#[test]
+fn source_unit_rejects_import_without_one_supported_target() {
     enum ExpectedImportError {
-        PathArity(usize),
-        PathNotString,
+        TargetArity(usize),
+        UnsupportedTarget,
         EmptyPath,
+        NonPositiveInput,
     }
 
     let cases = [
-        ("@[import] _", ExpectedImportError::PathArity(0)),
-        ("@[import(path)] _", ExpectedImportError::PathNotString),
-        (r#"@[import("one.zy","two.zy")] _"#, ExpectedImportError::PathArity(2)),
+        ("@[import] _", ExpectedImportError::TargetArity(0)),
+        ("@[import(path)] _", ExpectedImportError::UnsupportedTarget),
+        (r#"@[import("one.zy","two.zy")] _"#, ExpectedImportError::TargetArity(2)),
         (r#"@[import("")] _"#, ExpectedImportError::EmptyPath),
+        ("@[import(0)] _", ExpectedImportError::NonPositiveInput),
+        ("@[import(-1)] _", ExpectedImportError::NonPositiveInput),
     ];
 
     cases.into_iter().for_each(|(source, expected)| {
@@ -305,11 +326,18 @@ fn source_unit_rejects_import_without_one_string_path() {
 
         match (error, expected) {
             | (
-                ImportDirectiveError::PathArity { found, .. },
-                ExpectedImportError::PathArity(expected),
+                ImportDirectiveError::TargetArity { found, .. },
+                ExpectedImportError::TargetArity(expected),
             ) => assert_eq!(found, expected),
-            | (ImportDirectiveError::PathNotString { .. }, ExpectedImportError::PathNotString) => {}
+            | (
+                ImportDirectiveError::UnsupportedTarget { .. },
+                ExpectedImportError::UnsupportedTarget,
+            ) => {}
             | (ImportDirectiveError::EmptyPath { .. }, ExpectedImportError::EmptyPath) => {}
+            | (
+                ImportDirectiveError::NonPositiveInput { .. },
+                ExpectedImportError::NonPositiveInput,
+            ) => {}
             | (error, _) => panic!("unexpected import error: {error}"),
         }
     });

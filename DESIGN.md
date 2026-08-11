@@ -221,8 +221,19 @@ import occurrence. Parsed templates are memoized by source input, while each ass
 occurrence remains fresh. A source boundary around each clone prevents free names and
 mobile block bindings from crossing the file boundary.
 
+Interactive sessions reuse that source model instead of maintaining a mutable declaration environment. The
+Ratatui REPL stores every submitted term as a session overlay with a nonzero input identity, displayed as `[1]`,
+`[2]`, and so on. The annotation `@[import(1)] _` resolves the unquoted integer to that overlay and performs the same
+fresh, hygienic term splice as a file import. A quoted target such as `@[import("1")] _` still means a filesystem
+path, so source numbers and paths remain distinct in the parsed `ImportTarget` type.
+
+REPL commands also use root metadata rather than a second command language. `@[type] expression` requests static
+inspection, `@[run] expression` requires immediate evaluation, and `@[help] _` and `@[quit] _` are control commands.
+Unknown metadata remains ordinary Zydeco syntax. As a result, command recognition is a frontend policy while each
+numbered expression still passes through the same source graph, resolver, checker, linker, and evaluator as a file.
+
 The session owns revisioned source inputs and immutable frontend analysis results shared by
-the CLI and language server. Lowering schedules live with Stack IR and assembly, while the
+the CLI, TUI, and language server. Lowering schedules live with Stack IR and assembly, while the
 CLI owns diagnostic rendering, native tool invocation, runtime packaging, and process policy.
 This boundary keeps editor analysis independent of executable-building concerns.
 
@@ -368,6 +379,7 @@ Two separate type-level relations constrain IDs:
 - `lang/`: language implementation and tests.
 - `lib/`: Zydeco standard library, examples, and projects under `lib/tests`.
 - `cli/`: command-line interface for running and checking programs.
+- `tui/`: Ratatui application for the declaration-free interactive REPL.
 - `docs/`: literate Zydeco tutorial material (see `docs/spell`).
 - `editor/`: editor integrations (TextMate grammar and VSCode extension).
 - `web/`: web interface.
@@ -377,8 +389,8 @@ Two separate type-level relations constrain IDs:
 The artifact documents a few important limitations:
 
 - The LLVM emitter is experimental; the tested native backend targets AMD64.
-- Imports currently address relative or absolute source paths; there is no
-  external package resolver or lock file.
+- Persistent imports currently address relative or absolute source paths; interactive compiler sessions additionally
+  expose numbered overlay inputs. There is no external package resolver or lock file.
 - Absolute imports are location-dependent and receive no portability warning.
 - Monadic blocks pass monad instances at runtime; inlining is not implemented,
   and only global definitions can be referenced inside blocks.

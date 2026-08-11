@@ -1,11 +1,12 @@
 use crate::{builtin::BuiltinRuntime, syntax::DynamicsArena, *};
-use std::rc::Rc;
+use std::{collections::HashSet, rc::Rc};
 use thiserror::Error;
 use zydeco_statics::{
     BuiltinPackagePlan, BuiltinPackagePlanError, BuiltinPackageValue, arena::StaticsArena,
     surface_syntax::ScopedArena,
 };
 use zydeco_syntax::*;
+use zydeco_utils::arena::ArenaAccess;
 
 /// Trait for translating statics syntax nodes into dynamic syntax nodes.
 pub trait Link {
@@ -21,6 +22,13 @@ pub struct RootLinker {
     pub root: ss::CompuId,
 }
 
+/// Link one checked value as a computation that returns it.
+pub struct ValueRootLinker {
+    pub scoped: ScopedArena,
+    pub statics: StaticsArena,
+    pub root: ss::ValueId,
+}
+
 /// Link a package-dependent root and apply the concrete host Builtin package.
 pub struct BuiltinRootLinker {
     pub scoped: ScopedArena,
@@ -29,12 +37,30 @@ pub struct BuiltinRootLinker {
     pub signature: ss::PackPi,
 }
 
+/// Apply host Builtin packages until a package-dependent computation reaches its result.
+pub struct BuiltinComputationRootLinker {
+    pub scoped: ScopedArena,
+    pub statics: StaticsArena,
+    pub root: ss::CompuId,
+    pub signature: ss::PackPi,
+}
+
+/// Apply host Builtin packages until a pure package-dependent value reaches its result.
+pub struct BuiltinValueRootLinker {
+    pub scoped: ScopedArena,
+    pub statics: StaticsArena,
+    pub root: ss::ValueId,
+    pub signature: ss::ValuePackPi,
+}
+
 #[derive(Clone, Debug, Error)]
 pub enum BuiltinPackageError {
     #[error(transparent)]
     Plan(#[from] BuiltinPackagePlanError),
     #[error("host operation `{role}` has no interpreter implementation")]
     UnsupportedOperation { role: BuiltinValueRole },
+    #[error("host package contracts form a recursive result at type {ty:?}")]
+    RecursiveContract { ty: ss::TypeId },
 }
 
 /// Materialize the operation values described by a checked Builtin package plan.
@@ -57,6 +83,30 @@ impl BuiltinPackageLinker {
             }
         }
     }
+
+    fn computation_signature(statics: &StaticsArena, ty: ss::TypeId) -> Option<ss::PackPi> {
+        match Self::type_view(statics, ty) {
+            | Some(ss::Type::PackPi(signature)) => Some(signature.clone()),
+            | _ => None,
+        }
+    }
+
+    fn value_signature(statics: &StaticsArena, ty: ss::TypeId) -> Option<ss::ValuePackPi> {
+        match Self::type_view(statics, ty) {
+            | Some(ss::Type::VPackPi(signature)) => Some(signature.clone()),
+            | _ => None,
+        }
+    }
+
+    fn type_view(statics: &StaticsArena, ty: ss::TypeId) -> Option<&ss::Type> {
+        if let Some(normalized) = statics.types_normalized.get(&ty) {
+            return Some(normalized);
+        }
+        match statics.types_pre.get(&ty)? {
+            | ss::Fillable::Done(ty) => Some(ty),
+            | ss::Fillable::Fill(_) => None,
+        }
+    }
 }
 
 impl RootLinker {
@@ -69,6 +119,16 @@ impl RootLinker {
     }
 }
 
+impl ValueRootLinker {
+    pub fn run(self) -> DynamicsArena {
+        let Self { scoped, statics, root } = self;
+        let defs = scoped.defs.rebind::<ds::DynamicsScope>();
+        let value = root.link(&statics);
+        let root = Rc::new(ds::Computation::Ret(Return(value)));
+        DynamicsArena { defs, root }
+    }
+}
+
 impl BuiltinRootLinker {
     pub fn run(self) -> Result<DynamicsArena, BuiltinPackageError> {
         let Self { scoped, statics, root, signature } = self;
@@ -77,6 +137,57 @@ impl BuiltinRootLinker {
         let defs = scoped.defs.rebind::<ds::DynamicsScope>();
         let function = root.link(&statics);
         let root = Rc::new(ds::Computation::VApp(App(function, package)));
+        Ok(DynamicsArena { defs, root })
+    }
+}
+
+impl BuiltinComputationRootLinker {
+    pub fn run(self) -> Result<DynamicsArena, BuiltinPackageError> {
+        let Self { scoped, statics, root, signature } = self;
+        let defs = scoped.defs.rebind::<ds::DynamicsScope>();
+        let (root, _) = std::iter::successors(Some(signature), |signature| {
+            BuiltinPackageLinker::computation_signature(&statics, signature.codomain)
+        })
+        .try_fold(
+            (root.link(&statics), HashSet::new()),
+            |(function, mut seen), signature| {
+                if !seen.insert(signature.codomain) {
+                    return Err(BuiltinPackageError::RecursiveContract { ty: signature.codomain });
+                }
+                let plan = BuiltinPackagePlan::for_computation(&statics, &signature)?;
+                let package = BuiltinPackageLinker::link(plan.value)?;
+                Ok::<_, BuiltinPackageError>((
+                    Rc::new(ds::Computation::VApp(App(function, package))),
+                    seen,
+                ))
+            },
+        )?;
+        Ok(DynamicsArena { defs, root })
+    }
+}
+
+impl BuiltinValueRootLinker {
+    pub fn run(self) -> Result<DynamicsArena, BuiltinPackageError> {
+        let Self { scoped, statics, root, signature } = self;
+        let defs = scoped.defs.rebind::<ds::DynamicsScope>();
+        let (value, _) = std::iter::successors(Some(signature), |signature| {
+            BuiltinPackageLinker::value_signature(&statics, signature.codomain)
+        })
+        .try_fold(
+            (root.link(&statics), HashSet::new()),
+            |(function, mut seen), signature| {
+                if !seen.insert(signature.codomain) {
+                    return Err(BuiltinPackageError::RecursiveContract { ty: signature.codomain });
+                }
+                let plan = BuiltinPackagePlan::for_value(&statics, &signature)?;
+                let package = BuiltinPackageLinker::link(plan.value)?;
+                Ok::<_, BuiltinPackageError>((
+                    Rc::new(ds::Value::VApp(App(function, package))),
+                    seen,
+                ))
+            },
+        )?;
+        let root = Rc::new(ds::Computation::Ret(Return(value)));
         Ok(DynamicsArena { defs, root })
     }
 }

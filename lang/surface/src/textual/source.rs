@@ -1,6 +1,11 @@
 use super::syntax::*;
 use crate::metadata::{BuiltinMeta, BuiltinMetaError, DocMeta, IntrinsicMeta, IntrinsicMetaError};
-use std::{collections::HashSet, ops::Range, path::PathBuf};
+use std::{
+    collections::HashSet,
+    num::NonZeroU64,
+    ops::Range,
+    path::{Path, PathBuf},
+};
 use thiserror::Error;
 
 /// A decoded `@[doc]` annotation and its optional preceding prose.
@@ -25,10 +30,44 @@ pub struct UnattachedDocumentationWarning {
     pub range: Range<usize>,
 }
 
+/// The provider named by an `@[import(...)]` term splice.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ImportTarget {
+    /// A disk or overlay source addressed by a quoted path.
+    Path(PathBuf),
+    /// A numbered source retained by an interactive compiler session.
+    Input(SourceNumber),
+}
+
+/// A nonzero interactive source identity written without quotes in metadata.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SourceNumber(NonZeroU64);
+
+impl SourceNumber {
+    pub fn new(number: u64) -> Option<Self> {
+        NonZeroU64::new(number).map(Self)
+    }
+
+    pub fn get(self) -> u64 {
+        self.0.get()
+    }
+
+    /// Produce the opaque overlay key used to retain this input in a compiler session.
+    pub fn overlay_path(self, directory: &Path) -> PathBuf {
+        directory.join(format!(".zydeco-input-{}", self.get()))
+    }
+}
+
+impl std::fmt::Display for SourceNumber {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}", self.get())
+    }
+}
+
 /// A validated source import attached to one term-level splice site.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ImportDirective {
-    pub path: PathBuf,
+    pub target: ImportTarget,
     pub span: Span,
 }
 
@@ -77,12 +116,14 @@ pub enum BuiltinLocation {
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum ImportDirectiveError {
-    #[error("import at {span} expects one path argument, but found {found}")]
-    PathArity { term: TermId, span: Span, found: usize },
-    #[error("import path at {span} must be a string literal")]
-    PathNotString { term: TermId, span: Span },
+    #[error("import at {span} expects one source argument, but found {found}")]
+    TargetArity { term: TermId, span: Span, found: usize },
+    #[error("import source at {span} must be a path string or positive input number")]
+    UnsupportedTarget { term: TermId, span: Span },
     #[error("import path at {span} must not be empty")]
     EmptyPath { term: TermId, span: Span },
+    #[error("import input number at {span} must be positive")]
+    NonPositiveInput { term: TermId, span: Span },
     #[error("import at {span} must annotate a hole expression")]
     PayloadNotHole { term: TermId, span: Span },
 }
@@ -262,25 +303,31 @@ impl ImportSite {
     ) -> Option<Result<Self, ImportDirectiveError>> {
         meta.is("import").then(|| {
             let span = spans[&EntityId::Term(term)].clone();
-            let path = match meta.arguments() {
-                | [path] => path.as_string().ok_or_else(|| {
-                    ImportDirectiveError::PathNotString { term, span: span.clone() }
-                })?,
+            let target = match meta.arguments() {
+                | [Meta::String(path)] if path.is_empty() => {
+                    return Err(ImportDirectiveError::EmptyPath { term, span });
+                }
+                | [Meta::String(path)] => ImportTarget::Path(PathBuf::from(path)),
+                | [Meta::Integer(number)] => ImportTarget::Input(
+                    u64::try_from(*number).ok().and_then(SourceNumber::new).ok_or_else(|| {
+                        ImportDirectiveError::NonPositiveInput { term, span: span.clone() }
+                    })?,
+                ),
+                | [_] => {
+                    return Err(ImportDirectiveError::UnsupportedTarget { term, span });
+                }
                 | arguments => {
-                    return Err(ImportDirectiveError::PathArity {
+                    return Err(ImportDirectiveError::TargetArity {
                         term,
                         span,
                         found: arguments.len(),
                     });
                 }
             };
-            if path.is_empty() {
-                return Err(ImportDirectiveError::EmptyPath { term, span });
-            }
             if !matches!(arena.terms[&payload], Term::Hole(Hole)) {
                 return Err(ImportDirectiveError::PayloadNotHole { term, span });
             }
-            Ok(Self { term, directive: ImportDirective { path: PathBuf::from(path), span } })
+            Ok(Self { term, directive: ImportDirective { target, span } })
         })
     }
 }

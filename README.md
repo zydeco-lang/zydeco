@@ -16,17 +16,20 @@ The instructions are located in
 
 ## Running Zydeco
 
-Create a file `hello-world.zydeco`:
-```plain
-main
-  ! write_line "hello, world!"
-  { ! exit 0 }
-end
+Create a file `hello-world.zy` in the repository root:
+
+```zydeco
+param (
+  (/Ret; /Unit; /String; /stdio; /process) :
+  @[import("lib/std/builtin.zy")] _
+) in
+  ! (stdio/write_line) "hello, world!" { ! (process/exit) 0 }
 ```
 
 Then run
+
 ```bash
-$ cargo run -- run hello-world.zydeco
+cargo run -- run hello-world.zy
 hello, world!
 ```
 
@@ -46,6 +49,28 @@ hello, world!
 ```
 
 Run `zydeco --help` for further usage information.
+
+## Interactive REPL
+
+Start the full-screen terminal REPL with:
+
+```sh
+zydeco repl
+```
+
+Each submitted term receives an input number such as `[1]`. A later term can hygienically splice that source with
+`@[import(1)] _`; the integer is deliberately unquoted, because `@[import("1")] _` denotes a file named `1`.
+The REPL uses root metadata annotations for its commands:
+
+```zydeco
+@[type] ret 1
+@[run] ret 1
+@[help] _
+@[quit] _
+```
+
+Press Enter to evaluate complete syntax or continue an incomplete term on a new line. Alt+Enter always inserts a
+newline, and Ctrl+Enter submits the current text for diagnostics.
 
 ## Intro to Zydeco
 
@@ -108,6 +133,7 @@ The output is written to `target/doc/`.
 │  ├── tests
 │  └── utils
 ├── cli
+├── tui
 ├── web
 └── ...
 ```
@@ -116,6 +142,7 @@ The output is written to `target/doc/`.
 interpreter for the Zydeco language.
 - `lib/`: [standard library](lib/std/README.md), reusable examples, and `lib/tests/` regression projects
 - `cli/` Command-line interface
+- `tui/` Ratatui frontend for the interactive REPL
 - `web/` Web interface
 
 ## Related Literature

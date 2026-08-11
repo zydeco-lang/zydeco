@@ -384,7 +384,19 @@ impl<'a> BuiltinSignatureValidator<'a> {
     }
 
     pub fn validate(mut self, signature: &ss::PackPi) -> Result<(), BuiltinSignatureError> {
-        let types = signature.witnesses.iter().copied().fold(
+        self.validate_parts(signature.domain, &signature.witnesses)
+    }
+
+    pub fn validate_value(
+        mut self, signature: &ss::ValuePackPi,
+    ) -> Result<(), BuiltinSignatureError> {
+        self.validate_parts(signature.domain, &signature.witnesses)
+    }
+
+    fn validate_parts(
+        &mut self, domain: ss::TypeId, witnesses: &ss::PackTelescope,
+    ) -> Result<(), BuiltinSignatureError> {
+        let types = witnesses.iter().copied().fold(
             BTreeMap::<BuiltinTypeRole, Vec<ss::AbstId>>::new(),
             |mut roles, witness| {
                 if let Some(BuiltinRole::Type(role)) = self.statics.builtin_roles.witness(witness) {
@@ -393,7 +405,7 @@ impl<'a> BuiltinSignatureValidator<'a> {
                 roles
             },
         );
-        self.collect_values(signature.domain);
+        self.collect_values(domain);
         let duplicates = types
             .into_iter()
             .filter(|(_, witnesses)| witnesses.len() > 1)
@@ -651,13 +663,27 @@ struct BuiltinPackagePlanner<'a> {
 }
 
 impl BuiltinPackagePlan {
-    pub fn for_executable(
+    pub fn for_computation(
         statics: &StaticsArena, signature: &ss::PackPi,
     ) -> Result<Self, BuiltinPackagePlanError> {
         BuiltinSignatureValidator::new(statics).validate(signature)?;
+        Ok(Self { value: BuiltinPackagePlanner { statics }.value(signature.domain)? })
+    }
+
+    pub fn for_value(
+        statics: &StaticsArena, signature: &ss::ValuePackPi,
+    ) -> Result<Self, BuiltinPackagePlanError> {
+        BuiltinSignatureValidator::new(statics).validate_value(signature)?;
+        Ok(Self { value: BuiltinPackagePlanner { statics }.value(signature.domain)? })
+    }
+
+    pub fn for_executable(
+        statics: &StaticsArena, signature: &ss::PackPi,
+    ) -> Result<Self, BuiltinPackagePlanError> {
         let planner = BuiltinPackagePlanner { statics };
+        let plan = Self::for_computation(statics, signature)?;
         planner.validate_executable(signature)?;
-        Ok(Self { value: planner.value(signature.domain)? })
+        Ok(plan)
     }
 }
 

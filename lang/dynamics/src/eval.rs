@@ -41,9 +41,9 @@ impl<'rt> Runtime<'rt> {
         }
     }
     /// Evaluate the program's computation root.
-    pub fn run(mut self) -> Vec<ProgKont> {
+    pub fn run(&mut self) -> Vec<ProgKont> {
         let root = self.arena.root.clone();
-        vec![root.as_ref().clone().eval(&mut self)]
+        vec![root.as_ref().clone().eval(self)]
     }
 }
 
