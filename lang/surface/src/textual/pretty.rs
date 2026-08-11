@@ -144,11 +144,59 @@ enum StagedBoundary {
     Definition,
 }
 
+#[derive(Copy, Clone)]
+enum ScopedForm {
+    Function,
+    Pi,
+    Forall,
+    Sigma,
+}
+
+struct ScopeTelescope<Parameter> {
+    parameters: Vec<Parameter>,
+    body: TermId,
+}
+
 impl StagedBoundary {
     fn marker(self) -> &'static str {
         match self {
             | Self::Annotation | Self::BindingType => ":",
             | Self::Definition => "=",
+        }
+    }
+}
+
+impl ScopedForm {
+    fn keyword(self) -> &'static str {
+        match self {
+            | Self::Function => "fn",
+            | Self::Pi => "pi",
+            | Self::Forall => "forall",
+            | Self::Sigma => "sigma",
+        }
+    }
+
+    fn marker(self) -> &'static str {
+        match self {
+            | Self::Function => "=>",
+            | Self::Pi | Self::Forall | Self::Sigma => ".",
+        }
+    }
+
+    fn body_precedence(self) -> TermPrecedence {
+        match self {
+            | Self::Function => TermPrecedence::Binder,
+            | Self::Pi | Self::Forall | Self::Sigma => TermPrecedence::Quantifier,
+        }
+    }
+
+    fn split(self, term: &Term) -> Option<(CoPatId, TermId)> {
+        match (self, term) {
+            | (Self::Function, Term::Abs(Abs(parameter, body)))
+            | (Self::Pi, Term::Pi(Pi(parameter, body)))
+            | (Self::Forall, Term::Forall(Forall(parameter, body)))
+            | (Self::Sigma, Term::Sigma(Sigma(parameter, body))) => Some((*parameter, *body)),
+            | _ => None,
         }
     }
 }
@@ -595,19 +643,6 @@ impl<'arena> PrettyFormatter<'arena> {
         LayoutFragment { document, anchors }
     }
 
-    fn grouped_separated(
-        &'arena self, items: Vec<LayoutFragment<'arena>>, separator: &'static str,
-    ) -> Option<LayoutFragment<'arena>> {
-        items.into_iter().rev().reduce(|right, left| {
-            self.grouped_join(
-                left,
-                if separator.is_empty() { RcDoc::nil() } else { RcDoc::text(separator) },
-                right,
-                0,
-            )
-        })
-    }
-
     fn infix_chain(&'arena self, root: TermId, operator: InfixOperator) -> RcDoc<'arena> {
         let mut operands = Vec::new();
         let mut boundaries = Vec::new();
@@ -786,6 +821,39 @@ impl<'arena> PrettyFormatter<'arena> {
         let preferred = if retains_break { retained } else { self.single_line(compact.clone()) };
         let selected = preferred.union(expanded);
         if retains_break { selected } else { selected.flat_alt(compact) }
+    }
+
+    /// Keep a fitting telescope beside its head. Once the telescope becomes
+    /// multiline, move its first row below the head as part of the same layout
+    /// decision. Retained source breaks partition fitting parameter rows;
+    /// canonical expansion gives every parameter its own row.
+    fn parameter_telescope(
+        &'arena self, head: RcDoc<'arena>, after_head: BoundaryIntent,
+        parameters: &[LayoutFragment<'arena>],
+    ) -> RcDoc<'arena> {
+        let GroupLayout {
+            compact: compact_parameters,
+            retained: retained_parameters,
+            expanded: expanded_parameters,
+            retains_break: parameters_retain_break,
+        } = self.separated_group_layout(parameters, "");
+        let retained_after_head = self.retained_placement(after_head);
+        let retained_first_row = match retained_after_head {
+            | BoundaryPlacement::BlankLine => BoundaryPlacement::BlankLine,
+            | BoundaryPlacement::Joined | BoundaryPlacement::Broken => BoundaryPlacement::Broken,
+        };
+        let boundary = BoundaryLayout::hanging("", self.indent());
+        let compact = head.clone().append(RcDoc::space()).append(compact_parameters);
+        let retained = head.clone().append(boundary.place(retained_first_row, retained_parameters));
+        let expanded =
+            head.append(boundary.place(self.expanded_placement(after_head), expanded_parameters));
+        self.select_group_layout(GroupLayout {
+            compact,
+            retained,
+            expanded,
+            retains_break: parameters_retain_break
+                || retained_after_head != BoundaryPlacement::Joined,
+        })
     }
 
     fn delimited(
@@ -976,36 +1044,34 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn copattern(&'arena self, pattern: CoPatId) -> RcDoc<'arena> {
-        let document = match &self.arena.copats[&pattern] {
-            | CoPattern::Pat(pattern) => self.pattern(*pattern),
-            | CoPattern::Dtor(name) => self.destructor(name),
-            | CoPattern::App(_) => self.copattern_application(pattern).nest(self.indent()),
-        };
-        self.with_leading_comments(pattern.into(), document)
+        match &self.arena.copats[&pattern] {
+            | CoPattern::Pat(inner) => {
+                self.with_leading_comments(pattern.into(), self.pattern(*inner))
+            }
+            | CoPattern::Dtor(name) => {
+                self.with_leading_comments(pattern.into(), self.destructor(name))
+            }
+            | CoPattern::App(_) => {
+                let parameters = self.copattern_parameters(pattern);
+                self.select_group_layout(self.separated_group_layout(&parameters, ""))
+                    .nest(self.indent())
+            }
+        }
     }
 
-    fn copattern_application(&'arena self, pattern: CoPatId) -> RcDoc<'arena> {
+    fn copattern_parameters(&'arena self, pattern: CoPatId) -> Vec<LayoutFragment<'arena>> {
         let CoPattern::App(Appli(patterns)) = &self.arena.copats[&pattern] else {
-            unreachable!("copattern applications are selected before rendering")
+            return vec![LayoutFragment::entity(pattern.into(), self.copattern(pattern))];
         };
-        self.grouped_separated(
-            patterns
-                .iter()
-                .map(|pattern| {
-                    let document = match self.arena.copats[pattern] {
-                        | CoPattern::App(_) => self.with_leading_comments(
-                            (*pattern).into(),
-                            self.copattern_application(*pattern),
-                        ),
-                        | _ => self.copattern(*pattern),
-                    };
-                    LayoutFragment::entity((*pattern).into(), document)
-                })
-                .collect(),
-            "",
-        )
-        .expect("copattern applications contain at least two patterns")
-        .document
+        let mut parameters =
+            patterns.iter().flat_map(|pattern| self.copattern_parameters(*pattern));
+        let first = parameters.next().expect("copattern applications are nonempty");
+        let LayoutFragment { document, anchors } = first;
+        let first = LayoutFragment {
+            document: self.with_leading_comments(pattern.into(), document),
+            anchors: LayoutAnchors { first: pattern.into(), last: anchors.last },
+        };
+        std::iter::once(first).chain(parameters).collect()
     }
 
     fn term(&'arena self, term: TermId) -> RcDoc<'arena> {
@@ -1086,23 +1152,7 @@ impl<'arena> PrettyFormatter<'arena> {
                     ")",
                 ),
             },
-            | Term::Abs(Abs(pattern, body)) => {
-                self.scoped_join(
-                    LayoutFragment::entity(
-                        (*pattern).into(),
-                        self.prefixed(
-                            term,
-                            "fn",
-                            BoundaryLayout::hanging("", self.indent()),
-                            LayoutFragment::entity((*pattern).into(), self.copattern(*pattern)),
-                        ),
-                    ),
-                    "=>",
-                    self.term_through_fragment(*body, TermPrecedence::Binder),
-                    self.indent(),
-                )
-                .document
-            }
+            | Term::Abs(_) => self.scoped_form(term, ScopedForm::Function),
             | Term::App(Appli(terms)) => self.application(terms),
             | Term::KontCall(KontCall { body, tail }) => RcDoc::text("do~")
                 .append(self.fragment_boundary(
@@ -1129,12 +1179,10 @@ impl<'arena> PrettyFormatter<'arena> {
                 )
                 .document
             }
-            | Term::Pi(Pi(pattern, body)) => self.quantifier(term, "pi", *pattern, *body),
-            | Term::Forall(Forall(pattern, body)) => {
-                self.quantifier(term, "forall", *pattern, *body)
-            }
+            | Term::Pi(_) => self.scoped_form(term, ScopedForm::Pi),
+            | Term::Forall(_) => self.scoped_form(term, ScopedForm::Forall),
             | Term::Arrow(_) => self.infix_chain(term, InfixOperator::Arrow),
-            | Term::Sigma(Sigma(pattern, body)) => self.quantifier(term, "sigma", *pattern, *body),
+            | Term::Sigma(_) => self.scoped_form(term, ScopedForm::Sigma),
             | Term::Exists(exists) => self.exists(term, exists),
             | Term::Prod(_) => self.infix_chain(term, InfixOperator::Product),
             | Term::Thunk(Thunk(body)) => self.delimited_with_spacing(
@@ -1352,48 +1400,91 @@ impl<'arena> PrettyFormatter<'arena> {
         }
     }
 
-    fn quantifier(
-        &'arena self, term: TermId, keyword: &'static str, pattern: CoPatId, body: TermId,
-    ) -> RcDoc<'arena> {
-        self.scoped_join(
-            LayoutFragment::entity(
-                pattern.into(),
-                self.prefixed(
-                    term,
-                    keyword,
-                    BoundaryLayout::hanging("", self.indent()),
-                    LayoutFragment::entity(pattern.into(), self.copattern(pattern)),
-                ),
+    fn scope_boundary_allows_merging(
+        &self, parameter: impl Into<EntityId>, nested: TermId,
+    ) -> bool {
+        self.arena.trivia.leading_comments(nested.into()).is_empty()
+            && !(self.options.layout_intentions == LayoutIntentions::Preserve
+                && BoundaryIntent::between(parameter, nested)
+                    .resolve(self.arena)
+                    .is_some_and(BreakIntent::requires_line_break))
+    }
+
+    fn scoped_telescope(&self, root: TermId, form: ScopedForm) -> ScopeTelescope<CoPatId> {
+        let layers = std::iter::successors(Some(root), |current| {
+            let (parameter, nested) = form.split(&self.arena.terms[current])?;
+            form.split(&self.arena.terms[&nested])?;
+            self.scope_boundary_allows_merging(parameter, nested).then_some(nested)
+        })
+        .map(|scope| {
+            form.split(&self.arena.terms[&scope])
+                .expect("scope telescopes contain only their selected form")
+        })
+        .collect::<Vec<_>>();
+        let body = layers.last().expect("scope telescopes are nonempty").1;
+        let parameters = layers.into_iter().map(|(parameter, _)| parameter).collect();
+        ScopeTelescope { parameters, body }
+    }
+
+    fn scoped_form(&'arena self, term: TermId, form: ScopedForm) -> RcDoc<'arena> {
+        let ScopeTelescope { parameters, body } = self.scoped_telescope(term, form);
+        let first = *parameters.first().expect("scoped forms contain at least one parameter");
+        let last = *parameters.last().expect("scoped forms contain at least one parameter");
+        let parameters = parameters
+            .into_iter()
+            .flat_map(|parameter| self.copattern_parameters(parameter))
+            .collect::<Vec<_>>();
+        let head = LayoutFragment {
+            document: self.parameter_telescope(
+                RcDoc::text(form.keyword()),
+                BoundaryIntent::after_start(term, first),
+                &parameters,
             ),
-            ".",
-            self.term_through_fragment(body, TermPrecedence::Quantifier),
+            anchors: LayoutAnchors { first: first.into(), last: last.into() },
+        };
+        self.scoped_join(
+            head,
+            form.marker(),
+            self.term_through_fragment(body, form.body_precedence()),
             self.indent(),
         )
         .document
     }
 
-    fn exists(&'arena self, term: TermId, exists: &Exists) -> RcDoc<'arena> {
-        let Exists { parameters, body } = exists;
+    fn existential_telescope(
+        &'arena self, first: &'arena Exists,
+    ) -> ScopeTelescope<&'arena ExistentialParameter> {
+        let layers = std::iter::successors(Some(first), |current| {
+            let parameter = current.parameters.last()?;
+            let Term::Exists(nested) = &self.arena.terms[&current.body] else {
+                return None;
+            };
+            self.scope_boundary_allows_merging(parameter.binder, current.body).then_some(nested)
+        })
+        .collect::<Vec<_>>();
+        let body = layers.last().expect("existential telescopes are nonempty").body;
+        let parameters = layers.into_iter().flat_map(|exists| exists.parameters.iter()).collect();
+        ScopeTelescope { parameters, body }
+    }
+
+    fn exists(&'arena self, term: TermId, exists: &'arena Exists) -> RcDoc<'arena> {
+        let ScopeTelescope { parameters, body } = self.existential_telescope(exists);
         let Some((first, rest)) = parameters.split_first() else {
             unreachable!("the parser requires at least one existential parameter")
         };
-        let parameters = self
-            .grouped_separated(
-                std::iter::once(self.existential_parameter(first))
-                    .chain(rest.iter().map(|parameter| self.existential_parameter(parameter)))
-                    .collect(),
-                "",
-            )
-            .expect("existentials contain at least one parameter");
+        let last = parameters.last().expect("existentials contain at least one parameter");
+        let parameters = std::iter::once(self.existential_parameter(first))
+            .chain(rest.iter().map(|parameter| self.existential_parameter(parameter)))
+            .collect::<Vec<_>>();
         let head = LayoutFragment {
-            document: RcDoc::text("exists").append(self.layout_boundary(
+            document: self.parameter_telescope(
+                RcDoc::text("exists"),
                 BoundaryIntent::before_existential_parameter(term, first.binder),
-                BoundaryLayout::nested("", self.indent()),
-                parameters.document,
-            )),
-            anchors: parameters.anchors,
+                &parameters,
+            ),
+            anchors: LayoutAnchors { first: first.binder.into(), last: last.binder.into() },
         };
-        self.scoped_join(head, ".", self.term_fragment(*body), self.indent()).document
+        self.scoped_join(head, ".", self.term_fragment(body), self.indent()).document
     }
 
     fn existential_parameter(
@@ -1549,13 +1640,23 @@ impl<'arena> PrettyFormatter<'arena> {
             .into_iter()
             .flatten()
             .map(RcDoc::text);
-        let head_last = params.as_ref().map_or_else(|| (*binder).into(), |params| (*params).into());
-        let head = modifiers
-            .chain(std::iter::once(self.pattern(*binder)))
-            .chain(params.iter().map(|params| self.copattern(*params)));
-        let head = LayoutFragment {
-            document: RcDoc::intersperse(head, RcDoc::space()),
-            anchors: LayoutAnchors { first: (*binder).into(), last: head_last },
+        let head = RcDoc::intersperse(
+            modifiers.chain(std::iter::once(self.pattern(*binder))),
+            RcDoc::space(),
+        );
+        let head = match params {
+            | Some(params) => {
+                let parameters = self.copattern_parameters(*params);
+                LayoutFragment {
+                    document: self.parameter_telescope(
+                        head,
+                        BoundaryIntent::between(*binder, *params),
+                        &parameters,
+                    ),
+                    anchors: LayoutAnchors { first: (*binder).into(), last: (*params).into() },
+                }
+            }
+            | None => LayoutFragment::entity((*binder).into(), head),
         };
         let head_anchors = head.anchors;
         let head = LayoutFragment {
@@ -2049,9 +2150,9 @@ mod tests {
             ),
             (
                 "forall (A : Type) . forall (B : Type) . A -> B",
-                "forall (A : Type) . forall (B : Type) . A -> B\n",
+                "forall (A : Type) (B : Type) . A -> B\n",
             ),
-            ("fn x => fn y => x", "fn x => fn y => x\n"),
+            ("fn x => fn y => x", "fn x y => x\n"),
             (
                 "do x <- first; do y <- second; ret y",
                 concat!("do x <- first;\n", "do y <- second;\n", "ret y\n"),
@@ -2417,7 +2518,8 @@ mod tests {
                 ),
                 concat!(
                     "begin\n",
-                    "  let f (first : Type)\n",
+                    "  let f\n",
+                    "    (first : Type)\n",
                     "    (second : Type)\n",
                     "  : Result = value in\n",
                     "  f\n",
@@ -2465,7 +2567,8 @@ mod tests {
             (
                 "let f (first : FirstClassifier) (second : SecondClassifier) : Result = value in f",
                 concat!(
-                    "let f (first : FirstClassifier)\n",
+                    "let f\n",
+                    "  (first : FirstClassifier)\n",
                     "  (second : SecondClassifier)\n",
                     ": Result = value in\n",
                     "f\n",
@@ -2692,6 +2795,107 @@ mod tests {
     }
 
     #[test]
+    fn merges_joined_consecutive_scopes_into_one_telescope() {
+        let cases = [
+            ("fn a => fn b => body", "fn a b => body\n"),
+            ("fn a b => fn c d => body", "fn a b c d => body\n"),
+            ("pi (A : VType) . pi (B : VType) . Body", "pi (A : VType) (B : VType) . Body\n"),
+            (
+                "forall (A : VType) . forall (B : VType) . Body",
+                "forall (A : VType) (B : VType) . Body\n",
+            ),
+            (
+                "sigma (A : VType) . sigma (B : VType) . Body",
+                "sigma (A : VType) (B : VType) . Body\n",
+            ),
+            (
+                "exists (A : VType) . exists (B : VType) . Body",
+                "exists (A : VType) (B : VType) . Body\n",
+            ),
+            (
+                concat!(
+                    "exists (A : VType) (B : VType) . ",
+                    "exists (C : VType) (D : VType) . Body",
+                ),
+                "exists (A : VType) (B : VType) (C : VType) (D : VType) . Body\n",
+            ),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, expected, "source: {source}");
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape(), "source: {source}");
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+        });
+    }
+
+    #[test]
+    fn preserves_a_nested_scope_when_its_introducer_starts_on_a_new_line() {
+        let cases = [
+            (
+                concat!("fn a =>\n", "  fn b =>\n", "    body"),
+                concat!("fn a =>\n", "  fn b =>\n", "    body\n"),
+            ),
+            (
+                concat!("forall (A : VType) .\n", "  forall (B : VType) .\n", "    Body"),
+                concat!("forall (A : VType) .\n", "  forall (B : VType) .\n", "    Body\n"),
+            ),
+            (
+                concat!("exists (A : VType) .\n", "  exists (B : VType) .\n", "    Body"),
+                concat!("exists (A : VType) .\n", "  exists (B : VType) .\n", "    Body\n"),
+            ),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, expected, "source: {source}");
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape(), "source: {source}");
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+        });
+    }
+
+    #[test]
+    fn keeps_comments_and_distinct_scope_forms_at_telescope_boundaries() {
+        let cases = [
+            (
+                "fn a => /- Keep the nested scope. -/ fn b => body",
+                "fn a => /- Keep the nested scope. -/ fn b => body\n",
+            ),
+            (
+                "pi (A : VType) . forall (B : VType) . Body",
+                "pi (A : VType) . forall (B : VType) . Body\n",
+            ),
+            (
+                concat!(
+                    "exists (A : VType) . /- Keep the nested scope. -/ ",
+                    "exists (B : VType) . Body",
+                ),
+                concat!(
+                    "exists (A : VType) . /- Keep the nested scope. -/ ",
+                    "exists (B : VType) . Body\n",
+                ),
+            ),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, expected, "source: {source}");
+            assert_eq!(RetainedComments::collect(source), RetainedComments::collect(&formatted));
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape(), "source: {source}");
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+        });
+    }
+
+    #[test]
     fn places_scope_separators_after_parameters_that_wrap() {
         let options = PrettyOptions::default()
             .with_line_width(38)
@@ -2700,7 +2904,8 @@ mod tests {
             (
                 "fn (first : FirstClassifier) (second : SecondClassifier) => result",
                 concat!(
-                    "fn (first : FirstClassifier)\n",
+                    "fn\n",
+                    "  (first : FirstClassifier)\n",
                     "  (second : SecondClassifier)\n",
                     "=>\n",
                     "  result\n",
@@ -2709,7 +2914,8 @@ mod tests {
             (
                 "pi (first : FirstClassifier) (second : SecondClassifier) . Result",
                 concat!(
-                    "pi (first : FirstClassifier)\n",
+                    "pi\n",
+                    "  (first : FirstClassifier)\n",
                     "  (second : SecondClassifier)\n",
                     ".\n",
                     "  Result\n",
@@ -2718,7 +2924,8 @@ mod tests {
             (
                 "forall (first : FirstClassifier) (second : SecondClassifier) . Result",
                 concat!(
-                    "forall (first : FirstClassifier)\n",
+                    "forall\n",
+                    "  (first : FirstClassifier)\n",
                     "  (second : SecondClassifier)\n",
                     ".\n",
                     "  Result\n",
@@ -2727,7 +2934,8 @@ mod tests {
             (
                 "sigma (first : FirstClassifier) (second : SecondClassifier) . Result",
                 concat!(
-                    "sigma (first : FirstClassifier)\n",
+                    "sigma\n",
+                    "  (first : FirstClassifier)\n",
                     "  (second : SecondClassifier)\n",
                     ".\n",
                     "  Result\n",
@@ -2736,7 +2944,8 @@ mod tests {
             (
                 "exists (first : FirstClassifier) (second : SecondClassifier) . Result",
                 concat!(
-                    "exists (first : FirstClassifier)\n",
+                    "exists\n",
+                    "  (first : FirstClassifier)\n",
                     "  (second : SecondClassifier)\n",
                     ".\n",
                     "  Result\n",
@@ -2752,6 +2961,102 @@ mod tests {
             assert_eq!(formatted, reparsed.render_with_options(options));
             assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
         });
+    }
+
+    #[test]
+    fn preserves_fitting_parameter_rows_inside_multiline_telescopes() {
+        let cases = [
+            (
+                concat!(
+                    "def ! unwrap_or (A : VType)\n",
+                    "  (E : VType)\n",
+                    "  (result : Result A E)\n",
+                    "  (default : A) : Ret A = value that\n",
+                    "unwrap_or",
+                ),
+                concat!(
+                    "def ! unwrap_or\n",
+                    "  (A : VType)\n",
+                    "  (E : VType)\n",
+                    "  (result : Result A E)\n",
+                    "  (default : A)\n",
+                    ": Ret A = value that\n",
+                    "unwrap_or\n",
+                ),
+            ),
+            (
+                concat!(
+                    "let f (A : VType) (B : VType)\n",
+                    "  (left : A) (right : B) : Result = value in\n",
+                    "f",
+                ),
+                concat!(
+                    "let f\n",
+                    "  (A : VType) (B : VType)\n",
+                    "  (left : A) (right : B)\n",
+                    ": Result = value in\n",
+                    "f\n",
+                ),
+            ),
+            (
+                concat!("forall (A : VType) (B : VType)\n", "  (C : VType) (D : VType) . Body",),
+                concat!(
+                    "forall\n",
+                    "  (A : VType) (B : VType)\n",
+                    "  (C : VType) (D : VType)\n",
+                    ".\n",
+                    "  Body\n",
+                ),
+            ),
+            (
+                concat!("exists (A : VType) (B : VType)\n", "  (C : VType) (D : VType) . Body",),
+                concat!(
+                    "exists\n",
+                    "  (A : VType) (B : VType)\n",
+                    "  (C : VType) (D : VType)\n",
+                    ".\n",
+                    "  Body\n",
+                ),
+            ),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, expected, "source: {source}");
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        });
+    }
+
+    #[test]
+    fn preserves_comments_inside_multiline_parameter_telescopes() {
+        let source = concat!(
+            "fn\n",
+            "  -- Keep the first parameter.\n",
+            "  (A : VType)\n",
+            "  -- Keep the second parameter.\n",
+            "  (B : VType) => Body",
+        );
+        let expected = concat!(
+            "fn\n",
+            "  -- Keep the first parameter.\n",
+            "  (A : VType)\n",
+            "  -- Keep the second parameter.\n",
+            "  (B : VType)\n",
+            "=>\n",
+            "  Body\n",
+        );
+        let parsed = ParsedSource::new(source);
+        let formatted = parsed.render(LayoutIntentions::Preserve);
+
+        assert_eq!(formatted, expected);
+        assert_eq!(RetainedComments::collect(source), RetainedComments::collect(&formatted));
+        let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+        assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
     }
 
     #[test]

@@ -202,6 +202,29 @@ struct ExistentialTelescope {
     source: t::EntityId,
 }
 
+/// Consecutive textual `exists` nodes denote one existential telescope.
+/// Keeping this normalization in desugaring makes the repeated and merged
+/// surface spellings elaborate identically.
+struct TextualExistentialTelescope {
+    parameters: Vec<t::ExistentialParameter>,
+    body: t::TermId,
+}
+
+impl TextualExistentialTelescope {
+    fn new(first: t::Exists, desugarer: &Desugarer) -> Self {
+        let layers = std::iter::successors(Some(first), |current| {
+            match desugarer.lookup_term(current.body) {
+                | t::Term::Exists(nested) => Some(nested),
+                | _ => None,
+            }
+        })
+        .collect::<Vec<_>>();
+        let body = layers.last().expect("existential telescopes are nonempty").body;
+        let parameters = layers.into_iter().flat_map(|exists| exists.parameters).collect();
+        Self { parameters, body }
+    }
+}
+
 impl ExistentialTelescope {
     fn desugar(
         parameters: Vec<t::ExistentialParameter>, source: t::EntityId, desugarer: &mut Desugarer,
@@ -589,7 +612,8 @@ impl Desugar for t::TermId {
                 Alloc::alloc(desugarer, b::Sigma(ann, ty_r).into(), self.into())
             }
             | Tm::Exists(term) => {
-                let t::Exists { parameters, body } = term;
+                let TextualExistentialTelescope { parameters, body } =
+                    TextualExistentialTelescope::new(term, desugarer);
                 let parameters = ExistentialTelescope::desugar(parameters, self.into(), desugarer)?;
                 let body = body.desugar(desugarer)?;
                 let exists = parameters.quantify(body, desugarer);

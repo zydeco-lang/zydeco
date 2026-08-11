@@ -100,6 +100,7 @@ Most constructs use one of these families:
 | --- | --- | --- |
 | Delimited region | Contents stay between delimiters; a thunk is `{ body }`. | Contents nest once and the closer returns to the opener. |
 | Juxtaposition or list | Items use their canonical separator on one line. | Continuations nest once while fitting subgroups remain intact. |
+| Parameter telescope | A fitting telescope follows its head. | The head stands alone; width expansion gives each parameter a row, while preserved source breaks retain fitting row groups. |
 | Infix chain | Operators have one space on each side. | `*` and `->` lead continuation lines without recursive indentation. |
 | Headed scope | A short head keeps `.`, `=>`, and its body together. | A multiline head ends with an aligned marker, then the body nests once. |
 | Staged binding | Header, type, bindee, and placement remain together when they fit. | `:`, `=`, and then `in` or `that` close the stages at the binding indentation. |
@@ -114,6 +115,11 @@ layer rather than whichever nested boundary happens to encounter the width limit
 For layout purposes, `.`, `=>`, `in`, and `that` are scope-boundary markers. This is a presentation role shared by
 several grammar categories. A constituent is “short” exactly when its complete compact alternative fits in the
 remaining configured width; there is no second length threshold.
+
+Canonical printing folds adjacent scopes of the same form into one parameter telescope. In intention-preserving
+mode, a source line break before the nested introducer stops the fold. This rule applies to `fn`, `pi`, `forall`,
+`sigma`, and `exists`. Consecutive existential nodes also normalize to one telescope during desugaring, so the
+compact and repeated spellings have the same elaboration.
 
 Minimal parenthesis formatting retains grammar-required groups. It also retains a multiline singleton group when
 its delimiters provide an intentional boundary. Applications are the one self-grouping family: their own
