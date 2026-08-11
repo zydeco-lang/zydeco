@@ -277,23 +277,19 @@ module.exports = grammar({
       field('body', $._term),
     )),
 
-    existential_parameter: $ => choice(
-      seq(
-        '(',
-        field('binder', $._pattern_item),
+    existential_parameter: $ => seq(
+      repeat(field('metadata', $.metadata)),
+      '(',
+      field('binder', $._pattern_item),
+      optional(seq(
         'as',
         field('definition', $._term),
         optional(seq(
           ':',
           field('classifier', $._term),
         )),
-        ')',
-      ),
-      seq(
-        '(',
-        field('binder', $._pattern_item),
-        ')',
-      ),
+      )),
+      ')',
     ),
 
     lambda_expression: $ => prec.right(PREC.binding, seq(
@@ -432,6 +428,7 @@ module.exports = grammar({
       $.variable_pattern,
       $.constructor_pattern,
       $.manifest_pattern,
+      $.alias_pattern,
       $.parenthesized_pattern,
     ),
 
@@ -440,6 +437,8 @@ module.exports = grammar({
       $.pattern_annotation,
       $.punned_pattern,
       $.named_pattern,
+      $.punned_projection_pattern,
+      $.projection_pattern,
     ),
 
     hole_pattern: _ => '_',
@@ -456,6 +455,16 @@ module.exports = grammar({
       field('binder', $._pattern_item),
       'as',
       field('definition', $._term),
+      ')',
+    ),
+
+    alias_pattern: $ => seq(
+      '(',
+      field('member', $._pattern_item),
+      repeat1(seq(
+        ';',
+        field('member', $._pattern_item),
+      )),
       ')',
     ),
 
@@ -481,6 +490,22 @@ module.exports = grammar({
     )),
 
     named_pattern: $ => prec.right(seq(
+      field('name', $._variable_name),
+      '=',
+      field('pattern', $._pattern_item),
+    )),
+
+    punned_projection_pattern: $ => prec.right(seq(
+      '/',
+      field('name', $._variable_name),
+      optional(seq(
+        ':',
+        field('type', $._term),
+      )),
+    )),
+
+    projection_pattern: $ => prec.right(seq(
+      '/',
       field('name', $._variable_name),
       '=',
       field('pattern', $._pattern_item),

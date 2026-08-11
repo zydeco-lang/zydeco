@@ -216,3 +216,61 @@ end
           placement: (placement)
           body: (variable
             name: (lower_identifier)))))))
+
+==================
+Pattern aliases and projections
+==================
+
+param ((/VType; /CType; /Thk; /Ret) : @[import("builtin.zy")] _) in _
+
+---
+
+(source_file
+  body: (parameter_expression
+    binder: (parenthesized_pattern
+      (pattern_annotation
+        pattern: (alias_pattern
+          member: (punned_projection_pattern
+            name: (upper_identifier))
+          member: (punned_projection_pattern
+            name: (upper_identifier))
+          member: (punned_projection_pattern
+            name: (upper_identifier))
+          member: (punned_projection_pattern
+            name: (upper_identifier)))
+        type: (metadata_expression
+          metadata: (metadata
+            value: (meta_application
+              callee: (meta_identifier
+                (lower_identifier))
+              arguments: (meta_arguments
+                (string_literal))))
+          body: (hole))))
+    placement: (placement)
+    body: (hole)))
+
+==================
+Annotated existential parameters
+==================
+
+exists @[builtin(int)] (Int : VType) . Int
+
+---
+
+(source_file
+  body: (existential_type
+    parameter: (existential_parameter
+      metadata: (metadata
+        value: (meta_application
+          callee: (meta_identifier
+            (lower_identifier))
+          arguments: (meta_arguments
+            (meta_identifier
+              (lower_identifier)))))
+      binder: (pattern_annotation
+        pattern: (variable_pattern
+          name: (upper_identifier))
+        type: (variable
+          name: (upper_identifier))))
+    body: (variable
+      name: (upper_identifier))))

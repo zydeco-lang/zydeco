@@ -26,6 +26,10 @@
     "named": true,
     "subtypes": [
       {
+        "type": "alias_pattern",
+        "named": true
+      },
+      {
         "type": "constructor_pattern",
         "named": true
       },
@@ -180,6 +184,42 @@
         "named": true
       }
     ]
+  },
+  {
+    "type": "alias_pattern",
+    "named": true,
+    "fields": {
+      "member": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "_pattern",
+            "named": true
+          },
+          {
+            "type": "named_pattern",
+            "named": true
+          },
+          {
+            "type": "pattern_annotation",
+            "named": true
+          },
+          {
+            "type": "projection_pattern",
+            "named": true
+          },
+          {
+            "type": "punned_pattern",
+            "named": true
+          },
+          {
+            "type": "punned_projection_pattern",
+            "named": true
+          }
+        ]
+      }
+    }
   },
   {
     "type": "application_expression",
@@ -749,7 +789,15 @@
             "named": true
           },
           {
+            "type": "projection_pattern",
+            "named": true
+          },
+          {
             "type": "punned_pattern",
+            "named": true
+          },
+          {
+            "type": "punned_projection_pattern",
             "named": true
           }
         ]
@@ -770,6 +818,16 @@
         "types": [
           {
             "type": "_term",
+            "named": true
+          }
+        ]
+      },
+      "metadata": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "metadata",
             "named": true
           }
         ]
@@ -1121,7 +1179,15 @@
             "named": true
           },
           {
+            "type": "projection_pattern",
+            "named": true
+          },
+          {
             "type": "punned_pattern",
+            "named": true
+          },
+          {
+            "type": "punned_projection_pattern",
             "named": true
           }
         ]
@@ -1395,7 +1461,15 @@
             "named": true
           },
           {
+            "type": "projection_pattern",
+            "named": true
+          },
+          {
             "type": "punned_pattern",
+            "named": true
+          },
+          {
+            "type": "punned_projection_pattern",
             "named": true
           }
         ]
@@ -1469,7 +1543,15 @@
             "named": true
           },
           {
+            "type": "projection_pattern",
+            "named": true
+          },
+          {
             "type": "punned_pattern",
+            "named": true
+          },
+          {
+            "type": "punned_projection_pattern",
             "named": true
           }
         ]
@@ -1517,7 +1599,15 @@
           "named": true
         },
         {
+          "type": "projection_pattern",
+          "named": true
+        },
+        {
           "type": "punned_pattern",
+          "named": true
+        },
+        {
+          "type": "punned_projection_pattern",
           "named": true
         }
       ]
@@ -1668,7 +1758,87 @@
     }
   },
   {
+    "type": "projection_pattern",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "lower_identifier",
+            "named": true
+          },
+          {
+            "type": "upper_identifier",
+            "named": true
+          }
+        ]
+      },
+      "pattern": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_pattern",
+            "named": true
+          },
+          {
+            "type": "named_pattern",
+            "named": true
+          },
+          {
+            "type": "pattern_annotation",
+            "named": true
+          },
+          {
+            "type": "projection_pattern",
+            "named": true
+          },
+          {
+            "type": "punned_pattern",
+            "named": true
+          },
+          {
+            "type": "punned_projection_pattern",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "punned_pattern",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "lower_identifier",
+            "named": true
+          },
+          {
+            "type": "upper_identifier",
+            "named": true
+          }
+        ]
+      },
+      "type": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_term",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "punned_projection_pattern",
     "named": true,
     "fields": {
       "name": {
