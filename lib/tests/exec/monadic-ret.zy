@@ -17,7 +17,7 @@ begin
     end
   that
   def ! translated =
-    monadic
+    @[monadic] begin
       ret ()
     end
   that

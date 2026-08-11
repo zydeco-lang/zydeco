@@ -74,7 +74,7 @@ The metavariable $N$ ranges over unsorted terms.
   [], [], [$|$], [$"let" Q = S " in " N | "let" Q = "seal" S " in " N$],
   [], [], [$|$], [$"rec" {Q_i : K_i = "seal" S_i}_(i in I) \; N
     | "block"(N) | "boundary"(N)$],
-  [], [], [$|$], [$"monadic" M " end"$],
+  [], [], [$|$], [$#text("@[monadic]") space M$],
 )
 ]
 ]
@@ -1005,7 +1005,7 @@ $
       $op("global")(Gamma) \, X : ("VType" arrow.r "CType")
         tack.r M_1 arrow.r.squiggly M_2 : B_2$,
     )),
-    Gamma \; Delta tack.r "monadic" M_1 " end" arrow.r.double
+    Gamma \; Delta tack.r #text("@[monadic]") space M_1 arrow.r.double
       "forall" (X : "VType" arrow.r "CType") .
         "Thk" ("Monad" space X) arrow.r B_2,
   )

@@ -357,7 +357,7 @@ begin
   that
 
   def translated = {
-    monadic
+    @[monadic] begin
       let unbox = {
         do _ <- ret ();
         fn ((X, value) : Box) => ret value
@@ -385,7 +385,7 @@ begin
   that
 
   def translated = {
-    monadic
+    @[monadic] begin
       let run = {
         do _ <- ret ();
         fn ((A, OS, value, execute) : Core) =>
@@ -423,7 +423,7 @@ begin
   that
 
   def translated = {
-    monadic
+    @[monadic] begin
       do _ <- ret ();
       (comatch
       | .unbox =>
@@ -468,7 +468,7 @@ begin
   } that
 
   def translated = {
-    monadic
+    @[monadic] begin
       do _ <- ret ();
       (comatch
       | .run =>
@@ -504,7 +504,7 @@ begin
   that
 
   def translated = {
-    monadic
+    @[monadic] begin
       let first = {
         do _ <- ret ();
         fn ((X, value, _) : NestedBox) => ret value
@@ -533,7 +533,7 @@ begin
   that
 
   def translated = {
-    monadic
+    @[monadic] begin
       let reveal = {
         do _ <- ret ();
         fn ((Y, X, Z, value) : Mixed) => ret value
@@ -559,7 +559,7 @@ begin
   that
 
   def translated = {
-    monadic
+    @[monadic] begin
       let reveal = {
         do _ <- ret ();
         fn ((X, value) : Box) => ret value
@@ -593,7 +593,7 @@ begin
   that
 
   def translated = {
-    monadic
+    @[monadic] begin
       (comatch
       | .unbox =>
         fn ((X, value) : Box) => ret value
@@ -622,7 +622,7 @@ begin
   that
 
   def translated = {
-    monadic
+    @[monadic] begin
       let run = {
         do _ <- ret ();
         fn ((A, OS, value, execute) : Core) =>
@@ -659,7 +659,7 @@ begin
   that
 
   def translated = {
-    monadic
+    @[monadic] begin
       do _ <- ret ();
       fn ((X, value, _) : NestedBox) => ret value
     end
@@ -689,7 +689,7 @@ begin
   that
 
   def translated = {
-    monadic
+    @[monadic] begin
       let reveal = {
         do _ <- ret ();
         fn ((X, value) : Box) => ret value

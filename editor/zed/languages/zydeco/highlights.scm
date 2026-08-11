@@ -70,8 +70,6 @@
   "that"
   "do"
   "ret"
-  "monadic"
-  "monadically"
   "fn"
   "pi"
   "fix"

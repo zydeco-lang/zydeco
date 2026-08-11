@@ -162,7 +162,7 @@ begin
   } that
 
   def translated : Thk (Ret Unit) = {
-    (monadic
+    (@[monadic] begin
       let named_identity = {
         fn ((item = A) : (item :: VType))
            (value : A) =>
@@ -178,7 +178,7 @@ begin
     forall ((item = A) : (item :: VType)) .
       Thk Top -> A -> Ret A
   ) = {
-    (monadic
+    (@[monadic] begin
       do _ <- ret ();
       fn ((item = A) : (item :: VType))
          (value : A) =>

@@ -78,7 +78,7 @@
         },
         {
           "name": "storage.type.zydeco",
-          "match": "\\b(data|codata|def|define|let|param|monadic|monadically)\\b"
+          "match": "\\b(data|codata|def|define|let|param)\\b"
         },
         {
           "name": "storage.modifier.zydeco",

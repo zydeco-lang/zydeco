@@ -225,7 +225,6 @@ impl<'graph> ProgramAssembler<'graph> {
                 .into()
             }
             | t::Term::Block(t::Block(body)) => t::Block(self.term(source, body)?).into(),
-            | t::Term::MoBlock(t::MoBlock(body)) => t::MoBlock(self.term(source, body)?).into(),
             | t::Term::Data(t::Data { arms }) => t::Data {
                 arms: arms
                     .into_iter()

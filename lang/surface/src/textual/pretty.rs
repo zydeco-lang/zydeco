@@ -1234,7 +1234,6 @@ impl<'arena> PrettyFormatter<'arena> {
                     .append(self.sequence_tail(binding.bindee.into(), *tail))
             }
             | Term::Block(Block(body)) => self.block("begin", *body, "end"),
-            | Term::MoBlock(MoBlock(body)) => self.block("monadic", *body, "end"),
             | Term::Data(Data { arms }) => self.data(arms),
             | Term::CoData(CoData { arms }) => self.codata(arms),
             | Term::Ctor(Ctor(name, body)) => {

@@ -13,7 +13,7 @@ begin
       inner_basis builtin in
 
     begin
-      monadic
+      @[monadic] begin
         ret ()
       end
     end

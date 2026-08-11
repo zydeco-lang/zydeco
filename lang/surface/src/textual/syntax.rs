@@ -156,10 +156,6 @@ pub struct ContextBind {
 #[derive(Clone, Debug)]
 pub struct Block(pub TermId);
 
-/// `monadic ... end`
-#[derive(Clone, Debug)]
-pub struct MoBlock(pub TermId);
-
 /// data | C_1 ty | ... end
 #[derive(Clone, Debug)]
 pub struct Data {
@@ -221,7 +217,6 @@ pub enum Term {
     Param(Param),
     ContextBind(ContextBind),
     Block(Block),
-    MoBlock(MoBlock),
     Data(Data),
     CoData(CoData),
     Ctor(Ctor<CtorName, TermId>),

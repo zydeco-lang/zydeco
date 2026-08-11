@@ -1,6 +1,6 @@
 use crate::{
     bitter::{syntax as b, *},
-    metadata::{BuiltinMeta, IntrinsicMeta},
+    metadata::{BuiltinMeta, IntrinsicMeta, MonadicMeta},
     textual::syntax as t,
 };
 use derive_more::{AsMut, AsRef};
@@ -439,6 +439,35 @@ impl Desugar for t::TermId {
                         });
                     }
                 }
+                match meta.specialize::<MonadicMeta>() {
+                    | Ok(Some(MonadicMeta)) => {
+                        let body = term.desugar(desugarer)?;
+                        let basis = b::MonadicBasis {
+                            monad: Alloc::alloc(
+                                desugarer,
+                                b::Term::Var(b::VarName("Monad".into())),
+                                self.into(),
+                            ),
+                            algebra: Alloc::alloc(
+                                desugarer,
+                                b::Term::Var(b::VarName("Algebra".into())),
+                                self.into(),
+                            ),
+                        };
+                        return Ok(Alloc::alloc(
+                            desugarer,
+                            b::MoBlock { body, basis }.into(),
+                            self.into(),
+                        ));
+                    }
+                    | Ok(None) => {}
+                    | Err(source) => {
+                        return Err(DesugarError::InvalidMonadicMeta {
+                            term: self.span(desugarer.spans).clone().make(self),
+                            source,
+                        });
+                    }
+                }
                 let term = term.desugar(desugarer)?;
                 Alloc::alloc(desugarer, b::MetaT(meta, term).into(), self.into())
             }
@@ -692,23 +721,6 @@ impl Desugar for t::TermId {
                 let t::Block(body) = term;
                 let body = body.desugar(desugarer)?;
                 Alloc::alloc(desugarer, b::Block(body).into(), self.into())
-            }
-            | Tm::MoBlock(term) => {
-                let t::MoBlock(body) = term;
-                let body = body.desugar(desugarer)?;
-                let basis = b::MonadicBasis {
-                    monad: Alloc::alloc(
-                        desugarer,
-                        b::Term::Var(b::VarName("Monad".into())),
-                        self.into(),
-                    ),
-                    algebra: Alloc::alloc(
-                        desugarer,
-                        b::Term::Var(b::VarName("Algebra".into())),
-                        self.into(),
-                    ),
-                };
-                Alloc::alloc(desugarer, b::MoBlock { body, basis }.into(), self.into())
             }
             | Tm::Data(data) => (data, self.into()).desugar(desugarer)?,
             | Tm::CoData(codata) => (codata, self.into()).desugar(desugarer)?,

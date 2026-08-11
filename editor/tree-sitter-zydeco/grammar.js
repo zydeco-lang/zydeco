@@ -29,8 +29,6 @@ const KEYWORDS = [
   'that',
   'do',
   'ret',
-  'monadic',
-  'monadically',
   'fn',
   'pi',
   'fix',
@@ -81,7 +79,6 @@ module.exports = grammar({
       $.existential_type,
       $.lambda_expression,
       $.fix_expression,
-      $.monadically_expression,
       $.do_expression,
       $.parameter_expression,
       $.context_binding,
@@ -95,7 +92,6 @@ module.exports = grammar({
       $.thunk_expression,
       $.force_expression,
       $.return_expression,
-      $.monadic_block,
       $.block_expression,
       $.block_abstraction,
       $.data_type,
@@ -139,12 +135,6 @@ module.exports = grammar({
       'ret',
       field('value', $._atomic_term),
     )),
-
-    monadic_block: $ => seq(
-      'monadic',
-      field('body', $._term_item),
-      'end',
-    ),
 
     block_expression: $ => seq(
       'begin',
@@ -301,11 +291,6 @@ module.exports = grammar({
       'fix',
       field('binder', $._pattern),
       '=>',
-      field('body', $._term),
-    )),
-
-    monadically_expression: $ => prec.right(PREC.binding, seq(
-      'monadically',
       field('body', $._term),
     )),
 

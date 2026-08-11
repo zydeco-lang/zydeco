@@ -42,6 +42,21 @@ end
             name: (lower_identifier)))))))
 
 ==================
+Retired monadic words are identifiers
+==================
+
+(monadic, monadically)
+
+---
+
+(source_file
+  body: (parenthesized_term
+    (variable
+      name: (lower_identifier))
+    (variable
+      name: (lower_identifier))))
+
+==================
 Float literals
 ==================
 

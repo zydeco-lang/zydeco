@@ -339,10 +339,10 @@ demonstrate a systematic approach to derive algebras of relative monads in the
 
 #### Monadic Blocks
 
-The monadic blocks, defined in Section 5.2, allow the user to create a dialect of Zydeco that uses a user-specified ambient monad inside the monadic blocks. A monadic block accepts a Zydeco computation term and produces a computation term that accepts a monad instance as function argument. The syntax of monadic blocks looks like the following:
+The monadic blocks, defined in Section 5.2, allow the user to create a dialect of Zydeco that uses a user-specified ambient monad inside the monadic blocks. The `@[monadic]` annotation accepts any Zydeco computation term and produces a computation term that accepts a monad instance as function argument. A `begin ... end` expression makes a multiline annotated region explicit:
 
 ```zydeco
-monadic
+@[monadic] begin
   ret ()
 end
 ```
@@ -357,10 +357,8 @@ fn (M: VType -> CType) (mo: Thk (Monad M)) =>
 The reader may have noticed that the monad type and its implementation are not demanded on site; instead, they can be later passed in as function arguments, making the whole setup more flexible to the user. We can provide all the necessary interface as function arguments into the monadic blocks in a similar fashion. For example,
 
 ```zydeco
-monadic
-  fn (E: VType) (raise: Thk (forall (A: VType) . E -> Ret A)) =>
-    ...
-end
+@[monadic] fn (E: VType) (raise: Thk (forall (A: VType) . E -> Ret A)) =>
+  ...
 ```
 
 In such way, the user can require a monad instance that supports `raise`, and later pass in the `Exn` monad instance to the monadic block.
@@ -368,12 +366,13 @@ In such way, the user can require a monad instance that supports `raise`, and la
 A caveat is that the monadic blocks don't naturally support any reference to variables defined outside the monadic blocks. Only primitive CBPV constructs like `VType`, `CType`, `Thk`, `Ret`, units and products, functions, and exists and forall types are allowed inside the monadic blocks, noticably excluding all abstract primitive types like the `String` and `OS` type. All other terms used in the monadic block must also be passed in. Below is an example of a monadic block that raises an exception:
 
 ```zydeco
-monadic fn (Str: VType) (raise: Thk (forall (A: VType) . Str -> Ret A)) (msg: Str) =>
+(@[monadic] fn (Str: VType) (raise: Thk (forall (A: VType) . Str -> Ret A)) (msg: Str) =>
   do x <- ! raise Unit msg;
-  ret x
-end Exn mo-exn String triv { ! exn-raise String } "error"
+  ret x)
+Exn mo-exn String triv { ! exn-raise String } "error"
 ```
 
+The parentheses end the annotated term before applying the translated computation to its monad arguments.
 Observe how the implementations are passed in as function arguments in the last line. `Exn` and `mo-exn` are the monad type and its implementation, respectively. `String` and `triv` instantiate type `Str` and its algebra (introduced in the next section). `{ ! exn-raise String }` is the implementation of the `raise` function, specialized to the `String` type. `"error"` is the message to be passed to the `raise` function.
 
 
@@ -396,14 +395,14 @@ When global types and terms are referenced inside the monadic block, they have a
 
 As an example of using global types and terms in monadic blocks, we can define an identity function:
 ```zydeco
-monadic
+@[monadic] begin
   ! { fn (A: VType) (x: A) => ret x }
 end
 ```
 and observe how we can move the definition out of the monadic block:
 ```zydeco
 let id = { fn (A: VType) (x: A) => ret x } in
-monadic
+@[monadic] begin
   ! id
 end
 ```

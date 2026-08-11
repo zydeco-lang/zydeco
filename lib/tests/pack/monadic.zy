@@ -24,7 +24,7 @@ begin
     end
   that
   def ! translated =
-    monadic
+    @[monadic] begin
       let ! reveal =
         do _ <- ret ();
         fn (

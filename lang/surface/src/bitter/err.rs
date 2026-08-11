@@ -1,5 +1,5 @@
 use super::syntax as b;
-use crate::metadata::{BuiltinMetaError, IntrinsicMetaError};
+use crate::metadata::{BuiltinMetaError, IntrinsicMetaError, MonadicMetaError};
 use crate::textual::syntax as t;
 use thiserror::Error;
 use zydeco_syntax::{BuiltinTypeRole, BuiltinValueRole};
@@ -30,6 +30,12 @@ pub enum DesugarError {
         term: Sp<t::TermId>,
         #[source]
         source: IntrinsicMetaError,
+    },
+    #[error("Invalid monadic annotation: {source}")]
+    InvalidMonadicMeta {
+        term: Sp<t::TermId>,
+        #[source]
+        source: MonadicMetaError,
     },
     #[error("Intrinsic annotation must annotate a hole expression")]
     IntrinsicPayloadNotHole(Sp<t::TermId>),

@@ -20,6 +20,28 @@ impl SpecializeMeta for DocMeta {
     }
 }
 
+/// The typed meaning of a `@[monadic]` annotation.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct MonadicMeta;
+
+impl SpecializeMeta for MonadicMeta {
+    const NAME: &'static str = "monadic";
+    type Error = MonadicMetaError;
+
+    fn from_arguments(arguments: &[Meta]) -> Result<Self, Self::Error> {
+        match arguments {
+            | [] => Ok(Self),
+            | arguments => Err(MonadicMetaError::Arguments { found: arguments.len() }),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Error, Hash, PartialEq, Eq)]
+pub enum MonadicMetaError {
+    #[error("monadic does not accept arguments, but found {found}")]
+    Arguments { found: usize },
+}
+
 /// A decoded `intrinsic(role)` splice annotation.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IntrinsicMeta {

@@ -17,7 +17,7 @@ begin
     end
   that
   def ! translated =
-    monadic
+    @[monadic] begin
       do value <- ret 1;
       ret value
     end

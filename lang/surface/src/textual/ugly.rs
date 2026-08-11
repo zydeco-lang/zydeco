@@ -81,7 +81,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
             | Term::Param(t) => s += &t.ugly(f),
             | Term::ContextBind(t) => s += &t.ugly(f),
             | Term::Block(t) => s += &t.ugly(f),
-            | Term::MoBlock(t) => s += &t.ugly(f),
             | Term::Data(t) => s += &t.ugly(f),
             | Term::CoData(t) => s += &t.ugly(f),
             | Term::Ctor(t) => s += &t.ugly(f),
@@ -527,17 +526,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for GenBind<Option<TermId>> {
             s += " = ";
             s += &bindee.ugly(f);
         }
-        s
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for MoBlock {
-    fn ugly(&self, f: &'a Formatter<'a>) -> String {
-        let mut s = String::new();
-        let MoBlock(body) = self;
-        s += "monadic ";
-        s += &body.ugly(f);
-        s += " end";
         s
     }
 }

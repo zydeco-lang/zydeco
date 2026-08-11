@@ -77,9 +77,10 @@ e ::= ...
     | def p = e that e
 ```
 
-The concrete syntax of `begin ... end` takes its cue from Zydeco's `monadic ... end` blocks.
-Both forms mark a region with explicit delimiters, giving nested syntax a visible boundary.
-A monadic block organizes computation, whereas `begin` organizes the static context surrounding a term.
+The concrete syntax of `begin ... end` marks a region with explicit delimiters,
+giving nested syntax a visible boundary.
+Metadata can attach to the whole region, as in `@[monadic] begin ... end`, while an unannotated `begin`
+organizes only the static context surrounding a term.
 When its body contributes no mobile bindings, `begin e end` elaborates to `e` much like parentheses.
 Its additional purpose is to provide a visible destination for bindings contributed from within the term.
 

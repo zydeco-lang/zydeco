@@ -130,7 +130,7 @@ begin
       -- Readers can utilize this feature to observe the generated code,
       -- and verify that the algebra translation is correct.
       @[debug("generated and applied")]
-      monadic fn (E: VType) =>
+      (@[monadic] (fn (E: VType) =>
         @[debug("original")]
         let ! mo_exn (E: VType) : Monad (Exn E) =
           comatch
@@ -156,7 +156,7 @@ begin
         -- | .monad : Monad (Exn E)
         -- | .lift  : forall (A: VType) . Thk (Ret A) -> Exn E A
         -- end
-      end M mo E triv
+      )) M mo E triv
     in
     ! detriv-mt (ExnT E) mt'
   that

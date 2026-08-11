@@ -44,10 +44,6 @@ pub enum Tok<'input> {
     Do,
     #[token("ret")]
     Ret,
-    #[token("monadic")]
-    Monadic,
-    #[token("monadically")]
-    Monadically,
     #[token("fn")]
     Fn,
     #[token("pi")]
@@ -206,8 +202,6 @@ impl<'source> LexicalTokens<'source> {
             | Tok::That
             | Tok::Do
             | Tok::Ret
-            | Tok::Monadic
-            | Tok::Monadically
             | Tok::Fn
             | Tok::Pi
             | Tok::Fix
@@ -314,8 +308,6 @@ impl Display for Tok<'_> {
             | Tok::That => write!(f, "that"),
             | Tok::Do => write!(f, "do"),
             | Tok::Ret => write!(f, "ret"),
-            | Tok::Monadic => write!(f, "monadic"),
-            | Tok::Monadically => write!(f, "monadically"),
             | Tok::Fn => write!(f, "fn"),
             | Tok::Pi => write!(f, "pi"),
             | Tok::Fix => write!(f, "fix"),

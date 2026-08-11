@@ -6,7 +6,6 @@
 (metadata "]" @end) @indent
 
 (block_expression "end" @end) @indent
-(monadic_block "end" @end) @indent
 (block_abstraction "end" @end) @indent
 (data_type "end" @end) @indent
 (codata_type "end" @end) @indent

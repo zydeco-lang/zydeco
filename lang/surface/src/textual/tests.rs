@@ -1,5 +1,9 @@
 use crate::{
-    metadata::{BuiltinMetaError, IntrinsicMeta, IntrinsicMetaError},
+    bitter::{
+        SourceUnitDesugarer, arena::BitterArena, fmt::Formatter as BitterFormatter,
+        syntax as bitter,
+    },
+    metadata::{BuiltinMetaError, IntrinsicMeta, IntrinsicMetaError, MonadicMetaError},
     textual::{
         arena::TextualScope,
         fmt::Formatter,
@@ -12,7 +16,7 @@ use crate::{
     },
 };
 use zydeco_syntax::Ugly;
-use zydeco_utils::{arena::IdAllocator, span::LocationCtx};
+use zydeco_utils::{arena::IdAllocator, pass::CompilerPass, span::LocationCtx};
 
 use super::*;
 
@@ -62,6 +66,110 @@ fn rejects_retired_do_tilde_syntax() {
     parser::SingleTermParser::new()
         .parse(explicit, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(explicit))
         .expect("explicit continuation application must remain available");
+}
+
+#[test]
+fn rejects_retired_monadic_block_syntax() {
+    let source = "monadic ret () end";
+    let mut parser = Parser::new();
+    assert!(
+        parser::SingleTermParser::new()
+            .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+            .is_err(),
+        "the delimited monadic keyword form must remain retired"
+    );
+}
+
+#[test]
+fn monadic_metadata_lowers_arbitrary_terms_to_monadic_blocks() {
+    [("@[monadic] fn value => ret value", false), ("@[monadic] begin ret () end", true)]
+        .into_iter()
+        .for_each(|(source, expects_block_body)| {
+            let mut parser = Parser::new();
+            let unit = parser::SourceUnitParser::new()
+                .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+                .unwrap_or_else(|error| panic!("expected `{source}` to parse: {error}"));
+            let output = SourceUnitDesugarer::new(
+                &parser.spans,
+                &parser.arena,
+                unit,
+                BitterArena::default(),
+            )
+            .run()
+            .unwrap_or_else(|error| panic!("expected `{source}` to desugar: {error}"));
+            let bitter::Term::MoBlock(bitter::MoBlock { body, .. }) =
+                &output.arena.terms[&output.root]
+            else {
+                panic!("expected `{source}` to lower to a monadic block")
+            };
+
+            assert_eq!(
+                matches!(output.arena.terms[body], bitter::Term::Block(_)),
+                expects_block_body,
+                "the annotation must preserve its payload term"
+            );
+        });
+}
+
+#[test]
+fn monadic_metadata_rejects_arguments() {
+    let source = "@[monadic(extra)] ret ()";
+    let mut parser = Parser::new();
+    let unit = parser::SourceUnitParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+    let error =
+        match SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit, BitterArena::default())
+            .run()
+        {
+            | Ok(_) => panic!("monadic metadata must not accept arguments"),
+            | Err(error) => error,
+        };
+
+    assert!(matches!(
+        error,
+        crate::bitter::DesugarError::InvalidMonadicMeta {
+            source: MonadicMetaError::Arguments { found: 1 },
+            ..
+        }
+    ));
+}
+
+#[test]
+fn monadic_metadata_extent_survives_bitter_formatting() {
+    let source = "(@[monadic] fn value => ret value) argument";
+    let mut parser = Parser::new();
+    let unit = parser::SourceUnitParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+    let output =
+        SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit, BitterArena::default())
+            .run()
+            .unwrap();
+    let rendered = output.root.ugly(&BitterFormatter::new(&output.arena));
+
+    let mut reparsed = Parser::new();
+    let unit = parser::SourceUnitParser::new()
+        .parse(&rendered, &LocationCtx::Plain, &mut reparsed, lexer::Lexer::new(&rendered))
+        .unwrap_or_else(|error| panic!("expected `{rendered}` to reparse: {error}"));
+    let output =
+        SourceUnitDesugarer::new(&reparsed.spans, &reparsed.arena, unit, BitterArena::default())
+            .run()
+            .unwrap();
+    let bitter::Term::App(bitter::App(function, _)) = output.arena.terms[&output.root] else {
+        panic!("expected the reparsed root to remain an application")
+    };
+
+    assert!(matches!(output.arena.terms[&function], bitter::Term::MoBlock(_)));
+}
+
+#[test]
+fn retired_monadic_keywords_are_available_as_identifiers() {
+    let source = "let monadic = 1 in let monadically = monadic in monadically";
+    let mut parser = Parser::new();
+    parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .expect("retired monadic keywords must lex as ordinary identifiers");
 }
 
 #[test]

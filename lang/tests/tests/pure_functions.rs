@@ -220,7 +220,7 @@ begin
   that
 
   def ! translated =
-    monadic
+    @[monadic] begin
       let identity : forall (A : VType) . A -> A =
         fn (A : VType) => fn (value : A) => value
       in

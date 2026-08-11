@@ -123,7 +123,10 @@ Zydeco's value/computation distinction should remain visible in ordinary code:
 These forms also reveal evaluation order. Mobile block entries contribute types and values to a context;
 application, `do`, matching, and relative-monad operations order computations within that context.
 
-Use `monadic ... end` when a block is intentionally interpreted through a relative monad and its algebra.
+Use `@[monadic] term` when a term is intentionally interpreted through a relative monad and its algebra.
+Prefer `@[monadic] begin ... end` when explicit delimiters make a multiline translation easier to scan.
+Metadata extends across its following term, so parenthesize the annotated term before applying its result:
+`(@[monadic] term) argument`.
 Ordinary CBPV sequencing reads most directly as `do`.
 Use `match` to eliminate data values and `comatch` to construct a codata computation,
 with one arm per visible constructor or destructor case.

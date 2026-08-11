@@ -33,8 +33,6 @@ extern {
         "that" => Tok::That,
         "do" => Tok::Do,
         "ret" => Tok::Ret,
-        "monadic" => Tok::Monadic,
-        "monadically" => Tok::Monadically,
         "fn" => Tok::Fn,
         "pi" => Tok::Pi,
         "fix" => Tok::Fix,
@@ -129,8 +127,6 @@ MetaId: String = {
     "that" => "that".into(),
     "do" => "do".into(),
     "ret" => "ret".into(),
-    "monadic" => "monadic".into(),
-    "monadically" => "monadically".into(),
     "fn" => "fn".into(),
     "pi" => "pi".into(),
     "fix" => "fix".into(),
@@ -361,8 +357,6 @@ Term: Term = {
     "!" <TermGen<Term>> => Force(<>).into(),
     // ret
     "ret" <TermGen<Term>> => Return(<>).into(),
-    // monadic block
-    "monadic" <TermAnnId> "end" => MoBlock(<>).into(),
     // context-forming block
     "begin" <TermAnnId> "end" => Block(<>).into(),
     // abstraction (alternative syntax)
@@ -418,8 +412,6 @@ Term: Term = {
     "fn" <params:CoPatId> "=>" <term:TermGen<Term>> => Abs(<>).into(),
     // fixed point
     "fix" <binder:PatId> "=>" <term:TermGen<Term>> => Fix(<>).into(),
-    // monadically
-    "monadically" <TermGen<Term>> => MoBlock(<>).into(),
     // bind
     "do" <binder:PatId> "<-" <bindee:TermGen<Term>> ";" <tail:TermGen<Term>> => {
         Bind {<>}.into()

@@ -333,7 +333,7 @@ so a root file now reaches ZIR, analyzed ZASM, and amd64 emission without constr
 - [x] Let an imported block construct and return a pure value package.
 - [x] Define an abstract algebraic package with introduction values and a polymorphic eliminator.
 - [x] Define `Monad` and `Algebra` in an ordinary manifest library package.
-- [x] Resolve each `monadic` block against its lexical `Monad` and `Algebra` types.
+- [x] Resolve each `@[monadic]` term against its lexical `Monad` and `Algebra` types.
 - [x] Provide native runtime symbols for every exact host function retained in a linked executable.
 - [x] Rewrite the standard library as one complete term accepting Builtin and returning a public package.
 - [x] Import initial standard-library source components with `@[import(...)] _`.
@@ -685,8 +685,9 @@ Source-driver regressions assert those phase boundaries directly, and `lib/tests
 
 `lib/std/monad.zy` now defines `Monad` and `Algebra` as ordinary transparent types and returns them in a value
 package whose existential witnesses have manifest equations.
-A `monadic` node carries two hidden variable terms for these names; resolution therefore selects the definitions
-visible at that exact lexical site and records their users and block dependencies like any authored reference.
+A semantic monadic node lowered from `@[monadic]` carries two hidden variable terms for these names.
+Resolution therefore selects the definitions visible at that exact lexical site
+and records their users and block dependencies like any authored reference.
 The checker validates their higher kinds and stores the selected type constructors in the monadic translation
 environment instead of consulting declaration-era primitive cells.
 The imported package passes a minimal `Ret`-monad execution test, the interleaved monadic `PackPi` fixture,

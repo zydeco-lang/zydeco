@@ -289,16 +289,15 @@ uses the same rules, so interpreted and compiled programs agree without exposing
 Relative monads are defined as codata in the standard library (see
 `lib/std/monad.zy`). The module is a pure package-dependent function from Builtin to the `Monad` and `Algebra`
 type package, so importing and opening it requires neither a thunk nor a returned computation. Zydeco also
-implements *monadic blocks*, a
-generalized do-notation. A monadic block is translated during type checking
-via the algebra translation implemented in
+implements *monadic blocks*, a generalized do-notation selected by the `@[monadic]` metadata annotation.
+The annotation may attach to any term. During type checking, its payload undergoes the algebra translation implemented in
 `lang/statics/src/elaborate/monadic/mod.rs` and invoked from
 `lang/statics/src/check/mod.rs`.
 
-Each monadic block resolves `Monad` and `Algebra` as ordinary types at its lexical site.
-The checker verifies their expected higher kinds and records the selected constructors in the block's
-translation environment. Global types and terms used by the block are then reinterpreted under this
-lexically selected monad during translation. The block's preliminary typing environment retains lexical
+Each annotated term resolves `Monad` and `Algebra` as ordinary types at its lexical site.
+The checker verifies their expected higher kinds and records the selected constructors in the translation environment.
+Global types and terms used by the annotated payload are then reinterpreted under this lexically selected monad.
+The translation's preliminary typing environment retains lexical
 type bindings, including existential witnesses and transparent aliases, while term bindings still require
 the global, inlinable status needed by algebra translation.
 

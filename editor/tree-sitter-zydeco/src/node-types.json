@@ -136,14 +136,6 @@
         "named": true
       },
       {
-        "type": "monadic_block",
-        "named": true
-      },
-      {
-        "type": "monadically_expression",
-        "named": true
-      },
-      {
         "type": "parameter_expression",
         "named": true
       },
@@ -263,10 +255,6 @@
           },
           {
             "type": "match_expression",
-            "named": true
-          },
-          {
-            "type": "monadic_block",
             "named": true
           },
           {
@@ -507,10 +495,6 @@
           },
           {
             "type": "match_expression",
-            "named": true
-          },
-          {
-            "type": "monadic_block",
             "named": true
           },
           {
@@ -931,10 +915,6 @@
             "named": true
           },
           {
-            "type": "monadic_block",
-            "named": true
-          },
-          {
             "type": "parenthesized_term",
             "named": true
           },
@@ -1342,54 +1322,6 @@
         "types": [
           {
             "type": "metadata",
-            "named": true
-          }
-        ]
-      }
-    }
-  },
-  {
-    "type": "monadic_block",
-    "named": true,
-    "fields": {
-      "body": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "_term",
-            "named": true
-          },
-          {
-            "type": "labeled_term",
-            "named": true
-          },
-          {
-            "type": "named_term",
-            "named": true
-          },
-          {
-            "type": "punned_term",
-            "named": true
-          },
-          {
-            "type": "term_annotation",
-            "named": true
-          }
-        ]
-      }
-    }
-  },
-  {
-    "type": "monadically_expression",
-    "named": true,
-    "fields": {
-      "body": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "_term",
             "named": true
           }
         ]
@@ -1921,10 +1853,6 @@
             "named": true
           },
           {
-            "type": "monadic_block",
-            "named": true
-          },
-          {
             "type": "parenthesized_term",
             "named": true
           },
@@ -2246,14 +2174,6 @@
   },
   {
     "type": "match",
-    "named": false
-  },
-  {
-    "type": "monadic",
-    "named": false
-  },
-  {
-    "type": "monadically",
     "named": false
   },
   {

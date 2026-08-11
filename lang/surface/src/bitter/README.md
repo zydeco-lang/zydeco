@@ -41,6 +41,7 @@ them to bound variables.
   `App` nodes.
 - Inserts type annotations for literals, `ret`, and `thunk` so later phases see
   explicit types.
+- Consumes `@[monadic]` metadata into a monadic-translation node while preserving the annotated payload term.
 - Wraps definitions in `Sealed` when they should not be expanded accidentally.
 - Builds `PrimTerms` by inserting the internal kind/type terms and storing their
   `TermId`s in a `MultiCell`.
@@ -51,7 +52,7 @@ preserving their original source linkage.
 
 ## Errors and spans
 
-- `bitter::err` defines errors for malformed intrinsic metadata and incompatible
+- `bitter::err` defines errors for malformed intrinsic or monadic metadata and incompatible
   binding modifiers.
 - `bitter::span` provides `SpanView` implementations that retrieve spans via the
   `textual` back-mapping.

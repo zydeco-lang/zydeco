@@ -119,7 +119,7 @@ begin
   def ! mt_exnk (E: VType) : MonadTrans (ExnKT E) =
     let ! mt' (M: VType -> CType) (mo: Thk (Monad M)) =
       @[debug("generated and applied")]
-      monadic fn (E: VType) =>
+      (@[monadic] (fn (E: VType) =>
         @[debug("original")]
         let ! mo_exnk (E: VType) : Monad (ExnK E) =
           comatch
@@ -136,7 +136,7 @@ begin
         end
       :
         forall (E: VType) . MonadTransInner (ExnK E)
-      end M mo E triv
+      )) M mo E triv
     in
     ! detriv-mt (ExnKT E) mt'
   that

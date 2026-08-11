@@ -96,9 +96,8 @@ pub struct MonadicBasis {
     pub algebra: TermId,
 }
 
-/// `monadic ... end`
-#[derive(Clone, Debug)]
 /// Monadic block body kept as a single node until later translation.
+#[derive(Clone, Debug)]
 pub struct MoBlock {
     pub body: TermId,
     pub basis: MonadicBasis,

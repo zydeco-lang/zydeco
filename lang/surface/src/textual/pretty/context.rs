@@ -34,7 +34,6 @@ impl<'arena> GrammarContext<'arena> {
             | Term::Force(_)
             | Term::Ret(_)
             | Term::Block(_)
-            | Term::MoBlock(_)
             | Term::Data(_)
             | Term::CoData(_)
             | Term::Ctor(_)

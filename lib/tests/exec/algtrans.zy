@@ -50,7 +50,7 @@ begin
   def ! mo-return (E : VType) (mo : Thk (Monad (Exn E))) : Exn E Int =
     let ! translated =
       -- use mo
-      monadic
+      @[monadic] begin
         do a <- ret 1;
         ret a
       end
@@ -61,7 +61,7 @@ begin
   def ! mo-thunk (E : VType) (mo : Thk (Monad (Exn E))) : Exn E Int =
     let ! translated =
       -- use mo
-      monadic
+      @[monadic] begin
         do _ <- ret 1;
         ! { ret 1 }
       end
@@ -72,7 +72,7 @@ begin
   def ! mo-thunk-arg (E : VType) (mo : Thk (Monad (Exn E))) : Exn E Int =
     let ! translated =
       -- use mo
-      monadic
+      @[monadic] begin
         do _ <- ret 1;
         (fn (x : Thk _) => ! x) {
           ret 1
@@ -90,7 +90,7 @@ begin
     X -> Exn E X =
     let ! translated =
       -- use mo
-      monadic
+      @[monadic] begin
         do _ <- ret -1;
         fn (X : VType) (a : X) =>
           ret a
@@ -115,7 +115,7 @@ begin
       -- .bindA Int { ! mo .return Int -1 }
       -- { fn (_: Int) => fn (X: CType) (algX: U (Algebra (Exn E) X)) (b: U X) => ! b }
       -- use mo
-      monadic
+      @[monadic] begin
         do _ <- ret -1;
         fn (X : CType) (b : Thk X) =>
           ! b
@@ -139,7 +139,7 @@ begin
   --   -- U (Algebra (Exn E) Y) -> U (X Y) -> (X Y))
   -- =
   --   use mo
-  --   monadic
+  --   @[monadic] begin
   --     do _ <- ret -1;
   --     -- forall (X: CType -> CType) (Y: CType) . U (X Y) -> X Y
   --     --
@@ -165,7 +165,7 @@ begin
   --         ! mo .return A a
   --       end
   --     } : Thunk (forall (A: VType) . A -> M A))
-  --   monadic
+  --   @[monadic] begin
   --     ! id
   --   end
   -- end
@@ -185,7 +185,7 @@ begin
   --         ! id~ B b
   --       end
   --     } : Thunk (forall (B: CType) . Thunk (Algebra M B) -> Thunk B -> B))
-  --   monadic
+  --   @[monadic] begin
   --     ! id~
   --   end
   -- end
@@ -211,7 +211,7 @@ begin
   --         ! alg .bindA A ma { fn a => do a <- ! dethunk A { ret a }; ! mo .return A a }
   --       end
   --     } : Thunk (forall (A: VType) . Thunk (M A) -> M A))
-  --   monadic
+  --   @[monadic] begin
   --     ! dethunk
   --   end
   -- end
