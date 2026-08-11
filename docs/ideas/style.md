@@ -235,7 +235,7 @@ annotate the corresponding labeled classifier.
 
 ## Layout and Comments
 
-Indent by two spaces and aim for at most 110 characters per line. A short binding may occupy one line.
+Indent by two spaces and aim for at most 100 characters per line. A short binding may occupy one line.
 For a longer binding, put one parameter on each line and place the residual classifier at the same indentation.
 Align `in` or `that` with the keyword that opened the binding.
 
@@ -246,7 +246,7 @@ def fix fold
   (list : List A)
   (empty : Thk B)
   (step : Thk (A -> Thk B -> B))
-  : B =
+: B =
   match list
   | +Nil(_) => ! empty
   | +Cons(head, tail) =>
@@ -260,7 +260,7 @@ Constructor and destructor sigils stay attached to their names.
 A short thunk such as `{ ret value }` fits naturally on one line;
 a multiline thunk receives one additional indentation level.
 Align the arms of `match`, `comatch`, `data`, and `codata`, then indent an arm body once.
-Multiline tuples and packages use trailing commas.
+Multiline tuples and packages align their closing delimiter with the opener and keep separators between items.
 
 `--|` writes Markdown documentation prose. A contiguous block becomes part of
 the repository documentation when it appears immediately above a `@[doc]`

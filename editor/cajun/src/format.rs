@@ -1,7 +1,7 @@
 use tower_lsp::lsp_types::{FormattingOptions, Position, Range, TextEdit};
 use zydeco_surface::textual::{
     Lexer, SourceUnitParser,
-    fmt::{PrettyFormatter, PrettyOptions},
+    fmt::{IndentWidth, PrettyFormatter, PrettyOptions},
     syntax::{LocationCtx, Parser},
 };
 use zydeco_utils::span::FileInfo;
@@ -38,9 +38,9 @@ pub(crate) struct DocumentFormatter {
 impl DocumentFormatter {
     pub(crate) fn from_lsp(options: &FormattingOptions) -> Self {
         let default = PrettyOptions::default();
-        let indent = isize::try_from(options.tab_size)
+        let indent = usize::try_from(options.tab_size)
             .ok()
-            .filter(|indent| *indent > 0)
+            .and_then(IndentWidth::new)
             .unwrap_or(default.indent);
         Self { options: default.with_indent(indent) }
     }

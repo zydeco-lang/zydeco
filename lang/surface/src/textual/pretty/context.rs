@@ -1,5 +1,81 @@
 //! Typed descriptions of the parser grammar accepted at child positions.
 
+use super::super::syntax::*;
+
+/// The parser-side grammar facts needed while reconstructing parentheses.
+pub(super) struct GrammarContext<'arena> {
+    arena: &'arena TextArena,
+}
+
+impl<'arena> GrammarContext<'arena> {
+    pub(super) fn new(arena: &'arena TextArena) -> Self {
+        Self { arena }
+    }
+
+    pub(super) fn accepts_term(&self, requirement: TermRequirement, term: TermId) -> bool {
+        requirement.accepts(self.term_class(term))
+    }
+
+    pub(super) fn accepts_pattern(&self, requirement: PatternRequirement, pattern: PatId) -> bool {
+        requirement.accepts(self.pattern_class(pattern))
+    }
+
+    fn term_class(&self, term: TermId) -> RenderedTermClass {
+        match &self.arena.terms[&term] {
+            | Term::SourceBoundary(SourceBoundary(inner)) => self.term_class(*inner),
+            | Term::Named(_) | Term::Label(_) => RenderedTermClass::AnnotatedOnly,
+            // These constructors either are atoms in the grammar or are
+            // deliberately rendered with their own delimiters.
+            | Term::Ann(_)
+            | Term::Hole(_)
+            | Term::Var(_)
+            | Term::Paren(_)
+            | Term::Thunk(_)
+            | Term::Force(_)
+            | Term::Ret(_)
+            | Term::Block(_)
+            | Term::MoBlock(_)
+            | Term::Data(_)
+            | Term::CoData(_)
+            | Term::Ctor(_)
+            | Term::Match(_)
+            | Term::CoMatch(_)
+            | Term::Lit(_) => RenderedTermClass::Term(TermPrecedence::Atom),
+            | Term::Proj(_) => RenderedTermClass::Term(TermPrecedence::Projection),
+            | Term::App(_) | Term::Dtor(_) => RenderedTermClass::Term(TermPrecedence::Application),
+            | Term::Prod(_) => RenderedTermClass::Term(TermPrecedence::Product),
+            | Term::Arrow(_) => RenderedTermClass::Term(TermPrecedence::Arrow),
+            | Term::Pi(_) | Term::Forall(_) | Term::Sigma(_) | Term::Exists(_) => {
+                RenderedTermClass::Term(TermPrecedence::Quantifier)
+            }
+            | Term::Meta(_)
+            | Term::Abs(_)
+            | Term::KontCall(_)
+            | Term::Fix(_)
+            | Term::Do(_)
+            | Term::Let(_)
+            | Term::Param(_)
+            | Term::ContextBind(_) => RenderedTermClass::Term(TermPrecedence::Binder),
+        }
+    }
+
+    fn pattern_class(&self, pattern: PatId) -> RenderedPatternClass {
+        match &self.arena.pats[&pattern] {
+            | Pattern::Named(_) | Pattern::Project(_) => RenderedPatternClass::AnnotatedOnly,
+            // Annotations and manifest patterns include their own parentheses
+            // in canonical output, so their rendered form is an ordinary
+            // `Pattern` even though their payload grammar is `PatternAnn`.
+            | Pattern::Ann(_)
+            | Pattern::Manifest(_)
+            | Pattern::Hole(_)
+            | Pattern::Var(_)
+            | Pattern::Ctor(_)
+            | Pattern::Alias(_)
+            | Pattern::Paren(_) => RenderedPatternClass::Pattern,
+        }
+    }
+}
+
 /// Precedence levels of the `Term` nonterminal, ordered from tightest to
 /// loosest. These mirror the levels documented in `parser.lalrpop`.
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -25,13 +101,13 @@ pub(super) enum TermRequirement {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub(super) enum RenderedTermClass {
+enum RenderedTermClass {
     Term(TermPrecedence),
     AnnotatedOnly,
 }
 
 impl TermRequirement {
-    pub(super) fn accepts(self, class: RenderedTermClass) -> bool {
+    fn accepts(self, class: RenderedTermClass) -> bool {
         match (self, class) {
             | (Self::Annotated, _) => true,
             | (Self::Any, RenderedTermClass::Term(_)) => true,
@@ -50,13 +126,13 @@ pub(super) enum PatternRequirement {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub(super) enum RenderedPatternClass {
+enum RenderedPatternClass {
     Pattern,
     AnnotatedOnly,
 }
 
 impl PatternRequirement {
-    pub(super) fn accepts(self, class: RenderedPatternClass) -> bool {
+    fn accepts(self, class: RenderedPatternClass) -> bool {
         match (self, class) {
             | (Self::Annotated, _) => true,
             | (Self::Pattern, RenderedPatternClass::Pattern) => true,

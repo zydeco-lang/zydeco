@@ -51,7 +51,8 @@ pub mod textual {
     /// A wrapper for the formatters.
     pub mod fmt {
         pub use super::pretty::{
-            LayoutIntentions, NamedTermPunningAudit, Parentheses, PrettyFormatter, PrettyOptions,
+            IndentWidth, LayoutIntentions, NamedTermPunningAudit, Parentheses, PrettyFormatter,
+            PrettyOptions,
         };
         pub use super::ugly::*;
     }

@@ -1,6 +1,6 @@
 //! Author-selected layout retained alongside canonical syntax.
 
-use super::syntax::EntityId;
+use super::syntax::{EntityId, PatId};
 use std::{
     collections::BTreeSet,
     ops::{Bound::Excluded, Range},
@@ -33,6 +33,38 @@ pub enum BreakIntent {
     Broken,
     /// The anchors were separated by at least one empty line.
     BlankLine,
+}
+
+/// A grammatical source gap whose vertical layout may be retained.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum LayoutBoundary {
+    Between { before: EntityId, after: EntityId },
+    AfterStart { enclosing: EntityId, first: EntityId },
+    AfterArmPrefix { payload: EntityId },
+    BeforeExistentialParameter { enclosing: EntityId, parameter: PatId },
+    BeforeEnd { last: EntityId, enclosing: EntityId },
+}
+
+impl LayoutBoundary {
+    pub fn between(before: impl Into<EntityId>, after: impl Into<EntityId>) -> Self {
+        Self::Between { before: before.into(), after: after.into() }
+    }
+
+    pub fn after_start(enclosing: impl Into<EntityId>, first: impl Into<EntityId>) -> Self {
+        Self::AfterStart { enclosing: enclosing.into(), first: first.into() }
+    }
+
+    pub fn after_arm_prefix(payload: impl Into<EntityId>) -> Self {
+        Self::AfterArmPrefix { payload: payload.into() }
+    }
+
+    pub fn before_existential_parameter(enclosing: impl Into<EntityId>, parameter: PatId) -> Self {
+        Self::BeforeExistentialParameter { enclosing: enclosing.into(), parameter }
+    }
+
+    pub fn before_end(last: impl Into<EntityId>, enclosing: impl Into<EntityId>) -> Self {
+        Self::BeforeEnd { last: last.into(), enclosing: enclosing.into() }
+    }
 }
 
 impl BreakIntent {
@@ -92,6 +124,9 @@ struct SourceLayoutId(usize);
 #[derive(Clone, Default, Debug)]
 pub struct SurfaceIntentions {
     line_extents: ArenaAssoc<EntityId, LineExtent>,
+    presentation_start_overrides: ArenaAssoc<EntityId, SourceLine>,
+    arm_prefix_breaks: ArenaAssoc<EntityId, BreakIntent>,
+    existential_parameter_starts: ArenaAssoc<PatId, SourceLine>,
     entity_sources: ArenaAssoc<EntityId, SourceLayoutId>,
     source_layouts: Vec<SourceLayout>,
 }
@@ -107,16 +142,37 @@ impl SurfaceIntentions {
         self.line_extents.insert_new(entity, extent);
     }
 
-    pub(crate) fn record_source_line_extents(
+    pub(crate) fn record_source_layout(
         &mut self, source: &str, trivia_owned_ranges: &[Range<usize>],
-        extents: impl IntoIterator<Item = (EntityId, LineExtent)>,
+        layouts: impl IntoIterator<Item = (EntityId, LineExtent, SourceLine)>,
+        arm_layouts: impl IntoIterator<Item = (EntityId, SourceLine, SourceLine)>,
+        existential_layouts: impl IntoIterator<Item = (PatId, SourceLine)>,
     ) {
         let source_id = SourceLayoutId(self.source_layouts.len());
         self.source_layouts.push(SourceLayout::new(source, trivia_owned_ranges));
-        extents.into_iter().for_each(|(entity, extent)| {
+        layouts.into_iter().for_each(|(entity, extent, presentation_start)| {
             self.line_extents.insert_new(entity, extent);
+            if presentation_start != extent.first {
+                self.presentation_start_overrides.insert_new(entity, presentation_start);
+            }
             self.entity_sources.insert_new(entity, source_id);
         });
+        arm_layouts.into_iter().for_each(|(payload, prefix, presentation_start)| {
+            let contains_blank_line = self.source_layouts[source_id.0]
+                .contains_blank_line_between(prefix, presentation_start);
+            let intent = BreakIntent::between(prefix, presentation_start, contains_blank_line);
+            self.arm_prefix_breaks.insert_new(payload, intent);
+        });
+        existential_layouts.into_iter().for_each(|(parameter, start)| {
+            self.existential_parameter_starts.insert_new(parameter, start);
+        });
+    }
+
+    fn presentation_start(&self, entity: EntityId) -> Option<SourceLine> {
+        self.presentation_start_overrides
+            .get(&entity)
+            .copied()
+            .or_else(|| self.line_extent(entity).map(|extent| extent.first))
     }
 
     fn break_intent(
@@ -133,26 +189,37 @@ impl SurfaceIntentions {
         BreakIntent::between(before, after, contains_blank_line)
     }
 
-    /// Return the observed boundary between two consecutive entities.
-    pub fn between(&self, before: EntityId, after: EntityId) -> Option<BreakIntent> {
-        let before_extent = self.line_extent(before)?;
-        let after_extent = self.line_extent(after)?;
-        Some(self.break_intent(before, before_extent.last, after, after_extent.first))
-    }
-
-    /// Return the observed boundary between an enclosing entity's start and
-    /// the first entity rendered inside it.
-    pub fn after_start(&self, enclosing: EntityId, first: EntityId) -> Option<BreakIntent> {
-        let enclosing_extent = self.line_extent(enclosing)?;
-        let first_extent = self.line_extent(first)?;
-        Some(self.break_intent(enclosing, enclosing_extent.first, first, first_extent.first))
-    }
-
-    /// Return the observed boundary between the final contained entity and an
-    /// enclosing entity's end.
-    pub fn before_end(&self, last: EntityId, enclosing: EntityId) -> Option<BreakIntent> {
-        let last_extent = self.line_extent(last)?;
-        let enclosing_extent = self.line_extent(enclosing)?;
-        Some(self.break_intent(last, last_extent.last, enclosing, enclosing_extent.last))
+    /// Return the observed vertical separation at one grammatical boundary.
+    pub fn at(&self, boundary: LayoutBoundary) -> Option<BreakIntent> {
+        match boundary {
+            | LayoutBoundary::Between { before, after } => {
+                let before_extent = self.line_extent(before)?;
+                let after_start = self.presentation_start(after)?;
+                Some(self.break_intent(before, before_extent.last, after, after_start))
+            }
+            | LayoutBoundary::AfterStart { enclosing, first } => {
+                let enclosing_extent = self.line_extent(enclosing)?;
+                let first_start = self.presentation_start(first)?;
+                Some(self.break_intent(enclosing, enclosing_extent.first, first, first_start))
+            }
+            | LayoutBoundary::AfterArmPrefix { payload } => {
+                self.arm_prefix_breaks.get(&payload).copied()
+            }
+            | LayoutBoundary::BeforeExistentialParameter { enclosing, parameter } => {
+                let enclosing_extent = self.line_extent(enclosing)?;
+                let parameter_start = self.existential_parameter_starts.get(&parameter).copied()?;
+                Some(self.break_intent(
+                    enclosing,
+                    enclosing_extent.first,
+                    parameter.into(),
+                    parameter_start,
+                ))
+            }
+            | LayoutBoundary::BeforeEnd { last, enclosing } => {
+                let last_extent = self.line_extent(last)?;
+                let enclosing_extent = self.line_extent(enclosing)?;
+                Some(self.break_intent(last, last_extent.last, enclosing, enclosing_extent.last))
+            }
+        }
     }
 }

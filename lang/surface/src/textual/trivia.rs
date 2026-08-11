@@ -18,6 +18,7 @@ use zydeco_utils::arena::{ArenaAccess, ArenaAssoc};
 #[derive(Clone, Default, Debug)]
 pub struct SurfaceTrivia {
     leading_comments: ArenaAssoc<EntityId, Vec<LeadingComment>>,
+    before_arm_comments: ArenaAssoc<EntityId, Vec<LeadingComment>>,
     trailing_comments: ArenaAssoc<EntityId, Vec<TrailingComment>>,
 }
 
@@ -25,6 +26,11 @@ impl SurfaceTrivia {
     /// Comments printed immediately before one textual entity.
     pub fn leading_comments(&self, entity: EntityId) -> &[LeadingComment] {
         self.leading_comments.get(&entity).map(Vec::as_slice).unwrap_or_default()
+    }
+
+    /// Comments printed before an arm whose first syntax entity has this ID.
+    pub fn before_arm_comments(&self, entity: EntityId) -> &[LeadingComment] {
+        self.before_arm_comments.get(&entity).map(Vec::as_slice).unwrap_or_default()
     }
 
     /// Comments printed after a complete root entity.
@@ -48,6 +54,12 @@ impl SurfaceTrivia {
             .flat_map(|(_, comments)| comments)
             .filter_map(|comment| comment.comment().as_documentation())
             .chain(
+                self.before_arm_comments
+                    .iter()
+                    .flat_map(|(_, comments)| comments)
+                    .filter_map(|comment| comment.comment().as_documentation()),
+            )
+            .chain(
                 self.trailing_comments
                     .iter()
                     .flat_map(|(_, comments)| comments)
@@ -56,9 +68,12 @@ impl SurfaceTrivia {
     }
 
     pub(crate) fn record_comments(&mut self, capture: CommentCapture) {
-        let CommentCapture { leading, trailing, .. } = capture;
+        let CommentCapture { leading, before_arms, trailing, .. } = capture;
         leading.into_iter().for_each(|(entity, comment)| {
             self.leading_comments.entry(entity).or_default().push(comment);
+        });
+        before_arms.into_iter().for_each(|(entity, comment)| {
+            self.before_arm_comments.entry(entity).or_default().push(comment);
         });
         trailing.into_iter().for_each(|(entity, comment)| {
             self.trailing_comments.entry(entity).or_default().push(comment);

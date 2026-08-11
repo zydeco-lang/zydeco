@@ -250,12 +250,14 @@ CoPatternAtom: CoPattern = {
 };
 
 ExistentialParameter: ExistentialParameter = {
-    <annotations:MetaAnnotation*> "(" <binder:PatternAnnId> "as" <definition:TermId>
+    <start:@L> <annotations:MetaAnnotation*> "(" <binder:PatternAnnId> "as" <definition:TermId>
         <classifier:(":" <TermId>)?> <r:@R> ")" => {
         let binder = parser.manifest_pattern(binder, definition, classifier, r, loc);
+        parser.existential_prefix(binder, start);
         ExistentialParameter { annotations, binder }
     },
-    <annotations:MetaAnnotation*> "(" <binder:PatternAnnId> ")" => {
+    <start:@L> <annotations:MetaAnnotation*> "(" <binder:PatternAnnId> ")" => {
+        parser.existential_prefix(binder, start);
         ExistentialParameter { annotations, binder }
     },
 };
@@ -284,19 +286,32 @@ Placement: Placement = {
 Data: Data = <arms:DataArm*> => Data {<>};
 #[inline]
 DataArm: DataArm = {
-    "|" <name:CtorName> ":" <param:TermId> => DataArm {<>},
+    <start:@L> "|" <name:CtorName> ":" <param:TermId> => {
+        parser.arm_prefix(param, param, start);
+        DataArm { name, param }
+    },
 };
 CoData: CoData = <arms:CoDataArm*> => CoData {<>};
 #[inline]
 CoDataArm: CoDataArm = {
-    "|" <name:DtorName> <params:CoPatId?> ":" <out: TermId> => CoDataArm {<>},
+    <start:@L> "|" <name:DtorName> <params:CoPatId?> ":" <out: TermId> => {
+        let first: EntityId = params.map_or_else(|| out.into(), Into::into);
+        parser.arm_prefix(first, out, start);
+        CoDataArm { name, params, out }
+    },
 };
 
 Matcher: Matcher<PatId, TermId> = {
-    "|" <binder:PatId> "=>" <tail:TermId> => Matcher {<>},
+    <start:@L> "|" <binder:PatId> "=>" <tail:TermId> => {
+        parser.arm_prefix(binder, tail, start);
+        Matcher { binder, tail }
+    },
 };
 CoMatcher: CoMatcherParam = {
-    "|" <params:CoPatId> "=>" <tail:TermId> => CoMatcherParam {<>},
+    <start:@L> "|" <params:CoPatId> "=>" <tail:TermId> => {
+        parser.arm_prefix(params, tail, start);
+        CoMatcherParam { params, tail }
+    },
 };
 
 #[inline]

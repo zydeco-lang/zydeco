@@ -57,11 +57,15 @@ resolution.
   debugging and diagnostics.
 - `fmt::PrettyFormatter` renders the same textual arenas through compositional documents. `PrettyOptions`
   configures width, indentation, whether recorded line layout is consulted, and whether redundant singleton
-  grouping parentheses are preserved. Preserved multiline parentheses remain as indentation boundaries, while
-  fitting child groups stay on one line until the configured width requires a break.
+  grouping parentheses are preserved. A meaningful multiline group remains an indentation boundary, while an
+  application's own compact-or-hanging layout subsumes an extra singleton wrapper.
+
+The [surface formatting design](../../../../docs/ideas/formatting.md) states the printer's preservation laws,
+boundary algebra, and canonical layout families.
 
 Line comments are canonicalized as `--` or `--|` lines, nested block comments retain their delimiters and relative
-indentation, and all comment kinds are always printed. Recorded blank separators remain blank separators after
+indentation, and all comment kinds are always printed. Arm-boundary anchors keep comments on the intended side of
+`|` and its header. Recorded blank separators remain blank separators after
 formatting. Only an uninterrupted adjacent `--|` block attaches to a following `@[doc]` annotation, so an ordinary
 comment continues to separate documentation prose from the annotation. Source analysis warns about every `--|`
 block without such an attachment because that block contributes no repository documentation.

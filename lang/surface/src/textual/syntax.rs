@@ -250,8 +250,23 @@ pub struct SourceUnit {
 
 /* --------------------------------- Parser --------------------------------- */
 
+#[derive(Copy, Clone)]
+struct ArmPrefix {
+    first: EntityId,
+    payload: EntityId,
+    start: usize,
+}
+
+#[derive(Copy, Clone)]
+struct ExistentialPrefix {
+    parameter: PatId,
+    start: usize,
+}
+
 pub struct Parser {
     allocator: IdAllocator<TextualScope>,
+    arm_prefixes: Vec<ArmPrefix>,
+    existential_prefixes: Vec<ExistentialPrefix>,
     pub spans: SpanArena,
     pub arena: TextArena,
 }
@@ -265,7 +280,13 @@ impl Default for Parser {
 impl Parser {
     /// Create a parser with one ID issuer for all textual entity categories.
     pub fn new() -> Self {
-        Self { allocator: IdAllocator::new(), spans: SpanArena::new(), arena: TextArena::default() }
+        Self {
+            allocator: IdAllocator::new(),
+            arm_prefixes: Vec::new(),
+            existential_prefixes: Vec::new(),
+            spans: SpanArena::new(),
+            arena: TextArena::default(),
+        }
     }
     /// Finish parsing, dropping the issuer and returning only durable storage.
     pub fn finish(self) -> (SpanArena, TextArena) {
@@ -304,6 +325,18 @@ impl Parser {
         self.arena.terms.insert_new(id, term.inner);
         id
     }
+    /// Record an arm marker. `first` owns comments before the arm, while
+    /// `payload` supplies the layout boundary after its header.
+    pub fn arm_prefix(
+        &mut self, first: impl Into<EntityId>, payload: impl Into<EntityId>, start: usize,
+    ) {
+        self.arm_prefixes.push(ArmPrefix { first: first.into(), payload: payload.into(), start });
+    }
+    /// Record the first token of an existential parameter, whose surrounding
+    /// parentheses are grammar-owned rather than represented by its binder.
+    pub fn existential_prefix(&mut self, parameter: PatId, start: usize) {
+        self.existential_prefixes.push(ExistentialPrefix { parameter, start });
+    }
     /// Retain source presentation after one public parser entry point succeeds.
     ///
     /// Existing spans let printers reuse selected layout decisions without
@@ -320,20 +353,61 @@ impl Parser {
                 Some(SpannedEntity::new(*entity, start, end))
             })
             .collect::<Vec<_>>();
-        let comments = CommentCapture::new(source, &entities);
-        let extents = entities
+        let arm_prefixes = self
+            .arm_prefixes
+            .iter()
+            .copied()
+            .filter(|prefix| self.arena.intentions.line_extent(prefix.payload).is_none())
+            .collect::<Vec<_>>();
+        let existential_prefixes = self
+            .existential_prefixes
+            .iter()
+            .copied()
+            .filter(|prefix| self.arena.intentions.line_extent(prefix.parameter.into()).is_none())
+            .collect::<Vec<_>>();
+        let comments = CommentCapture::new(source, &entities)
+            .with_arm_prefixes(arm_prefixes.iter().map(|prefix| (prefix.first, prefix.start)));
+        let layouts = entities
             .iter()
             .map(|entity| {
                 let occupied_end = entity.end().saturating_sub(1).max(entity.start());
                 let first = file_info.trans_span2(entity.start()).line;
                 let last = file_info.trans_span2(occupied_end).line;
-                (entity.entity(), LineExtent::new(first, last))
+                let presentation_start =
+                    comments.presentation_start(entity.entity(), entity.start());
+                let presentation_start = SourceLine(file_info.trans_span2(presentation_start).line);
+                (entity.entity(), LineExtent::new(first, last), presentation_start)
             })
             .collect::<Vec<_>>();
-        self.arena.intentions.record_source_line_extents(
+        let arm_layouts = arm_prefixes
+            .iter()
+            .filter_map(|prefix| {
+                let (payload_start, payload_end) = self.spans[&prefix.payload].get_cursor1();
+                source.get(payload_start..payload_end)?;
+                let prefix_line = SourceLine(file_info.trans_span2(prefix.start).line);
+                let presentation_start = comments.arm_payload_start(prefix.payload, payload_start);
+                let presentation_line = SourceLine(file_info.trans_span2(presentation_start).line);
+                Some((prefix.payload, prefix_line, presentation_line))
+            })
+            .collect::<Vec<_>>();
+        let existential_layouts = existential_prefixes
+            .iter()
+            .filter_map(|prefix| {
+                let (parameter_start, parameter_end) =
+                    self.spans[&EntityId::Pat(prefix.parameter)].get_cursor1();
+                source.get(parameter_start..parameter_end)?;
+                let presentation_start =
+                    comments.presentation_start(prefix.parameter.into(), parameter_start);
+                let prefix_start = prefix.start.min(presentation_start);
+                Some((prefix.parameter, SourceLine(file_info.trans_span2(prefix_start).line)))
+            })
+            .collect::<Vec<_>>();
+        self.arena.intentions.record_source_layout(
             source,
             comments.layout_exclusions(),
-            extents,
+            layouts,
+            arm_layouts,
+            existential_layouts,
         );
         self.arena.trivia.record_comments(comments);
     }

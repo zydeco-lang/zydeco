@@ -2,7 +2,7 @@ use super::super::{
     lexer::{LexicalToken, LexicalTokenKind, LexicalTokens},
     syntax::EntityId,
 };
-use std::{cmp::Reverse, ops::Range, sync::Arc};
+use std::{cmp::Reverse, collections::BTreeMap, ops::Range, sync::Arc};
 
 /// Markdown recovered from one contiguous `--|` source block.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -208,6 +208,7 @@ impl SpannedEntity {
 
 pub(crate) struct CommentCapture {
     pub(super) leading: Vec<(EntityId, LeadingComment)>,
+    pub(super) before_arms: Vec<(EntityId, LeadingComment)>,
     pub(super) trailing: Vec<(EntityId, TrailingComment)>,
     pub(super) layout_exclusions: Vec<Range<usize>>,
 }
@@ -271,13 +272,51 @@ impl CommentCapture {
         let layout_exclusions =
             comment_ranges.chain(leading_ranges).chain(trailing_ranges).collect();
 
-        Self { leading, trailing, layout_exclusions }
+        Self { leading, before_arms: Vec::new(), trailing, layout_exclusions }
+    }
+
+    /// Move comments written before an arm marker from the arm's first entity
+    /// to the structural boundary. Comments written after the marker remain
+    /// attached to that entity.
+    pub(crate) fn with_arm_prefixes(
+        mut self, prefixes: impl IntoIterator<Item = (EntityId, usize)>,
+    ) -> Self {
+        let prefixes = prefixes.into_iter().collect::<BTreeMap<_, _>>();
+        let (before_arms, leading) = self.leading.into_iter().partition(|(entity, comment)| {
+            prefixes.get(entity).is_some_and(|prefix| comment.comment().range().start < *prefix)
+        });
+        self.leading = leading;
+        self.before_arms = before_arms;
+        self
     }
 
     /// Byte ranges whose vertical whitespace is already represented by the
     /// captured comment separations.
     pub(crate) fn layout_exclusions(&self) -> &[Range<usize>] {
         &self.layout_exclusions
+    }
+
+    /// Include an entity's leading trivia in the start used for boundary
+    /// layout. The comment content remains owned by `SurfaceTrivia`.
+    pub(crate) fn presentation_start(&self, entity: EntityId, syntax_start: usize) -> usize {
+        self.leading
+            .iter()
+            .chain(self.before_arms.iter())
+            .filter(|(anchor, _)| *anchor == entity)
+            .map(|(_, comment)| comment.comment().range().start)
+            .min()
+            .unwrap_or(syntax_start)
+    }
+
+    /// Start of the entity payload including comments written after an arm
+    /// marker, but excluding comments that precede the whole arm.
+    pub(crate) fn arm_payload_start(&self, entity: EntityId, syntax_start: usize) -> usize {
+        self.leading
+            .iter()
+            .filter(|(anchor, _)| *anchor == entity)
+            .map(|(_, comment)| comment.comment().range().start)
+            .min()
+            .unwrap_or(syntax_start)
     }
 
     fn leading_next_start(
