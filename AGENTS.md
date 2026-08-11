@@ -199,3 +199,22 @@ and use `with_*/set_*` names consistently for optional configuration.
 Prefer `derive` and `derive_more` over manual implementations
 when their generated behavior exactly matches the intended semantics;
 write a manual implementation only when it must enforce additional invariants.
+
+## Commit Message Convention
+
+Format: `prefix: lowercase description`
+
+No capitalization after the colon. No trailing period. One line.
+The description should say *what changed*, not *why* (the diff shows what; the description names it).
+
+## Prefix Vocabulary
+
+| Prefix | When to use |
+|--------|-------------|
+| `feat`  | A user-visible capability that did not exist before. |
+| `incr`  | Incremental progress on an existing feature: bug fixes, polish, tuning, small additions. |
+| `sisy`  | Mechanical changes: formatting, linting, renaming passes, internal restructuring with no behavior change. |
+| `vibe`  | Exploratory, prototype-quality work. Expect rough edges; may be revised or replaced. |
+| `repo`  | Repository housekeeping: migrations, dependency changes, formatter config, file reorganization, one-off maintenance. |
+| `docs`  | Documentation-only changes (AGENTS.md, README, inline Rust docs/comments). |
+| `test`  | Adding or updating tests without changing production code. |
