@@ -55,6 +55,11 @@ impl<'arena> LayoutFragment<'arena> {
         self.boundary_mode = boundary_mode;
         self
     }
+
+    fn map_document(self, transform: impl FnOnce(RcDoc<'arena>) -> RcDoc<'arena>) -> Self {
+        let Self { document, anchors, boundary_mode } = self;
+        Self { document: transform(document), anchors, boundary_mode }
+    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -417,16 +422,53 @@ impl<'arena> PrettyFormatter<'arena> {
         &'arena self, head: LayoutFragment<'arena>, separator: &'static str,
         body: LayoutFragment<'arena>, continuation_indent: isize,
     ) -> LayoutFragment<'arena> {
-        let LayoutFragment { document, anchors, boundary_mode } = head;
-        let joined = document.clone().append(RcDoc::space()).append(RcDoc::text(separator));
-        let broken = document.append(RcDoc::hardline()).append(RcDoc::text(separator));
-        let document = self.single_line_or(joined, broken);
         self.grouped_join(
-            LayoutFragment { document, anchors, boundary_mode },
+            head.map_document(|document| self.append_aligned_separator(document, separator)),
             RcDoc::nil(),
             body,
             continuation_indent,
         )
+    }
+
+    /// Append a separator to a one-line constituent, or align it with the
+    /// enclosing construct when that constituent renders across lines.
+    fn append_aligned_separator(
+        &self, document: RcDoc<'arena>, separator: &'static str,
+    ) -> RcDoc<'arena> {
+        let joined = document.clone().append(RcDoc::space()).append(RcDoc::text(separator));
+        let broken = document.append(RcDoc::hardline()).append(RcDoc::text(separator));
+        self.single_line_or(joined, broken)
+    }
+
+    /// Put a separator before the right-hand constituent when the left-hand
+    /// constituent is multiline, keeping the right-hand constituent on the
+    /// separator's line whenever it still fits.
+    fn leading_separator_join(
+        &'arena self, left: LayoutFragment<'arena>, separator: &'static str,
+        right: LayoutFragment<'arena>, continuation_indent: isize,
+    ) -> LayoutFragment<'arena> {
+        let intention = self.arena.intentions.between(left.anchors.last, right.anchors.first);
+        let anchors = LayoutAnchors { first: left.anchors.first, last: right.anchors.last };
+        let inline_head =
+            left.document.clone().append(RcDoc::space()).append(RcDoc::text(separator));
+        let aligned_head = left.document.append(RcDoc::hardline()).append(RcDoc::text(separator));
+        let inline = inline_head.clone().append(self.layout_boundary(
+            intention,
+            BoundaryLayout::after("", 0, continuation_indent),
+            right.boundary_mode,
+            right.document.clone(),
+        ));
+        // An ordinary entity-to-entity break is satisfied by moving the
+        // separator. A blank line still belongs between it and the right side.
+        let aligned_intention = intention.filter(|intent| *intent == BreakIntent::BlankLine);
+        let aligned = aligned_head.append(self.layout_boundary(
+            aligned_intention,
+            BoundaryLayout::after("", 0, continuation_indent),
+            right.boundary_mode,
+            right.document,
+        ));
+        let document = self.select_by_single_line(inline_head, inline, aligned);
+        LayoutFragment { document, anchors, boundary_mode: left.boundary_mode }
     }
 
     fn grouped_separated(
@@ -591,19 +633,21 @@ impl<'arena> PrettyFormatter<'arena> {
     fn single_line_or(
         &self, single_line: RcDoc<'arena>, multiline: RcDoc<'arena>,
     ) -> RcDoc<'arena> {
+        self.select_by_single_line(single_line.clone(), single_line, multiline)
+    }
+
+    fn select_by_single_line(
+        &self, probe: RcDoc<'arena>, single_line: RcDoc<'arena>, multiline: RcDoc<'arena>,
+    ) -> RcDoc<'arena> {
         let line_width = self.options.line_width;
         DOC_ALLOCATOR
             .column(move |column| {
+                let probe = probe.clone();
                 let single_line = single_line.clone();
                 let multiline = multiline.clone();
                 DOC_ALLOCATOR
                     .nesting(move |nesting| {
-                        if Self::document_fits_on_one_line(
-                            &single_line,
-                            column,
-                            nesting,
-                            line_width,
-                        ) {
+                        if Self::document_fits_on_one_line(&probe, column, nesting, line_width) {
                             single_line.clone()
                         } else {
                             multiline.clone()
@@ -1418,24 +1462,30 @@ impl<'arena> PrettyFormatter<'arena> {
         let head = modifiers
             .chain(std::iter::once(self.pattern(*binder)))
             .chain(params.iter().map(|params| self.copattern(*params)));
-        let head = RcDoc::intersperse(head, RcDoc::space());
-        let head = match ty {
-            | Some(ty) => head.append(self.fragment_boundary(
-                self.arena.intentions.between(head_last, (*ty).into()),
-                BoundaryLayout::after(" :", 0, 0),
-                self.term_fragment(*ty),
-            )),
-            | None => head,
+        let head = LayoutFragment {
+            document: RcDoc::intersperse(head, RcDoc::space()),
+            anchors: LayoutAnchors { first: (*binder).into(), last: head_last },
+            boundary_mode: BoundaryMode::Regular,
         };
         let placement = self.placement(placement);
-        let bindee_fragment = self.term_fragment(*bindee);
-        let bindee_document = self.bindee_with_placement(bindee_fragment.document, placement);
-        head.append(self.layout_boundary(
-            self.arena.intentions.between(head_last, (*bindee).into()),
-            BoundaryLayout::after(" =", 0, self.options.indent),
-            bindee_fragment.boundary_mode,
-            bindee_document,
-        ))
+        let bindee = self
+            .term_fragment(*bindee)
+            .map_document(|document| self.bindee_with_placement(document, placement));
+        match ty {
+            | Some(ty) => {
+                let assignment = self.leading_separator_join(
+                    self.term_fragment(*ty),
+                    "=",
+                    bindee,
+                    self.options.indent,
+                );
+                self.leading_separator_join(head, ":", assignment, 0).document
+            }
+            | None => {
+                self.join(head, BoundaryLayout::after(" =", 0, self.options.indent), bindee)
+                    .document
+            }
+        }
     }
 
     fn sequence_tail(&'arena self, before: EntityId, tail: TermId) -> RcDoc<'arena> {
@@ -2210,6 +2260,98 @@ mod tests {
 
             let reparsed = ParsedSource::new(&formatted);
             assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        });
+    }
+
+    #[test]
+    fn aligns_binding_separators_after_multiline_parameters_and_types() {
+        let cases = [
+            (
+                concat!(
+                    "begin\n",
+                    "  let f (\n",
+                    "    parameter : Type\n",
+                    "  ) : Result = value in\n",
+                    "  f\n",
+                    "end",
+                ),
+                concat!(
+                    "begin\n",
+                    "  let f (\n",
+                    "    parameter : Type\n",
+                    "  )\n",
+                    "  : Result = value in\n",
+                    "  f\n",
+                    "end\n",
+                ),
+            ),
+            (
+                concat!(
+                    "begin\n",
+                    "  def f : (\n",
+                    "    Result\n",
+                    "  ) = value that\n",
+                    "  f\n",
+                    "end",
+                ),
+                concat!(
+                    "begin\n",
+                    "  def f : (\n",
+                    "    Result\n",
+                    "  )\n",
+                    "  = value that\n",
+                    "  f\n",
+                    "end\n",
+                ),
+            ),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, expected, "source: {source}");
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        });
+    }
+
+    #[test]
+    fn aligns_binding_separators_after_width_wrapping() {
+        let options = PrettyOptions::default()
+            .with_line_width(38)
+            .with_layout_intentions(LayoutIntentions::Ignore);
+        let cases = [
+            (
+                "let f (first : FirstClassifier) (second : SecondClassifier) : Result = value in f",
+                concat!(
+                    "let f (first : FirstClassifier)\n",
+                    "  (second : SecondClassifier)\n",
+                    ": Result = value in\n",
+                    "f\n",
+                ),
+            ),
+            (
+                "def f : FirstClassifier * SecondClassifier * ThirdClassifier = value that f",
+                concat!(
+                    "def f :\n",
+                    "  FirstClassifier * SecondClassifier\n",
+                    "* ThirdClassifier\n",
+                    "= value that\n",
+                    "f\n",
+                ),
+            ),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render_with_options(options);
+            assert_eq!(formatted, expected, "source: {source}");
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render_with_options(options));
             assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
         });
     }
