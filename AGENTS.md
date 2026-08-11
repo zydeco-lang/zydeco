@@ -2,6 +2,41 @@
 
 This file is guidance for automated assistants working in this repository.
 
+## Language and Terminology
+
+Use English for identifiers and repository prose, including code comments and documentation.
+Communicate with users in their preferred language;
+when no preference is stated, follow the language of the current conversation.
+Keep established technical terms in English when that preserves precision and searchability,
+unless the user asks for translated or localized terminology.
+
+## Working Principles
+
+### Extract reusable rules
+
+Look for recurring shapes in syntax, architecture, failures, and design decisions while working.
+When several observations support one explanation, state the shared rule
+and suggest the abstraction or convention that follows from it.
+Distinguish evidence from inference, and prefer connections that simplify future decisions.
+A genuinely surprising observation is valuable when it compresses several facts into one useful principle;
+do not manufacture novelty for its own sake.
+
+### Preserve a reviewable design record
+
+As substantial exploratory or design-heavy work converges,
+propose formalizing it as a Markdown or Typst review document.
+The proposal should identify the questions that the document would make easier to review, such as the problem,
+constraints, alternatives, chosen invariants, representative examples, and remaining uncertainty.
+Propose this artifact rather than creating it automatically, and skip the suggestion for small routine changes.
+
+### Prefer direct transitions
+
+Treat a clean transition to the intended design as the default.
+When replacing a design, update its callers and remove the superseded path in the same change.
+Do not retain deprecated APIs, adapters, dual representations, migration parsers,
+or other compatibility layers unless the user explicitly requests a compatibility boundary.
+When compatibility is required, make its scope and intended removal condition explicit.
+
 ## Adding a Dependency
 
 All Rust dependencies are managed in the top-level `Cargo.toml` file, under `[workspace.dependencies]`.
@@ -73,6 +108,12 @@ Each phase generally includes `syntax`, `arena`, `err`, `fmt`, and `span` module
 ## Notes for Changes
 
 - Prefer updating `DESIGN.md` or `CONTRIBUTE.md` when modifying architecture or workflows.
+- Put exploratory design notes in `docs/ideas/`. Explain the motivating problem, relevant constraints,
+  alternatives, and the principles by which a later decision should be judged.
+- Put chronological implementation worklogs in `docs/logs/`. Record attempts, observations, failures,
+  measurements, decisions, and unresolved questions so later work can build on the evidence.
+- Cross-link a design note and its worklogs instead of duplicating their contents. Keep the stable design account
+  in the idea or canonical architecture document, and keep the history of how it was reached in the worklog.
 - Keep doc examples consistent with CLI flags and scripts in the repo.
 - If you add new example projects under `lib/`, consider wiring them into `lang/tests`.
 
