@@ -1,8 +1,8 @@
 use derive_more::{Index, IntoIterator};
 pub use la_arena::RawIdx;
 use la_arena::{Arena as LaArena, Idx as LaIdx};
+use rustc_hash::FxHashMap as HashMap;
 use std::{
-    collections::HashMap,
     hash::Hash,
     marker::PhantomData,
     ops::AddAssign,
@@ -413,7 +413,7 @@ mod impls {
         Scope: ArenaSchema<Id>,
     {
         pub fn new() -> Self {
-            Self { map: HashMap::new(), marker: PhantomData }
+            Self { map: HashMap::default(), marker: PhantomData }
         }
         /// Insert a value whose externally-issued ID must not already be present.
         pub fn insert_new(&mut self, id: Id, val: Scope::Item) {
@@ -573,7 +573,7 @@ mod impls {
 
     impl<Id, T> ArenaAssoc<Id, T> {
         pub fn new() -> Self {
-            ArenaAssoc { map: HashMap::new() }
+            ArenaAssoc { map: HashMap::default() }
         }
         pub fn iter(&self) -> impl Iterator<Item = (&Id, &T)> {
             self.into_iter()

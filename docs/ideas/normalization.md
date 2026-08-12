@@ -213,3 +213,37 @@ Before publishing the package signature, normalization substitutes provider-loca
 that every disclosed right-hand side is closed over the public static context.
 Normalization may simplify an equation the provider exposes, but it must not recover an equation hidden
 by ordinary existential sealing.
+
+## Arena-Wide Finalization
+
+Type checking constructs types as an arena-backed directed acyclic graph. Many arena IDs therefore share the same
+tails, especially the nested products and existentials used for package signatures. Once local inference closes,
+hole solutions are fixed for the remainder of the check, and the resolved or normalized form of a type ID is a stable
+function of that ID and the frozen solution table.
+
+Finalization exploits that stability with one pass-wide context. Hole resolution maintains a shared map from
+each visited `TypeId` to its resolved `TypeId` and a set of unresolved fills. It walks every arena root, rebuilds only
+paths whose children changed, and reuses the result whenever another root reaches an already visited node. After
+resolution completes, filled normalization uses one shared kind map and one shared type map for the complete arena.
+New nodes produced by beta reduction, projection, or structural rebuilding join the same memoized graph.
+
+The pass preserves three invariants:
+
+- every original arena ID remains a valid lookup key, even when its stored structure is replaced by a resolved form;
+- `kinds_normalized` and `types_normalized` contain the normal form associated with every finalized ID; and
+- missing solutions and sort mismatches remain checker diagnostics rather than partial normalized values exposed to
+  later compiler phases.
+
+For a graph with `V` type and kind IDs and `E` child edges, structural finalization takes `O(V + E)` work plus
+the intrinsic cost of reductions that create new nodes. A separate memo per arena root instead performs the sum of
+all reachable subgraphs, which approaches quadratic work for long package-signature spines. Sharing the context is
+therefore the algorithmic correction. Internal arena maps and finalization working sets use FxHash because their keys
+are compiler-owned identities or structural queries and do not require a denial-of-service-resistant hasher. This
+improves the constant factor without weakening the semantic identity boundary; denser tables remain a possible
+representation change where key-space-aware sparse storage is unnecessary.
+
+This eager arena-wide pass is an intermediate architecture. A future query-driven semantic model may normalize only
+closed types requested by a consumer, as described in the
+[query type-system worklog](../logs/query-type-system-worklog.md#5-make-normalization-and-consumers-demand-driven).
+The shared finalizer establishes the same essential boundary now: inference mutates local facts, then finalization
+reads a stable solution graph and publishes reusable semantic forms.

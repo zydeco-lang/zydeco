@@ -1,5 +1,5 @@
 use super::{syntax::*, *};
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use zydeco_utils::arena::ArenaAccess;
 
 /* ------------------------- Existential type scope ------------------------- */
@@ -91,7 +91,7 @@ struct InferenceOccurs {
 
 impl InferenceOccurs {
     fn new(needle: FillId) -> Self {
-        Self { needle, visiting_kinds: HashSet::new(), visiting_fills: HashSet::new() }
+        Self { needle, visiting_kinds: HashSet::default(), visiting_fills: HashSet::default() }
     }
 
     fn in_annotation(&mut self, annotation: AnnId, tycker: &mut Tycker<'_>) -> Result<bool> {
@@ -134,12 +134,12 @@ impl TypeSupportCollector {
     fn new() -> Self {
         Self {
             support: TypeSupport::default(),
-            bound: HashSet::new(),
+            bound: HashSet::default(),
             pack_scope: SkolemScope::default(),
-            visiting_fills: HashSet::new(),
-            visiting_vars: HashSet::new(),
-            visiting_datas: HashSet::new(),
-            visiting_codatas: HashSet::new(),
+            visiting_fills: HashSet::default(),
+            visiting_vars: HashSet::default(),
+            visiting_datas: HashSet::default(),
+            visiting_codatas: HashSet::default(),
         }
     }
 
@@ -942,7 +942,7 @@ struct InferenceRefinement;
 impl InferenceRefinement {
     fn unresolved_type_fill(tycker: &Tycker<'_>, root: TypeId) -> Result<Option<FillId>> {
         let mut current = root;
-        let mut visited = HashSet::new();
+        let mut visited = HashSet::default();
         loop {
             match tycker.statics.types_pre[&current] {
                 | Fillable::Done(_) => return Ok(None),
@@ -1111,7 +1111,7 @@ impl FillId {
 
     fn unresolved_head(tycker: &Tycker<'_>, candidate: AnnId) -> Option<(FillId, AnnId)> {
         let mut annotation = candidate;
-        let mut visited = HashSet::new();
+        let mut visited = HashSet::default();
         loop {
             let fill = match annotation {
                 | AnnId::Set => return None,
@@ -1143,6 +1143,43 @@ impl FillId {
     }
 }
 
+/// Pass-wide hole resolution after inference has stopped mutating solutions.
+#[derive(Default)]
+pub(crate) struct HoleResolver {
+    types: HashMap<TypeId, TypeId>,
+    missing: HashSet<FillId>,
+}
+
+impl HoleResolver {
+    pub(crate) fn resolve_k(
+        &mut self, root: TypeId, tycker: &mut Tycker<'_>,
+    ) -> ResultKont<TypeId> {
+        let result = self.resolve(root, tycker);
+        tycker.err_p_to_k(result)
+    }
+
+    fn resolve(&mut self, root: TypeId, tycker: &mut Tycker<'_>) -> Result<TypeId> {
+        if let Some(resolved) = self.types.get(&root).copied() {
+            return Ok(resolved);
+        }
+        root.resolve_holes(tycker, self)
+    }
+
+    fn remember(&mut self, roots: impl IntoIterator<Item = TypeId>, resolved: TypeId) -> TypeId {
+        roots.into_iter().filter(|root| *root != resolved).for_each(|root| {
+            self.types.insert(root, resolved);
+        });
+        self.types.insert(resolved, resolved);
+        resolved
+    }
+
+    pub(crate) fn into_missing(self) -> Vec<FillId> {
+        let mut missing = self.missing.into_iter().collect::<Vec<_>>();
+        missing.sort_unstable();
+        missing
+    }
+}
+
 impl TypeId {
     pub fn solution_k(&self, tycker: &mut Tycker<'_>) -> ResultKont<(TypeId, Vec<FillId>)> {
         let res = self.solution(tycker);
@@ -1150,10 +1187,20 @@ impl TypeId {
     }
     /// Solve unfilled types as much as possible; returns the final type and the unfilled holes
     pub fn solution(&self, tycker: &mut Tycker<'_>) -> Result<(TypeId, Vec<FillId>)> {
+        let mut resolver = HoleResolver::default();
+        let resolved = resolver.resolve(*self, tycker)?;
+        Ok((resolved, resolver.into_missing()))
+    }
+
+    fn resolve_holes(
+        &self, tycker: &mut Tycker<'_>, resolver: &mut HoleResolver,
+    ) -> Result<TypeId> {
+        let root = *self;
         let mut res = *self;
-        let mut fills = Vec::new();
+        let mut aliases = Vec::new();
         // recursively lookup unfilled types as much as possible
         while let Fillable::Fill(fill) = tycker.statics.types_pre[&res].to_owned() {
+            aliases.push(res);
             let solu = match tycker.statics.solus.get(&fill).cloned() {
                 | None => break,
                 | Some(AnnId::Type(ty)) => ty,
@@ -1162,11 +1209,14 @@ impl TypeId {
                 }
             };
             res = solu;
+            if let Some(resolved) = resolver.types.get(&res).copied() {
+                return Ok(resolver.remember(aliases.into_iter().chain([root]), resolved));
+            }
         }
         let env = tycker.statics.env_type[&res].clone();
         let res = match tycker.statics.types_pre[&res].to_owned() {
             | Fillable::Fill(fill) => {
-                fills.push(fill);
+                resolver.missing.insert(fill);
                 res
             }
             | Fillable::Done(ty) => match ty {
@@ -1174,8 +1224,7 @@ impl TypeId {
                 | Type::Abs(ty) => {
                     let Abs(tpat, ty) = ty;
                     let tpat_ = tpat;
-                    let (ty_, fills_) = ty.solution(tycker)?;
-                    fills.extend(fills_);
+                    let ty_ = resolver.resolve(ty, tycker)?;
                     if ty == ty_ {
                         res
                     } else {
@@ -1189,10 +1238,8 @@ impl TypeId {
                 }
                 | Type::App(ty) => {
                     let App(f_ty, a_ty) = ty;
-                    let (f_ty_, fills_) = f_ty.solution(tycker)?;
-                    fills.extend(fills_);
-                    let (a_ty_, fills_) = a_ty.solution(tycker)?;
-                    fills.extend(fills_);
+                    let f_ty_ = resolver.resolve(f_ty, tycker)?;
+                    let a_ty_ = resolver.resolve(a_ty, tycker)?;
                     if f_ty == f_ty_ && a_ty == a_ty_ {
                         res
                     } else {
@@ -1206,8 +1253,7 @@ impl TypeId {
                 }
                 | Type::Named(ty) => {
                     let Named(name, inner) = ty;
-                    let (inner_, fills_) = inner.solution(tycker)?;
-                    fills.extend(fills_);
+                    let inner_ = resolver.resolve(inner, tycker)?;
                     if inner == inner_ {
                         res
                     } else {
@@ -1221,8 +1267,7 @@ impl TypeId {
                 }
                 | Type::Label(ty) => {
                     let Label(name, inner) = ty;
-                    let (inner_, fills_) = inner.solution(tycker)?;
-                    fills.extend(fills_);
+                    let inner_ = resolver.resolve(inner, tycker)?;
                     if inner == inner_ {
                         res
                     } else {
@@ -1236,8 +1281,7 @@ impl TypeId {
                 }
                 | Type::Proj(ty) => {
                     let Proj(head, name) = ty;
-                    let (head_, fills_) = head.solution(tycker)?;
-                    fills.extend(fills_);
+                    let head_ = resolver.resolve(head, tycker)?;
                     match tycker.statics.types_pre[&head_].to_owned() {
                         | Fillable::Done(Type::Named(Named(found, inner))) if found == name => {
                             inner
@@ -1260,10 +1304,8 @@ impl TypeId {
                 | Type::OS(_) => res,
                 | Type::Arrow(ty) => {
                     let Arrow(ty1, ty2) = ty;
-                    let (ty1_, fills_) = ty1.solution(tycker)?;
-                    fills.extend(fills_);
-                    let (ty2_, fills_) = ty2.solution(tycker)?;
-                    fills.extend(fills_);
+                    let ty1_ = resolver.resolve(ty1, tycker)?;
+                    let ty2_ = resolver.resolve(ty2, tycker)?;
                     if ty1 == ty1_ && ty2 == ty2_ {
                         res
                     } else {
@@ -1276,10 +1318,8 @@ impl TypeId {
                     }
                 }
                 | Type::VArrow(ValueArrow(ty1, ty2)) => {
-                    let (ty1_, fills_) = ty1.solution(tycker)?;
-                    fills.extend(fills_);
-                    let (ty2_, fills_) = ty2.solution(tycker)?;
-                    fills.extend(fills_);
+                    let ty1_ = resolver.resolve(ty1, tycker)?;
+                    let ty2_ = resolver.resolve(ty2, tycker)?;
                     if ty1 == ty1_ && ty2 == ty2_ {
                         res
                     } else {
@@ -1294,8 +1334,7 @@ impl TypeId {
                 | Type::VForall(ty) => {
                     let ValueForall(tpat, ty) = ty;
                     let tpat_ = tpat;
-                    let (ty_, fills_) = ty.solution(tycker)?;
-                    fills.extend(fills_);
+                    let ty_ = resolver.resolve(ty, tycker)?;
                     if ty == ty_ {
                         res
                     } else {
@@ -1309,10 +1348,8 @@ impl TypeId {
                 }
                 | Type::VPackPi(pack_pi) => {
                     let ValuePackPi { domain, witnesses, codomain } = pack_pi;
-                    let (domain_, domain_fills) = domain.solution(tycker)?;
-                    fills.extend(domain_fills);
-                    let (codomain_, codomain_fills) = codomain.solution(tycker)?;
-                    fills.extend(codomain_fills);
+                    let domain_ = resolver.resolve(domain, tycker)?;
+                    let codomain_ = resolver.resolve(codomain, tycker)?;
                     if domain == domain_ && codomain == codomain_ {
                         res
                     } else {
@@ -1327,8 +1364,7 @@ impl TypeId {
                 | Type::Forall(ty) => {
                     let Forall(tpat, ty) = ty;
                     let tpat_ = tpat;
-                    let (ty_, fills_) = ty.solution(tycker)?;
-                    fills.extend(fills_);
+                    let ty_ = resolver.resolve(ty, tycker)?;
                     if ty == ty_ {
                         res
                     } else {
@@ -1342,10 +1378,8 @@ impl TypeId {
                 }
                 | Type::PackPi(pack_pi) => {
                     let PackPi { domain, witnesses, codomain } = pack_pi;
-                    let (domain_, domain_fills) = domain.solution(tycker)?;
-                    fills.extend(domain_fills);
-                    let (codomain_, codomain_fills) = codomain.solution(tycker)?;
-                    fills.extend(codomain_fills);
+                    let domain_ = resolver.resolve(domain, tycker)?;
+                    let codomain_ = resolver.resolve(codomain, tycker)?;
                     if domain == domain_ && codomain == codomain_ {
                         res
                     } else {
@@ -1359,10 +1393,8 @@ impl TypeId {
                 }
                 | Type::Prod(ty) => {
                     let Prod(ty1, ty2) = ty;
-                    let (ty1_, fills_) = ty1.solution(tycker)?;
-                    fills.extend(fills_);
-                    let (ty2_, fills_) = ty2.solution(tycker)?;
-                    fills.extend(fills_);
+                    let ty1_ = resolver.resolve(ty1, tycker)?;
+                    let ty2_ = resolver.resolve(ty2, tycker)?;
                     if ty1 == ty1_ && ty2 == ty2_ {
                         res
                     } else {
@@ -1379,13 +1411,11 @@ impl TypeId {
                     let (mode, definition_changed) = match mode {
                         | ExistsMode::Abstract => (ExistsMode::Abstract, false),
                         | ExistsMode::Manifest(definition) => {
-                            let (definition_, definition_fills) = definition.solution(tycker)?;
-                            fills.extend(definition_fills);
+                            let definition_ = resolver.resolve(definition, tycker)?;
                             (ExistsMode::Manifest(definition_), definition != definition_)
                         }
                     };
-                    let (body_, body_fills) = body.solution(tycker)?;
-                    fills.extend(body_fills);
+                    let body_ = resolver.resolve(body, tycker)?;
                     if !definition_changed && body == body_ {
                         res
                     } else {
@@ -1399,8 +1429,7 @@ impl TypeId {
                 }
                 | Type::ManifestKind(manifest) => {
                     let ManifestKind { binder, definition, body } = manifest;
-                    let (body_, body_fills) = body.solution(tycker)?;
-                    fills.extend(body_fills);
+                    let body_ = resolver.resolve(body, tycker)?;
                     if body == body_ {
                         res
                     } else {
@@ -1418,8 +1447,7 @@ impl TypeId {
                     let arms_ = arms
                         .into_iter()
                         .map(|(ctor, ty)| {
-                            let (ty_, fills_) = ty.solution(tycker)?;
-                            fills.extend(fills_);
+                            let ty_ = resolver.resolve(ty, tycker)?;
                             if ty == ty_ {
                                 Ok((ctor, ty))
                             } else {
@@ -1441,8 +1469,7 @@ impl TypeId {
                     let arms_ = arms
                         .into_iter()
                         .map(|(dtor, ty)| {
-                            let (ty_, fills_) = ty.solution(tycker)?;
-                            fills.extend(fills_);
+                            let ty_ = resolver.resolve(ty, tycker)?;
                             if ty == ty_ {
                                 Ok((dtor, ty))
                             } else {
@@ -1460,7 +1487,7 @@ impl TypeId {
                 }
             },
         };
-        Ok((res, fills))
+        Ok(resolver.remember(aliases.into_iter().chain([root, res]), res))
     }
 }
 
@@ -1550,25 +1577,52 @@ impl<'a> Tycker<'a> {
 
 /* ------------------------------ Normalization ----------------------------- */
 
-impl KindId {
-    pub fn do_normalize_filled_k(self, tycker: &mut Tycker<'_>) -> ResultKont<()> {
-        let res = self.do_normalize_filled(tycker);
-        tycker.err_p_to_k(res)
+/// Pass-wide memoization for filled kind and type normalization.
+///
+/// A single context is shared by every arena root after inference closes, so
+/// overlapping type subgraphs are normalized only once.
+#[derive(Default)]
+pub(crate) struct FilledNormalizer {
+    kinds: HashMap<KindId, KindId>,
+    types: HashMap<TypeId, TypeId>,
+}
+
+impl FilledNormalizer {
+    pub(crate) fn normalize_kind_k(
+        &mut self, root: KindId, tycker: &mut Tycker<'_>,
+    ) -> ResultKont<()> {
+        let result = self.normalize_kind(root, tycker);
+        tycker.err_p_to_k(result)
     }
-    pub fn do_normalize_filled(self, tycker: &mut Tycker<'_>) -> Result<()> {
-        let mut memo = std::collections::HashMap::new();
-        let _ = self.filled_norm_id(tycker, &mut memo)?;
+
+    fn normalize_kind(&mut self, root: KindId, tycker: &mut Tycker<'_>) -> Result<()> {
+        let _ = root.filled_norm_id(tycker, self)?;
         Ok(())
     }
+
+    pub(crate) fn normalize_type_k(
+        &mut self, root: TypeId, tycker: &mut Tycker<'_>,
+    ) -> ResultKont<()> {
+        let result = self.normalize_type(root, tycker);
+        tycker.err_p_to_k(result)
+    }
+
+    fn normalize_type(&mut self, root: TypeId, tycker: &mut Tycker<'_>) -> Result<()> {
+        let _ = root.filled_norm_id(tycker, self)?;
+        Ok(())
+    }
+}
+
+impl KindId {
     fn filled_norm_id(
-        self, tycker: &mut Tycker<'_>, memo: &mut std::collections::HashMap<KindId, KindId>,
+        self, tycker: &mut Tycker<'_>, norm: &mut FilledNormalizer,
     ) -> Result<KindId> {
-        if let Some(norm) = memo.get(&self).cloned() {
+        if let Some(norm) = norm.kinds.get(&self).cloned() {
             return Ok(norm);
         }
         let res = match tycker.statics.kinds_pre[&self].to_owned() {
             | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).cloned() {
-                | Some(AnnId::Kind(kd)) => kd.filled_norm_id(tycker, memo)?,
+                | Some(AnnId::Kind(kd)) => kd.filled_norm_id(tycker, norm)?,
                 | Some(AnnId::Set | AnnId::Type(_)) => {
                     let _: ResultKont<()> =
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller());
@@ -1585,8 +1639,8 @@ impl KindId {
             | Fillable::Done(kind) => match kind {
                 | Kind::VType(VType) | Kind::CType(CType) => self,
                 | Kind::Arrow(Arrow(from, to)) => {
-                    let from_norm = from.filled_norm_id(tycker, memo)?;
-                    let to_norm = to.filled_norm_id(tycker, memo)?;
+                    let from_norm = from.filled_norm_id(tycker, norm)?;
+                    let to_norm = to.filled_norm_id(tycker, norm)?;
                     if from_norm == from && to_norm == to {
                         self
                     } else {
@@ -1594,7 +1648,7 @@ impl KindId {
                     }
                 }
                 | Kind::Label(Label(name, inner)) => {
-                    let inner_norm = inner.filled_norm_id(tycker, memo)?;
+                    let inner_norm = inner.filled_norm_id(tycker, norm)?;
                     if inner_norm == inner {
                         self
                     } else {
@@ -1603,40 +1657,35 @@ impl KindId {
                 }
             },
         };
-        memo.insert(self, res);
-        memo.insert(res, res);
+        norm.kinds.insert(self, res);
+        if self != res {
+            norm.kinds.insert(res, res);
+        }
         if let Fillable::Done(kind) = tycker.statics.kinds_pre[&res].to_owned() {
-            let _ = tycker.statics.kinds_normalized.upsert(self, kind.clone());
-            let _ = tycker.statics.kinds_normalized.upsert(res, kind);
+            if self == res {
+                let _ = tycker.statics.kinds_normalized.upsert(self, kind);
+            } else {
+                let _ = tycker.statics.kinds_normalized.upsert(self, kind.clone());
+                let _ = tycker.statics.kinds_normalized.upsert(res, kind);
+            }
         }
         Ok(res)
     }
 }
 
 impl TypeId {
-    pub fn do_normalize_filled_k(self, tycker: &mut Tycker<'_>) -> ResultKont<()> {
-        let res = self.do_normalize_filled(tycker);
-        tycker.err_p_to_k(res)
-    }
-    pub fn do_normalize_filled(self, tycker: &mut Tycker<'_>) -> Result<()> {
-        let mut memo = std::collections::HashMap::new();
-        let mut memo_kd = std::collections::HashMap::new();
-        let _ = self.filled_norm_id(tycker, &mut memo, &mut memo_kd)?;
-        Ok(())
-    }
     fn filled_norm_id(
-        self, tycker: &mut Tycker<'_>, memo: &mut std::collections::HashMap<TypeId, TypeId>,
-        memo_kd: &mut std::collections::HashMap<KindId, KindId>,
+        self, tycker: &mut Tycker<'_>, norm: &mut FilledNormalizer,
     ) -> Result<TypeId> {
-        if let Some(norm) = memo.get(&self).cloned() {
-            return Ok(norm);
+        if let Some(normalized) = norm.types.get(&self).cloned() {
+            return Ok(normalized);
         }
         let kd = tycker.statics.annotations_type[&self];
-        let kd_norm = kd.filled_norm_id(tycker, memo_kd)?;
+        let kd_norm = kd.filled_norm_id(tycker, norm)?;
         let env = tycker.statics.env_type[&self].clone();
         let res = match tycker.statics.types_pre[&self].to_owned() {
             | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).cloned() {
-                | Some(AnnId::Type(ty)) => ty.filled_norm_id(tycker, memo, memo_kd)?,
+                | Some(AnnId::Type(ty)) => ty.filled_norm_id(tycker, norm)?,
                 | Some(AnnId::Set | AnnId::Kind(_)) => {
                     let _: ResultKont<()> =
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller());
@@ -1667,7 +1716,7 @@ impl TypeId {
                 }
                 | Type::Abs(abs) => {
                     let Abs(tpat, body) = abs;
-                    let body_norm = body.filled_norm_id(tycker, memo, memo_kd)?;
+                    let body_norm = body.filled_norm_id(tycker, norm)?;
                     if body_norm == body && kd_norm == kd {
                         self
                     } else {
@@ -1676,8 +1725,8 @@ impl TypeId {
                 }
                 | Type::App(app) => {
                     let App(f_ty, a_ty) = app;
-                    let f_norm = f_ty.filled_norm_id(tycker, memo, memo_kd)?;
-                    let a_norm = a_ty.filled_norm_id(tycker, memo, memo_kd)?;
+                    let f_norm = f_ty.filled_norm_id(tycker, norm)?;
+                    let a_norm = a_ty.filled_norm_id(tycker, norm)?;
                     match tycker.statics.types_pre[&f_norm].to_owned() {
                         | Fillable::Done(Type::Abs(abs)) => {
                             let Abs(tpat, body) = abs;
@@ -1691,7 +1740,7 @@ impl TypeId {
                             if body_subst == self {
                                 self
                             } else {
-                                body_subst.filled_norm_id(tycker, memo, memo_kd)?
+                                body_subst.filled_norm_id(tycker, norm)?
                             }
                         }
                         | _ => {
@@ -1705,7 +1754,7 @@ impl TypeId {
                 }
                 | Type::Named(named) => {
                     let Named(name, inner) = named;
-                    let inner_norm = inner.filled_norm_id(tycker, memo, memo_kd)?;
+                    let inner_norm = inner.filled_norm_id(tycker, norm)?;
                     if inner_norm == inner && kd_norm == kd {
                         self
                     } else {
@@ -1714,7 +1763,7 @@ impl TypeId {
                 }
                 | Type::Label(label) => {
                     let Label(name, inner) = label;
-                    let inner_norm = inner.filled_norm_id(tycker, memo, memo_kd)?;
+                    let inner_norm = inner.filled_norm_id(tycker, norm)?;
                     if inner_norm == inner && kd_norm == kd {
                         self
                     } else {
@@ -1723,10 +1772,10 @@ impl TypeId {
                 }
                 | Type::Proj(proj) => {
                     let Proj(head, name) = proj;
-                    let head_norm = head.filled_norm_id(tycker, memo, memo_kd)?;
+                    let head_norm = head.filled_norm_id(tycker, norm)?;
                     match tycker.statics.types_pre[&head_norm].to_owned() {
                         | Fillable::Done(Type::Named(Named(found, inner))) if found == name => {
-                            inner.filled_norm_id(tycker, memo, memo_kd)?
+                            inner.filled_norm_id(tycker, norm)?
                         }
                         | _ if head_norm == head && kd_norm == kd => self,
                         | _ => Alloc::alloc(tycker, Proj(head_norm, name), kd_norm, &env),
@@ -1783,8 +1832,8 @@ impl TypeId {
                 }
                 | Type::Arrow(arr) => {
                     let Arrow(ty1, ty2) = arr;
-                    let ty1_norm = ty1.filled_norm_id(tycker, memo, memo_kd)?;
-                    let ty2_norm = ty2.filled_norm_id(tycker, memo, memo_kd)?;
+                    let ty1_norm = ty1.filled_norm_id(tycker, norm)?;
+                    let ty2_norm = ty2.filled_norm_id(tycker, norm)?;
                     if ty1_norm == ty1 && ty2_norm == ty2 && kd_norm == kd {
                         self
                     } else {
@@ -1792,8 +1841,8 @@ impl TypeId {
                     }
                 }
                 | Type::VArrow(ValueArrow(ty1, ty2)) => {
-                    let ty1_norm = ty1.filled_norm_id(tycker, memo, memo_kd)?;
-                    let ty2_norm = ty2.filled_norm_id(tycker, memo, memo_kd)?;
+                    let ty1_norm = ty1.filled_norm_id(tycker, norm)?;
+                    let ty2_norm = ty2.filled_norm_id(tycker, norm)?;
                     if ty1_norm == ty1 && ty2_norm == ty2 && kd_norm == kd {
                         self
                     } else {
@@ -1802,7 +1851,7 @@ impl TypeId {
                 }
                 | Type::VForall(forall) => {
                     let ValueForall(abst, body) = forall;
-                    let body_norm = body.filled_norm_id(tycker, memo, memo_kd)?;
+                    let body_norm = body.filled_norm_id(tycker, norm)?;
                     if body_norm == body && kd_norm == kd {
                         self
                     } else {
@@ -1811,8 +1860,8 @@ impl TypeId {
                 }
                 | Type::VPackPi(pack_pi) => {
                     let ValuePackPi { domain, witnesses, codomain } = pack_pi;
-                    let domain_norm = domain.filled_norm_id(tycker, memo, memo_kd)?;
-                    let codomain_norm = codomain.filled_norm_id(tycker, memo, memo_kd)?;
+                    let domain_norm = domain.filled_norm_id(tycker, norm)?;
+                    let codomain_norm = codomain.filled_norm_id(tycker, norm)?;
                     if domain_norm == domain && codomain_norm == codomain && kd_norm == kd {
                         self
                     } else {
@@ -1826,7 +1875,7 @@ impl TypeId {
                 }
                 | Type::Forall(forall) => {
                     let Forall(abst, body) = forall;
-                    let body_norm = body.filled_norm_id(tycker, memo, memo_kd)?;
+                    let body_norm = body.filled_norm_id(tycker, norm)?;
                     if body_norm == body && kd_norm == kd {
                         self
                     } else {
@@ -1835,8 +1884,8 @@ impl TypeId {
                 }
                 | Type::PackPi(pack_pi) => {
                     let PackPi { domain, witnesses, codomain } = pack_pi;
-                    let domain_norm = domain.filled_norm_id(tycker, memo, memo_kd)?;
-                    let codomain_norm = codomain.filled_norm_id(tycker, memo, memo_kd)?;
+                    let domain_norm = domain.filled_norm_id(tycker, norm)?;
+                    let codomain_norm = codomain.filled_norm_id(tycker, norm)?;
                     if domain_norm == domain && codomain_norm == codomain && kd_norm == kd {
                         self
                     } else {
@@ -1850,8 +1899,8 @@ impl TypeId {
                 }
                 | Type::Prod(prod) => {
                     let Prod(ty1, ty2) = prod;
-                    let ty1_norm = ty1.filled_norm_id(tycker, memo, memo_kd)?;
-                    let ty2_norm = ty2.filled_norm_id(tycker, memo, memo_kd)?;
+                    let ty1_norm = ty1.filled_norm_id(tycker, norm)?;
+                    let ty2_norm = ty2.filled_norm_id(tycker, norm)?;
                     if ty1_norm == ty1 && ty2_norm == ty2 && kd_norm == kd {
                         self
                     } else {
@@ -1863,12 +1912,11 @@ impl TypeId {
                     let (mode, definition_changed) = match mode {
                         | ExistsMode::Abstract => (ExistsMode::Abstract, false),
                         | ExistsMode::Manifest(definition) => {
-                            let definition_norm =
-                                definition.filled_norm_id(tycker, memo, memo_kd)?;
+                            let definition_norm = definition.filled_norm_id(tycker, norm)?;
                             (ExistsMode::Manifest(definition_norm), definition_norm != definition)
                         }
                     };
-                    let body_norm = body.filled_norm_id(tycker, memo, memo_kd)?;
+                    let body_norm = body.filled_norm_id(tycker, norm)?;
                     if !definition_changed && body_norm == body && kd_norm == kd {
                         self
                     } else {
@@ -1882,8 +1930,8 @@ impl TypeId {
                 }
                 | Type::ManifestKind(manifest) => {
                     let ManifestKind { binder, definition, body } = manifest;
-                    let definition_norm = definition.filled_norm_id(tycker, memo_kd)?;
-                    let body_norm = body.filled_norm_id(tycker, memo, memo_kd)?;
+                    let definition_norm = definition.filled_norm_id(tycker, norm)?;
+                    let body_norm = body.filled_norm_id(tycker, norm)?;
                     if definition_norm == definition && body_norm == body && kd_norm == kd {
                         self
                     } else {
@@ -1911,11 +1959,17 @@ impl TypeId {
                 }
             },
         };
-        memo.insert(self, res);
-        memo.insert(res, res);
+        norm.types.insert(self, res);
+        if self != res {
+            norm.types.insert(res, res);
+        }
         if let Fillable::Done(ty) = tycker.statics.types_pre[&res].to_owned() {
-            let _ = tycker.statics.types_normalized.upsert(self, ty.clone());
-            let _ = tycker.statics.types_normalized.upsert(res, ty);
+            if self == res {
+                let _ = tycker.statics.types_normalized.upsert(self, ty);
+            } else {
+                let _ = tycker.statics.types_normalized.upsert(self, ty.clone());
+                let _ = tycker.statics.types_normalized.upsert(res, ty);
+            }
         }
         Ok(res)
     }

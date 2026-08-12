@@ -1051,12 +1051,13 @@ impl<'a> Tycker<'a> {
         // before we go, resolve all holes with solutions (including nested ones)
         self.do_resolve_holes();
         self.collect_hole_solutions();
+        let mut normalizer = crate::normalize::FilledNormalizer::default();
         // normalize all kinds
         {
             let kind_ids: Vec<_> =
                 self.statics.kinds_pre.iter().map(|(id, _)| id.to_owned()).collect();
             for id in kind_ids {
-                id.do_normalize_filled_k(self)?;
+                normalizer.normalize_kind_k(id, self)?;
             }
         }
         // normalize all types
@@ -1064,7 +1065,7 @@ impl<'a> Tycker<'a> {
             let type_ids: Vec<_> =
                 self.statics.types_pre.iter().map(|(id, _)| id.to_owned()).collect();
             for id in type_ids {
-                id.do_normalize_filled_k(self)?;
+                normalizer.normalize_type_k(id, self)?;
             }
         }
         if self.errors.is_empty() {
@@ -1113,20 +1114,22 @@ impl<'a> Tycker<'a> {
     #[inline]
     pub fn do_resolve_holes(&mut self) {
         let type_ids: Vec<_> = self.statics.types_pre.iter().map(|(id, _)| id.to_owned()).collect();
+        let mut resolver = crate::normalize::HoleResolver::default();
         for id in type_ids {
-            let (solu, mut fills) = match id.solution_k(self) {
+            let solu = match resolver.resolve_k(id, self) {
                 | Ok(res) => res,
                 | Err(()) => continue,
             };
-            if !fills.is_empty() {
-                fills.sort_unstable();
-                fills.dedup();
-                // keep running tycker even after unsuccessful solving hole
-                let _: ResultKont<()> =
-                    self.err_k(TyckError::MissingSolution(fills), std::panic::Location::caller());
+            if solu != id {
+                let ty = self.statics.types_pre[&solu].to_owned();
+                self.statics.types_pre.replace_existing(id, ty);
             }
-            let ty = self.statics.types_pre[&solu].to_owned();
-            self.statics.types_pre.replace_existing(id, ty);
+        }
+        let missing = resolver.into_missing();
+        if !missing.is_empty() {
+            // keep running tycker even after unsuccessful solving hole
+            let _: ResultKont<()> =
+                self.err_k(TyckError::MissingSolution(missing), std::panic::Location::caller());
         }
     }
     fn collect_hole_solutions(&mut self) {

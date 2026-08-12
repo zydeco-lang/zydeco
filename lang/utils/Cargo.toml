@@ -13,6 +13,7 @@ description = "utilities for zydeco"
 [dependencies]
 la-arena = { workspace = true }
 im = { workspace = true }
+rustc-hash = { workspace = true }
 derive_more = { workspace = true, features = [
     "as_ref",
     "debug",
