@@ -1,6 +1,6 @@
 begin
   param (
-    (/Ret; /Unit; /Int; /int; /process) :
+    (/Ret; /Unit; /Int64; /int64; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -11,10 +11,10 @@ begin
     end
   that
 
-  do x <- (fn x => ret 1 : Bool -> Ret Int) +True();
-  do y <- (fn x => ret +True() : Int -> Ret Bool) +123;
-  do z <- (fn x => ret +True() : Int -> Ret Bool) -123;
-  do x <- ! (int/mul) x -1;
-  do x <- ! (int/add) 1 x;
+  do x <- (fn x => ret 1 : Bool -> Ret Int64) +True();
+  do y <- (fn x => ret +True() : Int64 -> Ret Bool) +123;
+  do z <- (fn x => ret +True() : Int64 -> Ret Bool) -123;
+  do x <- ! (int64/mul) x -1;
+  do x <- ! (int64/add) 1 x;
   ! (process/exit) x
 end

@@ -1,7 +1,7 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /OS; /int; /stdio; /process; builtin) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /OS; /int64; /stdio; /process; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
@@ -48,8 +48,8 @@ begin
     end
   that
 
-  def ! int_eq (left : Int) (right : Int) : Ret Bool =
-    ! (int/eq)
+  def ! int_eq (left : Int64) (right : Int64) : Ret Bool =
+    ! (int64/eq)
       (Ret Bool)
       left
       right
@@ -104,7 +104,7 @@ begin
       }
     end
   that
-  def ! choose (xs : List Int) : MList Int =
+  def ! choose (xs : List Int64) : MList Int64 =
     fn .done =>
       ret xs
   that
@@ -115,32 +115,32 @@ begin
     end
   that
 
-  let ! demo : MList (Pair Int Int) =
-    ! mlist .bind Int (Pair Int Int)
+  let ! demo : MList (Pair Int64 Int64) =
+    ! mlist .bind Int64 (Pair Int64 Int64)
       { ! choose +Cons(1, +Cons(2, +Nil())) }
       {
         fn x =>
-          ! mlist .bind Int (Pair Int Int)
+          ! mlist .bind Int64 (Pair Int64 Int64)
             { ! choose +Cons(3, +Cons(4, +Nil())) }
             {
               fn y =>
-                ! mlist .bind Unit (Pair Int Int)
+                ! mlist .bind Unit (Pair Int64 Int64)
                   {
-                    do r <- ! (int/add) x y;
+                    do r <- ! (int64/add) x y;
                     do b <- ! int_eq r 5;
                     ! guard b
                   }
                   {
                     fn _ =>
                       ! mlist .return
-                        (Pair Int Int)
+                        (Pair Int64 Int64)
                         +Cons(x, y)
                   }
             }
       }
   in
   do ps <- ! demo .done;
-  let fix print (ps : List (Pair Int Int)) (kont : Thk OS) : OS =
+  let fix print (ps : List (Pair Int64 Int64)) (kont : Thk OS) : OS =
     match ps
     | +Nil() => ! kont
     | +Cons(p, ps) =>

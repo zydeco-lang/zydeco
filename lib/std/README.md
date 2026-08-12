@@ -37,33 +37,39 @@ of these foundational operations.
 Operations whose inputs may be invalid report that fact in their types:
 
 ```zydeco
-string/get          : String -> Int -> Ret (Option Char)
-string/split_at     : String -> Int -> Ret (Option (String * String))
-string/parse_int    : String -> Ret (Option Int)
-char/from_codepoint : Int -> Ret (Option Char)
-list/get            : forall (A : VType) . List A -> Int -> Ret (Option A)
+string/get          : String -> Int64 -> Ret (Option Char)
+string/split_at     : String -> Int64 -> Ret (Option (String * String))
+string/parse_int    : String -> Ret (Option Int64)
+char/from_codepoint : Int64 -> Ret (Option Char)
+list/get            : forall (A : VType) . List A -> Int64 -> Ret (Option A)
 ```
 
 The Builtin forms implement these results as computation-polymorphic branches.
 The public library reifies a successful branch with `option/some` and a failed branch with `option/none`.
 Neither backend has a hidden sentinel, and malformed input does not panic the host runtime.
 
-Integer division and remainder still inherit the machine integer domain and are not yet wrapped in checked operations.
+The integer types are `Int8`, `Int16`, `Int32`, `Int64`, `UInt8`, `UInt16`, `UInt32`, and `UInt64`.
+Their representations and arithmetic domains correspond directly to Rust's `i8` through `i64` and `u8` through
+`u64`; arithmetic wraps at the selected width, and signed and unsigned comparisons remain distinct.
+Integer division and remainder are not yet wrapped in checked operations.
 The generic numeric capability layer deliberately excludes them;
-a future checked-arithmetic capability should make their failure behavior explicit
-before more integer representations are added.
+a future checked-arithmetic capability should make their failure behavior explicit.
 
-`Float` is an IEEE-754 binary64 value.
-Decimal literals such as `1.5` and scientific literals such as `2e3` have type `Float`.
-The `float` module provides arithmetic, comparisons, negation, and shortest round-trippable decimal rendering.
+`Float32` and `Float64` are IEEE-754 binary32 and binary64 values backed by Rust's `f32` and `f64`.
+Decimal and scientific literals use an expected `Float32` or `Float64` type and default to `Float64` otherwise.
+The float modules provide arithmetic, comparisons, negation, and shortest round-trippable decimal rendering.
 Division by zero, infinities, signed zero, and NaN follow IEEE-754 behavior.
-In particular, every ordered comparison with NaN is false, while `float/ne` reports true.
+In particular, every ordered comparison with NaN is false, while `float32/ne` and `float64/ne` report true.
 
-The `numeric` module contains explicit dictionaries for the common `Int` and `Float` operation families.
+The `numeric` module contains one explicit dictionary for each fixed-width numeric representation.
 Each instance discloses its `Scalar` carrier through a manifest type and nests additive,
 multiplicative, equality, and ordering capabilities.
 Generic functions accept these dictionaries as ordinary arguments;
 the standard library does not perform implicit instance search.
+
+The `primitives` module exposes the exact host-facing operations for low-level code.
+Its comparisons select one of two computation continuations directly, avoiding a dependency on the library's
+`Bool` representation. The width-specific top-level modules reify those branches as `Bool` and add derived helpers.
 
 ## Public modules
 
@@ -71,9 +77,11 @@ the standard library does not perform implicit instance search.
 - `option`: construction, elimination, mapping, chaining, defaults, and zipping.
 - `result`: successful and failed results, elimination, mapping, chaining, defaults, and predicates.
 - `list`: construction, right and left folds, append, map, reverse, length, safe indexing, head, and tail.
-- `numeric`: manifest `Int` and `Float` instances for explicitly passed, nested capability dictionaries.
-- `int`: arithmetic, complete comparisons, successor/predecessor, negation, extrema, and string rendering.
-- `float`: binary64 arithmetic, IEEE-754 comparisons, negation, and string rendering.
+- `numeric`: manifest instances for all ten numeric representations and explicitly passed capability dictionaries.
+- `primitives`: exact-width arithmetic, branch comparisons, and rendering at the host ABI boundary.
+- `int8` through `int64` and `uint8` through `uint64`: arithmetic, complete comparisons,
+  successor/predecessor, wrapping negation, extrema, and string rendering.
+- `float32` and `float64`: IEEE-754 arithmetic, comparisons, negation, and string rendering.
 - `char`: UTF-8 text rendering and checked Unicode codepoint conversion.
 - `string`: scalar-aware observation, safe decomposition, character-list conversion, concatenation, and parsing.
 - `bytes`: immutable octet buffers, concatenation, length, UTF-8 encoding, and checked UTF-8 decoding.

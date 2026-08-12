@@ -1,22 +1,22 @@
 begin
   param (
-    (/int; /char; /string; /process) :
+    (/int64; /char; /string; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  do twelve <- ! (int/to_string) 12;
+  do twelve <- ! (int64/to_string) 12;
   do combined <- ! (string/append) twelve twelve;
   do length <- ! (string/length) combined;
   do bytes <- ! (string/byte_length) combined;
   do first_code <- ! (char/codepoint) '1';
   do first_string <- ! (char/to_string) '1';
   do first_length <- ! (string/length) first_string;
-  do length_status <- ! (int/sub) length 4;
-  do bytes_status <- ! (int/sub) bytes 4;
-  do first_status <- ! (int/sub) first_code 49;
-  do first_length_status <- ! (int/sub) first_length 1;
-  do status <- ! (int/add) length_status bytes_status;
-  do status <- ! (int/add) status first_status;
-  do status <- ! (int/add) status first_length_status;
+  do length_status <- ! (int64/sub) length 4;
+  do bytes_status <- ! (int64/sub) bytes 4;
+  do first_status <- ! (int64/sub) first_code 49;
+  do first_length_status <- ! (int64/sub) first_length 1;
+  do status <- ! (int64/add) length_status bytes_status;
+  do status <- ! (int64/add) status first_status;
+  do status <- ! (int64/add) status first_length_status;
   ! (process/exit) status
 end

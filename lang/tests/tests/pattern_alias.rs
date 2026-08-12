@@ -38,7 +38,7 @@ fn rejects_static_pattern_aliases() {
     PatternAliasCase::assert_type_error(
         r#"
 begin
-  let (First; Second) : VType = Int in
+  let (First; Second) : VType = Int64 in
   ()
 end
 "#,
@@ -50,7 +50,7 @@ fn rejects_missing_field_projection_patterns() {
     PatternAliasCase::assert_type_error(
         r#"
 begin
-  let Point = (x :: Int) * (y :: Int) that
+  let Point = (x :: Int64) * (y :: Int64) that
   def point : Point = (x = 1, y = 2) that
   let (/z = missing) = point in
   missing
@@ -64,7 +64,7 @@ fn rejects_ambiguous_field_projection_patterns() {
     PatternAliasCase::assert_type_error(
         r#"
 begin
-  let Ambiguous = (left :: (x :: Int)) * (right :: (x :: Int)) that
+  let Ambiguous = (left :: (x :: Int64)) * (right :: (x :: Int64)) that
   def ambiguous : Ambiguous = (left = x = 1, right = x = 2) that
   let (/x = duplicate) = ambiguous in
   duplicate
@@ -80,7 +80,7 @@ fn rejects_refutable_field_projection_payloads() {
 begin
   def Maybe : VType =
     data
-    | +Some : Int
+    | +Some : Int64
     | +None : Unit
     end
   that

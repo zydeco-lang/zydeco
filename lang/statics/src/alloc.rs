@@ -368,7 +368,7 @@ AllocType! {
     ThkTy
     RetTy
     UnitTy
-    IntTy
+    OpaqueTy
     CharTy
     StringTy
     OSTy

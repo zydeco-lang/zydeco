@@ -1,7 +1,7 @@
 param (
-  (/int; /process) :
+  (/int64; /process) :
   @[import("../../std/builtin.zy")] _
 ) in
-  do z <- ! (int/mul) 10 10;
-  do r <- ! (int/sub) z 100;
+  do z <- ! (int64/mul) 10 10;
+  do r <- ! (int64/sub) z 100;
   ! (process/exit) r

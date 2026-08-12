@@ -8,14 +8,17 @@ use std::{
     fmt::{Display, Formatter},
 };
 use thiserror::Error;
-use zydeco_syntax::{BuiltinRole, BuiltinTypeRole, BuiltinValueRole, Named, Prod};
+use zydeco_syntax::{
+    BuiltinRole, BuiltinTypeRole, BuiltinValueRole, FloatOperation, FloatType, IntegerOperation,
+    IntegerType, Named, Prod,
+};
 use zydeco_utils::arena::ArenaAccess;
 
 /// Host-provided atomic value types available to foundational operations.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum BuiltinValueAtom {
-    Int,
-    Float,
+    Integer(IntegerType),
+    Float(FloatType),
     Char,
     String,
     Bytes,
@@ -26,8 +29,8 @@ pub enum BuiltinValueAtom {
 impl BuiltinValueAtom {
     fn role(self) -> BuiltinTypeRole {
         match self {
-            | Self::Int => BuiltinTypeRole::Int,
-            | Self::Float => BuiltinTypeRole::Float,
+            | Self::Integer(integer) => integer.builtin_role(),
+            | Self::Float(float) => float.builtin_role(),
             | Self::Char => BuiltinTypeRole::Char,
             | Self::String => BuiltinTypeRole::String,
             | Self::Bytes => BuiltinTypeRole::Bytes,
@@ -93,38 +96,54 @@ impl BuiltinOperationAbi {
         use BuiltinValueAtom as Atom;
         use BuiltinValueRole as Role;
 
+        let int64 = Atom::Integer(IntegerType::Int64);
         let classifier = match role {
-            | Role::Add | Role::Sub | Role::Mul | Role::Div | Role::Mod => {
-                Self::pure([Atom::Int, Atom::Int], Atom::Int)
+            | Role::Integer(integer, operation) => {
+                let atom = Atom::Integer(integer);
+                match operation {
+                    | IntegerOperation::Add
+                    | IntegerOperation::Sub
+                    | IntegerOperation::Mul
+                    | IntegerOperation::Div
+                    | IntegerOperation::Mod => Self::pure([atom, atom], atom),
+                    | IntegerOperation::Eq | IntegerOperation::Lt | IntegerOperation::Gt => {
+                        Self::branch([atom, atom])
+                    }
+                    | IntegerOperation::ToString => Self::pure([atom], Atom::String),
+                }
             }
-            | Role::IntEq | Role::IntLt | Role::IntGt => Self::branch([Atom::Int, Atom::Int]),
-            | Role::FloatAdd | Role::FloatSub | Role::FloatMul | Role::FloatDiv => {
-                Self::pure([Atom::Float, Atom::Float], Atom::Float)
+            | Role::Float(float, operation) => {
+                let atom = Atom::Float(float);
+                match operation {
+                    | FloatOperation::Add
+                    | FloatOperation::Sub
+                    | FloatOperation::Mul
+                    | FloatOperation::Div => Self::pure([atom, atom], atom),
+                    | FloatOperation::Eq | FloatOperation::Lt | FloatOperation::Gt => {
+                        Self::branch([atom, atom])
+                    }
+                    | FloatOperation::ToString => Self::pure([atom], Atom::String),
+                }
             }
-            | Role::FloatEq | Role::FloatLt | Role::FloatGt => {
-                Self::branch([Atom::Float, Atom::Float])
-            }
-            | Role::FloatToStr => Self::pure([Atom::Float], Atom::String),
-            | Role::StrScalarLength | Role::StrByteLength => Self::pure([Atom::String], Atom::Int),
+            | Role::StrScalarLength | Role::StrByteLength => Self::pure([Atom::String], int64),
             | Role::StrAppend => Self::pure([Atom::String, Atom::String], Atom::String),
             | Role::StrSplitOnce => Self::optional_pair([Atom::String, Atom::Char]),
-            | Role::StrSplitAt => Self::optional_pair([Atom::String, Atom::Int]),
-            | Role::StrGet => Self::optional([Atom::String, Atom::Int], Atom::Char),
+            | Role::StrSplitAt => Self::optional_pair([Atom::String, int64]),
+            | Role::StrGet => Self::optional([Atom::String, int64], Atom::Char),
             | Role::StrEq => Self::branch([Atom::String, Atom::String]),
-            | Role::IntToStr => Self::pure([Atom::Int], Atom::String),
             | Role::CharToStr => Self::pure([Atom::Char], Atom::String),
-            | Role::CharCodepoint => Self::pure([Atom::Char], Atom::Int),
-            | Role::CharFromCodepoint => Self::optional([Atom::Int], Atom::Char),
-            | Role::StrParseInt => Self::optional([Atom::String], Atom::Int),
+            | Role::CharCodepoint => Self::pure([Atom::Char], int64),
+            | Role::CharFromCodepoint => Self::optional([int64], Atom::Char),
+            | Role::StrParseInt => Self::optional([Atom::String], int64),
             | Role::BytesEmpty => Self::pure([], Atom::Bytes),
-            | Role::BytesLength => Self::pure([Atom::Bytes], Atom::Int),
+            | Role::BytesLength => Self::pure([Atom::Bytes], int64),
             | Role::BytesAppend => Self::pure([Atom::Bytes, Atom::Bytes], Atom::Bytes),
             | Role::BytesFromStr => Self::pure([Atom::String], Atom::Bytes),
             | Role::BytesToStr => Self::optional([Atom::Bytes], Atom::String),
             | Role::Stdin => Self::pure([], Atom::Reader),
             | Role::Stdout | Role::Stderr => Self::pure([], Atom::Writer),
             | Role::IoRead => Self::io_effect(
-                [Self::atom(Atom::Reader), Self::atom(Atom::Int)],
+                [Self::atom(Atom::Reader), Self::atom(int64)],
                 Self::continuation(Atom::Bytes),
             ),
             | Role::IoReadAll => {
@@ -153,17 +172,17 @@ impl BuiltinOperationAbi {
                 Self::io_effect([Self::atom(Atom::String)], Self::continuation(Atom::Writer))
             }
             | Role::WriteStr => Self::effect([Self::atom(Atom::String), Self::os_continuation()]),
-            | Role::WriteInt => Self::effect([Self::atom(Atom::Int), Self::os_continuation()]),
+            | Role::WriteInt => Self::effect([Self::atom(int64), Self::os_continuation()]),
             | Role::WriteLine => Self::effect([Self::atom(Atom::String), Self::os_continuation()]),
             | Role::ReadLine | Role::ReadTillEof => {
                 Self::effect([Self::continuation(Atom::String)])
             }
             | Role::ReadLineAsInt => {
-                Self::effect([Self::os_continuation(), Self::continuation(Atom::Int)])
+                Self::effect([Self::os_continuation(), Self::continuation(int64)])
             }
             | Role::ArgList => Self::string_fold(),
-            | Role::RandomInt => Self::effect([Self::continuation(Atom::Int)]),
-            | Role::Exit => Self::effect([Self::atom(Atom::Int)]),
+            | Role::RandomInt => Self::effect([Self::continuation(int64)]),
+            | Role::Exit => Self::effect([Self::atom(int64)]),
         };
         Self { classifier }
     }
@@ -257,7 +276,10 @@ impl BuiltinOperationAbi {
     }
 
     fn io_error_continuation() -> BuiltinValueClassifier {
-        Self::continuation_with([BuiltinValueAtom::Int, BuiltinValueAtom::String])
+        Self::continuation_with([
+            BuiltinValueAtom::Integer(IntegerType::Int64),
+            BuiltinValueAtom::String,
+        ])
     }
 
     fn io_effect(

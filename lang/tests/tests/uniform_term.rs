@@ -35,7 +35,7 @@ begin
     | +Some : A
     end
   that
-  let none : Option Int = +None() that
+  let none : Option Int64 = +None() that
   ret ()
 end
 "#,
@@ -88,7 +88,7 @@ fn rejects_a_recursive_value_definition() {
     UniformTermCase::assert_type_error(
         r#"
 begin
-  def value : Int = value that
+  def value : Int64 = value that
   ret ()
 end
 "#,

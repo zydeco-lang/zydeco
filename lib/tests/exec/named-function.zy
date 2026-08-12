@@ -3,22 +3,22 @@
 -- a named tuple component.
 begin
   param (
-    (/Thk; /Ret; /Int; /int; /process) :
+    (/Thk; /Ret; /Int64; /int64; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   let Arguments =
-    (lhs :: Int) * Int
+    (lhs :: Int64) * Int64
   that
   let FunctionResult =
-    Int * (sum :: Int)
+    Int64 * (sum :: Int64)
   that
   let FunctionBox =
-    (apply :: Thk (Arguments -> Ret FunctionResult)) * Int
+    (apply :: Thk (Arguments -> Ret FunctionResult)) * Int64
   that
-  def ! combine ((lhs = lhs : Int, rhs : Int) : Arguments) : Ret FunctionResult =
-    do sum <- ! (int/add) lhs rhs;
-    ret (lhs, sum = sum : Int)
+  def ! combine ((lhs = lhs : Int64, rhs : Int64) : Arguments) : Ret FunctionResult =
+    do sum <- ! (int64/add) lhs rhs;
+    ret (lhs, sum = sum : Int64)
   that
   def function_box : FunctionBox = (
     apply = combine,
@@ -27,16 +27,16 @@ begin
 
   let (
     apply = apply : Thk (Arguments -> Ret FunctionResult),
-    marker : Int
+    marker : Int64
   ) = function_box in
-  do result <- ! apply (lhs = 10 : Int, 11 : Int);
+  do result <- ! apply (lhs = 10 : Int64, 11 : Int64);
   let (
-    echoed : Int,
-    sum = sum : Int
+    echoed : Int64,
+    sum = sum : Int64
   ) = result in
-  do echoed_check <- ! (int/sub) echoed 10;
-  do sum_check <- ! (int/sub) sum 21;
-  do total <- ! (int/add) marker echoed_check;
-  do total <- ! (int/add) total sum_check;
+  do echoed_check <- ! (int64/sub) echoed 10;
+  do sum_check <- ! (int64/sub) sum 21;
+  do total <- ! (int64/add) marker echoed_check;
+  do total <- ! (int64/add) total sum_check;
   ! (process/exit) total
 end

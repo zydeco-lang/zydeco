@@ -279,7 +279,7 @@ fn rejects_an_existential_witness_escaping_through_an_inferred_domain() {
         r#"
 begin
   let Box = exists (X : VType) . X that
-  def boxed : Box = (Int, 0) that
+  def boxed : Box = (Int64, 0) that
   let identity = { fn value => ret value } that
 
   match boxed
@@ -288,4 +288,44 @@ begin
 end
 "#,
     );
+}
+
+#[test]
+fn checks_literals_in_each_rust_numeric_domain() {
+    InferenceCase::check(
+        r#"
+begin
+  let int8_value : Int8 = -128 that
+  let int16_value : Int16 = -32768 that
+  let int32_value : Int32 = -2147483648 that
+  let int64_value : Int64 = -9223372036854775808 that
+  let uint8_value : UInt8 = 255 that
+  let uint16_value : UInt16 = 65535 that
+  let uint32_value : UInt32 = 4294967295 that
+  let uint64_value : UInt64 = 18446744073709551615 that
+  let float32_value : Float32 = 1.5 that
+  let float64_value : Float64 = 1.5 that
+  ret (
+    int8_value, int16_value, int32_value, int64_value,
+    uint8_value, uint16_value, uint32_value, uint64_value,
+    float32_value, float64_value
+  )
+end
+"#,
+    );
+}
+
+#[test]
+fn rejects_signed_literals_outside_the_selected_rust_domain() {
+    InferenceCase::assert_type_error("let value : Int8 = 128 in ret value");
+}
+
+#[test]
+fn rejects_negative_literals_in_unsigned_rust_domains() {
+    InferenceCase::assert_type_error("let value : UInt8 = -1 in ret value");
+}
+
+#[test]
+fn rejects_finite_literals_that_overflow_float32() {
+    InferenceCase::assert_type_error("let value : Float32 = 3.5e38 in ret value");
 }

@@ -3,7 +3,7 @@
 -- the numbers in a list.
 begin
   param (
-    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /int; /stdio; /process) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /int64; /stdio; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -15,23 +15,23 @@ begin
   that
   def Summer : CType =
     codata
-    | .done : Ret Int
+    | .done : Ret Int64
     -- The equivalent of CALLERS_KONT
-    | .addN : Int -> Summer
+    | .addN : Int64 -> Summer
     end
   that
   def Summer' =
     codata
-    | .add : Int -> Ret Int
+    | .add : Int64 -> Ret Int64
     end
   that
 
-  def fix sumBad (xs : List Int) : Ret Int =
+  def fix sumBad (xs : List Int64) : Ret Int64 =
     match xs
     | +Nil() => ret 0
     | +Cons(x, xs) =>
       do n <- ! sumBad xs;
-      ! (int/add) n x
+      ! (int64/add) n x
     end
   that
   -- This is a bad algorithm because it uses stack space linear in the
@@ -39,20 +39,20 @@ begin
   -- a *bind*, which pushes a kontinuation onto the stack. So if we have a list
   -- +Cons(5, +Cons(13, Nil))
   -- when we get to the recursive call, the stack looks like:
-  -- (n <- -. ! int/add n 13) :: (n <- -. ! int/add n 5) :: CALLERS_KONT
+  -- (n <- -. ! int64/add n 13) :: (n <- -. ! int64/add n 5) :: CALLERS_KONT
   -- We can make this recursive stack structure explicit in the program
-  -- by changing the return type from Ret(Int) to a new special codata
+  -- by changing the return type from Ret(Int64) to a new special codata
   -- type Summer (see above)
   -- and changing the implementation as follows:
-  def fix retSummer (n : Int) : Summer =
+  def fix retSummer (n : Int64) : Summer =
     comatch
     | .done => ret n
     | .addN x =>
-      do n' <- ! (int/add) n x;
+      do n' <- ! (int64/add) n x;
       ! retSummer n'
     end
   that
-  def fix sumOk (xs : List Int) : Summer =
+  def fix sumOk (xs : List Int64) : Summer =
     match xs
     | +Nil() => ! retSummer 0
     | +Cons(x, xs) => ! sumOk xs .addN x
@@ -80,20 +80,20 @@ begin
   -- ! retSummer x .addN (y + z)
   -- So when we pushed .addN (y) on the stack, we could have instead added
   -- it to `z` and not increased the size of the stack(!)
-  def fix sumBetter (xs : List Int) : Summer =
+  def fix sumBetter (xs : List Int64) : Summer =
     match xs
     | +Nil() => ! retSummer 0
     | +Cons(x, xs) =>
       comatch
       | .done => ! sumBetter xs .addN x .done
       | .addN y =>
-        do xPlusy <- ! (int/add) x y;
+        do xPlusy <- ! (int64/add) x y;
         ! sumBetter xs .addN xPlusy
       end
     end
   that
-  def ! sumBest : List Int -> Summer' =
-    fix (sumBest : Thk (List Int -> Summer')) =>
+  def ! sumBest : List Int64 -> Summer' =
+    fix (sumBest : Thk (List Int64 -> Summer')) =>
       fn xs =>
         -- This is better in that it uses *constant* space to implement the
         -- same algorithm, but we can make a couple of more improvements:
@@ -102,7 +102,7 @@ begin
         --    .add n on the stack so we wouldn't have to guess? We can do this
         --    by changing our codata type to only have one case (see above, Summer'):
         -- This no longer needs to be recursive because we know there will only
-        -- be at most one int/add, i.e., because we use constant stack space!
+        -- be at most one int64/add, i.e., because we use constant stack space!
         --
         -- We can implement the .done method from before by pushing .add(0)
         -- (using that it is the additive unit).
@@ -114,16 +114,16 @@ begin
         | +Cons(x, xs) =>
           comatch
           | .add n =>
-            do n' <- ! (int/add) x n;
+            do n' <- ! (int64/add) x n;
             ! sumBest xs .add n'
           end
         end
   that
-  def ! sum (xs : List Int) : Ret Int =
+  def ! sum (xs : List Int64) : Ret Int64 =
     ! sumBest xs .add 0
   that
 
   do n <- ! sum (+Cons(5, +Cons(13, +Nil())));
-  do s <- ! (int/to_string) n;
+  do s <- ! (int64/to_string) n;
   ! (stdio/write_line) s { ! (process/exit) 0 }
 end

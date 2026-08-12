@@ -57,8 +57,6 @@ pub struct BuiltinValueRootLinker {
 pub enum BuiltinPackageError {
     #[error(transparent)]
     Plan(#[from] BuiltinPackagePlanError),
-    #[error("host operation `{role}` has no interpreter implementation")]
-    UnsupportedOperation { role: BuiltinValueRole },
     #[error("host package contracts form a recursive result at type {ty:?}")]
     RecursiveContract { ty: ss::TypeId },
 }
@@ -70,8 +68,7 @@ impl BuiltinPackageLinker {
     fn link(value: BuiltinPackageValue) -> Result<ds::RcValue, BuiltinPackageError> {
         match value {
             | BuiltinPackageValue::Unit => Ok(Rc::new(ds::Value::Triv(Triv))),
-            | BuiltinPackageValue::Operation(role) => BuiltinRuntime::package_value(role)
-                .ok_or(BuiltinPackageError::UnsupportedOperation { role }),
+            | BuiltinPackageValue::Operation(role) => Ok(BuiltinRuntime::package_value(role)),
             | BuiltinPackageValue::Product(product) => {
                 let values = product
                     .into_values()

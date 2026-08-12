@@ -5,7 +5,7 @@ Consider a library that exports a transparent type together with values using th
 ```zydeco
 -- counter.zy
 begin
-  let Counter = Int that
+  let Counter = Int64 that
   let zero : Counter = 0 that
   let inc : Thk (Counter -> Ret Counter) =
     { fn n => ! add n 1 }
@@ -18,7 +18,7 @@ end
 The library author determines the package signature assigned to the resulting term:
 
 ```text
-exists (= Counter as Int : VType).
+exists (= Counter as Int64 : VType).
   (zero :: Counter) *
   (inc :: Thk (Counter -> Ret Counter))
 ```
@@ -37,7 +37,7 @@ end
 The consumer may annotate the `param` pattern explicitly.
 When the annotation is omitted, the compiled provider package signature supplies the expected type
 from which it is inferred.
-Opening the parameter therefore contributes `Counter ≡ Int`, `zero`, and `inc` to the block context.
+Opening the parameter therefore contributes `Counter ≡ Int64`, `zero`, and `inc` to the block context.
 The consumer is checked using the package signature produced by the library, and linking applies the consumer
 to the library implementation.
 
@@ -121,7 +121,7 @@ Opening this signature binds `VType`, `CType`, `Thk`, `Ret`, and `Unit` by ordin
 The first two fields bind kinds; the remaining three bind types or type constructors.
 All five are transparent and erased.
 They neither create fresh identities nor contribute witnesses to a package-dependent arrow.
-Abstract host types later in the signature, such as `Int` and `OS`, retain the ordinary existential semantics.
+Abstract host types later in the signature, such as `Int64` and `OS`, retain the ordinary existential semantics.
 
 ## Manifest Types
 

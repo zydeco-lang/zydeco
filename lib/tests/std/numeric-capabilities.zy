@@ -1,7 +1,7 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (/VType; /Ret; /Int; /Float; /OS; builtin) :
+    (/VType; /Ret; /Int64; /Float64; /OS; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -31,7 +31,7 @@ begin
     Scalar = IntScalar,
     dictionary = int_dictionary,
     ()
-  ) = numeric/int_instance in
+  ) = numeric/int64_instance in
   do int_arithmetic <- ! multiply_add_equal
     IntScalar int_dictionary 6 7 0 42;
   do int_order <- ! strictly_less IntScalar int_dictionary 41 42;
@@ -41,7 +41,7 @@ begin
     Scalar = FloatScalar,
     dictionary = float_dictionary,
     ()
-  ) = numeric/float_instance in
+  ) = numeric/float64_instance in
   do float_arithmetic <- ! multiply_add_equal
     FloatScalar float_dictionary 1.5 2.0 0.5 3.5;
   do float_order <- ! strictly_less

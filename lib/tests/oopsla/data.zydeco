@@ -1,7 +1,7 @@
 -- module Identity
 begin
   param (
-    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /Char; /String; /OS; /int; /char; /string; /stdio) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /Char; /String; /OS; /int64; /char; /string; /stdio) :
     @[import("../../std/builtin.zy")] _
   ) that
   let Thunk = Thk that
@@ -19,19 +19,19 @@ begin
     | +False : Unit
     end
   that
-  def ! int_eq (x : Int) (y : Int) : Ret Bool =
-    ! (int/eq) (Ret Bool) x y { ret +True() } { ret +False() }
+  def ! int_eq (x : Int64) (y : Int64) : Ret Bool =
+    ! (int64/eq) (Ret Bool) x y { ret +True() } { ret +False() }
   that
-  def ! int_lt (x : Int) (y : Int) : Ret Bool =
-    ! (int/lt) (Ret Bool) x y { ret +True() } { ret +False() }
+  def ! int_lt (x : Int64) (y : Int64) : Ret Bool =
+    ! (int64/lt) (Ret Bool) x y { ret +True() } { ret +False() }
   that
-  def ! int_gt (x : Int) (y : Int) : Ret Bool =
-    ! (int/gt) (Ret Bool) x y { ret +True() } { ret +False() }
+  def ! int_gt (x : Int64) (y : Int64) : Ret Bool =
+    ! (int64/gt) (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! str_eq (x : String) (y : String) : Ret Bool =
     ! (string/eq) (Ret Bool) x y { ret +True() } { ret +False() }
   that
-  def ! str_get_or_space (text : String) (index : Int) : Ret Char =
+  def ! str_get_or_space (text : String) (index : Int64) : Ret Char =
     ! (string/get)
       (Ret Char)
       text
@@ -203,18 +203,18 @@ begin
             xs'
   that
 
-  def fix get_rec (A : VType) (xs : List A) (index : Int) : F(Option A) =
+  def fix get_rec (A : VType) (xs : List A) (index : Int64) : F(Option A) =
     match xs
     | +Nil() => ret +None()
     | +Cons(hd, tl) =>
-      do minus1 <- ! (int/sub) index 1;
+      do minus1 <- ! (int64/sub) index 1;
       ! if~ (F(Option A)) {! int_eq 0 index} {ret +Some(hd)} {
         ! get_rec A tl minus1
       }
     end
   that
 
-  def ! get_element (A : VType) (xs : List A) (index : Int) : F(Option A) =
+  def ! get_element (A : VType) (xs : List A) (index : Int64) : F(Option A) =
     ! get_rec A xs index
   that
 -- end module List
@@ -286,14 +286,14 @@ begin
       acc
   that
 
-  def ! take (A: VType) (n : Int) (xs : U(LList A)) : LList A =
-    ! foldr A (Int -> LList A) xs
+  def ! take (A: VType) (n : Int64) (xs : U(LList A)) : LList A =
+    ! foldr A (Int64 -> LList A) xs
             { fn _ => ! nil A }
             { fn x take_xs n =>
                 !if~ (LList A)
                     { ! int_lt n 1 }
                     { ! nil A }
-                    { do n <- ! (int/sub) n 1;
+                    { do n <- ! (int64/sub) n 1;
                       ! cons A x { ! take_xs n }
                     }
             }
@@ -377,13 +377,13 @@ begin
     end
   that
 
-  def ! length (A : VType) (xs : U(LList A)) : F(Int) =
-    ! foldr A (F Int) xs {ret 0} {fn x b => do b' <- !b; ! (int/add) b' 1}
+  def ! length (A : VType) (xs : U(LList A)) : F(Int64) =
+    ! foldr A (F Int64) xs {ret 0} {fn x b => do b' <- !b; ! (int64/add) b' 1}
   that
 
   let Cmp (A : VType) : VType = U(A -> A -> F(Bool)) that
 
-  def fix min_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int)) =
+  def fix min_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int64)) =
     do xs' <- ! xs .run;
     match xs'
     | +Nil() => ret +None()
@@ -398,7 +398,7 @@ begin
           match c
           | +True() => ret +Some(+Cons(x, 0))
           | +False() =>
-            do i <- ! (int/add) 1 i;
+            do i <- ! (int64/add) 1 i;
             ret +Some(+Cons(m', i))
           end
         end
@@ -406,7 +406,7 @@ begin
     end
   that
 
-  def fix max_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int)) =
+  def fix max_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int64)) =
     do xs' <- ! xs .run;
     match xs'
     | +Nil() => ret +None()
@@ -420,7 +420,7 @@ begin
           do c <- ! cmp x m';
           match c
           | +True() =>
-            do i <- ! (int/add) 1 i;
+            do i <- ! (int64/add) 1 i;
             ret +Some(+Cons(m', i))
           | +False() => ret +Some(+Cons(x, 0))
           end
@@ -436,21 +436,21 @@ begin
     ! reverse A sx
   that
 
-  def fix repeat (A : VType) (x : A) (n : Int) : LList A =
+  def fix repeat (A : VType) (x : A) (n : Int64) : LList A =
     ! if~ (LList A) {! int_eq 0 n} {
       ! nil A
     } {
-      do n1 <- ! (int/sub) n 1;
+      do n1 <- ! (int64/sub) n 1;
       ! cons A x {! repeat A x n1}
     }
   that
 
-  def fix range (left : Int) (right : Int) : LList Int =
-    ! if~ (LList Int) {! int_eq left right} {
-      ! nil (Int)
+  def fix range (left : Int64) (right : Int64) : LList Int64 =
+    ! if~ (LList Int64) {! int_eq left right} {
+      ! nil (Int64)
     } {
-      do n1 <- ! (int/add) left 1;
-      ! cons (Int) left {! range n1 right}
+      do n1 <- ! (int64/add) left 1;
+      ! cons (Int64) left {! range n1 right}
     }
   that
 
@@ -480,7 +480,7 @@ begin
   def ! str_to_list (s : String) : LList Char =
     do sz <- ! (string/length) s;
     let indexes = {! range 0 sz} in
-    ! foldr (Int) (LList Char) indexes {! nil (Char)} {
+    ! foldr (Int64) (LList Char) indexes {! nil (Char)} {
       fn i acc =>
         do c <- ! str_get_or_space s i;
         ! cons (Char) c acc
@@ -489,11 +489,11 @@ begin
 -- end module LList
 
 -- module Arith
-  def ! int_le (x: Int) (y: Int) : Ret Bool =
+  def ! int_le (x: Int64) (y: Int64) : Ret Bool =
     ! not~ { ! int_gt x y }
   that
 
-  def ! int_max : Int -> Int -> Ret Int =
+  def ! int_max : Int64 -> Int64 -> Ret Int64 =
     fn x y =>
       do b <- ! int_gt x y;
       match b
@@ -502,7 +502,7 @@ begin
       end
   that
 
-  def ! int_min : Int -> Int -> Ret Int =
+  def ! int_min : Int64 -> Int64 -> Ret Int64 =
     fn x y =>
       do b <- ! int_lt x y;
       match b
@@ -521,7 +521,7 @@ begin
       { ret +None() }
       { fn s1 s2 => ret +Some(+Cons(s1, s2)) }
   that
-  def ! str_split_at (str : String) (index : Int) : Ret (Option (Pair String String)) =
+  def ! str_split_at (str : String) (index : Int64) : Ret (Option (Pair String String)) =
     ! (string/split_at)
       (Ret (Option (Pair String String)))
       str
@@ -554,12 +554,12 @@ begin
     end
   that
 
-  def fix str_slice (str : String) (left : Int) (right : Int) : F String =
+  def fix str_slice (str : String) (left : Int64) (right : Int64) : F String =
     do cond <- ! int_lt left right;
     ! if (F String) cond {
       do c <- ! str_get_or_space str left;
       do c' <- ! (char/to_string) c;
-      do left' <- ! (int/add) left 1;
+      do left' <- ! (int64/add) left 1;
       do s <- ! str_slice str left' right;
       do s <- ! (string/append) c' s;
       ret s

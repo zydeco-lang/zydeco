@@ -1,37 +1,37 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (/Ret; /Int; /Char; /String; builtin) :
+    (/Ret; /Int64; /Char; /String; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (/Bool; /bool; /option; /int; /char; /string; /process) = make_std builtin in
-  let ! status (condition : Bool) : Ret Int =
+  let (/Bool; /bool; /option; /int64; /char; /string; /process) = make_std builtin in
+  let ! status (condition : Bool) : Ret Int64 =
     ! (bool/if)
-      (Ret Int)
+      (Ret Int64)
       condition
       { ret 0 }
       { ret 1 }
   in
 
   do scalar_length <- ! (string/length) "éλ🙂";
-  do scalar_length_ok <- ! (int/eq) scalar_length 3;
+  do scalar_length_ok <- ! (int64/eq) scalar_length 3;
   do scalar_length_status <- ! status scalar_length_ok;
 
   do byte_length <- ! (string/byte_length) "éλ🙂";
-  do byte_length_ok <- ! (int/eq) byte_length 8;
+  do byte_length_ok <- ! (int64/eq) byte_length 8;
   do byte_length_status <- ! status byte_length_ok;
 
   do middle <- ! (string/get) "éλ🙂" 1;
   do middle_status <- ! (option/fold)
     Char
-    (Ret Int)
+    (Ret Int64)
     middle
     { ret 1 }
     {
       fn character =>
         do codepoint <- ! (char/codepoint) character;
-        do correct <- ! (int/eq) codepoint 955;
+        do correct <- ! (int64/eq) codepoint 955;
         ! status correct
     };
 
@@ -42,7 +42,7 @@ begin
   do split <- ! (string/split_at) "éλ🙂" 2;
   do split_status <- ! (option/fold)
     (String * String)
-    (Ret Int)
+    (Ret Int64)
     split
     { ret 1 }
     {
@@ -60,24 +60,24 @@ begin
 
   do parsed <- ! (string/parse_int) "-42";
   do parsed_status <- ! (option/fold)
-    Int
-    (Ret Int)
+    Int64
+    (Ret Int64)
     parsed
     { ret 1 }
     {
       fn integer =>
-        do correct <- ! (int/eq) integer -42;
+        do correct <- ! (int64/eq) integer -42;
         ! status correct
     };
 
   do invalid_integer <- ! (string/parse_int) "forty-two";
-  do invalid_integer_ok <- ! (option/is_none) Int invalid_integer;
+  do invalid_integer_ok <- ! (option/is_none) Int64 invalid_integer;
   do invalid_integer_status <- ! status invalid_integer_ok;
 
   do smile <- ! (char/from_codepoint) 128578;
   do smile_status <- ! (option/fold)
     Char
-    (Ret Int)
+    (Ret Int64)
     smile
     { ret 1 }
     {
@@ -91,14 +91,14 @@ begin
   do surrogate_ok <- ! (option/is_none) Char surrogate;
   do surrogate_status <- ! status surrogate_ok;
 
-  do first <- ! (int/add) scalar_length_status byte_length_status;
-  do second <- ! (int/add) middle_status missing_status;
-  do third <- ! (int/add) split_status roundtrip_status;
-  do fourth <- ! (int/add) parsed_status invalid_integer_status;
-  do fifth <- ! (int/add) smile_status surrogate_status;
-  do first_half <- ! (int/add) first second;
-  do second_half <- ! (int/add) third fourth;
-  do almost <- ! (int/add) first_half second_half;
-  do result <- ! (int/add) almost fifth;
+  do first <- ! (int64/add) scalar_length_status byte_length_status;
+  do second <- ! (int64/add) middle_status missing_status;
+  do third <- ! (int64/add) split_status roundtrip_status;
+  do fourth <- ! (int64/add) parsed_status invalid_integer_status;
+  do fifth <- ! (int64/add) smile_status surrogate_status;
+  do first_half <- ! (int64/add) first second;
+  do second_half <- ! (int64/add) third fourth;
+  do almost <- ! (int64/add) first_half second_half;
+  do result <- ! (int64/add) almost fifth;
   ! (process/exit) result
 end

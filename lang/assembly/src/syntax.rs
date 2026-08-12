@@ -165,20 +165,20 @@ pub struct Undefined;
 #[derive(Clone, Debug)]
 pub enum Imm {
     Triv(Triv),
-    Int(i64),
+    Integer(IntegerLiteral),
     Float(FloatLiteral),
     Char(char),
 }
 
 #[derive(Clone, Debug)]
 pub struct Intrinsic {
-    pub name: &'static str,
+    pub name: String,
     pub arity: usize,
 }
 
 #[derive(Clone, Debug)]
 pub struct Extern {
-    pub name: &'static str,
+    pub name: String,
     pub arity: usize,
     pub mode: ExternMode,
 }

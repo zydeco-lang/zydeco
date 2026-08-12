@@ -1812,7 +1812,7 @@ impl<'arena> PrettyFormatter<'arena> {
 
     fn literal(&self, literal: &Literal) -> RcDoc<'arena> {
         RcDoc::text(match literal {
-            | Literal::Int(value) => format!("{value:?}"),
+            | Literal::Integer(value) => format!("{value:?}"),
             | Literal::Float(value) => format!("{value:?}"),
             | Literal::String(value) => format!("{value:?}"),
             | Literal::Char(value) => format!("{value:?}"),
@@ -2628,16 +2628,16 @@ mod tests {
 
     #[test]
     fn compacts_manifest_existentials_when_grouping_is_semantically_transparent() {
-        let parsed = ParsedSource::new("exists (Counter = ((Counter as Int) : VType)) . Counter");
+        let parsed = ParsedSource::new("exists (Counter = ((Counter as Int64) : VType)) . Counter");
 
         assert_eq!(
             parsed.render(LayoutIntentions::Ignore),
-            "exists (= Counter as Int : VType) . Counter\n"
+            "exists (= Counter as Int64 : VType) . Counter\n"
         );
         let reparsed = ParsedSource::new(&parsed.render(LayoutIntentions::Ignore));
         assert_eq!(
             reparsed.render(LayoutIntentions::Ignore),
-            "exists (= Counter as Int : VType) . Counter\n"
+            "exists (= Counter as Int64 : VType) . Counter\n"
         );
     }
 
@@ -2734,7 +2734,7 @@ mod tests {
         let source = concat!(
             "begin\n",
             "  param (\n",
-            "    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /OS; /int; /string; /stdio; /process) :\n",
+            "    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /String; /OS; /int64; /string; /stdio; /process) :\n",
             "    @[import(\"../../lib/std/builtin.zy\")] _\n",
             "  ) that\n",
             "  _\n",
@@ -2765,7 +2765,7 @@ mod tests {
         let source = concat!(
             "begin\n",
             "  param (\n",
-            "    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /Float; /Char; /String; /Bytes; /Reader; /Writer; /OS) :\n",
+            "    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /Float64; /Char; /String; /Bytes; /Reader; /Writer; /OS) :\n",
             "    @[import(\"builtin.zy\")] _\n",
             "  ) in\n",
             "  _\n",
@@ -2775,7 +2775,7 @@ mod tests {
         let formatted = parsed.render_with_options(PrettyOptions::default());
 
         assert!(formatted.lines().all(|line| line.len() <= 100), "{formatted}");
-        assert!(formatted.contains("/OS)\n    : @[import"), "{formatted}");
+        assert!(formatted.contains("/OS\n    )\n    : @[import"), "{formatted}");
         let reparsed = ParsedSource::new(&formatted);
         assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
         assert_eq!(formatted, reparsed.render_with_options(PrettyOptions::default()));
@@ -3356,13 +3356,13 @@ mod tests {
     fn records_standard_library_named_term_punning_backlog() {
         let sources = [
             ("bool.zy", include_str!("../../../../lib/std/bool.zy"), 11),
-            ("interface.zy", include_str!("../../../../lib/std/interface.zy"), 8),
+            ("interface.zy", include_str!("../../../../lib/std/interface.zy"), 12),
             ("io-types.zy", include_str!("../../../../lib/std/io-types.zy"), 18),
             ("list.zy", include_str!("../../../../lib/std/list.zy"), 11),
             ("monad.zy", include_str!("../../../../lib/std/monad.zy"), 2),
             ("option.zy", include_str!("../../../../lib/std/option.zy"), 9),
             ("result.zy", include_str!("../../../../lib/std/result.zy"), 8),
-            ("std.zy", include_str!("../../../../lib/std/std.zy"), 29),
+            ("std.zy", include_str!("../../../../lib/std/std.zy"), 53),
         ];
 
         let observed = sources
@@ -3378,7 +3378,7 @@ mod tests {
             })
             .sum::<usize>();
 
-        assert_eq!(observed, 96);
+        assert_eq!(observed, 124);
     }
 
     #[test]

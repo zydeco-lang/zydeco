@@ -10,8 +10,15 @@ begin
     param (
       (
         /VType; /CType; /Thk; /Ret;
-        /Unit; /Int; /Float; /Char; /String; /Bytes; /Reader; /Writer; /OS;
-        /int; /float; /char; /string; /bytes;
+        /Unit;
+        /Int8; /Int16; /Int32; /Int64;
+        /UInt8; /UInt16; /UInt32; /UInt64;
+        /Float32; /Float64;
+        /Char; /String; /Bytes; /Reader; /Writer; /OS;
+        /int8; /int16; /int32; /int64;
+        /uint8; /uint16; /uint32; /uint64;
+        /float32; /float64;
+        /char; /string; /bytes;
         /io; /fs; /stdio; /args; /random; /process;
         builtin
       ) :
@@ -39,18 +46,13 @@ begin
         = PartialOrder,
         = Numeric,
         = NumericInstance,
+        = IntegerModule,
+        = FloatModule,
+        = PrimitiveIntegerModule,
+        = PrimitiveFloatModule,
         = Std,
         ()
       ) = make_interface builtin in
-      let ! increment (value : Int) : Ret Int =
-        ! (int/add) value 1
-      in
-      let ! decrement (value : Int) : Ret Int =
-        ! (int/sub) value 1
-      in
-      let ! negate (value : Int) : Ret Int =
-        ! (int/sub) 0 value
-      in
       let ! compare
         (A : VType)
         (predicate : Thk (
@@ -67,60 +69,11 @@ begin
           { ret (bool/true) }
           { ret (bool/false) }
       in
-      let ! int_eq (left : Int) (right : Int) : Ret Bool =
-        ! compare Int (int/eq) left right
+      let ! int64_eq (left : Int64) (right : Int64) : Ret Bool =
+        ! compare Int64 int64/eq left right
       in
-      let ! int_lt (left : Int) (right : Int) : Ret Bool =
-        ! compare Int (int/lt) left right
-      in
-      let ! int_gt (left : Int) (right : Int) : Ret Bool =
-        ! compare Int (int/gt) left right
-      in
-      let ! int_ne (left : Int) (right : Int) : Ret Bool =
-        do equal <- ! int_eq left right;
-        ! (bool/not) equal
-      in
-      let ! int_le (left : Int) (right : Int) : Ret Bool =
-        do greater <- ! int_gt left right;
-        ! (bool/not) greater
-      in
-      let ! int_ge (left : Int) (right : Int) : Ret Bool =
-        do less <- ! int_lt left right;
-        ! (bool/not) less
-      in
-      let ! int_min (left : Int) (right : Int) : Ret Int =
-        do less <- ! int_lt left right;
-        ! (bool/if) (Ret Int) less { ret left } { ret right }
-      in
-      let ! int_max (left : Int) (right : Int) : Ret Int =
-        do greater <- ! int_gt left right;
-        ! (bool/if) (Ret Int) greater { ret left } { ret right }
-      in
-      let ! float_eq (left : Float) (right : Float) : Ret Bool =
-        ! compare Float (float/eq) left right
-      in
-      let ! float_lt (left : Float) (right : Float) : Ret Bool =
-        ! compare Float (float/lt) left right
-      in
-      let ! float_gt (left : Float) (right : Float) : Ret Bool =
-        ! compare Float (float/gt) left right
-      in
-      let ! float_ne (left : Float) (right : Float) : Ret Bool =
-        do equal <- ! float_eq left right;
-        ! (bool/not) equal
-      in
-      let ! float_le (left : Float) (right : Float) : Ret Bool =
-        do less <- ! float_lt left right;
-        do equal <- ! float_eq left right;
-        ! (bool/or) less equal
-      in
-      let ! float_ge (left : Float) (right : Float) : Ret Bool =
-        do greater <- ! float_gt left right;
-        do equal <- ! float_eq left right;
-        ! (bool/or) greater equal
-      in
-      let ! float_negate (value : Float) : Ret Float =
-        ! (float/sub) 0.0 value
+      let ! int64_lt (left : Int64) (right : Int64) : Ret Bool =
+        ! compare Int64 int64/lt left right
       in
       let ! str_eq (left : String) (right : String) : Ret Bool =
         ! compare String string/eq left right
@@ -182,8 +135,8 @@ begin
           { ! (option/none) (List A) }
           { fn _ tail => ! (option/some) (List A) tail }
       in
-      let fix list_get (A : VType) (values : List A) (index : Int) : Ret (Option A) =
-        do negative <- ! int_lt index 0;
+      let fix list_get (A : VType) (values : List A) (index : Int64) : Ret (Option A) =
+        do negative <- ! int64_lt index 0;
         ! (bool/if)
           (Ret (Option A))
           negative
@@ -196,13 +149,13 @@ begin
               { ! (option/none) A }
               {
                 fn head tail =>
-                  do zero <- ! int_eq index 0;
+                  do zero <- ! int64_eq index 0;
                   ! (bool/if)
                     (Ret (Option A))
                     zero
                     { ! (option/some) A head }
                     {
-                      do previous <- ! (int/sub) index 1;
+                      do previous <- ! (int64/sub) index 1;
                       ! list_get A tail previous
                     }
               }
@@ -219,7 +172,7 @@ begin
               ! (option/some) (String * String) (first, second)
           }
       in
-      let ! str_split_at (text : String) (index : Int) : Ret (Option (String * String)) =
+      let ! str_split_at (text : String) (index : Int64) : Ret (Option (String * String)) =
         ! (string/split_at)
           (Ret (Option (String * String)))
           text
@@ -230,7 +183,7 @@ begin
               ! (option/some) (String * String) (first, second)
           }
       in
-      let ! str_get (text : String) (index : Int) : Ret (Option Char) =
+      let ! str_get (text : String) (index : Int64) : Ret (Option Char) =
         ! (string/get)
           (Ret (Option Char))
           text
@@ -238,23 +191,23 @@ begin
           { ! (option/none) Char }
           { fn character => ! (option/some) Char character }
       in
-      let ! char_from_codepoint (codepoint : Int) : Ret (Option Char) =
+      let ! char_from_codepoint (codepoint : Int64) : Ret (Option Char) =
         ! (char/from_codepoint)
           (Ret (Option Char))
           codepoint
           { ! (option/none) Char }
           { fn character => ! (option/some) Char character }
       in
-      let ! str_parse_int (text : String) : Ret (Option Int) =
+      let ! str_parse_int (text : String) : Ret (Option Int64) =
         ! (string/parse_int)
-          (Ret (Option Int))
+          (Ret (Option Int64))
           text
-          { ! (option/none) Int }
-          { fn integer => ! (option/some) Int integer }
+          { ! (option/none) Int64 }
+          { fn integer => ! (option/some) Int64 integer }
       in
       let ! str_is_empty (text : String) : Ret Bool =
         do length <- ! (string/length) text;
-        ! int_eq length 0
+        ! int64_eq length 0
       in
       let ! str_head (text : String) : Ret (Option Char) =
         ! str_get text 0
@@ -320,7 +273,7 @@ begin
           { ! (option/none) String }
           { fn string => ! (option/some) String string }
       in
-      let ! make_io_error (code : Int) (message : String) : Ret IoError =
+      let ! make_io_error (code : Int64) (message : String) : Ret IoError =
         do kind <- ! (io_types/from_code) code;
         ! (io_types/error) kind message
       in
@@ -351,7 +304,7 @@ begin
       let ! continue_host_error
         (A : VType)
         (continuation : Thk (Result A IoError -> OS))
-        (code : Int)
+        (code : Int64)
         (message : String)
         : OS =
         do error <- ! make_io_error code message;
@@ -359,7 +312,7 @@ begin
       in
       let ! io_read
         (reader : Reader)
-        (count : Int)
+        (count : Int64)
         (continuation : Thk (Result Bytes IoError -> OS))
         : OS =
         ! (io/read)
@@ -712,6 +665,756 @@ begin
       let ! panic (message : String) : OS =
         ! stdio_write_error_line message { fn _ => ! (process/exit) 1 }
       in
+      let int8_module : IntegerModule Bool Int8 String = (
+        add = int8/add,
+        sub = int8/sub,
+        mul = int8/mul,
+        div = int8/div,
+        mod = int8/mod,
+        eq = {
+          fn left right => ! compare Int8 (int8/eq) left right
+        },
+        ne = {
+          fn left right =>
+            do equal <- ! compare Int8 (int8/eq) left right;
+            ! (bool/not) equal
+        },
+        lt = {
+          fn left right => ! compare Int8 (int8/lt) left right
+        },
+        le = {
+          fn left right =>
+            do greater <- ! compare Int8 (int8/gt) left right;
+            ! (bool/not) greater
+        },
+        gt = {
+          fn left right => ! compare Int8 (int8/gt) left right
+        },
+        ge = {
+          fn left right =>
+            do less <- ! compare Int8 (int8/lt) left right;
+            ! (bool/not) less
+        },
+        increment = {
+          fn value => ! (int8/add) value 1
+        },
+        decrement = {
+          fn value => ! (int8/sub) value 1
+        },
+        negate = {
+          fn value => ! (int8/sub) 0 value
+        },
+        min = {
+          fn left right =>
+            do less <- ! compare Int8 (int8/lt) left right;
+            ! (bool/if) (Ret Int8) less { ret left } { ret right }
+        },
+        max = {
+          fn left right =>
+            do greater <- ! compare Int8 (int8/gt) left right;
+            ! (bool/if) (Ret Int8) greater { ret left } { ret right }
+        },
+        to_string = int8/to_string,
+      ) in
+      let int16_module : IntegerModule Bool Int16 String = (
+        add = int16/add,
+        sub = int16/sub,
+        mul = int16/mul,
+        div = int16/div,
+        mod = int16/mod,
+        eq = {
+          fn left right => ! compare Int16 (int16/eq) left right
+        },
+        ne = {
+          fn left right =>
+            do equal <- ! compare Int16 (int16/eq) left right;
+            ! (bool/not) equal
+        },
+        lt = {
+          fn left right => ! compare Int16 (int16/lt) left right
+        },
+        le = {
+          fn left right =>
+            do greater <- ! compare Int16 (int16/gt) left right;
+            ! (bool/not) greater
+        },
+        gt = {
+          fn left right => ! compare Int16 (int16/gt) left right
+        },
+        ge = {
+          fn left right =>
+            do less <- ! compare Int16 (int16/lt) left right;
+            ! (bool/not) less
+        },
+        increment = {
+          fn value => ! (int16/add) value 1
+        },
+        decrement = {
+          fn value => ! (int16/sub) value 1
+        },
+        negate = {
+          fn value => ! (int16/sub) 0 value
+        },
+        min = {
+          fn left right =>
+            do less <- ! compare Int16 (int16/lt) left right;
+            ! (bool/if) (Ret Int16) less { ret left } { ret right }
+        },
+        max = {
+          fn left right =>
+            do greater <- ! compare Int16 (int16/gt) left right;
+            ! (bool/if) (Ret Int16) greater { ret left } { ret right }
+        },
+        to_string = int16/to_string,
+      ) in
+      let int32_module : IntegerModule Bool Int32 String = (
+        add = int32/add,
+        sub = int32/sub,
+        mul = int32/mul,
+        div = int32/div,
+        mod = int32/mod,
+        eq = {
+          fn left right => ! compare Int32 (int32/eq) left right
+        },
+        ne = {
+          fn left right =>
+            do equal <- ! compare Int32 (int32/eq) left right;
+            ! (bool/not) equal
+        },
+        lt = {
+          fn left right => ! compare Int32 (int32/lt) left right
+        },
+        le = {
+          fn left right =>
+            do greater <- ! compare Int32 (int32/gt) left right;
+            ! (bool/not) greater
+        },
+        gt = {
+          fn left right => ! compare Int32 (int32/gt) left right
+        },
+        ge = {
+          fn left right =>
+            do less <- ! compare Int32 (int32/lt) left right;
+            ! (bool/not) less
+        },
+        increment = {
+          fn value => ! (int32/add) value 1
+        },
+        decrement = {
+          fn value => ! (int32/sub) value 1
+        },
+        negate = {
+          fn value => ! (int32/sub) 0 value
+        },
+        min = {
+          fn left right =>
+            do less <- ! compare Int32 (int32/lt) left right;
+            ! (bool/if) (Ret Int32) less { ret left } { ret right }
+        },
+        max = {
+          fn left right =>
+            do greater <- ! compare Int32 (int32/gt) left right;
+            ! (bool/if) (Ret Int32) greater { ret left } { ret right }
+        },
+        to_string = int32/to_string,
+      ) in
+      let int64_module : IntegerModule Bool Int64 String = (
+        add = int64/add,
+        sub = int64/sub,
+        mul = int64/mul,
+        div = int64/div,
+        mod = int64/mod,
+        eq = {
+          fn left right => ! compare Int64 (int64/eq) left right
+        },
+        ne = {
+          fn left right =>
+            do equal <- ! compare Int64 (int64/eq) left right;
+            ! (bool/not) equal
+        },
+        lt = {
+          fn left right => ! compare Int64 (int64/lt) left right
+        },
+        le = {
+          fn left right =>
+            do greater <- ! compare Int64 (int64/gt) left right;
+            ! (bool/not) greater
+        },
+        gt = {
+          fn left right => ! compare Int64 (int64/gt) left right
+        },
+        ge = {
+          fn left right =>
+            do less <- ! compare Int64 (int64/lt) left right;
+            ! (bool/not) less
+        },
+        increment = {
+          fn value => ! (int64/add) value 1
+        },
+        decrement = {
+          fn value => ! (int64/sub) value 1
+        },
+        negate = {
+          fn value => ! (int64/sub) 0 value
+        },
+        min = {
+          fn left right =>
+            do less <- ! compare Int64 (int64/lt) left right;
+            ! (bool/if) (Ret Int64) less { ret left } { ret right }
+        },
+        max = {
+          fn left right =>
+            do greater <- ! compare Int64 (int64/gt) left right;
+            ! (bool/if) (Ret Int64) greater { ret left } { ret right }
+        },
+        to_string = int64/to_string,
+      ) in
+      let uint8_module : IntegerModule Bool UInt8 String = (
+        add = uint8/add,
+        sub = uint8/sub,
+        mul = uint8/mul,
+        div = uint8/div,
+        mod = uint8/mod,
+        eq = {
+          fn left right => ! compare UInt8 (uint8/eq) left right
+        },
+        ne = {
+          fn left right =>
+            do equal <- ! compare UInt8 (uint8/eq) left right;
+            ! (bool/not) equal
+        },
+        lt = {
+          fn left right => ! compare UInt8 (uint8/lt) left right
+        },
+        le = {
+          fn left right =>
+            do greater <- ! compare UInt8 (uint8/gt) left right;
+            ! (bool/not) greater
+        },
+        gt = {
+          fn left right => ! compare UInt8 (uint8/gt) left right
+        },
+        ge = {
+          fn left right =>
+            do less <- ! compare UInt8 (uint8/lt) left right;
+            ! (bool/not) less
+        },
+        increment = {
+          fn value => ! (uint8/add) value 1
+        },
+        decrement = {
+          fn value => ! (uint8/sub) value 1
+        },
+        negate = {
+          fn value => ! (uint8/sub) 0 value
+        },
+        min = {
+          fn left right =>
+            do less <- ! compare UInt8 (uint8/lt) left right;
+            ! (bool/if) (Ret UInt8) less { ret left } { ret right }
+        },
+        max = {
+          fn left right =>
+            do greater <- ! compare UInt8 (uint8/gt) left right;
+            ! (bool/if) (Ret UInt8) greater { ret left } { ret right }
+        },
+        to_string = uint8/to_string,
+      ) in
+      let uint16_module : IntegerModule Bool UInt16 String = (
+        add = uint16/add,
+        sub = uint16/sub,
+        mul = uint16/mul,
+        div = uint16/div,
+        mod = uint16/mod,
+        eq = {
+          fn left right => ! compare UInt16 (uint16/eq) left right
+        },
+        ne = {
+          fn left right =>
+            do equal <- ! compare UInt16 (uint16/eq) left right;
+            ! (bool/not) equal
+        },
+        lt = {
+          fn left right => ! compare UInt16 (uint16/lt) left right
+        },
+        le = {
+          fn left right =>
+            do greater <- ! compare UInt16 (uint16/gt) left right;
+            ! (bool/not) greater
+        },
+        gt = {
+          fn left right => ! compare UInt16 (uint16/gt) left right
+        },
+        ge = {
+          fn left right =>
+            do less <- ! compare UInt16 (uint16/lt) left right;
+            ! (bool/not) less
+        },
+        increment = {
+          fn value => ! (uint16/add) value 1
+        },
+        decrement = {
+          fn value => ! (uint16/sub) value 1
+        },
+        negate = {
+          fn value => ! (uint16/sub) 0 value
+        },
+        min = {
+          fn left right =>
+            do less <- ! compare UInt16 (uint16/lt) left right;
+            ! (bool/if) (Ret UInt16) less { ret left } { ret right }
+        },
+        max = {
+          fn left right =>
+            do greater <- ! compare UInt16 (uint16/gt) left right;
+            ! (bool/if) (Ret UInt16) greater { ret left } { ret right }
+        },
+        to_string = uint16/to_string,
+      ) in
+      let uint32_module : IntegerModule Bool UInt32 String = (
+        add = uint32/add,
+        sub = uint32/sub,
+        mul = uint32/mul,
+        div = uint32/div,
+        mod = uint32/mod,
+        eq = {
+          fn left right => ! compare UInt32 (uint32/eq) left right
+        },
+        ne = {
+          fn left right =>
+            do equal <- ! compare UInt32 (uint32/eq) left right;
+            ! (bool/not) equal
+        },
+        lt = {
+          fn left right => ! compare UInt32 (uint32/lt) left right
+        },
+        le = {
+          fn left right =>
+            do greater <- ! compare UInt32 (uint32/gt) left right;
+            ! (bool/not) greater
+        },
+        gt = {
+          fn left right => ! compare UInt32 (uint32/gt) left right
+        },
+        ge = {
+          fn left right =>
+            do less <- ! compare UInt32 (uint32/lt) left right;
+            ! (bool/not) less
+        },
+        increment = {
+          fn value => ! (uint32/add) value 1
+        },
+        decrement = {
+          fn value => ! (uint32/sub) value 1
+        },
+        negate = {
+          fn value => ! (uint32/sub) 0 value
+        },
+        min = {
+          fn left right =>
+            do less <- ! compare UInt32 (uint32/lt) left right;
+            ! (bool/if) (Ret UInt32) less { ret left } { ret right }
+        },
+        max = {
+          fn left right =>
+            do greater <- ! compare UInt32 (uint32/gt) left right;
+            ! (bool/if) (Ret UInt32) greater { ret left } { ret right }
+        },
+        to_string = uint32/to_string,
+      ) in
+      let uint64_module : IntegerModule Bool UInt64 String = (
+        add = uint64/add,
+        sub = uint64/sub,
+        mul = uint64/mul,
+        div = uint64/div,
+        mod = uint64/mod,
+        eq = {
+          fn left right => ! compare UInt64 (uint64/eq) left right
+        },
+        ne = {
+          fn left right =>
+            do equal <- ! compare UInt64 (uint64/eq) left right;
+            ! (bool/not) equal
+        },
+        lt = {
+          fn left right => ! compare UInt64 (uint64/lt) left right
+        },
+        le = {
+          fn left right =>
+            do greater <- ! compare UInt64 (uint64/gt) left right;
+            ! (bool/not) greater
+        },
+        gt = {
+          fn left right => ! compare UInt64 (uint64/gt) left right
+        },
+        ge = {
+          fn left right =>
+            do less <- ! compare UInt64 (uint64/lt) left right;
+            ! (bool/not) less
+        },
+        increment = {
+          fn value => ! (uint64/add) value 1
+        },
+        decrement = {
+          fn value => ! (uint64/sub) value 1
+        },
+        negate = {
+          fn value => ! (uint64/sub) 0 value
+        },
+        min = {
+          fn left right =>
+            do less <- ! compare UInt64 (uint64/lt) left right;
+            ! (bool/if) (Ret UInt64) less { ret left } { ret right }
+        },
+        max = {
+          fn left right =>
+            do greater <- ! compare UInt64 (uint64/gt) left right;
+            ! (bool/if) (Ret UInt64) greater { ret left } { ret right }
+        },
+        to_string = uint64/to_string,
+      ) in
+      let float32_module : FloatModule Bool Float32 String = (
+        add = float32/add,
+        sub = float32/sub,
+        mul = float32/mul,
+        div = float32/div,
+        eq = {
+          fn left right => ! compare Float32 (float32/eq) left right
+        },
+        ne = {
+          fn left right =>
+            do equal <- ! compare Float32 (float32/eq) left right;
+            ! (bool/not) equal
+        },
+        lt = {
+          fn left right => ! compare Float32 (float32/lt) left right
+        },
+        le = {
+          fn left right =>
+            do less <- ! compare Float32 (float32/lt) left right;
+            do equal <- ! compare Float32 (float32/eq) left right;
+            ! (bool/or) less equal
+        },
+        gt = {
+          fn left right => ! compare Float32 (float32/gt) left right
+        },
+        ge = {
+          fn left right =>
+            do greater <- ! compare Float32 (float32/gt) left right;
+            do equal <- ! compare Float32 (float32/eq) left right;
+            ! (bool/or) greater equal
+        },
+        negate = {
+          fn value => ! (float32/sub) 0.0 value
+        },
+        to_string = float32/to_string,
+      ) in
+      let float64_module : FloatModule Bool Float64 String = (
+        add = float64/add,
+        sub = float64/sub,
+        mul = float64/mul,
+        div = float64/div,
+        eq = {
+          fn left right => ! compare Float64 (float64/eq) left right
+        },
+        ne = {
+          fn left right =>
+            do equal <- ! compare Float64 (float64/eq) left right;
+            ! (bool/not) equal
+        },
+        lt = {
+          fn left right => ! compare Float64 (float64/lt) left right
+        },
+        le = {
+          fn left right =>
+            do less <- ! compare Float64 (float64/lt) left right;
+            do equal <- ! compare Float64 (float64/eq) left right;
+            ! (bool/or) less equal
+        },
+        gt = {
+          fn left right => ! compare Float64 (float64/gt) left right
+        },
+        ge = {
+          fn left right =>
+            do greater <- ! compare Float64 (float64/gt) left right;
+            do equal <- ! compare Float64 (float64/eq) left right;
+            ! (bool/or) greater equal
+        },
+        negate = {
+          fn value => ! (float64/sub) 0.0 value
+        },
+        to_string = float64/to_string,
+      ) in
+      let int8_instance : NumericInstance Bool Int8 = (
+        Scalar = Int8,
+        dictionary = (
+          additive = (
+            zero = 0,
+            add = int8_module/add,
+            sub = int8_module/sub,
+            negate = int8_module/negate,
+          ),
+          multiplicative = (
+            one = 1,
+            mul = int8_module/mul,
+          ),
+          order = (
+            equality = (
+              eq = int8_module/eq,
+              ne = int8_module/ne,
+            ),
+            lt = int8_module/lt,
+            le = int8_module/le,
+            gt = int8_module/gt,
+            ge = int8_module/ge,
+          ),
+          (),
+        ),
+        (),
+      ) in
+      let int16_instance : NumericInstance Bool Int16 = (
+        Scalar = Int16,
+        dictionary = (
+          additive = (
+            zero = 0,
+            add = int16_module/add,
+            sub = int16_module/sub,
+            negate = int16_module/negate,
+          ),
+          multiplicative = (
+            one = 1,
+            mul = int16_module/mul,
+          ),
+          order = (
+            equality = (
+              eq = int16_module/eq,
+              ne = int16_module/ne,
+            ),
+            lt = int16_module/lt,
+            le = int16_module/le,
+            gt = int16_module/gt,
+            ge = int16_module/ge,
+          ),
+          (),
+        ),
+        (),
+      ) in
+      let int32_instance : NumericInstance Bool Int32 = (
+        Scalar = Int32,
+        dictionary = (
+          additive = (
+            zero = 0,
+            add = int32_module/add,
+            sub = int32_module/sub,
+            negate = int32_module/negate,
+          ),
+          multiplicative = (
+            one = 1,
+            mul = int32_module/mul,
+          ),
+          order = (
+            equality = (
+              eq = int32_module/eq,
+              ne = int32_module/ne,
+            ),
+            lt = int32_module/lt,
+            le = int32_module/le,
+            gt = int32_module/gt,
+            ge = int32_module/ge,
+          ),
+          (),
+        ),
+        (),
+      ) in
+      let int64_instance : NumericInstance Bool Int64 = (
+        Scalar = Int64,
+        dictionary = (
+          additive = (
+            zero = 0,
+            add = int64_module/add,
+            sub = int64_module/sub,
+            negate = int64_module/negate,
+          ),
+          multiplicative = (
+            one = 1,
+            mul = int64_module/mul,
+          ),
+          order = (
+            equality = (
+              eq = int64_module/eq,
+              ne = int64_module/ne,
+            ),
+            lt = int64_module/lt,
+            le = int64_module/le,
+            gt = int64_module/gt,
+            ge = int64_module/ge,
+          ),
+          (),
+        ),
+        (),
+      ) in
+      let uint8_instance : NumericInstance Bool UInt8 = (
+        Scalar = UInt8,
+        dictionary = (
+          additive = (
+            zero = 0,
+            add = uint8_module/add,
+            sub = uint8_module/sub,
+            negate = uint8_module/negate,
+          ),
+          multiplicative = (
+            one = 1,
+            mul = uint8_module/mul,
+          ),
+          order = (
+            equality = (
+              eq = uint8_module/eq,
+              ne = uint8_module/ne,
+            ),
+            lt = uint8_module/lt,
+            le = uint8_module/le,
+            gt = uint8_module/gt,
+            ge = uint8_module/ge,
+          ),
+          (),
+        ),
+        (),
+      ) in
+      let uint16_instance : NumericInstance Bool UInt16 = (
+        Scalar = UInt16,
+        dictionary = (
+          additive = (
+            zero = 0,
+            add = uint16_module/add,
+            sub = uint16_module/sub,
+            negate = uint16_module/negate,
+          ),
+          multiplicative = (
+            one = 1,
+            mul = uint16_module/mul,
+          ),
+          order = (
+            equality = (
+              eq = uint16_module/eq,
+              ne = uint16_module/ne,
+            ),
+            lt = uint16_module/lt,
+            le = uint16_module/le,
+            gt = uint16_module/gt,
+            ge = uint16_module/ge,
+          ),
+          (),
+        ),
+        (),
+      ) in
+      let uint32_instance : NumericInstance Bool UInt32 = (
+        Scalar = UInt32,
+        dictionary = (
+          additive = (
+            zero = 0,
+            add = uint32_module/add,
+            sub = uint32_module/sub,
+            negate = uint32_module/negate,
+          ),
+          multiplicative = (
+            one = 1,
+            mul = uint32_module/mul,
+          ),
+          order = (
+            equality = (
+              eq = uint32_module/eq,
+              ne = uint32_module/ne,
+            ),
+            lt = uint32_module/lt,
+            le = uint32_module/le,
+            gt = uint32_module/gt,
+            ge = uint32_module/ge,
+          ),
+          (),
+        ),
+        (),
+      ) in
+      let uint64_instance : NumericInstance Bool UInt64 = (
+        Scalar = UInt64,
+        dictionary = (
+          additive = (
+            zero = 0,
+            add = uint64_module/add,
+            sub = uint64_module/sub,
+            negate = uint64_module/negate,
+          ),
+          multiplicative = (
+            one = 1,
+            mul = uint64_module/mul,
+          ),
+          order = (
+            equality = (
+              eq = uint64_module/eq,
+              ne = uint64_module/ne,
+            ),
+            lt = uint64_module/lt,
+            le = uint64_module/le,
+            gt = uint64_module/gt,
+            ge = uint64_module/ge,
+          ),
+          (),
+        ),
+        (),
+      ) in
+      let float32_instance : NumericInstance Bool Float32 = (
+        Scalar = Float32,
+        dictionary = (
+          additive = (
+            zero = 0.0,
+            add = float32_module/add,
+            sub = float32_module/sub,
+            negate = float32_module/negate,
+          ),
+          multiplicative = (
+            one = 1.0,
+            mul = float32_module/mul,
+          ),
+          order = (
+            equality = (
+              eq = float32_module/eq,
+              ne = float32_module/ne,
+            ),
+            lt = float32_module/lt,
+            le = float32_module/le,
+            gt = float32_module/gt,
+            ge = float32_module/ge,
+          ),
+          (),
+        ),
+        (),
+      ) in
+      let float64_instance : NumericInstance Bool Float64 = (
+        Scalar = Float64,
+        dictionary = (
+          additive = (
+            zero = 0.0,
+            add = float64_module/add,
+            sub = float64_module/sub,
+            negate = float64_module/negate,
+          ),
+          multiplicative = (
+            one = 1.0,
+            mul = float64_module/mul,
+          ),
+          order = (
+            equality = (
+              eq = float64_module/eq,
+              ne = float64_module/ne,
+            ),
+            lt = float64_module/lt,
+            le = float64_module/le,
+            gt = float64_module/gt,
+            ge = float64_module/ge,
+          ),
+          (),
+        ),
+        (),
+      ) in
       let prelude : Prelude = (
         Thunk = Thk,
         U = Thk,
@@ -723,8 +1426,16 @@ begin
         Option = Option,
         Result = Result,
         List = List,
-        Int = Int,
-        Float = Float,
+        Int8 = Int8,
+        Int16 = Int16,
+        Int32 = Int32,
+        Int64 = Int64,
+        UInt8 = UInt8,
+        UInt16 = UInt16,
+        UInt32 = UInt32,
+        UInt64 = UInt64,
+        Float32 = Float32,
+        Float64 = Float64,
         Char = Char,
         String = String,
         Bytes = Bytes,
@@ -793,95 +1504,41 @@ begin
           get = list_get,
         ),
         numeric = (
-          int_instance = (
-            Scalar = Int,
-            dictionary = (
-              additive = (
-                zero = 0,
-                add = int/add,
-                sub = int/sub,
-                negate = negate,
-              ),
-              multiplicative = (
-                one = 1,
-                mul = int/mul,
-              ),
-              order = (
-                equality = (
-                  eq = int_eq,
-                  ne = int_ne,
-                ),
-                lt = int_lt,
-                le = int_le,
-                gt = int_gt,
-                ge = int_ge,
-              ),
-              (),
-            ),
-            (),
-          ),
-          float_instance = (
-            Scalar = Float,
-            dictionary = (
-              additive = (
-                zero = 0.0,
-                add = float/add,
-                sub = float/sub,
-                negate = float_negate,
-              ),
-              multiplicative = (
-                one = 1.0,
-                mul = float/mul,
-              ),
-              order = (
-                equality = (
-                  eq = float_eq,
-                  ne = float_ne,
-                ),
-                lt = float_lt,
-                le = float_le,
-                gt = float_gt,
-                ge = float_ge,
-              ),
-              (),
-            ),
-            (),
-          ),
+          int8_instance = int8_instance,
+          int16_instance = int16_instance,
+          int32_instance = int32_instance,
+          int64_instance = int64_instance,
+          uint8_instance = uint8_instance,
+          uint16_instance = uint16_instance,
+          uint32_instance = uint32_instance,
+          uint64_instance = uint64_instance,
+          float32_instance = float32_instance,
+          float64_instance = float64_instance,
           (),
         ),
-        int = (
-          add = int/add,
-          sub = int/sub,
-          mul = int/mul,
-          div = int/div,
-          mod = int/mod,
-          eq = int_eq,
-          ne = int_ne,
-          lt = int_lt,
-          le = int_le,
-          gt = int_gt,
-          ge = int_ge,
-          increment = increment,
-          decrement = decrement,
-          negate = negate,
-          min = int_min,
-          max = int_max,
-          to_string = int/to_string,
+        primitives = (
+          int8 = int8,
+          int16 = int16,
+          int32 = int32,
+          int64 = int64,
+          uint8 = uint8,
+          uint16 = uint16,
+          uint32 = uint32,
+          uint64 = uint64,
+          float32 = float32,
+          float64 = float64,
+          (),
         ),
-        float = (
-          add = float/add,
-          sub = float/sub,
-          mul = float/mul,
-          div = float/div,
-          eq = float_eq,
-          ne = float_ne,
-          lt = float_lt,
-          le = float_le,
-          gt = float_gt,
-          ge = float_ge,
-          negate = float_negate,
-          to_string = float/to_string,
-        ),
+        int8 = int8_module,
+        int16 = int16_module,
+        int32 = int32_module,
+        int64 = int64_module,
+        uint8 = uint8_module,
+        uint16 = uint16_module,
+        uint32 = uint32_module,
+        uint64 = uint64_module,
+        float32 = float32_module,
+        float64 = float64_module,
         char = (
           to_string = char/to_string,
           codepoint = char/codepoint,

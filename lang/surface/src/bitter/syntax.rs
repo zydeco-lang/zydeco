@@ -243,10 +243,6 @@ pub struct PrimTerms {
     pub ret: MultiCell<TermId>,
     /// Unit type
     pub unit: MultiCell<TermId>,
-    /// Int type
-    pub int: MultiCell<TermId>,
-    /// Float type
-    pub float: MultiCell<TermId>,
     /// Char type
     pub char: MultiCell<TermId>,
     /// String type

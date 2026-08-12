@@ -1,6 +1,6 @@
 begin
   param (
-    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /OS; /int; /string; /stdio; /process) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /String; /OS; /int64; /string; /stdio; /process) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
 
@@ -24,10 +24,10 @@ begin
       end
   } that
   def int_equal : Thk (
-    Int -> Int -> Ret Bool
+    Int64 -> Int64 -> Ret Bool
   ) = {
     fn left right =>
-      ! (int/eq)
+      ! (int64/eq)
         (Ret Bool)
         left
         right
@@ -35,10 +35,10 @@ begin
         { ret +False() }
   } that
   def int_less : Thk (
-    Int -> Int -> Ret Bool
+    Int64 -> Int64 -> Ret Bool
   ) = {
     fn left right =>
-      ! (int/lt)
+      ! (int64/lt)
         (Ret Bool)
         left
         right

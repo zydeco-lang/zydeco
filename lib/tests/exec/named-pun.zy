@@ -2,7 +2,7 @@
 -- syntax form. The inferred payload is resolved according to its context.
 begin
   param (
-    (/VType; /Int; /int; /process) :
+    (/VType; /Int64; /int64; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -13,45 +13,45 @@ begin
     (PunValue :: PunValue)
   that
   let PunPair =
-    (pun_x :: Int) * (pun_y :: Int)
+    (pun_x :: Int64) * (pun_y :: Int64)
   that
   let Wrapped =
-    (outer :: (pun_inner :: Int))
+    (outer :: (pun_inner :: Int64))
   that
-  def pun_value : Int = 4 that
-  def slot : Slot Int = (= pun_value) that
-  def PunValue : Int = 5 that
-  def upper_slot : UpperSlot Int = (= PunValue) that
-  def pun_x : Int = 10 that
-  def pun_y : Int = 11 that
+  def pun_value : Int64 = 4 that
+  def slot : Slot Int64 = (= pun_value) that
+  def PunValue : Int64 = 5 that
+  def upper_slot : UpperSlot Int64 = (= PunValue) that
+  def pun_x : Int64 = 10 that
+  def pun_y : Int64 = 11 that
   def pun_pair : PunPair = (
-    = pun_x : Int,
-    = pun_y : Int
+    = pun_x : Int64,
+    = pun_y : Int64
   ) that
-  def pun_inner : Int = 12 that
+  def pun_inner : Int64 = 12 that
   def wrapped : Wrapped = (
     outer = (= pun_inner)
   ) that
 
-  let (= pun_value : Int) = slot in
-  let (= PunValue : Int) = upper_slot in
+  let (= pun_value : Int64) = slot in
+  let (= PunValue : Int64) = upper_slot in
   let (
-    = pun_x : Int,
-    = pun_y : Int
+    = pun_x : Int64,
+    = pun_y : Int64
   ) = pun_pair in
   let (
-    outer = (= pun_inner : Int)
+    outer = (= pun_inner : Int64)
   ) = wrapped in
-  do value_check <- ! (int/sub) pun_value 4;
-  do upper_value_check <- ! (int/sub) PunValue 5;
-  do upper_projection_check <- ! (int/sub) upper_slot/PunValue 5;
-  do x_check <- ! (int/sub) pun_x 10;
-  do y_check <- ! (int/sub) pun_y 11;
-  do inner_check <- ! (int/sub) pun_inner 12;
-  do total <- ! (int/add) value_check x_check;
-  do total <- ! (int/add) total upper_value_check;
-  do total <- ! (int/add) total upper_projection_check;
-  do total <- ! (int/add) total y_check;
-  do total <- ! (int/add) total inner_check;
+  do value_check <- ! (int64/sub) pun_value 4;
+  do upper_value_check <- ! (int64/sub) PunValue 5;
+  do upper_projection_check <- ! (int64/sub) upper_slot/PunValue 5;
+  do x_check <- ! (int64/sub) pun_x 10;
+  do y_check <- ! (int64/sub) pun_y 11;
+  do inner_check <- ! (int64/sub) pun_inner 12;
+  do total <- ! (int64/add) value_check x_check;
+  do total <- ! (int64/add) total upper_value_check;
+  do total <- ! (int64/add) total upper_projection_check;
+  do total <- ! (int64/add) total y_check;
+  do total <- ! (int64/add) total inner_check;
   ! (process/exit) total
 end

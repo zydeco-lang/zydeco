@@ -109,8 +109,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for Internal {
             | Internal::Thk => s += "Thk",
             | Internal::Ret => s += "Ret",
             | Internal::Unit => s += "Unit",
-            | Internal::Int => s += "Int",
-            | Internal::Float => s += "Float",
             | Internal::Char => s += "Char",
             | Internal::String => s += "String",
             | Internal::OS => s += "OS",
@@ -567,7 +565,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Literal {
     fn ugly(&self, _f: &'a Formatter) -> String {
         let mut s = String::new();
         match self {
-            | Literal::Int(i) => s += &format!("{:?}", i),
+            | Literal::Integer(i) => s += &format!("{:?}", i),
             | Literal::Float(value) => s += &format!("{:?}", value),
             // Fixme: escape string
             | Literal::String(str) => s += &format!("{:?}", str),

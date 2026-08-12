@@ -1,5 +1,5 @@
 param (
-  (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /int) :
+  (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /String; /int64) :
   @[import("builtin.zy")] _
 ) in
 begin
@@ -31,44 +31,44 @@ begin
   that
   def other : IoErrorKind = +Other()
   that
-  def ! from_code (code : Int) : Ret IoErrorKind =
-    ! (int/eq)
+  def ! from_code (code : Int64) : Ret IoErrorKind =
+    ! (int64/eq)
       (Ret IoErrorKind)
       code
       0
       { ret not_found }
       {
-        ! (int/eq)
+        ! (int64/eq)
           (Ret IoErrorKind)
           code
           1
           { ret permission_denied }
           {
-            ! (int/eq)
+            ! (int64/eq)
               (Ret IoErrorKind)
               code
               2
               { ret already_exists }
               {
-                ! (int/eq)
+                ! (int64/eq)
                   (Ret IoErrorKind)
                   code
                   3
                   { ret invalid_input }
                   {
-                    ! (int/eq)
+                    ! (int64/eq)
                       (Ret IoErrorKind)
                       code
                       4
                       { ret invalid_data }
                       {
-                        ! (int/eq)
+                        ! (int64/eq)
                           (Ret IoErrorKind)
                           code
                           5
                           { ret broken_pipe }
                           {
-                            ! (int/eq)
+                            ! (int64/eq)
                               (Ret IoErrorKind)
                               code
                               6
@@ -81,7 +81,7 @@ begin
           }
       }
   that
-  def ! kind_code (kind : IoErrorKind) : Ret Int =
+  def ! kind_code (kind : IoErrorKind) : Ret Int64 =
     match kind
     | +NotFound(_) => ret 0
     | +PermissionDenied(_) => ret 1
@@ -102,7 +102,7 @@ begin
     : R =
     do left_code <- ! kind_code left;
     do right_code <- ! kind_code right;
-    ! (int/eq) R left_code right_code when_equal when_different
+    ! (int64/eq) R left_code right_code when_equal when_different
   that
   def IoError =
     data
@@ -147,7 +147,7 @@ begin
       (broken_pipe :: AbstractIoErrorKind) *
       (closed :: AbstractIoErrorKind) *
       (other :: AbstractIoErrorKind) *
-      (from_code :: Thk (Int -> Ret AbstractIoErrorKind)) *
+      (from_code :: Thk (Int64 -> Ret AbstractIoErrorKind)) *
       (kind_eq_branch :: Thk (
         forall (R : CType) .
           AbstractIoErrorKind -> AbstractIoErrorKind -> Thk R -> Thk R -> R

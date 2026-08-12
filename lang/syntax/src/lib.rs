@@ -135,8 +135,16 @@ impl std::fmt::Display for IntrinsicRole {
 /// package signature.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BuiltinTypeRole {
-    Int,
-    Float,
+    Int8,
+    Int16,
+    Int32,
+    Int64,
+    UInt8,
+    UInt16,
+    UInt32,
+    UInt64,
+    Float32,
+    Float64,
     Char,
     String,
     Bytes,
@@ -154,8 +162,16 @@ pub enum BuiltinTypeUniverse {
 impl BuiltinTypeRole {
     pub fn from_source_name(name: &str) -> Option<Self> {
         match name {
-            | "int" => Some(Self::Int),
-            | "float" => Some(Self::Float),
+            | "int8" => Some(Self::Int8),
+            | "int16" => Some(Self::Int16),
+            | "int32" => Some(Self::Int32),
+            | "int64" => Some(Self::Int64),
+            | "uint8" => Some(Self::UInt8),
+            | "uint16" => Some(Self::UInt16),
+            | "uint32" => Some(Self::UInt32),
+            | "uint64" => Some(Self::UInt64),
+            | "float32" => Some(Self::Float32),
+            | "float64" => Some(Self::Float64),
             | "char" => Some(Self::Char),
             | "string" => Some(Self::String),
             | "bytes" => Some(Self::Bytes),
@@ -168,8 +184,16 @@ impl BuiltinTypeRole {
 
     pub fn source_name(self) -> &'static str {
         match self {
-            | Self::Int => "int",
-            | Self::Float => "float",
+            | Self::Int8 => "int8",
+            | Self::Int16 => "int16",
+            | Self::Int32 => "int32",
+            | Self::Int64 => "int64",
+            | Self::UInt8 => "uint8",
+            | Self::UInt16 => "uint16",
+            | Self::UInt32 => "uint32",
+            | Self::UInt64 => "uint64",
+            | Self::Float32 => "float32",
+            | Self::Float64 => "float64",
             | Self::Char => "char",
             | Self::String => "string",
             | Self::Bytes => "bytes",
@@ -181,8 +205,16 @@ impl BuiltinTypeRole {
 
     pub fn universe(self) -> BuiltinTypeUniverse {
         match self {
-            | Self::Int
-            | Self::Float
+            | Self::Int8
+            | Self::Int16
+            | Self::Int32
+            | Self::Int64
+            | Self::UInt8
+            | Self::UInt16
+            | Self::UInt32
+            | Self::UInt64
+            | Self::Float32
+            | Self::Float64
             | Self::Char
             | Self::String
             | Self::Bytes
@@ -190,6 +222,28 @@ impl BuiltinTypeRole {
             | Self::Writer => BuiltinTypeUniverse::Value,
             | Self::OS => BuiltinTypeUniverse::Computation,
         }
+    }
+
+    pub fn integer_type(self) -> Option<IntegerType> {
+        Some(match self {
+            | Self::Int8 => IntegerType::Int8,
+            | Self::Int16 => IntegerType::Int16,
+            | Self::Int32 => IntegerType::Int32,
+            | Self::Int64 => IntegerType::Int64,
+            | Self::UInt8 => IntegerType::UInt8,
+            | Self::UInt16 => IntegerType::UInt16,
+            | Self::UInt32 => IntegerType::UInt32,
+            | Self::UInt64 => IntegerType::UInt64,
+            | _ => return None,
+        })
+    }
+
+    pub fn float_type(self) -> Option<FloatType> {
+        Some(match self {
+            | Self::Float32 => FloatType::Float32,
+            | Self::Float64 => FloatType::Float64,
+            | _ => return None,
+        })
     }
 }
 
@@ -199,26 +253,218 @@ impl std::fmt::Display for BuiltinTypeRole {
     }
 }
 
-/// Compiler-defined roles that may be assigned to host-provided value entries
-/// in the Builtin package signature.
+/// The concrete representation selected for an integer literal or operation.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub enum BuiltinValueRole {
+pub enum IntegerType {
+    Int8,
+    Int16,
+    Int32,
+    Int64,
+    UInt8,
+    UInt16,
+    UInt32,
+    UInt64,
+}
+
+impl IntegerType {
+    pub const ALL: [Self; 8] = [
+        Self::Int8,
+        Self::Int16,
+        Self::Int32,
+        Self::Int64,
+        Self::UInt8,
+        Self::UInt16,
+        Self::UInt32,
+        Self::UInt64,
+    ];
+
+    pub fn builtin_role(self) -> BuiltinTypeRole {
+        match self {
+            | Self::Int8 => BuiltinTypeRole::Int8,
+            | Self::Int16 => BuiltinTypeRole::Int16,
+            | Self::Int32 => BuiltinTypeRole::Int32,
+            | Self::Int64 => BuiltinTypeRole::Int64,
+            | Self::UInt8 => BuiltinTypeRole::UInt8,
+            | Self::UInt16 => BuiltinTypeRole::UInt16,
+            | Self::UInt32 => BuiltinTypeRole::UInt32,
+            | Self::UInt64 => BuiltinTypeRole::UInt64,
+        }
+    }
+
+    pub fn source_name(self) -> &'static str {
+        self.builtin_role().source_name()
+    }
+
+    pub fn type_name(self) -> &'static str {
+        match self {
+            | Self::Int8 => "Int8",
+            | Self::Int16 => "Int16",
+            | Self::Int32 => "Int32",
+            | Self::Int64 => "Int64",
+            | Self::UInt8 => "UInt8",
+            | Self::UInt16 => "UInt16",
+            | Self::UInt32 => "UInt32",
+            | Self::UInt64 => "UInt64",
+        }
+    }
+
+    pub fn is_signed(self) -> bool {
+        matches!(self, Self::Int8 | Self::Int16 | Self::Int32 | Self::Int64)
+    }
+}
+
+impl std::fmt::Display for IntegerType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.type_name())
+    }
+}
+
+/// The concrete IEEE-754 representation selected for a floating-point literal
+/// or operation.
+#[derive(Copy, Clone, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum FloatType {
+    Float32,
+    #[default]
+    Float64,
+}
+
+impl FloatType {
+    pub const ALL: [Self; 2] = [Self::Float32, Self::Float64];
+
+    pub fn builtin_role(self) -> BuiltinTypeRole {
+        match self {
+            | Self::Float32 => BuiltinTypeRole::Float32,
+            | Self::Float64 => BuiltinTypeRole::Float64,
+        }
+    }
+
+    pub fn source_name(self) -> &'static str {
+        self.builtin_role().source_name()
+    }
+
+    pub fn type_name(self) -> &'static str {
+        match self {
+            | Self::Float32 => "Float32",
+            | Self::Float64 => "Float64",
+        }
+    }
+}
+
+impl std::fmt::Display for FloatType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.type_name())
+    }
+}
+
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum IntegerOperation {
     Add,
     Sub,
     Mul,
     Div,
     Mod,
-    IntEq,
-    IntLt,
-    IntGt,
-    FloatAdd,
-    FloatSub,
-    FloatMul,
-    FloatDiv,
-    FloatEq,
-    FloatLt,
-    FloatGt,
-    FloatToStr,
+    Eq,
+    Lt,
+    Gt,
+    ToString,
+}
+
+impl IntegerOperation {
+    pub const ALL: [Self; 9] = [
+        Self::Add,
+        Self::Sub,
+        Self::Mul,
+        Self::Div,
+        Self::Mod,
+        Self::Eq,
+        Self::Lt,
+        Self::Gt,
+        Self::ToString,
+    ];
+
+    pub fn source_name(self) -> &'static str {
+        match self {
+            | Self::Add => "add",
+            | Self::Sub => "sub",
+            | Self::Mul => "mul",
+            | Self::Div => "div",
+            | Self::Mod => "mod",
+            | Self::Eq => "eq",
+            | Self::Lt => "lt",
+            | Self::Gt => "gt",
+            | Self::ToString => "to_string",
+        }
+    }
+
+    pub fn from_source_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|operation| operation.source_name() == name)
+    }
+
+    pub fn arity(self) -> usize {
+        match self {
+            | Self::Add | Self::Sub | Self::Mul | Self::Div | Self::Mod => 2,
+            | Self::Eq | Self::Lt | Self::Gt => 4,
+            | Self::ToString => 1,
+        }
+    }
+
+    pub fn is_branch(self) -> bool {
+        matches!(self, Self::Eq | Self::Lt | Self::Gt)
+    }
+}
+
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum FloatOperation {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Eq,
+    Lt,
+    Gt,
+    ToString,
+}
+
+impl FloatOperation {
+    pub const ALL: [Self; 8] =
+        [Self::Add, Self::Sub, Self::Mul, Self::Div, Self::Eq, Self::Lt, Self::Gt, Self::ToString];
+
+    pub fn source_name(self) -> &'static str {
+        match self {
+            | Self::Add => "add",
+            | Self::Sub => "sub",
+            | Self::Mul => "mul",
+            | Self::Div => "div",
+            | Self::Eq => "eq",
+            | Self::Lt => "lt",
+            | Self::Gt => "gt",
+            | Self::ToString => "to_string",
+        }
+    }
+
+    pub fn from_source_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|operation| operation.source_name() == name)
+    }
+
+    pub fn arity(self) -> usize {
+        match self {
+            | Self::Add | Self::Sub | Self::Mul | Self::Div => 2,
+            | Self::Eq | Self::Lt | Self::Gt => 4,
+            | Self::ToString => 1,
+        }
+    }
+
+    pub fn is_branch(self) -> bool {
+        matches!(self, Self::Eq | Self::Lt | Self::Gt)
+    }
+}
+
+/// Compiler-defined roles that may be assigned to host-provided value entries
+/// in the Builtin package signature.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum BuiltinValueRole {
+    Integer(IntegerType, IntegerOperation),
+    Float(FloatType, FloatOperation),
     StrScalarLength,
     StrByteLength,
     StrAppend,
@@ -226,7 +472,6 @@ pub enum BuiltinValueRole {
     StrSplitAt,
     StrEq,
     StrGet,
-    IntToStr,
     CharToStr,
     CharCodepoint,
     CharFromCodepoint,
@@ -261,23 +506,7 @@ pub enum BuiltinValueRole {
 }
 
 impl BuiltinValueRole {
-    pub const ALL: &'static [Self] = &[
-        Self::Add,
-        Self::Sub,
-        Self::Mul,
-        Self::Div,
-        Self::Mod,
-        Self::IntEq,
-        Self::IntLt,
-        Self::IntGt,
-        Self::FloatAdd,
-        Self::FloatSub,
-        Self::FloatMul,
-        Self::FloatDiv,
-        Self::FloatEq,
-        Self::FloatLt,
-        Self::FloatGt,
-        Self::FloatToStr,
+    const NON_NUMERIC: &'static [Self] = &[
         Self::StrScalarLength,
         Self::StrByteLength,
         Self::StrAppend,
@@ -285,7 +514,6 @@ impl BuiltinValueRole {
         Self::StrSplitAt,
         Self::StrEq,
         Self::StrGet,
-        Self::IntToStr,
         Self::CharToStr,
         Self::CharCodepoint,
         Self::CharFromCodepoint,
@@ -319,24 +547,40 @@ impl BuiltinValueRole {
         Self::Exit,
     ];
 
+    pub fn all() -> impl Iterator<Item = Self> {
+        IntegerType::ALL
+            .into_iter()
+            .flat_map(|integer| {
+                IntegerOperation::ALL
+                    .into_iter()
+                    .map(move |operation| Self::Integer(integer, operation))
+            })
+            .chain(FloatType::ALL.into_iter().flat_map(|float| {
+                FloatOperation::ALL.into_iter().map(move |operation| Self::Float(float, operation))
+            }))
+            .chain(Self::NON_NUMERIC.iter().copied())
+    }
+
     pub fn from_source_name(name: &str) -> Option<Self> {
+        let numeric = IntegerType::ALL.into_iter().find_map(|integer| {
+            name.strip_prefix(integer.source_name())
+                .and_then(|suffix| suffix.strip_prefix('_'))
+                .and_then(IntegerOperation::from_source_name)
+                .map(|operation| Self::Integer(integer, operation))
+        });
+        if numeric.is_some() {
+            return numeric;
+        }
+        let numeric = FloatType::ALL.into_iter().find_map(|float| {
+            name.strip_prefix(float.source_name())
+                .and_then(|suffix| suffix.strip_prefix('_'))
+                .and_then(FloatOperation::from_source_name)
+                .map(|operation| Self::Float(float, operation))
+        });
+        if numeric.is_some() {
+            return numeric;
+        }
         match name {
-            | "add" => Some(Self::Add),
-            | "sub" => Some(Self::Sub),
-            | "mul" => Some(Self::Mul),
-            | "div" => Some(Self::Div),
-            | "mod" => Some(Self::Mod),
-            | "int_eq" => Some(Self::IntEq),
-            | "int_lt" => Some(Self::IntLt),
-            | "int_gt" => Some(Self::IntGt),
-            | "float_add" => Some(Self::FloatAdd),
-            | "float_sub" => Some(Self::FloatSub),
-            | "float_mul" => Some(Self::FloatMul),
-            | "float_div" => Some(Self::FloatDiv),
-            | "float_eq" => Some(Self::FloatEq),
-            | "float_lt" => Some(Self::FloatLt),
-            | "float_gt" => Some(Self::FloatGt),
-            | "float_to_str" => Some(Self::FloatToStr),
             | "str_scalar_length" => Some(Self::StrScalarLength),
             | "str_byte_length" => Some(Self::StrByteLength),
             | "str_append" => Some(Self::StrAppend),
@@ -344,7 +588,6 @@ impl BuiltinValueRole {
             | "str_split_at" => Some(Self::StrSplitAt),
             | "str_eq" => Some(Self::StrEq),
             | "str_get" => Some(Self::StrGet),
-            | "int_to_str" => Some(Self::IntToStr),
             | "char_to_str" => Some(Self::CharToStr),
             | "char_codepoint" => Some(Self::CharCodepoint),
             | "char_from_codepoint" => Some(Self::CharFromCodepoint),
@@ -380,24 +623,21 @@ impl BuiltinValueRole {
         }
     }
 
-    pub fn source_name(self) -> &'static str {
+    pub fn source_name(self) -> String {
         match self {
-            | Self::Add => "add",
-            | Self::Sub => "sub",
-            | Self::Mul => "mul",
-            | Self::Div => "div",
-            | Self::Mod => "mod",
-            | Self::IntEq => "int_eq",
-            | Self::IntLt => "int_lt",
-            | Self::IntGt => "int_gt",
-            | Self::FloatAdd => "float_add",
-            | Self::FloatSub => "float_sub",
-            | Self::FloatMul => "float_mul",
-            | Self::FloatDiv => "float_div",
-            | Self::FloatEq => "float_eq",
-            | Self::FloatLt => "float_lt",
-            | Self::FloatGt => "float_gt",
-            | Self::FloatToStr => "float_to_str",
+            | Self::Integer(integer, operation) => {
+                format!("{}_{}", integer.source_name(), operation.source_name())
+            }
+            | Self::Float(float, operation) => {
+                format!("{}_{}", float.source_name(), operation.source_name())
+            }
+            | role => role.non_numeric_source_name().to_owned(),
+        }
+    }
+
+    fn non_numeric_source_name(self) -> &'static str {
+        match self {
+            | Self::Integer(_, _) | Self::Float(_, _) => unreachable!(),
             | Self::StrScalarLength => "str_scalar_length",
             | Self::StrByteLength => "str_byte_length",
             | Self::StrAppend => "str_append",
@@ -405,7 +645,6 @@ impl BuiltinValueRole {
             | Self::StrSplitAt => "str_split_at",
             | Self::StrEq => "str_eq",
             | Self::StrGet => "str_get",
-            | Self::IntToStr => "int_to_str",
             | Self::CharToStr => "char_to_str",
             | Self::CharCodepoint => "char_codepoint",
             | Self::CharFromCodepoint => "char_from_codepoint",
@@ -443,24 +682,66 @@ impl BuiltinValueRole {
     /// Runtime symbol used when the role is materialized in the foundational
     /// Builtin package. This may differ from the source annotation name when
     /// the package uses a representation-independent classifier.
-    pub fn host_name(self) -> &'static str {
+    pub fn host_name(self) -> String {
         match self {
-            | Self::IntEq => "int_eq_branch",
-            | Self::IntLt => "int_lt_branch",
-            | Self::IntGt => "int_gt_branch",
-            | Self::FloatEq => "float_eq_branch",
-            | Self::FloatLt => "float_lt_branch",
-            | Self::FloatGt => "float_gt_branch",
-            | Self::StrSplitOnce => "str_split_once_branch",
-            | Self::StrSplitAt => "str_split_at_branch",
-            | Self::StrEq => "str_eq_branch",
-            | Self::StrGet => "str_get_branch",
-            | Self::CharFromCodepoint => "char_from_codepoint_branch",
-            | Self::StrParseInt => "str_parse_int_branch",
-            | Self::BytesToStr => "bytes_to_str_branch",
-            | Self::ReadLineAsInt => "read_line_as_int_branch",
-            | Self::ArgList => "arg_fold",
+            | Self::Integer(integer, operation) if operation.is_branch() => {
+                format!("{}_{}_branch", integer.source_name(), operation.source_name())
+            }
+            | Self::Float(float, operation) if operation.is_branch() => {
+                format!("{}_{}_branch", float.source_name(), operation.source_name())
+            }
+            | Self::StrSplitOnce => "str_split_once_branch".to_owned(),
+            | Self::StrSplitAt => "str_split_at_branch".to_owned(),
+            | Self::StrEq => "str_eq_branch".to_owned(),
+            | Self::StrGet => "str_get_branch".to_owned(),
+            | Self::CharFromCodepoint => "char_from_codepoint_branch".to_owned(),
+            | Self::StrParseInt => "str_parse_int_branch".to_owned(),
+            | Self::BytesToStr => "bytes_to_str_branch".to_owned(),
+            | Self::ReadLineAsInt => "read_line_as_int_branch".to_owned(),
+            | Self::ArgList => "arg_fold".to_owned(),
             | role => role.source_name(),
+        }
+    }
+
+    pub fn arity(self) -> usize {
+        match self {
+            | Self::Integer(_, operation) => operation.arity(),
+            | Self::Float(_, operation) => operation.arity(),
+            | Self::BytesEmpty | Self::Stdin | Self::Stdout | Self::Stderr => 0,
+            | Self::StrScalarLength
+            | Self::StrByteLength
+            | Self::CharToStr
+            | Self::CharCodepoint
+            | Self::BytesLength
+            | Self::BytesFromStr
+            | Self::ReadLine
+            | Self::ReadTillEof
+            | Self::RandomInt
+            | Self::Exit => 1,
+            | Self::StrAppend
+            | Self::BytesAppend
+            | Self::WriteStr
+            | Self::WriteInt
+            | Self::WriteLine
+            | Self::ReadLineAsInt
+            | Self::ArgList => 2,
+            | Self::CharFromCodepoint
+            | Self::StrParseInt
+            | Self::BytesToStr
+            | Self::IoReadAll
+            | Self::IoFlush
+            | Self::IoCloseReader
+            | Self::IoCloseWriter
+            | Self::FsOpenReader
+            | Self::FsCreateWriter
+            | Self::FsAppendWriter => 3,
+            | Self::StrSplitOnce
+            | Self::StrSplitAt
+            | Self::StrEq
+            | Self::StrGet
+            | Self::IoRead
+            | Self::IoReadLine
+            | Self::IoWriteAll => 4,
         }
     }
 }
@@ -485,9 +766,9 @@ impl BuiltinRole {
             .or_else(|| BuiltinValueRole::from_source_name(name).map(Self::Value))
     }
 
-    pub fn source_name(self) -> &'static str {
+    pub fn source_name(self) -> String {
         match self {
-            | Self::Type(role) => role.source_name(),
+            | Self::Type(role) => role.source_name().to_owned(),
             | Self::Value(role) => role.source_name(),
         }
     }
@@ -674,36 +955,175 @@ pub struct Proj<Head, Tag>(pub Head, pub Tag);
 /// literals in term
 #[derive(From, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum Literal {
-    Int(i64),
+    Integer(IntegerLiteral),
     Float(FloatLiteral),
     String(Utf8String),
     Char(char),
 }
 
-/// An IEEE-754 binary64 literal with bitwise equality and hashing.
+/// An integer literal represented by the corresponding Rust integer type after
+/// checking. `Unresolved` exists only between parsing and type checking.
+#[derive(Copy, Clone, Hash, PartialEq, Eq)]
+pub enum IntegerLiteral {
+    Int8(i8),
+    Int16(i16),
+    Int32(i32),
+    Int64(i64),
+    UInt8(u8),
+    UInt16(u16),
+    UInt32(u32),
+    UInt64(u64),
+    Unresolved(i128),
+}
+
+impl IntegerLiteral {
+    pub fn new(value: i128) -> Self {
+        Self::Unresolved(value)
+    }
+
+    pub fn with_type(self, integer_type: IntegerType) -> Option<Self> {
+        let value = self.value();
+        Some(match integer_type {
+            | IntegerType::Int8 => Self::Int8(value.try_into().ok()?),
+            | IntegerType::Int16 => Self::Int16(value.try_into().ok()?),
+            | IntegerType::Int32 => Self::Int32(value.try_into().ok()?),
+            | IntegerType::Int64 => Self::Int64(value.try_into().ok()?),
+            | IntegerType::UInt8 => Self::UInt8(value.try_into().ok()?),
+            | IntegerType::UInt16 => Self::UInt16(value.try_into().ok()?),
+            | IntegerType::UInt32 => Self::UInt32(value.try_into().ok()?),
+            | IntegerType::UInt64 => Self::UInt64(value.try_into().ok()?),
+        })
+    }
+
+    pub fn from_value(value: i128, integer_type: IntegerType) -> Self {
+        Self::new(value)
+            .with_type(integer_type)
+            .expect("integer primitive produced a value outside its representation")
+    }
+
+    pub fn value(self) -> i128 {
+        match self {
+            | Self::Int8(value) => value.into(),
+            | Self::Int16(value) => value.into(),
+            | Self::Int32(value) => value.into(),
+            | Self::Int64(value) => value.into(),
+            | Self::UInt8(value) => value.into(),
+            | Self::UInt16(value) => value.into(),
+            | Self::UInt32(value) => value.into(),
+            | Self::UInt64(value) => value.into(),
+            | Self::Unresolved(value) => value,
+        }
+    }
+
+    pub fn integer_type(self) -> Option<IntegerType> {
+        Some(match self {
+            | Self::Int8(_) => IntegerType::Int8,
+            | Self::Int16(_) => IntegerType::Int16,
+            | Self::Int32(_) => IntegerType::Int32,
+            | Self::Int64(_) => IntegerType::Int64,
+            | Self::UInt8(_) => IntegerType::UInt8,
+            | Self::UInt16(_) => IntegerType::UInt16,
+            | Self::UInt32(_) => IntegerType::UInt32,
+            | Self::UInt64(_) => IntegerType::UInt64,
+            | Self::Unresolved(_) => return None,
+        })
+    }
+
+    pub fn to_word_bits(self) -> u64 {
+        match self {
+            | Self::Int8(value) => value as u8 as u64,
+            | Self::Int16(value) => value as u16 as u64,
+            | Self::Int32(value) => value as u32 as u64,
+            | Self::Int64(value) => value as u64,
+            | Self::UInt8(value) => value.into(),
+            | Self::UInt16(value) => value.into(),
+            | Self::UInt32(value) => value.into(),
+            | Self::UInt64(value) => value,
+            | Self::Unresolved(_) => panic!("unresolved integer literal reached lowering"),
+        }
+    }
+}
+
+impl From<i64> for IntegerLiteral {
+    fn from(value: i64) -> Self {
+        Self::Int64(value)
+    }
+}
+
+impl std::fmt::Debug for IntegerLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.value().fmt(f)
+    }
+}
+
+impl std::fmt::Display for IntegerLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.value().fmt(f)
+    }
+}
+
+/// An IEEE-754 binary32 or binary64 literal with bitwise equality and hashing.
 ///
 /// Keeping the bits as the structural representation preserves signed zero and
 /// NaN payloads while allowing literals to participate in syntax identities.
-#[derive(Copy, Clone, Default, Hash, PartialEq, Eq)]
-pub struct FloatLiteral(u64);
+#[derive(Copy, Clone, Hash, PartialEq, Eq)]
+pub enum FloatLiteral {
+    Float32(u32),
+    Float64(u64),
+}
+
+impl Default for FloatLiteral {
+    fn default() -> Self {
+        Self::from(0.0)
+    }
+}
 
 impl FloatLiteral {
     pub fn from_bits(bits: u64) -> Self {
-        Self(bits)
+        Self::Float64(bits)
+    }
+
+    pub fn from_f32_bits(bits: u32) -> Self {
+        Self::Float32(bits)
     }
 
     pub fn to_bits(self) -> u64 {
-        self.0
+        match self {
+            | Self::Float32(bits) => bits.into(),
+            | Self::Float64(bits) => bits,
+        }
     }
 
     pub fn value(self) -> f64 {
-        f64::from_bits(self.0)
+        match self {
+            | Self::Float32(bits) => f32::from_bits(bits).into(),
+            | Self::Float64(bits) => f64::from_bits(bits),
+        }
+    }
+
+    pub fn float_type(self) -> FloatType {
+        match self {
+            | Self::Float32(_) => FloatType::Float32,
+            | Self::Float64(_) => FloatType::Float64,
+        }
+    }
+
+    pub fn with_type(self, float_type: FloatType) -> Option<Self> {
+        let value = self.value();
+        match float_type {
+            | FloatType::Float32 => {
+                let narrowed = value as f32;
+                (!value.is_finite() || narrowed.is_finite())
+                    .then(|| Self::from_f32_bits(narrowed.to_bits()))
+            }
+            | FloatType::Float64 => Some(Self::from_bits(value.to_bits())),
+        }
     }
 }
 
 impl From<f64> for FloatLiteral {
     fn from(value: f64) -> Self {
-        Self(value.to_bits())
+        Self::from_bits(value.to_bits())
     }
 }
 
@@ -716,5 +1136,44 @@ impl std::fmt::Debug for FloatLiteral {
 impl std::fmt::Display for FloatLiteral {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.value().fmt(f)
+    }
+}
+
+#[cfg(test)]
+mod numeric_tests {
+    use super::*;
+
+    #[test]
+    fn integer_literals_use_exact_rust_carriers() {
+        assert_eq!(
+            IntegerLiteral::new(-128).with_type(IntegerType::Int8),
+            Some(IntegerLiteral::Int8(i8::MIN))
+        );
+        assert_eq!(
+            IntegerLiteral::new(u64::MAX.into()).with_type(IntegerType::UInt64),
+            Some(IntegerLiteral::UInt64(u64::MAX))
+        );
+        assert_eq!(IntegerLiteral::new(128).with_type(IntegerType::Int8), None);
+        assert_eq!(IntegerLiteral::new(-1).with_type(IntegerType::UInt8), None);
+    }
+
+    #[test]
+    fn float_literals_preserve_the_selected_rust_width() {
+        let literal = FloatLiteral::from(1.5);
+        let narrowed = literal.with_type(FloatType::Float32).unwrap();
+
+        assert_eq!(narrowed, FloatLiteral::Float32(1.5_f32.to_bits()));
+        assert_eq!(narrowed.float_type(), FloatType::Float32);
+        assert_eq!(literal.float_type(), FloatType::Float64);
+    }
+
+    #[test]
+    fn legacy_numeric_builtin_names_are_retired() {
+        ["int", "float"].into_iter().for_each(|name| {
+            assert_eq!(BuiltinTypeRole::from_source_name(name), None);
+        });
+        ["add", "int_eq", "float_add"].into_iter().for_each(|name| {
+            assert_eq!(BuiltinValueRole::from_source_name(name), None);
+        });
     }
 }

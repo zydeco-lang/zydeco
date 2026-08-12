@@ -308,7 +308,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Imm {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         match self {
             | Imm::Triv(triv) => triv.pretty(f),
-            | Imm::Int(i) => RcDoc::text(format!("{:?}", i)),
+            | Imm::Integer(i) => RcDoc::text(format!("{:?}", i)),
             | Imm::Float(value) => RcDoc::text(format!("{:?}", value)),
             | Imm::Char(c) => RcDoc::text(format!("{:?}", c)),
         }
@@ -317,14 +317,14 @@ impl<'a> Pretty<'a, Formatter<'a>> for Imm {
 
 impl<'a> Pretty<'a, Formatter<'a>> for Intrinsic {
     fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
-        RcDoc::text(self.name)
+        RcDoc::text(self.name.clone())
     }
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for Literal {
     fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
         match self {
-            | Literal::Int(i) => RcDoc::text(format!("{:?}", i)),
+            | Literal::Integer(i) => RcDoc::text(format!("{:?}", i)),
             | Literal::Float(value) => RcDoc::text(format!("{:?}", value)),
             | Literal::String(str) => RcDoc::text(format!("{:?}", str)),
             | Literal::Char(c) => RcDoc::text(format!("{:?}", c)),

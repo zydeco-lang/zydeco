@@ -1,7 +1,7 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (/VType; /CType; /Thk; /Ret; /Unit; /String; /OS; /int; /string; /stdio; /random; /process; builtin) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /String; /OS; /int64; /string; /stdio; /random; /process; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
@@ -102,8 +102,8 @@ begin
   def ! flip-os (unit : Unit) (continuation : Thk (Bool -> OS)) : OS =
     ! (random/generate) {
       fn random =>
-        do remainder <- ! (int/mod) random 2;
-        ! (int/eq)
+        do remainder <- ! (int64/mod) random 2;
+        ! (int64/eq)
           OS
           remainder
           0

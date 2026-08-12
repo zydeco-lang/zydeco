@@ -1,12 +1,12 @@
 param (
-  (/OS; /int; /stdio; /process) :
+  (/OS; /int64; /stdio; /process) :
   @[import("../../std/builtin.zy")] _
 ) in
   ! (stdio/read_int)
     { ! (process/exit) 1 }
     {
       fn integer =>
-        ! (int/eq)
+        ! (int64/eq)
           OS
           integer
           42

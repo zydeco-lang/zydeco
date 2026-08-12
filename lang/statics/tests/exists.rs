@@ -36,7 +36,7 @@ fn alpha_equivalent_manifest_existential_types_unify() {
     TestFixture::run(|tycker| {
         let (vtype, _) = TestFixture::kinds(tycker);
         let env = TyEnv::new();
-        let definition = Alloc::alloc(tycker, IntTy, vtype, &env);
+        let definition = Alloc::alloc(tycker, OpaqueTy, vtype, &env);
         let (lhs_witness, _) = TestFixture::abst(tycker, vtype);
         let (rhs_witness, _) = TestFixture::abst(tycker, vtype);
         let lhs_binder = TypeBinder::with_witness(tycker, lhs_witness, &env);
@@ -67,7 +67,7 @@ fn distinct_manifest_definitions_do_not_unify() {
         let (vtype, _) = TestFixture::kinds(tycker);
         let env = TyEnv::new();
         let unit = Alloc::alloc(tycker, UnitTy, vtype, &env);
-        let integer = Alloc::alloc(tycker, IntTy, vtype, &env);
+        let integer = Alloc::alloc(tycker, OpaqueTy, vtype, &env);
         let (lhs_witness, _) = TestFixture::abst(tycker, vtype);
         let (rhs_witness, _) = TestFixture::abst(tycker, vtype);
         let lhs_binder = TypeBinder::with_witness(tycker, lhs_witness, &env);

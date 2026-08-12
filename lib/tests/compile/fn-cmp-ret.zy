@@ -1,11 +1,11 @@
 begin
   param (
-    (/Ret; /Int; /int; /process) :
+    (/Ret; /Int64; /int64; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
-  def ! f (x : Int) : Ret Int =
-    ! (int/eq)
-      (Ret Int)
+  def ! f (x : Int64) : Ret Int64 =
+    ! (int64/eq)
+      (Ret Int64)
       x
       0
       { ret 0 }

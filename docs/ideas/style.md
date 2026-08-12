@@ -214,16 +214,17 @@ param (
   (/VType; /Thk; /String; builtin) :
   @[import("../std/builtin.zy")] _
 ) in
-let (/int; /process) = make_std builtin in
+let (/int64; /process) = make_std builtin in
 ...
 ```
 
 Selected type fields and module values share the same package opening.
 Keep all related selections in that group, place type fields before value modules,
 and retain their interface order when it makes the list easier to compare with the provider.
-Plain `/Int` selects the public field `Int` under the same local name.
+Plain `/Int64` selects the public field `Int64` under the same local name.
 Use an explicit rename such as `/String = Text` only when the consumer has a clearer role name.
-Select Builtin operations as module values and keep individual calls qualified, such as `int/add` and `process/exit`.
+Select Builtin operations as module values and keep individual calls qualified,
+such as `int64/add` and `process/exit`.
 A final ordinary pattern such as `builtin` retains the complete package for forwarding,
 while the preceding projections introduce only the requested local names.
 Omit that alias when the consumer does not forward the package.
@@ -235,7 +236,7 @@ and projecting only their dependencies, which keeps the names subject to ordinar
 without repeating the complete host interface.
 
 Within that signature, host-type roles are accepted only on abstract existential patterns,
-as in `exists @[builtin(int)] (Int : VType) . ...`.
+as in `exists @[builtin(int64)] (Int64 : VType) . ...`.
 This keeps the role beside the identity it classifies and allows all host types to inhabit one telescope.
 Host-operation roles are accepted only on term classifiers,
 where they should annotate the corresponding labeled classifier.

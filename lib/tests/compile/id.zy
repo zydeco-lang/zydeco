@@ -1,15 +1,15 @@
 begin
   param (
-    (/VType; /Ret; /Int; /process) :
+    (/VType; /Ret; /Int64; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
   def ! id (A : VType) (a : A) : Ret A =
     ret a
   that
 
-  do x <- ! id Int 0;
-  do y <- ! id Int x;
-  do z <- ! id Int y;
-  do r <- ! id Int z;
+  do x <- ! id Int64 0;
+  do y <- ! id Int64 x;
+  do z <- ! id Int64 y;
+  do r <- ! id Int64 z;
   ! (process/exit) r
 end

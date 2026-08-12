@@ -121,8 +121,6 @@ pub struct PrimDefs {
     pub thk: SingCell<DefId>,
     pub ret: SingCell<DefId>,
     pub unit: SingCell<DefId>,
-    pub int: SingCell<DefId>,
-    pub float: SingCell<DefId>,
     pub char: SingCell<DefId>,
     pub string: SingCell<DefId>,
     pub os: SingCell<DefId>,

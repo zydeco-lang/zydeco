@@ -53,20 +53,11 @@ pub enum Value {
 
 /* ------------------------------- Computation ------------------------------ */
 
-/// Function signature for builtin primitives.
-pub type PrimComp = fn(
-    Vec<SemValue>,
-    &mut dyn BufRead,
-    &mut dyn Write,
-    &[String],
-    &mut HostRuntime,
-) -> Result<Computation, i32>;
-
-/// A primitive function together with its arity.
+/// A typed host operation together with its runtime arity.
 #[derive(Clone, Debug)]
 pub struct Prim {
     pub arity: u64,
-    pub body: PrimComp,
+    pub role: BuiltinValueRole,
 }
 
 /// Computations in the dynamic language.

@@ -3,7 +3,7 @@ use yew::prelude::*;
 
 const EXAMPLE: &str = "
 let f = {
-  fn (x: Int) -> ret x
+  fn (x: Int64) -> ret x
 } in
 ! f 3
 ";

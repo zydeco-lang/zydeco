@@ -330,20 +330,20 @@ fn checked_trivial_computation() -> SourceChecked {
 fn builtin_add_exit_source() -> &'static str {
     r#"
 param (
-  (/Int; /OS; /int; /process) :
+  (/Int64; /OS; /int64; /process) :
   exists
-    @[builtin(int)] (Int : @[intrinsic(vtype)] _)
+    @[builtin(int64)] (Int64 : @[intrinsic(vtype)] _)
     @[builtin(os)] (OS : @[intrinsic(ctype)] _)
   .
-    (int ::
-      (@[builtin(add)] (add ::
-        (@[intrinsic(thk)] _) (Int -> Int -> (@[intrinsic(ret)] _) Int))) *
-      (@[builtin(sub)] (sub ::
-        (@[intrinsic(thk)] _) (Int -> Int -> (@[intrinsic(ret)] _) Int)))) *
+    (int64 ::
+      (@[builtin(int64_add)] (add ::
+        (@[intrinsic(thk)] _) (Int64 -> Int64 -> (@[intrinsic(ret)] _) Int64))) *
+      (@[builtin(int64_sub)] (sub ::
+        (@[intrinsic(thk)] _) (Int64 -> Int64 -> (@[intrinsic(ret)] _) Int64)))) *
     (process ::
-      @[builtin(exit)] (exit :: (@[intrinsic(thk)] _) (Int -> OS)))
+      @[builtin(exit)] (exit :: (@[intrinsic(thk)] _) (Int64 -> OS)))
 ) in
-  do sum <- ! (int/add) 1 2;
+  do sum <- ! (int64/add) 1 2;
   ! (process/exit) sum
 "#
 }
@@ -695,7 +695,7 @@ fn program_assembly_consumes_import_directives_and_preserves_a_source_boundary()
 #[test]
 fn builtin_operation_roles_remain_specializable_through_name_resolution() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", "@[builtin(add)] _");
+    let root = fixture.write("main.zy", "@[builtin(int64_add)] _");
     let assembly = SourceGraph::load(root).unwrap().assemble().unwrap();
 
     let resolved = resolve_assembly(assembly).unwrap();
@@ -707,7 +707,10 @@ fn builtin_operation_roles_remain_specializable_through_name_resolution() {
 
     assert_eq!(
         meta.specialize::<zydeco_surface::metadata::BuiltinMeta>().unwrap().map(|meta| meta.role),
-        Some(zydeco_syntax::BuiltinRole::Value(zydeco_syntax::BuiltinValueRole::Add))
+        Some(zydeco_syntax::BuiltinRole::Value(zydeco_syntax::BuiltinValueRole::Integer(
+            zydeco_syntax::IntegerType::Int64,
+            zydeco_syntax::IntegerOperation::Add,
+        ),))
     );
     assert!(matches!(resolved.arena.terms[payload], zydeco_surface::scoped::syntax::Term::Hole(_)));
 }
@@ -1039,8 +1042,8 @@ fn a_builtin_type_role_classifies_literals_inside_its_package_scope() {
     let root = fixture.write(
         "main.zy",
         concat!(
-            "param ((Int, value) : exists @[builtin(int)] ",
-            "(Int : @[intrinsic(vtype)] _) . Int) in ret 1"
+            "param ((Int64, value) : exists @[builtin(int64)] ",
+            "(Int64 : @[intrinsic(vtype)] _) . Int64) in ret 1"
         ),
     );
     let checked = SourceGraph::load(root)
@@ -1073,9 +1076,9 @@ fn two_visible_builtin_type_roles_are_ambiguous_at_a_literal() {
     let root = fixture.write(
         "main.zy",
         concat!(
-            "param ((IntA, a) : exists @[builtin(int)] ",
+            "param ((IntA, a) : exists @[builtin(int64)] ",
             "(IntA : @[intrinsic(vtype)] _) . IntA) in ",
-            "param ((IntB, b) : exists @[builtin(int)] ",
+            "param ((IntB, b) : exists @[builtin(int64)] ",
             "(IntB : @[intrinsic(vtype)] _) . IntB) in ",
             "ret 1",
         ),
@@ -1095,8 +1098,8 @@ fn one_package_signature_rejects_duplicate_builtin_type_roles() {
 param (
   (IntA, IntB, value) :
   exists
-    @[builtin(int)] (IntA : @[intrinsic(vtype)] _)
-    @[builtin(int)] (IntB : @[intrinsic(vtype)] _)
+    @[builtin(int64)] (IntA : @[intrinsic(vtype)] _)
+    @[builtin(int64)] (IntB : @[intrinsic(vtype)] _)
   . IntA
 ) in
   ret value
@@ -1115,12 +1118,12 @@ fn one_package_signature_rejects_duplicate_builtin_operation_roles() {
         "main.zy",
         r#"
 param (
-  (Int, = first, = second) :
+  (Int64, = first, = second) :
   exists
-    @[builtin(int)] (Int : @[intrinsic(vtype)] _)
+    @[builtin(int64)] (Int64 : @[intrinsic(vtype)] _)
   .
-    ((@[builtin(add)] (first :: @[intrinsic(unit)] _)) *
-     (@[builtin(add)] (second :: @[intrinsic(unit)] _)))
+    ((@[builtin(int64_add)] (first :: @[intrinsic(unit)] _)) *
+     (@[builtin(int64_add)] (second :: @[intrinsic(unit)] _)))
 ) in
   ret ()
 "#,
@@ -1135,11 +1138,11 @@ param (
 fn builtin_host_type_roles_require_abstract_entries_of_the_right_kind() {
     let cases = [
         concat!(
-            "exists @[builtin(int)] (Int as (@[intrinsic(unit)] _) : ",
+            "exists @[builtin(int64)] (Int64 as (@[intrinsic(unit)] _) : ",
             "@[intrinsic(vtype)] _) . (@[intrinsic(unit)] _)"
         ),
         concat!(
-            "exists @[builtin(int)] (Int : @[intrinsic(ctype)] _) . ",
+            "exists @[builtin(int64)] (Int64 : @[intrinsic(ctype)] _) . ",
             "(@[intrinsic(unit)] _)"
         ),
         concat!("exists @[builtin(os)] (OS : @[intrinsic(vtype)] _) . ", "(@[intrinsic(unit)] _)"),
@@ -1164,7 +1167,7 @@ fn builtin_host_type_roles_require_abstract_entries_of_the_right_kind() {
 #[test]
 fn a_builtin_operation_role_attaches_to_its_named_classifier() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", "@[builtin(add)] (add :: @[intrinsic(unit)] _)");
+    let root = fixture.write("main.zy", "@[builtin(int64_add)] (add :: @[intrinsic(unit)] _)");
     let checked = SourceGraph::load(root)
         .unwrap()
         .assemble()
@@ -1181,14 +1184,17 @@ fn a_builtin_operation_role_attaches_to_its_named_classifier() {
 
     assert_eq!(
         checked.statics.builtin_roles.value(entry),
-        Some(zydeco_syntax::BuiltinValueRole::Add)
+        Some(zydeco_syntax::BuiltinValueRole::Integer(
+            zydeco_syntax::IntegerType::Int64,
+            zydeco_syntax::IntegerOperation::Add,
+        ))
     );
 }
 
 #[test]
 fn a_builtin_operation_role_rejects_an_unnamed_classifier() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", "@[builtin(add)] @[intrinsic(unit)] _");
+    let root = fixture.write("main.zy", "@[builtin(int64_add)] @[intrinsic(unit)] _");
     let scoped =
         SourceGraph::load(root).unwrap().assemble().unwrap().desugar().unwrap().resolve().unwrap();
 
@@ -1225,16 +1231,16 @@ fn continuation_io_uses_its_foundational_builtin_classifier() {
         "main.zy",
         r#"
 param (
-  (/Int; /OS; /stdio; /process) :
+  (/Int64; /OS; /stdio; /process) :
   exists
-    @[builtin(int)] (Int : @[intrinsic(vtype)] _)
+    @[builtin(int64)] (Int64 : @[intrinsic(vtype)] _)
     @[builtin(os)] (OS : @[intrinsic(ctype)] _)
   .
     (stdio :: @[builtin(write_int)]
       (write_int :: (@[intrinsic(thk)] _)
-        (Int -> (@[intrinsic(thk)] _) OS -> OS))) *
+        (Int64 -> (@[intrinsic(thk)] _) OS -> OS))) *
     (process :: @[builtin(exit)]
-      (exit :: (@[intrinsic(thk)] _) (Int -> OS)))
+      (exit :: (@[intrinsic(thk)] _) (Int64 -> OS)))
 ) in
   ! (stdio/write_int) 7 { ! (process/exit) 0 }
 "#,
@@ -1258,15 +1264,15 @@ begin
   let Thk = @[intrinsic(thk)] _ that
   let Ret = @[intrinsic(ret)] _ that
   param (
-    (/Int; /OS; /int; /process) :
+    (/Int64; /OS; /int64; /process) :
     exists
-      @[builtin(int)] (Int : @[intrinsic(vtype)] _)
+      @[builtin(int64)] (Int64 : @[intrinsic(vtype)] _)
       @[builtin(os)] (OS : @[intrinsic(ctype)] _)
     .
-      (int :: @[builtin(add)] (add :: Thk (Int -> Int -> Ret Int))) *
-      (process :: @[builtin(exit)] (exit :: Thk (Int -> OS)))
+      (int64 :: @[builtin(int64_add)] (add :: Thk (Int64 -> Int64 -> Ret Int64))) *
+      (process :: @[builtin(exit)] (exit :: Thk (Int64 -> OS)))
   ) in
-    do sum <- ! (int/add) 1 2;
+    do sum <- ! (int64/add) 1 2;
     ! (process/exit) sum
 end
 "#,
@@ -1399,8 +1405,16 @@ fn canonical_builtin_signature_exports_intrinsics_as_static_manifest_fields() {
         ExpectedField::Thk,
         ExpectedField::Ret,
         ExpectedField::Unit,
-        ExpectedField::Abstract(BuiltinTypeRole::Int),
-        ExpectedField::Abstract(BuiltinTypeRole::Float),
+        ExpectedField::Abstract(BuiltinTypeRole::Int8),
+        ExpectedField::Abstract(BuiltinTypeRole::Int16),
+        ExpectedField::Abstract(BuiltinTypeRole::Int32),
+        ExpectedField::Abstract(BuiltinTypeRole::Int64),
+        ExpectedField::Abstract(BuiltinTypeRole::UInt8),
+        ExpectedField::Abstract(BuiltinTypeRole::UInt16),
+        ExpectedField::Abstract(BuiltinTypeRole::UInt32),
+        ExpectedField::Abstract(BuiltinTypeRole::UInt64),
+        ExpectedField::Abstract(BuiltinTypeRole::Float32),
+        ExpectedField::Abstract(BuiltinTypeRole::Float64),
         ExpectedField::Abstract(BuiltinTypeRole::Char),
         ExpectedField::Abstract(BuiltinTypeRole::String),
         ExpectedField::Abstract(BuiltinTypeRole::Bytes),
@@ -1474,7 +1488,7 @@ fn canonical_builtin_signature_exports_intrinsics_as_static_manifest_fields() {
         .map(|witness| checked.statics.builtin_roles.witness(*witness))
         .collect::<Vec<_>>();
     assert_eq!(abstract_roles, opened_roles);
-    assert_eq!(opened_roles.len(), 8);
+    assert_eq!(opened_roles.len(), 16);
     assert!(matches!(checked.statics.types_pre[&tail], Fillable::Done(Type::Prod(_))));
 }
 

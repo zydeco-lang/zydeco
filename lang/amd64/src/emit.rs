@@ -645,9 +645,12 @@ impl<'a> Emit<'a> for Atom {
                     em.asm.text.push(Instr::Comment("push_imm_triv".to_string()));
                     em.asm.text.push(Instr::Push(Arg32::Signed(0)));
                 }
-                | sa::Imm::Int(i) => {
-                    em.asm.text.push(Instr::Comment(format!("push_imm_int {:?}", i)));
-                    em.asm.text.extend([Instr::Push(Arg32::Signed(i as i32))]);
+                | sa::Imm::Integer(i) => {
+                    em.asm.text.push(Instr::Comment(format!("push_imm_integer {:?}", i)));
+                    em.asm.text.extend([
+                        Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(i.to_word_bits()))),
+                        Instr::Push(Arg32::Reg(Reg::Rax)),
+                    ]);
                 }
                 | sa::Imm::Float(value) => {
                     em.asm.text.push(Instr::Comment(format!("push_imm_float {:?}", value)));
@@ -669,7 +672,7 @@ impl<'a> Emit<'a> for Intrinsic {
     type Env = ();
     fn emit(&self, (): Self::Env, em: &mut Emitter) {
         let Intrinsic { name, arity } = self;
-        match (*name, arity) {
+        match (name.as_str(), arity) {
             | (_, 2) => {
                 em.asm
                     .text
@@ -700,7 +703,7 @@ impl<'a> Emit<'a> for Intrinsic {
                         )),
                     ]);
                 }
-                match *name {
+                match name.as_str() {
                     | "add" => {
                         emit_ba(Instr::Add, em);
                     }

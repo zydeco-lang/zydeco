@@ -123,8 +123,8 @@ impl<'a> Ugly<'a, Formatter<'a>> for Computation {
                 let DtorName(name) = dtor;
                 format!("({} {})", body.ugly(f), name)
             }
-            | Compu::Prim(Prim { arity, body }) => {
-                format!("prim({})[{:?}]", arity, body)
+            | Compu::Prim(Prim { arity, role }) => {
+                format!("prim({arity})[{role}]")
             }
         }
     }
@@ -147,7 +147,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for SemValue {
 impl<'a> Ugly<'a, Formatter<'a>> for Literal {
     fn ugly(&self, _: &'a Formatter) -> String {
         match self {
-            | Literal::Int(value) => format!("{value:?}"),
+            | Literal::Integer(value) => format!("{value:?}"),
             | Literal::Float(value) => format!("{value:?}"),
             | Literal::String(value) => format!("{value:?}"),
             | Literal::Char(value) => format!("{value:?}"),

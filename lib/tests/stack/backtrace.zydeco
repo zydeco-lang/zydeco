@@ -1,7 +1,7 @@
 -- a binary tree
 begin
   param (
-    (/VType; /Thk; /Ret; /Unit; /Int; /OS; /stdio; /process) :
+    (/VType; /Thk; /Ret; /Unit; /Int64; /OS; /stdio; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -32,7 +32,7 @@ begin
     end
   that
   -- here's a test
-  def t0 : Tree Int =
+  def t0 : Tree Int64 =
     +Node(
       +Node(
         +Node(+Leaf(), 1, +Leaf()),
@@ -78,12 +78,12 @@ begin
     end
   that
 
-  do t1 <- ! trace Int t0 +Nil();
-  ! write_tree Int (stdio/write_int) t0 {
+  do t1 <- ! trace Int64 t0 +Nil();
+  ! write_tree Int64 (stdio/write_int) t0 {
     ! (stdio/write_line) "" {
       ! write_tree
-        (List Int)
-        { ! write_list Int (stdio/write_int) }
+        (List Int64)
+        { ! write_list Int64 (stdio/write_int) }
         t1
         {
           ! (stdio/write_line) "" {

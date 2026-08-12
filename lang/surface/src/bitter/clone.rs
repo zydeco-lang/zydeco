@@ -101,12 +101,6 @@ impl DeepClone for b::TermId {
                     | Internal::Unit => {
                         return desugarer.unit(prev);
                     }
-                    | Internal::Int => {
-                        return desugarer.int(prev);
-                    }
-                    | Internal::Float => {
-                        return desugarer.float(prev);
-                    }
                     | Internal::Char => {
                         return desugarer.char(prev);
                     }

@@ -1,14 +1,14 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (/Int; /OS; builtin) :
+    (/Int64; /OS; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   let (/option; /process) = make_std builtin in
-  do value <- ! (option/some) Int 0;
+  do value <- ! (option/some) Int64 0;
   ! (option/fold)
-    Int
+    Int64
     OS
     value
     { ! (process/exit) 1 }

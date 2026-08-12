@@ -17,7 +17,7 @@ begin
   -- `that` lets this parameter move within the current block according to the
   -- dependency graph, so later definitions may use its fields.
   param (
-    (/VType; /Thk; /Ret; /Int; /String; /process) :
+    (/VType; /Thk; /Ret; /Int64; /String; /process) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
 
@@ -42,12 +42,12 @@ begin
   -- `let` gives a transparent definition. Its right-hand side is itself a
   -- parameterized type term, replacing the old type-alias declaration.
   let CoProductInt (A : VType) =
-    CoProduct2 Int A
+    CoProduct2 Int64 A
   that
 
   -- `def` seals its right-hand side at the given classifier. This is a value
   -- definition even though that value is a thunk containing a computation.
-  def sample : Thk (CoProductInt (Product2 Int String)) = {
+  def sample : Thk (CoProductInt (Product2 Int64 String)) = {
     comatch
     | .first => ret 0
     | .second => ret +Pair(0, "42")

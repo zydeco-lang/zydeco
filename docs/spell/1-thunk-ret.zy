@@ -7,26 +7,26 @@
 
 begin
   param (
-    (/Thk; /Ret; /Int; /int; /process) :
+    (/Thk; /Ret; /Int64; /int64; /process) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
 
   -- Integers, characters, and strings are host value types supplied by the
   -- Builtin package. A sealed value definition may bind one directly.
-  def zero : Int = 0 that
+  def zero : Int64 = 0 that
 
   -- `Ret A` is the simplest computation type: a computation that returns an
   -- `A`. Braces suspend a computation as a value of type `Thk B`.
-  def lazy_one : Thk (Ret Int) = {
+  def lazy_one : Thk (Ret Int64) = {
     ret 1
   } that
 
   -- A thunk captures values from its lexical environment. It is not executed
   -- until forced with `!`.
-  def lazy_add_one_zero : Thk (Ret Int) = {
+  def lazy_add_one_zero : Thk (Ret Int64) = {
     do x <- ! lazy_one;
     do y <- ret zero;
-    ! (int/add) x y
+    ! (int64/add) x y
   } that
 
   -- `do x <- computation; tail` eliminates `Ret A`, binding the returned value
@@ -35,12 +35,12 @@ begin
   -- Function types `A -> B` are computation types. Consequently, a reusable
   -- function is commonly stored as a thunked computation.
   def decrement : Thk (
-    Thk (Ret Int) ->
-    Ret Int
+    Thk (Ret Int64) ->
+    Ret Int64
   ) = {
     fn suspended =>
       do value <- ! suspended;
-      ! (int/sub) value 1
+      ! (int64/sub) value 1
   } that
 
   -- The dependency order differs from the presentation order without changing

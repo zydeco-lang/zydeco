@@ -1,28 +1,28 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (/Ret; /Int; builtin) :
+    (/Ret; /Int64; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (/bool; /int; /process) =
+  let (/bool; /int64; /process) =
     make_std builtin
   in
-  let fix fact (i : Int) : Ret Int =
-    -- extern def add : Thk (Int -> Int -> Ret Int) end
-    do zero? <- ! (int/eq) i 0;
+  let fix fact (i : Int64) : Ret Int64 =
+    -- extern def add : Thk (Int64 -> Int64 -> Ret Int64) end
+    do zero? <- ! (int64/eq) i 0;
     ! (bool/if)
-      (Ret Int)
+      (Ret Int64)
       zero?
       { ret 1 }
       {
         -- do i <- ret i;
-        do i' <- ! (int/sub) i 1;
+        do i' <- ! (int64/sub) i 1;
         do acc <- ! fact i';
-        ! (int/mul) i acc
+        ! (int64/mul) i acc
       }
   in
   do x <- ! fact 10;
-  do r <- ! (int/sub) x 3628800;
+  do r <- ! (int64/sub) x 3628800;
   ! (process/exit) r
 end

@@ -1,7 +1,7 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /OS; /int; /string; /stdio; /process; builtin) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /String; /OS; /int64; /string; /stdio; /process; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
@@ -39,7 +39,7 @@ begin
   that
   def State =
     data
-    | +State : Int * String
+    | +State : Int64 * String
     end
   that
 
@@ -109,7 +109,7 @@ begin
       fn s =>
         match s
         | +State(c, o) =>
-          do c' <- ! (int/add) c 1;
+          do c' <- ! (int64/add) c 1;
           ret +Cons(
             +State(c', o),
             +Right({ ! kret v })

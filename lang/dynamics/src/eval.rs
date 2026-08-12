@@ -304,7 +304,7 @@ impl<'rt> Eval<'rt> for Computation {
                 runtime.stack.push_back(SemCompu::Dtor(dtor));
                 Step::Step(body.as_ref().clone())
             }
-            | Computation::Prim(Prim { arity, body }) => {
+            | Computation::Prim(Prim { arity, role }) => {
                 let mut args = Vec::new();
                 for _ in 0..arity {
                     let Some(SemCompu::App(arg)) = runtime.stack.pop_back() else {
@@ -312,7 +312,14 @@ impl<'rt> Eval<'rt> for Computation {
                     };
                     args.push(arg);
                 }
-                match body(args, runtime.input, runtime.output, runtime.args, &mut runtime.host) {
+                match crate::builtin::BuiltinRuntime::invoke(
+                    role,
+                    args,
+                    runtime.input,
+                    runtime.output,
+                    runtime.args,
+                    &mut runtime.host,
+                ) {
                     | Ok(e) => Step::Step(e),
                     | Err(exit_code) => Step::Done(ProgKont::ExitCode(exit_code)),
                 }

@@ -766,17 +766,7 @@ impl Desugar for t::TermId {
                 let head = head.desugar(desugarer)?;
                 Alloc::alloc(desugarer, b::Proj(head, name).into(), self.into())
             }
-            | Tm::Lit(term) => {
-                use zydeco_syntax::Literal as Lit;
-                let lit_term = Alloc::alloc(desugarer, term.clone().into(), self.into());
-                let ty = match term {
-                    | Lit::Int(_) => desugarer.int(self.into()),
-                    | Lit::Float(_) => desugarer.float(self.into()),
-                    | Lit::String(_) => desugarer.string(self.into()),
-                    | Lit::Char(_) => desugarer.char(self.into()),
-                };
-                Alloc::alloc(desugarer, b::Ann { tm: lit_term, ty }.into(), self.into())
-            }
+            | Tm::Lit(term) => Alloc::alloc(desugarer, term.into(), self.into()),
         };
         Ok(res)
     }
@@ -952,14 +942,6 @@ mod impls {
         pub(crate) fn unit(&mut self, prev: t::EntityId) -> b::TermId {
             let term = Alloc::alloc(self, b::Internal::Unit.into(), prev);
             *self.prim.unit.extend_one(term)
-        }
-        pub(crate) fn int(&mut self, prev: t::EntityId) -> b::TermId {
-            let term = Alloc::alloc(self, b::Internal::Int.into(), prev);
-            *self.prim.int.extend_one(term)
-        }
-        pub(crate) fn float(&mut self, prev: t::EntityId) -> b::TermId {
-            let term = Alloc::alloc(self, b::Internal::Float.into(), prev);
-            *self.prim.float.extend_one(term)
         }
         pub(crate) fn char(&mut self, prev: t::EntityId) -> b::TermId {
             let term = Alloc::alloc(self, b::Internal::Char.into(), prev);

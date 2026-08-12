@@ -2,7 +2,7 @@
 -- `Ret' A` and the `Ret A` primitive are isomorphic to each other.
 begin
   param (
-    (/VType; /CType; /Thk; /Ret; /Int; /OS; /process) :
+    (/VType; /CType; /Thk; /Ret; /Int64; /OS; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -26,9 +26,9 @@ begin
     ! g A { ! f A rr }
   that
 
-  do n <- ! id_ret Int { ret 0 };
+  do n <- ! id_ret Int64 { ret 0 };
   ! id_ret'
-    Int
+    Int64
     { fn (R : CType) ar => ! ar n }
     OS
     (process/exit)

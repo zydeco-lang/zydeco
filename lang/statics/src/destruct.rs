@@ -239,7 +239,7 @@ impl TypeId {
             | Type::Thk(_)
             | Type::Ret(_)
             | Type::Unit(_)
-            | Type::Int(_)
+            | Type::Opaque(_)
             | Type::Char(_)
             | Type::String(_)
             | Type::OS(_)

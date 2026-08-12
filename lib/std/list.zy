@@ -1,5 +1,5 @@
 param (
-  (/VType; /CType; /Thk; /Ret; /Unit; /Int; /int) :
+  (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /int64) :
   @[import("builtin.zy")] _
 ) in
 begin
@@ -87,10 +87,10 @@ begin
         ! cons A value reversed
     }
   that
-  def ! length (A : VType) (list : List A) : Ret Int =
-    ! fold_left A Int list 0 {
+  def ! length (A : VType) (list : List A) : Ret Int64 =
+    ! fold_left A Int64 list 0 {
       fn count _ =>
-        ! (int/add) count 1
+        ! (int64/add) count 1
     }
   that
   let Interface =
@@ -146,7 +146,7 @@ begin
       )) *
       (length :: Thk (
         forall (A : VType) .
-          AbstractList A -> Ret Int
+          AbstractList A -> Ret Int64
       ))
   that
 

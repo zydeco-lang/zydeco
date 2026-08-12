@@ -18,7 +18,7 @@ For example, against
 exists (X : VType) (Y : VType) . X * Y
 ```
 
-the term `(Int, Char, 0, 'z')` contains two witnesses and a two-component product body.
+the term `(Int64, Char, 0, 'z')` contains two witnesses and a two-component product body.
 The pattern `(Left, Right, number, letter)` eliminates the same package.
 Sort checking therefore happens in the type checker, not in the parser.
 

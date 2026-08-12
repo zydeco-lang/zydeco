@@ -362,7 +362,7 @@ mod tests {
     #[test]
     fn each_sealed_type_equation_has_its_own_code_fence() {
         let signature = HoverSignature::with_definitions("pair", "Pair", []).with_sealed_types([
-            SealedTypeEquationPreview::new("Left : VType\n  = Int".to_owned()),
+            SealedTypeEquationPreview::new("Left : VType\n  = Int64".to_owned()),
             SealedTypeEquationPreview::new("Right : VType\n  = String".to_owned()),
         ]);
 
@@ -375,7 +375,7 @@ mod tests {
                 "where\n\n",
                 "```zydeco\n",
                 "Left : VType\n",
-                "  = Int\n",
+                "  = Int64\n",
                 "```\n\n",
                 "```zydeco\n",
                 "Right : VType\n",

@@ -360,7 +360,6 @@ where
     }
 }
 impl_mon_construct_from_construct! {
-    impl MonConstruct<TypeId> for IntTy;
     impl MonConstruct<TypeId> for CharTy;
     impl MonConstruct<TypeId> for StringTy;
     impl MonConstruct<TypeId> for ThkTy;

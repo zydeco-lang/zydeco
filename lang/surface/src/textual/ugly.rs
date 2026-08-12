@@ -603,7 +603,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Literal {
     fn ugly(&self, _f: &'a Formatter) -> String {
         let mut s = String::new();
         match self {
-            | Literal::Int(i) => s += &format!("{:?}", i),
+            | Literal::Integer(i) => s += &format!("{:?}", i),
             | Literal::Float(value) => s += &format!("{:?}", value),
             // Fixme: escape string
             | Literal::String(str) => s += &format!("{:?}", str),

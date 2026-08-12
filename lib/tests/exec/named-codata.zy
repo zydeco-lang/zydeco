@@ -2,25 +2,25 @@
 -- use named value types, and slash can project from a returned named value.
 begin
   param (
-    (/Thk; /Ret; /Int; /int; /process) :
+    (/Thk; /Ret; /Int64; /int64; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   def Gauge =
     codata
-    | .read : Ret ((reading :: Int) * Int)
-    | .shift : (delta :: Int) -> Ret (reading :: Int)
+    | .read : Ret ((reading :: Int64) * Int64)
+    | .shift : (delta :: Int64) -> Ret (reading :: Int64)
     end
   that
   let GaugeBox =
-    Int * (gauge :: Thk Gauge)
+    Int64 * (gauge :: Thk Gauge)
   that
   def ! gauge : Gauge =
     comatch
     | .read =>
-      ret (reading = 12 : Int, 13 : Int)
-    | .shift (delta = delta : Int) =>
-      ret (reading = delta : Int)
+      ret (reading = 12 : Int64, 13 : Int64)
+    | .shift (delta = delta : Int64) =>
+      ret (reading = delta : Int64)
     end
   that
   def gauge_box : GaugeBox = (
@@ -29,23 +29,23 @@ begin
   ) that
 
   let (
-    marker : Int,
+    marker : Int64,
     gauge = active_gauge : Thk Gauge
   ) = gauge_box in
   do observation <- ! active_gauge .read;
   let (
-    reading = reading : Int,
-    drift : Int
+    reading = reading : Int64,
+    drift : Int64
   ) = observation in
-  do reading_check <- ! (int/sub) reading 12;
-  do drift_check <- ! (int/sub) drift 13;
-  do shifted <- ! active_gauge .shift (delta = 14 : Int);
-  let (reading = shifted_reading : Int) = shifted in
-  do shifted_pattern_check <- ! (int/sub) shifted_reading 14;
-  do shifted_projection_check <- ! (int/sub) shifted/reading 14;
-  do total <- ! (int/add) marker reading_check;
-  do total <- ! (int/add) total drift_check;
-  do total <- ! (int/add) total shifted_pattern_check;
-  do total <- ! (int/add) total shifted_projection_check;
+  do reading_check <- ! (int64/sub) reading 12;
+  do drift_check <- ! (int64/sub) drift 13;
+  do shifted <- ! active_gauge .shift (delta = 14 : Int64);
+  let (reading = shifted_reading : Int64) = shifted in
+  do shifted_pattern_check <- ! (int64/sub) shifted_reading 14;
+  do shifted_projection_check <- ! (int64/sub) shifted/reading 14;
+  do total <- ! (int64/add) marker reading_check;
+  do total <- ! (int64/add) total drift_check;
+  do total <- ! (int64/add) total shifted_pattern_check;
+  do total <- ! (int64/add) total shifted_projection_check;
   ! (process/exit) total
 end

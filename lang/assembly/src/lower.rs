@@ -245,9 +245,9 @@ impl<'a> Lower<'a> for sk::ValueId {
                 });
                 kont(lo, cx)
             }
-            | Value::Literal(Literal::Int(i)) => {
+            | Value::Literal(Literal::Integer(i)) => {
                 // Push the literal value onto the stack
-                let atom = Atom::Imm(Imm::Int(i));
+                let atom = Atom::Imm(Imm::Integer(i));
                 Push(atom).build(lo, With::new(cx, CxKont::same(kont)))
             }
             | Value::Literal(Literal::Float(value)) => {
@@ -627,7 +627,7 @@ impl<'a> Lower<'a> for sk::CompuId {
                 )
             }
             | Compu::ExternCall(sk::ExternCall { function, stack }) => {
-                let builtin = &lo.stackir.admin.builtins[function];
+                let builtin = &lo.stackir.admin.builtins[&function];
                 let arity = builtin.arity;
                 let mode =
                     ExternMode::for_builtin(builtin.sort.clone()).expect("operator used as extern");

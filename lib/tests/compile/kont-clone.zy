@@ -6,11 +6,11 @@ begin
     end
   that
   param (
-    (/Thk; /Unit; /Int; /OS; /process) :
+    (/Thk; /Unit; /Int64; /OS; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
-  def ! f : Bool -> Thk (Int -> OS) -> OS =
-    fn (b : Bool) (k : Thk (Int -> OS)) =>
+  def ! f : Bool -> Thk (Int64 -> OS) -> OS =
+    fn (b : Bool) (k : Thk (Int64 -> OS)) =>
       -- k might be large
       match b
       | +True(_) => ! k 0

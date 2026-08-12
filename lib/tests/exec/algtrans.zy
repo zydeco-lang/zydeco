@@ -1,7 +1,7 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (/VType; /CType; /Thk; /Ret; /Int; /String; /OS; /int; /process; builtin) :
+    (/VType; /CType; /Thk; /Ret; /Int64; /String; /OS; /int64; /process; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
@@ -47,7 +47,7 @@ begin
       end
   that
   -- test algebra generation for ret and bind
-  def ! mo-return (E : VType) (mo : Thk (Monad (Exn E))) : Exn E Int =
+  def ! mo-return (E : VType) (mo : Thk (Monad (Exn E))) : Exn E Int64 =
     let ! translated =
       -- use mo
       @[monadic] begin
@@ -58,7 +58,7 @@ begin
     ! translated (Exn E) mo
   that
   -- test algebra generation for thunk
-  def ! mo-thunk (E : VType) (mo : Thk (Monad (Exn E))) : Exn E Int =
+  def ! mo-thunk (E : VType) (mo : Thk (Monad (Exn E))) : Exn E Int64 =
     let ! translated =
       -- use mo
       @[monadic] begin
@@ -69,7 +69,7 @@ begin
     ! translated (Exn E) mo
   that
   -- test algebra generation for thunk at argument position
-  def ! mo-thunk-arg (E : VType) (mo : Thk (Monad (Exn E))) : Exn E Int =
+  def ! mo-thunk-arg (E : VType) (mo : Thk (Monad (Exn E))) : Exn E Int64 =
     let ! translated =
       -- use mo
       @[monadic] begin
@@ -112,8 +112,8 @@ begin
       --     ! strY .bindA X m { fn x => ! f x a }
       --   end : Algebra (Exn E) (U Y -> Y)) .bindA X m { fn x => ! f x Y strY }
       -- end : Algebra (Exn E) (forall (X: CType) . U (Algebra (Exn E) X) -> U X -> X))
-      -- .bindA Int { ! mo .return Int -1 }
-      -- { fn (_: Int) => fn (X: CType) (algX: U (Algebra (Exn E) X)) (b: U X) => ! b }
+      -- .bindA Int64 { ! mo .return Int64 -1 }
+      -- { fn (_: Int64) => fn (X: CType) (algX: U (Algebra (Exn E) X)) (b: U X) => ! b }
       -- use mo
       @[monadic] begin
         do _ <- ret -1;
@@ -171,7 +171,7 @@ begin
   -- end
   -- -- run it
   -- def ! _mo-prim-id : OS =
-  --   do i? <- ! mo-prim-id (Exn String) { ! mo-exn String } Int 0;
+  --   do i? <- ! mo-prim-id (Exn String) { ! mo-exn String } Int64 0;
   --   match i?
   --   | +Left(e) => ! panic "error"
   --   | +Right(i) => ! process/exit i
@@ -194,7 +194,7 @@ begin
   --   ! mo-prim-id~ (Exn String) { ! mo-exn String } OS { ! alg-exn-os String } { ! process/exit 0 }
   -- end
   -- def ! _mo-prim-id~' : OS =
-  --   do i <- ! mo-prim-id~ (Exn String) { ! mo-exn String } (Ret Int) { _ } { ret 0 };
+  --   do i <- ! mo-prim-id~ (Exn String) { ! mo-exn String } (Ret Int64) { _ } { ret 0 };
   --   ! process/exit i
   -- end
   -- -- primitive ret in contravariant position
@@ -225,7 +225,7 @@ begin
   match returned
   | +Left(_) => ! (process/exit) 1
   | +Right(returned) =>
-    ! (int/eq)
+    ! (int64/eq)
       OS
       returned
       1
@@ -234,7 +234,7 @@ begin
         match thunked
         | +Left(_) => ! (process/exit) 1
         | +Right(thunked) =>
-          ! (int/eq)
+          ! (int64/eq)
             OS
             thunked
             1
@@ -245,7 +245,7 @@ begin
               match argument
               | +Left(_) => ! (process/exit) 1
               | +Right(argument) =>
-                ! (int/eq)
+                ! (int64/eq)
                   OS
                   argument
                   1
@@ -253,13 +253,13 @@ begin
                     do quantified <- ! mo-forallv
                       String
                       { ! mo-exn String }
-                      Int
+                      Int64
                       top
                       0;
                     match quantified
                     | +Left(_) => ! (process/exit) 1
                     | +Right(quantified) =>
-                      ! (int/eq)
+                      ! (int64/eq)
                         OS
                         quantified
                         0

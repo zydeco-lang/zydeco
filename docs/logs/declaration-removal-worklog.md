@@ -463,9 +463,9 @@ This admits `VType` and `CType` as manifest kind fields.
 `Thk`, `Ret`, and `Unit` are manifest type fields under the same syntax.
 All five are static and erased; only ordinary abstract type fields contribute witnesses to `PackPi`.
 
-The surface pipeline separately decodes an annotation such as `@[builtin(int)]`
+The surface pipeline separately decodes an annotation such as `@[builtin(int64)]`
 into a closed `BuiltinRole` and rejects malformed or unknown keys before assembly.
-Only host-provided abstract types (`Int`, `Char`, `String`, and `OS`) and host operations are Builtin roles.
+Only host-provided abstract types (`Int64`, `Char`, `String`, and `OS`) and host operations are Builtin roles.
 `VType`, `CType`, `Thk`, `Ret`, and `Unit` remain intrinsic language structure,
 while `Monad` and `Algebra` remain ordinary library definitions.
 
@@ -477,7 +477,7 @@ The same transfer occurs when monadic translation freshens a `PackPi` witness.
 Compiler-generated host-type syntax resolves a role only among the existential witnesses visible
 in its lexical `SkolemScope`.
 A missing role and multiple visible witnesses for one role are both static errors.
-Host-type roles accept only abstract existential entries: `Int`, `Char`,
+Host-type roles accept only abstract existential entries: `Int64`, `Char`,
 and `String` require `VType`, while `OS` requires `CType`.
 Host-operation roles accept only named value classifiers.
 After a package-dependent arrow has formed, the checker audits its complete package-local role assignment.
@@ -496,7 +496,7 @@ The interpreter and Stack IR lowerer both consume this plan, construct their pri
 and apply the resulting package to the package-dependent root.
 Execution requires exactly one `os` witness in the `PackPi` telescope and requires the codomain
 to be that abstract witness.
-A declaration-free fixture with `int`, `os`, `add`, and `exit` roles executes through the root-file command
+A declaration-free fixture with `int64`, `os`, `int64_add`, and `exit` roles executes through the root-file command
 and returns the host exit status computed by the program.
 
 The direct source path now reuses typed pipeline objects for inlining, optional CPS conversion,
@@ -507,7 +507,7 @@ The experimental LLVM emitter still cannot represent some assembly-local binding
 its shared adapter now reports that inherited limitation as a typed driver error instead of panicking.
 
 Exact classifier validation uses a typed ABI grammar rather than comparing formatted types.
-Its value classifiers contain only the host atoms `Int`, `Char`, and `String`, plus thunks;
+Its value classifiers contain only the host atoms `Int64`, `Char`, and `String`, plus thunks;
 its computation classifiers contain `OS`, returners, value-to-computation arrows,
 and computation-polymorphic binders with bound result classifiers.
 The validator follows named and variable aliases, checks host atoms by their abstract witness roles,
@@ -554,7 +554,7 @@ The public signature uses manifest existential fields for the four host types,
 so clients receive transparent equations while the package remains self-describing.
 It also imports the Boolean, optional-value, and list components exactly once
 and re-exports their abstract type witnesses and operations.
-The operation product is retained as one tail value: a parameter pattern opens `(Int, Char, String, OS, api)`,
+The operation product is retained as one tail value: a parameter pattern opens `(Int64, Char, String, OS, api)`,
 and forwarding reconstructs that compact package instead of repeating every operation.
 The standard-library term projects the named operations from `api` and returns them
 under its own manifest package signature.
@@ -643,7 +643,7 @@ without manufacturing a self-edge on the outer binding.
 The monadic package fixture imports the explicit lexical `Monad` and `Algebra` basis.
 
 The package ports cover named manifest fields and an interleaved existential telescope.
-The counter fixture exposes an `Int` representation transparently and consumes the package through a named pattern.
+The counter fixture exposes an `Int64` representation transparently and consumes the package through a named pattern.
 The interleaved fixture mixes manifest and abstract witnesses, forms a `PackPi` from the package pattern,
 and returns values whose result type depends on the opened witnesses.
 Both fixtures preserve their original static meaning while replacing declarations and project configuration

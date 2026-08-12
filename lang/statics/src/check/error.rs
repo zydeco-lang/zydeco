@@ -80,6 +80,8 @@ pub enum TyckError {
     ConflictingBuiltinRole { existing: BuiltinRole, found: BuiltinRole },
     MissingBuiltinTypeRole { role: BuiltinTypeRole },
     AmbiguousBuiltinTypeRole { role: BuiltinTypeRole, witnesses: Vec<AbstId> },
+    IntegerLiteralOutOfRange { value: i128, integer_type: IntegerType },
+    FloatLiteralOutOfRange { value: f64, float_type: FloatType },
     Expressivity(&'static str),
     NotInlinable(DefId),
     NotInlinableSeal(AbstId),
@@ -270,6 +272,14 @@ impl<'a> Tycker<'a> {
                 format!(
                     "Builtin type role `{}` is ambiguous in this scope: {witnesses}",
                     role.source_name()
+                )
+            }
+            | TyckError::IntegerLiteralOutOfRange { value, integer_type } => {
+                format!("Integer literal {value} is outside the range of {integer_type}")
+            }
+            | TyckError::FloatLiteralOutOfRange { value, float_type } => {
+                format!(
+                    "Floating-point literal {value} is outside the finite range of {float_type}"
                 )
             }
             | TyckError::Expressivity(s) => s.to_string(),
@@ -575,6 +585,14 @@ impl<'a> Tycker<'a> {
             }
             | TyckError::AmbiguousBuiltinTypeRole { role, .. } => {
                 format!("Builtin type role `{}` is ambiguous", role.source_name())
+            }
+            | TyckError::IntegerLiteralOutOfRange { value, integer_type } => {
+                format!("Integer literal {value} is outside the range of {integer_type}")
+            }
+            | TyckError::FloatLiteralOutOfRange { value, float_type } => {
+                format!(
+                    "Floating-point literal {value} is outside the finite range of {float_type}"
+                )
             }
             | TyckError::Expressivity(s) => s.to_string(),
             | TyckError::NotInlinable(_) => "Cannot inline definition".to_string(),

@@ -1,15 +1,15 @@
 begin
   param (
-    (/int; /process) :
+    (/int64; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   do x <- ret 40;
   do y <- ret 30;
   do z <-
-    do a <- ! (int/add) x y;
-    do b <- ! (int/add) a 10;
+    do a <- ! (int64/add) x y;
+    do b <- ! (int64/add) a 10;
     ret b;
-  do r <- ! (int/sub) z 80;
+  do r <- ! (int64/sub) z 80;
   ! (process/exit) r
 end

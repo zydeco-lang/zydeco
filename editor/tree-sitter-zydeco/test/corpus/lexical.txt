@@ -57,7 +57,7 @@ Retired monadic words are identifiers
       name: (lower_identifier))))
 
 ==================
-Float literals
+Float64 literals
 ==================
 
 (1.25, -2.5e1, 1e3)

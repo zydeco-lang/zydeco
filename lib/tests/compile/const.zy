@@ -1,6 +1,6 @@
 begin
   param (
-    (/VType; /Ret; /Int; /process) :
+    (/VType; /Ret; /Int64; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
   let x = 100 that
@@ -8,8 +8,8 @@ begin
     let _ = x in
     ret a
   that
-  def ! one : Int -> Ret Int =
-    ! const Int Int 0
+  def ! one : Int64 -> Ret Int64 =
+    ! const Int64 Int64 0
   that
 
   do x <- ! one 20;

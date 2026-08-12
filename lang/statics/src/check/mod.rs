@@ -1301,10 +1301,6 @@ impl InternalTerm {
                 let ty = ss::UnitTy.build(tycker, env);
                 TermAnnId::Type(ty, tycker.statics.annotations_type[&ty])
             }
-            | su::Internal::Int => self.builtin_type_k(tycker, env, ss::BuiltinTypeRole::Int)?,
-            | su::Internal::Float => {
-                self.builtin_type_k(tycker, env, ss::BuiltinTypeRole::Float)?
-            }
             | su::Internal::Char => self.builtin_type_k(tycker, env, ss::BuiltinTypeRole::Char)?,
             | su::Internal::String => {
                 self.builtin_type_k(tycker, env, ss::BuiltinTypeRole::String)?
@@ -5405,6 +5401,29 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 }
             }
             | Tm::Lit(lit) => {
+                fn builtin_type_role(
+                    tycker: &Tycker<'_>, ty: ss::TypeId,
+                ) -> Option<ss::BuiltinTypeRole> {
+                    match tycker.statics.types_pre.get(&ty)?.to_owned() {
+                        | ss::Fillable::Fill(fill) => match tycker.statics.solus.get(&fill) {
+                            | Some(ss::AnnId::Type(solution)) => {
+                                builtin_type_role(tycker, *solution)
+                            }
+                            | _ => None,
+                        },
+                        | ss::Fillable::Done(ss::Type::Abst(witness)) => {
+                            match tycker.statics.builtin_roles.witness(witness) {
+                                | Some(ss::BuiltinRole::Type(role)) => Some(role),
+                                | _ => None,
+                            }
+                        }
+                        | ss::Fillable::Done(ss::Type::Named(ss::Named(_, inner))) => {
+                            builtin_type_role(tycker, inner)
+                        }
+                        | ss::Fillable::Done(_) => None,
+                    }
+                }
+
                 fn literal_type_k(
                     tycker: &mut Tycker<'_>, env: &ss::TyEnv, switch: Switch<AnnId>,
                     role: ss::BuiltinTypeRole,
@@ -5418,20 +5437,82 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     std::panic::Location::caller(),
                                 )?
                             };
-                            Ok(ty)
+                            let literal_ty = BuiltinTypeResolution(role).resolve_k(tycker, env)?;
+                            Lub::lub_k(literal_ty, ty, tycker)
                         }
                     }
                 }
                 use zydeco_syntax::Literal as Lit;
                 let (lit, ty) = match lit {
-                    | Lit::Int(i) => {
-                        let ty =
-                            literal_type_k(tycker, &self.info, switch, ss::BuiltinTypeRole::Int)?;
-                        (Lit::Int(i), ty)
+                    | Lit::Integer(i) => {
+                        let (ty, integer_type) = match switch {
+                            | Switch::Syn => {
+                                let integer_type = ss::IntegerType::Int64;
+                                let ty = BuiltinTypeResolution(integer_type.builtin_role())
+                                    .resolve_k(tycker, &self.info)?;
+                                (ty, integer_type)
+                            }
+                            | Switch::Ana(AnnId::Type(ty)) => {
+                                match builtin_type_role(tycker, ty)
+                                    .and_then(ss::BuiltinTypeRole::integer_type)
+                                {
+                                    | Some(integer_type) => (ty, integer_type),
+                                    | None => {
+                                        let default =
+                                            BuiltinTypeResolution(ss::BuiltinTypeRole::Int64)
+                                                .resolve_k(tycker, &self.info)?;
+                                        let ty = Lub::lub_k(default, ty, tycker)?;
+                                        (ty, ss::IntegerType::Int64)
+                                    }
+                                }
+                            }
+                            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker
+                                .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
+                        };
+                        let value = i.value();
+                        let Some(i) = i.with_type(integer_type) else {
+                            tycker.err_k(
+                                TyckError::IntegerLiteralOutOfRange { value, integer_type },
+                                std::panic::Location::caller(),
+                            )?
+                        };
+                        (Lit::Integer(i), ty)
                     }
                     | Lit::Float(value) => {
-                        let ty =
-                            literal_type_k(tycker, &self.info, switch, ss::BuiltinTypeRole::Float)?;
+                        let (ty, float_type) = match switch {
+                            | Switch::Syn => {
+                                let float_type = ss::FloatType::Float64;
+                                let ty = BuiltinTypeResolution(float_type.builtin_role())
+                                    .resolve_k(tycker, &self.info)?;
+                                (ty, float_type)
+                            }
+                            | Switch::Ana(AnnId::Type(ty)) => {
+                                match builtin_type_role(tycker, ty)
+                                    .and_then(ss::BuiltinTypeRole::float_type)
+                                {
+                                    | Some(float_type) => (ty, float_type),
+                                    | None => {
+                                        let default =
+                                            BuiltinTypeResolution(ss::BuiltinTypeRole::Float64)
+                                                .resolve_k(tycker, &self.info)?;
+                                        let ty = Lub::lub_k(default, ty, tycker)?;
+                                        (ty, ss::FloatType::Float64)
+                                    }
+                                }
+                            }
+                            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker
+                                .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
+                        };
+                        let original = value;
+                        let Some(value) = value.with_type(float_type) else {
+                            tycker.err_k(
+                                TyckError::FloatLiteralOutOfRange {
+                                    value: original.value(),
+                                    float_type,
+                                },
+                                std::panic::Location::caller(),
+                            )?
+                        };
                         (Lit::Float(value), ty)
                     }
                     | Lit::String(s) => {

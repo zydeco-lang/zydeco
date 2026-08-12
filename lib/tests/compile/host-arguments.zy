@@ -1,19 +1,19 @@
 begin
   param (
-    (/Ret; /Int; /OS; /int; /string; /args; /process) :
+    (/Ret; /Int64; /OS; /int64; /string; /args; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   do length <- ! (args/fold)
-    (Ret Int)
+    (Ret Int64)
     { ret 0 }
     {
       fn argument remaining =>
         do suffix_length <- ! remaining;
         do argument_length <- ! (string/length) argument;
-        ! (int/add) argument_length suffix_length
+        ! (int64/add) argument_length suffix_length
     };
-  ! (int/eq)
+  ! (int64/eq)
     OS
     length
     9

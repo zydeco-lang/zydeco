@@ -7,7 +7,7 @@
 
 begin
   param (
-    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /OS; /int; /string; /stdio; /process) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /String; /OS; /int64; /string; /stdio; /process) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
 
@@ -25,8 +25,8 @@ begin
   that
 
   def head_int : Thk (
-    List Int ->
-    Ret (Option Int)
+    List Int64 ->
+    Ret (Option Int64)
   ) = {
     fn values =>
       match values
@@ -34,10 +34,10 @@ begin
       | +Cons(head, _) => ret +Some(head)
       end
   } that
-  def values : List Int =
+  def values : List Int64 =
     +Cons(0, +Cons(2, +Cons(4, +Nil())))
   that
-  def first_value : Thk (Ret (Option Int)) = {
+  def first_value : Thk (Ret (Option Int64)) = {
     ! head_int values
   } that
 
@@ -54,7 +54,7 @@ begin
     | .run : Ret (LazyLayer A (Thk (LazyList A)))
     end
   that
-  def lazy_values : Thk (LazyList Int) = {
+  def lazy_values : Thk (LazyList Int64) = {
     comatch
     | .run =>
       ret +LazyCons(0, {
@@ -74,7 +74,7 @@ begin
       })
     end
   } that
-  def lazy_first_value : Thk (Ret (Option Int)) = {
+  def lazy_first_value : Thk (Ret (Option Int64)) = {
     do layer <- ! lazy_values .run;
     match layer
     | +LazyNil() => ret +None()
@@ -84,18 +84,18 @@ begin
 
   -- These two folds are complete reference implementations.
   def fold_left : Thk (
-    Thk (Int -> Int -> Ret Int) ->
-    Int ->
-    List Int ->
-    Ret Int
+    Thk (Int64 -> Int64 -> Ret Int64) ->
+    Int64 ->
+    List Int64 ->
+    Ret Int64
   ) = {
     fix (
       fold_left :
       Thk (
-        Thk (Int -> Int -> Ret Int) ->
-        Int ->
-        List Int ->
-        Ret Int
+        Thk (Int64 -> Int64 -> Ret Int64) ->
+        Int64 ->
+        List Int64 ->
+        Ret Int64
       )
     ) =>
       fn combine accumulated remaining =>
@@ -107,18 +107,18 @@ begin
         end
   } that
   def fold_right : Thk (
-    Thk (Int -> Thk (Ret Int) -> Ret Int) ->
-    Thk (Ret Int) ->
-    Thk (LazyList Int) ->
-    Ret Int
+    Thk (Int64 -> Thk (Ret Int64) -> Ret Int64) ->
+    Thk (Ret Int64) ->
+    Thk (LazyList Int64) ->
+    Ret Int64
   ) = {
     fix (
       fold_right :
       Thk (
-        Thk (Int -> Thk (Ret Int) -> Ret Int) ->
-        Thk (Ret Int) ->
-        Thk (LazyList Int) ->
-        Ret Int
+        Thk (Int64 -> Thk (Ret Int64) -> Ret Int64) ->
+        Thk (Ret Int64) ->
+        Thk (LazyList Int64) ->
+        Ret Int64
       )
     ) =>
       fn combine base remaining =>
@@ -136,19 +136,19 @@ begin
   -- recursive fold above. The test data sum to six, so these placeholders keep
   -- the chapter runnable while leaving a visible exercise.
   def fold_left_exercise : Thk (
-    Thk (Int -> Int -> Ret Int) ->
-    Int ->
-    List Int ->
-    Ret Int
+    Thk (Int64 -> Int64 -> Ret Int64) ->
+    Int64 ->
+    List Int64 ->
+    Ret Int64
   ) = {
     fn _ _ _ =>
       ret 6
   } that
   def fold_right_exercise : Thk (
-    Thk (Int -> Thk (Ret Int) -> Ret Int) ->
-    Thk (Ret Int) ->
-    Thk (LazyList Int) ->
-    Ret Int
+    Thk (Int64 -> Thk (Ret Int64) -> Ret Int64) ->
+    Thk (Ret Int64) ->
+    Thk (LazyList Int64) ->
+    Ret Int64
   ) = {
     fn _ _ _ =>
       ret 6
@@ -161,23 +161,23 @@ begin
   that
 
   def add_lazy : Thk (
-    Int ->
-    Thk (Ret Int) ->
-    Ret Int
+    Int64 ->
+    Thk (Ret Int64) ->
+    Ret Int64
   ) = {
     fn left right =>
       do right <- ! right;
-      ! (int/add) left right
+      ! (int64/add) left right
   } that
   def check_result : Thk (
-    Int ->
-    Int ->
+    Int64 ->
+    Int64 ->
     String ->
     Thk OS ->
     OS
   ) = {
     fn expected actual label continuation =>
-      ! (int/eq)
+      ! (int64/eq)
         OS
         expected
         actual
@@ -190,8 +190,8 @@ begin
         }
   } that
 
-  do strict_expected <- ! fold_left (int/add) 0 values;
-  do strict_actual <- ! fold_left_exercise (int/add) 0 values;
+  do strict_expected <- ! fold_left (int64/add) 0 values;
+  do strict_actual <- ! fold_left_exercise (int64/add) 0 values;
   do lazy_expected <- ! fold_right add_lazy { ret 0 } lazy_values;
   do lazy_actual <- ! fold_right_exercise add_lazy { ret 0 } lazy_values;
   ! check_result strict_expected strict_actual "fold_left exercise" {

@@ -2,32 +2,32 @@
 -- unnamed components but preserves their physical positions.
 begin
   param (
-    (/Int; /int; /process) :
+    (/Int64; /int64; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   let Mixed =
-    (left :: Int) * (Int * (right :: Int))
+    (left :: Int64) * (Int64 * (right :: Int64))
   that
   def mixed : Mixed = (
-    left = 2 : Int,
-    3 : Int,
-    right = 4 : Int
+    left = 2 : Int64,
+    3 : Int64,
+    right = 4 : Int64
   ) that
 
   let (
-    left = left : Int,
-    middle : Int,
-    right = right : Int
+    left = left : Int64,
+    middle : Int64,
+    right = right : Int64
   ) = mixed in
-  do tens <- ! (int/mul) middle 10;
-  do hundreds <- ! (int/mul) right 100;
-  do low <- ! (int/add) left tens;
-  do checksum <- ! (int/add) low hundreds;
-  do layout_check <- ! (int/sub) checksum 432;
-  do left_projection_check <- ! (int/sub) mixed/left 2;
-  do right_projection_check <- ! (int/sub) mixed/right 4;
-  do total <- ! (int/add) layout_check left_projection_check;
-  do total <- ! (int/add) total right_projection_check;
+  do tens <- ! (int64/mul) middle 10;
+  do hundreds <- ! (int64/mul) right 100;
+  do low <- ! (int64/add) left tens;
+  do checksum <- ! (int64/add) low hundreds;
+  do layout_check <- ! (int64/sub) checksum 432;
+  do left_projection_check <- ! (int64/sub) mixed/left 2;
+  do right_projection_check <- ! (int64/sub) mixed/right 4;
+  do total <- ! (int64/add) layout_check left_projection_check;
+  do total <- ! (int64/add) total right_projection_check;
   ! (process/exit) total
 end

@@ -15,9 +15,9 @@ NumericInstance Bool Representation =
     Unit
 ```
 
-An integer instance therefore contains a static field `Scalar` with the equation `Scalar ≡ Int`
+An integer instance therefore contains a static field `Scalar` with the equation `Scalar ≡ Int64`
 and a dynamic dictionary checked at `Numeric Bool Scalar`.
-The floating-point instance similarly discloses `Scalar ≡ Float`.
+The floating-point instance similarly discloses `Scalar ≡ Float64`.
 Opening either package substitutes the manifest definition, so generic results at `Scalar` remain definitionally equal
 to the concrete representation:
 
@@ -26,7 +26,7 @@ let (
   Scalar = A,
   dictionary = operations,
   ()
-) = numeric/int_instance in
+) = numeric/int64_instance in
   use_numeric A operations
 ```
 
@@ -36,7 +36,8 @@ This makes an instance package a first-class module with a transparent carrier,
 rather than a new runtime object or a new form of type evidence.
 
 Instance selection remains explicit.
-The `numeric` module gives the packages the globally distinct field names `int_instance` and `float_instance`,
+The `numeric` module gives the packages globally distinct field names such as `int64_instance`,
+`uint8_instance`, and `float32_instance`,
 and a generic function receives the selected dictionary as an ordinary parameter.
 The longer names also avoid ambiguity because unchained projection searches recursively through nested packages.
 Manifest normalization establishes type equality after selection; it does not search the lexical environment,

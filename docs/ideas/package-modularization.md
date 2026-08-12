@@ -30,7 +30,7 @@ No `use`, `open`, module declaration, or import-specific binding form is added.
 ## The problem with complete unpacking
 
 The canonical Builtin signature is an existential telescope.
-Its abstract entries establish the identities of `Int`, `Float`, `Char`, `String`,
+Its abstract entries establish the identities of all fixed-width numeric types, `Char`, `String`,
 `Bytes`, `Reader`, `Writer`, and `OS`; later operation fields refer to those identities.
 The standard library adds another telescope for `Bool`, `Option`, `Result`, `List`, `Path`, and the I/O error types,
 followed by its module values.
@@ -43,9 +43,9 @@ let (
   Option = Option,
   Result = Result,
   List = List,
-  Int = Int,
+  Int64 = Int64,
   ...,
-  (/bool; /option; /result; /list; /int; ...; /process)
+  (/bool; /option; /result; /list; /int64; ...; /process)
 ) = make_std builtin in
 ...
 ```
@@ -168,31 +168,34 @@ Builtin exposes host operations through small capability modules while keeping t
 at the package boundary:
 
 ```text
-types:        Unit Int Float Char String Bytes Reader Writer OS
-capabilities: int float char string bytes io fs stdio args random process
+types:        Unit Int8 Int16 Int32 Int64 UInt8 UInt16 UInt32 UInt64
+              Float32 Float64 Char String Bytes Reader Writer OS
+capabilities: int8 int16 int32 int64 uint8 uint16 uint32 uint64
+              float32 float64 char string bytes io fs stdio args random process
 ```
 
 A source selects the types needed in annotations and the capability modules it calls.
-Individual operations stay qualified, such as `int/eq`, `string/append`, and `fs/open_reader`;
+Individual operations stay qualified, such as `int64/eq`, `string/append`, and `fs/open_reader`;
 this prevents generic names such as `eq`, `read`, and `write` from occupying every consumer's scope.
 
 The public standard package builds on that boundary.
 It exposes shared type identities once and groups its own operations into named module values:
 
 ```text
-types:   Bool Option Result List Int Float Char String Bytes Reader Writer
-         Path IoErrorKind IoError OS
+types:   Bool Option Result List Int8 Int16 Int32 Int64 UInt8 UInt16 UInt32 UInt64
+         Float32 Float64 Char String Bytes Reader Writer Path IoErrorKind IoError OS
 
-modules: prelude bool option result list int float char string bytes io fs stdio process
+modules: prelude bool option result list numeric primitives int8 ... uint64 float32 float64
+         char string bytes io fs stdio process
 ```
 
 Consumers select the shared types used in annotations and the modules used for operations.
 For example, a minimal integer program needs no complete public telescope:
 
 ```zydeco
-let (/int; /process) = make_std builtin in
-do one <- ! (int/increment) 0;
-do status <- ! (int/sub) one 1;
+let (/int64; /process) = make_std builtin in
+do one <- ! (int64/increment) 0;
+do status <- ! (int64/sub) one 1;
 ! (process/exit) status
 ```
 

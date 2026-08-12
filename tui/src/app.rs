@@ -477,7 +477,7 @@ mod tests {
                 number,
                 outcome: EvaluationOutcome::Success(result),
                 ..
-            })) if number.get() == 1 && result == "1 : Int"
+            })) if number.get() == 1 && result == "1 : Int64"
         ));
     }
 
@@ -493,7 +493,7 @@ mod tests {
             Some(TranscriptItem::Submission(TranscriptEntry {
                 outcome: EvaluationOutcome::Success(result),
                 ..
-            })) if result == "1 : Int"
+            })) if result == "1 : Int64"
         ));
     }
 }

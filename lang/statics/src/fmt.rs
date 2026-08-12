@@ -100,7 +100,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for TypeId {
                 | Type::Thk(ThkTy) => "Thk".to_string(),
                 | Type::Ret(RetTy) => "Ret".to_string(),
                 | Type::Unit(UnitTy) => "Unit".to_string(),
-                | Type::Int(IntTy) => "Int".to_string(),
+                | Type::Opaque(OpaqueTy) => "Opaque".to_string(),
                 | Type::Char(CharTy) => "Char".to_string(),
                 | Type::String(StringTy) => "String".to_string(),
                 | Type::OS(OSTy) => "OS".to_string(),
@@ -523,7 +523,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Literal {
     fn ugly(&self, _f: &'a Formatter) -> String {
         let mut s = String::new();
         match self {
-            | Literal::Int(i) => s += &format!("{:?}", i),
+            | Literal::Integer(i) => s += &format!("{:?}", i),
             | Literal::Float(value) => s += &format!("{:?}", value),
             // Fixme: escape string
             | Literal::String(str) => s += &format!("{:?}", str),
@@ -703,7 +703,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for TypeId {
                 | Type::Thk(ThkTy) => RcDoc::text("Thk"),
                 | Type::Ret(RetTy) => RcDoc::text("Ret"),
                 | Type::Unit(UnitTy) => RcDoc::text("Unit"),
-                | Type::Int(IntTy) => RcDoc::text("Int"),
+                | Type::Opaque(OpaqueTy) => RcDoc::text("Opaque"),
                 | Type::Char(CharTy) => RcDoc::text("Char"),
                 | Type::String(StringTy) => RcDoc::text("String"),
                 | Type::OS(OSTy) => RcDoc::text("OS"),

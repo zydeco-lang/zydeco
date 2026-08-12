@@ -1,14 +1,14 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (/VType; /Thk; /Unit; /Int; /String; /Bytes; /Writer; /OS; builtin) :
+    (/VType; /Thk; /Unit; /Int64; /String; /Bytes; /Writer; /OS; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   let (
     /Bool; /Result; /Path; /IoError;
     /bool; /option; /result = results; /list;
-    /int; /string; /bytes; /io; /fs; /stdio; /process
+    /int64; /string; /bytes; /io; /fs; /stdio; /process
   ) = make_std builtin in
   let ! expect_ok
     (A : VType)
@@ -86,7 +86,7 @@ begin
                   ! expect_ok Bytes read_bytes {
                   fn contents =>
                       do length <- ! (bytes/length) contents;
-                      do length_correct <- ! (int/eq) length 8;
+                      do length_correct <- ! (int64/eq) length 8;
                       ! require length_correct { ! verify_invalid_utf8 path_string }
                   }
               }

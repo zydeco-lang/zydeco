@@ -195,7 +195,7 @@ impl TypeSupportCollector {
                 | Type::Thk(_)
                 | Type::Ret(_)
                 | Type::Unit(_)
-                | Type::Int(_)
+                | Type::Opaque(_)
                 | Type::Char(_)
                 | Type::String(_)
                 | Type::OS(_) => {}
@@ -335,7 +335,7 @@ impl TypeId {
                 | Type::Thk(_)
                 | Type::Ret(_)
                 | Type::Unit(_)
-                | Type::Int(_)
+                | Type::Opaque(_)
                 | Type::Char(_)
                 | Type::String(_)
                 | Type::OS(_) => *self,
@@ -571,7 +571,7 @@ impl TypeId {
                 | Type::Thk(_)
                 | Type::Ret(_)
                 | Type::Unit(_)
-                | Type::Int(_)
+                | Type::Opaque(_)
                 | Type::Char(_)
                 | Type::String(_)
                 | Type::OS(_) => *self,
@@ -781,7 +781,7 @@ impl TypeId {
             | Type::Thk(_)
             | Type::Ret(_)
             | Type::Unit(_)
-            | Type::Int(_)
+            | Type::Opaque(_)
             | Type::Char(_)
             | Type::String(_)
             | Type::OS(_) => self,
@@ -847,7 +847,7 @@ impl TypeId {
                 | Type::Thk(_)
                 | Type::Ret(_)
                 | Type::Unit(_)
-                | Type::Int(_)
+                | Type::Opaque(_)
                 | Type::Char(_)
                 | Type::String(_)
                 | Type::OS(_)
@@ -1254,7 +1254,7 @@ impl TypeId {
                 | Type::Thk(_)
                 | Type::Ret(_)
                 | Type::Unit(_)
-                | Type::Int(_)
+                | Type::Opaque(_)
                 | Type::Char(_)
                 | Type::String(_)
                 | Type::OS(_) => res,
@@ -1753,11 +1753,11 @@ impl TypeId {
                         Alloc::alloc(tycker, UnitTy, kd_norm, &env)
                     }
                 }
-                | Type::Int(IntTy) => {
+                | Type::Opaque(OpaqueTy) => {
                     if kd_norm == kd {
                         self
                     } else {
-                        Alloc::alloc(tycker, IntTy, kd_norm, &env)
+                        Alloc::alloc(tycker, OpaqueTy, kd_norm, &env)
                     }
                 }
                 | Type::Char(CharTy) => {

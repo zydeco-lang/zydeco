@@ -289,8 +289,8 @@ impl Debruijn {
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                     std::panic::Location::caller(),
                 )?,
-                | (Type::Int(IntTy), Type::Int(IntTy)) => lhs_id,
-                | (Type::Int(_), _) => tycker.err(
+                | (Type::Opaque(OpaqueTy), Type::Opaque(OpaqueTy)) => lhs_id,
+                | (Type::Opaque(_), _) => tycker.err(
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                     std::panic::Location::caller(),
                 )?,

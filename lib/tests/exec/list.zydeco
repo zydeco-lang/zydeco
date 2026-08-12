@@ -1,21 +1,21 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (/Ret; /Int; /String; builtin) :
+    (/Ret; /Int64; /String; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (/List; /list; /int; /string; /stdio; /process) = make_std builtin in
-  def fix foldl (xs : List String) (i : Int) : Ret Int =
+  let (/List; /list; /int64; /string; /stdio; /process) = make_std builtin in
+  def fix foldl (xs : List String) (i : Int64) : Ret Int64 =
     ! (list/case)
       String
-      (Ret Int)
+      (Ret Int64)
       xs
       { ret i }
       {
         fn s xs =>
           do i' <- ! (string/length) s;
-          do i' <- ! (int/add) i i';
+          do i' <- ! (int64/add) i i';
           ! foldl xs i'
       }
   in
@@ -24,6 +24,6 @@ begin
   do empty_and_ys <- ! (list/cons) String "" ys;
   do xs <- ! (list/cons) String "abc" empty_and_ys;
   do l <- ! foldl xs 0;
-  do s <- ! (int/to_string) l;
+  do s <- ! (int64/to_string) l;
   ! (stdio/write_line) s { fn _ => ! (process/exit) 0 }
 end

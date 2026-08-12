@@ -12,8 +12,6 @@ pub enum Internal {
     Thk,
     Ret,
     Unit,
-    Int,
-    Float,
     Char,
     String,
     OS,

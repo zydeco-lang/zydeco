@@ -1,6 +1,6 @@
 begin
   param (
-    (/VType; /Thk; /Ret; /Unit; /Int; /String; /OS; /int; /stdio; /process) :
+    (/VType; /Thk; /Ret; /Unit; /Int64; /String; /OS; /int64; /stdio; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
   let U = Thk that
@@ -11,15 +11,15 @@ begin
     | +False : Unit
     end
   that
-  def ! int_lt (x : Int) (y : Int) : Ret Bool =
-    ! (int/lt)
+  def ! int_lt (x : Int64) (y : Int64) : Ret Bool =
+    ! (int64/lt)
       (Ret Bool)
       x
       y
       { ret +True() }
       { ret +False() }
   that
-  def ! write_int_line (x : Int) (b : U OS) : OS =
+  def ! write_int_line (x : Int64) (b : U OS) : OS =
     ! (stdio/write_int) x {
       ! (stdio/write_line) "" b
     }
@@ -37,13 +37,13 @@ begin
     end
   that
 
-  def fix iota : Int -> F(LList' Int) =
-    fn (i: Int) =>
-      do i+1 <- ! (int/add) i 1;
+  def fix iota : Int64 -> F(LList' Int64) =
+    fn (i: Int64) =>
+      do i+1 <- ! (int64/add) i 1;
       ret +Cons(i, { ! iota i+1 })
   that
 
-  def fix llist_foldr (ll: U(F(LList' Int))) (f: U(Int -> U OS -> OS)) (b: U OS) : OS =
+  def fix llist_foldr (ll: U(F(LList' Int64))) (f: U(Int64 -> U OS -> OS)) (b: U OS) : OS =
     do llv <- ! ll;
     match llv
     | +Nil() => ! b
@@ -54,7 +54,7 @@ begin
   def ! loopy =
     ! llist_foldr
     { ! iota 0 }
-    { fn (x: Int) (b: U OS) =>
+    { fn (x: Int64) (b: U OS) =>
       do next? <- ! int_lt x 10;
       ! write_int_line x b
     }

@@ -113,7 +113,7 @@ fn rejects_dependency_on_the_package_payload() {
         r#"
 begin
   let Core =
-    exists (OS : CType) . Int
+    exists (OS : CType) . Int64
   that
 
   let Bad : CType =
@@ -143,7 +143,7 @@ begin
     fn ((X, value) : Box) => ret value
   } that
 
-  def boxed : Box = (Int, 41) that
+  def boxed : Box = (Int64, 41) that
 
   { ! unbox boxed }
 end
@@ -165,7 +165,7 @@ begin
     fn ((X, value) : Box) => ret value
   } that
 
-  def boxed : Box = (Int, 41) that
+  def boxed : Box = (Int64, 41) that
 
   { ! unbox boxed }
 end
@@ -193,7 +193,7 @@ begin
     fn ((X, Y, x, y) : PairBox) => ret (x, y)
   } that
 
-  def boxed : PairBox = (Int, Char, 41, 'z') that
+  def boxed : PairBox = (Int64, Char, 41, 'z') that
 
   { ! unbox_pair boxed }
 end
@@ -209,7 +209,7 @@ fn preserves_an_opened_witness_across_applications() {
 begin
   let Box =
     exists (X : VType) .
-      X * Thk (X -> Ret Int)
+      X * Thk (X -> Ret Int64)
   that
 
   let Reveal =
@@ -220,7 +220,7 @@ begin
     fn ((X, value, _) : Box) => ret value
   } that
 
-  def consume_twice : Thk (Box -> Ret Int) = {
+  def consume_twice : Thk (Box -> Ret Int64) = {
     fn ((X, value, consume) : Box) =>
       do first <- ! reveal (X, value, consume);
       do second <- ! reveal (X, first, consume);
@@ -228,9 +228,9 @@ begin
   } that
 
   def boxed : Box = (
-    Int,
+    Int64,
     41,
-    { fn (value : Int) => ret value },
+    { fn (value : Int64) => ret value },
   ) that
 
   { ! consume_twice boxed }
@@ -309,7 +309,7 @@ begin
     fn ((X, value) : Box) => ret value
   } that
 
-  def boxed : Box = (Int, 41) that
+  def boxed : Box = (Int64, 41) that
 
   { ! unbox boxed }
 end
@@ -335,7 +335,7 @@ begin
     fn ((X, value) : Box) => ret value
   } that
 
-  def hidden : Thk (Box -> Ret Int) = {
+  def hidden : Thk (Box -> Ret Int64) = {
     fn (boxed : Box) =>
       do _ <- ! unbox boxed;
       ret 0
@@ -432,8 +432,8 @@ begin
     end
   } that
 
-  do value <- ! translated Ret { ! mo_ret } .unbox (Int, triv, 41);
-  do status <- ! (api/int/sub) value 41;
+  do value <- ! translated Ret { ! mo_ret } .unbox (Int64, triv, 41);
+  do status <- ! (api/int64/sub) value 41;
   ! exit status
 end
 "#,
@@ -478,11 +478,11 @@ begin
   } that
 
   do value <- ! translated Ret { ! mo_ret } .run (
-    Ret Int,
-    { ! ret_algebra (Ret Int) },
+    Ret Int64,
+    { ! ret_algebra (Ret Int64) },
     { ret 41 },
   );
-  do status <- ! (api/int/sub) value 41;
+  do status <- ! (api/int64/sub) value 41;
   ! exit status
 end
 "#,
@@ -601,8 +601,8 @@ begin
     end
   } that
 
-  do value <- ! translated Ret { ! mo_ret } .unbox (Int, triv, 41);
-  do status <- ! (api/int/sub) value 41;
+  do value <- ! translated Ret { ! mo_ret } .unbox (Int64, triv, 41);
+  do status <- ! (api/int64/sub) value 41;
   ! exit status
 end
 "#,
@@ -629,10 +629,10 @@ begin
           ! execute value
       } in
       ! run (
-        Int,
-        Ret Int,
+        Int64,
+        Ret Int64,
         0,
-        { fn (value : Int) => ret value },
+        { fn (value : Int64) => ret value },
       )
     end
   } that
@@ -666,12 +666,12 @@ begin
   } that
 
   do value <- ! translated Ret { ! mo_ret } (
-    Int,
+    Int64,
     triv,
     41,
     (Unit, triv, ()),
   );
-  do status <- ! (api/int/sub) value 41;
+  do status <- ! (api/int64/sub) value 41;
   ! exit status
 end
 "#,
@@ -700,8 +700,8 @@ begin
     end
   } that
 
-  do value <- ! translated Ret { ! mo_ret } (Int, triv, 41);
-  do status <- ! (api/int/sub) value 41;
+  do value <- ! translated Ret { ! mo_ret } (Int64, triv, 41);
+  do status <- ! (api/int64/sub) value 41;
   ! exit status
 end
 "#,

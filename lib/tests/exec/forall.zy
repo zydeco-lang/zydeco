@@ -1,6 +1,6 @@
 begin
   param (
-    (/VType; /CType; /Thk; /Ret; /Int; /OS; /process) :
+    (/VType; /CType; /Thk; /Ret; /Int64; /OS; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -11,6 +11,6 @@ begin
     ! b
   that
 
-  do x <- ! id Int 0;
+  do x <- ! id Int64 0;
   ! id~ OS { ! (process/exit) x }
 end

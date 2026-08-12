@@ -484,12 +484,6 @@ where
         Alloc::alloc(tycker, App(ty_1, ty_2), kd_b, env)
     }
 }
-impl<'a> Construct<Tycker<'a>, TypeId> for IntTy {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        let AnnId::Type(ty) = env[tycker.prim.int.get()] else { unreachable!() };
-        ty
-    }
-}
 impl<'a> Construct<Tycker<'a>, TypeId> for CharTy {
     fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
         let AnnId::Type(ty) = env[tycker.prim.char.get()] else { unreachable!() };

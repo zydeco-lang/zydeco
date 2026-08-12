@@ -1,23 +1,23 @@
 -- Semicolon patterns observe one bindee repeatedly while preserving source order.
 begin
   param (
-    (/Thk; /Ret; /Int; /int; /process) :
+    (/Thk; /Ret; /Int64; /int64; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let Pair = Int * Int that
+  let Pair = Int64 * Int64 that
   def pair : Pair = (20, 22) that
 
-  def compare_aliases : Thk (Pair -> Ret Int) = {
-    fn ((left : Int, right : Int); whole; copy) =>
-      let (whole_left : Int, whole_right : Int) = whole in
-      let (copy_left : Int, copy_right : Int) = copy in
-      do direct <- ! (int/add) left right;
-      do through_whole <- ! (int/add) whole_left whole_right;
-      do through_copy <- ! (int/add) copy_left copy_right;
-      do whole_delta <- ! (int/sub) direct through_whole;
-      do copy_delta <- ! (int/sub) direct through_copy;
-      do total <- ! (int/add) whole_delta copy_delta;
+  def compare_aliases : Thk (Pair -> Ret Int64) = {
+    fn ((left : Int64, right : Int64); whole; copy) =>
+      let (whole_left : Int64, whole_right : Int64) = whole in
+      let (copy_left : Int64, copy_right : Int64) = copy in
+      do direct <- ! (int64/add) left right;
+      do through_whole <- ! (int64/add) whole_left whole_right;
+      do through_copy <- ! (int64/add) copy_left copy_right;
+      do whole_delta <- ! (int64/sub) direct through_whole;
+      do copy_delta <- ! (int64/sub) direct through_copy;
+      do total <- ! (int64/add) whole_delta copy_delta;
       ret total
   } that
 

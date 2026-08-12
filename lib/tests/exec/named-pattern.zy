@@ -2,12 +2,12 @@
 -- whole-pattern annotations, and holes alongside unnamed patterns.
 begin
   param (
-    (/Int; /int; /process) :
+    (/Int64; /int64; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   let PatternTarget =
-    (left :: Int) * (Int * (right :: Int))
+    (left :: Int64) * (Int64 * (right :: Int64))
   that
   def pattern_target : PatternTarget = (
     left = 1,
@@ -18,36 +18,36 @@ begin
   -- Payload annotations on named patterns coexist with an annotated unnamed
   -- component.
   let (
-    left = direct_left : Int,
-    direct_middle : Int,
-    right = direct_right : Int
+    left = direct_left : Int64,
+    direct_middle : Int64,
+    right = direct_right : Int64
   ) = pattern_target in
   -- Variable patterns may bind named values without opening them.
   let (
-    left_field : (left :: Int),
-    opaque_middle : Int,
-    right_field : (right :: Int)
+    left_field : (left :: Int64),
+    opaque_middle : Int64,
+    right_field : (right :: Int64)
   ) = pattern_target in
   -- The field can later be opened with either an annotation on the complete
   -- named pattern or an annotation on only its payload.
-  let ((left = opaque_left) : (left :: Int)) = left_field in
-  let (right = opaque_right : Int) = right_field in
+  let ((left = opaque_left) : (left :: Int64)) = left_field in
+  let (right = opaque_right : Int64) = right_field in
   -- Holes still check the surrounding field labels and product structure.
   let (
     left = _,
     _,
     right = _
   ) = pattern_target in
-  do direct_left_check <- ! (int/sub) direct_left 1;
-  do direct_middle_check <- ! (int/sub) direct_middle 2;
-  do direct_right_check <- ! (int/sub) direct_right 3;
-  do opaque_left_check <- ! (int/sub) opaque_left 1;
-  do opaque_middle_check <- ! (int/sub) opaque_middle 2;
-  do opaque_right_check <- ! (int/sub) opaque_right 3;
-  do total <- ! (int/add) direct_left_check direct_middle_check;
-  do total <- ! (int/add) total direct_right_check;
-  do total <- ! (int/add) total opaque_left_check;
-  do total <- ! (int/add) total opaque_middle_check;
-  do total <- ! (int/add) total opaque_right_check;
+  do direct_left_check <- ! (int64/sub) direct_left 1;
+  do direct_middle_check <- ! (int64/sub) direct_middle 2;
+  do direct_right_check <- ! (int64/sub) direct_right 3;
+  do opaque_left_check <- ! (int64/sub) opaque_left 1;
+  do opaque_middle_check <- ! (int64/sub) opaque_middle 2;
+  do opaque_right_check <- ! (int64/sub) opaque_right 3;
+  do total <- ! (int64/add) direct_left_check direct_middle_check;
+  do total <- ! (int64/add) total direct_right_check;
+  do total <- ! (int64/add) total opaque_left_check;
+  do total <- ! (int64/add) total opaque_middle_check;
+  do total <- ! (int64/add) total opaque_right_check;
   ! (process/exit) total
 end

@@ -81,7 +81,7 @@ pub struct Closure {
 #[derive(Clone, Debug)]
 pub struct Complex {
     /// Operator name; can be found in builtins map
-    pub operator: &'static str,
+    pub operator: String,
     pub operands: Vec<ValueId>,
 }
 
@@ -151,7 +151,7 @@ pub struct SCoMatch<Sc, Br, Tail> {
 #[derive(Clone, Debug)]
 pub struct ExternCall {
     /// External function name; can be found in builtins map
-    pub function: &'static str,
+    pub function: String,
     pub stack: StackId,
 }
 

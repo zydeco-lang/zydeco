@@ -1,8 +1,8 @@
 param (
   (
     /VType; /CType; /Thk; /Ret;
-    /Unit; /Int; /Char; /String; /Bytes; /Reader; /Writer; /OS;
-    /int; /char; /string; /bytes;
+    /Unit; /Int64; /Char; /String; /Bytes; /Reader; /Writer; /OS;
+    /int64; /char; /string; /bytes;
     /io; /fs; /stdio; /args; /random; /process
   ) :
   @[import("../../std/builtin.zy")] _

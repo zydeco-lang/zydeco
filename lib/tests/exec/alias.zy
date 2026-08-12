@@ -1,7 +1,7 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (/Int; /OS; builtin) :
+    (/Int64; /OS; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -9,7 +9,7 @@ begin
     make_std builtin
   in
   begin
-    let Num = Int that
+    let Num = Int64 that
     def ! done (x : Num) : OS =
       ! (process/exit) x
     that

@@ -19,6 +19,18 @@ The core types include:
 
 The main program is required to have type `OS`.
 
+### Numeric representations
+
+Zydeco exposes fixed-width numeric types whose runtime domains match Rust's primitive representations:
+`Int8`, `Int16`, `Int32`, and `Int64` use `i8`, `i16`, `i32`, and `i64`; `UInt8`, `UInt16`, `UInt32`,
+and `UInt64` use the corresponding unsigned Rust types; `Float32` and `Float64` use `f32` and `f64`.
+Integer arithmetic wraps within the selected representation, comparisons retain signedness,
+and floating-point operations follow IEEE 754 at the selected width.
+
+An integer or decimal literal is checked against its expected numeric type, including an exact range check.
+When no expected type selects a representation, integer literals synthesize `Int64` and decimal literals
+synthesize `Float64`. There are no implicit conversions between numeric representations.
+
 Surface notation distinguishes classifier arrows from term bodies while leaving constructor
 and destructor spines whitespace-guided.
 The [surface syntax principles](docs/ideas/syntax.md) record the rationale and the intended use of juxtaposition,
@@ -71,8 +83,8 @@ The same distinction lifts one level to named types and named kinds:
 Γ ⊢ (field :: K) : Set         Γ ⊢ (field = A) : (field :: K)
 ```
 
-For example, `(item = Int) : (item :: VType)` is a type-level judgment,
-while `item :: Int` is the value type classifying values such as `(item = 1) : (item :: Int)`.
+For example, `(item = Int64) : (item :: VType)` is a type-level judgment,
+while `item :: Int64` is the value type classifying values such as `(item = 1) : (item :: Int64)`.
 A type constructor can be named at its higher kind in the same way:
 
 ```zydeco
@@ -80,7 +92,7 @@ alias NamedIdentity : (constructor :: (VType -> VType)) =
   (constructor = Identity)
 end
 
-alias IntAgain : VType = NamedIdentity/constructor Int end
+alias IntAgain : VType = NamedIdentity/constructor Int64 end
 ```
 
 `Set` remains the meta-level classifier of kinds.
@@ -106,7 +118,7 @@ When a field and a variable or pattern binder have the same name, prefix `=` pro
 
 ```zydeco
 (= x, = y)                 -- equivalent to (x = x, y = y)
-(= x : Int, middle, = y)  -- the annotation describes the payload x
+(= x : Int64, middle, = y)  -- the annotation describes the payload x
 ```
 
 The set of valid field names is exactly the set of valid variable names.

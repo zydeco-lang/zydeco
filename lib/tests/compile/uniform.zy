@@ -6,9 +6,9 @@ begin
       Result
     end
   that
-  let IdentityResult = TypeIdentity Int that
+  let IdentityResult = TypeIdentity Int64 that
   param (
-    (/VType; /Int; /OS; /int; /process) :
+    (/VType; /Int64; /OS; /int64; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
   def ! run
@@ -17,11 +17,11 @@ begin
     begin
       let copy : Number = seed that
       param (seed : Number) that
-      def expected : Int = 0 that
+      def expected : Int64 = 0 that
       let Number = A that
       param (A : VType) that
-      def Opaque : VType = Int that
-      do status <- ! (int/add) expected 0;
+      def Opaque : VType = Int64 that
+      do status <- ! (int64/add) expected 0;
       ! (process/exit) status
     end
   that

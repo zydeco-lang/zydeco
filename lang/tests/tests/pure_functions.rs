@@ -83,9 +83,9 @@ fn pure_functions_capture_their_lexical_environment() {
     PureFunctionCase::run(
         r#"
 begin
-  let captured : Int = 0 that
-  let constant : Unit -> Int = fn (_ : Unit) => captured that
-  let result : Int = constant () that
+  let captured : Int64 = 0 that
+  let constant : Unit -> Int64 = fn (_ : Unit) => captured that
+  let result : Int64 = constant () that
   ! exit result
 end
 "#,
@@ -150,7 +150,7 @@ fn synthesizes_a_pure_package_dependent_arrow() {
 begin
   let Box = exists (X : VType) . X that
   let unpack = fn ((X, value) : Box) => value that
-  let result : Int = unpack (Int, 0) that
+  let result : Int64 = unpack (Int64, 0) that
   ! exit result
 end
 "#,
@@ -168,7 +168,7 @@ begin
   let identity_thunk : forall (B : CType) . Thk B -> Thk B =
     fn (B : CType) => fn (value : Thk B) => value
   that
-  let status : Int = identity Int 0 that
+  let status : Int64 = identity Int64 0 that
   let top : Thk Top = identity_thunk Top triv that
   ! exit status
 end
@@ -196,9 +196,9 @@ begin
     end
   that
 
-  let (B, identity = identity, selected) = make (Int, 0) that
+  let (B, identity = identity, selected) = make (Int64, 0) that
   let result : B = identity selected that
-  let status : Int = result that
+  let status : Int64 = result that
   ! exit status
 end
 "#,
@@ -226,7 +226,7 @@ begin
       in
       let Box = exists (A : VType) . A in
       let unpack = fn ((A, value) : Box) => value in
-      ret (identity Int (unpack (Int, 0)))
+      ret (identity Int64 (unpack (Int64, 0)))
     end
   that
 

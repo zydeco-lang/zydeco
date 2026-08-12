@@ -22,10 +22,10 @@ fn opens_a_manifest_witness_as_its_disclosed_type() {
         r#"
 begin
   let Transparent =
-    exists (X as Int : VType) . X
+    exists (X as Int64 : VType) . X
   that
-  def packed : Transparent = (Int, 42) that
-  def consume : Thk (Transparent -> Ret Int) = {
+  def packed : Transparent = (Int64, 42) that
+  def consume : Thk (Transparent -> Ret Int64) = {
     fn ((X, value) : Transparent) => ret value
   } that
 
@@ -42,7 +42,7 @@ fn rejects_a_witness_that_disagrees_with_the_manifest_definition() {
         r#"
 begin
   let Transparent =
-    exists (X as Int : VType) . X
+    exists (X as Int64 : VType) . X
   that
   def packed : Transparent = (Char, 'x') that
 
@@ -58,14 +58,14 @@ fn composes_manifest_existentials_with_named_package_fields() {
         r#"
 begin
   let CounterLibrary =
-    exists (Counter = ((Representation as Int) : VType)) .
+    exists (Counter = ((Representation as Int64) : VType)) .
       (zero :: Representation)
   that
   def library : CounterLibrary = (
-    Counter = Int,
+    Counter = Int64,
     zero = 0,
   ) that
-  def consume : Thk (CounterLibrary -> Ret Int) = {
+  def consume : Thk (CounterLibrary -> Ret Int64) = {
     fn ((= Counter, = zero) : CounterLibrary) => ret zero
   } that
 
@@ -84,10 +84,10 @@ begin
   let Box =
     exists (Item = Hidden : VType) .
       (value :: Hidden) *
-      (consume :: Thk (Hidden -> Ret Int))
+      (consume :: Thk (Hidden -> Ret Int64))
   that
   def boxed : Box = (
-    Item = Int,
+    Item = Int64,
     value = 41,
     consume = { fn value => ret value },
   ) that
@@ -111,7 +111,7 @@ begin
     exists (Item : VType) .
       (value :: Item)
   that
-  def boxed : Box = (Int, value = 42) that
+  def boxed : Box = (Int64, value = 42) that
 
   let (/Item; /value) = boxed in
   def selected : Item = value in
@@ -131,7 +131,7 @@ begin
     exists (Item : VType) .
       (value :: Item)
   that
-  def boxed : Box = (Int, value = 42) that
+  def boxed : Box = (Int64, value = 42) that
 
   let (/Item = Left; /Item = Right; /value) = boxed in
   def left : Left = value in
@@ -152,7 +152,7 @@ begin
     exists (Item : VType) .
       (value :: Item)
   that
-  def boxed : Box = (Int, value = 42) that
+  def boxed : Box = (Int64, value = 42) that
 
   let (/Missing) = boxed in
   ()
@@ -170,7 +170,7 @@ begin
     exists (Item : VType) .
       (Item :: Item)
   that
-  def boxed : Box = (Int, Item = 42) that
+  def boxed : Box = (Int64, Item = 42) that
 
   let (/Item) = boxed in
   ()
@@ -189,7 +189,7 @@ begin
     exists (Y as X : VType) .
       Y
   that
-  def packed : Mixed = (Int, Int, 7) that
+  def packed : Mixed = (Int64, Int64, 7) that
   def unpack = {
     fn ((X, Y, value) : Mixed) => ret value
   } that
@@ -207,11 +207,11 @@ fn skips_a_leading_manifest_component_when_instantiating_pack_pi() {
         r#"
 begin
   let Mixed =
-    exists (Y as Int : VType) .
+    exists (Y as Int64 : VType) .
     exists (X : VType) .
       X
   that
-  def packed : Mixed = (Int, Int, 9) that
+  def packed : Mixed = (Int64, Int64, 9) that
   def unpack = {
     fn ((Y, X, value) : Mixed) => ret value
   } that
@@ -229,12 +229,12 @@ fn accepts_payload_at_its_fresh_witness() {
         r#"
 begin
   let Box =
-    exists (X : VType) . X * Thk (X -> Ret Int)
+    exists (X : VType) . X * Thk (X -> Ret Int64)
   that
   def boxed : Box = (
-    Int,
+    Int64,
     0,
-    { fn (x : Int) => ret x },
+    { fn (x : Int64) => ret x },
   ) that
 
   {
@@ -256,14 +256,14 @@ fn scopes_opened_witnesses_over_let_and_function_bodies() {
         r#"
 begin
   let Box =
-    exists (X : VType) . X * Thk (X -> Ret Int)
+    exists (X : VType) . X * Thk (X -> Ret Int64)
   that
   def boxed : Box = (
-    Int,
+    Int64,
     0,
-    { fn (x : Int) => ret x },
+    { fn (x : Int64) => ret x },
   ) that
-  def consume_box : Thk (Box -> Ret Int) = {
+  def consume_box : Thk (Box -> Ret Int64) = {
     fn ((X, value, consume) : Box) => ! consume value
   } that
 
@@ -285,12 +285,12 @@ fn scopes_an_opened_witness_over_a_do_tail() {
         r#"
 begin
   let Box =
-    exists (X : VType) . X * Thk (X -> Ret Int)
+    exists (X : VType) . X * Thk (X -> Ret Int64)
   that
   def boxed : Box = (
-    Int,
+    Int64,
     0,
-    { fn (x : Int) => ret x },
+    { fn (x : Int64) => ret x },
   ) that
   def yield_box : Thk (Ret Box) = {
     ret boxed
@@ -313,12 +313,12 @@ fn rejects_mixing_payloads_from_distinct_openings() {
         r#"
 begin
   let Box =
-    exists (X : VType) . X * Thk (X -> Ret Int)
+    exists (X : VType) . X * Thk (X -> Ret Int64)
   that
   def ints : Box = (
-    Int,
+    Int64,
     0,
-    { fn (x : Int) => ret x },
+    { fn (x : Int64) => ret x },
   ) that
   def chars : Box = (
     Char,
@@ -349,7 +349,7 @@ begin
   let Box =
     exists (X : VType) . X
   that
-  def boxed : Box = (Int, 0) that
+  def boxed : Box = (Int64, 0) that
   def leak = {
     match boxed
     | (X, value) => ret value

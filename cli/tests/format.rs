@@ -6,7 +6,7 @@ fn fmt_formats_each_source_file_in_place() {
     let first = directory.path().join("first.zy");
     let second = directory.path().join("second.zy");
     fs::write(&first, "(field = field, ((x)))").unwrap();
-    fs::write(&second, "exists (Counter = ((Counter as Int) : VType)) . Counter").unwrap();
+    fs::write(&second, "exists (Counter = ((Counter as Int64) : VType)) . Counter").unwrap();
 
     let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
         .arg("fmt")
@@ -25,7 +25,7 @@ fn fmt_formats_each_source_file_in_place() {
     assert_eq!(fs::read_to_string(first).unwrap(), "(= field, x)\n");
     assert_eq!(
         fs::read_to_string(second).unwrap(),
-        "exists (= Counter as Int : VType) . Counter\n"
+        "exists (= Counter as Int64 : VType) . Counter\n"
     );
 }
 

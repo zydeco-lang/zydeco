@@ -2,7 +2,7 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /int; /stdio; /process; builtin) :
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /int64; /stdio; /process; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
@@ -48,7 +48,7 @@ begin
     | .done : Ret (Either E A)
     end
   that
-  let ExnCounter = ExnDe Unit Int that
+  let ExnCounter = ExnDe Unit Int64 that
 
   def ! mexn (E : VType) : Monad (Exn E) =
     comatch
@@ -115,7 +115,7 @@ begin
   that
   --| Proof of the violation of the monad laws of
   --| the defunctionalized exception monad above
-  def fix count_kont (E : VType) (A : VType) (i : Int) (fi : Thk (Int -> ExnDe E A)) : ExnDe E A =
+  def fix count_kont (E : VType) (A : VType) (i : Int64) (fi : Thk (Int64 -> ExnDe E A)) : ExnDe E A =
     comatch
     | .try =>
       fn E' ke =>
@@ -125,7 +125,7 @@ begin
         }
     | .kont =>
       fn A' ka =>
-        do i' <- ! (int/add) i 1;
+        do i' <- ! (int64/add) i 1;
         ! count_kont E A' i' {
           fn i =>
             ! fi i .kont A' ka
@@ -133,10 +133,10 @@ begin
     | .done => ! fi i .done
     end
   that
-  def ! bench (impl : Thk (Thk ExnCounter -> ExnCounter)) : Ret Int =
+  def ! bench (impl : Thk (Thk ExnCounter -> ExnCounter)) : Ret Int64 =
     do i? <- ! impl {
-      ! count_kont Unit Int 0 {
-        ! mexnde Unit .return Int
+      ! count_kont Unit Int64 0 {
+        ! mexnde Unit .return Int64
       }
     } .done;
     match i?
@@ -146,30 +146,30 @@ begin
   that
   -- LHS and RHS of the associativity law
   def ! lhs
-    (f : Thk (Int -> ExnDe Unit Int))
-    (g : Thk (Int -> ExnDe Unit Int))
-    (m : Thk (ExnDe Unit Int))
-    : ExnDe Unit Int =
-    ! mexnde Unit .bind Int Int
+    (f : Thk (Int64 -> ExnDe Unit Int64))
+    (g : Thk (Int64 -> ExnDe Unit Int64))
+    (m : Thk (ExnDe Unit Int64))
+    : ExnDe Unit Int64 =
+    ! mexnde Unit .bind Int64 Int64
       {
-        ! mexnde Unit .bind Int Int m f
+        ! mexnde Unit .bind Int64 Int64 m f
       }
       g
   that
   def ! rhs
-    (f : Thk (Int -> ExnDe Unit Int))
-    (g : Thk (Int -> ExnDe Unit Int))
-    (m : Thk (ExnDe Unit Int))
-    : ExnDe Unit Int =
-    ! mexnde Unit .bind Int Int m {
+    (f : Thk (Int64 -> ExnDe Unit Int64))
+    (g : Thk (Int64 -> ExnDe Unit Int64))
+    (m : Thk (ExnDe Unit Int64))
+    : ExnDe Unit Int64 =
+    ! mexnde Unit .bind Int64 Int64 m {
       fn i =>
-        ! mexnde Unit .bind Int Int { ! f i } g
+        ! mexnde Unit .bind Int64 Int64 { ! f i } g
     }
   that
 
   -- Observable violation of the monad laws because the results are different
-  let ! triv : Int -> ExnDe Unit Int =
-    ! mexnde Unit .return Int
+  let ! triv : Int64 -> ExnDe Unit Int64 =
+    ! mexnde Unit .return Int64
   in
   do a <- ! bench {
     fn i =>

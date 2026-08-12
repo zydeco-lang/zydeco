@@ -1,12 +1,12 @@
 begin
   param (
-    (/OS; /int; /string; /process) :
+    (/OS; /int64; /string; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   do unicode_length <- ! (string/length) "λx";
   do joined <- ! (string/append) "uniform " "terms";
-  ! (int/eq)
+  ! (int64/eq)
     OS
     unicode_length
     2

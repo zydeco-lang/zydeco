@@ -22,13 +22,13 @@ A short session can therefore look like this:
 
 ```console
 [1] 40
-  ⇒ 40 : Int
+  ⇒ 40 : Int64
 
 [2] @[import(1)] _
-  ⇒ 40 : Int
+  ⇒ 40 : Int64
 
 [3] ret (@[import(1)] _)
-  ⇒ 40 : Int
+  ⇒ 40 : Int64
 ```
 
 The spelling `@[import(1)]` uses an unquoted positive integer.
@@ -81,7 +81,7 @@ The engine first analyzes the submitted source directly.
 Complete declaration-free programs can already provide their own Builtin contract,
 and direct analysis preserves that structure without introducing duplicate names.
 A small expression such as `1` may instead need the standard Builtin types in scope.
-This package supplies core types such as `Int` together with the operations implemented by the host.
+This package supplies core types such as `Int64` together with the operations implemented by the host.
 If direct checking fails, the engine retries through an in-memory wrapper that opens the package
 and imports the numbered input.
 

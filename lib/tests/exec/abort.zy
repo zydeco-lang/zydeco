@@ -1,6 +1,6 @@
 begin
   param (
-    (/VType; /CType; /Ret; /Int; /process) :
+    (/VType; /CType; /Ret; /Int64; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -10,7 +10,7 @@ begin
     | .return : Ret A
     end
   that
-  def fix abort (x : Int) : Stack Int =
+  def fix abort (x : Int64) : Stack Int64 =
     comatch
     | .app _ => ! abort x
     | .return => ret x

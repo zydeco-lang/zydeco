@@ -1,34 +1,34 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (/Ret; /Int; /Float; /OS; builtin) :
+    (/Ret; /Int64; /Float64; /OS; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (/bool; /float; /int; /string; /process) = make_std builtin in
-  do sum <- ! (float/add) 1.25 2.75;
-  do difference <- ! (float/sub) sum 1.5;
-  do product <- ! (float/mul) difference 4.0;
-  do quotient <- ! (float/div) product 2.0;
-  do negative <- ! (float/negate) quotient;
-  do arithmetic_ok <- ! (float/eq) negative -5.0;
+  let (/bool; /float64; /int64; /string; /process) = make_std builtin in
+  do sum <- ! (float64/add) 1.25 2.75;
+  do difference <- ! (float64/sub) sum 1.5;
+  do product <- ! (float64/mul) difference 4.0;
+  do quotient <- ! (float64/div) product 2.0;
+  do negative <- ! (float64/negate) quotient;
+  do arithmetic_ok <- ! (float64/eq) negative -5.0;
 
-  do not_equal <- ! (float/ne) 1.0 2.0;
-  do less <- ! (float/lt) 1.0 2.0;
-  do less_or_equal <- ! (float/le) 2.0 2.0;
-  do greater <- ! (float/gt) 2.0 1.0;
-  do greater_or_equal <- ! (float/ge) 2.0 2.0;
+  do not_equal <- ! (float64/ne) 1.0 2.0;
+  do less <- ! (float64/lt) 1.0 2.0;
+  do less_or_equal <- ! (float64/le) 2.0 2.0;
+  do greater <- ! (float64/gt) 2.0 1.0;
+  do greater_or_equal <- ! (float64/ge) 2.0 2.0;
   do comparisons_a <- ! (bool/and) not_equal less;
   do comparisons_b <- ! (bool/and) less_or_equal greater;
   do comparisons_c <- ! (bool/and) comparisons_a comparisons_b;
   do comparisons_ok <- ! (bool/and) comparisons_c greater_or_equal;
 
-  do nan <- ! (float/div) 0.0 0.0;
-  do nan_le <- ! (float/le) nan nan;
+  do nan <- ! (float64/div) 0.0 0.0;
+  do nan_le <- ! (float64/le) nan nan;
   do nan_not_ordered <- ! (bool/not) nan_le;
-  do nan_ne <- ! (float/ne) nan nan;
+  do nan_ne <- ! (float64/ne) nan nan;
   do nan_ordering_ok <- ! (bool/and) nan_not_ordered nan_ne;
-  do rendered <- ! (float/to_string) 1.25e1;
+  do rendered <- ! (float64/to_string) 1.25e1;
   do rendering_ok <- ! (string/eq) rendered "12.5";
 
   do first <- ! (bool/and) arithmetic_ok comparisons_ok;

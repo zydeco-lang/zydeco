@@ -76,7 +76,7 @@ The shared `io` layer is byte-oriented.
 The exact surface types use the standard library's continuation-passing `OS` convention:
 
 ```text
-io.read       : Reader -> Int -> Thk (Result Bytes IoError -> OS) -> OS
+io.read       : Reader -> Int64 -> Thk (Result Bytes IoError -> OS) -> OS
 io.read_line  : Reader -> Thk (Result (Option Bytes) IoError -> OS) -> OS
 io.read_all   : Reader -> Thk (Result Bytes IoError -> OS) -> OS
 io.write_all  : Writer -> Bytes -> Thk (Result Unit IoError -> OS) -> OS

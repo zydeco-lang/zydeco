@@ -15,7 +15,7 @@ fn structurally_different_primitive_types_do_not_unify() {
         let (vtype, _) = TestFixture::kinds(tycker);
         let env = TyEnv::new();
         let unit = Alloc::alloc(tycker, UnitTy, vtype, &env);
-        let integer = Alloc::alloc(tycker, IntTy, vtype, &env);
+        let integer = Alloc::alloc(tycker, OpaqueTy, vtype, &env);
 
         assert!(unit.lub(integer, tycker).is_err());
     });
@@ -61,7 +61,7 @@ fn incompatible_constraints_preserve_the_previous_solution() {
         let env = TyEnv::new();
         let fill = tycker.statics.fills.alloc(source_site().into());
         let unit = Alloc::alloc(tycker, UnitTy, vtype, &env);
-        let integer = Alloc::alloc(tycker, IntTy, vtype, &env);
+        let integer = Alloc::alloc(tycker, OpaqueTy, vtype, &env);
 
         assert!(fill.fill(tycker, unit.into()).is_ok());
         assert!(fill.fill(tycker, integer.into()).is_err());

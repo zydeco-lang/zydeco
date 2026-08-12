@@ -429,8 +429,8 @@ impl<'a> Emit<'a> for Atom {
                 | sa::Imm::Triv(Triv) => {
                     em.emit_push("0".to_string());
                 }
-                | sa::Imm::Int(i) => {
-                    em.emit_push(format!("{}", i));
+                | sa::Imm::Integer(i) => {
+                    em.emit_push(format!("{}", i.to_word_bits()));
                 }
                 | sa::Imm::Float(value) => {
                     em.emit_push(format!("{}", value.to_bits()));
@@ -448,13 +448,13 @@ impl<'a> Emit<'a> for Intrinsic {
     type Env = ();
     fn emit(&self, (): Self::Env, em: &mut Emitter) {
         let Intrinsic { name, arity } = self;
-        match (*name, arity) {
+        match (name.as_str(), arity) {
             | (_, 2) => {
                 let rhs = em.emit_pop();
                 let lhs = em.emit_pop();
 
                 let _result = em.new_local();
-                let _op = match *name {
+                let _op = match name.as_str() {
                     | "add" => "add",
                     | "sub" => "sub",
                     | "mul" => "mul",

@@ -1,7 +1,7 @@
 -- a binary tree
 begin
   param (
-    (/VType; /Thk; /Ret; /Unit; /Int; /OS; /stdio; /process) :
+    (/VType; /Thk; /Ret; /Unit; /Int64; /OS; /stdio; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -77,7 +77,7 @@ begin
     }
   that
   -- here's a test
-  def t0 : Tree Int =
+  def t0 : Tree Int64 =
     +Node(
       +Node(
         +Node(+Leaf(), 1, +Leaf()),
@@ -88,7 +88,7 @@ begin
       +Node(+Leaf(), 3, +Leaf())
     )
   that
-  def fix write_tree (t : Tree Int) (k : Thk OS) : OS =
+  def fix write_tree (t : Tree Int64) (k : Thk OS) : OS =
     match t
     | +Leaf() =>
       ! (stdio/write) "()" k
@@ -105,9 +105,9 @@ begin
     end
   that
 
-  do t1 <- ! invert Int t0;
-  do t2 <- ! invert' Int t0;
-  do t3 <- ! invert'' Int t0;
+  do t1 <- ! invert Int64 t0;
+  do t2 <- ! invert' Int64 t0;
+  do t3 <- ! invert'' Int64 t0;
   ! write_tree t0 {
     ! (stdio/write_line) "" {
       ! write_tree t1 {

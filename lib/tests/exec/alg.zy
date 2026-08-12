@@ -1,7 +1,7 @@
 begin
   let monadic_basis = @[import("../../std/monad.zy")] _ that
   param (
-    (/VType; /CType; /Thk; /Ret; /Int; /process; builtin) :
+    (/VType; /CType; /Thk; /Ret; /Int64; /process; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
   let (= Monad, = Algebra, ()) =
@@ -150,8 +150,8 @@ begin
   that
 
   do x <- ! alg_of_ret
-    (Ret Int)
-    Int
+    (Ret Int64)
+    Int64
     { ret 0 }
     {
       fn x =>

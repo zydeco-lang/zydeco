@@ -1,31 +1,31 @@
 begin
   param (
-    (/Int; /int; /process) :
+    (/Int64; /int64; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
-  let Point = (x :: Int) * (y :: Int) that
-  let Rectangle = (top_left :: Point) * (status :: Int) that
-  let Triple = (first :: Int) * ((middle :: Int) * (last :: Int)) that
-  let Nested = ((inner_x :: Int) * (inner_y :: Int)) * (outer :: Int) that
+  let Point = (x :: Int64) * (y :: Int64) that
+  let Rectangle = (top_left :: Point) * (status :: Int64) that
+  let Triple = (first :: Int64) * ((middle :: Int64) * (last :: Int64)) that
+  let Nested = ((inner_x :: Int64) * (inner_y :: Int64)) * (outer :: Int64) that
   def rectangle : Rectangle = (
     top_left = (x = 5, y = 1),
     status = 0
   ) that
   def triple : Triple = (first = 7, middle = -3, last = -4) that
   def nested : Nested = ((inner_x = 0, inner_y = -12), outer = 0) that
-  def first_global : Int = triple/first that
+  def first_global : Int64 = triple/first that
 
-  let (top_left = point, = status : Int) = rectangle in
-  let status_field = (= status : Int) in
+  let (top_left = point, = status : Int64) = rectangle in
+  let status_field = (= status : Int64) in
   let direct = (code = point/x) in
   let (inner, outer = _) = nested in
   let pair = (triple/first, triple/last) in
   let (first, last) = pair in
-  do total <- ! (int/add) first triple/middle;
-  do total <- ! (int/add) total last;
-  do total <- ! (int/add) total inner/inner_y;
-  do total <- ! (int/add) total direct/code;
-  do total <- ! (int/add) total first_global;
-  do total <- ! (int/add) total status_field/status;
+  do total <- ! (int64/add) first triple/middle;
+  do total <- ! (int64/add) total last;
+  do total <- ! (int64/add) total inner/inner_y;
+  do total <- ! (int64/add) total direct/code;
+  do total <- ! (int64/add) total first_global;
+  do total <- ! (int64/add) total status_field/status;
   ! (process/exit) total
 end

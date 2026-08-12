@@ -9,9 +9,9 @@ for occurrences of `field :: Payload` and returns the payload of the unique occu
 For example, neither the left-hand product nesting nor the outer named wrapper must be repeated at a use site:
 
 ```zydeco
-let Inner = (x :: Int) * Int that
-let Outer = Inner * (z :: Int) that
-let Wrapped = (outer :: inner :: Int) that
+let Inner = (x :: Int64) * Int64 that
+let Outer = Inner * (z :: Int64) that
+let Wrapped = (outer :: inner :: Int64) that
 
 nested/x
 wrapped/inner

@@ -123,8 +123,8 @@ end
 Named terms and existential parameters
 ==================
 
-exists (Counter as Int : VType) (= State as Counter)
-  (Public = ((Hidden as Int) : VType)) .
+exists (Counter as Int64 : VType) (= State as Counter)
+  (Public = ((Hidden as Int64) : VType)) .
   (state = 0, next :: Thk (State -> Ret State), = State)
 
 ---
@@ -253,7 +253,7 @@ param ((/VType; /CType; /Thk; /Ret) : @[import("builtin.zy")] _) in _
 Annotated existential parameters
 ==================
 
-exists @[builtin(int)] (Int : VType) . Int
+exists @[builtin(int64)] (Int64 : VType) . Int64
 
 ---
 

@@ -1,8 +1,8 @@
 param (
-  (/OS; /int; /process) :
+  (/OS; /int64; /process) :
   @[import("../../std/builtin.zy")] _
 ) in
-  ! (int/eq)
+  ! (int64/eq)
     OS
     0
     0

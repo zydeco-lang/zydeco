@@ -755,7 +755,7 @@ fn structure_translation(
             App(App(str_f, cs::Ty(ty_a_lift)), Thunk(str_a)).mbuild(tycker, env)?
         }
         // primitive types are not allowed in monadic blocks
-        | Type::Int(_) | Type::Char(_) | Type::String(_) => unreachable!(),
+        | Type::Opaque(_) | Type::Char(_) | Type::String(_) => unreachable!(),
         // unit, product, and existential types have the trivial structure `top`
         // (so should data types)
         | Type::Named(Named(_, inner)) | Type::Proj(Proj(inner, _)) => {
@@ -1006,11 +1006,13 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             (env, alloc)
         }
         // primitive types are not allowed in monadic blocks
-        | ty @ (Type::Int(_) | Type::Char(_) | Type::String(_)) => {
+        | Type::Opaque(_) => tycker.err(
+            TyckError::Expressivity("opaque checker-test types are unavailable in monadic blocks"),
+            std::panic::Location::caller(),
+        )?,
+        | ty @ (Type::Char(_) | Type::String(_)) => {
             let def = {
-                if let Type::Int(_) = ty {
-                    tycker.prim.int.get().to_owned()
-                } else if let Type::Char(_) = ty {
+                if let Type::Char(_) = ty {
                     tycker.prim.char.get().to_owned()
                 } else if let Type::String(_) = ty {
                     tycker.prim.string.get().to_owned()

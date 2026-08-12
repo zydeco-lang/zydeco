@@ -1,6 +1,6 @@
 # Numeric capability packages instead of inheritance
 
-`Int` and `Float` expose similar operations through separate standard-library modules.
+The fixed-width integer and floating-point types expose similar operations through separate standard-library modules.
 Generic numeric code should reuse that common structure without introducing a language-level inheritance relation
 or flattening every operation into one record.
 A flat record makes names such as `add` and `eq` easy to project ambiguously once capabilities are combined.
@@ -48,11 +48,11 @@ In particular, IEEE floating-point equality is not reflexive in the presence of 
 which motivates the name `PartialEquality`.
 Lawful refinements may be introduced later as separate interfaces without changing the operational dictionaries.
 
-The standard package exports these five type constructors and a `numeric` module containing `int_instance`
-and `float_instance`.
-Their specialized `int` and `float` modules remain the interfaces for division, remainder, rendering,
-extrema, and other representation-specific operations.
+The standard package exports these five capability type constructors and a `numeric` module containing one explicit
+instance for each of `Int8` through `Int64`, `UInt8` through `UInt64`, `Float32`, and `Float64`.
+Their specialized modules remain the interfaces for division, integer remainder, rendering, extrema,
+and other representation-specific operations.
 
-This proposal does not add numeric widths, overloaded literals, implicit conversions,
-checked arithmetic, or instance search.
-It only establishes explicit, reusable capability packages over the operations already present.
+Literal types are selected by context, defaulting to `Int64` and `Float64` when no expected type is available.
+The capability encoding does not add implicit conversions, checked arithmetic, or instance search;
+it establishes explicit, reusable packages over the operations provided by each representation.

@@ -1,32 +1,32 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (/Ret; /Int; /OS; builtin) :
+    (/Ret; /Int64; /OS; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (/list; /int; /process) = make_std builtin in
-  do empty <- ! (list/nil) Int;
-  do one <- ! (list/cons) Int 1 empty;
-  do values <- ! (list/cons) Int 2 one;
+  let (/list; /int64; /process) = make_std builtin in
+  do empty <- ! (list/nil) Int64;
+  do one <- ! (list/cons) Int64 1 empty;
+  do values <- ! (list/cons) Int64 2 one;
   ! (list/case)
-    Int
+    Int64
     OS
     values
     { ! (process/exit) 1 }
     {
       fn head tail =>
         do total <- ! (list/fold)
-          Int
-          (Ret Int)
+          Int64
+          (Ret Int64)
           tail
           { ret head }
           {
             fn value rest =>
               do subtotal <- ! rest;
-              ! (int/add) value subtotal
+              ! (int64/add) value subtotal
           };
-        do status <- ! (int/sub) total 3;
+        do status <- ! (int64/sub) total 3;
         ! (process/exit) status
     }
 end

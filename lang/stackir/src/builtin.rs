@@ -3,9 +3,9 @@
 use crate::sps::syntax::*;
 use std::collections::HashMap;
 use zydeco_statics::surface_syntax::ScopedArena;
-use zydeco_syntax::BuiltinValueRole;
+use zydeco_syntax::{BuiltinValueRole, FloatOperation, IntegerOperation};
 
-pub type BuiltinMap = HashMap<&'static str, Builtin>;
+pub type BuiltinMap = HashMap<String, Builtin>;
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum BuiltinPackageLowerError {
@@ -18,7 +18,7 @@ pub enum BuiltinPackageLowerError {
 #[derive(Clone, Debug, derive_more::Display)]
 #[display("{name}/{arity}")]
 pub struct Builtin {
-    pub name: &'static str,
+    pub name: String,
     pub arity: usize,
     pub sort: BuiltinSort,
 }
@@ -39,81 +39,72 @@ pub enum HostCallMode {
 
 impl Builtin {
     pub fn all() -> BuiltinMap {
-        use BuiltinSort::*;
-        use HostCallMode::*;
-        [
-            Builtin::new("add", 2, Operator),
-            Builtin::new("sub", 2, Operator),
-            Builtin::new("mul", 2, Operator),
-            Builtin::new("div", 2, Operator),
-            Builtin::new("mod", 2, Operator),
-            Builtin::new("int_eq_branch", 4, Function(Control)),
-            Builtin::new("int_lt_branch", 4, Function(Control)),
-            Builtin::new("int_gt_branch", 4, Function(Control)),
-            Builtin::new("float_add", 2, Function(Returning)),
-            Builtin::new("float_sub", 2, Function(Returning)),
-            Builtin::new("float_mul", 2, Function(Returning)),
-            Builtin::new("float_div", 2, Function(Returning)),
-            Builtin::new("float_eq_branch", 4, Function(Control)),
-            Builtin::new("float_lt_branch", 4, Function(Control)),
-            Builtin::new("float_gt_branch", 4, Function(Control)),
-            Builtin::new("float_to_str", 1, Function(Returning)),
-            Builtin::new("str_scalar_length", 1, Function(Returning)),
-            Builtin::new("str_byte_length", 1, Function(Returning)),
-            Builtin::new("str_append", 2, Function(Returning)),
-            Builtin::new("str_split_once_branch", 4, Function(Control)),
-            Builtin::new("str_split_at_branch", 4, Function(Control)),
-            Builtin::new("str_eq_branch", 4, Function(Control)),
-            Builtin::new("str_get_branch", 4, Function(Control)),
-            Builtin::new("int_to_str", 1, Function(Returning)),
-            Builtin::new("char_to_str", 1, Function(Returning)),
-            Builtin::new("char_codepoint", 1, Function(Returning)),
-            Builtin::new("char_from_codepoint_branch", 3, Function(Control)),
-            Builtin::new("str_parse_int_branch", 3, Function(Control)),
-            Builtin::new("bytes_empty", 0, Function(Returning)),
-            Builtin::new("bytes_length", 1, Function(Returning)),
-            Builtin::new("bytes_append", 2, Function(Returning)),
-            Builtin::new("bytes_from_str", 1, Function(Returning)),
-            Builtin::new("bytes_to_str_branch", 3, Function(Control)),
-            Builtin::new("stdin", 0, Function(Returning)),
-            Builtin::new("stdout", 0, Function(Returning)),
-            Builtin::new("stderr", 0, Function(Returning)),
-            Builtin::new("io_read", 4, Function(Control)),
-            Builtin::new("io_read_line", 4, Function(Control)),
-            Builtin::new("io_read_all", 3, Function(Control)),
-            Builtin::new("io_write_all", 4, Function(Control)),
-            Builtin::new("io_flush", 3, Function(Control)),
-            Builtin::new("io_close_reader", 3, Function(Control)),
-            Builtin::new("io_close_writer", 3, Function(Control)),
-            Builtin::new("fs_open_reader", 3, Function(Control)),
-            Builtin::new("fs_create_writer", 3, Function(Control)),
-            Builtin::new("fs_append_writer", 3, Function(Control)),
-            Builtin::new("write_str", 2, Function(Control)),
-            Builtin::new("write_int", 2, Function(Control)),
-            Builtin::new("write_line", 2, Function(Control)),
-            Builtin::new("read_line", 1, Function(Control)),
-            Builtin::new("read_line_as_int_branch", 2, Function(Control)),
-            Builtin::new("read_till_eof", 1, Function(Control)),
-            Builtin::new("arg_fold", 2, Function(Control)),
-            Builtin::new("random_int", 1, Function(Control)),
-            Builtin::new("exit", 1, Function(Control)),
-        ]
-        .into_iter()
-        .map(Self::generate)
-        .collect()
+        BuiltinValueRole::all().map(Self::for_known_role).map(Self::generate).collect()
     }
-    pub fn new(name: &'static str, arity: usize, sort: BuiltinSort) -> Self {
-        Builtin { name, arity, sort }
+
+    fn for_known_role(role: BuiltinValueRole) -> Self {
+        use BuiltinSort::Function;
+        use HostCallMode::{Control, Returning};
+
+        let mode = match role {
+            | BuiltinValueRole::Integer(_, operation) => {
+                if operation.is_branch() {
+                    Control
+                } else {
+                    Returning
+                }
+            }
+            | BuiltinValueRole::Float(_, operation) => {
+                if operation.is_branch() {
+                    Control
+                } else {
+                    Returning
+                }
+            }
+            | BuiltinValueRole::StrSplitOnce
+            | BuiltinValueRole::StrSplitAt
+            | BuiltinValueRole::StrEq
+            | BuiltinValueRole::StrGet
+            | BuiltinValueRole::CharFromCodepoint
+            | BuiltinValueRole::StrParseInt
+            | BuiltinValueRole::BytesToStr
+            | BuiltinValueRole::IoRead
+            | BuiltinValueRole::IoReadLine
+            | BuiltinValueRole::IoReadAll
+            | BuiltinValueRole::IoWriteAll
+            | BuiltinValueRole::IoFlush
+            | BuiltinValueRole::IoCloseReader
+            | BuiltinValueRole::IoCloseWriter
+            | BuiltinValueRole::FsOpenReader
+            | BuiltinValueRole::FsCreateWriter
+            | BuiltinValueRole::FsAppendWriter
+            | BuiltinValueRole::WriteStr
+            | BuiltinValueRole::WriteInt
+            | BuiltinValueRole::WriteLine
+            | BuiltinValueRole::ReadLine
+            | BuiltinValueRole::ReadLineAsInt
+            | BuiltinValueRole::ReadTillEof
+            | BuiltinValueRole::ArgList
+            | BuiltinValueRole::RandomInt
+            | BuiltinValueRole::Exit => Control,
+            | _ => Returning,
+        };
+        Builtin::new(role.host_name(), role.arity(), Function(mode))
     }
-    fn generate<'a>(self) -> (&'a str, Self) {
-        (self.name, self)
+
+    pub fn new(name: impl Into<String>, arity: usize, sort: BuiltinSort) -> Self {
+        Builtin { name: name.into(), arity, sort }
+    }
+
+    fn generate(self) -> (String, Self) {
+        (self.name.clone(), self)
     }
 
     pub fn for_role(
         builtins: &BuiltinMap, role: BuiltinValueRole,
     ) -> Result<Self, BuiltinPackageLowerError> {
         builtins
-            .get(role.host_name())
+            .get(&role.host_name())
             .cloned()
             .ok_or(BuiltinPackageLowerError::UnsupportedOperation { role })
     }
@@ -124,7 +115,7 @@ impl Builtin {
     where
         Arena: AsMut<StackirArena> + AsMut<ScopedArena>,
     {
-        let op = self.name;
+        let op = self.name.clone();
         // make fresh variables as operands
         let params: Vec<_> = (0..self.arity)
             .map(|i| {
@@ -156,7 +147,7 @@ impl Builtin {
     where
         Arena: AsMut<StackirArena> + AsMut<ScopedArena>,
     {
-        let function = self.name;
+        let function = self.name.clone();
         let stack = Bullet.build(arena, None);
         let body = ExternCall { function, stack }.build(arena, None);
         Closure { stack: Bullet, body }.build(arena, None)
@@ -174,9 +165,7 @@ mod tests {
     #[test]
     fn every_builtin_role_has_a_stack_ir_package_implementation() {
         let builtins = Builtin::all();
-        let missing = BuiltinValueRole::ALL
-            .iter()
-            .copied()
+        let missing = BuiltinValueRole::all()
             .filter(|role| Builtin::for_role(&builtins, *role).is_err())
             .collect::<Vec<_>>();
 

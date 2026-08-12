@@ -54,28 +54,88 @@ fn dtor(body: Rc<ZCompute>, dtor: &str) -> ZCompute {
 }
 
 // /* Arithmetic */
-/// Generate arithmetic primitives that operate on integer literals.
-macro_rules! arith {
-    ( $name:ident, $op:tt ) => {
-        pub fn $name(
-            args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-        ) -> Result<ZCompute, i32> {
-            match args.as_slice() {
-                [
-                    ZValue::Literal(Literal::Int(a)),
-                    ZValue::Literal(Literal::Int(b))
-                ] => ret(Literal::Int(a $op b).into()),
-                _ => unreachable!(""),
-            }
-        }
-    };
+macro_rules! integer_arithmetic_result {
+    ($variant:ident, $first:expr, $second:expr, $operation:expr) => {{
+        let result = match $operation {
+            | IntegerOperation::Add => $first.wrapping_add(*$second),
+            | IntegerOperation::Sub => $first.wrapping_sub(*$second),
+            | IntegerOperation::Mul => $first.wrapping_mul(*$second),
+            | IntegerOperation::Div => $first.wrapping_div(*$second),
+            | IntegerOperation::Mod => $first.wrapping_rem(*$second),
+            | IntegerOperation::Eq
+            | IntegerOperation::Lt
+            | IntegerOperation::Gt
+            | IntegerOperation::ToString => unreachable!(),
+        };
+        Literal::Integer(IntegerLiteral::$variant(result)).into()
+    }};
 }
 
-arith!(add, +);
-arith!(sub, -);
-arith!(mul, *);
-arith!(div, /);
-arith!(modulo, %);
+/// Evaluate width- and signedness-aware wrapping integer arithmetic.
+pub fn integer_arithmetic(
+    integer_type: IntegerType, operation: IntegerOperation, args: Vec<ZValue>,
+) -> Result<ZCompute, i32> {
+    let value = match (integer_type, args.as_slice()) {
+        | (
+            IntegerType::Int8,
+            [
+                ZValue::Literal(Literal::Integer(IntegerLiteral::Int8(first))),
+                ZValue::Literal(Literal::Integer(IntegerLiteral::Int8(second))),
+            ],
+        ) => integer_arithmetic_result!(Int8, first, second, operation),
+        | (
+            IntegerType::Int16,
+            [
+                ZValue::Literal(Literal::Integer(IntegerLiteral::Int16(first))),
+                ZValue::Literal(Literal::Integer(IntegerLiteral::Int16(second))),
+            ],
+        ) => integer_arithmetic_result!(Int16, first, second, operation),
+        | (
+            IntegerType::Int32,
+            [
+                ZValue::Literal(Literal::Integer(IntegerLiteral::Int32(first))),
+                ZValue::Literal(Literal::Integer(IntegerLiteral::Int32(second))),
+            ],
+        ) => integer_arithmetic_result!(Int32, first, second, operation),
+        | (
+            IntegerType::Int64,
+            [
+                ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(first))),
+                ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(second))),
+            ],
+        ) => integer_arithmetic_result!(Int64, first, second, operation),
+        | (
+            IntegerType::UInt8,
+            [
+                ZValue::Literal(Literal::Integer(IntegerLiteral::UInt8(first))),
+                ZValue::Literal(Literal::Integer(IntegerLiteral::UInt8(second))),
+            ],
+        ) => integer_arithmetic_result!(UInt8, first, second, operation),
+        | (
+            IntegerType::UInt16,
+            [
+                ZValue::Literal(Literal::Integer(IntegerLiteral::UInt16(first))),
+                ZValue::Literal(Literal::Integer(IntegerLiteral::UInt16(second))),
+            ],
+        ) => integer_arithmetic_result!(UInt16, first, second, operation),
+        | (
+            IntegerType::UInt32,
+            [
+                ZValue::Literal(Literal::Integer(IntegerLiteral::UInt32(first))),
+                ZValue::Literal(Literal::Integer(IntegerLiteral::UInt32(second))),
+            ],
+        ) => integer_arithmetic_result!(UInt32, first, second, operation),
+        | (
+            IntegerType::UInt64,
+            [
+                ZValue::Literal(Literal::Integer(IntegerLiteral::UInt64(first))),
+                ZValue::Literal(Literal::Integer(IntegerLiteral::UInt64(second))),
+            ],
+        ) => integer_arithmetic_result!(UInt64, first, second, operation),
+        | _ => unreachable!("type-checked integer operation received mismatched values"),
+    };
+    ret(value)
+}
 
 struct Branch;
 
@@ -86,83 +146,168 @@ impl Branch {
     }
 }
 
-macro_rules! intcomp_branch {
-    ( $name:ident, $op:tt ) => {
-        pub fn $name(
-            args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-        ) -> Result<ZCompute, i32> {
-            match args.as_slice() {
-                [
-                    ZValue::Literal(Literal::Int(a)),
-                    ZValue::Literal(Literal::Int(b)),
-                    when_true @ ZValue::Thunk(_),
-                    when_false @ ZValue::Thunk(_),
-                ] => Branch::select(a $op b, when_true, when_false),
-                _ => unreachable!(""),
-            }
-        }
-    };
+fn integer_comparison<T: PartialEq + PartialOrd>(
+    first: &T, second: &T, operation: IntegerOperation,
+) -> bool {
+    match operation {
+        | IntegerOperation::Eq => first == second,
+        | IntegerOperation::Lt => first < second,
+        | IntegerOperation::Gt => first > second,
+        | _ => unreachable!(),
+    }
 }
 
-intcomp_branch!(int_eq_branch, ==);
-intcomp_branch!(int_lt_branch, <);
-intcomp_branch!(int_gt_branch, >);
-
-macro_rules! float_arith {
-    ( $name:ident, $op:tt ) => {
-        pub fn $name(
-            args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
-            _: &mut HostRuntime,
-        ) -> Result<ZCompute, i32> {
-            match args.as_slice() {
-                [
-                    ZValue::Literal(Literal::Float(a)),
-                    ZValue::Literal(Literal::Float(b)),
-                ] => ret(Literal::Float((a.value() $op b.value()).into()).into()),
-                | _ => unreachable!(""),
-            }
-        }
-    };
-}
-
-float_arith!(float_add, +);
-float_arith!(float_sub, -);
-float_arith!(float_mul, *);
-float_arith!(float_div, /);
-
-macro_rules! floatcomp_branch {
-    ( $name:ident, $op:tt ) => {
-        pub fn $name(
-            args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
-            _: &mut HostRuntime,
-        ) -> Result<ZCompute, i32> {
-            match args.as_slice() {
-                [
-                    ZValue::Literal(Literal::Float(a)),
-                    ZValue::Literal(Literal::Float(b)),
-                    when_true @ ZValue::Thunk(_),
-                    when_false @ ZValue::Thunk(_),
-                ] => Branch::select(a.value() $op b.value(), when_true, when_false),
-                | _ => unreachable!(""),
-            }
-        }
-    };
-}
-
-floatcomp_branch!(float_eq_branch, ==);
-floatcomp_branch!(float_lt_branch, <);
-floatcomp_branch!(float_gt_branch, >);
-
-/// Convert a floating-point literal to its shortest round-trippable decimal form.
-pub fn float_to_str(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
+/// Select a continuation using comparison in the integer's Rust domain.
+pub fn integer_branch(
+    integer_type: IntegerType, operation: IntegerOperation, args: Vec<ZValue>,
 ) -> Result<ZCompute, i32> {
+    let [first, second, when_true @ ZValue::Thunk(_), when_false @ ZValue::Thunk(_)] =
+        args.as_slice()
+    else {
+        unreachable!("type-checked integer branch received malformed arguments")
+    };
+    let condition = match (integer_type, first, second) {
+        | (
+            IntegerType::Int8,
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int8(first))),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int8(second))),
+        ) => integer_comparison(first, second, operation),
+        | (
+            IntegerType::Int16,
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int16(first))),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int16(second))),
+        ) => integer_comparison(first, second, operation),
+        | (
+            IntegerType::Int32,
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int32(first))),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int32(second))),
+        ) => integer_comparison(first, second, operation),
+        | (
+            IntegerType::Int64,
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(first))),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(second))),
+        ) => integer_comparison(first, second, operation),
+        | (
+            IntegerType::UInt8,
+            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt8(first))),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt8(second))),
+        ) => integer_comparison(first, second, operation),
+        | (
+            IntegerType::UInt16,
+            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt16(first))),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt16(second))),
+        ) => integer_comparison(first, second, operation),
+        | (
+            IntegerType::UInt32,
+            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt32(first))),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt32(second))),
+        ) => integer_comparison(first, second, operation),
+        | (
+            IntegerType::UInt64,
+            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt64(first))),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt64(second))),
+        ) => integer_comparison(first, second, operation),
+        | _ => unreachable!("type-checked integer branch received mismatched values"),
+    };
+    Branch::select(condition, when_true, when_false)
+}
+
+pub fn integer_to_string(integer_type: IntegerType, args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        | [ZValue::Literal(Literal::Float(value))] => {
+        | [ZValue::Literal(Literal::Integer(value))]
+            if value.integer_type() == Some(integer_type) =>
+        {
             ret(Literal::String(value.to_string().into()).into())
         }
-        | _ => unreachable!(""),
+        | _ => unreachable!("type-checked integer rendering received a mismatched value"),
     }
+}
+
+macro_rules! float_arithmetic_result {
+    ($constructor:ident, $type:ty, $first:expr, $second:expr, $operation:expr) => {{
+        let first = <$type>::from_bits(*$first);
+        let second = <$type>::from_bits(*$second);
+        let result = match $operation {
+            | FloatOperation::Add => first + second,
+            | FloatOperation::Sub => first - second,
+            | FloatOperation::Mul => first * second,
+            | FloatOperation::Div => first / second,
+            | _ => unreachable!(),
+        };
+        Literal::Float(FloatLiteral::$constructor(result.to_bits())).into()
+    }};
+}
+
+pub fn float_arithmetic(
+    float_type: FloatType, operation: FloatOperation, args: Vec<ZValue>,
+) -> Result<ZCompute, i32> {
+    let value = match (float_type, args.as_slice()) {
+        | (
+            FloatType::Float32,
+            [
+                ZValue::Literal(Literal::Float(FloatLiteral::Float32(first))),
+                ZValue::Literal(Literal::Float(FloatLiteral::Float32(second))),
+            ],
+        ) => float_arithmetic_result!(Float32, f32, first, second, operation),
+        | (
+            FloatType::Float64,
+            [
+                ZValue::Literal(Literal::Float(FloatLiteral::Float64(first))),
+                ZValue::Literal(Literal::Float(FloatLiteral::Float64(second))),
+            ],
+        ) => float_arithmetic_result!(Float64, f64, first, second, operation),
+        | _ => unreachable!("type-checked float operation received mismatched values"),
+    };
+    ret(value)
+}
+
+fn float_comparison<T: PartialEq + PartialOrd>(
+    first: T, second: T, operation: FloatOperation,
+) -> bool {
+    match operation {
+        | FloatOperation::Eq => first == second,
+        | FloatOperation::Lt => first < second,
+        | FloatOperation::Gt => first > second,
+        | _ => unreachable!(),
+    }
+}
+
+pub fn float_branch(
+    float_type: FloatType, operation: FloatOperation, args: Vec<ZValue>,
+) -> Result<ZCompute, i32> {
+    let [first, second, when_true @ ZValue::Thunk(_), when_false @ ZValue::Thunk(_)] =
+        args.as_slice()
+    else {
+        unreachable!("type-checked float branch received malformed arguments")
+    };
+    let condition = match (float_type, first, second) {
+        | (
+            FloatType::Float32,
+            ZValue::Literal(Literal::Float(FloatLiteral::Float32(first))),
+            ZValue::Literal(Literal::Float(FloatLiteral::Float32(second))),
+        ) => float_comparison(f32::from_bits(*first), f32::from_bits(*second), operation),
+        | (
+            FloatType::Float64,
+            ZValue::Literal(Literal::Float(FloatLiteral::Float64(first))),
+            ZValue::Literal(Literal::Float(FloatLiteral::Float64(second))),
+        ) => float_comparison(f64::from_bits(*first), f64::from_bits(*second), operation),
+        | _ => unreachable!("type-checked float branch received mismatched values"),
+    };
+    Branch::select(condition, when_true, when_false)
+}
+
+/// Convert a floating-point literal to its shortest round-trippable decimal form.
+pub fn float_to_string(float_type: FloatType, args: Vec<ZValue>) -> Result<ZCompute, i32> {
+    let rendered = match (float_type, args.as_slice()) {
+        | (FloatType::Float32, [ZValue::Literal(Literal::Float(FloatLiteral::Float32(bits)))]) => {
+            f32::from_bits(*bits).to_string()
+        }
+        | (FloatType::Float64, [ZValue::Literal(Literal::Float(FloatLiteral::Float64(bits)))]) => {
+            f64::from_bits(*bits).to_string()
+        }
+        | _ => unreachable!("type-checked float rendering received a mismatched value"),
+    };
+    ret(Literal::String(rendered.into()).into())
 }
 
 // /* Strings */
@@ -171,7 +316,9 @@ pub fn str_scalar_length(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        | [ZValue::Literal(Literal::String(a))] => ret(Literal::Int(a.scalar_len() as i64).into()),
+        | [ZValue::Literal(Literal::String(a))] => {
+            ret(Literal::Integer((a.scalar_len() as i64).into()).into())
+        }
         | _ => unreachable!(""),
     }
 }
@@ -182,7 +329,7 @@ pub fn str_byte_length(
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::String(string))] => {
-            ret(Literal::Int(string.byte_len() as i64).into())
+            ret(Literal::Integer((string.byte_len() as i64).into()).into())
         }
         | _ => unreachable!(""),
     }
@@ -247,7 +394,7 @@ pub fn str_split_at_branch(
     match args.as_slice() {
         | [
             ZValue::Literal(Literal::String(string)),
-            ZValue::Literal(Literal::Int(index)),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(index))),
             when_none @ ZValue::Thunk(_),
             when_some @ ZValue::Thunk(_),
         ] => {
@@ -297,7 +444,7 @@ pub fn str_get_branch(
     match args.as_slice() {
         | [
             ZValue::Literal(Literal::String(string)),
-            ZValue::Literal(Literal::Int(index)),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(index))),
             when_none @ ZValue::Thunk(_),
             when_some @ ZValue::Thunk(_),
         ] => {
@@ -307,16 +454,6 @@ pub fn str_get_branch(
                 .map(|character| Literal::Char(character).into());
             OptionalValueBranch::select(character, when_none, when_some)
         }
-        | _ => unreachable!(""),
-    }
-}
-
-/// Convert an integer literal to its string representation.
-pub fn int_to_str(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
-    match args.as_slice() {
-        | [ZValue::Literal(Literal::Int(a))] => ret(Literal::String(a.to_string().into()).into()),
         | _ => unreachable!(""),
     }
 }
@@ -336,7 +473,9 @@ pub fn char_codepoint(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        | [ZValue::Literal(Literal::Char(a))] => ret(Literal::Int(*a as u32 as i64).into()),
+        | [ZValue::Literal(Literal::Char(a))] => {
+            ret(Literal::Integer((*a as u32 as i64).into()).into())
+        }
         | _ => unreachable!(""),
     }
 }
@@ -347,7 +486,7 @@ pub fn char_from_codepoint_branch(
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
-            ZValue::Literal(Literal::Int(codepoint)),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(codepoint))),
             when_none @ ZValue::Thunk(_),
             when_some @ ZValue::Thunk(_),
         ] => {
@@ -371,8 +510,11 @@ pub fn str_parse_int_branch(
             when_none @ ZValue::Thunk(_),
             when_some @ ZValue::Thunk(_),
         ] => {
-            let integer =
-                string.as_str().parse::<i64>().ok().map(|integer| Literal::Int(integer).into());
+            let integer = string
+                .as_str()
+                .parse::<i64>()
+                .ok()
+                .map(|integer| Literal::Integer(integer.into()).into());
             OptionalValueBranch::select(integer, when_none, when_some)
         }
         | _ => unreachable!(""),
@@ -410,7 +552,7 @@ pub fn bytes_length(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        | [bytes] => ret(Literal::Int(HostBytes::borrow(bytes).len() as i64).into()),
+        | [bytes] => ret(Literal::Integer((HostBytes::borrow(bytes).len() as i64).into()).into()),
         | _ => unreachable!(""),
     }
 }
@@ -473,7 +615,7 @@ impl HostContinuation {
     }
 
     fn io_error(continuation: &ZValue, error: io::Error) -> Result<ZCompute, i32> {
-        let kind = Literal::Int(HostIoErrorKind::from_error(&error) as i64).into();
+        let kind = Literal::Integer((HostIoErrorKind::from_error(&error) as i64).into()).into();
         let message = Literal::String(error.to_string().into()).into();
         Ok(Self::two(continuation, kind, message))
     }
@@ -546,7 +688,7 @@ pub fn io_read(
     match args.as_slice() {
         | [
             ZValue::Host(HostValue::Reader(reader)),
-            ZValue::Literal(Literal::Int(count)),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(count))),
             when_error @ ZValue::Thunk(_),
             when_success @ ZValue::Thunk(_),
         ] => {
@@ -786,7 +928,7 @@ pub fn write_int(
     host: &mut HostRuntime,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        | [ZValue::Literal(Literal::Int(i)), e @ ZValue::Thunk(..)] => {
+        | [ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(i))), e @ ZValue::Thunk(..)] => {
             WriterIo::run(WriterHandle::STDOUT, output, host, |writer| {
                 write!(writer, "{i}")?;
                 writer.flush()
@@ -847,7 +989,7 @@ pub fn read_line_as_int_branch(
             match line.parse::<i64>() {
                 | Ok(integer) => Ok(app(
                     mk_rc(Force(mk_rc(success.clone().into())).into()),
-                    Literal::Int(integer).into(),
+                    Literal::Integer(integer.into()).into(),
                 )),
                 | Err(_) => Ok(Force(mk_rc(failure.clone().into())).into()),
             }
@@ -916,7 +1058,7 @@ pub fn random_int(
     match args.as_slice() {
         | [k] => {
             let mut rng = rand::rng();
-            let i = Literal::Int(rng.random_range(i64::MIN..=i64::MAX));
+            let i = Literal::Integer(rng.random_range(i64::MIN..=i64::MAX).into());
             Ok(app(mk_rc(Force(mk_rc(k.clone().into())).into()), i.into()))
         }
         | _ => unreachable!(""),
@@ -928,7 +1070,7 @@ pub fn exit(
     args: Vec<ZValue>, _r: &mut dyn BufRead, _w: &mut dyn Write, _: &[String], _: &mut HostRuntime,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        | [ZValue::Literal(Literal::Int(a))] => Err(*a as i32),
+        | [ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(a)))] => Err(*a as i32),
         | _ => unreachable!(""),
     }
 }

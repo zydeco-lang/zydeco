@@ -5,8 +5,8 @@ begin
   param (
     (
       /VType; /CType; /Thk; /Ret;
-      /Unit; /Int; /Char; /String; /OS;
-      /int; /char; /string; /stdio; /process;
+      /Unit; /Int64; /Char; /String; /OS;
+      /int64; /char; /string; /stdio; /process;
       builtin
     ) :
     @[import("../../std/builtin.zy")] _
@@ -27,7 +27,7 @@ begin
     | +Some : A
     end
   that
-  def ! str_get_or_space (text : String) (index : Int) : Ret Char =
+  def ! str_get_or_space (text : String) (index : Int64) : Ret Char =
     ! (string/get)
       (Ret Char)
       text
@@ -57,24 +57,24 @@ begin
     do condition <- ! condition;
     ! if B condition consequent alternative
   that
-  def ! int_eq (left : Int) (right : Int) : Ret Bool =
-    ! (int/eq)
+  def ! int_eq (left : Int64) (right : Int64) : Ret Bool =
+    ! (int64/eq)
       (Ret Bool)
       left
       right
       { ret +True() }
       { ret +False() }
   that
-  def ! int_lt (left : Int) (right : Int) : Ret Bool =
-    ! (int/lt)
+  def ! int_lt (left : Int64) (right : Int64) : Ret Bool =
+    ! (int64/lt)
       (Ret Bool)
       left
       right
       { ret +True() }
       { ret +False() }
   that
-  def ! int_le (left : Int) (right : Int) : Ret Bool =
-    ! (int/gt)
+  def ! int_le (left : Int64) (right : Int64) : Ret Bool =
+    ! (int64/gt)
       (Ret Bool)
       left
       right
@@ -198,7 +198,7 @@ begin
 
   def Exception =
     data
-    | +ParseError : Int * String
+    | +ParseError : Int64 * String
     | +FreeVariable : Unit
     | +TypeError : Unit
     end
@@ -214,7 +214,7 @@ begin
   def Value : VType =
     data
     | +Bool : Bool
-    | +Int : Int
+    | +Int64 : Int64
     | +Thunk : U Compu
     end
   that
@@ -231,7 +231,7 @@ begin
     data
     | +Var : String
     | +Bool : Bool
-    | +Int : Int
+    | +Int64 : Int64
     | +Thunk : SCompu
     end
   that
@@ -351,8 +351,8 @@ begin
       match sv
       | +Var(x) => ! (stdio/write) x kont
       | +Bool(b) => ! if (OS) b { ! (stdio/write) "true" kont } { ! (stdio/write) "false" kont }
-      | +Int(i) =>
-        do i <- ! (int/to_string) i;
+      | +Int64(i) =>
+        do i <- ! (int64/to_string) i;
         ! (stdio/write) i kont
       | +Thunk(sc) =>
         -- Continuation sequencing is written explicitly as `<comp1> { <comp2> }`.
@@ -432,8 +432,8 @@ begin
     | .value v kont =>
       match v
       | +Bool(b) => ! if (OS) b { ! (stdio/write) "true" kont } { ! (stdio/write) "false" kont }
-      | +Int(i) =>
-        do i <- ! (int/to_string) i;
+      | +Int64(i) =>
+        do i <- ! (int64/to_string) i;
         ! (stdio/write) i kont
       | +Thunk(c) =>
         ! (stdio/write) "{ " {
@@ -550,7 +550,7 @@ begin
 -- module Parser
   def Parser (A : VType) =
     codata
-    | .run : String -> Int -> MExnOS (Pair A Int)
+    | .run : String -> Int64 -> MExnOS (Pair A Int64)
     end
   that
 
@@ -558,7 +558,7 @@ begin
     comatch
     | .return A a =>
       comatch
-      | .run s i => ! mexn .return (Pair A Int) +Cons(a, i)
+      | .run s i => ! mexn .return (Pair A Int64) +Cons(a, i)
       end
     | .bind A A' ma f =>
       comatch
@@ -590,19 +590,19 @@ begin
     | .alt A m1 m2 =>
       comatch
       | .run s i =>
-        ! mexn-alt .alt (Pair A Int) { ! m1 .run s i } { ! m2 .run s i }
+        ! mexn-alt .alt (Pair A Int64) { ! m1 .run s i } { ! m2 .run s i }
       end
     end
   that
 
-  def ! mp-cnt (A : VType) (cnt : Int) (m : U (Parser A)) : Parser A =
+  def ! mp-cnt (A : VType) (cnt : Int64) (m : U (Parser A)) : Parser A =
     comatch | .run s i =>
       do len <- ! (string/length) s;
-      do i' <- ! (int/add) i cnt;
-      ! if~ (MExnOS (Pair A Int)) { ! int_le i' len } {
+      do i' <- ! (int64/add) i cnt;
+      ! if~ (MExnOS (Pair A Int64)) { ! int_le i' len } {
         ! m .run s i
       } {
-        ! mexn-err .fail (Pair A Int) +ParseError(i, "unexpected eof")
+        ! mexn-err .fail (Pair A Int64) +ParseError(i, "unexpected eof")
       }
     end
   that
@@ -610,17 +610,17 @@ begin
   def ! p_char (c : Char) : Parser Char =
     ! mp-cnt (Char) 1 {
       comatch | .run s i =>
-        ! if~ (MExnOS (Pair Char Int)) {
+        ! if~ (MExnOS (Pair Char Int64)) {
           do c' <- ! str_get_or_space s i;
           ! char_eq c' c
         } {
-          do i' <- ! (int/add) i 1;
-          ! mexn .return (Pair Char Int) +Cons(c, i')
+          do i' <- ! (int64/add) i 1;
+          ! mexn .return (Pair Char Int64) +Cons(c, i')
         } {
           do msg <- ! (char/to_string) c;
           do msg <- ! (string/append) "missing `" msg;
           do msg <- ! (string/append) msg "`";
-          ! mexn-err .fail (Pair Char Int) +ParseError(i, msg)
+          ! mexn-err .fail (Pair Char Int64) +ParseError(i, msg)
         }
       end
     }
@@ -630,28 +630,28 @@ begin
     do len <- ! (string/length) w;
     ! mp-cnt (String) len {
       comatch | .run s i =>
-        let fix word_match (j: Int) =
+        let fix word_match (j: Int64) =
           ! if~ (Ret Bool) { ! int_eq j len } {
             ret +True()
           } {
-            do l <- ! (int/add) i j;
+            do l <- ! (int64/add) i j;
             do c1 <- ! str_get_or_space s l;
             do c2 <- ! str_get_or_space w j;
             ! if~ (Ret Bool) { ! char_eq c1 c2 } {
-              do j' <- ! (int/add) j 1;
+              do j' <- ! (int64/add) j 1;
               ! word_match j'
             } {
               ret +False()
             }
           }
         in
-        ! if~ (MExnOS (Pair String Int)) { ! word_match 0 } {
-          do i' <- ! (int/add) i len;
-          ! mexn .return (Pair String Int) +Cons(w, i')
+        ! if~ (MExnOS (Pair String Int64)) { ! word_match 0 } {
+          do i' <- ! (int64/add) i len;
+          ! mexn .return (Pair String Int64) +Cons(w, i')
         } {
           do msg <- ! (string/append) "word `" w;
           do msg <- ! (string/append) msg "` mismatch";
-          ! mexn-err .fail (Pair String Int) +ParseError(i, msg)
+          ! mexn-err .fail (Pair String Int64) +ParseError(i, msg)
         }
       end
     }
@@ -675,19 +675,19 @@ begin
         { ret +None() }
     in
     comatch | .run s i =>
-      let fix var (v: String) (i: Int) =
+      let fix var (v: String) (i: Int64) =
         do c <- ! str_get_or_space s i;
         do c? <- ! p_vc c;
-        do i' <- ! (int/add) i 1;
+        do i' <- ! (int64/add) i 1;
         match c?
         | +None() =>
-          ! if~ (MExnOS (Pair String Int)) {
+          ! if~ (MExnOS (Pair String Int64)) {
             do len <- ! (string/length) v;
             ! int_eq len 0
           } {
-            ! mexn-err .fail (Pair String Int) +ParseError(i, "variable of length 0")
+            ! mexn-err .fail (Pair String Int64) +ParseError(i, "variable of length 0")
           } {
-            ! mexn .return (Pair String Int) +Cons(v, i)
+            ! mexn .return (Pair String Int64) +Cons(v, i)
           }
         | +Some(c) =>
           do c <- ! (char/to_string) c;
@@ -732,7 +732,7 @@ begin
         ! mp-alt .alt (SValue) _var {
           ! mp-alt .alt (SValue) _thunk {
             comatch | .run s i =>
-              ! mexn-err .fail (Pair SValue Int) +ParseError(i, "expected value")
+              ! mexn-err .fail (Pair SValue Int64) +ParseError(i, "expected value")
             end } } } }
   | .compu =>
     let ! _env =
@@ -809,13 +809,13 @@ begin
               ! mp-alt .alt (SCompu) _lam {
                 ! mp-alt .alt (SCompu) _app {
                   comatch | .run s i =>
-                    ! mexn-err .fail (Pair SCompu Int) +ParseError(i, "expected computation")
+                    ! mexn-err .fail (Pair SCompu Int64) +ParseError(i, "expected computation")
                   end } } } } } } }
     end
   that
 
   def ! p_main (s : String) : MExnOS SCompu =
-    ! mexn .bind (Pair SCompu Int) (SCompu) { ! p_cbpv .compu .run s 0 } { fn sci =>
+    ! mexn .bind (Pair SCompu Int64) (SCompu) { ! p_cbpv .compu .run s 0 } { fn sci =>
       match sci
       | +Cons(sc, i) =>
         ! if~ (MExnOS SCompu) {
@@ -852,8 +852,8 @@ match sv
   end
 | +Bool(b) =>
   ! mexn .return Value +Bool(b)
-| +Int(i) =>
-  ! mexn .return Value +Int(i)
+| +Int64(i) =>
+  ! mexn .return Value +Int64(i)
 | +Thunk(c) =>
   ! mexn .return Value +Thunk({ ! interp env .compu c })
 end
@@ -890,7 +890,7 @@ match sc
   ! malg Value { ! interp env .value sv } { fn v =>
     match v
     | +Bool(_) => ! malg-err .failA +TypeError()
-    | +Int(_) => ! malg-err .failA +TypeError()
+    | +Int64(_) => ! malg-err .failA +TypeError()
     | +Thunk(c) => ! c
     end }
 | +Rec(x, sc) =>
@@ -903,7 +903,7 @@ match sc
       | +True() => ! interp env .compu c1
       | +False() => ! interp env .compu c2
       end
-    | +Int(_) => ! malg-err .failA +TypeError()
+    | +Int64(_) => ! malg-err .failA +TypeError()
     | +Thunk(_) => ! malg-err .failA +TypeError()
     end }
 | +Env(sc) =>
@@ -953,8 +953,8 @@ match sc
     let ! expect-bool-panic =
       ! panic "expected bool value"
     in
-    let ! expect-int-panic =
-      ! panic "expected int value"
+    let ! expect-int64-panic =
+      ! panic "expected int64 value"
     in
     let ! correct =
       ! (stdio/write_line) "\\^o^/" k
@@ -974,25 +974,25 @@ match sc
           do msg <- ! (string/append) "wrong bool value: " msg;
           ! panic msg
         end
-      | +Int(_) => ! expect-bool-panic
+      | +Int64(_) => ! expect-bool-panic
       | +Thunk(_) => ! expect-bool-panic
       end
-    | +Int(i1) =>
+    | +Int64(i1) =>
       match v2
-      | +Bool(_) => ! expect-int-panic
-      | +Int(i2) =>
+      | +Bool(_) => ! expect-int64-panic
+      | +Int64(i2) =>
         do eq? <- ! int_eq i1 i2;
         match eq?
         | +True() => ! correct
         | +False() =>
-          do i1 <- ! (int/to_string) i1;
-          do i2 <- ! (int/to_string) i2;
+          do i1 <- ! (int64/to_string) i1;
+          do i2 <- ! (int64/to_string) i2;
           do msg <- ! (string/append) i1 " != ";
           do msg <- ! (string/append) msg i2;
-          do msg <- ! (string/append) "wrong int value: " msg;
+          do msg <- ! (string/append) "wrong int64 value: " msg;
           ! panic msg
         end
-      | +Thunk(_) => ! expect-int-panic
+      | +Thunk(_) => ! expect-int64-panic
       end
     | +Thunk(_) => ! panic "thunks are not comparable"
     end
@@ -1001,7 +1001,7 @@ match sc
   def ! report (e : Exception) : OS =
     match e
     | +ParseError(loc, msg) =>
-      do loc <- ! (int/to_string) loc;
+      do loc <- ! (int64/to_string) loc;
       do loc <- ! (string/append) loc ": ";
       do msg <- ! (string/append) loc msg;
       ! panic msg
@@ -1016,13 +1016,13 @@ match sc
   that
 
   def ! cbpv-env : EnvO =
-    let ! app-int (f: U (Int -> Compu)) : Compu =
+    let ! app-int64 (f: U (Int64 -> Compu)) : Compu =
     comatch
     | .app v =>
       match v
       | +Bool(_) => ! malg-err .failA +TypeError()
       | +Thunk(_) => ! malg-err .failA +TypeError()
-      | +Int(i) => ! f i
+      | +Int64(i) => ! f i
       end
     | .bind _ _ _ =>
       ! malg-err .failA +TypeError()
@@ -1030,9 +1030,9 @@ match sc
       ! mexn-err .fail Value +TypeError()
     end
   in
-  let ! int-op (op: U (Int -> Int -> Ret Value)) : Compu =
-    ! app-int { fn i1 =>
-      ! app-int { fn i2 =>
+  let ! int64-op (op: U (Int64 -> Int64 -> Ret Value)) : Compu =
+    ! app-int64 { fn i1 =>
+      ! app-int64 { fn i2 =>
         do v <- ! op i1 i2;
         comatch
         | .app _ => ! malg-err .failA +TypeError()
@@ -1043,15 +1043,15 @@ match sc
         end } }
   in
   ! envo +Extend("add", +Thunk({
-    ! int-op { fn i1 i2 =>
-      do i <- ! (int/add) i1 i2;
-      ret +Int(i) }
+    ! int64-op { fn i1 i2 =>
+      do i <- ! (int64/add) i1 i2;
+      ret +Int64(i) }
   }), +Extend("mul", +Thunk({
-    ! int-op { fn i1 i2 =>
-      do i <- ! (int/mul) i1 i2;
-      ret +Int(i) }
+    ! int64-op { fn i1 i2 =>
+      do i <- ! (int64/mul) i1 i2;
+      ret +Int64(i) }
   }), +Extend("eq", +Thunk({
-    ! int-op { fn i1 i2 =>
+    ! int64-op { fn i1 i2 =>
       do b <- ! int_eq i1 i2;
       ret +Bool(b) }
   }), +Empty())))
@@ -1088,28 +1088,28 @@ match sc
   -- Disabled continuation: ! demo nil-env "! true" +Bool(+True())
 
   -- test `! add 1 2`
-    ! demo-scompu cbpv-env +App(+App(+Force(+Var("add")), +Int(1)), +Int(2)) +Int(3) {
+    ! demo-scompu cbpv-env +App(+App(+Force(+Var("add")), +Int64(1)), +Int64(2)) +Int64(3) {
 
     -- test `! mul 3 2`
-      ! demo-scompu cbpv-env +App(+App(+Force(+Var("mul")), +Int(3)), +Int(2)) +Int(6) {
+      ! demo-scompu cbpv-env +App(+App(+Force(+Var("mul")), +Int64(3)), +Int64(2)) +Int64(6) {
 
       -- test infinite loop
-      -- Disabled continuation: ! demo-scompu cbpv-env +Rec("loop", +Force(+Var("loop"))) +Int(1)
+      -- Disabled continuation: ! demo-scompu cbpv-env +Rec("loop", +Force(+Var("loop"))) +Int64(1)
 
       -- test `do x <- ! add 2 3; ! add 1 x`
         ! demo-scompu cbpv-env +Bind(
-          +App(+App(+Force(+Var("add")), +Int(2)), +Int(3)),
+          +App(+App(+Force(+Var("add")), +Int64(2)), +Int64(3)),
           "x",
-          +App(+App(+Force(+Var("add")), +Int(1)), +Var("x"))
-        ) +Int(6) {
+          +App(+App(+Force(+Var("add")), +Int64(1)), +Var("x"))
+        ) +Int64(6) {
 
         -- factorial, poor usage of stack
         -- Disabled continuation: ! demo-scompu cbpv-env +App(+Rec("fact", +Env(+Lam("x",
         --   +Bind(
-        --     +App(+App(+Force(+Var("eq")), +Var("x")), +Int(0)),
+        --     +App(+App(+Force(+Var("eq")), +Var("x")), +Int64(0)),
         --     "b",
-        --     +If(+Var("b"), +Ret(Int(1)), +Bind(
-        --       +App(+App(+Force(+Var("add")), +Var("x")), +Int(-1)),
+        --     +If(+Var("b"), +Ret(Int64(1)), +Bind(
+        --       +App(+App(+Force(+Var("add")), +Var("x")), +Int64(-1)),
         --       "y",
         --       +Bind(
         --         +App(+Force(+Var("fact")), +Var("y")),
@@ -1118,15 +1118,15 @@ match sc
         --       )
         --     ))
         --   )
-        -- ))), +Int(6)) +Int(720);
+        -- ))), +Int64(6)) +Int64(720);
 
         -- factorial, tail call
         -- Disabled continuation: ! demo-scompu cbpv-env +App(+App(+Rec("fact", +Env(+Lam("acc", +Lam("x",
         --   +Bind(
-        --     +App(+App(+Force(+Var("eq")), +Var("x")), +Int(0)),
+        --     +App(+App(+Force(+Var("eq")), +Var("x")), +Int64(0)),
         --     "b",
         --     +If(+Var("b"), +Ret(+Var("acc")), +Bind(
-        --       +App(+App(+Force(+Var("add")), +Var("x")), +Int(-1)),
+        --       +App(+App(+Force(+Var("add")), +Var("x")), +Int64(-1)),
         --       "y",
         --       +Bind(
         --         +App(+App(+Force(+Var("mul")), +Var("x")), +Var("acc")),
@@ -1135,7 +1135,7 @@ match sc
         --       )
         --     ))
         --   )
-        -- )))), +Int(1)), +Int(6)) +Int(720);
+        -- )))), +Int64(1)), +Int64(6)) +Int64(720);
           ! (process/exit) 0 } } } }
 end
 end

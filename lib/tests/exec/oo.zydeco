@@ -1,30 +1,30 @@
 -- We can do good old object-oriented programming in here
--- e.g. define a Counter that can incr and project out Int or String
+-- e.g. define a Counter that can incr and project out Int64 or String
 begin
   param (
-    (/CType; /Thk; /Ret; /Int; /String; /int; /stdio; /process) :
+    (/CType; /Thk; /Ret; /Int64; /String; /int64; /stdio; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
   def Counter : CType =
     codata
-    | .num : Ret Int
-    | .incr : Int -> Counter
+    | .num : Ret Int64
+    | .incr : Int64 -> Counter
     | .fmt : Ret String
     end
   that
   -- We can use `this` (or `self`) as in normal OO languages
-  def fix mk_counter (n : Int) : Counter =
+  def fix mk_counter (n : Int64) : Counter =
     fix (this : Thk Counter) =>
       comatch
       | .num => ret n
       | .incr i =>
         do j <- ! this .num;
-        do n <- ! (int/add) i j;
+        do n <- ! (int64/add) i j;
         ! mk_counter n
       | .fmt =>
         do n <- ! this .num;
-        ! (int/to_string) n
+        ! (int64/to_string) n
       end
   that
 

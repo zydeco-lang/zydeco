@@ -760,7 +760,7 @@ mod tests {
         };
 
         assert!(has("VType", "typeParameter", "kind"));
-        assert!(has("Int", "typeParameter", "valueType"));
+        assert!(has("Int64", "typeParameter", "valueType"));
         assert!(has("OS", "typeParameter", "computationType"));
         assert!(has("x", "variable", "value"));
         assert!(has("process", "parameter", "value"));
@@ -787,7 +787,7 @@ mod tests {
         let decoded = SemanticTokenDecoder::new(&broken).decode(&encoded);
 
         assert!(decoded.iter().any(|token| {
-            token.text == "Int" && token.modifiers.iter().any(|modifier| modifier == "valueType")
+            token.text == "Int64" && token.modifiers.iter().any(|modifier| modifier == "valueType")
         }));
         assert!(decoded.iter().any(|token| {
             token.text == "OS"

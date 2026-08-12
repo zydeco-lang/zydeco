@@ -1,37 +1,37 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (/Ret; /Int; builtin) :
+    (/Ret; /Int64; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (/bool; /int; /string; /process) = make_std builtin in
-  do equal <- ! (int/eq) 3 3;
+  let (/bool; /int64; /string; /process) = make_std builtin in
+  do equal <- ! (int64/eq) 3 3;
   do equal_status <- ! (bool/if)
-    (Ret Int)
+    (Ret Int64)
     equal
     { ret 0 }
     { ret 1 };
-  do less <- ! (int/lt) 2 3;
+  do less <- ! (int64/lt) 2 3;
   do less_status <- ! (bool/if)
-    (Ret Int)
+    (Ret Int64)
     less
     { ret 0 }
     { ret 1 };
-  do greater <- ! (int/gt) 3 2;
+  do greater <- ! (int64/gt) 3 2;
   do greater_status <- ! (bool/if)
-    (Ret Int)
+    (Ret Int64)
     greater
     { ret 0 }
     { ret 1 };
   do string_equal <- ! (string/eq) "zydeco" "zydeco";
   do string_status <- ! (bool/if)
-    (Ret Int)
+    (Ret Int64)
     string_equal
     { ret 0 }
     { ret 1 };
-  do first <- ! (int/add) equal_status less_status;
-  do second <- ! (int/add) greater_status string_status;
-  do status <- ! (int/add) first second;
+  do first <- ! (int64/add) equal_status less_status;
+  do second <- ! (int64/add) greater_status string_status;
+  do status <- ! (int64/add) first second;
   ! (process/exit) status
 end

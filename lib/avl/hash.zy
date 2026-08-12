@@ -1,11 +1,11 @@
 begin
   let make_std = @[import("../std/std.zy")] _ that
   param (
-    (/VType; /Thk; /Ret; /Unit; /Int; /String; /OS; builtin) :
+    (/VType; /Thk; /Ret; /Unit; /Int64; /String; /OS; builtin) :
     @[import("../std/builtin.zy")] _
   ) that
 
-  let (/Bool; /Option; /bool; /option; /int; /string; /stdio; /process) = make_std builtin in
+  let (/Bool; /Option; /bool; /option; /int64; /string; /stdio; /process) = make_std builtin in
   begin
     let Cmp (A : VType) =
       Thk (A -> A -> Ret Bool)
@@ -17,7 +17,7 @@ begin
       | +Node :
         (left :: Avl A) *
         (value :: A) *
-        (tree_height :: Int) *
+        (tree_height :: Int64) *
         (right :: Avl A)
       end
     that
@@ -32,16 +32,16 @@ begin
         right = +Leaf()
       )
     that
-    def ! height (A : VType) (tree : Avl A) : Ret Int =
+    def ! height (A : VType) (tree : Avl A) : Ret Int64 =
       match tree
       | +Leaf() => ret 0
       | +Node(/tree_height) => ret tree_height
       end
     that
-    def ! int_max (left : Int) (right : Int) : Ret Int =
-      do greater <- ! (int/gt) left right;
+    def ! int_max (left : Int64) (right : Int64) : Ret Int64 =
+      do greater <- ! (int64/gt) left right;
       ! (bool/if)
-        (Ret Int)
+        (Ret Int64)
         greater
         { ret left }
         { ret right }
@@ -53,17 +53,17 @@ begin
         do left_height <- ! height A left;
         do right_height <- ! height A right;
         do child_height <- ! int_max left_height right_height;
-        do new_height <- ! (int/add) child_height 1;
+        do new_height <- ! (int64/add) child_height 1;
         ret +Node(= left, = value, tree_height = new_height, = right)
       end
     that
-    def ! balance_factor (A : VType) (tree : Avl A) : Ret Int =
+    def ! balance_factor (A : VType) (tree : Avl A) : Ret Int64 =
       match tree
       | +Leaf() => ret 0
       | +Node(/left; /right) =>
         do left_height <- ! height A left;
         do right_height <- ! height A right;
-        ! (int/sub) left_height right_height
+        ! (int64/sub) left_height right_height
       end
     that
     def ! left (A : VType) (tree : Avl A) : Ret (Avl A) =
@@ -145,13 +145,13 @@ begin
       | +Leaf() => ret +Leaf()
       | +Node(/left; /value; /right) =>
         do factor <- ! balance_factor A tree;
-        do left_heavy <- ! (int/gt) factor 1;
+        do left_heavy <- ! (int64/gt) factor 1;
         ! (bool/if)
           (Ret (Avl A))
           left_heavy
           {
             do left_factor <- ! balance_factor A left;
-            do double_rotation <- ! (int/lt) left_factor 0;
+            do double_rotation <- ! (int64/lt) left_factor 0;
             ! (bool/if)
               (Ret (Avl A))
               double_rotation
@@ -163,13 +163,13 @@ begin
               { ! rotate_right A tree }
           }
           {
-            do right_heavy <- ! (int/lt) factor -1;
+            do right_heavy <- ! (int64/lt) factor -1;
             ! (bool/if)
               (Ret (Avl A))
               right_heavy
               {
                 do right_factor <- ! balance_factor A right;
-                do double_rotation <- ! (int/gt) right_factor 0;
+                do double_rotation <- ! (int64/gt) right_factor 0;
                 ! (bool/if)
                   (Ret (Avl A))
                   double_rotation
@@ -356,7 +356,7 @@ begin
       | +Node(/left; /value; /tree_height; /right) =>
         do rendered_value <- ! format value;
         do with_label <- ! (string/append) rendered_value " h:";
-        do rendered_height <- ! (int/to_string) tree_height;
+        do rendered_height <- ! (int64/to_string) tree_height;
         do line <- ! (string/append) with_label rendered_height;
         ! (stdio/write_line) line {
           fn _ =>
@@ -469,44 +469,44 @@ begin
       end
     that
 
-    do hash <- ! hash_new Int String
-      (int/lt)
-      (int/eq)
+    do hash <- ! hash_new Int64 String
+      (int64/lt)
+      (int64/eq)
       (string/eq);
-    do hash <- ! hash_insert Int String 1 "one" hash;
-    do hash <- ! hash_insert Int String 2 "two" hash;
-    do hash <- ! hash_insert Int String 3 "three" hash;
-    do hash <- ! hash_insert Int String 4 "four" hash;
-    do hash <- ! hash_insert Int String 5 "five" hash;
-    do hash <- ! hash_insert Int String 6 "six" hash;
-    do hash <- ! hash_insert Int String 7 "seven" hash;
-    do hash <- ! hash_insert Int String 8 "eight" hash;
-    do hash <- ! hash_insert Int String 9 "nine" hash;
-    do hash <- ! hash_insert Int String 10 "ten" hash;
+    do hash <- ! hash_insert Int64 String 1 "one" hash;
+    do hash <- ! hash_insert Int64 String 2 "two" hash;
+    do hash <- ! hash_insert Int64 String 3 "three" hash;
+    do hash <- ! hash_insert Int64 String 4 "four" hash;
+    do hash <- ! hash_insert Int64 String 5 "five" hash;
+    do hash <- ! hash_insert Int64 String 6 "six" hash;
+    do hash <- ! hash_insert Int64 String 7 "seven" hash;
+    do hash <- ! hash_insert Int64 String 8 "eight" hash;
+    do hash <- ! hash_insert Int64 String 9 "nine" hash;
+    do hash <- ! hash_insert Int64 String 10 "ten" hash;
 
     -- answer
-    do expected <- ! hash_new Int String
-      (int/lt)
-      (int/eq)
+    do expected <- ! hash_new Int64 String
+      (int64/lt)
+      (int64/eq)
       (string/eq);
-    do expected <- ! hash_insert Int String 1 "one change" expected;
-    do expected <- ! hash_insert Int String 2 "two" expected;
-    do expected <- ! hash_insert Int String 3 "three" expected;
-    do expected <- ! hash_insert Int String 4 "four change" expected;
-    do expected <- ! hash_insert Int String 7 "seven" expected;
-    do expected <- ! hash_insert Int String 8 "eight" expected;
-    do expected <- ! hash_insert Int String 9 "nine" expected;
-    do expected <- ! hash_insert Int String 10 "ten change" expected;
+    do expected <- ! hash_insert Int64 String 1 "one change" expected;
+    do expected <- ! hash_insert Int64 String 2 "two" expected;
+    do expected <- ! hash_insert Int64 String 3 "three" expected;
+    do expected <- ! hash_insert Int64 String 4 "four change" expected;
+    do expected <- ! hash_insert Int64 String 7 "seven" expected;
+    do expected <- ! hash_insert Int64 String 8 "eight" expected;
+    do expected <- ! hash_insert Int64 String 9 "nine" expected;
+    do expected <- ! hash_insert Int64 String 10 "ten change" expected;
 
     -- start deleting, changing and searching
-    do hash <- ! hash_delete Int String 5 "default" hash;
-    do hash <- ! hash_delete Int String 6 "default" hash;
-    do hash <- ! hash_change Int String 1 "one change" hash;
-    do hash <- ! hash_change Int String 4 "four change" hash;
-    do hash <- ! hash_change Int String 10 "ten change" hash;
-    do hashes_equal <- ! hash_equal Int String hash expected;
-    do first <- ! hash_search Int String 1 "default" hash;
-    do second <- ! hash_search Int String 1 "default" hash;
+    do hash <- ! hash_delete Int64 String 5 "default" hash;
+    do hash <- ! hash_delete Int64 String 6 "default" hash;
+    do hash <- ! hash_change Int64 String 1 "one change" hash;
+    do hash <- ! hash_change Int64 String 4 "four change" hash;
+    do hash <- ! hash_change Int64 String 10 "ten change" hash;
+    do hashes_equal <- ! hash_equal Int64 String hash expected;
+    do first <- ! hash_search Int64 String 1 "default" hash;
+    do second <- ! hash_search Int64 String 1 "default" hash;
     ! (option/fold)
       String
       OS

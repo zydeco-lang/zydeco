@@ -6,7 +6,8 @@ A value type classifies inert data and a computation type classifies programs th
 
 Value type can be: 
 - `X`: type variable defined using `data`.
-- `Int | String | Boolean | Unit`: basic primitive type with built-in functions.
+- `Int8 | ... | Int64`, `UInt8 | ... | UInt64`, `Float32 | Float64`, `String`, `Boolean`, and `Unit`:
+  basic types with built-in functions. Unconstrained numeric literals default to `Int64` or `Float64`.
 - `Thunk Y`: suspend a computation type `Y` and consider it as a value type. 
 
 Computation type can be:
@@ -24,7 +25,7 @@ Using the REPL can help us get familiar with syntax and basic idea of zydeco fas
 Key points: `Force`, `Binding`, `Function`
 ```
 > 1
-1 : Int
+1 : Int64
 > "ann arbor"
 "ann arbor" : String
 > True()
@@ -35,9 +36,9 @@ Unit() : Unit
 Basic value types can be interpreted in the ways above.
 ```
 > add
-add : Thunk(Int -> Int -> Ret(Int))
+add : Thunk(Int64 -> Int64 -> Ret(Int64))
 ```
-Now `add` has a value type of `Thunk B`, where `B` is a computation type which takes two `Int` and returns a computation type `Ret Int`.
+Now `add` has a value type of `Thunk B`, where `B` is a computation type which takes two `Int64` and returns a computation type `Ret Int64`.
 
 Notice that `add` is still suspended, so if we try to apply it into practice by `add 1 2` and get the result, there will be an error.
 ```
@@ -49,12 +50,12 @@ In fact, we need to `force` the `Thunk` type first and then apply it. The syntax
 > ! add 1 2
 3
 ```
-`3` is the returned `Int`.
+`3` is the returned `Int64`.
 
 Another example is the `exit` function:
 ```
 > exit
-exit : Thunk(Int -> OS)
+exit : Thunk(Int64 -> OS)
 ```
 `OS` is the other type of the computation result.
 ```
@@ -73,11 +74,11 @@ We can bind something with `value` type to a variable using `let`.
 We can also define a function using `let`.
 ```
 > mod
-mod : Thunk(Int -> Int -> Ret(Int))
-> let mod10 = {fn (n : Int) => ! mod n 10} in ! mod10 54
+mod : Thunk(Int64 -> Int64 -> Ret(Int64))
+> let mod10 = {fn (n : Int64) => ! mod n 10} in ! mod10 54
 4
 ```
-`mod` is a built-in function and we can define a function taking an `x : Int` and calculating `x mod 10`. The type of defined function `mod10` should also be `Thunk B`. Therefore, we add `{}` at each side of the definition part.
+`mod` is a built-in function and we can define a function taking an `x : Int64` and calculating `x mod 10`. The type of defined function `mod10` should also be `Thunk B`. Therefore, we add `{}` at each side of the definition part.
 
 For each `let` statement, a semicolon `;` is needed, indicating that it's not the main expression. We can add more `let` to bind more variables, but there must be a main expression at the end of the program.
 
@@ -131,7 +132,7 @@ end
 # Recursive
 data ListInt where
   | +NoInt : Unit
-  | +Cons  : Int * ListInt
+  | +Cons  : Int64 * ListInt
 end
 
 # Here's a function print every element in the ListInt seperated by a ' '
@@ -156,13 +157,13 @@ For example, when we try to calculate the sum of a list of number recursively, w
 ```
 # When adding a list of numbers, the process should be either finishing or keeping adding numbers
 codata Summer where
-  | .done : Ret Int
-  | .addN : Int -> Summer
+  | .done : Ret Int64
+  | .addN : Int64 -> Summer
 end
 
-# Since Summer includes the return type Ret(Int), it can be used directly instead of using the original return type.
-def rec retSummer : Int -> Summer =
-  fn (n : Int) =>
+# Since Summer includes the return type Ret(Int64), it can be used directly instead of using the original return type.
+def rec retSummer : Int64 -> Summer =
+  fn (n : Int64) =>
     comatch
     | .done   => ret n
     | .addN x =>
@@ -182,6 +183,6 @@ end
 
 ## System F_ω
 
-We have `forall (Y: CType) . B` and `exists (Y: CType) . A` just as normal system F. The term level syntax for types are the same as terms. For example, `(fn (X: VType) => ...) Int` introduces a forall-typed function which takes Int as an argument; `match (Int, ...) | (X, x) => ... end` works similarly (though to actually use them, you'll need more type annotation).
+We have `forall (Y: CType) . B` and `exists (Y: CType) . A` just as normal system F. The term level syntax for types are the same as terms. For example, `(fn (X: VType) => ...) Int64` introduces a forall-typed function which takes Int64 as an argument; `match (Int64, ...) | (X, x) => ... end` works similarly (though to actually use them, you'll need more type annotation).
 
 Besides base kinds, `K -> K` are also valid kinds, for example, type (constructor) `(fn (X: VType) => Ret X)` as kind `VType -> CType`. The syntax for type level is the same as term level.

@@ -1,6 +1,6 @@
 begin
   param (
-    (/VType; /Ret; /Unit; /Int; /int; /process) :
+    (/VType; /Ret; /Unit; /Int64; /int64; /process) :
     @[import("../../std/builtin.zy")] _
   ) that
 
@@ -10,15 +10,15 @@ begin
     | +Cons : A * List A
     end
   that
-  def fix merge (a : List Int) (b : List Int) : Ret (List Int) =
+  def fix merge (a : List Int64) (b : List Int64) : Ret (List Int64) =
     match a
     | +Nil() => ret b
     | +Cons(a_head, a_tail) =>
       match b
       | +Nil() => ret a
       | +Cons(b_head, b_tail) =>
-        ! (int/gt)
-          (Ret (List Int))
+        ! (int64/gt)
+          (Ret (List Int64))
           a_head
           b_head
           {

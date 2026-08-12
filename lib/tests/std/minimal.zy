@@ -1,14 +1,14 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (/Int = _; builtin) :
+    (/Int64 = _; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (/int; /process) =
+  let (/int64; /process) =
     make_std builtin
   in
-  do one <- ! (int/increment) 0;
-  do status <- ! (int/sub) one 1;
+  do one <- ! (int64/increment) 0;
+  do status <- ! (int64/sub) one 1;
   ! (process/exit) status
 end

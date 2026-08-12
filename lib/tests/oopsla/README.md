@@ -150,7 +150,7 @@ The primitive value types are:
 + unit type: `Unit`
 + product type: `<A> * <A>`
 + existential type: `exists (X: <T>) . <A>`
-+ integer type: `Int`
++ integer type: `Int64`
 + character type: `Char`
 + string type: `String`
 
@@ -210,7 +210,7 @@ strings, and operating system features are located in [`core.zydeco`](core.zydec
 
 The main program is required to have type `OS`.
 A few crucial primitive functions related to the `OS` type are:
-+ `exit: Thk (Int -> OS)`: constructs a computation that exits the program with the given exit code.
++ `exit: Thk (Int64 -> OS)`: constructs a computation that exits the program with the given exit code.
 + `write_str: Thk (String -> Thk OS -> OS)`: takes a string and a continuation of type `OS`,
   prints the string and then runs the continuation.
   What `OS` type actually means is a computation that can run on the operating system stack and consume it.
@@ -245,7 +245,7 @@ All examples are included in the `lib/tests/oopsla` directory.
 The first example [`polynomial.zydeco`](polynomial.zydeco) is a simple function
 that computes the polynomial `f(x) = x^2 + x + 10`.
 ```zydeco
-fn (x: Int) =>
+fn (x: Int64) =>
   do s <- ! times x x;
   do y <- ! add x 10;
   ! add s y
@@ -255,13 +255,13 @@ We are going to use them throughout the examples to show the types and kinds of 
 
 `fn` is the keyword for function.
 `do x <- ...; ...` is the monadic bind operator, syntactically similar to the OCaml-style monadic `let*` binding.
-All computations in Zydeco that returns an integer will have type `Ret Int`,
+All computations in Zydeco that returns an integer will have type `Ret Int64`,
 and the result can only be accessed with the `do` operator.
-Therefore, both `! times` and `! add` computations have type `Int -> Int -> Ret Int`
-and the above program overall has type `Int -> Ret Int`.
+Therefore, both `! times` and `! add` computations have type `Int64 -> Int64 -> Ret Int64`
+and the above program overall has type `Int64 -> Ret Int64`.
 The force operator `! ...` runs the thunk.
-Thunks are typed as `Thk ...` and are written as `{ ... }`, so we have `times: Thk (Int -> Int -> Ret Int)`
-and `add: Thk (Int -> Int -> Ret Int)`, and forcing them will remove the thunks wrapping them.
+Thunks are typed as `Thk ...` and are written as `{ ... }`, so we have `times: Thk (Int64 -> Int64 -> Ret Int64)`
+and `add: Thk (Int64 -> Int64 -> Ret Int64)`, and forcing them will remove the thunks wrapping them.
 
 Zydeco syntactically disambiguates between values and computations.
 Values don't run or have side effects, and computations do.
@@ -278,7 +278,7 @@ To wrap the function above into a definition that can be reused, we'll make it a
 
 ```zydeco
 def poly = {
-  fn (x: Int) =>
+  fn (x: Int64) =>
     do s <- ! times x x;
     do y <- ! add x 10;
     ! add s y

@@ -250,9 +250,9 @@ pub struct RetTy;
 #[derive(Clone, Debug)]
 pub struct UnitTy;
 
-/// `Int`
+/// An opaque atomic type used by low-level checker tests.
 #[derive(Clone, Debug)]
-pub struct IntTy;
+pub struct OpaqueTy;
 
 /// `Char`
 #[derive(Clone, Debug)]
@@ -459,7 +459,7 @@ pub enum Type {
     Thk(ThkTy),
     Ret(RetTy),
     Unit(UnitTy),
-    Int(IntTy),
+    Opaque(OpaqueTy),
     Char(CharTy),
     String(StringTy),
     OS(OSTy),
