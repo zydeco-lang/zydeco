@@ -123,9 +123,15 @@ Each phase generally includes `syntax`, `arena`, `err`, `fmt`, and `span` module
 ## Documentation Style
 
 Wrap prose to approximately 90~120 characters per line.
-Prefer one complete sentence within one line without breaking the natural flow of the paragraph.
-If not, prefer breaks after punctuation (especially prefer period) or before connective words,
-and relax the target for the final sentence of a paragraph rather than forcing an unnatural break.
+Treat sentences and substantial clauses as natural layout units rather than requiring one sentence per line.
+Keep a complete sentence on one line when it fits naturally,
+but do not force every sentence to begin or end at a line boundary.
+When a sentence spans lines, prefer breaks after punctuation—including commas, semicolons, colons,
+and periods—or before connective words.
+A comma that closes a substantial clause is an ordinary break point,
+not a fallback used only when no period is available.
+Allow the final clause or sentence of a paragraph to be shorter than the target
+instead of moving a break into the middle of a phrase merely to balance line widths.
 Preserve the formatting of code blocks and other structurally significant Markdown.
 
 Write for a reader encountering the design in sequence.
