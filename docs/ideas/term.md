@@ -13,11 +13,10 @@ Together, these connectives let the programmer choose between local binding and 
 Once binders may arise in different parts of a term, however, textual order is no longer enough.
 The block resolves dependencies among these contributions and elaborates them into a heterogeneous telescope:
 an ordered sequence in which later binders may depend on earlier ones.
-Most contributions form an acyclic order.
-Recursive types are handled as strongly connected components, while value bindings remain acyclic
-and computation recursion remains explicit through `fix`.
-The scheduling stays within the static layer because movable right-hand sides are types or values,
-so the order of CBPV computations is preserved.
+Most contributions form an acyclic order. Recursive types are handled as strongly connected components,
+while value bindings remain acyclic and computation recursion remains explicit through `fix`.
+The scheduling stays within the static layer because movable right-hand sides are types
+or values, so the order of CBPV computations is preserved.
 An outer block can therefore represent a source unit, and libraries can use the same functions
 and existential packages that compose ordinary terms.
 
@@ -52,15 +51,14 @@ This connection makes mobility predictable from the syntax.
 
 The remaining concern is whether this assembly can change program behavior.
 Zydeco's phase distinction makes dependency-directed placement semantically stable.
-Types and values are effect-free at introduction,
-while computations carry and sequence effects through relative monads.
+Types and values are effect-free at introduction, while computations carry and sequence effects through relative monads.
 Reordering the contributed binders can therefore change their nesting without changing computation order.
 This separation allows `that` to express binder mobility while computation syntax continues to express evaluation order.
 
 ## 2. Blocks and Mobile Bindings
 
-In the grammar below, `e` ranges over a source term before sorting determines whether it is
-a kind, type, value, or computation.
+In the grammar below, `e` ranges over a source term before sorting determines whether it is a kind,
+type, value, or computation.
 The common metavariable records the shared surface syntax while leaving the CBPV categories intact.
 The new constructs can therefore be stated once at the surface level and sorted according to their use.
 
@@ -77,39 +75,37 @@ e ::= ...
     | def p = e that e
 ```
 
-The concrete syntax of `begin ... end` marks a region with explicit delimiters,
-giving nested syntax a visible boundary.
-Metadata can attach to the whole region, as in `@[monadic] begin ... end`, while an unannotated `begin`
-organizes only the static context surrounding a term.
+The concrete syntax of `begin ... end` marks a region with explicit delimiters, giving nested syntax a visible boundary.
+Metadata can attach to the whole region, as in `@[monadic] begin ... end`,
+while an unannotated `begin` organizes only the static context surrounding a term.
 When its body contributes no mobile bindings, `begin e end` elaborates to `e` much like parentheses.
 Its additional purpose is to provide a visible destination for bindings contributed from within the term.
 
 The block supplies a boundary, but each binding still needs to say how it relates to that boundary.
 Each binding combines two choices.
-The form says what enters the context: `param` adds a parameter,
-`let` adds a transparent binding that the type checker may unfold during equality checking,
-and `def` gives the source binder a stable identity.
+The form says what enters the context: `param` adds a parameter, `let` adds a transparent binding
+that the type checker may unfold during equality checking, and `def` gives the source binder a stable identity.
 The connective says where that binding is established.
 Keeping these choices separate allows the same kind of binding to be either lexical or block-wide.
 
 With `in`, the binding stays where it is written and its following term is its scope.
-Thus `param p in e` forms a local abstraction, while the `in` variants of `let` and `def`
-form transparent and nominal local bindings.
+Thus `param p in e` forms a local abstraction, while the `in` variants of `let`
+and `def` form transparent and nominal local bindings.
 These forms support the familiar left-to-right reading of lexical scope.
 They provide the baseline against which the mobility of `that` can be understood.
 
 With `that`, the binding belongs to the nearest enclosing `begin`.
-The block places it according to its dependencies, and the resulting block-level position makes
-the names introduced by its pattern visible throughout the block,
-including text before the binding and text outside its syntactic continuation.
+The block places it according to its dependencies, and the resulting block-level position makes the names introduced
+by its pattern visible throughout the block, including text before the binding
+and text outside its syntactic continuation.
 The term following `that` supplies the residual expression at the original site.
 A nested `begin` starts a new closure region, so mobile bindings settle at the closest visible boundary.
 The elaborator allocates every block-wide binder before resolving occurrences in the block.
 
 Whole-block visibility makes forward references possible, but it also determines how far a binding may travel.
 Movement is valid when the binding's dependencies remain available at the block boundary.
-For example, a mobile definition whose right-hand side refers to an enclosing local `in` binder
-must settle at a boundary within that binder's scope.
+For example, a mobile definition whose right-hand side refers to an enclosing local `in` binder must settle
+at a boundary within that binder's scope.
 The programmer can make the dependency mobile, keep the dependent definition local,
 or place a nested block inside the local scope.
 
@@ -154,18 +150,16 @@ fn a b c d => let x = a + c in d
 Here the four `param` forms declare the block's interface.
 Reading the source from left to right orders the otherwise independent parameters as `a`, `b`, `c`, and `d`.
 Dependency edges may still interleave definitions when their types or bodies require it.
-The unused parameter `b` remains part of the result because `param` states an interface
-instead of asking the compiler to infer one from free variables.
+The unused parameter `b` remains part of the result because `param` states an interface instead
+of asking the compiler to infer one from free variables.
 
-This freedom of placement is useful, although block-wide scope can occasionally outrun
-the visual cues of indentation.
+This freedom of placement is useful, although block-wide scope can occasionally outrun the visual cues of indentation.
 The compiler should warn when a reference relies on a binder moving beyond its syntactic continuation,
 especially across match arms or another abstraction.
 A diagnostic can suggest moving the binding to the block spine, choosing `in`, or introducing a nested block.
 The warning addresses readability while preserving the block-wide meaning of `that`.
 
-The examples above focus on placement.
-The other choice carried by a binding form concerns identity.
+The examples above focus on placement. The other choice carried by a binding form concerns identity.
 The pairing of `def` and `let` is deliberate.
 `let` names a type or value transparently, so clients may use its defining equation.
 `def` establishes an abstraction boundary by giving the source binder its own identity.
@@ -200,26 +194,24 @@ Their meaning, however, was already fixed when names were resolved.
 Scheduling preserves the identities chosen during name resolution.
 An occurrence continues to refer to the same source binder after that binder moves,
 and a nominal type receives its identity from its source `def`.
-This separation between resolution and placement prevents capture and makes nominal identity
-independent of the particular topological order selected by the graph algorithm.
+This separation between resolution and placement prevents capture and makes nominal identity independent
+of the particular topological order selected by the graph algorithm.
 
 For an acyclic block, this scheduling step completes the plan.
 Recursive types require one further distinction, because their dependency cycles are intentional.
-Cycles in the graph are analyzed as strongly connected components (SCCs),
-groups in which every member depends, directly or indirectly, on every other member.
-A recursive component is admissible when all of its members define types,
-their kinds are available before their bodies are checked,
-and their recursive occurrences satisfy the guardedness or positivity discipline
-chosen for well-formed recursive types.
+Cycles in the graph are analyzed as strongly connected components (SCCs), groups in
+which every member depends, directly or indirectly, on every other member.
+A recursive component is admissible when all of its members define types, their kinds are available
+before their bodies are checked, and their recursive occurrences satisfy the guardedness
+or positivity discipline chosen for well-formed recursive types.
 The checker allocates the nominal identities for such a component together and then checks its equations.
 Parameters, values, and transparent type aliases follow acyclic dependency order.
 A cycle involving one of them receives a focused diagnostic.
 
 This account of recursive components also gives the existing named type forms a natural place in the design.
-The named `data` and `codata` forms formerly handled as declarations
-enter a block as specialized nominal definitions.
-A named `data` form elaborates to a nominal definition whose right-hand side
-abstracts its parameters over an anonymous `data ... end` term.
+The named `data` and `codata` forms formerly handled as declarations enter a block as specialized nominal definitions.
+A named `data` form elaborates to a nominal definition whose right-hand side abstracts its parameters
+over an anonymous `data ... end` term.
 The `codata` form supplies the computation-type dual.
 Their parameters and constructor or destructor signatures contribute dependency edges,
 so mutually recursive named types pass through the same SCC analysis as other type definitions.
@@ -246,8 +238,8 @@ The stable identities produced by this process become especially important when 
 
 Within a block, nominal identity distinguishes `def` from `let`.
 At a library boundary, the same distinction determines whether clients can observe a representation.
-A type introduced by `def` is lexically generative:
-the source binder receives a stable abstract identity for the lifetime of the program.
+A type introduced by `def` is lexically generative: the source binder receives a stable abstract identity
+for the lifetime of the program.
 Repeated evaluation of the enclosing term reuses that identity.
 For a recursive type component, the checker allocates all member identities together
 before checking any defining equation.
@@ -266,8 +258,8 @@ The current `extern` form introduces a typed name whose implementation is suppli
 Under uniform term composition, an existential library collects those assumptions into one package.
 The provider chooses the package's abstract types and supplies values implementing the operations over them.
 The consumer unpacks the package with a pattern that brings both types and operations into its block context.
-The compiler or launcher can construct the package for built-in facilities,
-so every external requirement appears in the type of the consuming term.
+The compiler or launcher can construct the package for built-in facilities, so every external requirement appears
+in the type of the consuming term.
 
 For an ordinary dependency, the package discipline has a familiar function shape.
 A reusable library may accept one package and return another:
@@ -290,10 +282,10 @@ binary : pi ((OS, api) : Core). OS
 ```
 
 The package pattern binds the opaque `OS` witness directly, and the binary's result type refers to that witness.
-This dependency is represented in the statics language by `PackPi`,
-a computation-valued package-dependent arrow whose codomain may mention abstract types bound by its parameter
-pattern. A value-valued library uses the corresponding `ValuePackPi`; its application instantiates the same witness
-telescope without introducing a computation.
+This dependency is represented in the statics language by `PackPi`, a computation-valued package-dependent arrow
+whose codomain may mention abstract types bound by its parameter pattern.
+A value-valued library uses the corresponding `ValuePackPi`; its application instantiates the same witness telescope
+without introducing a computation.
 The package value carries a stable witness identity wherever it is used.
 At launch, the compiler instantiates `Core`, passes the package to the binary,
 and executes the resulting computation while the witness remains in scope.
@@ -317,18 +309,17 @@ while intermediate representations expose the graph and telescope that make elab
 
 With that implementation boundary in place, the remaining work is chiefly formal.
 A formal account should make the elaboration invariants precise.
-Resolved identities and sorts must survive every permitted movement,
-and valid schedules that differ only in the order of independent candidates should be equivalent.
-Readability diagnostics must preserve the scope assigned by `that`,
-so a recommendation about layout leaves the meaning of a block-wide reference unchanged.
-Recursive type components need an explicit admissibility judgment,
-and `PackPi` needs an elimination rule that tracks the existential witness into the result type.
+Resolved identities and sorts must survive every permitted movement, and valid schedules
+that differ only in the order of independent candidates should be equivalent.
+Readability diagnostics must preserve the scope assigned by `that`, so a recommendation
+about layout leaves the meaning of a block-wide reference unchanged.
+Recursive type components need an explicit admissibility judgment, and `PackPi` needs an elimination rule
+that tracks the existential witness into the result type.
 
 These obligations give the organizing idea a precise metatheory.
 Uniform term composition extends Zydeco's expression-oriented design to binding structure.
-`in` gives a binder a lexical home.
-`that` assigns it to the surrounding block.
+`in` gives a binder a lexical home. `that` assigns it to the surrounding block.
 The programmer may place a definition near the syntax that motivates it,
 while dependency analysis recovers the telescope required by the type system.
-At larger scales, the same mechanism turns a source unit into a closed term
-and expresses libraries through ordinary abstraction, application, and existential packaging.
+At larger scales, the same mechanism turns a source unit into a closed term and expresses libraries
+through ordinary abstraction, application, and existential packaging.

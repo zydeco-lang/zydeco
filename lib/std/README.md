@@ -1,18 +1,21 @@
 # Zydeco Standard Library
 
-The standard library has two boundaries. [`builtin.zy`](builtin.zy) is the typed contract between Zydeco programs
-and the host runtime. Its operations expose representation-independent observations and effects, but never
-construct library-defined `Bool`, `Option`, `Result`, or `List` values. [`interface.zy`](interface.zy) defines the public
-package independently from its implementation. [`std.zy`](std.zy) applies the ordinary Zydeco modules in this
-directory, derives the higher-level operations, and assembles a value of that public package type.
+The standard library has two boundaries.
+[`builtin.zy`](builtin.zy) is the typed contract between Zydeco programs and the host runtime.
+Its operations expose representation-independent observations and effects,
+but never construct library-defined `Bool`, `Option`, `Result`, or `List` values.
+[`interface.zy`](interface.zy) defines the public package independently from its implementation.
+[`std.zy`](std.zy) applies the ordinary Zydeco modules in this directory, derives the higher-level operations,
+and assembles a value of that public package type.
 
-This separation keeps algebraic data in the language. The interpreter and native runtime only need to agree on
-the small Builtin ABI, while `bool.zy`, `option.zy`, `result.zy`, `list.zy`, and the derived operations in `std.zy`
-remain ordinary Zydeco code.
+This separation keeps algebraic data in the language.
+The interpreter and native runtime only need to agree on the small Builtin ABI, while `bool.zy`, `option.zy`,
+`result.zy`, `list.zy`, and the derived operations in `std.zy` remain ordinary Zydeco code.
 
 ## Text model
 
-`String` is immutable, valid UTF-8 text. Its indexed operations use zero-based Unicode scalar positions:
+`String` is immutable, valid UTF-8 text.
+Its indexed operations use zero-based Unicode scalar positions:
 
 - `string/length` counts Unicode scalar values.
 - `string/byte_length` counts bytes in the UTF-8 encoding.
@@ -20,12 +23,14 @@ remain ordinary Zydeco code.
 - `string/split_at` splits at a scalar boundary and returns `none` for an invalid position.
 - `string/to_chars` and `string/from_chars` convert between text and `List Char`.
 
-A `Char` is one Unicode scalar value. `char/codepoint` returns its integer value, and `char/from_codepoint` rejects
-negative numbers, surrogate code points, and values above the Unicode range with `none`.
+A `Char` is one Unicode scalar value.
+`char/codepoint` returns its integer value, and `char/from_codepoint` rejects negative numbers,
+surrogate code points, and values above the Unicode range with `none`.
 
-Unicode scalar values are deliberately different from user-perceived grapheme clusters. For example, a combining
-mark occupies its own position. Grapheme segmentation and normalization should be added as a separate text layer
-rather than changing the meaning of these foundational operations.
+Unicode scalar values are deliberately different from user-perceived grapheme clusters.
+For example, a combining mark occupies its own position.
+Grapheme segmentation and normalization should be added as a separate text layer rather than changing the meaning
+of these foundational operations.
 
 ## Total operations
 
@@ -39,23 +44,26 @@ char/from_codepoint : Int -> Ret (Option Char)
 list/get            : forall (A : VType) . List A -> Int -> Ret (Option A)
 ```
 
-The Builtin forms implement these results as computation-polymorphic branches. The public library reifies a
-successful branch with `option/some` and a failed branch with `option/none`. Neither backend has a hidden sentinel,
-and malformed input does not panic the host runtime.
+The Builtin forms implement these results as computation-polymorphic branches.
+The public library reifies a successful branch with `option/some` and a failed branch with `option/none`.
+Neither backend has a hidden sentinel, and malformed input does not panic the host runtime.
 
-Integer division and remainder still inherit the machine integer domain and are not yet wrapped in checked
-operations. The generic numeric capability layer deliberately excludes them; a future checked-arithmetic
-capability should make their failure behavior explicit before more integer representations are added.
+Integer division and remainder still inherit the machine integer domain and are not yet wrapped in checked operations.
+The generic numeric capability layer deliberately excludes them;
+a future checked-arithmetic capability should make their failure behavior explicit
+before more integer representations are added.
 
-`Float` is an IEEE-754 binary64 value. Decimal literals such as `1.5` and scientific literals such as `2e3` have
-type `Float`. The `float` module provides arithmetic, comparisons, negation, and shortest round-trippable decimal
-rendering. Division by zero, infinities, signed zero, and NaN follow IEEE-754 behavior. In particular, every ordered
-comparison with NaN is false, while `float/ne` reports true.
+`Float` is an IEEE-754 binary64 value.
+Decimal literals such as `1.5` and scientific literals such as `2e3` have type `Float`.
+The `float` module provides arithmetic, comparisons, negation, and shortest round-trippable decimal rendering.
+Division by zero, infinities, signed zero, and NaN follow IEEE-754 behavior.
+In particular, every ordered comparison with NaN is false, while `float/ne` reports true.
 
-The `numeric` module contains explicit dictionaries for the common `Int` and `Float` operation families. Each
-instance discloses its `Scalar` carrier through a manifest type and nests additive, multiplicative, equality, and
-ordering capabilities. Generic functions accept these dictionaries as ordinary arguments; the standard library
-does not perform implicit instance search.
+The `numeric` module contains explicit dictionaries for the common `Int` and `Float` operation families.
+Each instance discloses its `Scalar` carrier through a manifest type and nests additive,
+multiplicative, equality, and ordering capabilities.
+Generic functions accept these dictionaries as ordinary arguments;
+the standard library does not perform implicit instance search.
 
 ## Public modules
 
@@ -74,11 +82,12 @@ does not perform implicit instance search.
 - `stdio`: standard stream capabilities and UTF-8 terminal conveniences built from `io` operations.
 - `process`: process arguments, randomness, successful halt, panic, and explicit exit.
 
-Filesystem contents are bytes by default. Text conveniences explicitly validate or produce UTF-8, and every
-fallible operation reports `Result A IoError` to its `OS` continuation. EOF is represented as `Option` by line reads;
-it is not conflated with an empty line or an I/O failure. The full rationale and lifecycle contract are documented
+Filesystem contents are bytes by default. Text conveniences explicitly validate or produce UTF-8,
+and every fallible operation reports `Result A IoError` to its `OS` continuation.
+EOF is represented as `Option` by line reads; it is not conflated with an empty line or an I/O failure.
+The full rationale and lifecycle contract are documented
 in [`docs/ideas/filesystem.md`](../../docs/ideas/filesystem.md).
 
-The component files are independently importable pure package functions. `std.zy` is the composition root used by
-most programs and re-exports their abstract type witnesses in one package. Keeping the interface separate makes
-the exposed contract reviewable without reading the implementation machinery.
+The component files are independently importable pure package functions.
+`std.zy` is the composition root used by most programs and re-exports their abstract type witnesses in one package.
+Keeping the interface separate makes the exposed contract reviewable without reading the implementation machinery.

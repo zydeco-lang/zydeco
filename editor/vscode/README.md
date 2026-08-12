@@ -1,7 +1,7 @@
 # Zydeco for VS Code
 
-This extension provides Zydeco syntax highlighting and starts the
-[Cajun language server](https://github.com/zydeco-lang/zydeco/tree/main/editor/cajun)
+This extension provides Zydeco syntax highlighting
+and starts the [Cajun language server](https://github.com/zydeco-lang/zydeco/tree/main/editor/cajun)
 for `.zy` and `.zydeco` files.
 
 ## Features
@@ -21,9 +21,9 @@ Install the server with Cargo:
 cargo install --git https://github.com/zydeco-lang/zydeco.git cajun --bin cajun --locked
 ```
 
-The extension finds `cajun` on `PATH`. You can instead set
-`cajun.server.path` to an explicit executable path. If neither is available,
-the extension offers to run the Cargo command above.
+The extension finds `cajun` on `PATH`.
+You can instead set `cajun.server.path` to an explicit executable path.
+If neither is available, the extension offers to run the Cargo command above.
 
 ## Development
 
@@ -34,6 +34,5 @@ pnpm install
 pnpm compile
 ```
 
-Build Cajun from the repository root with `cargo build -p cajun`, then press
-<kbd>F5</kbd> in VS Code. The development launch configuration supplies the
-workspace binary through `CAJUN_SERVER_PATH`.
+Build Cajun from the repository root with `cargo build -p cajun`, then press <kbd>F5</kbd> in VS Code.
+The development launch configuration supplies the workspace binary through `CAJUN_SERVER_PATH`.

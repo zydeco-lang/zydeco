@@ -1,6 +1,8 @@
 # Overview
 
-This document is a high-level overview of the artifact for our OOPSLA paper "Notions of Stack-Manipulating Computation and Relative Monads" by Yuchen Jiang, Runze Xue, and Max S. New.
+This document is a high-level overview of the artifact
+for our OOPSLA paper "Notions of Stack-Manipulating Computation and Relative Monads" by Yuchen Jiang,
+Runze Xue, and Max S. New.
 
 1. [Introduction](#introduction)
 2. [Hardware Dependencies](#hardware-dependencies)
@@ -12,27 +14,36 @@ This document is a high-level overview of the artifact for our OOPSLA paper "Not
 
 ## Introduction
 
-The artifact contains the implementation of Zydeco, a call-by-push-value (CBPV) calculus with executable examples from the paper. The artifact supports the following claims of the paper.
+The artifact contains the implementation of Zydeco, a call-by-push-value (CBPV) calculus
+with executable examples from the paper.
+The artifact supports the following claims of the paper.
 - We demonstrate that relative monads can model common stack-manipulating computations used in functional programming
-- We described a generalized do-notation called "monadic blocks" that enables embedded CBPV programming by reinterpreting code to use any provided relative monad.
-- We showed that the monadic blocks allow for the automatic extension from any user-defined relative monad to a monad transformer.
-Further details are provided in the [Step-by-Step Instructions](#step-by-step-instructions) section.
+- We described a generalized do-notation called "monadic blocks" that enables embedded CBPV programming
+  by reinterpreting code to use any provided relative monad.
+- We showed that the monadic blocks allow for the automatic extension
+  from any user-defined relative monad to a monad transformer.
+  Further details are provided in the [Step-by-Step Instructions](#step-by-step-instructions) section.
 
 ## Hardware Dependencies
 
-The artifact doesn't require any specific hardware dependencies. The artifact is tested on a Linux machine, a macOS machine, and a Windows machine. Broadly speaking, the artifact is expected to work on any machine that has tier 1 or tier 2 support by the Rust compiler.
+The artifact doesn't require any specific hardware dependencies.
+The artifact is tested on a Linux machine, a macOS machine, and a Windows machine.
+Broadly speaking, the artifact is expected to work on any machine that has tier 1 or tier 2 support
+by the Rust compiler.
 
 
 
 ## Getting Started Guide
 
-This section prepares the reviewers to evaluate the artifact. Delivered as a docker image, the reviewers are encouraged to pull the image from Docker Hub and run it in a container.
+This section prepares the reviewers to evaluate the artifact.
+Delivered as a docker image, the reviewers are encouraged to pull the image from Docker Hub and run it in a container.
 
 1. Access the artifact by pulling the docker image and run it in a container
 ```sh
 docker run -it lighghteeloo/zydeco:amd64
 ```
-If you are on a machine with an ARM architecture, you can pull the image from Docker Hub by running the following command:
+If you are on a machine with an ARM architecture, you can pull the image from Docker Hub
+by running the following command:
 ```sh
 docker run -it lighghteeloo/zydeco:arm64
 ```
@@ -42,11 +53,19 @@ A shell will then be spawned in the container at `/usr/src/zydeco`, where a copy
 ```sh
 cargo test-workspace --release
 ```
-The tests perform basic sanity checks on the implementation of Zydeco, as well as all the core features mentioned in the paper.
+The tests perform basic sanity checks on the implementation of Zydeco, as well as all the core features mentioned
+in the paper.
 
 ## Step-by-Step Instructions
 
-This section shows how our artifact supports the claims made in the paper, and how the reviewers can use the artifact to run the examples and write their own Zydeco programs to test the claims. In the following sections, we first describe Zydeco as a functional programming language in a high-level manner through examples, and then briefly describe its implementation. After that, we describe relative monads and their algebras in Zydeco and demonstrate how to implement them in Zydeco and apply them to effectful programming. Finally, we show how we can further extend it to support monadic blocks, and how to automatically derive relative monad transformers using monadic blocks in Zydeco.
+This section shows how our artifact supports the claims made in the paper, and how the reviewers can use the artifact
+to run the examples and write their own Zydeco programs to test the claims.
+In the following sections, we first describe Zydeco as a functional programming language
+in a high-level manner through examples, and then briefly describe its implementation.
+After that, we describe relative monads and their algebras in Zydeco and demonstrate how
+to implement them in Zydeco and apply them to effectful programming.
+Finally, we show how we can further extend it to support monadic blocks, and how
+to automatically derive relative monad transformers using monadic blocks in Zydeco.
 
 
 ### Running the examples
@@ -95,12 +114,14 @@ See [`editor`](../../../editor) for the VS Code and Zed integrations.
 
 ### Zydeco as a Functional Programming Language
 
-In the following sections, we'll first introduce the grammar of Zydeco and then show example Zydeco programs in the paper.
+In the following sections, we'll first introduce the grammar of Zydeco and then show example Zydeco programs
+in the paper.
 
-In Section 3 of the paper, we illustrated the abstract syntax and semantics of Zydeco. Specifically, Figure 2 through 6 shows the syntax and semantics of Zydeco. The following paragraphs briefly show the corresponding concrete syntax of Zydeco.
-The artifact's compatibility library is located in [`core.zydeco`](core.zydeco) and
-[`data.zydeco`](data.zydeco). Both files use the current root-term syntax while preserving the artifact's
-comments and naming conventions.
+In Section 3 of the paper, we illustrated the abstract syntax and semantics of Zydeco.
+Specifically, Figure 2 through 6 shows the syntax and semantics of Zydeco.
+The following paragraphs briefly show the corresponding concrete syntax of Zydeco.
+The artifact's compatibility library is located in [`core.zydeco`](core.zydeco) and [`data.zydeco`](data.zydeco).
+Both files use the current root-term syntax while preserving the artifact's comments and naming conventions.
 
 #### Comments
 
@@ -122,8 +143,7 @@ Zydeco supports both line comments and block comments.
 `<A>` is used to denote value types, and `<B>` is used to denote computation types; `<T>` is used to denote types.
 Conventionally, PascalCase is used as type variables, but it's not enforced.
 
-Type abstraction: `fn (X: <K>) => <T>`
-Type application: `<T> <T>`
+Type abstraction: `fn (X: <K>) => <T>` Type application: `<T> <T>`
 
 The primitive value types are:
 + thunk type: `Thk <B>`
@@ -134,7 +154,8 @@ The primitive value types are:
 + character type: `Char`
 + string type: `String`
 
-User-defined data types are also value types. We'll see them in the abstract machine interpreter example below.
+User-defined data types are also value types.
+We'll see them in the abstract machine interpreter example below.
 The following is an example of the `Either` type.
 
 ```zydeco
@@ -151,7 +172,8 @@ The primitive computation types are:
 + forall type: `forall (X: <T>) . <B>`
 + OS type: `OS`
 
-User-defined codata types are also computation types. We'll see them in the calling convention example below.
+User-defined codata types are also computation types.
+We'll see them in the calling convention example below.
 
 #### Values and Computations
 `<V>` is used to denote value terms, and `<M>` is used to denote computation terms.
@@ -183,54 +205,76 @@ Other computation terms are:
 + comatch (terms of codata types): `comatch | .dtor1 => <M> | .dtor2 => <M> | ... end`
 + codata destructor: `<M> .dtor`
 
-The artifact-level wrappers for primitive functions that deal with integers, characters, strings, and operating
-system features are located in [`core.zydeco`](core.zydeco).
+The artifact-level wrappers for primitive functions that deal with integers, characters,
+strings, and operating system features are located in [`core.zydeco`](core.zydeco).
 
-The main program is required to have type `OS`. A few crucial primitive functions related to the `OS` type are:
+The main program is required to have type `OS`.
+A few crucial primitive functions related to the `OS` type are:
 + `exit: Thk (Int -> OS)`: constructs a computation that exits the program with the given exit code.
-+ `write_str: Thk (String -> Thk OS -> OS)`: takes a string and a continuation of type `OS`, prints the string and then runs the continuation.
-What `OS` type actually means is a computation that can run on the operating system stack and consume it. All Zydeco features that interact with the operating system are implemented using this type.
++ `write_str: Thk (String -> Thk OS -> OS)`: takes a string and a continuation of type `OS`,
+  prints the string and then runs the continuation.
+  What `OS` type actually means is a computation that can run on the operating system stack and consume it.
+  All Zydeco features that interact with the operating system are implemented using this type.
 
 
 ### The Implementation of Zydeco
 
-To demonstrate that Zydeco is usable as a functional programming language, we provide a Rust implementation of a
-System-Fω-style type checker for Zydeco, a small-step interpreter, native-code backends, and a minimal
-[`standard library`](../../std). The migrated [`core.zydeco`](core.zydeco) preserves the artifact-facing names.
+To demonstrate that Zydeco is usable as a functional programming language,
+we provide a Rust implementation of a System-Fω-style type checker for Zydeco, a small-step interpreter,
+native-code backends, and a minimal [`standard library`](../../std).
+The migrated [`core.zydeco`](core.zydeco) preserves the artifact-facing names.
 
-The implementation of Zydeco is located in the [`lang`](../../../lang) directory in a modularized manner. Among all components, the most crucial modules are:
+The implementation of Zydeco is located in the [`lang`](../../../lang) directory in a modularized manner.
+Among all components, the most crucial modules are:
 
 + `lang/syntax`: defines the general syntax of Zydeco that are used in all passes
-+ `lang/surface`: defines the surface syntax of Zydeco as well as the lexer, the parser, the desugaring pass, and the name resolution pass
-+ `lang/statics`: implements the static semantics of Zydeco with a type checker; the monadic blocks are implemented as a type-directed source-to-source translation during type checking
++ `lang/surface`: defines the surface syntax of Zydeco as well as the lexer, the parser,
+  the desugaring pass, and the name resolution pass
++ `lang/statics`: implements the static semantics of Zydeco with a type checker;
+  the monadic blocks are implemented as a type-directed source-to-source translation during type checking
 + `lang/dynamics`: implements the operational semantics of Zydeco with a small-step interpreter
 + `lang/driver`: includes utilities for simple Zydeco package management and driver for the pipeline
 
 
 ### Programming with the Stack in Call-by-Push-Value
 
-In Section 2 of the paper, we demonstrated how to use Zydeco to perform stack-manipulating computations. All examples are included in the `lib/tests/oopsla` directory.
+In Section 2 of the paper, we demonstrated how to use Zydeco to perform stack-manipulating computations.
+All examples are included in the `lib/tests/oopsla` directory.
 
 #### Implementing a Polynomial Function
-The first example [`polynomial.zydeco`](polynomial.zydeco) is a simple function that computes the polynomial `f(x) = x^2 + x + 10`.
+The first example [`polynomial.zydeco`](polynomial.zydeco) is a simple function
+that computes the polynomial `f(x) = x^2 + x + 10`.
 ```zydeco
 fn (x: Int) =>
   do s <- ! times x x;
   do y <- ! add x 10;
   ! add s y
 ```
-The first feature we may notice is **type annotations**, denoted by `:`. We are going to use them throughout the examples to show the types and kinds of the all programs.
+The first feature we may notice is **type annotations**, denoted by `:`.
+We are going to use them throughout the examples to show the types and kinds of the all programs.
 
-`fn` is the keyword for function. `do x <- ...; ...` is the monadic bind operator, syntactically similar to the OCaml-style monadic `let*` binding. All computations in Zydeco that returns an integer will have type `Ret Int`, and the result can only be accessed with the `do` operator. Therefore, both `! times` and `! add` computations have type `Int -> Int -> Ret Int` and the above program overall has type `Int -> Ret Int`. The force operator `! ...` runs the thunk. Thunks are typed as `Thk ...` and are written as `{ ... }`, so we have `times: Thk (Int -> Int -> Ret Int)` and `add: Thk (Int -> Int -> Ret Int)`, and forcing them will remove the thunks wrapping them.
+`fn` is the keyword for function.
+`do x <- ...; ...` is the monadic bind operator, syntactically similar to the OCaml-style monadic `let*` binding.
+All computations in Zydeco that returns an integer will have type `Ret Int`,
+and the result can only be accessed with the `do` operator.
+Therefore, both `! times` and `! add` computations have type `Int -> Int -> Ret Int`
+and the above program overall has type `Int -> Ret Int`.
+The force operator `! ...` runs the thunk.
+Thunks are typed as `Thk ...` and are written as `{ ... }`, so we have `times: Thk (Int -> Int -> Ret Int)`
+and `add: Thk (Int -> Int -> Ret Int)`, and forcing them will remove the thunks wrapping them.
 
-Zydeco syntactically disambiguates between values and computations. Values don't run or have side effects, and computations do. To briefly recap from the paper:
+Zydeco syntactically disambiguates between values and computations.
+Values don't run or have side effects, and computations do.
+To briefly recap from the paper:
 
 + Functions are computations because they push and pop values, interacting with the stack, thus they have side effects.
 + Thunks are values because they suspend computations, and they will not run until the force operator `!` is used.
-+ Return values are computations because they pop a continuation from the stack and pass the result to it; the continuation is corespondingly created by the `do` operator.
++ Return values are computations because they pop a continuation from the stack and pass the result to it;
+  the continuation is corespondingly created by the `do` operator.
 + Lastly, variables are themselves values, because references to variables don't have side effects.
 
-The top-level in Zydeco are either declarations, definitions, or the program entry point `main`. To wrap the function above into a definition that can be reused, we'll make it a definition.
+The top-level in Zydeco are either declarations, definitions, or the program entry point `main`.
+To wrap the function above into a definition that can be reused, we'll make it a definition.
 
 ```zydeco
 def poly = {
@@ -241,9 +285,12 @@ def poly = {
 } end
 ```
 
-Here, `def x = ... end` is the syntax for definition. As mentioned, since variable `poly` is a value, and the function is computation, we need to wrap the function in a thunk using `{ ... }` and then assign it to `poly`.
+Here, `def x = ... end` is the syntax for definition.
+As mentioned, since variable `poly` is a value, and the function is computation,
+we need to wrap the function in a thunk using `{ ... }` and then assign it to `poly`.
 
-To make the example above into a runnable Zydeco test case, we'll wrap it in `main`, and use the exit code `0` to indicate whether the test passes.
+To make the example above into a runnable Zydeco test case, we'll wrap it in `main`,
+and use the exit code `0` to indicate whether the test passes.
 
 ```zydeco
 main
@@ -257,7 +304,8 @@ end
 
 #### Complex Calling Conventions
 
-We include three complex calling conventions in [`cc.zydeco`](cc.zydeco). Specifically, we define the following variant function types:
+We include three complex calling conventions in [`cc.zydeco`](cc.zydeco).
+Specifically, we define the following variant function types:
 
 + `FnOpt (A: VType) (B: CType)`: function type with optional argument (`A ->? B`)
 + `FnVar (A: VType) (B: CType)`: variadic function type (`A ->* B`)
@@ -265,11 +313,16 @@ We include three complex calling conventions in [`cc.zydeco`](cc.zydeco). Specif
 
 The reader is encouraged to open the file and read the comments to understand the implementation.
 
-The file also contains a simple use case of the complex calling conventions demonstrated in the paper named `sum_and_mult`. The reader is encouraged to open the file, run the example, and understand how it works though detailed comments.
+The file also contains a simple use case of the complex calling conventions demonstrated
+in the paper named `sum_and_mult`.
+The reader is encouraged to open the file, run the example, and understand how it works though detailed comments.
 
 #### Abstract Machine Interpreter
 
-We provide a call-by-value abstract machine interpreter in [`cbv.zydeco`](cbv.zydeco), resembling the example from Figure 1 in the paper. A small difference is that we use a `codata` definition to encode the mutually recursive functions `descend` and `ascend`:
+We provide a call-by-value abstract machine interpreter in [`cbv.zydeco`](cbv.zydeco),
+resembling the example from Figure 1 in the paper.
+A small difference is that we use a `codata` definition to encode the mutually recursive functions `descend`
+and `ascend`:
 
 ```zydeco
 codata Interp where
@@ -278,14 +331,17 @@ codata Interp where
 end
 ```
 
-Zydeco doesn't directly support mutually recursive function definitions, however, they can be encoded using codata types. If the reader is interested in such encoding, please refer to the definition of `interp` and how it's used in the source code of this example, which demonstrates a general pattern that resolves the issue.
+Zydeco doesn't directly support mutually recursive function definitions, however,
+they can be encoded using codata types.
+If the reader is interested in such encoding, please refer to the definition of `interp` and how it's used
+in the source code of this example, which demonstrates a general pattern that resolves the issue.
 
 
 ### Relative Monads in Zydeco
 
 In Section 4 of the paper, we demonstrated how to define relative monads in Zydeco.
-The current relative-monad interface is defined in [`lib/std/monad.zy`](../../std/monad.zy), while the migrated
-artifact encoding remains in [`core.zydeco`](core.zydeco).
+The current relative-monad interface is defined in [`lib/std/monad.zy`](../../std/monad.zy),
+while the migrated artifact encoding remains in [`core.zydeco`](core.zydeco).
 Three exception monads are defined in [`exn.zydeco`](exn.zydeco).
 Furthermore, common data structures that are relative monads are defined in [`monads.zydeco`](monads.zydeco).
 And finally, the free monad is defined in [`free.zydeco`](free.zydeco).
@@ -309,21 +365,33 @@ end
 
 #### Exception Monads
 
-As shown in Figure 7, we implement three exception monads in [`exn.zydeco`](exn.zydeco), along with the proof of the violation of the monad laws (shown in Definition 4.1) of the defunctionalized exception monad because the exposure of the low-level details of the stack.
+As shown in Figure 7, we implement three exception monads in [`exn.zydeco`](exn.zydeco),
+along with the proof of the violation of the monad laws (shown in Definition 4.1)
+of the defunctionalized exception monad because the exposure of the low-level details of the stack.
 
 #### Continuation and State Monads
 
-The monads shown in Figure 8 are implemented in [`monads.zydeco`](monads.zydeco). We also implement an I/O monad to show the generality of our design of relative monads.
+The monads shown in Figure 8 are implemented in [`monads.zydeco`](monads.zydeco).
+We also implement an I/O monad to show the generality of our design of relative monads.
 
 
 ### Monadic Blocks and the Algebra Translation
 
-In Section 5 we introduced the monadic blocks as generalization of the do-notation. We implement a source-to-source translation called "algebra translation" that works during the type checking phase to traverse the program inside the monadic blocks and generate structures to allow the piece of code to work with the user-specified ambient monad. We also introduce algebras of relative monads in Zydeco and how to extend algebras on all type (constructors), which is crucial for the implementation of monadic blocks. To observe the code generated by monadic blocks, we provide tools for the reviewer to check the result of the algebra translation to witness the correctness of our implementation. As an application of monadic blocks, we show how relative monad transformers can be automatically derived from user-implemented relative monads in Zydeco.
+In Section 5 we introduced the monadic blocks as generalization of the do-notation.
+We implement a source-to-source translation called "algebra translation" that works
+during the type checking phase to traverse the program inside the monadic blocks and generate structures
+to allow the piece of code to work with the user-specified ambient monad.
+We also introduce algebras of relative monads in Zydeco and how to extend algebras on all type (constructors),
+which is crucial for the implementation of monadic blocks.
+To observe the code generated by monadic blocks, we provide tools for the reviewer to check the result
+of the algebra translation to witness the correctness of our implementation.
+As an application of monadic blocks, we show how relative monad transformers can be automatically derived
+from user-implemented relative monads in Zydeco.
 
 #### Algebras of Relative Monads
 
-The definition of algebras of relative monads is shown in Definition 5.1. The migrated artifact interface is
-defined in [`core.zydeco`](core.zydeco) as follows:
+The definition of algebras of relative monads is shown in Definition 5.1.
+The migrated artifact interface is defined in [`core.zydeco`](core.zydeco) as follows:
 
 ```zydeco
 alias Algebra (M: VType -> CType) (R: CType) : CType =
@@ -331,15 +399,19 @@ alias Algebra (M: VType -> CType) (R: CType) : CType =
 end
 ```
 
-In the paper, we claimed that the algebras of relative monads extend to all types (constructors). The migrated
-[`algebra.zydeco`](algebra.zydeco) fixture implements the crucial algebras listed in Section 5.1. Later on we'll
-demonstrate a systematic approach to derive algebras of relative monads in the
-[Algebra Translation](#algebra-translation) section.
+In the paper, we claimed that the algebras of relative monads extend to all types (constructors).
+The migrated [`algebra.zydeco`](algebra.zydeco) fixture implements the crucial algebras listed in Section 5.1.
+Later on we'll demonstrate a systematic approach to derive algebras of relative monads
+in the [Algebra Translation](#algebra-translation) section.
 
 
 #### Monadic Blocks
 
-The monadic blocks, defined in Section 5.2, allow the user to create a dialect of Zydeco that uses a user-specified ambient monad inside the monadic blocks. The `@[monadic]` annotation accepts any Zydeco computation term and produces a computation term that accepts a monad instance as function argument. A `begin ... end` expression makes a multiline annotated region explicit:
+The monadic blocks, defined in Section 5.2, allow the user to create a dialect of Zydeco
+that uses a user-specified ambient monad inside the monadic blocks.
+The `@[monadic]` annotation accepts any Zydeco computation term and produces a computation term
+that accepts a monad instance as function argument.
+A `begin ... end` expression makes a multiline annotated region explicit:
 
 ```zydeco
 @[monadic] begin
@@ -347,23 +419,34 @@ The monadic blocks, defined in Section 5.2, allow the user to create a dialect o
 end
 ```
 
-where `ret ()` is just an arbitrary computation. The whole block will then be translated into a computation that overloads the ambient monad inside the monadic block.
+where `ret ()` is just an arbitrary computation.
+The whole block will then be translated into a computation that overloads the ambient monad inside the monadic block.
 
 ```zydeco
 fn (M: VType -> CType) (mo: Thk (Monad M)) =>
   ! mo .return Unit ()
 ```
 
-The reader may have noticed that the monad type and its implementation are not demanded on site; instead, they can be later passed in as function arguments, making the whole setup more flexible to the user. We can provide all the necessary interface as function arguments into the monadic blocks in a similar fashion. For example,
+The reader may have noticed that the monad type and its implementation are not demanded on site; instead,
+they can be later passed in as function arguments, making the whole setup more flexible to the user.
+We can provide all the necessary interface as function arguments into the monadic blocks in a similar fashion.
+For example,
 
 ```zydeco
 @[monadic] fn (E: VType) (raise: Thk (forall (A: VType) . E -> Ret A)) =>
   ...
 ```
 
-In such way, the user can require a monad instance that supports `raise`, and later pass in the `Exn` monad instance to the monadic block.
+In such way, the user can require a monad instance that supports `raise`, and later pass
+in the `Exn` monad instance to the monadic block.
 
-A caveat is that the monadic blocks don't naturally support any reference to variables defined outside the monadic blocks. Only primitive CBPV constructs like `VType`, `CType`, `Thk`, `Ret`, units and products, functions, and exists and forall types are allowed inside the monadic blocks, noticably excluding all abstract primitive types like the `String` and `OS` type. All other terms used in the monadic block must also be passed in. Below is an example of a monadic block that raises an exception:
+A caveat is that the monadic blocks don't naturally support any reference
+to variables defined outside the monadic blocks.
+Only primitive CBPV constructs like `VType`, `CType`, `Thk`, `Ret`, units and products,
+functions, and exists and forall types are allowed inside the monadic blocks,
+noticably excluding all abstract primitive types like the `String` and `OS` type.
+All other terms used in the monadic block must also be passed in.
+Below is an example of a monadic block that raises an exception:
 
 ```zydeco
 (@[monadic] fn (Str: VType) (raise: Thk (forall (A: VType) . Str -> Ret A)) (msg: Str) =>
@@ -373,25 +456,46 @@ Exn mo-exn String triv { ! exn-raise String } "error"
 ```
 
 The parentheses end the annotated term before applying the translated computation to its monad arguments.
-Observe how the implementations are passed in as function arguments in the last line. `Exn` and `mo-exn` are the monad type and its implementation, respectively. `String` and `triv` instantiate type `Str` and its algebra (introduced in the next section). `{ ! exn-raise String }` is the implementation of the `raise` function, specialized to the `String` type. `"error"` is the message to be passed to the `raise` function.
+Observe how the implementations are passed in as function arguments in the last line.
+`Exn` and `mo-exn` are the monad type and its implementation, respectively.
+`String` and `triv` instantiate type `Str` and its algebra (introduced in the next section).
+`{ ! exn-raise String }` is the implementation of the `raise` function, specialized to the `String` type.
+`"error"` is the message to be passed to the `raise` function.
 
 
 #### Algebra Translation
 
-To implement the monadic blocks, in the paper we introduced the algebra translation in Section 5.3. The corresponding implementation is located in [`lang/statics/src/elaborate/monadic/mod.rs`](../../../lang/statics/src/elaborate/monadic/mod.rs). To briefly summarize,
+To implement the monadic blocks, in the paper we introduced the algebra translation in Section 5.3.
+The corresponding implementation is located
+in [`lang/statics/src/elaborate/monadic/mod.rs`](../../../lang/statics/src/elaborate/monadic/mod.rs).
+To briefly summarize,
 
 + The signature translation in Figure 20 is implemented in the function `signature_translation`
 + The carrier translation in Figure 21 is implemented in the function `type_pattern_translation` and `type_translation`
 + The structure translation in Figure 22 is implemented in the function `structure_translation`
 + The value term translation in Figure 23 is implemented in the function `value_translation`
-+ The computation term translation in Figure 24 is implemented in the function `value_pattern_translation` and `computation_translation`
-+ The monadic block translation in Figure 25 is implemented through direct invocation of the above functions during the type checking phase in [`lang/statics/src/check/mod.rs`](../../../lang/statics/src/check/mod.rs)
++ The computation term translation in Figure 24 is implemented in the function `value_pattern_translation`
+  and `computation_translation`
++ The monadic block translation in Figure 25 is implemented through direct invocation of the above functions
+  during the type checking phase in [`lang/statics/src/check/mod.rs`](../../../lang/statics/src/check/mod.rs)
 
 #### Using *Global* Types and Terms in Monadic Blocks
 
-In the paper we claimed that the monadic blocks are required to be closed, while in the artifact we slightly improve it. As a programming convenience to allow for more code reuse, Zydeco's monadic blocks allow for some limited use of definitions outside the block, whereas in the paper, code inside a monadic block must be closed. We define a type or a term to be "global" when it is well-kinded/typed only using other global types and terms. Closed types and kinds are global, as well as types and kinds that only reference other globally defined types and terms. In Zydeco, the code inside a monadic block doesn't need to be closed, but instead can make use of global definitions. This can be implemented (somewhat inefficiently) as inlining the used definitions into the block, so this feature does not increase the expressive power of monadic blocks, but makes them much more convenient to use.
+In the paper we claimed that the monadic blocks are required to be closed, while in the artifact we slightly improve it.
+As a programming convenience to allow for more code reuse, Zydeco's monadic blocks allow for some limited use
+of definitions outside the block, whereas in the paper, code inside a monadic block must be closed.
+We define a type or a term to be "global" when it is well-kinded/typed only using other global types and terms.
+Closed types and kinds are global, as well as types and kinds that only reference other globally defined types
+and terms.
+In Zydeco, the code inside a monadic block doesn't need to be closed, but instead can make use of global definitions.
+This can be implemented (somewhat inefficiently) as inlining the used definitions into the block,
+so this feature does not increase the expressive power of monadic blocks, but makes them much more convenient to use.
 
-When global types and terms are referenced inside the monadic block, they have a different meaning than when they are referenced outside the blocks, because the ambient monad of the global type or term is now overloaded by the monadic block. When the monadic block undergoes the algebra translation, the global type or term will be translated to use the user-specified ambient monad.
+When global types and terms are referenced inside the monadic block,
+they have a different meaning than when they are referenced outside the blocks,
+because the ambient monad of the global type or term is now overloaded by the monadic block.
+When the monadic block undergoes the algebra translation, the global type or term will be translated
+to use the user-specified ambient monad.
 
 As an example of using global types and terms in monadic blocks, we can define an identity function:
 ```zydeco
@@ -407,55 +511,76 @@ let id = { fn (A: VType) (x: A) => ret x } in
 end
 ```
 
-The reason why we can do this is because the definition of `id` is global, and therefore its ambient monad can be reinterpreted according to the surrounding monadic block.
+The reason why we can do this is because the definition of `id` is global,
+and therefore its ambient monad can be reinterpreted according to the surrounding monadic block.
 
-For a more realistic use case, refer to [`exnt.zydeco`](exnt.zydeco) and observe that `Exn` and `mo_exn` are
-directly referenced in the monadic block. Given the definition of the `Exn` type
+For a more realistic use case, refer to [`exnt.zydeco`](exnt.zydeco) and observe
+that `Exn` and `mo_exn` are directly referenced in the monadic block.
+Given the definition of the `Exn` type
 ```zydeco
 alias Exn (E: VType) (A: VType) : CType =
   Ret (Either E A)
 end
 ```
-In the definition of `Exn`, `Either` is a global type, therefore we can use `Exn` as a global type inside the monadic block, but keep in mind that the meaning of `Ret` type will be overloaded by the monadic block. Such overloading is the reason why we can derive relative monad transformers from a relative monad instance, which is itself defined as a global Zydeco program. Without this convenience, we would have to inline the definition of the monad inside the block.
+In the definition of `Exn`, `Either` is a global type, therefore we can use `Exn`
+as a global type inside the monadic block, but keep in mind that the meaning
+of `Ret` type will be overloaded by the monadic block.
+Such overloading is the reason why we can derive relative monad transformers from a relative monad instance,
+which is itself defined as a global Zydeco program.
+Without this convenience, we would have to inline the definition of the monad inside the block.
 
 #### Deriving Relative Monad Transformers
 
-The migrated [`exnt.zydeco`](exnt.zydeco) and [`exnkt.zydeco`](exnkt.zydeco) fixtures contain generated and manual
-transformer implementations for the `Exn` and `ExnK` monads. The `@[debug(...)]` macros print the generated code
-during type checking so it can be compared with the manual implementations.
+The migrated [`exnt.zydeco`](exnt.zydeco) and [`exnkt.zydeco`](exnkt.zydeco) fixtures contain generated
+and manual transformer implementations for the `Exn` and `ExnK` monads.
+The `@[debug(...)]` macros print the generated code during type checking so it can be compared
+with the manual implementations.
 
 
 ## Reusability Guide
 
-The artifact is designed to be reusable by other researchers and practitioners. Overall, it contains the following components:
+The artifact is designed to be reusable by other researchers and practitioners.
+Overall, it contains the following components:
 + The source code of `zydeco` can be compiled to interpret Zydeco programs and perform algebra translation.
 + The migrated `core.zydeco` and `data.zydeco` files preserve the artifact's compact compatibility library.
-+ Examples listed under [`lib`](../../) can be used as references to understand the implementation of Zydeco. They are also a good starting point to write new Zydeco programs, either as a library or as a starting point for standalone executables.
++ Examples listed under [`lib`](../../) can be used as references to understand the implementation of Zydeco.
+  They are also a good starting point to write new Zydeco programs, either as a library or as a starting point
+  for standalone executables.
 
 ### Project Structure
 
 The source code is organized into the following directories:
-+ [`lang`](../../../lang): the language implementation of Zydeco, including the lexer, parser, type checker, interpreter, and driver. What each modular crate does have been described in the [The Implementation of Zydeco](#the-implementation-of-zydeco) section. In addition, the common design of each phase is described in the [section below](#the-common-design-of-phases).
-+ [`lib`](../../): the standard library, reusable examples, and test programs. Test projects are wired into [`lang/tests`](../../../lang/tests).
-  + `std`: the standard library of Zydeco. Includes `core.zy` and `data.zy`; `core.zy` declares the primitive types and functions of Zydeco, and `data.zy` implements several common data structures.
++ [`lang`](../../../lang): the language implementation of Zydeco, including the lexer,
+  parser, type checker, interpreter, and driver.
+  What each modular crate does have been described
+  in the [The Implementation of Zydeco](#the-implementation-of-zydeco) section.
+  In addition, the common design of each phase is described in the [section below](#the-common-design-of-phases).
++ [`lib`](../../): the standard library, reusable examples, and test programs.
+  Test projects are wired into [`lang/tests`](../../../lang/tests).
+  + `std`: the standard library of Zydeco.
+    Includes `core.zy` and `data.zy`; `core.zy` declares the primitive types and functions of Zydeco,
+    and `data.zy` implements several common data structures.
   + `examples`, `playground`, and `avl`: reusable examples and a small data-structure implementation.
   + `spell`: a symlink to the literate Zydeco tutorials under `docs/spell`.
   + `tests`: end-to-end and regression projects, including this OOPSLA artifact.
     + `exec`: batch interpreter regression tests.
     + `compile`: programs shared by the interpreter and native compiler test paths.
-    + `delimcc`: a tiny library implementing `shift`/`reset`-style delimited continuations, with `try` and `throw` examples.
-+ [`cli`](../../../cli): the command-line interface of `zydeco`. See the next section for more details about the command-line interface.
+    + `delimcc`: a tiny library implementing `shift`/`reset`-style delimited continuations,
+      with `try` and `throw` examples.
++ [`cli`](../../../cli): the command-line interface of `zydeco`.
+  See the next section for more details about the command-line interface.
 + [`editor`](../../../editor): the Cajun language server and its VS Code and Zed integrations.
 
 ### Writing and Running Zydeco Programs
 
-Since Zydeco is a functional programming language, users can write new Zydeco programs and run them via a command-line interface.
+Since Zydeco is a functional programming language, users can write new Zydeco programs and run them
+via a command-line interface.
 
 #### Composing Source Files
 
-A Zydeco source file contains one complete term.
-Dependencies are term occurrences introduced by import metadata, and each relative path is resolved from the
-file containing that occurrence. For example:
+A Zydeco source file contains one complete term. Dependencies are term occurrences introduced by import metadata,
+and each relative path is resolved from the file containing that occurrence.
+For example:
 
 ```zydeco
 begin
@@ -468,16 +593,21 @@ begin
 end
 ```
 
-The driver first loads the import DAG, diagnoses cycles at their import sites, and then substitutes a fresh copy
-of each imported term at each occurrence. The resulting whole program is one term; no project manifest or
-declaration named `main` determines its meaning.
+The driver first loads the import DAG, diagnoses cycles at their import sites,
+and then substitutes a fresh copy of each imported term at each occurrence.
+The resulting whole program is one term; no project manifest or declaration named `main` determines its meaning.
 
 
 #### Writing New Zydeco Programs
 
-We've seen the syntax of Zydeco in [Zydeco as a Functional Programming Language](#zydeco-as-a-functional-programming-language). We've also seen examples of Zydeco programs in [Programming with the Stack in Call-by-Push-Value](#programming-with-the-stack-in-call-by-push-value). More examples are available in the [`lib`](../../) directory.
+We've seen the syntax of Zydeco
+in [Zydeco as a Functional Programming Language](#zydeco-as-a-functional-programming-language).
+We've also seen examples of Zydeco programs
+in [Programming with the Stack in Call-by-Push-Value](#programming-with-the-stack-in-call-by-push-value).
+More examples are available in the [`lib`](../../) directory.
 
-If the reader prefers a more systematic approach to learn Zydeco, a short tutorial is available in the [`lib/spell`](../../spell) directory.
+If the reader prefers a more systematic approach to learn Zydeco, a short tutorial is available
+in the [`lib/spell`](../../spell) directory.
 
 The easiest program we can write is a term that accepts the Builtin package and exits with status 42.
 
@@ -491,7 +621,8 @@ param (
 ```
 
 Run `cargo run --bin=zydeco --release -- run lib/playground/main.zydeco` to run the Zydeco program.
-The program should exit with status 42. To examine the status, run:
+The program should exit with status 42.
+To examine the status, run:
 
 ```sh
 echo $?
@@ -509,7 +640,8 @@ It's recommended to build the CLI under the `release` profile.
 cargo build --bin=zydeco --release
 ```
 
-Once the build is complete, a CLI program `zydeco` will be located at `target/release/zydeco`. It supports the following sub-commands:
+Once the build is complete, a CLI program `zydeco` will be located at `target/release/zydeco`.
+It supports the following sub-commands:
 
 + `run`: check and execute one source term
   + `zydeco run path/to/program.zy` runs that term after applying the Builtin package at the command boundary
@@ -521,24 +653,40 @@ Once the build is complete, a CLI program `zydeco` will be located at `target/re
 
 ### Extending Zydeco Calculus
 
-We've seen how we can write new Zydeco programs and run them as a Zydeco language user. In this section, we are going to take the perspective of a Zydeco language developer and explore how we can extend the calculus with new features. This may be useful for a researcher who wants to extend Zydeco with new syntax and semantics, or further compile Zydeco to low-level languages for efficient execution.
+We've seen how we can write new Zydeco programs and run them as a Zydeco language user.
+In this section, we are going to take the perspective of a Zydeco language developer
+and explore how we can extend the calculus with new features.
+This may be useful for a researcher who wants to extend Zydeco with new syntax and semantics,
+or further compile Zydeco to low-level languages for efficient execution.
 
 #### The Common Design of Phases
 
-The shared front end consists of [parsing](../../../lang/surface/src/textual), [desugaring](../../../lang/surface/src/bitter), [name resolution](../../../lang/surface/src/scoped), and [type checking](../../../lang/statics/src). The interpreter then performs [linking and evaluation](../../../lang/dynamics/src), while the compiler lowers through Stack IR and assembly before emitting native code. These phases follow the same general design pattern:
+The shared front end consists of [parsing](../../../lang/surface/src/textual),
+[desugaring](../../../lang/surface/src/bitter), [name resolution](../../../lang/surface/src/scoped),
+and [type checking](../../../lang/statics/src).
+The interpreter then performs [linking and evaluation](../../../lang/dynamics/src),
+while the compiler lowers through Stack IR and assembly before emitting native code.
+These phases follow the same general design pattern:
 
 + `mod syntax` defines new pieces of syntax needed for the calculus defined in the phase.
-+ `mod arena` defines the arena for the phase, if the phase uses an arena to store the intermediate results and use identifiers to refer to them.
++ `mod arena` defines the arena for the phase, if the phase uses an arena to store the intermediate results
+  and use identifiers to refer to them.
 + `mod err` defines the error messages.
 + `mod fmt` defines the formatters for the calculus used in the phase.
-+ `mod span` defines the span information for the phase, used for tracking where the error occurs in the Zydeco source code fed by the user.
++ `mod span` defines the span information for the phase, used for tracking where the error occurs
+  in the Zydeco source code fed by the user.
 
 All other modules in the phase are used to implement the elaboration from a previous phase to the current phase.
 
 
 #### Generating Documentations for the Source Code
 
-To see the documentation of a specific package, e.g. `zydeco-statics`, run `cargo doc --package zydeco-statics --no-deps`. An HTML documentation will show up in `target/doc/zydeco_statics/index.html`. Append `--open` to the command to immediately open the documentation in the browser. To generate the documentations for all packages in the project, run `cargo doc`. The packages documented are listed below:
+To see the documentation of a specific package, e.g. `zydeco-statics`,
+run `cargo doc --package zydeco-statics --no-deps`.
+An HTML documentation will show up in `target/doc/zydeco_statics/index.html`.
+Append `--open` to the command to immediately open the documentation in the browser.
+To generate the documentations for all packages in the project, run `cargo doc`.
+The packages documented are listed below:
 + `zydeco-utils`
 + `zydeco-syntax`
 + `zydeco-surface`
@@ -549,12 +697,24 @@ To see the documentation of a specific package, e.g. `zydeco-statics`, run `carg
 
 The following are some limitations of the artifact:
 
-+ The native backends remain experimental. The AMD64 path is covered by end-to-end tests, while the LLVM emitter has more limited coverage.
-+ Whole-program source imports currently provide composition rather than separate compilation; incremental artifacts,
-  registries, and generated lock files remain future work.
-+ Packages are expressed by ordinary product and existential types. There is not yet a separate namespace or
-  visibility layer over those typed interfaces.
++ The native backends remain experimental.
+  The AMD64 path is covered by end-to-end tests, while the LLVM emitter has more limited coverage.
++ Whole-program source imports currently provide composition rather than separate compilation;
+  incremental artifacts, registries, and generated lock files remain future work.
++ Packages are expressed by ordinary product and existential types.
+  There is not yet a separate namespace or visibility layer over those typed interfaces.
 + There're several caveats in using monadic blocks as a Zydeco programmer.
-  + The monadic blocks are compiled to a function that accepts a monad instance as function argument, which is passed in at runtime. However, an efficient implementation is to inline the monad instance into the monadic block if it's known at compile time, which is feasible in most cases, but not currently supported in the artifact.
-  + As mentioned in previous sections, the monadic blocks requires its inner computation to be closed in the paper. Even with the improvement in the artifact, it can only allow for the use of global types and terms.
-  + As a result, to use monad-specific features e.g. using `raise` with the `Exn` monad, the user must pass in the implementation of the `raise` function as a function argument to the monadic block, and introduce a function parameter inside the monadic block. It's therefore recommended to abstract the monad-specific features into an existential type interface, which requires the user to learn as a style of programming. Similar to the monad instance, the inline optimization oppotunity exists for the instance of the existential type interface, but just like the case of the monad instance, the application of instances are not currently optimized in the artifact.
+  + The monadic blocks are compiled to a function that accepts a monad instance
+    as function argument, which is passed in at runtime.
+    However, an efficient implementation is to inline the monad instance into the monadic block if it's known
+    at compile time, which is feasible in most cases, but not currently supported in the artifact.
+  + As mentioned in previous sections, the monadic blocks requires its inner computation to be closed in the paper.
+    Even with the improvement in the artifact, it can only allow for the use of global types and terms.
+  + As a result, to use monad-specific features e.g. using `raise` with the `Exn` monad,
+    the user must pass in the implementation of the `raise` function as a function argument to the monadic block,
+    and introduce a function parameter inside the monadic block.
+    It's therefore recommended to abstract the monad-specific features into an existential type interface,
+    which requires the user to learn as a style of programming.
+    Similar to the monad instance, the inline optimization oppotunity exists for the instance
+    of the existential type interface, but just like the case of the monad instance,
+    the application of instances are not currently optimized in the artifact.

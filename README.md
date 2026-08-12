@@ -6,8 +6,7 @@ Zydeco is a proof-of-concept programming language based on Call-by-push-value.
 
 ## OOPSLA Artifact Evaluation
 
-The instructions are located in
-[lib/tests/oopsla/README.md](lib/tests/oopsla/README.md).
+The instructions are located in [lib/tests/oopsla/README.md](lib/tests/oopsla/README.md).
 
 ## Documentation
 
@@ -58,8 +57,9 @@ Start the full-screen terminal REPL with:
 zydeco repl
 ```
 
-Each submitted term receives an input number such as `[1]`. A later term can hygienically splice that source with
-`@[import(1)] _`; the integer is deliberately unquoted, because `@[import("1")] _` denotes a file named `1`.
+Each submitted term receives an input number such as `[1]`.
+A later term can hygienically splice that source with `@[import(1)] _`; the integer is deliberately unquoted,
+because `@[import("1")] _` denotes a file named `1`.
 The REPL uses root metadata annotations for its commands:
 
 ```zydeco
@@ -69,13 +69,14 @@ The REPL uses root metadata annotations for its commands:
 @[quit] _
 ```
 
-Press Enter to evaluate complete syntax or continue an incomplete term on a new line. Alt+Enter always inserts a
-newline, and Ctrl+Enter submits the current text for diagnostics. A type checking error leaves the editor and input
-number unchanged so the source can be corrected and retried.
+Press Enter to evaluate complete syntax or continue an incomplete term on a new line.
+Alt+Enter always inserts a newline, and Ctrl+Enter submits the current text for diagnostics.
+A type checking error leaves the editor and input number unchanged so the source can be corrected and retried.
 
 ## Intro to Zydeco
 
-We now have a toy "literate zydeco" written in zydeco! Try it out by running
+We now have a toy "literate zydeco" written in zydeco!
+Try it out by running
 ```bash
 cd docs/spell && make build
 ```
@@ -85,9 +86,8 @@ Maybe we should call it "co-literate zydeco" because it turns commented zydeco i
 A legacy version of the tutorial lies [here](docs/tutorial/intro_to_zydeco.md).
 You might find the short tutorial easier to follow if the previous `spell` guide goes too fast.
 
-We will develop more introductory material on zydeco when we have
-implemented more features. For now, you can also choose to browse `lib/` for
-some example programs.
+We will develop more introductory material on zydeco when we have implemented more features.
+For now, you can also choose to browse `lib/` for some example programs.
 
 To run all tests
 ```bash
@@ -97,15 +97,13 @@ cargo test-workspace
 ## Editor Support
 
 The `cajun` binary is Zydeco's Language Server Protocol implementation.
-It provides live syntax and name-resolution diagnostics, document symbols,
-and go to definition across imported files:
+It provides live syntax and name-resolution diagnostics, document symbols, and go to definition across imported files:
 
 ```bash
 cargo install --path editor/cajun
 ```
 
-Client integrations live under [`editor/vscode`](editor/vscode) and
-[`editor/zed`](editor/zed).
+Client integrations live under [`editor/vscode`](editor/vscode) and [`editor/zed`](editor/zed).
 
 ## Rust API Docs
 
@@ -139,8 +137,7 @@ The output is written to `target/doc/`.
 └── ...
 ```
 
-- `lang/`: the library implementing the parser, type checker and
-interpreter for the Zydeco language.
+- `lang/`: the library implementing the parser, type checker and interpreter for the Zydeco language.
 - `lib/`: [standard library](lib/std/README.md), reusable examples, and `lib/tests/` regression projects
 - `cli/` Command-line interface
 - `tui/` Ratatui frontend for the interactive REPL
@@ -148,8 +145,8 @@ interpreter for the Zydeco language.
 
 ## Related Literature
 
-Zydeco is based on the Call-by-push-value calculus introduced by Paul
-Blain Levy: https://dl.acm.org/doi/10.1145/3537668.3537670
+Zydeco is based on the Call-by-push-value calculus introduced by Paul Blain Levy:
+https://dl.acm.org/doi/10.1145/3537668.3537670
 
 ## Related Language Implementations
 

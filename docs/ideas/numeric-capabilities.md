@@ -1,12 +1,12 @@
 # Numeric capability packages instead of inheritance
 
-`Int` and `Float` expose similar operations through separate standard-library modules. Generic numeric code should
-reuse that common structure without introducing a language-level inheritance relation or flattening every operation
-into one record. A flat record makes names such as `add` and `eq` easy to project ambiguously once capabilities are
-combined.
+`Int` and `Float` expose similar operations through separate standard-library modules.
+Generic numeric code should reuse that common structure without introducing a language-level inheritance relation
+or flattening every operation into one record.
+A flat record makes names such as `add` and `eq` easy to project ambiguously once capabilities are combined.
 
-This proposal represents each operation family by a type-indexed package. Larger interfaces contain smaller
-packages as named fields:
+This proposal represents each operation family by a type-indexed package.
+Larger interfaces contain smaller packages as named fields:
 
 ```zydeco
 Additive A =
@@ -37,18 +37,22 @@ Numeric Bool A =
   Unit
 ```
 
-The nesting is the composition rule. A function that needs addition accepts `Additive A`; a function that also
-needs multiplication accepts `Numeric Bool A` and projects `numeric/additive/add` or
-`numeric/multiplicative/mul`. The terminal `Unit` keeps the final nested package from merging with the enclosing
-associative product representation. No subtyping judgment or superclass elaboration is required.
+The nesting is the composition rule.
+A function that needs addition accepts `Additive A`; a function that also needs multiplication accepts `Numeric Bool A`
+and projects `numeric/additive/add` or `numeric/multiplicative/mul`.
+The terminal `Unit` keeps the final nested package from merging with the enclosing associative product representation.
+No subtyping judgment or superclass elaboration is required.
 
-These packages describe available operations rather than proving algebraic laws. In particular, IEEE floating-point
-equality is not reflexive in the presence of NaN, which motivates the name `PartialEquality`. Lawful refinements may
-be introduced later as separate interfaces without changing the operational dictionaries.
+These packages describe available operations rather than proving algebraic laws.
+In particular, IEEE floating-point equality is not reflexive in the presence of NaN,
+which motivates the name `PartialEquality`.
+Lawful refinements may be introduced later as separate interfaces without changing the operational dictionaries.
 
-The standard package exports these five type constructors and a `numeric` module containing `int_instance` and
-`float_instance`. Their specialized `int` and `float` modules remain the interfaces for division, remainder,
-rendering, extrema, and other representation-specific operations.
+The standard package exports these five type constructors and a `numeric` module containing `int_instance`
+and `float_instance`.
+Their specialized `int` and `float` modules remain the interfaces for division, remainder, rendering,
+extrema, and other representation-specific operations.
 
-This proposal does not add numeric widths, overloaded literals, implicit conversions, checked arithmetic, or
-instance search. It only establishes explicit, reusable capability packages over the operations already present.
+This proposal does not add numeric widths, overloaded literals, implicit conversions,
+checked arithmetic, or instance search.
+It only establishes explicit, reusable capability packages over the operations already present.

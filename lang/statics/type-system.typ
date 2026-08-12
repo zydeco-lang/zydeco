@@ -18,8 +18,8 @@
   #text(size: 9pt)[Implementation-derived core calculus with local inference]
 ]
 
-The calculus is the checked core after desugaring and name resolution. Surface wrappers are given only where
-they affect checking or elaboration.
+The calculus is the checked core after desugaring and name resolution.
+Surface wrappers are given only where they affect checking or elaboration.
 
 = Syntax
 
@@ -129,10 +129,11 @@ $
   & op("elim")_(ell=Q)(W) &= op("elim")_Q(W slash ell).
 $
 
-$Gamma[Q := W]$ binds the leaf variable of $Q$ to $op("elim")_Q(W)$; a hole binds nothing. Substitution
-$S[W slash alpha]$ substitutes an internal abstract identity. The operation $op("lead")(A)$ returns the maximal leading
-prefix of manifest-kind and existential fields. $op("abs")(op("lead")(A))$ returns, in order, only the abstract existential
-payload kinds. Manifest fields do not contribute package-dependent witnesses.
+$Gamma[Q := W]$ binds the leaf variable of $Q$ to $op("elim")_Q(W)$; a hole binds nothing.
+Substitution $S[W slash alpha]$ substitutes an internal abstract identity.
+The operation $op("lead")(A)$ returns the maximal leading prefix of manifest-kind and existential fields.
+$op("abs")(op("lead")(A))$ returns, in order, only the abstract existential payload kinds.
+Manifest fields do not contribute package-dependent witnesses.
 
 The partial operation $op("wits")_A(V)$ recovers the static witnesses retained by a package constructor, immutable
 alias, named wrapper, or administrative value `let`. $op("inst")_A(B, overline(W))$ traverses $op("lead")(A)$: it checks
@@ -168,8 +169,8 @@ $
   ) quad #text(size: 6.5pt)[VIEW-SEAL]
 $
 
-$alpha tilde.equiv S$ is not a general equality. Every rule that returns classifier $J$ also requires
-$op("fsk")(J) subset.eq Delta$.
+$alpha tilde.equiv S$ is not a general equality.
+Every rule that returns classifier $J$ also requires $op("fsk")(J) subset.eq Delta$.
 
 $
   frac(
@@ -295,8 +296,8 @@ $
   ) quad #text(size: 6.5pt)[T-ARROW]
 $
 
-The codomain sort disambiguates pure value arrows from computation arrows. The checked syntax retains distinct
-constructors for the two cases.
+The codomain sort disambiguates pure value arrows from computation arrows.
+The checked syntax retains distinct constructors for the two cases.
 
 $
   frac(
@@ -966,9 +967,9 @@ $
   quad #text(size: 6.5pt)[LITERAL]
 $
 
-A builtin type role attaches only to an abstract existential field of the indicated universe. A builtin operation
-role attaches only to a named value classifier, must match its fixed ABI classifier, and may occur at most once in
-one package-dependent signature.
+A builtin type role attaches only to an abstract existential field of the indicated universe.
+A builtin operation role attaches only to a named value classifier, must match its fixed ABI classifier,
+and may occur at most once in one package-dependent signature.
 
 == Blocks and wrappers
 

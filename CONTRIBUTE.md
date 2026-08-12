@@ -1,8 +1,7 @@
 # Contributing
 
-This repository includes the Zydeco language implementation, its standard
-library, and a collection of examples. The notes below collect the most common
-workflows described in the project documentation.
+This repository includes the Zydeco language implementation, its standard library, and a collection of examples.
+The notes below collect the most common workflows described in the project documentation.
 
 ## Build the CLI
 
@@ -24,8 +23,9 @@ zydeco repl
 
 Use `cargo run -p zydeco-tui` to launch the same application directly while working on the frontend crate.
 
-The REPL accepts one complete source term per numbered input. Import an earlier input with `@[import(1)] _`; numeric
-targets are session inputs, while quoted targets such as `@[import("library.zy")] _` remain filesystem sources.
+The REPL accepts one complete source term per numbered input.
+Import an earlier input with `@[import(1)] _`; numeric targets are session inputs,
+while quoted targets such as `@[import("library.zy")] _` remain filesystem sources.
 Commands are ordinary root annotations: `@[type] expression`, `@[run] expression`, `@[help] _`, and `@[quit] _`.
 Type checking errors remain on the current input number so the source can be edited and submitted again.
 
@@ -36,6 +36,25 @@ Format one or more Zydeco source files in place:
 ```sh
 zydeco fmt path/to/main.zy path/to/library.zy
 ```
+
+## Reflow Markdown Documentation
+
+Reflow explicitly named Markdown files after editing their prose:
+
+```sh
+ruby scripts/reflow-markdown.rb path/to/document.md
+```
+
+Use `--changed` to select only tracked Markdown files changed from `HEAD`.
+Combine it with `--check` to report files that need reflowing without writing them:
+
+```sh
+ruby scripts/reflow-markdown.rb --check --changed
+```
+
+The formatter preserves structurally significant Markdown, including code fences, tables,
+headings, block quotes, link definitions, hard breaks, and indented code.
+Reflow Typst and other specialized document formats manually.
 
 ## Run Programs and Examples
 
@@ -71,9 +90,8 @@ pnpm install
 pnpm check
 ```
 
-Commit the generated files under `editor/tree-sitter-zydeco/src` whenever the
-grammar changes. The compiler's Logos lexer and LALRPOP grammar remain the
-authority for accepted Zydeco programs.
+Commit the generated files under `editor/tree-sitter-zydeco/src` whenever the grammar changes.
+The compiler's Logos lexer and LALRPOP grammar remain the authority for accepted Zydeco programs.
 
 ## Create a Zydeco Program
 
@@ -93,10 +111,10 @@ No authored project configuration or distinguished `main` declaration is needed.
 
 ## Work on the Language Implementation
 
-The language pipeline is structured into phases (parsing, desugaring,
-name-resolution, type-checking, linking, evaluation) under `lang/`. Each phase
-typically includes `syntax`, `arena`, `err`, `fmt`, and `span` modules to keep
-the structure consistent across crates.
+The language pipeline is structured into phases (parsing, desugaring, name-resolution,
+type-checking, linking, evaluation) under `lang/`.
+Each phase typically includes `syntax`, `arena`, `err`, `fmt`, and `span` modules
+to keep the structure consistent across crates.
 
 ## Generate Rust API Docs
 
@@ -110,12 +128,11 @@ The HTML output is written to `target/doc/`.
 
 ## Pre-commit hooks
 
-Optional hooks run `cargo fmt -- --check` and `cargo check-workspace` before each
-commit. Install [pre-commit](https://pre-commit.com), then from the repo root:
+Optional hooks run `cargo fmt -- --check` and `cargo check-workspace` before each commit.
+Install [pre-commit](https://pre-commit.com), then from the repo root:
 
 ```sh
 pre-commit install
 ```
 
-To format and fix before committing, run `cargo fmt` and `cargo check-workspace`
-yourself when the hook fails.
+To format and fix before committing, run `cargo fmt` and `cargo check-workspace` yourself when the hook fails.

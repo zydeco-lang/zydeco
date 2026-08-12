@@ -3,8 +3,8 @@
 This guide is for contributors familiar with typed functional programming who may be new to Zydeco.
 Zydeco uses one term language for kinds, types, values, and computations,
 so a clear program gives the reader enough surface evidence to recognize each term's role.
-In particular, the source should reveal where a name is available,
-whether its definition remains transparent, and where computation is sequenced.
+In particular, the source should reveal where a name is available, whether its definition remains transparent,
+and where computation is sequenced.
 
 The conventions below favor Zydeco's direct forms and use annotations where they clarify a type-system boundary.
 The [surface syntax principles](syntax.md) explain the language-design choices behind the notation itself.
@@ -27,11 +27,10 @@ begin
 end
 ```
 
-An import is metadata on a hole.
-Each occurrence receives a fresh copy of the imported term,
+An import is metadata on a hole. Each occurrence receives a fresh copy of the imported term,
 so binding the result once gives every later use the same lexical identity.
-Place imports and parameters near the beginning of the file,
-followed by foundational types, operations, and finally the term that the file provides.
+Place imports and parameters near the beginning of the file, followed by foundational types, operations,
+and finally the term that the file provides.
 
 The forms ending in `that` contribute binders to their nearest block.
 Dependency analysis places each binder where its dependencies are available,
@@ -120,13 +119,14 @@ Zydeco's value/computation distinction should remain visible in ordinary code:
 | `M { N }` | pass the suspended continuation `N` directly to `M` |
 | `fn pattern => M` | the abstraction required by the residual computation type |
 
-These forms also reveal evaluation order. Mobile block entries contribute types and values to a context;
-application, `do`, matching, and relative-monad operations order computations within that context.
+These forms also reveal evaluation order.
+Mobile block entries contribute types and values to a context; application, `do`, matching,
+and relative-monad operations order computations within that context.
 
 Use `@[monadic] term` when a term is intentionally interpreted through a relative monad and its algebra.
 Prefer `@[monadic] begin ... end` when explicit delimiters make a multiline translation easier to scan.
-Metadata extends across its following term, so parenthesize the annotated term before applying its result:
-`(@[monadic] term) argument`.
+Metadata extends across its following term, so parenthesize the annotated term
+before applying its result: `(@[monadic] term) argument`.
 Ordinary CBPV sequencing reads most directly as `do`.
 Use `match` to eliminate data values and `comatch` to construct a codata computation,
 with one arm per visible constructor or destructor case.
@@ -159,9 +159,9 @@ The conventional metavariables carry additional information.
 `M` commonly has kind `(VType) -> (CType)`.
 A descriptive name is better when a parameter has a specific semantic role.
 
-A trailing `~` marks a lazy or thunked variant. A prime distinguishes a closely related formal variant, such as
-two encodings used in the same argument. Longer-lived APIs benefit from descriptive words instead of chains of
-primes.
+A trailing `~` marks a lazy or thunked variant.
+A prime distinguishes a closely related formal variant, such as two encodings used in the same argument.
+Longer-lived APIs benefit from descriptive words instead of chains of primes.
 
 ## Named Components and Packages
 
@@ -187,8 +187,8 @@ Library packages are easiest to use when their components are named.
 Small local products may remain positional when their order is evident at the construction and elimination sites.
 
 Use a field projection pattern when a consumer needs selected named fields without restating their product layout.
-The punned form `/field` binds the selected payload as `field`; combine several projections with a semicolon alias
-group because every projection observes the same bindee:
+The punned form `/field` binds the selected payload as `field`; combine several projections
+with a semicolon alias group because every projection observes the same bindee:
 
 ```zydeco
 match tree
@@ -198,14 +198,15 @@ match tree
 end
 ```
 
-Keep a short projection group on one line. When the group exceeds the line width, use a few lines organized by
-role, such as foundational classifiers, shared types, and module values. Avoid giving every projection its own line
-when several short fields form one readable topic.
+Keep a short projection group on one line. When the group exceeds the line width,
+use a few lines organized by role, such as foundational classifiers, shared types, and module values.
+Avoid giving every projection its own line when several short fields form one readable topic.
 
-Write `/field = local_name` when the local role deserves a different name, or chain projections to disambiguate a
-nested field. Keep an ordinary comma product pattern when the positional structure is itself meaningful and every
-component is used. Ordinary term projections traverse transparent named products and stop at an unopened
-existential package. At a package boundary, use one projection-pattern group to open the existential telescope once
+Write `/field = local_name` when the local role deserves a different name,
+or chain projections to disambiguate a nested field.
+Keep an ordinary comma product pattern when the positional structure is itself meaningful and every component is used.
+Ordinary term projections traverse transparent named products and stop at an unopened existential package.
+At a package boundary, use one projection-pattern group to open the existential telescope once
 and bind only the public types and module values the consumer needs:
 
 ```zydeco
@@ -217,28 +218,32 @@ let (/int; /process) = make_std builtin in
 ...
 ```
 
-Selected type fields and module values share the same package opening. Keep all related selections in that group,
-place type fields before value modules, and retain their interface order when it makes the list easier to compare
-with the provider. Plain `/Int` selects the public field `Int` under the same local name. Use an explicit rename
-such as `/String = Text` only when the consumer has a clearer role name. Select Builtin operations as module values
-and keep individual calls qualified, such as `int/add` and `process/exit`. A final ordinary pattern such as `builtin`
-retains the complete package for forwarding, while the preceding projections introduce only the requested local
-names. Omit that alias when the consumer does not forward the package. This projection-pattern idiom serves the
-role of package `use` without adding a separate binding form.
+Selected type fields and module values share the same package opening.
+Keep all related selections in that group, place type fields before value modules,
+and retain their interface order when it makes the list easier to compare with the provider.
+Plain `/Int` selects the public field `Int` under the same local name.
+Use an explicit rename such as `/String = Text` only when the consumer has a clearer role name.
+Select Builtin operations as module values and keep individual calls qualified, such as `int/add` and `process/exit`.
+A final ordinary pattern such as `builtin` retains the complete package for forwarding,
+while the preceding projections introduce only the requested local names.
+Omit that alias when the consumer does not forward the package.
+This projection-pattern idiom serves the role of package `use` without adding a separate binding form.
 
 The canonical builtin package is the single source of `@[intrinsic]` and `@[builtin(...)]` metadata.
-Other sources acquire intrinsic kinds, types, and host operations by importing that package and projecting only
-their dependencies, which keeps the names subject to ordinary language-level resolution without repeating the
-complete host interface.
+Other sources acquire intrinsic kinds, types, and host operations by importing that package
+and projecting only their dependencies, which keeps the names subject to ordinary language-level resolution
+without repeating the complete host interface.
 
-Within that signature, host-type roles are accepted only on abstract existential patterns, as in
-`exists @[builtin(int)] (Int : VType) . ...`. This keeps the role beside the identity it classifies and allows all
-host types to inhabit one telescope. Host-operation roles are accepted only on term classifiers, where they should
-annotate the corresponding labeled classifier.
+Within that signature, host-type roles are accepted only on abstract existential patterns,
+as in `exists @[builtin(int)] (Int : VType) . ...`.
+This keeps the role beside the identity it classifies and allows all host types to inhabit one telescope.
+Host-operation roles are accepted only on term classifiers,
+where they should annotate the corresponding labeled classifier.
 
 ## Layout and Comments
 
-Indent by two spaces and aim for at most 100 characters per line. A short binding may occupy one line.
+Indent by two spaces and aim for at most 100 characters per line.
+A short binding may occupy one line.
 For a longer binding, put one parameter on each line and place the residual classifier at the same indentation.
 Align `in` or `that` with the keyword that opened the binding.
 
@@ -265,9 +270,8 @@ a multiline thunk receives one additional indentation level.
 Align the arms of `match`, `comatch`, `data`, and `codata`, then indent an arm body once.
 Multiline tuples and packages align their closing delimiter with the opener and keep separators between items.
 
-`--|` writes Markdown documentation prose. A contiguous block becomes part of
-the repository documentation when it appears immediately above a `@[doc]`
-annotation:
+`--|` writes Markdown documentation prose.
+A contiguous block becomes part of the repository documentation when it appears immediately above a `@[doc]` annotation:
 
 ```zydeco
 --| Maps a function over every element of a list.
@@ -277,14 +281,13 @@ annotation:
 def map = _ in map
 ```
 
-The annotation may carry renderer-specific metadata, such as
-`@[doc(section, "collections")]`. Its payload may be any term; documentation
-renderers decide how to present the attached term from its syntax and checked
-classifier. A blank line or an ordinary comment between the documentation
-block and `@[doc]` leaves the prose unattached. Source analysis warns about
-unattached `--|` blocks because they contribute no repository documentation;
+The annotation may carry renderer-specific metadata, such as `@[doc(section, "collections")]`.
+Its payload may be any term; documentation renderers decide how to present the attached term
+from its syntax and checked classifier.
+A blank line or an ordinary comment between the documentation block and `@[doc]` leaves the prose unattached.
+Source analysis warns about unattached `--|` blocks because they contribute no repository documentation;
 use `--` instead when the text is an implementation note.
 
 `--` introduces a local implementation note.
-The most useful comments explain purpose, invariants, or a typing choice
-that remains surprising after the surrounding code is read.
+The most useful comments explain purpose, invariants, or a typing choice that remains surprising
+after the surrounding code is read.

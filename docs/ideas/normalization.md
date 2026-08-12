@@ -38,8 +38,8 @@ The consumer may annotate the `param` pattern explicitly.
 When the annotation is omitted, the compiled provider package signature supplies the expected type
 from which it is inferred.
 Opening the parameter therefore contributes `Counter ≡ Int`, `zero`, and `inc` to the block context.
-The consumer is checked using the package signature produced by the library,
-and linking applies the consumer to the library implementation.
+The consumer is checked using the package signature produced by the library, and linking applies the consumer
+to the library implementation.
 
 ## Package Signatures
 
@@ -55,10 +55,9 @@ they do not introduce a declaration sort into the source language.
     | val x : A; Θ
 ```
 
-`static X as D : S` binds a transparent compile-time component, where the classifier `S`
-may be `Set` or an ordinary kind.
-`type X : K` is abstract.
-`type X as A : K` is manifest and contributes the definitional equality `X ≡ A`.
+`static X as D : S` binds a transparent compile-time component,
+where the classifier `S` may be `Set` or an ordinary kind.
+`type X : K` is abstract. `type X as A : K` is manifest and contributes the definitional equality `X ≡ A`.
 The `as` keyword states an equation on an otherwise ordinary existential type binder.
 A value entry carries an ordinary runtime value whose type may mention preceding type entries.
 Its source-level classifier is `x :: A`, while `x = v` introduces the corresponding named value.
@@ -76,19 +75,19 @@ This translation preserves the order of the telescope and permits type and value
 It does not require a normal form in which every existential precedes every product.
 
 The second line is the package representation of a manifest type.
-Its witness is packaged like an existential type component,
-but its defining equation is disclosed by the package signature.
-Here `X` is an ordinary type variable.
-Manifest existential types add only the equation `X ≡ A`. The `as` decoration belongs to the binder payload and
-composes with ordinary pattern structure rather than introducing a separate naming form:
+Its witness is packaged like an existential type component, but its defining equation is disclosed
+by the package signature.
+Here `X` is an ordinary type variable. Manifest existential types add only the equation `X ≡ A`.
+The `as` decoration belongs to the binder payload and composes with ordinary pattern structure rather
+than introducing a separate naming form:
 
 ```text
 exists (field = ((X as A) : K)) . B
 exists (= X as A : K) . B  ≡  exists (X = ((X as A) : K)) . B
 ```
 
-The second line uses ordinary named-pattern punning. Its leading `=` derives the field from the head binder `X`,
-while `as A` and `: K` remain decorations of that payload.
+The second line uses ordinary named-pattern punning.
+Its leading `=` derives the field from the head binder `X`, while `as A` and `: K` remain decorations of that payload.
 
 ## Manifest Static Fields
 
@@ -101,8 +100,8 @@ The classifier of a manifest field may be omitted when the definition determines
 Γ ⊢ exists (X as D). B : VType
 ```
 
-This judgment applies uniformly when `D` is a kind classified by `Set` and when `D` is a type
-classified by an ordinary kind.
+This judgment applies uniformly when `D` is a kind classified by `Set` and
+when `D` is a type classified by an ordinary kind.
 The explicit form `exists (X as D : S). B` remains available and checks the stated classifier.
 
 The canonical Builtin signature uses the inferred form to introduce the core CBPV vocabulary once:
@@ -118,8 +117,7 @@ exists
   ...
 ```
 
-Opening this signature binds `VType`, `CType`, `Thk`, `Ret`, and `Unit` by ordinary package-pattern
-name resolution.
+Opening this signature binds `VType`, `CType`, `Thk`, `Ret`, and `Unit` by ordinary package-pattern name resolution.
 The first two fields bind kinds; the remaining three bind types or type constructors.
 All five are transparent and erased.
 They neither create fresh identities nor contribute witnesses to a package-dependent arrow.
@@ -174,18 +172,16 @@ this implementation limit does not impose a normal form on package signatures.
 ## Package Signatures as Expected Types
 
 A package is an ordinary term checked against an expected signature built from existential and product types.
-A transparent type component may inhabit a manifest existential,
-whereas a nominal or explicitly sealed component inhabits an abstract existential.
+A transparent type component may inhabit a manifest existential, whereas a nominal
+or explicitly sealed component inhabits an abstract existential.
 
 An explicitly annotated parameter checks its annotation against the provider package signature.
 An unannotated parameter is accepted when that package signature is available as its expected type.
-If neither an annotation nor an expected provider package signature is available,
-the parameter type cannot be inferred.
-This is expected-type propagation from the dependency's package signature,
-rather than inference from uses in the body.
+If neither an annotation nor an expected provider package signature is available, the parameter type cannot be inferred.
+This is expected-type propagation from the dependency's package signature, rather than inference from uses in the body.
 
-For now, the design assumes one global compilation context
-in which the provider signature is available before the consumer is checked.
+For now, the design assumes one global compilation context in which the provider signature is available
+before the consumer is checked.
 Separate compilation and persistent interface artifacts are deferred.
 
 Just to be clear, package checking is independent of block elaboration.
@@ -212,9 +208,8 @@ Manifest types are also erased:
 | (W, v) | = | v |
 ```
 
-The compiled package signature retains `X ≡ A`,
-while the executable package retains only its value fields.
-Before publishing the package signature, normalization substitutes provider-local transparent names
-and ensures that every disclosed right-hand side is closed over the public static context.
-Normalization may simplify an equation the provider exposes,
-but it must not recover an equation hidden by ordinary existential sealing.
+The compiled package signature retains `X ≡ A`, while the executable package retains only its value fields.
+Before publishing the package signature, normalization substitutes provider-local transparent names and ensures
+that every disclosed right-hand side is closed over the public static context.
+Normalization may simplify an equation the provider exposes, but it must not recover an equation hidden
+by ordinary existential sealing.
