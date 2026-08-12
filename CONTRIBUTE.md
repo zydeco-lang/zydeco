@@ -42,14 +42,14 @@ zydeco fmt path/to/main.zy path/to/library.zy
 Reflow explicitly named Markdown files after editing their prose:
 
 ```sh
-ruby scripts/reflow-markdown.rb path/to/document.md
+python3 docs/scripts/reflow-markdown.py path/to/document.md
 ```
 
 Use `--changed` to select only tracked Markdown files changed from `HEAD`.
 Combine it with `--check` to report files that need reflowing without writing them:
 
 ```sh
-ruby scripts/reflow-markdown.rb --check --changed
+python3 docs/scripts/reflow-markdown.py --check --changed
 ```
 
 The formatter preserves structurally significant Markdown, including code fences, tables,
