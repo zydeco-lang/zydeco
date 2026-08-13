@@ -152,9 +152,10 @@ impl<'a> StackMeasure<'a> for ProgId {
                                         si.arena.symbols[&sym].inner,
                                         Symbol::Prog(_)
                                     )
-                            ) {
-                                si.inlined[&slot_id] = true;
-                            }
+                            )
+                        {
+                            si.inlined[&slot_id] = true;
+                        }
                     }
                     | Terminator::Jump(_)
                     | Terminator::LeapJump(_)
