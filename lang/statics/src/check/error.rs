@@ -54,6 +54,7 @@ pub enum TyckError {
     OccursCheck(FillId),
     MissingStructure(TypeId),
     SortMismatch,
+    SignatureNotType,
     KindMismatch,
     TypeMismatch { expected: TypeId, found: TypeId },
     TypeExpected { expected: String, found: TypeId },
@@ -155,6 +156,7 @@ impl<'a> Tycker<'a> {
                 format!("Missing structure for type: {}", self.pretty_statics_nested(ty, "\t"))
             }
             | TyckError::SortMismatch => "Sort mismatch".to_string(),
+            | TyckError::SignatureNotType => "A `.zyi` signature root must be a type".to_string(),
             | TyckError::KindMismatch => "Kind mismatch".to_string(),
             | TyckError::TypeMismatch { expected, found } => {
                 format!(
@@ -488,6 +490,7 @@ impl<'a> Tycker<'a> {
             }
             | TyckError::MissingStructure(_) => "Missing structure for type".to_string(),
             | TyckError::SortMismatch => "Sort mismatch".to_string(),
+            | TyckError::SignatureNotType => "A `.zyi` signature root must be a type".to_string(),
             | TyckError::KindMismatch => "Kind mismatch".to_string(),
             | TyckError::TypeMismatch { expected, found } => {
                 format!(

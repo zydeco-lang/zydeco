@@ -243,6 +243,16 @@ and substitutes a freshly cloned provider term at each import occurrence.
 Parsed templates are memoized by source input, while each assembled occurrence remains fresh.
 A source boundary around each clone prevents free names and mobile block bindings from crossing the file boundary.
 
+An implementation source `foo.zy` may have an adjacent signature source `foo.zyi`.
+The companion is optional; when it is absent, source inference and imports behave exactly as before.
+The signature contains one ordinary Zydeco term, and that root must synthesize a type.
+When the companion exists, source assembly elaborates the pair as though the complete implementation root
+were written `(implementation : signature)`; importing `foo.zy` therefore checks and exposes the ascribed type
+while retaining the implementation term for evaluation. Signature files participate in the same dependency graph,
+may use ordinary imports, and may themselves be checked or imported when a type expression is needed.
+They introduce no declaration language, namespace, or runtime module representation.
+Companion discovery applies to reusable `.zy` sources only; `.zydeco` program roots remain unpaired.
+
 Interactive sessions reuse that source model instead of maintaining a mutable declaration environment.
 The Ratatui REPL stores every submitted term as a session overlay with a nonzero input identity,
 displayed as `[1]`, `[2]`, and so on.

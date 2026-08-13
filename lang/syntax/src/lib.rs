@@ -891,6 +891,10 @@ pub struct MetaT<T>(pub Meta, pub T);
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct SourceBoundary<T>(pub T);
 
+/// A compiler-internal boundary requiring one signature source to be a type term.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct SignatureBoundary<T>(pub T);
+
 /* --------------------------------- Common --------------------------------- */
 
 /// `{ b }` has type `Thk B`

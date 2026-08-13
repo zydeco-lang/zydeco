@@ -1,6 +1,6 @@
 use super::loader::{SourceGraphLoader, SourceProvider};
 use crate::source::{
-    CheckedRootSort, ProgramAssemblyError, ScopedProgram, SourceGraph, SourceLoadError,
+    CheckedRootSort, ProgramAssemblyError, ScopedProgram, SourceGraph, SourceLoadError, SourcePath,
     SourceTemplate,
 };
 use dashmap::{DashMap, mapref::entry::Entry};
@@ -85,7 +85,7 @@ impl ProgramAnalysis {
     }
 
     pub fn source(&self, path: &Path) -> Option<&str> {
-        let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        let canonical = SourcePath::identity(path).unwrap_or_else(|_| path.to_path_buf());
         self.graph
             .sources
             .iter()
@@ -216,10 +216,17 @@ impl SourceQueryDb for CompilerSession {
         Ok(match self.files.entry(canonical.clone()) {
             | Entry::Occupied(entry) => *entry.get(),
             | Entry::Vacant(entry) => {
-                let text = std::fs::read_to_string(&canonical).map_err(|source| {
-                    SourceLoadError::Read { path: canonical.clone(), source: source.into() }
-                })?;
-                *entry.insert(SourceInput::new(self, canonical, Some(text), None))
+                let disk_text = match std::fs::read_to_string(&canonical) {
+                    | Ok(text) => Some(text),
+                    | Err(source) if source.kind() == std::io::ErrorKind::NotFound => None,
+                    | Err(source) => {
+                        return Err(SourceLoadError::Read {
+                            path: canonical,
+                            source: source.into(),
+                        });
+                    }
+                };
+                *entry.insert(SourceInput::new(self, canonical, disk_text, None))
             }
         })
     }
@@ -252,10 +259,15 @@ impl CompilerSession {
     pub fn refresh_disk(&mut self, path: impl AsRef<Path>) -> Result<(), SourceLoadError> {
         let input = self.source_input(path.as_ref().to_path_buf())?;
         let canonical = input.path(self);
-        let text = std::fs::read_to_string(&canonical)
-            .map_err(|source| SourceLoadError::Read { path: canonical, source: source.into() })?;
-        if input.disk_text(self).as_ref() != Some(&text) {
-            input.set_disk_text(self).to(Some(text));
+        let disk_text = match std::fs::read_to_string(&canonical) {
+            | Ok(text) => Some(text),
+            | Err(source) if source.kind() == std::io::ErrorKind::NotFound => None,
+            | Err(source) => {
+                return Err(SourceLoadError::Read { path: canonical, source: source.into() });
+            }
+        };
+        if input.disk_text(self) != disk_text {
+            input.set_disk_text(self).to(disk_text);
         }
         Ok(())
     }
@@ -297,8 +309,9 @@ impl CompilerSession {
     }
 
     fn path_identity(path: &Path) -> Result<PathBuf, SourceLoadError> {
-        path.canonicalize().or_else(|_| std::path::absolute(path)).map_err(|source| {
-            SourceLoadError::RootPath { path: path.to_path_buf(), source: source.into() }
+        SourcePath::identity(path).map_err(|source| SourceLoadError::RootPath {
+            path: path.to_path_buf(),
+            source: source.into(),
         })
     }
 }
@@ -311,6 +324,16 @@ impl SourceProvider for QuerySourceProvider<'_> {
     fn load(&mut self, path: &Path) -> Result<Arc<SourceTemplate>, SourceLoadError> {
         let input = self.db.source_input(path.to_path_buf())?;
         parse_source(self.db, input).map_err(|error| (*error).clone())
+    }
+
+    fn load_optional(
+        &mut self, path: &Path,
+    ) -> Result<Option<Arc<SourceTemplate>>, SourceLoadError> {
+        let input = self.db.source_input(path.to_path_buf())?;
+        if input.overlay(self.db).or_else(|| input.disk_text(self.db)).is_none() {
+            return Ok(None);
+        }
+        parse_source(self.db, input).map(Some).map_err(|error| (*error).clone())
     }
 }
 
@@ -375,7 +398,7 @@ fn analyze_source(
 
 #[cfg(test)]
 mod tests {
-    use super::CompilerSession;
+    use super::{CompilerSession, SourcePath};
     use std::{path::Path, sync::Arc};
     use zydeco_surface::textual::SourceNumber;
 
@@ -457,6 +480,29 @@ mod tests {
     }
 
     #[test]
+    fn adding_and_removing_a_companion_overlay_invalidates_root_analysis() {
+        let fixture = Fixture::new();
+        let root = fixture.write("library.zy", "()");
+        let signature = fixture.directory.path().join("library.zyi");
+        let mut session = CompilerSession::default();
+
+        let without_signature = session.analyze(&root).unwrap();
+        assert!(without_signature.outcome().root().is_some());
+
+        session.set_overlay(&signature, "@[intrinsic(i64)] _".to_owned()).unwrap();
+        let graph = session.graph(&root).unwrap();
+        assert!(graph.sources[&graph.root].signature.is_some());
+        let with_signature = session.analyze(&root).unwrap();
+        assert!(!Arc::ptr_eq(&without_signature, &with_signature));
+        assert!(with_signature.outcome().root().is_none());
+
+        session.clear_overlay(&signature).unwrap();
+        let removed_signature = session.analyze(&root).unwrap();
+        assert!(!Arc::ptr_eq(&with_signature, &removed_signature));
+        assert!(removed_signature.outcome().root().is_some());
+    }
+
+    #[test]
     fn clearing_an_overlay_restores_disk_contents() {
         let fixture = Fixture::new();
         let source = fixture.write("source.zy", "1");
@@ -486,8 +532,18 @@ mod tests {
         let graph = session.graph(&root).unwrap();
 
         assert_eq!(graph.sources.len(), 2);
-        assert!(graph.sources.iter().any(|(_, source)| source.path == provider));
-        assert!(graph.sources.iter().any(|(_, source)| source.path == root));
+        assert!(
+            graph
+                .sources
+                .iter()
+                .any(|(_, source)| source.path == SourcePath::identity(&provider).unwrap())
+        );
+        assert!(
+            graph
+                .sources
+                .iter()
+                .any(|(_, source)| source.path == SourcePath::identity(&root).unwrap())
+        );
     }
 
     #[test]
@@ -502,7 +558,12 @@ mod tests {
         let graph = session.graph(&root).unwrap();
 
         assert_eq!(graph.sources.len(), 2);
-        assert!(graph.sources.iter().any(|(_, source)| source.path == input));
+        assert!(
+            graph
+                .sources
+                .iter()
+                .any(|(_, source)| source.path == SourcePath::identity(&input).unwrap())
+        );
     }
 
     #[test]

@@ -112,6 +112,9 @@ impl SyntacticallyAnnotated for su::TermId {
                 term.syntactically_annotated(tycker)
             }
             | Tm::SourceBoundary(su::SourceBoundary(term)) => term.syntactically_annotated(tycker),
+            | Tm::SignatureBoundary(su::SignatureBoundary(term)) => {
+                term.syntactically_annotated(tycker)
+            }
             | Tm::Internal(_) => unreachable!(),
             | Tm::Sealed(term) => {
                 let su::Sealed(term) = term;
@@ -172,6 +175,9 @@ impl SyntacticallySealed for su::TermId {
                 term.syntactically_sealed(tycker)
             }
             | Tm::SourceBoundary(su::SourceBoundary(term)) => term.syntactically_sealed(tycker),
+            | Tm::SignatureBoundary(su::SignatureBoundary(term)) => {
+                term.syntactically_sealed(tycker)
+            }
             | Tm::Internal(_) => unreachable!(),
             | Tm::Sealed(term) => {
                 let su::Sealed(term) = term;

@@ -1,6 +1,6 @@
 use crate::source::{
-    SourceFile, SourceGraph, SourceGraphScope, SourceId, SourceImport, SourceImportId,
-    SourceLoadError, SourceParseError, SourceTemplate, SourceWarning,
+    SourceFile, SourceGraph, SourceGraphScope, SourceId, SourceImport, SourceImportId, SourceKind,
+    SourceLoadError, SourceParseError, SourcePath, SourceTemplate, SourceWarning,
 };
 use std::{
     collections::HashMap,
@@ -17,6 +17,10 @@ use zydeco_utils::{
 
 pub(crate) trait SourceProvider {
     fn load(&mut self, path: &Path) -> Result<Arc<SourceTemplate>, SourceLoadError>;
+
+    fn load_optional(
+        &mut self, path: &Path,
+    ) -> Result<Option<Arc<SourceTemplate>>, SourceLoadError>;
 }
 
 pub(crate) struct SourceGraphLoader<Provider> {
@@ -60,7 +64,7 @@ where
     Provider: SourceProvider,
 {
     pub(crate) fn load_root(mut self, root: &Path) -> Result<SourceGraph, SourceLoadError> {
-        let canonical = Self::path_identity(root).map_err(|source| SourceLoadError::RootPath {
+        let canonical = SourcePath::identity(root).map_err(|source| SourceLoadError::RootPath {
             path: root.to_path_buf(),
             source: source.into(),
         })?;
@@ -90,17 +94,47 @@ where
         }
 
         let template = self.provider.load(&path)?;
+        self.load_template(path, template)
+    }
+
+    fn load_template(
+        &mut self, path: PathBuf, template: Arc<SourceTemplate>,
+    ) -> Result<SourceId, SourceLoadError> {
+        if let Some(source) = self.seen.get(&path) {
+            return Ok(*source);
+        }
+
         let import_sites = template.import_sites.clone();
 
-        let source_id = self.sources.alloc(SourceFile { template, imports: Vec::new() });
+        let source_id =
+            self.sources.alloc(SourceFile { template, imports: Vec::new(), signature: None });
         self.seen.insert(path.clone(), source_id);
 
         let imports = import_sites
             .into_iter()
             .map(|site| self.load_import(source_id, &path, site))
             .collect::<Result<Vec<_>, _>>()?;
+        let signature = self.load_signature(&path)?;
         self.sources[&source_id].imports = imports;
+        self.sources[&source_id].signature = signature;
         Ok(source_id)
+    }
+
+    fn load_signature(
+        &mut self, implementation: &Path,
+    ) -> Result<Option<SourceId>, SourceLoadError> {
+        let Some(requested) = SourceKind::companion(implementation) else {
+            return Ok(None);
+        };
+        let signature = SourcePath::identity(&requested)
+            .map_err(|source| SourceLoadError::Read { path: requested, source: source.into() })?;
+        if let Some(source) = self.seen.get(&signature) {
+            return Ok(Some(*source));
+        }
+        let Some(template) = self.provider.load_optional(&signature)? else {
+            return Ok(None);
+        };
+        self.load_template(signature, template).map(Some)
     }
 
     fn load_import(
@@ -128,7 +162,7 @@ where
             },
         };
         let canonical =
-            Self::path_identity(&requested).map_err(|source| import_error(source.into()))?;
+            SourcePath::identity(&requested).map_err(|source| import_error(source.into()))?;
         let imported = self.load_canonical(canonical).map_err(|error| match error {
             | SourceLoadError::Read { source, .. } => import_error(source),
             | error => error,
@@ -139,9 +173,5 @@ where
             term: site.term,
             span: site.directive.span,
         }))
-    }
-
-    fn path_identity(path: &Path) -> std::io::Result<PathBuf> {
-        path.canonicalize().or_else(|_| std::path::absolute(path))
     }
 }

@@ -3134,6 +3134,21 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 inference.close_k(tycker)?;
                 checked
             }
+            | Tm::SignatureBoundary(su::SignatureBoundary(term)) => {
+                let inference = InferenceRegion::enter(tycker);
+                let checked = self.mk(term).tyck_k(tycker, Action::switch(switch))?;
+                let checked = match checked {
+                    | TermAnnId::Type(_, _) => checked,
+                    | TermAnnId::Hole(_)
+                    | TermAnnId::Kind(_)
+                    | TermAnnId::Value(_, _)
+                    | TermAnnId::Compu(_, _) => {
+                        tycker.err_k(TyckError::SignatureNotType, std::panic::Location::caller())?
+                    }
+                };
+                inference.close_k(tycker)?;
+                checked
+            }
             | Tm::Internal(internal) => {
                 InternalTerm(internal).tyck_k(tycker, &self.info, switch)?
             }

@@ -176,6 +176,7 @@ pub struct CoMatchClauses {
 pub enum Term<Ref> {
     Meta(MetaT<TermId>),
     SourceBoundary(SourceBoundary<TermId>),
+    SignatureBoundary(SignatureBoundary<TermId>),
     Internal(Internal),
     Sealed(Sealed<TermId>),
     Ann(Ann<TermId, TermId>),

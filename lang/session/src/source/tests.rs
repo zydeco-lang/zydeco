@@ -261,7 +261,7 @@ impl RepositorySourceFiles {
                     Self::under(&path)
                 } else if matches!(
                     path.extension().and_then(|extension| extension.to_str()),
-                    Some("zy" | "zydeco")
+                    Some("zy" | "zyi" | "zydeco")
                 ) {
                     Ok(vec![path])
                 } else {
@@ -461,6 +461,39 @@ fn source_graph_loads_nested_relative_imports_in_provider_order() {
 }
 
 #[test]
+fn source_graph_discovers_an_adjacent_signature_before_its_implementation() {
+    let fixture = SourceFixture::new();
+    fixture.write("main.zyi", "@[intrinsic(unit)] _");
+    let root = fixture.write("main.zy", "()");
+
+    let graph = SourceGraph::load(&root).unwrap();
+    let implementation = &graph.sources[&graph.root];
+    let signature = implementation.signature.expect("expected a companion signature");
+    let order = graph
+        .provider_order()
+        .into_iter()
+        .map(|source| graph.sources[&source].path.file_name().unwrap().to_owned())
+        .collect::<Vec<_>>();
+
+    assert_eq!(graph.sources.len(), 2);
+    assert_eq!(graph.sources[&signature].kind(), SourceKind::Signature);
+    assert_eq!(order, ["main.zyi", "main.zy"].map(std::ffi::OsString::from));
+}
+
+#[test]
+fn source_graph_does_not_pair_program_roots_with_signatures() {
+    let fixture = SourceFixture::new();
+    fixture.write("main.zyi", "@[intrinsic(i64)] _");
+    let root = fixture.write("main.zydeco", "()");
+
+    let graph = SourceGraph::load(root).unwrap();
+
+    assert_eq!(graph.sources.len(), 1);
+    assert_eq!(graph.sources[&graph.root].kind(), SourceKind::Program);
+    assert!(graph.sources[&graph.root].signature.is_none());
+}
+
+#[test]
 fn source_graph_reports_unique_sources_as_they_are_discovered() {
     let fixture = SourceFixture::new();
     fixture.write("leaf.zy", "1");
@@ -578,8 +611,8 @@ fn source_graph_rejects_cycles_with_every_import_site() {
         .iter()
         .map(|step| {
             (
-                step.importer.file_name().unwrap().to_owned(),
-                step.imported.file_name().unwrap().to_owned(),
+                step.dependent.file_name().unwrap().to_owned(),
+                step.dependency.file_name().unwrap().to_owned(),
             )
         })
         .collect::<Vec<_>>();
@@ -601,11 +634,26 @@ fn source_graph_rejects_a_self_import_at_its_site() {
     };
     let [step] = cycle.steps.as_slice() else { panic!("expected one self-import step") };
 
-    assert_eq!(step.importer, step.imported);
+    assert_eq!(step.dependent, step.dependency);
     assert_eq!(
         step.span.get_path().and_then(|path| path.file_name()),
         Some(std::ffi::OsStr::new("main.zy"))
     );
+}
+
+#[test]
+fn source_graph_rejects_cycles_through_a_companion_signature() {
+    let fixture = SourceFixture::new();
+    let root = fixture.write("main.zy", "()");
+    fixture.write("main.zyi", r#"@[import("main.zy")] _"#);
+
+    let SourceLoadError::Cycle(cycle) = SourceGraph::load(root).unwrap_err() else {
+        panic!("expected a source dependency cycle")
+    };
+
+    assert_eq!(cycle.steps.len(), 2);
+    assert!(cycle.steps.iter().any(|step| step.kind == SourceDependencyKind::Signature));
+    assert!(cycle.steps.iter().any(|step| matches!(step.kind, SourceDependencyKind::Import(_))));
 }
 
 #[test]
@@ -692,6 +740,22 @@ fn program_assembly_consumes_import_directives_and_preserves_a_source_boundary()
                 if meta.is("import")
         )
     }));
+}
+
+#[test]
+fn program_assembly_ascribes_an_implementation_with_its_signature() {
+    use zydeco_surface::textual::syntax::{Ann, SignatureBoundary, Term};
+
+    let fixture = SourceFixture::new();
+    fixture.write("library.zyi", "@[intrinsic(unit)] _");
+    let root = fixture.write("library.zy", "()");
+
+    let assembly = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let Term::Ann(Ann { tm: _, ty }) = assembly.arena.terms[&assembly.unit.root] else {
+        panic!("expected a root ascription")
+    };
+
+    assert!(matches!(assembly.arena.terms[&ty], Term::SignatureBoundary(SignatureBoundary(_))));
 }
 
 #[test]
@@ -894,6 +958,88 @@ fn the_source_pipeline_reaches_statics_without_a_declaration_entry() {
         panic!("an unclassified root hole must not count as a checked source term")
     };
     assert!(!reports.is_empty());
+}
+
+#[test]
+fn a_matching_companion_signature_checks_the_implementation() {
+    let fixture = SourceFixture::new();
+    fixture.write("library.zyi", "@[intrinsic(unit)] _");
+    let root = fixture.write("library.zy", "()");
+
+    let checked = TestPipeline::check(root).unwrap();
+
+    assert!(matches!(checked.root, zydeco_statics::syntax::TermAnnId::Value(_, _)));
+}
+
+#[test]
+fn a_companion_signature_can_import_its_type_dependencies() {
+    let fixture = SourceFixture::new();
+    fixture.write("unit_type.zy", "@[intrinsic(unit)] _");
+    fixture.write("library.zyi", r#"@[import("unit_type.zy")] _"#);
+    let root = fixture.write("library.zy", "()");
+
+    let checked = TestPipeline::check(root).unwrap();
+
+    assert!(matches!(checked.root, zydeco_statics::syntax::TermAnnId::Value(_, _)));
+}
+
+#[test]
+fn a_mismatched_companion_signature_rejects_the_implementation() {
+    let fixture = SourceFixture::new();
+    fixture.write("library.zyi", "@[intrinsic(i64)] _");
+    let root = fixture.write("library.zy", "()");
+
+    let analysis = CompilerSession::default().analyze(root).unwrap();
+
+    assert!(analysis.outcome().root().is_none());
+    assert!(analysis.outcome().reports().is_some_and(|reports| !reports.is_empty()));
+}
+
+#[test]
+fn a_signature_root_must_itself_be_a_type() {
+    let fixture = SourceFixture::new();
+    fixture.write("library.zyi", "()");
+    let root = fixture.write("library.zy", "()");
+
+    let analysis = CompilerSession::default().analyze(root).unwrap();
+
+    assert!(analysis.outcome().root().is_none());
+    assert!(analysis.outcome().reports().is_some_and(|reports| !reports.is_empty()));
+}
+
+#[test]
+fn an_imported_implementation_is_checked_against_its_companion_signature() {
+    let fixture = SourceFixture::new();
+    fixture.write("library.zyi", "@[intrinsic(unit)] _");
+    fixture.write("library.zy", "()");
+    let root = fixture.write("main.zy", r#"@[import("library.zy")] _"#);
+
+    let checked = TestPipeline::check(root).unwrap();
+
+    assert!(matches!(checked.root, zydeco_statics::syntax::TermAnnId::Value(_, _)));
+}
+
+#[test]
+fn an_explicit_signature_import_is_a_type_term() {
+    let fixture = SourceFixture::new();
+    fixture.write("library.zyi", "@[intrinsic(unit)] _");
+    let root = fixture.write("main.zy", r#"@[import("library.zyi")] _"#);
+
+    let checked = TestPipeline::check(root).unwrap();
+
+    assert!(matches!(checked.root, zydeco_statics::syntax::TermAnnId::Type(_, _)));
+}
+
+#[test]
+fn an_explicit_signature_import_still_rejects_a_non_type_root() {
+    let fixture = SourceFixture::new();
+    fixture.write("library.zyi", "()");
+    let root = fixture.write("main.zy", r#"@[import("library.zyi")] _"#);
+
+    let analysis = CompilerSession::default().analyze(root).unwrap();
+
+    assert!(analysis.outcome().root().is_none());
+    assert!(analysis.outcome().reports().is_some_and(|reports| !reports.is_empty()));
 }
 
 #[test]

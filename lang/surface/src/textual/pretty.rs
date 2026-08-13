@@ -946,7 +946,8 @@ impl<'arena> PrettyFormatter<'arena> {
     /// singleton wrapper does not contribute an additional grouping choice.
     fn term_layout_subsumes_group(&self, term: TermId) -> bool {
         match &self.arena.terms[&term] {
-            | Term::SourceBoundary(SourceBoundary(inner)) => {
+            | Term::SourceBoundary(SourceBoundary(inner))
+            | Term::SignatureBoundary(SignatureBoundary(inner)) => {
                 self.term_layout_subsumes_group(*inner)
             }
             | Term::Paren(Paren(terms)) => match terms.as_slice() {
@@ -1109,7 +1110,9 @@ impl<'arena> PrettyFormatter<'arena> {
     fn term_with_requirement(
         &'arena self, term: TermId, requirement: TermRequirement,
     ) -> RcDoc<'arena> {
-        if let Term::SourceBoundary(SourceBoundary(inner)) = &self.arena.terms[&term] {
+        if let Term::SourceBoundary(SourceBoundary(inner))
+        | Term::SignatureBoundary(SignatureBoundary(inner)) = &self.arena.terms[&term]
+        {
             let document = self.term_with_requirement(*inner, requirement);
             return self.with_leading_comments(term.into(), document);
         }
@@ -1121,7 +1124,9 @@ impl<'arena> PrettyFormatter<'arena> {
                     BoundaryLayout::aligned("]"),
                     self.term_through_fragment(*inner, TermPrecedence::Binder),
                 )),
-            | Term::SourceBoundary(_) => unreachable!("source boundaries return before rendering"),
+            | Term::SourceBoundary(_) | Term::SignatureBoundary(_) => {
+                unreachable!("source boundaries return before rendering")
+            }
             | Term::Ann(Ann { tm, ty }) => self.annotation(
                 term.into(),
                 self.term_fragment(*tm),

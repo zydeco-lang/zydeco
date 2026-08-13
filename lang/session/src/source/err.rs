@@ -75,7 +75,7 @@ pub enum SourceLoadError {
     #[error(transparent)]
     Parse(#[from] SourceParseError),
     #[error(transparent)]
-    Cycle(#[from] ImportCycle),
+    Cycle(#[from] SourceCycle),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -117,37 +117,54 @@ impl Display for CheckedRootSort {
     }
 }
 
+/// The kind of edge participating in a source dependency cycle.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum SourceDependencyKind {
+    Import(SourceImportId),
+    Signature,
+}
+
+/// One dependency edge in a reported source cycle.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ImportCycleStep {
-    pub import: SourceImportId,
-    pub importer: PathBuf,
-    pub imported: PathBuf,
+pub struct SourceCycleStep {
+    pub kind: SourceDependencyKind,
+    pub dependent: PathBuf,
+    pub dependency: PathBuf,
     pub span: Span,
 }
 
+/// A cycle containing imports, implementation-signature pairs, or both.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ImportCycle {
-    pub steps: Vec<ImportCycleStep>,
+pub struct SourceCycle {
+    pub steps: Vec<SourceCycleStep>,
 }
 
-impl Display for ImportCycle {
+impl Display for SourceCycle {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "cyclic source imports")?;
+        writeln!(f, "cyclic source dependencies")?;
         write!(
             f,
             "{}",
             self.steps
                 .iter()
-                .map(|step| format!(
-                    "  `{}` imports `{}` at {}",
-                    step.importer.display(),
-                    step.imported.display(),
-                    step.span
-                ))
+                .map(|step| match step.kind {
+                    | SourceDependencyKind::Import(_) => format!(
+                        "  `{}` imports `{}` at {}",
+                        step.dependent.display(),
+                        step.dependency.display(),
+                        step.span
+                    ),
+                    | SourceDependencyKind::Signature => format!(
+                        "  `{}` uses companion signature `{}` at {}",
+                        step.dependent.display(),
+                        step.dependency.display(),
+                        step.span
+                    ),
+                })
                 .collect::<Vec<_>>()
                 .join("\n")
         )
     }
 }
 
-impl Error for ImportCycle {}
+impl Error for SourceCycle {}

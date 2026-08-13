@@ -194,6 +194,7 @@ pub struct CoMatcherParam {
 pub enum Term {
     Meta(MetaT<TermId>),
     SourceBoundary(SourceBoundary<TermId>),
+    SignatureBoundary(SignatureBoundary<TermId>),
     Ann(Ann<TermId, TermId>),
     Hole(Hole),
     Var(VarName),

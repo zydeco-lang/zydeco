@@ -100,7 +100,7 @@ impl<'a> BlockCandidateCollector<'a> {
                 .chain(self.term(*tail))
                 .collect()
             }
-            | Term::Block(_) | Term::SourceBoundary(_) => Vec::new(),
+            | Term::Block(_) | Term::SourceBoundary(_) | Term::SignatureBoundary(_) => Vec::new(),
             | Term::Residual(_) => {
                 unreachable!("residual nodes are introduced only after candidate collection")
             }

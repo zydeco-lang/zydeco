@@ -23,6 +23,7 @@ impl<'arena> GrammarContext<'arena> {
     fn term_class(&self, term: TermId) -> RenderedTermClass {
         match &self.arena.terms[&term] {
             | Term::SourceBoundary(SourceBoundary(inner)) => self.term_class(*inner),
+            | Term::SignatureBoundary(SignatureBoundary(inner)) => self.term_class(*inner),
             | Term::Named(_) | Term::Label(_) => RenderedTermClass::AnnotatedOnly,
             // These constructors either are atoms in the grammar or are
             // deliberately rendered with their own delimiters.

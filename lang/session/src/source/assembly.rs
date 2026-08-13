@@ -1,4 +1,4 @@
-use crate::source::{ProgramAssemblyError, SourceGraph, SourceId};
+use crate::source::{ProgramAssemblyError, SourceGraph, SourceId, SourceKind};
 use zydeco_surface::textual::syntax as t;
 use zydeco_utils::span::Span;
 
@@ -25,9 +25,31 @@ impl<'graph> ProgramAssembler<'graph> {
     }
 
     fn assemble(mut self) -> Result<ProgramAssembly, ProgramAssemblyError> {
-        let root = self.term(self.graph.root, self.graph.sources[&self.graph.root].unit.root)?;
+        let root = self.source(self.graph.root)?;
         let (spans, arena) = self.parser.finish();
         Ok(ProgramAssembly { spans, arena, unit: t::SourceUnit { root } })
+    }
+
+    fn source(&mut self, source: SourceId) -> Result<t::TermId, ProgramAssemblyError> {
+        let file = &self.graph.sources[&source];
+        let root = file.unit.root;
+        let kind = file.kind();
+        let signature = file.signature;
+        let body = self.term(source, root)?;
+        let body = match kind {
+            | SourceKind::Signature => self
+                .parser
+                .term(self.span(source, root.into()).make(t::SignatureBoundary(body).into())),
+            | SourceKind::Implementation | SourceKind::Program => body,
+        };
+        let Some(signature) = signature else {
+            return Ok(body);
+        };
+        let ty = self.source(signature)?;
+        let signature_root = self.graph.sources[&signature].unit.root;
+        Ok(self
+            .parser
+            .term(self.span(signature, signature_root.into()).make(t::Ann { tm: body, ty }.into())))
     }
 
     fn span(&self, source: SourceId, entity: t::EntityId) -> Span {
@@ -140,6 +162,9 @@ impl<'graph> ProgramAssembler<'graph> {
             }
             | t::Term::SourceBoundary(t::SourceBoundary(inner)) => {
                 t::SourceBoundary(self.term(source, inner)?).into()
+            }
+            | t::Term::SignatureBoundary(t::SignatureBoundary(inner)) => {
+                t::SignatureBoundary(self.term(source, inner)?).into()
             }
             | t::Term::Ann(t::Ann { tm, ty }) => {
                 t::Ann { tm: self.term(source, tm)?, ty: self.term(source, ty)? }.into()
@@ -293,7 +318,7 @@ impl<'graph> ProgramAssembler<'graph> {
             .copied()
             .ok_or_else(|| ProgramAssemblyError::MissingImport { path: file.path.clone(), term })?;
         let imported = self.graph.imports[&import].imported;
-        let body = self.term(imported, self.graph.sources[&imported].unit.root)?;
+        let body = self.source(imported)?;
         Ok(self.parser.term(self.span(source, term.into()).make(t::SourceBoundary(body).into())))
     }
 }

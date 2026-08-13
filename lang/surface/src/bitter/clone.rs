@@ -83,6 +83,10 @@ impl DeepClone for b::TermId {
                 let b::SourceBoundary(term) = term;
                 b::SourceBoundary(term.deep_clone(desugarer)).into()
             }
+            | b::Term::SignatureBoundary(term) => {
+                let b::SignatureBoundary(term) = term;
+                b::SignatureBoundary(term.deep_clone(desugarer)).into()
+            }
             | b::Term::Internal(term) => {
                 use crate::syntax::Internal;
                 match term {

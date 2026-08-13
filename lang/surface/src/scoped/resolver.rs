@@ -273,6 +273,12 @@ impl Resolve for TermId {
                 let () = inner.resolve(resolver, (Local::for_body(), &global))?;
                 SourceBoundary(inner).into()
             }
+            | Term::SignatureBoundary(term) => {
+                let SignatureBoundary(inner) = term;
+                let global = Global::default();
+                let () = inner.resolve(resolver, (Local::for_body(), &global))?;
+                SignatureBoundary(inner).into()
+            }
             | Term::Internal(internal) => internal.into(),
             | Term::Sealed(term) => {
                 let Sealed(inner) = &term;

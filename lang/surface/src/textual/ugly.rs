@@ -58,6 +58,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
         match term {
             | Term::Meta(t) => s += &t.ugly(f),
             | Term::SourceBoundary(SourceBoundary(t)) => s += &t.ugly(f),
+            | Term::SignatureBoundary(SignatureBoundary(t)) => s += &t.ugly(f),
             | Term::Ann(t) => s += &t.ugly(f),
             | Term::Hole(t) => s += &t.ugly(f),
             | Term::Var(t) => s += &t.ugly(f),

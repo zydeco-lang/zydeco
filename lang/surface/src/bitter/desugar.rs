@@ -476,6 +476,11 @@ impl Desugar for t::TermId {
                 let term = term.desugar(desugarer)?;
                 Alloc::alloc(desugarer, b::SourceBoundary(term).into(), self.into())
             }
+            | Tm::SignatureBoundary(term) => {
+                let t::SignatureBoundary(term) = term;
+                let term = term.desugar(desugarer)?;
+                Alloc::alloc(desugarer, b::SignatureBoundary(term).into(), self.into())
+            }
             | Tm::Ann(term) => {
                 let t::Ann { tm, ty } = term;
                 let tm = tm.desugar(desugarer)?;

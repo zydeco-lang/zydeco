@@ -306,6 +306,11 @@ impl LocalFoldScoped<Context> for Collector {
                 let co_inner = self.coctxs_term_local[&inner].to_owned();
                 self.coctxs_term_local.insert_new(term, co_inner);
             }
+            | Term::SignatureBoundary(inner) => {
+                let SignatureBoundary(inner) = inner;
+                let co_inner = self.coctxs_term_local[&inner].to_owned();
+                self.coctxs_term_local.insert_new(term, co_inner);
+            }
             | Term::Internal(_) => {
                 self.coctxs_term_local.insert_new(term, CoContext::new());
             }
@@ -622,6 +627,10 @@ mod impl_obverse_local_post {
                 }
                 | Term::SourceBoundary(inner) => {
                     let SourceBoundary(inner) = inner;
+                    inner.obverse_local_post(f, ctx);
+                }
+                | Term::SignatureBoundary(inner) => {
+                    let SignatureBoundary(inner) = inner;
                     inner.obverse_local_post(f, ctx);
                 }
                 | Term::Internal(_) => {}
