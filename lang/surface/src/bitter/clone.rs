@@ -101,11 +101,8 @@ impl DeepClone for b::TermId {
                     | Internal::Unit => {
                         return desugarer.unit(prev);
                     }
-                    | Internal::Char => {
-                        return desugarer.char(prev);
-                    }
-                    | Internal::String => {
-                        return desugarer.string(prev);
+                    | Internal::Primitive(primitive) => {
+                        return desugarer.primitive(*primitive, prev);
                     }
                     | Internal::OS => {
                         return desugarer.os(prev);

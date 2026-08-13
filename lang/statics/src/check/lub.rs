@@ -294,13 +294,12 @@ impl Debruijn {
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                     std::panic::Location::caller(),
                 )?,
-                | (Type::Char(CharTy), Type::Char(CharTy)) => lhs_id,
-                | (Type::Char(_), _) => tycker.err(
-                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                    std::panic::Location::caller(),
-                )?,
-                | (Type::String(StringTy), Type::String(StringTy)) => lhs_id,
-                | (Type::String(_), _) => tycker.err(
+                | (Type::Primitive(PrimitiveTy(lhs)), Type::Primitive(PrimitiveTy(rhs)))
+                    if lhs == rhs =>
+                {
+                    lhs_id
+                }
+                | (Type::Primitive(_), _) => tycker.err(
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                     std::panic::Location::caller(),
                 )?,

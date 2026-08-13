@@ -1,7 +1,8 @@
 param (
-  (/process) :
+  (/system) :
   @[import("../../std/builtin.zy")] _
 ) in
+let (/process) = system in
   let x = (10, 0) in
   let (y, z) = x in
   ! (process/exit) z

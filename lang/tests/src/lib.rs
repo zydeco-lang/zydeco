@@ -177,7 +177,7 @@ pub mod utils {
             let monadic = match prelude {
                 | SourceCasePrelude::Core => String::new(),
                 | SourceCasePrelude::Monadic => {
-                    let basis = library.join("monad.zy").canonicalize().unwrap();
+                    let basis = library.join("control/monad.zy").canonicalize().unwrap();
                     format!(
                         concat!("let monadic_basis = @[import(\"{}\")] _ in\n",),
                         basis.display()
@@ -186,31 +186,40 @@ pub mod utils {
             };
             let open_monadic = match prelude {
                 | SourceCasePrelude::Core => String::new(),
-                | SourceCasePrelude::Monadic => concat!(
-                    "let (= Monad, = Algebra, ()) =\n",
-                    "  monadic_basis ",
-                    concat!(
-                        "(VType, CType, Thk, Ret, Unit, ",
-                        "Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32, UInt64, ",
-                        "Float32, Float64, Char, String, Bytes, Reader, Writer, OS, api) in\n",
-                    ),
-                )
-                .to_string(),
+                | SourceCasePrelude::Monadic => {
+                    concat!("let (= Monad, = Algebra, ()) =\n", "  monadic_basis builtin in\n",)
+                        .to_string()
+                }
             };
 
             format!(
                 r#"let Builtin = @[import("{builtin}")] _ in
 {monadic}param (
-  (VType, CType, Thk, Ret, Unit,
-   Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32, UInt64,
-   Float32, Float64, Char, String, Bytes, Reader, Writer, OS, api) :
+  (/core; /representations; /numeric; /system; builtin) :
   Builtin
 ) in
+let (/VType; /CType; /Thk; /Ret; /Unit) = core in
+let (/Scalar = Int8) = representations/i8 in
+let (/Scalar = Int16) = representations/i16 in
+let (/Scalar = Int32) = representations/i32 in
+let (/Scalar = Int64) = representations/i64 in
+let (/Scalar = UInt8) = representations/u8 in
+let (/Scalar = UInt16) = representations/u16 in
+let (/Scalar = UInt32) = representations/u32 in
+let (/Scalar = UInt64) = representations/u64 in
+let (/Scalar = Float32) = representations/f32 in
+let (/Scalar = Float64) = representations/f64 in
+let (/Scalar = Char) = representations/char in
+let (/Scalar = String) = representations/string in
+let (/Scalar = Bytes) = representations/bytes in
+let (Scalar = NumericInt64, int64) = numeric/int64 in
+let (/Reader; /Writer; /OS; /process) = system in
 let Thunk = Thk in
 let U = Thk in
 let F = Ret in
 {open_monadic}
-let exit = api/exit in
+let api = (int64 = int64, exit = process/exit) in
+let exit = process/exit in
 let Top : CType = codata end in
 let triv : Thk Top = {{ comatch end }} in
 {source}

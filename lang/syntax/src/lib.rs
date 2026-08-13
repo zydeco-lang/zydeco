@@ -100,6 +100,7 @@ pub enum IntrinsicRole {
     Thk,
     Ret,
     Unit,
+    Primitive(PrimitiveType),
 }
 
 impl IntrinsicRole {
@@ -110,7 +111,7 @@ impl IntrinsicRole {
             | "thk" => Some(Self::Thk),
             | "ret" => Some(Self::Ret),
             | "unit" => Some(Self::Unit),
-            | _ => None,
+            | name => PrimitiveType::from_intrinsic_name(name).map(Self::Primitive),
         }
     }
 
@@ -121,6 +122,7 @@ impl IntrinsicRole {
             | Self::Thk => "thk",
             | Self::Ret => "ret",
             | Self::Unit => "unit",
+            | Self::Primitive(primitive) => primitive.intrinsic_name(),
         }
     }
 }
@@ -135,19 +137,6 @@ impl std::fmt::Display for IntrinsicRole {
 /// package signature.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BuiltinTypeRole {
-    Int8,
-    Int16,
-    Int32,
-    Int64,
-    UInt8,
-    UInt16,
-    UInt32,
-    UInt64,
-    Float32,
-    Float64,
-    Char,
-    String,
-    Bytes,
     Reader,
     Writer,
     OS,
@@ -162,19 +151,6 @@ pub enum BuiltinTypeUniverse {
 impl BuiltinTypeRole {
     pub fn from_source_name(name: &str) -> Option<Self> {
         match name {
-            | "int8" => Some(Self::Int8),
-            | "int16" => Some(Self::Int16),
-            | "int32" => Some(Self::Int32),
-            | "int64" => Some(Self::Int64),
-            | "uint8" => Some(Self::UInt8),
-            | "uint16" => Some(Self::UInt16),
-            | "uint32" => Some(Self::UInt32),
-            | "uint64" => Some(Self::UInt64),
-            | "float32" => Some(Self::Float32),
-            | "float64" => Some(Self::Float64),
-            | "char" => Some(Self::Char),
-            | "string" => Some(Self::String),
-            | "bytes" => Some(Self::Bytes),
             | "reader" => Some(Self::Reader),
             | "writer" => Some(Self::Writer),
             | "os" => Some(Self::OS),
@@ -184,19 +160,6 @@ impl BuiltinTypeRole {
 
     pub fn source_name(self) -> &'static str {
         match self {
-            | Self::Int8 => "int8",
-            | Self::Int16 => "int16",
-            | Self::Int32 => "int32",
-            | Self::Int64 => "int64",
-            | Self::UInt8 => "uint8",
-            | Self::UInt16 => "uint16",
-            | Self::UInt32 => "uint32",
-            | Self::UInt64 => "uint64",
-            | Self::Float32 => "float32",
-            | Self::Float64 => "float64",
-            | Self::Char => "char",
-            | Self::String => "string",
-            | Self::Bytes => "bytes",
             | Self::Reader => "reader",
             | Self::Writer => "writer",
             | Self::OS => "os",
@@ -205,45 +168,9 @@ impl BuiltinTypeRole {
 
     pub fn universe(self) -> BuiltinTypeUniverse {
         match self {
-            | Self::Int8
-            | Self::Int16
-            | Self::Int32
-            | Self::Int64
-            | Self::UInt8
-            | Self::UInt16
-            | Self::UInt32
-            | Self::UInt64
-            | Self::Float32
-            | Self::Float64
-            | Self::Char
-            | Self::String
-            | Self::Bytes
-            | Self::Reader
-            | Self::Writer => BuiltinTypeUniverse::Value,
+            | Self::Reader | Self::Writer => BuiltinTypeUniverse::Value,
             | Self::OS => BuiltinTypeUniverse::Computation,
         }
-    }
-
-    pub fn integer_type(self) -> Option<IntegerType> {
-        Some(match self {
-            | Self::Int8 => IntegerType::Int8,
-            | Self::Int16 => IntegerType::Int16,
-            | Self::Int32 => IntegerType::Int32,
-            | Self::Int64 => IntegerType::Int64,
-            | Self::UInt8 => IntegerType::UInt8,
-            | Self::UInt16 => IntegerType::UInt16,
-            | Self::UInt32 => IntegerType::UInt32,
-            | Self::UInt64 => IntegerType::UInt64,
-            | _ => return None,
-        })
-    }
-
-    pub fn float_type(self) -> Option<FloatType> {
-        Some(match self {
-            | Self::Float32 => FloatType::Float32,
-            | Self::Float64 => FloatType::Float64,
-            | _ => return None,
-        })
     }
 }
 
@@ -278,21 +205,17 @@ impl IntegerType {
         Self::UInt64,
     ];
 
-    pub fn builtin_role(self) -> BuiltinTypeRole {
-        match self {
-            | Self::Int8 => BuiltinTypeRole::Int8,
-            | Self::Int16 => BuiltinTypeRole::Int16,
-            | Self::Int32 => BuiltinTypeRole::Int32,
-            | Self::Int64 => BuiltinTypeRole::Int64,
-            | Self::UInt8 => BuiltinTypeRole::UInt8,
-            | Self::UInt16 => BuiltinTypeRole::UInt16,
-            | Self::UInt32 => BuiltinTypeRole::UInt32,
-            | Self::UInt64 => BuiltinTypeRole::UInt64,
-        }
-    }
-
     pub fn source_name(self) -> &'static str {
-        self.builtin_role().source_name()
+        match self {
+            | Self::Int8 => "int8",
+            | Self::Int16 => "int16",
+            | Self::Int32 => "int32",
+            | Self::Int64 => "int64",
+            | Self::UInt8 => "uint8",
+            | Self::UInt16 => "uint16",
+            | Self::UInt32 => "uint32",
+            | Self::UInt64 => "uint64",
+        }
     }
 
     pub fn type_name(self) -> &'static str {
@@ -331,15 +254,11 @@ pub enum FloatType {
 impl FloatType {
     pub const ALL: [Self; 2] = [Self::Float32, Self::Float64];
 
-    pub fn builtin_role(self) -> BuiltinTypeRole {
-        match self {
-            | Self::Float32 => BuiltinTypeRole::Float32,
-            | Self::Float64 => BuiltinTypeRole::Float64,
-        }
-    }
-
     pub fn source_name(self) -> &'static str {
-        self.builtin_role().source_name()
+        match self {
+            | Self::Float32 => "float32",
+            | Self::Float64 => "float64",
+        }
     }
 
     pub fn type_name(self) -> &'static str {
@@ -351,6 +270,92 @@ impl FloatType {
 }
 
 impl std::fmt::Display for FloatType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.type_name())
+    }
+}
+
+/// A fixed host representation with an applicative static identity.
+///
+/// Repeating an intrinsic primitive splice denotes the same type. This lets
+/// independently assembled packages share exact Rust-compatible scalar and
+/// buffer representations without placing every type in one generative
+/// existential telescope.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PrimitiveType {
+    Integer(IntegerType),
+    Float(FloatType),
+    Char,
+    String,
+    Bytes,
+}
+
+impl PrimitiveType {
+    pub const ALL: [Self; 13] = [
+        Self::Integer(IntegerType::Int8),
+        Self::Integer(IntegerType::Int16),
+        Self::Integer(IntegerType::Int32),
+        Self::Integer(IntegerType::Int64),
+        Self::Integer(IntegerType::UInt8),
+        Self::Integer(IntegerType::UInt16),
+        Self::Integer(IntegerType::UInt32),
+        Self::Integer(IntegerType::UInt64),
+        Self::Float(FloatType::Float32),
+        Self::Float(FloatType::Float64),
+        Self::Char,
+        Self::String,
+        Self::Bytes,
+    ];
+
+    pub fn from_intrinsic_name(name: &str) -> Option<Self> {
+        Some(match name {
+            | "i8" => Self::Integer(IntegerType::Int8),
+            | "i16" => Self::Integer(IntegerType::Int16),
+            | "i32" => Self::Integer(IntegerType::Int32),
+            | "i64" => Self::Integer(IntegerType::Int64),
+            | "u8" => Self::Integer(IntegerType::UInt8),
+            | "u16" => Self::Integer(IntegerType::UInt16),
+            | "u32" => Self::Integer(IntegerType::UInt32),
+            | "u64" => Self::Integer(IntegerType::UInt64),
+            | "f32" => Self::Float(FloatType::Float32),
+            | "f64" => Self::Float(FloatType::Float64),
+            | "char" => Self::Char,
+            | "string" => Self::String,
+            | "bytes" => Self::Bytes,
+            | _ => return None,
+        })
+    }
+
+    pub fn intrinsic_name(self) -> &'static str {
+        match self {
+            | Self::Integer(IntegerType::Int8) => "i8",
+            | Self::Integer(IntegerType::Int16) => "i16",
+            | Self::Integer(IntegerType::Int32) => "i32",
+            | Self::Integer(IntegerType::Int64) => "i64",
+            | Self::Integer(IntegerType::UInt8) => "u8",
+            | Self::Integer(IntegerType::UInt16) => "u16",
+            | Self::Integer(IntegerType::UInt32) => "u32",
+            | Self::Integer(IntegerType::UInt64) => "u64",
+            | Self::Float(FloatType::Float32) => "f32",
+            | Self::Float(FloatType::Float64) => "f64",
+            | Self::Char => "char",
+            | Self::String => "string",
+            | Self::Bytes => "bytes",
+        }
+    }
+
+    pub fn type_name(self) -> &'static str {
+        match self {
+            | Self::Integer(integer) => integer.type_name(),
+            | Self::Float(float) => float.type_name(),
+            | Self::Char => "Char",
+            | Self::String => "String",
+            | Self::Bytes => "Bytes",
+        }
+    }
+}
+
+impl std::fmt::Display for PrimitiveType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.type_name())
     }
@@ -1168,8 +1173,13 @@ mod numeric_tests {
     }
 
     #[test]
-    fn legacy_numeric_builtin_names_are_retired() {
-        ["int", "float"].into_iter().for_each(|name| {
+    fn fixed_primitive_builtin_type_roles_are_retired() {
+        [
+            "int", "float", "int8", "int16", "int32", "int64", "uint8", "uint16", "uint32",
+            "uint64", "float32", "float64", "char", "string", "bytes",
+        ]
+        .into_iter()
+        .for_each(|name| {
             assert_eq!(BuiltinTypeRole::from_source_name(name), None);
         });
         ["add", "int_eq", "float_add"].into_iter().for_each(|name| {

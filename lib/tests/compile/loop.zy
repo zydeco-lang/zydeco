@@ -1,10 +1,9 @@
 begin
   param (
-    (
-      /OS
-    ) :
+    (/system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/OS) = system that
   def fix loop : OS =
     ! loop
   that

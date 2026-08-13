@@ -1,0 +1,118 @@
+  (
+    i8 :: exists
+      (
+        Scalar = ScalarType as @[intrinsic(i8)] _ :
+        @[intrinsic(vtype)] _
+      )
+    .
+      @[intrinsic(unit)] _
+  )
+* (
+    i16 :: exists
+      (
+        Scalar = ScalarType as @[intrinsic(i16)] _ :
+        @[intrinsic(vtype)] _
+      )
+    .
+      @[intrinsic(unit)] _
+  )
+* (
+    i32 :: exists
+      (
+        Scalar = ScalarType as @[intrinsic(i32)] _ :
+        @[intrinsic(vtype)] _
+      )
+    .
+      @[intrinsic(unit)] _
+  )
+* (
+    i64 :: exists
+      (
+        Scalar = ScalarType as @[intrinsic(i64)] _ :
+        @[intrinsic(vtype)] _
+      )
+    .
+      @[intrinsic(unit)] _
+  )
+* (
+    u8 :: exists
+      (
+        Scalar = ScalarType as @[intrinsic(u8)] _ :
+        @[intrinsic(vtype)] _
+      )
+    .
+      @[intrinsic(unit)] _
+  )
+* (
+    u16 :: exists
+      (
+        Scalar = ScalarType as @[intrinsic(u16)] _ :
+        @[intrinsic(vtype)] _
+      )
+    .
+      @[intrinsic(unit)] _
+  )
+* (
+    u32 :: exists
+      (
+        Scalar = ScalarType as @[intrinsic(u32)] _ :
+        @[intrinsic(vtype)] _
+      )
+    .
+      @[intrinsic(unit)] _
+  )
+* (
+    u64 :: exists
+      (
+        Scalar = ScalarType as @[intrinsic(u64)] _ :
+        @[intrinsic(vtype)] _
+      )
+    .
+      @[intrinsic(unit)] _
+  )
+* (
+    f32 :: exists
+      (
+        Scalar = ScalarType as @[intrinsic(f32)] _ :
+        @[intrinsic(vtype)] _
+      )
+    .
+      @[intrinsic(unit)] _
+  )
+* (
+    f64 :: exists
+      (
+        Scalar = ScalarType as @[intrinsic(f64)] _ :
+        @[intrinsic(vtype)] _
+      )
+    .
+      @[intrinsic(unit)] _
+  )
+* (
+    char :: exists
+      (
+        Scalar = ScalarType as @[intrinsic(char)] _ :
+        @[intrinsic(vtype)] _
+      )
+    .
+      @[intrinsic(unit)] _
+  )
+* (
+    string :: exists
+      (
+        Scalar = ScalarType as @[intrinsic(string)] _ :
+        @[intrinsic(vtype)] _
+      )
+    .
+      @[intrinsic(unit)] _
+  )
+* (
+    bytes :: exists
+      (
+        Scalar = ScalarType as @[intrinsic(bytes)] _ :
+        @[intrinsic(vtype)] _
+      )
+    .
+      @[intrinsic(unit)] _
+  )
+* (@[intrinsic(unit)] _)

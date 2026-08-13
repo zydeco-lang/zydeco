@@ -1,9 +1,11 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (/Ret; /Int64; builtin) :
+    (/core; /representations; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/Ret) = core that
+  let (/Scalar = Int64) = representations/i64 that
 
   let (/bool; /int64; /process) =
     make_std builtin

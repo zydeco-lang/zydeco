@@ -20,6 +20,10 @@ impl TestFixture {
         (witness, ty)
     }
 
+    fn primitive_type(tycker: &mut Tycker<'_>, kind: KindId, primitive: PrimitiveType) -> TypeId {
+        Alloc::alloc(tycker, PrimitiveTy(primitive), kind, &TyEnv::new())
+    }
+
     fn add_classifier(
         tycker: &mut Tycker<'_>, vtype: KindId, ctype: KindId, int: TypeId, parameter_count: usize,
     ) -> TypeId {
@@ -42,13 +46,13 @@ fn builtin_type_roles_follow_fresh_existential_witnesses() {
         tycker
             .statics
             .builtin_roles
-            .attach_type(signature_witness, BuiltinTypeRole::Int64)
+            .attach_type(signature_witness, BuiltinTypeRole::Reader)
             .unwrap();
         tycker.statics.builtin_roles.transfer_witness(signature_witness, opened_witness).unwrap();
 
         assert_eq!(
             tycker.statics.builtin_roles.witness(opened_witness),
-            Some(BuiltinRole::Type(BuiltinTypeRole::Int64))
+            Some(BuiltinRole::Type(BuiltinTypeRole::Reader))
         );
     });
 }
@@ -59,11 +63,11 @@ fn one_existential_witness_cannot_carry_conflicting_builtin_roles() {
         let (vtype, _) = TestFixture::kinds(tycker);
         let witness = TestFixture::abstract_type(tycker, vtype);
 
-        tycker.statics.builtin_roles.attach_type(witness, BuiltinTypeRole::Int64).unwrap();
+        tycker.statics.builtin_roles.attach_type(witness, BuiltinTypeRole::Reader).unwrap();
 
         assert_eq!(
-            tycker.statics.builtin_roles.attach_type(witness, BuiltinTypeRole::Char),
-            Err(BuiltinRole::Type(BuiltinTypeRole::Int64))
+            tycker.statics.builtin_roles.attach_type(witness, BuiltinTypeRole::Writer),
+            Err(BuiltinRole::Type(BuiltinTypeRole::Reader))
         );
     });
 }
@@ -75,8 +79,8 @@ fn one_package_signature_rejects_duplicate_type_roles() {
         let first = TestFixture::abstract_type(tycker, vtype);
         let second = TestFixture::abstract_type(tycker, vtype);
         let domain = Alloc::alloc(tycker, UnitTy, vtype, &TyEnv::new());
-        tycker.statics.builtin_roles.attach_type(first, BuiltinTypeRole::Int64).unwrap();
-        tycker.statics.builtin_roles.attach_type(second, BuiltinTypeRole::Int64).unwrap();
+        tycker.statics.builtin_roles.attach_type(first, BuiltinTypeRole::Reader).unwrap();
+        tycker.statics.builtin_roles.attach_type(second, BuiltinTypeRole::Reader).unwrap();
         let signature =
             PackPi { domain, witnesses: PackTelescope::new(first, [second]), codomain: domain };
 
@@ -86,7 +90,7 @@ fn one_package_signature_rejects_duplicate_type_roles() {
         assert!(matches!(
             error.duplicates.as_slice(),
             [DuplicateBuiltinRole::Type {
-                role: BuiltinTypeRole::Int64,
+                role: BuiltinTypeRole::Reader,
                 witnesses,
             }] if witnesses == &vec![first, second]
         ));
@@ -145,8 +149,8 @@ fn the_same_role_may_appear_once_in_distinct_package_signatures() {
         let first = TestFixture::abstract_type(tycker, vtype);
         let second = TestFixture::abstract_type(tycker, vtype);
         let unit = Alloc::alloc(tycker, UnitTy, vtype, &TyEnv::new());
-        tycker.statics.builtin_roles.attach_type(first, BuiltinTypeRole::Int64).unwrap();
-        tycker.statics.builtin_roles.attach_type(second, BuiltinTypeRole::Int64).unwrap();
+        tycker.statics.builtin_roles.attach_type(first, BuiltinTypeRole::Reader).unwrap();
+        tycker.statics.builtin_roles.attach_type(second, BuiltinTypeRole::Reader).unwrap();
         let first_signature =
             PackPi { domain: unit, witnesses: PackTelescope::singleton(first), codomain: unit };
         let second_signature =
@@ -163,7 +167,8 @@ fn the_same_role_may_appear_once_in_distinct_package_signatures() {
 fn foundational_operation_roles_require_their_exact_classifier() {
     TestFixture::run(|tycker| {
         let (vtype, ctype) = TestFixture::kinds(tycker);
-        let (int_witness, int) = TestFixture::builtin_type(tycker, vtype, BuiltinTypeRole::Int64);
+        let int =
+            TestFixture::primitive_type(tycker, vtype, PrimitiveType::Integer(IntegerType::Int64));
         let (os_witness, os) = TestFixture::builtin_type(tycker, ctype, BuiltinTypeRole::OS);
         let valid_classifier = TestFixture::add_classifier(tycker, vtype, ctype, int, 2);
         let valid_entry = Alloc::alloc(
@@ -182,7 +187,7 @@ fn foundational_operation_roles_require_their_exact_classifier() {
             .unwrap();
         let valid_signature = PackPi {
             domain: valid_entry,
-            witnesses: PackTelescope::new(int_witness, [os_witness]),
+            witnesses: PackTelescope::singleton(os_witness),
             codomain: os,
         };
         assert!(BuiltinSignatureValidator::new(&tycker.statics).validate(&valid_signature).is_ok());
@@ -198,11 +203,8 @@ fn foundational_operation_roles_require_their_exact_classifier() {
                 BuiltinValueRole::Integer(IntegerType::Int64, IntegerOperation::Add),
             )
             .unwrap();
-        let signature = PackPi {
-            domain: entry,
-            witnesses: PackTelescope::new(int_witness, [os_witness]),
-            codomain: os,
-        };
+        let signature =
+            PackPi { domain: entry, witnesses: PackTelescope::singleton(os_witness), codomain: os };
 
         let error =
             BuiltinSignatureValidator::new(&tycker.statics).validate(&signature).unwrap_err();
@@ -222,7 +224,8 @@ fn foundational_operation_roles_require_their_exact_classifier() {
 fn read_line_as_int_rejects_a_non_branch_classifier() {
     TestFixture::run(|tycker| {
         let (vtype, ctype) = TestFixture::kinds(tycker);
-        let (int_witness, int) = TestFixture::builtin_type(tycker, vtype, BuiltinTypeRole::Int64);
+        let int =
+            TestFixture::primitive_type(tycker, vtype, PrimitiveType::Integer(IntegerType::Int64));
         let (os_witness, os) = TestFixture::builtin_type(tycker, ctype, BuiltinTypeRole::OS);
         let classifier = TestFixture::add_classifier(tycker, vtype, ctype, int, 2);
         let entry = Alloc::alloc(
@@ -232,11 +235,8 @@ fn read_line_as_int_rejects_a_non_branch_classifier() {
             &TyEnv::new(),
         );
         tycker.statics.builtin_roles.attach_value(entry, BuiltinValueRole::ReadLineAsInt).unwrap();
-        let signature = PackPi {
-            domain: entry,
-            witnesses: PackTelescope::new(int_witness, [os_witness]),
-            codomain: os,
-        };
+        let signature =
+            PackPi { domain: entry, witnesses: PackTelescope::singleton(os_witness), codomain: os };
 
         let error =
             BuiltinSignatureValidator::new(&tycker.statics).validate(&signature).unwrap_err();

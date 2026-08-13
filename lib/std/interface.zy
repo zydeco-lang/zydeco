@@ -1,705 +1,429 @@
 -- The public standard-library package type, kept separate from its implementation.
 begin
-  param (
-    (
-      /VType; /CType; /Thk; /Ret; /Unit;
-      /Int8; /Int16; /Int32; /Int64;
-      /UInt8; /UInt16; /UInt32; /UInt64;
-      /Float32; /Float64;
-      /Char; /String; /Bytes; /Reader; /Writer; /OS
-    ) :
-    @[import("builtin.zy")] _
-  ) in
-    let Prelude =
-      exists (
-        Thunk = ThunkType as Thk :
-        (CType) -> (VType)
-      ) .
-      exists (
-        U = UType as Thk :
-        (CType) -> (VType)
-      ) .
-      exists (
-        F = FType as Ret :
-        (VType) -> (CType)
-      ) .
-        Unit
-    in
-    let BoolModule (Bool : VType) =
-      (true :: Bool) *
-      (false :: Bool) *
-      (not :: Thk (Bool -> Ret Bool)) *
-      (and :: Thk (Bool -> Bool -> Ret Bool)) *
-      (or :: Thk (Bool -> Bool -> Ret Bool)) *
-      (eq :: Thk (Bool -> Bool -> Ret Bool)) *
-      (xor :: Thk (Bool -> Bool -> Ret Bool)) *
-      (nand :: Thk (Bool -> Bool -> Ret Bool)) *
-      (nor :: Thk (Bool -> Bool -> Ret Bool)) *
-      (if :: Thk (
-        forall (B : CType) .
-          Bool -> Thk B -> Thk B -> B
-      ))
-    in
-    let OptionModule
-      (Bool : VType)
-      (Option : (VType) -> (VType)) =
-      (none :: Thk (
-        forall (A : VType) .
-          Ret (Option A)
-      )) *
-      (some :: Thk (
-        forall (A : VType) .
-          A -> Ret (Option A)
-      )) *
-      (fold :: Thk (
-        forall (A : VType) .
-        forall (B : CType) .
-          Option A -> Thk B -> Thk (A -> B) -> B
-      )) *
-      (map :: Thk (
-        forall (A : VType) .
-        forall (B : VType) .
-          Option A -> Thk (A -> Ret B) -> Ret (Option B)
-      )) *
-      (and_then :: Thk (
-        forall (A : VType) .
-        forall (B : VType) .
-          Option A ->
-          Thk (A -> Ret (Option B)) ->
-          Ret (Option B)
-      )) *
-      (unwrap_or :: Thk (
-        forall (A : VType) .
-          Option A -> A -> Ret A
-      )) *
-      (or_else :: Thk (
-        forall (A : VType) .
-          Option A ->
-          Thk (Ret (Option A)) ->
-          Ret (Option A)
-      )) *
-      (zip :: Thk (
-        forall (A : VType) .
-        forall (B : VType) .
-          Option A -> Option B -> Ret (Option (A * B))
-      )) *
-      (is_some :: Thk (
-        forall (A : VType) .
-          Option A -> Ret Bool
-      )) *
-      (is_none :: Thk (
-        forall (A : VType) .
-          Option A -> Ret Bool
-      ))
-    in
-    let ResultModule
-      (Bool : VType)
-      (Result : (VType) -> (VType) -> (VType)) =
-      (ok :: Thk (
-        forall (A : VType) .
-        forall (E : VType) .
-          A -> Ret (Result A E)
-      )) *
-      (err :: Thk (
-        forall (A : VType) .
-        forall (E : VType) .
-          E -> Ret (Result A E)
-      )) *
-      (fold :: Thk (
-        forall (A : VType) .
-        forall (E : VType) .
-        forall (B : CType) .
-          Result A E -> Thk (A -> B) -> Thk (E -> B) -> B
-      )) *
-      (map :: Thk (
-        forall (A : VType) .
-        forall (B : VType) .
-        forall (E : VType) .
-          Result A E -> Thk (A -> Ret B) -> Ret (Result B E)
-      )) *
-      (map_err :: Thk (
-        forall (A : VType) .
-        forall (E : VType) .
-        forall (F : VType) .
-          Result A E -> Thk (E -> Ret F) -> Ret (Result A F)
-      )) *
-      (and_then :: Thk (
-        forall (A : VType) .
-        forall (B : VType) .
-        forall (E : VType) .
-          Result A E ->
-          Thk (A -> Ret (Result B E)) ->
-          Ret (Result B E)
-      )) *
-      (unwrap_or :: Thk (
-        forall (A : VType) .
-        forall (E : VType) .
-          Result A E -> A -> Ret A
-      )) *
-      (is_ok :: Thk (
-        forall (A : VType) .
-        forall (E : VType) .
-          Result A E -> Ret Bool
-      )) *
-      (is_err :: Thk (
-        forall (A : VType) .
-        forall (E : VType) .
-          Result A E -> Ret Bool
-      ))
-    in
-    let ListModule
-      (Bool : VType)
-      (Option : (VType) -> (VType))
-      (List : (VType) -> (VType))
-      (Int64 : VType) =
-      (nil :: Thk (
-        forall (A : VType) .
-          Ret (List A)
-      )) *
-      (cons :: Thk (
-        forall (A : VType) .
-          A -> List A -> Ret (List A)
-      )) *
-      (case :: Thk (
-        forall (A : VType) .
-        forall (B : CType) .
-          List A ->
-          Thk B ->
-          Thk (A -> List A -> B) ->
-          B
-      )) *
-      (fold :: Thk (
-        forall (A : VType) .
-        forall (B : CType) .
-          List A ->
-          Thk B ->
-          Thk (A -> Thk B -> B) ->
-          B
-      )) *
-      (singleton :: Thk (
-        forall (A : VType) .
-          A -> Ret (List A)
-      )) *
-      (append :: Thk (
-        forall (A : VType) .
-          List A -> List A -> Ret (List A)
-      )) *
-      (map :: Thk (
-        forall (A : VType) .
-        forall (B : VType) .
-          List A -> Thk (A -> Ret B) -> Ret (List B)
-      )) *
-      (fold_left :: Thk (
-        forall (A : VType) .
-        forall (B : VType) .
-          List A -> B -> Thk (B -> A -> Ret B) -> Ret B
-      )) *
-      (reverse :: Thk (
-        forall (A : VType) .
-          List A -> Ret (List A)
-      )) *
-      (length :: Thk (
-        forall (A : VType) .
-          List A -> Ret Int64
-      )) *
-      (is_empty :: Thk (
-        forall (A : VType) .
-          List A -> Ret Bool
-      )) *
-      (head :: Thk (
-        forall (A : VType) .
-          List A -> Ret (Option A)
-      )) *
-      (tail :: Thk (
-        forall (A : VType) .
-          List A -> Ret (Option (List A))
-      )) *
-      (get :: Thk (
-        forall (A : VType) .
-          List A -> Int64 -> Ret (Option A)
-      ))
-    in
-    let Additive (A : VType) =
-      (zero :: A) *
-      (add :: Thk (A -> A -> Ret A)) *
-      (sub :: Thk (A -> A -> Ret A)) *
-      (negate :: Thk (A -> Ret A))
-    in
-    let Multiplicative (A : VType) =
-      (one :: A) *
-      (mul :: Thk (A -> A -> Ret A))
-    in
-    let PartialEquality (Bool : VType) (A : VType) =
-      (eq :: Thk (A -> A -> Ret Bool)) *
-      (ne :: Thk (A -> A -> Ret Bool))
-    in
-    let PartialOrder (Bool : VType) (A : VType) =
-      (equality :: PartialEquality Bool A) *
-      (lt :: Thk (A -> A -> Ret Bool)) *
-      (le :: Thk (A -> A -> Ret Bool)) *
-      (gt :: Thk (A -> A -> Ret Bool)) *
-      (ge :: Thk (A -> A -> Ret Bool))
-    in
-    let Numeric (Bool : VType) (A : VType) =
-      (additive :: Additive A) *
-      (multiplicative :: Multiplicative A) *
-      (order :: PartialOrder Bool A) *
-      Unit
-    in
-    let NumericInstance (Bool : VType) (Representation : VType) =
-      exists (Scalar = ScalarType as Representation : VType) .
-        (dictionary :: Numeric Bool ScalarType) *
-        Unit
-    in
-    let PrimitiveIntegerModule (Integer : VType) (String : VType) =
-      (add :: Thk (Integer -> Integer -> Ret Integer)) *
-      (sub :: Thk (Integer -> Integer -> Ret Integer)) *
-      (mul :: Thk (Integer -> Integer -> Ret Integer)) *
-      (div :: Thk (Integer -> Integer -> Ret Integer)) *
-      (mod :: Thk (Integer -> Integer -> Ret Integer)) *
-      (eq :: Thk (
-        forall (R : CType) .
-          Integer -> Integer -> Thk R -> Thk R -> R
-      )) *
-      (lt :: Thk (
-        forall (R : CType) .
-          Integer -> Integer -> Thk R -> Thk R -> R
-      )) *
-      (gt :: Thk (
-        forall (R : CType) .
-          Integer -> Integer -> Thk R -> Thk R -> R
-      )) *
-      (to_string :: Thk (Integer -> Ret String))
-    in
-    let PrimitiveFloatModule (Floating : VType) (String : VType) =
-      (add :: Thk (Floating -> Floating -> Ret Floating)) *
-      (sub :: Thk (Floating -> Floating -> Ret Floating)) *
-      (mul :: Thk (Floating -> Floating -> Ret Floating)) *
-      (div :: Thk (Floating -> Floating -> Ret Floating)) *
-      (eq :: Thk (
-        forall (R : CType) .
-          Floating -> Floating -> Thk R -> Thk R -> R
-      )) *
-      (lt :: Thk (
-        forall (R : CType) .
-          Floating -> Floating -> Thk R -> Thk R -> R
-      )) *
-      (gt :: Thk (
-        forall (R : CType) .
-          Floating -> Floating -> Thk R -> Thk R -> R
-      )) *
-      (to_string :: Thk (Floating -> Ret String))
-    in
-    let IntegerModule (Bool : VType) (Integer : VType) (String : VType) =
-      (add :: Thk (Integer -> Integer -> Ret Integer)) *
-      (sub :: Thk (Integer -> Integer -> Ret Integer)) *
-      (mul :: Thk (Integer -> Integer -> Ret Integer)) *
-      (div :: Thk (Integer -> Integer -> Ret Integer)) *
-      (mod :: Thk (Integer -> Integer -> Ret Integer)) *
-      (eq :: Thk (Integer -> Integer -> Ret Bool)) *
-      (ne :: Thk (Integer -> Integer -> Ret Bool)) *
-      (lt :: Thk (Integer -> Integer -> Ret Bool)) *
-      (le :: Thk (Integer -> Integer -> Ret Bool)) *
-      (gt :: Thk (Integer -> Integer -> Ret Bool)) *
-      (ge :: Thk (Integer -> Integer -> Ret Bool)) *
-      (increment :: Thk (Integer -> Ret Integer)) *
-      (decrement :: Thk (Integer -> Ret Integer)) *
-      (negate :: Thk (Integer -> Ret Integer)) *
-      (min :: Thk (Integer -> Integer -> Ret Integer)) *
-      (max :: Thk (Integer -> Integer -> Ret Integer)) *
-      (to_string :: Thk (Integer -> Ret String))
-    in
-    let FloatModule (Bool : VType) (Floating : VType) (String : VType) =
-      (add :: Thk (Floating -> Floating -> Ret Floating)) *
-      (sub :: Thk (Floating -> Floating -> Ret Floating)) *
-      (mul :: Thk (Floating -> Floating -> Ret Floating)) *
-      (div :: Thk (Floating -> Floating -> Ret Floating)) *
-      (eq :: Thk (Floating -> Floating -> Ret Bool)) *
-      (ne :: Thk (Floating -> Floating -> Ret Bool)) *
-      (lt :: Thk (Floating -> Floating -> Ret Bool)) *
-      (le :: Thk (Floating -> Floating -> Ret Bool)) *
-      (gt :: Thk (Floating -> Floating -> Ret Bool)) *
-      (ge :: Thk (Floating -> Floating -> Ret Bool)) *
-      (negate :: Thk (Floating -> Ret Floating)) *
-      (to_string :: Thk (Floating -> Ret String))
-    in
-    let CharModule
-      (Option : (VType) -> (VType))
-      (Char : VType)
-      (Int64 : VType)
-      (String : VType) =
-      (to_string :: Thk (Char -> Ret String)) *
-      (codepoint :: Thk (Char -> Ret Int64)) *
-      (from_codepoint :: Thk (Int64 -> Ret (Option Char)))
-    in
-    let StringModule
-      (Bool : VType)
-      (Option : (VType) -> (VType))
-      (List : (VType) -> (VType))
-      (Int64 : VType)
-      (Char : VType)
-      (String : VType) =
-      (empty :: String) *
-      (length :: Thk (String -> Ret Int64)) *
-      (byte_length :: Thk (String -> Ret Int64)) *
-      (is_empty :: Thk (String -> Ret Bool)) *
-      (append :: Thk (String -> String -> Ret String)) *
-      (concat :: Thk (List String -> Ret String)) *
-      (split_once :: Thk (
-        String ->
-        Char ->
-        Ret (Option (String * String))
-      )) *
-      (split_at :: Thk (
-        String ->
-        Int64 ->
-        Ret (Option (String * String))
-      )) *
-      (eq :: Thk (String -> String -> Ret Bool)) *
-      (get :: Thk (String -> Int64 -> Ret (Option Char))) *
-      (head :: Thk (String -> Ret (Option Char))) *
-      (uncons :: Thk (
-        String -> Ret (Option (Char * String))
-      )) *
-      (to_chars :: Thk (String -> Ret (List Char))) *
-      (from_chars :: Thk (List Char -> Ret String)) *
-      (parse_int :: Thk (String -> Ret (Option Int64)))
-    in
-    let BytesModule
-      (Option : (VType) -> (VType))
-      (Int64 : VType)
-      (String : VType)
-      (Bytes : VType) =
-      (empty :: Thk (Ret Bytes)) *
-      (length :: Thk (Bytes -> Ret Int64)) *
-      (append :: Thk (Bytes -> Bytes -> Ret Bytes)) *
-      (from_string :: Thk (String -> Ret Bytes)) *
-      (to_string :: Thk (Bytes -> Ret (Option String)))
-    in
-    let IoModule
-      (Bool : VType)
-      (Option : (VType) -> (VType))
-      (Result : (VType) -> (VType) -> (VType))
-      (Int64 : VType)
-      (String : VType)
-      (Bytes : VType)
-      (Reader : VType)
-      (Writer : VType)
-      (IoErrorKind : VType)
-      (IoError : VType)
-      (OS : CType) =
-      (not_found :: IoErrorKind) *
-      (permission_denied :: IoErrorKind) *
-      (already_exists :: IoErrorKind) *
-      (invalid_input :: IoErrorKind) *
-      (invalid_data :: IoErrorKind) *
-      (broken_pipe :: IoErrorKind) *
-      (closed :: IoErrorKind) *
-      (other :: IoErrorKind) *
-      (kind_eq :: Thk (
-        IoErrorKind -> IoErrorKind -> Ret Bool
-      )) *
-      (error_kind :: Thk (IoError -> Ret IoErrorKind)) *
-      (error_message :: Thk (IoError -> Ret String)) *
-      (read :: Thk (
-        Reader -> Int64 ->
-        Thk (Result Bytes IoError -> OS) ->
-        OS
-      )) *
-      (read_line :: Thk (
-        Reader ->
-        Thk (Result (Option Bytes) IoError -> OS) ->
-        OS
-      )) *
-      (read_all :: Thk (
-        Reader ->
-        Thk (Result Bytes IoError -> OS) ->
-        OS
-      )) *
-      (write_all :: Thk (
-        Writer -> Bytes ->
-        Thk (Result Unit IoError -> OS) ->
-        OS
-      )) *
-      (flush :: Thk (
-        Writer ->
-        Thk (Result Unit IoError -> OS) ->
-        OS
-      )) *
-      (close_reader :: Thk (
-        Reader ->
-        Thk (Result Unit IoError -> OS) ->
-        OS
-      )) *
-      (close_writer :: Thk (
-        Writer ->
-        Thk (Result Unit IoError -> OS) ->
-        OS
-      ))
-    in
-    let FsModule
-      (Result : (VType) -> (VType) -> (VType))
-      (String : VType)
-      (Bytes : VType)
-      (Reader : VType)
-      (Writer : VType)
-      (Path : VType)
-      (IoError : VType)
-      (OS : CType) =
-      (path :: Thk (String -> Ret Path)) *
-      (path_string :: Thk (Path -> Ret String)) *
-      (open_reader :: Thk (
-        Path ->
-        Thk (Result Reader IoError -> OS) ->
-        OS
-      )) *
-      (create_writer :: Thk (
-        Path ->
-        Thk (Result Writer IoError -> OS) ->
-        OS
-      )) *
-      (append_writer :: Thk (
-        Path ->
-        Thk (Result Writer IoError -> OS) ->
-        OS
-      )) *
-      (read_bytes :: Thk (
-        Path ->
-        Thk (Result Bytes IoError -> OS) ->
-        OS
-      )) *
-      (read_text :: Thk (
-        Path ->
-        Thk (Result String IoError -> OS) ->
-        OS
-      )) *
-      (write_bytes :: Thk (
-        Path -> Bytes ->
-        Thk (Result Unit IoError -> OS) ->
-        OS
-      )) *
-      (write_text :: Thk (
-        Path -> String ->
-        Thk (Result Unit IoError -> OS) ->
-        OS
-      ))
-    in
-    let StdioModule
-      (Option : (VType) -> (VType))
-      (Result : (VType) -> (VType) -> (VType))
-      (String : VType)
-      (Reader : VType)
-      (Writer : VType)
-      (IoError : VType)
-      (OS : CType) =
-      (stdin :: Thk (Ret Reader)) *
-      (stdout :: Thk (Ret Writer)) *
-      (stderr :: Thk (Ret Writer)) *
-      (read_line :: Thk (
-        Thk (Result (Option String) IoError -> OS) ->
-        OS
-      )) *
-      (write :: Thk (
-        String ->
-        Thk (Result Unit IoError -> OS) ->
-        OS
-      )) *
-      (write_line :: Thk (
-        String ->
-        Thk (Result Unit IoError -> OS) ->
-        OS
-      )) *
-      (write_error :: Thk (
-        String ->
-        Thk (Result Unit IoError -> OS) ->
-        OS
-      )) *
-      (write_error_line :: Thk (
-        String ->
-        Thk (Result Unit IoError -> OS) ->
-        OS
-      ))
-    in
-    let ProcessModule
-      (List : (VType) -> (VType))
-      (Int64 : VType)
-      (String : VType)
-      (OS : CType) =
-      (arg_list :: Thk (Thk (List String -> OS) -> OS)) *
-      (random_int :: Thk (Thk (Int64 -> OS) -> OS)) *
-      (halt :: Thk OS) *
-      (panic :: Thk (String -> OS)) *
-      (exit :: Thk (Int64 -> OS))
-    in
+  let make_data_interface = @[import("interface/data.zy")] _ that
+  let make_numeric_interface = @[import("interface/numeric.zy")] _ that
+  let make_text_interface = @[import("interface/text.zy")] _ that
+  let make_system_interface = @[import("interface/system.zy")] _ that
+
+  begin
+    param (
+      (/core; /representations; /system) :
+      @[import("builtin.zy")] _
+    ) in
+    let (/VType; /CType; /Thk; /Ret; /Unit) = core in
+    let (/Scalar = Int8) = representations/i8 in
+    let (/Scalar = Int16) = representations/i16 in
+    let (/Scalar = Int32) = representations/i32 in
+    let (/Scalar = Int64) = representations/i64 in
+    let (/Scalar = UInt8) = representations/u8 in
+    let (/Scalar = UInt16) = representations/u16 in
+    let (/Scalar = UInt32) = representations/u32 in
+    let (/Scalar = UInt64) = representations/u64 in
+    let (/Scalar = Float32) = representations/f32 in
+    let (/Scalar = Float64) = representations/f64 in
+    let (/Scalar = Char) = representations/char in
+    let (/Scalar = String) = representations/string in
+    let (/Scalar = Bytes) = representations/bytes in
+    let (/Reader; /Writer; /OS) = system in
+    let (
+      = Prelude,
+      = BoolModule,
+      = OptionModule,
+      = ResultModule,
+      = ListModule,
+      = DataPackage,
+      ()
+    ) = make_data_interface core in
+    let (
+      = Additive,
+      = Multiplicative,
+      = PartialEquality,
+      = PartialOrder,
+      = Numeric,
+      = NumericInstance,
+      = PrimitiveIntegerModule,
+      = PrimitiveFloatModule,
+      = IntegerModule,
+      = FloatModule,
+      ()
+    ) = make_numeric_interface core in
+    let (
+      = CharModule,
+      = StringModule,
+      = BytesModule,
+      ()
+    ) = make_text_interface core in
+    let (
+      = IoModule,
+      = FsModule,
+      = StdioModule,
+      = ProcessModule,
+      ()
+    ) = make_system_interface core in
     let Std =
       exists (Bool = BoolType : VType) .
-      exists (
-        Option = OptionType :
-        (VType) -> (VType)
-      ) .
-      exists (
-        Result = ResultType :
-        (VType) -> (VType) -> (VType)
-      ) .
-      exists (
-        List = ListType :
-        (VType) -> (VType)
-      ) .
-      exists (Int8 = Int8Type as Int8 : VType) .
-      exists (Int16 = Int16Type as Int16 : VType) .
-      exists (Int32 = Int32Type as Int32 : VType) .
-      exists (Int64 = Int64Type as Int64 : VType) .
-      exists (UInt8 = UInt8Type as UInt8 : VType) .
-      exists (UInt16 = UInt16Type as UInt16 : VType) .
-      exists (UInt32 = UInt32Type as UInt32 : VType) .
-      exists (UInt64 = UInt64Type as UInt64 : VType) .
-      exists (Float32 = Float32Type as Float32 : VType) .
-      exists (Float64 = Float64Type as Float64 : VType) .
-      exists (Char = CharType as Char : VType) .
-      exists (String = StringType as String : VType) .
-      exists (Bytes = BytesType as Bytes : VType) .
-      exists (Reader = ReaderType as Reader : VType) .
-      exists (Writer = WriterType as Writer : VType) .
-      exists (Path = PathType : VType) .
-      exists (IoErrorKind = IoErrorKindType : VType) .
-      exists (IoError = IoErrorType : VType) .
-      exists (OS = OSType as OS : CType) .
-      exists (
-        Additive = AdditiveType as Additive :
-        (VType) -> (VType)
-      ) .
-      exists (
-        Multiplicative = MultiplicativeType as Multiplicative :
-        (VType) -> (VType)
-      ) .
-      exists (
-        PartialEquality = PartialEqualityType as PartialEquality :
-        (VType) -> (VType) -> (VType)
-      ) .
-      exists (
-        PartialOrder = PartialOrderType as PartialOrder :
-        (VType) -> (VType) -> (VType)
-      ) .
-      exists (
-        Numeric = NumericType as Numeric :
-        (VType) -> (VType) -> (VType)
-      ) .
-      exists (
-        NumericInstance = NumericInstanceType as NumericInstance :
-        (VType) -> (VType) -> (VType)
-      ) .
-        (prelude :: Prelude) *
-        (bool :: BoolModule BoolType) *
-        (option :: OptionModule BoolType OptionType) *
-        (result :: ResultModule BoolType ResultType) *
-        (list :: ListModule BoolType OptionType ListType Int64Type) *
-        (numeric ::
-          (int8_instance :: NumericInstanceType BoolType Int8Type) *
-          (int16_instance :: NumericInstanceType BoolType Int16Type) *
-          (int32_instance :: NumericInstanceType BoolType Int32Type) *
-          (int64_instance :: NumericInstanceType BoolType Int64Type) *
-          (uint8_instance :: NumericInstanceType BoolType UInt8Type) *
-          (uint16_instance :: NumericInstanceType BoolType UInt16Type) *
-          (uint32_instance :: NumericInstanceType BoolType UInt32Type) *
-          (uint64_instance :: NumericInstanceType BoolType UInt64Type) *
-          (float32_instance :: NumericInstanceType BoolType Float32Type) *
-          (float64_instance :: NumericInstanceType BoolType Float64Type) *
-          Unit) *
-        (primitives ::
-          (i8 :: PrimitiveIntegerModule Int8Type StringType) *
-          (i16 :: PrimitiveIntegerModule Int16Type StringType) *
-          (i32 :: PrimitiveIntegerModule Int32Type StringType) *
-          (i64 :: PrimitiveIntegerModule Int64Type StringType) *
-          (u8 :: PrimitiveIntegerModule UInt8Type StringType) *
-          (u16 :: PrimitiveIntegerModule UInt16Type StringType) *
-          (u32 :: PrimitiveIntegerModule UInt32Type StringType) *
-          (u64 :: PrimitiveIntegerModule UInt64Type StringType) *
-          (f32 :: PrimitiveFloatModule Float32Type StringType) *
-          (f64 :: PrimitiveFloatModule Float64Type StringType) *
-          Unit) *
-        (int8 :: IntegerModule BoolType Int8Type StringType) *
-        (int16 :: IntegerModule BoolType Int16Type StringType) *
-        (int32 :: IntegerModule BoolType Int32Type StringType) *
-        (int64 :: IntegerModule BoolType Int64Type StringType) *
-        (uint8 :: IntegerModule BoolType UInt8Type StringType) *
-        (uint16 :: IntegerModule BoolType UInt16Type StringType) *
-        (uint32 :: IntegerModule BoolType UInt32Type StringType) *
-        (uint64 :: IntegerModule BoolType UInt64Type StringType) *
-        (float32 :: FloatModule BoolType Float32Type StringType) *
-        (float64 :: FloatModule BoolType Float64Type StringType) *
-        (char :: CharModule OptionType CharType Int64Type StringType) *
-        (string :: StringModule
-          BoolType OptionType ListType Int64Type CharType StringType) *
-        (bytes :: BytesModule OptionType Int64Type StringType BytesType) *
-        (io :: IoModule
-          BoolType OptionType ResultType Int64Type StringType BytesType ReaderType
-          WriterType IoErrorKindType IoErrorType OSType) *
-        (fs :: FsModule
-          ResultType StringType BytesType ReaderType WriterType PathType IoErrorType
-          OSType) *
-        (stdio :: StdioModule
-          OptionType ResultType StringType ReaderType WriterType IoErrorType OSType) *
-        (process :: ProcessModule ListType Int64Type StringType OSType) *
-        Unit
+        exists
+          (
+            Option = OptionType :
+            VType -> VType
+          )
+        .
+          exists
+            (
+              Result = ResultType :
+              VType -> VType -> VType
+            )
+          .
+            exists
+              (
+                List = ListType :
+                VType -> VType
+              )
+            .
+              exists (Int8 = Int8Type as Int8 : VType) .
+                exists (Int16 = Int16Type as Int16 : VType) .
+                  exists (Int32 = Int32Type as Int32 : VType) .
+                    exists (Int64 = Int64Type as Int64 : VType) .
+                      exists (UInt8 = UInt8Type as UInt8 : VType) .
+                        exists (UInt16 = UInt16Type as UInt16 : VType) .
+                          exists (UInt32 = UInt32Type as UInt32 : VType) .
+                            exists (UInt64 = UInt64Type as UInt64 : VType) .
+                              exists (Float32 = Float32Type as Float32 : VType) .
+                                exists (Float64 = Float64Type as Float64 : VType) .
+                                  exists (Char = CharType as Char : VType) .
+                                    exists (String = StringType as String : VType) .
+                                      exists (Bytes = BytesType as Bytes : VType) .
+                                        exists (Reader = ReaderType as Reader : VType) .
+                                          exists (Writer = WriterType as Writer : VType) .
+                                            exists (Path = PathType : VType) .
+                                              exists (IoErrorKind = IoErrorKindType : VType) .
+                                                exists (IoError = IoErrorType : VType) .
+                                                  exists (OS = OSType as OS : CType) .
+                                                    exists
+                                                      (
+                                                        Additive = AdditiveType as Additive :
+                                                        VType -> VType
+                                                      )
+                                                    .
+                                                      exists
+                                                        (
+                                                          Multiplicative = MultiplicativeType as
+                                                          Multiplicative :
+                                                          VType -> VType
+                                                        )
+                                                      .
+                                                        exists
+                                                          (
+                                                            PartialEquality = PartialEqualityType as
+                                                            PartialEquality :
+                                                            VType -> VType -> VType
+                                                          )
+                                                        .
+                                                          exists
+                                                            (
+                                                              PartialOrder = PartialOrderType as
+                                                              PartialOrder :
+                                                              VType -> VType -> VType
+                                                            )
+                                                          .
+                                                            exists
+                                                              (
+                                                                Numeric = NumericType as Numeric :
+                                                                VType -> VType -> VType
+                                                              )
+                                                            .
+                                                              exists
+                                                                (
+                                                                  NumericInstance =
+                                                                  NumericInstanceType as
+                                                                  NumericInstance :
+                                                                  VType -> VType -> VType
+                                                                )
+                                                              .
+                                                                  (prelude :: Prelude)
+                                                                * (bool :: BoolModule BoolType)
+                                                                * (
+                                                                    option :: OptionModule BoolType
+                                                                      OptionType
+                                                                  )
+                                                                * (
+                                                                    result :: ResultModule BoolType
+                                                                      ResultType
+                                                                  )
+                                                                * (
+                                                                    list :: ListModule BoolType
+                                                                      OptionType ListType Int64Type
+                                                                  )
+                                                                * (
+                                                                    numeric ::
+                                                                      (
+                                                                        int8_instance ::
+                                                                        NumericInstanceType BoolType
+                                                                          Int8Type
+                                                                      )
+                                                                    * (
+                                                                        int16_instance ::
+                                                                        NumericInstanceType BoolType
+                                                                          Int16Type
+                                                                      )
+                                                                    * (
+                                                                        int32_instance ::
+                                                                        NumericInstanceType BoolType
+                                                                          Int32Type
+                                                                      )
+                                                                    * (
+                                                                        int64_instance ::
+                                                                        NumericInstanceType BoolType
+                                                                          Int64Type
+                                                                      )
+                                                                    * (
+                                                                        uint8_instance ::
+                                                                        NumericInstanceType BoolType
+                                                                          UInt8Type
+                                                                      )
+                                                                    * (
+                                                                        uint16_instance ::
+                                                                        NumericInstanceType BoolType
+                                                                          UInt16Type
+                                                                      )
+                                                                    * (
+                                                                        uint32_instance ::
+                                                                        NumericInstanceType BoolType
+                                                                          UInt32Type
+                                                                      )
+                                                                    * (
+                                                                        uint64_instance ::
+                                                                        NumericInstanceType BoolType
+                                                                          UInt64Type
+                                                                      )
+                                                                    * (
+                                                                        float32_instance ::
+                                                                        NumericInstanceType BoolType
+                                                                          Float32Type
+                                                                      )
+                                                                    * (
+                                                                        float64_instance ::
+                                                                        NumericInstanceType BoolType
+                                                                          Float64Type
+                                                                      )
+                                                                    * Unit
+                                                                  )
+                                                                * (
+                                                                    primitives ::
+                                                                      (
+                                                                        i8 :: PrimitiveIntegerModule
+                                                                          Int8Type StringType
+                                                                      )
+                                                                    * (
+                                                                        i16 ::
+                                                                        PrimitiveIntegerModule
+                                                                          Int16Type StringType
+                                                                      )
+                                                                    * (
+                                                                        i32 ::
+                                                                        PrimitiveIntegerModule
+                                                                          Int32Type StringType
+                                                                      )
+                                                                    * (
+                                                                        i64 ::
+                                                                        PrimitiveIntegerModule
+                                                                          Int64Type StringType
+                                                                      )
+                                                                    * (
+                                                                        u8 :: PrimitiveIntegerModule
+                                                                          UInt8Type StringType
+                                                                      )
+                                                                    * (
+                                                                        u16 ::
+                                                                        PrimitiveIntegerModule
+                                                                          UInt16Type StringType
+                                                                      )
+                                                                    * (
+                                                                        u32 ::
+                                                                        PrimitiveIntegerModule
+                                                                          UInt32Type StringType
+                                                                      )
+                                                                    * (
+                                                                        u64 ::
+                                                                        PrimitiveIntegerModule
+                                                                          UInt64Type StringType
+                                                                      )
+                                                                    * (
+                                                                        f32 :: PrimitiveFloatModule
+                                                                          Float32Type StringType
+                                                                      )
+                                                                    * (
+                                                                        f64 :: PrimitiveFloatModule
+                                                                          Float64Type StringType
+                                                                      )
+                                                                    * Unit
+                                                                  )
+                                                                * (
+                                                                    int8 :: IntegerModule BoolType
+                                                                      Int8Type StringType
+                                                                  )
+                                                                * (
+                                                                    int16 :: IntegerModule BoolType
+                                                                      Int16Type StringType
+                                                                  )
+                                                                * (
+                                                                    int32 :: IntegerModule BoolType
+                                                                      Int32Type StringType
+                                                                  )
+                                                                * (
+                                                                    int64 :: IntegerModule BoolType
+                                                                      Int64Type StringType
+                                                                  )
+                                                                * (
+                                                                    uint8 :: IntegerModule BoolType
+                                                                      UInt8Type StringType
+                                                                  )
+                                                                * (
+                                                                    uint16 :: IntegerModule BoolType
+                                                                      UInt16Type StringType
+                                                                  )
+                                                                * (
+                                                                    uint32 :: IntegerModule BoolType
+                                                                      UInt32Type StringType
+                                                                  )
+                                                                * (
+                                                                    uint64 :: IntegerModule BoolType
+                                                                      UInt64Type StringType
+                                                                  )
+                                                                * (
+                                                                    float32 :: FloatModule BoolType
+                                                                      Float32Type StringType
+                                                                  )
+                                                                * (
+                                                                    float64 :: FloatModule BoolType
+                                                                      Float64Type StringType
+                                                                  )
+                                                                * (
+                                                                    char :: CharModule OptionType
+                                                                      CharType Int64Type StringType
+                                                                  )
+                                                                * (
+                                                                    string :: StringModule
+                                                                      BoolType OptionType ListType
+                                                                      Int64Type CharType StringType
+                                                                  )
+                                                                * (
+                                                                    bytes :: BytesModule OptionType
+                                                                      Int64Type StringType BytesType
+                                                                  )
+                                                                * (
+                                                                    io :: IoModule
+                                                                      BoolType OptionType ResultType
+                                                                      Int64Type StringType BytesType
+                                                                      ReaderType
+                                                                      WriterType IoErrorKindType
+                                                                      IoErrorType OSType
+                                                                  )
+                                                                * (
+                                                                    fs :: FsModule
+                                                                      ResultType StringType
+                                                                      BytesType ReaderType
+                                                                      WriterType PathType
+                                                                      IoErrorType
+                                                                      OSType
+                                                                  )
+                                                                * (
+                                                                    stdio :: StdioModule
+                                                                      OptionType ResultType
+                                                                      StringType ReaderType
+                                                                      WriterType IoErrorType OSType
+                                                                  )
+                                                                * (
+                                                                    process :: ProcessModule
+                                                                      ListType Int64Type StringType
+                                                                      OSType
+                                                                  )
+                                                                * Unit
     in
     let Interface =
       exists (Prelude = PreludeType as Prelude : VType) .
-      exists (
-        Additive = AdditiveType as Additive :
-        (VType) -> (VType)
-      ) .
-      exists (
-        Multiplicative = MultiplicativeType as Multiplicative :
-        (VType) -> (VType)
-      ) .
-      exists (
-        PartialEquality = PartialEqualityType as PartialEquality :
-        (VType) -> (VType) -> (VType)
-      ) .
-      exists (
-        PartialOrder = PartialOrderType as PartialOrder :
-        (VType) -> (VType) -> (VType)
-      ) .
-      exists (
-        Numeric = NumericType as Numeric :
-        (VType) -> (VType) -> (VType)
-      ) .
-      exists (
-        NumericInstance = NumericInstanceType as NumericInstance :
-        (VType) -> (VType) -> (VType)
-      ) .
-      exists (
-        IntegerModule = IntegerModuleType as IntegerModule :
-        (VType) -> (VType) -> (VType) -> (VType)
-      ) .
-      exists (
-        FloatModule = FloatModuleType as FloatModule :
-        (VType) -> (VType) -> (VType) -> (VType)
-      ) .
-      exists (
-        PrimitiveIntegerModule = PrimitiveIntegerModuleType as PrimitiveIntegerModule :
-        (VType) -> (VType) -> (VType)
-      ) .
-      exists (
-        PrimitiveFloatModule = PrimitiveFloatModuleType as PrimitiveFloatModule :
-        (VType) -> (VType) -> (VType)
-      ) .
-      exists (Std = PackageType as Std : VType) .
-        Unit
+        exists
+          (
+            Additive = AdditiveType as Additive :
+            VType -> VType
+          )
+        .
+          exists
+            (
+              Multiplicative = MultiplicativeType as Multiplicative :
+              VType -> VType
+            )
+          .
+            exists
+              (
+                PartialEquality = PartialEqualityType as PartialEquality :
+                VType -> VType -> VType
+              )
+            .
+              exists
+                (
+                  PartialOrder = PartialOrderType as PartialOrder :
+                  VType -> VType -> VType
+                )
+              .
+                exists
+                  (
+                    Numeric = NumericType as Numeric :
+                    VType -> VType -> VType
+                  )
+                .
+                  exists
+                    (
+                      NumericInstance = NumericInstanceType as NumericInstance :
+                      VType -> VType -> VType
+                    )
+                  .
+                    exists
+                      (
+                        IntegerModule = IntegerModuleType as IntegerModule :
+                        VType -> VType -> VType -> VType
+                      )
+                    .
+                      exists
+                        (
+                          FloatModule = FloatModuleType as FloatModule :
+                          VType -> VType -> VType -> VType
+                        )
+                      .
+                        exists
+                          (
+                            PrimitiveIntegerModule = PrimitiveIntegerModuleType as
+                            PrimitiveIntegerModule :
+                            VType -> VType -> VType
+                          )
+                        .
+                          exists
+                            (
+                              PrimitiveFloatModule = PrimitiveFloatModuleType as
+                              PrimitiveFloatModule :
+                              VType -> VType -> VType
+                            )
+                          .
+                            exists (Std = PackageType as Std : VType) .
+                              Unit
     in
-    ((
-      Prelude = Prelude,
-      Additive = Additive,
-      Multiplicative = Multiplicative,
-      PartialEquality = PartialEquality,
-      PartialOrder = PartialOrder,
-      Numeric = Numeric,
-      NumericInstance = NumericInstance,
-      IntegerModule = IntegerModule,
-      FloatModule = FloatModule,
-      PrimitiveIntegerModule = PrimitiveIntegerModule,
-      PrimitiveFloatModule = PrimitiveFloatModule,
-      Std = Std,
-      ()
-    ) : Interface)
+    (
+      (
+        = Prelude,
+        = Additive,
+        = Multiplicative,
+        = PartialEquality,
+        = PartialOrder,
+        = Numeric,
+        = NumericInstance,
+        = IntegerModule,
+        = FloatModule,
+        = PrimitiveIntegerModule,
+        = PrimitiveFloatModule,
+        = Std,
+        ()
+      )
+      : Interface
+    )
+  end
 end

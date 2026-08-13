@@ -1,0 +1,39 @@
+  (
+    @[builtin(bytes_empty)] (
+      empty :: (@[intrinsic(thk)] _) ((@[intrinsic(ret)] _) (@[intrinsic(bytes)] _))
+    )
+  )
+* (
+    @[builtin(bytes_length)] (
+      length :: (@[intrinsic(thk)] _) (
+        (@[intrinsic(bytes)] _) -> (@[intrinsic(ret)] _) (@[intrinsic(i64)] _)
+      )
+    )
+  )
+* (
+    @[builtin(bytes_append)] (
+      append :: (@[intrinsic(thk)] _) (
+           (@[intrinsic(bytes)] _)
+        -> (@[intrinsic(bytes)] _)
+        -> (@[intrinsic(ret)] _) (@[intrinsic(bytes)] _)
+      )
+    )
+  )
+* (
+    @[builtin(bytes_from_str)] (
+      from_string :: (@[intrinsic(thk)] _) (
+        (@[intrinsic(string)] _) -> (@[intrinsic(ret)] _) (@[intrinsic(bytes)] _)
+      )
+    )
+  )
+* (
+    @[builtin(bytes_to_str)] (
+      to_string :: (@[intrinsic(thk)] _) (
+        forall (R : @[intrinsic(ctype)] _) .
+             (@[intrinsic(bytes)] _)
+          -> (@[intrinsic(thk)] _) R
+          -> (@[intrinsic(thk)] _) ((@[intrinsic(string)] _) -> R)
+          -> R
+      )
+    )
+  )

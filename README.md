@@ -19,9 +19,10 @@ Create a file `hello-world.zy` in the repository root:
 
 ```zydeco
 param (
-  (/Ret; /Unit; /String; /stdio; /process) :
+  (/system) :
   @[import("lib/std/builtin.zy")] _
 ) in
+  let (/stdio; /process) = system in
   ! (stdio/write_line) "hello, world!" { ! (process/exit) 0 }
 ```
 

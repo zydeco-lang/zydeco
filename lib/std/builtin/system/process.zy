@@ -1,0 +1,4 @@
+param OS : @[intrinsic(ctype)] _ in
+@[builtin(exit)] (
+  exit :: (@[intrinsic(thk)] _) ((@[intrinsic(i64)] _) -> OS)
+)

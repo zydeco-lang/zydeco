@@ -7,9 +7,10 @@
 
 begin
   param (
-    (/VType; /Thk; /Ret; /Unit) :
+    (/core) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
+  let (/VType; /Thk; /Ret; /Unit) = core that
   def Option (A : VType) =
     data
     | +None : Unit

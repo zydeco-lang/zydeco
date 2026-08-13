@@ -1,0 +1,14 @@
+exists
+  (VType as @[intrinsic(vtype)] _)
+  (CType as @[intrinsic(ctype)] _)
+  (
+    Thk = CoreThk as @[intrinsic(thk)] _ :
+    (@[intrinsic(ctype)] _) -> (@[intrinsic(vtype)] _)
+  )
+  (
+    Ret = CoreRet as @[intrinsic(ret)] _ :
+    (@[intrinsic(vtype)] _) -> (@[intrinsic(ctype)] _)
+  )
+  (Unit = CoreUnit as @[intrinsic(unit)] _ : @[intrinsic(vtype)] _)
+.
+  @[intrinsic(unit)] _

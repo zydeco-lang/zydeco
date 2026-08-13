@@ -2735,7 +2735,7 @@ mod tests {
             "begin\n",
             "  param (\n",
             "    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /String; /OS; /int64; /string; /stdio; /process) :\n",
-            "    @[import(\"../../lib/std/builtin.zy\")] _\n",
+            "    @[import(\"package.zy\")] _\n",
             "  ) that\n",
             "  _\n",
             "end\n",
@@ -2766,7 +2766,7 @@ mod tests {
             "begin\n",
             "  param (\n",
             "    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /Float64; /Char; /String; /Bytes; /Reader; /Writer; /OS) :\n",
-            "    @[import(\"builtin.zy\")] _\n",
+            "    @[import(\"package.zy\")] _\n",
             "  ) in\n",
             "  _\n",
             "end\n",
@@ -3355,14 +3355,14 @@ mod tests {
     #[test]
     fn records_standard_library_named_term_punning_backlog() {
         let sources = [
-            ("bool.zy", include_str!("../../../../lib/std/bool.zy"), 11),
+            ("bool.zy", include_str!("../../../../lib/std/data/bool.zy"), 11),
             ("interface.zy", include_str!("../../../../lib/std/interface.zy"), 12),
-            ("io-types.zy", include_str!("../../../../lib/std/io-types.zy"), 18),
-            ("list.zy", include_str!("../../../../lib/std/list.zy"), 11),
-            ("monad.zy", include_str!("../../../../lib/std/monad.zy"), 2),
-            ("option.zy", include_str!("../../../../lib/std/option.zy"), 9),
-            ("result.zy", include_str!("../../../../lib/std/result.zy"), 8),
-            ("std.zy", include_str!("../../../../lib/std/std.zy"), 53),
+            ("io-types.zy", include_str!("../../../../lib/std/system/types.zy"), 18),
+            ("list.zy", include_str!("../../../../lib/std/data/list.zy"), 11),
+            ("monad.zy", include_str!("../../../../lib/std/control/monad.zy"), 2),
+            ("option.zy", include_str!("../../../../lib/std/data/option.zy"), 9),
+            ("result.zy", include_str!("../../../../lib/std/data/result.zy"), 8),
+            ("std.zy", include_str!("../../../../lib/std/std.zy"), 43),
         ];
 
         let observed = sources
@@ -3378,20 +3378,20 @@ mod tests {
             })
             .sum::<usize>();
 
-        assert_eq!(observed, 124);
+        assert_eq!(observed, 114);
     }
 
     #[test]
     fn standard_library_pretty_printing_reparses_idempotently() {
         let sources = [
-            ("bool.zy", include_str!("../../../../lib/std/bool.zy")),
+            ("bool.zy", include_str!("../../../../lib/std/data/bool.zy")),
             ("builtin.zy", include_str!("../../../../lib/std/builtin.zy")),
             ("interface.zy", include_str!("../../../../lib/std/interface.zy")),
-            ("io-types.zy", include_str!("../../../../lib/std/io-types.zy")),
-            ("list.zy", include_str!("../../../../lib/std/list.zy")),
-            ("monad.zy", include_str!("../../../../lib/std/monad.zy")),
-            ("option.zy", include_str!("../../../../lib/std/option.zy")),
-            ("result.zy", include_str!("../../../../lib/std/result.zy")),
+            ("io-types.zy", include_str!("../../../../lib/std/system/types.zy")),
+            ("list.zy", include_str!("../../../../lib/std/data/list.zy")),
+            ("monad.zy", include_str!("../../../../lib/std/control/monad.zy")),
+            ("option.zy", include_str!("../../../../lib/std/data/option.zy")),
+            ("result.zy", include_str!("../../../../lib/std/data/result.zy")),
             ("std.zy", include_str!("../../../../lib/std/std.zy")),
         ];
 

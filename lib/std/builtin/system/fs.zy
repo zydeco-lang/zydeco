@@ -1,0 +1,39 @@
+param Reader : @[intrinsic(vtype)] _ in
+param Writer : @[intrinsic(vtype)] _ in
+param OS : @[intrinsic(ctype)] _ in
+  (
+    @[builtin(fs_open_reader)] (
+      open_reader :: (@[intrinsic(thk)] _) (
+           (@[intrinsic(string)] _)
+        -> (@[intrinsic(thk)] _) (
+             (@[intrinsic(i64)] _) -> (@[intrinsic(string)] _) -> OS
+           )
+        -> (@[intrinsic(thk)] _) (Reader -> OS)
+        -> OS
+      )
+    )
+  )
+* (
+    @[builtin(fs_create_writer)] (
+      create_writer :: (@[intrinsic(thk)] _) (
+           (@[intrinsic(string)] _)
+        -> (@[intrinsic(thk)] _) (
+             (@[intrinsic(i64)] _) -> (@[intrinsic(string)] _) -> OS
+           )
+        -> (@[intrinsic(thk)] _) (Writer -> OS)
+        -> OS
+      )
+    )
+  )
+* (
+    @[builtin(fs_append_writer)] (
+      append_writer :: (@[intrinsic(thk)] _) (
+           (@[intrinsic(string)] _)
+        -> (@[intrinsic(thk)] _) (
+             (@[intrinsic(i64)] _) -> (@[intrinsic(string)] _) -> OS
+           )
+        -> (@[intrinsic(thk)] _) (Writer -> OS)
+        -> OS
+      )
+    )
+  )

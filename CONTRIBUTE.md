@@ -100,9 +100,10 @@ Source dependencies are ordinary term imports written at their use sites:
 
 ```zydeco
 param (
-  (/process) :
+  (/system) :
   @[import("../std/builtin.zy")] _
 ) in
+  let (/process) = system in
   ! (process/exit) 42
 ```
 

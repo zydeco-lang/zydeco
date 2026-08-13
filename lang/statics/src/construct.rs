@@ -484,15 +484,15 @@ where
         Alloc::alloc(tycker, App(ty_1, ty_2), kd_b, env)
     }
 }
-impl<'a> Construct<Tycker<'a>, TypeId> for CharTy {
+impl<'a> Construct<Tycker<'a>, TypeId> for PrimitiveTy {
     fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        let AnnId::Type(ty) = env[tycker.prim.char.get()] else { unreachable!() };
-        ty
-    }
-}
-impl<'a> Construct<Tycker<'a>, TypeId> for StringTy {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        let AnnId::Type(ty) = env[tycker.prim.string.get()] else { unreachable!() };
+        if let Some(ty) = tycker.statics.intrinsics.primitives.get(&self.0).copied() {
+            return ty;
+        }
+        let primitive = self.0;
+        let vtype = VType.build(tycker, env);
+        let ty = Alloc::alloc(tycker, PrimitiveTy(primitive), vtype, env);
+        tycker.statics.intrinsics.primitives.insert(primitive, ty);
         ty
     }
 }

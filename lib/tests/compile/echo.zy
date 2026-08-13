@@ -1,8 +1,10 @@
 begin
   param (
-    (/Thk; /OS; /stdio) :
+    (/core; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/Thk) = core that
+  let (/OS; /stdio) = system that
 
   fix (loop : Thk OS) =>
     ! (stdio/read_line) {

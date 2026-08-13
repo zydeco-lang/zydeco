@@ -1,7 +1,8 @@
 param (
-  (/VType; /CType; /Thk; /Ret; /Unit) :
-  @[import("builtin.zy")] _
+  (/core) :
+  @[import("../builtin.zy")] _
 ) in
+let (/VType; /CType; /Thk; /Ret; /Unit) = core in
 begin
   def Bool =
     data
@@ -57,33 +58,36 @@ begin
   that
   let Interface =
     exists (Bool = AbstractBool : VType) .
-      (true :: AbstractBool) *
-      (false :: AbstractBool) *
-      (not :: Thk (AbstractBool -> Ret AbstractBool)) *
-      (and :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool)) *
-      (or :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool)) *
-      (eq :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool)) *
-      (xor :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool)) *
-      (nand :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool)) *
-      (nor :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool)) *
-      (if :: Thk (
-        forall (B : CType) .
-          AbstractBool -> Thk B -> Thk B -> B
-      ))
+        (true :: AbstractBool)
+      * (false :: AbstractBool)
+      * (not :: Thk (AbstractBool -> Ret AbstractBool))
+      * (and :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool))
+      * (or :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool))
+      * (eq :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool))
+      * (xor :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool))
+      * (nand :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool))
+      * (nor :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool))
+      * (
+          if :: Thk (
+            forall (B : CType) .
+              AbstractBool -> Thk B -> Thk B -> B
+          )
+        )
   that
 
   (
-    Bool = Bool,
-    true = true,
-    false = false,
-    not = not,
-    and = and,
-    or = or,
-    eq = eq,
-    xor = xor,
-    nand = nand,
-    nor = nor,
-    if = if,
-  ) : Interface
+    = Bool,
+    = true,
+    = false,
+    = not,
+    = and,
+    = or,
+    = eq,
+    = xor,
+    = nand,
+    = nor,
+    = if
+  )
+  : Interface
 end
 -- end module Bool

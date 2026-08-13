@@ -1,8 +1,10 @@
 begin
   param (
-    (/int64; /process) :
+    (/numeric; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let (/process) = system that
 
   do quotient <- ! (int64/div) -7 3;
   do remainder <- ! (int64/mod) -7 3;

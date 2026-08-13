@@ -1,0 +1,90 @@
+param Reader : @[intrinsic(vtype)] _ in
+param Writer : @[intrinsic(vtype)] _ in
+param OS : @[intrinsic(ctype)] _ in
+  (
+    @[builtin(io_read)] (
+      read :: (@[intrinsic(thk)] _) (
+           Reader
+        -> (@[intrinsic(i64)] _)
+        -> (@[intrinsic(thk)] _) (
+             (@[intrinsic(i64)] _) -> (@[intrinsic(string)] _) -> OS
+           )
+        -> (@[intrinsic(thk)] _) ((@[intrinsic(bytes)] _) -> OS)
+        -> OS
+      )
+    )
+  )
+* (
+    @[builtin(io_read_line)] (
+      read_line :: (@[intrinsic(thk)] _) (
+           Reader
+        -> (@[intrinsic(thk)] _) (
+             (@[intrinsic(i64)] _) -> (@[intrinsic(string)] _) -> OS
+           )
+        -> (@[intrinsic(thk)] _) OS
+        -> (@[intrinsic(thk)] _) ((@[intrinsic(bytes)] _) -> OS)
+        -> OS
+      )
+    )
+  )
+* (
+    @[builtin(io_read_all)] (
+      read_all :: (@[intrinsic(thk)] _) (
+           Reader
+        -> (@[intrinsic(thk)] _) (
+             (@[intrinsic(i64)] _) -> (@[intrinsic(string)] _) -> OS
+           )
+        -> (@[intrinsic(thk)] _) ((@[intrinsic(bytes)] _) -> OS)
+        -> OS
+      )
+    )
+  )
+* (
+    @[builtin(io_write_all)] (
+      write_all :: (@[intrinsic(thk)] _) (
+           Writer
+        -> (@[intrinsic(bytes)] _)
+        -> (@[intrinsic(thk)] _) (
+             (@[intrinsic(i64)] _) -> (@[intrinsic(string)] _) -> OS
+           )
+        -> (@[intrinsic(thk)] _) OS
+        -> OS
+      )
+    )
+  )
+* (
+    @[builtin(io_flush)] (
+      flush :: (@[intrinsic(thk)] _) (
+           Writer
+        -> (@[intrinsic(thk)] _) (
+             (@[intrinsic(i64)] _) -> (@[intrinsic(string)] _) -> OS
+           )
+        -> (@[intrinsic(thk)] _) OS
+        -> OS
+      )
+    )
+  )
+* (
+    @[builtin(io_close_reader)] (
+      close_reader :: (@[intrinsic(thk)] _) (
+           Reader
+        -> (@[intrinsic(thk)] _) (
+             (@[intrinsic(i64)] _) -> (@[intrinsic(string)] _) -> OS
+           )
+        -> (@[intrinsic(thk)] _) OS
+        -> OS
+      )
+    )
+  )
+* (
+    @[builtin(io_close_writer)] (
+      close_writer :: (@[intrinsic(thk)] _) (
+           Writer
+        -> (@[intrinsic(thk)] _) (
+             (@[intrinsic(i64)] _) -> (@[intrinsic(string)] _) -> OS
+           )
+        -> (@[intrinsic(thk)] _) OS
+        -> OS
+      )
+    )
+  )

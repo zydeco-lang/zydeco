@@ -369,8 +369,7 @@ AllocType! {
     RetTy
     UnitTy
     OpaqueTy
-    CharTy
-    StringTy
+    PrimitiveTy
     OSTy
     ValueArrow
     ValueForall

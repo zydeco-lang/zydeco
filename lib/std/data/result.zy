@@ -1,0 +1,158 @@
+param (
+  (/core) :
+  @[import("../builtin.zy")] _
+) in
+let (/VType; /CType; /Thk; /Ret) = core in
+begin
+  def Result (A : VType) (E : VType) =
+    data
+    | +Ok : A
+    | +Err : E
+    end
+  that
+  def ! ok (A : VType) (E : VType) (value : A) : Ret (Result A E) =
+    ret +Ok(value)
+  that
+  def ! err (A : VType) (E : VType) (error : E) : Ret (Result A E) =
+    ret +Err(error)
+  that
+  def ! fold
+    (A : VType)
+    (E : VType)
+    (B : CType)
+    (result : Result A E)
+    (when_ok : Thk (A -> B))
+    (when_err : Thk (E -> B))
+  : B =
+    match result
+    | +Ok(value) => ! when_ok value
+    | +Err(error) => ! when_err error
+    end
+  that
+  def ! map
+    (A : VType)
+    (B : VType)
+    (E : VType)
+    (result : Result A E)
+    (transform : Thk (A -> Ret B))
+  : Ret (Result B E) =
+    match result
+    | +Ok(value) =>
+      do transformed <- ! transform value;
+      ! ok B E transformed
+    | +Err(error) => ! err B E error
+    end
+  that
+  def ! map_err
+    (A : VType)
+    (E : VType)
+    (F : VType)
+    (result : Result A E)
+    (transform : Thk (E -> Ret F))
+  : Ret (Result A F) =
+    match result
+    | +Ok(value) => ! ok A F value
+    | +Err(error) =>
+      do transformed <- ! transform error;
+      ! err A F transformed
+    end
+  that
+  def ! and_then
+    (A : VType)
+    (B : VType)
+    (E : VType)
+    (result : Result A E)
+    (transform : Thk (A -> Ret (Result B E)))
+  : Ret (Result B E) =
+    match result
+    | +Ok(value) => ! transform value
+    | +Err(error) => ! err B E error
+    end
+  that
+  def ! unwrap_or
+    (A : VType)
+    (E : VType)
+    (result : Result A E)
+    (default : A)
+  : Ret A =
+    match result
+    | +Ok(value) => ret value
+    | +Err(_) => ret default
+    end
+  that
+  let Interface =
+    exists
+      (
+        Result = AbstractResult :
+        VType -> VType -> VType
+      )
+    .
+        (
+          ok :: Thk (
+            forall (A : VType) .
+              forall (E : VType) .
+                A -> Ret (AbstractResult A E)
+          )
+        )
+      * (
+          err :: Thk (
+            forall (A : VType) .
+              forall (E : VType) .
+                E -> Ret (AbstractResult A E)
+          )
+        )
+      * (
+          fold :: Thk (
+            forall (A : VType) .
+              forall (E : VType) .
+                forall (B : CType) .
+                  AbstractResult A E -> Thk (A -> B) -> Thk (E -> B) -> B
+          )
+        )
+      * (
+          map :: Thk (
+            forall (A : VType) .
+              forall (B : VType) .
+                forall (E : VType) .
+                  AbstractResult A E -> Thk (A -> Ret B) -> Ret (AbstractResult B E)
+          )
+        )
+      * (
+          map_err :: Thk (
+            forall (A : VType) .
+              forall (E : VType) .
+                forall (F : VType) .
+                  AbstractResult A E -> Thk (E -> Ret F) -> Ret (AbstractResult A F)
+          )
+        )
+      * (
+          and_then :: Thk (
+            forall (A : VType) .
+              forall (B : VType) .
+                forall (E : VType) .
+                     AbstractResult A E
+                  -> Thk (A -> Ret (AbstractResult B E))
+                  -> Ret (AbstractResult B E)
+          )
+        )
+      * (
+          unwrap_or :: Thk (
+            forall (A : VType) .
+              forall (E : VType) .
+                AbstractResult A E -> A -> Ret A
+          )
+        )
+  that
+
+  (
+    = Result,
+    = ok,
+    = err,
+    = fold,
+    = map,
+    = map_err,
+    = and_then,
+    = unwrap_or
+  )
+  : Interface
+end

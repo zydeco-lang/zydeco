@@ -1,8 +1,12 @@
 begin
   param (
-    (/VType; /Thk; /Ret; /Int64; /Char; /process) :
+    (/core; /representations; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/VType; /Thk; /Ret) = core that
+  let (/Scalar = Int64) = representations/i64 that
+  let (/Scalar = Char) = representations/char that
+  let (/process) = system that
 
   def Seal (X : VType) (A : VType) =
     data

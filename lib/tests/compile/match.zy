@@ -6,9 +6,11 @@ begin
     end
   that
   param (
-    (/Unit; /process) :
+    (/core; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/Unit) = core that
+  let (/process) = system that
 
   let x : Bool = +False() in
   match x

@@ -300,9 +300,17 @@ or value package directly whenever their residual term is pure.
 Computation-producing packages continue to use the CBPV forms required by their effects.
 
 The standard-library components and their aggregate package use this pure boundary.
-Importing `bool.zy`, `option.zy`, `list.zy`, or `std.zy` yields a value-level package function;
-clients apply it and open its result with `let`.
+Importing `data/bool.zy`, `data/option.zy`, `data/list.zy`, or `std.zy` yields a value-level package function;
+clients apply it and open its result with `let`. The root Builtin, interface, and standard-package sources are
+composition boundaries; their contracts and implementations live in topic directories beneath `lib/std`.
 The operations exported inside those packages retain their computation types.
+
+The launcher-supplied Builtin contract is structurally divided into `core`, `representations`, `numeric`,
+`text`, and `system`. Fixed-width numbers, `Char`, `String`, and `Bytes` are compiler-canonical primitive types;
+their manifest packages can be assembled independently while retaining one identity. `Reader`, `Writer`, and
+`OS` remain abstract provider capabilities and share one generative `system` opening. This separates stable data
+layout from runtime ownership without adding a module runtime or type tags. See
+[`docs/ideas/primitive-packages.md`](docs/ideas/primitive-packages.md).
 
 Strings are immutable, shared UTF-8 values throughout the compiler and interpreter.
 The foundational text ABI distinguishes encoded byte length from Unicode scalar length,
@@ -314,7 +322,7 @@ without exposing either backend's storage layout.
 
 ## Relative Monads and Monadic Blocks
 
-Relative monads are defined as codata in the standard library (see `lib/std/monad.zy`).
+Relative monads are defined as codata in the standard library (see `lib/std/control/monad.zy`).
 The module is a pure package-dependent function from Builtin to the `Monad` and `Algebra` type package,
 so importing and opening it requires neither a thunk nor a returned computation.
 Zydeco also implements *monadic blocks*, a generalized do-notation selected by the `@[monadic]` metadata annotation.

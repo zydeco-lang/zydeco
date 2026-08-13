@@ -2,9 +2,12 @@
 -- `Ret' A` and the `Ret A` primitive are isomorphic to each other.
 begin
   param (
-    (/VType; /CType; /Thk; /Ret; /Int64; /OS; /process) :
+    (/core; /representations; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/VType; /CType; /Thk; /Ret) = core that
+  let (/Scalar = Int64) = representations/i64 that
+  let (/OS; /process) = system that
 
   let Ret' (A : VType) =
     forall (R : CType) .

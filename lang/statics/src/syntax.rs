@@ -254,13 +254,9 @@ pub struct UnitTy;
 #[derive(Clone, Debug)]
 pub struct OpaqueTy;
 
-/// `Char`
+/// A fixed host representation such as `Int8`, `Float64`, or `String`.
 #[derive(Clone, Debug)]
-pub struct CharTy;
-
-/// `String`
-#[derive(Clone, Debug)]
-pub struct StringTy;
+pub struct PrimitiveTy(pub zydeco_syntax::PrimitiveType);
 
 /// `OS`
 #[derive(Clone, Debug)]
@@ -460,8 +456,7 @@ pub enum Type {
     Ret(RetTy),
     Unit(UnitTy),
     Opaque(OpaqueTy),
-    Char(CharTy),
-    String(StringTy),
+    Primitive(PrimitiveTy),
     OS(OSTy),
     VArrow(ValueArrow),
     VForall(ValueForall),

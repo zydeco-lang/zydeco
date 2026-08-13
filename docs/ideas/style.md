@@ -19,9 +19,12 @@ before producing a computation or package:
 begin
   let make_std = @[import("../std/std.zy")] _ that
   param (
-    (/VType; /Thk; /String; /OS; builtin) :
+    (/core; /representations; /system; builtin) :
     @[import("../std/builtin.zy")] _
   ) that
+  let (/VType; /Thk) = core that
+  let (/Scalar = String) = representations/string that
+  let (/OS) = system that
 
   ...
 end
@@ -211,18 +214,20 @@ and bind only the public types and module values the consumer needs:
 
 ```zydeco
 param (
-  (/VType; /Thk; /String; builtin) :
+  (/core; /representations; builtin) :
   @[import("../std/builtin.zy")] _
 ) in
+let (/VType; /Thk) = core in
+let (/Scalar = String) = representations/string in
 let (/int64; /process) = make_std builtin in
 ...
 ```
 
-Selected type fields and module values share the same package opening.
-Keep all related selections in that group, place type fields before value modules,
-and retain their interface order when it makes the list easier to compare with the provider.
-Plain `/Int64` selects the public field `Int64` under the same local name.
-Use an explicit rename such as `/String = Text` only when the consumer has a clearer role name.
+Selected outer groups share the same Builtin value. Open each selected group once, place manifest type fields
+before value modules, and retain their interface order when it makes the list easier to compare with the provider.
+Fixed representations use an associated field, such as
+`let (/Scalar = Int64) = representations/i64 in`.
+Use a different explicit rename only when the consumer has a clearer role name.
 Select Builtin operations as module values and keep individual calls qualified,
 such as `int64/add` and `process/exit`.
 A final ordinary pattern such as `builtin` retains the complete package for forwarding,
@@ -235,9 +240,11 @@ Other sources acquire intrinsic kinds, types, and host operations by importing t
 and projecting only their dependencies, which keeps the names subject to ordinary language-level resolution
 without repeating the complete host interface.
 
-Within that signature, host-type roles are accepted only on abstract existential patterns,
-as in `exists @[builtin(int64)] (Int64 : VType) . ...`.
-This keeps the role beside the identity it classifies and allows all host types to inhabit one telescope.
+Within that signature, fixed representations use canonical primitive intrinsics such as
+`@[intrinsic(i64)] _` and are re-exported through manifest `Scalar` packages.
+Host-type roles are reserved for abstract capability patterns,
+as in `exists @[builtin(reader)] (Reader : VType) . ...`.
+This keeps generative resource identities beside the provider boundary that owns them.
 Host-operation roles are accepted only on term classifiers,
 where they should annotate the corresponding labeled classifier.
 

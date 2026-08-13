@@ -9,8 +9,54 @@ but never construct library-defined `Bool`, `Option`, `Result`, or `List` values
 and assembles a value of that public package type.
 
 This separation keeps algebraic data in the language.
-The interpreter and native runtime only need to agree on the small Builtin ABI, while `bool.zy`, `option.zy`,
-`result.zy`, `list.zy`, and the derived operations in `std.zy` remain ordinary Zydeco code.
+The interpreter and native runtime only need to agree on the small Builtin ABI, while the files under `data/`
+and the derived operations in the topic packages remain ordinary Zydeco code.
+
+## Source layout
+
+The three files at the root of this directory are composition boundaries, not implementation buckets:
+
+```text
+builtin.zy                 complete host ABI and shared system witness telescope
+interface.zy               public `Std` signature and exported interface types
+std.zy                     wiring for the public package
+
+builtin/core.zy            CBPV kinds and constructors
+builtin/representations.zy fixed representation packages
+builtin/numeric/*.zy       exact-width primitive operations
+builtin/text/*.zy          Char, String, and Bytes host operations
+builtin/system/*.zy        I/O, filesystem, streams, arguments, randomness, process
+
+data/*.zy                  Bool, Option, Result, List, and their composed package
+interface/*.zy             data, numeric, text, and system contracts
+numeric/{integer,float}.zy explicitly polymorphic derived numeric builders
+text/package.zy            cross-representation text operations
+system/{types,package}.zy  shared system data and capability-preserving assembly
+control/monad.zy           reusable control abstractions
+```
+
+Leaf sources are independently checkable package values or package functions. Topic package files assemble values
+whose operations genuinely share several leaves. In particular, the public system package keeps one opening for
+`Reader`, `Writer`, and `OS`; splitting that opening would give related I/O operations incompatible abstract types.
+No compatibility forwarding files remain at the old flat paths.
+
+## Builtin packages
+
+The host contract is one launcher-supplied value divided into structural dependency groups:
+
+- `core`: `VType`, `CType`, `Thk`, `Ret`, and `Unit`.
+- `representations`: manifest `Scalar` packages for `i8` through `i64`, `u8` through `u64`, `f32`, `f64`,
+  `char`, `string`, and `bytes`.
+- `numeric`: exact-width arithmetic, branch comparisons, and rendering, with a manifest associated `Scalar`.
+- `text`: operations crossing `Char`, `String`, `Bytes`, and `Int64`.
+- `system`: abstract `Reader`, `Writer`, and `OS` capabilities plus I/O, filesystem, standard stream,
+  argument, randomness, and process operations.
+
+Fixed representations are compiler-canonical intrinsics, so independent packages that select `i64` share one
+`Int64` identity. Only the runtime-owned system capabilities are generative existential types. Consumers first
+project the groups they need and then open those narrower packages; the composition root retains the complete
+Builtin value when it must pass the dependency onward. See
+[Modular primitive packages](../../docs/ideas/primitive-packages.md) for the design and usage examples.
 
 ## Text model
 

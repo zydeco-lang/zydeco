@@ -2,9 +2,11 @@
 -- wrappers support chained patterns and projections.
 begin
   param (
-    (/Int64; /int64; /process) :
+    (/numeric; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let (/process) = system that
 
   let Inner =
     (x :: Int64) * Int64

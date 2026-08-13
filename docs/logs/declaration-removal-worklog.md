@@ -700,7 +700,7 @@ One still reaches the checker without enough information to synthesize a constru
 while the other still fails resolution on its intended free variable.
 Source-driver regressions assert those phase boundaries directly, and `lib/tests/fail/proj.toml` has been removed.
 
-`lib/std/monad.zy` now defines `Monad` and `Algebra` as ordinary transparent types and returns them
+`lib/std/control/monad.zy` now defines `Monad` and `Algebra` as ordinary transparent types and returns them
 in a value package whose existential witnesses have manifest equations.
 A semantic monadic node lowered from `@[monadic]` carries two hidden variable terms for these names.
 Resolution therefore selects the definitions visible at that exact lexical site
@@ -812,7 +812,7 @@ during elaboration, deep cloning, and value replacement.
 A focused StackIR test checks the index directly,
 while the migrated addition program verifies the complete closure-conversion and repeated-normalization pipeline.
 
-`lib/std/bool.zy`, `option.zy`, and `list.zy` establish the first reusable algebraic component boundaries.
+`lib/std/data/bool.zy`, `option.zy`, and `list.zy` establish the first reusable algebraic component boundaries.
 Each file is a pure package-dependent function that produces an existential value package
 and keeps its constructors lexical to the provider.
 The Boolean package exports introduction values, ordinary operations, and a computation-polymorphic `branch`.
@@ -854,7 +854,7 @@ over the result.
 Block elaboration already lowers `param` to abstraction, `let` and `def` to scoped bindings,
 and `begin ... end` to its residual term.
 With the two pure classifiers available, those forms can now produce types and values directly as well as computations.
-`lib/std/monad.zy`, the algebraic component modules, and the aggregate `lib/std/std.zy` use this boundary:
+`lib/std/control/monad.zy`, the algebraic component modules, and the aggregate `lib/std/std.zy` use this boundary:
 their Builtin parameters, transparent type definitions, and result packages need no outer thunk or `ret`.
 Consumers apply each module as a value and open the result with `let`; exported operations remain computation-typed.
 

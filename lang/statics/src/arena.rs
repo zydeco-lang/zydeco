@@ -93,6 +93,15 @@ impl BuiltinRoles {
         zydeco_utils::arena::ArenaAccess::get(&self.values, &entry).copied()
     }
 
+    pub fn transfer_value(
+        &mut self, source: TypeId, target: TypeId,
+    ) -> Result<(), BuiltinValueRole> {
+        match self.value(source) {
+            | Some(role) => self.attach_value(target, role),
+            | None => Ok(()),
+        }
+    }
+
     pub fn type_witnesses(&self, role: BuiltinTypeRole) -> impl Iterator<Item = AbstId> + '_ {
         self.witnesses.iter().filter_map(move |(witness, found)| {
             (*found == BuiltinRole::Type(role)).then_some(*witness)
@@ -124,6 +133,7 @@ pub struct IntrinsicStatics {
     pub(crate) thk: Option<TypeId>,
     pub(crate) ret: Option<TypeId>,
     pub(crate) unit: Option<TypeId>,
+    pub(crate) primitives: std::collections::BTreeMap<zydeco_syntax::PrimitiveType, TypeId>,
 }
 
 /// Typed arena plus annotation tables and translation metadata.

@@ -13,9 +13,12 @@ A consumer can open one package and select only the type identities and module v
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (/VType; /Thk; /String; /OS; builtin) :
+    (/core; /representations; /system; builtin) :
     @[import("../../std/builtin.zy")] _
   ) in
+  let (/VType; /Thk) = core in
+  let (/Scalar = String) = representations/string in
+  let (/OS) = system in
   let (/Result; /Path; /IoError; /result; /fs; /stdio; /process) = make_std builtin in
 
   ...
@@ -29,9 +32,10 @@ No `use`, `open`, module declaration, or import-specific binding form is added.
 
 ## The problem with complete unpacking
 
-The canonical Builtin signature is an existential telescope.
-Its abstract entries establish the identities of all fixed-width numeric types, `Char`, `String`,
-`Bytes`, `Reader`, `Writer`, and `OS`; later operation fields refer to those identities.
+The canonical Builtin signature contains manifest core and representation packages plus one existential
+capability telescope. Compiler-canonical intrinsics establish the identities of all fixed-width numeric types,
+`Char`, `String`, and `Bytes`; only `Reader`, `Writer`, and `OS` receive fresh provider witnesses.
+Later operation fields refer to those identities.
 The standard library adds another telescope for `Bool`, `Option`, `Result`, `List`, `Path`, and the I/O error types,
 followed by its module values.
 
@@ -55,9 +59,9 @@ The reader cannot tell which members are used, the positional shape is duplicate
 and an added public member causes unrelated edits.
 Replacing unused entries with `_` removes their names while retaining the same positional coupling.
 
-Separately sealing every module would create a different problem.
-Standard modules share identities: `fs/open_reader` produces the same `Reader` accepted by `io/read`,
-and `fs/read_bytes` produces the same `Bytes` understood by the bytes module.
+Separately opening every generative capability module would create a different problem.
+System modules share identities: `fs/open_reader` produces the same `Reader` accepted by `io/read`.
+Fixed representations such as `Bytes` are canonical and may be referenced independently.
 `Result`, `Option`, and `IoError` similarly cross module boundaries.
 The consumer must therefore open one shared package, rather than independently reopen a package
 for each selected module.
@@ -93,13 +97,16 @@ without copying the complete host ABI:
 
 ```zydeco
 param (
-  (/Bytes; /Reader; /io; builtin) :
+  (/representations; /system; builtin) :
   @[import("builtin.zy")] _
 ) in
+let (/Scalar = Bytes) = representations/bytes in
+let (/Reader; /io) = system in
 ...
 ```
 
-`/Bytes`, `/Reader`, and `/io` are the only local bindings introduced from the package.
+`/representations` and `/system` are the only local bindings introduced from the outer package;
+the following patterns select `Bytes`, `Reader`, and `io` from those narrower structural groups.
 Operations remain qualified, so this source calls `io/read` rather than introducing a generic `read` binding.
 The final `builtin` is an ordinary same-bindee alias for the complete package value.
 It is useful when this source forwards its dependency to another package-dependent function
@@ -164,19 +171,59 @@ Repeating elimination on independently produced package values retains the ordin
 
 ## Standard-library organization
 
-Builtin exposes host operations through small capability modules while keeping their shared base types
-at the package boundary:
+Builtin groups the host boundary by stability and purpose:
 
 ```text
-types:        Unit Int8 Int16 Int32 Int64 UInt8 UInt16 UInt32 UInt64
-              Float32 Float64 Char String Bytes Reader Writer OS
-capabilities: int8 int16 int32 int64 uint8 uint16 uint32 uint64
-              float32 float64 char string bytes io fs stdio args random process
+core:             VType CType Thk Ret Unit
+representations:  i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char string bytes
+numeric:          int8 int16 int32 int64 uint8 uint16 uint32 uint64 float32 float64
+text:             char string bytes
+system:           Reader Writer OS io fs stdio args random process
 ```
 
-A source selects the types needed in annotations and the capability modules it calls.
-Individual operations stay qualified, such as `int64/eq`, `string/append`, and `fs/open_reader`;
-this prevents generic names such as `eq`, `read`, and `write` from occupying every consumer's scope.
+Each representation child is a manifest package with an associated `Scalar` type. Each numeric child discloses
+the same `Scalar` identity beside its arithmetic and comparison operations. Text owns operations crossing
+`Char`, `String`, `Bytes`, and `Int64`; system keeps the generative capabilities and their operations in one
+opening. The full rationale is in [Modular primitive packages](primitive-packages.md).
+
+The source tree mirrors those semantic boundaries:
+
+```text
+lib/std/
+  builtin.zy
+  builtin/
+    core.zy
+    representations.zy
+    numeric.zy
+    numeric/{int8,...,uint64,float32,float64}.zy
+    text.zy
+    text/{char,string,bytes}.zy
+    system/{io,fs,stdio,args,random,process}.zy
+  data/{bool,option,result,list,package}.zy
+  interface/{data,numeric,text,system}.zy
+  numeric/{integer,float}.zy
+  text/package.zy
+  system/{types,package}.zy
+  control/monad.zy
+  interface.zy
+  std.zy
+```
+
+`builtin.zy`, `interface.zy`, and `std.zy` are deliberately thin composition roots. The first closes the complete
+host ABI and introduces the shared generative system witnesses; the second composes topic contracts into `Std`;
+the third applies the topic implementations and constructs that public package. A topic leaf depends on a selected
+package boundary rather than on names inherited from a monolithic source file.
+
+The derived integer and floating-point builders share algorithms across the fixed-width representations through
+explicitly annotated `forall` parameters. Their result types retain the input `Bool`, scalar, and `String`
+identities, while each public `NumericInstance` still discloses its associated `Scalar` through a manifest field.
+The public system implementation remains one assembly package because `Reader`, `Writer`, and `OS` are abstract
+provider identities shared by `io`, `fs`, and `stdio`. Its host-facing operation contracts are nevertheless split
+into topic leaves, which is the modular boundary that does not duplicate those witnesses.
+
+A source selects only the groups needed for its annotations and calls. Individual operations stay qualified,
+such as `int64/eq`, `string/append`, and `fs/open_reader`; this prevents generic names such as `eq`, `read`,
+and `write` from occupying every consumer's scope.
 
 The public standard package builds on that boundary.
 It exposes shared type identities once and groups its own operations into named module values:
@@ -206,9 +253,9 @@ let (/Result; /Path; /IoError; /result; /bytes; /io; /fs; /process) = make_std b
 ...
 ```
 
-The implementation uses the same rule. Each standard-library source selects its own Builtin capability modules,
+The implementation uses the same rule. Each standard-library source selects its own Builtin groups,
 and `std.zy` retains a whole alias while forwarding the package to its component modules.
-The complete telescope remains only in the provider representation and host/runtime construction boundary.
+The complete nested product remains only in the provider representation and host/runtime construction boundary.
 
 ## Elaboration and runtime representation
 

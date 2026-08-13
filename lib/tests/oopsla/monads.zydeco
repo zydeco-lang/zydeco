@@ -1,11 +1,14 @@
 --| A bunch of example of monads
 --| The program prints "Hello, world!" using the io monads and then exits.
 begin
-  let monadic_basis = @[import("../../std/monad.zy")] _ that
+  let monadic_basis = @[import("../../std/control/monad.zy")] _ that
   param (
-    (/VType; /CType; /Thk; /Ret; /Unit; /String; /OS; /stdio; /process; builtin) :
+    (/core; /representations; /system; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/VType; /CType; /Thk; /Ret; /Unit) = core that
+  let (/Scalar = String) = representations/string that
+  let (/OS; /stdio; /process) = system that
   let (= Monad, = Algebra, ()) =
     monadic_basis builtin in
   begin

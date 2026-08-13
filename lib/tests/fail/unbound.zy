@@ -1,8 +1,9 @@
 begin
   param (
-    (/process) :
+    (/system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/process) = system that
 
   ! (process/exit) x
 end

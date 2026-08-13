@@ -1,14 +1,15 @@
 begin
-  let outer_basis = @[import("../../std/monad.zy")] _ that
+  let outer_basis = @[import("../../std/control/monad.zy")] _ that
   param (
-    (/Unit = _; builtin) :
+    (/core; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/Unit = _) = core that
   let (= Monad, = Algebra, ()) =
     outer_basis builtin in
 
   begin
-    let inner_basis = @[import("../../std/monad.zy")] _ that
+    let inner_basis = @[import("../../std/control/monad.zy")] _ that
     let (= Monad, = Algebra, ()) =
       inner_basis builtin in
 

@@ -340,7 +340,7 @@ in the source code of this example, which demonstrates a general pattern that re
 ### Relative Monads in Zydeco
 
 In Section 4 of the paper, we demonstrated how to define relative monads in Zydeco.
-The current relative-monad interface is defined in [`lib/std/monad.zy`](../../std/monad.zy),
+The current relative-monad interface is defined in [`lib/std/control/monad.zy`](../../std/control/monad.zy),
 while the migrated artifact encoding remains in [`core.zydeco`](core.zydeco).
 Three exception monads are defined in [`exn.zydeco`](exn.zydeco).
 Furthermore, common data structures that are relative monads are defined in [`monads.zydeco`](monads.zydeco).
@@ -442,10 +442,10 @@ in the `Exn` monad instance to the monadic block.
 
 A caveat is that the monadic blocks don't naturally support any reference
 to variables defined outside the monadic blocks.
-Only primitive CBPV constructs like `VType`, `CType`, `Thk`, `Ret`, units and products,
-functions, and exists and forall types are allowed inside the monadic blocks,
-noticably excluding all abstract primitive types like the `String` and `OS` type.
-All other terms used in the monadic block must also be passed in.
+Only compiler-canonical types and terms admitted by the algebra translation may be used directly inside monadic
+blocks. This includes fixed primitives such as `String`, while an abstract provider capability such as `OS`
+must still be passed through the translated interface. Other external terms used in a monadic block must also be
+passed in.
 Below is an example of a monadic block that raises an exception:
 
 ```zydeco
@@ -614,9 +614,10 @@ The easiest program we can write is a term that accepts the Builtin package and 
 `lib/playground/main.zydeco`
 ```zydeco
 param (
-  (/process) :
+  (/system) :
   @[import("../std/builtin.zy")] _
 ) in
+  let (/process) = system in
   ! (process/exit) 42
 ```
 

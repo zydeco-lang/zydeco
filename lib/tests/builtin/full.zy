@@ -1,10 +1,25 @@
 param (
-  (
-    /VType; /CType; /Thk; /Ret;
-    /Unit; /Int64; /Char; /String; /Bytes; /Reader; /Writer; /OS;
-    /int64; /char; /string; /bytes;
-    /io; /fs; /stdio; /args; /random; /process
-  ) :
+  (/core; /representations; /numeric; /text; /system) :
   @[import("../../std/builtin.zy")] _
 ) in
-  ! (process/exit) 0
+  let (/VType; /CType; /Thk; /Ret; /Unit) = core in
+  let (/Scalar = Int8) = representations/i8 in
+  let (/Scalar = Int16) = representations/i16 in
+  let (/Scalar = Int32) = representations/i32 in
+  let (/Scalar = Int64) = representations/i64 in
+  let (/Scalar = UInt8) = representations/u8 in
+  let (/Scalar = UInt16) = representations/u16 in
+  let (/Scalar = UInt32) = representations/u32 in
+  let (/Scalar = UInt64) = representations/u64 in
+  let (/Scalar = Float32) = representations/f32 in
+  let (/Scalar = Float64) = representations/f64 in
+  let (/Scalar = Char) = representations/char in
+  let (/Scalar = String) = representations/string in
+  let (/Scalar = Bytes) = representations/bytes in
+  let (Scalar = NumericInt64, int64) = numeric/int64 in
+  let char = text/char in
+  let string = text/string in
+  let bytes = text/bytes in
+  let (/Reader; /Writer; /OS; /io; /fs; /stdio; /args; /random; /process) = system in
+  do zero <- ! (int64/add) 0 0;
+  ! (process/exit) zero

@@ -1,8 +1,10 @@
 begin
   param (
-    (/int64; /process) :
+    (/numeric; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let (/process) = system that
 
   do x <- ret 40;
   do y <- ret 30;

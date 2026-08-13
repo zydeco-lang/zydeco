@@ -1,0 +1,75 @@
+exists
+  (
+    Scalar = ScalarType as @[intrinsic(i8)] _ :
+    @[intrinsic(vtype)] _
+  )
+.
+    (
+      @[builtin(int8_add)] (
+        add :: (@[intrinsic(thk)] _) (
+          ScalarType -> ScalarType -> (@[intrinsic(ret)] _) ScalarType
+        )
+      )
+    )
+  * (
+      @[builtin(int8_sub)] (
+        sub :: (@[intrinsic(thk)] _) (
+          ScalarType -> ScalarType -> (@[intrinsic(ret)] _) ScalarType
+        )
+      )
+    )
+  * (
+      @[builtin(int8_mul)] (
+        mul :: (@[intrinsic(thk)] _) (
+          ScalarType -> ScalarType -> (@[intrinsic(ret)] _) ScalarType
+        )
+      )
+    )
+  * (
+      @[builtin(int8_div)] (
+        div :: (@[intrinsic(thk)] _) (
+          ScalarType -> ScalarType -> (@[intrinsic(ret)] _) ScalarType
+        )
+      )
+    )
+  * (
+      @[builtin(int8_mod)] (
+        mod :: (@[intrinsic(thk)] _) (
+          ScalarType -> ScalarType -> (@[intrinsic(ret)] _) ScalarType
+        )
+      )
+    )
+  * (
+      @[builtin(int8_eq)] (
+        eq :: (@[intrinsic(thk)] _) (
+          forall (R : @[intrinsic(ctype)] _) .
+               ScalarType -> ScalarType
+            -> (@[intrinsic(thk)] _) R -> (@[intrinsic(thk)] _) R -> R
+        )
+      )
+    )
+  * (
+      @[builtin(int8_lt)] (
+        lt :: (@[intrinsic(thk)] _) (
+          forall (R : @[intrinsic(ctype)] _) .
+               ScalarType -> ScalarType
+            -> (@[intrinsic(thk)] _) R -> (@[intrinsic(thk)] _) R -> R
+        )
+      )
+    )
+  * (
+      @[builtin(int8_gt)] (
+        gt :: (@[intrinsic(thk)] _) (
+          forall (R : @[intrinsic(ctype)] _) .
+               ScalarType -> ScalarType
+            -> (@[intrinsic(thk)] _) R -> (@[intrinsic(thk)] _) R -> R
+        )
+      )
+    )
+  * (
+      @[builtin(int8_to_string)] (
+        to_string :: (@[intrinsic(thk)] _) (
+          ScalarType -> (@[intrinsic(ret)] _) (@[intrinsic(string)] _)
+        )
+      )
+    )

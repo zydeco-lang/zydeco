@@ -1,10 +1,14 @@
 -- A monad structure that supports fail and print as well
 begin
-  let monadic_basis = @[import("../../std/monad.zy")] _ that
+  let monadic_basis = @[import("../../std/control/monad.zy")] _ that
   param (
-    (/VType; /CType; /Thk; /Ret; /Unit; /String; /OS; /string; /stdio; /process; builtin) :
+    (/core; /representations; /text; /system; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/VType; /CType; /Thk; /Ret; /Unit) = core that
+  let (/Scalar = String) = representations/string that
+  let string = text/string that
+  let (/OS; /stdio; /process) = system that
   let (= Monad, = Algebra, ()) =
     monadic_basis builtin in
   begin

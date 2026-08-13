@@ -1,9 +1,16 @@
 -- module Identity
 begin
   param (
-    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /Char; /String; /OS; /int64; /char; /string; /stdio) :
+    (/core; /representations; /numeric; /text; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/VType; /CType; /Thk; /Ret; /Unit) = core that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let (/Scalar = Char) = representations/char that
+  let (/Scalar = String) = representations/string that
+  let char = text/char that
+  let string = text/string that
+  let (/OS; /stdio) = system that
   let Thunk = Thk that
   let U = Thk that
   let F = Ret that

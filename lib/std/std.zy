@@ -1,1520 +1,161 @@
 begin
-  let make_bool = @[import("bool.zy")] _ that
-  let make_option = @[import("option.zy")] _ that
-  let make_result = @[import("result.zy")] _ that
-  let make_list = @[import("list.zy")] _ that
-  let make_io_types = @[import("io-types.zy")] _ that
+  let make_data = @[import("data/package.zy")] _ that
+  let make_text = @[import("text/package.zy")] _ that
+  let make_system = @[import("system/package.zy")] _ that
   let make_interface = @[import("interface.zy")] _ that
+  let make_integer = @[import("numeric/integer.zy")] _ that
+  let make_float = @[import("numeric/float.zy")] _ that
 
   begin
     param (
       (
-        /VType; /CType; /Thk; /Ret;
-        /Unit;
-        /Int8; /Int16; /Int32; /Int64;
-        /UInt8; /UInt16; /UInt32; /UInt64;
-        /Float32; /Float64;
-        /Char; /String; /Bytes; /Reader; /Writer; /OS;
-        /int8; /int16; /int32; /int64;
-        /uint8; /uint16; /uint32; /uint64;
-        /float32; /float64;
-        /char; /string; /bytes;
-        /io; /fs; /stdio; /args; /random; /process;
+        /core; /representations; /numeric; /system;
         builtin
-      ) :
-      @[import("builtin.zy")] _
+      )
+      : @[import("builtin.zy")] _
     ) in
-      let (Bool = Bool, bool) =
-        make_bool builtin in
-      let (Option = Option, option) =
-        make_option builtin in
-      let (Result = Result, result) =
-        make_result builtin in
-      let (List = List, list) =
-        make_list builtin in
-      let (
-        IoErrorKind = IoErrorKind,
-        IoError = IoError,
-        Path = Path,
-        io_types
-      ) = make_io_types builtin in
-      let (
-        = Prelude,
+    let (/VType; /CType; /Thk; /Ret; /Unit) = core in
+    let (Scalar = Int8, int8) = numeric/int8 in
+    let (Scalar = Int16, int16) = numeric/int16 in
+    let (Scalar = Int32, int32) = numeric/int32 in
+    let (Scalar = Int64, int64) = numeric/int64 in
+    let (Scalar = UInt8, uint8) = numeric/uint8 in
+    let (Scalar = UInt16, uint16) = numeric/uint16 in
+    let (Scalar = UInt32, uint32) = numeric/uint32 in
+    let (Scalar = UInt64, uint64) = numeric/uint64 in
+    let (Scalar = Float32, float32) = numeric/float32 in
+    let (Scalar = Float64, float64) = numeric/float64 in
+    let (/Scalar = Char) = representations/char in
+    let (/Scalar = String) = representations/string in
+    let (/Scalar = Bytes) = representations/bytes in
+    let (/Reader; /Writer; /OS) = system in
+    let (
+      /Bool;
+      /Option;
+      /Result;
+      /List;
+      /bool;
+      /option;
+      /result;
+      /list;
+      data_package
+    ) = make_data builtin in
+    let (
+      /char = char_module;
+      /string = string_module;
+      /bytes = bytes_module
+    ) =
+      make_text builtin data_package
+    in
+    let (
+      /Path;
+      /IoErrorKind;
+      /IoError;
+      /io = io_module;
+      /fs = fs_module;
+      /stdio = stdio_module;
+      /process = process_module
+    ) = make_system builtin data_package in
+    let (
+      = Prelude,
+      = Additive,
+      = Multiplicative,
+      = PartialEquality,
+      = PartialOrder,
+      = Numeric,
+      = NumericInstance,
+      = IntegerModule,
+      = FloatModule,
+      = PrimitiveIntegerModule,
+      = PrimitiveFloatModule,
+      = Std,
+      ()
+    ) = make_interface builtin in
+    let (/operations = int8_module; /instance = int8_instance) =
+      make_integer core Bool Int8 String bool int8 0 1
+    in
+    let (/operations = int16_module; /instance = int16_instance) =
+      make_integer core Bool Int16 String bool int16 0 1
+    in
+    let (/operations = int32_module; /instance = int32_instance) =
+      make_integer core Bool Int32 String bool int32 0 1
+    in
+    let (/operations = int64_module; /instance = int64_instance) =
+      make_integer core Bool Int64 String bool int64 0 1
+    in
+    let (/operations = uint8_module; /instance = uint8_instance) =
+      make_integer core Bool UInt8 String bool uint8 0 1
+    in
+    let (/operations = uint16_module; /instance = uint16_instance) =
+      make_integer core Bool UInt16 String bool uint16 0 1
+    in
+    let (/operations = uint32_module; /instance = uint32_instance) =
+      make_integer core Bool UInt32 String bool uint32 0 1
+    in
+    let (/operations = uint64_module; /instance = uint64_instance) =
+      make_integer core Bool UInt64 String bool uint64 0 1
+    in
+    let (/operations = float32_module; /instance = float32_instance) =
+      make_float core Bool Float32 String bool float32 0.0 1.0
+    in
+    let (/operations = float64_module; /instance = float64_instance) =
+      make_float core Bool Float64 String bool float64 0.0 1.0
+    in
+    let prelude : Prelude = (
+        Thunk = Thk,
+        U = Thk,
+        F = Ret,
+        ()
+      )
+    in
+    (
+      (
+        = Bool,
+        = Option,
+        = Result,
+        = List,
+        = Int8,
+        = Int16,
+        = Int32,
+        = Int64,
+        = UInt8,
+        = UInt16,
+        = UInt32,
+        = UInt64,
+        = Float32,
+        = Float64,
+        = Char,
+        = String,
+        = Bytes,
+        = Reader,
+        = Writer,
+        = Path,
+        = IoErrorKind,
+        = IoError,
+        = OS,
         = Additive,
         = Multiplicative,
         = PartialEquality,
         = PartialOrder,
         = Numeric,
         = NumericInstance,
-        = IntegerModule,
-        = FloatModule,
-        = PrimitiveIntegerModule,
-        = PrimitiveFloatModule,
-        = Std,
-        ()
-      ) = make_interface builtin in
-      let ! compare
-        (A : VType)
-        (predicate : Thk (
-          forall (B : CType) .
-            A -> A -> Thk B -> Thk B -> B
-        ))
-        (left : A)
-        (right : A)
-        : Ret Bool =
-        ! predicate
-          (Ret Bool)
-          left
-          right
-          { ret (bool/true) }
-          { ret (bool/false) }
-      in
-      let ! int64_eq (left : Int64) (right : Int64) : Ret Bool =
-        ! compare Int64 int64/eq left right
-      in
-      let ! int64_lt (left : Int64) (right : Int64) : Ret Bool =
-        ! compare Int64 int64/lt left right
-      in
-      let ! str_eq (left : String) (right : String) : Ret Bool =
-        ! compare String string/eq left right
-      in
-      let ! option_is_some (A : VType) (value : Option A) : Ret Bool =
-        ! (option/fold)
-          A
-          (Ret Bool)
-          value
-          { ret (bool/false) }
-          { fn _ => ret (bool/true) }
-      in
-      let ! option_is_none (A : VType) (value : Option A) : Ret Bool =
-        do present <- ! option_is_some A value;
-        ! (bool/not) present
-      in
-      let ! result_is_ok
-        (A : VType)
-        (E : VType)
-        (value : Result A E)
-        : Ret Bool =
-        ! (result/fold)
-          A
-          E
-          (Ret Bool)
-          value
-          { fn _ => ret (bool/true) }
-          { fn _ => ret (bool/false) }
-      in
-      let ! result_is_err
-        (A : VType)
-        (E : VType)
-        (value : Result A E)
-        : Ret Bool =
-        do successful <- ! result_is_ok A E value;
-        ! (bool/not) successful
-      in
-      let ! list_is_empty (A : VType) (values : List A) : Ret Bool =
-        ! (list/case)
-          A
-          (Ret Bool)
-          values
-          { ret (bool/true) }
-          { fn _ _ => ret (bool/false) }
-      in
-      let ! list_head (A : VType) (values : List A) : Ret (Option A) =
-        ! (list/case)
-          A
-          (Ret (Option A))
-          values
-          { ! (option/none) A }
-          { fn head _ => ! (option/some) A head }
-      in
-      let ! list_tail (A : VType) (values : List A) : Ret (Option (List A)) =
-        ! (list/case)
-          A
-          (Ret (Option (List A)))
-          values
-          { ! (option/none) (List A) }
-          { fn _ tail => ! (option/some) (List A) tail }
-      in
-      let fix list_get (A : VType) (values : List A) (index : Int64) : Ret (Option A) =
-        do negative <- ! int64_lt index 0;
-        ! (bool/if)
-          (Ret (Option A))
-          negative
-          { ! (option/none) A }
-          {
-            ! (list/case)
-              A
-              (Ret (Option A))
-              values
-              { ! (option/none) A }
-              {
-                fn head tail =>
-                  do zero <- ! int64_eq index 0;
-                  ! (bool/if)
-                    (Ret (Option A))
-                    zero
-                    { ! (option/some) A head }
-                    {
-                      do previous <- ! (int64/sub) index 1;
-                      ! list_get A tail previous
-                    }
-              }
-          }
-      in
-      let ! str_split_once (text : String) (separator : Char) : Ret (Option (String * String)) =
-        ! (string/split_once)
-          (Ret (Option (String * String)))
-          text
-          separator
-          { ! (option/none) (String * String) }
-          {
-            fn first second =>
-              ! (option/some) (String * String) (first, second)
-          }
-      in
-      let ! str_split_at (text : String) (index : Int64) : Ret (Option (String * String)) =
-        ! (string/split_at)
-          (Ret (Option (String * String)))
-          text
-          index
-          { ! (option/none) (String * String) }
-          {
-            fn first second =>
-              ! (option/some) (String * String) (first, second)
-          }
-      in
-      let ! str_get (text : String) (index : Int64) : Ret (Option Char) =
-        ! (string/get)
-          (Ret (Option Char))
-          text
-          index
-          { ! (option/none) Char }
-          { fn character => ! (option/some) Char character }
-      in
-      let ! char_from_codepoint (codepoint : Int64) : Ret (Option Char) =
-        ! (char/from_codepoint)
-          (Ret (Option Char))
-          codepoint
-          { ! (option/none) Char }
-          { fn character => ! (option/some) Char character }
-      in
-      let ! str_parse_int (text : String) : Ret (Option Int64) =
-        ! (string/parse_int)
-          (Ret (Option Int64))
-          text
-          { ! (option/none) Int64 }
-          { fn integer => ! (option/some) Int64 integer }
-      in
-      let ! str_is_empty (text : String) : Ret Bool =
-        do length <- ! (string/length) text;
-        ! int64_eq length 0
-      in
-      let ! str_head (text : String) : Ret (Option Char) =
-        ! str_get text 0
-      in
-      let ! str_uncons (text : String) : Ret (Option (Char * String)) =
-        do character <- ! str_get text 0;
-        ! (option/and_then)
-          Char
-          (Char * String)
-          character
-          {
-            fn head =>
-              do split <- ! str_split_at text 1;
-              ! (option/map)
-                (String * String)
-                (Char * String)
-                split
-                { fn (_, tail) => ret (head, tail) }
-          }
-      in
-      let fix str_to_chars (text : String) : Ret (List Char) =
-        do first <- ! str_uncons text;
-        ! (option/fold)
-          (Char * String)
-          (Ret (List Char))
-          first
-          { ! (list/nil) Char }
-          {
-            fn (head, tail) =>
-              do rest <- ! str_to_chars tail;
-              ! (list/cons) Char head rest
-          }
-      in
-      let fix str_from_chars (characters : List Char) : Ret String =
-        ! (list/case)
-          Char
-          (Ret String)
-          characters
-          { ret "" }
-          {
-            fn head tail =>
-              do first <- ! (char/to_string) head;
-              do rest <- ! str_from_chars tail;
-              ! (string/append) first rest
-          }
-      in
-      let ! str_concat (strings : List String) : Ret String =
-        ! (list/fold)
-          String
-          (Ret String)
-          strings
-          { ret "" }
-          {
-            fn head tail =>
-              do rest <- ! tail;
-              ! (string/append) head rest
-          }
-      in
-      let ! bytes_to_string (value : Bytes) : Ret (Option String) =
-        ! (bytes/to_string)
-          (Ret (Option String))
-          value
-          { ! (option/none) String }
-          { fn string => ! (option/some) String string }
-      in
-      let ! make_io_error (code : Int64) (message : String) : Ret IoError =
-        do kind <- ! (io_types/from_code) code;
-        ! (io_types/error) kind message
-      in
-      let ! io_kind_eq (left : IoErrorKind) (right : IoErrorKind) : Ret Bool =
-        ! (io_types/kind_eq_branch)
-          (Ret Bool)
-          left
-          right
-          { ret (bool/true) }
-          { ret (bool/false) }
-      in
-      let ! continue_io_ok
-        (A : VType)
-        (continuation : Thk (Result A IoError -> OS))
-        (value : A)
-        : OS =
-        do result <- ! (result/ok) A IoError value;
-        ! continuation result
-      in
-      let ! continue_io_error
-        (A : VType)
-        (continuation : Thk (Result A IoError -> OS))
-        (error : IoError)
-        : OS =
-        do result <- ! (result/err) A IoError error;
-        ! continuation result
-      in
-      let ! continue_host_error
-        (A : VType)
-        (continuation : Thk (Result A IoError -> OS))
-        (code : Int64)
-        (message : String)
-        : OS =
-        do error <- ! make_io_error code message;
-        ! continue_io_error A continuation error
-      in
-      let ! io_read
-        (reader : Reader)
-        (count : Int64)
-        (continuation : Thk (Result Bytes IoError -> OS))
-        : OS =
-        ! (io/read)
-          reader
-          count
-          { fn code message => ! continue_host_error Bytes continuation code message }
-          { fn chunk => ! continue_io_ok Bytes continuation chunk }
-      in
-      let ! io_read_line
-        (reader : Reader)
-        (continuation : Thk (Result (Option Bytes) IoError -> OS))
-        : OS =
-        ! (io/read_line)
-          reader
-          {
-            fn code message =>
-              ! continue_host_error (Option Bytes) continuation code message
-          }
-          {
-            do absent <- ! (option/none) Bytes;
-            ! continue_io_ok (Option Bytes) continuation absent
-          }
-          {
-            fn chunk =>
-              do present <- ! (option/some) Bytes chunk;
-              ! continue_io_ok (Option Bytes) continuation present
-          }
-      in
-      let ! io_read_all
-        (reader : Reader)
-        (continuation : Thk (Result Bytes IoError -> OS))
-        : OS =
-        ! (io/read_all)
-          reader
-          { fn code message => ! continue_host_error Bytes continuation code message }
-          { fn chunk => ! continue_io_ok Bytes continuation chunk }
-      in
-      let ! io_write_all
-        (writer : Writer)
-        (chunk : Bytes)
-        (continuation : Thk (Result Unit IoError -> OS))
-        : OS =
-        ! (io/write_all)
-          writer
-          chunk
-          { fn code message => ! continue_host_error Unit continuation code message }
-          { ! continue_io_ok Unit continuation () }
-      in
-      let ! io_flush
-        (writer : Writer)
-        (continuation : Thk (Result Unit IoError -> OS))
-        : OS =
-        ! (io/flush)
-          writer
-          { fn code message => ! continue_host_error Unit continuation code message }
-          { ! continue_io_ok Unit continuation () }
-      in
-      let ! io_close_reader
-        (reader : Reader)
-        (continuation : Thk (Result Unit IoError -> OS))
-        : OS =
-        ! (io/close_reader)
-          reader
-          { fn code message => ! continue_host_error Unit continuation code message }
-          { ! continue_io_ok Unit continuation () }
-      in
-      let ! io_close_writer
-        (writer : Writer)
-        (continuation : Thk (Result Unit IoError -> OS))
-        : OS =
-        ! (io/close_writer)
-          writer
-          { fn code message => ! continue_host_error Unit continuation code message }
-          { ! continue_io_ok Unit continuation () }
-      in
-      let ! fs_open_reader
-        (path : Path)
-        (continuation : Thk (Result Reader IoError -> OS))
-        : OS =
-        do string <- ! (io_types/path_string) path;
-        ! (fs/open_reader)
-          string
-          { fn code message => ! continue_host_error Reader continuation code message }
-          { fn reader => ! continue_io_ok Reader continuation reader }
-      in
-      let ! fs_create_writer
-        (path : Path)
-        (continuation : Thk (Result Writer IoError -> OS))
-        : OS =
-        do string <- ! (io_types/path_string) path;
-        ! (fs/create_writer)
-          string
-          { fn code message => ! continue_host_error Writer continuation code message }
-          { fn writer => ! continue_io_ok Writer continuation writer }
-      in
-      let ! fs_append_writer
-        (path : Path)
-        (continuation : Thk (Result Writer IoError -> OS))
-        : OS =
-        do string <- ! (io_types/path_string) path;
-        ! (fs/append_writer)
-          string
-          { fn code message => ! continue_host_error Writer continuation code message }
-          { fn writer => ! continue_io_ok Writer continuation writer }
-      in
-      let ! finish_reader
-        (A : VType)
-        (reader : Reader)
-        (operation : Result A IoError)
-        (continuation : Thk (Result A IoError -> OS))
-        : OS =
-        ! (result/fold)
-          A
-          IoError
-          OS
-          operation
-          {
-            fn value =>
-              ! io_close_reader reader {
-                fn close_result =>
-                  ! (result/fold)
-                    Unit
-                    IoError
-                    OS
-                    close_result
-                    { fn _ => ! continue_io_ok A continuation value }
-                    { fn error => ! continue_io_error A continuation error }
-              }
-          }
-          {
-            fn operation_error =>
-              ! io_close_reader reader {
-                fn _ => ! continue_io_error A continuation operation_error
-              }
-          }
-      in
-      let ! finish_writer
-        (writer : Writer)
-        (operation : Result Unit IoError)
-        (continuation : Thk (Result Unit IoError -> OS))
-        : OS =
-        ! (result/fold)
-          Unit
-          IoError
-          OS
-          operation
-          {
-            fn _ =>
-              ! io_close_writer writer continuation
-          }
-          {
-            fn operation_error =>
-              ! io_close_writer writer {
-                fn _ => ! continue_io_error Unit continuation operation_error
-              }
-          }
-      in
-      let ! fs_read_bytes
-        (path : Path)
-        (continuation : Thk (Result Bytes IoError -> OS))
-        : OS =
-        ! fs_open_reader path {
-          fn opened =>
-            ! (result/fold)
-              Reader
-              IoError
-              OS
-              opened
-              {
-                fn reader =>
-                  ! io_read_all reader {
-                    fn operation => ! finish_reader Bytes reader operation continuation
-                  }
-              }
-              { fn error => ! continue_io_error Bytes continuation error }
-        }
-      in
-      let ! fs_read_text
-        (path : Path)
-        (continuation : Thk (Result String IoError -> OS))
-        : OS =
-        ! fs_read_bytes path {
-          fn read_result =>
-            ! (result/fold)
-              Bytes
-              IoError
-              OS
-              read_result
-              {
-                fn contents =>
-                  ! (bytes/to_string)
-                    OS
-                    contents
-                    {
-                      do error <- ! (io_types/error)
-                        (io_types/invalid_data)
-                        "file is not valid UTF-8";
-                      ! continue_io_error String continuation error
-                    }
-                    { fn string => ! continue_io_ok String continuation string }
-              }
-              { fn error => ! continue_io_error String continuation error }
-        }
-      in
-      let ! fs_write_bytes
-        (path : Path)
-        (chunk : Bytes)
-        (continuation : Thk (Result Unit IoError -> OS))
-        : OS =
-        ! fs_create_writer path {
-          fn opened =>
-            ! (result/fold)
-              Writer
-              IoError
-              OS
-              opened
-              {
-                fn writer =>
-                  ! io_write_all writer chunk {
-                    fn operation => ! finish_writer writer operation continuation
-                  }
-              }
-              { fn error => ! continue_io_error Unit continuation error }
-        }
-      in
-      let ! fs_write_text
-        (path : Path)
-        (string : String)
-        (continuation : Thk (Result Unit IoError -> OS))
-        : OS =
-        do encoded <- ! (bytes/from_string) string;
-        ! fs_write_bytes path encoded continuation
-      in
-      let ! write_bytes_and_flush
-        (writer : Writer)
-        (chunk : Bytes)
-        (continuation : Thk (Result Unit IoError -> OS))
-        : OS =
-        ! io_write_all writer chunk {
-          fn written =>
-            ! (result/fold)
-              Unit
-              IoError
-              OS
-              written
-              { fn _ => ! io_flush writer continuation }
-              { fn error => ! continue_io_error Unit continuation error }
-        }
-      in
-      let ! stdio_write_to
-        (writer : Writer)
-        (string : String)
-        (continuation : Thk (Result Unit IoError -> OS))
-        : OS =
-        do encoded <- ! (bytes/from_string) string;
-        ! write_bytes_and_flush writer encoded continuation
-      in
-      let ! stdio_write_line_to
-        (writer : Writer)
-        (string : String)
-        (continuation : Thk (Result Unit IoError -> OS))
-        : OS =
-        do encoded <- ! (bytes/from_string) string;
-        do newline <- ! (bytes/from_string) "\n";
-        do line <- ! (bytes/append) encoded newline;
-        ! write_bytes_and_flush writer line continuation
-      in
-      let ! stdio_read_line
-        (continuation : Thk (Result (Option String) IoError -> OS))
-        : OS =
-        do reader <- ! (stdio/stdin);
-        ! io_read_line reader {
-          fn read_result =>
-            ! (result/fold)
-              (Option Bytes)
-              IoError
-              OS
-              read_result
-              {
-                fn line =>
-                  ! (option/fold)
-                    Bytes
-                    OS
-                    line
-                    {
-                      do absent <- ! (option/none) String;
-                      ! continue_io_ok (Option String) continuation absent
-                    }
-                    {
-                      fn line_bytes =>
-                        ! (bytes/to_string)
-                          OS
-                          line_bytes
-                          {
-                            do error <- ! (io_types/error)
-                              (io_types/invalid_data)
-                              "standard input is not valid UTF-8";
-                            ! continue_io_error (Option String) continuation error
-                          }
-                          {
-                            fn string =>
-                              do present <- ! (option/some) String string;
-                              ! continue_io_ok (Option String) continuation present
-                          }
-                    }
-              }
-              { fn error => ! continue_io_error (Option String) continuation error }
-        }
-      in
-      let ! stdio_write
-        (string : String)
-        (continuation : Thk (Result Unit IoError -> OS))
-        : OS =
-        do writer <- ! (stdio/stdout);
-        ! stdio_write_to writer string continuation
-      in
-      let ! stdio_write_line
-        (string : String)
-        (continuation : Thk (Result Unit IoError -> OS))
-        : OS =
-        do writer <- ! (stdio/stdout);
-        ! stdio_write_line_to writer string continuation
-      in
-      let ! stdio_write_error
-        (string : String)
-        (continuation : Thk (Result Unit IoError -> OS))
-        : OS =
-        do writer <- ! (stdio/stderr);
-        ! stdio_write_to writer string continuation
-      in
-      let ! stdio_write_error_line
-        (string : String)
-        (continuation : Thk (Result Unit IoError -> OS))
-        : OS =
-        do writer <- ! (stdio/stderr);
-        ! stdio_write_line_to writer string continuation
-      in
-      let ! arg_list (continuation : Thk (List String -> OS)) : OS =
-        do arguments <- ! (args/fold)
-          (Ret (List String))
-          { ! (list/nil) String }
-          {
-            fn argument remaining =>
-              do tail <- ! remaining;
-              ! (list/cons) String argument tail
-          };
-        ! continuation arguments
-      in
-      let halt : Thk OS = { ! (process/exit) 0 } in
-      let ! panic (message : String) : OS =
-        ! stdio_write_error_line message { fn _ => ! (process/exit) 1 }
-      in
-      let int8_module : IntegerModule Bool Int8 String = (
-        add = int8/add,
-        sub = int8/sub,
-        mul = int8/mul,
-        div = int8/div,
-        mod = int8/mod,
-        eq = {
-          fn left right => ! compare Int8 (int8/eq) left right
-        },
-        ne = {
-          fn left right =>
-            do equal <- ! compare Int8 (int8/eq) left right;
-            ! (bool/not) equal
-        },
-        lt = {
-          fn left right => ! compare Int8 (int8/lt) left right
-        },
-        le = {
-          fn left right =>
-            do greater <- ! compare Int8 (int8/gt) left right;
-            ! (bool/not) greater
-        },
-        gt = {
-          fn left right => ! compare Int8 (int8/gt) left right
-        },
-        ge = {
-          fn left right =>
-            do less <- ! compare Int8 (int8/lt) left right;
-            ! (bool/not) less
-        },
-        increment = {
-          fn value => ! (int8/add) value 1
-        },
-        decrement = {
-          fn value => ! (int8/sub) value 1
-        },
-        negate = {
-          fn value => ! (int8/sub) 0 value
-        },
-        min = {
-          fn left right =>
-            do less <- ! compare Int8 (int8/lt) left right;
-            ! (bool/if) (Ret Int8) less { ret left } { ret right }
-        },
-        max = {
-          fn left right =>
-            do greater <- ! compare Int8 (int8/gt) left right;
-            ! (bool/if) (Ret Int8) greater { ret left } { ret right }
-        },
-        to_string = int8/to_string,
-      ) in
-      let int16_module : IntegerModule Bool Int16 String = (
-        add = int16/add,
-        sub = int16/sub,
-        mul = int16/mul,
-        div = int16/div,
-        mod = int16/mod,
-        eq = {
-          fn left right => ! compare Int16 (int16/eq) left right
-        },
-        ne = {
-          fn left right =>
-            do equal <- ! compare Int16 (int16/eq) left right;
-            ! (bool/not) equal
-        },
-        lt = {
-          fn left right => ! compare Int16 (int16/lt) left right
-        },
-        le = {
-          fn left right =>
-            do greater <- ! compare Int16 (int16/gt) left right;
-            ! (bool/not) greater
-        },
-        gt = {
-          fn left right => ! compare Int16 (int16/gt) left right
-        },
-        ge = {
-          fn left right =>
-            do less <- ! compare Int16 (int16/lt) left right;
-            ! (bool/not) less
-        },
-        increment = {
-          fn value => ! (int16/add) value 1
-        },
-        decrement = {
-          fn value => ! (int16/sub) value 1
-        },
-        negate = {
-          fn value => ! (int16/sub) 0 value
-        },
-        min = {
-          fn left right =>
-            do less <- ! compare Int16 (int16/lt) left right;
-            ! (bool/if) (Ret Int16) less { ret left } { ret right }
-        },
-        max = {
-          fn left right =>
-            do greater <- ! compare Int16 (int16/gt) left right;
-            ! (bool/if) (Ret Int16) greater { ret left } { ret right }
-        },
-        to_string = int16/to_string,
-      ) in
-      let int32_module : IntegerModule Bool Int32 String = (
-        add = int32/add,
-        sub = int32/sub,
-        mul = int32/mul,
-        div = int32/div,
-        mod = int32/mod,
-        eq = {
-          fn left right => ! compare Int32 (int32/eq) left right
-        },
-        ne = {
-          fn left right =>
-            do equal <- ! compare Int32 (int32/eq) left right;
-            ! (bool/not) equal
-        },
-        lt = {
-          fn left right => ! compare Int32 (int32/lt) left right
-        },
-        le = {
-          fn left right =>
-            do greater <- ! compare Int32 (int32/gt) left right;
-            ! (bool/not) greater
-        },
-        gt = {
-          fn left right => ! compare Int32 (int32/gt) left right
-        },
-        ge = {
-          fn left right =>
-            do less <- ! compare Int32 (int32/lt) left right;
-            ! (bool/not) less
-        },
-        increment = {
-          fn value => ! (int32/add) value 1
-        },
-        decrement = {
-          fn value => ! (int32/sub) value 1
-        },
-        negate = {
-          fn value => ! (int32/sub) 0 value
-        },
-        min = {
-          fn left right =>
-            do less <- ! compare Int32 (int32/lt) left right;
-            ! (bool/if) (Ret Int32) less { ret left } { ret right }
-        },
-        max = {
-          fn left right =>
-            do greater <- ! compare Int32 (int32/gt) left right;
-            ! (bool/if) (Ret Int32) greater { ret left } { ret right }
-        },
-        to_string = int32/to_string,
-      ) in
-      let int64_module : IntegerModule Bool Int64 String = (
-        add = int64/add,
-        sub = int64/sub,
-        mul = int64/mul,
-        div = int64/div,
-        mod = int64/mod,
-        eq = {
-          fn left right => ! compare Int64 (int64/eq) left right
-        },
-        ne = {
-          fn left right =>
-            do equal <- ! compare Int64 (int64/eq) left right;
-            ! (bool/not) equal
-        },
-        lt = {
-          fn left right => ! compare Int64 (int64/lt) left right
-        },
-        le = {
-          fn left right =>
-            do greater <- ! compare Int64 (int64/gt) left right;
-            ! (bool/not) greater
-        },
-        gt = {
-          fn left right => ! compare Int64 (int64/gt) left right
-        },
-        ge = {
-          fn left right =>
-            do less <- ! compare Int64 (int64/lt) left right;
-            ! (bool/not) less
-        },
-        increment = {
-          fn value => ! (int64/add) value 1
-        },
-        decrement = {
-          fn value => ! (int64/sub) value 1
-        },
-        negate = {
-          fn value => ! (int64/sub) 0 value
-        },
-        min = {
-          fn left right =>
-            do less <- ! compare Int64 (int64/lt) left right;
-            ! (bool/if) (Ret Int64) less { ret left } { ret right }
-        },
-        max = {
-          fn left right =>
-            do greater <- ! compare Int64 (int64/gt) left right;
-            ! (bool/if) (Ret Int64) greater { ret left } { ret right }
-        },
-        to_string = int64/to_string,
-      ) in
-      let uint8_module : IntegerModule Bool UInt8 String = (
-        add = uint8/add,
-        sub = uint8/sub,
-        mul = uint8/mul,
-        div = uint8/div,
-        mod = uint8/mod,
-        eq = {
-          fn left right => ! compare UInt8 (uint8/eq) left right
-        },
-        ne = {
-          fn left right =>
-            do equal <- ! compare UInt8 (uint8/eq) left right;
-            ! (bool/not) equal
-        },
-        lt = {
-          fn left right => ! compare UInt8 (uint8/lt) left right
-        },
-        le = {
-          fn left right =>
-            do greater <- ! compare UInt8 (uint8/gt) left right;
-            ! (bool/not) greater
-        },
-        gt = {
-          fn left right => ! compare UInt8 (uint8/gt) left right
-        },
-        ge = {
-          fn left right =>
-            do less <- ! compare UInt8 (uint8/lt) left right;
-            ! (bool/not) less
-        },
-        increment = {
-          fn value => ! (uint8/add) value 1
-        },
-        decrement = {
-          fn value => ! (uint8/sub) value 1
-        },
-        negate = {
-          fn value => ! (uint8/sub) 0 value
-        },
-        min = {
-          fn left right =>
-            do less <- ! compare UInt8 (uint8/lt) left right;
-            ! (bool/if) (Ret UInt8) less { ret left } { ret right }
-        },
-        max = {
-          fn left right =>
-            do greater <- ! compare UInt8 (uint8/gt) left right;
-            ! (bool/if) (Ret UInt8) greater { ret left } { ret right }
-        },
-        to_string = uint8/to_string,
-      ) in
-      let uint16_module : IntegerModule Bool UInt16 String = (
-        add = uint16/add,
-        sub = uint16/sub,
-        mul = uint16/mul,
-        div = uint16/div,
-        mod = uint16/mod,
-        eq = {
-          fn left right => ! compare UInt16 (uint16/eq) left right
-        },
-        ne = {
-          fn left right =>
-            do equal <- ! compare UInt16 (uint16/eq) left right;
-            ! (bool/not) equal
-        },
-        lt = {
-          fn left right => ! compare UInt16 (uint16/lt) left right
-        },
-        le = {
-          fn left right =>
-            do greater <- ! compare UInt16 (uint16/gt) left right;
-            ! (bool/not) greater
-        },
-        gt = {
-          fn left right => ! compare UInt16 (uint16/gt) left right
-        },
-        ge = {
-          fn left right =>
-            do less <- ! compare UInt16 (uint16/lt) left right;
-            ! (bool/not) less
-        },
-        increment = {
-          fn value => ! (uint16/add) value 1
-        },
-        decrement = {
-          fn value => ! (uint16/sub) value 1
-        },
-        negate = {
-          fn value => ! (uint16/sub) 0 value
-        },
-        min = {
-          fn left right =>
-            do less <- ! compare UInt16 (uint16/lt) left right;
-            ! (bool/if) (Ret UInt16) less { ret left } { ret right }
-        },
-        max = {
-          fn left right =>
-            do greater <- ! compare UInt16 (uint16/gt) left right;
-            ! (bool/if) (Ret UInt16) greater { ret left } { ret right }
-        },
-        to_string = uint16/to_string,
-      ) in
-      let uint32_module : IntegerModule Bool UInt32 String = (
-        add = uint32/add,
-        sub = uint32/sub,
-        mul = uint32/mul,
-        div = uint32/div,
-        mod = uint32/mod,
-        eq = {
-          fn left right => ! compare UInt32 (uint32/eq) left right
-        },
-        ne = {
-          fn left right =>
-            do equal <- ! compare UInt32 (uint32/eq) left right;
-            ! (bool/not) equal
-        },
-        lt = {
-          fn left right => ! compare UInt32 (uint32/lt) left right
-        },
-        le = {
-          fn left right =>
-            do greater <- ! compare UInt32 (uint32/gt) left right;
-            ! (bool/not) greater
-        },
-        gt = {
-          fn left right => ! compare UInt32 (uint32/gt) left right
-        },
-        ge = {
-          fn left right =>
-            do less <- ! compare UInt32 (uint32/lt) left right;
-            ! (bool/not) less
-        },
-        increment = {
-          fn value => ! (uint32/add) value 1
-        },
-        decrement = {
-          fn value => ! (uint32/sub) value 1
-        },
-        negate = {
-          fn value => ! (uint32/sub) 0 value
-        },
-        min = {
-          fn left right =>
-            do less <- ! compare UInt32 (uint32/lt) left right;
-            ! (bool/if) (Ret UInt32) less { ret left } { ret right }
-        },
-        max = {
-          fn left right =>
-            do greater <- ! compare UInt32 (uint32/gt) left right;
-            ! (bool/if) (Ret UInt32) greater { ret left } { ret right }
-        },
-        to_string = uint32/to_string,
-      ) in
-      let uint64_module : IntegerModule Bool UInt64 String = (
-        add = uint64/add,
-        sub = uint64/sub,
-        mul = uint64/mul,
-        div = uint64/div,
-        mod = uint64/mod,
-        eq = {
-          fn left right => ! compare UInt64 (uint64/eq) left right
-        },
-        ne = {
-          fn left right =>
-            do equal <- ! compare UInt64 (uint64/eq) left right;
-            ! (bool/not) equal
-        },
-        lt = {
-          fn left right => ! compare UInt64 (uint64/lt) left right
-        },
-        le = {
-          fn left right =>
-            do greater <- ! compare UInt64 (uint64/gt) left right;
-            ! (bool/not) greater
-        },
-        gt = {
-          fn left right => ! compare UInt64 (uint64/gt) left right
-        },
-        ge = {
-          fn left right =>
-            do less <- ! compare UInt64 (uint64/lt) left right;
-            ! (bool/not) less
-        },
-        increment = {
-          fn value => ! (uint64/add) value 1
-        },
-        decrement = {
-          fn value => ! (uint64/sub) value 1
-        },
-        negate = {
-          fn value => ! (uint64/sub) 0 value
-        },
-        min = {
-          fn left right =>
-            do less <- ! compare UInt64 (uint64/lt) left right;
-            ! (bool/if) (Ret UInt64) less { ret left } { ret right }
-        },
-        max = {
-          fn left right =>
-            do greater <- ! compare UInt64 (uint64/gt) left right;
-            ! (bool/if) (Ret UInt64) greater { ret left } { ret right }
-        },
-        to_string = uint64/to_string,
-      ) in
-      let float32_module : FloatModule Bool Float32 String = (
-        add = float32/add,
-        sub = float32/sub,
-        mul = float32/mul,
-        div = float32/div,
-        eq = {
-          fn left right => ! compare Float32 (float32/eq) left right
-        },
-        ne = {
-          fn left right =>
-            do equal <- ! compare Float32 (float32/eq) left right;
-            ! (bool/not) equal
-        },
-        lt = {
-          fn left right => ! compare Float32 (float32/lt) left right
-        },
-        le = {
-          fn left right =>
-            do less <- ! compare Float32 (float32/lt) left right;
-            do equal <- ! compare Float32 (float32/eq) left right;
-            ! (bool/or) less equal
-        },
-        gt = {
-          fn left right => ! compare Float32 (float32/gt) left right
-        },
-        ge = {
-          fn left right =>
-            do greater <- ! compare Float32 (float32/gt) left right;
-            do equal <- ! compare Float32 (float32/eq) left right;
-            ! (bool/or) greater equal
-        },
-        negate = {
-          fn value => ! (float32/sub) 0.0 value
-        },
-        to_string = float32/to_string,
-      ) in
-      let float64_module : FloatModule Bool Float64 String = (
-        add = float64/add,
-        sub = float64/sub,
-        mul = float64/mul,
-        div = float64/div,
-        eq = {
-          fn left right => ! compare Float64 (float64/eq) left right
-        },
-        ne = {
-          fn left right =>
-            do equal <- ! compare Float64 (float64/eq) left right;
-            ! (bool/not) equal
-        },
-        lt = {
-          fn left right => ! compare Float64 (float64/lt) left right
-        },
-        le = {
-          fn left right =>
-            do less <- ! compare Float64 (float64/lt) left right;
-            do equal <- ! compare Float64 (float64/eq) left right;
-            ! (bool/or) less equal
-        },
-        gt = {
-          fn left right => ! compare Float64 (float64/gt) left right
-        },
-        ge = {
-          fn left right =>
-            do greater <- ! compare Float64 (float64/gt) left right;
-            do equal <- ! compare Float64 (float64/eq) left right;
-            ! (bool/or) greater equal
-        },
-        negate = {
-          fn value => ! (float64/sub) 0.0 value
-        },
-        to_string = float64/to_string,
-      ) in
-      let int8_instance : NumericInstance Bool Int8 = (
-        Scalar = Int8,
-        dictionary = (
-          additive = (
-            zero = 0,
-            add = int8_module/add,
-            sub = int8_module/sub,
-            negate = int8_module/negate,
-          ),
-          multiplicative = (
-            one = 1,
-            mul = int8_module/mul,
-          ),
-          order = (
-            equality = (
-              eq = int8_module/eq,
-              ne = int8_module/ne,
-            ),
-            lt = int8_module/lt,
-            le = int8_module/le,
-            gt = int8_module/gt,
-            ge = int8_module/ge,
-          ),
-          (),
-        ),
-        (),
-      ) in
-      let int16_instance : NumericInstance Bool Int16 = (
-        Scalar = Int16,
-        dictionary = (
-          additive = (
-            zero = 0,
-            add = int16_module/add,
-            sub = int16_module/sub,
-            negate = int16_module/negate,
-          ),
-          multiplicative = (
-            one = 1,
-            mul = int16_module/mul,
-          ),
-          order = (
-            equality = (
-              eq = int16_module/eq,
-              ne = int16_module/ne,
-            ),
-            lt = int16_module/lt,
-            le = int16_module/le,
-            gt = int16_module/gt,
-            ge = int16_module/ge,
-          ),
-          (),
-        ),
-        (),
-      ) in
-      let int32_instance : NumericInstance Bool Int32 = (
-        Scalar = Int32,
-        dictionary = (
-          additive = (
-            zero = 0,
-            add = int32_module/add,
-            sub = int32_module/sub,
-            negate = int32_module/negate,
-          ),
-          multiplicative = (
-            one = 1,
-            mul = int32_module/mul,
-          ),
-          order = (
-            equality = (
-              eq = int32_module/eq,
-              ne = int32_module/ne,
-            ),
-            lt = int32_module/lt,
-            le = int32_module/le,
-            gt = int32_module/gt,
-            ge = int32_module/ge,
-          ),
-          (),
-        ),
-        (),
-      ) in
-      let int64_instance : NumericInstance Bool Int64 = (
-        Scalar = Int64,
-        dictionary = (
-          additive = (
-            zero = 0,
-            add = int64_module/add,
-            sub = int64_module/sub,
-            negate = int64_module/negate,
-          ),
-          multiplicative = (
-            one = 1,
-            mul = int64_module/mul,
-          ),
-          order = (
-            equality = (
-              eq = int64_module/eq,
-              ne = int64_module/ne,
-            ),
-            lt = int64_module/lt,
-            le = int64_module/le,
-            gt = int64_module/gt,
-            ge = int64_module/ge,
-          ),
-          (),
-        ),
-        (),
-      ) in
-      let uint8_instance : NumericInstance Bool UInt8 = (
-        Scalar = UInt8,
-        dictionary = (
-          additive = (
-            zero = 0,
-            add = uint8_module/add,
-            sub = uint8_module/sub,
-            negate = uint8_module/negate,
-          ),
-          multiplicative = (
-            one = 1,
-            mul = uint8_module/mul,
-          ),
-          order = (
-            equality = (
-              eq = uint8_module/eq,
-              ne = uint8_module/ne,
-            ),
-            lt = uint8_module/lt,
-            le = uint8_module/le,
-            gt = uint8_module/gt,
-            ge = uint8_module/ge,
-          ),
-          (),
-        ),
-        (),
-      ) in
-      let uint16_instance : NumericInstance Bool UInt16 = (
-        Scalar = UInt16,
-        dictionary = (
-          additive = (
-            zero = 0,
-            add = uint16_module/add,
-            sub = uint16_module/sub,
-            negate = uint16_module/negate,
-          ),
-          multiplicative = (
-            one = 1,
-            mul = uint16_module/mul,
-          ),
-          order = (
-            equality = (
-              eq = uint16_module/eq,
-              ne = uint16_module/ne,
-            ),
-            lt = uint16_module/lt,
-            le = uint16_module/le,
-            gt = uint16_module/gt,
-            ge = uint16_module/ge,
-          ),
-          (),
-        ),
-        (),
-      ) in
-      let uint32_instance : NumericInstance Bool UInt32 = (
-        Scalar = UInt32,
-        dictionary = (
-          additive = (
-            zero = 0,
-            add = uint32_module/add,
-            sub = uint32_module/sub,
-            negate = uint32_module/negate,
-          ),
-          multiplicative = (
-            one = 1,
-            mul = uint32_module/mul,
-          ),
-          order = (
-            equality = (
-              eq = uint32_module/eq,
-              ne = uint32_module/ne,
-            ),
-            lt = uint32_module/lt,
-            le = uint32_module/le,
-            gt = uint32_module/gt,
-            ge = uint32_module/ge,
-          ),
-          (),
-        ),
-        (),
-      ) in
-      let uint64_instance : NumericInstance Bool UInt64 = (
-        Scalar = UInt64,
-        dictionary = (
-          additive = (
-            zero = 0,
-            add = uint64_module/add,
-            sub = uint64_module/sub,
-            negate = uint64_module/negate,
-          ),
-          multiplicative = (
-            one = 1,
-            mul = uint64_module/mul,
-          ),
-          order = (
-            equality = (
-              eq = uint64_module/eq,
-              ne = uint64_module/ne,
-            ),
-            lt = uint64_module/lt,
-            le = uint64_module/le,
-            gt = uint64_module/gt,
-            ge = uint64_module/ge,
-          ),
-          (),
-        ),
-        (),
-      ) in
-      let float32_instance : NumericInstance Bool Float32 = (
-        Scalar = Float32,
-        dictionary = (
-          additive = (
-            zero = 0.0,
-            add = float32_module/add,
-            sub = float32_module/sub,
-            negate = float32_module/negate,
-          ),
-          multiplicative = (
-            one = 1.0,
-            mul = float32_module/mul,
-          ),
-          order = (
-            equality = (
-              eq = float32_module/eq,
-              ne = float32_module/ne,
-            ),
-            lt = float32_module/lt,
-            le = float32_module/le,
-            gt = float32_module/gt,
-            ge = float32_module/ge,
-          ),
-          (),
-        ),
-        (),
-      ) in
-      let float64_instance : NumericInstance Bool Float64 = (
-        Scalar = Float64,
-        dictionary = (
-          additive = (
-            zero = 0.0,
-            add = float64_module/add,
-            sub = float64_module/sub,
-            negate = float64_module/negate,
-          ),
-          multiplicative = (
-            one = 1.0,
-            mul = float64_module/mul,
-          ),
-          order = (
-            equality = (
-              eq = float64_module/eq,
-              ne = float64_module/ne,
-            ),
-            lt = float64_module/lt,
-            le = float64_module/le,
-            gt = float64_module/gt,
-            ge = float64_module/ge,
-          ),
-          (),
-        ),
-        (),
-      ) in
-      let prelude : Prelude = (
-        Thunk = Thk,
-        U = Thk,
-        F = Ret,
-        ()
-      ) in
-      ((
-        Bool = Bool,
-        Option = Option,
-        Result = Result,
-        List = List,
-        Int8 = Int8,
-        Int16 = Int16,
-        Int32 = Int32,
-        Int64 = Int64,
-        UInt8 = UInt8,
-        UInt16 = UInt16,
-        UInt32 = UInt32,
-        UInt64 = UInt64,
-        Float32 = Float32,
-        Float64 = Float64,
-        Char = Char,
-        String = String,
-        Bytes = Bytes,
-        Reader = Reader,
-        Writer = Writer,
-        Path = Path,
-        IoErrorKind = IoErrorKind,
-        IoError = IoError,
-        OS = OS,
-        Additive = Additive,
-        Multiplicative = Multiplicative,
-        PartialEquality = PartialEquality,
-        PartialOrder = PartialOrder,
-        Numeric = Numeric,
-        NumericInstance = NumericInstance,
-        prelude = prelude,
-        bool = (
-          true = bool/true,
-          false = bool/false,
-          not = bool/not,
-          and = bool/and,
-          or = bool/or,
-          eq = bool/eq,
-          xor = bool/xor,
-          nand = bool/nand,
-          nor = bool/nor,
-          if = bool/if,
-        ),
-        option = (
-          none = option/none,
-          some = option/some,
-          fold = option/fold,
-          map = option/map,
-          and_then = option/and_then,
-          unwrap_or = option/unwrap_or,
-          or_else = option/or_else,
-          zip = option/zip,
-          is_some = option_is_some,
-          is_none = option_is_none,
-        ),
-        result = (
-          ok = result/ok,
-          err = result/err,
-          fold = result/fold,
-          map = result/map,
-          map_err = result/map_err,
-          and_then = result/and_then,
-          unwrap_or = result/unwrap_or,
-          is_ok = result_is_ok,
-          is_err = result_is_err,
-        ),
-        list = (
-          nil = list/nil,
-          cons = list/cons,
-          case = list/case,
-          fold = list/fold,
-          singleton = list/singleton,
-          append = list/append,
-          map = list/map,
-          fold_left = list/fold_left,
-          reverse = list/reverse,
-          length = list/length,
-          is_empty = list_is_empty,
-          head = list_head,
-          tail = list_tail,
-          get = list_get,
-        ),
+        = prelude,
+        = bool,
+        = option,
+        = result,
+        = list,
         numeric = (
-          int8_instance = int8_instance,
-          int16_instance = int16_instance,
-          int32_instance = int32_instance,
-          int64_instance = int64_instance,
-          uint8_instance = uint8_instance,
-          uint16_instance = uint16_instance,
-          uint32_instance = uint32_instance,
-          uint64_instance = uint64_instance,
-          float32_instance = float32_instance,
-          float64_instance = float64_instance,
-          (),
+          = int8_instance,
+          = int16_instance,
+          = int32_instance,
+          = int64_instance,
+          = uint8_instance,
+          = uint16_instance,
+          = uint32_instance,
+          = uint64_instance,
+          = float32_instance,
+          = float64_instance,
+          ()
         ),
         primitives = (
           i8 = int8,
@@ -1527,7 +168,7 @@ begin
           u64 = uint64,
           f32 = float32,
           f64 = float64,
-          (),
+          ()
         ),
         int8 = int8_module,
         int16 = int16_module,
@@ -1539,84 +180,16 @@ begin
         uint64 = uint64_module,
         float32 = float32_module,
         float64 = float64_module,
-        char = (
-          to_string = char/to_string,
-          codepoint = char/codepoint,
-          from_codepoint = char_from_codepoint,
-        ),
-        string = (
-          empty = "",
-          length = string/length,
-          byte_length = string/byte_length,
-          is_empty = str_is_empty,
-          append = string/append,
-          concat = str_concat,
-          split_once = str_split_once,
-          split_at = str_split_at,
-          eq = str_eq,
-          get = str_get,
-          head = str_head,
-          uncons = str_uncons,
-          to_chars = str_to_chars,
-          from_chars = str_from_chars,
-          parse_int = str_parse_int,
-        ),
-        bytes = (
-          empty = bytes/empty,
-          length = bytes/length,
-          append = bytes/append,
-          from_string = bytes/from_string,
-          to_string = bytes_to_string,
-        ),
-        io = (
-          not_found = io_types/not_found,
-          permission_denied = io_types/permission_denied,
-          already_exists = io_types/already_exists,
-          invalid_input = io_types/invalid_input,
-          invalid_data = io_types/invalid_data,
-          broken_pipe = io_types/broken_pipe,
-          closed = io_types/closed,
-          other = io_types/other,
-          kind_eq = io_kind_eq,
-          error_kind = io_types/error_kind,
-          error_message = io_types/error_message,
-          read = io_read,
-          read_line = io_read_line,
-          read_all = io_read_all,
-          write_all = io_write_all,
-          flush = io_flush,
-          close_reader = io_close_reader,
-          close_writer = io_close_writer,
-        ),
-        fs = (
-          path = io_types/path,
-          path_string = io_types/path_string,
-          open_reader = fs_open_reader,
-          create_writer = fs_create_writer,
-          append_writer = fs_append_writer,
-          read_bytes = fs_read_bytes,
-          read_text = fs_read_text,
-          write_bytes = fs_write_bytes,
-          write_text = fs_write_text,
-        ),
-        stdio = (
-          stdin = stdio/stdin,
-          stdout = stdio/stdout,
-          stderr = stdio/stderr,
-          read_line = stdio_read_line,
-          write = stdio_write,
-          write_line = stdio_write_line,
-          write_error = stdio_write_error,
-          write_error_line = stdio_write_error_line,
-        ),
-        process = (
-          arg_list = arg_list,
-          random_int = random/generate,
-          halt = halt,
-          panic = panic,
-          exit = process/exit,
-        ),
-        (),
-      ) : Std)
+        char = char_module,
+        string = string_module,
+        bytes = bytes_module,
+        io = io_module,
+        fs = fs_module,
+        stdio = stdio_module,
+        process = process_module,
+        ()
+      )
+      : Std
+    )
   end
 end

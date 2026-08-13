@@ -1,8 +1,11 @@
 begin
   param (
-    (/Thk; /Ret; /Unit; /Int64; /int64; /process) :
+    (/core; /numeric; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/Thk; /Ret; /Unit) = core that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let (/process) = system that
 
   -- Named components remain ordinary product components. They may be mixed with
   -- unnamed components, nested explicitly, and destructured by ordinary tuple

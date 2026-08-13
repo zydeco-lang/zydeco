@@ -1,0 +1,62 @@
+param Reader : @[intrinsic(vtype)] _ in
+param Writer : @[intrinsic(vtype)] _ in
+param OS : @[intrinsic(ctype)] _ in
+  (
+    @[builtin(stdin)] (
+      stdin :: (@[intrinsic(thk)] _) ((@[intrinsic(ret)] _) Reader)
+    )
+  )
+* (
+    @[builtin(stdout)] (
+      stdout :: (@[intrinsic(thk)] _) ((@[intrinsic(ret)] _) Writer)
+    )
+  )
+* (
+    @[builtin(stderr)] (
+      stderr :: (@[intrinsic(thk)] _) ((@[intrinsic(ret)] _) Writer)
+    )
+  )
+* (
+    @[builtin(write_str)] (
+      write :: (@[intrinsic(thk)] _) (
+        (@[intrinsic(string)] _) -> (@[intrinsic(thk)] _) OS -> OS
+      )
+    )
+  )
+* (
+    @[builtin(write_int)] (
+      write_int :: (@[intrinsic(thk)] _) (
+        (@[intrinsic(i64)] _) -> (@[intrinsic(thk)] _) OS -> OS
+      )
+    )
+  )
+* (
+    @[builtin(write_line)] (
+      write_line :: (@[intrinsic(thk)] _) (
+        (@[intrinsic(string)] _) -> (@[intrinsic(thk)] _) OS -> OS
+      )
+    )
+  )
+* (
+    @[builtin(read_line)] (
+      read_line :: (@[intrinsic(thk)] _) (
+        (@[intrinsic(thk)] _) ((@[intrinsic(string)] _) -> OS) -> OS
+      )
+    )
+  )
+* (
+    @[builtin(read_line_as_int)] (
+      read_int :: (@[intrinsic(thk)] _) (
+           (@[intrinsic(thk)] _) OS
+        -> (@[intrinsic(thk)] _) ((@[intrinsic(i64)] _) -> OS)
+        -> OS
+      )
+    )
+  )
+* (
+    @[builtin(read_till_eof)] (
+      read_all :: (@[intrinsic(thk)] _) (
+        (@[intrinsic(thk)] _) ((@[intrinsic(string)] _) -> OS) -> OS
+      )
+    )
+  )

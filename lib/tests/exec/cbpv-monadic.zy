@@ -1,16 +1,18 @@
 begin
   let U = Thk that
   let F = Ret that
-  let monadic_basis = @[import("../../std/monad.zy")] _ that
+  let monadic_basis = @[import("../../std/control/monad.zy")] _ that
   param (
-    (
-      /VType; /CType; /Thk; /Ret;
-      /Unit; /Int64; /Char; /String; /OS;
-      /int64; /char; /string; /stdio; /process;
-      builtin
-    ) :
+    (/core; /representations; /numeric; /text; /system; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/VType; /CType; /Thk; /Ret; /Unit) = core that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let (/Scalar = Char) = representations/char that
+  let (/Scalar = String) = representations/string that
+  let char = text/char that
+  let string = text/string that
+  let (/OS; /stdio; /process) = system that
   let (= Monad, = Algebra, ()) =
     monadic_basis builtin in
   begin

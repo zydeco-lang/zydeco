@@ -463,7 +463,7 @@ fn stdio_hover_links_referenced_type_definitions() {
         .unwrap();
     let source = std::fs::read_to_string(&path).unwrap();
     let mut definition = Url::from_file_path(&path).unwrap();
-    definition.set_fragment(Some("L7"));
+    definition.set_fragment(Some("L10"));
     let uri = Url::from_file_path(&path).unwrap().to_string();
     let mut server = LspProcess::start();
 
@@ -494,7 +494,7 @@ fn stdio_hover_links_referenced_type_definitions() {
         "textDocument/hover",
         json!({
             "textDocument": { "uri": uri },
-            "position": { "line": 7, "character": 9 },
+            "position": { "line": 9, "character": 25 },
         }),
     );
     assert_eq!(hover["result"]["contents"]["kind"], "markdown");
@@ -509,7 +509,7 @@ fn stdio_hover_links_referenced_type_definitions() {
 #[test]
 fn stdio_hover_uses_the_initialized_line_width() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../lib/std/option.zy")
+        .join("../../lib/std/data/option.zy")
         .canonicalize()
         .unwrap();
     let source = std::fs::read_to_string(&path).unwrap();
@@ -546,7 +546,7 @@ fn stdio_hover_uses_the_initialized_line_width() {
         "textDocument/hover",
         json!({
             "textDocument": { "uri": uri },
-            "position": { "line": 29, "character": 9 },
+            "position": { "line": 30, "character": 9 },
         }),
     );
     assert_eq!(hover["result"]["contents"]["kind"], "markdown");
@@ -576,10 +576,10 @@ fn stdio_server_treats_overlapping_open_analyses_as_superseded() {
     let repository =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
     let documents = [
-        "lib/std/bool.zy",
+        "lib/std/data/bool.zy",
         "lib/std/builtin.zy",
-        "lib/std/list.zy",
-        "lib/std/monad.zy",
+        "lib/std/data/list.zy",
+        "lib/std/control/monad.zy",
         "lib/std/std.zy",
     ]
     .into_iter()

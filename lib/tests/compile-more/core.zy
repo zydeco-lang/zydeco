@@ -4,9 +4,13 @@ begin
   --| Thunk Type and Return Type
   --| Primitive Base Types
   param (
-    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /String; /OS; /int64; /stdio; /process) :
+    (/core; /representations; /numeric; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/VType; /CType; /Thk; /Ret; /Unit) = core that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let (/Scalar = String) = representations/string that
+  let (/OS; /stdio; /process) = system that
   let Thunk (B : CType) = Thk B that
 
   --| Interface for Monads and Their Algebras

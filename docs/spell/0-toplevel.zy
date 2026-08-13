@@ -17,9 +17,13 @@ begin
   -- `that` lets this parameter move within the current block according to the
   -- dependency graph, so later definitions may use its fields.
   param (
-    (/VType; /Thk; /Ret; /Int64; /String; /process) :
+    (/core; /representations; /system) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
+  let (/VType; /Thk; /Ret) = core that
+  let (/Scalar = Int64) = representations/i64 that
+  let (/Scalar = String) = representations/string that
+  let (/process) = system that
 
   -- A former `data` declaration is now a type-valued definition. Parameters
   -- are ordinary term parameters, and the `data ... end` term constructs the

@@ -1,8 +1,11 @@
 begin
   param (
-    (/VType; /Ret; /Unit; /Int64; /int64; /process) :
+    (/core; /numeric; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/VType; /Ret; /Unit) = core that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let (/process) = system that
 
   def List (A : VType) : VType =
     data

@@ -1,9 +1,10 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (/Int64 = _; builtin) :
+    (/representations; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/Scalar = _) = representations/i64 that
 
   let (/int64; /process) =
     make_std builtin

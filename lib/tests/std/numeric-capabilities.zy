@@ -1,9 +1,13 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (/VType; /Ret; /Int64; /Float64; /OS; builtin) :
+    (/core; /representations; /system; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/VType; /Ret) = core that
+  let (/Scalar = Int64) = representations/i64 that
+  let (/Scalar = Float64) = representations/f64 that
+  let (/OS) = system that
 
   let (/Bool; /Numeric; /numeric; /primitives; /bool; /process) = make_std builtin in
   let ! multiply_add_equal

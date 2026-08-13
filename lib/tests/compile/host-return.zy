@@ -1,8 +1,12 @@
 begin
   param (
-    (/int64; /char; /string; /process) :
+    (/numeric; /text; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let char = text/char that
+  let string = text/string that
+  let (/process) = system that
 
   do twelve <- ! (int64/to_string) 12;
   do combined <- ! (string/append) twelve twelve;

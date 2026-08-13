@@ -920,7 +920,14 @@ mod impls {
                 | IntrinsicRole::Thk => self.thunk(prev),
                 | IntrinsicRole::Ret => self.ret(prev),
                 | IntrinsicRole::Unit => self.unit(prev),
+                | IntrinsicRole::Primitive(primitive) => self.primitive(primitive, prev),
             }
+        }
+
+        pub(crate) fn primitive(
+            &mut self, primitive: zydeco_syntax::PrimitiveType, prev: t::EntityId,
+        ) -> b::TermId {
+            Alloc::alloc(self, b::Internal::Primitive(primitive).into(), prev)
         }
 
         pub(crate) fn vtype(&mut self, prev: t::EntityId) -> b::TermId {
@@ -942,14 +949,6 @@ mod impls {
         pub(crate) fn unit(&mut self, prev: t::EntityId) -> b::TermId {
             let term = Alloc::alloc(self, b::Internal::Unit.into(), prev);
             *self.prim.unit.extend_one(term)
-        }
-        pub(crate) fn char(&mut self, prev: t::EntityId) -> b::TermId {
-            let term = Alloc::alloc(self, b::Internal::Char.into(), prev);
-            *self.prim.char.extend_one(term)
-        }
-        pub(crate) fn string(&mut self, prev: t::EntityId) -> b::TermId {
-            let term = Alloc::alloc(self, b::Internal::String.into(), prev);
-            *self.prim.string.extend_one(term)
         }
         pub(crate) fn os(&mut self, prev: t::EntityId) -> b::TermId {
             let term = Alloc::alloc(self, b::Internal::OS.into(), prev);

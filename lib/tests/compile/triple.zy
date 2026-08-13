@@ -1,8 +1,11 @@
 begin
   param (
-    (/VType; /Int64; /process) :
+    (/core; /representations; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/VType) = core that
+  let (/Scalar = Int64) = representations/i64 that
+  let (/process) = system that
   def packed :
     exists (X : VType) .
     exists (Y : VType) .

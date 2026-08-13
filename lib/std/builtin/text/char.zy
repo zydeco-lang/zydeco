@@ -1,0 +1,25 @@
+  (
+    @[builtin(char_to_str)] (
+      to_string :: (@[intrinsic(thk)] _) (
+        (@[intrinsic(char)] _) -> (@[intrinsic(ret)] _) (@[intrinsic(string)] _)
+      )
+    )
+  )
+* (
+    @[builtin(char_codepoint)] (
+      codepoint :: (@[intrinsic(thk)] _) (
+        (@[intrinsic(char)] _) -> (@[intrinsic(ret)] _) (@[intrinsic(i64)] _)
+      )
+    )
+  )
+* (
+    @[builtin(char_from_codepoint)] (
+      from_codepoint :: (@[intrinsic(thk)] _) (
+        forall (R : @[intrinsic(ctype)] _) .
+             (@[intrinsic(i64)] _)
+          -> (@[intrinsic(thk)] _) R
+          -> (@[intrinsic(thk)] _) ((@[intrinsic(char)] _) -> R)
+          -> R
+      )
+    )
+  )

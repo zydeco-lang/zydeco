@@ -6,9 +6,11 @@
 
 begin
   param (
-    (/VType; /Thk; /Ret; /Unit; /OS; /process) :
+    (/core; /system) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
+  let (/VType; /Thk; /Ret; /Unit) = core that
+  let (/OS; /process) = system that
 
   def Nat : VType =
     data

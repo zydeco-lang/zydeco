@@ -3,9 +3,12 @@
 --| Funciton Type (A -> B)
 begin
   param (
-    (/VType; /CType; /Thk; /Ret; /Int64; /int64; /process) :
+    (/core; /numeric; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/VType; /CType; /Thk; /Ret) = core that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let (/process) = system that
 
   def Fn (A : VType) (B : CType) =
     codata

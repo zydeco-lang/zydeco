@@ -246,16 +246,16 @@ fn checks_selective_package_patterns_against_canonical_witnesses() {
         r#"
 begin
   let Box =
-    exists (Item : VType) .
-      (value :: Item)
+    exists (Item = ItemType : VType) .
+      (value :: ItemType)
   that
 
   let Reveal =
-    pi ((Item, _) : Box) . Ret Item
+    pi ((Item = ItemType, _) : Box) . Ret ItemType
   that
 
   def reveal : Thk Reveal = {
-    fn ((Item, = value) : Box) => ret value
+    fn ((Item = ItemType, = value) : Box) => ret value
   } that
 
   def forward : Thk Reveal = {
@@ -270,17 +270,20 @@ end
 }
 
 #[test]
-fn selective_builtin_parameters_bind_manifest_kinds_and_requested_fields() {
+fn selective_builtin_parameters_open_modular_groups() {
     PackPiCase::check(
         r#"
 begin
   def selective = {
     fn ((
-      /VType = SelectedVType;
-      /Bytes = SelectedBytes;
-      /bytes;
+      /core;
+      /representations;
+      /text;
       builtin
     ) : Builtin) =>
+      let (/VType = SelectedVType) = core in
+      let (/Scalar = SelectedBytes) = representations/bytes in
+      let bytes = text/bytes in
       let Selected : SelectedVType = SelectedBytes in
       ! (bytes/empty)
   } that

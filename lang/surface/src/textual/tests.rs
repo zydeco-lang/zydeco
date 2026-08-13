@@ -518,6 +518,14 @@ fn source_unit_decodes_typed_intrinsic_splices() {
         ("thk", IntrinsicRole::Thk),
         ("ret", IntrinsicRole::Ret),
         ("unit", IntrinsicRole::Unit),
+        ("i8", IntrinsicRole::Primitive(zydeco_syntax::PrimitiveType::Integer(IntegerType::Int8))),
+        (
+            "f64",
+            IntrinsicRole::Primitive(zydeco_syntax::PrimitiveType::Float(
+                zydeco_syntax::FloatType::Float64,
+            )),
+        ),
+        ("string", IntrinsicRole::Primitive(zydeco_syntax::PrimitiveType::String)),
     ]
     .into_iter()
     .for_each(|(name, expected)| {

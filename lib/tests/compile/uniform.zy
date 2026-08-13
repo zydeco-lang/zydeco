@@ -8,9 +8,12 @@ begin
   that
   let IdentityResult = TypeIdentity Int64 that
   param (
-    (/VType; /Int64; /OS; /int64; /process) :
+    (/core; /numeric; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/VType) = core that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let (/OS; /process) = system that
   def ! run
     : forall (A : VType) .
     A -> OS =

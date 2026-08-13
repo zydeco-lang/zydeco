@@ -561,7 +561,7 @@ mod tests {
     #[test]
     fn type_hover_expands_short_definitions_and_collapses_long_ones() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/std/option.zy")
+            .join("../../lib/std/data/option.zy")
             .canonicalize()
             .unwrap();
         let project = ProjectState::load(&path, &HashMap::new()).unwrap();
@@ -601,7 +601,7 @@ mod tests {
     #[test]
     fn type_hover_pretty_prints_within_the_client_column_budget() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/std/option.zy")
+            .join("../../lib/std/data/option.zy")
             .canonicalize()
             .unwrap();
         let project = ProjectState::load(&path, &HashMap::new()).unwrap();
@@ -630,15 +630,16 @@ mod tests {
     #[test]
     fn type_hover_breaks_result_constructor_signatures_at_72_columns() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/std/result.zy")
+            .join("../../lib/std/data/result.zy")
             .canonicalize()
             .unwrap();
         let source = concat!(
             "param (\n",
-            "  (/VType; /CType; /Thk; /Ret) :\n",
+            "  (/core) :\n",
             "  @[import(\"builtin.zy\")] _\n",
             ") in\n",
             "begin\n",
+            "  let (/VType; /CType; /Thk; /Ret) = core that\n",
             "  def Result (A : VType) (E : VType) =\n",
             "    data\n",
             "    | +Ok : A\n",
@@ -654,7 +655,7 @@ mod tests {
         let overrides = HashMap::from([(path.clone(), source.to_owned())]);
         let project = ProjectState::load(&path, &overrides).unwrap();
         let line_width = HoverLineWidth::new(72).unwrap();
-        let hover = project.hover(&path, Position::new(11, 9), line_width).unwrap();
+        let hover = project.hover(&path, Position::new(12, 9), line_width).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };

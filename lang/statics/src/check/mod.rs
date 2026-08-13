@@ -440,6 +440,9 @@ enum ExistentialProjectionSlot {
         source_pattern: ss::TPatId,
         payload_kind: ss::KindId,
         payload: ss::TypeId,
+        /// The payload wrapped in the binder's named-pattern structure.
+        /// Whole-package aliases need this form when instantiating a package arrow.
+        full_payload: ss::TypeId,
         pattern: ss::TPatId,
         skolem: Option<ss::AbstId>,
     },
@@ -462,7 +465,7 @@ impl ExistentialProjectionSlot {
     fn term(&self) -> ss::StaticTermId {
         match self {
             | Self::Kind { definition, .. } => (*definition).into(),
-            | Self::Type { payload, .. } => (*payload).into(),
+            | Self::Type { full_payload, .. } => (*full_payload).into(),
         }
     }
 
@@ -601,6 +604,7 @@ impl ExistentialProjectionPattern {
                         source_pattern: binder.pattern,
                         payload_kind,
                         payload,
+                        full_payload,
                         pattern: binder.pattern,
                         skolem,
                     });
@@ -1304,9 +1308,9 @@ impl InternalTerm {
                 let ty = ss::UnitTy.build(tycker, env);
                 TermAnnId::Type(ty, tycker.statics.annotations_type[&ty])
             }
-            | su::Internal::Char => self.builtin_type_k(tycker, env, ss::BuiltinTypeRole::Char)?,
-            | su::Internal::String => {
-                self.builtin_type_k(tycker, env, ss::BuiltinTypeRole::String)?
+            | su::Internal::Primitive(primitive) => {
+                let ty = ss::PrimitiveTy(primitive).build(tycker, env);
+                TermAnnId::Type(ty, tycker.statics.annotations_type[&ty])
             }
             | su::Internal::OS => self.builtin_type_k(tycker, env, ss::BuiltinTypeRole::OS)?,
             | su::Internal::Monad | su::Internal::Algebra => tycker.err_k(
@@ -5404,24 +5408,19 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 }
             }
             | Tm::Lit(lit) => {
-                fn builtin_type_role(
+                fn primitive_type(
                     tycker: &Tycker<'_>, ty: ss::TypeId,
-                ) -> Option<ss::BuiltinTypeRole> {
+                ) -> Option<ss::PrimitiveType> {
                     match tycker.statics.types_pre.get(&ty)?.to_owned() {
                         | ss::Fillable::Fill(fill) => match tycker.statics.solus.get(&fill) {
-                            | Some(ss::AnnId::Type(solution)) => {
-                                builtin_type_role(tycker, *solution)
-                            }
+                            | Some(ss::AnnId::Type(solution)) => primitive_type(tycker, *solution),
                             | _ => None,
                         },
-                        | ss::Fillable::Done(ss::Type::Abst(witness)) => {
-                            match tycker.statics.builtin_roles.witness(witness) {
-                                | Some(ss::BuiltinRole::Type(role)) => Some(role),
-                                | _ => None,
-                            }
+                        | ss::Fillable::Done(ss::Type::Primitive(ss::PrimitiveTy(primitive))) => {
+                            Some(primitive)
                         }
                         | ss::Fillable::Done(ss::Type::Named(ss::Named(_, inner))) => {
-                            builtin_type_role(tycker, inner)
+                            primitive_type(tycker, inner)
                         }
                         | ss::Fillable::Done(_) => None,
                     }
@@ -5429,10 +5428,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
 
                 fn literal_type_k(
                     tycker: &mut Tycker<'_>, env: &ss::TyEnv, switch: Switch<AnnId>,
-                    role: ss::BuiltinTypeRole,
+                    primitive: ss::PrimitiveType,
                 ) -> ResultKont<ss::TypeId> {
+                    let literal_ty = ss::PrimitiveTy(primitive).build(tycker, env);
                     match switch {
-                        | Switch::Syn => BuiltinTypeResolution(role).resolve_k(tycker, env),
+                        | Switch::Syn => Ok(literal_ty),
                         | Switch::Ana(annotation) => {
                             let AnnId::Type(ty) = annotation else {
                                 tycker.err_k(
@@ -5440,7 +5440,6 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     std::panic::Location::caller(),
                                 )?
                             };
-                            let literal_ty = BuiltinTypeResolution(role).resolve_k(tycker, env)?;
                             Lub::lub_k(literal_ty, ty, tycker)
                         }
                     }
@@ -5451,24 +5450,23 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         let (ty, integer_type) = match switch {
                             | Switch::Syn => {
                                 let integer_type = ss::IntegerType::Int64;
-                                let ty = BuiltinTypeResolution(integer_type.builtin_role())
-                                    .resolve_k(tycker, &self.info)?;
+                                let ty = ss::PrimitiveTy(ss::PrimitiveType::Integer(integer_type))
+                                    .build(tycker, &self.info);
                                 (ty, integer_type)
                             }
-                            | Switch::Ana(AnnId::Type(ty)) => {
-                                match builtin_type_role(tycker, ty)
-                                    .and_then(ss::BuiltinTypeRole::integer_type)
-                                {
-                                    | Some(integer_type) => (ty, integer_type),
-                                    | None => {
-                                        let default =
-                                            BuiltinTypeResolution(ss::BuiltinTypeRole::Int64)
-                                                .resolve_k(tycker, &self.info)?;
-                                        let ty = Lub::lub_k(default, ty, tycker)?;
-                                        (ty, ss::IntegerType::Int64)
-                                    }
+                            | Switch::Ana(AnnId::Type(ty)) => match primitive_type(tycker, ty) {
+                                | Some(ss::PrimitiveType::Integer(integer_type)) => {
+                                    (ty, integer_type)
                                 }
-                            }
+                                | Some(_) | None => {
+                                    let default = ss::PrimitiveTy(ss::PrimitiveType::Integer(
+                                        ss::IntegerType::Int64,
+                                    ))
+                                    .build(tycker, &self.info);
+                                    let ty = Lub::lub_k(default, ty, tycker)?;
+                                    (ty, ss::IntegerType::Int64)
+                                }
+                            },
                             | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker
                                 .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
                         };
@@ -5485,24 +5483,21 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         let (ty, float_type) = match switch {
                             | Switch::Syn => {
                                 let float_type = ss::FloatType::Float64;
-                                let ty = BuiltinTypeResolution(float_type.builtin_role())
-                                    .resolve_k(tycker, &self.info)?;
+                                let ty = ss::PrimitiveTy(ss::PrimitiveType::Float(float_type))
+                                    .build(tycker, &self.info);
                                 (ty, float_type)
                             }
-                            | Switch::Ana(AnnId::Type(ty)) => {
-                                match builtin_type_role(tycker, ty)
-                                    .and_then(ss::BuiltinTypeRole::float_type)
-                                {
-                                    | Some(float_type) => (ty, float_type),
-                                    | None => {
-                                        let default =
-                                            BuiltinTypeResolution(ss::BuiltinTypeRole::Float64)
-                                                .resolve_k(tycker, &self.info)?;
-                                        let ty = Lub::lub_k(default, ty, tycker)?;
-                                        (ty, ss::FloatType::Float64)
-                                    }
+                            | Switch::Ana(AnnId::Type(ty)) => match primitive_type(tycker, ty) {
+                                | Some(ss::PrimitiveType::Float(float_type)) => (ty, float_type),
+                                | Some(_) | None => {
+                                    let default = ss::PrimitiveTy(ss::PrimitiveType::Float(
+                                        ss::FloatType::Float64,
+                                    ))
+                                    .build(tycker, &self.info);
+                                    let ty = Lub::lub_k(default, ty, tycker)?;
+                                    (ty, ss::FloatType::Float64)
                                 }
-                            }
+                            },
                             | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker
                                 .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
                         };
@@ -5519,17 +5514,13 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         (Lit::Float(value), ty)
                     }
                     | Lit::String(s) => {
-                        let ty = literal_type_k(
-                            tycker,
-                            &self.info,
-                            switch,
-                            ss::BuiltinTypeRole::String,
-                        )?;
+                        let ty =
+                            literal_type_k(tycker, &self.info, switch, ss::PrimitiveType::String)?;
                         (Lit::String(s), ty)
                     }
                     | Lit::Char(c) => {
                         let ty =
-                            literal_type_k(tycker, &self.info, switch, ss::BuiltinTypeRole::Char)?;
+                            literal_type_k(tycker, &self.info, switch, ss::PrimitiveType::Char)?;
                         (Lit::Char(c), ty)
                     }
                 };

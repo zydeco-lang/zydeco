@@ -6,9 +6,11 @@
 
 begin
   param (
-    (/VType; /CType; /Thk; /Ret; /process) :
+    (/core; /system) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
+  let (/VType; /CType; /Thk; /Ret) = core that
+  let (/process) = system that
 
   let Lens (S : VType) (A : VType) =
     forall (

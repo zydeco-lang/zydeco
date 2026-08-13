@@ -329,22 +329,24 @@ fn checked_trivial_computation() -> SourceChecked {
 
 fn builtin_add_exit_source() -> &'static str {
     r#"
-param (
-  (/Int64; /OS; /int64; /process) :
-  exists
-    @[builtin(int64)] (Int64 : @[intrinsic(vtype)] _)
-    @[builtin(os)] (OS : @[intrinsic(ctype)] _)
-  .
-    (int64 ::
-      (@[builtin(int64_add)] (add ::
-        (@[intrinsic(thk)] _) (Int64 -> Int64 -> (@[intrinsic(ret)] _) Int64))) *
-      (@[builtin(int64_sub)] (sub ::
-        (@[intrinsic(thk)] _) (Int64 -> Int64 -> (@[intrinsic(ret)] _) Int64)))) *
-    (process ::
-      @[builtin(exit)] (exit :: (@[intrinsic(thk)] _) (Int64 -> OS)))
-) in
-  do sum <- ! (int64/add) 1 2;
-  ! (process/exit) sum
+begin
+  let Int64 = @[intrinsic(i64)] _ that
+  param (
+    (/OS; /int64; /process) :
+    exists
+      @[builtin(os)] (OS : @[intrinsic(ctype)] _)
+    .
+      (int64 ::
+        (@[builtin(int64_add)] (add ::
+          (@[intrinsic(thk)] _) (Int64 -> Int64 -> (@[intrinsic(ret)] _) Int64))) *
+        (@[builtin(int64_sub)] (sub ::
+          (@[intrinsic(thk)] _) (Int64 -> Int64 -> (@[intrinsic(ret)] _) Int64)))) *
+      (process ::
+        @[builtin(exit)] (exit :: (@[intrinsic(thk)] _) (Int64 -> OS)))
+  ) in
+    do sum <- ! (int64/add) 1 2;
+    ! (process/exit) sum
+end
 "#
 }
 
@@ -1037,14 +1039,11 @@ fn a_zero_dependency_source_program_lowers_directly_to_stack_ir() {
 }
 
 #[test]
-fn a_builtin_type_role_classifies_literals_inside_its_package_scope() {
+fn a_fixed_primitive_intrinsic_classifies_literals_without_a_package_scope() {
     let fixture = SourceFixture::new();
     let root = fixture.write(
         "main.zy",
-        concat!(
-            "param ((Int64, value) : exists @[builtin(int64)] ",
-            "(Int64 : @[intrinsic(vtype)] _) . Int64) in ret 1"
-        ),
+        "begin let Int64 = @[intrinsic(i64)] _ that def value : Int64 = 1 that ret value end",
     );
     let checked = SourceGraph::load(root)
         .unwrap()
@@ -1061,32 +1060,42 @@ fn a_builtin_type_role_classifies_literals_inside_its_package_scope() {
 }
 
 #[test]
-fn a_literal_cannot_use_a_builtin_type_role_outside_its_package_scope() {
+fn an_integer_literal_defaults_to_int64_without_a_package_scope() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "ret 1");
-    let scoped =
-        SourceGraph::load(root).unwrap().assemble().unwrap().desugar().unwrap().resolve().unwrap();
-
-    assert!(scoped.check().is_err());
+    SourceGraph::load(root)
+        .unwrap()
+        .assemble()
+        .unwrap()
+        .desugar()
+        .unwrap()
+        .resolve()
+        .unwrap()
+        .check()
+        .unwrap();
 }
 
 #[test]
-fn two_visible_builtin_type_roles_are_ambiguous_at_a_literal() {
+fn repeated_primitive_intrinsics_have_one_applicative_identity() {
     let fixture = SourceFixture::new();
     let root = fixture.write(
         "main.zy",
         concat!(
-            "param ((IntA, a) : exists @[builtin(int64)] ",
-            "(IntA : @[intrinsic(vtype)] _) . IntA) in ",
-            "param ((IntB, b) : exists @[builtin(int64)] ",
-            "(IntB : @[intrinsic(vtype)] _) . IntB) in ",
-            "ret 1",
+            "begin let IntA = @[intrinsic(i64)] _ that ",
+            "let IntB = @[intrinsic(i64)] _ that ",
+            "def a : IntA = 1 that def b : IntB = a that ret b end",
         ),
     );
-    let scoped =
-        SourceGraph::load(root).unwrap().assemble().unwrap().desugar().unwrap().resolve().unwrap();
-
-    assert!(scoped.check().is_err());
+    SourceGraph::load(root)
+        .unwrap()
+        .assemble()
+        .unwrap()
+        .desugar()
+        .unwrap()
+        .resolve()
+        .unwrap()
+        .check()
+        .unwrap();
 }
 
 #[test]
@@ -1098,8 +1107,8 @@ fn one_package_signature_rejects_duplicate_builtin_type_roles() {
 param (
   (IntA, IntB, value) :
   exists
-    @[builtin(int64)] (IntA : @[intrinsic(vtype)] _)
-    @[builtin(int64)] (IntB : @[intrinsic(vtype)] _)
+    @[builtin(reader)] (IntA : @[intrinsic(vtype)] _)
+    @[builtin(reader)] (IntB : @[intrinsic(vtype)] _)
   . IntA
 ) in
   ret value
@@ -1118,9 +1127,9 @@ fn one_package_signature_rejects_duplicate_builtin_operation_roles() {
         "main.zy",
         r#"
 param (
-  (Int64, = first, = second) :
+  (OS, = first, = second) :
   exists
-    @[builtin(int64)] (Int64 : @[intrinsic(vtype)] _)
+    @[builtin(os)] (OS : @[intrinsic(ctype)] _)
   .
     ((@[builtin(int64_add)] (first :: @[intrinsic(unit)] _)) *
      (@[builtin(int64_add)] (second :: @[intrinsic(unit)] _)))
@@ -1138,11 +1147,11 @@ param (
 fn builtin_host_type_roles_require_abstract_entries_of_the_right_kind() {
     let cases = [
         concat!(
-            "exists @[builtin(int64)] (Int64 as (@[intrinsic(unit)] _) : ",
+            "exists @[builtin(reader)] (Reader as (@[intrinsic(unit)] _) : ",
             "@[intrinsic(vtype)] _) . (@[intrinsic(unit)] _)"
         ),
         concat!(
-            "exists @[builtin(int64)] (Int64 : @[intrinsic(ctype)] _) . ",
+            "exists @[builtin(reader)] (Reader : @[intrinsic(ctype)] _) . ",
             "(@[intrinsic(unit)] _)"
         ),
         concat!("exists @[builtin(os)] (OS : @[intrinsic(vtype)] _) . ", "(@[intrinsic(unit)] _)"),
@@ -1230,19 +1239,21 @@ fn continuation_io_uses_its_foundational_builtin_classifier() {
     let root = fixture.write(
         "main.zy",
         r#"
-param (
-  (/Int64; /OS; /stdio; /process) :
-  exists
-    @[builtin(int64)] (Int64 : @[intrinsic(vtype)] _)
-    @[builtin(os)] (OS : @[intrinsic(ctype)] _)
-  .
-    (stdio :: @[builtin(write_int)]
-      (write_int :: (@[intrinsic(thk)] _)
-        (Int64 -> (@[intrinsic(thk)] _) OS -> OS))) *
-    (process :: @[builtin(exit)]
-      (exit :: (@[intrinsic(thk)] _) (Int64 -> OS)))
-) in
-  ! (stdio/write_int) 7 { ! (process/exit) 0 }
+begin
+  let Int64 = @[intrinsic(i64)] _ that
+  param (
+    (/OS; /stdio; /process) :
+    exists
+      @[builtin(os)] (OS : @[intrinsic(ctype)] _)
+    .
+      (stdio :: @[builtin(write_int)]
+        (write_int :: (@[intrinsic(thk)] _)
+          (Int64 -> (@[intrinsic(thk)] _) OS -> OS))) *
+      (process :: @[builtin(exit)]
+        (exit :: (@[intrinsic(thk)] _) (Int64 -> OS)))
+  ) in
+    ! (stdio/write_int) 7 { ! (process/exit) 0 }
+end
 "#,
     );
     let dynamics = TestPipeline::check(root).unwrap().dynamics_with_builtin().unwrap().arena;
@@ -1263,10 +1274,10 @@ fn exact_builtin_classifiers_follow_bound_intrinsic_aliases() {
 begin
   let Thk = @[intrinsic(thk)] _ that
   let Ret = @[intrinsic(ret)] _ that
+  let Int64 = @[intrinsic(i64)] _ that
   param (
-    (/Int64; /OS; /int64; /process) :
+    (/OS; /int64; /process) :
     exists
-      @[builtin(int64)] (Int64 : @[intrinsic(vtype)] _)
       @[builtin(os)] (OS : @[intrinsic(ctype)] _)
     .
       (int64 :: @[builtin(int64_add)] (add :: Thk (Int64 -> Int64 -> Ret Int64))) *
@@ -1356,28 +1367,38 @@ fn canonical_builtin_signature_imports_into_interpreter_and_native_compilation()
 }
 
 #[test]
-fn authored_sources_define_each_intrinsic_once_in_the_canonical_builtin_signature() {
-    let builtin = repository_source("std/builtin.zy").canonicalize().unwrap();
-    let source = std::fs::read_to_string(&builtin).unwrap();
-    let unexpected = RepositorySourceFiles::all()
+fn authored_intrinsic_splices_stay_in_the_canonical_builtin_package_tree() {
+    let builtin_root = repository_source("std/builtin.zy").canonicalize().unwrap();
+    let builtin_modules = repository_source("std/builtin").canonicalize().unwrap();
+    let (builtin_sources, unexpected): (Vec<_>, Vec<_>) = RepositorySourceFiles::all()
         .into_iter()
-        .filter(|path| path != &builtin)
         .filter(|path| std::fs::read_to_string(path).unwrap().contains("@[intrinsic("))
-        .collect::<Vec<_>>();
+        .partition(|path| path == &builtin_root || path.starts_with(&builtin_modules));
+    let source = builtin_sources
+        .iter()
+        .map(|path| std::fs::read_to_string(path).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
 
-    assert!(unexpected.is_empty(), "intrinsic splices outside builtin.zy: {unexpected:?}");
-    ["vtype", "ctype", "thk", "ret", "unit"].into_iter().for_each(|role| {
-        assert_eq!(
-            source.matches(&format!("@[intrinsic({role})] _")).count(),
-            1,
-            "expected one `{role}` intrinsic splice"
+    assert!(
+        unexpected.is_empty(),
+        "intrinsic splices outside the canonical Builtin package tree: {unexpected:?}"
+    );
+    [
+        "vtype", "ctype", "thk", "ret", "unit", "i8", "i16", "i32", "i64", "u8", "u16", "u32",
+        "u64", "f32", "f64", "char", "string", "bytes",
+    ]
+    .into_iter()
+    .for_each(|role| {
+        assert!(
+            source.contains(&format!("@[intrinsic({role})] _")),
+            "expected a `{role}` intrinsic splice"
         );
     });
-    assert_eq!(source.matches("@[intrinsic(").count(), 5);
 }
 
 #[test]
-fn canonical_builtin_signature_exports_intrinsics_as_static_manifest_fields() {
+fn canonical_builtin_signature_keeps_only_system_capabilities_abstract() {
     use zydeco_statics::syntax::{ExistsMode, Fillable, Kind, ManifestKind, TermAnnId, Type};
     use zydeco_syntax::{BuiltinRole, BuiltinTypeRole};
 
@@ -1385,9 +1406,6 @@ fn canonical_builtin_signature_exports_intrinsics_as_static_manifest_fields() {
     enum ExpectedField {
         VType,
         CType,
-        Thk,
-        Ret,
-        Unit,
         Abstract(BuiltinTypeRole),
     }
 
@@ -1402,22 +1420,6 @@ fn canonical_builtin_signature_exports_intrinsics_as_static_manifest_fields() {
     let fields = [
         ExpectedField::VType,
         ExpectedField::CType,
-        ExpectedField::Thk,
-        ExpectedField::Ret,
-        ExpectedField::Unit,
-        ExpectedField::Abstract(BuiltinTypeRole::Int8),
-        ExpectedField::Abstract(BuiltinTypeRole::Int16),
-        ExpectedField::Abstract(BuiltinTypeRole::Int32),
-        ExpectedField::Abstract(BuiltinTypeRole::Int64),
-        ExpectedField::Abstract(BuiltinTypeRole::UInt8),
-        ExpectedField::Abstract(BuiltinTypeRole::UInt16),
-        ExpectedField::Abstract(BuiltinTypeRole::UInt32),
-        ExpectedField::Abstract(BuiltinTypeRole::UInt64),
-        ExpectedField::Abstract(BuiltinTypeRole::Float32),
-        ExpectedField::Abstract(BuiltinTypeRole::Float64),
-        ExpectedField::Abstract(BuiltinTypeRole::Char),
-        ExpectedField::Abstract(BuiltinTypeRole::String),
-        ExpectedField::Abstract(BuiltinTypeRole::Bytes),
         ExpectedField::Abstract(BuiltinTypeRole::Reader),
         ExpectedField::Abstract(BuiltinTypeRole::Writer),
         ExpectedField::Abstract(BuiltinTypeRole::OS),
@@ -1448,21 +1450,6 @@ fn canonical_builtin_signature_exports_intrinsics_as_static_manifest_fields() {
                 ));
                 (body, abstract_witnesses)
             }
-            | (
-                expected @ (ExpectedField::Thk | ExpectedField::Ret | ExpectedField::Unit),
-                Fillable::Done(Type::Exists(exists)),
-            ) => {
-                let ExistsMode::Manifest(definition) = exists.mode else {
-                    panic!("expected a manifest intrinsic type field")
-                };
-                assert!(match (expected, &checked.statics.types_pre[&definition]) {
-                    | (ExpectedField::Thk, Fillable::Done(Type::Thk(_)))
-                    | (ExpectedField::Ret, Fillable::Done(Type::Ret(_)))
-                    | (ExpectedField::Unit, Fillable::Done(Type::Unit(_))) => true,
-                    | _ => false,
-                });
-                (exists.body, abstract_witnesses)
-            }
             | (ExpectedField::Abstract(role), Fillable::Done(Type::Exists(exists))) => {
                 assert!(matches!(exists.mode, ExistsMode::Abstract));
                 assert_eq!(
@@ -1488,7 +1475,14 @@ fn canonical_builtin_signature_exports_intrinsics_as_static_manifest_fields() {
         .map(|witness| checked.statics.builtin_roles.witness(*witness))
         .collect::<Vec<_>>();
     assert_eq!(abstract_roles, opened_roles);
-    assert_eq!(opened_roles.len(), 16);
+    assert_eq!(
+        opened_roles,
+        vec![
+            Some(BuiltinRole::Type(BuiltinTypeRole::Reader)),
+            Some(BuiltinRole::Type(BuiltinTypeRole::Writer)),
+            Some(BuiltinRole::Type(BuiltinTypeRole::OS)),
+        ]
+    );
     assert!(matches!(checked.statics.types_pre[&tail], Fillable::Done(Type::Prod(_))));
 }
 
@@ -1743,7 +1737,7 @@ fn recursive_nominal_types_port_to_a_declaration_free_block() {
 
 #[test]
 fn abstract_bool_package_exports_values_and_an_eliminator() {
-    RepositorySourceFiles::assert_pure_package("std/bool.zy");
+    RepositorySourceFiles::assert_pure_package("std/data/bool.zy");
 
     let root = repository_source("tests/std/bool.zy");
     let dynamics = TestPipeline::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
@@ -1764,7 +1758,7 @@ fn abstract_bool_package_exports_values_and_an_eliminator() {
 
 #[test]
 fn abstract_option_package_exports_a_type_constructor_and_an_eliminator() {
-    RepositorySourceFiles::assert_pure_package("std/option.zy");
+    RepositorySourceFiles::assert_pure_package("std/data/option.zy");
 
     let root = repository_source("tests/std/option.zy");
     let dynamics = TestPipeline::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;
@@ -1785,7 +1779,7 @@ fn abstract_option_package_exports_a_type_constructor_and_an_eliminator() {
 
 #[test]
 fn abstract_list_package_exports_case_analysis_and_a_recursive_fold() {
-    RepositorySourceFiles::assert_pure_package("std/list.zy");
+    RepositorySourceFiles::assert_pure_package("std/data/list.zy");
 
     let root = repository_source("tests/std/list.zy");
     let dynamics = TestPipeline::check(&root).unwrap().dynamics_with_builtin().unwrap().arena;

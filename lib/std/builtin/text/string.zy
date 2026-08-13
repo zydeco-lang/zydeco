@@ -1,0 +1,86 @@
+  (
+    @[builtin(str_scalar_length)] (
+      length :: (@[intrinsic(thk)] _) (
+        (@[intrinsic(string)] _) -> (@[intrinsic(ret)] _) (@[intrinsic(i64)] _)
+      )
+    )
+  )
+* (
+    @[builtin(str_byte_length)] (
+      byte_length :: (@[intrinsic(thk)] _) (
+        (@[intrinsic(string)] _) -> (@[intrinsic(ret)] _) (@[intrinsic(i64)] _)
+      )
+    )
+  )
+* (
+    @[builtin(str_append)] (
+      append :: (@[intrinsic(thk)] _) (
+           (@[intrinsic(string)] _)
+        -> (@[intrinsic(string)] _)
+        -> (@[intrinsic(ret)] _) (@[intrinsic(string)] _)
+      )
+    )
+  )
+* (
+    @[builtin(str_split_once)] (
+      split_once :: (@[intrinsic(thk)] _) (
+        forall (R : @[intrinsic(ctype)] _) .
+             (@[intrinsic(string)] _)
+          -> (@[intrinsic(char)] _)
+          -> (@[intrinsic(thk)] _) R
+          -> (@[intrinsic(thk)] _) (
+               (@[intrinsic(string)] _) -> (@[intrinsic(string)] _) -> R
+             )
+          -> R
+      )
+    )
+  )
+* (
+    @[builtin(str_split_at)] (
+      split_at :: (@[intrinsic(thk)] _) (
+        forall (R : @[intrinsic(ctype)] _) .
+             (@[intrinsic(string)] _)
+          -> (@[intrinsic(i64)] _)
+          -> (@[intrinsic(thk)] _) R
+          -> (@[intrinsic(thk)] _) (
+               (@[intrinsic(string)] _) -> (@[intrinsic(string)] _) -> R
+             )
+          -> R
+      )
+    )
+  )
+* (
+    @[builtin(str_eq)] (
+      eq :: (@[intrinsic(thk)] _) (
+        forall (R : @[intrinsic(ctype)] _) .
+             (@[intrinsic(string)] _)
+          -> (@[intrinsic(string)] _)
+          -> (@[intrinsic(thk)] _) R
+          -> (@[intrinsic(thk)] _) R
+          -> R
+      )
+    )
+  )
+* (
+    @[builtin(str_get)] (
+      get :: (@[intrinsic(thk)] _) (
+        forall (R : @[intrinsic(ctype)] _) .
+             (@[intrinsic(string)] _)
+          -> (@[intrinsic(i64)] _)
+          -> (@[intrinsic(thk)] _) R
+          -> (@[intrinsic(thk)] _) ((@[intrinsic(char)] _) -> R)
+          -> R
+      )
+    )
+  )
+* (
+    @[builtin(str_parse_int)] (
+      parse_int :: (@[intrinsic(thk)] _) (
+        forall (R : @[intrinsic(ctype)] _) .
+             (@[intrinsic(string)] _)
+          -> (@[intrinsic(thk)] _) R
+          -> (@[intrinsic(thk)] _) ((@[intrinsic(i64)] _) -> R)
+          -> R
+      )
+    )
+  )

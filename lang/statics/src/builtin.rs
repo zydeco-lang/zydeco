@@ -14,7 +14,7 @@ use zydeco_syntax::{
 };
 use zydeco_utils::arena::ArenaAccess;
 
-/// Host-provided atomic value types available to foundational operations.
+/// Atomic value types available to foundational host operations.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum BuiltinValueAtom {
     Integer(IntegerType),
@@ -27,16 +27,24 @@ pub enum BuiltinValueAtom {
 }
 
 impl BuiltinValueAtom {
-    fn role(self) -> BuiltinTypeRole {
+    fn capability_role(self) -> Option<BuiltinTypeRole> {
         match self {
-            | Self::Integer(integer) => integer.builtin_role(),
-            | Self::Float(float) => float.builtin_role(),
-            | Self::Char => BuiltinTypeRole::Char,
-            | Self::String => BuiltinTypeRole::String,
-            | Self::Bytes => BuiltinTypeRole::Bytes,
-            | Self::Reader => BuiltinTypeRole::Reader,
-            | Self::Writer => BuiltinTypeRole::Writer,
+            | Self::Reader => Some(BuiltinTypeRole::Reader),
+            | Self::Writer => Some(BuiltinTypeRole::Writer),
+            | Self::Integer(_) | Self::Float(_) | Self::Char | Self::String | Self::Bytes => None,
         }
+    }
+
+    fn primitive(self) -> Option<zydeco_syntax::PrimitiveType> {
+        use zydeco_syntax::PrimitiveType;
+        Some(match self {
+            | Self::Integer(integer) => PrimitiveType::Integer(integer),
+            | Self::Float(float) => PrimitiveType::Float(float),
+            | Self::Char => PrimitiveType::Char,
+            | Self::String => PrimitiveType::String,
+            | Self::Bytes => PrimitiveType::Bytes,
+            | Self::Reader | Self::Writer => return None,
+        })
     }
 }
 
@@ -529,9 +537,14 @@ impl<'a> BuiltinClassifierMatcher<'a> {
             return false;
         }
         let matches = match (self.type_view(actual), expected) {
+            | (
+                Some(ss::Type::Primitive(ss::PrimitiveTy(actual))),
+                BuiltinValueClassifier::Atom(expected),
+            ) => expected.primitive() == Some(actual),
             | (Some(ss::Type::Abst(witness)), BuiltinValueClassifier::Atom(expected)) => {
-                self.statics.builtin_roles.witness(witness)
-                    == Some(BuiltinRole::Type(expected.role()))
+                expected.capability_role().is_some_and(|role| {
+                    self.statics.builtin_roles.witness(witness) == Some(BuiltinRole::Type(role))
+                })
             }
             | (
                 Some(ss::Type::App(zydeco_syntax::App(constructor, body))),

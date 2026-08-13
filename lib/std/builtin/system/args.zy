@@ -1,0 +1,10 @@
+@[builtin(arg_list)] (
+  fold :: (@[intrinsic(thk)] _) (
+    forall (R : @[intrinsic(ctype)] _) .
+         (@[intrinsic(thk)] _) R
+      -> (@[intrinsic(thk)] _) (
+           (@[intrinsic(string)] _) -> (@[intrinsic(thk)] _) R -> R
+         )
+      -> R
+  )
+)

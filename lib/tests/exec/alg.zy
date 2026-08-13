@@ -1,9 +1,12 @@
 begin
-  let monadic_basis = @[import("../../std/monad.zy")] _ that
+  let monadic_basis = @[import("../../std/control/monad.zy")] _ that
   param (
-    (/VType; /CType; /Thk; /Ret; /Int64; /process; builtin) :
+    (/core; /representations; /system; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/VType; /CType; /Thk; /Ret) = core that
+  let (/Scalar = Int64) = representations/i64 that
+  let (/process) = system that
   let (= Monad, = Algebra, ()) =
     monadic_basis builtin in
   begin

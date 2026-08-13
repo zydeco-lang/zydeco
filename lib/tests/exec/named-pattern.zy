@@ -2,9 +2,11 @@
 -- whole-pattern annotations, and holes alongside unnamed patterns.
 begin
   param (
-    (/Int64; /int64; /process) :
+    (/numeric; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let (/process) = system that
 
   let PatternTarget =
     (left :: Int64) * (Int64 * (right :: Int64))

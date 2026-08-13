@@ -1,7 +1,10 @@
 param (
-  (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /String; /int64) :
-  @[import("builtin.zy")] _
+  (/core; /representations; /numeric) :
+  @[import("../builtin.zy")] _
 ) in
+let (/VType; /CType; /Thk; /Ret; /Unit) = core in
+let (Scalar = Int64, int64) = numeric/int64 in
+let (/Scalar = String) = representations/string in
 begin
   def IoErrorKind =
     data
@@ -15,22 +18,14 @@ begin
     | +Other : Unit
     end
   that
-  def not_found : IoErrorKind = +NotFound()
-  that
-  def permission_denied : IoErrorKind = +PermissionDenied()
-  that
-  def already_exists : IoErrorKind = +AlreadyExists()
-  that
-  def invalid_input : IoErrorKind = +InvalidInput()
-  that
-  def invalid_data : IoErrorKind = +InvalidData()
-  that
-  def broken_pipe : IoErrorKind = +BrokenPipe()
-  that
-  def closed : IoErrorKind = +Closed()
-  that
-  def other : IoErrorKind = +Other()
-  that
+  def not_found : IoErrorKind = +NotFound() that
+  def permission_denied : IoErrorKind = +PermissionDenied() that
+  def already_exists : IoErrorKind = +AlreadyExists() that
+  def invalid_input : IoErrorKind = +InvalidInput() that
+  def invalid_data : IoErrorKind = +InvalidData() that
+  def broken_pipe : IoErrorKind = +BrokenPipe() that
+  def closed : IoErrorKind = +Closed() that
+  def other : IoErrorKind = +Other() that
   def ! from_code (code : Int64) : Ret IoErrorKind =
     ! (int64/eq)
       (Ret IoErrorKind)
@@ -99,7 +94,7 @@ begin
     (right : IoErrorKind)
     (when_equal : Thk R)
     (when_different : Thk R)
-    : R =
+  : R =
     do left_code <- ! kind_code left;
     do right_code <- ! kind_code right;
     ! (int64/eq) R left_code right_code when_equal when_different
@@ -137,46 +132,49 @@ begin
   that
   let Interface =
     exists (IoErrorKind = AbstractIoErrorKind : VType) .
-    exists (IoError = AbstractIoError : VType) .
-    exists (Path = AbstractPath : VType) .
-      (not_found :: AbstractIoErrorKind) *
-      (permission_denied :: AbstractIoErrorKind) *
-      (already_exists :: AbstractIoErrorKind) *
-      (invalid_input :: AbstractIoErrorKind) *
-      (invalid_data :: AbstractIoErrorKind) *
-      (broken_pipe :: AbstractIoErrorKind) *
-      (closed :: AbstractIoErrorKind) *
-      (other :: AbstractIoErrorKind) *
-      (from_code :: Thk (Int64 -> Ret AbstractIoErrorKind)) *
-      (kind_eq_branch :: Thk (
-        forall (R : CType) .
-          AbstractIoErrorKind -> AbstractIoErrorKind -> Thk R -> Thk R -> R
-      )) *
-      (error :: Thk (AbstractIoErrorKind -> String -> Ret AbstractIoError)) *
-      (error_kind :: Thk (AbstractIoError -> Ret AbstractIoErrorKind)) *
-      (error_message :: Thk (AbstractIoError -> Ret String)) *
-      (path :: Thk (String -> Ret AbstractPath)) *
-      (path_string :: Thk (AbstractPath -> Ret String))
+      exists (IoError = AbstractIoError : VType) .
+        exists (Path = AbstractPath : VType) .
+            (not_found :: AbstractIoErrorKind)
+          * (permission_denied :: AbstractIoErrorKind)
+          * (already_exists :: AbstractIoErrorKind)
+          * (invalid_input :: AbstractIoErrorKind)
+          * (invalid_data :: AbstractIoErrorKind)
+          * (broken_pipe :: AbstractIoErrorKind)
+          * (closed :: AbstractIoErrorKind)
+          * (other :: AbstractIoErrorKind)
+          * (from_code :: Thk (Int64 -> Ret AbstractIoErrorKind))
+          * (
+              kind_eq_branch :: Thk (
+                forall (R : CType) .
+                  AbstractIoErrorKind -> AbstractIoErrorKind -> Thk R -> Thk R -> R
+              )
+            )
+          * (error :: Thk (AbstractIoErrorKind -> String -> Ret AbstractIoError))
+          * (error_kind :: Thk (AbstractIoError -> Ret AbstractIoErrorKind))
+          * (error_message :: Thk (AbstractIoError -> Ret String))
+          * (path :: Thk (String -> Ret AbstractPath))
+          * (path_string :: Thk (AbstractPath -> Ret String))
   that
 
   (
-    IoErrorKind = IoErrorKind,
-    IoError = IoError,
-    Path = Path,
-    not_found = not_found,
-    permission_denied = permission_denied,
-    already_exists = already_exists,
-    invalid_input = invalid_input,
-    invalid_data = invalid_data,
-    broken_pipe = broken_pipe,
-    closed = closed,
-    other = other,
-    from_code = from_code,
-    kind_eq_branch = kind_eq_branch,
-    error = error,
-    error_kind = error_kind,
-    error_message = error_message,
-    path = path,
-    path_string = path_string,
-  ) : Interface
+    = IoErrorKind,
+    = IoError,
+    = Path,
+    = not_found,
+    = permission_denied,
+    = already_exists,
+    = invalid_input,
+    = invalid_data,
+    = broken_pipe,
+    = closed,
+    = other,
+    = from_code,
+    = kind_eq_branch,
+    = error,
+    = error_kind,
+    = error_message,
+    = path,
+    = path_string
+  )
+  : Interface
 end

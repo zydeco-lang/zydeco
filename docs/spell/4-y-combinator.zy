@@ -8,9 +8,12 @@
 begin
   let make_std = @[import("../../lib/std/std.zy")] _ that
   param (
-    (/CType; /Thk; /Ret; /Int64; /OS; builtin) :
+    (/core; /representations; /system; builtin) :
     @[import("../../lib/std/builtin.zy")] _
   ) that
+  let (/CType; /Thk; /Ret) = core that
+  let (/Scalar = Int64) = representations/i64 that
+  let (/OS) = system that
 
   def Y (B : CType) : CType =
     codata

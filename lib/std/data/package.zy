@@ -1,0 +1,187 @@
+begin
+  let make_bool = @[import("bool.zy")] _ that
+  let make_option = @[import("option.zy")] _ that
+  let make_result = @[import("result.zy")] _ that
+  let make_list = @[import("list.zy")] _ that
+  let make_data_interface = @[import("../interface/data.zy")] _ that
+
+  begin
+    param (/core; /numeric; builtin) : @[import("../builtin.zy")] _ in
+    let (/VType; /CType; /Thk; /Ret; /Unit) = core in
+    let (Scalar = Int64, int64) = numeric/int64 in
+    let (= Bool, bool) = make_bool builtin in
+    let (= Option, option) = make_option builtin in
+    let (= Result, result) = make_result builtin in
+    let (= List, list) = make_list builtin in
+    let (/BoolModule; /OptionModule; /ResultModule; /ListModule; /DataPackage) =
+      make_data_interface core
+    in
+    let ! compare
+      (
+        predicate : Thk (
+          forall (B : CType) .
+            Int64 -> Int64 -> Thk B -> Thk B -> B
+        )
+      )
+      (left : Int64)
+      (right : Int64)
+    : Ret Bool =
+      ! predicate
+        (Ret Bool)
+        left
+        right
+        { ret (bool/true) }
+        { ret (bool/false) }
+    in
+    let ! int64_eq (left : Int64) (right : Int64) : Ret Bool =
+      ! compare int64/eq left right
+    in
+    let ! int64_lt (left : Int64) (right : Int64) : Ret Bool =
+      ! compare int64/lt left right
+    in
+    let ! option_is_some (A : VType) (value : Option A) : Ret Bool =
+      ! (option/fold)
+        A
+        (Ret Bool)
+        value
+        { ret (bool/false) }
+        { fn _ => ret (bool/true) }
+    in
+    let ! option_is_none (A : VType) (value : Option A) : Ret Bool =
+      do present <- ! option_is_some A value;
+      ! (bool/not) present
+    in
+    let ! result_is_ok
+      (A : VType)
+      (E : VType)
+      (value : Result A E)
+    : Ret Bool =
+      ! (result/fold)
+        A
+        E
+        (Ret Bool)
+        value
+        { fn _ => ret (bool/true) }
+        { fn _ => ret (bool/false) }
+    in
+    let ! result_is_err
+      (A : VType)
+      (E : VType)
+      (value : Result A E)
+    : Ret Bool =
+      do successful <- ! result_is_ok A E value;
+      ! (bool/not) successful
+    in
+    let ! list_is_empty (A : VType) (values : List A) : Ret Bool =
+      ! (list/case)
+        A
+        (Ret Bool)
+        values
+        { ret (bool/true) }
+        { fn _ _ => ret (bool/false) }
+    in
+    let ! list_head (A : VType) (values : List A) : Ret (Option A) =
+      ! (list/case)
+        A
+        (Ret (Option A))
+        values
+        { ! (option/none) A }
+        { fn head _ => ! (option/some) A head }
+    in
+    let ! list_tail (A : VType) (values : List A) : Ret (Option (List A)) =
+      ! (list/case)
+        A
+        (Ret (Option (List A)))
+        values
+        { ! (option/none) (List A) }
+        { fn _ tail => ! (option/some) (List A) tail }
+    in
+    let fix list_get (A : VType) (values : List A) (index : Int64) : Ret (Option A) =
+      do negative <- ! int64_lt index 0;
+      ! (bool/if)
+        (Ret (Option A))
+        negative
+        { ! (option/none) A }
+        {
+          ! (list/case)
+            A
+            (Ret (Option A))
+            values
+            { ! (option/none) A }
+            {
+              fn head tail =>
+                do zero <- ! int64_eq index 0;
+                ! (bool/if)
+                  (Ret (Option A))
+                  zero
+                  { ! (option/some) A head }
+                  {
+                    do previous <- ! (int64/sub) index 1;
+                    ! list_get A tail previous
+                  }
+            }
+        }
+    in
+    (
+      (
+        = Bool,
+        = Option,
+        = Result,
+        = List,
+        bool = (
+          true = bool/true,
+          false = bool/false,
+          not = bool/not,
+          and = bool/and,
+          or = bool/or,
+          eq = bool/eq,
+          xor = bool/xor,
+          nand = bool/nand,
+          nor = bool/nor,
+          if = bool/if
+        ),
+        option = (
+          none = option/none,
+          some = option/some,
+          fold = option/fold,
+          map = option/map,
+          and_then = option/and_then,
+          unwrap_or = option/unwrap_or,
+          or_else = option/or_else,
+          zip = option/zip,
+          is_some = option_is_some,
+          is_none = option_is_none
+        ),
+        result = (
+          ok = result/ok,
+          err = result/err,
+          fold = result/fold,
+          map = result/map,
+          map_err = result/map_err,
+          and_then = result/and_then,
+          unwrap_or = result/unwrap_or,
+          is_ok = result_is_ok,
+          is_err = result_is_err
+        ),
+        list = (
+          nil = list/nil,
+          cons = list/cons,
+          case = list/case,
+          fold = list/fold,
+          singleton = list/singleton,
+          append = list/append,
+          map = list/map,
+          fold_left = list/fold_left,
+          reverse = list/reverse,
+          length = list/length,
+          is_empty = list_is_empty,
+          head = list_head,
+          tail = list_tail,
+          get = list_get
+        ),
+        ()
+      )
+      : DataPackage Int64
+    )
+  end
+end

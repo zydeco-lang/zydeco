@@ -196,8 +196,7 @@ impl TypeSupportCollector {
                 | Type::Ret(_)
                 | Type::Unit(_)
                 | Type::Opaque(_)
-                | Type::Char(_)
-                | Type::String(_)
+                | Type::Primitive(_)
                 | Type::OS(_) => {}
                 | Type::VArrow(ValueArrow(input, output))
                 | Type::Arrow(Arrow(input, output))
@@ -320,7 +319,13 @@ impl TypeId {
                     if inner == inner_ {
                         *self
                     } else {
-                        Alloc::alloc(tycker, Label(name, inner_), kd, env)
+                        let target = Alloc::alloc(tycker, Label(name, inner_), kd, env);
+                        tycker
+                            .statics
+                            .builtin_roles
+                            .transfer_value(*self, target)
+                            .expect("a fresh substituted label cannot have a conflicting role");
+                        target
                     }
                 }
                 | Type::Proj(proj) => {
@@ -336,8 +341,7 @@ impl TypeId {
                 | Type::Ret(_)
                 | Type::Unit(_)
                 | Type::Opaque(_)
-                | Type::Char(_)
-                | Type::String(_)
+                | Type::Primitive(_)
                 | Type::OS(_) => *self,
                 | Type::Arrow(arr) => {
                     let Arrow(ty1, ty2) = arr;
@@ -556,7 +560,13 @@ impl TypeId {
                     if inner == inner_ {
                         *self
                     } else {
-                        Alloc::alloc(tycker, Label(name, inner_), kd, &env)
+                        let target = Alloc::alloc(tycker, Label(name, inner_), kd, &env);
+                        tycker
+                            .statics
+                            .builtin_roles
+                            .transfer_value(*self, target)
+                            .expect("a fresh substituted label cannot have a conflicting role");
+                        target
                     }
                 }
                 | Type::Proj(proj) => {
@@ -572,8 +582,7 @@ impl TypeId {
                 | Type::Ret(_)
                 | Type::Unit(_)
                 | Type::Opaque(_)
-                | Type::Char(_)
-                | Type::String(_)
+                | Type::Primitive(_)
                 | Type::OS(_) => *self,
                 | Type::Arrow(arr) => {
                     let Arrow(ty1, ty2) = arr;
@@ -782,8 +791,7 @@ impl TypeId {
             | Type::Ret(_)
             | Type::Unit(_)
             | Type::Opaque(_)
-            | Type::Char(_)
-            | Type::String(_)
+            | Type::Primitive(_)
             | Type::OS(_) => self,
             | Type::VArrow(_)
             | Type::VForall(_)
@@ -848,8 +856,7 @@ impl TypeId {
                 | Type::Ret(_)
                 | Type::Unit(_)
                 | Type::Opaque(_)
-                | Type::Char(_)
-                | Type::String(_)
+                | Type::Primitive(_)
                 | Type::OS(_)
                 | Type::VArrow(_)
                 | Type::VForall(_)
@@ -1271,12 +1278,18 @@ impl TypeId {
                     if inner == inner_ {
                         res
                     } else {
-                        Alloc::alloc(
+                        let target = Alloc::alloc(
                             tycker,
                             Label(name, inner_),
                             tycker.statics.annotations_type[&res],
                             &env,
-                        )
+                        );
+                        tycker
+                            .statics
+                            .builtin_roles
+                            .transfer_value(res, target)
+                            .expect("a fresh resolved label cannot have a conflicting role");
+                        target
                     }
                 }
                 | Type::Proj(ty) => {
@@ -1299,8 +1312,7 @@ impl TypeId {
                 | Type::Ret(_)
                 | Type::Unit(_)
                 | Type::Opaque(_)
-                | Type::Char(_)
-                | Type::String(_)
+                | Type::Primitive(_)
                 | Type::OS(_) => res,
                 | Type::Arrow(ty) => {
                     let Arrow(ty1, ty2) = ty;
@@ -1767,7 +1779,13 @@ impl TypeId {
                     if inner_norm == inner && kd_norm == kd {
                         self
                     } else {
-                        Alloc::alloc(tycker, Label(name, inner_norm), kd_norm, &env)
+                        let target = Alloc::alloc(tycker, Label(name, inner_norm), kd_norm, &env);
+                        tycker
+                            .statics
+                            .builtin_roles
+                            .transfer_value(self, target)
+                            .expect("a fresh normalized label cannot have a conflicting role");
+                        target
                     }
                 }
                 | Type::Proj(proj) => {
@@ -1809,20 +1827,7 @@ impl TypeId {
                         Alloc::alloc(tycker, OpaqueTy, kd_norm, &env)
                     }
                 }
-                | Type::Char(CharTy) => {
-                    if kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(tycker, CharTy, kd_norm, &env)
-                    }
-                }
-                | Type::String(StringTy) => {
-                    if kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(tycker, StringTy, kd_norm, &env)
-                    }
-                }
+                | Type::Primitive(primitive) => primitive.build(tycker, &env),
                 | Type::OS(OSTy) => {
                     if kd_norm == kd {
                         self

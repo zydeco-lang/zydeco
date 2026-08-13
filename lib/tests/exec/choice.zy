@@ -1,9 +1,12 @@
 begin
   let make_std = @[import("../../std/std.zy")] _ that
   param (
-    (/VType; /CType; /Thk; /Unit; /String; /OS; builtin) :
+    (/core; /representations; /system; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/VType; /CType; /Thk; /Unit) = core that
+  let (/Scalar = String) = representations/string that
+  let (/OS) = system that
   def Tree (A : VType) : VType =
     data
     | +Fork : Tree A * Tree A

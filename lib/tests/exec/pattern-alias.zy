@@ -1,9 +1,12 @@
 -- Semicolon patterns observe one bindee repeatedly while preserving source order.
 begin
   param (
-    (/Thk; /Ret; /Int64; /int64; /process) :
+    (/core; /numeric; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/Thk; /Ret) = core that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let (/process) = system that
 
   let Pair = Int64 * Int64 that
   def pair : Pair = (20, 22) that

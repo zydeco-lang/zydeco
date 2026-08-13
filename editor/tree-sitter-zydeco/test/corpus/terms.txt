@@ -221,7 +221,7 @@ end
 Pattern aliases and projections
 ==================
 
-param ((/VType; /CType; /Thk; /Ret) : @[import("builtin.zy")] _) in _
+param ((/VType; /CType; /Thk; /Ret) : @[import("package.zy")] _) in _
 
 ---
 
@@ -253,7 +253,7 @@ param ((/VType; /CType; /Thk; /Ret) : @[import("builtin.zy")] _) in _
 Annotated existential parameters
 ==================
 
-exists @[builtin(int64)] (Int64 : VType) . Int64
+exists @[builtin(reader)] (Reader : VType) . Reader
 
 ---
 

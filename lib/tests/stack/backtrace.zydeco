@@ -1,9 +1,12 @@
 -- a binary tree
 begin
   param (
-    (/VType; /Thk; /Ret; /Unit; /Int64; /OS; /stdio; /process) :
+    (/core; /representations; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/VType; /Thk; /Ret; /Unit) = core that
+  let (/Scalar = Int64) = representations/i64 that
+  let (/OS; /stdio; /process) = system that
 
   def Tree (A : VType) : VType =
     data

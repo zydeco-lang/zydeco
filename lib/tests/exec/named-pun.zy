@@ -2,9 +2,12 @@
 -- syntax form. The inferred payload is resolved according to its context.
 begin
   param (
-    (/VType; /Int64; /int64; /process) :
+    (/core; /numeric; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/VType) = core that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let (/process) = system that
 
   let Slot (pun_value : VType) =
     (pun_value :: pun_value)

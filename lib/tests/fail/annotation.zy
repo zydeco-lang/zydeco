@@ -1,8 +1,10 @@
 begin
   param (
-    (/Unit; /process) :
+    (/core; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/Unit) = core that
+  let (/process) = system that
   def Bool =
     data
     | +True : Unit

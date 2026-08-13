@@ -1,8 +1,10 @@
 begin
   param (
-    (/Int64; /process) :
+    (/representations; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/Scalar = Int64) = representations/i64 that
+  let (/process) = system that
 
   let captured : Int64 = 0 that
   let constant : Int64 -> Int64 = fn (_ : Int64) => captured that

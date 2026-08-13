@@ -2,9 +2,13 @@
 -- e.g. define a Counter that can incr and project out Int64 or String
 begin
   param (
-    (/CType; /Thk; /Ret; /Int64; /String; /int64; /stdio; /process) :
+    (/core; /representations; /numeric; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/CType; /Thk; /Ret) = core that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let (/Scalar = String) = representations/string that
+  let (/stdio; /process) = system that
 
   def Counter : CType =
     codata

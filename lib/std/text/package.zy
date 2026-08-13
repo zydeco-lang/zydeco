@@ -1,0 +1,208 @@
+begin
+  let make_data_interface = @[import("../interface/data.zy")] _ that
+  let make_text_interface = @[import("../interface/text.zy")] _ that
+
+  begin
+    param (
+      (/core; /representations; /numeric; /text; builtin) :
+      @[import("../builtin.zy")] _
+    ) in
+    let (/VType; /CType; /Thk; /Ret; /Unit) = core in
+    let (/Scalar = Char) = representations/char in
+    let (/Scalar = String) = representations/string in
+    let (/Scalar = Bytes) = representations/bytes in
+    let (Scalar = Int64, int64) = numeric/int64 in
+    let (/char; /string; /bytes) = text in
+    let (/BoolModule; /OptionModule; /ListModule; /DataPackage) =
+      make_data_interface core
+    in
+    let (/CharModule; /StringModule; /BytesModule) = make_text_interface core in
+    param (
+      (/Bool; /Option; /List; /bool; /option; /list) :
+      DataPackage Int64
+    ) in
+    let ! compare
+      (A : VType)
+      (
+        predicate : Thk (
+          forall (B : CType) .
+            A -> A -> Thk B -> Thk B -> B
+        )
+      )
+      (left : A)
+      (right : A)
+    : Ret Bool =
+      ! predicate
+        (Ret Bool)
+        left
+        right
+        { ret (bool/true) }
+        { ret (bool/false) }
+    in
+    let ! int64_eq (left : Int64) (right : Int64) : Ret Bool =
+      ! compare Int64 int64/eq left right
+    in
+    let ! str_eq (left : String) (right : String) : Ret Bool =
+      ! compare String string/eq left right
+    in
+    let ! str_split_once
+      (value : String)
+      (separator : Char)
+    : Ret (Option (String * String)) =
+      ! (string/split_once)
+        (Ret (Option (String * String)))
+        value
+        separator
+        { ! (option/none) (String * String) }
+        {
+          fn first second =>
+            ! (option/some) (String * String) (first, second)
+        }
+    in
+    let ! str_split_at
+      (value : String)
+      (index : Int64)
+    : Ret (Option (String * String)) =
+      ! (string/split_at)
+        (Ret (Option (String * String)))
+        value
+        index
+        { ! (option/none) (String * String) }
+        {
+          fn first second =>
+            ! (option/some) (String * String) (first, second)
+        }
+    in
+    let ! str_get (value : String) (index : Int64) : Ret (Option Char) =
+      ! (string/get)
+        (Ret (Option Char))
+        value
+        index
+        { ! (option/none) Char }
+        { fn character => ! (option/some) Char character }
+    in
+    let ! char_from_codepoint (codepoint : Int64) : Ret (Option Char) =
+      ! (char/from_codepoint)
+        (Ret (Option Char))
+        codepoint
+        { ! (option/none) Char }
+        { fn character => ! (option/some) Char character }
+    in
+    let ! str_parse_int (value : String) : Ret (Option Int64) =
+      ! (string/parse_int)
+        (Ret (Option Int64))
+        value
+        { ! (option/none) Int64 }
+        { fn integer => ! (option/some) Int64 integer }
+    in
+    let ! str_is_empty (value : String) : Ret Bool =
+      do length <- ! (string/length) value;
+      ! int64_eq length 0
+    in
+    let ! str_head (value : String) : Ret (Option Char) =
+      ! str_get value 0
+    in
+    let ! str_uncons (value : String) : Ret (Option (Char * String)) =
+      do character <- ! str_get value 0;
+      ! (option/and_then)
+        Char
+        (Char * String)
+        character
+        {
+          fn head =>
+            do split <- ! str_split_at value 1;
+            ! (option/map)
+              (String * String)
+              (Char * String)
+              split
+              { fn (_, tail) => ret (head, tail) }
+        }
+    in
+    let fix str_to_chars (value : String) : Ret (List Char) =
+      do first <- ! str_uncons value;
+      ! (option/fold)
+        (Char * String)
+        (Ret (List Char))
+        first
+        { ! (list/nil) Char }
+        {
+          fn (head, tail) =>
+            do rest <- ! str_to_chars tail;
+            ! (list/cons) Char head rest
+        }
+    in
+    let fix str_from_chars (characters : List Char) : Ret String =
+      ! (list/case)
+        Char
+        (Ret String)
+        characters
+        { ret "" }
+        {
+          fn head tail =>
+            do first <- ! (char/to_string) head;
+            do rest <- ! str_from_chars tail;
+            ! (string/append) first rest
+        }
+    in
+    let ! str_concat (strings : List String) : Ret String =
+      ! (list/fold)
+        String
+        (Ret String)
+        strings
+        { ret "" }
+        {
+          fn head tail =>
+            do rest <- ! tail;
+            ! (string/append) head rest
+        }
+    in
+    let ! bytes_to_string (value : Bytes) : Ret (Option String) =
+      ! (bytes/to_string)
+        (Ret (Option String))
+        value
+        { ! (option/none) String }
+        { fn string => ! (option/some) String string }
+    in
+    let Package =
+        (char :: CharModule Option Char Int64 String)
+      * (string :: StringModule Bool Option List Int64 Char String)
+      * (bytes :: BytesModule Option Int64 String Bytes)
+      * Unit
+    in
+    (
+      (
+        char = (
+          to_string = char/to_string,
+          codepoint = char/codepoint,
+          from_codepoint = char_from_codepoint
+        ),
+        string = (
+          empty = "",
+          length = string/length,
+          byte_length = string/byte_length,
+          is_empty = str_is_empty,
+          append = string/append,
+          concat = str_concat,
+          split_once = str_split_once,
+          split_at = str_split_at,
+          eq = str_eq,
+          get = str_get,
+          head = str_head,
+          uncons = str_uncons,
+          to_chars = str_to_chars,
+          from_chars = str_from_chars,
+          parse_int = str_parse_int
+        ),
+        bytes = (
+          empty = bytes/empty,
+          length = bytes/length,
+          append = bytes/append,
+          from_string = bytes/from_string,
+          to_string = bytes_to_string
+        ),
+        ()
+      )
+      : Package
+    )
+  end
+end

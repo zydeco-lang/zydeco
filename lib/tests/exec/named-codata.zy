@@ -2,9 +2,12 @@
 -- use named value types, and slash can project from a returned named value.
 begin
   param (
-    (/Thk; /Ret; /Int64; /int64; /process) :
+    (/core; /numeric; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/Thk; /Ret) = core that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let (/process) = system that
 
   def Gauge =
     codata

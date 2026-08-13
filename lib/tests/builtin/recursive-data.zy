@@ -21,9 +21,11 @@ begin
     end
   that
   param (
-    (/VType; /Ret; /Unit; /process) :
+    (/core; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/VType; /Ret; /Unit) = core that
+  let (/process) = system that
 
   do one <- ! successor +Z();
   do result <- ! is_nonzero one;

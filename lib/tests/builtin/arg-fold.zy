@@ -1,8 +1,12 @@
 begin
   param (
-    (/Ret; /String; /OS; /string; /args; /process) :
+    (/core; /representations; /text; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/Ret) = core that
+  let (/Scalar = String) = representations/string that
+  let string = text/string that
+  let (/OS; /args; /process) = system that
 
   do joined <- ! (args/fold)
     (Ret String)

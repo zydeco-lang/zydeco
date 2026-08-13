@@ -1,10 +1,13 @@
 --| The Free monad
 begin
-  let monadic_basis = @[import("../../std/monad.zy")] _ that
+  let monadic_basis = @[import("../../std/control/monad.zy")] _ that
   param (
-    (/VType; /CType; /Thk; /Unit; /String; /OS; /stdio; /process; builtin) :
+    (/core; /representations; /system; builtin) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/VType; /CType; /Thk; /Unit) = core that
+  let (/Scalar = String) = representations/string that
+  let (/OS; /stdio; /process) = system that
   let (= Monad, = Algebra, ()) =
     monadic_basis builtin in
   begin

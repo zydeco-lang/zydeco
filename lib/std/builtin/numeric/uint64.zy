@@ -1,0 +1,75 @@
+exists
+  (
+    Scalar = ScalarType as @[intrinsic(u64)] _ :
+    @[intrinsic(vtype)] _
+  )
+.
+    (
+      @[builtin(uint64_add)] (
+        add :: (@[intrinsic(thk)] _) (
+          ScalarType -> ScalarType -> (@[intrinsic(ret)] _) ScalarType
+        )
+      )
+    )
+  * (
+      @[builtin(uint64_sub)] (
+        sub :: (@[intrinsic(thk)] _) (
+          ScalarType -> ScalarType -> (@[intrinsic(ret)] _) ScalarType
+        )
+      )
+    )
+  * (
+      @[builtin(uint64_mul)] (
+        mul :: (@[intrinsic(thk)] _) (
+          ScalarType -> ScalarType -> (@[intrinsic(ret)] _) ScalarType
+        )
+      )
+    )
+  * (
+      @[builtin(uint64_div)] (
+        div :: (@[intrinsic(thk)] _) (
+          ScalarType -> ScalarType -> (@[intrinsic(ret)] _) ScalarType
+        )
+      )
+    )
+  * (
+      @[builtin(uint64_mod)] (
+        mod :: (@[intrinsic(thk)] _) (
+          ScalarType -> ScalarType -> (@[intrinsic(ret)] _) ScalarType
+        )
+      )
+    )
+  * (
+      @[builtin(uint64_eq)] (
+        eq :: (@[intrinsic(thk)] _) (
+          forall (R : @[intrinsic(ctype)] _) .
+               ScalarType -> ScalarType
+            -> (@[intrinsic(thk)] _) R -> (@[intrinsic(thk)] _) R -> R
+        )
+      )
+    )
+  * (
+      @[builtin(uint64_lt)] (
+        lt :: (@[intrinsic(thk)] _) (
+          forall (R : @[intrinsic(ctype)] _) .
+               ScalarType -> ScalarType
+            -> (@[intrinsic(thk)] _) R -> (@[intrinsic(thk)] _) R -> R
+        )
+      )
+    )
+  * (
+      @[builtin(uint64_gt)] (
+        gt :: (@[intrinsic(thk)] _) (
+          forall (R : @[intrinsic(ctype)] _) .
+               ScalarType -> ScalarType
+            -> (@[intrinsic(thk)] _) R -> (@[intrinsic(thk)] _) R -> R
+        )
+      )
+    )
+  * (
+      @[builtin(uint64_to_string)] (
+        to_string :: (@[intrinsic(thk)] _) (
+          ScalarType -> (@[intrinsic(ret)] _) (@[intrinsic(string)] _)
+        )
+      )
+    )

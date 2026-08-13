@@ -1,8 +1,11 @@
 begin
   param (
-    (/OS; /int64; /string; /process) :
+    (/numeric; /text; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let string = text/string that
+  let (/OS; /process) = system that
 
   do unicode_length <- ! (string/length) "λx";
   do joined <- ! (string/append) "uniform " "terms";

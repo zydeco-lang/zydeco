@@ -1,7 +1,8 @@
 param (
-  (/stdio; /process) :
+  (/system) :
   @[import("../../std/builtin.zy")] _
 ) in
+let (/stdio; /process) = system in
   ! (stdio/read_line) {
     fn _ =>
       ! (process/exit) 0

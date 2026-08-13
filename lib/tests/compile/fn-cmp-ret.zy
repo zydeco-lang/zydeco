@@ -1,8 +1,11 @@
 begin
   param (
-    (/Ret; /Int64; /int64; /process) :
+    (/core; /numeric; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/Ret) = core that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let (/process) = system that
   def ! f (x : Int64) : Ret Int64 =
     ! (int64/eq)
       (Ret Int64)

@@ -104,24 +104,21 @@ This judgment applies uniformly when `D` is a kind classified by `Set` and
 when `D` is a type classified by an ordinary kind.
 The explicit form `exists (X as D : S). B` remains available and checks the stated classifier.
 
-The canonical Builtin signature uses the inferred form to introduce the core CBPV vocabulary once:
+The canonical Builtin signature uses the inferred form for the leading CBPV universe components:
 
 ```zydeco
 exists
   (VType as @[intrinsic(vtype)] _)
   (CType as @[intrinsic(ctype)] _)
-  (Thk as @[intrinsic(thk)] _)
-  (Ret as @[intrinsic(ret)] _)
-  (Unit as @[intrinsic(unit)] _)
 .
   ...
 ```
 
-Opening this signature binds `VType`, `CType`, `Thk`, `Ret`, and `Unit` by ordinary package-pattern name resolution.
-The first two fields bind kinds; the remaining three bind types or type constructors.
-All five are transparent and erased.
-They neither create fresh identities nor contribute witnesses to a package-dependent arrow.
-Abstract host types later in the signature, such as `Int64` and `OS`, retain the ordinary existential semantics.
+The consumer-facing `core` package manifestly re-exports these kinds together with the intrinsic `Thk`, `Ret`,
+and `Unit` types. Fixed representations such as `Int64` are likewise canonical intrinsics re-exported by small
+manifest packages. These fields are transparent and erased; they neither create fresh identities nor contribute
+witnesses to a package-dependent arrow. Only provider-owned capabilities such as `Reader`, `Writer`, and `OS`
+retain ordinary abstract existential semantics.
 
 ## Manifest Types
 

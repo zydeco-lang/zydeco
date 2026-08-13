@@ -203,8 +203,7 @@ impl<'arena> TypeReferenceCollector<'arena> {
             | Type::Ret(_)
             | Type::Unit(_)
             | Type::Opaque(_)
-            | Type::Char(_)
-            | Type::String(_)
+            | Type::Primitive(_)
             | Type::OS(_) => {}
         }
     }

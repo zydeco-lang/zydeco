@@ -1,0 +1,194 @@
+param core : @[import("../builtin/core.zy")] _ in
+let (/VType; /CType; /Thk; /Ret; /Unit) = core in
+begin
+  let Additive (A : VType) =
+      (zero :: A)
+    * (add :: Thk (A -> A -> Ret A))
+    * (sub :: Thk (A -> A -> Ret A))
+    * (negate :: Thk (A -> Ret A))
+  in
+  let Multiplicative (A : VType) =
+      (one :: A)
+    * (mul :: Thk (A -> A -> Ret A))
+  in
+  let PartialEquality (Bool : VType) (A : VType) =
+      (eq :: Thk (A -> A -> Ret Bool))
+    * (ne :: Thk (A -> A -> Ret Bool))
+  in
+  let PartialOrder (Bool : VType) (A : VType) =
+      (equality :: PartialEquality Bool A)
+    * (lt :: Thk (A -> A -> Ret Bool))
+    * (le :: Thk (A -> A -> Ret Bool))
+    * (gt :: Thk (A -> A -> Ret Bool))
+    * (ge :: Thk (A -> A -> Ret Bool))
+  in
+  let Numeric (Bool : VType) (A : VType) =
+      (additive :: Additive A)
+    * (multiplicative :: Multiplicative A)
+    * (order :: PartialOrder Bool A)
+    * Unit
+  in
+  let NumericInstance (Bool : VType) (Representation : VType) =
+    exists (Scalar = ScalarType as Representation : VType) .
+        (dictionary :: Numeric Bool ScalarType)
+      * Unit
+  in
+  let PrimitiveIntegerModule (Integer : VType) (String : VType) =
+      (add :: Thk (Integer -> Integer -> Ret Integer))
+    * (sub :: Thk (Integer -> Integer -> Ret Integer))
+    * (mul :: Thk (Integer -> Integer -> Ret Integer))
+    * (div :: Thk (Integer -> Integer -> Ret Integer))
+    * (mod :: Thk (Integer -> Integer -> Ret Integer))
+    * (
+        eq :: Thk (
+          forall (R : CType) .
+            Integer -> Integer -> Thk R -> Thk R -> R
+        )
+      )
+    * (
+        lt :: Thk (
+          forall (R : CType) .
+            Integer -> Integer -> Thk R -> Thk R -> R
+        )
+      )
+    * (
+        gt :: Thk (
+          forall (R : CType) .
+            Integer -> Integer -> Thk R -> Thk R -> R
+        )
+      )
+    * (to_string :: Thk (Integer -> Ret String))
+  in
+  let PrimitiveFloatModule (Floating : VType) (String : VType) =
+      (add :: Thk (Floating -> Floating -> Ret Floating))
+    * (sub :: Thk (Floating -> Floating -> Ret Floating))
+    * (mul :: Thk (Floating -> Floating -> Ret Floating))
+    * (div :: Thk (Floating -> Floating -> Ret Floating))
+    * (
+        eq :: Thk (
+          forall (R : CType) .
+            Floating -> Floating -> Thk R -> Thk R -> R
+        )
+      )
+    * (
+        lt :: Thk (
+          forall (R : CType) .
+            Floating -> Floating -> Thk R -> Thk R -> R
+        )
+      )
+    * (
+        gt :: Thk (
+          forall (R : CType) .
+            Floating -> Floating -> Thk R -> Thk R -> R
+        )
+      )
+    * (to_string :: Thk (Floating -> Ret String))
+  in
+  let IntegerModule (Bool : VType) (Integer : VType) (String : VType) =
+      (add :: Thk (Integer -> Integer -> Ret Integer))
+    * (sub :: Thk (Integer -> Integer -> Ret Integer))
+    * (mul :: Thk (Integer -> Integer -> Ret Integer))
+    * (div :: Thk (Integer -> Integer -> Ret Integer))
+    * (mod :: Thk (Integer -> Integer -> Ret Integer))
+    * (eq :: Thk (Integer -> Integer -> Ret Bool))
+    * (ne :: Thk (Integer -> Integer -> Ret Bool))
+    * (lt :: Thk (Integer -> Integer -> Ret Bool))
+    * (le :: Thk (Integer -> Integer -> Ret Bool))
+    * (gt :: Thk (Integer -> Integer -> Ret Bool))
+    * (ge :: Thk (Integer -> Integer -> Ret Bool))
+    * (increment :: Thk (Integer -> Ret Integer))
+    * (decrement :: Thk (Integer -> Ret Integer))
+    * (negate :: Thk (Integer -> Ret Integer))
+    * (min :: Thk (Integer -> Integer -> Ret Integer))
+    * (max :: Thk (Integer -> Integer -> Ret Integer))
+    * (to_string :: Thk (Integer -> Ret String))
+  in
+  let FloatModule (Bool : VType) (Floating : VType) (String : VType) =
+      (add :: Thk (Floating -> Floating -> Ret Floating))
+    * (sub :: Thk (Floating -> Floating -> Ret Floating))
+    * (mul :: Thk (Floating -> Floating -> Ret Floating))
+    * (div :: Thk (Floating -> Floating -> Ret Floating))
+    * (eq :: Thk (Floating -> Floating -> Ret Bool))
+    * (ne :: Thk (Floating -> Floating -> Ret Bool))
+    * (lt :: Thk (Floating -> Floating -> Ret Bool))
+    * (le :: Thk (Floating -> Floating -> Ret Bool))
+    * (gt :: Thk (Floating -> Floating -> Ret Bool))
+    * (ge :: Thk (Floating -> Floating -> Ret Bool))
+    * (negate :: Thk (Floating -> Ret Floating))
+    * (to_string :: Thk (Floating -> Ret String))
+  in
+  let NumericInterface =
+    exists (Additive = AdditiveType as Additive : VType -> VType) .
+      exists
+        (
+          Multiplicative = MultiplicativeType as Multiplicative :
+          VType -> VType
+        )
+      .
+        exists
+          (
+            PartialEquality = PartialEqualityType as PartialEquality :
+            VType -> VType -> VType
+          )
+        .
+          exists
+            (
+              PartialOrder = PartialOrderType as PartialOrder :
+              VType -> VType -> VType
+            )
+          .
+            exists
+              (
+                Numeric = NumericType as Numeric :
+                VType -> VType -> VType
+              )
+            .
+              exists
+                (
+                  NumericInstance = NumericInstanceType as NumericInstance :
+                  VType -> VType -> VType
+                )
+              .
+                exists
+                  (
+                    PrimitiveIntegerModule = PrimitiveIntegerModuleType as PrimitiveIntegerModule :
+                    VType -> VType -> VType
+                  )
+                .
+                  exists
+                    (
+                      PrimitiveFloatModule = PrimitiveFloatModuleType as PrimitiveFloatModule :
+                      VType -> VType -> VType
+                    )
+                  .
+                    exists
+                      (
+                        IntegerModule = IntegerModuleType as IntegerModule :
+                        VType -> VType -> VType -> VType
+                      )
+                    .
+                      exists
+                        (
+                          FloatModule = FloatModuleType as FloatModule :
+                          VType -> VType -> VType -> VType
+                        )
+                      .
+                        Unit
+  in
+  (
+    (
+      = Additive,
+      = Multiplicative,
+      = PartialEquality,
+      = PartialOrder,
+      = Numeric,
+      = NumericInstance,
+      = PrimitiveIntegerModule,
+      = PrimitiveFloatModule,
+      = IntegerModule,
+      = FloatModule,
+      ()
+    )
+    : NumericInterface
+  )
+end

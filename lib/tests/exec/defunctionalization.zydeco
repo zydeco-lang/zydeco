@@ -3,9 +3,12 @@
 -- the numbers in a list.
 begin
   param (
-    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /int64; /stdio; /process) :
+    (/core; /numeric; /system) :
     @[import("../../std/builtin.zy")] _
   ) that
+  let (/VType; /CType; /Thk; /Ret; /Unit) = core that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let (/stdio; /process) = system that
 
   def List (A : VType) : VType =
     data
