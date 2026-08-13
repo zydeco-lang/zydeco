@@ -3358,32 +3358,31 @@ mod tests {
     }
 
     #[test]
-    fn records_standard_library_named_term_punning_backlog() {
+    fn standard_library_has_no_named_term_punning_backlog() {
         let sources = [
-            ("bool.zy", include_str!("../../../../lib/std/data/bool.zy"), 11),
-            ("interface.zy", include_str!("../../../../lib/std/interface.zy"), 12),
-            ("io-types.zy", include_str!("../../../../lib/std/system/types.zy"), 18),
-            ("list.zy", include_str!("../../../../lib/std/data/list.zy"), 11),
-            ("monad.zy", include_str!("../../../../lib/std/control/monad.zy"), 2),
-            ("option.zy", include_str!("../../../../lib/std/data/option.zy"), 9),
-            ("result.zy", include_str!("../../../../lib/std/data/result.zy"), 8),
-            ("std.zy", include_str!("../../../../lib/std/std.zy"), 43),
+            ("bool.zy", include_str!("../../../../lib/std/data/bool.zy")),
+            ("interface.zy", include_str!("../../../../lib/std/interface.zy")),
+            ("io-types.zy", include_str!("../../../../lib/std/system/types.zy")),
+            ("list.zy", include_str!("../../../../lib/std/data/list.zy")),
+            ("monad.zy", include_str!("../../../../lib/std/control/monad.zy")),
+            ("option.zy", include_str!("../../../../lib/std/data/option.zy")),
+            ("result.zy", include_str!("../../../../lib/std/data/result.zy")),
+            ("std.zy", include_str!("../../../../lib/std/std.zy")),
         ];
 
-        let observed = sources
+        let remaining = sources
             .into_iter()
-            .map(|(name, source, expected)| {
+            .filter_map(|(name, source)| {
                 let parsed = ParsedSource::new(source);
                 let candidates =
                     NamedTermPunningAudit::new(source, &parsed.parser.spans, &parsed.parser.arena)
                         .candidates()
                         .len();
-                assert_eq!(candidates, expected, "unexpected punning backlog in {name}");
-                candidates
+                (candidates != 0).then_some((name, candidates))
             })
-            .sum::<usize>();
+            .collect::<Vec<_>>();
 
-        assert_eq!(observed, 114);
+        assert!(remaining.is_empty(), "unpunned named terms remain: {remaining:?}");
     }
 
     #[test]
