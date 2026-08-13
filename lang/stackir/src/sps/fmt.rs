@@ -212,10 +212,14 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation<LetJoin> {
             | Computation::Hole(SHole(tail)) => {
                 RcDoc::concat([RcDoc::text("_"), RcDoc::space(), tail.pretty(f)])
             }
-            | Computation::Fix(SFix { param, body }) => RcDoc::concat([
+            | Computation::Fix(SFix { param, stack, body }) => RcDoc::concat([
                 RcDoc::text("fix"),
                 RcDoc::space(),
                 param.pretty(f),
+                RcDoc::space(),
+                RcDoc::text("!"),
+                RcDoc::space(),
+                stack.pretty(f),
                 RcDoc::space(),
                 RcDoc::text("->"),
                 RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
@@ -234,7 +238,19 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation<LetJoin> {
                 RcDoc::space(),
                 value.pretty(f),
             ]),
-            | Computation::Case(Match { scrut, arms }) => RcDoc::concat([
+            | Computation::ProductMatch(SProductMatch { scrut, binder, body }) => RcDoc::concat([
+                RcDoc::text("match-product"),
+                RcDoc::space(),
+                scrut.pretty(f),
+                RcDoc::space(),
+                RcDoc::text("as"),
+                RcDoc::space(),
+                binder.pretty(f),
+                RcDoc::space(),
+                RcDoc::text("in"),
+                RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
+            ]),
+            | Computation::CoprodMatch(SCoprodMatch { scrut, arms }) => RcDoc::concat([
                 RcDoc::text("case"),
                 RcDoc::space(),
                 scrut.pretty(f),

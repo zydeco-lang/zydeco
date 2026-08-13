@@ -55,6 +55,27 @@ pub struct StackirProgram {
     pub root: CompuId,
 }
 
+/// Read-only source storage and empty target storage for a structural rebuild.
+pub(crate) struct StackirRebuild {
+    pub source: StackirArena,
+    pub target: StackirArena,
+    pub root: CompuId,
+}
+
+impl StackirProgram {
+    pub(crate) fn into_rebuild(self) -> StackirRebuild {
+        let Self { arena: StackirArena { mut admin, inner }, root } = self;
+        let mut source_admin = AdminArena::default();
+        source_admin.pats = std::mem::take(&mut admin.pats);
+        source_admin.terms = std::mem::take(&mut admin.terms);
+        StackirRebuild {
+            source: StackirArena { admin: source_admin, inner },
+            target: StackirArena { admin, inner: StackirInnerArena::default() },
+            root,
+        }
+    }
+}
+
 /// Build a stack IR node and optionally record its source site mapping.
 pub trait Construct<S, T, Arena>: Sized + Into<S> {
     type Site;

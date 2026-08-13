@@ -1,4 +1,4 @@
-use super::syntax::*;
+use super::{check::BranchJoinProgram, syntax::*};
 use derive_more::{AsMut, AsRef};
 use zydeco_statics::{BuiltinPackagePlan, BuiltinPackageValue, arena::StaticsArena, syntax as ss};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
@@ -169,6 +169,33 @@ impl<'a> Lowerer<'a> {
         def
     }
 
+    fn is_coprod_pattern(&self, pattern: ss::VPatId) -> bool {
+        match &self.statics.vpats[&pattern] {
+            | ss::ValuePattern::Ctor(_) => true,
+            | ss::ValuePattern::Named(Named(_, pattern)) => self.is_coprod_pattern(*pattern),
+            | ss::ValuePattern::Alias(Alias(patterns)) => {
+                patterns.iter().any(|pattern| self.is_coprod_pattern(*pattern))
+            }
+            | ss::ValuePattern::SCons(ss::ConsN(_, pattern)) => self.is_coprod_pattern(*pattern),
+            | ss::ValuePattern::Hole(_)
+            | ss::ValuePattern::Var(_)
+            | ss::ValuePattern::Triv(_)
+            | ss::ValuePattern::VCons(_) => false,
+        }
+    }
+
+    fn is_coprod_match(&self, arms: &[Matcher<ss::VPatId, ss::CompuId>]) -> bool {
+        match arms {
+            | [Matcher { binder, tail: _ }] => self.is_coprod_pattern(*binder),
+            | _ => true,
+        }
+    }
+
+    fn finish(self, root: CompuId) -> BranchJoinProgram {
+        BranchJoinProgram::try_new(StackirProgram { arena: self.arena, root })
+            .expect("stack-indexed lowering must construct branch-join SPS")
+    }
+
     fn projection_binding(
         &mut self, head: ValueId, position: usize, layout: ProductLayout, site: Option<ss::TermId>,
     ) -> (ValueBinding, ValueId) {
@@ -234,29 +261,29 @@ impl BuiltinPackageLowering {
 
 impl CompilerPass for RootLowerer<'_> {
     type Arena = StackirArena;
-    type Out = StackirProgram;
+    type Out = BranchJoinProgram;
     type Error = std::convert::Infallible;
 
-    fn run(self) -> Result<StackirProgram, Self::Error> {
+    fn run(self) -> Result<BranchJoinProgram, Self::Error> {
         let Self { mut lowerer, root } = self;
-        let root = root.lower(&mut lowerer, ());
-        Ok(StackirProgram { arena: lowerer.arena, root })
+        let stack = Bullet.build(&mut lowerer, None);
+        let root = root.lower(&mut lowerer, stack);
+        Ok(lowerer.finish(root))
     }
 }
 
 impl CompilerPass for BuiltinRootLowerer<'_> {
     type Arena = StackirArena;
-    type Out = StackirProgram;
+    type Out = BranchJoinProgram;
     type Error = BuiltinPackageLowerError;
 
-    fn run(self) -> Result<StackirProgram, Self::Error> {
+    fn run(self) -> Result<BranchJoinProgram, Self::Error> {
         let Self { mut lowerer, root, signature } = self;
         let plan = BuiltinPackagePlan::for_executable(lowerer.statics, &signature)?;
-        let function = root.lower(&mut lowerer, ());
         let package = BuiltinPackageLowering::lower(plan.value, &mut lowerer)?;
         let stack = Cons(package, Bullet.build(&mut lowerer, None)).build(&mut lowerer, None);
-        let root = Let { binder: Bullet, bindee: stack, tail: function }.build(&mut lowerer, None);
-        Ok(StackirProgram { arena: lowerer.arena, root })
+        let root = root.lower(&mut lowerer, stack);
+        Ok(lowerer.finish(root))
     }
 }
 
@@ -357,7 +384,8 @@ impl Lower for ss::ValueId {
             | ss::Value::TAbs(Abs(_param, body)) => body.lower(lo, ()),
             | ss::Value::TApp(App(body, _arg)) => body.lower(lo, ()),
             | ss::Value::Thunk(Thunk(body)) => {
-                let body = body.lower(lo, ());
+                let stack = Bullet.build(lo, site);
+                let body = body.lower(lo, stack);
                 ValuePlan::pure(Closure { stack: Bullet, body }.build(lo, site))
             }
             | ss::Value::Ctor(Ctor(name, body)) => {
@@ -406,41 +434,36 @@ impl Lower for Vec<ss::ValueId> {
 }
 
 impl Lower for ss::CompuId {
-    type Kont = ();
+    type Kont = StackId;
     type Out = CompuId;
 
-    fn lower(&self, lo: &mut Lowerer, (): Self::Kont) -> Self::Out {
+    fn lower(&self, lo: &mut Lowerer, stack: Self::Kont) -> Self::Out {
         let compu = lo.statics.compus[self].clone();
         let site = Some(ss::TermId::Compu(*self));
         use ss::Computation as Compu;
         match compu {
-            | Compu::Hole(Hole) => {
-                let tail = Bullet.build(lo, site);
-                SHole(tail).build(lo, site)
-            }
+            | Compu::Hole(Hole) => SHole(stack).build(lo, site),
             | Compu::VAbs(Abs(param, body)) => {
                 let param_vpat = param.lower(lo, ());
-                let body_compu = body.lower(lo, ());
-                let stack_id = Bullet.build(lo, site);
-                Let { binder: Cons(param_vpat, Bullet), bindee: stack_id, tail: body_compu }
+                let body_stack = Bullet.build(lo, site);
+                let body_compu = body.lower(lo, body_stack);
+                Let { binder: Cons(param_vpat, Bullet), bindee: stack, tail: body_compu }
                     .build(lo, site)
             }
             | Compu::VApp(App(body, arg)) => {
                 let arg = arg.lower(lo, ());
                 arg.lower_into(lo, move |arg, lo| {
-                    let next_stack = Bullet.build(lo, site);
-                    let stack = Cons(arg, next_stack).build(lo, site);
-                    let body = body.lower(lo, ());
-                    Let { binder: Bullet, bindee: stack, tail: body }.build(lo, site)
+                    let stack = Cons(arg, stack).build(lo, site);
+                    body.lower(lo, stack)
                 })
             }
             | Compu::TAbs(Abs(_param, body)) => {
                 // Type abstractions are erased
-                body.lower(lo, ())
+                body.lower(lo, stack)
             }
             | Compu::TApp(App(body, _arg)) => {
                 // Type applications are erased
-                body.lower(lo, ())
+                body.lower(lo, stack)
             }
             | Compu::Fix(Fix(param, body)) => {
                 // Extract DefId from binder (should be a Var pattern)
@@ -453,52 +476,56 @@ impl Lower for ss::CompuId {
                         panic!("Fix param must be a variable, found:\n{}", param_str);
                     }
                 };
-                let body_compu = body.lower(lo, ());
-                SFix { param: def_id, body: body_compu }.build(lo, site)
+                let body_stack = Bullet.build(lo, site);
+                let body_compu = body.lower(lo, body_stack);
+                SFix { param: def_id, stack, body: body_compu }.build(lo, site)
             }
             | Compu::Force(Force(body)) => {
                 let body = body.lower(lo, ());
-                body.lower_into(lo, move |thunk, lo| {
-                    SForce { thunk, stack: Bullet.build(lo, site) }.build(lo, site)
-                })
+                body.lower_into(lo, move |thunk, lo| SForce { thunk, stack }.build(lo, site))
             }
             | Compu::Ret(Return(body)) => {
                 let body = body.lower(lo, ());
-                body.lower_into(lo, move |value, lo| {
-                    let stack_id = Bullet.build(lo, site);
-                    SReturn { stack: stack_id, value }.build(lo, site)
-                })
+                body.lower_into(lo, move |value, lo| SReturn { stack, value }.build(lo, site))
             }
             | Compu::Do(Bind { binder, bindee, tail }) => {
                 let binder_vpat = binder.lower(lo, ());
-                let tail_compu = tail.lower(lo, ());
+                let tail_compu = tail.lower(lo, stack);
                 let kont_stack_id = Kont { binder: binder_vpat, body: tail_compu }.build(lo, site);
-                let bindee_compu = bindee.lower(lo, ());
-                Let { binder: Bullet, bindee: kont_stack_id, tail: bindee_compu }.build(lo, site)
+                bindee.lower(lo, kont_stack_id)
             }
             | Compu::Let(Let { binder, bindee, tail }) => {
                 let binder_vpat = binder.lower(lo, ());
                 let bindee = bindee.lower(lo, ());
                 bindee.lower_into(lo, move |bindee, lo| {
-                    let tail_compu = tail.lower(lo, ());
+                    let tail_compu = tail.lower(lo, stack);
                     Let { binder: binder_vpat, bindee, tail: tail_compu }.build(lo, site)
                 })
             }
             | Compu::Match(Match { scrut, arms }) => {
-                // Match: lower the scrutinee, then create a case statement
+                let is_coprod = lo.is_coprod_match(&arms);
                 let scrut = scrut.lower(lo, ());
                 scrut.lower_into(lo, move |scrut, lo| {
-                    // Lower all the arms - arms are (VPatId, CompuId) in statics
-                    let lowered_arms: Vec<_> = arms
-                        .iter()
-                        .map(|arm| {
-                            let Matcher { binder, tail } = arm;
-                            let binder_vpat = binder.lower(lo, ());
-                            let body_compu = tail.lower(lo, ());
-                            Matcher { binder: binder_vpat, tail: body_compu }
-                        })
-                        .collect();
-                    Match { scrut, arms: lowered_arms }.build(lo, site)
+                    if is_coprod {
+                        let lowered_arms = arms
+                            .iter()
+                            .map(|Matcher { binder, tail }| {
+                                let binder = binder.lower(lo, ());
+                                let branch_stack = Bullet.build(lo, site);
+                                let tail = tail.lower(lo, branch_stack);
+                                Matcher { binder, tail }
+                            })
+                            .collect();
+                        let body = SCoprodMatch { scrut, arms: lowered_arms }.build(lo, site);
+                        Let { binder: Bullet, bindee: stack, tail: body }.build(lo, site)
+                    } else {
+                        let [Matcher { binder, tail }] = arms.as_slice() else {
+                            unreachable!("an irrefutable match has exactly one arm")
+                        };
+                        let binder = binder.lower(lo, ());
+                        let body = tail.lower(lo, stack);
+                        SProductMatch { scrut, binder, body }.build(lo, site)
+                    }
                 })
             }
             | Compu::CoMatch(CoMatch { arms }) => {
@@ -512,26 +539,22 @@ impl Lower for ss::CompuId {
                             .position(|(tag_branch, _ty)| tag_branch == &name)
                             .expect("Destructor tag not found");
                         let dtor_idx = DtorIdx { idx, name };
-                        let body_compu = tail.lower(lo, ());
+                        let branch_stack = Bullet.build(lo, site);
+                        let body_compu = tail.lower(lo, branch_stack);
                         CoMatcher { dtor: Cons(dtor_idx, Bullet), tail: body_compu }
                     })
                     .collect();
-                let scrut = Bullet.build(lo, site);
-                SCoMatch { scrut, arms }.build(lo, site)
+                SCoMatch { scrut: stack, arms }.build(lo, site)
             }
             | Compu::Dtor(Dtor(body, name)) => {
-                // Destructor: push the destructor onto the stack and continue with body
-                let next_stack = Bullet.build(lo, Some(ss::TermId::Compu(body)));
                 let codata_id = lo.statics.codata_hints[&body];
                 let idx = lo.statics.codatas[&codata_id]
                     .iter()
                     .position(|(tag_branch, _ty)| tag_branch == &name)
                     .expect("Destructor tag not found");
                 let dtor_idx = DtorIdx { idx, name };
-                let tag_stack_id = Cons(dtor_idx, next_stack).build(lo, site);
-                let body_compu = body.lower(lo, ());
-                // Create LetStack to bind from the stack with the tag to the current stack, then run body
-                Let { binder: Bullet, bindee: tag_stack_id, tail: body_compu }.build(lo, site)
+                let stack = Cons(dtor_idx, stack).build(lo, site);
+                body.lower(lo, stack)
             }
         }
     }
@@ -555,8 +578,9 @@ mod tests {
         let mut scoped = ScopedArena::default();
 
         let stackir = RootLowerer::new(&spans, &mut scoped, &statics, root).run().unwrap();
+        let stackir = stackir.as_program();
 
         assert!(stackir.arena.inner.compus.get(&stackir.root).is_some());
-        super::super::check::check(&stackir, &scoped);
+        super::super::check::check(stackir, &scoped);
     }
 }

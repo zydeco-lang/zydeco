@@ -1,80 +1,88 @@
 //! Closure conversion.
 //!
-//! After this pass, there will be no implicit captures.
+//! This pass rebuilds the reachable Stack IR graph instead of rewriting arena
+//! nodes in place.  A source node can be shared by several lexical occurrences,
+//! so mutating it while substituting captures would let one occurrence change
+//! the meaning of another.  The translation rebuilds every reachable occurrence
+//! as lexical syntax in a fresh output arena; source storage is read-only and is
+//! dropped with the consumed input program.
 
-use super::{arena::*, substitute::*, syntax::*};
+use super::{check::BranchJoinProgram, syntax::*, variables::FreeVars as _};
 use derive_more::{AsMut, AsRef};
 use std::{collections::HashMap, convert::Infallible};
 use {
-    zydeco_statics::{arena::StaticsArena, syntax as ss},
-    zydeco_surface::scoped::arena::ScopedArena,
-    zydeco_syntax::VarName,
-    zydeco_utils::prelude::{CoContext, CompilerPass},
+    zydeco_statics::syntax as ss, zydeco_surface::scoped::arena::ScopedArena,
+    zydeco_syntax::VarName, zydeco_utils::prelude::CompilerPass,
 };
 
-/// Perform closure conversion on the stack arena.
-#[derive(AsRef, AsMut)]
-pub struct ClosureConverter<'a> {
-    #[as_ref(StackirArena)]
-    #[as_mut(StackirArena)]
-    arena: &'a mut StackirArena,
-    #[as_ref(ScopedArena)]
-    #[as_mut(ScopedArena)]
-    scoped: &'a mut ScopedArena,
-    _statics: &'a StaticsArena,
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct RenameEnvId(usize);
+
+#[derive(Debug)]
+struct RenameEnv {
+    parent: Option<RenameEnvId>,
+    bindings: HashMap<DefId, DefId>,
 }
 
-impl<'a> CompilerPass for ClosureConverter<'a> {
-    type Arena = StackirArena;
-    type Out = ();
-    type Error = Infallible;
-    fn run(self) -> Result<Self::Out, Self::Error> {
-        self.convert();
-        Ok(())
-    }
+struct PatternTranslation {
+    pattern: VPatId,
+    bindings: Vec<(DefId, DefId)>,
+}
+
+/// Make thunk captures explicit without mutating any reachable source node.
+///
+/// With the transitional CPS pass enabled, continuation captures arrive here as
+/// thunk captures too. A distinct `SPS_l` pass will replace that encoding.
+#[derive(AsRef, AsMut)]
+pub struct ClosureConverter<'a> {
+    source: StackirArena,
+    #[as_ref(StackirArena)]
+    #[as_mut(StackirArena)]
+    arena: StackirArena,
+    root: CompuId,
+    #[as_mut(ScopedArena)]
+    scoped: &'a mut ScopedArena,
+    envs: Vec<RenameEnv>,
 }
 
 impl<'a> ClosureConverter<'a> {
-    pub fn new(
-        program: &'a mut StackirProgram, scoped: &'a mut ScopedArena, statics: &'a StaticsArena,
-    ) -> Self {
-        let StackirProgram { arena, root: _ } = program;
-        Self { arena, scoped, _statics: statics }
+    pub fn new(program: BranchJoinProgram, scoped: &'a mut ScopedArena) -> Self {
+        let StackirRebuild { source, target, root } = program.into_program().into_rebuild();
+        Self {
+            source,
+            arena: target,
+            root,
+            scoped,
+            envs: vec![RenameEnv { parent: None, bindings: HashMap::new() }],
+        }
     }
 
-    pub fn convert(mut self) {
-        // Transform Fix computations
-        let fixes: Vec<_> = (self.arena.inner.compus.iter())
-            .filter_map(|(id, compu)| match compu {
-                | Computation::Fix(fix) => Some((*id, fix.clone())),
-                | _ => None,
-            })
-            .collect();
-        for (compu_id, fix) in fixes {
-            self.convert_fix(compu_id, &fix);
-        }
+    pub fn convert(mut self) -> BranchJoinProgram {
+        let root_env = RenameEnvId(0);
+        let root = self.translate_compu(self.root, root_env);
+        BranchJoinProgram::try_new(StackirProgram { arena: self.arena, root })
+            .expect("closure conversion preserves lexical branch-join Stack IR")
+    }
 
-        // Transform Clo values (thunks)
-        let clos: Vec<_> = (self.arena.inner.values.iter())
-            .filter_map(|(id, value)| match value {
-                | Value::Closure(clo) => Some((*id, clo.clone())),
-                | _ => None,
-            })
-            .collect();
-        for (value_id, clo) in clos {
-            self.convert_clo(value_id, &clo);
-        }
+    fn extend_env(
+        &mut self, parent: RenameEnvId, bindings: impl IntoIterator<Item = (DefId, DefId)>,
+    ) -> RenameEnvId {
+        let id = RenameEnvId(self.envs.len());
+        self.envs
+            .push(RenameEnv { parent: Some(parent), bindings: bindings.into_iter().collect() });
+        id
+    }
 
-        // Update Force operations to handle converted closures
-        // Find all Force operations and update them to unpack the closure pair
-        let forces: Vec<_> = (self.arena.inner.compus.iter())
-            .filter_map(|(id, compu)| match compu {
-                | Computation::Force(force) => Some((*id, force.clone())),
-                | _ => None,
-            })
-            .collect();
-        for (compu_id, force) in forces {
-            self.convert_force(compu_id, &force);
+    fn renamed_def(&self, mut env: RenameEnvId, def: DefId) -> DefId {
+        loop {
+            let RenameEnv { parent, bindings } = &self.envs[env.0];
+            if let Some(renamed) = bindings.get(&def) {
+                return *renamed;
+            }
+            match parent {
+                | Some(parent) => env = *parent,
+                | None => return def,
+            }
         }
     }
 
@@ -84,20 +92,40 @@ impl<'a> ClosureConverter<'a> {
         id
     }
 
-    /// Get the ss::TermId site for a CompuId, if it exists.
-    fn get_compu_site(&self, compu_id: CompuId) -> Option<ss::TermId> {
-        self.arena.admin.terms.back(&TermId::Compu(compu_id)).copied()
+    fn alloc_capture(&mut self, captured: DefId) -> DefId {
+        let VarName(name) = self.scoped.defs[&captured].clone();
+        self.alloc_def(VarName(format!("{name}#cap")))
     }
 
-    /// Get the ss::TermId site for a ValueId, if it exists.
-    fn get_value_site(&self, value_id: ValueId) -> Option<ss::TermId> {
-        self.arena.admin.terms.back(&TermId::Value(value_id)).copied()
+    fn alloc_like(&mut self, original: DefId) -> DefId {
+        self.alloc_def(self.scoped.defs[&original].clone())
     }
 
-    /// Compute free variables in a computation using cocontext from scoped.
-    fn free_vars_compu(&self, compu_id: CompuId) -> CoContext<DefId> {
-        use super::variables::FreeVars;
-        compu_id.free_vars(&self)
+    fn alloc_closure(&mut self, param: DefId) -> DefId {
+        let VarName(name) = self.scoped.defs[&param].clone();
+        self.alloc_def(VarName(format!("{name}#clo")))
+    }
+
+    fn compu_site(&self, id: CompuId) -> Option<ss::TermId> {
+        self.source.admin.terms.back(&TermId::Compu(id)).copied()
+    }
+
+    fn value_site(&self, id: ValueId) -> Option<ss::TermId> {
+        self.source.admin.terms.back(&TermId::Value(id)).copied()
+    }
+
+    fn stack_site(&self, id: StackId) -> Option<ss::TermId> {
+        self.source.admin.terms.back(&TermId::Stack(id)).copied()
+    }
+
+    fn pattern_site(&self, id: VPatId) -> Option<ss::PatId> {
+        self.source.admin.pats.back(&id).copied()
+    }
+
+    fn sorted_free_vars(&self, body: CompuId) -> Vec<DefId> {
+        let mut vars: Vec<_> = body.free_vars(&self.source).into_iter().collect();
+        vars.sort_unstable();
+        vars
     }
 
     fn build_product_pattern(&mut self, items: Vec<VPatId>) -> VPatId {
@@ -116,192 +144,325 @@ impl<'a> ClosureConverter<'a> {
         }
     }
 
-    /// Convert a Fix computation to explicit closure form.
-    fn convert_fix(&mut self, old_compu_id: CompuId, fix: &SFix) {
-        let site = self.get_compu_site(old_compu_id);
+    fn translated_var(
+        &mut self, def: DefId, env: RenameEnvId, site: Option<ss::TermId>,
+    ) -> ValueId {
+        self.renamed_def(env, def).build(self, site)
+    }
 
-        // 1. Compute capture list for body (excluding param)
-        let free_vars: Vec<DefId> = self.free_vars_compu(old_compu_id).into_iter().collect();
-        let mut free_var_renames = HashMap::new();
-        let mut renamed_captures = Vec::with_capacity(free_vars.len());
-        for &capture in free_vars.iter() {
-            let VarName(original_name) = self.scoped.defs[&capture].clone();
-            let new_def = self.alloc_def(VarName(format!("{original_name}#cap")));
-            free_var_renames.insert(capture, new_def);
-            renamed_captures.push(new_def);
+    fn translate_pattern(&mut self, id: VPatId) -> PatternTranslation {
+        let site = self.pattern_site(id);
+        let pattern = self.source.inner.vpats[&id].clone();
+        match pattern {
+            | ValuePattern::Hole(Hole) => {
+                PatternTranslation { pattern: Hole.build(self, site), bindings: Vec::new() }
+            }
+            | ValuePattern::Var(def) => {
+                let translated = self.alloc_like(def);
+                PatternTranslation {
+                    pattern: translated.build(self, site),
+                    bindings: vec![(def, translated)],
+                }
+            }
+            | ValuePattern::Ctor(Ctor(ctor, body)) => {
+                let PatternTranslation { pattern: body, bindings } = self.translate_pattern(body);
+                PatternTranslation { pattern: Ctor(ctor, body).build(self, site), bindings }
+            }
+            | ValuePattern::Alias(Alias(patterns)) => {
+                let (patterns, bindings): (Vec<_>, Vec<_>) = patterns
+                    .into_iter()
+                    .map(|pattern| {
+                        let PatternTranslation { pattern, bindings } =
+                            self.translate_pattern(pattern);
+                        (pattern, bindings)
+                    })
+                    .unzip();
+                let patterns = ConsN::from_vec(patterns).expect("an alias pattern is non-empty");
+                PatternTranslation {
+                    pattern: Alias(patterns).build(self, site),
+                    bindings: bindings.into_iter().flatten().collect(),
+                }
+            }
+            | ValuePattern::Triv(Triv) => {
+                PatternTranslation { pattern: Triv.build(self, site), bindings: Vec::new() }
+            }
+            | ValuePattern::VCons(VCons { items: ConsN(items, tail), layout }) => {
+                let (items, bindings): (Vec<_>, Vec<_>) = items
+                    .into_iter()
+                    .chain([tail])
+                    .map(|item| {
+                        let PatternTranslation { pattern, bindings } = self.translate_pattern(item);
+                        (pattern, bindings)
+                    })
+                    .unzip();
+                let items = ConsN::from_vec(items).expect("a product pattern is non-empty");
+                PatternTranslation {
+                    pattern: VCons::new(items, layout).build(self, site),
+                    bindings: bindings.into_iter().flatten().collect(),
+                }
+            }
         }
+    }
 
-        // 2. Substitute free variables in the body to use freshly bound capture vars,
-        //    then replace all occurrences of param with param applied to captures.
-        //    In stack style: when param is used, push captures on stack, then use param.
-        // Convert HashMap<DefId, DefId> to HashMap<DefId, ValueId> for substitution
-        let mut subst_map = SubstVarMap::new();
-        for (&old_def, &new_def) in free_var_renames.iter() {
-            let new_value_id = new_def.build(self, None);
-            subst_map.insert(old_def, new_value_id);
+    fn translate_value(&mut self, id: ValueId, env: RenameEnvId) -> ValueId {
+        let site = self.value_site(id);
+        let value = self.source.inner.values[&id].clone();
+        match value {
+            | Value::Hole(Hole) => Hole.build(self, site),
+            | Value::Var(def) => self.translated_var(def, env, site),
+            | Value::Closure(Closure { stack: Bullet, body }) => {
+                self.translate_closure(body, env, site)
+            }
+            | Value::Ctor(Ctor(ctor, body)) => {
+                let body = self.translate_value(body, env);
+                Ctor(ctor, body).build(self, site)
+            }
+            | Value::Triv(Triv) => Triv.build(self, site),
+            | Value::VCons(VCons { items: ConsN(items, tail), layout }) => {
+                let items = items.into_iter().map(|item| self.translate_value(item, env)).collect();
+                let tail = self.translate_value(tail, env);
+                VCons::new(ConsN(items, tail), layout).build(self, site)
+            }
+            | Value::Literal(literal) => literal.build(self, site),
+            | Value::Complex(Complex { operator, operands }) => {
+                let operands = operands
+                    .into_iter()
+                    .map(|operand| self.translate_value(operand, env))
+                    .collect();
+                Complex { operator, operands }.build(self, site)
+            }
         }
-        fix.body.subst_var_in_place(self, &mut subst_map);
+    }
 
-        // 3. Wrap body in a let arg to retrieve the flat capture product from the stack.
-        let mut capture_patterns = Vec::with_capacity(free_vars.len());
-        let mut capture_values = Vec::with_capacity(free_vars.len());
-        for &capture in &free_vars {
-            let capture_var = *free_var_renames.get(&capture).unwrap();
-            capture_patterns.push(capture_var.build(self, None));
-            capture_values.push(capture_var.build(self, None));
-        }
-        let capture_pattern = self.build_product_pattern(capture_patterns);
-        let capture_pack = self.build_product_value(capture_values, None);
-
-        // Add a variable that re-packs the captures and the param into a thunk pair
-        let param_value: ValueId = fix.param.build(self, site);
-        let closure_pair =
-            VCons::new(ConsN(vec![capture_pack], param_value), ProductLayout { arity: 2 })
-                .build(self, site);
-        let closure_def = {
-            let original_name = self.scoped.defs[&fix.param].clone();
-            self.alloc_def(VarName(format!("{original_name}#clo")))
-        };
-        let closure_vpat = closure_def.build(self, None);
-        let transformed_body = {
-            // Substitute the closure def into the transformed body to replace fix.param
-            let closure_def_value: ValueId = closure_def.build(self, site);
-            let mut subst_map = SubstVarMap::new();
-            subst_map.insert(fix.param, closure_def_value);
-            fix.body.subst_var_in_place(self, &mut subst_map);
-            fix.body
-        };
-        // LetValue the closure pair to a closure definition
-        let transformed_let_body =
-            Let { binder: closure_vpat, bindee: closure_pair, tail: transformed_body }
-                .build(self, site);
-        // Use a single LetArg to extract all captures from the stack
-        let capture_stack = Bullet.build(self, site);
-        let transformed_arg_body = Let {
-            binder: Cons(capture_pattern, Bullet),
-            bindee: capture_stack,
-            tail: transformed_let_body,
-        }
-        .build(self, site);
-
-        // 4. Push the capture list onto the stack first, then run the fix.
-        let capture_values: Vec<ValueId> = free_vars
+    fn translate_closure(
+        &mut self, body: CompuId, env: RenameEnvId, site: Option<ss::TermId>,
+    ) -> ValueId {
+        let captures = self.sorted_free_vars(body);
+        let capture_bindings = captures
             .iter()
-            .map(|&capture| {
-                let value: ValueId = capture.build(self, site);
-                value
-            })
-            .collect();
-        let capture_pair = self.build_product_value(capture_values, site);
-        // Push the capture pair onto the stack
-        let bullet_stack = Bullet.build(self, site);
-        let capture_stack: StackId = Cons(capture_pair, bullet_stack).build(self, site);
-        // Create the Fix computation
-        let fix_compu = SFix { param: fix.param, body: transformed_arg_body }.build(self, site);
-        // Wrap the Fix in a LetStack that pushes captures, then runs the Fix
-        // Update the Fix in place with the wrapped computation
-        self.arena.inner.compus.replace_existing(
-            old_compu_id,
-            Computation::Join(LetJoin::Stack(Let {
-                binder: Bullet,
-                bindee: capture_stack,
-                tail: fix_compu,
-            })),
-        );
-    }
+            .map(|capture| (*capture, self.alloc_capture(*capture)))
+            .collect::<Vec<_>>();
+        let body_env = self.extend_env(env, capture_bindings.iter().copied());
+        let body = self.translate_compu(body, body_env);
 
-    /// Convert a Clo (thunk) to explicit closure form.
-    fn convert_clo(&mut self, old_value_id: ValueId, clo: &Closure) {
-        // Preserve the site from the original value
-        let site = self.get_value_site(old_value_id);
-
-        // 1. Capture the environment (free variables in body)
-        let free_vars: Vec<DefId> = self.free_vars_compu(clo.body).into_iter().collect();
-        let mut free_var_renames = HashMap::new();
-
-        // 2. Make the closure a pair of (capture list, body function).
-        let mut capture_values = Vec::with_capacity(free_vars.len());
-        let mut capture_patterns = Vec::with_capacity(free_vars.len());
-        for &capture in &free_vars {
-            let VarName(original_name) = self.scoped.defs[&capture].clone();
-            let new_def = self.alloc_def(VarName(format!("{original_name}#cap")));
-            free_var_renames.insert(capture, new_def);
-
-            capture_values.push(capture.build(self, site));
-            capture_patterns.push(new_def.build(self, None));
-        }
-        let capture_pair = self.build_product_value(capture_values, site);
+        let capture_patterns: Vec<VPatId> =
+            capture_bindings.iter().map(|(_, captured)| captured.build(self, None)).collect();
         let capture_pattern = self.build_product_pattern(capture_patterns);
+        let capture_values =
+            captures.into_iter().map(|capture| self.translated_var(capture, env, site)).collect();
+        let captures = self.build_product_value(capture_values, site);
 
-        // Substitute free variables in the closure body to refer to the freshly
-        // bound capture variables.
-        // Convert HashMap<DefId, DefId> to HashMap<DefId, ValueId> for substitution
-        let mut subst_map = SubstVarMap::new();
-        for (&old_def, &new_def) in free_var_renames.iter() {
-            let new_value_id = new_def.build(self, None);
-            subst_map.insert(old_def, new_value_id);
-        }
-        clo.body.subst_var_in_place(self, &mut subst_map);
-
-        // Use a single LetArg to extract all captures from the stack
-        let capture_stack = Bullet.build(self, site);
-        let transformed_body =
-            Let { binder: Cons(capture_pattern, Bullet), bindee: capture_stack, tail: clo.body }
-                .build(self, site);
-
-        // The body is already a computation that can be wrapped in a closure
-        // We'll store it as a closure that takes the captures as argument
-        // The pair will be: (capture_values, body_closure)
-        // where body_closure is a closure whose body is the original body
-        let body_closure = Closure { stack: Bullet, body: transformed_body }.build(self, site);
-
-        // Update the value in place with the pair: (captures, body_closure)
-        self.arena.inner.values.replace_existing_with(
-            old_value_id,
-            VCons::new(ConsN(vec![capture_pair], body_closure), ProductLayout { arity: 2 }),
-        );
+        let incoming = Bullet.build(self, site);
+        let body = Let { binder: Cons(capture_pattern, Bullet), bindee: incoming, tail: body }
+            .build(self, site);
+        let code = Closure { stack: Bullet, body }.build(self, site);
+        VCons::new(ConsN(vec![captures], code), ProductLayout { arity: 2 }).build(self, site)
     }
 
-    /// Convert a Force computation to handle converted closures.
-    fn convert_force(&mut self, compu_id: CompuId, force: &SForce) {
-        // Always destructure the thunk as a pair at runtime using LetValue
-        // The thunk should be a pair (capture_pair, body_closure) from converted closures
-        let site = self.get_compu_site(compu_id);
+    fn translate_stack(&mut self, id: StackId, env: RenameEnvId) -> StackId {
+        let site = self.stack_site(id);
+        let stack = self.source.inner.stacks[&id].clone();
+        match stack {
+            | Stack::Kont(Kont { binder, body }) => {
+                let PatternTranslation { pattern: binder, bindings } =
+                    self.translate_pattern(binder);
+                let body_env = self.extend_env(env, bindings);
+                let body = self.translate_compu(body, body_env);
+                Kont { binder, body }.build(self, site)
+            }
+            | Stack::Var(Bullet) => Bullet.build(self, site),
+            | Stack::Arg(Cons(value, stack)) => {
+                let value = self.translate_value(value, env);
+                let stack = self.translate_stack(stack, env);
+                Cons(value, stack).build(self, site)
+            }
+            | Stack::Tag(Cons(dtor, stack)) => {
+                let stack = self.translate_stack(stack, env);
+                Cons(dtor, stack).build(self, site)
+            }
+        }
+    }
 
-        // Create fresh DefIds for the pattern binders
-        let capture_pair_def = self.alloc_def(VarName("__env__".into()));
-        let body_closure_def = self.alloc_def(VarName("__code__".into()));
+    fn translate_compu(&mut self, id: CompuId, env: RenameEnvId) -> CompuId {
+        let site = self.compu_site(id);
+        let compu = self.source.inner.compus[&id].clone();
+        match compu {
+            | Computation::Hole(SHole(stack)) => {
+                let stack = self.translate_stack(stack, env);
+                SHole(stack).build(self, site)
+            }
+            | Computation::Force(force) => self.translate_force(force, env, site),
+            | Computation::Ret(SReturn { stack, value }) => {
+                let stack = self.translate_stack(stack, env);
+                let value = self.translate_value(value, env);
+                SReturn { stack, value }.build(self, site)
+            }
+            | Computation::Fix(fix) => self.translate_fix(fix, env, site),
+            | Computation::ProductMatch(SProductMatch { scrut, binder, body }) => {
+                let scrut = self.translate_value(scrut, env);
+                let PatternTranslation { pattern: binder, bindings } =
+                    self.translate_pattern(binder);
+                let body_env = self.extend_env(env, bindings);
+                let body = self.translate_compu(body, body_env);
+                SProductMatch { scrut, binder, body }.build(self, site)
+            }
+            | Computation::CoprodMatch(SCoprodMatch { scrut, arms }) => {
+                let scrut = self.translate_value(scrut, env);
+                let arms = arms
+                    .into_iter()
+                    .map(|Matcher { binder, tail }| {
+                        let PatternTranslation { pattern: binder, bindings } =
+                            self.translate_pattern(binder);
+                        let body_env = self.extend_env(env, bindings);
+                        Matcher { binder, tail: self.translate_compu(tail, body_env) }
+                    })
+                    .collect();
+                SCoprodMatch { scrut, arms }.build(self, site)
+            }
+            | Computation::Join(LetJoin::Value(Let { binder, bindee, tail })) => {
+                let bindee = self.translate_value(bindee, env);
+                let PatternTranslation { pattern: binder, bindings } =
+                    self.translate_pattern(binder);
+                let tail_env = self.extend_env(env, bindings);
+                let tail = self.translate_compu(tail, tail_env);
+                Let { binder, bindee, tail }.build(self, site)
+            }
+            | Computation::Join(LetJoin::Stack(Let { binder: Bullet, bindee, tail })) => {
+                let bindee = self.translate_stack(bindee, env);
+                let tail = self.translate_compu(tail, env);
+                Let { binder: Bullet, bindee, tail }.build(self, site)
+            }
+            | Computation::LetArg(Let { binder: Cons(binder, Bullet), bindee, tail }) => {
+                let bindee = self.translate_stack(bindee, env);
+                let PatternTranslation { pattern: binder, bindings } =
+                    self.translate_pattern(binder);
+                let tail_env = self.extend_env(env, bindings);
+                let tail = self.translate_compu(tail, tail_env);
+                Let { binder: Cons(binder, Bullet), bindee, tail }.build(self, site)
+            }
+            | Computation::CoCase(SCoMatch { scrut, arms }) => {
+                let scrut = self.translate_stack(scrut, env);
+                let arms = arms
+                    .into_iter()
+                    .map(|CoMatcher { dtor, tail }| {
+                        let branch_env = self.extend_env(env, []);
+                        CoMatcher { dtor, tail: self.translate_compu(tail, branch_env) }
+                    })
+                    .collect();
+                SCoMatch { scrut, arms }.build(self, site)
+            }
+            | Computation::ExternCall(ExternCall { function, stack }) => {
+                let stack = self.translate_stack(stack, env);
+                ExternCall { function, stack }.build(self, site)
+            }
+        }
+    }
 
-        // Create Var patterns to bind the destructured values
-        let capture_pair_vpat = capture_pair_def.build(self, None);
-        let body_closure_vpat = body_closure_def.build(self, None);
+    fn translate_force(
+        &mut self, force: SForce, env: RenameEnvId, site: Option<ss::TermId>,
+    ) -> CompuId {
+        let thunk = self.translate_value(force.thunk, env);
+        let stack = self.translate_stack(force.stack, env);
+
+        let captures = self.alloc_def(VarName("__env__".into()));
+        let code = self.alloc_def(VarName("__code__".into()));
         let pair_pattern = VCons::new(
-            ConsN(vec![capture_pair_vpat], body_closure_vpat),
+            ConsN(vec![captures.build(self, None)], code.build(self, None)),
             ProductLayout { arity: 2 },
         )
         .build(self, None);
 
-        // After destructuring with LetValue, we need to:
-        // 1. Push capture_pair onto the stack
-        // 2. Force body_closure
-        // Reference the pattern-bound values using Value::Var
-        let capture_pair_val: ValueId = capture_pair_def.build(self, site);
-        let body_closure_val = body_closure_def.build(self, site);
+        let captures: ValueId = captures.build(self, site);
+        let code: ValueId = code.build(self, site);
+        let stack = Cons(captures, stack).build(self, site);
+        let invoke = SForce { thunk: code, stack }.build(self, site);
+        Let { binder: pair_pattern, bindee: thunk, tail: invoke }.build(self, site)
+    }
 
-        let capture_pair_stack = Cons(capture_pair_val, force.stack).build(self, site);
-        let force_body =
-            SForce { thunk: body_closure_val, stack: capture_pair_stack }.build(self, site);
+    fn translate_fix(&mut self, fix: SFix, env: RenameEnvId, site: Option<ss::TermId>) -> CompuId {
+        let stack = self.translate_stack(fix.stack, env);
+        let captures = self
+            .sorted_free_vars(fix.body)
+            .into_iter()
+            .filter(|capture| *capture != fix.param)
+            .collect::<Vec<_>>();
+        let capture_bindings = captures
+            .iter()
+            .map(|capture| (*capture, self.alloc_capture(*capture)))
+            .collect::<Vec<_>>();
+        let closure = self.alloc_closure(fix.param);
+        let code_param = self.alloc_like(fix.param);
+        let body_env =
+            self.extend_env(env, capture_bindings.iter().copied().chain([(fix.param, closure)]));
+        let body = self.translate_compu(fix.body, body_env);
 
-        // LetValue to destructure: let Cons(capture_pair, body_closure) = thunk in ...
-        // This will destructure the pair at runtime.
-        // Replace the original Force with the transformed computation
-        self.arena.inner.compus.replace_existing(
-            compu_id,
-            Computation::Join(LetJoin::Value(Let {
-                binder: pair_pattern,
-                bindee: force.thunk,
-                tail: force_body,
-            })),
-        );
+        let capture_patterns: Vec<VPatId> =
+            capture_bindings.iter().map(|(_, captured)| captured.build(self, None)).collect();
+        let capture_pattern = self.build_product_pattern(capture_patterns);
+        let captured_values: Vec<ValueId> =
+            capture_bindings.iter().map(|(_, captured)| captured.build(self, site)).collect();
+        let captured_values = self.build_product_value(captured_values, site);
+        let code: ValueId = code_param.build(self, site);
+        let recursive_closure =
+            VCons::new(ConsN(vec![captured_values], code), ProductLayout { arity: 2 })
+                .build(self, site);
+        let closure_pattern: VPatId = closure.build(self, None);
+        let body = Let { binder: closure_pattern, bindee: recursive_closure, tail: body }
+            .build(self, site);
+        let incoming = Bullet.build(self, site);
+        let body = Let { binder: Cons(capture_pattern, Bullet), bindee: incoming, tail: body }
+            .build(self, site);
+
+        let captured_values =
+            captures.into_iter().map(|capture| self.translated_var(capture, env, site)).collect();
+        let captured_values = self.build_product_value(captured_values, site);
+        let stack = Cons(captured_values, stack).build(self, site);
+        SFix { param: code_param, stack, body }.build(self, site)
+    }
+}
+
+impl CompilerPass for ClosureConverter<'_> {
+    type Arena = StackirArena;
+    type Out = BranchJoinProgram;
+    type Error = Infallible;
+
+    fn run(self) -> Result<Self::Out, Self::Error> {
+        Ok(self.convert())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn closure_conversion_builds_a_fresh_output_arena() {
+        let mut arena = StackirArena::default();
+        let mut scoped = ScopedArena::default();
+        let captured = arena.admin.fresh();
+        scoped.insert_def(captured, VarName("captured".into()));
+
+        let captured_use: ValueId = captured.build(&mut arena, None);
+        let closure_stack = Bullet.build(&mut arena, None);
+        let closure_body =
+            SReturn { stack: closure_stack, value: captured_use }.build(&mut arena, None);
+        let closure = Closure { stack: Bullet, body: closure_body }.build(&mut arena, None);
+        let root_stack = Bullet.build(&mut arena, None);
+        let tail = SReturn { stack: root_stack, value: closure }.build(&mut arena, None);
+        let binder: VPatId = captured.build(&mut arena, None);
+        let bindee = Triv.build(&mut arena, None);
+        let root = Let { binder, bindee, tail }.build(&mut arena, None);
+        let program = BranchJoinProgram::try_new(StackirProgram { arena, root }).unwrap();
+
+        super::super::check::check(program.as_program(), &scoped);
+        let program = ClosureConverter::new(program, &mut scoped).convert();
+        let output = program.as_program();
+
+        assert_ne!(output.root, root);
+        assert!(output.arena.inner.compus.get(&root).is_none());
+        assert!(output.arena.inner.compus.get(&closure_body).is_none());
+        assert!(output.arena.inner.values.get(&closure).is_none());
+        assert!(output.arena.inner.values.get(&captured_use).is_none());
+        super::super::check::check(output, &scoped);
     }
 }

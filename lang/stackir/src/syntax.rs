@@ -139,7 +139,23 @@ pub struct SReturn {
 #[derive(Clone, Debug)]
 pub struct SFix {
     pub param: DefId,
+    pub stack: StackId,
     pub body: CompuId,
+}
+
+/// Elimination of one irrefutable product-like value pattern.
+#[derive(Clone, Debug)]
+pub struct SProductMatch {
+    pub scrut: ValueId,
+    pub binder: VPatId,
+    pub body: CompuId,
+}
+
+/// Branching elimination of a value coproduct.
+#[derive(Clone, Debug)]
+pub struct SCoprodMatch {
+    pub scrut: ValueId,
+    pub arms: Vec<Matcher<VPatId, CompuId>>,
 }
 
 #[derive(Clone, Debug)]
@@ -161,7 +177,8 @@ pub enum Computation<Join> {
     Force(SForce),
     Ret(SReturn),
     Fix(SFix),
-    Case(Match<ValueId, VPatId, CompuId>),
+    ProductMatch(SProductMatch),
+    CoprodMatch(SCoprodMatch),
     #[from(ignore)]
     Join(Join),
     LetArg(Let<Cons<VPatId, Bullet>, StackId, CompuId>),

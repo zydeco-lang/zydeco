@@ -362,14 +362,15 @@ Zydeco is implemented as a pipeline with an interpreter and native-code branch:
 3. name resolution (`lang/surface/src/scoped`)
 4. type checking and post-check validation (`lang/statics/src`)
 5. linking and evaluation (`lang/dynamics/src`), or
-6. single-root Stack IR and substitution normalization (`lang/stackir/src`)
+6. single-root branch-join Stack IR and explicit-capture lowering (`lang/stackir/src`)
 7. single-root assembly lowering (`lang/assembly/src`)
 8. AMD64 or LLVM emission (`lang/amd64/src`, `lang/llvm/src`)
 
 Every completed representation after type checking carries exactly one top-level expression or program root.
-`DynamicsProgram`, `StackirProgram`, substitution-normal `SNormProgram`, and `AssemblyProgram` pair that root with
-the storage needed by their syntax. Node arenas and labeled block collections are therefore implementation storage,
-not declaration-oriented containers that determine how many programs a compilation contains.
+`DynamicsProgram`, `StackirProgram`, and `AssemblyProgram` pair that root with the storage needed by their syntax.
+Node arenas and labeled block collections are therefore implementation storage, not declaration-oriented containers
+that determine how many programs a compilation contains. Stack IR follows the branch-join presentation described in
+[the paper-aligned Stack IR design](docs/ideas/paper-aligned-stackir.md).
 
 The phases are spread across several core crates:
 
@@ -404,7 +405,7 @@ Two separate type-level relations constrain IDs:
 - `Scope: ArenaSchema<Id, Item = T>` declares the contents owned by an arena representation.
   Since `Id` is a trait parameter, one scope can own several ID categories
   and the same ID can inhabit several representation scopes.
-  This is used, for example, by the stack-passing and substitution-normal forms of Stack IR.
+  This is used, for example, by the several node categories in Stack IR.
 
 - Dense storage wraps `la_arena::Arena`.
   The `la-arena` allocation itself supplies the raw index, so a dense arena retains only its identity tag
@@ -419,8 +420,8 @@ Two separate type-level relations constrain IDs:
 - Issuers live on the operation that creates nodes: `Parser`, `Desugarer`, `Tycker`,
   assembly `Lowerer`, and stack analysis.
   Their output arenas do not retain the cursor.
-  Stack IR deliberately keeps one issuer in `AdminArena` because normalization, substitution, CPS,
-  and closure-conversion passes all continue creating nodes in the same IR.
+  Stack IR deliberately keeps one issuer in `AdminArena` because CPS and the transitional closure-conversion pass
+  continue creating fresh nodes in the same IR without rewriting their input nodes.
 - Provenance tables encode their actual cardinality.
   In particular, repeated type checking and transparent syntax make surface-to-typed provenance many-to-many,
   while one typed node can lower to many stack-IR nodes.

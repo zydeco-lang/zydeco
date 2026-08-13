@@ -8,7 +8,7 @@ use zydeco_session::{
     ProgramAnalysis,
 };
 use zydeco_stackir::{
-    BuiltinPackageLowerError, BuiltinRootLowerer, CpsMode, OptimizationPipeline, StackirProgram,
+    BuiltinPackageLowerError, BuiltinRootLowerer, CpsMode, StackirPipeline, StackirProgram,
 };
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax::SpanArena};
@@ -96,7 +96,7 @@ impl BackendProgram {
         let stackir = BuiltinRootLowerer::new(&spans, &mut scoped, &statics, root, signature)
             .run()
             .map_err(CompileError::BuiltinLower)?;
-        let stackir = OptimizationPipeline::new(&spans, &mut scoped, &statics, cps).run(stackir);
+        let stackir = StackirPipeline::new(&mut scoped, cps).run(stackir);
         let assembly = LoweringPipeline::new(&spans, &scoped, &statics, &stackir).run();
         Ok(Self { spans, scoped, statics, stackir, assembly })
     }

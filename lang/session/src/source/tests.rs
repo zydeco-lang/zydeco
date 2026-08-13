@@ -19,6 +19,13 @@ struct SourceStack {
     spans: zydeco_surface::textual::syntax::SpanArena,
     scoped: zydeco_surface::scoped::arena::ScopedArena,
     statics: zydeco_statics::arena::StaticsArena,
+    stackir: zydeco_stackir::BranchJoinProgram,
+}
+
+struct SourceConvertedStack {
+    spans: zydeco_surface::textual::syntax::SpanArena,
+    scoped: zydeco_surface::scoped::arena::ScopedArena,
+    statics: zydeco_statics::arena::StaticsArena,
     stackir: zydeco_stackir::StackirProgram,
 }
 
@@ -136,22 +143,19 @@ impl SourceChecked {
 }
 
 impl SourceStack {
-    fn optimize(mut self, config: &crate::TestPipelineOptions) -> Self {
+    fn convert(self, config: &crate::TestPipelineOptions) -> SourceConvertedStack {
         let cps = if config.enable_cps {
             zydeco_stackir::CpsMode::Enabled
         } else {
             zydeco_stackir::CpsMode::Disabled
         };
-        self.stackir = zydeco_stackir::OptimizationPipeline::new(
-            &self.spans,
-            &mut self.scoped,
-            &self.statics,
-            cps,
-        )
-        .run(self.stackir);
-        self
+        let Self { spans, mut scoped, statics, stackir } = self;
+        let stackir = zydeco_stackir::StackirPipeline::new(&mut scoped, cps).run(stackir);
+        SourceConvertedStack { spans, scoped, statics, stackir }
     }
+}
 
+impl SourceConvertedStack {
     fn assemble(self) -> SourceAssembly {
         let Self { spans, scoped, statics, stackir } = self;
         let assembly =
@@ -178,7 +182,7 @@ impl TestPipeline {
     fn zasm(
         path: impl AsRef<Path>, config: &crate::TestPipelineOptions, _: crate::TestOutput,
     ) -> Result<SourceAssembly, TestPipelineError> {
-        Ok(Self::check(path)?.stackir_with_builtin()?.optimize(config).assemble())
+        Ok(Self::check(path)?.stackir_with_builtin()?.convert(config).assemble())
     }
 
     fn amd64(
@@ -1184,8 +1188,9 @@ fn a_zero_dependency_source_program_lowers_directly_to_stack_ir() {
         .unwrap();
 
     let SourceStack { stackir, scoped, .. } = checked.stackir().unwrap();
+    let stackir = stackir.as_program();
     assert!(stackir.arena.inner.compus.get(&stackir.root).is_some());
-    zydeco_stackir::sps::check::check(&stackir, &scoped);
+    zydeco_stackir::sps::check::check(stackir, &scoped);
 }
 
 #[test]
@@ -1461,8 +1466,9 @@ fn stack_ir_constructs_and_applies_the_same_typed_builtin_package() {
 
     let SourceStack { stackir, scoped, .. } = checked.stackir_with_builtin().unwrap();
 
+    let stackir = stackir.as_program();
     assert!(stackir.arena.inner.compus.get(&stackir.root).is_some());
-    zydeco_stackir::sps::check::check(&stackir, &scoped);
+    zydeco_stackir::sps::check::check(stackir, &scoped);
 }
 
 #[test]
@@ -2180,6 +2186,18 @@ fn choice_exec_example_composes_the_standard_library_as_a_root_term() {
 }
 
 #[test]
+fn choice_root_reaches_zasm_without_the_transitional_cps_pass() {
+    let SourceAssembly { assembly, .. } = TestPipeline::zasm(
+        repository_source("tests/exec/choice.zy"),
+        &crate::TestPipelineOptions { enable_cps: false },
+        crate::TestOutput::quiet(),
+    )
+    .unwrap();
+
+    assert!(assembly.arena.programs.get(&assembly.root).is_some());
+}
+
+#[test]
 fn y_combinator_exec_example_composes_as_a_root_term() {
     assert_source_io_program_reaches_zasm("tests/exec/Y.zydeco", "", "");
 }
@@ -2439,6 +2457,7 @@ fn checked_computation_roots_link_directly_to_dynamics() {
 fn checked_computation_roots_lower_directly_to_stack_ir() {
     let SourceStack { stackir, scoped, .. } = checked_trivial_computation().stackir().unwrap();
 
+    let stackir = stackir.as_program();
     assert!(stackir.arena.inner.compus.get(&stackir.root).is_some());
-    zydeco_stackir::sps::check::check(&stackir, &scoped);
+    zydeco_stackir::sps::check::check(stackir, &scoped);
 }

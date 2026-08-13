@@ -11,10 +11,7 @@ pub mod builtin;
 pub use builtin::*;
 
 mod pipeline;
-pub use pipeline::{CpsMode, OptimizationPipeline};
-
-/// Deep cloning of nodes in stack IR.
-pub mod clone;
+pub use pipeline::{CpsMode, StackirPipeline};
 
 /// Passes and utilities specific to stack IR.
 pub mod sps {
@@ -28,43 +25,18 @@ pub mod sps {
     pub mod lower;
     /// Double check the stack IR is well-formed. For debugging purposes only.
     pub mod check;
-    /// Inlining of "must inline" items.
-    /// One feasiable approach: inline all "top-level" definition let-bindings.
-    pub mod inline;
     /// CPS translation over stack IR.
     pub mod cps;
     /// Closure conversion over stack IR.
     pub mod convert;
-    /// In-place substitution helpers for stack IR.
-    pub mod substitute;
     /// Free-variable analysis for stack IR.
     pub mod variables;
-    /// Deep cloning of nodes in stack IR.
-    pub mod clone;
 }
 
 pub use sps::{
     arena::*,
+    check::{BranchJoinError, BranchJoinProgram},
     convert::ClosureConverter,
     cps::CpsTranslator,
     lower::{BuiltinRootLowerer, Lowerer, RootLowerer},
 };
-
-pub mod snorm {
-    /// Extra syntax for normalization.
-    pub mod syntax;
-    /// Arenas and builders for normalized stack IR.
-    pub mod arena;
-    /// Pretty/ugly formatters for normalized stack IR.
-    pub mod fmt;
-    /// Elaboration pass from stack IR into normalized stack IR.
-    pub mod elaborate;
-    /// Reconstructing substitution from normalized stack IR into stack IR.
-    pub mod substitute;
-    /// Variable introduction analysis for normalized stack IR.
-    pub mod variables;
-    /// Deep cloning of nodes in normalized stack IR.
-    pub mod clone;
-}
-
-pub use snorm::{arena::*, elaborate::Elaborator, substitute::Substitutor};

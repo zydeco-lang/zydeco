@@ -75,8 +75,13 @@ impl FreeVars for CompuId {
             | Compu::Ret(SReturn { stack, value }) => {
                 stack.free_vars(arena) + value.free_vars(arena)
             }
-            | Compu::Fix(SFix { param, body }) => body.free_vars(arena) - Context::singleton(param),
-            | Compu::Case(Match { scrut, arms }) => {
+            | Compu::Fix(SFix { param, stack, body }) => {
+                stack.free_vars(arena) + (body.free_vars(arena) - Context::singleton(param))
+            }
+            | Compu::ProductMatch(SProductMatch { scrut, binder, body }) => {
+                scrut.free_vars(arena) + (body.free_vars(arena) - binder.vars(arena))
+            }
+            | Compu::CoprodMatch(SCoprodMatch { scrut, arms }) => {
                 scrut.free_vars(arena)
                     + arms
                         .into_iter()

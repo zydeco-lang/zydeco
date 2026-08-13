@@ -445,21 +445,40 @@ impl<'a> Lower<'a> for sk::CompuId {
                     ),
                 )
             }
-            | Compu::Fix(sk::SFix { param, body }) => {
-                // Label the body code; use an undefined symbol as a placeholder.
-                let name = lo.scoped.defs[&param].plain();
-                let sym = Undefined.build(lo, (Some(name.to_string()), Some(param)));
-                // Lower the body
-                let body_prog = body.lower(lo, cx.clone());
-                lo.arena.symbols.replace_existing(
-                    sym,
-                    NamedSymbol { name: name.to_string(), inner: Symbol::Prog(body_prog) },
-                );
-                lo.arena.labels.insert_new(body_prog, sym);
-                // Jump to the body
-                Jump(body_prog).build(lo, cx)
+            | Compu::Fix(sk::SFix { param, stack, body }) => {
+                stack.lower(
+                    lo,
+                    With::new(
+                        cx,
+                        Box::new(move |lo, cx| {
+                            // The explicit capture stack makes the block independent of the
+                            // caller's assembly context.
+                            let name = lo.scoped.defs[&param].plain();
+                            let sym = Undefined.build(lo, (Some(name.to_string()), Some(param)));
+                            let body_prog = body.lower(lo, Context::new());
+                            lo.arena.symbols.replace_existing(
+                                sym,
+                                NamedSymbol {
+                                    name: name.to_string(),
+                                    inner: Symbol::Prog(body_prog),
+                                },
+                            );
+                            lo.arena.labels.insert_new(body_prog, sym);
+                            Jump(body_prog).build(lo, cx)
+                        }),
+                    ),
+                )
             }
-            | Compu::Case(Match { scrut, arms }) => {
+            | Compu::ProductMatch(sk::SProductMatch { scrut, binder, body }) => scrut.lower(
+                lo,
+                With::new(
+                    cx,
+                    Box::new(move |lo, cx| {
+                        binder.lower(lo, With::new(cx, Box::new(move |lo, cx| body.lower(lo, cx))))
+                    }),
+                ),
+            ),
+            | Compu::CoprodMatch(sk::SCoprodMatch { scrut, arms }) => {
                 // Lower the scrutinee
                 scrut.lower(
                     lo,
