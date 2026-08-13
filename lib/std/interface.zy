@@ -606,16 +606,16 @@ begin
           (float64_instance :: NumericInstanceType BoolType Float64Type) *
           Unit) *
         (primitives ::
-          (int8 :: PrimitiveIntegerModule Int8Type StringType) *
-          (int16 :: PrimitiveIntegerModule Int16Type StringType) *
-          (int32 :: PrimitiveIntegerModule Int32Type StringType) *
-          (int64 :: PrimitiveIntegerModule Int64Type StringType) *
-          (uint8 :: PrimitiveIntegerModule UInt8Type StringType) *
-          (uint16 :: PrimitiveIntegerModule UInt16Type StringType) *
-          (uint32 :: PrimitiveIntegerModule UInt32Type StringType) *
-          (uint64 :: PrimitiveIntegerModule UInt64Type StringType) *
-          (float32 :: PrimitiveFloatModule Float32Type StringType) *
-          (float64 :: PrimitiveFloatModule Float64Type StringType) *
+          (i8 :: PrimitiveIntegerModule Int8Type StringType) *
+          (i16 :: PrimitiveIntegerModule Int16Type StringType) *
+          (i32 :: PrimitiveIntegerModule Int32Type StringType) *
+          (i64 :: PrimitiveIntegerModule Int64Type StringType) *
+          (u8 :: PrimitiveIntegerModule UInt8Type StringType) *
+          (u16 :: PrimitiveIntegerModule UInt16Type StringType) *
+          (u32 :: PrimitiveIntegerModule UInt32Type StringType) *
+          (u64 :: PrimitiveIntegerModule UInt64Type StringType) *
+          (f32 :: PrimitiveFloatModule Float32Type StringType) *
+          (f64 :: PrimitiveFloatModule Float64Type StringType) *
           Unit) *
         (int8 :: IntegerModule BoolType Int8Type StringType) *
         (int16 :: IntegerModule BoolType Int16Type StringType) *

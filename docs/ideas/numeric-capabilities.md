@@ -52,6 +52,9 @@ The standard package exports these five capability type constructors and a `nume
 instance for each of `Int8` through `Int64`, `UInt8` through `UInt64`, `Float32`, and `Float64`.
 Their specialized modules remain the interfaces for division, integer remainder, rendering, extrema,
 and other representation-specific operations.
+The lower-level `primitives` module uses the corresponding Rust names, from `i8` through `i64`, `u8` through `u64`,
+and `f32` and `f64`. This keeps primitive ABI paths distinct from the higher-level width-specific modules while
+making the representation contract explicit.
 
 Literal types are selected by context, defaulting to `Int64` and `Float64` when no expected type is available.
 The capability encoding does not add implicit conversions, checked arithmetic, or instance search;

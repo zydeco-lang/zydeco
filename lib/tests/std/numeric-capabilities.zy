@@ -5,7 +5,7 @@ begin
     @[import("../../std/builtin.zy")] _
   ) that
 
-  let (/Bool; /Numeric; /numeric; /bool; /process) = make_std builtin in
+  let (/Bool; /Numeric; /numeric; /primitives; /bool; /process) = make_std builtin in
   let ! multiply_add_equal
     (A : VType)
     (dictionary : Numeric Bool A)
@@ -32,10 +32,13 @@ begin
     dictionary = int_dictionary,
     ()
   ) = numeric/int64_instance in
+  do primitive_total <- ! (primitives/i64/add) 40 2;
+  do primitive_ok <- ! (int_dictionary/order/equality/eq) primitive_total 42;
   do int_arithmetic <- ! multiply_add_equal
     IntScalar int_dictionary 6 7 0 42;
   do int_order <- ! strictly_less IntScalar int_dictionary 41 42;
-  do int_ok <- ! (bool/and) int_arithmetic int_order;
+  do int_operations_ok <- ! (bool/and) int_arithmetic int_order;
+  do int_ok <- ! (bool/and) primitive_ok int_operations_ok;
 
   let (
     Scalar = FloatScalar,

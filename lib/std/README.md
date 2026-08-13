@@ -67,7 +67,8 @@ multiplicative, equality, and ordering capabilities.
 Generic functions accept these dictionaries as ordinary arguments;
 the standard library does not perform implicit instance search.
 
-The `primitives` module exposes the exact host-facing operations for low-level code.
+The `primitives` module exposes the exact host-facing operations for low-level code under the corresponding Rust
+representation names: `i8` through `i64`, `u8` through `u64`, `f32`, and `f64`.
 Its comparisons select one of two computation continuations directly, avoiding a dependency on the library's
 `Bool` representation. The width-specific top-level modules reify those branches as `Bool` and add derived helpers.
 
@@ -78,7 +79,7 @@ Its comparisons select one of two computation continuations directly, avoiding a
 - `result`: successful and failed results, elimination, mapping, chaining, defaults, and predicates.
 - `list`: construction, right and left folds, append, map, reverse, length, safe indexing, head, and tail.
 - `numeric`: manifest instances for all ten numeric representations and explicitly passed capability dictionaries.
-- `primitives`: exact-width arithmetic, branch comparisons, and rendering at the host ABI boundary.
+- `primitives`: exact-width arithmetic, branch comparisons, and rendering under Rust representation names.
 - `int8` through `int64` and `uint8` through `uint64`: arithmetic, complete comparisons,
   successor/predecessor, wrapping negation, extrema, and string rendering.
 - `float32` and `float64`: IEEE-754 arithmetic, comparisons, negation, and string rendering.

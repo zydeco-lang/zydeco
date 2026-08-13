@@ -1718,7 +1718,8 @@ fn exact_signed_arithmetic_agrees_through_interpretation_and_native_emission() {
     .unwrap();
 
     assert!(matches!(results.as_slice(), [zydeco_dynamics::ProgKont::ExitCode(0)]));
-    assert!(native.assembly.contains("idiv"));
+    assert!(native.assembly.contains("call zydeco_int64_div"));
+    assert!(native.assembly.contains("call zydeco_int64_mod"));
 }
 
 #[test]
