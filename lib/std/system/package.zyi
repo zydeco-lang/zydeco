@@ -1,0 +1,24 @@
+begin
+  let DataPackage = @[import("../data/package.type.zy")] _ in
+  let SystemPackage = @[import("package.type.zy")] _ in
+  pi
+    (
+      (
+        /core;
+        /representations;
+        /numeric;
+        /text;
+        /system = (/Reader; /Writer; /OS; /io; /fs; /stdio; /args; /random; /process);
+        builtin
+      )
+      : @[import("../builtin.zy")] _
+    )
+  .
+    pi
+      (
+        (/Bool; /Option; /Result; /List) :
+        DataPackage
+      )
+    .
+      SystemPackage Bool Option Result List Reader Writer OS
+end

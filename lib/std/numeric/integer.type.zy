@@ -1,0 +1,28 @@
+begin
+  let Thk = @[import("../builtin/intrinsic/thk.zy")] _ in
+  let Ret = @[import("../builtin/intrinsic/ret.zy")] _ in
+  let Unit = @[import("../builtin/intrinsic/unit.zy")] _ in
+  let IntegerModule
+    (Bool : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (Integer : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (String : @[import("../builtin/intrinsic/vtype.zy")] _) =
+      (add :: Thk (Integer -> Integer -> Ret Integer))
+    * (sub :: Thk (Integer -> Integer -> Ret Integer))
+    * (mul :: Thk (Integer -> Integer -> Ret Integer))
+    * (div :: Thk (Integer -> Integer -> Ret Integer))
+    * (mod :: Thk (Integer -> Integer -> Ret Integer))
+    * (eq :: Thk (Integer -> Integer -> Ret Bool))
+    * (ne :: Thk (Integer -> Integer -> Ret Bool))
+    * (lt :: Thk (Integer -> Integer -> Ret Bool))
+    * (le :: Thk (Integer -> Integer -> Ret Bool))
+    * (gt :: Thk (Integer -> Integer -> Ret Bool))
+    * (ge :: Thk (Integer -> Integer -> Ret Bool))
+    * (increment :: Thk (Integer -> Ret Integer))
+    * (decrement :: Thk (Integer -> Ret Integer))
+    * (negate :: Thk (Integer -> Ret Integer))
+    * (min :: Thk (Integer -> Integer -> Ret Integer))
+    * (max :: Thk (Integer -> Integer -> Ret Integer))
+    * (to_string :: Thk (Integer -> Ret String))
+  in
+  IntegerModule
+end

@@ -56,25 +56,6 @@ begin
     | +True(_) => ! when_true
     end
   that
-  let Interface =
-    exists (Bool = AbstractBool : VType) .
-        (true :: AbstractBool)
-      * (false :: AbstractBool)
-      * (not :: Thk (AbstractBool -> Ret AbstractBool))
-      * (and :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool))
-      * (or :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool))
-      * (eq :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool))
-      * (xor :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool))
-      * (nand :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool))
-      * (nor :: Thk (AbstractBool -> AbstractBool -> Ret AbstractBool))
-      * (
-          if :: Thk (
-            forall (B : CType) .
-              AbstractBool -> Thk B -> Thk B -> B
-          )
-        )
-  that
-
   (
     = Bool,
     = true,
@@ -88,6 +69,5 @@ begin
     = nor,
     = if
   )
-  : Interface
 end
 -- end module Bool

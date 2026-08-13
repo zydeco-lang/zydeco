@@ -1,24 +1,28 @@
   (
     @[builtin(char_to_str)] (
-      to_string :: (@[intrinsic(thk)] _) (
-        (@[intrinsic(char)] _) -> (@[intrinsic(ret)] _) (@[intrinsic(string)] _)
+      to_string :: (@[import("../intrinsic/thk.zy")] _) (
+        (@[import("../intrinsic/char.zy")] _) -> (@[import("../intrinsic/ret.zy")] _) (
+          @[import("../intrinsic/string.zy")] _
+        )
       )
     )
   )
 * (
     @[builtin(char_codepoint)] (
-      codepoint :: (@[intrinsic(thk)] _) (
-        (@[intrinsic(char)] _) -> (@[intrinsic(ret)] _) (@[intrinsic(i64)] _)
+      codepoint :: (@[import("../intrinsic/thk.zy")] _) (
+        (@[import("../intrinsic/char.zy")] _) -> (@[import("../intrinsic/ret.zy")] _) (
+          @[import("../intrinsic/i64.zy")] _
+        )
       )
     )
   )
 * (
     @[builtin(char_from_codepoint)] (
-      from_codepoint :: (@[intrinsic(thk)] _) (
-        forall (R : @[intrinsic(ctype)] _) .
-             (@[intrinsic(i64)] _)
-          -> (@[intrinsic(thk)] _) R
-          -> (@[intrinsic(thk)] _) ((@[intrinsic(char)] _) -> R)
+      from_codepoint :: (@[import("../intrinsic/thk.zy")] _) (
+        forall (R : @[import("../intrinsic/ctype.zy")] _) .
+             (@[import("../intrinsic/i64.zy")] _)
+          -> (@[import("../intrinsic/thk.zy")] _) R
+          -> (@[import("../intrinsic/thk.zy")] _) ((@[import("../intrinsic/char.zy")] _) -> R)
           -> R
       )
     )

@@ -3361,13 +3361,14 @@ mod tests {
     fn standard_library_has_no_named_term_punning_backlog() {
         let sources = [
             ("bool.zy", include_str!("../../../../lib/std/data/bool.zy")),
-            ("interface.zy", include_str!("../../../../lib/std/interface.zy")),
             ("io-types.zy", include_str!("../../../../lib/std/system/types.zy")),
             ("list.zy", include_str!("../../../../lib/std/data/list.zy")),
             ("monad.zy", include_str!("../../../../lib/std/control/monad.zy")),
             ("option.zy", include_str!("../../../../lib/std/data/option.zy")),
             ("result.zy", include_str!("../../../../lib/std/data/result.zy")),
+            ("std.type.zy", include_str!("../../../../lib/std/std.type.zy")),
             ("std.zy", include_str!("../../../../lib/std/std.zy")),
+            ("std.zyi", include_str!("../../../../lib/std/std.zyi")),
         ];
 
         let remaining = sources
@@ -3390,13 +3391,14 @@ mod tests {
         let sources = [
             ("bool.zy", include_str!("../../../../lib/std/data/bool.zy")),
             ("builtin.zy", include_str!("../../../../lib/std/builtin.zy")),
-            ("interface.zy", include_str!("../../../../lib/std/interface.zy")),
             ("io-types.zy", include_str!("../../../../lib/std/system/types.zy")),
             ("list.zy", include_str!("../../../../lib/std/data/list.zy")),
             ("monad.zy", include_str!("../../../../lib/std/control/monad.zy")),
             ("option.zy", include_str!("../../../../lib/std/data/option.zy")),
             ("result.zy", include_str!("../../../../lib/std/data/result.zy")),
+            ("std.type.zy", include_str!("../../../../lib/std/std.type.zy")),
             ("std.zy", include_str!("../../../../lib/std/std.zy")),
+            ("std.zyi", include_str!("../../../../lib/std/std.zyi")),
         ];
 
         sources.into_iter().for_each(|(name, source)| {

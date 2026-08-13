@@ -253,6 +253,11 @@ may use ordinary imports, and may themselves be checked or imported when a type 
 They introduce no declaration language, namespace, or runtime module representation.
 Companion discovery applies to reusable `.zy` sources only; `.zydeco` program roots remain unpaired.
 
+A companion is an annotation boundary, rather than the only place where its type may be written.
+Ordinary `.zy` sources whose roots are type terms remain independently importable, so reusable package schemas use
+the descriptive `.type.zy` suffix. A leaf `.zyi` and an aggregate type can import the same constructor and apply it
+to their shared type witnesses. This keeps each implementation pairing local without duplicating its public schema.
+
 Interactive sessions reuse that source model instead of maintaining a mutable declaration environment.
 The Ratatui REPL stores every submitted term as a session overlay with a nonzero input identity,
 displayed as `[1]`, `[2]`, and so on.
@@ -311,8 +316,9 @@ Computation-producing packages continue to use the CBPV forms required by their 
 
 The standard-library components and their aggregate package use this pure boundary.
 Importing `data/bool.zy`, `data/option.zy`, `data/list.zy`, or `std.zy` yields a value-level package function;
-clients apply it and open its result with `let`. The root Builtin, interface, and standard-package sources are
-composition boundaries; their contracts and implementations live in topic directories beneath `lib/std`.
+clients apply it and open its result with `let`. Builtin and the standard-package root are composition boundaries;
+value contracts live in adjacent `.zyi` companions, and reusable type terms live beside their topic implementations
+beneath `lib/std`.
 The operations exported inside those packages retain their computation types.
 
 The launcher-supplied Builtin contract is structurally divided into `core`, `representations`, `numeric`,

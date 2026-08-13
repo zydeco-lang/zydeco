@@ -130,32 +130,6 @@ begin
     | +Path(string) => ret string
     end
   that
-  let Interface =
-    exists (IoErrorKind = AbstractIoErrorKind : VType) .
-      exists (IoError = AbstractIoError : VType) .
-        exists (Path = AbstractPath : VType) .
-            (not_found :: AbstractIoErrorKind)
-          * (permission_denied :: AbstractIoErrorKind)
-          * (already_exists :: AbstractIoErrorKind)
-          * (invalid_input :: AbstractIoErrorKind)
-          * (invalid_data :: AbstractIoErrorKind)
-          * (broken_pipe :: AbstractIoErrorKind)
-          * (closed :: AbstractIoErrorKind)
-          * (other :: AbstractIoErrorKind)
-          * (from_code :: Thk (Int64 -> Ret AbstractIoErrorKind))
-          * (
-              kind_eq_branch :: Thk (
-                forall (R : CType) .
-                  AbstractIoErrorKind -> AbstractIoErrorKind -> Thk R -> Thk R -> R
-              )
-            )
-          * (error :: Thk (AbstractIoErrorKind -> String -> Ret AbstractIoError))
-          * (error_kind :: Thk (AbstractIoError -> Ret AbstractIoErrorKind))
-          * (error_message :: Thk (AbstractIoError -> Ret String))
-          * (path :: Thk (String -> Ret AbstractPath))
-          * (path_string :: Thk (AbstractPath -> Ret String))
-  that
-
   (
     = IoErrorKind,
     = IoError,
@@ -176,5 +150,4 @@ begin
     = path,
     = path_string
   )
-  : Interface
 end

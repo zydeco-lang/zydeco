@@ -1,134 +1,100 @@
 begin
-  let make_data_interface = @[import("../interface/data.zy")] _ that
-  let make_numeric_interface = @[import("../interface/numeric.zy")] _ that
-
   begin
     param core : @[import("../builtin/core.zy")] _ in
     let (/VType; /CType; /Thk; /Ret; /Unit) = core in
-    let (/BoolModule) = make_data_interface core in
-    let (/NumericInstance; /FloatModule; /PrimitiveFloatModule) =
-      make_numeric_interface core
-    in
-    let Package (Bool : VType) (Scalar : VType) (String : VType) =
-        (operations :: FloatModule Bool Scalar String)
-      * (instance :: NumericInstance Bool Scalar)
-      * Unit
-    in
-    let Builder =
-      forall
-        (Bool : VType)
-        (Scalar : VType)
-        (String : VType)
-      .
-           BoolModule Bool
-        -> PrimitiveFloatModule Scalar String
-        -> Scalar
-        -> Scalar
-        -> Package Bool Scalar String
-    in
-    (
-      fn (Bool : VType) =>
-        fn (Scalar : VType) =>
-          fn (String : VType) =>
-            fn bool =>
-              let bool : BoolModule Bool = bool in
-              fn primitive =>
-                let primitive : PrimitiveFloatModule Scalar String = primitive in
-                fn zero =>
-                  let zero : Scalar = zero in
-                  fn one =>
-                    let one : Scalar = one in
-                    let ! compare
-                      (
-                        predicate : Thk (
-                          forall (B : CType) .
-                            Scalar -> Scalar -> Thk B -> Thk B -> B
-                        )
+    let NumericInstance = @[import("numeric-instance.type.zy")] _ in
+    let FloatModule = @[import("float.type.zy")] _ in
+    fn (Bool : VType) =>
+      fn (Scalar : VType) =>
+        fn (String : VType) =>
+          fn bool =>
+            fn primitive =>
+              fn zero =>
+                let zero : Scalar = zero in
+                fn one =>
+                  let one : Scalar = one in
+                  let ! compare
+                    (
+                      predicate : Thk (
+                        forall (B : CType) .
+                          Scalar -> Scalar -> Thk B -> Thk B -> B
                       )
-                      (left : Scalar)
-                      (right : Scalar)
-                    : Ret Bool =
-                      ! predicate
-                        (Ret Bool)
-                        left
-                        right
-                        { ret (bool/true) }
-                        { ret (bool/false) }
-                    in
-                    let operations : FloatModule Bool Scalar String = (
-                        add = primitive/add,
-                        sub = primitive/sub,
-                        mul = primitive/mul,
-                        div = primitive/div,
-                        eq = {
-                          fn left right => ! compare primitive/eq left right
-                        },
-                        ne = {
-                          fn left right =>
-                            do equal <- ! compare primitive/eq left right;
-                            ! (bool/not) equal
-                        },
-                        lt = {
-                          fn left right => ! compare primitive/lt left right
-                        },
-                        le = {
-                          fn left right =>
-                            do less <- ! compare primitive/lt left right;
-                            do equal <- ! compare primitive/eq left right;
-                            ! (bool/or) less equal
-                        },
-                        gt = {
-                          fn left right => ! compare primitive/gt left right
-                        },
-                        ge = {
-                          fn left right =>
-                            do greater <- ! compare primitive/gt left right;
-                            do equal <- ! compare primitive/eq left right;
-                            ! (bool/or) greater equal
-                        },
-                        negate = {
-                          fn value => ! (primitive/sub) zero value
-                        },
-                        to_string = primitive/to_string
-                      )
-                    in
-                    let instance : NumericInstance Bool Scalar = (
-                        = Scalar,
-                        dictionary = (
-                          additive = (
-                            = zero,
-                            add = operations/add,
-                            sub = operations/sub,
-                            negate = operations/negate
+                    )
+                    (left : Scalar)
+                    (right : Scalar)
+                  : Ret Bool =
+                    ! predicate
+                      (Ret Bool)
+                      left
+                      right
+                      { ret (bool/true) }
+                      { ret (bool/false) }
+                  in
+                  let operations : FloatModule Bool Scalar String = (
+                      add = primitive/add,
+                      sub = primitive/sub,
+                      mul = primitive/mul,
+                      div = primitive/div,
+                      eq = {
+                        fn left right => ! compare primitive/eq left right
+                      },
+                      ne = {
+                        fn left right =>
+                          do equal <- ! compare primitive/eq left right;
+                          ! (bool/not) equal
+                      },
+                      lt = {
+                        fn left right => ! compare primitive/lt left right
+                      },
+                      le = {
+                        fn left right =>
+                          do less <- ! compare primitive/lt left right;
+                          do equal <- ! compare primitive/eq left right;
+                          ! (bool/or) less equal
+                      },
+                      gt = {
+                        fn left right => ! compare primitive/gt left right
+                      },
+                      ge = {
+                        fn left right =>
+                          do greater <- ! compare primitive/gt left right;
+                          do equal <- ! compare primitive/eq left right;
+                          ! (bool/or) greater equal
+                      },
+                      negate = {
+                        fn value => ! (primitive/sub) zero value
+                      },
+                      to_string = primitive/to_string
+                    )
+                  in
+                  let instance : NumericInstance Bool Scalar = (
+                      = Scalar,
+                      dictionary = (
+                        additive = (
+                          = zero,
+                          add = operations/add,
+                          sub = operations/sub,
+                          negate = operations/negate
+                        ),
+                        multiplicative = (
+                          = one,
+                          mul = operations/mul
+                        ),
+                        order = (
+                          equality = (
+                            eq = operations/eq,
+                            ne = operations/ne
                           ),
-                          multiplicative = (
-                            = one,
-                            mul = operations/mul
-                          ),
-                          order = (
-                            equality = (
-                              eq = operations/eq,
-                              ne = operations/ne
-                            ),
-                            lt = operations/lt,
-                            le = operations/le,
-                            gt = operations/gt,
-                            ge = operations/ge
-                          ),
-                          ()
+                          lt = operations/lt,
+                          le = operations/le,
+                          gt = operations/gt,
+                          ge = operations/ge
                         ),
                         ()
-                      )
-                    in
-                    (
-                      (
-                        = operations,
-                        = instance,
-                        ()
-                      )
-                      : Package Bool Scalar String
+                      ),
+                      ()
                     )
-      : Builder
-    )
+                  in
+                  (= operations, = instance, ())
   end
 end

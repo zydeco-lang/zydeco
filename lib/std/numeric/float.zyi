@@ -1,0 +1,26 @@
+begin
+  let BoolModule = @[import("../data/bool.type.zy")] _ in
+  let NumericInstance = @[import("numeric-instance.type.zy")] _ in
+  let FloatModule = @[import("float.type.zy")] _ in
+  let PrimitiveFloatModule = @[import("primitive-float.type.zy")] _ in
+  let Unit = @[import("../builtin/intrinsic/unit.zy")] _ in
+  let Package
+    (Bool : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (Scalar : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (String : @[import("../builtin/intrinsic/vtype.zy")] _) =
+      (operations :: FloatModule Bool Scalar String)
+    * (instance :: NumericInstance Bool Scalar)
+    * Unit
+  in
+  pi (_ : @[import("../builtin/core.zy")] _) .
+    forall
+      (Bool : @[import("../builtin/intrinsic/vtype.zy")] _)
+      (Scalar : @[import("../builtin/intrinsic/vtype.zy")] _)
+      (String : @[import("../builtin/intrinsic/vtype.zy")] _)
+    .
+         BoolModule Bool
+      -> PrimitiveFloatModule Scalar String
+      -> Scalar
+      -> Scalar
+      -> Package Bool Scalar String
+end

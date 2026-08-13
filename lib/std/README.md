@@ -4,9 +4,11 @@ The standard library has two boundaries.
 [`builtin.zy`](builtin.zy) is the typed contract between Zydeco programs and the host runtime.
 Its operations expose representation-independent observations and effects,
 but never construct library-defined `Bool`, `Option`, `Result`, or `List` values.
-[`interface.zy`](interface.zy) defines the public package independently from its implementation.
-[`std.zy`](std.zy) applies the ordinary Zydeco modules in this directory, derives the higher-level operations,
-and assembles a value of that public package type.
+[`std.zyi`](std.zyi) annotates the public package independently from its implementation.
+[`std.zy`](std.zy) applies the ordinary Zydeco modules in this directory, derives higher-level operations,
+and assembles a value of that package type. Topic implementations use the same adjacent `.zy`/`.zyi` pairing.
+Reusable package-type constructors live in `.type.zy` sources and are imported by both leaf companions and
+aggregate signatures, so the contracts have one definition even when several boundaries expose them.
 
 This separation keeps algebraic data in the language.
 The interpreter and native runtime only need to agree on the small Builtin ABI, while the files under `data/`
@@ -14,25 +16,29 @@ and the derived operations in the topic packages remain ordinary Zydeco code.
 
 ## Source layout
 
-The three files at the root of this directory are composition boundaries, not implementation buckets:
+The files at the root of this directory are composition boundaries, not implementation buckets:
 
 ```text
 builtin.zy                 complete host ABI and shared system witness telescope
-interface.zy               public `Std` signature and exported interface types
+std.type.zy                reusable public `Std` package-type constructor
+std.zyi                    companion annotation for `std.zy`
 std.zy                     wiring for the public package
 
 builtin/core.zy            CBPV kinds and constructors
+builtin/intrinsic/*.zy     one canonical source term for each compiler intrinsic
 builtin/representations.zy fixed representation packages
 builtin/numeric/*.zy       exact-width primitive operations
 builtin/text/*.zy          Char, String, and Bytes host operations
 builtin/system/*.zy        I/O, filesystem, streams, arguments, randomness, process
 
 data/*.zy                  Bool, Option, Result, List, and their composed package
-interface/*.zy             data, numeric, text, and system contracts
 numeric/{integer,float}.zy explicitly polymorphic derived numeric builders
 text/package.zy            cross-representation text operations
 system/{types,package}.zy  shared system data and capability-preserving assembly
 control/monad.zy           reusable control abstractions
+
+**/*.zyi                   optional whole-file annotations beside value implementations
+**/*.type.zy               reusable type terms imported by companions and aggregate types
 ```
 
 Leaf sources are independently checkable package values or package functions. Topic package files assemble values
@@ -57,6 +63,8 @@ Fixed representations are compiler-canonical intrinsics, so independent packages
 project the groups they need and then open those narrower packages; the composition root retains the complete
 Builtin value when it must pass the dependency onward. See
 [Modular primitive packages](../../docs/ideas/primitive-packages.md) for the design and usage examples.
+Each intrinsic splice is authored once under `builtin/intrinsic/`; contracts elsewhere import those canonical
+terms rather than spelling compiler metadata again.
 
 ## Text model
 
@@ -145,4 +153,5 @@ in [`docs/ideas/filesystem.md`](../../docs/ideas/filesystem.md).
 
 The component files are independently importable pure package functions.
 `std.zy` is the composition root used by most programs and re-exports their abstract type witnesses in one package.
-Keeping the interface separate makes the exposed contract reviewable without reading the implementation machinery.
+Its companion keeps the exposed contract reviewable without reading the implementation machinery, while imported
+`.type.zy` constructors let topic and aggregate signatures share the same definitions.

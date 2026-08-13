@@ -1,0 +1,60 @@
+begin
+  let Thk = @[import("../builtin/intrinsic/thk.zy")] _ in
+  let Ret = @[import("../builtin/intrinsic/ret.zy")] _ in
+  let Unit = @[import("../builtin/intrinsic/unit.zy")] _ in
+  let StdioModule
+    (
+      Option : (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+        @[import("../builtin/intrinsic/vtype.zy")] _
+      )
+    )
+    (
+      Result : (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+        @[import("../builtin/intrinsic/vtype.zy")] _
+      ) -> (@[import("../builtin/intrinsic/vtype.zy")] _)
+    )
+    (String : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (Reader : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (Writer : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (IoError : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (OS : @[import("../builtin/intrinsic/ctype.zy")] _) =
+      (stdin :: Thk (Ret Reader))
+    * (stdout :: Thk (Ret Writer))
+    * (stderr :: Thk (Ret Writer))
+    * (
+        read_line :: Thk (
+             Thk (Result (Option String) IoError -> OS)
+          -> OS
+        )
+      )
+    * (
+        write :: Thk (
+             String
+          -> Thk (Result Unit IoError -> OS)
+          -> OS
+        )
+      )
+    * (
+        write_line :: Thk (
+             String
+          -> Thk (Result Unit IoError -> OS)
+          -> OS
+        )
+      )
+    * (
+        write_error :: Thk (
+             String
+          -> Thk (Result Unit IoError -> OS)
+          -> OS
+        )
+      )
+    * (
+        write_error_line :: Thk (
+             String
+          -> Thk (Result Unit IoError -> OS)
+          -> OS
+        )
+      )
+  in
+  StdioModule
+end

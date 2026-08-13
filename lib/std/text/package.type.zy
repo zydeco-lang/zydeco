@@ -1,0 +1,28 @@
+begin
+  let CharModule = @[import("char.type.zy")] _ in
+  let StringModule = @[import("string.type.zy")] _ in
+  let BytesModule = @[import("bytes.type.zy")] _ in
+  let Unit = @[import("../builtin/intrinsic/unit.zy")] _ in
+  let Int64 = @[import("../builtin/intrinsic/i64.zy")] _ in
+  let Char = @[import("../builtin/intrinsic/char.zy")] _ in
+  let String = @[import("../builtin/intrinsic/string.zy")] _ in
+  let Bytes = @[import("../builtin/intrinsic/bytes.zy")] _ in
+  let Package
+    (Bool : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (
+      Option : (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+        @[import("../builtin/intrinsic/vtype.zy")] _
+      )
+    )
+    (
+      List : (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+        @[import("../builtin/intrinsic/vtype.zy")] _
+      )
+    ) =
+      (char :: CharModule Option Char Int64 String)
+    * (string :: StringModule Bool Option List Int64 Char String)
+    * (bytes :: BytesModule Option Int64 String Bytes)
+    * Unit
+  in
+  Package
+end

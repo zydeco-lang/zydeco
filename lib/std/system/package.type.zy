@@ -1,0 +1,51 @@
+begin
+  let IoModule = @[import("io.type.zy")] _ in
+  let FsModule = @[import("fs.type.zy")] _ in
+  let StdioModule = @[import("stdio.type.zy")] _ in
+  let ProcessModule = @[import("process.type.zy")] _ in
+  let Unit = @[import("../builtin/intrinsic/unit.zy")] _ in
+  let Int64 = @[import("../builtin/intrinsic/i64.zy")] _ in
+  let String = @[import("../builtin/intrinsic/string.zy")] _ in
+  let Bytes = @[import("../builtin/intrinsic/bytes.zy")] _ in
+  let Package
+    (Bool : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (
+      Option : (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+        @[import("../builtin/intrinsic/vtype.zy")] _
+      )
+    )
+    (
+      Result :
+      (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+        @[import("../builtin/intrinsic/vtype.zy")] _
+      ) -> (@[import("../builtin/intrinsic/vtype.zy")] _)
+    )
+    (
+      List : (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+        @[import("../builtin/intrinsic/vtype.zy")] _
+      )
+    )
+    (Reader : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (Writer : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (OS : @[import("../builtin/intrinsic/ctype.zy")] _) =
+    exists (Path = PathType : @[import("../builtin/intrinsic/vtype.zy")] _) .
+      exists (IoErrorKind = IoErrorKindType : @[import("../builtin/intrinsic/vtype.zy")] _) .
+        exists (IoError = IoErrorType : @[import("../builtin/intrinsic/vtype.zy")] _) .
+            (
+              io :: IoModule
+                Bool Option Result Int64 String Bytes Reader Writer
+                IoErrorKindType IoErrorType OS
+            )
+          * (
+              fs :: FsModule
+                Result String Bytes Reader Writer PathType IoErrorType OS
+            )
+          * (
+              stdio :: StdioModule
+                Option Result String Reader Writer IoErrorType OS
+            )
+          * (process :: ProcessModule List Int64 String OS)
+          * Unit
+  in
+  Package
+end

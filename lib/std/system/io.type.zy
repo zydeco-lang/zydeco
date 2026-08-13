@@ -1,0 +1,91 @@
+begin
+  let Thk = @[import("../builtin/intrinsic/thk.zy")] _ in
+  let Ret = @[import("../builtin/intrinsic/ret.zy")] _ in
+  let Unit = @[import("../builtin/intrinsic/unit.zy")] _ in
+  let IoModule
+    (Bool : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (
+      Option : (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+        @[import("../builtin/intrinsic/vtype.zy")] _
+      )
+    )
+    (
+      Result : (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+        @[import("../builtin/intrinsic/vtype.zy")] _
+      ) -> (@[import("../builtin/intrinsic/vtype.zy")] _)
+    )
+    (Int64 : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (String : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (Bytes : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (Reader : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (Writer : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (IoErrorKind : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (IoError : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (OS : @[import("../builtin/intrinsic/ctype.zy")] _) =
+      (not_found :: IoErrorKind)
+    * (permission_denied :: IoErrorKind)
+    * (already_exists :: IoErrorKind)
+    * (invalid_input :: IoErrorKind)
+    * (invalid_data :: IoErrorKind)
+    * (broken_pipe :: IoErrorKind)
+    * (closed :: IoErrorKind)
+    * (other :: IoErrorKind)
+    * (
+        kind_eq :: Thk (
+          IoErrorKind -> IoErrorKind -> Ret Bool
+        )
+      )
+    * (error_kind :: Thk (IoError -> Ret IoErrorKind))
+    * (error_message :: Thk (IoError -> Ret String))
+    * (
+        read :: Thk (
+             Reader -> Int64
+          -> Thk (Result Bytes IoError -> OS)
+          -> OS
+        )
+      )
+    * (
+        read_line :: Thk (
+             Reader
+          -> Thk (Result (Option Bytes) IoError -> OS)
+          -> OS
+        )
+      )
+    * (
+        read_all :: Thk (
+             Reader
+          -> Thk (Result Bytes IoError -> OS)
+          -> OS
+        )
+      )
+    * (
+        write_all :: Thk (
+             Writer -> Bytes
+          -> Thk (Result Unit IoError -> OS)
+          -> OS
+        )
+      )
+    * (
+        flush :: Thk (
+             Writer
+          -> Thk (Result Unit IoError -> OS)
+          -> OS
+        )
+      )
+    * (
+        close_reader :: Thk (
+             Reader
+          -> Thk (Result Unit IoError -> OS)
+          -> OS
+        )
+      )
+    * (
+        close_writer :: Thk (
+             Writer
+          -> Thk (Result Unit IoError -> OS)
+          -> OS
+        )
+      )
+  in
+  IoModule
+end

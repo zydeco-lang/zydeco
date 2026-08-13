@@ -80,70 +80,6 @@ begin
     | +Err(_) => ret default
     end
   that
-  let Interface =
-    exists
-      (
-        Result = AbstractResult :
-        VType -> VType -> VType
-      )
-    .
-        (
-          ok :: Thk (
-            forall (A : VType) .
-              forall (E : VType) .
-                A -> Ret (AbstractResult A E)
-          )
-        )
-      * (
-          err :: Thk (
-            forall (A : VType) .
-              forall (E : VType) .
-                E -> Ret (AbstractResult A E)
-          )
-        )
-      * (
-          fold :: Thk (
-            forall (A : VType) .
-              forall (E : VType) .
-                forall (B : CType) .
-                  AbstractResult A E -> Thk (A -> B) -> Thk (E -> B) -> B
-          )
-        )
-      * (
-          map :: Thk (
-            forall (A : VType) .
-              forall (B : VType) .
-                forall (E : VType) .
-                  AbstractResult A E -> Thk (A -> Ret B) -> Ret (AbstractResult B E)
-          )
-        )
-      * (
-          map_err :: Thk (
-            forall (A : VType) .
-              forall (E : VType) .
-                forall (F : VType) .
-                  AbstractResult A E -> Thk (E -> Ret F) -> Ret (AbstractResult A F)
-          )
-        )
-      * (
-          and_then :: Thk (
-            forall (A : VType) .
-              forall (B : VType) .
-                forall (E : VType) .
-                     AbstractResult A E
-                  -> Thk (A -> Ret (AbstractResult B E))
-                  -> Ret (AbstractResult B E)
-          )
-        )
-      * (
-          unwrap_or :: Thk (
-            forall (A : VType) .
-              forall (E : VType) .
-                AbstractResult A E -> A -> Ret A
-          )
-        )
-  that
-
   (
     = Result,
     = ok,
@@ -154,5 +90,4 @@ begin
     = and_then,
     = unwrap_or
   )
-  : Interface
 end

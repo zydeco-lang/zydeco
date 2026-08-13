@@ -95,85 +95,6 @@ begin
         ! (int64/add) count 1
     }
   that
-  let Interface =
-    exists
-      (
-        List = AbstractList :
-        VType -> VType
-      )
-    .
-        (
-          nil :: Thk (
-            forall (A : VType) .
-              Ret (AbstractList A)
-          )
-        )
-      * (
-          cons :: Thk (
-            forall (A : VType) .
-              A -> AbstractList A -> Ret (AbstractList A)
-          )
-        )
-      * (
-          case :: Thk (
-            forall (A : VType) .
-              forall (B : CType) .
-                   AbstractList A
-                -> Thk B
-                -> Thk (A -> AbstractList A -> B)
-                -> B
-          )
-        )
-      * (
-          fold :: Thk (
-            forall (A : VType) .
-              forall (B : CType) .
-                   AbstractList A
-                -> Thk B
-                -> Thk (A -> Thk B -> B)
-                -> B
-          )
-        )
-      * (
-          singleton :: Thk (
-            forall (A : VType) .
-              A -> Ret (AbstractList A)
-          )
-        )
-      * (
-          append :: Thk (
-            forall (A : VType) .
-              AbstractList A -> AbstractList A -> Ret (AbstractList A)
-          )
-        )
-      * (
-          map :: Thk (
-            forall (A : VType) .
-              forall (B : VType) .
-                AbstractList A -> Thk (A -> Ret B) -> Ret (AbstractList B)
-          )
-        )
-      * (
-          fold_left :: Thk (
-            forall (A : VType) .
-              forall (B : VType) .
-                AbstractList A -> B -> Thk (B -> A -> Ret B) -> Ret B
-          )
-        )
-      * (
-          reverse :: Thk (
-            forall (A : VType) .
-              AbstractList A -> Ret (AbstractList A)
-          )
-        )
-      * (
-          length :: Thk (
-            forall (A : VType) .
-              AbstractList A -> Ret Int64
-          )
-        )
-  that
-
   (
     = List,
     = nil,
@@ -187,6 +108,5 @@ begin
     = reverse,
     = length
   )
-  : Interface
 end
 -- end module List

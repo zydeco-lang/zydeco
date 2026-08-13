@@ -1,11 +1,11 @@
 exists
   -- Kind-valued manifest components establish the two CBPV universes used by
   -- the rest of the signature.
-  (VType as @[intrinsic(vtype)] _)
-  (CType as @[intrinsic(ctype)] _)
+  (VType as @[import("builtin/intrinsic/vtype.zy")] _)
+  (CType as @[import("builtin/intrinsic/ctype.zy")] _)
 .
   begin
-    let BuiltinUnit = @[intrinsic(unit)] _ that
+    let BuiltinUnit = @[import("builtin/intrinsic/unit.zy")] _ that
 
     -- Effect capabilities remain generative at the provider boundary.
     exists

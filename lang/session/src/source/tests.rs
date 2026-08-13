@@ -1513,7 +1513,7 @@ fn canonical_builtin_signature_imports_into_interpreter_and_native_compilation()
 }
 
 #[test]
-fn authored_intrinsic_splices_stay_in_the_canonical_builtin_package_tree() {
+fn authored_intrinsic_splices_are_each_introduced_once_in_the_builtin_tree() {
     let builtin_root = repository_source("std/builtin.zy").canonicalize().unwrap();
     let builtin_modules = repository_source("std/builtin").canonicalize().unwrap();
     let (builtin_sources, unexpected): (Vec<_>, Vec<_>) = RepositorySourceFiles::all()
@@ -1536,9 +1536,11 @@ fn authored_intrinsic_splices_stay_in_the_canonical_builtin_package_tree() {
     ]
     .into_iter()
     .for_each(|role| {
-        assert!(
-            source.contains(&format!("@[intrinsic({role})] _")),
-            "expected a `{role}` intrinsic splice"
+        let spelling = format!("@[intrinsic({role})] _");
+        assert_eq!(
+            source.match_indices(&spelling).count(),
+            1,
+            "expected exactly one `{role}` intrinsic splice"
         );
     });
 }

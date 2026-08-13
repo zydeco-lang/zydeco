@@ -1,6 +1,6 @@
-param OS : @[intrinsic(ctype)] _ in
+param OS : @[import("../intrinsic/ctype.zy")] _ in
 @[builtin(random_int)] (
-  generate :: (@[intrinsic(thk)] _) (
-    (@[intrinsic(thk)] _) ((@[intrinsic(i64)] _) -> OS) -> OS
+  generate :: (@[import("../intrinsic/thk.zy")] _) (
+    (@[import("../intrinsic/thk.zy")] _) ((@[import("../intrinsic/i64.zy")] _) -> OS) -> OS
   )
 )

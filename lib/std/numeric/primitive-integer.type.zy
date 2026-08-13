@@ -1,0 +1,34 @@
+begin
+  let Thk = @[import("../builtin/intrinsic/thk.zy")] _ in
+  let Ret = @[import("../builtin/intrinsic/ret.zy")] _ in
+  let Unit = @[import("../builtin/intrinsic/unit.zy")] _ in
+  let PrimitiveIntegerModule
+    (Integer : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (String : @[import("../builtin/intrinsic/vtype.zy")] _) =
+      (add :: Thk (Integer -> Integer -> Ret Integer))
+    * (sub :: Thk (Integer -> Integer -> Ret Integer))
+    * (mul :: Thk (Integer -> Integer -> Ret Integer))
+    * (div :: Thk (Integer -> Integer -> Ret Integer))
+    * (mod :: Thk (Integer -> Integer -> Ret Integer))
+    * (
+        eq :: Thk (
+          forall (R : @[import("../builtin/intrinsic/ctype.zy")] _) .
+            Integer -> Integer -> Thk R -> Thk R -> R
+        )
+      )
+    * (
+        lt :: Thk (
+          forall (R : @[import("../builtin/intrinsic/ctype.zy")] _) .
+            Integer -> Integer -> Thk R -> Thk R -> R
+        )
+      )
+    * (
+        gt :: Thk (
+          forall (R : @[import("../builtin/intrinsic/ctype.zy")] _) .
+            Integer -> Integer -> Thk R -> Thk R -> R
+        )
+      )
+    * (to_string :: Thk (Integer -> Ret String))
+  in
+  PrimitiveIntegerModule
+end

@@ -8,4 +8,4 @@
 * (uint64 :: @[import("numeric/uint64.zy")] _)
 * (float32 :: @[import("numeric/float32.zy")] _)
 * (float64 :: @[import("numeric/float64.zy")] _)
-* (@[intrinsic(unit)] _)
+* (@[import("intrinsic/unit.zy")] _)

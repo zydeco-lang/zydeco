@@ -1,0 +1,20 @@
+begin
+  let Thk = @[import("../builtin/intrinsic/thk.zy")] _ in
+  let Ret = @[import("../builtin/intrinsic/ret.zy")] _ in
+  let BytesModule
+    (
+      Option : (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+        @[import("../builtin/intrinsic/vtype.zy")] _
+      )
+    )
+    (Int64 : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (String : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (Bytes : @[import("../builtin/intrinsic/vtype.zy")] _) =
+      (empty :: Thk (Ret Bytes))
+    * (length :: Thk (Bytes -> Ret Int64))
+    * (append :: Thk (Bytes -> Bytes -> Ret Bytes))
+    * (from_string :: Thk (String -> Ret Bytes))
+    * (to_string :: Thk (Bytes -> Ret (Option String)))
+  in
+  BytesModule
+end

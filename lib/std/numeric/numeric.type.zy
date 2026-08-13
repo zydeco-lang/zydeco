@@ -1,0 +1,17 @@
+begin
+  let Thk = @[import("../builtin/intrinsic/thk.zy")] _ in
+  let Ret = @[import("../builtin/intrinsic/ret.zy")] _ in
+  let Unit = @[import("../builtin/intrinsic/unit.zy")] _ in
+  let Additive = @[import("additive.type.zy")] _ in
+  let Multiplicative = @[import("multiplicative.type.zy")] _ in
+  let PartialOrder = @[import("partial-order.type.zy")] _ in
+  let Numeric
+    (Bool : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (A : @[import("../builtin/intrinsic/vtype.zy")] _) =
+      (additive :: Additive A)
+    * (multiplicative :: Multiplicative A)
+    * (order :: PartialOrder Bool A)
+    * Unit
+  in
+  Numeric
+end

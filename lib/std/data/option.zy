@@ -83,73 +83,6 @@ begin
       end
     end
   that
-  let Interface =
-    exists
-      (
-        Option = AbstractOption :
-        VType -> VType
-      )
-    .
-        (
-          none :: Thk (
-            forall (A : VType) .
-              Ret (AbstractOption A)
-          )
-        )
-      * (
-          some :: Thk (
-            forall (A : VType) .
-              A -> Ret (AbstractOption A)
-          )
-        )
-      * (
-          fold :: Thk (
-            forall (A : VType) .
-              forall (B : CType) .
-                AbstractOption A -> Thk B -> Thk (A -> B) -> B
-          )
-        )
-      * (
-          map :: Thk (
-            forall (A : VType) .
-              forall (B : VType) .
-                AbstractOption A -> Thk (A -> Ret B) -> Ret (AbstractOption B)
-          )
-        )
-      * (
-          and_then :: Thk (
-            forall (A : VType) .
-              forall (B : VType) .
-                   AbstractOption A
-                -> Thk (A -> Ret (AbstractOption B))
-                -> Ret (AbstractOption B)
-          )
-        )
-      * (
-          unwrap_or :: Thk (
-            forall (A : VType) .
-              AbstractOption A -> A -> Ret A
-          )
-        )
-      * (
-          or_else :: Thk (
-            forall (A : VType) .
-                 AbstractOption A
-              -> Thk (Ret (AbstractOption A))
-              -> Ret (AbstractOption A)
-          )
-        )
-      * (
-          zip :: Thk (
-            forall (A : VType) .
-              forall (B : VType) .
-                   AbstractOption A
-                -> AbstractOption B
-                -> Ret (AbstractOption (A * B))
-          )
-        )
-  that
-
   (
     = Option,
     = none,
@@ -161,5 +94,4 @@ begin
     = or_else,
     = zip
   )
-  : Interface
 end

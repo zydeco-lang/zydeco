@@ -1,35 +1,29 @@
 begin
   let make_io_types = @[import("types.zy")] _ that
-  let make_data_interface = @[import("../interface/data.zy")] _ that
-  let make_system_interface = @[import("../interface/system.zy")] _ that
 
   begin
     param (
-      (/core; /representations; /numeric; /text; /system; builtin) :
-      @[import("../builtin.zy")] _
+      (
+        /core;
+        /representations;
+        /numeric;
+        /text;
+        /system = (/Reader; /Writer; /OS; /io; /fs; /stdio; /args; /random; /process);
+        builtin
+      )
     ) in
     let (/VType; /CType; /Thk; /Ret; /Unit) = core in
     let (Scalar = Int64, int64) = numeric/int64 in
     let (/Scalar = String) = representations/string in
     let (/Scalar = Bytes) = representations/bytes in
     let (/bytes) = text in
-    let (/Reader; /Writer; /OS; /io; /fs; /stdio; /args; /random; /process) = system in
     let (
       = IoErrorKind,
       = IoError,
       = Path,
       io_types
     ) = make_io_types builtin in
-    let (/BoolModule; /OptionModule; /ResultModule; /ListModule; /DataPackage) =
-      make_data_interface core
-    in
-    let (/IoModule; /FsModule; /StdioModule; /ProcessModule) =
-      make_system_interface core
-    in
-    param (
-      (/Bool; /Option; /Result; /List; /bool; /option; /result; /list) :
-      DataPackage Int64
-    ) in
+    param (/Bool; /Option; /Result; /List; /bool; /option; /result; /list) in
     let ! make_io_error (code : Int64) (message : String) : Ret IoError =
       do kind <- ! (io_types/from_code) code;
       ! (io_types/error) kind message
@@ -422,82 +416,59 @@ begin
     let ! panic (message : String) : OS =
       ! stdio_write_error_line message { fn _ => ! (process/exit) 1 }
     in
-    let Package =
-      exists (Path = PathType : VType) .
-        exists (IoErrorKind = IoErrorKindType : VType) .
-          exists (IoError = IoErrorType : VType) .
-              (
-                io :: IoModule
-                  Bool Option Result Int64 String Bytes Reader Writer
-                  IoErrorKindType IoErrorType OS
-              )
-            * (
-                fs :: FsModule
-                  Result String Bytes Reader Writer PathType IoErrorType OS
-              )
-            * (
-                stdio :: StdioModule
-                  Option Result String Reader Writer IoErrorType OS
-              )
-            * (process :: ProcessModule List Int64 String OS)
-            * Unit
-    in
     (
-      (
-        = Path,
-        = IoErrorKind,
-        = IoError,
-        io = (
-          not_found = io_types/not_found,
-          permission_denied = io_types/permission_denied,
-          already_exists = io_types/already_exists,
-          invalid_input = io_types/invalid_input,
-          invalid_data = io_types/invalid_data,
-          broken_pipe = io_types/broken_pipe,
-          closed = io_types/closed,
-          other = io_types/other,
-          kind_eq = io_kind_eq,
-          error_kind = io_types/error_kind,
-          error_message = io_types/error_message,
-          read = io_read,
-          read_line = io_read_line,
-          read_all = io_read_all,
-          write_all = io_write_all,
-          flush = io_flush,
-          close_reader = io_close_reader,
-          close_writer = io_close_writer
-        ),
-        fs = (
-          path = io_types/path,
-          path_string = io_types/path_string,
-          open_reader = fs_open_reader,
-          create_writer = fs_create_writer,
-          append_writer = fs_append_writer,
-          read_bytes = fs_read_bytes,
-          read_text = fs_read_text,
-          write_bytes = fs_write_bytes,
-          write_text = fs_write_text
-        ),
-        stdio = (
-          stdin = stdio/stdin,
-          stdout = stdio/stdout,
-          stderr = stdio/stderr,
-          read_line = stdio_read_line,
-          write = stdio_write,
-          write_line = stdio_write_line,
-          write_error = stdio_write_error,
-          write_error_line = stdio_write_error_line
-        ),
-        process = (
-          = arg_list,
-          random_int = random/generate,
-          = halt,
-          = panic,
-          exit = process/exit
-        ),
-        ()
-      )
-      : Package
+      = Path,
+      = IoErrorKind,
+      = IoError,
+      io = (
+        not_found = io_types/not_found,
+        permission_denied = io_types/permission_denied,
+        already_exists = io_types/already_exists,
+        invalid_input = io_types/invalid_input,
+        invalid_data = io_types/invalid_data,
+        broken_pipe = io_types/broken_pipe,
+        closed = io_types/closed,
+        other = io_types/other,
+        kind_eq = io_kind_eq,
+        error_kind = io_types/error_kind,
+        error_message = io_types/error_message,
+        read = io_read,
+        read_line = io_read_line,
+        read_all = io_read_all,
+        write_all = io_write_all,
+        flush = io_flush,
+        close_reader = io_close_reader,
+        close_writer = io_close_writer
+      ),
+      fs = (
+        path = io_types/path,
+        path_string = io_types/path_string,
+        open_reader = fs_open_reader,
+        create_writer = fs_create_writer,
+        append_writer = fs_append_writer,
+        read_bytes = fs_read_bytes,
+        read_text = fs_read_text,
+        write_bytes = fs_write_bytes,
+        write_text = fs_write_text
+      ),
+      stdio = (
+        stdin = stdio/stdin,
+        stdout = stdio/stdout,
+        stderr = stdio/stderr,
+        read_line = stdio_read_line,
+        write = stdio_write,
+        write_line = stdio_write_line,
+        write_error = stdio_write_error,
+        write_error_line = stdio_write_error_line
+      ),
+      process = (
+        = arg_list,
+        random_int = random/generate,
+        = halt,
+        = panic,
+        exit = process/exit
+      ),
+      ()
     )
   end
 end

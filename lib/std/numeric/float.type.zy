@@ -1,0 +1,23 @@
+begin
+  let Thk = @[import("../builtin/intrinsic/thk.zy")] _ in
+  let Ret = @[import("../builtin/intrinsic/ret.zy")] _ in
+  let Unit = @[import("../builtin/intrinsic/unit.zy")] _ in
+  let FloatModule
+    (Bool : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (Floating : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (String : @[import("../builtin/intrinsic/vtype.zy")] _) =
+      (add :: Thk (Floating -> Floating -> Ret Floating))
+    * (sub :: Thk (Floating -> Floating -> Ret Floating))
+    * (mul :: Thk (Floating -> Floating -> Ret Floating))
+    * (div :: Thk (Floating -> Floating -> Ret Floating))
+    * (eq :: Thk (Floating -> Floating -> Ret Bool))
+    * (ne :: Thk (Floating -> Floating -> Ret Bool))
+    * (lt :: Thk (Floating -> Floating -> Ret Bool))
+    * (le :: Thk (Floating -> Floating -> Ret Bool))
+    * (gt :: Thk (Floating -> Floating -> Ret Bool))
+    * (ge :: Thk (Floating -> Floating -> Ret Bool))
+    * (negate :: Thk (Floating -> Ret Floating))
+    * (to_string :: Thk (Floating -> Ret String))
+  in
+  FloatModule
+end

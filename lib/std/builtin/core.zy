@@ -1,14 +1,14 @@
 exists
-  (VType as @[intrinsic(vtype)] _)
-  (CType as @[intrinsic(ctype)] _)
+  (VType as @[import("intrinsic/vtype.zy")] _)
+  (CType as @[import("intrinsic/ctype.zy")] _)
   (
-    Thk = CoreThk as @[intrinsic(thk)] _ :
-    (@[intrinsic(ctype)] _) -> (@[intrinsic(vtype)] _)
+    Thk = CoreThk as @[import("intrinsic/thk.zy")] _ :
+    (@[import("intrinsic/ctype.zy")] _) -> (@[import("intrinsic/vtype.zy")] _)
   )
   (
-    Ret = CoreRet as @[intrinsic(ret)] _ :
-    (@[intrinsic(vtype)] _) -> (@[intrinsic(ctype)] _)
+    Ret = CoreRet as @[import("intrinsic/ret.zy")] _ :
+    (@[import("intrinsic/vtype.zy")] _) -> (@[import("intrinsic/ctype.zy")] _)
   )
-  (Unit = CoreUnit as @[intrinsic(unit)] _ : @[intrinsic(vtype)] _)
+  (Unit = CoreUnit as @[import("intrinsic/unit.zy")] _ : @[import("intrinsic/vtype.zy")] _)
 .
-  @[intrinsic(unit)] _
+  @[import("intrinsic/unit.zy")] _

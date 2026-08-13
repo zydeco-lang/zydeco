@@ -1,0 +1,16 @@
+begin
+  let Thk = @[import("../builtin/intrinsic/thk.zy")] _ in
+  let Ret = @[import("../builtin/intrinsic/ret.zy")] _ in
+  let Unit = @[import("../builtin/intrinsic/unit.zy")] _ in
+  let PartialEquality = @[import("partial-equality.type.zy")] _ in
+  let PartialOrder
+    (Bool : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (A : @[import("../builtin/intrinsic/vtype.zy")] _) =
+      (equality :: PartialEquality Bool A)
+    * (lt :: Thk (A -> A -> Ret Bool))
+    * (le :: Thk (A -> A -> Ret Bool))
+    * (gt :: Thk (A -> A -> Ret Bool))
+    * (ge :: Thk (A -> A -> Ret Bool))
+  in
+  PartialOrder
+end

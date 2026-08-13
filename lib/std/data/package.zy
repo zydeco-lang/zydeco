@@ -3,7 +3,6 @@ begin
   let make_option = @[import("option.zy")] _ that
   let make_result = @[import("result.zy")] _ that
   let make_list = @[import("list.zy")] _ that
-  let make_data_interface = @[import("../interface/data.zy")] _ that
 
   begin
     param (/core; /numeric; builtin) : @[import("../builtin.zy")] _ in
@@ -13,9 +12,6 @@ begin
     let (= Option, option) = make_option builtin in
     let (= Result, result) = make_result builtin in
     let (= List, list) = make_list builtin in
-    let (/BoolModule; /OptionModule; /ResultModule; /ListModule; /DataPackage) =
-      make_data_interface core
-    in
     let ! compare
       (
         predicate : Thk (
@@ -123,65 +119,62 @@ begin
         }
     in
     (
-      (
-        = Bool,
-        = Option,
-        = Result,
-        = List,
-        bool = (
-          true = bool/true,
-          false = bool/false,
-          not = bool/not,
-          and = bool/and,
-          or = bool/or,
-          eq = bool/eq,
-          xor = bool/xor,
-          nand = bool/nand,
-          nor = bool/nor,
-          if = bool/if
-        ),
-        option = (
-          none = option/none,
-          some = option/some,
-          fold = option/fold,
-          map = option/map,
-          and_then = option/and_then,
-          unwrap_or = option/unwrap_or,
-          or_else = option/or_else,
-          zip = option/zip,
-          is_some = option_is_some,
-          is_none = option_is_none
-        ),
-        result = (
-          ok = result/ok,
-          err = result/err,
-          fold = result/fold,
-          map = result/map,
-          map_err = result/map_err,
-          and_then = result/and_then,
-          unwrap_or = result/unwrap_or,
-          is_ok = result_is_ok,
-          is_err = result_is_err
-        ),
-        list = (
-          nil = list/nil,
-          cons = list/cons,
-          case = list/case,
-          fold = list/fold,
-          singleton = list/singleton,
-          append = list/append,
-          map = list/map,
-          fold_left = list/fold_left,
-          reverse = list/reverse,
-          length = list/length,
-          is_empty = list_is_empty,
-          head = list_head,
-          tail = list_tail,
-          get = list_get
-        ),
-        ()
-      )
-      : DataPackage Int64
+      = Bool,
+      = Option,
+      = Result,
+      = List,
+      bool = (
+        true = bool/true,
+        false = bool/false,
+        not = bool/not,
+        and = bool/and,
+        or = bool/or,
+        eq = bool/eq,
+        xor = bool/xor,
+        nand = bool/nand,
+        nor = bool/nor,
+        if = bool/if
+      ),
+      option = (
+        none = option/none,
+        some = option/some,
+        fold = option/fold,
+        map = option/map,
+        and_then = option/and_then,
+        unwrap_or = option/unwrap_or,
+        or_else = option/or_else,
+        zip = option/zip,
+        is_some = option_is_some,
+        is_none = option_is_none
+      ),
+      result = (
+        ok = result/ok,
+        err = result/err,
+        fold = result/fold,
+        map = result/map,
+        map_err = result/map_err,
+        and_then = result/and_then,
+        unwrap_or = result/unwrap_or,
+        is_ok = result_is_ok,
+        is_err = result_is_err
+      ),
+      list = (
+        nil = list/nil,
+        cons = list/cons,
+        case = list/case,
+        fold = list/fold,
+        singleton = list/singleton,
+        append = list/append,
+        map = list/map,
+        fold_left = list/fold_left,
+        reverse = list/reverse,
+        length = list/length,
+        is_empty = list_is_empty,
+        head = list_head,
+        tail = list_tail,
+        get = list_get
+      ),
+      ()
     )
   end
 end

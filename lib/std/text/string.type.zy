@@ -1,0 +1,52 @@
+begin
+  let Thk = @[import("../builtin/intrinsic/thk.zy")] _ in
+  let Ret = @[import("../builtin/intrinsic/ret.zy")] _ in
+  let StringModule
+    (Bool : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (
+      Option : (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+        @[import("../builtin/intrinsic/vtype.zy")] _
+      )
+    )
+    (
+      List : (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+        @[import("../builtin/intrinsic/vtype.zy")] _
+      )
+    )
+    (Int64 : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (Char : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (String : @[import("../builtin/intrinsic/vtype.zy")] _) =
+      (empty :: String)
+    * (length :: Thk (String -> Ret Int64))
+    * (byte_length :: Thk (String -> Ret Int64))
+    * (is_empty :: Thk (String -> Ret Bool))
+    * (append :: Thk (String -> String -> Ret String))
+    * (concat :: Thk (List String -> Ret String))
+    * (
+        split_once :: Thk (
+             String
+          -> Char
+          -> Ret (Option (String * String))
+        )
+      )
+    * (
+        split_at :: Thk (
+             String
+          -> Int64
+          -> Ret (Option (String * String))
+        )
+      )
+    * (eq :: Thk (String -> String -> Ret Bool))
+    * (get :: Thk (String -> Int64 -> Ret (Option Char)))
+    * (head :: Thk (String -> Ret (Option Char)))
+    * (
+        uncons :: Thk (
+          String -> Ret (Option (Char * String))
+        )
+      )
+    * (to_chars :: Thk (String -> Ret (List Char)))
+    * (from_chars :: Thk (List Char -> Ret String))
+    * (parse_int :: Thk (String -> Ret (Option Int64)))
+  in
+  StringModule
+end

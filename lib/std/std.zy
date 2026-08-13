@@ -2,17 +2,27 @@ begin
   let make_data = @[import("data/package.zy")] _ that
   let make_text = @[import("text/package.zy")] _ that
   let make_system = @[import("system/package.zy")] _ that
-  let make_interface = @[import("interface.zy")] _ that
   let make_integer = @[import("numeric/integer.zy")] _ that
   let make_float = @[import("numeric/float.zy")] _ that
+  let Prelude = @[import("data/prelude.type.zy")] _ in
+  let Additive = @[import("numeric/additive.type.zy")] _ in
+  let Multiplicative = @[import("numeric/multiplicative.type.zy")] _ in
+  let PartialEquality = @[import("numeric/partial-equality.type.zy")] _ in
+  let PartialOrder = @[import("numeric/partial-order.type.zy")] _ in
+  let Numeric = @[import("numeric/numeric.type.zy")] _ in
+  let NumericInstance = @[import("numeric/numeric-instance.type.zy")] _ in
+  let IntegerModule = @[import("numeric/integer.type.zy")] _ in
+  let FloatModule = @[import("numeric/float.type.zy")] _ in
+  let PrimitiveIntegerModule = @[import("numeric/primitive-integer.type.zy")] _ in
+  let PrimitiveFloatModule = @[import("numeric/primitive-float.type.zy")] _ in
 
   begin
     param (
-      (
-        /core; /representations; /numeric; /system;
-        builtin
-      )
-      : @[import("builtin.zy")] _
+      /core;
+      /representations;
+      /numeric;
+      /system = (/Reader; /Writer; /OS);
+      builtin
     ) in
     let (/VType; /CType; /Thk; /Ret; /Unit) = core in
     let (Scalar = Int8, int8) = numeric/int8 in
@@ -28,7 +38,6 @@ begin
     let (/Scalar = Char) = representations/char in
     let (/Scalar = String) = representations/string in
     let (/Scalar = Bytes) = representations/bytes in
-    let (/Reader; /Writer; /OS) = system in
     let (
       /Bool;
       /Option;
@@ -56,21 +65,6 @@ begin
       /stdio = stdio_module;
       /process = process_module
     ) = make_system builtin data_package in
-    let (
-      = Prelude,
-      = Additive,
-      = Multiplicative,
-      = PartialEquality,
-      = PartialOrder,
-      = Numeric,
-      = NumericInstance,
-      = IntegerModule,
-      = FloatModule,
-      = PrimitiveIntegerModule,
-      = PrimitiveFloatModule,
-      = Std,
-      ()
-    ) = make_interface builtin in
     let (/operations = int8_module; /instance = int8_instance) =
       make_integer core Bool Int8 String bool int8 0 1
     in
@@ -109,87 +103,84 @@ begin
       )
     in
     (
-      (
-        = Bool,
-        = Option,
-        = Result,
-        = List,
-        = Int8,
-        = Int16,
-        = Int32,
-        = Int64,
-        = UInt8,
-        = UInt16,
-        = UInt32,
-        = UInt64,
-        = Float32,
-        = Float64,
-        = Char,
-        = String,
-        = Bytes,
-        = Reader,
-        = Writer,
-        = Path,
-        = IoErrorKind,
-        = IoError,
-        = OS,
-        = Additive,
-        = Multiplicative,
-        = PartialEquality,
-        = PartialOrder,
-        = Numeric,
-        = NumericInstance,
-        = prelude,
-        = bool,
-        = option,
-        = result,
-        = list,
-        numeric = (
-          = int8_instance,
-          = int16_instance,
-          = int32_instance,
-          = int64_instance,
-          = uint8_instance,
-          = uint16_instance,
-          = uint32_instance,
-          = uint64_instance,
-          = float32_instance,
-          = float64_instance,
-          ()
-        ),
-        primitives = (
-          i8 = int8,
-          i16 = int16,
-          i32 = int32,
-          i64 = int64,
-          u8 = uint8,
-          u16 = uint16,
-          u32 = uint32,
-          u64 = uint64,
-          f32 = float32,
-          f64 = float64,
-          ()
-        ),
-        int8 = int8_module,
-        int16 = int16_module,
-        int32 = int32_module,
-        int64 = int64_module,
-        uint8 = uint8_module,
-        uint16 = uint16_module,
-        uint32 = uint32_module,
-        uint64 = uint64_module,
-        float32 = float32_module,
-        float64 = float64_module,
-        char = char_module,
-        string = string_module,
-        bytes = bytes_module,
-        io = io_module,
-        fs = fs_module,
-        stdio = stdio_module,
-        process = process_module,
+      = Bool,
+      = Option,
+      = Result,
+      = List,
+      = Int8,
+      = Int16,
+      = Int32,
+      = Int64,
+      = UInt8,
+      = UInt16,
+      = UInt32,
+      = UInt64,
+      = Float32,
+      = Float64,
+      = Char,
+      = String,
+      = Bytes,
+      = Reader,
+      = Writer,
+      = Path,
+      = IoErrorKind,
+      = IoError,
+      = OS,
+      = Additive,
+      = Multiplicative,
+      = PartialEquality,
+      = PartialOrder,
+      = Numeric,
+      = NumericInstance,
+      = prelude,
+      = bool,
+      = option,
+      = result,
+      = list,
+      numeric = (
+        = int8_instance,
+        = int16_instance,
+        = int32_instance,
+        = int64_instance,
+        = uint8_instance,
+        = uint16_instance,
+        = uint32_instance,
+        = uint64_instance,
+        = float32_instance,
+        = float64_instance,
         ()
-      )
-      : Std
+      ),
+      primitives = (
+        i8 = int8,
+        i16 = int16,
+        i32 = int32,
+        i64 = int64,
+        u8 = uint8,
+        u16 = uint16,
+        u32 = uint32,
+        u64 = uint64,
+        f32 = float32,
+        f64 = float64,
+        ()
+      ),
+      int8 = int8_module,
+      int16 = int16_module,
+      int32 = int32_module,
+      int64 = int64_module,
+      uint8 = uint8_module,
+      uint16 = uint16_module,
+      uint32 = uint32_module,
+      uint64 = uint64_module,
+      float32 = float32_module,
+      float64 = float64_module,
+      char = char_module,
+      string = string_module,
+      bytes = bytes_module,
+      io = io_module,
+      fs = fs_module,
+      stdio = stdio_module,
+      process = process_module,
+      ()
     )
   end
 end

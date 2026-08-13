@@ -1,0 +1,60 @@
+begin
+  let Thk = @[import("../builtin/intrinsic/thk.zy")] _ that
+  let Unit = @[import("../builtin/intrinsic/unit.zy")] _ that
+  let Monad
+    (
+      M : (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+        @[import("../builtin/intrinsic/ctype.zy")] _
+      )
+    ) =
+    codata
+    | .return :
+      forall (A : @[import("../builtin/intrinsic/vtype.zy")] _) .
+        A -> M A
+    | .bind :
+      forall (A : @[import("../builtin/intrinsic/vtype.zy")] _) .
+        forall (B : @[import("../builtin/intrinsic/vtype.zy")] _) .
+             Thk (M A)
+          -> Thk (A -> M B)
+          -> M B
+    end
+  that
+  let Algebra
+    (
+      M : (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+        @[import("../builtin/intrinsic/ctype.zy")] _
+      )
+    )
+    (R : @[import("../builtin/intrinsic/ctype.zy")] _) =
+    forall (A : @[import("../builtin/intrinsic/vtype.zy")] _) .
+         Thk (M A)
+      -> Thk (A -> R)
+      -> R
+  that
+  pi (_ : @[import("../builtin.zy")] _) .
+    exists
+      (
+        Monad = ExportedMonad as Monad :
+        (
+          (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+            @[import("../builtin/intrinsic/ctype.zy")] _
+          )
+        ) -> (@[import("../builtin/intrinsic/ctype.zy")] _)
+      )
+    .
+      exists
+        (
+          Algebra = ExportedAlgebra as Algebra :
+          (
+               (
+                 (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+                   @[import("../builtin/intrinsic/ctype.zy")] _
+                 )
+               )
+            -> (@[import("../builtin/intrinsic/ctype.zy")] _)
+            -> (@[import("../builtin/intrinsic/ctype.zy")] _)
+          )
+        )
+      .
+        Unit
+end

@@ -1,4 +1,4 @@
-param OS : @[intrinsic(ctype)] _ in
+param OS : @[import("../intrinsic/ctype.zy")] _ in
 @[builtin(exit)] (
-  exit :: (@[intrinsic(thk)] _) ((@[intrinsic(i64)] _) -> OS)
+  exit :: (@[import("../intrinsic/thk.zy")] _) ((@[import("../intrinsic/i64.zy")] _) -> OS)
 )

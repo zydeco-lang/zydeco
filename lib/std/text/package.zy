@@ -1,7 +1,4 @@
 begin
-  let make_data_interface = @[import("../interface/data.zy")] _ that
-  let make_text_interface = @[import("../interface/text.zy")] _ that
-
   begin
     param (
       (/core; /representations; /numeric; /text; builtin) :
@@ -13,14 +10,7 @@ begin
     let (/Scalar = Bytes) = representations/bytes in
     let (Scalar = Int64, int64) = numeric/int64 in
     let (/char; /string; /bytes) = text in
-    let (/BoolModule; /OptionModule; /ListModule; /DataPackage) =
-      make_data_interface core
-    in
-    let (/CharModule; /StringModule; /BytesModule) = make_text_interface core in
-    param (
-      (/Bool; /Option; /List; /bool; /option; /list) :
-      DataPackage Int64
-    ) in
+    param (/Bool; /Option; /List; /bool; /option; /list) in
     let ! compare
       (A : VType)
       (
@@ -163,46 +153,37 @@ begin
         { ! (option/none) String }
         { fn string => ! (option/some) String string }
     in
-    let Package =
-        (char :: CharModule Option Char Int64 String)
-      * (string :: StringModule Bool Option List Int64 Char String)
-      * (bytes :: BytesModule Option Int64 String Bytes)
-      * Unit
-    in
     (
-      (
-        char = (
-          to_string = char/to_string,
-          codepoint = char/codepoint,
-          from_codepoint = char_from_codepoint
-        ),
-        string = (
-          empty = "",
-          length = string/length,
-          byte_length = string/byte_length,
-          is_empty = str_is_empty,
-          append = string/append,
-          concat = str_concat,
-          split_once = str_split_once,
-          split_at = str_split_at,
-          eq = str_eq,
-          get = str_get,
-          head = str_head,
-          uncons = str_uncons,
-          to_chars = str_to_chars,
-          from_chars = str_from_chars,
-          parse_int = str_parse_int
-        ),
-        bytes = (
-          empty = bytes/empty,
-          length = bytes/length,
-          append = bytes/append,
-          from_string = bytes/from_string,
-          to_string = bytes_to_string
-        ),
-        ()
-      )
-      : Package
+      char = (
+        to_string = char/to_string,
+        codepoint = char/codepoint,
+        from_codepoint = char_from_codepoint
+      ),
+      string = (
+        empty = "",
+        length = string/length,
+        byte_length = string/byte_length,
+        is_empty = str_is_empty,
+        append = string/append,
+        concat = str_concat,
+        split_once = str_split_once,
+        split_at = str_split_at,
+        eq = str_eq,
+        get = str_get,
+        head = str_head,
+        uncons = str_uncons,
+        to_chars = str_to_chars,
+        from_chars = str_from_chars,
+        parse_int = str_parse_int
+      ),
+      bytes = (
+        empty = bytes/empty,
+        length = bytes/length,
+        append = bytes/append,
+        from_string = bytes/from_string,
+        to_string = bytes_to_string
+      ),
+      ()
     )
   end
 end

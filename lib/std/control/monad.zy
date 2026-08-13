@@ -4,7 +4,7 @@ param (
 ) in
 let (/VType; /CType; /Thk; /Unit) = core in
 begin
-  --| interface for monads and their algebras
+  -- Monad and algebra type constructors.
   let Monad (M : VType -> CType) =
     codata
     | .return :
@@ -25,29 +25,6 @@ begin
       -> R
   that
 
-  let MonadicBasis =
-    exists
-      (
-        Monad = ExportedMonad as Monad :
-        (
-             (VType -> CType)
-          -> CType
-        )
-      )
-    .
-      exists
-        (
-          Algebra = ExportedAlgebra as Algebra :
-          (
-               (VType -> CType)
-            -> CType
-            -> CType
-          )
-        )
-      .
-        Unit
-  that
-
-  ((= Monad, = Algebra, ()) : MonadicBasis)
+  (= Monad, = Algebra, ())
 end
 -- end module Monad

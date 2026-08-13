@@ -1,0 +1,38 @@
+begin
+  let BoolModule = @[import("bool.type.zy")] _ in
+  let OptionModule = @[import("option.type.zy")] _ in
+  let ResultModule = @[import("result.type.zy")] _ in
+  let ListModule = @[import("list.type.zy")] _ in
+  let Unit = @[import("../builtin/intrinsic/unit.zy")] _ in
+  let Int64 = @[import("../builtin/intrinsic/i64.zy")] _ in
+  exists (Bool = BoolType : @[import("../builtin/intrinsic/vtype.zy")] _) .
+    exists
+      (
+        Option = OptionType :
+        (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+          @[import("../builtin/intrinsic/vtype.zy")] _
+        )
+      )
+    .
+      exists
+        (
+          Result = ResultType :
+          (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+            @[import("../builtin/intrinsic/vtype.zy")] _
+          ) -> (@[import("../builtin/intrinsic/vtype.zy")] _)
+        )
+      .
+        exists
+          (
+            List = ListType :
+            (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+              @[import("../builtin/intrinsic/vtype.zy")] _
+            )
+          )
+        .
+            (bool :: BoolModule BoolType)
+          * (option :: OptionModule BoolType OptionType)
+          * (result :: ResultModule BoolType ResultType)
+          * (list :: ListModule BoolType OptionType ListType Int64)
+          * Unit
+end

@@ -1,0 +1,71 @@
+begin
+  let Thk = @[import("../builtin/intrinsic/thk.zy")] _ in
+  let Ret = @[import("../builtin/intrinsic/ret.zy")] _ in
+  let Unit = @[import("../builtin/intrinsic/unit.zy")] _ in
+  let FsModule
+    (
+      Result : (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+        @[import("../builtin/intrinsic/vtype.zy")] _
+      ) -> (@[import("../builtin/intrinsic/vtype.zy")] _)
+    )
+    (String : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (Bytes : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (Reader : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (Writer : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (Path : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (IoError : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (OS : @[import("../builtin/intrinsic/ctype.zy")] _) =
+      (path :: Thk (String -> Ret Path))
+    * (path_string :: Thk (Path -> Ret String))
+    * (
+        open_reader :: Thk (
+             Path
+          -> Thk (Result Reader IoError -> OS)
+          -> OS
+        )
+      )
+    * (
+        create_writer :: Thk (
+             Path
+          -> Thk (Result Writer IoError -> OS)
+          -> OS
+        )
+      )
+    * (
+        append_writer :: Thk (
+             Path
+          -> Thk (Result Writer IoError -> OS)
+          -> OS
+        )
+      )
+    * (
+        read_bytes :: Thk (
+             Path
+          -> Thk (Result Bytes IoError -> OS)
+          -> OS
+        )
+      )
+    * (
+        read_text :: Thk (
+             Path
+          -> Thk (Result String IoError -> OS)
+          -> OS
+        )
+      )
+    * (
+        write_bytes :: Thk (
+             Path -> Bytes
+          -> Thk (Result Unit IoError -> OS)
+          -> OS
+        )
+      )
+    * (
+        write_text :: Thk (
+             Path -> String
+          -> Thk (Result Unit IoError -> OS)
+          -> OS
+        )
+      )
+  in
+  FsModule
+end

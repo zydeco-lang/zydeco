@@ -193,6 +193,7 @@ lib/std/
   builtin.zy
   builtin/
     core.zy
+    intrinsic/{vtype,ctype,thk,ret,unit,i8,...,bytes}.zy
     representations.zy
     numeric.zy
     numeric/{int8,...,uint64,float32,float64}.zy
@@ -200,19 +201,30 @@ lib/std/
     text/{char,string,bytes}.zy
     system/{io,fs,stdio,args,random,process}.zy
   data/{bool,option,result,list,package}.zy
-  interface/{data,numeric,text,system}.zy
+  data/{bool,option,result,list,package}.zyi
+  data/*.type.zy
   numeric/{integer,float}.zy
+  numeric/{integer,float}.zyi
+  numeric/*.type.zy
   text/package.zy
+  text/package.zyi
+  text/*.type.zy
   system/{types,package}.zy
+  system/{types,package}.zyi
+  system/*.type.zy
   control/monad.zy
-  interface.zy
+  control/monad.zyi
+  std.type.zy
+  std.zyi
   std.zy
 ```
 
-`builtin.zy`, `interface.zy`, and `std.zy` are deliberately thin composition roots. The first closes the complete
-host ABI and introduces the shared generative system witnesses; the second composes topic contracts into `Std`;
-the third applies the topic implementations and constructs that public package. A topic leaf depends on a selected
-package boundary rather than on names inherited from a monolithic source file.
+`builtin.zy` and `std.zy` are deliberately thin composition roots. The first closes the complete host ABI and
+introduces the shared generative system witnesses; the second applies the topic implementations and constructs the
+public package. Each value implementation has an optional adjacent `.zyi` annotation. Reusable `.type.zy` terms
+define topic contracts once and are imported by both leaf companions and aggregate package types, so locality does
+not require copying a contract. A topic leaf depends on a selected package boundary rather than on names inherited
+from a monolithic source file.
 
 The derived integer and floating-point builders share algorithms across the fixed-width representations through
 explicitly annotated `forall` parameters. Their result types retain the input `Bool`, scalar, and `String`
