@@ -36,8 +36,9 @@ impl<'a> CompilerPass for ClosureConverter<'a> {
 
 impl<'a> ClosureConverter<'a> {
     pub fn new(
-        arena: &'a mut StackirArena, scoped: &'a mut ScopedArena, statics: &'a StaticsArena,
+        program: &'a mut StackirProgram, scoped: &'a mut ScopedArena, statics: &'a StaticsArena,
     ) -> Self {
+        let StackirProgram { arena, root: _ } = program;
         Self { arena, scoped, _statics: statics }
     }
 

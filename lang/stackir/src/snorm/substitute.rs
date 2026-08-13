@@ -320,37 +320,30 @@ pub struct Substitutor<'a> {
     #[as_mut(ScopedArena)]
     pub scoped: &'a mut ScopedArena,
     pub statics: &'a StaticsArena,
+    pub root: CompuId,
 }
 impl<'a> Substitutor<'a> {
     pub fn new(
         admin: AdminArena, snorm: &'a mut SNormInnerArena, scoped: &'a mut ScopedArena,
-        statics: &'a StaticsArena,
+        statics: &'a StaticsArena, root: CompuId,
     ) -> Self {
         Self {
             arena: StackirArena { admin, inner: StackirInnerArena::default() },
             snorm,
             scoped,
             statics,
+            root,
         }
     }
 }
 
 impl<'a> CompilerPass for Substitutor<'a> {
     type Arena = StackirArena;
-    type Out = StackirArena;
+    type Out = StackirProgram;
     type Error = std::convert::Infallible;
-    fn run(mut self) -> Result<StackirArena, Self::Error> {
-        self.arena.inner.entry = self
-            .snorm
-            .entry
-            .clone()
-            .into_iter()
-            .map(|(compu_id, ())| {
-                let new_compu_id = compu_id.substitute(&mut self, ());
-                (new_compu_id, ())
-            })
-            .collect();
-        Ok(self.arena)
+    fn run(mut self) -> Result<StackirProgram, Self::Error> {
+        let root = self.root.substitute(&mut self, ());
+        Ok(StackirProgram { arena: self.arena, root })
     }
 }
 

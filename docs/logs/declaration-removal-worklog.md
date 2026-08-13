@@ -166,7 +166,7 @@ by `check`.
 | Bitter syntax | Desugaring produces only definitions, patterns, and terms |
 | Scoped syntax | `ResolveSourceOut.root` identifies the root; every context binding originates at a term |
 | Statics | `CheckedSource.root` is the classified term identity; no declaration or entry arena remains |
-| Dynamics | `DynamicsArena` owns one linked computation root |
+| Dynamics | `DynamicsProgram` owns one linked computation root |
 | Stack IR | `RootLowerer` lowers the typed computation directly; lexical `let` structure carries definitions |
 | Driver | `check`, interpreter `run`, and native compilation accept one root source path |
 | Editor and tests | Editor analysis and maintained fixtures parse and resolve one source term |

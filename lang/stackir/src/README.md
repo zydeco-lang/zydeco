@@ -9,11 +9,14 @@ and continuations explicit while preserving a close mapping to Zydeco terms.
 textual -> bitter -> scoped -> tyck -> stack
 ```
 
-The stack IR is built from typed syntax and is a convenient target for closure conversion and later backend work.
+The stack IR is built from one checked typed expression and is a convenient target for closure conversion and
+later backend work. A completed `StackirProgram` separates its single computation `root` from the arena that stores
+the root's nodes; auxiliary code is reachable through explicit closure and continuation syntax rather than a
+top-level declaration collection.
 
 ## Key components
 
-- The `syntax` and `arena` modules define the stack-passing AST and its arenas.
+- The `syntax` and `arena` modules define the stack-passing AST, its node arenas, and the single-root program.
 - `lower` translates typed syntax into stack form, preserving source mappings.
 - `cps` translates `Ret`/`do` continuations into explicit thunk calls.
 - `convert` performs closure conversion by making captures explicit.

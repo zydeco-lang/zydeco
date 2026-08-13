@@ -234,31 +234,29 @@ impl BuiltinPackageLowering {
 
 impl CompilerPass for RootLowerer<'_> {
     type Arena = StackirArena;
-    type Out = StackirArena;
+    type Out = StackirProgram;
     type Error = std::convert::Infallible;
 
-    fn run(self) -> Result<StackirArena, Self::Error> {
+    fn run(self) -> Result<StackirProgram, Self::Error> {
         let Self { mut lowerer, root } = self;
         let root = root.lower(&mut lowerer, ());
-        lowerer.arena.inner.entry.insert_new(root, ());
-        Ok(lowerer.arena)
+        Ok(StackirProgram { arena: lowerer.arena, root })
     }
 }
 
 impl CompilerPass for BuiltinRootLowerer<'_> {
     type Arena = StackirArena;
-    type Out = StackirArena;
+    type Out = StackirProgram;
     type Error = BuiltinPackageLowerError;
 
-    fn run(self) -> Result<StackirArena, Self::Error> {
+    fn run(self) -> Result<StackirProgram, Self::Error> {
         let Self { mut lowerer, root, signature } = self;
         let plan = BuiltinPackagePlan::for_executable(lowerer.statics, &signature)?;
         let function = root.lower(&mut lowerer, ());
         let package = BuiltinPackageLowering::lower(plan.value, &mut lowerer)?;
         let stack = Cons(package, Bullet.build(&mut lowerer, None)).build(&mut lowerer, None);
         let root = Let { binder: Bullet, bindee: stack, tail: function }.build(&mut lowerer, None);
-        lowerer.arena.inner.entry.insert_new(root, ());
-        Ok(lowerer.arena)
+        Ok(StackirProgram { arena: lowerer.arena, root })
     }
 }
 
@@ -546,7 +544,7 @@ mod tests {
     use zydeco_utils::prelude::IdAllocator;
 
     #[test]
-    fn computation_roots_lower_without_declaration_entries() {
+    fn computation_roots_lower_as_single_program_roots() {
         let mut allocator = IdAllocator::<StaticsScope>::new();
         let value = allocator.alloc();
         let root = allocator.alloc();
@@ -558,7 +556,7 @@ mod tests {
 
         let stackir = RootLowerer::new(&spans, &mut scoped, &statics, root).run().unwrap();
 
-        assert_eq!(stackir.inner.entry.len(), 1);
+        assert!(stackir.arena.inner.compus.get(&stackir.root).is_some());
         super::super::check::check(&stackir, &scoped);
     }
 }

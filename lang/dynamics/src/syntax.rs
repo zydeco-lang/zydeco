@@ -87,8 +87,8 @@ impl ArenaSchema<DefId> for DynamicsScope {
     type Item = VarName;
 }
 
-/// Storage for one linked runtime computation.
-pub struct DynamicsArena {
+/// A linked runtime program with one computation at its top level.
+pub struct DynamicsProgram {
     pub defs: ArenaSparse<DynamicsScope, DefId>,
     pub root: RcCompu,
 }
@@ -138,7 +138,7 @@ pub struct Runtime<'rt> {
     pub(crate) host: HostRuntime,
     pub stack: im::Vector<SemCompu>,
     pub env: Env<SemValue>,
-    pub arena: DynamicsArena,
+    pub program: DynamicsProgram,
 }
 
 /// Program-level continuation produced by evaluation.

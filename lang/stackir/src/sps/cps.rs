@@ -18,6 +18,7 @@ pub struct CpsTranslator<'a> {
     #[as_ref(StackirArena)]
     #[as_mut(StackirArena)]
     arena: &'a mut StackirArena,
+    root: &'a mut CompuId,
     #[as_mut(ScopedArena)]
     scoped: &'a mut ScopedArena,
     values: HashMap<ValueId, ValueId>,
@@ -26,9 +27,11 @@ pub struct CpsTranslator<'a> {
 }
 
 impl<'a> CpsTranslator<'a> {
-    pub fn new(arena: &'a mut StackirArena, scoped: &'a mut ScopedArena) -> Self {
+    pub fn new(program: &'a mut StackirProgram, scoped: &'a mut ScopedArena) -> Self {
+        let StackirProgram { arena, root } = program;
         Self {
             arena,
+            root,
             scoped,
             values: HashMap::new(),
             stacks: HashMap::new(),
@@ -37,13 +40,7 @@ impl<'a> CpsTranslator<'a> {
     }
 
     pub fn translate(mut self) {
-        let entries = self.arena.inner.entry.clone();
-        let mut new_entries = ArenaAssoc::new();
-        for (entry, ()) in entries {
-            let entry = self.translate_compu(entry);
-            new_entries.ensure(entry);
-        }
-        self.arena.inner.entry = new_entries;
+        *self.root = self.translate_compu(*self.root);
     }
 
     fn translate_value(&mut self, value_id: ValueId) -> ValueId {

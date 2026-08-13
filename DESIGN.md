@@ -362,9 +362,14 @@ Zydeco is implemented as a pipeline with an interpreter and native-code branch:
 3. name resolution (`lang/surface/src/scoped`)
 4. type checking and post-check validation (`lang/statics/src`)
 5. linking and evaluation (`lang/dynamics/src`), or
-6. Stack IR and substitution normalization (`lang/stackir/src`)
-7. assembly lowering (`lang/assembly/src`)
+6. single-root Stack IR and substitution normalization (`lang/stackir/src`)
+7. single-root assembly lowering (`lang/assembly/src`)
 8. AMD64 or LLVM emission (`lang/amd64/src`, `lang/llvm/src`)
+
+Every completed representation after type checking carries exactly one top-level expression or program root.
+`DynamicsProgram`, `StackirProgram`, substitution-normal `SNormProgram`, and `AssemblyProgram` pair that root with
+the storage needed by their syntax. Node arenas and labeled block collections are therefore implementation storage,
+not declaration-oriented containers that determine how many programs a compilation contains.
 
 The phases are spread across several core crates:
 

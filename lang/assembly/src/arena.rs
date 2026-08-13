@@ -43,8 +43,12 @@ pub struct AssemblyArena {
     pub labels: ArenaAssoc<ProgId, SymId>,
     /// Externs that are variables.
     pub externs: Vec<Extern>,
-    /// The whole object has an optional entry point.
-    pub entry: ArenaAssoc<ProgId, ()>,
+}
+
+/// A complete assembly program with one executable program root.
+pub struct AssemblyProgram {
+    pub arena: AssemblyArena,
+    pub root: ProgId,
 }
 
 pub trait AssemblyArenaRefLike {

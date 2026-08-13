@@ -15,8 +15,16 @@ pub struct Inliner<'a> {
     #[as_ref(StackirArena)]
     #[as_mut(StackirArena)]
     pub stackir: &'a mut StackirArena,
+    pub root: &'a mut CompuId,
     #[as_mut(ScopedArena)]
     pub scoped: &'a mut ScopedArena,
+}
+
+impl<'a> Inliner<'a> {
+    pub fn new(program: &'a mut StackirProgram, scoped: &'a mut ScopedArena) -> Self {
+        let StackirProgram { arena, root } = program;
+        Self { stackir: arena, root, scoped }
+    }
 }
 
 impl<'a> CompilerPass for Inliner<'a> {
@@ -24,11 +32,7 @@ impl<'a> CompilerPass for Inliner<'a> {
     type Out = ();
     type Error = std::convert::Infallible;
     fn run(mut self) -> Result<(), Self::Error> {
-        let mut new_entry = ArenaAssoc::new();
-        for (compu_id, ()) in self.stackir.inner.entry.clone() {
-            new_entry.ensure(compu_id.inline_top_level(&mut self));
-        }
-        self.stackir.inner.entry = new_entry;
+        *self.root = (*self.root).inline_top_level(&mut self);
         Ok(())
     }
 }

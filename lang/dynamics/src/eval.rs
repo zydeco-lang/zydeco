@@ -28,7 +28,7 @@ impl<'rt> Runtime<'rt> {
     /// Construct a new runtime with empty environment and stack.
     pub fn new(
         input: &'rt mut dyn BufRead, output: &'rt mut dyn Write, args: &'rt [String],
-        arena: DynamicsArena,
+        program: DynamicsProgram,
     ) -> Self {
         Runtime {
             input,
@@ -37,13 +37,13 @@ impl<'rt> Runtime<'rt> {
             host: crate::host::HostRuntime::new(),
             stack: im::Vector::new(),
             env: Env::new(),
-            arena,
+            program,
         }
     }
     /// Evaluate the program's computation root.
-    pub fn run(&mut self) -> Vec<ProgKont> {
-        let root = self.arena.root.clone();
-        vec![root.as_ref().clone().eval(self)]
+    pub fn run(&mut self) -> ProgKont {
+        let root = self.program.root.clone();
+        root.as_ref().clone().eval(self)
     }
 }
 

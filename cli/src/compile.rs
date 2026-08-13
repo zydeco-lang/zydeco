@@ -1,14 +1,14 @@
 use crate::{TargetArchitecture, TargetOs};
 use std::{path::Path, sync::Arc};
 use thiserror::Error;
-use zydeco_assembly::{LoweringPipeline, syntax::AssemblyArena};
+use zydeco_assembly::{LoweringPipeline, syntax::AssemblyProgram};
 use zydeco_dynamics::{BuiltinPackageError, BuiltinRootLinker, ProgKont, Runtime};
 use zydeco_session::{
     AnalysisError, AnalysisOutcome, CompilerSession, ExecutableError, ExecutableProgram,
     ProgramAnalysis,
 };
 use zydeco_stackir::{
-    BuiltinPackageLowerError, BuiltinRootLowerer, CpsMode, OptimizationPipeline, StackirArena,
+    BuiltinPackageLowerError, BuiltinRootLowerer, CpsMode, OptimizationPipeline, StackirProgram,
 };
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax::SpanArena};
@@ -55,8 +55,7 @@ impl CommandCompiler {
         .map_err(CompileError::BuiltinLink)?;
         let mut input = std::io::stdin().lock();
         let mut output = std::io::stdout();
-        let results = Runtime::new(&mut input, &mut output, arguments, dynamics).run();
-        Self::one_result(results)
+        Ok(Runtime::new(&mut input, &mut output, arguments, dynamics).run())
     }
 
     pub fn test(&self, path: &Path, arguments: &[String]) -> Result<(), CompileError> {
@@ -71,7 +70,7 @@ impl CommandCompiler {
         .map_err(CompileError::BuiltinLink)?;
         let mut input = std::io::empty();
         let mut output = std::io::sink();
-        match Self::one_result(Runtime::new(&mut input, &mut output, arguments, dynamics).run())? {
+        match Runtime::new(&mut input, &mut output, arguments, dynamics).run() {
             | ProgKont::ExitCode(0) => Ok(()),
             | result => Err(CompileError::TestFailure(result)),
         }
@@ -80,13 +79,6 @@ impl CommandCompiler {
     pub fn lower(&self, path: &Path, cps: CpsMode) -> Result<BackendProgram, CompileError> {
         BackendProgram::lower(self.executable(path)?, cps)
     }
-
-    fn one_result(mut results: Vec<ProgKont>) -> Result<ProgKont, CompileError> {
-        match results.len() {
-            | 1 => Ok(results.pop().expect("one result was just counted")),
-            | count => Err(CompileError::EntryCount(count)),
-        }
-    }
 }
 
 /// Frozen backend input retaining the provenance needed by renderers and emitters.
@@ -94,8 +86,8 @@ pub struct BackendProgram {
     pub spans: SpanArena,
     pub scoped: ScopedArena,
     pub statics: StaticsArena,
-    pub stackir: StackirArena,
-    pub assembly: AssemblyArena,
+    pub stackir: StackirProgram,
+    pub assembly: AssemblyProgram,
 }
 
 impl BackendProgram {
@@ -111,8 +103,12 @@ impl BackendProgram {
 
     pub fn render_stackir(&self) -> String {
         use zydeco_stackir::sps::fmt::*;
-        let formatter =
-            Formatter::new(&self.stackir.admin, &self.stackir.inner, &self.scoped, &self.statics);
+        let formatter = Formatter::new(
+            &self.stackir.arena.admin,
+            &self.stackir.arena.inner,
+            &self.scoped,
+            &self.statics,
+        );
         let mut output = String::new();
         self.stackir.pretty(&formatter).render_fmt(100, &mut output).unwrap();
         output
@@ -120,7 +116,7 @@ impl BackendProgram {
 
     pub fn render_assembly(&self) -> String {
         use zydeco_assembly::fmt::*;
-        let formatter = Formatter::new(&self.assembly, None, None);
+        let formatter = Formatter::new(&self.assembly.arena, None, None);
         let mut output = String::new();
         self.assembly.pretty(&formatter).render_fmt(100, &mut output).unwrap();
         output
@@ -193,6 +189,7 @@ impl BackendProgram {
         use zydeco_assembly::syntax::{Atom, Instruction, Program};
 
         self.assembly
+            .arena
             .programs
             .iter()
             .find_map(|(program, body)| {
@@ -207,7 +204,7 @@ impl BackendProgram {
                     ) => Some(*variable),
                     | _ => None,
                 }?;
-                (!self.assembly.contexts[program].iter().any(|local| local == &variable))
+                (!self.assembly.arena.contexts[program].iter().any(|local| local == &variable))
                     .then_some((*program, variable))
             })
             .map_or(Ok(()), |(program, variable)| {
@@ -245,8 +242,6 @@ pub enum CompileError {
     BuiltinLower(BuiltinPackageLowerError),
     #[error(transparent)]
     AssemblyInterpreter(zydeco_assembly::interp::Error),
-    #[error("source execution produced {0} roots; expected exactly one")]
-    EntryCount(usize),
     #[error("source test expected exit code 0, got {0:?}")]
     TestFailure(ProgKont),
     #[error("LLVM emitter cannot represent local {variable:?} at assembly program {program:?}")]

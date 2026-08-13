@@ -15,7 +15,7 @@ fn a_root_term_builds_without_project_configuration() {
         "source build failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(String::from_utf8_lossy(&output.stdout).contains("[entry]"));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("[root]"));
 }
 
 #[test]

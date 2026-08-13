@@ -373,7 +373,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for CompuId {
     }
 }
 
-impl<'a> Pretty<'a, Formatter<'a>> for SNormArena {
+impl<'a> Pretty<'a, Formatter<'a>> for SNormProgram {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let mut doc = RcDoc::nil();
 
@@ -390,13 +390,10 @@ impl<'a> Pretty<'a, Formatter<'a>> for SNormArena {
             doc = doc.append(RcDoc::line());
         }
 
-        // Print all entries (each entry compu may start with let chain)
-        for (compu_id, _) in self.inner.entry.iter() {
-            doc = doc
-                .append(RcDoc::text("[entry]"))
-                .append(RcDoc::concat([RcDoc::line(), compu_id.pretty(f)]).nest(f.indent))
-                .append(RcDoc::line());
-        }
+        doc = doc
+            .append(RcDoc::text("[root]"))
+            .append(RcDoc::concat([RcDoc::line(), self.root.pretty(f)]).nest(f.indent))
+            .append(RcDoc::line());
 
         doc
     }

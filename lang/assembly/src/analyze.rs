@@ -42,6 +42,7 @@ pub struct StackAnalyzer<'a> {
     #[as_ref(AssemblyArena)]
     #[as_mut(AssemblyArena)]
     pub arena: &'a mut AssemblyArena,
+    pub root: ProgId,
     /// Issuer scoped to this analysis run's temporary stack slots.
     allocator: IdAllocator<StackAnalysisScope>,
     /// The stack layouts *before* each program point.
@@ -61,9 +62,11 @@ pub struct StackAnalysis<'a> {
 }
 
 impl<'a> StackAnalyzer<'a> {
-    pub fn new(arena: &'a mut AssemblyArena) -> Self {
+    pub fn new(program: &'a mut AssemblyProgram) -> Self {
+        let AssemblyProgram { arena, root } = program;
         Self {
             arena,
+            root: *root,
             allocator: IdAllocator::new(),
             layouts: ArenaAssoc::new(),
             slots: ArenaSparse::new(),
@@ -105,8 +108,6 @@ impl<'a> CompilerPass for StackAnalyzer<'a> {
                 | Symbol::Undefined(_) | Symbol::StringLiteral(_) => None,
             })
             .collect();
-        let entries: Vec<_> = self.arena.entry.iter().map(|(entry, ())| *entry).collect();
-
         for prog in symbol_programs.iter().copied() {
             let context = self.arena.contexts[&prog]
                 .to_owned()
@@ -116,22 +117,18 @@ impl<'a> CompilerPass for StackAnalyzer<'a> {
             let layout = Layout { control: im::Vector::new(), context };
             prog.stack_measure(&mut self, layout);
         }
-        for entry in entries.iter().copied() {
-            let context = self.arena.contexts[&entry]
-                .to_owned()
-                .into_iter()
-                .map(|var| (var, Slot::Unknown))
-                .collect();
-            let layout = Layout { control: im::Vector::new(), context };
-            entry.stack_measure(&mut self, layout);
-        }
+        let context = self.arena.contexts[&self.root]
+            .to_owned()
+            .into_iter()
+            .map(|var| (var, Slot::Unknown))
+            .collect();
+        let layout = Layout { control: im::Vector::new(), context };
+        self.root.stack_measure(&mut self, layout);
         for prog in symbol_programs {
             prog.stack_inline(&mut self);
         }
-        for entry in entries {
-            entry.stack_inline(&mut self);
-        }
-        let Self { arena, allocator: _, layouts, slots, inlined } = self;
+        self.root.stack_inline(&mut self);
+        let Self { arena, root: _, allocator: _, layouts, slots, inlined } = self;
         Ok(StackAnalysis { arena, layouts, slots, inlined })
     }
 }

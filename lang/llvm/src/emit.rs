@@ -4,10 +4,10 @@ use super::syntax::*;
 use derive_more::{AsMut, AsRef, Display};
 use std::collections::HashSet;
 use zydeco_assembly::{
-    arena::{AssemblyArena, AssemblyArenaRefLike},
+    arena::{AssemblyArena, AssemblyArenaRefLike, AssemblyProgram},
     syntax::{self as sa, Atom, Instruction, Intrinsic, ProgId, Program, Symbol, Terminator},
 };
-use zydeco_stackir::StackirArena;
+use zydeco_stackir::{StackirArena, StackirProgram};
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_syntax::*;
@@ -113,6 +113,7 @@ pub struct Emitter<'e> {
     statics: &'e StaticsArena,
     stackir: &'e StackirArena,
     assembly: &'e AssemblyArena,
+    root: ProgId,
 
     target_triple: TargetTriple,
     #[as_ref]
@@ -130,14 +131,15 @@ pub struct Emitter<'e> {
 impl<'e> Emitter<'e> {
     pub fn new(
         spans: &'e SpanArena, scoped: &'e ScopedArena, statics: &'e StaticsArena,
-        stackir: &'e StackirArena, assembly: &'e AssemblyArena, target_triple: TargetTriple,
+        stackir: &'e StackirProgram, assembly: &'e AssemblyProgram, target_triple: TargetTriple,
     ) -> Self {
         Self {
             spans,
             scoped,
             statics,
-            stackir,
-            assembly,
+            stackir: &stackir.arena,
+            assembly: &assembly.arena,
+            root: assembly.root,
             target_triple,
             module: LlvmModule::new(),
             visited: HashSet::new(),
@@ -202,8 +204,8 @@ impl<'e> Emitter<'e> {
 
         // Create entry function
         let entry_name = self.get_or_create_entry_function();
-        let entry_prog_id = self.assembly.entry.iter().next().unwrap().0;
-        let context_size = self.assembly.contexts[entry_prog_id].iter().len();
+        let entry_prog_id = self.root;
+        let context_size = self.assembly.contexts[&entry_prog_id].iter().len();
 
         // Build entry function
         let mut entry_ir = format!("define i64 @{}(i64 %env) {{\n", entry_name);

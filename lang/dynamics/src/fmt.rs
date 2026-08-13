@@ -1,20 +1,20 @@
 use crate::syntax::*;
 
 pub use zydeco_syntax::Ugly;
-/// Formatter that owns the dynamic arena for name resolution.
+/// Formatter borrowing the linked program for name resolution.
 pub struct Formatter<'arena> {
-    arena: &'arena DynamicsArena,
+    program: &'arena DynamicsProgram,
 }
 impl<'arena> Formatter<'arena> {
-    /// Create a formatter bound to the given dynamic arena.
-    pub fn new(arena: &'arena DynamicsArena) -> Self {
-        Formatter { arena }
+    /// Create a formatter bound to the given dynamic program.
+    pub fn new(program: &'arena DynamicsProgram) -> Self {
+        Formatter { program }
     }
 }
 
 impl<'a> Ugly<'a, Formatter<'a>> for DefId {
     fn ugly(&self, f: &'a Formatter) -> String {
-        let VarName(name) = &f.arena.defs[self];
+        let VarName(name) = &f.program.defs[self];
         format!("{}{}", name, self.concise())
     }
 }

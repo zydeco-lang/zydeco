@@ -44,13 +44,15 @@ pub struct StackirInnerArena {
     pub stacks: ArenaSparse<StackirScope, StackId>,
     /// computation arena
     pub compus: ArenaSparse<StackirScope, CompuId>,
+}
 
-    /// Computation roots selected for backend execution.
-    ///
-    /// A source-file compilation contributes exactly one root. The set-like
-    /// representation is retained because later whole-arena rewrites operate
-    /// uniformly over every selected root.
-    pub entry: ArenaAssoc<CompuId, ()>,
+/// A complete Stack IR program with one computation at its top level.
+#[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
+pub struct StackirProgram {
+    #[as_ref]
+    #[as_mut]
+    pub arena: StackirArena,
+    pub root: CompuId,
 }
 
 /// Build a stack IR node and optionally record its source site mapping.

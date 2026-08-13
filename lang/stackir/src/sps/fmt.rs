@@ -344,7 +344,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
     }
 }
 
-impl<'a> Pretty<'a, Formatter<'a>> for StackirArena {
+impl<'a> Pretty<'a, Formatter<'a>> for StackirProgram {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let mut doc = RcDoc::nil();
         let builtins = &f.admin.builtins;
@@ -361,13 +361,10 @@ impl<'a> Pretty<'a, Formatter<'a>> for StackirArena {
             doc = doc.append(RcDoc::line());
         }
 
-        // Print all entries (each entry compu is let g1 = v1 in ... in body)
-        for (compu_id, _) in self.inner.entry.iter() {
-            doc = doc
-                .append(RcDoc::text("[entry]"))
-                .append(RcDoc::concat([RcDoc::line(), compu_id.pretty(f)]).nest(f.indent))
-                .append(RcDoc::line());
-        }
+        doc = doc
+            .append(RcDoc::text("[root]"))
+            .append(RcDoc::concat([RcDoc::line(), self.root.pretty(f)]).nest(f.indent))
+            .append(RcDoc::line());
 
         doc
     }

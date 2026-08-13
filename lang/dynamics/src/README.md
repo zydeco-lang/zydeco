@@ -2,7 +2,7 @@
 
 This crate implements the dynamic semantics for Zydeco: it links the type-checked program
 into a runtime-friendly representation and evaluates it with a small-step interpreter.
-The pipeline produces a `DynamicsArena` from the statics pass, wires in builtin primitives,
+The pipeline produces a `DynamicsProgram` from the statics pass, wires in builtin primitives,
 and then steps computations to produce program continuations or exit codes.
 
 ## Role in the pipeline

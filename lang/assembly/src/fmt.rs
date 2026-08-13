@@ -23,12 +23,12 @@ impl<'arena> Formatter<'arena> {
 
 use pretty::RcDoc;
 
-impl<'a> Pretty<'a, Formatter<'a>> for AssemblyArena {
+impl<'a> Pretty<'a, Formatter<'a>> for AssemblyProgram {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let mut doc = RcDoc::nil();
 
         // Print all symbols
-        for (sym_id, sym) in self.symbols.iter() {
+        for (sym_id, sym) in self.arena.symbols.iter() {
             doc = doc
                 .append(RcDoc::text(format!("[sym:{}{}]", sym.name, sym_id.concise(),)))
                 .append(RcDoc::space())
@@ -39,12 +39,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for AssemblyArena {
             doc = doc.append(RcDoc::line());
         }
 
-        // Print entry point
-        for (prog_id, _) in self.entry.iter() {
-            doc = doc.append(RcDoc::text("[entry]"));
-            doc = doc.append(RcDoc::concat([RcDoc::line(), prog_id.pretty(f)]).nest(f.indent));
-            doc = doc.append(RcDoc::line());
-        }
+        doc = doc.append(RcDoc::text("[root]"));
+        doc = doc.append(RcDoc::concat([RcDoc::line(), self.root.pretty(f)]).nest(f.indent));
+        doc = doc.append(RcDoc::line());
 
         doc
     }

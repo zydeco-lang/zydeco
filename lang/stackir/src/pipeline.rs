@@ -1,4 +1,7 @@
-use crate::{ClosureConverter, CpsTranslator, Elaborator, StackirArena, Substitutor};
+use crate::{
+    ClosureConverter, CpsTranslator, Elaborator, SNormArena, SNormProgram, StackirArena,
+    StackirProgram, Substitutor,
+};
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax::SpanArena};
 use zydeco_utils::pass::CompilerPass;
@@ -27,9 +30,9 @@ impl<'a> OptimizationPipeline<'a> {
         Self { spans, scoped, statics, cps }
     }
 
-    pub fn run(self, mut stackir: StackirArena) -> StackirArena {
+    pub fn run(self, mut stackir: StackirProgram) -> StackirProgram {
         zydeco_stackir_infallible(
-            crate::sps::inline::Inliner { stackir: &mut stackir, scoped: self.scoped }.run(),
+            crate::sps::inline::Inliner::new(&mut stackir, self.scoped).run(),
         );
         crate::sps::check::check(&stackir, self.scoped);
 
@@ -42,13 +45,13 @@ impl<'a> OptimizationPipeline<'a> {
         crate::sps::check::check(&stackir, self.scoped);
 
         (0..Self::NORMALIZATION_PASSES).fold(stackir, |stackir, _| {
-            let StackirArena { admin, mut inner } = stackir;
+            let StackirProgram { arena: StackirArena { admin, inner }, root } = stackir;
             let snorm = zydeco_stackir_infallible(
-                Elaborator::new(admin, self.spans, self.statics, &mut inner).run(),
+                Elaborator::new(admin, self.spans, self.statics, &inner, root).run(),
             );
-            let crate::snorm::arena::SNormArena { admin, mut inner } = snorm;
+            let SNormProgram { arena: SNormArena { admin, mut inner }, root } = snorm;
             let stackir = zydeco_stackir_infallible(
-                Substitutor::new(admin, &mut inner, self.scoped, self.statics).run(),
+                Substitutor::new(admin, &mut inner, self.scoped, self.statics, root).run(),
             );
             crate::sps::check::check(&stackir, self.scoped);
             stackir

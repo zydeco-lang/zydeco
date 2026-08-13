@@ -48,9 +48,15 @@ pub struct SNormInnerArena {
     pub users: ArenaAssoc<DefId, Vec<ValueId>>,
     /// hole (bullet) in stacks. LHS is the stack, RHS is the bullet stack id.
     pub holes: ArenaAssoc<StackId, StackId>,
+}
 
-    // entry points (each compu may start with a let chain binding former globals)
-    pub entry: ArenaAssoc<CompuId, ()>,
+/// A complete substitution-normal Stack IR program with one computation root.
+#[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
+pub struct SNormProgram {
+    #[as_ref]
+    #[as_mut]
+    pub arena: SNormArena,
+    pub root: CompuId,
 }
 
 impl SNormInnerArena {

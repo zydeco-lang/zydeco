@@ -2,10 +2,10 @@ use super::syntax::*;
 use derive_more::{AsMut, AsRef};
 use std::collections::{BTreeMap, HashSet};
 use zydeco_assembly::{
-    arena::{AssemblyArena, AssemblyArenaRefLike},
+    arena::{AssemblyArena, AssemblyArenaRefLike, AssemblyProgram},
     syntax::{self as sa, Atom, Instruction, Intrinsic, ProgId, Program, Symbol, Terminator},
 };
-use zydeco_stackir::StackirArena;
+use zydeco_stackir::{StackirArena, StackirProgram};
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_syntax::*;
@@ -31,6 +31,7 @@ pub struct Emitter<'e> {
     pub statics: &'e StaticsArena,
     pub stackir: &'e StackirArena,
     pub assembly: &'e AssemblyArena,
+    pub root: ProgId,
 
     #[as_ref]
     #[as_mut]
@@ -44,14 +45,15 @@ pub struct Emitter<'e> {
 impl<'e> Emitter<'e> {
     pub fn new(
         spans: &'e SpanArena, scoped: &'e ScopedArena, statics: &'e StaticsArena,
-        stackir: &'e StackirArena, assembly: &'e AssemblyArena, target_format: TargetFormat,
+        stackir: &'e StackirProgram, assembly: &'e AssemblyProgram, target_format: TargetFormat,
     ) -> Self {
         Self {
             spans,
             scoped,
             statics,
-            stackir,
-            assembly,
+            stackir: &stackir.arena,
+            assembly: &assembly.arena,
+            root: assembly.root,
             asm: AsmFile::default(),
             target_format,
             tables: Vec::new(),
@@ -135,10 +137,8 @@ impl<'e> CompilerPass for Emitter<'e> {
             Instr::Mov(MovArgs::ToReg(ENV_REG, Arg64::Reg(Reg::Rdi))),
         ]);
 
-        // Assert that there's only one entry point, and emit it
-        assert_eq!(self.assembly.entry.len(), 1, "expected exactly one entry point");
-        let (entry, ()) = self.assembly.entry.iter().next().unwrap();
-        entry.emit((), &mut self);
+        let root = self.root;
+        root.emit((), &mut self);
 
         // Emit the named blocks
         for (prog_id, _) in &self.assembly.programs {

@@ -167,7 +167,7 @@ impl ReplEngine {
 
     fn link_checked(
         program: CheckedProgram,
-    ) -> Result<zydeco_dynamics::syntax::DynamicsArena, ReplLinkError> {
+    ) -> Result<zydeco_dynamics::syntax::DynamicsProgram, ReplLinkError> {
         match program.root {
             | TermAnnId::Value(root, ty) => match Self::value_plan(&program.statics, ty) {
                 | ValuePlan::Builtin(signature) => BuiltinValueRootLinker {
@@ -204,18 +204,14 @@ impl ReplEngine {
     }
 
     fn run_dynamics(
-        dynamics: zydeco_dynamics::syntax::DynamicsArena, classifier: Option<String>,
+        dynamics: zydeco_dynamics::syntax::DynamicsProgram, classifier: Option<String>,
     ) -> Result<String, String> {
         let mut input = std::io::empty();
         let mut output = Vec::new();
         let arguments: [String; 0] = [];
         let mut runtime = Runtime::new(&mut input, &mut output, &arguments, dynamics);
-        let mut results = runtime.run();
-        let result = match results.len() {
-            | 1 => results.pop().expect("one runtime result was just counted"),
-            | count => return Err(format!("evaluation produced {count} roots; expected one")),
-        };
-        let formatter = DynamicFormatter::new(&runtime.arena);
+        let result = runtime.run();
+        let formatter = DynamicFormatter::new(&runtime.program);
         let result = match result {
             | ProgKont::Ret(value) => {
                 let value = value.ugly(&formatter);

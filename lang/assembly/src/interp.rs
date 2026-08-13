@@ -8,12 +8,14 @@ pub struct Interpreter {
     #[as_ref]
     #[as_mut]
     pub arena: AssemblyArena,
+    pub root: ProgId,
     pub runtime: Runtime,
 }
 
 impl Interpreter {
-    pub fn new(arena: AssemblyArena) -> Self {
-        Self { arena, runtime: Runtime::default() }
+    pub fn new(program: AssemblyProgram) -> Self {
+        let AssemblyProgram { arena, root } = program;
+        Self { arena, root, runtime: Runtime::default() }
     }
 }
 
@@ -50,8 +52,7 @@ impl CompilerPass for Interpreter {
     type Out = Output;
     type Error = Error;
     fn run(mut self) -> Result<Self::Out, Self::Error> {
-        let entry = self.arena.entry.iter().map(|(prog, _)| *prog).next().expect("no entry point");
-        entry.eval(&mut self)
+        self.root.eval(&mut self)
     }
 }
 

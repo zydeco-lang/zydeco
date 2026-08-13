@@ -1,4 +1,4 @@
-use crate::{builtin::BuiltinRuntime, syntax::DynamicsArena, *};
+use crate::{builtin::BuiltinRuntime, syntax::DynamicsProgram, *};
 use std::{collections::HashSet, rc::Rc};
 use thiserror::Error;
 use zydeco_statics::{
@@ -108,38 +108,38 @@ impl BuiltinPackageLinker {
 
 impl RootLinker {
     /// Erase static structure and retain one computation as the dynamic root.
-    pub fn run(self) -> DynamicsArena {
+    pub fn run(self) -> DynamicsProgram {
         let Self { scoped, statics, root } = self;
         let defs = scoped.defs.rebind::<ds::DynamicsScope>();
         let root = root.link(&statics);
-        DynamicsArena { defs, root }
+        DynamicsProgram { defs, root }
     }
 }
 
 impl ValueRootLinker {
-    pub fn run(self) -> DynamicsArena {
+    pub fn run(self) -> DynamicsProgram {
         let Self { scoped, statics, root } = self;
         let defs = scoped.defs.rebind::<ds::DynamicsScope>();
         let value = root.link(&statics);
         let root = Rc::new(ds::Computation::Ret(Return(value)));
-        DynamicsArena { defs, root }
+        DynamicsProgram { defs, root }
     }
 }
 
 impl BuiltinRootLinker {
-    pub fn run(self) -> Result<DynamicsArena, BuiltinPackageError> {
+    pub fn run(self) -> Result<DynamicsProgram, BuiltinPackageError> {
         let Self { scoped, statics, root, signature } = self;
         let plan = BuiltinPackagePlan::for_executable(&statics, &signature)?;
         let package = BuiltinPackageLinker::link(plan.value)?;
         let defs = scoped.defs.rebind::<ds::DynamicsScope>();
         let function = root.link(&statics);
         let root = Rc::new(ds::Computation::VApp(App(function, package)));
-        Ok(DynamicsArena { defs, root })
+        Ok(DynamicsProgram { defs, root })
     }
 }
 
 impl BuiltinComputationRootLinker {
-    pub fn run(self) -> Result<DynamicsArena, BuiltinPackageError> {
+    pub fn run(self) -> Result<DynamicsProgram, BuiltinPackageError> {
         let Self { scoped, statics, root, signature } = self;
         let defs = scoped.defs.rebind::<ds::DynamicsScope>();
         let (root, _) = std::iter::successors(Some(signature), |signature| {
@@ -159,12 +159,12 @@ impl BuiltinComputationRootLinker {
                 ))
             },
         )?;
-        Ok(DynamicsArena { defs, root })
+        Ok(DynamicsProgram { defs, root })
     }
 }
 
 impl BuiltinValueRootLinker {
-    pub fn run(self) -> Result<DynamicsArena, BuiltinPackageError> {
+    pub fn run(self) -> Result<DynamicsProgram, BuiltinPackageError> {
         let Self { scoped, statics, root, signature } = self;
         let defs = scoped.defs.rebind::<ds::DynamicsScope>();
         let (value, _) = std::iter::successors(Some(signature), |signature| {
@@ -185,7 +185,7 @@ impl BuiltinValueRootLinker {
             },
         )?;
         let root = Rc::new(ds::Computation::Ret(Return(value)));
-        Ok(DynamicsArena { defs, root })
+        Ok(DynamicsProgram { defs, root })
     }
 }
 
@@ -393,8 +393,8 @@ mod tests {
         let arena = RootLinker { scoped: ScopedArena::default(), statics, root }.run();
         let mut input = std::io::empty();
         let mut output = Vec::new();
-        let results = ds::Runtime::new(&mut input, &mut output, &[], arena).run();
+        let result = ds::Runtime::new(&mut input, &mut output, &[], arena).run();
 
-        assert!(matches!(results.as_slice(), [ds::ProgKont::Ret(ds::SemValue::Triv(ss::Triv))]));
+        assert!(matches!(result, ds::ProgKont::Ret(ds::SemValue::Triv(ss::Triv))));
     }
 }

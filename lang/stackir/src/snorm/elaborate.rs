@@ -19,32 +19,26 @@ pub struct Elaborator<'a> {
     pub spans: &'a SpanArena,
     pub statics: &'a StaticsArena,
     #[as_ref]
-    #[as_mut]
-    pub stackir: &'a mut StackirInnerArena,
+    pub stackir: &'a StackirInnerArena,
+    pub root: CompuId,
 }
 
 impl<'a> Elaborator<'a> {
     pub fn new(
         admin: AdminArena, spans: &'a SpanArena, statics: &'a StaticsArena,
-        stackir: &'a mut StackirInnerArena,
+        stackir: &'a StackirInnerArena, root: CompuId,
     ) -> Self {
-        Self { arena: SNormArena::new(admin), spans, statics, stackir }
+        Self { arena: SNormArena::new(admin), spans, statics, stackir, root }
     }
 }
 
 impl<'a> CompilerPass for Elaborator<'a> {
     type Arena = SNormInnerArena;
-    type Out = SNormArena;
+    type Out = SNormProgram;
     type Error = std::convert::Infallible;
-    fn run(mut self) -> Result<SNormArena, Self::Error> {
-        self.arena.inner.entry = self
-            .stackir
-            .entry
-            .clone()
-            .into_iter()
-            .map(|(compu_id, ())| (compu_id.elaborate(&mut self), ()))
-            .collect();
-        Ok(self.arena)
+    fn run(mut self) -> Result<SNormProgram, Self::Error> {
+        let root = self.root.elaborate(&mut self);
+        Ok(SNormProgram { arena: self.arena, root })
     }
 }
 

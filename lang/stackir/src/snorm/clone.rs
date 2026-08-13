@@ -268,8 +268,9 @@ mod tests {
         let mut snorm = SNormInnerArena::default();
         let mut scoped = ScopedArena::default();
         let statics = StaticsArena::default();
-        let mut substitutor =
-            Substitutor::new(AdminArena::default(), &mut snorm, &mut scoped, &statics);
+        let mut admin = AdminArena::default();
+        let root = admin.fresh();
+        let mut substitutor = Substitutor::new(admin, &mut snorm, &mut scoped, &statics, root);
 
         let definition = substitutor.arena.admin.fresh();
         substitutor.scoped.insert_def(definition, VarName("captured".into()));
@@ -286,8 +287,9 @@ mod tests {
         let mut snorm = SNormInnerArena::default();
         let mut scoped = ScopedArena::default();
         let statics = StaticsArena::default();
-        let mut substitutor =
-            Substitutor::new(AdminArena::default(), &mut snorm, &mut scoped, &statics);
+        let mut admin = AdminArena::default();
+        let root = admin.fresh();
+        let mut substitutor = Substitutor::new(admin, &mut snorm, &mut scoped, &statics, root);
 
         let original_outer = substitutor.arena.admin.fresh();
         let original_inner = substitutor.arena.admin.fresh();

@@ -9,7 +9,7 @@ use super::{
     syntax::*,
 };
 use derive_more::{AsMut, AsRef};
-use zydeco_stackir::{StackirArena, sps::syntax as sk};
+use zydeco_stackir::{StackirArena, StackirProgram, sps::syntax as sk};
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_utils::with::With;
@@ -34,14 +34,16 @@ pub struct Lowerer<'a> {
     pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
     pub stackir: &'a StackirArena,
+    pub root: sk::CompuId,
     pending: Vec<PendingInstruction<'a>>,
 }
 
 impl<'a> Lowerer<'a> {
     pub fn new(
         spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena,
-        stackir: &'a StackirArena,
+        stackir: &'a StackirProgram,
     ) -> Self {
+        let StackirProgram { arena: stackir, root } = stackir;
         let arena = AssemblyArena::default();
         Self {
             allocator: IdAllocator::new(),
@@ -50,11 +52,12 @@ impl<'a> Lowerer<'a> {
             scoped,
             statics,
             stackir,
+            root: *root,
             pending: Vec::new(),
         }
     }
 
-    pub fn run(mut self) -> AssemblyArena {
+    pub fn run(mut self) -> AssemblyProgram {
         // Lower all builtins
         for builtin in self.stackir.admin.builtins.values() {
             let sk::Builtin { name, arity, sort } = builtin.clone();
@@ -63,14 +66,10 @@ impl<'a> Lowerer<'a> {
             }
         }
 
-        // Lower entry points from StackArena to AssemblyArena.
-        // Each entry compu is already let g1 = v1 in ... in body, so lowering it handles globals.
-        for (compu_id, ()) in &self.stackir.inner.entry {
-            let whole = (*compu_id).lower(&mut self, Context::new());
-            self.arena.entry.ensure(whole);
-            self.finish_pending();
-        }
-        self.arena
+        let stackir_root = self.root;
+        let root = stackir_root.lower(&mut self, Context::new());
+        self.finish_pending();
+        AssemblyProgram { arena: self.arena, root }
     }
 
     fn finish_pending(&mut self) {
