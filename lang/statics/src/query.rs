@@ -426,6 +426,145 @@ pub fn pat_triv_syn_judgment<'db>(
     Some(PatTrivSynOutcome { id, value: ss::ValuePattern::Triv(ss::Triv), ty })
 }
 
+/// An interned term annotation, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedTermAnn<'db> {
+    pub id: ss::TermAnnId,
+}
+
+/// The synthesized judgment of a named term, keyed on its inner term's
+/// judgment. The type arm (a named type whose payload is itself a type)
+/// allocates the label kind and the named type node; the rejection arms
+/// surface as errors. The value arm reads the arena through `lub`, so it
+/// stays checker-side and the query reports `None`.
+#[derive(Clone, Debug)]
+pub enum NamedSynOutcome {
+    Type { kind_id: ss::KindId, kind: ss::Kind, named_id: ss::TypeId, named: ss::Type },
+    Error(crate::check::TyckError),
+}
+
+/// The synthesized judgment of a named term.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn named_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+    inner: InternedTermAnn<'db>,
+) -> Option<NamedSynOutcome> {
+    let su::Term::Named(su::Named(name, _inner_term)) = data.scoped(db).terms.get(&term.id(db))?
+    else {
+        return None;
+    };
+    let name = name.clone();
+    match inner.id(db) {
+        | ss::TermAnnId::Type(inner, kd) => {
+            let site_space = term.id(db).key_space().as_u64();
+            let site_raw = term.id(db).raw().into_u32();
+            let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0);
+            let kind_id: ss::KindId = derived_id(key_space, 0);
+            let named_id: ss::TypeId = derived_id(key_space, 1);
+            Some(NamedSynOutcome::Type {
+                kind_id,
+                kind: ss::Kind::Label(ss::Label(name.clone(), kd)),
+                named_id,
+                named: ss::Type::Named(ss::Named(name, inner)),
+            })
+        }
+        | ss::TermAnnId::Hole(_) => {
+            Some(NamedSynOutcome::Error(crate::check::TyckError::MissingAnnotation))
+        }
+        | ss::TermAnnId::Kind(_) | ss::TermAnnId::Compu(_, _) => {
+            Some(NamedSynOutcome::Error(crate::check::TyckError::SortMismatch))
+        }
+        | ss::TermAnnId::Value(_, _) => None,
+    }
+}
+
+/// The synthesized judgment of a label term, keyed on its inner term's
+/// judgment. The kind arm allocates the label kind node; the rejection arms
+/// surface as errors. The type arm reads the arena through `lub`, so it stays
+/// checker-side and the query reports `None`.
+#[derive(Clone, Debug)]
+pub enum LabelSynOutcome {
+    Kind { id: ss::KindId, kind: ss::Kind },
+    Error(crate::check::TyckError),
+}
+
+/// The synthesized judgment of a label term.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn label_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+    inner: InternedTermAnn<'db>,
+) -> Option<LabelSynOutcome> {
+    let su::Term::Label(su::Label(name, _inner_term)) = data.scoped(db).terms.get(&term.id(db))?
+    else {
+        return None;
+    };
+    let name = name.clone();
+    match inner.id(db) {
+        | ss::TermAnnId::Kind(inner) => {
+            let site_space = term.id(db).key_space().as_u64();
+            let site_raw = term.id(db).raw().into_u32();
+            let id: ss::KindId =
+                derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0), 0);
+            Some(LabelSynOutcome::Kind { id, kind: ss::Kind::Label(ss::Label(name, inner)) })
+        }
+        | ss::TermAnnId::Hole(_) => {
+            Some(LabelSynOutcome::Error(crate::check::TyckError::MissingAnnotation))
+        }
+        | ss::TermAnnId::Value(_, _) | ss::TermAnnId::Compu(_, _) => {
+            Some(LabelSynOutcome::Error(crate::check::TyckError::SortMismatch))
+        }
+        | ss::TermAnnId::Type(_, _) => None,
+    }
+}
+
+/// An interned pattern annotation, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedPatAnn<'db> {
+    pub id: ss::PatAnnId,
+}
+
+/// The synthesized judgment of a named pattern, keyed on its inner pattern's
+/// judgment. The type arm allocates the label kind and the named type-pattern
+/// node; the kind arm surfaces as an expressivity rejection. The value arm
+/// reads the arena through `lub`, so it stays checker-side and the query
+/// reports `None`.
+#[derive(Clone, Debug)]
+pub enum PatNamedSynOutcome {
+    Type { kind_id: ss::KindId, kind: ss::Kind, named_id: ss::TPatId, named: ss::TypePattern },
+    Error(crate::check::TyckError),
+}
+
+/// The synthesized judgment of a named pattern.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn pat_named_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>, inner: InternedPatAnn<'db>,
+) -> Option<PatNamedSynOutcome> {
+    let su::Pattern::Named(su::Named(name, _inner_pat)) = data.scoped(db).pats.get(&pat.id(db))?
+    else {
+        return None;
+    };
+    let name = name.clone();
+    match inner.id(db) {
+        | ss::PatAnnId::Type(inner, inner_kind) => {
+            let site_space = pat.id(db).key_space().as_u64();
+            let site_raw = pat.id(db).raw().into_u32();
+            let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0);
+            let kind_id: ss::KindId = derived_id(key_space, 0);
+            let named_id: ss::TPatId = derived_id(key_space, 1);
+            Some(PatNamedSynOutcome::Type {
+                kind_id,
+                kind: ss::Kind::Label(ss::Label(name.clone(), inner_kind)),
+                named_id,
+                named: ss::TypePattern::Named(ss::Named(name, inner)),
+            })
+        }
+        | ss::PatAnnId::Kind(_) => Some(PatNamedSynOutcome::Error(
+            crate::check::TyckError::Expressivity("named kind components are not supported"),
+        )),
+        | ss::PatAnnId::Value(_, _) => None,
+    }
+}
+
 /// The rejection of an intrinsic `Internal` term, carried as a query value so
 /// the checker routes decisions through queries and keeps the writer as a sink.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]

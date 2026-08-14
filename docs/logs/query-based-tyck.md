@@ -387,3 +387,21 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   fold's merge step and every Ana arm) or the first composite construct keyed on its inner
   results.
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — first composite judgments keyed on inner results
+
+- `Tm::Named` and `Tm::Label` are the first composite constructs on the query graph: the
+  checker still drives the recursion (inner checks stay checker-side until their own slices
+  land), but the outer judgment is now `named_syn_judgment` / `label_syn_judgment` keyed on
+  the interned inner `TermAnnId` (`InternedTermAnn`). The lub-free arms and the outer
+  rejections moved into the queries: named allocates the label kind and the named type node
+  (slots 0 and 1 at the term's site), label allocates its kind node, and both return the
+  `MissingAnnotation` / `SortMismatch` rejections as values — the first `err_k`-to-return
+  conversions for judgments whose errors live at the outer level.
+- The lub-dependent arms stay checker-side: named values (constructor-ish named terms) and
+  label types both read the arena through `lub`, so they remain until the fill-state pattern
+  converts `types_pre` reads into `fill_state` queries.
+- `Pat::Named` followed the same recipe (`pat_named_syn_judgment`): the type-pattern arm
+  allocates the label kind and the named `TPat` node, and the kind arm's expressivity
+  rejection became a query return value; the value-pattern arm keeps its `lub` path.
+- Workspace suite passes unchanged (61 targets green), clippy clean.

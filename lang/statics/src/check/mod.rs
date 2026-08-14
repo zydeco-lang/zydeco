@@ -2291,24 +2291,46 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                             .mk(inner)
                             .tyck_k(tycker, PatternAction::syn().with_skolems(skolems.clone()))?;
                         match checked.annotation {
-                            | PatAnnId::Kind(_) => tycker.err_k(
-                                TyckError::Expressivity("named kind components are not supported"),
-                                std::panic::Location::caller(),
-                            )?,
-                            | PatAnnId::Type(inner, inner_kind) => {
-                                let named_kind = Alloc::alloc(
-                                    tycker,
-                                    ss::Label(name.clone(), inner_kind),
-                                    (),
-                                    &(),
-                                );
-                                let named = Alloc::alloc(
-                                    tycker,
-                                    ss::Named(name, inner),
-                                    named_kind,
-                                    &self.info,
-                                );
-                                checked.with_annotation(PatAnnId::Type(named, named_kind))
+                            | inner_out @ (PatAnnId::Kind(_) | PatAnnId::Type(_, _)) => {
+                                let pat = crate::query::InternedPat::new(tycker.db, self.inner);
+                                let inner_interned =
+                                    crate::query::InternedPatAnn::new(tycker.db, inner_out);
+                                let Some(outcome) = crate::query::pat_named_syn_judgment(
+                                    tycker.db,
+                                    tycker.data,
+                                    pat,
+                                    inner_interned,
+                                ) else {
+                                    unreachable!(
+                                        "the type and rejection arms of named pattern judgments are query-produced"
+                                    )
+                                };
+                                match outcome {
+                                    | crate::query::PatNamedSynOutcome::Type {
+                                        kind_id,
+                                        kind,
+                                        named_id,
+                                        named,
+                                    } => {
+                                        tycker
+                                            .statics
+                                            .kinds_pre
+                                            .insert_new(kind_id, ss::Fillable::Done(kind));
+                                        tycker.statics.tpats.insert_new(named_id, named);
+                                        tycker
+                                            .statics
+                                            .annotations_tpat
+                                            .insert_new(named_id, kind_id);
+                                        tycker
+                                            .statics
+                                            .env_tpat
+                                            .insert_new(named_id, self.info.clone());
+                                        checked.with_annotation(PatAnnId::Type(named_id, kind_id))
+                                    }
+                                    | crate::query::PatNamedSynOutcome::Error(error) => {
+                                        tycker.err_k(error, std::panic::Location::caller())?
+                                    }
+                                }
                             }
                             | PatAnnId::Value(inner, inner_ty) => {
                                 let inner_kind = tycker.statics.annotations_type[&inner_ty];
@@ -3488,16 +3510,46 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 let su::Named(name, inner) = term;
                 match switch {
                     | Switch::Syn => match self.mk(inner).tyck_k(tycker, Action::syn())? {
-                        | TermAnnId::Type(inner, kd) => {
-                            let named_kind =
-                                Alloc::alloc(tycker, ss::Label(name.clone(), kd), (), &());
-                            let named = Alloc::alloc(
-                                tycker,
-                                ss::Named(name, inner),
-                                named_kind,
-                                &self.info,
-                            );
-                            TermAnnId::Type(named, named_kind)
+                        | inner_out @ (TermAnnId::Type(..)
+                        | TermAnnId::Hole(_)
+                        | TermAnnId::Kind(_)
+                        | TermAnnId::Compu(_, _)) => {
+                            let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                            let inner_interned =
+                                crate::query::InternedTermAnn::new(tycker.db, inner_out);
+                            let Some(outcome) = crate::query::named_syn_judgment(
+                                tycker.db,
+                                tycker.data,
+                                term,
+                                inner_interned,
+                            ) else {
+                                unreachable!(
+                                    "the type and rejection arms of named judgments are query-produced"
+                                )
+                            };
+                            match outcome {
+                                | crate::query::NamedSynOutcome::Type {
+                                    kind_id,
+                                    kind,
+                                    named_id,
+                                    named,
+                                } => {
+                                    tycker
+                                        .statics
+                                        .kinds_pre
+                                        .insert_new(kind_id, ss::Fillable::Done(kind));
+                                    tycker
+                                        .statics
+                                        .types_pre
+                                        .insert_new(named_id, ss::Fillable::Done(named));
+                                    tycker.statics.annotations_type.insert_new(named_id, kind_id);
+                                    tycker.statics.env_type.insert_new(named_id, self.info.clone());
+                                    TermAnnId::Type(named_id, kind_id)
+                                }
+                                | crate::query::NamedSynOutcome::Error(error) => {
+                                    tycker.err_k(error, std::panic::Location::caller())?
+                                }
+                            }
                         }
                         | TermAnnId::Value(inner, inner_ty) => {
                             let inner_kind = tycker.statics.annotations_type[&inner_ty];
@@ -3512,11 +3564,6 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             let named =
                                 Alloc::alloc(tycker, ss::Named(name, inner), named_ty, &self.info);
                             TermAnnId::Value(named, named_ty)
-                        }
-                        | TermAnnId::Hole(_) => tycker
-                            .err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?,
-                        | TermAnnId::Kind(_) | TermAnnId::Compu(_, _) => {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                         }
                     },
                     | Switch::Ana(AnnId::Kind(kd)) => {
@@ -3587,9 +3634,35 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 let su::Label(name, inner) = term;
                 match switch {
                     | Switch::Syn => match self.mk(inner).tyck_k(tycker, Action::syn())? {
-                        | TermAnnId::Kind(inner) => {
-                            let label = Alloc::alloc(tycker, ss::Label(name, inner), (), &());
-                            TermAnnId::Kind(label)
+                        | inner_out @ (TermAnnId::Kind(_)
+                        | TermAnnId::Hole(_)
+                        | TermAnnId::Value(_, _)
+                        | TermAnnId::Compu(_, _)) => {
+                            let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                            let inner_interned =
+                                crate::query::InternedTermAnn::new(tycker.db, inner_out);
+                            let Some(outcome) = crate::query::label_syn_judgment(
+                                tycker.db,
+                                tycker.data,
+                                term,
+                                inner_interned,
+                            ) else {
+                                unreachable!(
+                                    "the kind and rejection arms of label judgments are query-produced"
+                                )
+                            };
+                            match outcome {
+                                | crate::query::LabelSynOutcome::Kind { id, kind } => {
+                                    tycker
+                                        .statics
+                                        .kinds_pre
+                                        .insert_new(id, ss::Fillable::Done(kind));
+                                    TermAnnId::Kind(id)
+                                }
+                                | crate::query::LabelSynOutcome::Error(error) => {
+                                    tycker.err_k(error, std::panic::Location::caller())?
+                                }
+                            }
                         }
                         | TermAnnId::Type(inner, kind) => {
                             let vtype = ss::VType.build(tycker, &self.info);
@@ -3597,11 +3670,6 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             let label =
                                 Alloc::alloc(tycker, ss::Label(name, inner), vtype, &self.info);
                             TermAnnId::Type(label, vtype)
-                        }
-                        | TermAnnId::Hole(_) => tycker
-                            .err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?,
-                        | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                         }
                     },
                     | Switch::Ana(AnnId::Set) => {
