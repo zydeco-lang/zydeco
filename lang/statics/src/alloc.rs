@@ -42,6 +42,16 @@ impl DerivedAllocator {
         self.sites.push((entity_space, entity_raw, occurrence, 0));
     }
 
+    /// The root site's next slot, for resuming an interrupted check.
+    pub fn root_slot(&self) -> u32 {
+        self.sites[0].3
+    }
+
+    /// Resume an interrupted check, continuing the root site's slot count.
+    pub fn resume_from_root_slot(slot: u32) -> Self {
+        Self { sites: vec![(u64::MAX, u32::MAX, u32::MAX, slot)] }
+    }
+
     /// Leave the innermost site, resuming the enclosing site's slots.
     pub fn exit(&mut self) {
         assert!(self.sites.len() > 1, "cannot leave the root allocation site");

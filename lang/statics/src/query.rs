@@ -8,7 +8,8 @@
 
 use crate::TyEnv;
 use crate::alloc::QUERY_DERIVATION_TAG;
-use crate::check::{SourceCheckOutcome, Tycker};
+use crate::arena::StaticsArena;
+use crate::check::{CheckedSource, KontFailure, RejectedSource, SourceCheckOutcome, Tycker};
 use crate::surface_syntax as su;
 use crate::syntax as ss;
 use zydeco_utils::arena::ArenaAccess;
@@ -267,12 +268,102 @@ pub struct TyckOutput {
     pub outcome: SourceCheckOutcome,
 }
 
+/// The intermediate state between the judgment and finish phases of a check,
+/// carried as a tracked struct so both phases are separate queries.
+#[salsa::tracked]
+pub struct Judgments<'db> {
+    #[tracked]
+    #[no_eq]
+    #[returns(ref)]
+    pub scoped: su::ScopedArena,
+    #[tracked]
+    #[no_eq]
+    #[returns(ref)]
+    pub statics: StaticsArena,
+    #[tracked]
+    #[no_eq]
+    #[returns(ref)]
+    pub errors: Vec<crate::check::TyckErrorEntry>,
+    #[tracked]
+    #[no_eq]
+    #[returns(ref)]
+    pub observations: Vec<crate::check::TyckObservation>,
+    #[tracked]
+    #[no_eq]
+    #[returns(ref)]
+    pub root: Option<ss::TermAnnId>,
+    #[tracked]
+    pub root_slot: u32,
+}
+
+/// The judgment phase: check the whole scoped program, producing the typed
+/// arena, the accumulated errors, and the root annotation.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+fn tyck_judgments<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> Judgments<'db> {
+    let mut scoped = data.scoped(db).clone();
+    let mut tycker = Tycker::new(db, data, data.spans(db), data.prim(db), &mut scoped);
+    crate::check::InternalTerm::fill_intrinsics(&mut tycker);
+    let root = tycker.run_judgments_k(data.root(db)).ok();
+    let root_slot = tycker.root_slot();
+    let statics = std::mem::take(&mut tycker.statics);
+    let errors = std::mem::take(&mut tycker.errors);
+    let observations = std::mem::take(&mut tycker.observations);
+    drop(tycker);
+    Judgments::new(db, scoped, statics, errors, observations, root, root_slot)
+}
+
+/// The finish phase: resolve holes, normalize, and validate, given the
+/// judgment phase's arena. Reconstructs the checker around the phase-1 state
+/// so error reporting and the writer monad behave exactly as the combined pass
+/// did.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+fn finish_checked<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, judgments: Judgments<'db>,
+) -> SourceCheckOutcome {
+    let mut scoped = judgments.scoped(db).clone();
+    let mut tycker = Tycker::resume(
+        db,
+        data,
+        data.spans(db),
+        data.prim(db),
+        &mut scoped,
+        judgments.statics(db).clone(),
+        judgments.errors(db).clone(),
+        judgments.observations(db).clone(),
+        judgments.root_slot(db),
+    );
+    match judgments.root(db) {
+        | None => {
+            let reports = tycker.error_reports();
+            SourceCheckOutcome::Rejected(RejectedSource {
+                statics: tycker.statics,
+                reports,
+                observations: tycker.observations,
+            })
+        }
+        | Some(root) => match tycker.finish_check_k() {
+            | Ok(()) => SourceCheckOutcome::Checked(CheckedSource {
+                statics: tycker.statics,
+                root: *root,
+                observations: tycker.observations,
+            }),
+            | Err(KontFailure) => {
+                let reports = tycker.error_reports();
+                SourceCheckOutcome::Rejected(RejectedSource {
+                    statics: tycker.statics,
+                    reports,
+                    observations: tycker.observations,
+                })
+            }
+        },
+    }
+}
+
 // The outcome owns its arenas and reports and contains no database-tied references.
 // The non-Update escape hatch stays until the judgment layer gains structural equality.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn check_source<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> TyckOutput {
-    let mut scoped = data.scoped(db).clone();
-    let outcome = Tycker::new(db, data, data.spans(db), data.prim(db), &mut scoped)
-        .check_source_outcome(data.root(db));
-    TyckOutput { scoped, outcome }
+    let judgments = tyck_judgments(db, data);
+    let outcome = finish_checked(db, data, judgments);
+    TyckOutput { scoped: judgments.scoped(db).clone(), outcome }
 }

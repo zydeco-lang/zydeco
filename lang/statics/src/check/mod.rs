@@ -56,7 +56,7 @@ pub struct Tycker<'a> {
     pub metas: im::Vector<su::Meta>,
     /// a writer monad for error handling
     pub errors: Vec<TyckErrorEntry>,
-    observations: Vec<TyckObservation>,
+    pub(crate) observations: Vec<TyckObservation>,
 }
 
 pub type TyckReports = std::sync::Arc<
@@ -1032,7 +1032,8 @@ impl<'a> Tycker<'a> {
     }
 
     /// Type-check one complete source term.
-    pub fn run_source_k(&mut self, root: su::TermId) -> ResultKont<TermAnnId> {
+    /// Check the complete source term without the finish phase.
+    pub fn run_judgments_k(&mut self, root: su::TermId) -> ResultKont<TermAnnId> {
         let env = TyEnvT::new(Default::default(), ());
         let inference = InferenceRegion::enter(self);
         let root = env.mk(root).tyck_k(self, Action::syn())?;
@@ -1040,8 +1041,42 @@ impl<'a> Tycker<'a> {
             self.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
         }
         inference.close_k(self)?;
+        Ok(root)
+    }
+
+    pub fn run_source_k(&mut self, root: su::TermId) -> ResultKont<TermAnnId> {
+        let root = self.run_judgments_k(root)?;
         self.finish_check_k()?;
         Ok(root)
+    }
+
+    /// The root site's next slot, carried between the check's phases.
+    pub fn root_slot(&self) -> u32 {
+        self.allocator.root_slot()
+    }
+
+    /// Resume a check after its judgment phase, restoring the accumulated
+    /// errors and observations for the finish phase.
+    #[allow(clippy::too_many_arguments)]
+    pub fn resume(
+        db: &'a dyn crate::query::TyckDb, data: crate::query::ScopedData<'a>, spans: &'a SpanArena,
+        prim: &'a PrimDefs, scoped: &'a mut ScopedArena, statics: StaticsArena,
+        errors: Vec<TyckErrorEntry>, observations: Vec<TyckObservation>, root_slot: u32,
+    ) -> Self {
+        Self {
+            allocator: DerivedAllocator::resume_from_root_slot(root_slot),
+            db,
+            data,
+            spans,
+            prim,
+            scoped,
+            statics,
+            tasks: im::Vector::new(),
+            metas: im::Vector::new(),
+            check_counts: ArenaAssoc::default(),
+            errors,
+            observations,
+        }
     }
 
     /// Consume the checker and retain the typed identity of a complete source term.
@@ -1071,7 +1106,7 @@ impl<'a> Tycker<'a> {
         }
     }
 
-    fn finish_check_k(&mut self) -> ResultKont<()> {
+    pub(crate) fn finish_check_k(&mut self) -> ResultKont<()> {
         // before we go, resolve all holes with solutions (including nested ones)
         self.do_resolve_holes();
         self.collect_hole_solutions();
@@ -1108,7 +1143,7 @@ impl<'a> Tycker<'a> {
         Ok(())
     }
 
-    fn error_reports(&self) -> TyckReports {
+    pub(crate) fn error_reports(&self) -> TyckReports {
         use std::collections::HashSet;
 
         let mut seen_blame = HashSet::new();
@@ -1325,11 +1360,11 @@ impl BuiltinTypeResolution {
 
 /// Give compiler-generated primitive syntax its intrinsic or lexical static
 /// meaning without routing it through a source-level definition name.
-struct InternalTerm(su::Internal, su::TermId);
+pub(crate) struct InternalTerm(su::Internal, su::TermId);
 
 impl InternalTerm {
     /// Materialize the query-owned intrinsic singletons into `IntrinsicStatics`.
-    fn fill_intrinsics(tycker: &mut Tycker<'_>) {
+    pub(crate) fn fill_intrinsics(tycker: &mut Tycker<'_>) {
         use zydeco_syntax::PrimitiveType;
         let mut keys = vec![
             crate::query::IntrinsicKey::VType,
