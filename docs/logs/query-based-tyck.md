@@ -251,3 +251,21 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   complete for this architecture (intrinsic judgments plus the demand-driven fact queries), and
   the remaining judgment migration requires the redesign decision (typed arena as query-owned
   state, touching `new_key_type` and the downstream backends).
+
+## 2026-08-14 — query-owned statics: first table, the intrinsic singletons
+
+- The user approved the query-owned-statics redesign; the design now lives in
+  `docs/ideas/query-owned-statics.md` (four table-conversion patterns, fill-before-read
+  invariant, materialization boundary, migration order).
+- First conversion landed: `IntrinsicStatics` is query-owned. `intrinsic_singleton(db, data, key)`
+  produces each singleton at a synthetic site discriminated by the key, and
+  `check_source_outcome` materializes all of them (`vtype`, `ctype`, `thk`, `ret`, `unit`, all 13
+  primitives) before any judgment runs. `InternalTerm` went back to plain cache reads through
+  `Construct::build`; only the `Monad`/`Algebra` rejection still rides a query result. The
+  checker-side singleton cache mutation is gone from the judgment path.
+- This also corrected a semantic drift from the per-site judgment migration: `VType`/`CType`
+  kinds and the intrinsic types are now single nodes per check again (the original
+  `Construct::build` semantics), instead of one node per `Internal` term site.
+- `env_type` records for the intrinsic types are materialized with the default environment: the
+  nodes are closed, so normalization's free-variable and skolem lookups never observe them.
+- Workspace suite passes unchanged (61 targets green), clippy clean.
