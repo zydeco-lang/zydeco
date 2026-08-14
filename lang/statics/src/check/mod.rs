@@ -1057,6 +1057,13 @@ impl<'a> Tycker<'a> {
         self.allocator.current_site().2
     }
 
+    /// The innermost allocation site as a salsa key, for queries of auxiliary
+    /// entities that allocate at the enclosing entity's site.
+    pub fn query_site(&self) -> crate::query::InternedSite<'a> {
+        let (space, raw, occurrence) = self.allocator.current_site();
+        crate::query::InternedSite::new(self.db, space, raw, occurrence)
+    }
+
     /// The root site's next slot, carried between the check's phases.
     pub fn root_slot(&self) -> u32 {
         self.allocator.root_slot()
@@ -3397,12 +3404,28 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiIntroduction> {
         let (body, codomain) =
             body.try_as_compu(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
 
-        let ctype = ss::CType.build(tycker, &self.info);
-        let signature =
-            Alloc::alloc(tycker, ss::PackPi { domain, witnesses, codomain }, ctype, &self.info);
-        signature.constrain_to_scope_k(tycker, self.info.skolem_scope())?;
-        let abstraction = Alloc::alloc(tycker, ss::Abs(pattern, body), signature, &self.info);
-        Ok(TermAnnId::Compu(abstraction, signature))
+        let mut iter = witnesses.iter();
+        let first = *iter.next().expect("a package telescope opens at least one witness");
+        let rest = iter.copied().collect::<Vec<_>>();
+        let input = crate::query::InternedPackPiIntro::new(
+            tycker.db, pattern, body, domain, first, rest, codomain,
+        );
+        let Some(outcome) = crate::query::pack_pi_intro_judgment(
+            tycker.db,
+            tycker.data,
+            tycker.query_site(),
+            input,
+        ) else {
+            unreachable!("pack-pi introduction judgments are query-produced")
+        };
+        tycker.statics.types_pre.insert_new(outcome.sig_id, ss::Fillable::Done(outcome.sig));
+        tycker.statics.annotations_type.insert_new(outcome.sig_id, outcome.kd);
+        tycker.statics.env_type.insert_new(outcome.sig_id, self.info.clone());
+        outcome.sig_id.constrain_to_scope_k(tycker, self.info.skolem_scope())?;
+        tycker.statics.compus.insert_new(outcome.abs_id, outcome.abs);
+        tycker.statics.annotations_compu.insert_new(outcome.abs_id, outcome.sig_id);
+        tycker.statics.env_compu.insert_new(outcome.abs_id, self.info.clone());
+        Ok(TermAnnId::Compu(outcome.abs_id, outcome.sig_id))
     }
 }
 
@@ -3436,17 +3459,28 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePackPiIntroduction> {
         let (body, codomain) =
             body.try_as_value(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
 
-        let vtype = ss::VType.build(tycker, &self.info);
-        let signature = Alloc::alloc(
-            tycker,
-            ss::ValuePackPi { domain, witnesses, codomain },
-            vtype,
-            &self.info,
+        let mut iter = witnesses.iter();
+        let first = *iter.next().expect("a package telescope opens at least one witness");
+        let rest = iter.copied().collect::<Vec<_>>();
+        let input = crate::query::InternedValuePackPiIntro::new(
+            tycker.db, pattern, body, domain, first, rest, codomain,
         );
-        signature.constrain_to_scope_k(tycker, self.info.skolem_scope())?;
-        let abstraction: ss::ValueId =
-            Alloc::alloc(tycker, ss::Abs(pattern, body), signature, &self.info);
-        Ok(TermAnnId::Value(abstraction, signature))
+        let Some(outcome) = crate::query::value_pack_pi_intro_judgment(
+            tycker.db,
+            tycker.data,
+            tycker.query_site(),
+            input,
+        ) else {
+            unreachable!("value pack-pi introduction judgments are query-produced")
+        };
+        tycker.statics.types_pre.insert_new(outcome.sig_id, ss::Fillable::Done(outcome.sig));
+        tycker.statics.annotations_type.insert_new(outcome.sig_id, outcome.kd);
+        tycker.statics.env_type.insert_new(outcome.sig_id, self.info.clone());
+        outcome.sig_id.constrain_to_scope_k(tycker, self.info.skolem_scope())?;
+        tycker.statics.values.insert_new(outcome.abs_id, outcome.abs);
+        tycker.statics.annotations_value.insert_new(outcome.abs_id, outcome.sig_id);
+        tycker.statics.env_value.insert_new(outcome.abs_id, self.info.clone());
+        Ok(TermAnnId::Value(outcome.abs_id, outcome.sig_id))
     }
 }
 
@@ -3481,8 +3515,21 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiElimination> {
                 tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
             }
         };
-        let application = Alloc::alloc(tycker, ss::App(*function, argument), codomain, &self.info);
-        Ok(TermAnnId::Compu(application, codomain))
+        let input = crate::query::InternedAppInput::new(
+            tycker.db,
+            crate::query::AppKind::CompuValue { function: *function, argument },
+            codomain,
+            codomain,
+        );
+        let Some(crate::query::AppSynOutcome::Compu { id, compu, ann, reported }) =
+            crate::query::app_judgment_at(tycker.db, tycker.data, tycker.query_site(), input)
+        else {
+            unreachable!("pack-pi elimination judgments are query-produced")
+        };
+        tycker.statics.compus.insert_new(id, compu);
+        tycker.statics.annotations_compu.insert_new(id, ann);
+        tycker.statics.env_compu.insert_new(id, self.info.clone());
+        Ok(TermAnnId::Compu(id, reported))
     }
 }
 
@@ -3517,9 +3564,21 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePackPiElimination> {
                 tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
             }
         };
-        let application: ss::ValueId =
-            Alloc::alloc(tycker, ss::App(*function, argument), codomain, &self.info);
-        Ok(TermAnnId::Value(application, codomain))
+        let input = crate::query::InternedAppInput::new(
+            tycker.db,
+            crate::query::AppKind::ValueValue { function: *function, argument },
+            codomain,
+            codomain,
+        );
+        let Some(crate::query::AppSynOutcome::Value { id, value, ann, reported }) =
+            crate::query::app_judgment_at(tycker.db, tycker.data, tycker.query_site(), input)
+        else {
+            unreachable!("value pack-pi elimination judgments are query-produced")
+        };
+        tycker.statics.values.insert_new(id, value);
+        tycker.statics.annotations_value.insert_new(id, ann);
+        tycker.statics.env_value.insert_new(id, self.info.clone());
+        Ok(TermAnnId::Value(id, reported))
     }
 }
 

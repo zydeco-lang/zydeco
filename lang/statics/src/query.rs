@@ -382,6 +382,18 @@ pub fn var_syn_judgment<'db>(
     }
 }
 
+/// An interned allocation site, for use as a salsa query key.
+///
+/// Auxiliary checker entities (package-pi introductions and eliminations)
+/// allocate at the enclosing entity's site without being scoped entities
+/// themselves; this wrapper keys their queries on the site directly.
+#[salsa::interned]
+pub struct InternedSite<'db> {
+    pub space: u64,
+    pub raw: u32,
+    pub occurrence: u32,
+}
+
 /// An interned scoped pattern, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedPat<'db> {
@@ -991,6 +1003,26 @@ pub fn app_judgment<'db>(
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
     let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
+    derive_app_outcome(db, key_space, input)
+}
+
+/// The application judgment keyed on an explicit allocation site, for
+/// auxiliary entities that allocate at the enclosing term's site.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn app_judgment_at<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, site: InternedSite<'db>,
+    input: InternedAppInput<'db>,
+) -> Option<AppSynOutcome> {
+    let _ = data;
+    let key_space =
+        KeySpaceId::derive(QUERY_DERIVATION_TAG, site.space(db), site.raw(db), site.occurrence(db));
+    derive_app_outcome(db, key_space, input)
+}
+
+/// The application tail shared by the term-keyed and site-keyed judgments.
+fn derive_app_outcome<'db>(
+    db: &'db dyn TyckDb, key_space: KeySpaceId, input: InternedAppInput<'db>,
+) -> Option<AppSynOutcome> {
     match input.kind(db) {
         | AppKind::ValueValue { function, argument } => {
             let id: ss::ValueId = derived_id(key_space, 0);
@@ -2129,6 +2161,113 @@ pub fn pat_project_syn_judgment<'db>(
         return None;
     };
     Some(crate::check::TyckError::MissingAnnotation)
+}
+
+/// An interned pack-pi introduction input, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedPackPiIntro<'db> {
+    pub pattern: ss::VPatId,
+    pub body: ss::CompuId,
+    pub domain: ss::TypeId,
+    pub first: ss::AbstId,
+    pub rest: Vec<ss::AbstId>,
+    pub codomain: ss::TypeId,
+}
+
+/// An interned value pack-pi introduction input, for use as a salsa query
+/// key.
+#[salsa::interned]
+pub struct InternedValuePackPiIntro<'db> {
+    pub pattern: ss::VPatId,
+    pub body: ss::ValueId,
+    pub domain: ss::TypeId,
+    pub first: ss::AbstId,
+    pub rest: Vec<ss::AbstId>,
+    pub codomain: ss::TypeId,
+}
+
+/// The allocation tail of a package-pi introduction: the pack-pi signature
+/// and the abstraction node.
+#[derive(Clone, Debug)]
+pub struct PackPiIntroOutcome {
+    pub sig_id: ss::TypeId,
+    pub sig: ss::Type,
+    pub kd: ss::KindId,
+    pub abs_id: ss::CompuId,
+    pub abs: ss::Computation,
+}
+
+/// The allocation tail of a value package-pi introduction.
+#[derive(Clone, Debug)]
+pub struct ValuePackPiIntroOutcome {
+    pub sig_id: ss::TypeId,
+    pub sig: ss::Type,
+    pub kd: ss::KindId,
+    pub abs_id: ss::ValueId,
+    pub abs: ss::Value,
+}
+
+/// The synthesized judgment of a package-pi introduction, keyed on the
+/// checked pattern, body, and witness telescope.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn pack_pi_intro_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, site: InternedSite<'db>,
+    input: InternedPackPiIntro<'db>,
+) -> Option<PackPiIntroOutcome> {
+    let _ = data;
+    let ctype = {
+        let key = InternedIntrinsic::new(db, IntrinsicKey::CType);
+        let IntrinsicSingleton::Kind { id, .. } = intrinsic_singleton(db, data, key) else {
+            unreachable!("the ctype singleton is kind-producing")
+        };
+        id
+    };
+    let key_space =
+        KeySpaceId::derive(QUERY_DERIVATION_TAG, site.space(db), site.raw(db), site.occurrence(db));
+    let sig_id: ss::TypeId = derived_id(key_space, 0);
+    let abs_id: ss::CompuId = derived_id(key_space, 1);
+    Some(PackPiIntroOutcome {
+        sig_id,
+        sig: ss::Type::PackPi(ss::PackPi {
+            domain: input.domain(db),
+            witnesses: ss::PackTelescope::new(input.first(db), input.rest(db).iter().copied()),
+            codomain: input.codomain(db),
+        }),
+        kd: ctype,
+        abs_id,
+        abs: ss::Computation::VAbs(ss::Abs(input.pattern(db), input.body(db))),
+    })
+}
+
+/// The synthesized judgment of a value package-pi introduction.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn value_pack_pi_intro_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, site: InternedSite<'db>,
+    input: InternedValuePackPiIntro<'db>,
+) -> Option<ValuePackPiIntroOutcome> {
+    let _ = data;
+    let vtype = {
+        let key = InternedIntrinsic::new(db, IntrinsicKey::VType);
+        let IntrinsicSingleton::Kind { id, .. } = intrinsic_singleton(db, data, key) else {
+            unreachable!("the vtype singleton is kind-producing")
+        };
+        id
+    };
+    let key_space =
+        KeySpaceId::derive(QUERY_DERIVATION_TAG, site.space(db), site.raw(db), site.occurrence(db));
+    let sig_id: ss::TypeId = derived_id(key_space, 0);
+    let abs_id: ss::ValueId = derived_id(key_space, 1);
+    Some(ValuePackPiIntroOutcome {
+        sig_id,
+        sig: ss::Type::VPackPi(ss::ValuePackPi {
+            domain: input.domain(db),
+            witnesses: ss::PackTelescope::new(input.first(db), input.rest(db).iter().copied()),
+            codomain: input.codomain(db),
+        }),
+        kd: vtype,
+        abs_id,
+        abs: ss::Value::VAbs(ss::Abs(input.pattern(db), input.body(db))),
+    })
 }
 
 /// The rejection of an intrinsic `Internal` term, carried as a query value so

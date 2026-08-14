@@ -570,3 +570,16 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
 - The remaining pattern-side work is the existential-opening arm of consumed patterns, the
   projection pattern's resolver arms, and the variable-pattern merge fold itself (lub).
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — the pack-pi family joins the query graph
+
+- `pack_pi_intro_judgment` / `value_pack_pi_intro_judgment` own the introduction tails (the
+  pack-pi signature node annotated by the shared ctype/vtype singleton and the abstraction
+  node), keyed on the checked pattern, body, and the flattened witness telescope.
+- `app_judgment_at` adds the site-keyed application judgment (via the new `InternedSite`
+  wrapper + `Tycker::query_site`), so the two package-pi eliminations reuse the application
+  tail at the enclosing term's site without being scoped entities themselves.
+- This completes the construct family: every allocation-producing entity in the checker —
+  terms, patterns, and the auxiliary package-pi entities — now derives its nodes through a
+  producer query; `constrain_to_scope_k` and the resolver reads stay checker-side.
+- Workspace suite passes unchanged (61 targets green), clippy clean.
