@@ -6,17 +6,23 @@ begin
   let (/VType; /Thk; /Ret; /Unit) = core that
   let (/process) = system that
 
-  def Nat : VType = data
-  | +Z : Unit
-  | +S : Nat
-  end that
-  def Bool = data
-  | +True : Unit
-  | +False : Unit
-  end that
-  def OddEven = data
-  | +OddEven : Thk (Nat -> Ret Bool) * Thk (Nat -> Ret Bool)
-  end that
+  def Nat : VType =
+    data
+    | +Z : Unit
+    | +S : Nat
+    end
+  that
+  def Bool =
+    data
+    | +True : Unit
+    | +False : Unit
+    end
+  that
+  def OddEven =
+    data
+    | +OddEven : Thk (Nat -> Ret Bool) * Thk (Nat -> Ret Bool)
+    end
+  that
   def fix fp : Ret OddEven = ret +OddEven(
     {
       do fp <- ! fp;

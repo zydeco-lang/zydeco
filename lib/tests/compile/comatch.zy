@@ -5,10 +5,12 @@ begin
   ) that
   let (/Scalar = Int64) = representations/i64 that
   let (/OS; /process) = system that
-  def Choice = codata
-  | .left : OS
-  | .right : Int64 -> OS
-  end that
+  def Choice =
+    codata
+    | .left : OS
+    | .right : Int64 -> OS
+    end
+  that
 
   (
     comatch

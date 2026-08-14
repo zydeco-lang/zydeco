@@ -9,10 +9,12 @@ begin
   let (/OS; /stdio; /process) = system that
   let U = Thk that
   let F = Ret that
-  def Bool = data
-  | +True : Unit
-  | +False : Unit
-  end that
+  def Bool =
+    data
+    | +True : Unit
+    | +False : Unit
+    end
+  that
   def ! int_lt (x : Int64) (y : Int64) : Ret Bool = ! (int64/lt)
     (Ret Bool)
     x
@@ -28,10 +30,12 @@ begin
     ! (process/exit) 1
   } that
 
-  def LList' (A : VType) : VType = data
-  | +Nil : Unit
-  | +Cons : A * U (F (LList' A))
-  end that
+  def LList' (A : VType) : VType =
+    data
+    | +Nil : Unit
+    | +Cons : A * U (F (LList' A))
+    end
+  that
 
   def fix iota : Int64 -> F (LList' Int64) = fn (i : Int64) =>
     do i+1 <- ! (int64/add) i 1;

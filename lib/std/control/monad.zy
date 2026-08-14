@@ -5,15 +5,17 @@ param (
 let (/VType; /CType; /Thk; /Unit) = core in
 begin
   -- Monad and algebra type constructors.
-  let Monad (M : VType -> CType) = codata
-  | .return :
-    forall (A : VType) . A -> M A
-  | .bind :
-    forall (A : VType) (B : VType) .
-         Thk (M A)
-      -> Thk (A -> M B)
-      -> M B
-  end that
+  let Monad (M : VType -> CType) =
+    codata
+    | .return :
+      forall (A : VType) . A -> M A
+    | .bind :
+      forall (A : VType) (B : VType) .
+           Thk (M A)
+        -> Thk (A -> M B)
+        -> M B
+    end
+  that
   let Algebra (M : VType -> CType) (R : CType) = forall (A : VType) .
        Thk (M A)
     -> Thk (A -> R)

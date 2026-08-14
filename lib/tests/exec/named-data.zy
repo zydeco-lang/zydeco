@@ -8,12 +8,14 @@ begin
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/process) = system that
 
-  def Packet = data
-  | +Packet : (
-    tag :: Int64
-  ) * Int64 * (payload :: Int64)
-  | +Empty : Unit
-  end that
+  def Packet =
+    data
+    | +Packet : (
+      tag :: Int64
+    ) * Int64 * (payload :: Int64)
+    | +Empty : Unit
+    end
+  that
   def packet : Packet = +Packet(
     tag = 7 : Int64,
     8 : Int64,

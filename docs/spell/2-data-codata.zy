@@ -16,14 +16,18 @@ begin
   let string = text/string that
   let (/OS; /stdio; /process) = system that
 
-  def Option (A : VType) = data
-  | +None : Unit
-  | +Some : A
-  end that
-  def List (A : VType) : VType = data
-  | +Nil : Unit
-  | +Cons : A * List A
-  end that
+  def Option (A : VType) =
+    data
+    | +None : Unit
+    | +Some : A
+    end
+  that
+  def List (A : VType) : VType =
+    data
+    | +Nil : Unit
+    | +Cons : A * List A
+    end
+  that
 
   def head_int : Thk (
        List Int64
@@ -42,13 +46,17 @@ begin
 
   -- A lazy list separates one observable layer from the suspended remainder.
   -- Its layer is data; the stream itself is codata.
-  def LazyLayer (A : VType) (Tail : VType) = data
-  | +LazyNil : Unit
-  | +LazyCons : A * Tail
-  end that
-  def LazyList (A : VType) : CType = codata
-  | .run : Ret (LazyLayer A (Thk (LazyList A)))
-  end that
+  def LazyLayer (A : VType) (Tail : VType) =
+    data
+    | +LazyNil : Unit
+    | +LazyCons : A * Tail
+    end
+  that
+  def LazyList (A : VType) : CType =
+    codata
+    | .run : Ret (LazyLayer A (Thk (LazyList A)))
+    end
+  that
   def lazy_values : Thk (LazyList Int64) = {
     comatch
     | .run => ret +LazyCons(
@@ -155,8 +163,10 @@ begin
   } that
 
   -- Exercise: define a coinductive list using only a lazy recursive data type.
-  def LazyList' (A : VType) = data
-  end that
+  def LazyList' (A : VType) =
+    data
+    end
+  that
 
   def add_lazy : Thk (
        Int64

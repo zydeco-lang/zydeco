@@ -7,10 +7,12 @@ begin
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/process) = system that
 
-  def Bool = data
-  | +True : Unit
-  | +False : Unit
-  end that
+  def Bool =
+    data
+    | +True : Unit
+    | +False : Unit
+    end
+  that
 
   do x <- (fn x => ret 1 : Bool -> Ret Int64) +True();
   do y <- (fn x => ret +True() : Int64 -> Ret Bool) 123;

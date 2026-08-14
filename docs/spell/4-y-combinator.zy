@@ -15,9 +15,11 @@ begin
   let (/Scalar = Int64) = representations/i64 that
   let (/OS) = system that
 
-  def Y (B : CType) : CType = codata
-  | .apply : Thk (Y B) -> B
-  end that
+  def Y (B : CType) : CType =
+    codata
+    | .apply : Thk (Y B) -> B
+    end
+  that
 
   def fixed_point : Thk (
     forall (B : CType) .

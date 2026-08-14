@@ -7,31 +7,39 @@ begin
   let (/Scalar = String) = representations/string that
   let (/OS; /stdio; /process) = system that
 
-  def List (A : VType) : VType = data
-  | +Nil : Unit
-  | +Cons : A * List A
-  end that
-  def Variadic (A : VType) (B : CType) : CType = codata
-  | .more : A -> Variadic A B
-  | .done : B
-  end that
+  def List (A : VType) : VType =
+    data
+    | +Nil : Unit
+    | +Cons : A * List A
+    end
+  that
+  def Variadic (A : VType) (B : CType) : CType =
+    codata
+    | .more : A -> Variadic A B
+    | .done : B
+    end
+  that
   -- A ->* B == List A -> B
   -- restore
-  def fix l (A : VType) (B : CType) (fv : Thk (Variadic A B)) (xs : List A) : B = match xs
-  | +Nil() => ! fv .done
-  | +Cons(x, xs) => ! l A B { ! fv .more x } xs
-  end that
+  def fix l (A : VType) (B : CType) (fv : Thk (Variadic A B)) (xs : List A) : B =
+    match xs
+    | +Nil() => ! fv .done
+    | +Cons(x, xs) => ! l A B { ! fv .more x } xs
+    end
+  that
   def ! r (A : VType)
     (B : CType)
     (fl : Thk (List A -> B))
   : Variadic A B =
       -- capture
-      let fix r (k : Thk (List A -> B)) : Variadic A B = comatch
-      | .more x => ! r {
-        fn xs => ! k +Cons(x, xs)
-      }
-      | .done => ! k +Nil()
-      end in
+      let fix r (k : Thk (List A -> B)) : Variadic A B =
+        comatch
+        | .more x => ! r {
+          fn xs => ! k +Cons(x, xs)
+        }
+        | .done => ! k +Nil()
+        end
+      in
       ! r { fn xs => ! fl xs }
   that
   -- continuation based mich wand
@@ -39,10 +47,12 @@ begin
   -- forall fv: U (Variadic A B)
   -- ! l (B) (A) { ! r (B) (A) fl } == fl
   -- forall fl: U (List A -> B)
-  def fix printl (xs : List String) (kont : Thk OS) : OS = match xs
-  | +Nil() => ! kont
-  | +Cons(x, xs) => ! (stdio/write_line) x { ! printl xs kont }
-  end that
+  def fix printl (xs : List String) (kont : Thk OS) : OS =
+    match xs
+    | +Nil() => ! kont
+    | +Cons(x, xs) => ! (stdio/write_line) x { ! printl xs kont }
+    end
+  that
   def ! printv : Variadic String (Thk OS -> OS) = ! r String (Thk OS -> OS) printl that
 
   ! l

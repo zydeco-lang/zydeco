@@ -10,10 +10,12 @@ begin
   let (= Monad, = Algebra, ()) = monadic_basis builtin in
   begin
 
-    def With (B1 : CType) (B2 : CType) = codata
-    | .l : B1
-    | .r : B2
-    end that
+    def With (B1 : CType) (B2 : CType) =
+      codata
+      | .l : B1
+      | .r : B2
+      end
+    that
 
     def ! alg_arrow
       (

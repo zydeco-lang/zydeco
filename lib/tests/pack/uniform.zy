@@ -33,10 +33,12 @@ begin
     Secret
   end that
   let RecursiveList = begin
-    def RecursiveList : VType = data
-    | +Nil : Unit
-    | +Cons : Int64 * RecursiveList
-    end that
+    def RecursiveList : VType =
+      data
+      | +Nil : Unit
+      | +Cons : Int64 * RecursiveList
+      end
+    that
     RecursiveList
   end that
   def plain : Int64 = begin

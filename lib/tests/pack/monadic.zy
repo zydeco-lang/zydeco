@@ -13,12 +13,14 @@ begin
     let Mixed = exists (Leading as Unit : VType) (X : VType) .
       exists (AliasX as X : VType) (Trailing as Unit : VType) .
         X that
-    def ! mo_ret : Monad Ret = comatch
-    | .return A value => ret value
-    | .bind A B computation continuation =>
-      do value <- ! computation;
-      ! continuation value
-    end that
+    def ! mo_ret : Monad Ret =
+      comatch
+      | .return A value => ret value
+      | .bind A B computation continuation =>
+        do value <- ! computation;
+        ! continuation value
+      end
+    that
     def ! translated = @[monadic] begin
       let ! reveal =
         do _ <- ret ();

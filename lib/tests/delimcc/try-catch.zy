@@ -11,12 +11,14 @@ begin
   begin
 
     let Kont (R : CType) (A : VType) = Thk (A -> R) -> R that
-    def ! mret : Monad Ret = comatch
-    | .return A a => ret a
-    | .bind A A' m f =>
-      do a <- ! m;
-      ! f a
-    end that
+    def ! mret : Monad Ret =
+      comatch
+      | .return A a => ret a
+      | .bind A A' m f =>
+        do a <- ! m;
+        ! f a
+      end
+    that
     def ! reset
       (
         M :

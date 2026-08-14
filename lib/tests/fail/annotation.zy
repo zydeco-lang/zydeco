@@ -5,10 +5,12 @@ begin
   ) that
   let (/Unit) = core that
   let (/process) = system that
-  def Bool = data
-  | +True : Unit
-  | +False : Unit
-  end that
+  def Bool =
+    data
+    | +True : Unit
+    | +False : Unit
+    end
+  that
 
   match +True()
   | +True() => ! (process/exit) 0

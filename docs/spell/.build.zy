@@ -9,10 +9,12 @@ begin
   let (/string) = text that
   let (/OS; /stdio; /process) = system that
 
-  def Bool : VType = data
-  | +True : Unit
-  | +False : Unit
-  end that
+  def Bool : VType =
+    data
+    | +True : Unit
+    | +False : Unit
+    end
+  that
   def branch : Thk (
     forall (B : CType) . Bool -> Thk B -> Thk B -> B
   ) = {

@@ -4,10 +4,12 @@ param (
 ) in
 let (/VType; /CType; /Thk; /Ret; /Unit) = core in
 begin
-  def Option (A : VType) = data
-  | +None : Unit
-  | +Some : A
-  end that
+  def Option (A : VType) =
+    data
+    | +None : Unit
+    | +Some : A
+    end
+  that
   def ! none (A : VType) : Ret (Option A) = ret +None() that
   def ! some (A : VType) (value : A) : Ret (Option A) = ret +Some(value) that
   def ! fold (A : VType)
@@ -15,54 +17,62 @@ begin
     (option : Option A)
     (when_none : Thk B)
     (when_some : Thk (A -> B))
-  : B = match option
-    | +None(_) => ! when_none
-    | +Some(value) => ! when_some value
-    end
+  : B =
+      match option
+      | +None(_) => ! when_none
+      | +Some(value) => ! when_some value
+      end
   that
   def ! map (A : VType)
     (B : VType)
     (option : Option A)
     (transform : Thk (A -> Ret B))
-  : Ret (Option B) = match option
-    | +None(_) => ! none B
-    | +Some(value) =>
-      do transformed <- ! transform value;
-      ! some B transformed
-    end
+  : Ret (Option B) =
+      match option
+      | +None(_) => ! none B
+      | +Some(value) =>
+        do transformed <- ! transform value;
+        ! some B transformed
+      end
   that
   def ! and_then (A : VType)
     (B : VType)
     (option : Option A)
     (transform : Thk (A -> Ret (Option B)))
-  : Ret (Option B) = match option
-    | +None(_) => ! none B
-    | +Some(value) => ! transform value
+  : Ret (Option B) =
+      match option
+      | +None(_) => ! none B
+      | +Some(value) => ! transform value
+      end
+  that
+  def ! unwrap_or (A : VType) (option : Option A) (default : A) : Ret A =
+    match option
+    | +None(_) => ret default
+    | +Some(value) => ret value
     end
   that
-  def ! unwrap_or (A : VType) (option : Option A) (default : A) : Ret A = match option
-  | +None(_) => ret default
-  | +Some(value) => ret value
-  end that
   def ! or_else (A : VType)
     (option : Option A)
     (default : Thk (Ret (Option A)))
-  : Ret (Option A) = match option
-    | +None(_) => ! default
-    | +Some(value) => ! some A value
-    end
+  : Ret (Option A) =
+      match option
+      | +None(_) => ! default
+      | +Some(value) => ! some A value
+      end
   that
   def ! zip (A : VType)
     (B : VType)
     (left : Option A)
     (right : Option B)
-  : Ret (Option (A * B)) = match left
-    | +None(_) => ! none (A * B)
-    | +Some(left_value) => match right
-    | +None(_) => ! none (A * B)
-    | +Some(right_value) => ! some (A * B) (left_value, right_value)
-    end
-    end
+  : Ret (Option (A * B)) =
+      match left
+      | +None(_) => ! none (A * B)
+      | +Some(left_value) =>
+        match right
+        | +None(_) => ! none (A * B)
+        | +Some(right_value) => ! some (A * B) (left_value, right_value)
+        end
+      end
   that
   (
     = Option,

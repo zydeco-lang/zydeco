@@ -11,25 +11,33 @@ begin
   let (= Monad, = Algebra, ()) = monadic_basis builtin in
   begin
 
-    def Either (E : VType) (A : VType) = data
-    | +Left : E
-    | +Right : A
-    end that
-    let Exn (E : VType) (A : VType) = Ret (Either E A) that
-    let Top = codata
-    end that
-    let ! top : Top = comatch
-    end that
-
-    def ! mo-exn (E : VType) : Monad (Exn E) = comatch
-    | .return A a => ret +Right(a)
-    | .bind A A' m f =>
-      do a? <- ! m;
-      match a?
-      | +Left(e) => ret +Left(e)
-      | +Right(a) => ! f a
+    def Either (E : VType) (A : VType) =
+      data
+      | +Left : E
+      | +Right : A
       end
-    end that
+    that
+    let Exn (E : VType) (A : VType) = Ret (Either E A) that
+    let Top =
+      codata
+      end
+    that
+    let ! top : Top =
+      comatch
+      end
+    that
+
+    def ! mo-exn (E : VType) : Monad (Exn E) =
+      comatch
+      | .return A a => ret +Right(a)
+      | .bind A A' m f =>
+        do a? <- ! m;
+        match a?
+        | +Left(e) => ret +Left(e)
+        | +Right(a) => ! f a
+        end
+      end
+    that
     def ! alg-exn-os (E : VType) : Algebra (Exn E) OS = fn X m f =>
       do a? <- ! m;
       match a?

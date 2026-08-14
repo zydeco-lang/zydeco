@@ -10,12 +10,14 @@ begin
   let (= Monad, = Algebra, ()) = monadic_basis builtin in
   begin
 
-    def ! ret_monad : Monad Ret = comatch
-    | .return A value => ret value
-    | .bind A B computation function =>
-      do value <- ! computation;
-      ! function value
-    end that
+    def ! ret_monad : Monad Ret =
+      comatch
+      | .return A value => ret value
+      | .bind A B computation function =>
+        do value <- ! computation;
+        ! function value
+      end
+    that
     def ! translated = @[monadic] begin
       do value <- ret 1;
       ret value

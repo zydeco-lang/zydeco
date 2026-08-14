@@ -22,12 +22,16 @@ begin
        Thk (A -> Fun A)
     -> S
     -> Fun S that
-  def Identity (A : VType) = codata
-  | .identity : Ret A
-  end that
-  def Const (A : VType) (B : VType) = codata
-  | .constant : Ret A
-  end that
+  def Identity (A : VType) =
+    codata
+    | .identity : Ret A
+    end
+  that
+  def Const (A : VType) (B : VType) =
+    codata
+    | .constant : Ret A
+    end
+  that
 
   def over : Thk (
     forall (S : VType) (A : VType) .

@@ -7,20 +7,28 @@ begin
   let (/Scalar = Int64) = representations/i64 that
   let (/process) = system that
 
-  def FnRet (A : VType) = codata
-  | .arg : A -> Ret A
-  end that
-  def FnOpt (A : VType) = codata
-  | .one : A -> Ret A
-  | .zero : Ret A
-  end that
-  def ! fn_int : FnRet Int64 = comatch
-  | .arg i => ret i
-  end that
-  def ! fn_opt_int : FnOpt Int64 = comatch
-  | .one i => ! fn_int .arg i
-  | .zero => ! fn_int .arg 0
-  end that
+  def FnRet (A : VType) =
+    codata
+    | .arg : A -> Ret A
+    end
+  that
+  def FnOpt (A : VType) =
+    codata
+    | .one : A -> Ret A
+    | .zero : Ret A
+    end
+  that
+  def ! fn_int : FnRet Int64 =
+    comatch
+    | .arg i => ret i
+    end
+  that
+  def ! fn_opt_int : FnOpt Int64 =
+    comatch
+    | .one i => ! fn_int .arg i
+    | .zero => ! fn_int .arg 0
+    end
+  that
 
   do x <- ! fn_opt_int .zero;
   ! (process/exit) x

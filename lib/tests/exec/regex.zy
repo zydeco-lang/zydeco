@@ -11,30 +11,40 @@ begin
   let string = text/string that
   let (/OS; /stdio; /process) = system that
 
-  def Bool = data
-  | +True : Unit
-  | +False : Unit
-  end that
-  def Option (A : VType) = data
-  | +None : Unit
-  | +Some : A
-  end that
-  def Syn : VType = data
-  | +Str : String
-  | +Concat : Syn * Syn
-  | +Kleene : Syn
-  | +Choose : Syn * Syn
-  end that
-  def Matcher = codata
-  | .str : String -> Ret (Option String)
-  | .concat : Syn -> Syn -> Ret (Option String)
-  | .kleene : Syn -> Ret (Option String)
-  | .choose : Syn -> Syn -> Ret (Option String)
-  | .bind : Syn -> Ret (Option String)
-  end that
-  def Regex = codata
-  | .run : String -> Matcher
-  end that
+  def Bool =
+    data
+    | +True : Unit
+    | +False : Unit
+    end
+  that
+  def Option (A : VType) =
+    data
+    | +None : Unit
+    | +Some : A
+    end
+  that
+  def Syn : VType =
+    data
+    | +Str : String
+    | +Concat : Syn * Syn
+    | +Kleene : Syn
+    | +Choose : Syn * Syn
+    end
+  that
+  def Matcher =
+    codata
+    | .str : String -> Ret (Option String)
+    | .concat : Syn -> Syn -> Ret (Option String)
+    | .kleene : Syn -> Ret (Option String)
+    | .choose : Syn -> Syn -> Ret (Option String)
+    | .bind : Syn -> Ret (Option String)
+    end
+  that
+  def Regex =
+    codata
+    | .run : String -> Matcher
+    end
+  that
 
   def ! int_lt (left : Int64) (right : Int64) : Ret Bool = ! (int64/lt)
     (Ret Bool)
@@ -95,50 +105,55 @@ begin
       | +False() =>
         do s' <- ! str_chop_hd s i;
         ret +Some(s')
-      | +True() => match i_lt_s
-      | +False() => ret +None()
       | +True() =>
-        do eq? <- ! str_eq_at s p i;
-        match eq?
+        match i_lt_s
         | +False() => ret +None()
         | +True() =>
-          do i+1 <- ! (int64/add) i 1;
-          ! str_match i+1 s p
+          do eq? <- ! str_eq_at s p i;
+          match eq?
+          | +False() => ret +None()
+          | +True() =>
+            do i+1 <- ! (int64/add) i 1;
+            ! str_match i+1 s p
+          end
         end
-      end
       end
     in
     ! str_match 0 s p
   that
-  def fix regex : Regex = comatch
-  | .run s => comatch
-  | .str p => ! str_match s p
-  | .concat sy1 sy2 =>
-    do s? <- ! regex .run s .bind sy1;
-    match s?
-    | +None() => ret +None()
-    | +Some(s) => ! regex .run s .bind sy2
+  def fix regex : Regex =
+    comatch
+    | .run s =>
+      comatch
+      | .str p => ! str_match s p
+      | .concat sy1 sy2 =>
+        do s? <- ! regex .run s .bind sy1;
+        match s?
+        | +None() => ret +None()
+        | +Some(s) => ! regex .run s .bind sy2
+        end
+      | .kleene sy =>
+        do s? <- ! regex .run s .bind sy;
+        match s?
+        | +None() => ret +Some(s)
+        | +Some(s) => ! regex .run s .kleene sy
+        end
+      | .choose sy1 sy2 =>
+        do s? <- ! regex .run s .bind sy1;
+        match s?
+        | +Some(s) => ret +Some(s)
+        | +None() => ! regex .run s .bind sy2
+        end
+      | .bind sy =>
+        match sy
+        | +Str(p) => ! regex .run s .str p
+        | +Concat(sy1, sy2) => ! regex .run s .concat sy1 sy2
+        | +Kleene(sy) => ! regex .run s .kleene sy
+        | +Choose(sy1, sy2) => ! regex .run s .choose sy1 sy2
+        end
+      end
     end
-  | .kleene sy =>
-    do s? <- ! regex .run s .bind sy;
-    match s?
-    | +None() => ret +Some(s)
-    | +Some(s) => ! regex .run s .kleene sy
-    end
-  | .choose sy1 sy2 =>
-    do s? <- ! regex .run s .bind sy1;
-    match s?
-    | +Some(s) => ret +Some(s)
-    | +None() => ! regex .run s .bind sy2
-    end
-  | .bind sy => match sy
-  | +Str(p) => ! regex .run s .str p
-  | +Concat(sy1, sy2) => ! regex .run s .concat sy1 sy2
-  | +Kleene(sy) => ! regex .run s .kleene sy
-  | +Choose(sy1, sy2) => ! regex .run s .choose sy1 sy2
-  end
-  end
-  end that
+  that
   def ! demo (syn : Syn) (str : String) (kont : Thk OS) : OS =
     do res <- ! regex .run str .bind syn;
     match res

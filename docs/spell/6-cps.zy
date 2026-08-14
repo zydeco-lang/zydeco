@@ -13,10 +13,12 @@ begin
   let (/Scalar = String) = representations/string that
   let (/OS; /stdio; /process) = system that
 
-  def List (A : VType) : VType = data
-  | +Nil : Unit
-  | +Cons : A * List A
-  end that
+  def List (A : VType) : VType =
+    data
+    | +Nil : Unit
+    | +Cons : A * List A
+    end
+  that
   def values : List String = +Cons(
     "1",
     +Cons(

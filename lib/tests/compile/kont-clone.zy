@@ -1,8 +1,10 @@
 begin
-  def Bool = data
-  | +False : Unit
-  | +True : Unit
-  end that
+  def Bool =
+    data
+    | +False : Unit
+    | +True : Unit
+    end
+  that
   param (
     (/core; /representations; /system) :
     @(import("../../std/builtin.zy"))

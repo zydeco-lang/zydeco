@@ -6,19 +6,25 @@ begin
   let (/VType; /Ret; /Unit) = core that
   let (/process) = system that
 
-  def Nat : VType = data
-  | +Z : Unit
-  | +S : Nat
-  end that
-  def Bool = data
-  | +True : Unit
-  | +False : Unit
-  end that
+  def Nat : VType =
+    data
+    | +Z : Unit
+    | +S : Nat
+    end
+  that
+  def Bool =
+    data
+    | +True : Unit
+    | +False : Unit
+    end
+  that
   def fix odd : Nat -> Ret Bool =
-    let fix even (x : Nat) : Ret Bool = match x
-    | +Z() => ret +True()
-    | +S(x) => ! odd x
-    end in
+    let fix even (x : Nat) : Ret Bool =
+      match x
+      | +Z() => ret +True()
+      | +S(x) => ! odd x
+      end
+    in
     fn (x : Nat) =>
       match x
       | +Z() => ret +False()

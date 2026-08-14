@@ -5,10 +5,12 @@ param (
 let (/VType; /CType; /Thk; /Ret; /Unit) = core in
 let (Scalar = Int64, int64) = numeric/int64 in
 begin
-  def List (A : VType) : VType = data
-  | +Nil : Unit
-  | +Cons : A * List A
-  end that
+  def List (A : VType) : VType =
+    data
+    | +Nil : Unit
+    | +Cons : A * List A
+    end
+  that
   def ! nil (A : VType) : Ret (List A) = ret +Nil() that
   def ! cons (A : VType) (head : A) (tail : List A) : Ret (List A) = ret +Cons(head, tail) that
   def ! case (A : VType)
@@ -16,54 +18,60 @@ begin
     (list : List A)
     (when_nil : Thk B)
     (when_cons : Thk (A -> List A -> B))
-  : B = match list
-    | +Nil(_) => ! when_nil
-    | +Cons(head, tail) => ! when_cons head tail
-    end
+  : B =
+      match list
+      | +Nil(_) => ! when_nil
+      | +Cons(head, tail) => ! when_cons head tail
+      end
   that
   def fix fold (A : VType)
     (B : CType)
     (list : List A)
     (when_nil : Thk B)
     (when_cons : Thk (A -> Thk B -> B))
-  : B = match list
-    | +Nil(_) => ! when_nil
-    | +Cons(head, tail) => ! when_cons head { ! fold A B tail when_nil when_cons }
-    end
+  : B =
+      match list
+      | +Nil(_) => ! when_nil
+      | +Cons(head, tail) => ! when_cons head { ! fold A B tail when_nil when_cons }
+      end
   that
   def ! singleton (A : VType) (value : A) : Ret (List A) =
     do empty <- ! nil A;
     ! cons A value empty
   that
-  def fix append (A : VType) (left : List A) (right : List A) : Ret (List A) = match left
-  | +Nil(_) => ret right
-  | +Cons(head, tail) =>
-    do rest <- ! append A tail right;
-    ! cons A head rest
-  end that
+  def fix append (A : VType) (left : List A) (right : List A) : Ret (List A) =
+    match left
+    | +Nil(_) => ret right
+    | +Cons(head, tail) =>
+      do rest <- ! append A tail right;
+      ! cons A head rest
+    end
+  that
   def fix map (A : VType)
     (B : VType)
     (list : List A)
     (transform : Thk (A -> Ret B))
-  : Ret (List B) = match list
-    | +Nil(_) => ! nil B
-    | +Cons(head, tail) =>
-      do transformed <- ! transform head;
-      do rest <- ! map A B tail transform;
-      ! cons B transformed rest
-    end
+  : Ret (List B) =
+      match list
+      | +Nil(_) => ! nil B
+      | +Cons(head, tail) =>
+        do transformed <- ! transform head;
+        do rest <- ! map A B tail transform;
+        ! cons B transformed rest
+      end
   that
   def fix fold_left (A : VType)
     (B : VType)
     (list : List A)
     (initial : B)
     (combine : Thk (B -> A -> Ret B))
-  : Ret B = match list
-    | +Nil(_) => ret initial
-    | +Cons(head, tail) =>
-      do next <- ! combine initial head;
-      ! fold_left A B tail next combine
-    end
+  : Ret B =
+      match list
+      | +Nil(_) => ret initial
+      | +Cons(head, tail) =>
+        do next <- ! combine initial head;
+        ! fold_left A B tail next combine
+      end
   that
   def ! reverse (A : VType) (list : List A) : Ret (List A) =
     do empty <- ! nil A;

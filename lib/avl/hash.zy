@@ -13,14 +13,16 @@ begin
   begin
     let Cmp (A : VType) = Thk (A -> A -> Ret Bool) that
     --| AvlTree
-    def Avl (A : VType) : VType = data
-    | +Leaf : Unit
-    | +Node :
-        (left :: Avl A)
-      * (value :: A)
-      * (tree_height :: Int64)
-      * (right :: Avl A)
-    end that
+    def Avl (A : VType) : VType =
+      data
+      | +Leaf : Unit
+      | +Node :
+          (left :: Avl A)
+        * (value :: A)
+        * (tree_height :: Int64)
+        * (right :: Avl A)
+      end
+    that
     def ! leaf (A : VType) : Ret (Avl A) = ret +Leaf() that
     def ! singleton (A : VType) (value : A) : Ret (Avl A) = ret +Node(
       left = +Leaf(),
@@ -28,10 +30,12 @@ begin
       tree_height = 1,
       right = +Leaf()
     ) that
-    def ! height (A : VType) (tree : Avl A) : Ret Int64 = match tree
-    | +Leaf() => ret 0
-    | +Node(/tree_height) => ret tree_height
-    end that
+    def ! height (A : VType) (tree : Avl A) : Ret Int64 =
+      match tree
+      | +Leaf() => ret 0
+      | +Node(/tree_height) => ret tree_height
+      end
+    that
     def ! int_max (left : Int64) (right : Int64) : Ret Int64 =
       do greater <- ! (int64/gt) left right;
       ! (bool/if)
@@ -40,30 +44,38 @@ begin
         { ret left }
         { ret right }
     that
-    def ! fix_height (A : VType) (tree : Avl A) : Ret (Avl A) = match tree
-    | +Leaf() => ret +Leaf()
-    | +Node(/left; /value; /right) =>
-      do left_height <- ! height A left;
-      do right_height <- ! height A right;
-      do child_height <- ! int_max left_height right_height;
-      do new_height <- ! (int64/add) child_height 1;
-      ret +Node(= left, = value, tree_height = new_height, = right)
-    end that
-    def ! balance_factor (A : VType) (tree : Avl A) : Ret Int64 = match tree
-    | +Leaf() => ret 0
-    | +Node(/left; /right) =>
-      do left_height <- ! height A left;
-      do right_height <- ! height A right;
-      ! (int64/sub) left_height right_height
-    end that
-    def ! left (A : VType) (tree : Avl A) : Ret (Avl A) = match tree
-    | +Leaf() => ret +Leaf()
-    | +Node(/left) => ret left
-    end that
-    def ! right (A : VType) (tree : Avl A) : Ret (Avl A) = match tree
-    | +Leaf() => ret +Leaf()
-    | +Node(/right) => ret right
-    end that
+    def ! fix_height (A : VType) (tree : Avl A) : Ret (Avl A) =
+      match tree
+      | +Leaf() => ret +Leaf()
+      | +Node(/left; /value; /right) =>
+        do left_height <- ! height A left;
+        do right_height <- ! height A right;
+        do child_height <- ! int_max left_height right_height;
+        do new_height <- ! (int64/add) child_height 1;
+        ret +Node(= left, = value, tree_height = new_height, = right)
+      end
+    that
+    def ! balance_factor (A : VType) (tree : Avl A) : Ret Int64 =
+      match tree
+      | +Leaf() => ret 0
+      | +Node(/left; /right) =>
+        do left_height <- ! height A left;
+        do right_height <- ! height A right;
+        ! (int64/sub) left_height right_height
+      end
+    that
+    def ! left (A : VType) (tree : Avl A) : Ret (Avl A) =
+      match tree
+      | +Leaf() => ret +Leaf()
+      | +Node(/left) => ret left
+      end
+    that
+    def ! right (A : VType) (tree : Avl A) : Ret (Avl A) =
+      match tree
+      | +Leaf() => ret +Leaf()
+      | +Node(/right) => ret right
+      end
+    that
     def fix min_element (A : VType) (tree : Avl A) (comparison : Cmp A) : Ret (Option A) =
       match tree
       | +Leaf() => ! (option/none) A
@@ -79,96 +91,104 @@ begin
           }
       end
     that
-    def ! rotate_right (A : VType) (tree : Avl A) : Ret (Avl A) = match tree
-    | +Leaf() => ret +Leaf()
-    | +Node(/left; /value; /tree_height; /right) => match left
-    | +Leaf() => ret +Leaf()
-    | +Node(
-      /left = left_left;
-      /value = left_value;
-      /tree_height = left_height;
-      /right = left_right
-    ) =>
-      do new_right <- ! fix_height A +Node(
-        left = left_right,
-        = value,
-        = tree_height,
-        = right
-      );
-      ! fix_height A +Node(
-        left = left_left,
-        value = left_value,
-        tree_height = left_height,
-        right = new_right
-      )
-    end
-    end that
-    def ! rotate_left (A : VType) (tree : Avl A) : Ret (Avl A) = match tree
-    | +Leaf() => ret +Leaf()
-    | +Node(/left; /value; /tree_height; /right) => match right
-    | +Leaf() => ret +Leaf()
-    | +Node(
-      /left = right_left;
-      /value = right_value;
-      /tree_height = right_height;
-      /right = right_right
-    ) =>
-      do new_left <- ! fix_height A +Node(
-        = left,
-        = value,
-        = tree_height,
-        right = right_left
-      );
-      ! fix_height A +Node(
-        left = new_left,
-        value = right_value,
-        tree_height = right_height,
-        right = right_right
-      )
-    end
-    end that
-    def ! balance (A : VType) (tree : Avl A) : Ret (Avl A) = match tree
-    | +Leaf() => ret +Leaf()
-    | +Node(/left; /value; /right) =>
-      do factor <- ! balance_factor A tree;
-      do left_heavy <- ! (int64/gt) factor 1;
-      ! (bool/if)
-        (Ret (Avl A))
-        left_heavy
-        {
-          do left_factor <- ! balance_factor A left;
-          do double_rotation <- ! (int64/lt) left_factor 0;
-          ! (bool/if)
-            (Ret (Avl A))
-            double_rotation
-            {
-              do new_left <- ! rotate_left A left;
-              do tree_height <- ! height A tree;
-              ! rotate_right A +Node(left = new_left, = value, = tree_height, = right)
-            }
-            { ! rotate_right A tree }
-        }
-        {
-          do right_heavy <- ! (int64/lt) factor -1;
-          ! (bool/if)
-            (Ret (Avl A))
-            right_heavy
-            {
-              do right_factor <- ! balance_factor A right;
-              do double_rotation <- ! (int64/gt) right_factor 0;
-              ! (bool/if)
-                (Ret (Avl A))
-                double_rotation
-                {
-                  do new_right <- ! rotate_right A right;
-                  do tree_height <- ! height A tree;
-                  ! rotate_left A +Node(= left, = value, = tree_height, right = new_right)
-                }
-                { ! rotate_left A tree }
-            }
-            { ret tree }
-        }
-    end that
+    def ! rotate_right (A : VType) (tree : Avl A) : Ret (Avl A) =
+      match tree
+      | +Leaf() => ret +Leaf()
+      | +Node(/left; /value; /tree_height; /right) =>
+        match left
+        | +Leaf() => ret +Leaf()
+        | +Node(
+          /left = left_left;
+          /value = left_value;
+          /tree_height = left_height;
+          /right = left_right
+        ) =>
+          do new_right <- ! fix_height A +Node(
+            left = left_right,
+            = value,
+            = tree_height,
+            = right
+          );
+          ! fix_height A +Node(
+            left = left_left,
+            value = left_value,
+            tree_height = left_height,
+            right = new_right
+          )
+        end
+      end
+    that
+    def ! rotate_left (A : VType) (tree : Avl A) : Ret (Avl A) =
+      match tree
+      | +Leaf() => ret +Leaf()
+      | +Node(/left; /value; /tree_height; /right) =>
+        match right
+        | +Leaf() => ret +Leaf()
+        | +Node(
+          /left = right_left;
+          /value = right_value;
+          /tree_height = right_height;
+          /right = right_right
+        ) =>
+          do new_left <- ! fix_height A +Node(
+            = left,
+            = value,
+            = tree_height,
+            right = right_left
+          );
+          ! fix_height A +Node(
+            left = new_left,
+            value = right_value,
+            tree_height = right_height,
+            right = right_right
+          )
+        end
+      end
+    that
+    def ! balance (A : VType) (tree : Avl A) : Ret (Avl A) =
+      match tree
+      | +Leaf() => ret +Leaf()
+      | +Node(/left; /value; /right) =>
+        do factor <- ! balance_factor A tree;
+        do left_heavy <- ! (int64/gt) factor 1;
+        ! (bool/if)
+          (Ret (Avl A))
+          left_heavy
+          {
+            do left_factor <- ! balance_factor A left;
+            do double_rotation <- ! (int64/lt) left_factor 0;
+            ! (bool/if)
+              (Ret (Avl A))
+              double_rotation
+              {
+                do new_left <- ! rotate_left A left;
+                do tree_height <- ! height A tree;
+                ! rotate_right A +Node(left = new_left, = value, = tree_height, = right)
+              }
+              { ! rotate_right A tree }
+          }
+          {
+            do right_heavy <- ! (int64/lt) factor -1;
+            ! (bool/if)
+              (Ret (Avl A))
+              right_heavy
+              {
+                do right_factor <- ! balance_factor A right;
+                do double_rotation <- ! (int64/gt) right_factor 0;
+                ! (bool/if)
+                  (Ret (Avl A))
+                  double_rotation
+                  {
+                    do new_right <- ! rotate_right A right;
+                    do tree_height <- ! height A tree;
+                    ! rotate_left A +Node(= left, = value, = tree_height, right = new_right)
+                  }
+                  { ! rotate_left A tree }
+              }
+              { ret tree }
+          }
+      end
+    that
     def fix insert (A : VType) (item : A) (tree : Avl A) (comparison : Cmp A) : Ret (Avl A) =
       match tree
       | +Leaf() => ! singleton A item
@@ -201,159 +221,171 @@ begin
     that
     def fix search (A : VType) (item : A) (tree : Avl A) (equal : Cmp A) (less : Cmp A) : Ret (
       Option A
-    ) = match tree
-    | +Leaf() => ! (option/none) A
-    | +Node(/left; /value; /right) =>
-      do found <- ! equal item value;
-      ! (bool/if)
-        (Ret (Option A))
-        found
-        { ! (option/some) A value }
-        {
-          do goes_left <- ! less item value;
-          ! (bool/if)
-            (Ret (Option A))
-            goes_left
-            { ! search A item left equal less }
-            { ! search A item right equal less }
-        }
-    end that
+    ) =
+      match tree
+      | +Leaf() => ! (option/none) A
+      | +Node(/left; /value; /right) =>
+        do found <- ! equal item value;
+        ! (bool/if)
+          (Ret (Option A))
+          found
+          { ! (option/some) A value }
+          {
+            do goes_left <- ! less item value;
+            ! (bool/if)
+              (Ret (Option A))
+              goes_left
+              { ! search A item left equal less }
+              { ! search A item right equal less }
+          }
+      end
+    that
     def fix change (A : VType) (item : A) (tree : Avl A) (equal : Cmp A) (less : Cmp A) : Ret (
       Avl A
-    ) = match tree
-    | +Leaf() => ret tree
-    | +Node(/left; /value; /tree_height; /right) =>
-      do found <- ! equal item value;
-      ! (bool/if)
-        (Ret (Avl A))
-        found
-        { ret +Node(= left, value = item, = tree_height, = right) }
-        {
-          do goes_left <- ! less item value;
-          ! (bool/if)
-            (Ret (Avl A))
-            goes_left
-            {
-              do new_left <- ! change A item left equal less;
-              ret +Node(left = new_left, = value, = tree_height, = right)
-            }
-            {
-              do new_right <- ! change A item right equal less;
-              ret +Node(= left, = value, = tree_height, right = new_right)
-            }
-        }
-    end that
+    ) =
+      match tree
+      | +Leaf() => ret tree
+      | +Node(/left; /value; /tree_height; /right) =>
+        do found <- ! equal item value;
+        ! (bool/if)
+          (Ret (Avl A))
+          found
+          { ret +Node(= left, value = item, = tree_height, = right) }
+          {
+            do goes_left <- ! less item value;
+            ! (bool/if)
+              (Ret (Avl A))
+              goes_left
+              {
+                do new_left <- ! change A item left equal less;
+                ret +Node(left = new_left, = value, = tree_height, = right)
+              }
+              {
+                do new_right <- ! change A item right equal less;
+                ret +Node(= left, = value, = tree_height, right = new_right)
+              }
+          }
+      end
+    that
     def fix delete (A : VType) (item : A) (tree : Avl A) (equal : Cmp A) (less : Cmp A) : Ret (
       Avl A
-    ) = match tree
-    | +Leaf() => ret tree
-    | +Node(/left; /value; /tree_height; /right) =>
-      do found <- ! equal item value;
-      ! (bool/if)
-        (Ret (Avl A))
-        found
-        {
-          match left
-          | +Leaf() => ret right
-          | +Node(_) => match right
-          | +Leaf() => ret left
-          | +Node(_) =>
-            do minimum <- ! min_element A right less;
-            ! (option/fold)
-              A
+    ) =
+      match tree
+      | +Leaf() => ret tree
+      | +Node(/left; /value; /tree_height; /right) =>
+        do found <- ! equal item value;
+        ! (bool/if)
+          (Ret (Avl A))
+          found
+          {
+            match left
+            | +Leaf() => ret right
+            | +Node(_) =>
+              match right
+              | +Leaf() => ret left
+              | +Node(_) =>
+                do minimum <- ! min_element A right less;
+                ! (option/fold)
+                  A
+                  (Ret (Avl A))
+                  minimum
+                  { ret left }
+                  {
+                    fn replacement =>
+                      do new_right <- ! delete A replacement right equal less;
+                      do unbalanced <- ! fix_height A +Node(
+                        = left,
+                        value = replacement,
+                        = tree_height,
+                        right = new_right
+                      );
+                      ! balance A unbalanced
+                  }
+              end
+            end
+          }
+          {
+            do goes_left <- ! less item value;
+            ! (bool/if)
               (Ret (Avl A))
-              minimum
-              { ret left }
+              goes_left
               {
-                fn replacement =>
-                  do new_right <- ! delete A replacement right equal less;
-                  do unbalanced <- ! fix_height A +Node(
-                    = left,
-                    value = replacement,
-                    = tree_height,
-                    right = new_right
-                  );
-                  ! balance A unbalanced
+                do new_left <- ! delete A item left equal less;
+                do unbalanced <- ! fix_height A +Node(
+                  left = new_left,
+                  = value,
+                  = tree_height,
+                  = right
+                );
+                ! balance A unbalanced
               }
-          end
-          end
-        }
-        {
-          do goes_left <- ! less item value;
-          ! (bool/if)
-            (Ret (Avl A))
-            goes_left
-            {
-              do new_left <- ! delete A item left equal less;
-              do unbalanced <- ! fix_height A +Node(
-                left = new_left,
-                = value,
-                = tree_height,
-                = right
-              );
-              ! balance A unbalanced
-            }
-            {
-              do new_right <- ! delete A item right equal less;
-              do unbalanced <- ! fix_height A +Node(
-                = left,
-                = value,
-                = tree_height,
-                right = new_right
-              );
-              ! balance A unbalanced
-            }
-        }
-    end that
+              {
+                do new_right <- ! delete A item right equal less;
+                do unbalanced <- ! fix_height A +Node(
+                  = left,
+                  = value,
+                  = tree_height,
+                  right = new_right
+                );
+                ! balance A unbalanced
+              }
+          }
+      end
+    that
     def fix equal (A : VType) (first : Avl A) (second : Avl A) (item_equal : Cmp A) : Ret Bool =
       match first
-      | +Leaf() => match second
-      | +Leaf() => ret (bool/true)
-      | +Node(_) => ret (bool/false)
-      end
-      | +Node(/left = first_left; /value = first_value; /right = first_right) => match second
-      | +Leaf() => ret (bool/false)
-      | +Node(/left = second_left; /value = second_value; /right = second_right) =>
-        do values_equal <- ! item_equal first_value second_value;
-        ! (bool/if)
-          (Ret Bool)
-          values_equal
-          {
-            do left_equal <- ! equal A first_left second_left item_equal;
-            do right_equal <- ! equal A first_right second_right item_equal;
-            ! (bool/and) left_equal right_equal
-          }
-          { ret (bool/false) }
-      end
+      | +Leaf() =>
+        match second
+        | +Leaf() => ret (bool/true)
+        | +Node(_) => ret (bool/false)
+        end
+      | +Node(/left = first_left; /value = first_value; /right = first_right) =>
+        match second
+        | +Leaf() => ret (bool/false)
+        | +Node(/left = second_left; /value = second_value; /right = second_right) =>
+          do values_equal <- ! item_equal first_value second_value;
+          ! (bool/if)
+            (Ret Bool)
+            values_equal
+            {
+              do left_equal <- ! equal A first_left second_left item_equal;
+              do right_equal <- ! equal A first_right second_right item_equal;
+              ! (bool/and) left_equal right_equal
+            }
+            { ret (bool/false) }
+        end
       end
     that
     def fix pre_traversal (A : VType)
       (tree : Avl A)
       (format : Thk (A -> Ret String))
       (continuation : Thk OS)
-    : OS = match tree
-      | +Leaf() => ! continuation
-      | +Node(/left; /value; /tree_height; /right) =>
-        do rendered_value <- ! format value;
-        do with_label <- ! (string/append) rendered_value " h:";
-        do rendered_height <- ! (int64/to_string) tree_height;
-        do line <- ! (string/append) with_label rendered_height;
-        ! (stdio/write_line) line {
-          fn _ =>
-            ! pre_traversal A left format {
-              ! pre_traversal A right format continuation
-            }
-        }
-      end
+    : OS =
+        match tree
+        | +Leaf() => ! continuation
+        | +Node(/left; /value; /tree_height; /right) =>
+          do rendered_value <- ! format value;
+          do with_label <- ! (string/append) rendered_value " h:";
+          do rendered_height <- ! (int64/to_string) tree_height;
+          do line <- ! (string/append) with_label rendered_height;
+          ! (stdio/write_line) line {
+            fn _ =>
+              ! pre_traversal A left format {
+                ! pre_traversal A right format continuation
+              }
+          }
+        end
     that
     --| Hash
-    def Hash (K : VType) (V : VType) = data
-    | +Hash :
-        (body :: Avl (K * V))
-      * (insert_less :: Cmp (K * V))
-      * (search_equal :: Cmp (K * V))
-      * (item_equal :: Cmp (K * V))
-    end that
+    def Hash (K : VType) (V : VType) =
+      data
+      | +Hash :
+          (body :: Avl (K * V))
+        * (insert_less :: Cmp (K * V))
+        * (search_equal :: Cmp (K * V))
+        * (item_equal :: Cmp (K * V))
+      end
+    that
     def ! hash_new (K : VType)
       (V : VType)
       (insert_key_less : Cmp K)
@@ -366,76 +398,88 @@ begin
           insert_less = {
             fn first second =>
               match first
-              | (first_key, _) => match second
-              | (second_key, _) => ! insert_key_less first_key second_key
-              end
+              | (first_key, _) =>
+                match second
+                | (second_key, _) => ! insert_key_less first_key second_key
+                end
               end
           },
           search_equal = {
             fn first second =>
               match first
-              | (first_key, _) => match second
-              | (second_key, _) => ! search_key_equal first_key second_key
-              end
+              | (first_key, _) =>
+                match second
+                | (second_key, _) => ! search_key_equal first_key second_key
+                end
               end
           },
           item_equal = {
             fn first second =>
               match first
-              | (first_key, first_value) => match second
-              | (second_key, second_value) =>
-                do values_equal <- ! value_equal first_value second_value;
-                do keys_equal <- ! search_key_equal first_key second_key;
-                ! (bool/and) values_equal keys_equal
-              end
+              | (first_key, first_value) =>
+                match second
+                | (second_key, second_value) =>
+                  do values_equal <- ! value_equal first_value second_value;
+                  do keys_equal <- ! search_key_equal first_key second_key;
+                  ! (bool/and) values_equal keys_equal
+                end
               end
           }
         )
     that
     def ! hash_insert (K : VType) (V : VType) (key : K) (value : V) (hash : Hash K V) : Ret (
       Hash K V
-    ) = match hash
-    | +Hash(/body; /insert_less; /search_equal; /item_equal) =>
-      do new_body <- ! insert (K * V) (key, value) body insert_less;
-      ret +Hash(body = new_body, = insert_less, = search_equal, = item_equal)
-    end that
+    ) =
+      match hash
+      | +Hash(/body; /insert_less; /search_equal; /item_equal) =>
+        do new_body <- ! insert (K * V) (key, value) body insert_less;
+        ret +Hash(body = new_body, = insert_less, = search_equal, = item_equal)
+      end
+    that
     --| in search, a default value for v is needed, because the type of v is unknown
     def ! hash_search (K : VType) (V : VType) (key : K) (default : V) (hash : Hash K V) : Ret (
       Option V
-    ) = match hash
-    | +Hash(/body; /insert_less; /search_equal) =>
-      do result <- ! search (K * V) (key, default) body search_equal insert_less;
-      ! (option/fold)
-        (K * V)
-        (Ret (Option V))
-        result
-        { ! (option/none) V }
-        {
-          fn pair =>
-            match pair
-            | (_, value) => ! (option/some) V value
-            end
-        }
-    end that
+    ) =
+      match hash
+      | +Hash(/body; /insert_less; /search_equal) =>
+        do result <- ! search (K * V) (key, default) body search_equal insert_less;
+        ! (option/fold)
+          (K * V)
+          (Ret (Option V))
+          result
+          { ! (option/none) V }
+          {
+            fn pair =>
+              match pair
+              | (_, value) => ! (option/some) V value
+              end
+          }
+      end
+    that
     def ! hash_delete (K : VType) (V : VType) (key : K) (default : V) (hash : Hash K V) : Ret (
       Hash K V
-    ) = match hash
-    | +Hash(/body; /insert_less; /search_equal; /item_equal) =>
-      do new_body <- ! delete (K * V) (key, default) body search_equal insert_less;
-      ret +Hash(body = new_body, = insert_less, = search_equal, = item_equal)
-    end that
+    ) =
+      match hash
+      | +Hash(/body; /insert_less; /search_equal; /item_equal) =>
+        do new_body <- ! delete (K * V) (key, default) body search_equal insert_less;
+        ret +Hash(body = new_body, = insert_less, = search_equal, = item_equal)
+      end
+    that
     def ! hash_change (K : VType) (V : VType) (key : K) (value : V) (hash : Hash K V) : Ret (
       Hash K V
-    ) = match hash
-    | +Hash(/body; /insert_less; /search_equal; /item_equal) =>
-      do new_body <- ! change (K * V) (key, value) body search_equal insert_less;
-      ret +Hash(body = new_body, = insert_less, = search_equal, = item_equal)
-    end that
+    ) =
+      match hash
+      | +Hash(/body; /insert_less; /search_equal; /item_equal) =>
+        do new_body <- ! change (K * V) (key, value) body search_equal insert_less;
+        ret +Hash(body = new_body, = insert_less, = search_equal, = item_equal)
+      end
+    that
     def ! hash_equal (K : VType) (V : VType) (first : Hash K V) (second : Hash K V) : Ret Bool =
       match first
-      | +Hash(/body = first_body; /item_equal = first_item_equal) => match second
-      | +Hash(/body = second_body) => ! equal (K * V) first_body second_body first_item_equal
-      end
+      | +Hash(/body = first_body; /item_equal = first_item_equal) =>
+        match second
+        | +Hash(/body = second_body) => ! equal (K * V) first_body second_body first_item_equal
+        end
       end
     that
 

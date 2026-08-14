@@ -11,10 +11,12 @@ begin
     @(import("../../lib/std/builtin.zy"))
   ) that
   let (/VType; /Thk; /Ret; /Unit) = core that
-  def Option (A : VType) = data
-  | +None : Unit
-  | +Some : A
-  end that
+  def Option (A : VType) =
+    data
+    | +None : Unit
+    | +Some : A
+    end
+  that
 
   let ReferenceLibrary = exists
     (

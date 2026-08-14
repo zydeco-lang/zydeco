@@ -63,10 +63,12 @@ begin
     end
   that
   let GaugeBox = Int64 * (gauge :: Thk Gauge) that
-  def ! gauge : Gauge = comatch
-  | .read => ret (reading = 12 : Int64, 13 : Int64)
-  | .shift (= delta : Int64) => ret (reading = delta : Int64)
-  end that
+  def ! gauge : Gauge =
+    comatch
+    | .read => ret (reading = 12 : Int64, 13 : Int64)
+    | .shift (= delta : Int64) => ret (reading = delta : Int64)
+    end
+  that
   def gauge_box : GaugeBox = (
     0,
     = gauge

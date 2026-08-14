@@ -12,30 +12,38 @@ begin
   let (/VType; /Thk; /Ret; /Unit) = core that
   let (/OS; /process) = system that
 
-  def Nat : VType = data
-  | +Zero : Unit
-  | +Successor : Nat
-  end that
-  def Bool = data
-  | +True : Unit
-  | +False : Unit
-  end that
-  def EvenOdd = codata
-  | .even : Nat -> Ret Bool
-  | .odd : Nat -> Ret Bool
-  end that
+  def Nat : VType =
+    data
+    | +Zero : Unit
+    | +Successor : Nat
+    end
+  that
+  def Bool =
+    data
+    | +True : Unit
+    | +False : Unit
+    end
+  that
+  def EvenOdd =
+    codata
+    | .even : Nat -> Ret Bool
+    | .odd : Nat -> Ret Bool
+    end
+  that
 
   def even_odd : Thk EvenOdd = {
     fix (even_odd : Thk EvenOdd) =>
       comatch
-      | .even number => match number
-      | +Zero() => ret +True()
-      | +Successor(predecessor) => ! even_odd .odd predecessor
-      end
-      | .odd number => match number
-      | +Zero() => ret +False()
-      | +Successor(predecessor) => ! even_odd .even predecessor
-      end
+      | .even number =>
+        match number
+        | +Zero() => ret +True()
+        | +Successor(predecessor) => ! even_odd .odd predecessor
+        end
+      | .odd number =>
+        match number
+        | +Zero() => ret +False()
+        | +Successor(predecessor) => ! even_odd .even predecessor
+        end
       end
   } that
 
@@ -55,14 +63,16 @@ begin
   ) = {
     fn actual expected continuation =>
       match actual
-      | +True() => match expected
-      | +True() => ! continuation
-      | +False() => ! (process/exit) 1
-      end
-      | +False() => match expected
-      | +True() => ! (process/exit) 1
-      | +False() => ! continuation
-      end
+      | +True() =>
+        match expected
+        | +True() => ! continuation
+        | +False() => ! (process/exit) 1
+        end
+      | +False() =>
+        match expected
+        | +True() => ! (process/exit) 1
+        | +False() => ! continuation
+        end
       end
   } that
 
