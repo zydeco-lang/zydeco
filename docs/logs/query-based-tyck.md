@@ -185,3 +185,22 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   so the session tests exercise the query pipeline end to end instead of constructing a `Tycker`
   directly.
 - Workspace suite passes unchanged (61 targets green).
+
+## 2026-08-14 — intrinsic type judgments through the query
+
+- Extended the intrinsic judgment to the type-producing variants: `Unit`, `Thk`, `Ret`, and the
+  primitive types now come from `internal_judgment(db, data, term, env)`, which returns a small
+  node DAG (`InternalJudgment::Type { kinds, ty, ann }`). The checker materializes the fragment —
+  kinds, type, `annotations_type`, and `env_type` — exactly as in-context `Alloc::alloc` recorded
+  them.
+- Two facts that shaped this slice:
+  - `Construct::build` caches the intrinsic type singletons in `IntrinsicStatics` (one `Thk` type
+    node per check, reused by every later site). The checker keeps that cache; the query only runs
+    on a cache miss and produces the fresh nodes. The materializer must therefore stay the sole
+    writer of the intrinsics cache.
+  - `env_type` records feed normalization's free-variable and skolem-scope resolution, so the
+    query takes the caller's environment as an `EnvData` tracked struct and the materializer
+    records `env.clone()` alongside each type.
+- `OS` stays checker-side for now: its resolution reads builtin roles from the arena, which is
+  still being built during the check and cannot be read by a query.
+- Workspace suite passes unchanged (61 targets green).
