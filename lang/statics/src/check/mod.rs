@@ -1161,6 +1161,23 @@ mod impl_tycker {
             res
         }
 
+        /// Start a diagnostic stack at the root of an imported source.
+        ///
+        /// Source assembly deliberately preserves a boundary around every
+        /// imported term. Type errors inside that boundary should explain the
+        /// imported source, without inheriting administrative frames from the
+        /// importing term.
+        #[inline]
+        pub(crate) fn source_guarded<R>(
+            &mut self, root: TyckTask, with: impl FnOnce(&mut Self) -> R,
+        ) -> R {
+            let stack = std::mem::take(&mut self.tasks);
+            self.tasks.push_back(root);
+            let res = with(self);
+            self.tasks = stack;
+            res
+        }
+
         /// Push an error entry into the error list.
         #[inline]
         fn push_err_entry_k<T>(&mut self, entry: TyckErrorEntry) -> ResultKont<T> {
@@ -3129,25 +3146,28 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 res
             }
             | Tm::SourceBoundary(su::SourceBoundary(term)) => {
-                let inference = InferenceRegion::enter(tycker);
-                let checked = self.mk(term).tyck_k(tycker, Action::switch(switch))?;
-                inference.close_k(tycker)?;
-                checked
+                tycker.source_guarded(TyckTask::Term(term, switch), |tycker| {
+                    let inference = InferenceRegion::enter(tycker);
+                    let checked = self.mk(term).tyck_inner_k(tycker, Action::switch(switch))?;
+                    inference.close_k(tycker)?;
+                    Ok(checked)
+                })?
             }
             | Tm::SignatureBoundary(su::SignatureBoundary(term)) => {
-                let inference = InferenceRegion::enter(tycker);
-                let checked = self.mk(term).tyck_k(tycker, Action::switch(switch))?;
-                let checked = match checked {
-                    | TermAnnId::Type(_, _) => checked,
-                    | TermAnnId::Hole(_)
-                    | TermAnnId::Kind(_)
-                    | TermAnnId::Value(_, _)
-                    | TermAnnId::Compu(_, _) => {
-                        tycker.err_k(TyckError::SignatureNotType, std::panic::Location::caller())?
-                    }
-                };
-                inference.close_k(tycker)?;
-                checked
+                tycker.source_guarded(TyckTask::Term(term, switch), |tycker| {
+                    let inference = InferenceRegion::enter(tycker);
+                    let checked = self.mk(term).tyck_inner_k(tycker, Action::switch(switch))?;
+                    let checked = match checked {
+                        | TermAnnId::Type(_, _) => checked,
+                        | TermAnnId::Hole(_)
+                        | TermAnnId::Kind(_)
+                        | TermAnnId::Value(_, _)
+                        | TermAnnId::Compu(_, _) => tycker
+                            .err_k(TyckError::SignatureNotType, std::panic::Location::caller())?,
+                    };
+                    inference.close_k(tycker)?;
+                    Ok(checked)
+                })?
             }
             | Tm::Internal(internal) => {
                 InternalTerm(internal).tyck_k(tycker, &self.info, switch)?
@@ -5590,5 +5610,34 @@ mod source_boundary_tests {
 
         assert!(matches!(checked, TermAnnId::Type(_, kind) if kind == expected));
         assert!(tycker.errors.is_empty());
+    }
+
+    #[test]
+    fn imported_source_errors_exclude_the_importing_task_stack() {
+        let mut allocator = IdAllocator::<su::ScopedScope>::new();
+        let hole = allocator.alloc();
+        let boundary = allocator.alloc();
+        let mut scoped = su::ScopedArena::default();
+        scoped.terms.insert_new(hole, su::Hole.into());
+        scoped.terms.insert_new(boundary, su::SourceBoundary(hole).into());
+        [hole, boundary].into_iter().for_each(|term| {
+            scoped.ctxs_term.insert_new(term, su::Context::new());
+            scoped.coctxs_term_local.insert_new(term, su::CoContext::new());
+        });
+
+        let spans = su::SpanArena::default();
+        let prim = su::PrimDefs::default();
+        let mut tycker = Tycker::new(&spans, &prim, &mut scoped);
+        let result =
+            TyEnvT::new(TyEnv::default(), boundary).tyck_k(&mut tycker, Action::ana(AnnId::Set));
+
+        assert!(result.is_err());
+        let [entry] = tycker.errors.as_slice() else { panic!("expected one type-checking error") };
+        assert!(matches!(entry.error, TyckError::SortMismatch));
+        assert_eq!(entry.stack.len(), 1);
+        assert!(matches!(
+            entry.stack.front(),
+            Some(TyckTask::Term(term, Switch::Ana(AnnId::Set))) if *term == hole
+        ));
     }
 }

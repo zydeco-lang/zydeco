@@ -77,19 +77,21 @@ Keeping this boundary prevents UI behavior from becoming part of the core syntax
 
 ## Analysis and Evaluation
 
-The engine first analyzes the submitted source directly.
-Complete declaration-free programs can already provide their own Builtin contract,
-and direct analysis preserves that structure without introducing duplicate names.
-A small expression such as `1` may instead need the standard Builtin types in scope.
-This package supplies core types such as `Int64` together with the operations implemented by the host.
-If direct checking fails, the engine retries through an in-memory wrapper that opens the package
-and imports the numbered input.
+The engine analyzes every submitted source through an in-memory wrapper that imports the canonical Builtin
+contract and then imports the numbered input. A projection of Builtin's stable `core` module opens the package
+witness telescope; typed Builtin roles then classify literals and identify the operations implemented by the host.
+The wrapper does not reproduce the package's nested fields or operation names, so internal module changes do not
+create a second Builtin schema in the terminal frontend.
+
+The imported input retains its own source boundary and lexical scope. A small expression such as `1` and a complete
+program therefore follow the same analysis path, while a complete program that provides another Builtin contract
+remains an explicit nested package abstraction rather than capturing bindings from the wrapper.
 
 The wrapper carries a reserved debug annotation around the imported root.
 Type checking records the annotation as an observation, which lets the REPL recover the classification
 of the user's expression after the surrounding package abstraction has been checked.
 The marker and wrapper are implementation details: the marker is removed from displayed observations,
-and diagnostics prefer the original source when the fallback does not make it valid.
+and diagnostics point through the imported source boundary to the original input.
 
 Without a command, kinds and types are inspected.
 Values and computations with a direct runtime interpretation are evaluated,
@@ -143,9 +145,9 @@ Caching evaluated values would also change when effects occur.
 Treating every import argument as a string would erase the distinction between a numbered input and a path,
 while a separate `:command` grammar would make the prompt accept text that cannot be parsed as a source term.
 
-Always wrapping an input with Builtin seems simpler, but it breaks complete programs that already expose the same roles.
-The direct-then-fallback strategy gives small expressions a convenient prelude without changing the meaning
-of self-contained programs.
+The wrapper is the single analysis path, so input classification does not depend on whether an earlier attempt
+happened to check without the standard basis. Source boundaries keep self-contained programs hygienic,
+while host linking applies consecutive Builtin package abstractions when a checked program contains more than one.
 
 The current design is governed by a few durable invariants:
 
@@ -153,7 +155,8 @@ The current design is governed by a few durable invariants:
 - Numeric and quoted import targets remain different typed cases.
 - Importing history performs a fresh, hygienic source splice rather than sharing a runtime object.
 - Recognized REPL commands are root metadata; unknown metadata remains ordinary source syntax.
-- The fallback wrapper may supply Builtin names, but it must not alter a self-contained program.
+- The wrapper establishes Builtin roles from the canonical contract without flattening its package namespace
+  or altering a self-contained program.
 
 ## Open Questions
 

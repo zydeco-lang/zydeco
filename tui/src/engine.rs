@@ -25,7 +25,6 @@ pub(crate) enum EvaluationOutcome {
 }
 
 pub(crate) struct InstalledInput {
-    source: PathBuf,
     wrapper: PathBuf,
 }
 
@@ -53,55 +52,36 @@ impl ReplEngine {
         let builtin = format!("{:?}", self.builtin.to_string_lossy());
         let wrapper = format!(
             concat!(
-                "param (\n",
-                "  (/VType; /CType; /Thk; /Ret; /Unit; ",
-                "/Int8; /Int16; /Int32; /Int64; /UInt8; /UInt16; /UInt32; /UInt64; ",
-                "/Float32; /Float64; /Char; /String; /Bytes; /Reader; /Writer; /OS; ",
-                "/int8; /int16; /int32; /int64; /uint8; /uint16; /uint32; /uint64; ",
-                "/float32; /float64) :\n",
-                "  @[import({})] _\n",
-                ") in\n",
-                "  @[debug(\"{}\")] @[import({})] _\n",
+                "param ((/core = _) : @[import({})] _)\n",
+                "in\n",
+                "@[debug(\"{}\")] @[import({})] _\n",
             ),
             builtin,
             Self::INPUT_OBSERVATION,
             number.get(),
         );
         self.session.set_overlay(&root, wrapper)?;
-        Ok(InstalledInput { source: input, wrapper: root })
+        Ok(InstalledInput { wrapper: root })
     }
 
     pub(crate) fn evaluate(
         &self, input: &InstalledInput, mode: ExpressionMode,
     ) -> EvaluationOutcome {
-        let direct = match self.session.analyze(&input.source) {
+        let analysis = match self.session.analyze(&input.wrapper) {
             | Ok(analysis) => analysis,
             | Err(error) => {
                 return EvaluationOutcome::Error(DiagnosticText::analysis_error(&error));
             }
         };
-        let (analysis, wrapped) = match direct.outcome() {
-            | AnalysisOutcome::Checked { .. } => (direct, false),
-            | AnalysisOutcome::Rejected { .. } => match self.session.analyze(&input.wrapper) {
-                | Ok(wrapper) if matches!(wrapper.outcome(), AnalysisOutcome::Checked { .. }) => {
-                    (wrapper, true)
-                }
-                | Ok(_) => {
-                    return EvaluationOutcome::TypeRejected(DiagnosticText::rejected(&direct));
-                }
-                | Err(error) => {
-                    return EvaluationOutcome::Error(DiagnosticText::analysis_error(&error));
-                }
-            },
-        };
+        if matches!(analysis.outcome(), AnalysisOutcome::Rejected { .. }) {
+            return EvaluationOutcome::TypeRejected(DiagnosticText::rejected(&analysis));
+        }
 
-        let observations = Self::observations(&analysis, wrapped);
+        let observations = Self::observations(&analysis);
         let result = match mode {
-            | ExpressionMode::Type => {
-                Ok(Self::inspect(&analysis, Self::input_root(&analysis, wrapped)))
-            }
-            | ExpressionMode::Evaluate => Self::evaluate_default(&analysis, wrapped),
-            | ExpressionMode::Run => Self::run_checked(&analysis, wrapped, true),
+            | ExpressionMode::Type => Ok(Self::inspect(&analysis, Self::input_root(&analysis))),
+            | ExpressionMode::Evaluate => Self::evaluate_default(&analysis),
+            | ExpressionMode::Run => Self::run_checked(&analysis, true),
         };
         match result {
             | Ok(result) => {
@@ -111,22 +91,20 @@ impl ReplEngine {
         }
     }
 
-    fn evaluate_default(analysis: &Arc<ProgramAnalysis>, wrapped: bool) -> Result<String, String> {
-        match Self::input_root(analysis, wrapped) {
+    fn evaluate_default(analysis: &Arc<ProgramAnalysis>) -> Result<String, String> {
+        match Self::input_root(analysis) {
             | root @ (TermAnnId::Kind(_) | TermAnnId::Type(_, _)) => {
                 Ok(Self::inspect(analysis, root))
             }
-            | TermAnnId::Value(_, _) => Self::run_checked(analysis, wrapped, false),
-            | TermAnnId::Compu(_, _) => Self::run_checked(analysis, wrapped, false),
+            | TermAnnId::Value(_, _) => Self::run_checked(analysis, false),
+            | TermAnnId::Compu(_, _) => Self::run_checked(analysis, false),
             | TermAnnId::Hole(_) => unreachable!("a checked source root cannot remain a hole"),
         }
     }
 
-    fn run_checked(
-        analysis: &Arc<ProgramAnalysis>, wrapped: bool, forced: bool,
-    ) -> Result<String, String> {
+    fn run_checked(analysis: &Arc<ProgramAnalysis>, forced: bool) -> Result<String, String> {
         let program = analysis.checked_program().expect("a checked analysis has an owned program");
-        let classifier = match Self::input_root(analysis, wrapped) {
+        let classifier = match Self::input_root(analysis) {
             | TermAnnId::Value(_, ty) => {
                 Some(Self::pretty_in(&program, Self::value_result_type(&program.statics, ty)))
             }
@@ -304,10 +282,7 @@ impl ReplEngine {
         Self::inspect_with(&formatter, root)
     }
 
-    fn input_root(analysis: &ProgramAnalysis, wrapped: bool) -> TermAnnId {
-        if !wrapped {
-            return analysis.outcome().root().expect("a checked analysis has a root");
-        }
+    fn input_root(analysis: &ProgramAnalysis) -> TermAnnId {
         analysis
             .observations()
             .iter()
@@ -342,16 +317,15 @@ impl ReplEngine {
         }
     }
 
-    fn observations(analysis: &ProgramAnalysis, wrapped: bool) -> Vec<String> {
+    fn observations(analysis: &ProgramAnalysis) -> Vec<String> {
         let formatter = StaticFormatter::new(analysis.scoped(), analysis.statics());
         analysis
             .observations()
             .iter()
             .filter_map(|observation| match observation {
                 | TyckObservation::Debug { metadata, .. }
-                    if wrapped
-                        && metadata.arguments()
-                            == [Meta::string(Self::INPUT_OBSERVATION)].as_slice() =>
+                    if metadata.arguments()
+                        == [Meta::string(Self::INPUT_OBSERVATION)].as_slice() =>
                 {
                     None
                 }
