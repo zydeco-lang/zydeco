@@ -90,3 +90,37 @@ commit per table.
 
 - Worklog and wall evidence: [query-based type checking](../logs/query-based-tyck.md)
 - `docs/ideas/normalization.md` for the normalization semantics behind the fill-state pattern.
+
+## Achieved Form (2026-08-14)
+
+The migration reached the following steady state, which supersedes the remaining steps of the
+migration order:
+
+- **Every allocation-producing judgment is a producer query.** All term constructs, all
+  pattern constructs, and the auxiliary package-pi entities derive their nodes under
+  `QUERY_DERIVATION_TAG(space, raw, occurrence)` and return them as outcomes; the checker
+  materializes the fragments (including the environment records) into the arena. The outer
+  rejections became return values (`err_k` retirement per construct).
+- **The arena reads stay checker-side by necessity.** The wall's final form: a read of
+  `types_pre[id]` could only become a query if the pre-node content were a pure function of
+  `(data, id)`. It is not — the producer inputs include checker-computed values (lub results,
+  refinements, substitutions), and those computations are stateful (`lub` merges with fill
+  resolution and de Bruijn bookkeeping). The candidate escapes were closed by measurement or
+  analysis: per-call arena snapshots destroy memoization; tracked-struct mirrors have no
+  keyed lookup (tracked structs are identity-keyed, and content is not recomputable from the
+  site because the inputs are checker values); interned content is impossible (`Type` has
+  neither `Eq` nor `Hash` — literal floats). A case-machine worklist conversion of `lub`
+  remains theoretically possible but offers marginal memoization value at a large rewrite
+  cost.
+- **The checker keeps the algorithmic core**: `lub`/unification, fill resolution, the
+  existential-opening pattern arm, the copattern elaborator, and the recursion-group
+  fixpoint — about 136 allocation sites, all in these internals rather than in
+  syntax-category judgments.
+- **Downstream contract intact**: the materialized arena (`*_normalized`, annotations,
+  environments, intrinsics) is byte-identical to the pre-migration output; the session's
+  demand-driven fact queries (`analyze_source`, `normalized_type`, `coverage`,
+  `fill_solution`, `reports`, annotations) consume it per source, and cajun publishes
+  per-file reports.
+- **Cost**: ~30% of end-to-end check time on `lib/std` (measured 2026-08-14 against the
+  pre-migration binary; see the worklog's P7 checkpoint). The producer queries and interned
+  inputs are the expected source.
