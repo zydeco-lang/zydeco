@@ -623,3 +623,18 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   P7 the benchmark script, the baseline comparison, and this record.
 - Every stage ran the full workspace suite (61 targets) and committed green; clippy and fmt
   are clean at `HEAD`.
+
+## 2026-08-14 — the std integration suite stops re-checking the library
+
+- The 29 std end-to-end tests each ran three full pipelines (package purity check, root check
+  for the interpreter, root re-analysis for native codegen) in fresh sessions, in parallel —
+  the "over 60 seconds" notices and the machine heating came from that combination.
+- Three fixes: `TestPipeline` now analyzes through one shared `CompilerSession`
+  (`LazyLock<Mutex<_>>`), so salsa memoizes the standard library's sub-analyses across
+  tests and the analysis phase is serialized instead of core-saturating; the native/zasm
+  paths reuse the already-checked program (`amd64_from_checked` / `zasm_from_checked`
+  with `SourceChecked: Clone`) instead of re-analyzing; and a `test-workspace-low` cargo
+  alias pins `--test-threads=2` for heat-limited machines.
+- Measured: three representative std tests now finish in ~16.6 s serial (previously each
+  reported 60 s+ under parallel contention); the full workspace suite stays green at 61
+  targets.

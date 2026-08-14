@@ -5,6 +5,7 @@ RUST_MIN_STACK = "4194304"
 rustflags = ['--cfg', 'getrandom_backend="wasm_js"']
 
 [alias]
+test-workspace-low = "test --workspace -- --test-threads=2"
 check-workspace = "check --workspace"
 build-workspace = "build --workspace"
 test-workspace = "test --workspace"
