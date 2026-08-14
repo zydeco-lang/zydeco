@@ -8,6 +8,18 @@ The *pretty printer* performs the arena-to-document transformation in `textual`.
 The *formatter* is the complete parse, print, and replace workflow exposed by `zydeco fmt` and Cajun.
 Both frontends use the ordinary parser and the same printer.
 
+## Terminology
+
+A **sequence binding** is one of `let`, `do`, `def`, or `param`: a binding whose computation continues into a tail.
+Sequence bindings are block-like: their tail always breaks onto a new line at the binding's indentation,
+and the binding itself starts on a line of its own.
+
+A **tail marker** is one of `in`, `that`, or `;`: the token that closes a sequence binding and begins its tail.
+The **placement markers** are `in` and `that` in particular.
+The printer places them through the inline, attached, and aligned tiers, mirroring the definition separator.
+
+A **stage separator** is `:` or `=`: `:` joins a head with its type, and `=` joins the type with its bindee.
+A **scope marker** is `.` or `=>` and introduces a scope body.
 ## Retained Source Information
 
 A parsed source has three kinds of printable information:
@@ -114,7 +126,7 @@ A source gap participates in intention preservation only when a syntax case decl
 Every other gap between entities is canonical spacing.
 Postfix projections and destructors never break, so a source break before `/` or `.` joins the operator to its head.
 `in` and `that` belong to the bindee's line; an empty line written
-before the placement marker is re-anchored between the placement and the following tail.
+before the placement marker is re-anchored between the tail marker and the following tail.
 Sequence tails always start a new line even when the source joined them.
 Declaring a new boundary is the only way to make a gap intention-aware.
 
@@ -130,7 +142,7 @@ Most constructs use one of these families:
 | Infix chain | Operators have one space on each side. | `*` and `->` lead continuation lines without recursive indentation. |
 | Headed scope | A short head keeps `.`, `=>`, and its body together. | A multiline head ends with an aligned marker, then the body nests once. |
 | Staged binding | Header, type, bindee, and placement remain together when they fit. | `:`, `=`, and then `in` or `that` close the stages at the binding indentation. |
-| Sequence or block | A short stage may remain compact. | Tails of `do`, `let`, `def`, and `param` return to the enclosing indentation. |
+| Sequence binding | A short stage may remain compact. | The tail marker (`in`, `that`, or `;`) always breaks, the tail returns to the binding indentation, and the binding starts on a line of its own. |
 | Arm block | A short arm header and payload share a line. | Arms begin with aligned `\|`; a broken payload nests once, while comments before `|` remain at the arm boundary. Blank lines between arms, after the head, and before `end` survive as one empty line. |
 
 Each grammatical group makes one width decision for the boundaries it owns.
@@ -151,7 +163,7 @@ and the printer captures the binding indentation dynamically instead of assuming
 Preserved source breaks partition fitting rows, but an overflowing row expands the complete outer layer rather
 than whichever nested boundary happens to encounter the width limit first.
 
-For layout purposes, `.`, `=>`, `in`, and `that` are scope-boundary markers.
+For layout purposes the scope markers `.` and `=>` and the tail markers `in` and `that` are scope-boundary markers.
 This is a presentation role shared by several grammar categories.
 A constituent is “short” exactly when its complete compact alternative fits in the remaining configured width;
 there is no second length threshold.
