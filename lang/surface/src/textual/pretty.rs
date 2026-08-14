@@ -1102,11 +1102,25 @@ impl<'arena> PrettyFormatter<'arena> {
                 ")",
             ),
             | Pattern::Paren(Paren(patterns)) => match patterns.as_slice() {
+                // A single-line group elides; a multiline group keeps its
+                // delimiters hugging the enclosing line with the contents
+                // nested inside.
                 | [inner]
                     if self.should_elide_parentheses(pattern.into(), (*inner).into())
                         && self.grammar.accepts_pattern(requirement, *inner) =>
                 {
-                    self.pattern_with_requirement(*inner, requirement)
+                    let elided = self.pattern_with_requirement(*inner, requirement);
+                    let grouped = self.delimited(
+                        Some(pattern.into()),
+                        "(",
+                        vec![LayoutFragment::entity(
+                            (*inner).into(),
+                            self.annotated_pattern(*inner),
+                        )],
+                        ",",
+                        ")",
+                    );
+                    self.single_line(elided.clone()).union(grouped).flat_alt(elided)
                 }
                 | _ => self.delimited(
                     Some(pattern.into()),
@@ -1250,12 +1264,30 @@ impl<'arena> PrettyFormatter<'arena> {
                 self.annotated_term_fragment(*inner),
             )),
             | Term::Paren(Paren(terms)) => match terms.as_slice() {
+                // An application owns the grouping layout, so its singleton
+                // wrapper is always redundant.
                 | [inner]
-                    if (self.should_elide_parentheses(term.into(), (*inner).into())
-                        || self.term_layout_subsumes_group(*inner))
-                        && self.grammar.accepts_term(requirement, *inner) =>
+                    if self.grammar.accepts_term(requirement, *inner)
+                        && self.term_layout_subsumes_group(*inner) =>
                 {
                     self.term_with_requirement(*inner, requirement)
+                }
+                // A single-line group elides; a multiline group keeps its
+                // delimiters hugging the enclosing line with the contents
+                // nested inside.
+                | [inner]
+                    if self.grammar.accepts_term(requirement, *inner)
+                        && self.should_elide_parentheses(term.into(), (*inner).into()) =>
+                {
+                    let elided = self.term_with_requirement(*inner, requirement);
+                    let grouped = self.delimited(
+                        Some(term.into()),
+                        "(",
+                        vec![self.annotated_term_fragment(*inner)],
+                        ",",
+                        ")",
+                    );
+                    self.single_line(elided.clone()).union(grouped).flat_alt(elided)
                 }
                 | _ => self.delimited(
                     Some(term.into()),
@@ -3321,6 +3353,37 @@ mod tests {
             let reparsed = ParsedSource::new(&formatted);
             assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape(), "source: {source}");
             assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+        });
+    }
+
+    #[test]
+    fn multiline_groups_keep_their_delimiters() {
+        let cases = [
+            // A group whose contents break keeps its delimiters hugging the
+            // enclosing line, with the contents nested inside.
+            (
+                "let x = (a *\nb) in x",
+                concat!("let x = (\n", "    a\n", "  * b\n", ") in\n", "x\n"),
+            ),
+            (
+                "param (x :\nLongTypeName) that\nx",
+                concat!("param (\n", "  x :\n", "  LongTypeName\n", ") that\n", "x\n",),
+            ),
+            ("let x = (\n  a\n) in x", concat!("let x = (\n", "  a\n", ") in\n", "x\n")),
+            // A single-line group still elides, and an application's wrapper
+            // remains redundant even for multiline arguments.
+            ("let x = (a) in x", "let x = a in\nx\n"),
+            ("! f ((a))", "! f a\n"),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, expected, "source: {source}");
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve), "source: {source}");
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape(), "source: {source}");
         });
     }
 
