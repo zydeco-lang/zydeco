@@ -223,3 +223,19 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   the `new_key_type` foundation and every downstream backend, so it stays parked behind an
   explicit decision; the worklog keeps the wall documented as the boundary of the current
   architecture.
+
+## 2026-08-14 — P6: cajun consumes the fact queries; refresh gets a fast path
+
+- Fixed the root cause that had blocked the cajun wiring: `refresh_with_progress` re-analyzed the
+  whole project on every LSP request. It now takes a fast path — an unchanged open document
+  reuses its cached `ProjectState` — so repeated hovers, symbols, and navigation requests are
+  pure cache reads. The stdio suite dropped from a hanging run to ~3.4 s for all eight tests.
+- Hover is now wired through the session's memoized fact queries: `ProjectState` records its
+  analyzed root, and `hover` answers the annotation and type-definition lookups via
+  `CompilerSession::annotation_of_def` / `type_definition_of_def` against the live session. The
+  previous attempt stored a session snapshot inside `ProjectState` behind a `std::sync::Mutex` and
+  hung the LSP; this design keeps no stored session and locks only the tokio session and projects
+  guards, in a consistent order, around memoized reads.
+- The analysis test helpers (`ProjectState::load`) now return the session alongside the project so
+  hover tests exercise the query path.
+- Workspace suite passes unchanged (61 targets green), clippy clean.
