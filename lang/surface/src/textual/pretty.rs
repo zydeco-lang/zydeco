@@ -3300,6 +3300,29 @@ mod tests {
     }
 
     #[test]
+    fn scope_separator_breaks_only_after_a_multiline_head() {
+        let cases = [
+            // A single-line head keeps its marker on the same line.
+            ("pi (A : VType) . Result", "pi (A : VType) . Result\n"),
+            // A multiline head ends with the marker alone on its own line.
+            (
+                concat!("pi\n", "  (A : VType)\n", "  (B : CType -> CType)\n", ". Result",),
+                concat!("pi\n", "  (A : VType)\n", "  (B : CType -> CType)\n", ".\n", "  Result\n",),
+            ),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, expected, "source: {source}");
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve), "source: {source}");
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape(), "source: {source}");
+        });
+    }
+
+    #[test]
     fn places_scope_separators_after_parameters_that_wrap() {
         let options = PrettyOptions::default()
             .with_line_width(38)
