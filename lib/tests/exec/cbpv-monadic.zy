@@ -82,9 +82,11 @@ begin
       {
         ret +False()
       } that
-    def ! char_eq (left : Char) (right : Char) : Ret Bool = do left <- ! (char/codepoint) left;
-    do right <- ! (char/codepoint) right;
-    ! int_eq left right that
+    def ! char_eq (left : Char) (right : Char) : Ret Bool =
+      do left <- ! (char/codepoint) left;
+      do right <- ! (char/codepoint) right;
+      ! int_eq left right
+    that
     def ! bool_eq (left : Bool) (right : Bool) : Ret Bool = match left
     | +True() => ret right
     | +False() => match right
@@ -96,16 +98,20 @@ begin
     | +True() => ret "true"
     | +False() => ret "false"
     end that
-    def ! and~ (left : U (Ret Bool)) (right : U (Ret Bool)) : Ret Bool = do left <- ! left;
-    match left
-    | +True() => ! right
-    | +False() => ret +False()
-    end that
-    def ! or~ (left : U (Ret Bool)) (right : U (Ret Bool)) : Ret Bool = do left <- ! left;
-    match left
-    | +True() => ret +True()
-    | +False() => ! right
-    end that
+    def ! and~ (left : U (Ret Bool)) (right : U (Ret Bool)) : Ret Bool =
+      do left <- ! left;
+      match left
+      | +True() => ! right
+      | +False() => ret +False()
+      end
+    that
+    def ! or~ (left : U (Ret Bool)) (right : U (Ret Bool)) : Ret Bool =
+      do left <- ! left;
+      match left
+      | +True() => ret +True()
+      | +False() => ! right
+      end
+    that
     def fix foldl (A : VType)
       (R : VType)
       (values : List A)
@@ -113,8 +119,9 @@ begin
       (result : R)
     : Ret R = match values
       | +Nil() => ret result
-      | +Cons(value, remaining) => do result <- ! function value result;
-      ! foldl A R remaining function result
+      | +Cons(value, remaining) =>
+        do result <- ! function value result;
+        ! foldl A R remaining function result
       end
     that
     def ! panic (message : String) : OS = ! (stdio/write_line) message {
@@ -230,15 +237,16 @@ begin
     end that
 
     def ! mexn-reduce : MonadReduce MExnOS = comatch
-    | .reduce A ms m => do m~ <- ! foldl (U (MExnOS A)) (U (MExnOS A)) ms {
-      fn m' m =>
-        ret {
-          comatch
-          | .run ka ke => ! m' .run ka { fn _ => ! m .run ka ke }
-          end
-        }
-    } m;
-    ! m~
+    | .reduce A ms m =>
+      do m~ <- ! foldl (U (MExnOS A)) (U (MExnOS A)) ms {
+        fn m' m =>
+          ret {
+            comatch
+            | .run ka ke => ! m' .run ka { fn _ => ! m .run ka ke }
+            end
+          }
+      } m;
+      ! m~
     end that
 
     def fix malg : Algebra MExnOS Compu = fn A m f =>
@@ -271,8 +279,9 @@ begin
     | .value sv kont => match sv
     | +Var(x) => ! (stdio/write) x kont
     | +Bool(b) => ! if OS b { ! (stdio/write) "true" kont } { ! (stdio/write) "false" kont }
-    | +Int64(i) => do i <- ! (int64/to_string) i;
-    ! (stdio/write) i kont
+    | +Int64(i) =>
+      do i <- ! (int64/to_string) i;
+      ! (stdio/write) i kont
     | +Thunk(sc) =>
       -- Continuation sequencing is written explicitly as `<comp1> { <comp2> }`.
       ! (stdio/write) "{ " {
@@ -305,16 +314,17 @@ begin
       ! print-scbpv .value sv {
         ! kont }
     }
-    | +Bind(sc1, x, sc2) => do m <- ! (string/append) "bind " x;
-    do m <- ! (string/append) m " <- ";
-    ! (stdio/write) m {
-      ! print-scbpv .compu sc1 {
-        ! (stdio/write) "; " {
-          ! print-scbpv .compu sc2 {
-            ! kont }
+    | +Bind(sc1, x, sc2) =>
+      do m <- ! (string/append) "bind " x;
+      do m <- ! (string/append) m " <- ";
+      ! (stdio/write) m {
+        ! print-scbpv .compu sc1 {
+          ! (stdio/write) "; " {
+            ! print-scbpv .compu sc2 {
+              ! kont }
+          }
         }
       }
-    }
     | +Force(sv) => ! (stdio/write) "! " {
       ! print-scbpv .value sv {
         ! kont }
@@ -357,8 +367,9 @@ begin
     def fix print-cbpv : PrintCbpv = comatch
     | .value v kont => match v
     | +Bool(b) => ! if OS b { ! (stdio/write) "true" kont } { ! (stdio/write) "false" kont }
-    | +Int64(i) => do i <- ! (int64/to_string) i;
-    ! (stdio/write) i kont
+    | +Int64(i) =>
+      do i <- ! (int64/to_string) i;
+      ! (stdio/write) i kont
     | +Thunk(c) => ! (stdio/write) "{ " {
       ! print-cbpv .compu c {
         ! (stdio/write) " }" {
@@ -387,11 +398,12 @@ begin
     def fix envo (env : EnvT) : EnvO = comatch
     | .lookup x => match env
     | +Empty() => ret +None()
-    | +Extend(x', v, env') => do is-eq? <- ! str_eq x x';
-    match is-eq?
-    | +True() => ret +Some(v)
-    | +False() => ! envo env' .lookup x
-    end
+    | +Extend(x', v, env') =>
+      do is-eq? <- ! str_eq x x';
+      match is-eq?
+      | +True() => ret +Some(v)
+      | +False() => ! envo env' .lookup x
+      end
     end
     | .extend x v => ! envo +Extend(x, v, env)
     | .print k => ! (stdio/write_line) "[" {
@@ -502,13 +514,14 @@ begin
     end that
 
     def ! mp-cnt (A : VType) (cnt : Int64) (m : U (Parser A)) : Parser A = comatch
-    | .run s i => do len <- ! (string/length) s;
-    do i' <- ! (int64/add) i cnt;
-    ! if~ (MExnOS (Pair A Int64)) { ! int_le i' len } {
-      ! m .run s i
-    } {
-      ! mexn-err .fail (Pair A Int64) +ParseError(i, "unexpected eof")
-    }
+    | .run s i =>
+      do len <- ! (string/length) s;
+      do i' <- ! (int64/add) i cnt;
+      ! if~ (MExnOS (Pair A Int64)) { ! int_le i' len } {
+        ! m .run s i
+      } {
+        ! mexn-err .fail (Pair A Int64) +ParseError(i, "unexpected eof")
+      }
     end that
 
     def ! p_char (c : Char) : Parser Char = ! mp-cnt Char 1 {
@@ -528,62 +541,71 @@ begin
       end
     } that
 
-    def ! p_word (w : String) : Parser String = do len <- ! (string/length) w;
-    ! mp-cnt String len {
-      comatch
-      | .run s i => let fix word_match (j : Int64) = ! if~ (Ret Bool) { ! int_eq j len } {
-        ret +True()
-      } {
-        do l <- ! (int64/add) i j;
-        do c1 <- ! str_get_or_space s l;
-        do c2 <- ! str_get_or_space w j;
-        ! if~ (Ret Bool) { ! char_eq c1 c2 } {
-          do j' <- ! (int64/add) j 1;
-          ! word_match j'
-        } {
-          ret +False()
-        }
-      } in
-      ! if~ (MExnOS (Pair String Int64)) { ! word_match 0 } {
-        do i' <- ! (int64/add) i len;
-        ! mexn .return (Pair String Int64) +Cons(w, i')
-      } {
-        do msg <- ! (string/append) "word `" w;
-        do msg <- ! (string/append) msg "` mismatch";
-        ! mexn-err .fail (Pair String Int64) +ParseError(i, msg)
+    def ! p_word (w : String) : Parser String =
+      do len <- ! (string/length) w;
+      ! mp-cnt String len {
+        comatch
+        | .run s i =>
+          let fix word_match (j : Int64) = ! if~ (Ret Bool) { ! int_eq j len } {
+            ret +True()
+          } {
+            do l <- ! (int64/add) i j;
+            do c1 <- ! str_get_or_space s l;
+            do c2 <- ! str_get_or_space w j;
+            ! if~ (Ret Bool) { ! char_eq c1 c2 } {
+              do j' <- ! (int64/add) j 1;
+              ! word_match j'
+            } {
+              ret +False()
+            }
+          } in
+          ! if~ (MExnOS (Pair String Int64)) { ! word_match 0 } {
+            do i' <- ! (int64/add) i len;
+            ! mexn .return (Pair String Int64) +Cons(w, i')
+          } {
+            do msg <- ! (string/append) "word `" w;
+            do msg <- ! (string/append) msg "` mismatch";
+            ! mexn-err .fail (Pair String Int64) +ParseError(i, msg)
+          }
+        end
       }
-      end
-    } that
+    that
 
-    def ! p_var : Parser String = let ! p_vc (c : Char) : Ret (Option Char) =
-      do ascii <- ! (char/codepoint) c;
-      let ! digit = ! and~ { ! int_lt 47 ascii } { ! int_lt ascii 58 } in
-      let ! cap = ! and~ { ! int_lt 64 ascii } { ! int_lt ascii 91 } in
-      let ! sml = ! and~ { ! int_lt 96 ascii } { ! int_lt ascii 123 } in
-      ! if~ (Ret (Option Char))
-        { ! or~ digit { ! or~ cap sml } }
-        { ret +Some(c) }
-        { ret +None() }
-    in
-    comatch
-    | .run s i => let fix var (v : String) (i : Int64) = do c <- ! str_get_or_space s i;
-    do c? <- ! p_vc c;
-    do i' <- ! (int64/add) i 1;
-    match c?
-    | +None() => ! if~ (MExnOS (Pair String Int64)) {
-      do len <- ! (string/length) v;
-      ! int_eq len 0
-    } {
-      ! mexn-err .fail (Pair String Int64) +ParseError(i, "variable of length 0")
-    } {
-      ! mexn .return (Pair String Int64) +Cons(v, i)
-    }
-    | +Some(c) => do c <- ! (char/to_string) c;
-    do v <- ! (string/append) v c;
-    ! var v i'
-    end in
-    ! var "" i
-    end that
+    def ! p_var : Parser String =
+      let ! p_vc (c : Char) : Ret (Option Char) =
+        do ascii <- ! (char/codepoint) c;
+        let ! digit = ! and~ { ! int_lt 47 ascii } { ! int_lt ascii 58 } in
+        let ! cap = ! and~ { ! int_lt 64 ascii } { ! int_lt ascii 91 } in
+        let ! sml = ! and~ { ! int_lt 96 ascii } { ! int_lt ascii 123 } in
+        ! if~ (Ret (Option Char))
+          { ! or~ digit { ! or~ cap sml } }
+          { ret +Some(c) }
+          { ret +None() }
+      in
+      comatch
+      | .run s i =>
+        let fix var (v : String) (i : Int64) =
+          do c <- ! str_get_or_space s i;
+          do c? <- ! p_vc c;
+          do i' <- ! (int64/add) i 1;
+          match c?
+          | +None() => ! if~ (MExnOS (Pair String Int64)) {
+            do len <- ! (string/length) v;
+            ! int_eq len 0
+          } {
+            ! mexn-err .fail (Pair String Int64) +ParseError(i, "variable of length 0")
+          } {
+            ! mexn .return (Pair String Int64) +Cons(v, i)
+          }
+          | +Some(c) =>
+            do c <- ! (char/to_string) c;
+            do v <- ! (string/append) v c;
+            ! var v i'
+          end
+        in
+        ! var "" i
+      end
+    that
 
     def ParserCbpv = codata
     | .value : Parser SValue
@@ -591,186 +613,188 @@ begin
     end that
 
     def fix p_cbpv : ParserCbpv = comatch
-    | .value => let ! _true = ! mp .bind String SValue { ! p_word "true" } {
-      fn _ => ! mp .return SValue +Bool(+True())
-    } in
-    let ! _false = ! mp .bind String SValue { ! p_word "false" } {
-      fn _ => ! mp .return SValue +Bool(+False())
-    } in
-    let ! _var = ! mp .bind String SValue p_var {
-      fn v => ! mp .return SValue +Var(v)
-    } in
-    let ! _thunk = ! mp .bind Char SValue { ! p_char '{' } {
-      fn _ =>
-        ! mp .bind SCompu SValue { ! p_cbpv .compu } {
-          fn sc =>
-            ! mp .bind Char SValue { ! p_char '}' } {
-              fn _ => ! mp .return SValue +Thunk(sc)
+    | .value =>
+      let ! _true = ! mp .bind String SValue { ! p_word "true" } {
+        fn _ => ! mp .return SValue +Bool(+True())
+      } in
+      let ! _false = ! mp .bind String SValue { ! p_word "false" } {
+        fn _ => ! mp .return SValue +Bool(+False())
+      } in
+      let ! _var = ! mp .bind String SValue p_var {
+        fn v => ! mp .return SValue +Var(v)
+      } in
+      let ! _thunk = ! mp .bind Char SValue { ! p_char '{' } {
+        fn _ =>
+          ! mp .bind SCompu SValue { ! p_cbpv .compu } {
+            fn sc =>
+              ! mp .bind Char SValue { ! p_char '}' } {
+                fn _ => ! mp .return SValue +Thunk(sc)
+              }
+          }
+      } in
+      ! mp-alt .alt SValue _true {
+        ! mp-alt .alt SValue _false {
+          ! mp-alt .alt SValue _var {
+            ! mp-alt .alt SValue _thunk {
+              comatch
+              | .run s i =>
+                ! mexn-err .fail (Pair SValue Int64) +ParseError(i, "expected value")
+              end
             }
-        }
-    } in
-    ! mp-alt .alt SValue _true {
-      ! mp-alt .alt SValue _false {
-        ! mp-alt .alt SValue _var {
-          ! mp-alt .alt SValue _thunk {
-            comatch
-            | .run s i =>
-              ! mexn-err .fail (Pair SValue Int64) +ParseError(i, "expected value")
-            end
           }
         }
       }
-    }
-    | .compu => let ! _env = ! mp .bind Char SCompu { ! p_char '(' } {
-      fn _ =>
-        ! mp .bind String SCompu { ! p_word "env" } {
-          fn _ =>
-            ! mp .bind Char SCompu { ! p_char ' ' } {
-              fn _ =>
-                ! mp .bind SCompu SCompu { ! p_cbpv .compu } {
-                  fn sc =>
-                    ! mp .bind Char SCompu { ! p_char ')' } {
-                      fn _ => ! mp .return SCompu +Env(sc)
-                    }
-                }
-            }
-        }
-    } in
-    let ! _ret = ! mp .bind Char SCompu { ! p_char '(' } {
-      fn _ =>
-        ! mp .bind String SCompu { ! p_word "ret" } {
-          fn _ =>
-            ! mp .bind Char SCompu { ! p_char ' ' } {
-              fn _ =>
-                ! mp .bind SValue SCompu { ! p_cbpv .value } {
-                  fn sv =>
-                    ! mp .bind Char SCompu { ! p_char ')' } {
-                      fn _ => ! mp .return SCompu +Ret(sv)
-                    }
-                }
-            }
-        }
-    } in
-    let ! _bind = ! mp .bind Char SCompu { ! p_char '(' } {
-      fn _ =>
-        ! mp .bind String SCompu { ! p_word "bind" } {
-          fn _ =>
-            ! mp .bind Char SCompu { ! p_char ' ' } {
-              fn _ =>
-                ! mp .bind SCompu SCompu { ! p_cbpv .compu } {
-                  fn sc1 =>
-                    ! mp .bind Char SCompu { ! p_char ' ' } {
-                      fn _ =>
-                        ! mp .bind String SCompu p_var {
-                          fn v =>
-                            ! mp .bind Char SCompu { ! p_char ' ' } {
-                              fn _ =>
-                                ! mp .bind SCompu SCompu { ! p_cbpv .compu } {
-                                  fn sc2 =>
-                                    ! mp .bind Char SCompu { ! p_char ')' } {
-                                      fn _ => ! mp .return SCompu +Bind(sc1, v, sc2)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    } in
-    let ! _force = ! mp .bind Char SCompu { ! p_char '!' } {
-      fn _ =>
-        -- An optional `call` keyword parser could continue here.
-        ! mp .bind Char SCompu { ! p_char ' ' } {
-          fn _ =>
-            ! mp .bind SValue SCompu { ! p_cbpv .value } {
-              fn sv =>
-                -- An optional closing-parenthesis parser could continue here.
-                ! mp .return SCompu +Force(sv)
-            }
-        }
-    } in
-    let ! _if = ! mp .bind Char SCompu { ! p_char '(' } {
-      fn _ =>
-        ! mp .bind String SCompu { ! p_word "if" } {
-          fn _ =>
-            ! mp .bind Char SCompu { ! p_char ' ' } {
-              fn _ =>
-                ! mp .bind SValue SCompu { ! p_cbpv .value } {
-                  fn sv =>
-                    ! mp .bind Char SCompu { ! p_char ' ' } {
-                      fn _ =>
-                        ! mp .bind SCompu SCompu { ! p_cbpv .compu } {
-                          fn sc1 =>
-                            ! mp .bind Char SCompu { ! p_char ' ' } {
-                              fn _ =>
-                                ! mp .bind SCompu SCompu { ! p_cbpv .compu } {
-                                  fn sc2 =>
-                                    ! mp .bind Char SCompu { ! p_char ')' } {
-                                      fn _ => ! mp .return SCompu +If(sv, sc1, sc2)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    } in
-    let ! _lam = ! mp .bind Char SCompu { ! p_char '(' } {
-      fn _ =>
-        ! mp .bind String SCompu { ! p_word "fn" } {
-          fn _ =>
-            ! mp .bind Char SCompu { ! p_char ' ' } {
-              fn _ =>
-                ! mp .bind String SCompu p_var {
-                  fn v =>
-                    ! mp .bind Char SCompu { ! p_char ' ' } {
-                      fn _ =>
-                        ! mp .bind SCompu SCompu { ! p_cbpv .compu } {
-                          fn sc =>
-                            ! mp .bind Char SCompu { ! p_char ')' } {
-                              fn _ => ! mp .return SCompu +Lam(v, sc)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    } in
-    let ! _app = ! mp .bind Char SCompu { ! p_char '(' } {
-      fn _ =>
-        ! mp .bind SCompu SCompu { ! p_cbpv .compu } {
-          fn sc =>
-            ! mp .bind Char SCompu { ! p_char ' ' } {
-              fn _ =>
-                ! mp .bind SValue SCompu { ! p_cbpv .value } {
-                  fn sv =>
-                    ! mp .bind Char SCompu { ! p_char ')' } {
-                      fn _ => ! mp .return SCompu +App(sc, sv)
-                    }
-                }
-            }
-        }
-    } in
-    ! mp-alt .alt SCompu _env {
-      ! mp-alt .alt SCompu _ret {
-        ! mp-alt .alt SCompu _bind {
-          ! mp-alt .alt SCompu _force {
-            ! mp-alt .alt SCompu _if {
-              ! mp-alt .alt SCompu _lam {
-                ! mp-alt .alt SCompu _app {
-                  comatch
-                  | .run s i =>
-                    ! mexn-err .fail (Pair SCompu Int64) +ParseError(i, "expected computation")
-                  end
+    | .compu =>
+      let ! _env = ! mp .bind Char SCompu { ! p_char '(' } {
+        fn _ =>
+          ! mp .bind String SCompu { ! p_word "env" } {
+            fn _ =>
+              ! mp .bind Char SCompu { ! p_char ' ' } {
+                fn _ =>
+                  ! mp .bind SCompu SCompu { ! p_cbpv .compu } {
+                    fn sc =>
+                      ! mp .bind Char SCompu { ! p_char ')' } {
+                        fn _ => ! mp .return SCompu +Env(sc)
+                      }
+                  }
+              }
+          }
+      } in
+      let ! _ret = ! mp .bind Char SCompu { ! p_char '(' } {
+        fn _ =>
+          ! mp .bind String SCompu { ! p_word "ret" } {
+            fn _ =>
+              ! mp .bind Char SCompu { ! p_char ' ' } {
+                fn _ =>
+                  ! mp .bind SValue SCompu { ! p_cbpv .value } {
+                    fn sv =>
+                      ! mp .bind Char SCompu { ! p_char ')' } {
+                        fn _ => ! mp .return SCompu +Ret(sv)
+                      }
+                  }
+              }
+          }
+      } in
+      let ! _bind = ! mp .bind Char SCompu { ! p_char '(' } {
+        fn _ =>
+          ! mp .bind String SCompu { ! p_word "bind" } {
+            fn _ =>
+              ! mp .bind Char SCompu { ! p_char ' ' } {
+                fn _ =>
+                  ! mp .bind SCompu SCompu { ! p_cbpv .compu } {
+                    fn sc1 =>
+                      ! mp .bind Char SCompu { ! p_char ' ' } {
+                        fn _ =>
+                          ! mp .bind String SCompu p_var {
+                            fn v =>
+                              ! mp .bind Char SCompu { ! p_char ' ' } {
+                                fn _ =>
+                                  ! mp .bind SCompu SCompu { ! p_cbpv .compu } {
+                                    fn sc2 =>
+                                      ! mp .bind Char SCompu { ! p_char ')' } {
+                                        fn _ => ! mp .return SCompu +Bind(sc1, v, sc2)
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+      } in
+      let ! _force = ! mp .bind Char SCompu { ! p_char '!' } {
+        fn _ =>
+          -- An optional `call` keyword parser could continue here.
+          ! mp .bind Char SCompu { ! p_char ' ' } {
+            fn _ =>
+              ! mp .bind SValue SCompu { ! p_cbpv .value } {
+                fn sv =>
+                  -- An optional closing-parenthesis parser could continue here.
+                  ! mp .return SCompu +Force(sv)
+              }
+          }
+      } in
+      let ! _if = ! mp .bind Char SCompu { ! p_char '(' } {
+        fn _ =>
+          ! mp .bind String SCompu { ! p_word "if" } {
+            fn _ =>
+              ! mp .bind Char SCompu { ! p_char ' ' } {
+                fn _ =>
+                  ! mp .bind SValue SCompu { ! p_cbpv .value } {
+                    fn sv =>
+                      ! mp .bind Char SCompu { ! p_char ' ' } {
+                        fn _ =>
+                          ! mp .bind SCompu SCompu { ! p_cbpv .compu } {
+                            fn sc1 =>
+                              ! mp .bind Char SCompu { ! p_char ' ' } {
+                                fn _ =>
+                                  ! mp .bind SCompu SCompu { ! p_cbpv .compu } {
+                                    fn sc2 =>
+                                      ! mp .bind Char SCompu { ! p_char ')' } {
+                                        fn _ => ! mp .return SCompu +If(sv, sc1, sc2)
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+      } in
+      let ! _lam = ! mp .bind Char SCompu { ! p_char '(' } {
+        fn _ =>
+          ! mp .bind String SCompu { ! p_word "fn" } {
+            fn _ =>
+              ! mp .bind Char SCompu { ! p_char ' ' } {
+                fn _ =>
+                  ! mp .bind String SCompu p_var {
+                    fn v =>
+                      ! mp .bind Char SCompu { ! p_char ' ' } {
+                        fn _ =>
+                          ! mp .bind SCompu SCompu { ! p_cbpv .compu } {
+                            fn sc =>
+                              ! mp .bind Char SCompu { ! p_char ')' } {
+                                fn _ => ! mp .return SCompu +Lam(v, sc)
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+      } in
+      let ! _app = ! mp .bind Char SCompu { ! p_char '(' } {
+        fn _ =>
+          ! mp .bind SCompu SCompu { ! p_cbpv .compu } {
+            fn sc =>
+              ! mp .bind Char SCompu { ! p_char ' ' } {
+                fn _ =>
+                  ! mp .bind SValue SCompu { ! p_cbpv .value } {
+                    fn sv =>
+                      ! mp .bind Char SCompu { ! p_char ')' } {
+                        fn _ => ! mp .return SCompu +App(sc, sv)
+                      }
+                  }
+              }
+          }
+      } in
+      ! mp-alt .alt SCompu _env {
+        ! mp-alt .alt SCompu _ret {
+          ! mp-alt .alt SCompu _bind {
+            ! mp-alt .alt SCompu _force {
+              ! mp-alt .alt SCompu _if {
+                ! mp-alt .alt SCompu _lam {
+                  ! mp-alt .alt SCompu _app {
+                    comatch
+                    | .run s i =>
+                      ! mexn-err .fail (Pair SCompu Int64) +ParseError(i, "expected computation")
+                    end
+                  }
                 }
               }
             }
           }
         }
       }
-    }
     end that
 
     def ! p_main (s : String) : MExnOS SCompu =
@@ -799,75 +823,82 @@ begin
 
     def fix interp (env : U EnvO) : Interp = comatch
     | .value sv => match sv
-    | +Var(x) => do x? <- ! env .lookup x;
-    match x?
-    | +None() => ! mexn-err .fail Value +FreeVariable()
-    | +Some(v) => ! mexn .return Value v
-    end
+    | +Var(x) =>
+      do x? <- ! env .lookup x;
+      match x?
+      | +None() => ! mexn-err .fail Value +FreeVariable()
+      | +Some(v) => ! mexn .return Value v
+      end
     | +Bool(b) => ! mexn .return Value +Bool(b)
     | +Int64(i) => ! mexn .return Value +Int64(i)
     | +Thunk(c) => ! mexn .return Value +Thunk({ ! interp env .compu c })
     end
-    | .compu sc => let ! type-error = ! mexn-err .fail Value +TypeError() in
-    match sc
-    | +Lam(x, sc) => comatch
-    | .app v => ! interp { ! env .extend x v } .compu sc
-    | .bind _ _ k => ! malg Value type-error {
-      fn v =>
-        -- the following is unreachable
-        ! k v .app v
-    }
-    | .os => ! type-error
-    end
-    | +App(sc, sv) => ! malg Value { ! interp env .value sv } {
-      fn v => ! interp env .compu sc .app v
-    }
-    | +Ret(sv) => comatch
-    | .app _ => ! malg-err .failA +TypeError()
-    | .bind _ _ k => ! malg Value { ! interp env .value sv } {
-      fn v => ! k v
-    }
-    | .os => ! interp env .value sv
-    end
-    | +Bind(sc1, x, sc2) => ! interp env .compu sc1 .bind x sc2 {
-      fn v => ! interp { ! env .extend x v } .compu sc2
-    }
-    | +Force(sv) => ! malg Value { ! interp env .value sv } {
-      fn v =>
-        match v
-        | +Bool(_) => ! malg-err .failA +TypeError()
-        | +Int64(_) => ! malg-err .failA +TypeError()
-        | +Thunk(c) => ! c
-        end
-    }
-    | +Rec(x, sc) =>
-      ! interp { ! env .extend x +Thunk({ ! interp env .compu +Rec(x, sc) }) } .compu sc
-    | +If(sv, c1, c2) => ! malg Value { ! interp env .value sv } {
-      fn v =>
-        match v
-        | +Bool(b) => match b
-        | +True() => ! interp env .compu c1
-        | +False() => ! interp env .compu c2
-        end
-        | +Int64(_) => ! malg-err .failA +TypeError()
-        | +Thunk(_) => ! malg-err .failA +TypeError()
-        end
-    }
-    | +Env(sc) => let fix walk (items : List TraceItem) : Compu = comatch
-    | .app v => ! walk +Cons(+App(v), items)
-    | .bind x sc k => ! walk +Cons(+Bind(x, sc, k), items)
-    | .os => let ! mp : MExnOS Unit = comatch
-    | .run ka _ => ! (stdio/write_line) "[[DEBUG]]" {
-      ! (stdio/write) "[env]: " {
-        ! env .print {
-          ! (stdio/write) "[term]: " {
-            ! print-scompu sc {
-              ! (stdio/write_line) "" {
-                ! (stdio/write) "[stack]: " {
-                  ! traceo items .print {
-                    ! (stdio/write) "Continue? " {
-                      ! (stdio/read_line) {
-                        fn _ => ! ka ()
+    | .compu sc =>
+      let ! type-error = ! mexn-err .fail Value +TypeError() in
+      match sc
+      | +Lam(x, sc) => comatch
+      | .app v => ! interp { ! env .extend x v } .compu sc
+      | .bind _ _ k => ! malg Value type-error {
+        fn v =>
+          -- the following is unreachable
+          ! k v .app v
+      }
+      | .os => ! type-error
+      end
+      | +App(sc, sv) => ! malg Value { ! interp env .value sv } {
+        fn v => ! interp env .compu sc .app v
+      }
+      | +Ret(sv) => comatch
+      | .app _ => ! malg-err .failA +TypeError()
+      | .bind _ _ k => ! malg Value { ! interp env .value sv } {
+        fn v => ! k v
+      }
+      | .os => ! interp env .value sv
+      end
+      | +Bind(sc1, x, sc2) => ! interp env .compu sc1 .bind x sc2 {
+        fn v => ! interp { ! env .extend x v } .compu sc2
+      }
+      | +Force(sv) => ! malg Value { ! interp env .value sv } {
+        fn v =>
+          match v
+          | +Bool(_) => ! malg-err .failA +TypeError()
+          | +Int64(_) => ! malg-err .failA +TypeError()
+          | +Thunk(c) => ! c
+          end
+      }
+      | +Rec(x, sc) =>
+        ! interp { ! env .extend x +Thunk({ ! interp env .compu +Rec(x, sc) }) } .compu sc
+      | +If(sv, c1, c2) => ! malg Value { ! interp env .value sv } {
+        fn v =>
+          match v
+          | +Bool(b) => match b
+          | +True() => ! interp env .compu c1
+          | +False() => ! interp env .compu c2
+          end
+          | +Int64(_) => ! malg-err .failA +TypeError()
+          | +Thunk(_) => ! malg-err .failA +TypeError()
+          end
+      }
+      | +Env(sc) =>
+        let fix walk (items : List TraceItem) : Compu = comatch
+        | .app v => ! walk +Cons(+App(v), items)
+        | .bind x sc k => ! walk +Cons(+Bind(x, sc, k), items)
+        | .os =>
+          let ! mp : MExnOS Unit = comatch
+          | .run ka _ => ! (stdio/write_line) "[[DEBUG]]" {
+            ! (stdio/write) "[env]: " {
+              ! env .print {
+                ! (stdio/write) "[term]: " {
+                  ! print-scompu sc {
+                    ! (stdio/write_line) "" {
+                      ! (stdio/write) "[stack]: " {
+                        ! traceo items .print {
+                          ! (stdio/write) "Continue? " {
+                            ! (stdio/read_line) {
+                              fn _ => ! ka ()
+                            }
+                          }
+                        }
                       }
                     }
                   }
@@ -875,69 +906,73 @@ begin
               }
             }
           }
-        }
-      }
-    }
-    end in
-    ! mexn .bind Unit Value mp {
-      fn _ =>
-        let fix cowalk (items : List TraceItem) : Compu = match items
-        | +Nil() => ! interp env .compu sc
-        | +Cons(item, items) => match item
-        | +App(v) => ! cowalk items .app v
-        | +Bind(x, sc, k) => ! cowalk items .bind x sc k
-        end
+          end in
+          ! mexn .bind Unit Value mp {
+            fn _ =>
+              let fix cowalk (items : List TraceItem) : Compu = match items
+              | +Nil() => ! interp env .compu sc
+              | +Cons(item, items) => match item
+              | +App(v) => ! cowalk items .app v
+              | +Bind(x, sc, k) => ! cowalk items .bind x sc k
+              end
+              end in
+              ! cowalk items .os
+          }
         end in
-        ! cowalk items .os
-    }
-    end in
-    ! walk +Nil()
-    end
+        ! walk +Nil()
+      end
     end that
 
     -- module Utils
-    def ! value-eq (v1 : Value) (v2 : Value) (k : U OS) : OS = let ! expect-bool-panic =
-      ! panic "expected bool value"
-    in
-    let ! expect-int64-panic = ! panic "expected int64 value" in
-    let ! correct = ! (stdio/write_line) "\\^o^/" k in
-    match v1
-    | +Bool(b1) => match v2
-    | +Bool(b2) => do eq? <- ! bool_eq b1 b2;
-    match eq?
-    | +True() => ! correct
-    | +False() => do b1 <- ! bool_to_str b1;
-    do b2 <- ! bool_to_str b2;
-    do msg <- ! (string/append) b1 " != ";
-    do msg <- ! (string/append) msg b2;
-    do msg <- ! (string/append) "wrong bool value: " msg;
-    ! panic msg
-    end
-    | +Int64(_) => ! expect-bool-panic
-    | +Thunk(_) => ! expect-bool-panic
-    end
-    | +Int64(i1) => match v2
-    | +Bool(_) => ! expect-int64-panic
-    | +Int64(i2) => do eq? <- ! int_eq i1 i2;
-    match eq?
-    | +True() => ! correct
-    | +False() => do i1 <- ! (int64/to_string) i1;
-    do i2 <- ! (int64/to_string) i2;
-    do msg <- ! (string/append) i1 " != ";
-    do msg <- ! (string/append) msg i2;
-    do msg <- ! (string/append) "wrong int64 value: " msg;
-    ! panic msg
-    end
-    | +Thunk(_) => ! expect-int64-panic
-    end
-    | +Thunk(_) => ! panic "thunks are not comparable"
-    end that
+    def ! value-eq (v1 : Value) (v2 : Value) (k : U OS) : OS =
+      let ! expect-bool-panic =
+        ! panic "expected bool value"
+      in
+      let ! expect-int64-panic = ! panic "expected int64 value" in
+      let ! correct = ! (stdio/write_line) "\\^o^/" k in
+      match v1
+      | +Bool(b1) => match v2
+      | +Bool(b2) =>
+        do eq? <- ! bool_eq b1 b2;
+        match eq?
+        | +True() => ! correct
+        | +False() =>
+          do b1 <- ! bool_to_str b1;
+          do b2 <- ! bool_to_str b2;
+          do msg <- ! (string/append) b1 " != ";
+          do msg <- ! (string/append) msg b2;
+          do msg <- ! (string/append) "wrong bool value: " msg;
+          ! panic msg
+        end
+      | +Int64(_) => ! expect-bool-panic
+      | +Thunk(_) => ! expect-bool-panic
+      end
+      | +Int64(i1) => match v2
+      | +Bool(_) => ! expect-int64-panic
+      | +Int64(i2) =>
+        do eq? <- ! int_eq i1 i2;
+        match eq?
+        | +True() => ! correct
+        | +False() =>
+          do i1 <- ! (int64/to_string) i1;
+          do i2 <- ! (int64/to_string) i2;
+          do msg <- ! (string/append) i1 " != ";
+          do msg <- ! (string/append) msg i2;
+          do msg <- ! (string/append) "wrong int64 value: " msg;
+          ! panic msg
+        end
+      | +Thunk(_) => ! expect-int64-panic
+      end
+      | +Thunk(_) => ! panic "thunks are not comparable"
+      end
+    that
 
     def ! report (e : Exception) : OS = match e
-    | +ParseError(loc, msg) => do loc <- ! (int64/to_string) loc;
-    do loc <- ! (string/append) loc ": ";
-    do msg <- ! (string/append) loc msg;
-    ! panic msg
+    | +ParseError(loc, msg) =>
+      do loc <- ! (int64/to_string) loc;
+      do loc <- ! (string/append) loc ": ";
+      do msg <- ! (string/append) loc msg;
+      ! panic msg
     | +FreeVariable() => ! panic "free variable"
     | +TypeError() => ! panic "type error"
     end that
@@ -945,66 +980,68 @@ begin
 
     def ! nil-env : EnvO = ! envo +Empty() that
 
-    def ! cbpv-env : EnvO = let ! app-int64 (f : U (Int64 -> Compu)) : Compu = comatch
-    | .app v => match v
-    | +Bool(_) => ! malg-err .failA +TypeError()
-    | +Thunk(_) => ! malg-err .failA +TypeError()
-    | +Int64(i) => ! f i
-    end
-    | .bind _ _ _ => ! malg-err .failA +TypeError()
-    | .os => ! mexn-err .fail Value +TypeError()
-    end in
-    let ! int64-op (op : U (Int64 -> Int64 -> Ret Value)) : Compu = ! app-int64 {
-      fn i1 =>
-        ! app-int64 {
-          fn i2 =>
-            do v <- ! op i1 i2;
-            comatch
-            | .app _ => ! malg-err .failA +TypeError()
-            | .bind _ _ k => ! malg Value { ! mexn .return Value v } {
-              fn v => ! k v
-            }
-            | .os => ! mexn .return Value v
-            end
-        }
-    } in
-    ! envo +Extend(
-      "add",
-      +Thunk(
-        {
-          ! int64-op {
-            fn i1 i2 =>
-              do i <- ! (int64/add) i1 i2;
-              ret +Int64(i)
+    def ! cbpv-env : EnvO =
+      let ! app-int64 (f : U (Int64 -> Compu)) : Compu = comatch
+      | .app v => match v
+      | +Bool(_) => ! malg-err .failA +TypeError()
+      | +Thunk(_) => ! malg-err .failA +TypeError()
+      | +Int64(i) => ! f i
+      end
+      | .bind _ _ _ => ! malg-err .failA +TypeError()
+      | .os => ! mexn-err .fail Value +TypeError()
+      end in
+      let ! int64-op (op : U (Int64 -> Int64 -> Ret Value)) : Compu = ! app-int64 {
+        fn i1 =>
+          ! app-int64 {
+            fn i2 =>
+              do v <- ! op i1 i2;
+              comatch
+              | .app _ => ! malg-err .failA +TypeError()
+              | .bind _ _ k => ! malg Value { ! mexn .return Value v } {
+                fn v => ! k v
+              }
+              | .os => ! mexn .return Value v
+              end
           }
-        }
-      ),
-      +Extend(
-        "mul",
+      } in
+      ! envo +Extend(
+        "add",
         +Thunk(
           {
             ! int64-op {
               fn i1 i2 =>
-                do i <- ! (int64/mul) i1 i2;
+                do i <- ! (int64/add) i1 i2;
                 ret +Int64(i)
             }
           }
         ),
         +Extend(
-          "eq",
+          "mul",
           +Thunk(
             {
               ! int64-op {
                 fn i1 i2 =>
-                  do b <- ! int_eq i1 i2;
-                  ret +Bool(b)
+                  do i <- ! (int64/mul) i1 i2;
+                  ret +Int64(i)
               }
             }
           ),
-          +Empty()
+          +Extend(
+            "eq",
+            +Thunk(
+              {
+                ! int64-op {
+                  fn i1 i2 =>
+                    do b <- ! int_eq i1 i2;
+                    ret +Bool(b)
+                }
+              }
+            ),
+            +Empty()
+          )
         )
       )
-    ) that
+    that
 
     def ! demo-scompu (env : U EnvO) (term : SCompu) (ans : Value) (k : U OS) : OS =
       ! interp env .compu term .os .run {

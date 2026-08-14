@@ -12,10 +12,12 @@ begin
   def Self (B : VType) : VType = data
   | +Roll : Thk (Self B -> Ret B)
   end that
-  def ! fix' (B : CType) (f : Thk (Thk B -> B)) : B = let ! prim : Y B = comatch
-  | .y x => ! f { ! x .y x }
-  end in
-  ! prim .y prim that
+  def ! fix' (B : CType) (f : Thk (Thk B -> B)) : B =
+    let ! prim : Y B = comatch
+    | .y x => ! f { ! x .y x }
+    end in
+    ! prim .y prim
+  that
   def ! m : OS = ! fix' OS { fn loop => ! loop } that
 
   ! (process/exit) 0

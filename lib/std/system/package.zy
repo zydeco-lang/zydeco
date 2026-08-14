@@ -39,21 +39,24 @@ begin
     let ! continue_io_ok (A : VType)
       (continuation : Thk (Result A IoError -> OS))
       (value : A)
-    : OS = do result <- ! (result/ok) A IoError value;
-      ! continuation result
+    : OS =
+        do result <- ! (result/ok) A IoError value;
+        ! continuation result
     in
     let ! continue_io_error (A : VType)
       (continuation : Thk (Result A IoError -> OS))
       (error : IoError)
-    : OS = do result <- ! (result/err) A IoError error;
-      ! continuation result
+    : OS =
+        do result <- ! (result/err) A IoError error;
+        ! continuation result
     in
     let ! continue_host_error (A : VType)
       (continuation : Thk (Result A IoError -> OS))
       (code : Int64)
       (message : String)
-    : OS = do error <- ! make_io_error code message;
-      ! continue_io_error A continuation error
+    : OS =
+        do error <- ! make_io_error code message;
+        ! continue_io_error A continuation error
     in
     let ! io_read (reader : Reader)
       (count : Int64)
@@ -121,27 +124,30 @@ begin
     in
     let ! fs_open_reader (path : Path)
       (continuation : Thk (Result Reader IoError -> OS))
-    : OS = do string <- ! (io_types/path_string) path;
-      ! (fs/open_reader)
-        string
-        { fn code message => ! continue_host_error Reader continuation code message }
-        { fn reader => ! continue_io_ok Reader continuation reader }
+    : OS =
+        do string <- ! (io_types/path_string) path;
+        ! (fs/open_reader)
+          string
+          { fn code message => ! continue_host_error Reader continuation code message }
+          { fn reader => ! continue_io_ok Reader continuation reader }
     in
     let ! fs_create_writer (path : Path)
       (continuation : Thk (Result Writer IoError -> OS))
-    : OS = do string <- ! (io_types/path_string) path;
-      ! (fs/create_writer)
-        string
-        { fn code message => ! continue_host_error Writer continuation code message }
-        { fn writer => ! continue_io_ok Writer continuation writer }
+    : OS =
+        do string <- ! (io_types/path_string) path;
+        ! (fs/create_writer)
+          string
+          { fn code message => ! continue_host_error Writer continuation code message }
+          { fn writer => ! continue_io_ok Writer continuation writer }
     in
     let ! fs_append_writer (path : Path)
       (continuation : Thk (Result Writer IoError -> OS))
-    : OS = do string <- ! (io_types/path_string) path;
-      ! (fs/append_writer)
-        string
-        { fn code message => ! continue_host_error Writer continuation code message }
-        { fn writer => ! continue_io_ok Writer continuation writer }
+    : OS =
+        do string <- ! (io_types/path_string) path;
+        ! (fs/append_writer)
+          string
+          { fn code message => ! continue_host_error Writer continuation code message }
+          { fn writer => ! continue_io_ok Writer continuation writer }
     in
     let ! finish_reader (A : VType)
       (reader : Reader)
@@ -255,8 +261,9 @@ begin
     let ! fs_write_text (path : Path)
       (string : String)
       (continuation : Thk (Result Unit IoError -> OS))
-    : OS = do encoded <- ! (bytes/from_string) string;
-      ! fs_write_bytes path encoded continuation
+    : OS =
+        do encoded <- ! (bytes/from_string) string;
+        ! fs_write_bytes path encoded continuation
     in
     let ! write_bytes_and_flush (writer : Writer)
       (chunk : Bytes)
@@ -275,86 +282,95 @@ begin
     let ! stdio_write_to (writer : Writer)
       (string : String)
       (continuation : Thk (Result Unit IoError -> OS))
-    : OS = do encoded <- ! (bytes/from_string) string;
-      ! write_bytes_and_flush writer encoded continuation
+    : OS =
+        do encoded <- ! (bytes/from_string) string;
+        ! write_bytes_and_flush writer encoded continuation
     in
     let ! stdio_write_line_to (writer : Writer)
       (string : String)
       (continuation : Thk (Result Unit IoError -> OS))
-    : OS = do encoded <- ! (bytes/from_string) string;
-      do newline <- ! (bytes/from_string) "\n";
-      do line <- ! (bytes/append) encoded newline;
-      ! write_bytes_and_flush writer line continuation
+    : OS =
+        do encoded <- ! (bytes/from_string) string;
+        do newline <- ! (bytes/from_string) "\n";
+        do line <- ! (bytes/append) encoded newline;
+        ! write_bytes_and_flush writer line continuation
     in
     let ! stdio_read_line (continuation : Thk (Result (Option String) IoError -> OS)) :
-      OS = do reader <- ! (stdio/stdin);
-      ! io_read_line reader {
-        fn read_result =>
-          ! (result/fold)
-            (Option Bytes)
-            IoError
-            OS
-            read_result
-            {
-              fn line =>
-                ! (option/fold)
-                  Bytes
-                  OS
-                  line
-                  {
-                    do absent <- ! (option/none) String;
-                    ! continue_io_ok (Option String) continuation absent
-                  }
-                  {
-                    fn line_bytes =>
-                      ! (bytes/to_string)
-                        OS
-                        line_bytes
-                        {
-                          do error <- ! (io_types/error)
-                            io_types/invalid_data
-                            "standard input is not valid UTF-8";
-                          ! continue_io_error (Option String) continuation error
-                        }
-                        {
-                          fn string =>
-                            do present <- ! (option/some) String string;
-                            ! continue_io_ok (Option String) continuation present
-                        }
-                  }
-            }
-            { fn error => ! continue_io_error (Option String) continuation error }
-      }
+      OS =
+        do reader <- ! (stdio/stdin);
+        ! io_read_line reader {
+          fn read_result =>
+            ! (result/fold)
+              (Option Bytes)
+              IoError
+              OS
+              read_result
+              {
+                fn line =>
+                  ! (option/fold)
+                    Bytes
+                    OS
+                    line
+                    {
+                      do absent <- ! (option/none) String;
+                      ! continue_io_ok (Option String) continuation absent
+                    }
+                    {
+                      fn line_bytes =>
+                        ! (bytes/to_string)
+                          OS
+                          line_bytes
+                          {
+                            do error <- ! (io_types/error)
+                              io_types/invalid_data
+                              "standard input is not valid UTF-8";
+                            ! continue_io_error (Option String) continuation error
+                          }
+                          {
+                            fn string =>
+                              do present <- ! (option/some) String string;
+                              ! continue_io_ok (Option String) continuation present
+                          }
+                    }
+              }
+              { fn error => ! continue_io_error (Option String) continuation error }
+        }
     in
     let ! stdio_write (string : String)
       (continuation : Thk (Result Unit IoError -> OS))
-    : OS = do writer <- ! (stdio/stdout);
-      ! stdio_write_to writer string continuation
+    : OS =
+        do writer <- ! (stdio/stdout);
+        ! stdio_write_to writer string continuation
     in
     let ! stdio_write_line (string : String)
       (continuation : Thk (Result Unit IoError -> OS))
-    : OS = do writer <- ! (stdio/stdout);
-      ! stdio_write_line_to writer string continuation
+    : OS =
+        do writer <- ! (stdio/stdout);
+        ! stdio_write_line_to writer string continuation
     in
     let ! stdio_write_error (string : String)
       (continuation : Thk (Result Unit IoError -> OS))
-    : OS = do writer <- ! (stdio/stderr);
-      ! stdio_write_to writer string continuation
+    : OS =
+        do writer <- ! (stdio/stderr);
+        ! stdio_write_to writer string continuation
     in
     let ! stdio_write_error_line (string : String)
       (continuation : Thk (Result Unit IoError -> OS))
-    : OS = do writer <- ! (stdio/stderr);
-      ! stdio_write_line_to writer string continuation
+    : OS =
+        do writer <- ! (stdio/stderr);
+        ! stdio_write_line_to writer string continuation
     in
-    let ! arg_list (continuation : Thk (List String -> OS)) : OS = do arguments <- ! (args/fold)
-      (Ret (List String))
-      { ! (list/nil) String }
-      {
-        fn argument remaining =>
-          do tail <- ! remaining;
-          ! (list/cons) String argument tail
-      };
-    ! continuation arguments in
+    let ! arg_list (continuation : Thk (List String -> OS)) : OS =
+      do arguments <- ! (args/fold)
+        (Ret (List String))
+        { ! (list/nil) String }
+        {
+          fn argument remaining =>
+            do tail <- ! remaining;
+            ! (list/cons) String argument tail
+        };
+      ! continuation arguments
+    in
     let halt : Thk OS = { ! (process/exit) 0 } in
     let ! panic (message : String) : OS =
       ! stdio_write_error_line message { fn _ => ! (process/exit) 1 }

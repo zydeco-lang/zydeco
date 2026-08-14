@@ -27,8 +27,9 @@ begin
     (result : Result A E)
     (transform : Thk (A -> Ret B))
   : Ret (Result B E) = match result
-    | +Ok(value) => do transformed <- ! transform value;
-    ! ok B E transformed
+    | +Ok(value) =>
+      do transformed <- ! transform value;
+      ! ok B E transformed
     | +Err(error) => ! err B E error
     end
   that
@@ -39,8 +40,9 @@ begin
     (transform : Thk (E -> Ret F))
   : Ret (Result A F) = match result
     | +Ok(value) => ! ok A F value
-    | +Err(error) => do transformed <- ! transform error;
-    ! err A F transformed
+    | +Err(error) =>
+      do transformed <- ! transform error;
+      ! err A F transformed
     end
   that
   def ! and_then (A : VType)

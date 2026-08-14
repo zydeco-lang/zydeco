@@ -26,8 +26,9 @@ begin
     (transform : Thk (A -> Ret B))
   : Ret (Option B) = match option
     | +None(_) => ! none B
-    | +Some(value) => do transformed <- ! transform value;
-    ! some B transformed
+    | +Some(value) =>
+      do transformed <- ! transform value;
+      ! some B transformed
     end
   that
   def ! and_then (A : VType)

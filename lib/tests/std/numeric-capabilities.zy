@@ -16,9 +16,10 @@ begin
     (right : A)
     (offset : A)
     (expected : A)
-  : Ret Bool = do product <- ! (dictionary/multiplicative/mul) left right;
-    do total <- ! (dictionary/additive/add) product offset;
-    ! (dictionary/order/equality/eq) total expected
+  : Ret Bool =
+      do product <- ! (dictionary/multiplicative/mul) left right;
+      do total <- ! (dictionary/additive/add) product offset;
+      ! (dictionary/order/equality/eq) total expected
   in
   let ! strictly_less (A : VType)
     (dictionary : Numeric Bool A)

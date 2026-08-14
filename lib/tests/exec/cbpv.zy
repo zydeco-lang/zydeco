@@ -124,11 +124,12 @@ begin
     def fix envo (env : EnvT) : EnvO = comatch
     | .lookup x => match env
     | +Empty() => ret +None()
-    | +Extend(x', v, env') => do is-eq? <- ! str_eq x x';
-    match is-eq?
-    | +True() => ret +Some(v)
-    | +False() => ! envo env' .lookup x
-    end
+    | +Extend(x', v, env') =>
+      do is-eq? <- ! str_eq x x';
+      match is-eq?
+      | +True() => ret +Some(v)
+      | +False() => ! envo env' .lookup x
+      end
     end
     | .extend x v => ! envo +Extend(x, v, env)
     end that
@@ -153,11 +154,12 @@ begin
       end that
     def fix interp (env : Thk EnvO) : Interp = comatch
     | .value sv => match sv
-    | +Var(x) => do x? <- ! env .lookup x;
-    match x?
-    | +None() => ! mexn .fail Value +FreeVariable()
-    | +Some(v) => ! mexn .return Value v
-    end
+    | +Var(x) =>
+      do x? <- ! env .lookup x;
+      match x?
+      | +None() => ! mexn .fail Value +FreeVariable()
+      | +Some(v) => ! mexn .return Value v
+      end
     | +Bool(b) => ! mexn .return Value +Bool(b)
     | +Thunk(c) => ! mexn .return Value +Thunk(
       {
@@ -172,45 +174,50 @@ begin
       sc
     | .bind => ! mexn .fail Value +TypeError()
     end
-    | +App(sc, sv) => let ! mv = ! interp env .value sv in
-    ! malg Value mv {
-      fn v => ! interp env .compu sc .app v
-    }
-    | +Ret(sv) => let fix unwind (m : Thk (MExnOS Value)) : Compu = comatch
-    | .app _ => ! unwind {
-      ! mexn .fail Value +TypeError()
-    }
-    | .bind => ! m
-    end in
-    ! unwind {
-      ! interp env .value sv
-    }
-    | +Bind(sc1, x, sc2) => let ! mv = ! interp env .compu sc1 .bind in
-    ! malg Value mv {
-      fn v =>
-        ! interp
-          { ! env .extend x v } .compu
-          sc2
-    }
-    | +Force(sv) => let ! mv = ! interp env .value sv in
-    ! malg Value mv {
-      fn v =>
-        match v
-        | +Bool(_) => ! abort +TypeError()
-        | +Thunk(c) => ! c
-        end
-    }
-    | +If(sv, c1, c2) => let ! mv = ! interp env .value sv in
-    ! malg Value mv {
-      fn v =>
-        match v
-        | +Bool(b) => match b
-        | +True() => ! interp env .compu c1
-        | +False() => ! interp env .compu c2
-        end
-        | +Thunk(_) => ! abort +TypeError()
-        end
-    }
+    | +App(sc, sv) =>
+      let ! mv = ! interp env .value sv in
+      ! malg Value mv {
+        fn v => ! interp env .compu sc .app v
+      }
+    | +Ret(sv) =>
+      let fix unwind (m : Thk (MExnOS Value)) : Compu = comatch
+      | .app _ => ! unwind {
+        ! mexn .fail Value +TypeError()
+      }
+      | .bind => ! m
+      end in
+      ! unwind {
+        ! interp env .value sv
+      }
+    | +Bind(sc1, x, sc2) =>
+      let ! mv = ! interp env .compu sc1 .bind in
+      ! malg Value mv {
+        fn v =>
+          ! interp
+            { ! env .extend x v } .compu
+            sc2
+      }
+    | +Force(sv) =>
+      let ! mv = ! interp env .value sv in
+      ! malg Value mv {
+        fn v =>
+          match v
+          | +Bool(_) => ! abort +TypeError()
+          | +Thunk(c) => ! c
+          end
+      }
+    | +If(sv, c1, c2) =>
+      let ! mv = ! interp env .value sv in
+      ! malg Value mv {
+        fn v =>
+          match v
+          | +Bool(b) => match b
+          | +True() => ! interp env .compu c1
+          | +False() => ! interp env .compu c2
+          end
+          | +Thunk(_) => ! abort +TypeError()
+          end
+      }
     end
     end that
 
@@ -219,21 +226,24 @@ begin
     | +TypeError() => ! (process/exit) 1
     | +FreeVariable() => ! (process/exit) 1
     end in
-    let ! value-eq (v1 : Value) (v2 : Value) (k : Thk OS) : OS = let ! bool-value-panic =
-      ! (process/exit) 1
+    let ! value-eq (v1 : Value) (v2 : Value) (k : Thk OS) : OS =
+      let ! bool-value-panic =
+        ! (process/exit) 1
+      in
+      let ! thunk-panic = ! (process/exit) 1 in
+      match v1
+      | +Bool(b1) => match v2
+      | +Bool(b2) =>
+        do eq? <- ! bool_eq b1 b2;
+        match eq?
+        | +True() => ! (stdio/write_line) "\\^o^/" k
+        | +False() => ! bool-value-panic
+        end
+      | +Thunk(_) => ! thunk-panic
+      end
+      | +Thunk(_) => ! thunk-panic
+      end
     in
-    let ! thunk-panic = ! (process/exit) 1 in
-    match v1
-    | +Bool(b1) => match v2
-    | +Bool(b2) => do eq? <- ! bool_eq b1 b2;
-    match eq?
-    | +True() => ! (stdio/write_line) "\\^o^/" k
-    | +False() => ! bool-value-panic
-    end
-    | +Thunk(_) => ! thunk-panic
-    end
-    | +Thunk(_) => ! thunk-panic
-    end in
     let ! demo (term : SCompu) (ans : Value) (k : Thk OS) : OS = ! interp env .compu term .bind .run
       {
         fn v => ! value-eq v ans k

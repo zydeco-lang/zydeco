@@ -104,8 +104,9 @@ begin
             end in
             comatch
             | .monad => ! mo_exnk E
-            | .lift A m => do a <- ! m;
-            ! mo_exnk E .return A a
+            | .lift A m =>
+              do a <- ! m;
+              ! mo_exnk E .return A a
             end
           : forall (E : VType) . MonadTransInner (ExnK E)
         )

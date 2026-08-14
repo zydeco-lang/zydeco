@@ -56,9 +56,10 @@ begin
         do cached <- ! (references/read) (Option A) cache;
         match cached
         | +Some(value) => ret value
-        | +None() => do value <- ! suspended;
-        do _ <- ! (references/write) (Option A) cache +Some(value);
-        ret value
+        | +None() =>
+          do value <- ! suspended;
+          do _ <- ! (references/write) (Option A) cache +Some(value);
+          ret value
         end
       }
   } that

@@ -15,24 +15,27 @@ begin
         X that
     def ! mo_ret : Monad Ret = comatch
     | .return A value => ret value
-    | .bind A B computation continuation => do value <- ! computation;
-    ! continuation value
+    | .bind A B computation continuation =>
+      do value <- ! computation;
+      ! continuation value
     end that
     def ! translated = @[monadic] begin
-      let ! reveal = do _ <- ret ();
-      fn
-        (
+      let ! reveal =
+        do _ <- ret ();
+        fn
           (
-            Leading,
-            X,
-            AliasX,
-            Trailing,
-            value
+            (
+              Leading,
+              X,
+              AliasX,
+              Trailing,
+              value
+            )
+            : Mixed
           )
-          : Mixed
-        )
-      =>
-        ret value in
+        =>
+          ret value
+      in
       ! reveal (
         Unit,
         Int64,

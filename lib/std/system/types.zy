@@ -87,9 +87,10 @@ begin
     (right : IoErrorKind)
     (when_equal : Thk R)
     (when_different : Thk R)
-  : R = do left_code <- ! kind_code left;
-    do right_code <- ! kind_code right;
-    ! (int64/eq) R left_code right_code when_equal when_different
+  : R =
+      do left_code <- ! kind_code left;
+      do right_code <- ! kind_code right;
+      ! (int64/eq) R left_code right_code when_equal when_different
   that
   def IoError = data
   | +IoError : (kind :: IoErrorKind) * (message :: String)

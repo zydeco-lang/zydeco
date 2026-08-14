@@ -19,11 +19,15 @@ begin
       A
     end
   that
-  let LexicalTypeIdentity = param A : VType in
-  let Result = A in
-  Result that
-  let LexicalHidden = def Secret : VType = Int64 in
-  Secret that
+  let LexicalTypeIdentity =
+    param A : VType in
+    let Result = A in
+    Result
+  that
+  let LexicalHidden =
+    def Secret : VType = Int64 in
+    Secret
+  that
   let Hidden = begin
     def Secret : VType = Int64 that
     Secret
@@ -42,11 +46,13 @@ begin
     param value that
     ret value
   end that
-  def ! lexical_run = param value : Int64 in
-  def expected : Int64 = 42 in
-  let answer = value in
-  do status <- ! (int64/sub) answer expected;
-  ! (process/exit) status that
+  def ! lexical_run =
+    param value : Int64 in
+    def expected : Int64 = 42 in
+    let answer = value in
+    do status <- ! (int64/sub) answer expected;
+    ! (process/exit) status
+  that
   def ! run = begin
     let answer : Number = seed that
     param seed : Number that

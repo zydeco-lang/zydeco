@@ -55,8 +55,9 @@ begin
     let ! result_is_err (A : VType)
       (E : VType)
       (value : Result A E)
-    : Ret Bool = do successful <- ! result_is_ok A E value;
-      ! (bool/not) successful
+    : Ret Bool =
+        do successful <- ! result_is_ok A E value;
+        ! (bool/not) successful
     in
     let ! list_is_empty (A : VType) (values : List A) : Ret Bool = ! (list/case)
       A

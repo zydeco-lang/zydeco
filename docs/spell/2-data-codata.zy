@@ -103,8 +103,9 @@ begin
       fn combine accumulated remaining =>
         match remaining
         | +Nil() => ret accumulated
-        | +Cons(head, tail) => do next <- ! combine accumulated head;
-        ! fold_left combine next tail
+        | +Cons(head, tail) =>
+          do next <- ! combine accumulated head;
+          ! fold_left combine next tail
         end
   } that
   def fold_right : Thk (

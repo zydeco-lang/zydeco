@@ -86,11 +86,12 @@ begin
     --| Monad implementation for `Exn`
     let ! mo_exn (E : VType) : Monad (Exn E) = comatch
     | .return A a => ret +Right(a)
-    | .bind A A' m f => do a? <- ! m;
-    match a?
-    | +Left(e) => ret +Left(e)
-    | +Right(a) => ! f a
-    end
+    | .bind A A' m f =>
+      do a? <- ! m;
+      match a?
+      | +Left(e) => ret +Left(e)
+      | +Right(a) => ! f a
+      end
     end that
 
     --| Automatically generated implementation of the monad transformer for `ExnT`
@@ -111,16 +112,18 @@ begin
               @[debug("original")]
               let ! mo_exn (E : VType) : Monad (Exn E) = comatch
               | .return A a => ret +Right(a)
-              | .bind A A' m f => do a? <- ! m;
-              match a?
-              | +Left(e) => ret +Left(e)
-              | +Right(a) => ! f a
-              end
+              | .bind A A' m f =>
+                do a? <- ! m;
+                match a?
+                | +Left(e) => ret +Left(e)
+                | +Right(a) => ! f a
+                end
               end in
               comatch
               | .monad => ! mo_exn E
-              | .lift A m => do a <- ! m;
-              ! mo_exn E .return A a
+              | .lift A m =>
+                do a <- ! m;
+                ! mo_exn E .return A a
               end
             : forall (E : VType) . MonadTransInner (Exn E)
           )

@@ -74,8 +74,10 @@ begin
       {
         fn integer => ! (option/some) Int64 integer
       } in
-    let ! str_is_empty (value : String) : Ret Bool = do length <- ! (string/length) value;
-    ! int64_eq length 0 in
+    let ! str_is_empty (value : String) : Ret Bool =
+      do length <- ! (string/length) value;
+      ! int64_eq length 0
+    in
     let ! str_head (value : String) : Ret (Option Char) = ! str_get value 0 in
     let ! str_uncons (value : String) : Ret (Option (Char * String)) =
       do character <- ! str_get value 0;
@@ -93,17 +95,19 @@ begin
               { fn (_, tail) => ret (head, tail) }
         }
     in
-    let fix str_to_chars (value : String) : Ret (List Char) = do first <- ! str_uncons value;
-    ! (option/fold)
-      (Char * String)
-      (Ret (List Char))
-      first
-      { ! (list/nil) Char }
-      {
-        fn (head, tail) =>
-          do rest <- ! str_to_chars tail;
-          ! (list/cons) Char head rest
-      } in
+    let fix str_to_chars (value : String) : Ret (List Char) =
+      do first <- ! str_uncons value;
+      ! (option/fold)
+        (Char * String)
+        (Ret (List Char))
+        first
+        { ! (list/nil) Char }
+        {
+          fn (head, tail) =>
+            do rest <- ! str_to_chars tail;
+            ! (list/cons) Char head rest
+        }
+    in
     let fix str_from_chars (characters : List Char) : Ret String = ! (list/case)
       Char
       (Ret String)

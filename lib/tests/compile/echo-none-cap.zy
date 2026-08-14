@@ -8,8 +8,10 @@ begin
 
   ! (stdio/read_line) {
     fn line =>
-      let ! f (z : Int64) : OS = let line = line in
-      ! (process/exit) z in
+      let ! f (z : Int64) : OS =
+        let line = line in
+        ! (process/exit) z
+      in
       ! f 0
   }
 end

@@ -130,13 +130,15 @@ begin
           }
       }
   } in
-  let ! exercise (path_string : String) : OS = do path <- ! (fs/path) path_string;
-  ! (fs/write_text) path "hé🙂" {
-    fn written =>
-      ! expect_ok Unit written {
-        fn _ => ! append_marker path path_string
-      }
-  } in
+  let ! exercise (path_string : String) : OS =
+    do path <- ! (fs/path) path_string;
+    ! (fs/write_text) path "hé🙂" {
+      fn written =>
+        ! expect_ok Unit written {
+          fn _ => ! append_marker path path_string
+        }
+    }
+  in
 
   ! (process/arg_list) {
     fn arguments =>

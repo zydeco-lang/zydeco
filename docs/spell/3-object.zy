@@ -28,11 +28,13 @@ begin
         fix (this : Thk Counter) =>
           comatch
           | .number => ret current
-          | .increment amount => do previous <- ! this .number;
-          do next <- ! (int64/add) previous amount;
-          ! make_counter next
-          | .format => do value <- ! this .number;
-          ! (int64/to_string) value
+          | .increment amount =>
+            do previous <- ! this .number;
+            do next <- ! (int64/add) previous amount;
+            ! make_counter next
+          | .format =>
+            do value <- ! this .number;
+            ! (int64/to_string) value
           end
   } that
 

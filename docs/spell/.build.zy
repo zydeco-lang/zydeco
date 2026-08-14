@@ -135,65 +135,66 @@ begin
             fn line rest =>
               do classified <- ! classify_line line;
               match classified
-              | (content, comment) => do empty <- ! string_empty content;
-              match in_code
-              | +False() => ! branch
-                OS
-                empty
-                {
-                  ! (stdio/write) "\n\n" {
-                    ! loop rest in_code
-                  }
-                }
-                {
-                  ! branch
-                    OS
-                    comment
-                    {
-                      ! (stdio/write) content {
-                        ! (stdio/write) " " {
-                          ! loop rest in_code
-                        }
-                      }
+              | (content, comment) =>
+                do empty <- ! string_empty content;
+                match in_code
+                | +False() => ! branch
+                  OS
+                  empty
+                  {
+                    ! (stdio/write) "\n\n" {
+                      ! loop rest in_code
                     }
-                    {
-                      ! (stdio/write) "\n```zydeco\n" {
-                        ! (stdio/write) content {
-                          ! loop rest +True()
-                        }
-                      }
-                    }
-                }
-              | +True() => ! branch
-                OS
-                empty
-                {
-                  ! (stdio/write) "\n" {
-                    ! loop rest in_code
                   }
-                }
-                {
-                  ! branch
-                    OS
-                    comment
-                    {
-                      ! (stdio/write) "\n```\n\n" {
+                  {
+                    ! branch
+                      OS
+                      comment
+                      {
                         ! (stdio/write) content {
                           ! (stdio/write) " " {
-                            ! loop rest +False()
+                            ! loop rest in_code
                           }
                         }
                       }
-                    }
-                    {
-                      ! (stdio/write) "\n" {
-                        ! (stdio/write) content {
-                          ! loop rest in_code
+                      {
+                        ! (stdio/write) "\n```zydeco\n" {
+                          ! (stdio/write) content {
+                            ! loop rest +True()
+                          }
                         }
                       }
+                  }
+                | +True() => ! branch
+                  OS
+                  empty
+                  {
+                    ! (stdio/write) "\n" {
+                      ! loop rest in_code
                     }
-                }
-              end
+                  }
+                  {
+                    ! branch
+                      OS
+                      comment
+                      {
+                        ! (stdio/write) "\n```\n\n" {
+                          ! (stdio/write) content {
+                            ! (stdio/write) " " {
+                              ! loop rest +False()
+                            }
+                          }
+                        }
+                      }
+                      {
+                        ! (stdio/write) "\n" {
+                          ! (stdio/write) content {
+                            ! loop rest in_code
+                          }
+                        }
+                      }
+                  }
+                end
               end
           }
   } that
