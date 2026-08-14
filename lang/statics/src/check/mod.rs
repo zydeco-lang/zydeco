@@ -6233,10 +6233,27 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     };
                     arms_vec.push_back((name, ty));
                 }
-                let id: DataId = tycker.fresh();
-                tycker.statics.datas.insert_new(id, ss::Data::new(arms_vec));
-                let data = Alloc::alloc(tycker, id, vtype, &self.info);
-                TermAnnId::Type(data, vtype)
+                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                let arms_interned = crate::query::InternedDataArms::new(
+                    tycker.db,
+                    arms_vec.into_iter().collect::<Vec<_>>(),
+                );
+                let kd_interned = crate::query::InternedKind::new(tycker.db, vtype);
+                let Some(outcome) = crate::query::data_syn_judgment(
+                    tycker.db,
+                    tycker.data,
+                    term,
+                    arms_interned,
+                    kd_interned,
+                    tycker.site_occurrence(),
+                ) else {
+                    unreachable!("data declaration judgments are query-produced")
+                };
+                tycker.statics.datas.insert_new(outcome.data_id, outcome.data);
+                tycker.statics.types_pre.insert_new(outcome.ty_id, ss::Fillable::Done(outcome.ty));
+                tycker.statics.annotations_type.insert_new(outcome.ty_id, outcome.kd);
+                tycker.statics.env_type.insert_new(outcome.ty_id, self.info.clone());
+                TermAnnId::Type(outcome.ty_id, outcome.kd)
             }
             | Tm::CoData(term) => {
                 let su::CoData { arms } = term;
@@ -6258,10 +6275,27 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     };
                     arms_vec.push_back((name, ty));
                 }
-                let id: CoDataId = tycker.fresh();
-                tycker.statics.codatas.insert_new(id, ss::CoData::new(arms_vec));
-                let codata = Alloc::alloc(tycker, id, ctype, &self.info);
-                TermAnnId::Type(codata, ctype)
+                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                let arms_interned = crate::query::InternedCoDataArms::new(
+                    tycker.db,
+                    arms_vec.into_iter().collect::<Vec<_>>(),
+                );
+                let kd_interned = crate::query::InternedKind::new(tycker.db, ctype);
+                let Some(outcome) = crate::query::codata_syn_judgment(
+                    tycker.db,
+                    tycker.data,
+                    term,
+                    arms_interned,
+                    kd_interned,
+                    tycker.site_occurrence(),
+                ) else {
+                    unreachable!("codata declaration judgments are query-produced")
+                };
+                tycker.statics.codatas.insert_new(outcome.codata_id, outcome.codata);
+                tycker.statics.types_pre.insert_new(outcome.ty_id, ss::Fillable::Done(outcome.ty));
+                tycker.statics.annotations_type.insert_new(outcome.ty_id, outcome.kd);
+                tycker.statics.env_type.insert_new(outcome.ty_id, self.info.clone());
+                TermAnnId::Type(outcome.ty_id, outcome.kd)
             }
             | Tm::Ctor(term) => {
                 let su::Ctor(ctor, arg) = term;

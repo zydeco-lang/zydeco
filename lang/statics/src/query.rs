@@ -1602,6 +1602,86 @@ pub fn manifest_exists_syn_judgment<'db>(
     }
 }
 
+/// An interned data-arms table, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedDataArms<'db> {
+    pub arms: Vec<(ss::CtorName, ss::TypeId)>,
+}
+
+/// An interned codata-arms table, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedCoDataArms<'db> {
+    pub arms: Vec<(ss::DtorName, ss::TypeId)>,
+}
+
+/// The allocation tail of a data or codata declaration: the definition node
+/// and the type node referencing it.
+#[derive(Clone, Debug)]
+pub struct DataSynOutcome {
+    pub data_id: ss::DataId,
+    pub data: ss::Data,
+    pub ty_id: ss::TypeId,
+    pub ty: ss::Type,
+    pub kd: ss::KindId,
+}
+
+/// The allocation tail of a codata declaration.
+#[derive(Clone, Debug)]
+pub struct CoDataSynOutcome {
+    pub codata_id: ss::CoDataId,
+    pub codata: ss::CoData,
+    pub ty_id: ss::TypeId,
+    pub ty: ss::Type,
+    pub kd: ss::KindId,
+}
+
+/// The synthesized judgment of a data declaration, keyed on the checked arms.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn data_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+    arms: InternedDataArms<'db>, kd: InternedKind<'db>, occurrence: u32,
+) -> Option<DataSynOutcome> {
+    let su::Term::Data(su::Data { .. }) = data.scoped(db).terms.get(&term.id(db))? else {
+        return None;
+    };
+    let site_space = term.id(db).key_space().as_u64();
+    let site_raw = term.id(db).raw().into_u32();
+    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
+    let data_id: ss::DataId = derived_id(key_space, 0);
+    let ty_id: ss::TypeId = derived_id(key_space, 1);
+    Some(DataSynOutcome {
+        data_id,
+        data: ss::Data::new(arms.arms(db).iter().cloned()),
+        ty_id,
+        ty: ss::Type::Data(data_id),
+        kd: kd.id(db),
+    })
+}
+
+/// The synthesized judgment of a codata declaration, keyed on the checked
+/// arms.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn codata_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+    arms: InternedCoDataArms<'db>, kd: InternedKind<'db>, occurrence: u32,
+) -> Option<CoDataSynOutcome> {
+    let su::Term::CoData(su::CoData { .. }) = data.scoped(db).terms.get(&term.id(db))? else {
+        return None;
+    };
+    let site_space = term.id(db).key_space().as_u64();
+    let site_raw = term.id(db).raw().into_u32();
+    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
+    let codata_id: ss::CoDataId = derived_id(key_space, 0);
+    let ty_id: ss::TypeId = derived_id(key_space, 1);
+    Some(CoDataSynOutcome {
+        codata_id,
+        codata: ss::CoData::new(arms.arms(db).iter().cloned()),
+        ty_id,
+        ty: ss::Type::CoData(codata_id),
+        kd: kd.id(db),
+    })
+}
+
 /// The rejection of an intrinsic `Internal` term, carried as a query value so
 /// the checker routes decisions through queries and keeps the writer as a sink.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]

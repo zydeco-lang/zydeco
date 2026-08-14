@@ -513,3 +513,12 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   return value, keyed on the checked definition, binder, witness, and body. The checker
   keeps `introduce_payload`, the assignments, and the lubs.
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — data and codata declarations allocate through queries
+
+- `data_syn_judgment` and `codata_syn_judgment` own the declaration tails: the definition
+  node (with the checked arm table) and the `Type::Data`/`Type::CoData` node referencing it,
+  derived at the declaration's site. The checker keeps the arm checks and the Ana lub; the
+  final kind annotation enters the query as an interned `KindId`, preserving the exact
+  annotation node the checker computed.
+- Workspace suite passes unchanged (61 targets green), clippy clean.
