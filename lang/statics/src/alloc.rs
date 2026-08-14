@@ -28,6 +28,12 @@ pub struct DerivedAllocator {
     sites: Vec<(u64, u32, u32, u32)>,
 }
 
+impl Default for DerivedAllocator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DerivedAllocator {
     /// Create an allocator with a root site for allocations outside any entity.
     ///

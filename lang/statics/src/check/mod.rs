@@ -5601,126 +5601,158 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     }
                 }
             }
-            | Tm::Lit(lit) => {
-                fn primitive_type(
-                    tycker: &Tycker<'_>, ty: ss::TypeId,
-                ) -> Option<ss::PrimitiveType> {
-                    match tycker.statics.types_pre.get(&ty)?.to_owned() {
-                        | ss::Fillable::Fill(fill) => match tycker.statics.solus.get(&fill) {
-                            | Some(ss::AnnId::Type(solution)) => primitive_type(tycker, *solution),
-                            | _ => None,
-                        },
-                        | ss::Fillable::Done(ss::Type::Primitive(ss::PrimitiveTy(primitive))) => {
-                            Some(primitive)
+            | Tm::Lit(lit) => match switch {
+                | Switch::Syn => {
+                    let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                    let Some(outcome) =
+                        crate::query::literal_syn_judgment(tycker.db, tycker.data, term)
+                    else {
+                        unreachable!("literal judgments are query-produced")
+                    };
+                    match outcome {
+                        | crate::query::LiteralSynOutcome::Value { id, value, ty } => {
+                            tycker.statics.values.insert_new(id, value);
+                            tycker.statics.annotations_value.insert_new(id, ty);
+                            tycker.statics.env_value.insert_new(id, self.info.clone());
+                            TermAnnId::Value(id, ty)
                         }
-                        | ss::Fillable::Done(ss::Type::Named(ss::Named(_, inner))) => {
-                            primitive_type(tycker, inner)
+                        | crate::query::LiteralSynOutcome::Error(error) => {
+                            tycker.err_k(error, std::panic::Location::caller())?
                         }
-                        | ss::Fillable::Done(_) => None,
                     }
                 }
+                | Switch::Ana(annotation) => {
+                    let switch = Switch::Ana(annotation);
+                    fn primitive_type(
+                        tycker: &Tycker<'_>, ty: ss::TypeId,
+                    ) -> Option<ss::PrimitiveType> {
+                        match tycker.statics.types_pre.get(&ty)?.to_owned() {
+                            | ss::Fillable::Fill(fill) => match tycker.statics.solus.get(&fill) {
+                                | Some(ss::AnnId::Type(solution)) => {
+                                    primitive_type(tycker, *solution)
+                                }
+                                | _ => None,
+                            },
+                            | ss::Fillable::Done(ss::Type::Primitive(ss::PrimitiveTy(
+                                primitive,
+                            ))) => Some(primitive),
+                            | ss::Fillable::Done(ss::Type::Named(ss::Named(_, inner))) => {
+                                primitive_type(tycker, inner)
+                            }
+                            | ss::Fillable::Done(_) => None,
+                        }
+                    }
 
-                fn literal_type_k(
-                    tycker: &mut Tycker<'_>, env: &ss::TyEnv, switch: Switch<AnnId>,
-                    primitive: ss::PrimitiveType,
-                ) -> ResultKont<ss::TypeId> {
-                    let literal_ty = ss::PrimitiveTy(primitive).build(tycker, env);
-                    match switch {
-                        | Switch::Syn => Ok(literal_ty),
-                        | Switch::Ana(annotation) => {
-                            let AnnId::Type(ty) = annotation else {
-                                tycker.err_k(
+                    fn literal_type_k(
+                        tycker: &mut Tycker<'_>, env: &ss::TyEnv, switch: Switch<AnnId>,
+                        primitive: ss::PrimitiveType,
+                    ) -> ResultKont<ss::TypeId> {
+                        let literal_ty = ss::PrimitiveTy(primitive).build(tycker, env);
+                        match switch {
+                            | Switch::Syn => unreachable!("the synth path is query-produced"),
+                            | Switch::Ana(annotation) => {
+                                let AnnId::Type(ty) = annotation else {
+                                    tycker.err_k(
+                                        TyckError::SortMismatch,
+                                        std::panic::Location::caller(),
+                                    )?
+                                };
+                                Lub::lub_k(literal_ty, ty, tycker)
+                            }
+                        }
+                    }
+                    use zydeco_syntax::Literal as Lit;
+                    let (lit, ty) = match lit {
+                        | Lit::Integer(i) => {
+                            let (ty, integer_type) = match switch {
+                                | Switch::Syn => unreachable!("the synth path is query-produced"),
+                                | Switch::Ana(AnnId::Type(ty)) => {
+                                    match primitive_type(tycker, ty) {
+                                        | Some(ss::PrimitiveType::Integer(integer_type)) => {
+                                            (ty, integer_type)
+                                        }
+                                        | Some(_) | None => {
+                                            let default = ss::PrimitiveTy(
+                                                ss::PrimitiveType::Integer(ss::IntegerType::Int64),
+                                            )
+                                            .build(tycker, &self.info);
+                                            let ty = Lub::lub_k(default, ty, tycker)?;
+                                            (ty, ss::IntegerType::Int64)
+                                        }
+                                    }
+                                }
+                                | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err_k(
                                     TyckError::SortMismatch,
+                                    std::panic::Location::caller(),
+                                )?,
+                            };
+                            let value = i.value();
+                            let Some(i) = i.with_type(integer_type) else {
+                                tycker.err_k(
+                                    TyckError::IntegerLiteralOutOfRange { value, integer_type },
                                     std::panic::Location::caller(),
                                 )?
                             };
-                            Lub::lub_k(literal_ty, ty, tycker)
+                            (Lit::Integer(i), ty)
                         }
-                    }
+                        | Lit::Float(value) => {
+                            let (ty, float_type) = match switch {
+                                | Switch::Syn => unreachable!("the synth path is query-produced"),
+                                | Switch::Ana(AnnId::Type(ty)) => {
+                                    match primitive_type(tycker, ty) {
+                                        | Some(ss::PrimitiveType::Float(float_type)) => {
+                                            (ty, float_type)
+                                        }
+                                        | Some(_) | None => {
+                                            let default = ss::PrimitiveTy(
+                                                ss::PrimitiveType::Float(ss::FloatType::Float64),
+                                            )
+                                            .build(tycker, &self.info);
+                                            let ty = Lub::lub_k(default, ty, tycker)?;
+                                            (ty, ss::FloatType::Float64)
+                                        }
+                                    }
+                                }
+                                | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err_k(
+                                    TyckError::SortMismatch,
+                                    std::panic::Location::caller(),
+                                )?,
+                            };
+                            let original = value;
+                            let Some(value) = value.with_type(float_type) else {
+                                tycker.err_k(
+                                    TyckError::FloatLiteralOutOfRange {
+                                        value: original.value(),
+                                        float_type,
+                                    },
+                                    std::panic::Location::caller(),
+                                )?
+                            };
+                            (Lit::Float(value), ty)
+                        }
+                        | Lit::String(s) => {
+                            let ty = literal_type_k(
+                                tycker,
+                                &self.info,
+                                switch,
+                                ss::PrimitiveType::String,
+                            )?;
+                            (Lit::String(s), ty)
+                        }
+                        | Lit::Char(c) => {
+                            let ty = literal_type_k(
+                                tycker,
+                                &self.info,
+                                switch,
+                                ss::PrimitiveType::Char,
+                            )?;
+                            (Lit::Char(c), ty)
+                        }
+                    };
+                    let lit = Alloc::alloc(tycker, lit, ty, &self.info);
+                    TermAnnId::Value(lit, ty)
                 }
-                use zydeco_syntax::Literal as Lit;
-                let (lit, ty) = match lit {
-                    | Lit::Integer(i) => {
-                        let (ty, integer_type) = match switch {
-                            | Switch::Syn => {
-                                let integer_type = ss::IntegerType::Int64;
-                                let ty = ss::PrimitiveTy(ss::PrimitiveType::Integer(integer_type))
-                                    .build(tycker, &self.info);
-                                (ty, integer_type)
-                            }
-                            | Switch::Ana(AnnId::Type(ty)) => match primitive_type(tycker, ty) {
-                                | Some(ss::PrimitiveType::Integer(integer_type)) => {
-                                    (ty, integer_type)
-                                }
-                                | Some(_) | None => {
-                                    let default = ss::PrimitiveTy(ss::PrimitiveType::Integer(
-                                        ss::IntegerType::Int64,
-                                    ))
-                                    .build(tycker, &self.info);
-                                    let ty = Lub::lub_k(default, ty, tycker)?;
-                                    (ty, ss::IntegerType::Int64)
-                                }
-                            },
-                            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker
-                                .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
-                        };
-                        let value = i.value();
-                        let Some(i) = i.with_type(integer_type) else {
-                            tycker.err_k(
-                                TyckError::IntegerLiteralOutOfRange { value, integer_type },
-                                std::panic::Location::caller(),
-                            )?
-                        };
-                        (Lit::Integer(i), ty)
-                    }
-                    | Lit::Float(value) => {
-                        let (ty, float_type) = match switch {
-                            | Switch::Syn => {
-                                let float_type = ss::FloatType::Float64;
-                                let ty = ss::PrimitiveTy(ss::PrimitiveType::Float(float_type))
-                                    .build(tycker, &self.info);
-                                (ty, float_type)
-                            }
-                            | Switch::Ana(AnnId::Type(ty)) => match primitive_type(tycker, ty) {
-                                | Some(ss::PrimitiveType::Float(float_type)) => (ty, float_type),
-                                | Some(_) | None => {
-                                    let default = ss::PrimitiveTy(ss::PrimitiveType::Float(
-                                        ss::FloatType::Float64,
-                                    ))
-                                    .build(tycker, &self.info);
-                                    let ty = Lub::lub_k(default, ty, tycker)?;
-                                    (ty, ss::FloatType::Float64)
-                                }
-                            },
-                            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker
-                                .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
-                        };
-                        let original = value;
-                        let Some(value) = value.with_type(float_type) else {
-                            tycker.err_k(
-                                TyckError::FloatLiteralOutOfRange {
-                                    value: original.value(),
-                                    float_type,
-                                },
-                                std::panic::Location::caller(),
-                            )?
-                        };
-                        (Lit::Float(value), ty)
-                    }
-                    | Lit::String(s) => {
-                        let ty =
-                            literal_type_k(tycker, &self.info, switch, ss::PrimitiveType::String)?;
-                        (Lit::String(s), ty)
-                    }
-                    | Lit::Char(c) => {
-                        let ty =
-                            literal_type_k(tycker, &self.info, switch, ss::PrimitiveType::Char)?;
-                        (Lit::Char(c), ty)
-                    }
-                };
-                let lit = Alloc::alloc(tycker, lit, ty, &self.info);
-                TermAnnId::Value(lit, ty)
-            }
+            },
         };
 
         if let Some(out) = out_ann.as_term() {

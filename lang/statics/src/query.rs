@@ -12,6 +12,7 @@ use crate::arena::StaticsArena;
 use crate::check::{CheckedSource, KontFailure, RejectedSource, SourceCheckOutcome, Tycker};
 use crate::surface_syntax as su;
 use crate::syntax as ss;
+use zydeco_surface::arena::ArenaId;
 use zydeco_utils::arena::ArenaAccess;
 use zydeco_utils::arena::{KeySpaceId, derived_id};
 
@@ -217,6 +218,72 @@ pub fn intrinsic_singleton<'db>(
     }
 }
 
+/// The synthesized judgment of a literal term: its primitive singleton type
+/// and the range-checked literal value, produced without touching the arena.
+#[derive(Clone, Debug)]
+pub enum LiteralSynOutcome {
+    Value { id: ss::ValueId, value: ss::Value, ty: ss::TypeId },
+    Error(crate::check::TyckError),
+}
+
+/// The synthesized judgment of a literal term.
+///
+/// The primitive type comes from the query-owned intrinsic singleton; the
+/// range check and the literal value are pure functions of the source literal.
+/// The checker materializes the returned value node with the caller's
+/// environment, exactly as in-context allocation did.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn literal_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+) -> Option<LiteralSynOutcome> {
+    use zydeco_syntax::{FloatType, IntegerType, Literal, PrimitiveType};
+    let lit = match data.scoped(db).terms.get(&term.id(db))? {
+        | su::Term::Lit(lit) => lit,
+        | _ => return None,
+    };
+    let primitive_ty = |primitive| {
+        let key = crate::query::InternedIntrinsic::new(db, IntrinsicKey::Primitive(primitive));
+        let crate::query::IntrinsicSingleton::Type { ty: (ty, _), .. } =
+            crate::query::intrinsic_singleton(db, data, key)
+        else {
+            unreachable!("primitive singletons are type-producing")
+        };
+        ty
+    };
+    let (lit, ty) = match lit {
+        | Literal::Integer(i) => {
+            let integer_type = IntegerType::Int64;
+            let value = i.value();
+            let Some(i) = i.with_type(integer_type) else {
+                return Some(LiteralSynOutcome::Error(
+                    crate::check::TyckError::IntegerLiteralOutOfRange { value, integer_type },
+                ));
+            };
+            (Literal::Integer(i), primitive_ty(PrimitiveType::Integer(integer_type)))
+        }
+        | Literal::Float(value) => {
+            let float_type = FloatType::Float64;
+            let original = value;
+            let Some(value) = value.with_type(float_type) else {
+                return Some(LiteralSynOutcome::Error(
+                    crate::check::TyckError::FloatLiteralOutOfRange {
+                        value: original.value(),
+                        float_type,
+                    },
+                ));
+            };
+            (Literal::Float(value), primitive_ty(PrimitiveType::Float(float_type)))
+        }
+        | Literal::String(s) => (Literal::String(s.clone()), primitive_ty(PrimitiveType::String)),
+        | Literal::Char(c) => (Literal::Char(*c), primitive_ty(PrimitiveType::Char)),
+    };
+    let site_space = term.id(db).key_space().as_u64();
+    let site_raw = term.id(db).raw().into_u32();
+    let id: ss::ValueId =
+        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0), 0);
+    Some(LiteralSynOutcome::Value { id, value: ss::Value::Lit(lit), ty })
+}
+
 /// The rejection of an intrinsic `Internal` term, carried as a query value so
 /// the checker routes decisions through queries and keeps the writer as a sink.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
@@ -363,7 +430,7 @@ fn resolve_holes_phase<'db>(
     let statics = std::mem::take(&mut tycker.statics);
     let errors = std::mem::take(&mut tycker.errors);
     let observations = std::mem::take(&mut tycker.observations);
-    let root = judgments.root(db).clone();
+    let root = *judgments.root(db);
     drop(tycker);
     Resolved::new(db, scoped, statics, errors, observations, root, root_slot)
 }

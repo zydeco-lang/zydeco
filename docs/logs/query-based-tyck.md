@@ -314,3 +314,25 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
 - Key-check before the conversion: no pass iterates these arenas (only keyed lookups), so the
   HashMap iteration order cannot leak into diagnostics or resolution order.
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — first term judgment on the query graph: literal synthesis
+
+- The `Tm::Lit` Syn path is the first whole-term judgment produced by a salsa query:
+  `literal_syn_judgment(db, data, term) -> Option<LiteralSynOutcome>`. It computes the
+  range-checked literal and its primitive singleton type without reading the arena: the type
+  comes from the already query-owned `intrinsic_singleton`, and the value identifier is derived
+  at the term's site under `QUERY_DERIVATION_TAG`.
+- The checker branch now splits by mode. The Syn arm materializes the query outcome into
+  `values` / `annotations_value` / `env_value` exactly as `Alloc::alloc` did (the environment
+  record is the caller's cloned environment); the Ana arm keeps the arena-touching logic —
+  `primitive_type` probing and `lub` — with its Syn sub-arms now `unreachable!()`.
+- A semantic simplification falls out for free: literal types are now one shared intrinsic
+  node per check instead of one fresh `PrimitiveTy` node per literal site. The nodes are
+  structurally identical and closed, so the default environment record on the shared node is
+  unobservable.
+- Repeat checks of the same literal re-materialize the same value identifier: the Syn
+  judgment runs once per term (occurrence is always zero), so the inserts are idempotent
+  where the old per-occurrence allocation minted a fresh node each time.
+- Two pre-existing clippy lints fixed along the way (`new_without_default` on
+  `DerivedAllocator`, `clone_on_copy` in the hole-resolution query).
+- Workspace suite passes unchanged (61 targets green), clippy clean.
