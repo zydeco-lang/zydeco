@@ -6,6 +6,7 @@
 //! replace the wholesale [`check_source`] piece by piece (see
 //! `docs/logs/query-based-tyck.md`).
 
+use crate::TyEnv;
 use crate::alloc::QUERY_DERIVATION_TAG;
 use crate::check::{SourceCheckOutcome, Tycker};
 use crate::surface_syntax as su;
@@ -82,26 +83,107 @@ pub struct InternedTerm<'db> {
     pub id: su::TermId,
 }
 
-/// The typed judgment of an intrinsic `Internal` term that needs no
-/// environment: a fresh `VType` or `CType` kind node, produced by salsa rather
-/// than by the checker's in-context allocator.
+/// The type-checking environment at a judgment site, salsa-visible so that
+/// environment-dependent judgments can key on it.
+#[salsa::tracked]
+pub struct EnvData<'db> {
+    #[tracked]
+    #[no_eq]
+    #[returns(ref)]
+    pub env: TyEnv,
+}
+
+/// The nodes produced by checking an intrinsic `Internal` term.
+#[derive(Clone, Debug)]
+pub enum InternalJudgment {
+    Kind { id: ss::KindId, kind: ss::Kind },
+    Type { kinds: Vec<(ss::KindId, ss::Kind)>, ty: (ss::TypeId, ss::Type), ann: ss::KindId },
+}
+
+/// The typed judgment of an intrinsic `Internal` term.
+///
+/// Produces the fresh nodes for an intrinsic cache miss; the checker owns the
+/// intrinsic singletons (`IntrinsicStatics`) and materializes the returned
+/// nodes, recording the caller's environment exactly as in-context allocation
+/// did. `OS`, `Monad`, and `Algebra` are not query-produced yet: `OS` resolves
+/// against the environment through the builtin signature, and the latter two
+/// are ordinary library bindings.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
-pub fn internal_kind_judgment<'db>(
-    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
-) -> Option<(ss::KindId, ss::Kind)> {
+pub fn internal_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>, env: EnvData<'db>,
+) -> Option<InternalJudgment> {
+    let _ = env;
     let internal = match data.scoped(db).terms.get(&term.id(db))? {
         | su::Term::Internal(internal) => internal,
         | _ => return None,
     };
-    let kind = match internal {
-        | su::Internal::VType => ss::Kind::VType(ss::VType),
-        | su::Internal::CType => ss::Kind::CType(ss::CType),
-        | _ => return None,
-    };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let id = derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0), 0);
-    Some((id, kind))
+    let kind_id = |slot: u32| {
+        derived_id::<ss::KindId>(
+            KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0),
+            slot,
+        )
+    };
+    let type_id = |slot: u32| {
+        derived_id::<ss::TypeId>(
+            KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0),
+            slot,
+        )
+    };
+    match internal {
+        | su::Internal::VType => {
+            Some(InternalJudgment::Kind { id: kind_id(0), kind: ss::Kind::VType(ss::VType) })
+        }
+        | su::Internal::CType => {
+            Some(InternalJudgment::Kind { id: kind_id(0), kind: ss::Kind::CType(ss::CType) })
+        }
+        | su::Internal::Unit => {
+            let vtype = kind_id(0);
+            Some(InternalJudgment::Type {
+                kinds: vec![(vtype, ss::Kind::VType(ss::VType))],
+                ty: (type_id(1), ss::Type::Unit(ss::UnitTy)),
+                ann: vtype,
+            })
+        }
+        | su::Internal::Thk => {
+            let ctype = kind_id(0);
+            let vtype = kind_id(1);
+            let arrow = kind_id(2);
+            Some(InternalJudgment::Type {
+                kinds: vec![
+                    (ctype, ss::Kind::CType(ss::CType)),
+                    (vtype, ss::Kind::VType(ss::VType)),
+                    (arrow, ss::Kind::Arrow(ss::Arrow(ctype, vtype))),
+                ],
+                ty: (type_id(3), ss::Type::Thk(ss::ThkTy)),
+                ann: arrow,
+            })
+        }
+        | su::Internal::Ret => {
+            let vtype = kind_id(0);
+            let ctype = kind_id(1);
+            let arrow = kind_id(2);
+            Some(InternalJudgment::Type {
+                kinds: vec![
+                    (vtype, ss::Kind::VType(ss::VType)),
+                    (ctype, ss::Kind::CType(ss::CType)),
+                    (arrow, ss::Kind::Arrow(ss::Arrow(vtype, ctype))),
+                ],
+                ty: (type_id(3), ss::Type::Ret(ss::RetTy)),
+                ann: arrow,
+            })
+        }
+        | su::Internal::Primitive(primitive) => {
+            let vtype = kind_id(0);
+            Some(InternalJudgment::Type {
+                kinds: vec![(vtype, ss::Kind::VType(ss::VType))],
+                ty: (type_id(1), ss::Type::Primitive(ss::PrimitiveTy(*primitive))),
+                ann: vtype,
+            })
+        }
+        | su::Internal::OS | su::Internal::Monad | su::Internal::Algebra => None,
+    }
 }
 
 /// An interned hole-filling site, for use as a salsa query key.
