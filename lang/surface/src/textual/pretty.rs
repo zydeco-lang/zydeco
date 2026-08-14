@@ -1310,8 +1310,8 @@ impl<'arena> PrettyFormatter<'arena> {
                 BoundaryLayout::hanging("", self.indent()),
                 self.term_through_fragment(*body, TermPrecedence::Atom),
             ),
-            | Term::Do(Bind { binder, bindee, tail }) => self
-                .prefixed(
+            | Term::Do(Bind { binder, bindee, tail }) => self.sequence_block(
+                self.prefixed(
                     term,
                     "do",
                     BoundaryLayout::aligned(""),
@@ -1324,11 +1324,14 @@ impl<'arena> PrettyFormatter<'arena> {
                 ))
                 .append(RcDoc::text(";"))
                 .append(self.sequence_tail((*bindee).into(), *tail)),
-            | Term::Let(GenLet { binding, tail }) => RcDoc::text("let")
-                .append(self.placed_binding(term, binding, Placement::In))
-                .append(self.sequence_tail(binding.bindee.into(), *tail)),
-            | Term::Param(Param { binder, placement, tail }) => self
-                .prefixed(
+            ),
+            | Term::Let(GenLet { binding, tail }) => self.sequence_block(
+                RcDoc::text("let")
+                    .append(self.placed_binding(term, binding, Placement::In))
+                    .append(self.sequence_tail(binding.bindee.into(), *tail)),
+            ),
+            | Term::Param(Param { binder, placement, tail }) => self.sequence_block(
+                self.prefixed(
                     term,
                     "param",
                     BoundaryLayout::aligned(""),
@@ -1337,14 +1340,17 @@ impl<'arena> PrettyFormatter<'arena> {
                 .append(RcDoc::text(" "))
                 .append(self.placement(*placement))
                 .append(self.sequence_tail((*binder).into(), *tail)),
+            ),
             | Term::ContextBind(ContextBind { mode, binding, placement, tail }) => {
                 let keyword = match mode {
                     | DefinitionMode::Transparent => "let",
                     | DefinitionMode::Nominal => "def",
                 };
-                RcDoc::text(keyword)
-                    .append(self.placed_binding(term, binding, *placement))
-                    .append(self.sequence_tail(binding.bindee.into(), *tail))
+                self.sequence_block(
+                    RcDoc::text(keyword)
+                        .append(self.placed_binding(term, binding, *placement))
+                        .append(self.sequence_tail(binding.bindee.into(), *tail)),
+                )
             }
             | Term::Block(Block(body)) => self.block(term, "begin", *body, "end"),
             | Term::Data(Data { arms }) => self.data(term, arms),
@@ -1864,8 +1870,24 @@ impl<'arena> PrettyFormatter<'arena> {
             .append(self.term_through(tail, TermPrecedence::Binder))
     }
 
-    /// Attach the stage-closing placement to a bindee. Mirroring the `=`
-    /// stage, the marker has three tiers: it stays on a single-line bindee,
+    /// Sequence bindings are block-like: their tail marker always breaks
+    /// onto a new line, so the whole binding must start on its own line.
+    /// The guard fails mid-line and lets an enclosing boundary fall back to
+    /// its broken form instead of anchoring the binding to a running line.
+    fn sequence_block(&self, document: RcDoc<'arena>) -> RcDoc<'arena> {
+        RcDoc::column(|column| {
+            RcDoc::nesting(
+                move |nesting| {
+                    if column == nesting { RcDoc::nil() } else { RcDoc::fail() }
+                },
+            )
+        })
+        .append(document)
+    }
+
+    /// Attach the stage-closing placement marker to a bindee. Mirroring the
+    /// `=` stage separator, the marker has three tiers: it stays on a
+    /// single-line bindee,
     /// follows the bindee's final line when that line returns to the binding
     /// indentation (a delimited closer), and otherwise breaks onto its own
     /// line at the binding indentation, wherever the bindee's own layout
@@ -3296,6 +3318,41 @@ mod tests {
             let reparsed = ParsedSource::new(&formatted);
             assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape(), "source: {source}");
             assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+        });
+    }
+
+    #[test]
+    fn sequence_bindings_start_on_their_own_lines() {
+        let cases = [
+            // A sequence binding anchored mid-line moves to its own line
+            // because its tail marker always breaks.
+            (
+                "let x = do a <- b; ret a in x",
+                concat!("let x =\n", "  do a <- b;\n", "  ret a\n", "in\n", "x\n"),
+            ),
+            (
+                "do x <- do y <- b; ret y;\nret x",
+                concat!("do x <-\n", "  do y <- b;\n", "  ret y;\n", "ret x\n"),
+            ),
+            ("fn x => do y <- b; ret y", concat!("fn x =>\n", "  do y <- b;\n", "  ret y\n")),
+            // A sequence binding already at a line start stays there.
+            ("begin\n  do x <- f;\n  ret x\nend", "begin\n  do x <- f;\n  ret x\nend\n"),
+            // A sequence binding nested in a delimited region starts on a
+            // new line without moving the surrounding delimiters.
+            (
+                "let x = { let y = c in y } in x",
+                concat!("let x = {\n", "  let y = c in\n", "  y\n", "} in\n", "x\n"),
+            ),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, expected, "source: {source}");
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve), "source: {source}");
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape(), "source: {source}");
         });
     }
 
