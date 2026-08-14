@@ -35,6 +35,8 @@ impl Default for IndentWidth {
 pub enum LayoutIntentions {
     /// Let document width determine every optional break.
     Ignore,
+    /// Preserve only blank lines; document width decides every single break.
+    BlankLinesOnly,
     /// Preserve multiline layout at parsed entity boundaries when possible.
     #[default]
     Preserve,

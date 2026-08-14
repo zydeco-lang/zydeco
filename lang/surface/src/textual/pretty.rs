@@ -463,10 +463,30 @@ impl<'arena> PrettyFormatter<'arena> {
         }
     }
 
+    /// Whether an observed blank line must appear at a boundary under the
+    /// configured layout-intentions policy.
+    fn preserves_blank_line(&self, intention: Option<BreakIntent>) -> bool {
+        matches!(
+            self.options.layout_intentions,
+            LayoutIntentions::Preserve | LayoutIntentions::BlankLinesOnly
+        ) && intention == Some(BreakIntent::BlankLine)
+    }
+
+    /// Whether an observed separation must appear in the output under the
+    /// configured layout-intentions policy. `Preserve` keeps every break,
+    /// `BlankLinesOnly` keeps only blank lines, and `Ignore` keeps neither.
+    fn forces_break(&self, intention: Option<BreakIntent>) -> bool {
+        match (self.options.layout_intentions, intention) {
+            | (LayoutIntentions::Ignore, _) => false,
+            | (LayoutIntentions::BlankLinesOnly, Some(BreakIntent::BlankLine)) => true,
+            | (LayoutIntentions::BlankLinesOnly, _) => false,
+            | (LayoutIntentions::Preserve, Some(intention)) => intention.requires_line_break(),
+            | (LayoutIntentions::Preserve, None) => false,
+        }
+    }
+
     fn mandatory_line_break(&self, intention: Option<BreakIntent>) -> RcDoc<'arena> {
-        if self.options.layout_intentions == LayoutIntentions::Preserve
-            && intention == Some(BreakIntent::BlankLine)
-        {
+        if self.preserves_blank_line(intention) {
             BoundaryLayout::blank_line()
         } else {
             RcDoc::hardline()
@@ -474,21 +494,22 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn retained_placement(&self, intent: BoundaryIntent) -> BoundaryPlacement {
-        match (self.options.layout_intentions, intent.resolve(self.arena)) {
-            | (LayoutIntentions::Preserve, Some(BreakIntent::Broken)) => BoundaryPlacement::Broken,
-            | (LayoutIntentions::Preserve, Some(BreakIntent::BlankLine)) => {
-                BoundaryPlacement::BlankLine
-            }
-            | _ => BoundaryPlacement::Joined,
+        let intention = intent.resolve(self.arena);
+        if self.preserves_blank_line(intention) {
+            return BoundaryPlacement::BlankLine;
         }
+        if self.forces_break(intention) {
+            return BoundaryPlacement::Broken;
+        }
+        BoundaryPlacement::Joined
     }
 
     fn expanded_placement(&self, intent: BoundaryIntent) -> BoundaryPlacement {
-        match (self.options.layout_intentions, intent.resolve(self.arena)) {
-            | (LayoutIntentions::Preserve, Some(BreakIntent::BlankLine)) => {
-                BoundaryPlacement::BlankLine
-            }
-            | _ => BoundaryPlacement::Broken,
+        let intention = intent.resolve(self.arena);
+        if self.preserves_blank_line(intention) {
+            BoundaryPlacement::BlankLine
+        } else {
+            BoundaryPlacement::Broken
         }
     }
 
@@ -555,8 +576,7 @@ impl<'arena> PrettyFormatter<'arena> {
         let intent = BoundaryIntent::between(left.anchors.last, right.anchors.first);
         let intention = intent.resolve(self.arena);
         let anchors = LayoutAnchors { first: left.anchors.first, last: right.anchors.last };
-        let preserve_break = self.options.layout_intentions == LayoutIntentions::Preserve
-            && intention.is_some_and(BreakIntent::requires_line_break);
+        let preserve_break = self.forces_break(intention);
         let separator =
             if preserve_break { self.mandatory_line_break(intention) } else { RcDoc::line() };
         let document = left
@@ -710,13 +730,8 @@ impl<'arena> PrettyFormatter<'arena> {
                     .append(RcDoc::text(" ".repeat(operator_padding)))
                     .append(continuation)
             };
-            let boundary = if self.options.layout_intentions == LayoutIntentions::Preserve
-                && intention.is_some_and(BreakIntent::requires_line_break)
-            {
-                broken
-            } else {
-                self.flexible(inline, broken)
-            };
+            let boundary =
+                if self.forces_break(intention) { broken } else { self.flexible(inline, broken) };
             table = table.append(boundary);
         }
         let begins_after_same_line_comment = self
@@ -731,8 +746,8 @@ impl<'arena> PrettyFormatter<'arena> {
             self.at_line_start(RcDoc::text(" ".repeat(hanging_indent_usize)).append(table))
         };
 
-        let preserves_break = self.options.layout_intentions == LayoutIntentions::Preserve
-            && boundaries.iter().flatten().any(|intention| intention.requires_line_break());
+        let preserves_break =
+            boundaries.iter().flatten().any(|intention| self.forces_break(Some(*intention)));
         if preserves_break {
             return hanging;
         }
@@ -927,17 +942,10 @@ impl<'arena> PrettyFormatter<'arena> {
     /// multiline layout boundary.
     fn should_elide_parentheses(&self, entity: EntityId, inner: EntityId) -> bool {
         let carries_break = self
-            .arena
-            .intentions
-            .at(LayoutBoundary::after_start(entity, inner))
-            .is_some_and(BreakIntent::requires_line_break)
+            .forces_break(self.arena.intentions.at(LayoutBoundary::after_start(entity, inner)))
             || self
-                .arena
-                .intentions
-                .at(LayoutBoundary::before_end(inner, entity))
-                .is_some_and(BreakIntent::requires_line_break);
-        self.options.parentheses == Parentheses::Minimal
-            && !(self.options.layout_intentions == LayoutIntentions::Preserve && carries_break)
+                .forces_break(self.arena.intentions.at(LayoutBoundary::before_end(inner, entity)));
+        self.options.parentheses == Parentheses::Minimal && !carries_break
     }
 
     /// Applications already own a compact-or-hanging layout boundary, so a
@@ -1246,14 +1254,14 @@ impl<'arena> PrettyFormatter<'arena> {
                     .append(self.placed_binding(term, binding, *placement))
                     .append(self.sequence_tail(binding.bindee.into(), *tail))
             }
-            | Term::Block(Block(body)) => self.block("begin", *body, "end"),
-            | Term::Data(Data { arms }) => self.data(arms),
-            | Term::CoData(CoData { arms }) => self.codata(arms),
+            | Term::Block(Block(body)) => self.block(term, "begin", *body, "end"),
+            | Term::Data(Data { arms }) => self.data(term, arms),
+            | Term::CoData(CoData { arms }) => self.codata(term, arms),
             | Term::Ctor(Ctor(name, body)) => {
                 self.constructor(name).append(self.term_constructor_argument(*body))
             }
             | Term::Match(Match { scrut, arms }) => self.matcher(term, *scrut, arms),
-            | Term::CoMatch(CoMatchParam { arms }) => self.comatcher(arms),
+            | Term::CoMatch(CoMatchParam { arms }) => self.comatcher(term, arms),
             | Term::Dtor(Dtor(body, name)) => self
                 .term_through(*body, TermPrecedence::Application)
                 .append(RcDoc::text(" "))
@@ -1408,10 +1416,7 @@ impl<'arena> PrettyFormatter<'arena> {
         &self, parameter: impl Into<EntityId>, nested: TermId,
     ) -> bool {
         self.arena.trivia.leading_comments(nested.into()).is_empty()
-            && !(self.options.layout_intentions == LayoutIntentions::Preserve
-                && BoundaryIntent::between(parameter, nested)
-                    .resolve(self.arena)
-                    .is_some_and(BreakIntent::requires_line_break))
+            && !self.forces_break(BoundaryIntent::between(parameter, nested).resolve(self.arena))
     }
 
     fn scoped_telescope(&self, root: TermId, form: ScopedForm) -> ScopeTelescope<CoPatId> {
@@ -1709,28 +1714,47 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn block(
-        &'arena self, keyword: &'static str, body: TermId, end: &'static str,
+        &'arena self, enclosing: TermId, keyword: &'static str, body: TermId, end: &'static str,
     ) -> RcDoc<'arena> {
         RcDoc::text(keyword)
-            .append(RcDoc::hardline().append(self.annotated_term(body)).nest(self.indent()))
-            .append(RcDoc::hardline())
+            .append(
+                self.mandatory_line_break(
+                    BoundaryIntent::after_start(enclosing, body).resolve(self.arena),
+                )
+                .append(self.annotated_term(body))
+                .nest(self.indent()),
+            )
+            .append(self.mandatory_line_break(
+                BoundaryIntent::before_end(body, enclosing).resolve(self.arena),
+            ))
             .append(RcDoc::text(end))
     }
 
     fn arm_block(
-        &'arena self, head: RcDoc<'arena>, arms: impl IntoIterator<Item = LayoutFragment<'arena>>,
+        &'arena self, enclosing: EntityId, head: RcDoc<'arena>,
+        arms: impl IntoIterator<Item = LayoutFragment<'arena>>,
     ) -> RcDoc<'arena> {
-        arms.into_iter()
-            .fold(head, |document, arm| {
-                document
-                    .append(RcDoc::hardline())
-                    .append(self.with_before_arm_comments(arm.anchors.first, arm.document))
-            })
-            .append(RcDoc::hardline())
-            .append(RcDoc::text("end"))
+        let mut document = head;
+        let mut previous = None;
+        for arm in arms {
+            let gap = match previous {
+                | None => BoundaryIntent::after_start(enclosing, arm.anchors.first),
+                | Some(previous) => BoundaryIntent::between(previous, arm.anchors.first),
+            };
+            document = document
+                .append(self.mandatory_line_break(gap.resolve(self.arena)))
+                .append(self.with_before_arm_comments(arm.anchors.first, arm.document));
+            previous = Some(arm.anchors.last);
+        }
+        let before_end = previous.map_or_else(RcDoc::hardline, |last| {
+            self.mandatory_line_break(
+                BoundaryIntent::before_end(last, enclosing).resolve(self.arena),
+            )
+        });
+        document.append(before_end).append(RcDoc::text("end"))
     }
 
-    fn data(&'arena self, arms: &[DataArm]) -> RcDoc<'arena> {
+    fn data(&'arena self, enclosing: TermId, arms: &[DataArm]) -> RcDoc<'arena> {
         let arms = arms.iter().map(|arm| {
             let document = RcDoc::text("| ").append(self.constructor(&arm.name)).append(
                 self.fragment_boundary(
@@ -1741,10 +1765,10 @@ impl<'arena> PrettyFormatter<'arena> {
             );
             LayoutFragment::entity(arm.param.into(), document)
         });
-        self.arm_block(RcDoc::text("data"), arms)
+        self.arm_block(enclosing.into(), RcDoc::text("data"), arms)
     }
 
-    fn codata(&'arena self, arms: &[CoDataArm]) -> RcDoc<'arena> {
+    fn codata(&'arena self, enclosing: TermId, arms: &[CoDataArm]) -> RcDoc<'arena> {
         let arms = arms.iter().map(|arm| {
             let document = RcDoc::text("| ").append(self.destructor(&arm.name));
             let document = match arm.params {
@@ -1759,7 +1783,7 @@ impl<'arena> PrettyFormatter<'arena> {
             ));
             LayoutFragment { document, anchors: LayoutAnchors { first, last: arm.out.into() } }
         });
-        self.arm_block(RcDoc::text("codata"), arms)
+        self.arm_block(enclosing.into(), RcDoc::text("codata"), arms)
     }
 
     fn matcher(
@@ -1782,10 +1806,10 @@ impl<'arena> PrettyFormatter<'arena> {
                 anchors: LayoutAnchors { first: arm.binder.into(), last: arm.tail.into() },
             }
         });
-        self.arm_block(head, arms)
+        self.arm_block(term.into(), head, arms)
     }
 
-    fn comatcher(&'arena self, arms: &[CoMatcherParam]) -> RcDoc<'arena> {
+    fn comatcher(&'arena self, enclosing: TermId, arms: &[CoMatcherParam]) -> RcDoc<'arena> {
         let arms = arms.iter().map(|arm| {
             let document = RcDoc::text("| ").append(self.copattern(arm.params)).append(
                 self.fragment_boundary(
@@ -1799,7 +1823,7 @@ impl<'arena> PrettyFormatter<'arena> {
                 anchors: LayoutAnchors { first: arm.params.into(), last: arm.tail.into() },
             }
         });
-        self.arm_block(RcDoc::text("comatch"), arms)
+        self.arm_block(enclosing.into(), RcDoc::text("comatch"), arms)
     }
 
     fn definition(&'arena self, definition: DefId) -> RcDoc<'arena> {
@@ -3245,6 +3269,164 @@ mod tests {
             assert_eq!(RetainedComments::collect(source), RetainedComments::collect(&formatted));
             assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
             assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+        });
+    }
+
+    #[test]
+    fn preserves_blank_lines_at_arm_block_boundaries() {
+        let cases = [
+            concat!(
+                "match tree\n",
+                "| +Leaf() => ret 0\n",
+                "\n",
+                "| +Node(/tree_height) => ret tree_height\n",
+                "end\n",
+            ),
+            concat!("data\n", "\n", "| +A : Unit\n", "\n", "| +B : Unit\n", "\n", "end\n",),
+            concat!(
+                "comatch\n",
+                "| .a => ret 0\n",
+                "\n",
+                "-- The second arm.\n",
+                "| .b => ret 1\n",
+                "end\n",
+            ),
+        ];
+
+        cases.into_iter().for_each(|source| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, source, "source: {source}");
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        });
+    }
+
+    #[test]
+    fn preserves_blank_lines_at_block_boundaries() {
+        let cases = [
+            concat!("begin\n", "\n", "  let x = f in\n", "  ret x\n", "end\n",),
+            concat!("begin\n", "  let x = f in\n", "  ret x\n", "\n", "end\n",),
+            concat!("begin\n", "\n", "  let x = f in\n", "  ret x\n", "\n", "end\n",),
+        ];
+
+        cases.into_iter().for_each(|source| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, source, "source: {source}");
+            assert!(formatted.lines().all(|line| line.trim_end() == line));
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        });
+    }
+
+    #[test]
+    fn ignores_blank_lines_at_arm_boundaries_when_intentions_are_off() {
+        let source = concat!(
+            "match tree\n",
+            "| +Leaf() => ret 0\n",
+            "\n",
+            "| +Node(/tree_height) => ret tree_height\n",
+            "end\n",
+        );
+        let expected = concat!(
+            "match tree\n",
+            "| +Leaf() => ret 0\n",
+            "| +Node(/tree_height) => ret tree_height\n",
+            "end\n",
+        );
+        let parsed = ParsedSource::new(source);
+        let formatted = parsed.render(LayoutIntentions::Ignore);
+
+        assert_eq!(formatted, expected);
+        let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(formatted, reparsed.render(LayoutIntentions::Ignore));
+    }
+
+    #[test]
+    fn blank_lines_only_mode_rejoins_single_breaks_and_keeps_blank_lines() {
+        let options =
+            PrettyOptions::default().with_layout_intentions(LayoutIntentions::BlankLinesOnly);
+        let cases = [
+            // A hand-wrapped application rejoins when its compact form fits.
+            (
+                "! (bool/if)\n  (Ret Int64)\n  greater\n  { ret left }\n  { ret right }",
+                "! (bool/if) (Ret Int64) greater { ret left } { ret right }\n",
+            ),
+            // A blank line still partitions the argument rows and survives.
+            (
+                "! (bool/if)\n  (Ret Int64)\n\n  greater\n  { ret left }\n  { ret right }",
+                "! (bool/if) (Ret Int64)\n\n  greater { ret left } { ret right }\n",
+            ),
+            // A single infix break rejoins; a blank line keeps the hanging form.
+            ("A *\nB", "A * B\n"),
+            ("A *\n\nB", "  A\n\n* B\n"),
+            // A single break before a nested scope no longer stops the fold.
+            ("fn a =>\nfn b => body", "fn a b => body\n"),
+            // A blank line before the nested introducer still stops it,
+            // while the inner scope remains compact when it fits.
+            ("fn a =>\n\nfn b => body", "fn a =>\n\n  fn b => body\n"),
+            // Blank lines between sequence stages survive.
+            (
+                "do x <- ! f a;\n\ndo y <- ! g b;\nret x",
+                "do x <- ! f a;\n\ndo y <- ! g b;\nret x\n",
+            ),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render_with_options(options);
+            assert_eq!(formatted, expected, "source: {source}");
+            assert!(formatted.lines().all(|line| line.trim_end() == line));
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render_with_options(options), "source: {source}");
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape(), "source: {source}");
+        });
+    }
+
+    #[test]
+    fn blank_lines_only_mode_still_collapses_redundant_blank_runs() {
+        let options =
+            PrettyOptions::default().with_layout_intentions(LayoutIntentions::BlankLinesOnly);
+        let cases =
+            [("A *\n\n\n\nB", "  A\n\n* B\n"), ("(first,\n\n\nsecond)", "(first,\n\n  second)\n")];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render_with_options(options);
+            assert_eq!(formatted, expected, "source: {source}");
+            assert!(formatted.lines().all(|line| line.trim_end() == line));
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render_with_options(options));
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        });
+    }
+
+    #[test]
+    fn blank_lines_only_mode_elides_parentheses_with_single_breaks_only() {
+        let options =
+            PrettyOptions::default().with_layout_intentions(LayoutIntentions::BlankLinesOnly);
+        let cases = [
+            // A single break inside a singleton group disappears with the group.
+            ("(\nvalue\n)", "value\n"),
+            // A blank line inside the group keeps the delimiters and the blank.
+            ("(\n\nvalue\n)", "(\n\n  value)\n"),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render_with_options(options);
+            assert_eq!(formatted, expected, "source: {source}");
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render_with_options(options));
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
         });
     }
 
