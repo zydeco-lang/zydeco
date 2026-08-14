@@ -674,8 +674,9 @@ mod tests {
         let source = std::fs::read_to_string(&path).unwrap();
         let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
         let line_width = HoverLineWidth::new(30).unwrap();
-        let hover =
-            project.hover(&session, &path, source_position(&source, "map\n"), line_width).unwrap();
+        let hover = project
+            .hover(&session, &path, source_position(&source, "map (A : VType)"), line_width)
+            .unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
@@ -785,7 +786,7 @@ mod tests {
             .unwrap();
         let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
         let hover = project
-            .hover(&session, &path, Position::new(14, 12), HoverLineWidth::default())
+            .hover(&session, &path, Position::new(9, 19), HoverLineWidth::default())
             .unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")

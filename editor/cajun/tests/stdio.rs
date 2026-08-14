@@ -600,7 +600,7 @@ fn stdio_hover_uses_the_initialized_line_width() {
         "textDocument/hover",
         json!({
             "textDocument": { "uri": uri },
-            "position": { "line": 30, "character": 9 },
+            "position": { "line": 22, "character": 9 },
         }),
     );
     assert_eq!(hover["result"]["contents"]["kind"], "markdown");
