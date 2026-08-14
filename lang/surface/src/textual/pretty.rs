@@ -927,10 +927,24 @@ impl<'arena> PrettyFormatter<'arena> {
         let boundary = BoundaryLayout::hanging("", self.indent());
         let compact = head.clone().append(RcDoc::space()).append(compact_parameters);
         let retained = match retained_after_head {
-            | BoundaryPlacement::Joined => head
-                .clone()
-                .append(RcDoc::space())
-                .append(retained_parameters.clone().nest(self.indent())),
+            // A joined first row stays beside the head, and the remaining
+            // rows keep their own layout without forcing the telescope into
+            // the expanded form when a later row is multiline.
+            | BoundaryPlacement::Joined => {
+                let row_boundary = BoundaryLayout::aligned("");
+                let rows = parameters.windows(2).fold(RcDoc::nil(), |document, pair| {
+                    let [left, right] = pair else { unreachable!("windows contain two items") };
+                    let intent = BoundaryIntent::between(left.anchors.last, right.anchors.first);
+                    document.append(
+                        row_boundary.place(self.retained_placement(intent), right.document.clone()),
+                    )
+                });
+                head.clone()
+                    .append(RcDoc::space())
+                    .append(parameters.first().expect("telescopes are nonempty").document.clone())
+                    .append(rows)
+                    .nest(self.indent())
+            }
             | BoundaryPlacement::Broken | BoundaryPlacement::BlankLine => {
                 head.clone().append(boundary.place(retained_after_head, retained_parameters))
             }
