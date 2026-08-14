@@ -20,6 +20,9 @@ The printer places them through the inline, attached, and aligned tiers, mirrori
 
 A **stage separator** is `:` or `=`: `:` joins a head with its type, and `=` joins the type with its bindee.
 A **scope marker** is `.` or `=>` and introduces a scope body.
+An **arm block** is one of `match`, `comatch`, `data`, or `codata`: a construct whose arms each occupy their own line.
+Arm blocks are block-like: they always expand, so they begin on a line of their own.
+
 ## Layout Meta-Rules
 
 Every formatter law and layout family below follows from four meta-rules.
@@ -42,7 +45,8 @@ it stays with a single-line payload, follows the payload's final line when that 
 to the boundary (the delimited closer), or takes a line of its own at the boundary.
 
 **Vertical constructs start at a boundary.** A construct that always expands — a sequence binding,
-whose tail marker always breaks — must begin on a boundary line, never anchored mid-line.
+whose tail marker always breaks, or an arm block, whose arms always break — must begin on a boundary line,
+never anchored mid-line.
 
 ## Retained Source Information
 
@@ -256,9 +260,10 @@ The focused regression matrix covers every layout family in compact, source-brok
 Each meta-rule has dedicated regression tests: the closer tiers are pinned
 by `placement_closes_at_the_binding_indentation`, `definition_separator_tiers_share_the_binding_indentation`,
 and `scope_separator_breaks_only_after_a_multiline_head`; the vertical-construct rule
-by `sequence_bindings_start_on_their_own_lines`; the joined-boundary nesting rule
-by `preserves_fitting_parameter_rows_inside_multiline_telescopes`; and the boundary-ownership rule
-by `removes_only_parentheses_allowed_by_the_grammar_context` together with the canonical-gap cases.
+by `sequence_bindings_start_on_their_own_lines` and `arm_blocks_start_on_their_own_lines`;
+the joined-boundary nesting rule by `preserves_fitting_parameter_rows_inside_multiline_telescopes`;
+and the boundary-ownership rule by `removes_only_parentheses_allowed_by_the_grammar_context` together
+with the canonical-gap cases.
 A repository corpus test formats the maintained `.zy` sources under `lib/` and `docs/spell/`.
 It then reparses them, compares desugared structure, checks comment content, and verifies idempotence.
 Legacy examples and CLI fixtures are excluded because they contain earlier syntax or test-harness directives rather
