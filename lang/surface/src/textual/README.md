@@ -52,8 +52,9 @@ and for ordering entities by precision.
 - `err` formats parser errors with file path and location context.
 - `fmt::ugly` renders textual syntax back into a safe surface form for debugging and diagnostics.
 - `fmt::PrettyFormatter` renders the same textual arenas through compositional documents.
-  `PrettyOptions` configures width, indentation, whether recorded line layout is consulted,
-  and whether redundant singleton grouping parentheses are preserved.
+  `PrettyOptions` configures width, indentation, how much recorded line layout is retained
+  (every break, blank lines only, or none), and whether redundant singleton grouping
+  parentheses are preserved.
   A meaningful multiline group remains an indentation boundary,
   while an application's own compact-or-hanging layout subsumes an extra singleton wrapper.
 

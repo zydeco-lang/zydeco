@@ -63,10 +63,18 @@ Vertical separation has the following order:
 joined < broken < one empty line
 ```
 
-When intention preservation is enabled, an observed break is not collapsed
-and a larger empty region becomes one empty line.
+Under the `Preserve` policy an observed break is not collapsed and a larger empty region
+becomes one empty line.
+Under `BlankLinesOnly` the same holds for blank lines, while every single break is left to the
+width decision.
+Under `Ignore` no observed separation is retained.
+
 A joined boundary can still break when its compact form does not fit.
+A boundary that always breaks, such as the gap between match arms or between the stages of a
+`do` chain, retains one empty line where the source had at least one.
 Local groups remain compact when they fit, even inside an expanded parent.
+Because a retained break persists, a line that the width forced to wrap in an earlier run stays
+wrapped until the author rejoins it; the lower bound never re-joins automatically.
 
 ### Boundary composition
 
@@ -102,6 +110,18 @@ A candidate that is valid only on one line contains a flat-mode guard.
 The final renderer therefore performs the only width selection; the printer does not render temporary strings
 or maintain a syntax-specific boundary mode.
 
+### Canonical gaps
+
+A source gap participates in intention preservation only when a syntax case declares a layout
+boundary for it.
+Every other gap between entities is canonical spacing.
+Postfix projections and destructors never break, so a source break before `/` or `.` joins the
+operator to its head.
+`in` and `that` belong to the bindee's line; an empty line written before the placement marker
+is re-anchored between the placement and the following tail.
+Sequence tails always start a new line even when the source joined them.
+Declaring a new boundary is the only way to make a gap intention-aware.
+
 ## Canonical Layout Families
 
 Most constructs use one of these families:
@@ -115,7 +135,7 @@ Most constructs use one of these families:
 | Headed scope | A short head keeps `.`, `=>`, and its body together. | A multiline head ends with an aligned marker, then the body nests once. |
 | Staged binding | Header, type, bindee, and placement remain together when they fit. | `:`, `=`, and then `in` or `that` close the stages at the binding indentation. |
 | Sequence or block | A short stage may remain compact. | Tails of `do`, `let`, `def`, and `param` return to the enclosing indentation. |
-| Arm block | A short arm header and payload share a line. | Arms begin with aligned `\|`; a broken payload nests once, while comments before `|` remain at the arm boundary. |
+| Arm block | A short arm header and payload share a line. | Arms begin with aligned `\|`; a broken payload nests once, while comments before `|` remain at the arm boundary. Blank lines between arms, after the head, and before `end` survive as one empty line. |
 
 Each grammatical group makes one width decision for the boundaries it owns.
 If a delimited row overflows, the delimiters and item separators enter their expanded layout together;
@@ -129,13 +149,15 @@ A constituent is “short” exactly when its complete compact alternative fits 
 there is no second length threshold.
 
 Canonical printing folds adjacent scopes of the same form into one parameter telescope.
-In intention-preserving mode, a source line break before the nested introducer stops the fold.
+Under `Preserve`, a source line break before the nested introducer stops the fold;
+under `BlankLinesOnly` only a blank line does.
 This rule applies to `fn`, `pi`, `forall`, `sigma`, and `exists`.
 Consecutive existential nodes also normalize to one telescope during desugaring,
 so the compact and repeated spellings have the same elaboration.
 
 Minimal parenthesis formatting retains grammar-required groups.
-It also retains a multiline singleton group when its delimiters provide an intentional boundary.
+It also retains a multiline singleton group when its delimiters provide an intentional boundary
+under the active layout policy.
 Applications are the one self-grouping family: their own compact-or-hanging boundary subsumes a singleton wrapper.
 `Parentheses::Preserve` is available when every parsed singleton group must remain.
 
@@ -148,8 +170,13 @@ The boundary compositor combines anchored documents with retained layout.
 
 Semantic preservation, comment retention, punning, and convergence are laws rather than options.
 Printer policy controls the positive `IndentWidth`, target line width,
-use of layout intentions, and treatment of transparent parentheses.
-`zydeco fmt` and Cajun are adapters and must not introduce independent formatting rules.
+how much recorded layout is retained, and treatment of transparent parentheses.
+The layout policy has three tiers: `Preserve` keeps every observed break and blank line,
+`BlankLinesOnly` keeps blank lines while the width decides single breaks,
+and `Ignore` leaves every optional break to the width decision.
+`zydeco fmt` exposes the policy through `--layout` (and `--width`, `--indent`, and `--check`),
+Cajun receives it through client initialization options,
+and neither adapter may introduce independent formatting rules.
 
 ## Verification and Extension
 
