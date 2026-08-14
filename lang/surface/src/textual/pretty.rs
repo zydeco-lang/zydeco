@@ -143,7 +143,6 @@ struct BoundaryLayout<'arena> {
 enum StagedBoundary {
     Annotation,
     BindingType,
-    Definition,
 }
 
 #[derive(Copy, Clone)]
@@ -163,7 +162,6 @@ impl StagedBoundary {
     fn marker(self) -> &'static str {
         match self {
             | Self::Annotation | Self::BindingType => ":",
-            | Self::Definition => "=",
         }
     }
 }
@@ -619,24 +617,22 @@ impl<'arena> PrettyFormatter<'arena> {
     /// Put a separator before the right-hand constituent when the left-hand
     /// constituent is multiline, keeping the right-hand constituent on the
     /// separator's line whenever it still fits.
+    ///
+    /// A joined boundary keeps the continuation at the separator's level so
+    /// its own layout families measure from there; only a broken boundary
+    /// hangs the continuation one level below.
     fn staged_join(
         &self, left: LayoutFragment<'arena>, right: LayoutFragment<'arena>,
         boundary: StagedBoundary,
     ) -> LayoutFragment<'arena> {
         let separator = boundary.marker();
-        let (inline_layout, aligned_layout, aligned_separator_indent) = match boundary {
+        let (inline_layout, aligned_layout) = match boundary {
             | StagedBoundary::Annotation => {
-                (BoundaryLayout::aligned(""), BoundaryLayout::nested("", self.indent()), 0)
+                (BoundaryLayout::aligned(""), BoundaryLayout::nested("", self.indent()))
             }
             | StagedBoundary::BindingType => (
-                BoundaryLayout::nested("", self.indent()),
-                BoundaryLayout::nested("", self.indent()),
-                0,
-            ),
-            | StagedBoundary::Definition => (
-                BoundaryLayout::aligned(""),
                 BoundaryLayout::hanging("", self.indent()),
-                -self.indent(),
+                BoundaryLayout::nested("", self.indent()),
             ),
         };
         let intent = BoundaryIntent::between(left.anchors.last, right.anchors.first);
@@ -650,18 +646,90 @@ impl<'arena> PrettyFormatter<'arena> {
         ));
         // An ordinary entity-to-entity break is satisfied by moving the
         // separator. A blank line still belongs between it and the right side.
-        let aligned = left.document.append(
-            RcDoc::hardline()
-                .append(RcDoc::text(separator))
-                .append(self.layout_boundary(
-                    intent.blank_line_only(),
-                    aligned_layout,
-                    right.document,
-                ))
-                .nest(aligned_separator_indent),
-        );
+        let aligned =
+            left.document.append(RcDoc::hardline().append(RcDoc::text(separator)).append(
+                self.layout_boundary(intent.blank_line_only(), aligned_layout, right.document),
+            ));
         let document = self.flexible(inline, aligned);
         LayoutFragment { document, anchors }
+    }
+
+    /// Join a type and its bindee through the `=` stage of a binding.
+    ///
+    /// The separator stays on the head's line when the whole stage fits,
+    /// follows the type's final line when that line returns to the binding
+    /// indentation (a delimited closer that returned to its opener), and
+    /// otherwise breaks onto its own line at the binding indentation.
+    /// A broken bindee hangs one level below the separator.
+    fn definition_join(
+        &self, ty: LayoutFragment<'arena>, bindee: LayoutFragment<'arena>, binding_nesting: isize,
+    ) -> LayoutFragment<'arena> {
+        let intent = BoundaryIntent::between(ty.anchors.last, bindee.anchors.first);
+        let anchors = LayoutAnchors { first: ty.anchors.first, last: bindee.anchors.last };
+        let inline = self
+            .single_line(ty.document.clone().append(RcDoc::space()).append(RcDoc::text("=")))
+            .append(self.layout_boundary(
+                intent,
+                BoundaryLayout::hanging("", self.indent()),
+                bindee.document.clone(),
+            ));
+        // A blank line between the type and the bindee belongs before the
+        // separator, so it excludes the attached form.
+        let attachable = !matches!(intent.resolve(self.arena), Some(BreakIntent::BlankLine));
+        let attached = if attachable {
+            ty.document
+                .clone()
+                .append(Self::at_binding_guard(binding_nesting))
+                .append(RcDoc::text(" ="))
+                .append(self.layout_boundary(
+                    intent,
+                    BoundaryLayout::hanging("", self.indent()),
+                    bindee.document.clone(),
+                ))
+        } else {
+            RcDoc::fail()
+        };
+        let aligned = ty.document.append(Self::separator_at_binding(
+            "=",
+            binding_nesting,
+            self.layout_boundary(
+                intent.blank_line_only(),
+                BoundaryLayout::hanging("", self.indent()),
+                bindee.document,
+            ),
+        ));
+        let document = self.flexible(inline, self.flexible(attached, aligned));
+        LayoutFragment { document, anchors }
+    }
+
+    /// A guard that fails unless the current line starts at the given
+    /// indentation, used to attach a separator only to lines that return to
+    /// the binding level.
+    fn at_binding_guard(binding_nesting: isize) -> RcDoc<'arena> {
+        DOC_ALLOCATOR
+            .nesting(move |nesting| {
+                let nesting = isize::try_from(nesting).unwrap_or(isize::MAX);
+                if nesting == binding_nesting { RcDoc::nil() } else { RcDoc::fail() }
+            })
+            .into_doc()
+    }
+
+    /// A hardline-separated marker placed at the given indentation.
+    fn separator_at_binding(
+        separator: &'static str, binding_nesting: isize, continuation: RcDoc<'arena>,
+    ) -> RcDoc<'arena> {
+        DOC_ALLOCATOR
+            .nesting({
+                let continuation = continuation.clone();
+                move |nesting| {
+                    let nesting = isize::try_from(nesting).unwrap_or(isize::MAX);
+                    RcDoc::hardline()
+                        .append(RcDoc::text(separator))
+                        .append(continuation.clone())
+                        .nest(binding_nesting.saturating_sub(nesting))
+                }
+            })
+            .into_doc()
     }
 
     fn infix_chain(&self, root: TermId, operator: InfixOperator) -> RcDoc<'arena> {
@@ -1762,7 +1830,7 @@ impl<'arena> PrettyFormatter<'arena> {
         match ty {
             | Some(ty) => {
                 let assignment =
-                    self.staged_join(self.term_fragment(*ty), bindee, StagedBoundary::Definition);
+                    self.definition_join(self.term_fragment(*ty), bindee, binding_nesting);
                 self.staged_join(head, assignment, StagedBoundary::BindingType).document
             }
             | None => {
@@ -2594,10 +2662,9 @@ mod tests {
                 concat!(
                     "begin\n",
                     "  def branch : Thk (\n",
-                    "      forall (B : CType) .\n",
-                    "        Bool -> Thk B -> Thk B -> B\n",
-                    "    )\n",
-                    "  = {\n",
+                    "    forall (B : CType) .\n",
+                    "      Bool -> Thk B -> Thk B -> B\n",
+                    "  ) = {\n",
                     "    fn\n",
                     "      (B : CType)\n",
                     "      condition\n",
@@ -2710,6 +2777,69 @@ mod tests {
     }
 
     #[test]
+    fn definition_separator_tiers_share_the_binding_indentation() {
+        let cases = [
+            // A delimited type whose closer returns to the binding level
+            // takes the attached tier: `)` and `=` share the closer's line.
+            (
+                concat!(
+                    "begin\n",
+                    "  def f : (\n",
+                    "    Result\n",
+                    "  ) = value that\n",
+                    "  f\n",
+                    "end\n",
+                ),
+                concat!(
+                    "begin\n",
+                    "  def f : (\n",
+                    "    Result\n",
+                    "  ) = value that\n",
+                    "  f\n",
+                    "end\n",
+                ),
+            ),
+            // A blank line between the type and the separator excludes the
+            // attached tier, so the blank survives in the aligned form.
+            (
+                concat!(
+                    "begin\n",
+                    "  def f : (\n",
+                    "    Result\n",
+                    "  )\n",
+                    "\n",
+                    "  = value that\n",
+                    "  f\n",
+                    "end\n",
+                ),
+                concat!(
+                    "begin\n",
+                    "  def f : (\n",
+                    "    Result\n",
+                    "  )\n",
+                    "  =\n",
+                    "\n",
+                    "    value\n",
+                    "  that\n",
+                    "  f\n",
+                    "end\n",
+                ),
+            ),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, expected, "source: {source}");
+            assert!(formatted.lines().all(|line| line.trim_end() == line));
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve), "source: {source}");
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape(), "source: {source}");
+        });
+    }
+
+    #[test]
     fn aligns_binding_separators_after_multiline_parameters_and_types() {
         let cases = [
             (
@@ -2742,9 +2872,8 @@ mod tests {
                 concat!(
                     "begin\n",
                     "  def f : (\n",
-                    "      Result\n",
-                    "    )\n",
-                    "  = value that\n",
+                    "    Result\n",
+                    "  ) = value that\n",
                     "  f\n",
                     "end\n",
                 ),
