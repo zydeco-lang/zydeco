@@ -126,7 +126,7 @@ Most constructs use one of these families:
 | --- | --- | --- |
 | Delimited region | Contents stay between delimiters; a thunk is `{ body }`. | Contents nest once and the closer returns to the opener. |
 | Juxtaposition or list | Items use their canonical separator on one line. | Continuations nest once while fitting subgroups remain intact. |
-| Parameter telescope | A fitting telescope follows its head. | The head stands alone; width expansion gives each parameter a row, while preserved source breaks retain fitting row groups. |
+| Parameter telescope | A fitting telescope follows its head. | A joined first row stays beside the head; the remaining rows hang one level below. The head stands alone only when the source broke the first row away or the row does not fit, while width expansion gives each parameter a row. |
 | Infix chain | Operators have one space on each side. | `*` and `->` lead continuation lines without recursive indentation. |
 | Headed scope | A short head keeps `.`, `=>`, and its body together. | A multiline head ends with an aligned marker, then the body nests once. |
 | Staged binding | Header, type, bindee, and placement remain together when they fit. | `:`, `=`, and then `in` or `that` close the stages at the binding indentation. |

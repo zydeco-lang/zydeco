@@ -907,10 +907,12 @@ impl<'arena> PrettyFormatter<'arena> {
         if retains_break { selected } else { selected.flat_alt(compact) }
     }
 
-    /// Keep a fitting telescope beside its head. Once the telescope becomes
-    /// multiline, move its first row below the head as part of the same layout
-    /// decision. Retained source breaks partition fitting parameter rows;
-    /// canonical expansion gives every parameter its own row.
+    /// Keep a fitting telescope beside its head. A joined first row stays
+    /// beside the head when the telescope becomes multiline, while the
+    /// remaining rows hang one level below; the head stands alone only when
+    /// the source broke the first row away or the row does not fit.
+    /// Retained source breaks partition fitting parameter rows; canonical
+    /// expansion gives every parameter its own row.
     fn parameter_telescope(
         &self, head: RcDoc<'arena>, after_head: BoundaryIntent,
         parameters: &[LayoutFragment<'arena>],
@@ -922,13 +924,17 @@ impl<'arena> PrettyFormatter<'arena> {
             retains_break: parameters_retain_break,
         } = self.separated_group_layout(parameters, "");
         let retained_after_head = self.retained_placement(after_head);
-        let retained_first_row = match retained_after_head {
-            | BoundaryPlacement::BlankLine => BoundaryPlacement::BlankLine,
-            | BoundaryPlacement::Joined | BoundaryPlacement::Broken => BoundaryPlacement::Broken,
-        };
         let boundary = BoundaryLayout::hanging("", self.indent());
         let compact = head.clone().append(RcDoc::space()).append(compact_parameters);
-        let retained = head.clone().append(boundary.place(retained_first_row, retained_parameters));
+        let retained = match retained_after_head {
+            | BoundaryPlacement::Joined => head
+                .clone()
+                .append(RcDoc::space())
+                .append(retained_parameters.clone().nest(self.indent())),
+            | BoundaryPlacement::Broken | BoundaryPlacement::BlankLine => {
+                head.clone().append(boundary.place(retained_after_head, retained_parameters))
+            }
+        };
         let expanded =
             head.append(boundary.place(self.expanded_placement(after_head), expanded_parameters));
         self.select_group_layout(GroupLayout {
@@ -2719,8 +2725,7 @@ mod tests {
                     "    forall (B : CType) .\n",
                     "      Bool -> Thk B -> Thk B -> B\n",
                     "  ) = {\n",
-                    "    fn\n",
-                    "      (B : CType)\n",
+                    "    fn (B : CType)\n",
                     "      condition\n",
                     "      when_true\n",
                     "      when_false\n",
@@ -2905,8 +2910,7 @@ mod tests {
                 ),
                 concat!(
                     "begin\n",
-                    "  let f\n",
-                    "    (first : Type)\n",
+                    "  let f (first : Type)\n",
                     "    (second : Type)\n",
                     "  : Result = value in\n",
                     "  f\n",
@@ -3361,8 +3365,7 @@ mod tests {
                     "unwrap_or",
                 ),
                 concat!(
-                    "def ! unwrap_or\n",
-                    "  (A : VType)\n",
+                    "def ! unwrap_or (A : VType)\n",
                     "  (E : VType)\n",
                     "  (result : Result A E)\n",
                     "  (default : A)\n",
@@ -3377,8 +3380,7 @@ mod tests {
                     "f",
                 ),
                 concat!(
-                    "let f\n",
-                    "  (A : VType) (B : VType)\n",
+                    "let f (A : VType) (B : VType)\n",
                     "  (left : A) (right : B)\n",
                     ": Result = value in\n",
                     "f\n",
@@ -3387,8 +3389,7 @@ mod tests {
             (
                 concat!("forall (A : VType) (B : VType)\n", "  (C : VType) (D : VType) . Body",),
                 concat!(
-                    "forall\n",
-                    "  (A : VType) (B : VType)\n",
+                    "forall (A : VType) (B : VType)\n",
                     "  (C : VType) (D : VType)\n",
                     ".\n",
                     "  Body\n",
@@ -3397,8 +3398,7 @@ mod tests {
             (
                 concat!("exists (A : VType) (B : VType)\n", "  (C : VType) (D : VType) . Body",),
                 concat!(
-                    "exists\n",
-                    "  (A : VType) (B : VType)\n",
+                    "exists (A : VType) (B : VType)\n",
                     "  (C : VType) (D : VType)\n",
                     ".\n",
                     "  Body\n",
