@@ -58,9 +58,16 @@ enum TestPipelineError {
 
 impl ScopedProgram {
     fn check(self) -> Result<SourceChecked, zydeco_statics::TyckReports> {
-        let Self { spans, mut arena, prim, root } = self;
-        let checked = zydeco_statics::Tycker::new(&spans, &prim, &mut arena).check_source(root)?;
-        Ok(SourceChecked { spans, scoped: arena, statics: checked.statics, root: checked.root })
+        let Self { spans, arena, prim, root } = self;
+        let session = super::CompilerSession::default();
+        let output = session.check_resolved(spans.clone(), prim, arena, root);
+        let checked = output.outcome.into_result()?;
+        Ok(SourceChecked {
+            spans,
+            scoped: output.scoped,
+            statics: checked.statics,
+            root: checked.root,
+        })
     }
 }
 

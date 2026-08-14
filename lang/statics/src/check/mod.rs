@@ -35,6 +35,10 @@ pub struct Tycker<'a> {
     /// Issuer of site-derived identifiers for this type-checking run.
     #[as_mut(DerivedAllocator)]
     allocator: DerivedAllocator,
+    /// The salsa database this check runs within.
+    pub db: &'a dyn crate::query::TyckDb,
+    /// The name-resolved program snapshot being checked.
+    pub data: crate::query::ScopedData<'a>,
     pub spans: &'a SpanArena,
     pub prim: &'a PrimDefs,
     #[as_ref(ScopedArena)]
@@ -974,9 +978,14 @@ impl CheckedPatternExt for CheckedPattern {
 
 impl<'a> Tycker<'a> {
     /// Create a type checker with fresh statics arenas.
-    pub fn new(spans: &'a SpanArena, prim: &'a PrimDefs, scoped: &'a mut ScopedArena) -> Self {
+    pub fn new(
+        db: &'a dyn crate::query::TyckDb, data: crate::query::ScopedData<'a>, spans: &'a SpanArena,
+        prim: &'a PrimDefs, scoped: &'a mut ScopedArena,
+    ) -> Self {
         Self {
             allocator: DerivedAllocator::new(),
+            db,
+            data,
             spans,
             prim,
             scoped,
@@ -1313,7 +1322,7 @@ impl BuiltinTypeResolution {
 
 /// Give compiler-generated primitive syntax its intrinsic or lexical static
 /// meaning without routing it through a source-level definition name.
-struct InternalTerm(su::Internal);
+struct InternalTerm(su::Internal, su::TermId);
 
 impl InternalTerm {
     #[track_caller]
@@ -1321,8 +1330,16 @@ impl InternalTerm {
         self, tycker: &mut Tycker<'_>, env: &ss::TyEnv, switch: Switch<AnnId>,
     ) -> ResultKont<TermAnnId> {
         let synthesized = match self.0 {
-            | su::Internal::VType => TermAnnId::Kind(ss::VType.build(tycker, env)),
-            | su::Internal::CType => TermAnnId::Kind(ss::CType.build(tycker, env)),
+            | su::Internal::VType | su::Internal::CType => {
+                let term = crate::query::InternedTerm::new(tycker.db, self.1);
+                let Some((id, kind)) =
+                    crate::query::internal_kind_judgment(tycker.db, tycker.data, term)
+                else {
+                    unreachable!("intrinsic kinds are query-produced judgments")
+                };
+                tycker.statics.kinds_pre.insert_new(id, ss::Fillable::Done(kind));
+                TermAnnId::Kind(id)
+            }
             | su::Internal::Thk => {
                 let ty = ss::ThkTy.build(tycker, env);
                 TermAnnId::Type(ty, tycker.statics.annotations_type[&ty])
@@ -3202,7 +3219,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 })?
             }
             | Tm::Internal(internal) => {
-                InternalTerm(internal).tyck_k(tycker, &self.info, switch)?
+                InternalTerm(internal, self.inner).tyck_k(tycker, &self.info, switch)?
             }
             | Tm::Sealed(_) => unreachable!(),
             | Tm::Ann(term) => {
@@ -5617,6 +5634,30 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
 #[cfg(test)]
 mod source_boundary_tests {
     use super::*;
+    use std::sync::{Arc, Mutex};
+
+    #[salsa::db]
+    #[derive(Clone)]
+    struct TestDb {
+        storage: salsa::Storage<Self>,
+        pending: Arc<Mutex<Option<Arc<crate::query::PendingParts>>>>,
+    }
+
+    impl Default for TestDb {
+        fn default() -> Self {
+            Self { storage: salsa::Storage::default(), pending: Arc::new(Mutex::new(None)) }
+        }
+    }
+
+    #[salsa::db]
+    impl salsa::Database for TestDb {}
+
+    #[salsa::db]
+    impl crate::query::TyckDb for TestDb {
+        fn pending_parts(&self) -> &Arc<Mutex<Option<Arc<crate::query::PendingParts>>>> {
+            &self.pending
+        }
+    }
     use crate::environment::TyEnv;
 
     #[test]
@@ -5634,7 +5675,15 @@ mod source_boundary_tests {
 
         let spans = su::SpanArena::default();
         let prim = su::PrimDefs::default();
-        let mut tycker = Tycker::new(&spans, &prim, &mut scoped);
+        let db = TestDb::default();
+        *db.pending.lock().unwrap() = Some(Arc::new(crate::query::PendingParts {
+            spans: spans.clone(),
+            prim: prim.clone(),
+            scoped: scoped.clone(),
+            root: hole,
+        }));
+        let data = crate::query::intern_pending(&db);
+        let mut tycker = Tycker::new(&db, data, &spans, &prim, &mut scoped);
         let env = TyEnv::default();
         let expected = Alloc::alloc(&mut tycker, ss::VType, (), &());
         let checked =
@@ -5659,7 +5708,15 @@ mod source_boundary_tests {
 
         let spans = su::SpanArena::default();
         let prim = su::PrimDefs::default();
-        let mut tycker = Tycker::new(&spans, &prim, &mut scoped);
+        let db = TestDb::default();
+        *db.pending.lock().unwrap() = Some(Arc::new(crate::query::PendingParts {
+            spans: spans.clone(),
+            prim: prim.clone(),
+            scoped: scoped.clone(),
+            root: hole,
+        }));
+        let data = crate::query::intern_pending(&db);
+        let mut tycker = Tycker::new(&db, data, &spans, &prim, &mut scoped);
         let result =
             TyEnvT::new(TyEnv::default(), boundary).tyck_k(&mut tycker, Action::ana(AnnId::Set));
 

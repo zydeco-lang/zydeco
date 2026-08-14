@@ -199,11 +199,18 @@ trait SourceQueryDb: salsa::Database + zydeco_statics::query::TyckDb {
 pub struct CompilerSession {
     storage: Storage<Self>,
     files: DashMap<PathBuf, SourceInput>,
+    pending: std::sync::Arc<
+        std::sync::Mutex<Option<std::sync::Arc<zydeco_statics::query::PendingParts>>>,
+    >,
 }
 
 impl Default for CompilerSession {
     fn default() -> Self {
-        Self { storage: Storage::default(), files: DashMap::new() }
+        Self {
+            storage: Storage::default(),
+            files: DashMap::new(),
+            pending: std::sync::Arc::new(std::sync::Mutex::new(None)),
+        }
     }
 }
 
@@ -211,7 +218,15 @@ impl Default for CompilerSession {
 impl salsa::Database for CompilerSession {}
 
 #[salsa::db]
-impl zydeco_statics::query::TyckDb for CompilerSession {}
+impl zydeco_statics::query::TyckDb for CompilerSession {
+    fn pending_parts(
+        &self,
+    ) -> &std::sync::Arc<
+        std::sync::Mutex<Option<std::sync::Arc<zydeco_statics::query::PendingParts>>>,
+    > {
+        &self.pending
+    }
+}
 
 #[salsa::db]
 impl SourceQueryDb for CompilerSession {
@@ -302,6 +317,23 @@ impl CompilerSession {
             .source_input(root.as_ref().to_path_buf())
             .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
         analyze_source(self, root)
+    }
+
+    /// Check a resolved program assembled outside the source pipeline.
+    ///
+    /// Salsa requires an active query to create tracked structs, so the arenas
+    /// cross into the query graph through the session's pending-parts slot.
+    /// Intended for tests and tools that own the intermediate arenas.
+    pub fn check_resolved(
+        &self, spans: zydeco_surface::textual::syntax::SpanArena,
+        prim: zydeco_surface::scoped::syntax::PrimDefs,
+        scoped: zydeco_surface::scoped::arena::ScopedArena,
+        root: zydeco_surface::scoped::syntax::TermId,
+    ) -> zydeco_statics::query::TyckOutput {
+        *self.pending.lock().expect("pending check slot poisoned") =
+            Some(Arc::new(zydeco_statics::query::PendingParts { spans, prim, scoped, root }));
+        let data = zydeco_statics::query::intern_pending(self);
+        zydeco_statics::query::check_source(self, data)
     }
 
     /// The normalized type of a typed node, memoized per analysis.

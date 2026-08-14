@@ -8,7 +8,13 @@ use crate::*;
 use zydeco_utils::arena::{ArenaId, KeySpaceId, derived_id};
 
 /// Category tag separating derived identifier key spaces from sequential ones.
-const DERIVATION_TAG: u64 = 0x5A59_4445_434F_5155;
+pub(crate) const DERIVATION_TAG: u64 = 0x5A59_4445_434F_5155;
+
+/// Category tag for identifiers produced by salsa queries rather than by the
+/// checker's in-context allocator. A separate family keeps query-produced
+/// identifiers disjoint from checker-produced ones even when both derive from
+/// the same allocation site.
+pub(crate) const QUERY_DERIVATION_TAG: u64 = 0x5A59_5155_4552_5921;
 
 /// Issuer of derived identifiers for query-friendly type checking.
 ///
