@@ -22,6 +22,8 @@ A **stage separator** is `:` or `=`: `:` joins a head with its type, and `=` joi
 A **scope marker** is `.` or `=>` and introduces a scope body.
 An **arm block** is one of `match`, `comatch`, `data`, or `codata`: a construct whose arms each occupy their own line.
 Arm blocks are block-like: they always expand, so they begin on a line of their own.
+A **delimited region** is a `{ }` or `( )` group, or a `begin`...`end` block:
+its contents nest inside its delimiters while the delimiters themselves hug the surrounding line.
 
 ## Layout Meta-Rules
 
@@ -44,9 +46,11 @@ A stage separator or tail marker returns to the binding's indentation through th
 it stays with a single-line payload, follows the payload's final line when that line returned
 to the boundary (the delimited closer), or takes a line of its own at the boundary.
 
-**Vertical constructs start at a boundary.** A construct that always expands — a sequence binding,
-whose tail marker always breaks, or an arm block, whose arms always break — must begin on a boundary line,
-never anchored mid-line.
+**Blocks anchor; delimiters hug.** A construct whose interior aligns with its head — a sequence binding,
+whose tail aligns with the binding, or an arm block, whose arms align with the keyword — must begin on a boundary line.
+A delimited region instead hugs the line it lands on: the opener stays put,
+the contents nest one level inside, and the closer returns to the opener's line.
+A singleton group therefore keeps its delimiters whenever its contents span more than one line.
 
 ## Retained Source Information
 
@@ -206,8 +210,8 @@ Consecutive existential nodes also normalize to one telescope during desugaring,
 so the compact and repeated spellings have the same elaboration.
 
 Minimal parenthesis formatting retains grammar-required groups.
-It also retains a multiline singleton group when its delimiters provide an intentional boundary
-under the active layout policy.
+It also retains a singleton group whenever its contents span more than one line,
+so the delimiters can hug the enclosing line while the contents nest inside.
 Applications are the one self-grouping family: their own compact-or-hanging boundary subsumes a singleton wrapper.
 `Parentheses::Preserve` is available when every parsed singleton group must remain.
 
