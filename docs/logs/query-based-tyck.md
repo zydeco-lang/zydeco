@@ -583,3 +583,14 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   terms, patterns, and the auxiliary package-pi entities — now derives its nodes through a
   producer query; `constrain_to_scope_k` and the resolver reads stay checker-side.
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — P7 checkpoint: end-to-end check benchmark
+
+- `scripts/bench-check.sh` times the release `zydeco check` on `lib/std/std.zy` and three
+  representative test files; the baseline is the parent of `b23f7253` (the last commit before
+  the salsa `check_source` query), built in a worktree.
+- `lib/std/std.zy` (which pulls in the whole standard module tree): ~1.95 s baseline, ~2.65 s
+  current — the query migration has added roughly 30% of end-to-end check time so far. The
+  producer queries and their interned inputs are the expected source; the materializer walk at
+  the end of the migration will re-measure and decide whether to batch or cache per-judgment
+  inputs. Small files stay at ~0.1 s, dominated by startup.
