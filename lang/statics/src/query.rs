@@ -296,6 +296,34 @@ pub struct Judgments<'db> {
     pub root_slot: u32,
 }
 
+/// The intermediate state between the hole-resolution and the normalization
+/// phases, carried as a tracked struct so each finish step is its own query.
+#[salsa::tracked]
+pub struct Resolved<'db> {
+    #[tracked]
+    #[no_eq]
+    #[returns(ref)]
+    pub scoped: su::ScopedArena,
+    #[tracked]
+    #[no_eq]
+    #[returns(ref)]
+    pub statics: StaticsArena,
+    #[tracked]
+    #[no_eq]
+    #[returns(ref)]
+    pub errors: Vec<crate::check::TyckErrorEntry>,
+    #[tracked]
+    #[no_eq]
+    #[returns(ref)]
+    pub observations: Vec<crate::check::TyckObservation>,
+    #[tracked]
+    #[no_eq]
+    #[returns(ref)]
+    pub root: Option<ss::TermAnnId>,
+    #[tracked]
+    pub root_slot: u32,
+}
+
 /// The judgment phase: check the whole scoped program, producing the typed
 /// arena, the accumulated errors, and the root annotation.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
@@ -312,14 +340,12 @@ fn tyck_judgments<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> Judgments<
     Judgments::new(db, scoped, statics, errors, observations, root, root_slot)
 }
 
-/// The finish phase: resolve holes, normalize, and validate, given the
-/// judgment phase's arena. Reconstructs the checker around the phase-1 state
-/// so error reporting and the writer monad behave exactly as the combined pass
-/// did.
+/// The hole-resolution phase: resolve every fillable site and collect the
+/// solutions, given the judgment phase's arena.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
-fn finish_checked<'db>(
+fn resolve_holes_phase<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, judgments: Judgments<'db>,
-) -> SourceCheckOutcome {
+) -> Resolved<'db> {
     let mut scoped = judgments.scoped(db).clone();
     let mut tycker = Tycker::resume(
         db,
@@ -332,7 +358,37 @@ fn finish_checked<'db>(
         judgments.observations(db).clone(),
         judgments.root_slot(db),
     );
-    match judgments.root(db) {
+    tycker.resolve_holes_and_collect();
+    let root_slot = tycker.root_slot();
+    let statics = std::mem::take(&mut tycker.statics);
+    let errors = std::mem::take(&mut tycker.errors);
+    let observations = std::mem::take(&mut tycker.observations);
+    let root = judgments.root(db).clone();
+    drop(tycker);
+    Resolved::new(db, scoped, statics, errors, observations, root, root_slot)
+}
+
+/// The normalization phase: normalize and validate the checked arena, given
+/// the hole-resolution phase's arena. Reconstructs the checker around the
+/// previous phase's state so error reporting and the writer monad behave
+/// exactly as the combined pass did.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+fn finish_checked<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, resolved: Resolved<'db>,
+) -> SourceCheckOutcome {
+    let mut scoped = resolved.scoped(db).clone();
+    let mut tycker = Tycker::resume(
+        db,
+        data,
+        data.spans(db),
+        data.prim(db),
+        &mut scoped,
+        resolved.statics(db).clone(),
+        resolved.errors(db).clone(),
+        resolved.observations(db).clone(),
+        resolved.root_slot(db),
+    );
+    match resolved.root(db) {
         | None => {
             let reports = tycker.error_reports();
             SourceCheckOutcome::Rejected(RejectedSource {
@@ -341,7 +397,7 @@ fn finish_checked<'db>(
                 observations: tycker.observations,
             })
         }
-        | Some(root) => match tycker.finish_check_k() {
+        | Some(root) => match tycker.normalize_and_validate_k() {
             | Ok(()) => SourceCheckOutcome::Checked(CheckedSource {
                 statics: tycker.statics,
                 root: *root,
@@ -364,6 +420,7 @@ fn finish_checked<'db>(
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn check_source<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> TyckOutput {
     let judgments = tyck_judgments(db, data);
-    let outcome = finish_checked(db, data, judgments);
-    TyckOutput { scoped: judgments.scoped(db).clone(), outcome }
+    let resolved = resolve_holes_phase(db, data, judgments);
+    let outcome = finish_checked(db, data, resolved);
+    TyckOutput { scoped: resolved.scoped(db).clone(), outcome }
 }

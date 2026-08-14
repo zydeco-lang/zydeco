@@ -1107,9 +1107,21 @@ impl<'a> Tycker<'a> {
     }
 
     pub(crate) fn finish_check_k(&mut self) -> ResultKont<()> {
+        self.resolve_holes_and_collect();
+        self.normalize_and_validate_k()
+    }
+
+    /// Resolve holes and collect their solutions, the first half of the
+    /// finish phase.
+    pub(crate) fn resolve_holes_and_collect(&mut self) {
         // before we go, resolve all holes with solutions (including nested ones)
         self.do_resolve_holes();
         self.collect_hole_solutions();
+    }
+
+    /// Normalize and validate the checked arena, the second half of the finish
+    /// phase.
+    pub(crate) fn normalize_and_validate_k(&mut self) -> ResultKont<()> {
         let mut normalizer = crate::normalize::FilledNormalizer::default();
         // normalize all kinds
         {
