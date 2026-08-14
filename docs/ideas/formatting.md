@@ -20,6 +20,30 @@ The printer places them through the inline, attached, and aligned tiers, mirrori
 
 A **stage separator** is `:` or `=`: `:` joins a head with its type, and `=` joins the type with its bindee.
 A **scope marker** is `.` or `=>` and introduces a scope body.
+## Layout Meta-Rules
+
+Every formatter law and layout family below follows from four meta-rules.
+The printer may introduce or remove a break, or add or remove indentation, only where a meta-rule permits it;
+everywhere else it keeps the canonical compact layout.
+
+**A break belongs to a boundary.** Every line break is owned by exactly one grammatical boundary.
+Punctuation placement and continuation indentation belong to the boundary,
+never to either neighboring child in isolation.
+A gap without a declared boundary is canonical spacing and never breaks.
+
+**Indentation comes from the owning boundary.** A boundary contributes indentation only
+through its declared continuation policy: a broken boundary hangs its continuation one level below the boundary's line,
+or aligns it for aligned families; a joined boundary contributes nothing.
+There is no other source of nesting, and no fixed offsets: the printer measures the boundary's indentation dynamically.
+
+**Closers return to their boundary.** A delimiter closer returns to its opener's line.
+A stage separator or tail marker returns to the binding's indentation through three tiers:
+it stays with a single-line payload, follows the payload's final line when that line returned
+to the boundary (the delimited closer), or takes a line of its own at the boundary.
+
+**Vertical constructs start at a boundary.** A construct that always expands — a sequence binding,
+whose tail marker always breaks — must begin on a boundary line, never anchored mid-line.
+
 ## Retained Source Information
 
 A parsed source has three kinds of printable information:
@@ -47,6 +71,8 @@ If a named term or pattern contains the same-named variable, the printer always 
 Raw whitespace is not retained.
 
 ## Formatter Laws
+
+The following laws elaborate the layout meta-rules for concrete constructs.
 
 ### Semantic identity
 
@@ -227,6 +253,12 @@ so `zydeco fmt` and Cajun share one behavior and must not introduce independent 
 ## Verification and Extension
 
 The focused regression matrix covers every layout family in compact, source-broken, and width-broken forms.
+Each meta-rule has dedicated regression tests: the closer tiers are pinned
+by `placement_closes_at_the_binding_indentation`, `definition_separator_tiers_share_the_binding_indentation`,
+and `scope_separator_breaks_only_after_a_multiline_head`; the vertical-construct rule
+by `sequence_bindings_start_on_their_own_lines`; the joined-boundary nesting rule
+by `preserves_fitting_parameter_rows_inside_multiline_telescopes`; and the boundary-ownership rule
+by `removes_only_parentheses_allowed_by_the_grammar_context` together with the canonical-gap cases.
 A repository corpus test formats the maintained `.zy` sources under `lib/` and `docs/spell/`.
 It then reparses them, compares desugared structure, checks comment content, and verifies idempotence.
 Legacy examples and CLI fixtures are excluded because they contain earlier syntax or test-harness directives rather
