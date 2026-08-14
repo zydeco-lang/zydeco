@@ -2642,16 +2642,41 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                             std::panic::Location::caller(),
                         )?;
                         opened.extend(inner.opened);
-                        let vtype = ss::VType.build(tycker, &pattern_env);
-                        let annotation =
-                            annotations.into_iter().rev().fold(tail_annotation, |tail, head| {
-                                Alloc::alloc(tycker, ss::Prod(head, tail), vtype, &pattern_env)
-                            });
-                        let pattern =
-                            Alloc::alloc(tycker, ss::ConsN(output, tail), annotation, &self.info);
+                        let item_outcomes = output
+                            .iter()
+                            .zip(&annotations)
+                            .map(|(vpat, ty)| PatAnnId::Value(*vpat, *ty))
+                            .collect::<Vec<_>>();
+                        let pat_interned = crate::query::InternedPat::new(tycker.db, self.inner);
+                        let items_interned =
+                            crate::query::InternedPatItems::new(tycker.db, item_outcomes);
+                        let tail_interned = crate::query::InternedPatAnn::new(
+                            tycker.db,
+                            PatAnnId::Value(tail, tail_annotation),
+                        );
+                        let Some(outcome) = crate::query::pat_cons_syn_judgment(
+                            tycker.db,
+                            tycker.data,
+                            pat_interned,
+                            items_interned,
+                            tail_interned,
+                        ) else {
+                            unreachable!("consumed pattern judgments are query-produced")
+                        };
+                        for (id, prod) in outcome.prods {
+                            tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(prod));
+                            tycker.statics.annotations_type.insert_new(id, outcome.vtype);
+                            tycker.statics.env_type.insert_new(id, pattern_env.clone());
+                        }
+                        tycker.statics.vpats.insert_new(outcome.pat_id, outcome.pat);
+                        tycker.statics.annotations_vpat.insert_new(outcome.pat_id, outcome.ann);
+                        tycker.statics.env_vpat.insert_new(outcome.pat_id, self.info.clone());
                         TyEnvT::new(
                             pattern_env,
-                            PatternCheck::with_opened(PatAnnId::Value(pattern, annotation), opened),
+                            PatternCheck::with_opened(
+                                PatAnnId::Value(outcome.pat_id, outcome.ann),
+                                opened,
+                            ),
                         )
                     }
                     | Switch::Ana(AnnId::Type(expected)) => {

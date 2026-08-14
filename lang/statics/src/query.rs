@@ -631,6 +631,70 @@ pub fn cons_syn_judgment<'db>(
     Some(ConsSynOutcome { vtype, prods, cons_id, cons, ann })
 }
 
+/// An interned list of pattern annotations, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedPatItems<'db> {
+    pub items: Vec<ss::PatAnnId>,
+}
+
+/// The synthesized judgment of a consumed pattern, keyed on its items' and
+/// tail's judgments, mirroring the consumed term: the right-nested product
+/// chain over the shared vtype singleton and the consumed value-pattern node.
+#[derive(Clone, Debug)]
+pub struct PatConsSynOutcome {
+    pub vtype: ss::KindId,
+    /// The product type nodes in build order (innermost first).
+    pub prods: Vec<(ss::TypeId, ss::Type)>,
+    pub pat_id: ss::VPatId,
+    pub pat: ss::ValuePattern,
+    pub ann: ss::TypeId,
+}
+
+/// The synthesized judgment of a consumed pattern.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn pat_cons_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>,
+    items: InternedPatItems<'db>, tail: InternedPatAnn<'db>,
+) -> Option<PatConsSynOutcome> {
+    let su::Pattern::Cons(su::ConsN(_, _)) = data.scoped(db).pats.get(&pat.id(db))? else {
+        return None;
+    };
+    let ss::PatAnnId::Value(tail_value, tail_ty) = tail.id(db) else {
+        return None;
+    };
+    let item_values = items
+        .items(db)
+        .iter()
+        .map(|outcome| match outcome {
+            | ss::PatAnnId::Value(vpat, ty) => (*vpat, *ty),
+            | _ => unreachable!("consumed pattern items are value judgments"),
+        })
+        .collect::<Vec<_>>();
+    let vtype = {
+        let key = InternedIntrinsic::new(db, IntrinsicKey::VType);
+        let IntrinsicSingleton::Kind { id, .. } = intrinsic_singleton(db, data, key) else {
+            unreachable!("the vtype singleton is kind-producing")
+        };
+        id
+    };
+    let site_space = pat.id(db).key_space().as_u64();
+    let site_raw = pat.id(db).raw().into_u32();
+    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0);
+    let mut ann = tail_ty;
+    let mut prods = Vec::with_capacity(item_values.len());
+    for (idx, (_, head_ty)) in item_values.iter().rev().enumerate() {
+        let id: ss::TypeId = derived_id(key_space, idx as u32);
+        prods.push((id, ss::Type::Prod(ss::Prod(*head_ty, ann))));
+        ann = id;
+    }
+    let pat_id: ss::VPatId = derived_id(key_space, item_values.len() as u32);
+    let pat = ss::ValuePattern::VCons(ss::ConsN(
+        item_values.into_iter().map(|(vpat, _)| vpat).collect(),
+        tail_value,
+    ));
+    Some(PatConsSynOutcome { vtype, prods, pat_id, pat, ann })
+}
+
 /// The rejection of an intrinsic `Internal` term, carried as a query value so
 /// the checker routes decisions through queries and keeps the writer as a sink.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]

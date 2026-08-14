@@ -419,3 +419,18 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   allocations and derived ids move into queries keyed on inner results, while errors that
   abort mid-fold keep their exact checker-side timing until the fold itself migrates.
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — consumed patterns allocate through a query
+
+- `Pat::Cons` Syn followed the consumed term: `pat_cons_syn_judgment` keyed on the interned
+  item and tail pattern outcomes (`InternedPatItems`, `InternedPatAnn`) builds the product
+  chain and the consumed value-pattern node at the pattern's site. The product nodes record
+  the thread-accumulated pattern environment, while the pattern node records the outer
+  environment — the materializer clones each exactly as the allocator did.
+- Every remaining Syn arm now reads the arena through `lub`, `type_filled_k`, or
+  `try_destruct_def` (Abs, App, Fix, Pi, Sigma, ManifestExists, Thunk, Force, Ret, Do, Let,
+  the pack-pi family, the data declarations, and the pattern counterparts). The next slice is
+  therefore the fill-state conversion: `fill_state(db, data, site)` over `types_pre`/
+  `kinds_pre`, which turns those reads into query calls and unblocks both the Ana paths and
+  the `annotations_var` merge step.
+- Workspace suite passes unchanged (61 targets green), clippy clean.
