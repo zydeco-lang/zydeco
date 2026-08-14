@@ -458,3 +458,14 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   result type. The checker keeps the arrow/forall destructuring and the argument checks,
   which read the arena until the fill-state conversion lands.
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — the first fill-state content rides a query
+
+- `hole_ana_judgment` is the seed of the fill-state pattern: the analyzed hole's stand-in fill
+  and its `Fillable::Fill` type pre-node derive at the term's site, so a query now produces
+  fill-state content (`HoleAnaKind::Type`), while the resolution side effects (`fill_k`'s
+  solution write, `fill_hints`, and the `fill_scopes` bookkeeping) stay checker-side. The
+  value and computation arms derive the hole value/computation nodes the same way.
+- `Pat::Ctor` and `Pat::Alias` Syn became error-only queries returning `MissingAnnotation`,
+  completing the pattern-level error arms alongside `Pat::Hole`.
+- Workspace suite passes unchanged (61 targets green), clippy clean.

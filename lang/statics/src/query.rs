@@ -1058,6 +1058,173 @@ pub fn fix_judgment<'db>(
     })
 }
 
+/// The shape of a hole's analyzed annotation: a kind (a type hole), a value
+/// type (a value hole), or a computation type (a computation hole).
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum HoleAnaKind {
+    Type { kd: ss::KindId },
+    Value { ty: ss::TypeId },
+    Compu { ty: ss::TypeId },
+}
+
+/// An interned hole analysis input, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedHoleAna<'db> {
+    pub kind: HoleAnaKind,
+}
+
+/// The allocation result of an analyzed hole: the stand-in fill, and either a
+/// type pre-node holding `Fillable::Fill` or the hole value/computation node.
+#[derive(Clone, Debug)]
+pub enum HoleAnaOutcome {
+    Type { fill: ss::FillId, ty: ss::TypeId, kd: ss::KindId },
+    Value { fill: ss::FillId, id: ss::ValueId, value: ss::Value, ann: ss::TypeId },
+    Compu { fill: ss::FillId, id: ss::CompuId, compu: ss::Computation, ann: ss::TypeId },
+}
+
+/// The analyzed judgment of a hole term.
+///
+/// The first query to produce fill-state content: the type arm's pre-node is
+/// `Fillable::Fill`, derived at the term's site. The checker keeps the
+/// resolution side effects (`fill_k`'s solution write, `fill_hints`, and the
+/// `fill_scopes` bookkeeping).
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn hole_ana_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+    input: InternedHoleAna<'db>,
+) -> Option<HoleAnaOutcome> {
+    let su::Term::Hole(su::Hole) = data.scoped(db).terms.get(&term.id(db))? else {
+        return None;
+    };
+    let site_space = term.id(db).key_space().as_u64();
+    let site_raw = term.id(db).raw().into_u32();
+    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0);
+    let fill: ss::FillId = derived_id(key_space, 0);
+    match input.kind(db) {
+        | HoleAnaKind::Type { kd } => {
+            let ty: ss::TypeId = derived_id(key_space, 1);
+            Some(HoleAnaOutcome::Type { fill, ty, kd })
+        }
+        | HoleAnaKind::Value { ty } => {
+            let id: ss::ValueId = derived_id(key_space, 1);
+            Some(HoleAnaOutcome::Value { fill, id, value: ss::Value::Hole(ss::Hole), ann: ty })
+        }
+        | HoleAnaKind::Compu { ty } => {
+            let id: ss::CompuId = derived_id(key_space, 1);
+            Some(HoleAnaOutcome::Compu {
+                fill,
+                id,
+                compu: ss::Computation::Hole(ss::Hole),
+                ann: ty,
+            })
+        }
+    }
+}
+
+/// The synthesized judgment of a constructor pattern: it always fails with a
+/// missing annotation.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn pat_ctor_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>,
+) -> Option<crate::check::TyckError> {
+    let su::Pattern::Ctor(_) = data.scoped(db).pats.get(&pat.id(db))? else {
+        return None;
+    };
+    Some(crate::check::TyckError::MissingAnnotation)
+}
+
+/// The synthesized judgment of an alias pattern: it always fails with a
+/// missing annotation.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn pat_alias_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>,
+) -> Option<crate::check::TyckError> {
+    let su::Pattern::Alias(_) = data.scoped(db).pats.get(&pat.id(db))? else {
+        return None;
+    };
+    Some(crate::check::TyckError::MissingAnnotation)
+}
+
+/// The arm of a pi judgment after its binder checks: which shape the body's
+/// judgment took.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum PiSynArm {
+    KindArrow { kd_1: ss::KindId, kd_2: ss::KindId },
+    ValueForall { ty_2: ss::TypeId, kd_2: ss::KindId },
+    Forall { ty_2: ss::TypeId, kd_2: ss::KindId },
+    KindMismatch,
+    MissingAnnotation,
+    SortMismatch,
+}
+
+/// An interned pi judgment input, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedPiSyn<'db> {
+    pub arm: PiSynArm,
+    pub tpat: ss::TPatId,
+    pub abst: ss::AbstId,
+}
+
+/// The allocation tail of a pi judgment: the kind arrow, the value forall, or
+/// the computation forall node; the rejections surface as errors.
+#[derive(Clone, Debug)]
+pub enum PiSynOutcome {
+    Kind { id: ss::KindId, kind: ss::Kind },
+    Type { id: ss::TypeId, ty: ss::Type, kd: ss::KindId },
+    Error(crate::check::TyckError),
+}
+
+/// The synthesized judgment of a pi term, keyed on the checked binder and
+/// body arm.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn pi_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>, input: InternedPiSyn<'db>,
+) -> Option<PiSynOutcome> {
+    let su::Term::Pi(su::Pi(_, _)) = data.scoped(db).terms.get(&term.id(db))? else {
+        return None;
+    };
+    let site_space = term.id(db).key_space().as_u64();
+    let site_raw = term.id(db).raw().into_u32();
+    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0);
+    match input.arm(db) {
+        | PiSynArm::KindArrow { kd_1, kd_2 } => {
+            let id: ss::KindId = derived_id(key_space, 0);
+            Some(PiSynOutcome::Kind { id, kind: ss::Kind::Arrow(ss::Arrow(kd_1, kd_2)) })
+        }
+        | PiSynArm::ValueForall { ty_2, kd_2 } => {
+            let id: ss::TypeId = derived_id(key_space, 0);
+            Some(PiSynOutcome::Type {
+                id,
+                ty: ss::Type::VForall(ss::ValueForall(
+                    ss::TypeBinder { pattern: input.tpat(db), witness: input.abst(db) },
+                    ty_2,
+                )),
+                kd: kd_2,
+            })
+        }
+        | PiSynArm::Forall { ty_2, kd_2 } => {
+            let id: ss::TypeId = derived_id(key_space, 0);
+            Some(PiSynOutcome::Type {
+                id,
+                ty: ss::Type::Forall(ss::Forall(
+                    ss::TypeBinder { pattern: input.tpat(db), witness: input.abst(db) },
+                    ty_2,
+                )),
+                kd: kd_2,
+            })
+        }
+        | PiSynArm::KindMismatch => {
+            Some(PiSynOutcome::Error(crate::check::TyckError::KindMismatch))
+        }
+        | PiSynArm::MissingAnnotation => {
+            Some(PiSynOutcome::Error(crate::check::TyckError::MissingAnnotation))
+        }
+        | PiSynArm::SortMismatch => {
+            Some(PiSynOutcome::Error(crate::check::TyckError::SortMismatch))
+        }
+    }
+}
+
 /// The rejection of an intrinsic `Internal` term, carried as a query value so
 /// the checker routes decisions through queries and keeps the writer as a sink.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]

@@ -2487,7 +2487,13 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
             },
             | Pat::Ctor(pat) => match switch {
                 | Switch::Syn => {
-                    tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
+                    let pat = crate::query::InternedPat::new(tycker.db, self.inner);
+                    let Some(error) =
+                        crate::query::pat_ctor_syn_judgment(tycker.db, tycker.data, pat)
+                    else {
+                        unreachable!("constructor pattern judgments are query-produced")
+                    };
+                    tycker.err_k(error, std::panic::Location::caller())?
                 }
                 | Switch::Ana(ann) => {
                     let AnnId::Type(ann_ty) = ann else {
@@ -2531,7 +2537,13 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
             },
             | Pat::Alias(su::Alias(patterns)) => match switch {
                 | Switch::Syn => {
-                    tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
+                    let pat = crate::query::InternedPat::new(tycker.db, self.inner);
+                    let Some(error) =
+                        crate::query::pat_alias_syn_judgment(tycker.db, tycker.data, pat)
+                    else {
+                        unreachable!("alias pattern judgments are query-produced")
+                    };
+                    tycker.err_k(error, std::panic::Location::caller())?
                 }
                 | Switch::Ana(AnnId::Type(expected)) => {
                     let members =
@@ -3439,27 +3451,100 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     }
                     | Switch::Ana(AnnId::Kind(kd)) => {
                         // a type hole, with a specific kind in mind
-                        let fill = Alloc::alloc(tycker, self.inner, (), &());
-                        let fill_out = Alloc::alloc(tycker, fill, kd, &self.info);
-                        TermAnnId::Type(fill_out, kd)
+                        let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                        let input = crate::query::InternedHoleAna::new(
+                            tycker.db,
+                            crate::query::HoleAnaKind::Type { kd },
+                        );
+                        let Some(crate::query::HoleAnaOutcome::Type { fill, ty, kd }) =
+                            crate::query::hole_ana_judgment(tycker.db, tycker.data, term, input)
+                        else {
+                            unreachable!("the kind arm of hole judgments is query-produced")
+                        };
+                        tycker.statics.fills.insert_new(fill, ss::InferenceSite::Term(self.inner));
+                        tycker.statics.types_pre.insert_new(ty, ss::Fillable::Fill(fill));
+                        tycker.statics.annotations_type.insert_new(ty, kd);
+                        tycker.statics.env_type.insert_new(ty, self.info.clone());
+                        let scope = self.info.skolem_scope().clone();
+                        if let Some(existing) =
+                            tycker.statics.fill_scopes.insert_or_get(fill, scope.clone())
+                        {
+                            tycker
+                                .statics
+                                .fill_scopes
+                                .replace_existing(fill, existing.intersection(&scope));
+                        }
+                        TermAnnId::Type(ty, kd)
                     }
                     | Switch::Ana(AnnId::Type(ty)) => {
                         // a hole in either value or computation; like undefined in Haskell
                         let kd = tycker.statics.annotations_type[&ty].to_owned();
                         match tycker.kind_filled_k(&kd)?.to_owned() {
                             | ss::Kind::VType(ss::VType) => {
-                                let hole = Alloc::alloc(tycker, self.inner, (), &());
-                                hole.fill_k(tycker, ty.into())?;
-                                tycker.statics.fill_hints.insert_new(hole, ());
-                                let hole = Alloc::alloc(tycker, ss::Hole, ty, &self.info);
-                                TermAnnId::Value(hole, ty)
+                                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                                let input = crate::query::InternedHoleAna::new(
+                                    tycker.db,
+                                    crate::query::HoleAnaKind::Value { ty },
+                                );
+                                let Some(crate::query::HoleAnaOutcome::Value {
+                                    fill,
+                                    id,
+                                    value,
+                                    ann,
+                                }) = crate::query::hole_ana_judgment(
+                                    tycker.db,
+                                    tycker.data,
+                                    term,
+                                    input,
+                                )
+                                else {
+                                    unreachable!(
+                                        "the value arm of hole judgments is query-produced"
+                                    )
+                                };
+                                tycker
+                                    .statics
+                                    .fills
+                                    .insert_new(fill, ss::InferenceSite::Term(self.inner));
+                                fill.fill_k(tycker, ty.into())?;
+                                tycker.statics.fill_hints.insert_new(fill, ());
+                                tycker.statics.values.insert_new(id, value);
+                                tycker.statics.annotations_value.insert_new(id, ann);
+                                tycker.statics.env_value.insert_new(id, self.info.clone());
+                                TermAnnId::Value(id, ann)
                             }
                             | ss::Kind::CType(ss::CType) => {
-                                let hole = Alloc::alloc(tycker, self.inner, (), &());
-                                hole.fill_k(tycker, ty.into())?;
-                                tycker.statics.fill_hints.insert_new(hole, ());
-                                let hole = Alloc::alloc(tycker, ss::Hole, ty, &self.info);
-                                TermAnnId::Compu(hole, ty)
+                                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                                let input = crate::query::InternedHoleAna::new(
+                                    tycker.db,
+                                    crate::query::HoleAnaKind::Compu { ty },
+                                );
+                                let Some(crate::query::HoleAnaOutcome::Compu {
+                                    fill,
+                                    id,
+                                    compu,
+                                    ann,
+                                }) = crate::query::hole_ana_judgment(
+                                    tycker.db,
+                                    tycker.data,
+                                    term,
+                                    input,
+                                )
+                                else {
+                                    unreachable!(
+                                        "the computation arm of hole judgments is query-produced"
+                                    )
+                                };
+                                tycker
+                                    .statics
+                                    .fills
+                                    .insert_new(fill, ss::InferenceSite::Term(self.inner));
+                                fill.fill_k(tycker, ty.into())?;
+                                tycker.statics.fill_hints.insert_new(fill, ());
+                                tycker.statics.compus.insert_new(id, compu);
+                                tycker.statics.annotations_compu.insert_new(id, ann);
+                                tycker.statics.env_compu.insert_new(id, self.info.clone());
+                                TermAnnId::Compu(id, ann)
                             }
                             | ss::Kind::Arrow(_) | ss::Kind::Label(_) => tycker
                                 .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
@@ -4804,48 +4889,126 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                                 std::panic::Location::caller(),
                                             )?
                                         }
-                                        let arr =
-                                            Alloc::alloc(tycker, ss::Arrow(kd_1, kd_2), (), &());
-                                        TermAnnId::Kind(arr)
+                                        let term =
+                                            crate::query::InternedTerm::new(tycker.db, self.inner);
+                                        let input = crate::query::InternedPiSyn::new(
+                                            tycker.db,
+                                            crate::query::PiSynArm::KindArrow { kd_1, kd_2 },
+                                            tpat,
+                                            abst,
+                                        );
+                                        let Some(crate::query::PiSynOutcome::Kind { id, kind }) =
+                                            crate::query::pi_syn_judgment(
+                                                tycker.db,
+                                                tycker.data,
+                                                term,
+                                                input,
+                                            )
+                                        else {
+                                            unreachable!(
+                                                "the kind arrow of pi judgments is query-produced"
+                                            )
+                                        };
+                                        tycker
+                                            .statics
+                                            .kinds_pre
+                                            .insert_new(id, ss::Fillable::Done(kind));
+                                        TermAnnId::Kind(id)
                                     }
                                     | TermAnnId::Type(ty_2, kd_2) => {
-                                        let binder =
-                                            ss::TypeBinder { pattern: tpat, witness: abst };
-                                        match tycker.kind_filled_k(&kd_2)?.to_owned() {
+                                        let arm = match tycker.kind_filled_k(&kd_2)?.to_owned() {
                                             | ss::Kind::VType(_) => {
-                                                let forall = Alloc::alloc(
-                                                    tycker,
-                                                    ss::ValueForall(binder, ty_2),
-                                                    kd_2,
-                                                    &self.info,
-                                                );
-                                                TermAnnId::Type(forall, kd_2)
+                                                crate::query::PiSynArm::ValueForall { ty_2, kd_2 }
                                             }
                                             | ss::Kind::CType(_) => {
-                                                let forall = Alloc::alloc(
-                                                    tycker,
-                                                    ss::Forall(binder, ty_2),
-                                                    kd_2,
-                                                    &self.info,
-                                                );
-                                                TermAnnId::Type(forall, kd_2)
+                                                crate::query::PiSynArm::Forall { ty_2, kd_2 }
                                             }
-                                            | ss::Kind::Arrow(_) | ss::Kind::Label(_) => tycker
-                                                .err_k(
-                                                    TyckError::KindMismatch,
-                                                    std::panic::Location::caller(),
-                                                )?,
+                                            | ss::Kind::Arrow(_) | ss::Kind::Label(_) => {
+                                                crate::query::PiSynArm::KindMismatch
+                                            }
+                                        };
+                                        let term =
+                                            crate::query::InternedTerm::new(tycker.db, self.inner);
+                                        let input = crate::query::InternedPiSyn::new(
+                                            tycker.db, arm, tpat, abst,
+                                        );
+                                        match crate::query::pi_syn_judgment(
+                                            tycker.db,
+                                            tycker.data,
+                                            term,
+                                            input,
+                                        ) {
+                                            | Some(crate::query::PiSynOutcome::Type {
+                                                id,
+                                                ty,
+                                                kd,
+                                            }) => {
+                                                tycker
+                                                    .statics
+                                                    .types_pre
+                                                    .insert_new(id, ss::Fillable::Done(ty));
+                                                tycker.statics.annotations_type.insert_new(id, kd);
+                                                tycker
+                                                    .statics
+                                                    .env_type
+                                                    .insert_new(id, self.info.clone());
+                                                TermAnnId::Type(id, kd)
+                                            }
+                                            | Some(crate::query::PiSynOutcome::Error(error)) => {
+                                                tycker
+                                                    .err_k(error, std::panic::Location::caller())?
+                                            }
+                                            | _ => unreachable!(
+                                                "the type arm of pi judgments is query-produced"
+                                            ),
                                         }
                                     }
-                                    | TermAnnId::Hole(_) => tycker.err_k(
-                                        TyckError::MissingAnnotation,
-                                        std::panic::Location::caller(),
-                                    )?,
-                                    | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => tycker
-                                        .err_k(
-                                            TyckError::SortMismatch,
-                                            std::panic::Location::caller(),
-                                        )?,
+                                    | TermAnnId::Hole(_) => {
+                                        let term =
+                                            crate::query::InternedTerm::new(tycker.db, self.inner);
+                                        let input = crate::query::InternedPiSyn::new(
+                                            tycker.db,
+                                            crate::query::PiSynArm::MissingAnnotation,
+                                            tpat,
+                                            abst,
+                                        );
+                                        let Some(crate::query::PiSynOutcome::Error(error)) =
+                                            crate::query::pi_syn_judgment(
+                                                tycker.db,
+                                                tycker.data,
+                                                term,
+                                                input,
+                                            )
+                                        else {
+                                            unreachable!(
+                                                "the hole arm of pi judgments is query-produced"
+                                            )
+                                        };
+                                        tycker.err_k(error, std::panic::Location::caller())?
+                                    }
+                                    | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
+                                        let term =
+                                            crate::query::InternedTerm::new(tycker.db, self.inner);
+                                        let input = crate::query::InternedPiSyn::new(
+                                            tycker.db,
+                                            crate::query::PiSynArm::SortMismatch,
+                                            tpat,
+                                            abst,
+                                        );
+                                        let Some(crate::query::PiSynOutcome::Error(error)) =
+                                            crate::query::pi_syn_judgment(
+                                                tycker.db,
+                                                tycker.data,
+                                                term,
+                                                input,
+                                            )
+                                        else {
+                                            unreachable!(
+                                                "the sort arm of pi judgments is query-produced"
+                                            )
+                                        };
+                                        tycker.err_k(error, std::panic::Location::caller())?
+                                    }
                                 }
                             }
                             | PatAnnId::Value(_, _) => self
