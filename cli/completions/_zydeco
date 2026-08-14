@@ -76,7 +76,7 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (help)
 _arguments "${_arguments_options[@]}" : \
-":: :_zydeco__help_commands" \
+":: :_zydeco__subcmd__help_commands" \
 "*::: :->help" \
 && ret=0
 
@@ -131,23 +131,23 @@ _zydeco_commands() {
     )
     _describe -t commands 'zydeco commands' commands "$@"
 }
-(( $+functions[_zydeco__build_commands] )) ||
-_zydeco__build_commands() {
+(( $+functions[_zydeco__subcmd__build_commands] )) ||
+_zydeco__subcmd__build_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco build commands' commands "$@"
 }
-(( $+functions[_zydeco__check_commands] )) ||
-_zydeco__check_commands() {
+(( $+functions[_zydeco__subcmd__check_commands] )) ||
+_zydeco__subcmd__check_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco check commands' commands "$@"
 }
-(( $+functions[_zydeco__fmt_commands] )) ||
-_zydeco__fmt_commands() {
+(( $+functions[_zydeco__subcmd__fmt_commands] )) ||
+_zydeco__subcmd__fmt_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco fmt commands' commands "$@"
 }
-(( $+functions[_zydeco__help_commands] )) ||
-_zydeco__help_commands() {
+(( $+functions[_zydeco__subcmd__help_commands] )) ||
+_zydeco__subcmd__help_commands() {
     local commands; commands=(
 'fmt:Format Zydeco source files in place' \
 'run:Run a zydeco program' \
@@ -158,43 +158,43 @@ _zydeco__help_commands() {
     )
     _describe -t commands 'zydeco help commands' commands "$@"
 }
-(( $+functions[_zydeco__help__build_commands] )) ||
-_zydeco__help__build_commands() {
+(( $+functions[_zydeco__subcmd__help__subcmd__build_commands] )) ||
+_zydeco__subcmd__help__subcmd__build_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco help build commands' commands "$@"
 }
-(( $+functions[_zydeco__help__check_commands] )) ||
-_zydeco__help__check_commands() {
+(( $+functions[_zydeco__subcmd__help__subcmd__check_commands] )) ||
+_zydeco__subcmd__help__subcmd__check_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco help check commands' commands "$@"
 }
-(( $+functions[_zydeco__help__fmt_commands] )) ||
-_zydeco__help__fmt_commands() {
+(( $+functions[_zydeco__subcmd__help__subcmd__fmt_commands] )) ||
+_zydeco__subcmd__help__subcmd__fmt_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco help fmt commands' commands "$@"
 }
-(( $+functions[_zydeco__help__help_commands] )) ||
-_zydeco__help__help_commands() {
+(( $+functions[_zydeco__subcmd__help__subcmd__help_commands] )) ||
+_zydeco__subcmd__help__subcmd__help_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco help help commands' commands "$@"
 }
-(( $+functions[_zydeco__help__repl_commands] )) ||
-_zydeco__help__repl_commands() {
+(( $+functions[_zydeco__subcmd__help__subcmd__repl_commands] )) ||
+_zydeco__subcmd__help__subcmd__repl_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco help repl commands' commands "$@"
 }
-(( $+functions[_zydeco__help__run_commands] )) ||
-_zydeco__help__run_commands() {
+(( $+functions[_zydeco__subcmd__help__subcmd__run_commands] )) ||
+_zydeco__subcmd__help__subcmd__run_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco help run commands' commands "$@"
 }
-(( $+functions[_zydeco__repl_commands] )) ||
-_zydeco__repl_commands() {
+(( $+functions[_zydeco__subcmd__repl_commands] )) ||
+_zydeco__subcmd__repl_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco repl commands' commands "$@"
 }
-(( $+functions[_zydeco__run_commands] )) ||
-_zydeco__run_commands() {
+(( $+functions[_zydeco__subcmd__run_commands] )) ||
+_zydeco__subcmd__run_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco run commands' commands "$@"
 }
