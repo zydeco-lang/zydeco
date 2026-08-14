@@ -3417,9 +3417,21 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 };
                 match ann {
                     | AnnId::Set => {
-                        let ann = self.info[&def];
-                        let AnnId::Kind(kd) = ann else { unreachable!() };
-                        TermAnnId::Kind(kd)
+                        let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                        let env_data = crate::query::EnvData::new(tycker.db, self.info.clone());
+                        let annotation = crate::query::InternedAnn::new(tycker.db, ann);
+                        let Some(crate::query::VarSynOutcome::Kind { id }) =
+                            crate::query::var_syn_judgment(
+                                tycker.db,
+                                tycker.data,
+                                env_data,
+                                term,
+                                annotation,
+                            )
+                        else {
+                            unreachable!("the set arm of variable judgments is query-produced")
+                        };
+                        TermAnnId::Kind(id)
                     }
                     | AnnId::Kind(kd) => match self.info.recursively_get_type(tycker, &def) {
                         | Some(&ann) => {
@@ -3431,9 +3443,25 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             TermAnnId::Type(ty, kd)
                         }
                     },
-                    | AnnId::Type(ty) => {
-                        let val = Alloc::alloc(tycker, def, ty, &self.info);
-                        TermAnnId::Value(val, ty)
+                    | AnnId::Type(_) => {
+                        let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                        let env_data = crate::query::EnvData::new(tycker.db, self.info.clone());
+                        let annotation = crate::query::InternedAnn::new(tycker.db, ann);
+                        let Some(crate::query::VarSynOutcome::Value { id, value, ty }) =
+                            crate::query::var_syn_judgment(
+                                tycker.db,
+                                tycker.data,
+                                env_data,
+                                term,
+                                annotation,
+                            )
+                        else {
+                            unreachable!("the type arm of variable judgments is query-produced")
+                        };
+                        tycker.statics.values.insert_new(id, value);
+                        tycker.statics.annotations_value.insert_new(id, ty);
+                        tycker.statics.env_value.insert_new(id, self.info.clone());
+                        TermAnnId::Value(id, ty)
                     }
                 }
             }

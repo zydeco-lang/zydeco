@@ -330,6 +330,56 @@ pub fn triv_syn_judgment<'db>(
     Some(TrivSynOutcome { id, value: ss::Value::Triv(ss::Triv), ty })
 }
 
+/// The synthesized judgment of a variable term.
+///
+/// The variable's annotation — the merge-fold cell `annotations_var[def]` — is
+/// still computed by the checker's pattern pass, so it enters the query as an
+/// input; the fold itself becomes query-owned once the pattern DAG migrates.
+/// The set arm is a pure environment lookup, and the type arm derives the
+/// `Value::Var` node at the term's site. The kind arm reads the arena through
+/// the recursive-type alias chain, so it stays checker-side for now and the
+/// query reports `None`.
+#[derive(Clone, Debug)]
+pub enum VarSynOutcome {
+    Kind { id: ss::KindId },
+    Value { id: ss::ValueId, value: ss::Value, ty: ss::TypeId },
+}
+
+/// An interned type annotation, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedAnn<'db> {
+    pub id: ss::AnnId,
+}
+
+/// The synthesized judgment of a variable term, keyed on its merge-fold
+/// annotation cell.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn var_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, env: EnvData<'db>, term: InternedTerm<'db>,
+    annotation: InternedAnn<'db>,
+) -> Option<VarSynOutcome> {
+    let su::Term::Var(def) = data.scoped(db).terms.get(&term.id(db))? else {
+        return None;
+    };
+    let def = *def;
+    match annotation.id(db) {
+        | ss::AnnId::Set => {
+            let ss::AnnId::Kind(kd) = env.env(db)[&def] else {
+                unreachable!("kind-bound variables carry kind annotations")
+            };
+            Some(VarSynOutcome::Kind { id: kd })
+        }
+        | ss::AnnId::Type(ty) => {
+            let site_space = term.id(db).key_space().as_u64();
+            let site_raw = term.id(db).raw().into_u32();
+            let id: ss::ValueId =
+                derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0), 0);
+            Some(VarSynOutcome::Value { id, value: ss::Value::Var(def), ty })
+        }
+        | ss::AnnId::Kind(_) => None,
+    }
+}
+
 /// The rejection of an intrinsic `Internal` term, carried as a query value so
 /// the checker routes decisions through queries and keeps the writer as a sink.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]

@@ -351,3 +351,21 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
 - All producer queries derive at their own term's site, so the query family's key spaces
   stay disjoint per term without any inter-producer coordination.
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — the variable judgment takes the fold state as a query input
+
+- `Tm::Var` is now judged by `var_syn_judgment(db, data, env, term, annotation)`: the
+  `AnnId::Set` arm is a pure environment lookup returning the kind, and the `AnnId::Type` arm
+  derives the `Value::Var` node at the term's site under `QUERY_DERIVATION_TAG`. The checker
+  materializes `values` / `annotations_value` / `env_value` with the caller's cloned
+  environment, and the `AnnId::Kind` arm keeps its checker-side `recursively_get_type` walk
+  (it reads `types_pre` through the recursive-alias chain, so it stays until the fill-state
+  pattern lands).
+- The merge-fold cell enters the query as an input (`InternedAnn`): `annotations_var` itself
+  is still checker-owned, because its binder-side contributions come from the pattern DAG,
+  whose Ana annotations are judgment results. Once the binder constructs migrate, the fold
+  flips from input to query-produced without changing the judgment's shape.
+- Both the Syn and Ana paths route through the query for the two pure arms: the Ana path's
+  `lub` result is just a different annotation input, so the arm split is by annotation shape
+  rather than by mode.
+- Workspace suite passes unchanged (61 targets green), clippy clean.
