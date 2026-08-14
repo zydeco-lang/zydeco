@@ -1439,7 +1439,6 @@ mod tests {
 #[cfg(test)]
 mod derived_id_tests {
     use super::{ArenaId, KeySpaceId, derived_id};
-    use crate::new_key_type;
 
     new_key_type! { struct DerivedTestId; }
 
@@ -1459,6 +1458,12 @@ mod derived_id_tests {
             id_a0,
             derived_id(KeySpaceId::derive(1, 7, 42, 0), 0),
             "re-deriving a site reproduces its identifiers",
+        );
+        assert_ne!(id_a0.concise(), id_a1.concise(), "concise forms distinguish slots");
+        assert_ne!(
+            id_a0.concise_inner(),
+            id_b0.concise_inner(),
+            "inner concise forms distinguish sites"
         );
     }
 }

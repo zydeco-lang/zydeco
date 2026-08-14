@@ -823,7 +823,7 @@ mod tests {
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
-        let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
+        let (project, _session) = ProjectState::load(&path, &HashMap::new()).unwrap();
         let encoded = project.semantic_tokens(&path).unwrap();
         let decoded = SemanticTokenDecoder::new(&source).decode(&encoded);
         let has = |text: &str, token_type: &str, modifier: &str| {
