@@ -405,3 +405,17 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   allocates the label kind and the named `TPat` node, and the kind arm's expressivity
   rejection became a query return value; the value-pattern arm keeps its `lub` path.
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — consumed judgments allocate through a query
+
+- `Tm::Cons` Syn is now `cons_syn_judgment` keyed on the interned item and tail outcomes
+  (`InternedConsItems`, `InternedTermAnn`): the right-nested product chain annotates against
+  the shared vtype singleton and the consumed value node derives at the term's site, so the
+  whole allocation block left the checker. The per-item sort rejections stay at their
+  checker-side abort points — they happen mid-fold over item outcomes, and moving them would
+  change when later items get checked (observable in arena contents) — so the query only ever
+  receives value outcomes.
+- This establishes the two-tier composite pattern for the remaining constructs: outer
+  allocations and derived ids move into queries keyed on inner results, while errors that
+  abort mid-fold keep their exact checker-side timing until the fold itself migrates.
+- Workspace suite passes unchanged (61 targets green), clippy clean.

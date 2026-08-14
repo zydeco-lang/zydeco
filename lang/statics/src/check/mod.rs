@@ -3748,8 +3748,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             .into_iter()
                             .unzip();
                         let checked = self.mk(tail).tyck_k(tycker, Action::syn())?;
-                        let (tail, ann) = match checked {
-                            | TermAnnId::Value(tail, tail_ty) => (tail, tail_ty),
+                        match checked {
+                            | TermAnnId::Value(_, _) => {}
                             | TermAnnId::Type(_, _) => tycker.err_k(
                                 TyckError::MissingAnnotation,
                                 std::panic::Location::caller(),
@@ -3761,12 +3761,33 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 )?
                             }
                         };
-                        let vtype = ss::VType.build(tycker, &self.info);
-                        let ann = annotations.into_iter().rev().fold(ann, |ann, head| {
-                            Alloc::alloc(tycker, ss::Prod(head, ann), vtype, &self.info)
-                        });
-                        let cons = Alloc::alloc(tycker, ss::ConsN(output, tail), ann, &self.info);
-                        TermAnnId::Value(cons, ann)
+                        let item_outcomes = output
+                            .iter()
+                            .zip(&annotations)
+                            .map(|(value, ty)| TermAnnId::Value(*value, *ty))
+                            .collect::<Vec<_>>();
+                        let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                        let items_interned =
+                            crate::query::InternedConsItems::new(tycker.db, item_outcomes);
+                        let tail_interned = crate::query::InternedTermAnn::new(tycker.db, checked);
+                        let Some(outcome) = crate::query::cons_syn_judgment(
+                            tycker.db,
+                            tycker.data,
+                            term,
+                            items_interned,
+                            tail_interned,
+                        ) else {
+                            unreachable!("consumed judgments are query-produced")
+                        };
+                        for (id, prod) in outcome.prods {
+                            tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(prod));
+                            tycker.statics.annotations_type.insert_new(id, outcome.vtype);
+                            tycker.statics.env_type.insert_new(id, self.info.clone());
+                        }
+                        tycker.statics.values.insert_new(outcome.cons_id, outcome.cons);
+                        tycker.statics.annotations_value.insert_new(outcome.cons_id, outcome.ann);
+                        tycker.statics.env_value.insert_new(outcome.cons_id, self.info.clone());
+                        TermAnnId::Value(outcome.cons_id, outcome.ann)
                     }
                     | Switch::Ana(AnnId::Type(expected)) => {
                         let expected_view = expected;

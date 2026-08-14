@@ -565,6 +565,72 @@ pub fn pat_named_syn_judgment<'db>(
     }
 }
 
+/// An interned list of term annotations, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedConsItems<'db> {
+    pub items: Vec<ss::TermAnnId>,
+}
+
+/// The synthesized judgment of a consumed term, keyed on its items' and
+/// tail's judgments. Every arm is allocation: the right-nested product type
+/// chain over the shared vtype singleton, and the consumed value node. The
+/// per-item sort rejections stay at their checker-side abort points (they
+/// happen mid-fold), so this query only ever sees value outcomes.
+#[derive(Clone, Debug)]
+pub struct ConsSynOutcome {
+    pub vtype: ss::KindId,
+    /// The product type nodes in build order (innermost first).
+    pub prods: Vec<(ss::TypeId, ss::Type)>,
+    pub cons_id: ss::ValueId,
+    pub cons: ss::Value,
+    pub ann: ss::TypeId,
+}
+
+/// The synthesized judgment of a consumed term.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn cons_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+    items: InternedConsItems<'db>, tail: InternedTermAnn<'db>,
+) -> Option<ConsSynOutcome> {
+    let su::Term::Cons(su::ConsN(_, _)) = data.scoped(db).terms.get(&term.id(db))? else {
+        return None;
+    };
+    let ss::TermAnnId::Value(tail_value, tail_ty) = tail.id(db) else {
+        return None;
+    };
+    let item_values = items
+        .items(db)
+        .iter()
+        .map(|outcome| match outcome {
+            | ss::TermAnnId::Value(value, ty) => (*value, *ty),
+            | _ => unreachable!("consumed items are value judgments"),
+        })
+        .collect::<Vec<_>>();
+    let vtype = {
+        let key = InternedIntrinsic::new(db, IntrinsicKey::VType);
+        let IntrinsicSingleton::Kind { id, .. } = intrinsic_singleton(db, data, key) else {
+            unreachable!("the vtype singleton is kind-producing")
+        };
+        id
+    };
+    let site_space = term.id(db).key_space().as_u64();
+    let site_raw = term.id(db).raw().into_u32();
+    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0);
+    let mut ann = tail_ty;
+    let mut prods = Vec::with_capacity(item_values.len());
+    for (idx, (_, head_ty)) in item_values.iter().rev().enumerate() {
+        let id: ss::TypeId = derived_id(key_space, idx as u32);
+        prods.push((id, ss::Type::Prod(ss::Prod(*head_ty, ann))));
+        ann = id;
+    }
+    let cons_id: ss::ValueId = derived_id(key_space, item_values.len() as u32);
+    let cons = ss::Value::VCons(ss::ConsN(
+        item_values.into_iter().map(|(value, _)| value).collect(),
+        tail_value,
+    ));
+    Some(ConsSynOutcome { vtype, prods, cons_id, cons, ann })
+}
+
 /// The rejection of an intrinsic `Internal` term, carried as a query value so
 /// the checker routes decisions through queries and keeps the writer as a sink.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
