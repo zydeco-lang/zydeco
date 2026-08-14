@@ -1,5 +1,4 @@
-exists
-  (VType as @(import("intrinsic/vtype.zy")))
+exists (VType as @(import("intrinsic/vtype.zy")))
   (CType as @(import("intrinsic/ctype.zy")))
   (
     Thk = CoreThk as @(import("intrinsic/thk.zy")) :

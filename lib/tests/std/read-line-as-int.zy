@@ -10,37 +10,35 @@ begin
   let (/OS) = system that
 
   let (/Option; /IoError; /option; /result; /string; /stdio; /process) = make_std builtin in
-  let ! read_int (continuation : Thk (Option Int64 -> OS)) : OS =
-    ! (stdio/read_line) {
-      fn read =>
-        ! (result/fold)
-          (Option String)
-          IoError
-          OS
-          read
-          {
-            fn line =>
-              ! (option/fold)
-                String
-                OS
-                line
-                {
-                  do absent <- ! (option/none) Int64;
-                  ! continuation absent
-                }
-                {
-                  fn text =>
-                    do parsed <- ! (string/parse_int) text;
-                    ! continuation parsed
-                }
-          }
-          {
-            fn _ =>
-              do absent <- ! (option/none) Int64;
-              ! continuation absent
-          }
-    }
-  in
+  let ! read_int (continuation : Thk (Option Int64 -> OS)) : OS = ! (stdio/read_line) {
+    fn read =>
+      ! (result/fold)
+        (Option String)
+        IoError
+        OS
+        read
+        {
+          fn line =>
+            ! (option/fold)
+              String
+              OS
+              line
+              {
+                do absent <- ! (option/none) Int64;
+                ! continuation absent
+              }
+              {
+                fn text =>
+                  do parsed <- ! (string/parse_int) text;
+                  ! continuation parsed
+              }
+        }
+        {
+          fn _ =>
+            do absent <- ! (option/none) Int64;
+            ! continuation absent
+        }
+  } in
   ! read_int {
     fn first =>
       ! (option/fold)
@@ -58,8 +56,7 @@ begin
                   second
                   { ! (process/exit) 0 }
                   {
-                    fn unexpected =>
-                      ! (process/exit) 1
+                    fn unexpected => ! (process/exit) 1
                   }
             }
         }

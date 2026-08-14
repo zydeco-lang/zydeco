@@ -6,6 +6,5 @@ begin
   let (/Thk) = core that
   let (/OS) = system that
 
-  fix (loop : Thk OS) =>
-    ! loop
+  fix (loop : Thk OS) => ! loop
 end

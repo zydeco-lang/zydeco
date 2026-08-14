@@ -53,9 +53,7 @@ begin
       /char = char_module;
       /string = string_module;
       /bytes = bytes_module
-    ) =
-      make_text builtin data_package
-    in
+    ) = make_text builtin data_package in
     let (
       /Path;
       /IoErrorKind;

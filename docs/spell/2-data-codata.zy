@@ -16,18 +16,14 @@ begin
   let string = text/string that
   let (/OS; /stdio; /process) = system that
 
-  def Option (A : VType) =
-    data
-    | +None : Unit
-    | +Some : A
-    end
-  that
-  def List (A : VType) : VType =
-    data
-    | +Nil : Unit
-    | +Cons : A * List A
-    end
-  that
+  def Option (A : VType) = data
+  | +None : Unit
+  | +Some : A
+  end that
+  def List (A : VType) : VType = data
+  | +Nil : Unit
+  | +Cons : A * List A
+  end that
 
   def head_int : Thk (
        List Int64
@@ -39,53 +35,44 @@ begin
       | +Cons(head, _) => ret +Some(head)
       end
   } that
-  def values : List Int64 =
-    +Cons(0, +Cons(2, +Cons(4, +Nil())))
-  that
+  def values : List Int64 = +Cons(0, +Cons(2, +Cons(4, +Nil()))) that
   def first_value : Thk (Ret (Option Int64)) = {
     ! head_int values
   } that
 
   -- A lazy list separates one observable layer from the suspended remainder.
   -- Its layer is data; the stream itself is codata.
-  def LazyLayer (A : VType) (Tail : VType) =
-    data
-    | +LazyNil : Unit
-    | +LazyCons : A * Tail
-    end
-  that
-  def LazyList (A : VType) : CType =
-    codata
-    | .run : Ret (LazyLayer A (Thk (LazyList A)))
-    end
-  that
+  def LazyLayer (A : VType) (Tail : VType) = data
+  | +LazyNil : Unit
+  | +LazyCons : A * Tail
+  end that
+  def LazyList (A : VType) : CType = codata
+  | .run : Ret (LazyLayer A (Thk (LazyList A)))
+  end that
   def lazy_values : Thk (LazyList Int64) = {
     comatch
-    | .run =>
-      ret +LazyCons(
-        0,
-        {
-          comatch
-          | .run =>
-            ret +LazyCons(
-              2,
+    | .run => ret +LazyCons(
+      0,
+      {
+        comatch
+        | .run => ret +LazyCons(
+          2,
+          {
+            comatch
+            | .run => ret +LazyCons(
+              4,
               {
                 comatch
-                | .run =>
-                  ret +LazyCons(
-                    4,
-                    {
-                      comatch
-                      | .run => ret +LazyNil()
-                      end
-                    }
-                  )
+                | .run => ret +LazyNil()
                 end
               }
             )
-          end
-        }
-      )
+            end
+          }
+        )
+        end
+      }
+    )
     end
   } that
   def lazy_first_value : Thk (Ret (Option Int64)) = {
@@ -116,9 +103,8 @@ begin
       fn combine accumulated remaining =>
         match remaining
         | +Nil() => ret accumulated
-        | +Cons(head, tail) =>
-          do next <- ! combine accumulated head;
-          ! fold_left combine next tail
+        | +Cons(head, tail) => do next <- ! combine accumulated head;
+        ! fold_left combine next tail
         end
   } that
   def fold_right : Thk (
@@ -141,10 +127,9 @@ begin
         do layer <- ! remaining .run;
         match layer
         | +LazyNil() => ! base
-        | +LazyCons(head, tail) =>
-          ! combine head {
-            ! fold_right combine base tail
-          }
+        | +LazyCons(head, tail) => ! combine head {
+          ! fold_right combine base tail
+        }
         end
   } that
 
@@ -157,8 +142,7 @@ begin
     -> List Int64
     -> Ret Int64
   ) = {
-    fn _ _ _ =>
-      ret 6
+    fn _ _ _ => ret 6
   } that
   def fold_right_exercise : Thk (
        Thk (Int64 -> Thk (Ret Int64) -> Ret Int64)
@@ -166,15 +150,12 @@ begin
     -> Thk (LazyList Int64)
     -> Ret Int64
   ) = {
-    fn _ _ _ =>
-      ret 6
+    fn _ _ _ => ret 6
   } that
 
   -- Exercise: define a coinductive list using only a lazy recursive data type.
-  def LazyList' (A : VType) =
-    data
-    end
-  that
+  def LazyList' (A : VType) = data
+  end that
 
   def add_lazy : Thk (
        Int64

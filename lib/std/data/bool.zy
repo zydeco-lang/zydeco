@@ -4,52 +4,36 @@ param (
 ) in
 let (/VType; /CType; /Thk; /Ret; /Unit) = core in
 begin
-  def Bool =
-    data
-    | +False : Unit
-    | +True : Unit
-    end
-  that
+  def Bool = data
+  | +False : Unit
+  | +True : Unit
+  end that
   def true : Bool = +True() that
   def false : Bool = +False() that
-  def ! not (value : Bool) : Ret Bool =
-    match value
-    | +False(_) => ret true
-    | +True(_) => ret false
-    end
-  that
-  def ! and (left : Bool) (right : Bool) : Ret Bool =
-    match left
-    | +False(_) => ret false
-    | +True(_) => ret right
-    end
-  that
-  def ! or (left : Bool) (right : Bool) : Ret Bool =
-    match left
-    | +False(_) => ret right
-    | +True(_) => ret true
-    end
-  that
-  def ! eq (left : Bool) (right : Bool) : Ret Bool =
-    match left
-    | +False(_) => ! not right
-    | +True(_) => ret right
-    end
-  that
-  def ! xor (left : Bool) (right : Bool) : Ret Bool =
-    match left
-    | +False(_) => ret right
-    | +True(_) => ! not right
-    end
-  that
-  def ! nand (left : Bool) (right : Bool) : Ret Bool =
-    do both <- ! and left right;
-    ! not both
-  that
-  def ! nor (left : Bool) (right : Bool) : Ret Bool =
-    do either <- ! or left right;
-    ! not either
-  that
+  def ! not (value : Bool) : Ret Bool = match value
+  | +False(_) => ret true
+  | +True(_) => ret false
+  end that
+  def ! and (left : Bool) (right : Bool) : Ret Bool = match left
+  | +False(_) => ret false
+  | +True(_) => ret right
+  end that
+  def ! or (left : Bool) (right : Bool) : Ret Bool = match left
+  | +False(_) => ret right
+  | +True(_) => ret true
+  end that
+  def ! eq (left : Bool) (right : Bool) : Ret Bool = match left
+  | +False(_) => ! not right
+  | +True(_) => ret right
+  end that
+  def ! xor (left : Bool) (right : Bool) : Ret Bool = match left
+  | +False(_) => ret right
+  | +True(_) => ! not right
+  end that
+  def ! nand (left : Bool) (right : Bool) : Ret Bool = do both <- ! and left right;
+  ! not both that
+  def ! nor (left : Bool) (right : Bool) : Ret Bool = do either <- ! or left right;
+  ! not either that
   def ! if (B : CType) (condition : Bool) (when_true : Thk B) (when_false : Thk B) : B =
     match condition
     | +False(_) => ! when_false

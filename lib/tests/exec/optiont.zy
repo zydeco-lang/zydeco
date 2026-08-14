@@ -7,29 +7,18 @@ begin
   let (/Scalar = Int64) = representations/i64 that
   let (/process) = system that
 
-  def Option (A : VType) =
-    data
-    | +None : Unit
-    | +Some : A
-    end
-  that
-  def OptionT (M : VType -> CType) (A : VType) =
-    codata
-    | .trans : M (Option A)
-    end
-  that
-  let Return (X : VType) =
-    Ret X
-  that
-  let Option' (A : VType) =
-    OptionT Return A
-  that
-  def ! o : Option' Int64 =
-    comatch
-    | .trans =>
-      ret +Some(1)
-    end
-  that
+  def Option (A : VType) = data
+  | +None : Unit
+  | +Some : A
+  end that
+  def OptionT (M : VType -> CType) (A : VType) = codata
+  | .trans : M (Option A)
+  end that
+  let Return (X : VType) = Ret X that
+  let Option' (A : VType) = OptionT Return A that
+  def ! o : Option' Int64 = comatch
+  | .trans => ret +Some(1)
+  end that
 
   ! (process/exit) 0
 end

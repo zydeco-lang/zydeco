@@ -7,62 +7,45 @@ begin
   let (/VType; /CType; /Thk; /Ret) = core that
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/OS; /stdio; /process) = system that
-  let (= Monad, = Algebra, ()) =
-    monadic_basis builtin
-  in
+  let (= Monad, = Algebra, ()) = monadic_basis builtin in
   begin
 
-    let Kont (R : CType) (A : VType) =
-      Thk (A -> R) -> R
-    that
-    def ! mkont (R : CType) : Monad (Kont R) =
-      comatch
-      | .return A a =>
-        fn k =>
-          ! k a
-      | .bind A A' m f =>
-        fn k =>
-          ! m {
-            fn a =>
-              ! f a k
-          }
-      end
-    that
-    def ! reset' (A : VType) (e : Thk (Kont (Ret A) A)) (R : CType) : Kont R A =
-      fn k =>
-        do x <- ! e {
-          fn x =>
-            ret x
-        };
-        ! k x
-    that
-    def ! shift'
-      (A : VType)
+    let Kont (R : CType) (A : VType) = Thk (A -> R) -> R that
+    def ! mkont (R : CType) : Monad (Kont R) = comatch
+    | .return A a => fn k => ! k a
+    | .bind A A' m f => fn k =>
+      ! m {
+        fn a => ! f a k
+      }
+    end that
+    def ! reset' (A : VType) (e : Thk (Kont (Ret A) A)) (R : CType) : Kont R A = fn k =>
+      do x <- ! e {
+        fn x => ret x
+      };
+      ! k x that
+    def ! shift' (A : VType)
       (A' : VType)
       (
         e : Thk (
              Thk (
                   A
                -> (
-                    forall (R : CType) .
-                      Kont R A'
+                    forall (R : CType) . Kont R A'
                   )
              )
           -> Kont (Ret A') A'
         )
       )
-    : Kont (Ret A') A =
-        fn kaa' =>
-          ! e
-            {
-              fn x R ka' =>
-                do x' <- ! kaa' x;
-                ! ka' x'
-            }
-            {
-              fn x' =>
-                ret x'
-            }
+    : Kont (Ret A') A = fn kaa' =>
+        ! e
+          {
+            fn x R ka' =>
+              do x' <- ! kaa' x;
+              ! ka' x'
+          }
+          {
+            fn x' => ret x'
+          }
     that
     -- reset and shift are the primitives of delimited continuations.
     -- example:
@@ -76,28 +59,28 @@ begin
     --   }
     -- end
     def ! ex :
-      forall (R : CType) .
-        Kont R Int64
-    = ! reset' Int64 {
-      ! mkont (Ret Int64) .bind Int64 Int64
-        {
-          ! shift' Int64 Int64 {
-            fn cont =>
-              ! mkont (Ret Int64) .bind Int64 Int64
-                { ! cont 4 (Ret Int64) }
-                {
-                  fn y =>
-                    do res <- ! (int64/add) 17 y;
-                    ! mkont (Ret Int64) .return Int64 res
-                }
-          }
+      forall (R : CType) . Kont R Int64 =
+        ! reset' Int64 {
+          ! mkont (Ret Int64) .bind Int64 Int64
+            {
+              ! shift' Int64 Int64 {
+                fn cont =>
+                  ! mkont (Ret Int64) .bind Int64 Int64
+                    { ! cont 4 (Ret Int64) }
+                    {
+                      fn y =>
+                        do res <- ! (int64/add) 17 y;
+                        ! mkont (Ret Int64) .return Int64 res
+                    }
+              }
+            }
+            {
+              fn x =>
+                do res <- ! (int64/mul) 2 x;
+                ! mkont (Ret Int64) .return Int64 res
+            }
         }
-        {
-          fn x =>
-            do res <- ! (int64/mul) 2 x;
-            ! mkont (Ret Int64) .return Int64 res
-        }
-    } that
+    that
 
     ! ex OS {
       fn x =>

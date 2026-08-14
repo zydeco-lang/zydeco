@@ -5,8 +5,7 @@ begin
   let Additive = @(import("additive.type.zy")) in
   let Multiplicative = @(import("multiplicative.type.zy")) in
   let PartialOrder = @(import("partial-order.type.zy")) in
-  let Numeric
-    (Bool : @(import("../builtin/intrinsic/vtype.zy")))
+  let Numeric (Bool : @(import("../builtin/intrinsic/vtype.zy")))
     (A : @(import("../builtin/intrinsic/vtype.zy"))) =
       (additive :: Additive A)
     * (multiplicative :: Multiplicative A)

@@ -7,18 +7,14 @@ begin
   let (/Scalar = Int64) = representations/i64 that
   let (/process) = system that
 
-  def Stack (A : VType) : CType =
-    codata
-    | .app : A -> Stack A
-    | .return : Ret A
-    end
-  that
-  def fix abort (x : Int64) : Stack Int64 =
-    comatch
-    | .app _ => ! abort x
-    | .return => ret x
-    end
-  that
+  def Stack (A : VType) : CType = codata
+  | .app : A -> Stack A
+  | .return : Ret A
+  end that
+  def fix abort (x : Int64) : Stack Int64 = comatch
+  | .app _ => ! abort x
+  | .return => ret x
+  end that
 
   do x <- ! abort 0 .app 1 .app 2 .app 3 .return;
   ! (process/exit) x

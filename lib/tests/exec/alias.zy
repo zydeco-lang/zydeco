@@ -7,14 +7,10 @@ begin
   let (/Scalar = Int64) = representations/i64 that
   let (/OS) = system that
 
-  let (/process) =
-    make_std builtin
-  in
+  let (/process) = make_std builtin in
   begin
     let Num = Int64 that
-    def ! done (x : Num) : OS =
-      ! (process/exit) x
-    that
+    def ! done (x : Num) : OS = ! (process/exit) x that
 
     ! done 0
   end

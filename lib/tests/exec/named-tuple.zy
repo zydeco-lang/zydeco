@@ -8,11 +8,9 @@ begin
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/process) = system that
 
-  let Mixed =
-    (
-      left :: Int64
-    ) * Int64 * (right :: Int64)
-  that
+  let Mixed = (
+    left :: Int64
+  ) * Int64 * (right :: Int64) that
   def mixed : Mixed = (
     left = 2 : Int64,
     3 : Int64,

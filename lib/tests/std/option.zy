@@ -15,7 +15,6 @@ begin
     value
     { ! (process/exit) 1 }
     {
-      fn status =>
-        ! (process/exit) status
+      fn status => ! (process/exit) status
     }
 end

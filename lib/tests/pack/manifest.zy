@@ -6,17 +6,12 @@ begin
   let (/VType; /Ret) = core that
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/process) = system that
-  let Transparent =
-    exists (Representation as Int64 : VType) .
-      Representation
-  that
+  let Transparent = exists (Representation as Int64 : VType) . Representation that
   def packed : Transparent = (
     Int64,
     42
   ) that
-  def ! reveal ((Representation, value) : Transparent) : Ret Int64 =
-    ret value
-  that
+  def ! reveal ((Representation, value) : Transparent) : Ret Int64 = ret value that
 
   do value <- ! reveal packed;
   do status <- ! (int64/sub) value 42;

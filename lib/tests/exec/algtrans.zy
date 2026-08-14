@@ -8,87 +8,64 @@ begin
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/Scalar = String) = representations/string that
   let (/OS; /process) = system that
-  let (= Monad, = Algebra, ()) =
-    monadic_basis builtin
-  in
+  let (= Monad, = Algebra, ()) = monadic_basis builtin in
   begin
 
-    def Either (E : VType) (A : VType) =
-      data
-      | +Left : E
-      | +Right : A
-      end
-    that
-    let Exn (E : VType) (A : VType) =
-      Ret (Either E A)
-    that
-    let Top =
-      codata
-      end
-    that
-    let ! top : Top =
-      comatch
-      end
-    that
+    def Either (E : VType) (A : VType) = data
+    | +Left : E
+    | +Right : A
+    end that
+    let Exn (E : VType) (A : VType) = Ret (Either E A) that
+    let Top = codata
+    end that
+    let ! top : Top = comatch
+    end that
 
-    def ! mo-exn (E : VType) : Monad (Exn E) =
-      comatch
-      | .return A a =>
-        ret +Right(a)
-      | .bind A A' m f =>
-        do a? <- ! m;
-        match a?
-        | +Left(e) => ret +Left(e)
-        | +Right(a) => ! f a
-        end
-      end
-    that
-    def ! alg-exn-os (E : VType) : Algebra (Exn E) OS =
-      fn X m f =>
-        do a? <- ! m;
-        match a?
-        | +Left(e) => ! (process/exit) 1
-        | +Right(a) => ! f a
-        end
-    that
+    def ! mo-exn (E : VType) : Monad (Exn E) = comatch
+    | .return A a => ret +Right(a)
+    | .bind A A' m f => do a? <- ! m;
+    match a?
+    | +Left(e) => ret +Left(e)
+    | +Right(a) => ! f a
+    end
+    end that
+    def ! alg-exn-os (E : VType) : Algebra (Exn E) OS = fn X m f =>
+      do a? <- ! m;
+      match a?
+      | +Left(e) => ! (process/exit) 1
+      | +Right(a) => ! f a
+      end that
     -- test algebra generation for ret and bind
-    def ! mo-return (E : VType) (mo : Thk (Monad (Exn E))) : Exn E Int64 =
-      let ! translated =
-        -- use mo
-        @[monadic] begin
-          do a <- ret 1;
-          ret a
-        end
-      in
-      ! translated (Exn E) mo
-    that
+    def ! mo-return (E : VType) (mo : Thk (Monad (Exn E))) : Exn E Int64 = let ! translated =
+      -- use mo
+      @[monadic] begin
+        do a <- ret 1;
+        ret a
+      end
+    in
+    ! translated (Exn E) mo that
     -- test algebra generation for thunk
-    def ! mo-thunk (E : VType) (mo : Thk (Monad (Exn E))) : Exn E Int64 =
-      let ! translated =
-        -- use mo
-        @[monadic] begin
-          do _ <- ret 1;
-          ! { ret 1 }
-        end
-      in
-      ! translated (Exn E) mo
-    that
+    def ! mo-thunk (E : VType) (mo : Thk (Monad (Exn E))) : Exn E Int64 = let ! translated =
+      -- use mo
+      @[monadic] begin
+        do _ <- ret 1;
+        ! { ret 1 }
+      end
+    in
+    ! translated (Exn E) mo that
     -- test algebra generation for thunk at argument position
-    def ! mo-thunk-arg (E : VType) (mo : Thk (Monad (Exn E))) : Exn E Int64 =
-      let ! translated =
-        -- use mo
-        @[monadic] begin
-          do _ <- ret 1;
-          (fn (x : Thk _) => ! x) {
-            ret 1
-          }
-        end
-      in
-      ! translated (Exn E) mo
-    that
+    def ! mo-thunk-arg (E : VType) (mo : Thk (Monad (Exn E))) : Exn E Int64 = let ! translated =
+      -- use mo
+      @[monadic] begin
+        do _ <- ret 1;
+        (fn (x : Thk _) => ! x) {
+          ret 1
+        }
+      end
+    in
+    ! translated (Exn E) mo that
     -- test algebra generation for forall vtype
-    def ! mo-forallv
-      (E : VType)
+    def ! mo-forallv (E : VType)
       (mo : Thk (Monad (Exn E)))
     : forall (X : VType) .
            Thk Top
@@ -97,14 +74,12 @@ begin
       -- use mo
       @[monadic] begin
         do _ <- ret -1;
-        fn (X : VType) (a : X) =>
-          ret a
+        fn (X : VType) (a : X) => ret a
       end
     in
     ! translated (Exn E) mo that
     -- test algebra generation for forall ctype
-    def ! mo-forallc
-      (E : VType)
+    def ! mo-forallc (E : VType)
       (mo : Thk (Monad (Exn E)))
     : forall (X : CType) .
            Thk (Algebra (Exn E) X)
@@ -121,8 +96,7 @@ begin
       -- use mo
       @[monadic] begin
         do _ <- ret -1;
-        fn (X : CType) (b : Thk X) =>
-          ! b
+        fn (X : CType) (b : Thk X) => ! b
       end
     in
     ! translated (Exn E) mo that
@@ -227,64 +201,60 @@ begin
     do returned <- ! mo-return String { ! mo-exn String };
     match returned
     | +Left(_) => ! (process/exit) 1
-    | +Right(returned) =>
-      ! (int64/eq)
-        OS
-        returned
-        1
-        {
-          do thunked <- ! mo-thunk String { ! mo-exn String };
-          match thunked
-          | +Left(_) => ! (process/exit) 1
-          | +Right(thunked) =>
-            ! (int64/eq)
+    | +Right(returned) => ! (int64/eq)
+      OS
+      returned
+      1
+      {
+        do thunked <- ! mo-thunk String { ! mo-exn String };
+        match thunked
+        | +Left(_) => ! (process/exit) 1
+        | +Right(thunked) => ! (int64/eq)
+          OS
+          thunked
+          1
+          {
+            do argument <- ! mo-thunk-arg String {
+              ! mo-exn String
+            };
+            match argument
+            | +Left(_) => ! (process/exit) 1
+            | +Right(argument) => ! (int64/eq)
               OS
-              thunked
+              argument
               1
               {
-                do argument <- ! mo-thunk-arg String {
-                  ! mo-exn String
-                };
-                match argument
+                do quantified <- ! mo-forallv
+                  String
+                  { ! mo-exn String }
+                  Int64
+                  top
+                  0;
+                match quantified
                 | +Left(_) => ! (process/exit) 1
-                | +Right(argument) =>
-                  ! (int64/eq)
-                    OS
-                    argument
-                    1
-                    {
-                      do quantified <- ! mo-forallv
-                        String
-                        { ! mo-exn String }
-                        Int64
-                        top
-                        0;
-                      match quantified
-                      | +Left(_) => ! (process/exit) 1
-                      | +Right(quantified) =>
-                        ! (int64/eq)
-                          OS
-                          quantified
-                          0
-                          {
-                            -- run it
-                            ! mo-forallc
-                              String
-                              { ! mo-exn String }
-                              OS
-                              { ! alg-exn-os String }
-                              { ! (process/exit) 0 }
-                          }
-                          { ! (process/exit) 1 }
-                      end
-                    }
-                    { ! (process/exit) 1 }
+                | +Right(quantified) => ! (int64/eq)
+                  OS
+                  quantified
+                  0
+                  {
+                    -- run it
+                    ! mo-forallc
+                      String
+                      { ! mo-exn String }
+                      OS
+                      { ! alg-exn-os String }
+                      { ! (process/exit) 0 }
+                  }
+                  { ! (process/exit) 1 }
                 end
               }
               { ! (process/exit) 1 }
-          end
-        }
-        { ! (process/exit) 1 }
+            end
+          }
+          { ! (process/exit) 1 }
+        end
+      }
+      { ! (process/exit) 1 }
     end
   end
 end

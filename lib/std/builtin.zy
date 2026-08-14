@@ -27,8 +27,7 @@ exists
         )
       * (
           system ::
-          exists
-            (Reader = ReaderType as SystemReader : VType)
+          exists (Reader = ReaderType as SystemReader : VType)
             (Writer = WriterType as SystemWriter : VType)
             (OS = OSType as SystemOS : CType)
           .

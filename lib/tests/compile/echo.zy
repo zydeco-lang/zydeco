@@ -8,7 +8,6 @@ begin
 
   fix (loop : Thk OS) =>
     ! (stdio/read_line) {
-      fn line =>
-        ! (stdio/write_line) line loop
+      fn line => ! (stdio/write_line) line loop
     }
 end

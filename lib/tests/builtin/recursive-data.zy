@@ -1,25 +1,17 @@
 begin
-  def Nat : VType =
-    data
-    | +Z : Unit
-    | +S : Nat
-    end
-  that
-  def Bool =
-    data
-    | +False : Unit
-    | +True : Unit
-    end
-  that
-  def ! successor (value : Nat) : Ret Nat =
-    ret +S(value)
-  that
-  def ! is_nonzero (value : Nat) : Ret Bool =
-    match value
-    | +Z(_) => ret +False()
-    | +S(_) => ret +True()
-    end
-  that
+  def Nat : VType = data
+  | +Z : Unit
+  | +S : Nat
+  end that
+  def Bool = data
+  | +False : Unit
+  | +True : Unit
+  end that
+  def ! successor (value : Nat) : Ret Nat = ret +S(value) that
+  def ! is_nonzero (value : Nat) : Ret Bool = match value
+  | +Z(_) => ret +False()
+  | +S(_) => ret +True()
+  end that
   param (
     (/core; /system) :
     @(import("../../std/builtin.zy"))

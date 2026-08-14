@@ -6,49 +6,39 @@ begin
   let (/VType; /Thk; /Ret; /Unit) = core that
   let (/process) = system that
 
-  def Nat : VType =
-    data
-    | +Z : Unit
-    | +S : Nat
-    end
-  that
-  def Bool =
-    data
-    | +True : Unit
-    | +False : Unit
-    end
-  that
-  def OddEven =
-    data
-    | +OddEven : Thk (Nat -> Ret Bool) * Thk (Nat -> Ret Bool)
-    end
-  that
-  def fix fp : Ret OddEven =
-    ret +OddEven(
-      {
-        do fp <- ! fp;
-        match fp
-        | +OddEven(odd, even) =>
-          fn (x : Nat) =>
-            match x
-            | +Z() => ret +False()
-            | +S(x) => ! even x
-            end
+  def Nat : VType = data
+  | +Z : Unit
+  | +S : Nat
+  end that
+  def Bool = data
+  | +True : Unit
+  | +False : Unit
+  end that
+  def OddEven = data
+  | +OddEven : Thk (Nat -> Ret Bool) * Thk (Nat -> Ret Bool)
+  end that
+  def fix fp : Ret OddEven = ret +OddEven(
+    {
+      do fp <- ! fp;
+      match fp
+      | +OddEven(odd, even) => fn (x : Nat) =>
+        match x
+        | +Z() => ret +False()
+        | +S(x) => ! even x
         end
-      },
-      {
-        do fp <- ! fp;
-        match fp
-        | +OddEven(odd, even) =>
-          fn (x : Nat) =>
-            match x
-            | +Z() => ret +True()
-            | +S(x) => ! odd x
-            end
+      end
+    },
+    {
+      do fp <- ! fp;
+      match fp
+      | +OddEven(odd, even) => fn (x : Nat) =>
+        match x
+        | +Z() => ret +True()
+        | +S(x) => ! odd x
         end
-      }
-    )
-  that
+      end
+    }
+  ) that
 
   do odd <- (
     do fp <- ! fp;

@@ -1,10 +1,8 @@
 begin
-  def Bool =
-    data
-    | +False : Unit
-    | +True : Unit
-    end
-  that
+  def Bool = data
+  | +False : Unit
+  | +True : Unit
+  end that
   param (
     (/core; /representations; /system) :
     @(import("../../std/builtin.zy"))
@@ -12,14 +10,12 @@ begin
   let (/Thk; /Unit) = core that
   let (/Scalar = Int64) = representations/i64 that
   let (/OS; /process) = system that
-  def ! f : Bool -> Thk (Int64 -> OS) -> OS =
-    fn (b : Bool) (k : Thk (Int64 -> OS)) =>
-      -- k might be large
-      match b
-      | +True(_) => ! k 0
-      | +False(_) => ! k 1
-      end
-  that
+  def ! f : Bool -> Thk (Int64 -> OS) -> OS = fn (b : Bool) (k : Thk (Int64 -> OS)) =>
+    -- k might be large
+    match b
+    | +True(_) => ! k 0
+    | +False(_) => ! k 1
+    end that
 
   ! f +True() {
     -- a large continuation gets inlined

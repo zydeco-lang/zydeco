@@ -10,15 +10,9 @@ begin
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/process) = system that
 
-  let Arguments =
-    (lhs :: Int64) * Int64
-  that
-  let FunctionResult =
-    Int64 * (sum :: Int64)
-  that
-  let FunctionBox =
-    (apply :: Thk (Arguments -> Ret FunctionResult)) * Int64
-  that
+  let Arguments = (lhs :: Int64) * Int64 that
+  let FunctionResult = Int64 * (sum :: Int64) that
+  let FunctionBox = (apply :: Thk (Arguments -> Ret FunctionResult)) * Int64 that
   def ! combine ((= lhs : Int64, rhs : Int64) : Arguments) : Ret FunctionResult =
     do sum <- ! (int64/add) lhs rhs;
     ret (lhs, = sum : Int64)

@@ -15,32 +15,27 @@ begin
     /bool; /option; /result = results; /list;
     /int64; /string; /bytes; /io; /fs; /stdio; /process
   ) = make_std builtin in
-  let ! expect_ok
-    (A : VType)
+  let ! expect_ok (A : VType)
     (result : Result A IoError)
     (continuation : Thk (A -> OS))
-  : OS =
-      ! (results/fold)
-        A
-        IoError
-        OS
-        result
-        continuation
-        { fn _ => ! (process/exit) 1 }
-  in
-  let ! require (condition : Bool) (continuation : Thk OS) : OS =
-    ! (bool/if)
+  : OS = ! (results/fold)
+      A
+      IoError
       OS
-      condition
+      result
       continuation
-      { ! (process/exit) 2 }
+      { fn _ => ! (process/exit) 1 }
   in
-  let ! verify_stdio : OS =
-    ! (stdio/write) "" {
-      fn written =>
-        ! expect_ok Unit written { fn _ => ! (process/exit) 0 }
-    }
-  in
+  let ! require (condition : Bool) (continuation : Thk OS) : OS = ! (bool/if)
+    OS
+    condition
+    continuation
+    {
+      ! (process/exit) 2
+    } in
+  let ! verify_stdio : OS = ! (stdio/write) "" {
+    fn written => ! expect_ok Unit written { fn _ => ! (process/exit) 0 }
+  } in
   let ! verify_missing (path_string : String) : OS =
     do missing_string <- ! (string/append) path_string ".missing";
     do missing_path <- ! (fs/path) missing_string;
@@ -79,77 +74,69 @@ begin
           }
     }
   in
-  let ! verify_contents (path : Path) (path_string : String) : OS =
-    ! (fs/read_text) path {
-      fn read =>
-        ! expect_ok String read {
-          fn contents =>
-            do text_correct <- ! (string/eq) contents "hé🙂!";
-            ! require text_correct {
-              ! (fs/read_bytes) path {
-                fn read_bytes =>
-                  ! expect_ok Bytes read_bytes {
-                    fn contents =>
-                      do length <- ! (bytes/length) contents;
-                      do length_correct <- ! (int64/eq) length 8;
-                      ! require length_correct { ! verify_invalid_utf8 path_string }
-                  }
-              }
-            }
-        }
-    }
-  in
-  let ! verify_closed
-    (path : Path)
-    (path_string : String)
-    (writer : Writer)
-  : OS =
-      ! (io/close_writer) writer {
-        fn closed_again =>
-          ! (results/fold)
-            Unit
-            IoError
-            OS
-            closed_again
-            { fn _ => ! (process/exit) 4 }
-            {
-              fn error =>
-                do kind <- ! (io/error_kind) error;
-                do correct <- ! (io/kind_eq) kind io/closed;
-                ! require correct { ! verify_contents path path_string }
-            }
-      }
-  in
-  let ! append_marker (path : Path) (path_string : String) : OS =
-    ! (fs/append_writer) path {
-      fn opened =>
-        ! expect_ok Writer opened {
-          fn writer =>
-            do marker <- ! (bytes/from_string) "!";
-            ! (io/write_all) writer marker {
-              fn written =>
-                ! expect_ok Unit written {
-                  fn _ =>
-                    ! (io/close_writer) writer {
-                      fn closed =>
-                        ! expect_ok Unit closed {
-                          fn _ => ! verify_closed path path_string writer
-                        }
-                    }
+  let ! verify_contents (path : Path) (path_string : String) : OS = ! (fs/read_text) path {
+    fn read =>
+      ! expect_ok String read {
+        fn contents =>
+          do text_correct <- ! (string/eq) contents "hé🙂!";
+          ! require text_correct {
+            ! (fs/read_bytes) path {
+              fn read_bytes =>
+                ! expect_ok Bytes read_bytes {
+                  fn contents =>
+                    do length <- ! (bytes/length) contents;
+                    do length_correct <- ! (int64/eq) length 8;
+                    ! require length_correct { ! verify_invalid_utf8 path_string }
                 }
             }
-        }
+          }
+      }
+  } in
+  let ! verify_closed (path : Path)
+    (path_string : String)
+    (writer : Writer)
+  : OS = ! (io/close_writer) writer {
+      fn closed_again =>
+        ! (results/fold)
+          Unit
+          IoError
+          OS
+          closed_again
+          { fn _ => ! (process/exit) 4 }
+          {
+            fn error =>
+              do kind <- ! (io/error_kind) error;
+              do correct <- ! (io/kind_eq) kind io/closed;
+              ! require correct { ! verify_contents path path_string }
+          }
     }
   in
-  let ! exercise (path_string : String) : OS =
-    do path <- ! (fs/path) path_string;
-    ! (fs/write_text) path "hé🙂" {
-      fn written =>
-        ! expect_ok Unit written {
-          fn _ => ! append_marker path path_string
-        }
-    }
-  in
+  let ! append_marker (path : Path) (path_string : String) : OS = ! (fs/append_writer) path {
+    fn opened =>
+      ! expect_ok Writer opened {
+        fn writer =>
+          do marker <- ! (bytes/from_string) "!";
+          ! (io/write_all) writer marker {
+            fn written =>
+              ! expect_ok Unit written {
+                fn _ =>
+                  ! (io/close_writer) writer {
+                    fn closed =>
+                      ! expect_ok Unit closed {
+                        fn _ => ! verify_closed path path_string writer
+                      }
+                  }
+              }
+          }
+      }
+  } in
+  let ! exercise (path_string : String) : OS = do path <- ! (fs/path) path_string;
+  ! (fs/write_text) path "hé🙂" {
+    fn written =>
+      ! expect_ok Unit written {
+        fn _ => ! append_marker path path_string
+      }
+  } in
 
   ! (process/arg_list) {
     fn arguments =>

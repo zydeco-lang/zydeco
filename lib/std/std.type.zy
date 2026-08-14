@@ -35,119 +35,128 @@ begin
   let Char = @(import("builtin/intrinsic/char.zy")) in
   let String = @(import("builtin/intrinsic/string.zy")) in
   let Bytes = @(import("builtin/intrinsic/bytes.zy")) in
-  let Std
-    (Reader : @(import("builtin/intrinsic/vtype.zy")))
+  let Std (Reader : @(import("builtin/intrinsic/vtype.zy")))
     (Writer : @(import("builtin/intrinsic/vtype.zy")))
     (OS : @(import("builtin/intrinsic/ctype.zy"))) =
-    exists (Bool = BoolType : @(import("builtin/intrinsic/vtype.zy"))) .
+    exists (Bool = BoolType : @(import("builtin/intrinsic/vtype.zy")))
+      (
+        Option = OptionType :
+        (@(import("builtin/intrinsic/vtype.zy"))) -> (@(import("builtin/intrinsic/vtype.zy")))
+      )
+    .
       exists
         (
-          Option = OptionType :
-          (@(import("builtin/intrinsic/vtype.zy"))) -> (@(import("builtin/intrinsic/vtype.zy")))
+          Result = ResultType :
+          (@(import("builtin/intrinsic/vtype.zy"))) -> (
+            @(import("builtin/intrinsic/vtype.zy"))
+          ) -> (@(import("builtin/intrinsic/vtype.zy")))
         )
       .
         exists
           (
-            Result = ResultType :
+            List = ListType :
             (@(import("builtin/intrinsic/vtype.zy"))) -> (
               @(import("builtin/intrinsic/vtype.zy"))
-            ) -> (@(import("builtin/intrinsic/vtype.zy")))
+            )
           )
         .
-          exists
-            (
-              List = ListType :
-              (@(import("builtin/intrinsic/vtype.zy"))) -> (
-                @(import("builtin/intrinsic/vtype.zy"))
-              )
-            )
-          .
-            exists (Int8 = Int8Type as Int8 : @(import("builtin/intrinsic/vtype.zy"))) .
-              exists (Int16 = Int16Type as Int16 : @(import("builtin/intrinsic/vtype.zy"))) .
-                exists (Int32 = Int32Type as Int32 : @(import("builtin/intrinsic/vtype.zy"))) .
-                  exists (Int64 = Int64Type as Int64 : @(import("builtin/intrinsic/vtype.zy"))) .
-                    exists (UInt8 = UInt8Type as UInt8 : @(import("builtin/intrinsic/vtype.zy"))) .
+          exists (Int8 = Int8Type as Int8 : @(import("builtin/intrinsic/vtype.zy"))) .
+            exists (Int16 = Int16Type as Int16 : @(import("builtin/intrinsic/vtype.zy"))) .
+              exists (Int32 = Int32Type as Int32 : @(import("builtin/intrinsic/vtype.zy"))) .
+                exists (Int64 = Int64Type as Int64 : @(import("builtin/intrinsic/vtype.zy"))) .
+                  exists (UInt8 = UInt8Type as UInt8 : @(import("builtin/intrinsic/vtype.zy"))) .
+                    exists
+                      (UInt16 = UInt16Type as UInt16 : @(import("builtin/intrinsic/vtype.zy")))
+                    .
                       exists
-                        (UInt16 = UInt16Type as UInt16 : @(import("builtin/intrinsic/vtype.zy")))
+                        (UInt32 = UInt32Type as UInt32 : @(import("builtin/intrinsic/vtype.zy")))
                       .
                         exists
-                          (UInt32 = UInt32Type as UInt32 : @(import("builtin/intrinsic/vtype.zy")))
+                          (
+                            UInt64 = UInt64Type as UInt64 :
+                            @(import("builtin/intrinsic/vtype.zy"))
+                          )
                         .
                           exists
                             (
-                              UInt64 = UInt64Type as UInt64 :
+                              Float32 = Float32Type as Float32 :
                               @(import("builtin/intrinsic/vtype.zy"))
                             )
                           .
                             exists
                               (
-                                Float32 = Float32Type as Float32 :
+                                Float64 = Float64Type as Float64 :
                                 @(import("builtin/intrinsic/vtype.zy"))
                               )
                             .
                               exists
                                 (
-                                  Float64 = Float64Type as Float64 :
+                                  Char = CharType as Char :
                                   @(import("builtin/intrinsic/vtype.zy"))
                                 )
                               .
                                 exists
                                   (
-                                    Char = CharType as Char :
+                                    String = StringType as String :
                                     @(import("builtin/intrinsic/vtype.zy"))
                                   )
                                 .
                                   exists
                                     (
-                                      String = StringType as String :
+                                      Bytes = BytesType as Bytes :
                                       @(import("builtin/intrinsic/vtype.zy"))
                                     )
                                   .
                                     exists
                                       (
-                                        Bytes = BytesType as Bytes :
+                                        Reader = ReaderType as Reader :
                                         @(import("builtin/intrinsic/vtype.zy"))
                                       )
                                     .
                                       exists
                                         (
-                                          Reader = ReaderType as Reader :
+                                          Writer = WriterType as Writer :
                                           @(import("builtin/intrinsic/vtype.zy"))
                                         )
                                       .
                                         exists
                                           (
-                                            Writer = WriterType as Writer :
+                                            Path = PathType :
                                             @(import("builtin/intrinsic/vtype.zy"))
                                           )
                                         .
                                           exists
                                             (
-                                              Path = PathType :
+                                              IoErrorKind = IoErrorKindType :
                                               @(import("builtin/intrinsic/vtype.zy"))
                                             )
                                           .
                                             exists
                                               (
-                                                IoErrorKind = IoErrorKindType :
+                                                IoError = IoErrorType :
                                                 @(import("builtin/intrinsic/vtype.zy"))
                                               )
                                             .
                                               exists
                                                 (
-                                                  IoError = IoErrorType :
-                                                  @(import("builtin/intrinsic/vtype.zy"))
+                                                  OS = OSType as OS :
+                                                  @(import("builtin/intrinsic/ctype.zy"))
                                                 )
                                               .
                                                 exists
                                                   (
-                                                    OS = OSType as OS :
-                                                    @(import("builtin/intrinsic/ctype.zy"))
+                                                    Additive = AdditiveType as Additive :
+                                                    (
+                                                      @(import("builtin/intrinsic/vtype.zy"))
+                                                    ) -> (
+                                                      @(import("builtin/intrinsic/vtype.zy"))
+                                                    )
                                                   )
                                                 .
                                                   exists
                                                     (
-                                                      Additive = AdditiveType as Additive :
+                                                      Multiplicative = MultiplicativeType as
+                                                      Multiplicative :
                                                       (
                                                         @(import("builtin/intrinsic/vtype.zy"))
                                                       ) -> (
@@ -157,9 +166,11 @@ begin
                                                   .
                                                     exists
                                                       (
-                                                        Multiplicative = MultiplicativeType as
-                                                        Multiplicative :
+                                                        PartialEquality = PartialEqualityType as
+                                                        PartialEquality :
                                                         (
+                                                          @(import("builtin/intrinsic/vtype.zy"))
+                                                        ) -> (
                                                           @(import("builtin/intrinsic/vtype.zy"))
                                                         ) -> (
                                                           @(import("builtin/intrinsic/vtype.zy"))
@@ -168,21 +179,22 @@ begin
                                                     .
                                                       exists
                                                         (
-                                                          PartialEquality = PartialEqualityType as
-                                                          PartialEquality :
-                                                          (
-                                                            @(import("builtin/intrinsic/vtype.zy"))
-                                                          ) -> (
-                                                            @(import("builtin/intrinsic/vtype.zy"))
-                                                          ) -> (
-                                                            @(import("builtin/intrinsic/vtype.zy"))
-                                                          )
+                                                          PartialOrder = PartialOrderType as
+                                                          PartialOrder :
+                                                             (
+                                                               @(import("builtin/intrinsic/vtype.zy"))
+                                                             )
+                                                          -> (
+                                                               @(import("builtin/intrinsic/vtype.zy"))
+                                                             )
+                                                          -> (
+                                                               @(import("builtin/intrinsic/vtype.zy"))
+                                                             )
                                                         )
                                                       .
                                                         exists
                                                           (
-                                                            PartialOrder = PartialOrderType as
-                                                            PartialOrder :
+                                                            Numeric = NumericType as Numeric :
                                                                (
                                                                  @(import("builtin/intrinsic/vtype.zy"))
                                                                )
@@ -196,7 +208,9 @@ begin
                                                         .
                                                           exists
                                                             (
-                                                              Numeric = NumericType as Numeric :
+                                                              NumericInstance =
+                                                              NumericInstanceType as
+                                                              NumericInstance :
                                                                  (
                                                                    @(import("builtin/intrinsic/vtype.zy"))
                                                                  )
@@ -208,221 +222,205 @@ begin
                                                                  )
                                                             )
                                                           .
-                                                            exists
-                                                              (
-                                                                NumericInstance =
-                                                                NumericInstanceType as
-                                                                NumericInstance :
-                                                                   (
-                                                                     @(import("builtin/intrinsic/vtype.zy"))
-                                                                   )
-                                                                -> (
-                                                                     @(import("builtin/intrinsic/vtype.zy"))
-                                                                   )
-                                                                -> (
-                                                                     @(import("builtin/intrinsic/vtype.zy"))
-                                                                   )
+                                                              (prelude :: Prelude)
+                                                            * (bool :: BoolModule BoolType)
+                                                            * (
+                                                                option :: OptionModule BoolType
+                                                                  OptionType
                                                               )
-                                                            .
-                                                                (prelude :: Prelude)
-                                                              * (bool :: BoolModule BoolType)
-                                                              * (
-                                                                  option :: OptionModule BoolType
-                                                                    OptionType
-                                                                )
-                                                              * (
-                                                                  result :: ResultModule BoolType
-                                                                    ResultType
-                                                                )
-                                                              * (
-                                                                  list :: ListModule BoolType
-                                                                    OptionType ListType Int64Type
-                                                                )
-                                                              * (
-                                                                  numeric ::
-                                                                    (
-                                                                      int8_instance ::
-                                                                      NumericInstanceType BoolType
-                                                                        Int8Type
-                                                                    )
-                                                                  * (
-                                                                      int16_instance ::
-                                                                      NumericInstanceType BoolType
-                                                                        Int16Type
-                                                                    )
-                                                                  * (
-                                                                      int32_instance ::
-                                                                      NumericInstanceType BoolType
-                                                                        Int32Type
-                                                                    )
-                                                                  * (
-                                                                      int64_instance ::
-                                                                      NumericInstanceType BoolType
-                                                                        Int64Type
-                                                                    )
-                                                                  * (
-                                                                      uint8_instance ::
-                                                                      NumericInstanceType BoolType
-                                                                        UInt8Type
-                                                                    )
-                                                                  * (
-                                                                      uint16_instance ::
-                                                                      NumericInstanceType BoolType
-                                                                        UInt16Type
-                                                                    )
-                                                                  * (
-                                                                      uint32_instance ::
-                                                                      NumericInstanceType BoolType
-                                                                        UInt32Type
-                                                                    )
-                                                                  * (
-                                                                      uint64_instance ::
-                                                                      NumericInstanceType BoolType
-                                                                        UInt64Type
-                                                                    )
-                                                                  * (
-                                                                      float32_instance ::
-                                                                      NumericInstanceType BoolType
-                                                                        Float32Type
-                                                                    )
-                                                                  * (
-                                                                      float64_instance ::
-                                                                      NumericInstanceType BoolType
-                                                                        Float64Type
-                                                                    )
-                                                                  * Unit
-                                                                )
-                                                              * (
-                                                                  primitives ::
-                                                                    (
-                                                                      i8 :: PrimitiveIntegerModule
-                                                                        Int8Type StringType
-                                                                    )
-                                                                  * (
-                                                                      i16 ::
-                                                                      PrimitiveIntegerModule
-                                                                        Int16Type StringType
-                                                                    )
-                                                                  * (
-                                                                      i32 ::
-                                                                      PrimitiveIntegerModule
-                                                                        Int32Type StringType
-                                                                    )
-                                                                  * (
-                                                                      i64 ::
-                                                                      PrimitiveIntegerModule
-                                                                        Int64Type StringType
-                                                                    )
-                                                                  * (
-                                                                      u8 :: PrimitiveIntegerModule
-                                                                        UInt8Type StringType
-                                                                    )
-                                                                  * (
-                                                                      u16 ::
-                                                                      PrimitiveIntegerModule
-                                                                        UInt16Type StringType
-                                                                    )
-                                                                  * (
-                                                                      u32 ::
-                                                                      PrimitiveIntegerModule
-                                                                        UInt32Type StringType
-                                                                    )
-                                                                  * (
-                                                                      u64 ::
-                                                                      PrimitiveIntegerModule
-                                                                        UInt64Type StringType
-                                                                    )
-                                                                  * (
-                                                                      f32 :: PrimitiveFloatModule
-                                                                        Float32Type StringType
-                                                                    )
-                                                                  * (
-                                                                      f64 :: PrimitiveFloatModule
-                                                                        Float64Type StringType
-                                                                    )
-                                                                  * Unit
-                                                                )
-                                                              * (
-                                                                  int8 :: IntegerModule BoolType
-                                                                    Int8Type StringType
-                                                                )
-                                                              * (
-                                                                  int16 :: IntegerModule BoolType
-                                                                    Int16Type StringType
-                                                                )
-                                                              * (
-                                                                  int32 :: IntegerModule BoolType
-                                                                    Int32Type StringType
-                                                                )
-                                                              * (
-                                                                  int64 :: IntegerModule BoolType
-                                                                    Int64Type StringType
-                                                                )
-                                                              * (
-                                                                  uint8 :: IntegerModule BoolType
-                                                                    UInt8Type StringType
-                                                                )
-                                                              * (
-                                                                  uint16 :: IntegerModule BoolType
-                                                                    UInt16Type StringType
-                                                                )
-                                                              * (
-                                                                  uint32 :: IntegerModule BoolType
-                                                                    UInt32Type StringType
-                                                                )
-                                                              * (
-                                                                  uint64 :: IntegerModule BoolType
-                                                                    UInt64Type StringType
-                                                                )
-                                                              * (
-                                                                  float32 :: FloatModule BoolType
-                                                                    Float32Type StringType
-                                                                )
-                                                              * (
-                                                                  float64 :: FloatModule BoolType
-                                                                    Float64Type StringType
-                                                                )
-                                                              * (
-                                                                  char :: CharModule OptionType
-                                                                    CharType Int64Type StringType
-                                                                )
-                                                              * (
-                                                                  string :: StringModule
-                                                                    BoolType OptionType ListType
-                                                                    Int64Type CharType StringType
-                                                                )
-                                                              * (
-                                                                  bytes :: BytesModule OptionType
-                                                                    Int64Type StringType BytesType
-                                                                )
-                                                              * (
-                                                                  io :: IoModule
-                                                                    BoolType OptionType ResultType
-                                                                    Int64Type StringType BytesType
-                                                                    ReaderType
-                                                                    WriterType IoErrorKindType
-                                                                    IoErrorType OSType
-                                                                )
-                                                              * (
-                                                                  fs :: FsModule
-                                                                    ResultType StringType
-                                                                    BytesType ReaderType
-                                                                    WriterType PathType
-                                                                    IoErrorType
-                                                                    OSType
-                                                                )
-                                                              * (
-                                                                  stdio :: StdioModule
-                                                                    OptionType ResultType
-                                                                    StringType ReaderType
-                                                                    WriterType IoErrorType OSType
-                                                                )
-                                                              * (
-                                                                  process :: ProcessModule
-                                                                    ListType Int64Type StringType
-                                                                    OSType
-                                                                )
-                                                              * Unit
+                                                            * (
+                                                                result :: ResultModule BoolType
+                                                                  ResultType
+                                                              )
+                                                            * (
+                                                                list :: ListModule BoolType
+                                                                  OptionType ListType Int64Type
+                                                              )
+                                                            * (
+                                                                numeric ::
+                                                                  (
+                                                                    int8_instance ::
+                                                                    NumericInstanceType BoolType
+                                                                      Int8Type
+                                                                  )
+                                                                * (
+                                                                    int16_instance ::
+                                                                    NumericInstanceType BoolType
+                                                                      Int16Type
+                                                                  )
+                                                                * (
+                                                                    int32_instance ::
+                                                                    NumericInstanceType BoolType
+                                                                      Int32Type
+                                                                  )
+                                                                * (
+                                                                    int64_instance ::
+                                                                    NumericInstanceType BoolType
+                                                                      Int64Type
+                                                                  )
+                                                                * (
+                                                                    uint8_instance ::
+                                                                    NumericInstanceType BoolType
+                                                                      UInt8Type
+                                                                  )
+                                                                * (
+                                                                    uint16_instance ::
+                                                                    NumericInstanceType BoolType
+                                                                      UInt16Type
+                                                                  )
+                                                                * (
+                                                                    uint32_instance ::
+                                                                    NumericInstanceType BoolType
+                                                                      UInt32Type
+                                                                  )
+                                                                * (
+                                                                    uint64_instance ::
+                                                                    NumericInstanceType BoolType
+                                                                      UInt64Type
+                                                                  )
+                                                                * (
+                                                                    float32_instance ::
+                                                                    NumericInstanceType BoolType
+                                                                      Float32Type
+                                                                  )
+                                                                * (
+                                                                    float64_instance ::
+                                                                    NumericInstanceType BoolType
+                                                                      Float64Type
+                                                                  )
+                                                                * Unit
+                                                              )
+                                                            * (
+                                                                primitives ::
+                                                                  (
+                                                                    i8 :: PrimitiveIntegerModule
+                                                                      Int8Type StringType
+                                                                  )
+                                                                * (
+                                                                    i16 ::
+                                                                    PrimitiveIntegerModule
+                                                                      Int16Type StringType
+                                                                  )
+                                                                * (
+                                                                    i32 ::
+                                                                    PrimitiveIntegerModule
+                                                                      Int32Type StringType
+                                                                  )
+                                                                * (
+                                                                    i64 ::
+                                                                    PrimitiveIntegerModule
+                                                                      Int64Type StringType
+                                                                  )
+                                                                * (
+                                                                    u8 :: PrimitiveIntegerModule
+                                                                      UInt8Type StringType
+                                                                  )
+                                                                * (
+                                                                    u16 ::
+                                                                    PrimitiveIntegerModule
+                                                                      UInt16Type StringType
+                                                                  )
+                                                                * (
+                                                                    u32 ::
+                                                                    PrimitiveIntegerModule
+                                                                      UInt32Type StringType
+                                                                  )
+                                                                * (
+                                                                    u64 ::
+                                                                    PrimitiveIntegerModule
+                                                                      UInt64Type StringType
+                                                                  )
+                                                                * (
+                                                                    f32 :: PrimitiveFloatModule
+                                                                      Float32Type StringType
+                                                                  )
+                                                                * (
+                                                                    f64 :: PrimitiveFloatModule
+                                                                      Float64Type StringType
+                                                                  )
+                                                                * Unit
+                                                              )
+                                                            * (
+                                                                int8 :: IntegerModule BoolType
+                                                                  Int8Type StringType
+                                                              )
+                                                            * (
+                                                                int16 :: IntegerModule BoolType
+                                                                  Int16Type StringType
+                                                              )
+                                                            * (
+                                                                int32 :: IntegerModule BoolType
+                                                                  Int32Type StringType
+                                                              )
+                                                            * (
+                                                                int64 :: IntegerModule BoolType
+                                                                  Int64Type StringType
+                                                              )
+                                                            * (
+                                                                uint8 :: IntegerModule BoolType
+                                                                  UInt8Type StringType
+                                                              )
+                                                            * (
+                                                                uint16 :: IntegerModule BoolType
+                                                                  UInt16Type StringType
+                                                              )
+                                                            * (
+                                                                uint32 :: IntegerModule BoolType
+                                                                  UInt32Type StringType
+                                                              )
+                                                            * (
+                                                                uint64 :: IntegerModule BoolType
+                                                                  UInt64Type StringType
+                                                              )
+                                                            * (
+                                                                float32 :: FloatModule BoolType
+                                                                  Float32Type StringType
+                                                              )
+                                                            * (
+                                                                float64 :: FloatModule BoolType
+                                                                  Float64Type StringType
+                                                              )
+                                                            * (
+                                                                char :: CharModule OptionType
+                                                                  CharType Int64Type StringType
+                                                              )
+                                                            * (
+                                                                string :: StringModule
+                                                                  BoolType OptionType ListType
+                                                                  Int64Type CharType StringType
+                                                              )
+                                                            * (
+                                                                bytes :: BytesModule OptionType
+                                                                  Int64Type StringType BytesType
+                                                              )
+                                                            * (
+                                                                io :: IoModule
+                                                                  BoolType OptionType ResultType
+                                                                  Int64Type StringType BytesType
+                                                                  ReaderType
+                                                                  WriterType IoErrorKindType
+                                                                  IoErrorType OSType
+                                                              )
+                                                            * (
+                                                                fs :: FsModule
+                                                                  ResultType StringType
+                                                                  BytesType ReaderType
+                                                                  WriterType PathType
+                                                                  IoErrorType
+                                                                  OSType
+                                                              )
+                                                            * (
+                                                                stdio :: StdioModule
+                                                                  OptionType ResultType
+                                                                  StringType ReaderType
+                                                                  WriterType IoErrorType OSType
+                                                              )
+                                                            * (
+                                                                process :: ProcessModule
+                                                                  ListType Int64Type StringType
+                                                                  OSType
+                                                              )
+                                                            * Unit
   in
   Std
 end

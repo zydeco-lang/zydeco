@@ -9,23 +9,15 @@ begin
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/process) = system that
 
-  def Gauge =
-    codata
-    | .read : Ret ((reading :: Int64) * Int64)
-    | .shift : (delta :: Int64) -> Ret (reading :: Int64)
-    end
-  that
-  let GaugeBox =
-    Int64 * (gauge :: Thk Gauge)
-  that
-  def ! gauge : Gauge =
-    comatch
-    | .read =>
-      ret (reading = 12 : Int64, 13 : Int64)
-    | .shift (= delta : Int64) =>
-      ret (reading = delta : Int64)
-    end
-  that
+  def Gauge = codata
+  | .read : Ret ((reading :: Int64) * Int64)
+  | .shift : (delta :: Int64) -> Ret (reading :: Int64)
+  end that
+  let GaugeBox = Int64 * (gauge :: Thk Gauge) that
+  def ! gauge : Gauge = comatch
+  | .read => ret (reading = 12 : Int64, 13 : Int64)
+  | .shift (= delta : Int64) => ret (reading = delta : Int64)
+  end that
   def gauge_box : GaugeBox = (
     0,
     = gauge

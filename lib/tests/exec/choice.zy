@@ -7,78 +7,56 @@ begin
   let (/VType; /CType; /Thk; /Unit) = core that
   let (/Scalar = String) = representations/string that
   let (/OS) = system that
-  def Tree (A : VType) : VType =
-    data
-    | +Fork : Tree A * Tree A
-    | +Final : A
-    end
-  that
-  def Choice (B : CType) =
-    data
-    | +L : Thk B
-    | +R : Thk B
-    end
-  that
-  def Path (A : VType) : VType =
-    data
-    | +Nil : Unit
-    | +Cons : A * Path A
-    end
-  that
+  def Tree (A : VType) : VType = data
+  | +Fork : Tree A * Tree A
+  | +Final : A
+  end that
+  def Choice (B : CType) = data
+  | +L : Thk B
+  | +R : Thk B
+  end that
+  def Path (A : VType) : VType = data
+  | +Nil : Unit
+  | +Cons : A * Path A
+  end that
 
   let (/bool; /string; /stdio; /process) = make_std builtin in
-  def beep : Choice (Thk OS -> OS) =
-    +L(
-      {
-        fn k =>
-          ! (stdio/write_line) "0" { fn _ => ! k }
-      }
-    )
-  in
-  def boop : Choice (Thk OS -> OS) =
-    +R(
-      {
-        fn k =>
-          ! (stdio/write_line) "1" { fn _ => ! k }
-      }
-    )
-  in
-  def tree : Tree String =
-    +Fork(
-      +Fork(+Final("x"), +Final("o")),
-      +Final("x")
-    )
-  in
-  def path : Path (Choice (Thk OS -> OS)) =
-    +Cons(beep, +Cons(boop, +Nil()))
-  in
-  def fix walk (t : Tree String) (p : Path (Choice (Thk OS -> OS))) : OS =
-    match t
-    | +Final(res) =>
-      match p
-      | +Nil() =>
-        ! (stdio/write_line) res {
-          fn _ =>
-            do correct <- ! (string/eq) res "o";
-            ! (bool/if)
-              OS
-              correct
-              { ! (process/exit) 0 }
-              { ! (process/exit) 1 }
-        }
-      | +Cons(_, _) => ! (process/exit) 2
-      end
-    | +Fork(tl, tr) =>
-      match p
-      | +Nil() => ! (process/exit) 3
-      | +Cons(c, p') =>
-        match c
-        | +L(k) => ! k { ! walk tl p' }
-        | +R(k) => ! k { ! walk tr p' }
-        end
-      end
-    end
-  in
+  def beep : Choice (Thk OS -> OS) = +L(
+    {
+      fn k => ! (stdio/write_line) "0" { fn _ => ! k }
+    }
+  ) in
+  def boop : Choice (Thk OS -> OS) = +R(
+    {
+      fn k => ! (stdio/write_line) "1" { fn _ => ! k }
+    }
+  ) in
+  def tree : Tree String = +Fork(
+    +Fork(+Final("x"), +Final("o")),
+    +Final("x")
+  ) in
+  def path : Path (Choice (Thk OS -> OS)) = +Cons(beep, +Cons(boop, +Nil())) in
+  def fix walk (t : Tree String) (p : Path (Choice (Thk OS -> OS))) : OS = match t
+  | +Final(res) => match p
+  | +Nil() => ! (stdio/write_line) res {
+    fn _ =>
+      do correct <- ! (string/eq) res "o";
+      ! (bool/if)
+        OS
+        correct
+        { ! (process/exit) 0 }
+        { ! (process/exit) 1 }
+  }
+  | +Cons(_, _) => ! (process/exit) 2
+  end
+  | +Fork(tl, tr) => match p
+  | +Nil() => ! (process/exit) 3
+  | +Cons(c, p') => match c
+  | +L(k) => ! k { ! walk tl p' }
+  | +R(k) => ! k { ! walk tr p' }
+  end
+  end
+  end in
 
   ! walk tree path
 end

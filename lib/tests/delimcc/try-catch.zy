@@ -7,23 +7,15 @@ begin
   let (/VType; /CType; /Thk; /Ret) = core that
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/OS; /process) = system that
-  let (= Monad, = Algebra, ()) =
-    monadic_basis builtin
-  in
+  let (= Monad, = Algebra, ()) = monadic_basis builtin in
   begin
 
-    let Kont (R : CType) (A : VType) =
-      Thk (A -> R) -> R
-    that
-    def ! mret : Monad Ret =
-      comatch
-      | .return A a =>
-        ret a
-      | .bind A A' m f =>
-        do a <- ! m;
-        ! f a
-      end
-    that
+    let Kont (R : CType) (A : VType) = Thk (A -> R) -> R that
+    def ! mret : Monad Ret = comatch
+    | .return A a => ret a
+    | .bind A A' m f => do a <- ! m;
+    ! f a
+    end that
     def ! reset
       (
         M :
@@ -32,11 +24,9 @@ begin
       (monad : Thk (Monad M))
       (A : VType)
       (expression : Thk (Kont (M A) A))
-    : M A =
-        ! expression {
-          fn value =>
-            ! monad .return A value
-        }
+    : M A = ! expression {
+        fn value => ! monad .return A value
+      }
     that
     def ! shift
       (
@@ -52,14 +42,12 @@ begin
           -> Kont (M B) B
         )
       )
-    : Kont (M B) A =
-        fn continuation =>
-          ! handler
-            continuation
-            {
-              fn value =>
-                ! monad .return B value
-            }
+    : Kont (M B) A = fn continuation =>
+        ! handler
+          continuation
+          {
+            fn value => ! monad .return B value
+          }
     that
     def ! attempt
       (
@@ -71,22 +59,20 @@ begin
       (E : VType)
       (computation : Thk (Kont (M A) E))
       (handler : Thk (E -> M A))
-    : M A =
-        ! monad .bind
-          (Thk (Kont (M A) E))
-          A
-          {
-            ! reset M monad (Thk (Kont (M A) E)) {
-              fn ignored =>
-                ! monad .return
-                  (Thk (Kont (M A) E))
-                  computation
-            }
+    : M A = ! monad .bind
+        (Thk (Kont (M A) E))
+        A
+        {
+          ! reset M monad (Thk (Kont (M A) E)) {
+            fn ignored =>
+              ! monad .return
+                (Thk (Kont (M A) E))
+                computation
           }
-          {
-            fn suspended =>
-              ! suspended handler
-          }
+        }
+        {
+          fn suspended => ! suspended handler
+        }
     that
     def ! throw
       (
@@ -97,11 +83,9 @@ begin
       (A : VType)
       (E : VType)
       (exception : E)
-    : Kont (M A) E =
-        ! shift M monad E A {
-          fn continuation ignored =>
-            ! continuation exception
-        }
+    : Kont (M A) E = ! shift M monad E A {
+        fn continuation ignored => ! continuation exception
+      }
     that
 
     do i <- ! attempt Ret mret Int64 Int64
@@ -110,18 +94,15 @@ begin
       }
       -- fn _ => ret 0
       {
-        fn x =>
-          ! (int64/sub) x 42
+        fn x => ! (int64/sub) x 42
       };
     do j <- ! attempt Ret mret Int64 Int64
       {
         -- ! throw Ret mret Int64 Int64 42
-        fn _ =>
-          ret 0
+        fn _ => ret 0
       }
       {
-        fn x =>
-          ! (int64/sub) x 42
+        fn x => ! (int64/sub) x 42
       };
     ! (int64/eq)
       OS

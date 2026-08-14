@@ -10,13 +10,13 @@ begin
   let (/Scalar = String) = representations/string that
 
   let (/Bool; /bool; /option; /int64; /char; /string; /process) = make_std builtin in
-  let ! status (condition : Bool) : Ret Int64 =
-    ! (bool/if)
-      (Ret Int64)
-      condition
-      { ret 0 }
-      { ret 1 }
-  in
+  let ! status (condition : Bool) : Ret Int64 = ! (bool/if)
+    (Ret Int64)
+    condition
+    { ret 0 }
+    {
+      ret 1
+    } in
 
   do scalar_length <- ! (string/length) "éλ🙂";
   do scalar_length_ok <- ! (int64/eq) scalar_length 3;

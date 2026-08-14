@@ -13,24 +13,20 @@ begin
   let (/Scalar = String) = representations/string that
   let (/OS; /stdio; /process) = system that
 
-  def List (A : VType) : VType =
-    data
-    | +Nil : Unit
-    | +Cons : A * List A
-    end
-  that
-  def values : List String =
+  def List (A : VType) : VType = data
+  | +Nil : Unit
+  | +Cons : A * List A
+  end that
+  def values : List String = +Cons(
+    "1",
     +Cons(
-      "1",
+      "2",
       +Cons(
-        "2",
-        +Cons(
-          "3",
-          +Cons("not only you and me", +Nil())
-        )
+        "3",
+        +Cons("not only you and me", +Nil())
       )
     )
-  that
+  ) that
 
   def print_list : Thk (
        List String
@@ -49,10 +45,9 @@ begin
       fn remaining continuation =>
         match remaining
         | +Nil() => ! continuation
-        | +Cons(head, tail) =>
-          ! (stdio/write_line) head {
-            ! print_list tail continuation
-          }
+        | +Cons(head, tail) => ! (stdio/write_line) head {
+          ! print_list tail continuation
+        }
         end
   } that
 

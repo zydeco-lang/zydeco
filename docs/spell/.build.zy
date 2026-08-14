@@ -9,18 +9,14 @@ begin
   let (/string) = text that
   let (/OS; /stdio; /process) = system that
 
-  def Bool : VType =
-    data
-    | +True : Unit
-    | +False : Unit
-    end
-  that
+  def Bool : VType = data
+  | +True : Unit
+  | +False : Unit
+  end that
   def branch : Thk (
-    forall (B : CType) .
-      Bool -> Thk B -> Thk B -> B
+    forall (B : CType) . Bool -> Thk B -> Thk B -> B
   ) = {
-    fn
-      (B : CType)
+    fn (B : CType)
       condition
       when_true
       when_false
@@ -129,10 +125,9 @@ begin
           '\n'
           {
             match in_code
-            | +True() =>
-              ! (stdio/write) "\n```\n" {
-                ! (process/exit) 0
-              }
+            | +True() => ! (stdio/write) "\n```\n" {
+              ! (process/exit) 0
+            }
             | +False() => ! (process/exit) 0
             end
           }
@@ -140,74 +135,70 @@ begin
             fn line rest =>
               do classified <- ! classify_line line;
               match classified
-              | (content, comment) =>
-                do empty <- ! string_empty content;
-                match in_code
-                | +False() =>
+              | (content, comment) => do empty <- ! string_empty content;
+              match in_code
+              | +False() => ! branch
+                OS
+                empty
+                {
+                  ! (stdio/write) "\n\n" {
+                    ! loop rest in_code
+                  }
+                }
+                {
                   ! branch
                     OS
-                    empty
+                    comment
                     {
-                      ! (stdio/write) "\n\n" {
-                        ! loop rest in_code
+                      ! (stdio/write) content {
+                        ! (stdio/write) " " {
+                          ! loop rest in_code
+                        }
                       }
                     }
                     {
-                      ! branch
-                        OS
-                        comment
-                        {
-                          ! (stdio/write) content {
-                            ! (stdio/write) " " {
-                              ! loop rest in_code
-                            }
-                          }
+                      ! (stdio/write) "\n```zydeco\n" {
+                        ! (stdio/write) content {
+                          ! loop rest +True()
                         }
-                        {
-                          ! (stdio/write) "\n```zydeco\n" {
-                            ! (stdio/write) content {
-                              ! loop rest +True()
-                            }
-                          }
-                        }
+                      }
                     }
-                | +True() =>
+                }
+              | +True() => ! branch
+                OS
+                empty
+                {
+                  ! (stdio/write) "\n" {
+                    ! loop rest in_code
+                  }
+                }
+                {
                   ! branch
                     OS
-                    empty
+                    comment
+                    {
+                      ! (stdio/write) "\n```\n\n" {
+                        ! (stdio/write) content {
+                          ! (stdio/write) " " {
+                            ! loop rest +False()
+                          }
+                        }
+                      }
+                    }
                     {
                       ! (stdio/write) "\n" {
-                        ! loop rest in_code
+                        ! (stdio/write) content {
+                          ! loop rest in_code
+                        }
                       }
                     }
-                    {
-                      ! branch
-                        OS
-                        comment
-                        {
-                          ! (stdio/write) "\n```\n\n" {
-                            ! (stdio/write) content {
-                              ! (stdio/write) " " {
-                                ! loop rest +False()
-                              }
-                            }
-                          }
-                        }
-                        {
-                          ! (stdio/write) "\n" {
-                            ! (stdio/write) content {
-                              ! loop rest in_code
-                            }
-                          }
-                        }
-                    }
-                end
+                }
+              end
               end
           }
   } that
 
   ! (stdio/read_all) {
-    fn file =>
-      ! loop file +False()
+    fn file => ! loop file +False()
   }
 end

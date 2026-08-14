@@ -3,8 +3,7 @@ begin
   let Ret = @(import("../builtin/intrinsic/ret.zy")) in
   let Unit = @(import("../builtin/intrinsic/unit.zy")) in
   let Numeric = @(import("numeric.type.zy")) in
-  let NumericInstance
-    (Bool : @(import("../builtin/intrinsic/vtype.zy")))
+  let NumericInstance (Bool : @(import("../builtin/intrinsic/vtype.zy")))
     (Representation : @(import("../builtin/intrinsic/vtype.zy"))) =
     exists (Scalar = ScalarType as Representation : @(import("../builtin/intrinsic/vtype.zy"))) .
         (dictionary :: Numeric Bool ScalarType)

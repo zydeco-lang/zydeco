@@ -14,13 +14,11 @@ begin
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/stdio; /process) = system that
 
-  def Counter : CType =
-    codata
-    | .number : Ret Int64
-    | .increment : Int64 -> Counter
-    | .format : Ret String
-    end
-  that
+  def Counter : CType = codata
+  | .number : Ret Int64
+  | .increment : Int64 -> Counter
+  | .format : Ret String
+  end that
 
   -- `make_counter` closes over `current`. The local fixed point named `this`
   -- permits one method to invoke another method on the same object.
@@ -30,13 +28,11 @@ begin
         fix (this : Thk Counter) =>
           comatch
           | .number => ret current
-          | .increment amount =>
-            do previous <- ! this .number;
-            do next <- ! (int64/add) previous amount;
-            ! make_counter next
-          | .format =>
-            do value <- ! this .number;
-            ! (int64/to_string) value
+          | .increment amount => do previous <- ! this .number;
+          do next <- ! (int64/add) previous amount;
+          ! make_counter next
+          | .format => do value <- ! this .number;
+          ! (int64/to_string) value
           end
   } that
 

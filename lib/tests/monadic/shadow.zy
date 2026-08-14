@@ -5,15 +5,11 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/Unit = _) = core that
-  let (= Monad, = Algebra, ()) =
-    outer_basis builtin
-  in
+  let (= Monad, = Algebra, ()) = outer_basis builtin in
 
   begin
     let inner_basis = @(import("../../std/control/monad.zy")) that
-    let (= Monad, = Algebra, ()) =
-      inner_basis builtin
-    in
+    let (= Monad, = Algebra, ()) = inner_basis builtin in
 
     begin
       @[monadic] begin

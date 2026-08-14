@@ -2,8 +2,7 @@ begin
   let Thk = @(import("../builtin/intrinsic/thk.zy")) in
   let Ret = @(import("../builtin/intrinsic/ret.zy")) in
   let Unit = @(import("../builtin/intrinsic/unit.zy")) in
-  let PrimitiveFloatModule
-    (Floating : @(import("../builtin/intrinsic/vtype.zy")))
+  let PrimitiveFloatModule (Floating : @(import("../builtin/intrinsic/vtype.zy")))
     (String : @(import("../builtin/intrinsic/vtype.zy"))) =
       (add :: Thk (Floating -> Floating -> Ret Floating))
     * (sub :: Thk (Floating -> Floating -> Ret Floating))

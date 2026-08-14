@@ -7,12 +7,8 @@ begin
   let (/Scalar = Int64) = representations/i64 that
   let (/OS; /process) = system that
 
-  def ! id (A : VType) (value : A) : Ret A =
-    ret value
-  that
-  def ! id~ (B : CType) (b : Thk B) : B =
-    ! b
-  that
+  def ! id (A : VType) (value : A) : Ret A = ret value that
+  def ! id~ (B : CType) (b : Thk B) : B = ! b that
 
   do x <- ! id Int64 0;
   ! id~ OS { ! (process/exit) x }

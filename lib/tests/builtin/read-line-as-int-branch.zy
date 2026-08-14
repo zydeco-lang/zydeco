@@ -16,8 +16,7 @@ let (/OS; /stdio; /process) = system in
           ! (stdio/read_int)
             { ! (process/exit) 0 }
             {
-              fn unexpected =>
-                ! (process/exit) 1
+              fn unexpected => ! (process/exit) 1
             }
         }
         { ! (process/exit) 1 }

@@ -7,53 +7,51 @@ begin
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/Scalar = Char) = representations/char that
   let (/process) = system that
-  let Interleaved =
-    exists
-      (Leading as Unit : VType)
-      (X : VType)
-      (AliasX as X : VType)
-      (Middle as Unit : VType)
-      (Y : VType)
-      (AliasY as Y : VType)
-    .
+  let Interleaved = exists (Leading as Unit : VType)
+    (X : VType)
+    (AliasX as X : VType)
+    (Middle as Unit : VType)
+    (Y : VType)
+    (AliasY as Y : VType)
+  .
+    X * Y that
+  let Reveal = pi
+    (
+      (
+        Leading,
+        X,
+        AliasX,
+        Middle,
+        Y,
+        AliasY,
+        _,
+        _
+      )
+      : Interleaved
+    )
+  .
+    Ret (
       X * Y
-  that
-  let Reveal =
-    pi
+    ) that
+  def ! reveal : Reveal = fn
+    (
       (
-        (
-          Leading,
-          X,
-          AliasX,
-          Middle,
-          Y,
-          AliasY,
-          _,
-          _
-        )
-        : Interleaved
+        Leading,
+        X,
+        AliasX,
+        Middle,
+        Y,
+        AliasY,
+        x,
+        y
       )
-    .
-      Ret (X * Y)
-  that
-  def ! reveal : Reveal =
-    fn
-      (
-        (
-          Leading,
-          X,
-          AliasX,
-          Middle,
-          Y,
-          AliasY,
-          x,
-          y
-        )
-        : Interleaved
-      )
-    =>
-      ret (x, y)
-  that
+      : Interleaved
+    )
+  =>
+    ret (
+      x,
+      y
+    ) that
   def packed : Interleaved = (
     Unit,
     Int64,

@@ -8,11 +8,9 @@ begin
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/process) = system that
 
-  let PatternTarget =
-    (
-      left :: Int64
-    ) * Int64 * (right :: Int64)
-  that
+  let PatternTarget = (
+    left :: Int64
+  ) * Int64 * (right :: Int64) that
   def pattern_target : PatternTarget = (
     left = 1,
     2,

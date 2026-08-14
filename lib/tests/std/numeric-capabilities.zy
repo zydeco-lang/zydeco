@@ -10,26 +10,21 @@ begin
   let (/OS) = system that
 
   let (/Bool; /Numeric; /numeric; /primitives; /bool; /process) = make_std builtin in
-  let ! multiply_add_equal
-    (A : VType)
+  let ! multiply_add_equal (A : VType)
     (dictionary : Numeric Bool A)
     (left : A)
     (right : A)
     (offset : A)
     (expected : A)
-  : Ret Bool =
-      do product <- ! (dictionary/multiplicative/mul) left right;
-      do total <- ! (dictionary/additive/add) product offset;
-      ! (dictionary/order/equality/eq) total expected
+  : Ret Bool = do product <- ! (dictionary/multiplicative/mul) left right;
+    do total <- ! (dictionary/additive/add) product offset;
+    ! (dictionary/order/equality/eq) total expected
   in
-  let ! strictly_less
-    (A : VType)
+  let ! strictly_less (A : VType)
     (dictionary : Numeric Bool A)
     (left : A)
     (right : A)
-  : Ret Bool =
-      ! (dictionary/order/lt) left right
-  in
+  : Ret Bool = ! (dictionary/order/lt) left right in
 
   let (
     Scalar = IntScalar,

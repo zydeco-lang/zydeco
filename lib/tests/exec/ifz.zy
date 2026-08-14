@@ -6,33 +6,23 @@ begin
   let (/VType; /Thk; /Ret; /Unit) = core that
   let (/process) = system that
 
-  def Nat : VType =
-    data
-    | +Z : Unit
-    | +S : Nat
-    end
-  that
-  def Bool =
-    data
-    | +True : Unit
-    | +False : Unit
-    end
-  that
-  def ! suc (x : Nat) : Ret Nat =
-    ret +S(x)
-  that
-  def ! ifz (z : Bool) (pred : Thk (Nat -> Ret Bool)) (x : Nat) : Ret Bool =
-    match x
-    | +Z() => ret z
-    | +S(x) => ! pred x
-    end
-  that
-  def ! ifz' (x : Nat) : Ret Bool =
-    ! ifz
-      +False()
-      { fn (_ : Nat) => ret +True() }
-      x
-  that
+  def Nat : VType = data
+  | +Z : Unit
+  | +S : Nat
+  end that
+  def Bool = data
+  | +True : Unit
+  | +False : Unit
+  end that
+  def ! suc (x : Nat) : Ret Nat = ret +S(x) that
+  def ! ifz (z : Bool) (pred : Thk (Nat -> Ret Bool)) (x : Nat) : Ret Bool = match x
+  | +Z() => ret z
+  | +S(x) => ! pred x
+  end that
+  def ! ifz' (x : Nat) : Ret Bool = ! ifz
+    +False()
+    { fn (_ : Nat) => ret +True() }
+    x that
 
   let zero : Nat = +Z() in
   do one <- ! suc zero;
@@ -42,15 +32,13 @@ begin
   do zero' <- ! ifz' zero;
   do b <- (
     match two'
-    | +True() =>
-      match one'
-      | +True() =>
-        match zero'
-        | +False() => ret +True()
-        | +True() => ret +False()
-        end
-      | +False() => ret +False()
-      end
+    | +True() => match one'
+    | +True() => match zero'
+    | +False() => ret +True()
+    | +True() => ret +False()
+    end
+    | +False() => ret +False()
+    end
     | +False() => ret +False()
     end
     : Ret Bool

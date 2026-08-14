@@ -14,8 +14,7 @@ begin
     * (nor :: Thk (Bool -> Bool -> Ret Bool))
     * (
         if :: Thk (
-          forall (B : @(import("../builtin/intrinsic/ctype.zy"))) .
-            Bool -> Thk B -> Thk B -> B
+          forall (B : @(import("../builtin/intrinsic/ctype.zy"))) . Bool -> Thk B -> Thk B -> B
         )
       )
   in

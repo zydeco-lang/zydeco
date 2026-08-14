@@ -12,39 +12,31 @@ begin
   let (/VType; /CType; /Thk; /Ret) = core that
   let (/process) = system that
 
-  let Lens (S : VType) (A : VType) =
-    forall
-      (
-        Fun :
-           VType
-        -> CType
-      )
-    .
-         Thk (A -> Fun A)
-      -> S
-      -> Fun S
-  that
-  def Identity (A : VType) =
-    codata
-    | .identity : Ret A
-    end
-  that
-  def Const (A : VType) (B : VType) =
-    codata
-    | .constant : Ret A
-    end
-  that
+  let Lens (S : VType) (A : VType) = forall
+    (
+      Fun :
+         VType
+      -> CType
+    )
+  .
+       Thk (A -> Fun A)
+    -> S
+    -> Fun S that
+  def Identity (A : VType) = codata
+  | .identity : Ret A
+  end that
+  def Const (A : VType) (B : VType) = codata
+  | .constant : Ret A
+  end that
 
   def over : Thk (
-    forall (S : VType) .
-      forall (A : VType) .
-           Thk (Lens S A)
-        -> Thk (A -> Ret A)
-        -> S
-        -> Ret S
+    forall (S : VType) (A : VType) .
+         Thk (Lens S A)
+      -> Thk (A -> Ret A)
+      -> S
+      -> Ret S
   ) = {
-    fn
-      (S : VType)
+    fn (S : VType)
       (A : VType)
       lens
       function
@@ -61,14 +53,12 @@ begin
         source .identity
   } that
   def view : Thk (
-    forall (S : VType) .
-      forall (A : VType) .
-           Thk (Lens S A)
-        -> S
-        -> Ret A
+    forall (S : VType) (A : VType) .
+         Thk (Lens S A)
+      -> S
+      -> Ret A
   ) = {
-    fn
-      (S : VType)
+    fn (S : VType)
       (A : VType)
       lens
       source

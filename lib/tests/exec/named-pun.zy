@@ -9,18 +9,10 @@ begin
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/process) = system that
 
-  let Slot (pun_value : VType) =
-    (pun_value :: pun_value)
-  that
-  let UpperSlot (PunValue : VType) =
-    (PunValue :: PunValue)
-  that
-  let PunPair =
-    (pun_x :: Int64) * (pun_y :: Int64)
-  that
-  let Wrapped =
-    (outer :: pun_inner :: Int64)
-  that
+  let Slot (pun_value : VType) = (pun_value :: pun_value) that
+  let UpperSlot (PunValue : VType) = (PunValue :: PunValue) that
+  let PunPair = (pun_x :: Int64) * (pun_y :: Int64) that
+  let Wrapped = (outer :: pun_inner :: Int64) that
   def pun_value : Int64 = 4 that
   def slot : Slot Int64 = (= pun_value) that
   def PunValue : Int64 = 5 that

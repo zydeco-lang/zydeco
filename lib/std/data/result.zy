@@ -4,81 +4,63 @@ param (
 ) in
 let (/VType; /CType; /Thk; /Ret) = core in
 begin
-  def Result (A : VType) (E : VType) =
-    data
-    | +Ok : A
-    | +Err : E
-    end
-  that
-  def ! ok (A : VType) (E : VType) (value : A) : Ret (Result A E) =
-    ret +Ok(value)
-  that
-  def ! err (A : VType) (E : VType) (error : E) : Ret (Result A E) =
-    ret +Err(error)
-  that
-  def ! fold
-    (A : VType)
+  def Result (A : VType) (E : VType) = data
+  | +Ok : A
+  | +Err : E
+  end that
+  def ! ok (A : VType) (E : VType) (value : A) : Ret (Result A E) = ret +Ok(value) that
+  def ! err (A : VType) (E : VType) (error : E) : Ret (Result A E) = ret +Err(error) that
+  def ! fold (A : VType)
     (E : VType)
     (B : CType)
     (result : Result A E)
     (when_ok : Thk (A -> B))
     (when_err : Thk (E -> B))
-  : B =
-      match result
-      | +Ok(value) => ! when_ok value
-      | +Err(error) => ! when_err error
-      end
+  : B = match result
+    | +Ok(value) => ! when_ok value
+    | +Err(error) => ! when_err error
+    end
   that
-  def ! map
-    (A : VType)
+  def ! map (A : VType)
     (B : VType)
     (E : VType)
     (result : Result A E)
     (transform : Thk (A -> Ret B))
-  : Ret (Result B E) =
-      match result
-      | +Ok(value) =>
-        do transformed <- ! transform value;
-        ! ok B E transformed
-      | +Err(error) => ! err B E error
-      end
+  : Ret (Result B E) = match result
+    | +Ok(value) => do transformed <- ! transform value;
+    ! ok B E transformed
+    | +Err(error) => ! err B E error
+    end
   that
-  def ! map_err
-    (A : VType)
+  def ! map_err (A : VType)
     (E : VType)
     (F : VType)
     (result : Result A E)
     (transform : Thk (E -> Ret F))
-  : Ret (Result A F) =
-      match result
-      | +Ok(value) => ! ok A F value
-      | +Err(error) =>
-        do transformed <- ! transform error;
-        ! err A F transformed
-      end
+  : Ret (Result A F) = match result
+    | +Ok(value) => ! ok A F value
+    | +Err(error) => do transformed <- ! transform error;
+    ! err A F transformed
+    end
   that
-  def ! and_then
-    (A : VType)
+  def ! and_then (A : VType)
     (B : VType)
     (E : VType)
     (result : Result A E)
     (transform : Thk (A -> Ret (Result B E)))
-  : Ret (Result B E) =
-      match result
-      | +Ok(value) => ! transform value
-      | +Err(error) => ! err B E error
-      end
+  : Ret (Result B E) = match result
+    | +Ok(value) => ! transform value
+    | +Err(error) => ! err B E error
+    end
   that
-  def ! unwrap_or
-    (A : VType)
+  def ! unwrap_or (A : VType)
     (E : VType)
     (result : Result A E)
     (default : A)
-  : Ret A =
-      match result
-      | +Ok(value) => ret value
-      | +Err(_) => ret default
-      end
+  : Ret A = match result
+    | +Ok(value) => ret value
+    | +Err(_) => ret default
+    end
   that
   (
     = Result,

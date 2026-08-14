@@ -6,12 +6,10 @@ begin
   let (/VType; /CType; /Thk) = core that
   let (/OS; /process) = system that
 
-  def Kont (A : VType) (B : CType) =
-    data
-    | +Running : Thk B
-    | +Done : A
-    end
-  that
+  def Kont (A : VType) (B : CType) = data
+  | +Running : Thk B
+  | +Done : A
+  end that
 
   let k : Kont _ OS = +Done(1) in
   ! (process/exit) 0

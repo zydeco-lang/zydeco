@@ -16,8 +16,7 @@ begin
     present
     { ret 1 }
     {
-      fn pair =>
-        ret 0
+      fn pair => ret 0
     };
   do absent <- ! (string/split_at) "short" 99;
   do absent_status <- ! (option/fold)
@@ -26,8 +25,7 @@ begin
     absent
     { ret 0 }
     {
-      fn pair =>
-        ret 1
+      fn pair => ret 1
     };
   do status <- ! (int64/add) present_status absent_status;
   ! (process/exit) status

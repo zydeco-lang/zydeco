@@ -6,14 +6,14 @@ begin
   let (/Ret) = core that
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/process) = system that
-  def ! f (x : Int64) : Ret Int64 =
-    ! (int64/eq)
-      (Ret Int64)
-      x
-      0
-      { ret 0 }
-      { ret 1 }
-  that
+  def ! f (x : Int64) : Ret Int64 = ! (int64/eq)
+    (Ret Int64)
+    x
+    0
+    { ret 0 }
+    {
+      ret 1
+    } that
 
   do z <- ! f 0;
   ! (process/exit) z

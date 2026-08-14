@@ -4,6 +4,5 @@ param (
 ) in
 let (/stdio; /process) = system in
 ! (stdio/read_line) {
-  fn _ =>
-    ! (process/exit) 0
+  fn _ => ! (process/exit) 0
 }

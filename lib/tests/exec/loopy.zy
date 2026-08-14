@@ -6,27 +6,17 @@ begin
   let (/VType; /CType; /Thk; /Ret) = core that
   let (/OS; /process) = system that
 
-  def Y (B : CType) : CType =
-    codata
-    | .y : Thk (Y B) -> B
-    end
-  that
-  def Self (B : VType) : VType =
-    data
-    | +Roll : Thk (Self B -> Ret B)
-    end
-  that
-  def ! fix' (B : CType) (f : Thk (Thk B -> B)) : B =
-    let ! prim : Y B =
-      comatch
-      | .y x => ! f { ! x .y x }
-      end
-    in
-    ! prim .y prim
-  that
-  def ! m : OS =
-    ! fix' OS { fn loop => ! loop }
-  that
+  def Y (B : CType) : CType = codata
+  | .y : Thk (Y B) -> B
+  end that
+  def Self (B : VType) : VType = data
+  | +Roll : Thk (Self B -> Ret B)
+  end that
+  def ! fix' (B : CType) (f : Thk (Thk B -> B)) : B = let ! prim : Y B = comatch
+  | .y x => ! f { ! x .y x }
+  end in
+  ! prim .y prim that
+  def ! m : OS = ! fix' OS { fn loop => ! loop } that
 
   ! (process/exit) 0
 end

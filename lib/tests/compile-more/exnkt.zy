@@ -11,96 +11,74 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret) = core that
-  let (= Monad, = Algebra, ()) =
-    monadic_basis builtin
-  in
+  let (= Monad, = Algebra, ()) = monadic_basis builtin in
   begin
 
-    let Top =
-      codata
-      end
-    that
-    let ! triv : Top =
-      comatch
-      end
-    that
-    let Either (E : VType) (A : VType) =
-      data
-      | +Left : E
-      | +Right : A
-      end
-    that
-    let MonadTrans (T : (VType -> CType) -> VType -> CType) =
-      forall (M : VType -> CType) .
-           Thk (Monad M)
-        -> codata
-           | .monad : Monad (T M)
-           | .lift :
-             forall (A : VType) .
-                  Thk (M A)
-               -> T M A
-           end
-    that
-    let Monad' (M : VType -> CType) =
-      codata
-      | .return :
-        forall (A : VType) .
-             Thk Top
-          -> A
-          -> M A
-      | .bind :
-        forall (A : VType) .
-             Thk Top
-          -> (
-               forall (A' : VType) .
-                    Thk Top
-                 -> Thk (M A)
-                 -> Thk (A -> M A')
-                 -> M A'
-             )
-      end
-    that
-    let MonadTransInner (T_M : VType -> CType) =
-      codata
-      | .monad : Monad T_M
-      | .lift :
-        forall (A : VType) .
-             Thk (Ret A)
-          -> T_M A
-      end
-    that
-    let MonadTrans' (T : (VType -> CType) -> VType -> CType) =
-      forall (M : VType -> CType) .
-           Thk (Monad M)
-        -> codata
-           | .monad : Monad' (T M)
-           | .lift :
-             forall (A : VType) .
+    let Top = codata
+    end that
+    let ! triv : Top = comatch
+    end that
+    let Either (E : VType) (A : VType) = data
+    | +Left : E
+    | +Right : A
+    end that
+    let MonadTrans (T : (VType -> CType) -> VType -> CType) = forall (M : VType -> CType) .
+         Thk (Monad M)
+      -> codata
+         | .monad : Monad (T M)
+         | .lift :
+           forall (A : VType) .
+                Thk (M A)
+             -> T M A
+         end that
+    let Monad' (M : VType -> CType) = codata
+    | .return :
+      forall (A : VType) .
+           Thk Top
+        -> A
+        -> M A
+    | .bind :
+      forall (A : VType) .
+           Thk Top
+        -> (
+             forall (A' : VType) .
                   Thk Top
                -> Thk (M A)
-               -> T M A
-           end
-    that
-    def ! detriv-mo (M : VType -> CType) (mo : Thk (Monad' M)) : Monad M =
-      comatch
-      | .return A => ! mo .return A triv
-      | .bind A A' => ! mo .bind A triv A' triv
-      end
-    that
-    def ! detriv-mt
-      (T : (VType -> CType) -> VType -> CType)
+               -> Thk (A -> M A')
+               -> M A'
+           )
+    end that
+    let MonadTransInner (T_M : VType -> CType) = codata
+    | .monad : Monad T_M
+    | .lift :
+      forall (A : VType) .
+           Thk (Ret A)
+        -> T_M A
+    end that
+    let MonadTrans' (T : (VType -> CType) -> VType -> CType) = forall (M : VType -> CType) .
+         Thk (Monad M)
+      -> codata
+         | .monad : Monad' (T M)
+         | .lift :
+           forall (A : VType) .
+                Thk Top
+             -> Thk (M A)
+             -> T M A
+         end that
+    def ! detriv-mo (M : VType -> CType) (mo : Thk (Monad' M)) : Monad M = comatch
+    | .return A => ! mo .return A triv
+    | .bind A A' => ! mo .bind A triv A' triv
+    end that
+    def ! detriv-mt (T : (VType -> CType) -> VType -> CType)
       (mt : Thk (MonadTrans' T))
-    : MonadTrans T =
-        fn (M : VType -> CType) (mo : Thk (Monad M)) =>
-          comatch
-          | .monad => ! detriv-mo (T M) { ! mt M mo .monad }
-          | .lift A => ! mt M mo .lift A triv
-          end
+    : MonadTrans T = fn (M : VType -> CType) (mo : Thk (Monad M)) =>
+        comatch
+        | .monad => ! detriv-mo (T M) { ! mt M mo .monad }
+        | .lift A => ! mt M mo .lift A triv
+        end
     that
 
-    let ExnK (E : VType) (A : VType) =
-      forall (R : CType) . Thk (E -> R) -> Thk (A -> R) -> R
-    that
+    let ExnK (E : VType) (A : VType) = forall (R : CType) . Thk (E -> R) -> Thk (A -> R) -> R that
 
     --| Pass the algebra of `R` along with the type quantifier `R`
     let ExnKT (E : VType) (M : VType -> CType) (A : VType) =
@@ -108,55 +86,41 @@ begin
     that
 
     --| Monad implementation for `ExnK`
-    let ! mo_exnk (E : VType) : Monad (ExnK E) =
-      comatch
-      | .return A a => fn R ke ka =>
-        ! ka a
-      | .bind A A' m f => fn R ke ka =>
-        ! m R ke { fn a => ! f a R ke ka }
-      end
-    that
+    let ! mo_exnk (E : VType) : Monad (ExnK E) = comatch
+    | .return A a => fn R ke ka => ! ka a
+    | .bind A A' m f => fn R ke ka => ! m R ke { fn a => ! f a R ke ka }
+    end that
 
     --| Automatically generated implementation of the monad transformer for `ExnKT`
     def ! mt_exnk (E : VType) : MonadTrans (ExnKT E) =
-      let ! mt' (M : VType -> CType) (mo : Thk (Monad M)) =
-        @[debug("generated and applied")]
-        (
-          @[monadic] (
-            fn (E : VType) =>
-              @[debug("original")]
-              let ! mo_exnk (E : VType) : Monad (ExnK E) =
-                comatch
-                | .return A a => fn R ke ka =>
-                  ! ka a
-                | .bind A A' m f => fn R ke ka =>
-                  ! m R ke { fn a => ! f a R ke ka }
-                end
-              in
-              comatch
-              | .monad => ! mo_exnk E
-              | .lift A m =>
-                do a <- ! m;
-                ! mo_exnk E .return A a
-              end
-            : forall (E : VType) . MonadTransInner (ExnK E)
-          )
-        ) M mo E triv
-      in
+      let ! mt' (M : VType -> CType) (mo : Thk (Monad M)) = @[debug("generated and applied")]
+      (
+        @[monadic] (
+          fn (E : VType) =>
+            @[debug("original")]
+            let ! mo_exnk (E : VType) : Monad (ExnK E) = comatch
+            | .return A a => fn R ke ka => ! ka a
+            | .bind A A' m f => fn R ke ka => ! m R ke { fn a => ! f a R ke ka }
+            end in
+            comatch
+            | .monad => ! mo_exnk E
+            | .lift A m => do a <- ! m;
+            ! mo_exnk E .return A a
+            end
+          : forall (E : VType) . MonadTransInner (ExnK E)
+        )
+      ) M mo E triv in
       ! detriv-mt (ExnKT E) mt'
     that
 
     --| Manual implementation of the monad transformer for `ExnKT`
     def ! mt_exnk_manual (E : VType) : MonadTrans (ExnKT E) = fn M mo =>
       comatch
-      | .monad =>
-        comatch
-        | .return A a => fn R alg ke ka => ! ka a
-        | .bind A A' m f => fn R alg ke ka' =>
-          ! m R alg ke { fn a => ! f a R alg ke ka' }
-        end
-      | .lift A m => fn R alg ke ka =>
-        ! alg A m ka
+      | .monad => comatch
+      | .return A a => fn R alg ke ka => ! ka a
+      | .bind A A' m f => fn R alg ke ka' => ! m R alg ke { fn a => ! f a R alg ke ka' }
+      end
+      | .lift A m => fn R alg ke ka => ! alg A m ka
       end that
 
     (

@@ -5,9 +5,7 @@ begin
   ) that
   let (/OS; /process) = system that
 
-  def fix loop : OS =
-    ! loop
-  that
+  def fix loop : OS = ! loop that
 
   -- ! loop
   ! (process/exit) 0

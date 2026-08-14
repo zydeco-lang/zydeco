@@ -9,87 +9,55 @@ begin
   let (/Scalar = String) = representations/string that
   let string = text/string that
   let (/OS; /stdio; /random; /process) = system that
-  let (= Monad, = Algebra, ()) =
-    monadic_basis builtin
-  in
+  let (= Monad, = Algebra, ()) = monadic_basis builtin in
   begin
 
-    let Kont (R : CType) (A : VType) =
-      Thk (A -> R) -> R
-    that
-    def Bool =
-      data
-      | +True : Unit
-      | +False : Unit
-      end
-    that
-    def Empty =
-      data
-      end
-    that
-    def Err =
-      data
-      | +Msg : String
-      end
-    that
-    def Handlers (R : CType) (K : CType) =
-      codata
-      | .eff :
-        -- print : String ~> Bool
-           Thk (String -> Kont R Bool) ->
-           -- fail : Err ~> Empty
-           Thk (Err -> Kont R Empty) ->
-           -- flip : Unit ~> Bool
-           Thk (Unit -> Kont R Bool)
-        -> K
-      end
-    that
-    def Free (H : CType -> CType -> CType) (A : VType) =
-      codata
-      | .run :
-        forall (R : CType) .
-          H R (Kont R A)
-      end
-    that
+    let Kont (R : CType) (A : VType) = Thk (A -> R) -> R that
+    def Bool = data
+    | +True : Unit
+    | +False : Unit
+    end that
+    def Empty = data
+    end that
+    def Err = data
+    | +Msg : String
+    end that
+    def Handlers (R : CType) (K : CType) = codata
+    | .eff :
+      -- print : String ~> Bool
+         Thk (String -> Kont R Bool) ->
+         -- fail : Err ~> Empty
+         Thk (Err -> Kont R Empty) ->
+         -- flip : Unit ~> Bool
+         Thk (Unit -> Kont R Bool)
+      -> K
+    end that
+    def Free (H : CType -> CType -> CType) (A : VType) = codata
+    | .run :
+      forall (R : CType) . H R (Kont R A)
+    end that
 
-    def ! mfree : Monad (Free Handlers) =
-      comatch
-      | .return A a =>
-        fn .run R =>
-          fn .eff print fail flip k =>
-            ! k a
-      | .bind A A' m f =>
-        fn .run R =>
-          fn .eff print fail flip k' =>
-            ! m .run R .eff
+    def ! mfree : Monad (Free Handlers) = comatch
+    | .return A a => fn .run R .eff print fail flip k => ! k a
+    | .bind A A' m f => fn .run R .eff print fail flip k' =>
+      ! m .run R .eff
+        print
+        fail
+        flip
+        {
+          fn a =>
+            ! f a .run R .eff
               print
               fail
               flip
-              {
-                fn a =>
-                  ! f a .run R .eff
-                    print
-                    fail
-                    flip
-                    k'
-              }
-      end
-    that
-    def ! print (string : String) : Free Handlers Bool =
-      fn .run R =>
-        fn .eff print fail flip =>
-          ! print string
-    that
-    def ! fail (error : Err) : Free Handlers Empty =
-      fn .run R =>
-        fn .eff print fail flip =>
-          ! fail error
-    that
-    def ! flip : Free Handlers Bool =
-      fn .run R =>
-        fn .eff print fail flip =>
-          ! flip ()
-    that
+              k'
+        }
+    end that
+    def ! print (string : String) : Free Handlers Bool = fn .run R .eff print fail flip =>
+      ! print string that
+    def ! fail (error : Err) : Free Handlers Empty = fn .run R .eff print fail flip =>
+      ! fail error that
+    def ! flip : Free Handlers Bool = fn .run R .eff print fail flip => ! flip () that
     def ! print-os (string : String) (k : Thk (Bool -> OS)) : OS =
       ! (stdio/write_line) string { ! k +True() }
     that
@@ -97,56 +65,47 @@ begin
       do suffix <- ! k +True();
       ! (string/append) text suffix
     that
-    def ! fail-os (error : Err) (continuation : Thk (Empty -> OS)) : OS =
-      match error
-      | +Msg(message) =>
-        ! (stdio/write_line) message { ! (process/exit) 1 }
-      end
-    that
-    def ! flip-os (unit : Unit) (continuation : Thk (Bool -> OS)) : OS =
-      ! (random/generate) {
-        fn random =>
-          do remainder <- ! (int64/mod) random 2;
-          ! (int64/eq)
-            OS
-            remainder
-            0
-            { ! continuation +True() }
-            { ! continuation +False() }
-      }
-    that
+    def ! fail-os (error : Err) (continuation : Thk (Empty -> OS)) : OS = match error
+    | +Msg(message) => ! (stdio/write_line) message { ! (process/exit) 1 }
+    end that
+    def ! flip-os (unit : Unit) (continuation : Thk (Bool -> OS)) : OS = ! (random/generate) {
+      fn random =>
+        do remainder <- ! (int64/mod) random 2;
+        ! (int64/eq)
+          OS
+          remainder
+          0
+          { ! continuation +True() }
+          { ! continuation +False() }
+    } that
 
-    let ! m : Free Handlers Unit =
-      ! mfree .bind Bool Unit
-        { ! print "a" }
-        {
-          fn _ =>
-            ! mfree .bind Bool Unit
-              { ! print "b" }
-              {
-                fn _ =>
-                  ! mfree .bind Bool Unit
-                    { ! flip }
-                    {
-                      fn choice =>
-                        ! mfree .bind Bool Unit
-                          {
-                            match choice
-                            | +True() => ! print "+"
-                            | +False() => ! print "-"
-                            end
-                          }
-                          {
-                            fn _ =>
-                              ! mfree .return Unit ()
-                          }
-                    }
-              }
-        }
-    in
+    let ! m : Free Handlers Unit = ! mfree .bind Bool Unit
+      { ! print "a" }
+      {
+        fn _ =>
+          ! mfree .bind Bool Unit
+            { ! print "b" }
+            {
+              fn _ =>
+                ! mfree .bind Bool Unit
+                  { ! flip }
+                  {
+                    fn choice =>
+                      ! mfree .bind Bool Unit
+                        {
+                          match choice
+                          | +True() => ! print "+"
+                          | +False() => ! print "-"
+                          end
+                        }
+                        {
+                          fn _ => ! mfree .return Unit ()
+                        }
+                  }
+            }
+      } in
     ! m .run OS .eff print-os fail-os flip-os {
-      fn _ =>
-        ! (process/exit) 0
+      fn _ => ! (process/exit) 0
     }
   end
 end

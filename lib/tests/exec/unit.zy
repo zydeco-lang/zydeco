@@ -8,9 +8,7 @@ begin
   let (/Scalar = String) = representations/string that
   let (/stdio; /process) = system that
 
-  def ! unit_to_str (_ : Unit) : Ret String =
-    ret "()"
-  that
+  def ! unit_to_str (_ : Unit) : Ret String = ret "()" that
 
   let v : Unit = () in
   do x <- ! unit_to_str v;

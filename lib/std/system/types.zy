@@ -6,18 +6,16 @@ let (/VType; /CType; /Thk; /Ret; /Unit) = core in
 let (Scalar = Int64, int64) = numeric/int64 in
 let (/Scalar = String) = representations/string in
 begin
-  def IoErrorKind =
-    data
-    | +NotFound : Unit
-    | +PermissionDenied : Unit
-    | +AlreadyExists : Unit
-    | +InvalidInput : Unit
-    | +InvalidData : Unit
-    | +BrokenPipe : Unit
-    | +Closed : Unit
-    | +Other : Unit
-    end
-  that
+  def IoErrorKind = data
+  | +NotFound : Unit
+  | +PermissionDenied : Unit
+  | +AlreadyExists : Unit
+  | +InvalidInput : Unit
+  | +InvalidData : Unit
+  | +BrokenPipe : Unit
+  | +Closed : Unit
+  | +Other : Unit
+  end that
   def not_found : IoErrorKind = +NotFound() that
   def permission_denied : IoErrorKind = +PermissionDenied() that
   def already_exists : IoErrorKind = +AlreadyExists() that
@@ -26,110 +24,92 @@ begin
   def broken_pipe : IoErrorKind = +BrokenPipe() that
   def closed : IoErrorKind = +Closed() that
   def other : IoErrorKind = +Other() that
-  def ! from_code (code : Int64) : Ret IoErrorKind =
-    ! (int64/eq)
-      (Ret IoErrorKind)
-      code
-      0
-      { ret not_found }
-      {
-        ! (int64/eq)
-          (Ret IoErrorKind)
-          code
-          1
-          { ret permission_denied }
-          {
-            ! (int64/eq)
-              (Ret IoErrorKind)
-              code
-              2
-              { ret already_exists }
-              {
-                ! (int64/eq)
-                  (Ret IoErrorKind)
-                  code
-                  3
-                  { ret invalid_input }
-                  {
-                    ! (int64/eq)
-                      (Ret IoErrorKind)
-                      code
-                      4
-                      { ret invalid_data }
-                      {
-                        ! (int64/eq)
-                          (Ret IoErrorKind)
-                          code
-                          5
-                          { ret broken_pipe }
-                          {
-                            ! (int64/eq)
-                              (Ret IoErrorKind)
-                              code
-                              6
-                              { ret closed }
-                              { ret other }
-                          }
-                      }
-                  }
-              }
-          }
-      }
-  that
-  def ! kind_code (kind : IoErrorKind) : Ret Int64 =
-    match kind
-    | +NotFound(_) => ret 0
-    | +PermissionDenied(_) => ret 1
-    | +AlreadyExists(_) => ret 2
-    | +InvalidInput(_) => ret 3
-    | +InvalidData(_) => ret 4
-    | +BrokenPipe(_) => ret 5
-    | +Closed(_) => ret 6
-    | +Other(_) => ret 7
-    end
-  that
-  def ! kind_eq_branch
-    (R : CType)
+  def ! from_code (code : Int64) : Ret IoErrorKind = ! (int64/eq)
+    (Ret IoErrorKind)
+    code
+    0
+    { ret not_found }
+    {
+      ! (int64/eq)
+        (Ret IoErrorKind)
+        code
+        1
+        { ret permission_denied }
+        {
+          ! (int64/eq)
+            (Ret IoErrorKind)
+            code
+            2
+            { ret already_exists }
+            {
+              ! (int64/eq)
+                (Ret IoErrorKind)
+                code
+                3
+                { ret invalid_input }
+                {
+                  ! (int64/eq)
+                    (Ret IoErrorKind)
+                    code
+                    4
+                    { ret invalid_data }
+                    {
+                      ! (int64/eq)
+                        (Ret IoErrorKind)
+                        code
+                        5
+                        { ret broken_pipe }
+                        {
+                          ! (int64/eq)
+                            (Ret IoErrorKind)
+                            code
+                            6
+                            { ret closed }
+                            { ret other }
+                        }
+                    }
+                }
+            }
+        }
+    } that
+  def ! kind_code (kind : IoErrorKind) : Ret Int64 = match kind
+  | +NotFound(_) => ret 0
+  | +PermissionDenied(_) => ret 1
+  | +AlreadyExists(_) => ret 2
+  | +InvalidInput(_) => ret 3
+  | +InvalidData(_) => ret 4
+  | +BrokenPipe(_) => ret 5
+  | +Closed(_) => ret 6
+  | +Other(_) => ret 7
+  end that
+  def ! kind_eq_branch (R : CType)
     (left : IoErrorKind)
     (right : IoErrorKind)
     (when_equal : Thk R)
     (when_different : Thk R)
-  : R =
-      do left_code <- ! kind_code left;
-      do right_code <- ! kind_code right;
-      ! (int64/eq) R left_code right_code when_equal when_different
+  : R = do left_code <- ! kind_code left;
+    do right_code <- ! kind_code right;
+    ! (int64/eq) R left_code right_code when_equal when_different
   that
-  def IoError =
-    data
-    | +IoError : (kind :: IoErrorKind) * (message :: String)
-    end
-  that
+  def IoError = data
+  | +IoError : (kind :: IoErrorKind) * (message :: String)
+  end that
   def ! error (kind : IoErrorKind) (message : String) : Ret IoError =
     ret +IoError(= kind, = message)
   that
-  def ! error_kind (error : IoError) : Ret IoErrorKind =
-    match error
-    | +IoError(/kind) => ret kind
-    end
-  that
-  def ! error_message (error : IoError) : Ret String =
-    match error
-    | +IoError(/message) => ret message
-    end
-  that
-  def Path =
-    data
-    | +Path : String
-    end
-  that
-  def ! path (string : String) : Ret Path =
-    ret +Path(string)
-  that
-  def ! path_string (path : Path) : Ret String =
-    match path
-    | +Path(string) => ret string
-    end
-  that
+  def ! error_kind (error : IoError) : Ret IoErrorKind = match error
+  | +IoError(/kind) => ret kind
+  end that
+  def ! error_message (error : IoError) : Ret String = match error
+  | +IoError(/message) => ret message
+  end that
+  def Path = data
+  | +Path : String
+  end that
+  def ! path (string : String) : Ret Path = ret +Path(string) that
+  def ! path_string (path : Path) : Ret String = match path
+  | +Path(string) => ret string
+  end that
   (
     = IoErrorKind,
     = IoError,

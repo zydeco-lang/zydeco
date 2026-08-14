@@ -7,53 +7,40 @@ begin
   let (/VType; /Ret; /Unit) = core that
   let (/Scalar = Int64) = representations/i64 that
   let (/process) = system that
-  let (= Monad, = Algebra, ()) =
-    monadic_basis builtin
-  in
+  let (= Monad, = Algebra, ()) = monadic_basis builtin in
   begin
 
-    let Mixed =
-      exists (Leading as Unit : VType) .
-        exists (X : VType) .
-          exists (AliasX as X : VType) .
-            exists (Trailing as Unit : VType) .
-              X
-    that
-    def ! mo_ret : Monad Ret =
-      comatch
-      | .return A value => ret value
-      | .bind A B computation continuation =>
-        do value <- ! computation;
-        ! continuation value
-      end
-    that
-    def ! translated =
-      @[monadic] begin
-        let ! reveal =
-          do _ <- ret ();
-          fn
-            (
-              (
-                Leading,
-                X,
-                AliasX,
-                Trailing,
-                value
-              )
-              : Mixed
-            )
-          =>
-            ret value
-        in
-        ! reveal (
-          Unit,
-          Int64,
-          Int64,
-          Unit,
-          0
+    let Mixed = exists (Leading as Unit : VType) (X : VType) .
+      exists (AliasX as X : VType) (Trailing as Unit : VType) .
+        X that
+    def ! mo_ret : Monad Ret = comatch
+    | .return A value => ret value
+    | .bind A B computation continuation => do value <- ! computation;
+    ! continuation value
+    end that
+    def ! translated = @[monadic] begin
+      let ! reveal = do _ <- ret ();
+      fn
+        (
+          (
+            Leading,
+            X,
+            AliasX,
+            Trailing,
+            value
+          )
+          : Mixed
         )
-      end
-    that
+      =>
+        ret value in
+      ! reveal (
+        Unit,
+        Int64,
+        Int64,
+        Unit,
+        0
+      )
+    end that
 
     do status <- ! translated Ret { ! mo_ret };
     ! (process/exit) status

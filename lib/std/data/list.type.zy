@@ -2,8 +2,7 @@ begin
   let Thk = @(import("../builtin/intrinsic/thk.zy")) in
   let Ret = @(import("../builtin/intrinsic/ret.zy")) in
   let Unit = @(import("../builtin/intrinsic/unit.zy")) in
-  let ListModule
-    (Bool : @(import("../builtin/intrinsic/vtype.zy")))
+  let ListModule (Bool : @(import("../builtin/intrinsic/vtype.zy")))
     (
       Option : (@(import("../builtin/intrinsic/vtype.zy"))) -> (
         @(import("../builtin/intrinsic/vtype.zy"))
@@ -17,14 +16,12 @@ begin
     (Int64 : @(import("../builtin/intrinsic/vtype.zy"))) =
       (
         nil :: Thk (
-          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-            Ret (List A)
+          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) . Ret (List A)
         )
       )
     * (
         cons :: Thk (
-          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-            A -> List A -> Ret (List A)
+          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) . A -> List A -> Ret (List A)
         )
       )
     * (
@@ -49,14 +46,12 @@ begin
       )
     * (
         singleton :: Thk (
-          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-            A -> Ret (List A)
+          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) . A -> Ret (List A)
         )
       )
     * (
         append :: Thk (
-          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-            List A -> List A -> Ret (List A)
+          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) . List A -> List A -> Ret (List A)
         )
       )
     * (
@@ -75,32 +70,27 @@ begin
       )
     * (
         reverse :: Thk (
-          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-            List A -> Ret (List A)
+          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) . List A -> Ret (List A)
         )
       )
     * (
         length :: Thk (
-          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-            List A -> Ret Int64
+          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) . List A -> Ret Int64
         )
       )
     * (
         is_empty :: Thk (
-          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-            List A -> Ret Bool
+          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) . List A -> Ret Bool
         )
       )
     * (
         head :: Thk (
-          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-            List A -> Ret (Option A)
+          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) . List A -> Ret (Option A)
         )
       )
     * (
         tail :: Thk (
-          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-            List A -> Ret (Option (List A))
+          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) . List A -> Ret (Option (List A))
         )
       )
     * (

@@ -7,17 +7,13 @@ begin
   let (/VType; /CType; /Thk; /Ret) = core that
   let (/Scalar = Int64) = representations/i64 that
   let (/process) = system that
-  let (= Monad, = Algebra, ()) =
-    monadic_basis builtin
-  in
+  let (= Monad, = Algebra, ()) = monadic_basis builtin in
   begin
 
-    def With (B1 : CType) (B2 : CType) =
-      codata
-      | .l : B1
-      | .r : B2
-      end
-    that
+    def With (B1 : CType) (B2 : CType) = codata
+    | .l : B1
+    | .r : B2
+    end that
 
     def ! alg_arrow
       (
@@ -27,13 +23,10 @@ begin
       (A : VType)
       (B : CType)
       (alg : Thk (Algebra M B))
-    : Algebra M (A -> B) =
-        fn X m f =>
-          fn a =>
-            ! alg X m {
-              fn x =>
-                ! f x a
-            }
+    : Algebra M (A -> B) = fn X m f a =>
+        ! alg X m {
+          fn x => ! f x a
+        }
     that
     def ! alg_with
       (
@@ -44,20 +37,15 @@ begin
       (alg1 : Thk (Algebra M B1))
       (B2 : CType)
       (alg2 : Thk (Algebra M B2))
-    : Algebra M (With B1 B2) =
-        fn X m f =>
-          comatch
-          | .l =>
-            ! alg1 X m {
-              fn x =>
-                ! f x .l
-            }
-          | .r =>
-            ! alg2 X m {
-              fn x =>
-                ! f x .r
-            }
-          end
+    : Algebra M (With B1 B2) = fn X m f =>
+        comatch
+        | .l => ! alg1 X m {
+          fn x => ! f x .l
+        }
+        | .r => ! alg2 X m {
+          fn x => ! f x .r
+        }
+        end
     that
     def ! alg_ret
       (
@@ -66,10 +54,7 @@ begin
       )
       (mo : Thk (Monad M))
       (A : VType)
-    : Algebra M (M A) =
-        fn X m f =>
-          ! mo .bind X A m f
-    that
+    : Algebra M (M A) = fn X m f => ! mo .bind X A m f that
     def ! alg_forall_ctype
       (
         M :
@@ -91,12 +76,10 @@ begin
              Thk (Algebra M Y)
           -> S Y
       )
-    = fn X m f =>
-      fn Y algY =>
-        ! algS Y algY X m {
-          fn a =>
-            ! f a Y algY
-        } that
+    = fn X m f Y algY =>
+      ! algS Y algY X m {
+        fn a => ! f a Y algY
+      } that
     def ! alg_forall_ctype_constructor
       (
         M :
@@ -139,25 +122,20 @@ begin
              )
           -> S F
       )
-    = fn X m f =>
-      fn F algZFZ =>
-        ! algS F algZFZ X m {
-          fn a =>
-            ! f a F algZFZ
-        } that
-    def ! alg_of_ret (R : CType) : Algebra Ret R =
-      fn X m f =>
-        do x <- ! m;
-        ! f x
-    that
+    = fn X m f F algZFZ =>
+      ! algS F algZFZ X m {
+        fn a => ! f a F algZFZ
+      } that
+    def ! alg_of_ret (R : CType) : Algebra Ret R = fn X m f =>
+      do x <- ! m;
+      ! f x that
 
     do x <- ! alg_of_ret
       (Ret Int64)
       Int64
       { ret 0 }
       {
-        fn x =>
-          ret x
+        fn x => ret x
       };
     ! (process/exit) x
   end

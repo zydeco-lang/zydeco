@@ -8,9 +8,7 @@ begin
 
   let captured : Int64 = 0 that
   let constant : Int64 -> Int64 = fn (_ : Int64) => captured that
-  let apply : (Int64 -> Int64) -> Int64 -> Int64 =
-    fn function argument => function argument
-  that
+  let apply : (Int64 -> Int64) -> Int64 -> Int64 = fn function argument => function argument that
   let result : Int64 = apply constant 42 that
 
   ! (process/exit) result

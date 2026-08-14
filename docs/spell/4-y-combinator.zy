@@ -15,25 +15,21 @@ begin
   let (/Scalar = Int64) = representations/i64 that
   let (/OS) = system that
 
-  def Y (B : CType) : CType =
-    codata
-    | .apply : Thk (Y B) -> B
-    end
-  that
+  def Y (B : CType) : CType = codata
+  | .apply : Thk (Y B) -> B
+  end that
 
   def fixed_point : Thk (
     forall (B : CType) .
          Thk (Thk B -> B)
       -> Ret (Thk B)
   ) = {
-    fn
-      (B : CType)
+    fn (B : CType)
       (function : Thk (Thk B -> B))
     =>
       let self_application : Thk (Y B) = {
         comatch
-        | .apply recursive =>
-          ! function { ! recursive .apply recursive }
+        | .apply recursive => ! function { ! recursive .apply recursive }
         end
       } in
       ret { ! self_application .apply self_application }

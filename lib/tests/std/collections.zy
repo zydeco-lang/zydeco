@@ -8,13 +8,13 @@ begin
   let (/Scalar = Int64) = representations/i64 that
 
   let (/Bool; /bool; /option; /list; /int64; /process) = make_std builtin in
-  let ! status (condition : Bool) : Ret Int64 =
-    ! (bool/if)
-      (Ret Int64)
-      condition
-      { ret 0 }
-      { ret 1 }
-  in
+  let ! status (condition : Bool) : Ret Int64 = ! (bool/if)
+    (Ret Int64)
+    condition
+    { ret 0 }
+    {
+      ret 1
+    } in
 
   do empty <- ! (list/nil) Int64;
   do one <- ! (list/singleton) Int64 3;

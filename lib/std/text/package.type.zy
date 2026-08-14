@@ -7,8 +7,7 @@ begin
   let Char = @(import("../builtin/intrinsic/char.zy")) in
   let String = @(import("../builtin/intrinsic/string.zy")) in
   let Bytes = @(import("../builtin/intrinsic/bytes.zy")) in
-  let Package
-    (Bool : @(import("../builtin/intrinsic/vtype.zy")))
+  let Package (Bool : @(import("../builtin/intrinsic/vtype.zy")))
     (
       Option : (@(import("../builtin/intrinsic/vtype.zy"))) -> (
         @(import("../builtin/intrinsic/vtype.zy"))

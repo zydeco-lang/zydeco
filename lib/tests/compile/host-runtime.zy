@@ -38,8 +38,7 @@ begin
     (Ret Int64)
     { ret 0 }
     {
-      fn argument remaining =>
-        ret 1
+      fn argument remaining => ret 1
     };
   do length_status <- ! (int64/sub) length 4;
   do parsed_status <- ! (int64/sub) parsed 1212;

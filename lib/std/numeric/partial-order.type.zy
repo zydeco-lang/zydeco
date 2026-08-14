@@ -3,8 +3,7 @@ begin
   let Ret = @(import("../builtin/intrinsic/ret.zy")) in
   let Unit = @(import("../builtin/intrinsic/unit.zy")) in
   let PartialEquality = @(import("partial-equality.type.zy")) in
-  let PartialOrder
-    (Bool : @(import("../builtin/intrinsic/vtype.zy")))
+  let PartialOrder (Bool : @(import("../builtin/intrinsic/vtype.zy")))
     (A : @(import("../builtin/intrinsic/vtype.zy"))) =
       (equality :: PartialEquality Bool A)
     * (lt :: Thk (A -> A -> Ret Bool))

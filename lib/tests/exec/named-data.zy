@@ -8,14 +8,12 @@ begin
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/process) = system that
 
-  def Packet =
-    data
-    | +Packet : (
-      tag :: Int64
-    ) * Int64 * (payload :: Int64)
-    | +Empty : Unit
-    end
-  that
+  def Packet = data
+  | +Packet : (
+    tag :: Int64
+  ) * Int64 * (payload :: Int64)
+  | +Empty : Unit
+  end that
   def packet : Packet = +Packet(
     tag = 7 : Int64,
     8 : Int64,
@@ -27,14 +25,12 @@ begin
     = tag : Int64,
     body : Int64,
     = payload : Int64
-  ) =>
-    do tag_check <- ! (int64/sub) tag 7;
-    do body_check <- ! (int64/sub) body 8;
-    do payload_check <- ! (int64/sub) payload 9;
-    do total <- ! (int64/add) tag_check body_check;
-    do total <- ! (int64/add) total payload_check;
-    ! (process/exit) total
-  | +Empty() =>
-    ! (process/exit) 1
+  ) => do tag_check <- ! (int64/sub) tag 7;
+  do body_check <- ! (int64/sub) body 8;
+  do payload_check <- ! (int64/sub) payload 9;
+  do total <- ! (int64/add) tag_check body_check;
+  do total <- ! (int64/add) total payload_check;
+  ! (process/exit) total
+  | +Empty() => ! (process/exit) 1
   end
 end

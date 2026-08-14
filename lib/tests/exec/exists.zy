@@ -8,39 +8,32 @@ begin
   let (/Scalar = Char) = representations/char that
   let (/process) = system that
 
-  def Seal (X : VType) (A : VType) =
-    data
-    | +Seal : Thk (A -> Ret X) * Thk (X -> Ret A)
-    end
-  that
-  def ! id (A : VType) (value : A) : Ret A =
-    ret value
-  that
+  def Seal (X : VType) (A : VType) = data
+  | +Seal : Thk (A -> Ret X) * Thk (X -> Ret A)
+  end that
+  def ! id (A : VType) (value : A) : Ret A = ret value that
   def nat :
-    exists (X : VType) .
-      Seal X Int64
-  = (
-    Int64,
-    +Seal(
-      { ! id Int64 },
-      { ! id Int64 }
-    )
-  ) that
+    exists (X : VType) . Seal X Int64 =
+      (
+        Int64,
+        +Seal(
+          { ! id Int64 },
+          { ! id Int64 }
+        )
+      )
+  that
   def packed :
-    exists (X : VType) (Y : VType) .
-      X * Y * Int64
-  = (Int64, Char, 0, ('z', 0)) that
+    exists (X : VType) (Y : VType) . X * Y * Int64 =
+      (Int64, Char, 0, ('z', 0))
+  that
 
   match packed
-  | (Left, Right, zero, letter, status) =>
-    match nat
-    | (Nat, seal) =>
-      match seal
-      | +Seal(of, to) =>
-        do n <- ! of 0;
-        do i <- ! to n;
-        ! (process/exit) i
-      end
-    end
+  | (Left, Right, zero, letter, status) => match nat
+  | (Nat, seal) => match seal
+  | +Seal(of, to) => do n <- ! of 0;
+  do i <- ! to n;
+  ! (process/exit) i
+  end
+  end
   end
 end

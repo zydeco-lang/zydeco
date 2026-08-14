@@ -10,14 +10,10 @@ begin
   -- Named components remain ordinary product components. They may be mixed with
   -- unnamed components, nested explicitly, and destructured by ordinary tuple
   -- patterns.
-  let FlatMixed =
-    (
-      first :: Int64
-    ) * Int64 * (third :: Int64)
-  that
-  let NestedMixed =
-    ((left :: Int64) * Int64) * (right :: Int64)
-  that
+  let FlatMixed = (
+    first :: Int64
+  ) * Int64 * (third :: Int64) that
+  let NestedMixed = ((left :: Int64) * Int64) * (right :: Int64) that
   def flat_mixed : FlatMixed = (
     first = 1 : Int64,
     2 : Int64,
@@ -46,15 +42,9 @@ begin
 
   -- Named value types may contain thunked arrows. The arrow itself is unchanged:
   -- its parameter and result are merely ordinary value types containing names.
-  let FunctionInput =
-    (lhs :: Int64) * Int64
-  that
-  let FunctionOutput =
-    Int64 * (result :: Int64)
-  that
-  let FunctionBox =
-    (apply :: Thk (FunctionInput -> Ret FunctionOutput)) * Int64
-  that
+  let FunctionInput = (lhs :: Int64) * Int64 that
+  let FunctionOutput = Int64 * (result :: Int64) that
+  let FunctionBox = (apply :: Thk (FunctionInput -> Ret FunctionOutput)) * Int64 that
   def ! transform ((= lhs : Int64, rhs : Int64) : FunctionInput) : Ret FunctionOutput =
     do result <- ! (int64/add) lhs rhs;
     ret (lhs, = result)
@@ -72,29 +62,21 @@ begin
     | .shift : (delta :: Int64) -> Ret (reading :: Int64)
     end
   that
-  let GaugeBox =
-    Int64 * (gauge :: Thk Gauge)
-  that
-  def ! gauge : Gauge =
-    comatch
-    | .read =>
-      ret (reading = 12 : Int64, 13 : Int64)
-    | .shift (= delta : Int64) =>
-      ret (reading = delta : Int64)
-    end
-  that
+  let GaugeBox = Int64 * (gauge :: Thk Gauge) that
+  def ! gauge : Gauge = comatch
+  | .read => ret (reading = 12 : Int64, 13 : Int64)
+  | .shift (= delta : Int64) => ret (reading = delta : Int64)
+  end that
   def gauge_box : GaugeBox = (
     0,
     = gauge
   ) that
 
   -- Positional weighting makes an accidental field permutation visible.
-  def ! checksum3 (a : Int64) (b : Int64) (c : Int64) : Ret Int64 =
-    do tens <- ! (int64/mul) b 10;
-    do hundreds <- ! (int64/mul) c 100;
-    do low <- ! (int64/add) a tens;
-    ! (int64/add) low hundreds
-  that
+  def ! checksum3 (a : Int64) (b : Int64) (c : Int64) : Ret Int64 = do tens <- ! (int64/mul) b 10;
+  do hundreds <- ! (int64/mul) c 100;
+  do low <- ! (int64/add) a tens;
+  ! (int64/add) low hundreds that
 
   let (
     = first : Int64,
@@ -128,50 +110,48 @@ begin
     = kind : Int64,
     body : Int64,
     = payload : Int64
-  ) =>
-    do packet_checksum <- ! checksum3 kind body payload;
-    do packet_check <- ! (int64/sub) packet_checksum 987;
+  ) => do packet_checksum <- ! checksum3 kind body payload;
+  do packet_check <- ! (int64/sub) packet_checksum 987;
 
-    let (
-      = apply : Thk (FunctionInput -> Ret FunctionOutput),
-      function_marker : Int64
-    ) = function_box in
-    do transformed <- ! apply (lhs = 10 : Int64, 11 : Int64);
-    let (
-      echoed : Int64,
-      = result : Int64
-    ) = transformed in
-    do function_checksum <- ! checksum3 echoed result 0;
-    do function_check <- ! (int64/sub) function_checksum 220;
+  let (
+    = apply : Thk (FunctionInput -> Ret FunctionOutput),
+    function_marker : Int64
+  ) = function_box in
+  do transformed <- ! apply (lhs = 10 : Int64, 11 : Int64);
+  let (
+    echoed : Int64,
+    = result : Int64
+  ) = transformed in
+  do function_checksum <- ! checksum3 echoed result 0;
+  do function_check <- ! (int64/sub) function_checksum 220;
 
-    let (
-      gauge_marker : Int64,
-      gauge = active_gauge : Thk Gauge
-    ) = gauge_box in
-    do observation <- ! active_gauge .read;
-    let (
-      = reading : Int64,
-      drift : Int64
-    ) = observation in
-    do gauge_checksum <- ! checksum3 reading drift 0;
-    do gauge_check <- ! (int64/sub) gauge_checksum 142;
+  let (
+    gauge_marker : Int64,
+    gauge = active_gauge : Thk Gauge
+  ) = gauge_box in
+  do observation <- ! active_gauge .read;
+  let (
+    = reading : Int64,
+    drift : Int64
+  ) = observation in
+  do gauge_checksum <- ! checksum3 reading drift 0;
+  do gauge_check <- ! (int64/sub) gauge_checksum 142;
 
-    do shifted <- ! active_gauge .shift (delta = 14 : Int64);
-    let (reading = shifted_reading : Int64) = shifted in
-    do shift_pattern_check <- ! (int64/sub) shifted_reading 14;
-    do shift_projection_check <- ! (int64/sub) shifted/reading 14;
+  do shifted <- ! active_gauge .shift (delta = 14 : Int64);
+  let (reading = shifted_reading : Int64) = shifted in
+  do shift_pattern_check <- ! (int64/sub) shifted_reading 14;
+  do shift_projection_check <- ! (int64/sub) shifted/reading 14;
 
-    do total <- ! (int64/add) flat_check nested_check;
-    do total <- ! (int64/add) total opaque_check;
-    do total <- ! (int64/add) total packet_check;
-    do total <- ! (int64/add) total function_marker;
-    do total <- ! (int64/add) total function_check;
-    do total <- ! (int64/add) total gauge_marker;
-    do total <- ! (int64/add) total gauge_check;
-    do total <- ! (int64/add) total shift_pattern_check;
-    do total <- ! (int64/add) total shift_projection_check;
-    ! (process/exit) total
-  | +Empty() =>
-    ! (process/exit) 1
+  do total <- ! (int64/add) flat_check nested_check;
+  do total <- ! (int64/add) total opaque_check;
+  do total <- ! (int64/add) total packet_check;
+  do total <- ! (int64/add) total function_marker;
+  do total <- ! (int64/add) total function_check;
+  do total <- ! (int64/add) total gauge_marker;
+  do total <- ! (int64/add) total gauge_check;
+  do total <- ! (int64/add) total shift_pattern_check;
+  do total <- ! (int64/add) total shift_projection_check;
+  ! (process/exit) total
+  | +Empty() => ! (process/exit) 1
   end
 end

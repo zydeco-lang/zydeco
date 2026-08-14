@@ -6,9 +6,7 @@ begin
   let (/VType; /Ret) = core that
   let (/Scalar = Int64) = representations/i64 that
   let (/process) = system that
-  def ! id (A : VType) (a : A) : Ret A =
-    ret a
-  that
+  def ! id (A : VType) (a : A) : Ret A = ret a that
 
   do x <- ! id Int64 0;
   do y <- ! id Int64 x;

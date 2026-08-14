@@ -14,72 +14,59 @@ begin
   let Thunk (B : CType) = Thk B that
 
   --| Interface for Monads and Their Algebras
-  let Monad (M : VType -> CType) =
-    codata
-    | .return : forall (A : VType) .
-      A -> M A
-    | .bind : forall (A : VType) (A' : VType) .
-      Thk (M A) -> Thk (A -> M A') -> M A'
-    end
-  that
-  let Algebra (M : VType -> CType) (R : CType) =
-    forall (A : VType) . Thk (M A) -> Thk (A -> R) -> R
-  that
+  let Monad (M : VType -> CType) = codata
+  | .return : forall (A : VType) . A -> M A
+  | .bind : forall (A : VType) (A' : VType) . Thk (M A) -> Thk (A -> M A') -> M A'
+  end that
+  let Algebra (M : VType -> CType) (R : CType) = forall (A : VType) .
+    Thk (M A) -> Thk (
+      A -> R
+    ) -> R that
   -- end module Builtin
 
   -- module Monad
   --| Interface for Monad Transformers
-  let MonadTrans (T : (VType -> CType) -> VType -> CType) =
-    forall (M : VType -> CType) .
-      Thk (Monad M) -> codata
-      | .monad : Monad (T M)
-      | .lift : forall (A : VType) . Thk (M A) -> T M A
-      end
-  that
+  let MonadTrans (T : (VType -> CType) -> VType -> CType) = forall (M : VType -> CType) .
+    Thk (Monad M) -> codata
+    | .monad : Monad (T M)
+    | .lift : forall (A : VType) . Thk (M A) -> T M A
+    end that
 
   --| The Trivial Algebra (Structure)
   def ! triv : Top = comatch
   end that
 
   --| Interface for Monad, Lifted
-  let Monad' (M : VType -> CType) =
-    codata
-    | .return : forall (A : VType) .
-         Thk Top
-      -> A -> M A
-    | .bind : forall (A : VType) .
-      Thk Top -> (
-        forall (A' : VType) .
-             Thk Top
-          -> Thk (M A) -> Thk (A -> M A') -> M A'
-      )
-    end
-  that
+  let Monad' (M : VType -> CType) = codata
+  | .return : forall (A : VType) .
+       Thk Top
+    -> A -> M A
+  | .bind : forall (A : VType) .
+    Thk Top -> (
+      forall (A' : VType) .
+           Thk Top
+        -> Thk (M A) -> Thk (A -> M A') -> M A'
+    )
+  end that
 
   --| Removing the need of trivial algebra for generated monads
-  def ! detriv-mo (M : VType -> CType) (mo : Thk (Monad' M)) : Monad M =
-    comatch
-    | .return A => ! mo .return A triv
-    | .bind A A' => ! mo .bind A triv A' triv
-    end
-  that
+  def ! detriv-mo (M : VType -> CType) (mo : Thk (Monad' M)) : Monad M = comatch
+  | .return A => ! mo .return A triv
+  | .bind A A' => ! mo .bind A triv A' triv
+  end that
 
   --| Interface for Monad Transformers, used for annotating terms inside the monadic block
-  let MonadTransInner (T_M : VType -> CType) =
-    codata
-    | .monad : Monad T_M
-    | .lift : forall (A : VType) . Thk (Ret A) -> T_M A
-    end
-  that
+  let MonadTransInner (T_M : VType -> CType) = codata
+  | .monad : Monad T_M
+  | .lift : forall (A : VType) . Thk (Ret A) -> T_M A
+  end that
 
   --| Interface for Monad Transformers, Lifted
-  let MonadTrans' (T : (VType -> CType) -> VType -> CType) =
-    forall (M : VType -> CType) .
-      Thk (Monad M) -> codata
-      | .monad : Monad' (T M)
-      | .lift : forall (A : VType) . Thk Top -> Thk (M A) -> T M A
-      end
-  that
+  let MonadTrans' (T : (VType -> CType) -> VType -> CType) = forall (M : VType -> CType) .
+    Thk (Monad M) -> codata
+    | .monad : Monad' (T M)
+    | .lift : forall (A : VType) . Thk Top -> Thk (M A) -> T M A
+    end that
 
   --| Removing the need of trivial algebra for generated monad transformers
   def ! detriv-mt (T : (VType -> CType) -> VType -> CType) (mt : Thk (MonadTrans' T)) : MonadTrans T
@@ -96,26 +83,20 @@ begin
   let Top = codata
   end that
 
-  let Option (A : VType) =
-    data
-    | +None : Unit
-    | +Some : A
-    end
-  that
+  let Option (A : VType) = data
+  | +None : Unit
+  | +Some : A
+  end that
 
-  let Either (E : VType) (A : VType) =
-    data
-    | +Left : E
-    | +Right : A
-    end
-  that
+  let Either (E : VType) (A : VType) = data
+  | +Left : E
+  | +Right : A
+  end that
 
-  let Bool =
-    data
-    | +True : Unit
-    | +False : Unit
-    end
-  that
+  let Bool = data
+  | +True : Unit
+  | +False : Unit
+  end that
   -- end module Core
 
   -- module Arith
@@ -157,11 +138,11 @@ begin
   -- end module String
 
   -- module OS
-  def ! read_line_as_int (k : Thk (Option Int64 -> OS)) : OS =
-    ! (stdio/read_int)
-      { ! k +None() }
-      { fn i => ! k +Some(i) }
-  that
+  def ! read_line_as_int (k : Thk (Option Int64 -> OS)) : OS = ! (stdio/read_int)
+    { ! k +None() }
+    {
+      fn i => ! k +Some(i)
+    } that
   def halt : Thk OS = { ! (process/exit) 0 } that
 
   def panic : Thk (String -> OS) = {

@@ -11,114 +11,87 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret) = core that
-  let (= Monad, = Algebra, ()) =
-    monadic_basis builtin
-  in
+  let (= Monad, = Algebra, ()) = monadic_basis builtin in
   begin
 
-    let Top =
-      codata
-      end
-    that
-    let ! triv : Top =
-      comatch
-      end
-    that
-    let Either (E : VType) (A : VType) =
-      data
-      | +Left : E
-      | +Right : A
-      end
-    that
-    let MonadTrans (T : (VType -> CType) -> VType -> CType) =
-      forall (M : VType -> CType) .
-           Thk (Monad M)
-        -> codata
-           | .monad : Monad (T M)
-           | .lift :
-             forall (A : VType) .
-                  Thk (M A)
-               -> T M A
-           end
-    that
-    let Monad' (M : VType -> CType) =
-      codata
-      | .return :
-        forall (A : VType) .
-             Thk Top
-          -> A
-          -> M A
-      | .bind :
-        forall (A : VType) .
-             Thk Top
-          -> (
-               forall (A' : VType) .
-                    Thk Top
-                 -> Thk (M A)
-                 -> Thk (A -> M A')
-                 -> M A'
-             )
-      end
-    that
-    let MonadTransInner (T_M : VType -> CType) =
-      codata
-      | .monad : Monad T_M
-      | .lift :
-        forall (A : VType) .
-             Thk (Ret A)
-          -> T_M A
-      end
-    that
-    let MonadTrans' (T : (VType -> CType) -> VType -> CType) =
-      forall (M : VType -> CType) .
-           Thk (Monad M)
-        -> codata
-           | .monad : Monad' (T M)
-           | .lift :
-             forall (A : VType) .
+    let Top = codata
+    end that
+    let ! triv : Top = comatch
+    end that
+    let Either (E : VType) (A : VType) = data
+    | +Left : E
+    | +Right : A
+    end that
+    let MonadTrans (T : (VType -> CType) -> VType -> CType) = forall (M : VType -> CType) .
+         Thk (Monad M)
+      -> codata
+         | .monad : Monad (T M)
+         | .lift :
+           forall (A : VType) .
+                Thk (M A)
+             -> T M A
+         end that
+    let Monad' (M : VType -> CType) = codata
+    | .return :
+      forall (A : VType) .
+           Thk Top
+        -> A
+        -> M A
+    | .bind :
+      forall (A : VType) .
+           Thk Top
+        -> (
+             forall (A' : VType) .
                   Thk Top
                -> Thk (M A)
-               -> T M A
-           end
-    that
-    def ! detriv-mo (M : VType -> CType) (mo : Thk (Monad' M)) : Monad M =
-      comatch
-      | .return A => ! mo .return A triv
-      | .bind A A' => ! mo .bind A triv A' triv
-      end
-    that
-    def ! detriv-mt
-      (T : (VType -> CType) -> VType -> CType)
+               -> Thk (A -> M A')
+               -> M A'
+           )
+    end that
+    let MonadTransInner (T_M : VType -> CType) = codata
+    | .monad : Monad T_M
+    | .lift :
+      forall (A : VType) .
+           Thk (Ret A)
+        -> T_M A
+    end that
+    let MonadTrans' (T : (VType -> CType) -> VType -> CType) = forall (M : VType -> CType) .
+         Thk (Monad M)
+      -> codata
+         | .monad : Monad' (T M)
+         | .lift :
+           forall (A : VType) .
+                Thk Top
+             -> Thk (M A)
+             -> T M A
+         end that
+    def ! detriv-mo (M : VType -> CType) (mo : Thk (Monad' M)) : Monad M = comatch
+    | .return A => ! mo .return A triv
+    | .bind A A' => ! mo .bind A triv A' triv
+    end that
+    def ! detriv-mt (T : (VType -> CType) -> VType -> CType)
       (mt : Thk (MonadTrans' T))
-    : MonadTrans T =
-        fn (M : VType -> CType) (mo : Thk (Monad M)) =>
-          comatch
-          | .monad => ! detriv-mo (T M) { ! mt M mo .monad }
-          | .lift A => ! mt M mo .lift A triv
-          end
+    : MonadTrans T = fn (M : VType -> CType) (mo : Thk (Monad M)) =>
+        comatch
+        | .monad => ! detriv-mo (T M) { ! mt M mo .monad }
+        | .lift A => ! mt M mo .lift A triv
+        end
     that
 
     --| Change `Ret` in `Exn` to `M`
-    let Exn (E : VType) (A : VType) =
-      Ret (Either E A)
-    that
+    let Exn (E : VType) (A : VType) = Ret (Either E A) that
 
-    let ExnT (E : VType) (M : VType -> CType) (A : VType) =
-      M (Either E A)
-    that
+    let ExnT (E : VType) (M : VType -> CType) (A : VType) = M (Either E A) that
 
     --| Monad implementation for `Exn`
-    let ! mo_exn (E : VType) : Monad (Exn E) =
-      comatch
-      | .return A a => ret +Right(a)
-      | .bind A A' m f =>
-        do a? <- ! m;
-        match a?
-        | +Left(e) => ret +Left(e)
-        | +Right(a) => ! f a
-        end
-      end
-    that
+    let ! mo_exn (E : VType) : Monad (Exn E) = comatch
+    | .return A a => ret +Right(a)
+    | .bind A A' m f => do a? <- ! m;
+    match a?
+    | +Left(e) => ret +Left(e)
+    | +Right(a) => ! f a
+    end
+    end that
 
     --| Automatically generated implementation of the monad transformer for `ExnT`
     --|
@@ -136,22 +109,18 @@ begin
           @[monadic] (
             fn (E : VType) =>
               @[debug("original")]
-              let ! mo_exn (E : VType) : Monad (Exn E) =
-                comatch
-                | .return A a => ret +Right(a)
-                | .bind A A' m f =>
-                  do a? <- ! m;
-                  match a?
-                  | +Left(e) => ret +Left(e)
-                  | +Right(a) => ! f a
-                  end
-                end
-              in
+              let ! mo_exn (E : VType) : Monad (Exn E) = comatch
+              | .return A a => ret +Right(a)
+              | .bind A A' m f => do a? <- ! m;
+              match a?
+              | +Left(e) => ret +Left(e)
+              | +Right(a) => ! f a
+              end
+              end in
               comatch
               | .monad => ! mo_exn E
-              | .lift A m =>
-                do a <- ! m;
-                ! mo_exn E .return A a
+              | .lift A m => do a <- ! m;
+              ! mo_exn E .return A a
               end
             : forall (E : VType) . MonadTransInner (Exn E)
           )
@@ -172,26 +141,21 @@ begin
     --| Provided for reference.
     def ! mt_exn_manual (E : VType) : MonadTrans (ExnT E) = fn M mo =>
       comatch
-      | .monad =>
-        comatch
-        | .return A a =>
-          ! mo .return (Either E A) +Right(a)
-        | .bind A A' m f =>
-          ! mo .bind (Either E A) (Either E A') { ! m }
-            {
-              fn a? =>
-                match a?
-                | +Left(e) => ! mo .return (Either E A') +Left(e)
-                | +Right(a) => ! f a
-                end
-            }
-        end
-      | .lift A m =>
-        ! mo .bind A (Either E A) m
-          {
-            fn a =>
-              ! mo .return (Either E A) +Right(a)
-          }
+      | .monad => comatch
+      | .return A a => ! mo .return (Either E A) +Right(a)
+      | .bind A A' m f => ! mo .bind (Either E A) (Either E A') { ! m }
+        {
+          fn a? =>
+            match a?
+            | +Left(e) => ! mo .return (Either E A') +Left(e)
+            | +Right(a) => ! f a
+            end
+        }
+      end
+      | .lift A m => ! mo .bind A (Either E A) m
+        {
+          fn a => ! mo .return (Either E A) +Right(a)
+        }
       end that
 
     (

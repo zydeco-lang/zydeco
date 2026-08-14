@@ -6,9 +6,7 @@ begin
   ) that
   let (/Scalar = _) = representations/i64 that
 
-  let (/int64; /process) =
-    make_std builtin
-  in
+  let (/int64; /process) = make_std builtin in
   do one <- ! (int64/increment) 0;
   do status <- ! (int64/sub) one 1;
   ! (process/exit) status
