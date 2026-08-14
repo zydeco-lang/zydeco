@@ -605,3 +605,21 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   salsa-recover backstop stays inapplicable while producer queries are keyed on checker
   inputs (documented in the achieved-form note).
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — completion record
+
+- Final end-to-end numbers (`scripts/bench-check.sh`, release build): `lib/std/std.zy` 2.57 s
+  against the 1.95 s pre-migration baseline (~32%), small files ~0.13–0.17 s. The overhead
+  has been stable since the first P7 checkpoint (2.65 s) across the later slices.
+- Phase-by-phase state: P2 the four-query checking chain (the `*_normalized` retirement
+  re-scoped as the downstream contract, documented); P3 site-derived identifiers plus the
+  `fill_solution` fact query; P4 every allocation-producing judgment as a producer query
+  keyed on interned inputs with `err_k`-to-return rejections, the arena-reading algorithmic
+  core remaining checker-side by the wall (achieved-form note in
+  `docs/ideas/query-owned-statics.md`); P5 the group-level pre-introduction query for
+  recursive groups, the coverage query, and per-source derived reports with primary spans
+  (the salsa-recover backstop documented as inapplicable to input-keyed producers); P6 the
+  session's per-source fact queries consumed by cajun, including per-file error diagnostics;
+  P7 the benchmark script, the baseline comparison, and this record.
+- Every stage ran the full workspace suite (61 targets) and committed green; clippy and fmt
+  are clean at `HEAD`.
