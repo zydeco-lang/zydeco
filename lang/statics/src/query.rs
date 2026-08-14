@@ -4,10 +4,11 @@
 //! name-resolved program is held as a salsa tracked struct ([`ScopedData`]) so that
 //! queries can key on it within the same database; finer-grained judgment queries
 //! replace the wholesale [`check_source`] piece by piece (see
-//! `docs/ideas/query-based-tyck.md`).
+//! `docs/logs/query-based-tyck.md`).
 
 use crate::check::{SourceCheckOutcome, Tycker};
 use crate::surface_syntax as su;
+use crate::syntax as ss;
 
 /// Databases that can answer type-checking queries.
 ///
@@ -38,6 +39,18 @@ pub struct ScopedData<'db> {
     pub root: su::TermId,
 }
 
+/// An interned typed type node, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedType<'db> {
+    pub id: ss::TypeId,
+}
+
+/// An interned typed kind node, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedKind<'db> {
+    pub id: ss::KindId,
+}
+
 /// The complete result of checking one source snapshot.
 #[derive(Clone, Debug)]
 pub struct TyckOutput {
@@ -51,7 +64,7 @@ pub struct TyckOutput {
 // The outcome owns its arenas and reports and contains no database-tied references.
 // The non-Update escape hatch stays until the judgment layer gains structural equality.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
-pub fn check_source(db: &dyn TyckDb, data: ScopedData<'_>) -> TyckOutput {
+pub fn check_source<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> TyckOutput {
     let mut scoped = data.scoped(db).clone();
     let outcome =
         Tycker::new(data.spans(db), data.prim(db), &mut scoped).check_source_outcome(data.root(db));

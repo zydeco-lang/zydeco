@@ -20,6 +20,7 @@ use zydeco_surface::{
     scoped::{ResolveError, arena::ScopedArena},
     textual::syntax::SpanArena,
 };
+use zydeco_utils::arena::ArenaAccess;
 
 /// The recoverable type-checking state retained by a root analysis query.
 #[derive(Debug)]
@@ -303,6 +304,17 @@ impl CompilerSession {
         analyze_source(self, root)
     }
 
+    /// The normalized type of a typed node, memoized per analysis.
+    pub fn normalized_type(
+        &self, root: impl AsRef<Path>, id: zydeco_statics::syntax::TypeId,
+    ) -> Result<Option<zydeco_statics::syntax::Type>, AnalysisError> {
+        let root = self
+            .source_input(root.as_ref().to_path_buf())
+            .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
+        let id = zydeco_statics::query::InternedType::new(self, id);
+        Ok(normalized_type_at(self, root, id))
+    }
+
     #[cfg(test)]
     fn template(
         &self, path: impl AsRef<Path>,
@@ -400,6 +412,18 @@ fn analyze_source(
         }) => (statics, AnalysisOutcome::Rejected { reports }, observations),
     };
     Ok(Arc::new(ProgramAnalysis { graph, spans, scoped, statics, outcome, observations }))
+}
+
+/// The normalized type recorded for a typed type node of one analyzed root.
+///
+/// Memoized per `(root, id)` and demand-driven: it reuses the memoized
+/// [`analyze_source`] instead of re-checking the root.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+fn normalized_type_at<'db>(
+    db: &'db dyn SourceQueryDb, root: SourceInput, id: zydeco_statics::query::InternedType<'db>,
+) -> Option<Type> {
+    let analysis = analyze_source(db, root).ok()?;
+    analysis.statics().types_normalized.get(&id.id(db)).cloned()
 }
 
 #[cfg(test)]
@@ -582,5 +606,27 @@ mod tests {
 
         assert!(analysis.outcome().root().is_none());
         assert!(analysis.outcome().reports().is_some_and(|reports| !reports.is_empty()));
+    }
+
+    #[test]
+    fn normalized_type_facts_are_demand_driven_per_analysis() {
+        let fixture = Fixture::new();
+        let root = fixture.write("root.zy", "ret 1");
+        let session = CompilerSession::default();
+
+        let analysis = session.analyze(&root).unwrap();
+        let zydeco_statics::syntax::TermAnnId::Compu(_, ty) = analysis.outcome().root().unwrap()
+        else {
+            panic!("expected a computation root")
+        };
+
+        let first = session.normalized_type(&root, ty).unwrap();
+        let repeated = session.normalized_type(&root, ty).unwrap();
+        assert!(first.is_some(), "the checked computation type should be normalized");
+        assert_eq!(
+            first.as_ref().map(|ty| format!("{ty:?}")),
+            repeated.as_ref().map(|ty| format!("{ty:?}")),
+            "repeated lookups should agree",
+        );
     }
 }
