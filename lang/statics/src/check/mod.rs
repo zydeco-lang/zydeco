@@ -5110,10 +5110,26 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
-                let thunk_app_body_ty = cs::Thk(body_ty).build(tycker, &self.info);
-                let thunk =
-                    Alloc::alloc(tycker, ss::Thunk(body_out), thunk_app_body_ty, &self.info);
-                TermAnnId::Value(thunk, thunk_app_body_ty)
+                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                let body_interned = crate::query::InternedTermAnn::new(
+                    tycker.db,
+                    TermAnnId::Compu(body_out, body_ty),
+                );
+                let Some(outcome) =
+                    crate::query::thunk_judgment(tycker.db, tycker.data, term, body_interned)
+                else {
+                    unreachable!("thunk judgments are query-produced")
+                };
+                tycker
+                    .statics
+                    .types_pre
+                    .insert_new(outcome.thk_ty_id, ss::Fillable::Done(outcome.thk_ty));
+                tycker.statics.annotations_type.insert_new(outcome.thk_ty_id, outcome.vtype);
+                tycker.statics.env_type.insert_new(outcome.thk_ty_id, self.info.clone());
+                tycker.statics.values.insert_new(outcome.thunk_id, outcome.thunk);
+                tycker.statics.annotations_value.insert_new(outcome.thunk_id, outcome.thk_ty_id);
+                tycker.statics.env_value.insert_new(outcome.thunk_id, self.info.clone());
+                TermAnnId::Value(outcome.thunk_id, outcome.thk_ty_id)
             }
             | Tm::Force(term) => {
                 let su::Force(body) = term;
@@ -5159,8 +5175,17 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     let ss::App(_thunk_ty, force_ty) = thunk_app_body_ty;
                     force_ty
                 };
-                let force = Alloc::alloc(tycker, ss::Force(body), force_ty, &self.info);
-                TermAnnId::Compu(force, force_ty)
+                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                let input = crate::query::InternedForceInput::new(tycker.db, body, force_ty);
+                let Some(outcome) =
+                    crate::query::force_judgment(tycker.db, tycker.data, term, input)
+                else {
+                    unreachable!("force judgments are query-produced")
+                };
+                tycker.statics.compus.insert_new(outcome.id, outcome.compu);
+                tycker.statics.annotations_compu.insert_new(outcome.id, outcome.ann);
+                tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());
+                TermAnnId::Compu(outcome.id, outcome.ann)
             }
             | Tm::Ret(term) => {
                 let su::Return(body) = term;
@@ -5183,9 +5208,26 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
-                let ret_app_body_ty = cs::Ret(body_ty).build(tycker, &self.info);
-                let ret = Alloc::alloc(tycker, ss::Return(body_out), ret_app_body_ty, &self.info);
-                TermAnnId::Compu(ret, ret_app_body_ty)
+                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                let body_interned = crate::query::InternedTermAnn::new(
+                    tycker.db,
+                    TermAnnId::Value(body_out, body_ty),
+                );
+                let Some(outcome) =
+                    crate::query::ret_judgment(tycker.db, tycker.data, term, body_interned)
+                else {
+                    unreachable!("return judgments are query-produced")
+                };
+                tycker
+                    .statics
+                    .types_pre
+                    .insert_new(outcome.ret_ty_id, ss::Fillable::Done(outcome.ret_ty));
+                tycker.statics.annotations_type.insert_new(outcome.ret_ty_id, outcome.vtype);
+                tycker.statics.env_type.insert_new(outcome.ret_ty_id, self.info.clone());
+                tycker.statics.compus.insert_new(outcome.ret_id, outcome.ret);
+                tycker.statics.annotations_compu.insert_new(outcome.ret_id, outcome.ret_ty_id);
+                tycker.statics.env_compu.insert_new(outcome.ret_id, self.info.clone());
+                TermAnnId::Compu(outcome.ret_id, outcome.ret_ty_id)
             }
             | Tm::Do(term) => {
                 let su::Bind { binder, bindee, tail } = term;
@@ -5221,13 +5263,18 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 };
                 binder_elaboration.close_scope_k(tycker, tail_ty)?;
                 let bind_ty = tail_ty;
-                let bind = Alloc::alloc(
-                    tycker,
-                    ss::Bind { binder: binder_out, bindee: bindee_out, tail: tail_out },
-                    bind_ty,
-                    &self.info,
+                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                let input = crate::query::InternedDoInput::new(
+                    tycker.db, binder_out, bindee_out, tail_out, bind_ty,
                 );
-                TermAnnId::Compu(bind, bind_ty)
+                let Some(outcome) = crate::query::do_judgment(tycker.db, tycker.data, term, input)
+                else {
+                    unreachable!("bind judgments are query-produced")
+                };
+                tycker.statics.compus.insert_new(outcome.id, outcome.compu);
+                tycker.statics.annotations_compu.insert_new(outcome.id, outcome.ann);
+                tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());
+                TermAnnId::Compu(outcome.id, outcome.ann)
             }
             | Tm::Let(term) => {
                 let su::Let { binder, bindee, tail } = term;
@@ -5314,31 +5361,61 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         match tail_out_ann {
                             | TermAnnId::Value(tail_out, tail_ty) => {
                                 binder_elaboration.close_scope_k(tycker, tail_ty)?;
-                                let bind = Alloc::alloc(
-                                    tycker,
-                                    ss::Let {
-                                        binder: binder_out,
-                                        bindee: bindee_out,
-                                        tail: tail_out,
-                                    },
-                                    tail_ty,
-                                    &self.info,
+                                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                                let binder = crate::query::InternedVPat::new(tycker.db, binder_out);
+                                let bindee =
+                                    crate::query::InternedValue::new(tycker.db, bindee_out);
+                                let tail = crate::query::InternedTermAnn::new(
+                                    tycker.db,
+                                    TermAnnId::Value(tail_out, tail_ty),
                                 );
-                                TermAnnId::Value(bind, tail_ty)
+                                let Some(crate::query::LetSynOutcome::Value { id, value, ann }) =
+                                    crate::query::let_judgment(
+                                        tycker.db,
+                                        tycker.data,
+                                        term,
+                                        binder,
+                                        bindee,
+                                        tail,
+                                    )
+                                else {
+                                    unreachable!(
+                                        "the value tail of let judgments is query-produced"
+                                    )
+                                };
+                                tycker.statics.values.insert_new(id, value);
+                                tycker.statics.annotations_value.insert_new(id, ann);
+                                tycker.statics.env_value.insert_new(id, self.info.clone());
+                                TermAnnId::Value(id, ann)
                             }
                             | TermAnnId::Compu(tail_out, tail_ty) => {
                                 binder_elaboration.close_scope_k(tycker, tail_ty)?;
-                                let bind = Alloc::alloc(
-                                    tycker,
-                                    ss::Let {
-                                        binder: binder_out,
-                                        bindee: bindee_out,
-                                        tail: tail_out,
-                                    },
-                                    tail_ty,
-                                    &self.info,
+                                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                                let binder = crate::query::InternedVPat::new(tycker.db, binder_out);
+                                let bindee =
+                                    crate::query::InternedValue::new(tycker.db, bindee_out);
+                                let tail = crate::query::InternedTermAnn::new(
+                                    tycker.db,
+                                    TermAnnId::Compu(tail_out, tail_ty),
                                 );
-                                TermAnnId::Compu(bind, tail_ty)
+                                let Some(crate::query::LetSynOutcome::Compu { id, compu, ann }) =
+                                    crate::query::let_judgment(
+                                        tycker.db,
+                                        tycker.data,
+                                        term,
+                                        binder,
+                                        bindee,
+                                        tail,
+                                    )
+                                else {
+                                    unreachable!(
+                                        "the computation tail of let judgments is query-produced"
+                                    )
+                                };
+                                tycker.statics.compus.insert_new(id, compu);
+                                tycker.statics.annotations_compu.insert_new(id, ann);
+                                tycker.statics.env_compu.insert_new(id, self.info.clone());
+                                TermAnnId::Compu(id, ann)
                             }
                             | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Type(_, _) => {
                                 tycker.err_k(

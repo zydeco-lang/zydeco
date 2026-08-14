@@ -434,3 +434,15 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   `kinds_pre`, which turns those reads into query calls and unblocks both the Ana paths and
   the `annotations_var` merge step.
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — the monadic core allocates through queries
+
+- `thunk_judgment` / `ret_judgment` / `force_judgment` moved the CBPV monadic tails onto the
+  query graph. Thunk and return build their type nodes as applications of the query-owned
+  thunk/return singletons to the checked body type (annotated by the shared vtype singleton),
+  so both modes of each construct share one query keyed on the checked body; force allocates
+  its computation node keyed on the body and the destructured force type.
+- The checker keeps the inference machinery (thunk/return holes, the lub, and the
+  `type_filled_k` destructure) until the fill-state conversion turns those reads into
+  `fill_state` query calls; the queries receive their results as inputs.
+- Workspace suite passes unchanged (61 targets green), clippy clean.
