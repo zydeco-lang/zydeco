@@ -5623,10 +5623,32 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 )?;
                                 let vtype = ss::VType.build(tycker, &self.info);
                                 Lub::lub_k(vtype, body_kind, tycker)?;
-                                let manifest =
-                                    ss::ManifestKind { binder: pattern, definition, body };
-                                let manifest = Alloc::alloc(tycker, manifest, vtype, &self.info);
-                                TermAnnId::Type(manifest, vtype)
+                                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                                let input = crate::query::InternedManifestSyn::new(
+                                    tycker.db,
+                                    crate::query::ManifestSynArm::Kind {
+                                        pattern,
+                                        definition,
+                                        body,
+                                    },
+                                );
+                                let Some(crate::query::ManifestSynOutcome::Type { id, ty, kd }) =
+                                    crate::query::manifest_exists_syn_judgment(
+                                        tycker.db,
+                                        tycker.data,
+                                        term,
+                                        input,
+                                        tycker.site_occurrence(),
+                                    )
+                                else {
+                                    unreachable!(
+                                        "the kind arm of manifest-exists judgments is query-produced"
+                                    )
+                                };
+                                tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(ty));
+                                tycker.statics.annotations_type.insert_new(id, kd);
+                                tycker.statics.env_type.insert_new(id, self.info.clone());
+                                TermAnnId::Type(id, kd)
                             }
                             | TermAnnId::Type(definition, definition_kind) => {
                                 let binder_action = if tycker.pattern_has_payload_annotation(binder)
@@ -5661,19 +5683,57 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 let vtype = ss::VType.build(tycker, &self.info);
                                 Lub::lub_k(vtype, body_kind, tycker)?;
 
-                                let binder = ss::TypeBinder { pattern, witness };
-                                let exists = Alloc::alloc(
-                                    tycker,
-                                    ss::Exists::with_manifest(binder, definition, body),
-                                    vtype,
-                                    &self.info,
+                                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                                let input = crate::query::InternedManifestSyn::new(
+                                    tycker.db,
+                                    crate::query::ManifestSynArm::Type {
+                                        pattern,
+                                        witness,
+                                        definition,
+                                        body,
+                                    },
                                 );
-                                TermAnnId::Type(exists, vtype)
+                                let Some(crate::query::ManifestSynOutcome::Type { id, ty, kd }) =
+                                    crate::query::manifest_exists_syn_judgment(
+                                        tycker.db,
+                                        tycker.data,
+                                        term,
+                                        input,
+                                        tycker.site_occurrence(),
+                                    )
+                                else {
+                                    unreachable!(
+                                        "the type arm of manifest-exists judgments is query-produced"
+                                    )
+                                };
+                                tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(ty));
+                                tycker.statics.annotations_type.insert_new(id, kd);
+                                tycker.statics.env_type.insert_new(id, self.info.clone());
+                                TermAnnId::Type(id, kd)
                             }
                             | TermAnnId::Hole(_)
                             | TermAnnId::Value(_, _)
-                            | TermAnnId::Compu(_, _) => tycker
-                                .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
+                            | TermAnnId::Compu(_, _) => {
+                                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                                let input = crate::query::InternedManifestSyn::new(
+                                    tycker.db,
+                                    crate::query::ManifestSynArm::SortMismatch,
+                                );
+                                let Some(crate::query::ManifestSynOutcome::Error(error)) =
+                                    crate::query::manifest_exists_syn_judgment(
+                                        tycker.db,
+                                        tycker.data,
+                                        term,
+                                        input,
+                                        tycker.site_occurrence(),
+                                    )
+                                else {
+                                    unreachable!(
+                                        "the sort arm of manifest-exists judgments is query-produced"
+                                    )
+                                };
+                                tycker.err_k(error, std::panic::Location::caller())?
+                            }
                         }
                     }
                     | Switch::Ana(AnnId::Kind(kind)) => {

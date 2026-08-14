@@ -1530,6 +1530,78 @@ pub fn abs_syn_judgment<'db>(
     }
 }
 
+/// The arm of a manifest-exists judgment after its definition and binder
+/// checks.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum ManifestSynArm {
+    Kind { pattern: ss::KPatId, definition: ss::KindId, body: ss::TypeId },
+    Type { pattern: ss::TPatId, witness: ss::AbstId, definition: ss::TypeId, body: ss::TypeId },
+    SortMismatch,
+}
+
+/// An interned manifest-exists judgment input, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedManifestSyn<'db> {
+    pub arm: ManifestSynArm,
+}
+
+/// The allocation tail of a manifest-exists judgment: the manifest kind or
+/// the manifest existential node; the rejection surfaces as an error.
+#[derive(Clone, Debug)]
+pub enum ManifestSynOutcome {
+    Type { id: ss::TypeId, ty: ss::Type, kd: ss::KindId },
+    Error(crate::check::TyckError),
+}
+
+/// The synthesized judgment of a manifest-exists term, keyed on the checked
+/// definition, binder, and body.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn manifest_exists_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+    input: InternedManifestSyn<'db>, occurrence: u32,
+) -> Option<ManifestSynOutcome> {
+    let su::Term::ManifestExists(su::ManifestExists { .. }) =
+        data.scoped(db).terms.get(&term.id(db))?
+    else {
+        return None;
+    };
+    let site_space = term.id(db).key_space().as_u64();
+    let site_raw = term.id(db).raw().into_u32();
+    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
+    let vtype = {
+        let key = InternedIntrinsic::new(db, IntrinsicKey::VType);
+        let IntrinsicSingleton::Kind { id, .. } = intrinsic_singleton(db, data, key) else {
+            unreachable!("the vtype singleton is kind-producing")
+        };
+        id
+    };
+    match input.arm(db) {
+        | ManifestSynArm::Kind { pattern, definition, body } => {
+            let id: ss::TypeId = derived_id(key_space, 0);
+            Some(ManifestSynOutcome::Type {
+                id,
+                ty: ss::Type::ManifestKind(ss::ManifestKind { binder: pattern, definition, body }),
+                kd: vtype,
+            })
+        }
+        | ManifestSynArm::Type { pattern, witness, definition, body } => {
+            let id: ss::TypeId = derived_id(key_space, 0);
+            Some(ManifestSynOutcome::Type {
+                id,
+                ty: ss::Type::Exists(ss::Exists::with_manifest(
+                    ss::TypeBinder { pattern, witness },
+                    definition,
+                    body,
+                )),
+                kd: vtype,
+            })
+        }
+        | ManifestSynArm::SortMismatch => {
+            Some(ManifestSynOutcome::Error(crate::check::TyckError::SortMismatch))
+        }
+    }
+}
+
 /// The rejection of an intrinsic `Internal` term, carried as a query value so
 /// the checker routes decisions through queries and keeps the writer as a sink.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]

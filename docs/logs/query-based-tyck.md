@@ -505,3 +505,11 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   to fire only for pack-pi signatures, exactly as before. The query-owned vtype/ctype
   singletons annotate the arrow/forall nodes where the checker previously built fresh ones.
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — manifest existentials allocate through a query
+
+- `manifest_exists_syn_judgment` covers the manifest-exists tails: the manifest kind node,
+  the manifest existential node (`Exists::with_manifest`), and the sort rejection as a
+  return value, keyed on the checked definition, binder, witness, and body. The checker
+  keeps `introduce_payload`, the assignments, and the lubs.
+- Workspace suite passes unchanged (61 targets green), clippy clean.
