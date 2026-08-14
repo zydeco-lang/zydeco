@@ -96,8 +96,18 @@ pub struct EnvData<'db> {
 /// The nodes produced by checking an intrinsic `Internal` term.
 #[derive(Clone, Debug)]
 pub enum InternalJudgment {
-    Kind { id: ss::KindId, kind: ss::Kind },
-    Type { kinds: Vec<(ss::KindId, ss::Kind)>, ty: (ss::TypeId, ss::Type), ann: ss::KindId },
+    Kind {
+        id: ss::KindId,
+        kind: ss::Kind,
+    },
+    Type {
+        kinds: Vec<(ss::KindId, ss::Kind)>,
+        ty: (ss::TypeId, ss::Type),
+        ann: ss::KindId,
+    },
+    /// The judgment rejected the term; the error rides the query result
+    /// instead of a checker-side writer, the first step of retiring `err_k`.
+    Error(crate::check::TyckError),
 }
 
 /// The typed judgment of an intrinsic `Internal` term.
@@ -105,9 +115,8 @@ pub enum InternalJudgment {
 /// Produces the fresh nodes for an intrinsic cache miss; the checker owns the
 /// intrinsic singletons (`IntrinsicStatics`) and materializes the returned
 /// nodes, recording the caller's environment exactly as in-context allocation
-/// did. `OS`, `Monad`, and `Algebra` are not query-produced yet: `OS` resolves
-/// against the environment through the builtin signature, and the latter two
-/// are ordinary library bindings.
+/// did. Only `OS` remains checker-side: it resolves against the environment
+/// through the builtin signature, which reads the arena being built.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn internal_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>, env: EnvData<'db>,
@@ -182,7 +191,12 @@ pub fn internal_judgment<'db>(
                 ann: vtype,
             })
         }
-        | su::Internal::OS | su::Internal::Monad | su::Internal::Algebra => None,
+        | su::Internal::Monad | su::Internal::Algebra => {
+            Some(InternalJudgment::Error(crate::check::TyckError::Expressivity(
+                "`Monad` and `Algebra` are ordinary library bindings, not intrinsic terms",
+            )))
+        }
+        | su::Internal::OS => None,
     }
 }
 

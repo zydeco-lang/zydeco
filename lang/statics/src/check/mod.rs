@@ -1335,7 +1335,9 @@ impl InternalTerm {
             | su::Internal::Thk
             | su::Internal::Ret
             | su::Internal::Unit
-            | su::Internal::Primitive(_) => {
+            | su::Internal::Primitive(_)
+            | su::Internal::Monad
+            | su::Internal::Algebra => {
                 // The intrinsic type singletons are cached exactly as
                 // `Construct::build` did; the query produces fresh nodes only
                 // for a cache miss.
@@ -1362,6 +1364,9 @@ impl InternalTerm {
                             | crate::query::InternalJudgment::Kind { id, kind } => {
                                 tycker.statics.kinds_pre.insert_new(id, ss::Fillable::Done(kind));
                                 TermAnnId::Kind(id)
+                            }
+                            | crate::query::InternalJudgment::Error(error) => {
+                                tycker.err_k(error, std::panic::Location::caller())?
                             }
                             | crate::query::InternalJudgment::Type {
                                 kinds,
@@ -1398,12 +1403,6 @@ impl InternalTerm {
                 }
             }
             | su::Internal::OS => self.builtin_type_k(tycker, env, ss::BuiltinTypeRole::OS)?,
-            | su::Internal::Monad | su::Internal::Algebra => tycker.err_k(
-                TyckError::Expressivity(
-                    "`Monad` and `Algebra` are ordinary library bindings, not intrinsic terms",
-                ),
-                std::panic::Location::caller(),
-            )?,
         };
         self.reconcile_k(tycker, synthesized, switch)
     }
