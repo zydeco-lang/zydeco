@@ -522,3 +522,13 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   final kind annotation enters the query as an interned `KindId`, preserving the exact
   annotation node the checker computed.
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — matches and constructors allocate through queries
+
+- `match_syn_judgment` owns the match tail (including the empty-arms analyzed path), keyed on
+  the checked scrutinee and the interned arm table; the arm lub fold stays checker-side.
+- `ctor_syn_judgment` owns the constructor tail, keyed on the checked argument and the
+  destructured data definition; the `data_hints` association stays checker-side.
+- `comatch_syn_judgment` and `dtor_syn_judgment` followed the same recipe for the codata
+  counterparts, with `codata_hints` staying checker-side.
+- Workspace suite passes unchanged (61 targets green), clippy clean.

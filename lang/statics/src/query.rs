@@ -1682,6 +1682,166 @@ pub fn codata_syn_judgment<'db>(
     })
 }
 
+/// An interned match judgment input, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedMatchInput<'db> {
+    pub scrut: ss::ValueId,
+    pub arms: Vec<(ss::VPatId, ss::CompuId)>,
+    pub ann: ss::TypeId,
+}
+
+/// The allocation tail of a match judgment: the match computation node.
+#[derive(Clone, Debug)]
+pub struct MatchSynOutcome {
+    pub id: ss::CompuId,
+    pub compu: ss::Computation,
+    pub ann: ss::TypeId,
+}
+
+/// The synthesized judgment of a match term, keyed on the checked scrutinee
+/// and arms.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn match_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+    input: InternedMatchInput<'db>, occurrence: u32,
+) -> Option<MatchSynOutcome> {
+    let su::Term::Match(su::Match { .. }) = data.scoped(db).terms.get(&term.id(db))? else {
+        return None;
+    };
+    let site_space = term.id(db).key_space().as_u64();
+    let site_raw = term.id(db).raw().into_u32();
+    let id: ss::CompuId =
+        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0);
+    Some(MatchSynOutcome {
+        id,
+        compu: ss::Computation::Match(ss::Match {
+            scrut: input.scrut(db),
+            arms: input
+                .arms(db)
+                .iter()
+                .map(|(binder, tail)| ss::Matcher { binder: *binder, tail: *tail })
+                .collect(),
+        }),
+        ann: input.ann(db),
+    })
+}
+
+/// An interned constructor judgment input, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedCtorInput<'db> {
+    pub name: ss::CtorName,
+    pub arg: ss::ValueId,
+    pub ann: ss::TypeId,
+    pub data_id: ss::DataId,
+}
+
+/// The allocation tail of a constructor judgment: the constructor value node.
+#[derive(Clone, Debug)]
+pub struct CtorSynOutcome {
+    pub id: ss::ValueId,
+    pub value: ss::Value,
+    pub ann: ss::TypeId,
+}
+
+/// The synthesized judgment of a constructor term, keyed on the checked
+/// argument and the destructured data definition.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn ctor_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+    input: InternedCtorInput<'db>, occurrence: u32,
+) -> Option<CtorSynOutcome> {
+    let su::Term::Ctor(su::Ctor(_, _)) = data.scoped(db).terms.get(&term.id(db))? else {
+        return None;
+    };
+    let site_space = term.id(db).key_space().as_u64();
+    let site_raw = term.id(db).raw().into_u32();
+    let id: ss::ValueId =
+        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0);
+    Some(CtorSynOutcome {
+        id,
+        value: ss::Value::Ctor(ss::Ctor(input.name(db), input.arg(db))),
+        ann: input.ann(db),
+    })
+}
+
+/// An interned comatch judgment input, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedCoMatchInput<'db> {
+    pub arms: Vec<(ss::DtorName, ss::CompuId)>,
+    pub ann: ss::TypeId,
+}
+
+/// The allocation tail of a comatch judgment: the comatch computation node.
+#[derive(Clone, Debug)]
+pub struct CoMatchSynOutcome {
+    pub id: ss::CompuId,
+    pub compu: ss::Computation,
+    pub ann: ss::TypeId,
+}
+
+/// The synthesized judgment of a comatch term, keyed on the checked arms.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn comatch_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+    input: InternedCoMatchInput<'db>, occurrence: u32,
+) -> Option<CoMatchSynOutcome> {
+    let su::Term::CoMatch(su::CoMatch { .. }) = data.scoped(db).terms.get(&term.id(db))? else {
+        return None;
+    };
+    let site_space = term.id(db).key_space().as_u64();
+    let site_raw = term.id(db).raw().into_u32();
+    let id: ss::CompuId =
+        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0);
+    Some(CoMatchSynOutcome {
+        id,
+        compu: ss::Computation::CoMatch(ss::CoMatch {
+            arms: input
+                .arms(db)
+                .iter()
+                .map(|(dtor, tail)| ss::CoMatcher { dtor: dtor.clone(), tail: *tail })
+                .collect(),
+        }),
+        ann: input.ann(db),
+    })
+}
+
+/// An interned destructor judgment input, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedDtorInput<'db> {
+    pub body: ss::CompuId,
+    pub dtor: ss::DtorName,
+    pub ann: ss::TypeId,
+}
+
+/// The allocation tail of a destructor judgment: the destructor computation
+/// node.
+#[derive(Clone, Debug)]
+pub struct DtorSynOutcome {
+    pub id: ss::CompuId,
+    pub compu: ss::Computation,
+    pub ann: ss::TypeId,
+}
+
+/// The synthesized judgment of a destructor term, keyed on the checked body.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn dtor_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+    input: InternedDtorInput<'db>, occurrence: u32,
+) -> Option<DtorSynOutcome> {
+    let su::Term::Dtor(su::Dtor(_, _)) = data.scoped(db).terms.get(&term.id(db))? else {
+        return None;
+    };
+    let site_space = term.id(db).key_space().as_u64();
+    let site_raw = term.id(db).raw().into_u32();
+    let id: ss::CompuId =
+        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0);
+    Some(DtorSynOutcome {
+        id,
+        compu: ss::Computation::Dtor(ss::Dtor(input.body(db), input.dtor(db))),
+        ann: input.ann(db),
+    })
+}
+
 /// The rejection of an intrinsic `Internal` term, carried as a query value so
 /// the checker routes decisions through queries and keeps the writer as a sink.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]

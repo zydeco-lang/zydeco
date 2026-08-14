@@ -6326,10 +6326,29 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 };
                 let arg_out_ann = self.mk(arg).tyck_k(tycker, Action::ana(arg_ty.into()))?;
                 let TermAnnId::Value(arg, _arg_ty) = arg_out_ann else { unreachable!() };
-                let ctor = Alloc::alloc(tycker, ss::Ctor(ctor.to_owned(), arg), ana_ty, &self.info);
+                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                let input = crate::query::InternedCtorInput::new(
+                    tycker.db,
+                    ctor.to_owned(),
+                    arg,
+                    ana_ty,
+                    data_id,
+                );
+                let Some(outcome) = crate::query::ctor_syn_judgment(
+                    tycker.db,
+                    tycker.data,
+                    term,
+                    input,
+                    tycker.site_occurrence(),
+                ) else {
+                    unreachable!("constructor judgments are query-produced")
+                };
+                tycker.statics.values.insert_new(outcome.id, outcome.value);
+                tycker.statics.annotations_value.insert_new(outcome.id, outcome.ann);
+                tycker.statics.env_value.insert_new(outcome.id, self.info.clone());
                 // hint the ctor to be associated with the definition name
-                tycker.statics.data_hints.insert_new(ctor, data_id);
-                TermAnnId::Value(ctor, ana_ty)
+                tycker.statics.data_hints.insert_new(outcome.id, data_id);
+                TermAnnId::Value(outcome.id, outcome.ann)
             }
             | Tm::Match(term) => {
                 let su::Match { scrut, arms } = term;
@@ -6396,13 +6415,32 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             | AnnId::Set | AnnId::Kind(_) => tycker
                                 .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
                             | AnnId::Type(ana_ty) => {
-                                let whole_term = Alloc::alloc(
-                                    tycker,
-                                    ss::Match { scrut, arms: matchers },
+                                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                                let input = crate::query::InternedMatchInput::new(
+                                    tycker.db,
+                                    scrut,
+                                    matchers
+                                        .iter()
+                                        .map(|matcher| (matcher.binder, matcher.tail))
+                                        .collect::<Vec<_>>(),
                                     ana_ty,
-                                    &self.info,
                                 );
-                                TermAnnId::Compu(whole_term, ana_ty)
+                                let Some(outcome) = crate::query::match_syn_judgment(
+                                    tycker.db,
+                                    tycker.data,
+                                    term,
+                                    input,
+                                    tycker.site_occurrence(),
+                                ) else {
+                                    unreachable!("the empty-arms match judgment is query-produced")
+                                };
+                                tycker.statics.compus.insert_new(outcome.id, outcome.compu);
+                                tycker
+                                    .statics
+                                    .annotations_compu
+                                    .insert_new(outcome.id, outcome.ann);
+                                tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());
+                                TermAnnId::Compu(outcome.id, outcome.ann)
                             }
                         },
                     }
@@ -6414,13 +6452,29 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         res = Lub::lub_k(res, ty, tycker)?;
                     }
                     let whole_ty = res;
-                    let whole_term = Alloc::alloc(
-                        tycker,
-                        ss::Match { scrut, arms: matchers },
+                    let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                    let input = crate::query::InternedMatchInput::new(
+                        tycker.db,
+                        scrut,
+                        matchers
+                            .iter()
+                            .map(|matcher| (matcher.binder, matcher.tail))
+                            .collect::<Vec<_>>(),
                         whole_ty,
-                        &self.info,
                     );
-                    TermAnnId::Compu(whole_term, whole_ty)
+                    let Some(outcome) = crate::query::match_syn_judgment(
+                        tycker.db,
+                        tycker.data,
+                        term,
+                        input,
+                        tycker.site_occurrence(),
+                    ) else {
+                        unreachable!("match judgments are query-produced")
+                    };
+                    tycker.statics.compus.insert_new(outcome.id, outcome.compu);
+                    tycker.statics.annotations_compu.insert_new(outcome.id, outcome.ann);
+                    tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());
+                    TermAnnId::Compu(outcome.id, outcome.ann)
                 }
             }
             | Tm::CoMatchClauses(term) => {
@@ -6474,11 +6528,30 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     };
                     comatchers_new.push(ss::CoMatcher { dtor, tail });
                 }
-                let whole_term =
-                    Alloc::alloc(tycker, ss::CoMatch { arms: comatchers_new }, ana_ty, &self.info);
+                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                let input = crate::query::InternedCoMatchInput::new(
+                    tycker.db,
+                    comatchers_new
+                        .iter()
+                        .map(|comatcher| (comatcher.dtor.clone(), comatcher.tail))
+                        .collect::<Vec<_>>(),
+                    ana_ty,
+                );
+                let Some(outcome) = crate::query::comatch_syn_judgment(
+                    tycker.db,
+                    tycker.data,
+                    term,
+                    input,
+                    tycker.site_occurrence(),
+                ) else {
+                    unreachable!("comatch judgments are query-produced")
+                };
+                tycker.statics.compus.insert_new(outcome.id, outcome.compu);
+                tycker.statics.annotations_compu.insert_new(outcome.id, outcome.ann);
+                tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());
                 // hint the whole computation to be associated with the codata type
-                tycker.statics.codata_hints.insert_new(whole_term, codata_id);
-                TermAnnId::Compu(whole_term, ana_ty)
+                tycker.statics.codata_hints.insert_new(outcome.id, codata_id);
+                TermAnnId::Compu(outcome.id, outcome.ann)
             }
             | Tm::Dtor(term) => {
                 let su::Dtor(body, dtor) = term;
@@ -6507,18 +6580,44 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 };
                 match switch {
                     | Switch::Syn => {
-                        let whole =
-                            Alloc::alloc(tycker, ss::Dtor(body, dtor), whole_ty, &self.info);
-                        TermAnnId::Compu(whole, whole_ty)
+                        let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                        let input =
+                            crate::query::InternedDtorInput::new(tycker.db, body, dtor, whole_ty);
+                        let Some(outcome) = crate::query::dtor_syn_judgment(
+                            tycker.db,
+                            tycker.data,
+                            term,
+                            input,
+                            tycker.site_occurrence(),
+                        ) else {
+                            unreachable!("destructor judgments are query-produced")
+                        };
+                        tycker.statics.compus.insert_new(outcome.id, outcome.compu);
+                        tycker.statics.annotations_compu.insert_new(outcome.id, outcome.ann);
+                        tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());
+                        TermAnnId::Compu(outcome.id, outcome.ann)
                     }
                     | Switch::Ana(ana) => {
                         let AnnId::Type(ana_ty) = ana else {
                             tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                         };
                         let whole_ty = Lub::lub_k(whole_ty, ana_ty, tycker)?;
-                        let whole =
-                            Alloc::alloc(tycker, ss::Dtor(body, dtor), whole_ty, &self.info);
-                        TermAnnId::Compu(whole, whole_ty)
+                        let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                        let input =
+                            crate::query::InternedDtorInput::new(tycker.db, body, dtor, whole_ty);
+                        let Some(outcome) = crate::query::dtor_syn_judgment(
+                            tycker.db,
+                            tycker.data,
+                            term,
+                            input,
+                            tycker.site_occurrence(),
+                        ) else {
+                            unreachable!("destructor judgments are query-produced")
+                        };
+                        tycker.statics.compus.insert_new(outcome.id, outcome.compu);
+                        tycker.statics.annotations_compu.insert_new(outcome.id, outcome.ann);
+                        tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());
+                        TermAnnId::Compu(outcome.id, outcome.ann)
                     }
                 }
             }
