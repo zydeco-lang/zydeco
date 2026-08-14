@@ -14,6 +14,8 @@ pub use punning::NamedTermPunningAudit;
 use punning::{PunnedPatternPayload, PunnedTermPayload, Punning};
 use zydeco_syntax::Pretty;
 
+use crate::metadata::FormatMeta;
+
 static DOC_ALLOCATOR: RcAllocator = RcAllocator;
 
 /// A pretty printer over one parsed textual arena.
@@ -315,30 +317,40 @@ impl<'arena> PrettyFormatter<'arena> {
         Self { arena, grammar: GrammarContext::new(arena), punning: Punning::new(arena), options }
     }
 
+    /// Render one subtree with different policy over the same arena.
+    fn scoped(&self, options: PrettyOptions) -> Self {
+        Self {
+            arena: self.arena,
+            grammar: GrammarContext::new(self.arena),
+            punning: Punning::new(self.arena),
+            options,
+        }
+    }
+
     fn indent(&self) -> isize {
         self.options.indent.nesting()
     }
 
     /// Render one complete source unit with a trailing newline.
-    pub fn render_unit(&'arena self, unit: SourceUnit) -> String {
+    pub fn render_unit(&self, unit: SourceUnit) -> String {
         let document = self.with_trailing_comments(unit.root.into(), unit.pretty(self));
         self.render_doc(document.append(RcDoc::hardline()))
     }
 
     /// Render one term without adding a trailing newline.
-    pub fn render_term(&'arena self, term: TermId) -> String {
+    pub fn render_term(&self, term: TermId) -> String {
         let document = self.with_trailing_comments(term.into(), term.pretty(self));
         self.render_doc(document)
     }
 
     /// Render one pattern without adding a trailing newline.
-    pub fn render_pattern(&'arena self, pattern: PatId) -> String {
+    pub fn render_pattern(&self, pattern: PatId) -> String {
         let document = self.with_trailing_comments(pattern.into(), pattern.pretty(self));
         self.render_doc(document)
     }
 
     /// Render one copattern spine without adding a trailing newline.
-    pub fn render_copattern(&'arena self, pattern: CoPatId) -> String {
+    pub fn render_copattern(&self, pattern: CoPatId) -> String {
         let document = self.with_trailing_comments(pattern.into(), pattern.pretty(self));
         self.render_doc(document)
     }
@@ -349,20 +361,16 @@ impl<'arena> PrettyFormatter<'arena> {
         output
     }
 
-    fn with_leading_comments(
-        &'arena self, entity: EntityId, document: RcDoc<'arena>,
-    ) -> RcDoc<'arena> {
+    fn with_leading_comments(&self, entity: EntityId, document: RcDoc<'arena>) -> RcDoc<'arena> {
         self.with_comments(self.arena.trivia.leading_comments(entity), document)
     }
 
-    fn with_before_arm_comments(
-        &'arena self, entity: EntityId, document: RcDoc<'arena>,
-    ) -> RcDoc<'arena> {
+    fn with_before_arm_comments(&self, entity: EntityId, document: RcDoc<'arena>) -> RcDoc<'arena> {
         self.with_comments(self.arena.trivia.before_arm_comments(entity), document)
     }
 
     fn with_comments(
-        &'arena self, comments: &'arena [LeadingComment], document: RcDoc<'arena>,
+        &self, comments: &'arena [LeadingComment], document: RcDoc<'arena>,
     ) -> RcDoc<'arena> {
         comments
             .iter()
@@ -411,9 +419,7 @@ impl<'arena> PrettyFormatter<'arena> {
         .append(document)
     }
 
-    fn with_trailing_comments(
-        &'arena self, entity: EntityId, document: RcDoc<'arena>,
-    ) -> RcDoc<'arena> {
+    fn with_trailing_comments(&self, entity: EntityId, document: RcDoc<'arena>) -> RcDoc<'arena> {
         self.arena.trivia.trailing_comments(entity).iter().fold(document, |document, comment| {
             let separation = if comment.comment().as_text().is_some()
                 && comment.separation_before() == LineSeparation::SameLine
@@ -428,7 +434,7 @@ impl<'arena> PrettyFormatter<'arena> {
         })
     }
 
-    fn comment(&'arena self, comment: &'arena SurfaceComment) -> RcDoc<'arena> {
+    fn comment(&self, comment: &'arena SurfaceComment) -> RcDoc<'arena> {
         match comment {
             | SurfaceComment::Text(comment) => self.marked_comment_lines("--|", &comment.text),
             | SurfaceComment::Line(comment) => self.marked_comment_lines("--", &comment.text),
@@ -436,9 +442,7 @@ impl<'arena> PrettyFormatter<'arena> {
         }
     }
 
-    fn marked_comment_lines(
-        &'arena self, marker: &'static str, text: &'arena str,
-    ) -> RcDoc<'arena> {
+    fn marked_comment_lines(&self, marker: &'static str, text: &'arena str) -> RcDoc<'arena> {
         RcDoc::intersperse(
             text.split('\n').map(|line| {
                 if line.is_empty() {
@@ -451,7 +455,7 @@ impl<'arena> PrettyFormatter<'arena> {
         )
     }
 
-    fn block_comment(&'arena self, comment: &'arena BlockComment) -> RcDoc<'arena> {
+    fn block_comment(&self, comment: &'arena BlockComment) -> RcDoc<'arena> {
         RcDoc::intersperse(comment.text.split('\n').map(RcDoc::text), RcDoc::hardline())
     }
 
@@ -514,8 +518,7 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn layout_boundary(
-        &'arena self, intent: BoundaryIntent, layout: BoundaryLayout<'arena>,
-        continuation: RcDoc<'arena>,
+        &self, intent: BoundaryIntent, layout: BoundaryLayout<'arena>, continuation: RcDoc<'arena>,
     ) -> RcDoc<'arena> {
         let retained = self.retained_placement(intent);
         match retained {
@@ -530,14 +533,14 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn fragment_boundary(
-        &'arena self, intent: BoundaryIntent, layout: BoundaryLayout<'arena>,
+        &self, intent: BoundaryIntent, layout: BoundaryLayout<'arena>,
         continuation: LayoutFragment<'arena>,
     ) -> RcDoc<'arena> {
         self.layout_boundary(intent, layout, continuation.document)
     }
 
     fn prefixed(
-        &'arena self, enclosing: impl Into<EntityId>, prefix: &'static str,
+        &self, enclosing: impl Into<EntityId>, prefix: &'static str,
         layout: BoundaryLayout<'arena>, child: LayoutFragment<'arena>,
     ) -> RcDoc<'arena> {
         RcDoc::text(prefix).append(self.fragment_boundary(
@@ -547,14 +550,14 @@ impl<'arena> PrettyFormatter<'arena> {
         ))
     }
 
-    fn flexible(&'arena self, joined: RcDoc<'arena>, broken: RcDoc<'arena>) -> RcDoc<'arena> {
+    fn flexible(&self, joined: RcDoc<'arena>, broken: RcDoc<'arena>) -> RcDoc<'arena> {
         // Expose the joined projection to enclosing groups while retaining a
         // complete broken alternative for a boundary whose own group overflows.
         joined.clone().union(broken).flat_alt(joined)
     }
 
     fn join(
-        &'arena self, left: LayoutFragment<'arena>, layout: BoundaryLayout<'arena>,
+        &self, left: LayoutFragment<'arena>, layout: BoundaryLayout<'arena>,
         right: LayoutFragment<'arena>,
     ) -> LayoutFragment<'arena> {
         let intent = BoundaryIntent::between(left.anchors.last, right.anchors.first);
@@ -564,13 +567,13 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn separated(
-        &'arena self, items: Vec<LayoutFragment<'arena>>, layout: BoundaryLayout<'arena>,
+        &self, items: Vec<LayoutFragment<'arena>>, layout: BoundaryLayout<'arena>,
     ) -> Option<LayoutFragment<'arena>> {
         items.into_iter().rev().reduce(|right, left| self.join(left, layout.clone(), right))
     }
 
     fn grouped_join(
-        &'arena self, left: LayoutFragment<'arena>, before_boundary: RcDoc<'arena>,
+        &self, left: LayoutFragment<'arena>, before_boundary: RcDoc<'arena>,
         right: LayoutFragment<'arena>, continuation_indent: isize,
     ) -> LayoutFragment<'arena> {
         let intent = BoundaryIntent::between(left.anchors.last, right.anchors.first);
@@ -592,8 +595,8 @@ impl<'arena> PrettyFormatter<'arena> {
     /// Separate a multiline binder head from the token that introduces its
     /// scope, while retaining the compact single-line form when it fits.
     fn scoped_join(
-        &'arena self, head: LayoutFragment<'arena>, separator: &'static str,
-        body: LayoutFragment<'arena>, continuation_indent: isize,
+        &self, head: LayoutFragment<'arena>, separator: &'static str, body: LayoutFragment<'arena>,
+        continuation_indent: isize,
     ) -> LayoutFragment<'arena> {
         self.grouped_join(
             head.map_document(|document| self.append_aligned_separator(document, separator)),
@@ -617,7 +620,7 @@ impl<'arena> PrettyFormatter<'arena> {
     /// constituent is multiline, keeping the right-hand constituent on the
     /// separator's line whenever it still fits.
     fn staged_join(
-        &'arena self, left: LayoutFragment<'arena>, right: LayoutFragment<'arena>,
+        &self, left: LayoutFragment<'arena>, right: LayoutFragment<'arena>,
         boundary: StagedBoundary,
     ) -> LayoutFragment<'arena> {
         let separator = boundary.marker();
@@ -661,7 +664,7 @@ impl<'arena> PrettyFormatter<'arena> {
         LayoutFragment { document, anchors }
     }
 
-    fn infix_chain(&'arena self, root: TermId, operator: InfixOperator) -> RcDoc<'arena> {
+    fn infix_chain(&self, root: TermId, operator: InfixOperator) -> RcDoc<'arena> {
         let mut operands = Vec::new();
         let mut boundaries = Vec::new();
         let mut current = root;
@@ -785,7 +788,7 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn separated_group_layout(
-        &'arena self, items: &[LayoutFragment<'arena>], separator: &'static str,
+        &self, items: &[LayoutFragment<'arena>], separator: &'static str,
     ) -> GroupLayout<'arena> {
         let first = items.first().expect("grouped sequences are nonempty");
         let boundary_layout = BoundaryLayout::aligned(separator);
@@ -841,7 +844,7 @@ impl<'arena> PrettyFormatter<'arena> {
     /// decision. Retained source breaks partition fitting parameter rows;
     /// canonical expansion gives every parameter its own row.
     fn parameter_telescope(
-        &'arena self, head: RcDoc<'arena>, after_head: BoundaryIntent,
+        &self, head: RcDoc<'arena>, after_head: BoundaryIntent,
         parameters: &[LayoutFragment<'arena>],
     ) -> RcDoc<'arena> {
         let GroupLayout {
@@ -870,16 +873,15 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn delimited(
-        &'arena self, entity: Option<EntityId>, open: &'static str,
-        items: Vec<LayoutFragment<'arena>>, separator: &'static str, close: &'static str,
+        &self, entity: Option<EntityId>, open: &'static str, items: Vec<LayoutFragment<'arena>>,
+        separator: &'static str, close: &'static str,
     ) -> RcDoc<'arena> {
         self.delimited_with_spacing(entity, open, items, separator, close, DelimiterSpacing::Tight)
     }
 
     fn delimited_with_spacing(
-        &'arena self, entity: Option<EntityId>, open: &'static str,
-        items: Vec<LayoutFragment<'arena>>, separator: &'static str, close: &'static str,
-        spacing: DelimiterSpacing,
+        &self, entity: Option<EntityId>, open: &'static str, items: Vec<LayoutFragment<'arena>>,
+        separator: &'static str, close: &'static str, spacing: DelimiterSpacing,
     ) -> RcDoc<'arena> {
         if items.is_empty() {
             return RcDoc::text(open).append(RcDoc::text(close));
@@ -926,8 +928,7 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn annotation(
-        &'arena self, entity: EntityId, term: LayoutFragment<'arena>, ty: TermId,
-        parenthesized: bool,
+        &self, entity: EntityId, term: LayoutFragment<'arena>, ty: TermId, parenthesized: bool,
     ) -> RcDoc<'arena> {
         let ty = self.term_fragment(ty);
         let annotation = self.staged_join(term, ty, StagedBoundary::Annotation);
@@ -965,16 +966,16 @@ impl<'arena> PrettyFormatter<'arena> {
         }
     }
 
-    fn pattern(&'arena self, pattern: PatId) -> RcDoc<'arena> {
+    fn pattern(&self, pattern: PatId) -> RcDoc<'arena> {
         self.pattern_with_requirement(pattern, PatternRequirement::Pattern)
     }
 
-    fn annotated_pattern(&'arena self, pattern: PatId) -> RcDoc<'arena> {
+    fn annotated_pattern(&self, pattern: PatId) -> RcDoc<'arena> {
         self.pattern_with_requirement(pattern, PatternRequirement::Annotated)
     }
 
     fn pattern_with_requirement(
-        &'arena self, pattern: PatId, requirement: PatternRequirement,
+        &self, pattern: PatId, requirement: PatternRequirement,
     ) -> RcDoc<'arena> {
         let document = match &self.arena.pats[&pattern] {
             | Pattern::Ann(Ann { tm, ty }) => self.annotation(
@@ -1050,7 +1051,7 @@ impl<'arena> PrettyFormatter<'arena> {
         self.with_leading_comments(pattern.into(), document)
     }
 
-    fn copattern(&'arena self, pattern: CoPatId) -> RcDoc<'arena> {
+    fn copattern(&self, pattern: CoPatId) -> RcDoc<'arena> {
         match &self.arena.copats[&pattern] {
             | CoPattern::Pat(inner) => {
                 self.with_leading_comments(pattern.into(), self.pattern(*inner))
@@ -1066,7 +1067,7 @@ impl<'arena> PrettyFormatter<'arena> {
         }
     }
 
-    fn copattern_parameters(&'arena self, pattern: CoPatId) -> Vec<LayoutFragment<'arena>> {
+    fn copattern_parameters(&self, pattern: CoPatId) -> Vec<LayoutFragment<'arena>> {
         let CoPattern::App(Appli(patterns)) = &self.arena.copats[&pattern] else {
             return vec![LayoutFragment::entity(pattern.into(), self.copattern(pattern))];
         };
@@ -1081,41 +1082,39 @@ impl<'arena> PrettyFormatter<'arena> {
         std::iter::once(first).chain(parameters).collect()
     }
 
-    fn term(&'arena self, term: TermId) -> RcDoc<'arena> {
+    fn term(&self, term: TermId) -> RcDoc<'arena> {
         self.term_with_requirement(term, TermRequirement::Any)
     }
 
-    fn annotated_term(&'arena self, term: TermId) -> RcDoc<'arena> {
+    fn annotated_term(&self, term: TermId) -> RcDoc<'arena> {
         self.term_with_requirement(term, TermRequirement::Annotated)
     }
 
-    fn term_through(&'arena self, term: TermId, precedence: TermPrecedence) -> RcDoc<'arena> {
+    fn term_through(&self, term: TermId, precedence: TermPrecedence) -> RcDoc<'arena> {
         self.term_with_requirement(term, TermRequirement::Through(precedence))
     }
 
-    fn term_fragment(&'arena self, term: TermId) -> LayoutFragment<'arena> {
+    fn term_fragment(&self, term: TermId) -> LayoutFragment<'arena> {
         self.term_fragment_with_requirement(term, TermRequirement::Any)
     }
 
-    fn annotated_term_fragment(&'arena self, term: TermId) -> LayoutFragment<'arena> {
+    fn annotated_term_fragment(&self, term: TermId) -> LayoutFragment<'arena> {
         self.term_fragment_with_requirement(term, TermRequirement::Annotated)
     }
 
     fn term_through_fragment(
-        &'arena self, term: TermId, precedence: TermPrecedence,
+        &self, term: TermId, precedence: TermPrecedence,
     ) -> LayoutFragment<'arena> {
         self.term_fragment_with_requirement(term, TermRequirement::Through(precedence))
     }
 
     fn term_fragment_with_requirement(
-        &'arena self, term: TermId, requirement: TermRequirement,
+        &self, term: TermId, requirement: TermRequirement,
     ) -> LayoutFragment<'arena> {
         LayoutFragment::entity(term.into(), self.term_with_requirement(term, requirement))
     }
 
-    fn term_with_requirement(
-        &'arena self, term: TermId, requirement: TermRequirement,
-    ) -> RcDoc<'arena> {
+    fn term_with_requirement(&self, term: TermId, requirement: TermRequirement) -> RcDoc<'arena> {
         if let Term::SourceBoundary(SourceBoundary(inner))
         | Term::SignatureBoundary(SignatureBoundary(inner)) = &self.arena.terms[&term]
         {
@@ -1123,22 +1122,27 @@ impl<'arena> PrettyFormatter<'arena> {
             return self.with_leading_comments(term.into(), document);
         }
         let document = match &self.arena.terms[&term] {
-            | Term::Meta(MetaT(meta, inner)) => match &self.arena.terms[inner] {
-                // A commentless hole payload collapses into the parenthesized sugar.
-                // A commented hole keeps the bracket form so its comments survive.
-                | Term::Hole(_)
-                    if self.arena.trivia.leading_comments((*inner).into()).is_empty()
-                        && self.arena.trivia.trailing_comments((*inner).into()).is_empty() =>
-                {
-                    RcDoc::text("@(").append(RcDoc::text(meta.to_string())).append(RcDoc::text(")"))
-                }
-                | _ => RcDoc::text("@[").append(RcDoc::text(meta.to_string())).append(
-                    self.fragment_boundary(
-                        BoundaryIntent::after_start(term, *inner),
-                        BoundaryLayout::aligned("]"),
-                        self.term_through_fragment(*inner, TermPrecedence::Binder),
+            | Term::Meta(MetaT(meta, inner)) => match meta.specialize::<FormatMeta>() {
+                | Ok(Some(directive)) => self.format_annotated(term, meta, *inner, directive),
+                | Ok(None) | Err(_) => match &self.arena.terms[inner] {
+                    // A commentless hole payload collapses into the parenthesized sugar.
+                    // A commented hole keeps the bracket form so its comments survive.
+                    | Term::Hole(_)
+                        if self.arena.trivia.leading_comments((*inner).into()).is_empty()
+                            && self.arena.trivia.trailing_comments((*inner).into()).is_empty() =>
+                    {
+                        RcDoc::text("@(")
+                            .append(RcDoc::text(meta.to_string()))
+                            .append(RcDoc::text(")"))
+                    }
+                    | _ => RcDoc::text("@[").append(RcDoc::text(meta.to_string())).append(
+                        self.fragment_boundary(
+                            BoundaryIntent::after_start(term, *inner),
+                            BoundaryLayout::aligned("]"),
+                            self.term_through_fragment(*inner, TermPrecedence::Binder),
+                        ),
                     ),
-                ),
+                },
             },
             | Term::SourceBoundary(_) | Term::SignatureBoundary(_) => {
                 unreachable!("source boundaries return before rendering")
@@ -1280,7 +1284,68 @@ impl<'arena> PrettyFormatter<'arena> {
         self.with_leading_comments(term.into(), document)
     }
 
-    fn application(&'arena self, terms: &[TermId]) -> RcDoc<'arena> {
+    /// Render a `@[format(...)]` annotation, applying its directive to the
+    /// payload and everything inside it. The annotation-to-payload boundary
+    /// follows the directive's policy as well.
+    ///
+    /// Indentation, layout intentions, and parenthesis treatment shape the
+    /// payload document directly. A width change instead pre-renders the
+    /// payload at its own width and embeds the result, because the document
+    /// renderer applies one width to the whole document.
+    fn format_annotated(
+        &self, term: TermId, meta: &'arena Meta, inner: TermId, directive: FormatMeta,
+    ) -> RcDoc<'arena> {
+        let scoped = self.scoped(self.options.with_format_meta(&directive));
+        let prefix = self.annotation_prefix(meta);
+        let payload = scoped.term_through_fragment(inner, TermPrecedence::Binder);
+        if scoped.options.line_width == self.options.line_width {
+            return prefix.append(scoped.fragment_boundary(
+                BoundaryIntent::after_start(term, inner),
+                BoundaryLayout::aligned(""),
+                payload,
+            ));
+        }
+        let rendered = scoped.render_doc(payload.document);
+        if rendered.contains('\n') {
+            return prefix.append(self.embedded_block(&rendered));
+        }
+        prefix.append(scoped.fragment_boundary(
+            BoundaryIntent::after_start(term, inner),
+            BoundaryLayout::aligned(""),
+            LayoutFragment::entity(inner.into(), RcDoc::text(rendered)),
+        ))
+    }
+
+    /// The complete `@[...]` text of one annotation.
+    fn annotation_prefix(&self, meta: &Meta) -> RcDoc<'arena> {
+        RcDoc::text("@[").append(RcDoc::text(meta.to_string())).append(RcDoc::text("]"))
+    }
+
+    /// Place a pre-rendered multiline payload below its annotation, keeping
+    /// its relative indentation and its empty lines free of trailing
+    /// whitespace.
+    fn embedded_block(&self, rendered: &str) -> RcDoc<'arena> {
+        rendered.split('\n').enumerate().fold(RcDoc::nil(), |document, (index, line)| {
+            if index == 0 {
+                document.append(RcDoc::hardline()).append(RcDoc::text(line.to_owned()))
+            } else if line.is_empty() {
+                document.append(Self::empty_embedded_line())
+            } else {
+                document.append(RcDoc::hardline()).append(RcDoc::text(line.to_owned()))
+            }
+        })
+    }
+
+    /// One hardline followed by an empty line, leaving the empty line free of
+    /// trailing whitespace regardless of the ambient nesting.
+    fn empty_embedded_line() -> RcDoc<'arena> {
+        RcDoc::nesting(|nesting| {
+            let nesting = isize::try_from(nesting).unwrap_or(isize::MAX);
+            RcDoc::hardline().append(RcDoc::text("").nest(-nesting))
+        })
+    }
+
+    fn application(&self, terms: &[TermId]) -> RcDoc<'arena> {
         let [head, first_argument, arguments @ ..] = terms else {
             unreachable!("application terms always contain a function and an argument")
         };
@@ -1302,7 +1367,7 @@ impl<'arena> PrettyFormatter<'arena> {
         self.join(head, BoundaryLayout::hanging("", self.indent()), arguments).document
     }
 
-    fn named_term(&'arena self, term: TermId, field: &FieldName, inner: TermId) -> RcDoc<'arena> {
+    fn named_term(&self, term: TermId, field: &FieldName, inner: TermId) -> RcDoc<'arena> {
         let payload = self.punning.term_payload(field, inner);
         match payload {
             | Some(PunnedTermPayload::Variable) => RcDoc::text("= ").append(self.field(field)),
@@ -1321,7 +1386,7 @@ impl<'arena> PrettyFormatter<'arena> {
         }
     }
 
-    fn term_constructor_argument(&'arena self, body: TermId) -> RcDoc<'arena> {
+    fn term_constructor_argument(&self, body: TermId) -> RcDoc<'arena> {
         match &self.arena.terms[&body] {
             | Term::Paren(Paren(terms)) => self.with_leading_comments(
                 body.into(),
@@ -1337,7 +1402,7 @@ impl<'arena> PrettyFormatter<'arena> {
         }
     }
 
-    fn pattern_constructor_argument(&'arena self, body: PatId) -> RcDoc<'arena> {
+    fn pattern_constructor_argument(&self, body: PatId) -> RcDoc<'arena> {
         match &self.arena.pats[&body] {
             | Pattern::Alias(_) | Pattern::Manifest(_) => self.annotated_pattern(body),
             | Pattern::Paren(Paren(patterns)) => match patterns.as_slice() {
@@ -1372,9 +1437,7 @@ impl<'arena> PrettyFormatter<'arena> {
         }
     }
 
-    fn named_pattern(
-        &'arena self, pattern: PatId, field: &FieldName, inner: PatId,
-    ) -> RcDoc<'arena> {
+    fn named_pattern(&self, pattern: PatId, field: &FieldName, inner: PatId) -> RcDoc<'arena> {
         match self.punning.pattern_payload(field, inner) {
             | Some(PunnedPatternPayload::Variable) => RcDoc::text("= ").append(self.field(field)),
             | Some(PunnedPatternPayload::Annotated { variable, classifier }) => {
@@ -1392,9 +1455,7 @@ impl<'arena> PrettyFormatter<'arena> {
         }
     }
 
-    fn projection_pattern(
-        &'arena self, pattern: PatId, field: &FieldName, inner: PatId,
-    ) -> RcDoc<'arena> {
+    fn projection_pattern(&self, pattern: PatId, field: &FieldName, inner: PatId) -> RcDoc<'arena> {
         match self.punning.pattern_payload(field, inner) {
             | Some(PunnedPatternPayload::Variable) => RcDoc::text("/").append(self.field(field)),
             | Some(PunnedPatternPayload::Annotated { variable, classifier }) => {
@@ -1435,7 +1496,7 @@ impl<'arena> PrettyFormatter<'arena> {
         ScopeTelescope { parameters, body }
     }
 
-    fn scoped_form(&'arena self, term: TermId, form: ScopedForm) -> RcDoc<'arena> {
+    fn scoped_form(&self, term: TermId, form: ScopedForm) -> RcDoc<'arena> {
         let ScopeTelescope { parameters, body } = self.scoped_telescope(term, form);
         let first = *parameters.first().expect("scoped forms contain at least one parameter");
         let last = *parameters.last().expect("scoped forms contain at least one parameter");
@@ -1461,7 +1522,7 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn existential_telescope(
-        &'arena self, first: &'arena Exists,
+        &self, first: &'arena Exists,
     ) -> ScopeTelescope<&'arena ExistentialParameter> {
         let layers = std::iter::successors(Some(first), |current| {
             let parameter = current.parameters.last()?;
@@ -1476,7 +1537,7 @@ impl<'arena> PrettyFormatter<'arena> {
         ScopeTelescope { parameters, body }
     }
 
-    fn exists(&'arena self, term: TermId, exists: &'arena Exists) -> RcDoc<'arena> {
+    fn exists(&self, term: TermId, exists: &'arena Exists) -> RcDoc<'arena> {
         let ScopeTelescope { parameters, body } = self.existential_telescope(exists);
         let Some((first, rest)) = parameters.split_first() else {
             unreachable!("the parser requires at least one existential parameter")
@@ -1496,9 +1557,7 @@ impl<'arena> PrettyFormatter<'arena> {
         self.scoped_join(head, ".", self.term_fragment(body), self.indent()).document
     }
 
-    fn existential_parameter(
-        &'arena self, parameter: &ExistentialParameter,
-    ) -> LayoutFragment<'arena> {
+    fn existential_parameter(&self, parameter: &ExistentialParameter) -> LayoutFragment<'arena> {
         let annotations = parameter.annotations.iter().map(|annotation| {
             RcDoc::text("@[")
                 .append(RcDoc::text(annotation.inner.to_string()))
@@ -1528,9 +1587,7 @@ impl<'arena> PrettyFormatter<'arena> {
         )
     }
 
-    fn manifest_parameter_view(
-        &'arena self, pattern: PatId,
-    ) -> Option<ManifestParameterView<'arena>> {
+    fn manifest_parameter_view(&self, pattern: PatId) -> Option<ManifestParameterView<'arena>> {
         let mut fields = Vec::new();
         let mut current = pattern;
         loop {
@@ -1589,7 +1646,7 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn manifest_parameter(
-        &'arena self, view: ManifestParameterView<'arena>, entity: PatId,
+        &self, view: ManifestParameterView<'arena>, entity: PatId,
     ) -> RcDoc<'arena> {
         let ManifestParameterView { fields, binder, definition, classifier } = view;
         let binder = fields.iter().rev().enumerate().fold(
@@ -1642,7 +1699,7 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn placed_binding(
-        &'arena self, enclosing: TermId, binding: &GenBind<TermId>, placement: Placement,
+        &self, enclosing: TermId, binding: &GenBind<TermId>, placement: Placement,
     ) -> RcDoc<'arena> {
         let GenBind { fix, comp, binder, params, ty, bindee } = binding;
         let modifiers = [(*comp).then_some("!"), (*fix).then_some("fix")]
@@ -1692,13 +1749,13 @@ impl<'arena> PrettyFormatter<'arena> {
         }
     }
 
-    fn sequence_tail(&'arena self, before: EntityId, tail: TermId) -> RcDoc<'arena> {
+    fn sequence_tail(&self, before: EntityId, tail: TermId) -> RcDoc<'arena> {
         self.mandatory_line_break(BoundaryIntent::between(before, tail).resolve(self.arena))
             .append(self.term_through(tail, TermPrecedence::Binder))
     }
 
     fn bindee_with_placement(
-        &'arena self, bindee: RcDoc<'arena>, placement: RcDoc<'arena>,
+        &self, bindee: RcDoc<'arena>, placement: RcDoc<'arena>,
     ) -> RcDoc<'arena> {
         let joined =
             self.after_line_start(bindee.clone().append(RcDoc::space()).append(placement.clone()));
@@ -1714,7 +1771,7 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn block(
-        &'arena self, enclosing: TermId, keyword: &'static str, body: TermId, end: &'static str,
+        &self, enclosing: TermId, keyword: &'static str, body: TermId, end: &'static str,
     ) -> RcDoc<'arena> {
         RcDoc::text(keyword)
             .append(
@@ -1731,7 +1788,7 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn arm_block(
-        &'arena self, enclosing: EntityId, head: RcDoc<'arena>,
+        &self, enclosing: EntityId, head: RcDoc<'arena>,
         arms: impl IntoIterator<Item = LayoutFragment<'arena>>,
     ) -> RcDoc<'arena> {
         let mut document = head;
@@ -1754,7 +1811,7 @@ impl<'arena> PrettyFormatter<'arena> {
         document.append(before_end).append(RcDoc::text("end"))
     }
 
-    fn data(&'arena self, enclosing: TermId, arms: &[DataArm]) -> RcDoc<'arena> {
+    fn data(&self, enclosing: TermId, arms: &[DataArm]) -> RcDoc<'arena> {
         let arms = arms.iter().map(|arm| {
             let document = RcDoc::text("| ").append(self.constructor(&arm.name)).append(
                 self.fragment_boundary(
@@ -1768,7 +1825,7 @@ impl<'arena> PrettyFormatter<'arena> {
         self.arm_block(enclosing.into(), RcDoc::text("data"), arms)
     }
 
-    fn codata(&'arena self, enclosing: TermId, arms: &[CoDataArm]) -> RcDoc<'arena> {
+    fn codata(&self, enclosing: TermId, arms: &[CoDataArm]) -> RcDoc<'arena> {
         let arms = arms.iter().map(|arm| {
             let document = RcDoc::text("| ").append(self.destructor(&arm.name));
             let document = match arm.params {
@@ -1787,7 +1844,7 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn matcher(
-        &'arena self, term: TermId, scrutinee: TermId, arms: &[Matcher<PatId, TermId>],
+        &self, term: TermId, scrutinee: TermId, arms: &[Matcher<PatId, TermId>],
     ) -> RcDoc<'arena> {
         let head = RcDoc::text("match").append(self.fragment_boundary(
             BoundaryIntent::after_start(term, scrutinee),
@@ -1809,7 +1866,7 @@ impl<'arena> PrettyFormatter<'arena> {
         self.arm_block(term.into(), head, arms)
     }
 
-    fn comatcher(&'arena self, enclosing: TermId, arms: &[CoMatcherParam]) -> RcDoc<'arena> {
+    fn comatcher(&self, enclosing: TermId, arms: &[CoMatcherParam]) -> RcDoc<'arena> {
         let arms = arms.iter().map(|arm| {
             let document = RcDoc::text("| ").append(self.copattern(arm.params)).append(
                 self.fragment_boundary(
@@ -1826,7 +1883,7 @@ impl<'arena> PrettyFormatter<'arena> {
         self.arm_block(enclosing.into(), RcDoc::text("comatch"), arms)
     }
 
-    fn definition(&'arena self, definition: DefId) -> RcDoc<'arena> {
+    fn definition(&self, definition: DefId) -> RcDoc<'arena> {
         let document = self.variable(&self.arena.defs[&definition]);
         self.with_leading_comments(definition.into(), document)
     }
@@ -3386,6 +3443,199 @@ mod tests {
             let reparsed = ParsedSource::new(&formatted);
             assert_eq!(formatted, reparsed.render_with_options(options), "source: {source}");
             assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape(), "source: {source}");
+        });
+    }
+
+    #[test]
+    fn format_annotations_scope_layout_intentions() {
+        let cases = [
+            (
+                concat!(
+                    "@[format(layout(ignore))] ! (bool/if)\n",
+                    "  (Ret Int64)\n",
+                    "  greater\n",
+                    "  { ret left }\n",
+                    "  { ret right }\n",
+                ),
+                "@[format(layout(ignore))] ! (bool/if) (Ret Int64) greater { ret left } { ret right }\n",
+            ),
+            (
+                concat!(
+                    "@[format(layout(blank_lines))] ! (bool/if)\n",
+                    "  (Ret Int64)\n",
+                    "\n",
+                    "  greater\n",
+                    "  { ret left }\n",
+                    "  { ret right }\n",
+                ),
+                concat!(
+                    "@[format(layout(blank_lines))] ! (bool/if) (Ret Int64)\n",
+                    "\n",
+                    "  greater { ret left } { ret right }\n",
+                ),
+            ),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, expected, "source: {source}");
+            assert!(formatted.lines().all(|line| line.trim_end() == line));
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve), "source: {source}");
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape(), "source: {source}");
+        });
+    }
+
+    #[test]
+    fn format_annotations_scope_indentation() {
+        let source = concat!(
+            "begin\n",
+            "  @[format(indent(4))] begin\n",
+            "  let x = f\n",
+            "  in ret x\n",
+            "  end\n",
+            "end\n",
+        );
+        let expected = concat!(
+            "begin\n",
+            "  @[format(indent(4))] begin\n",
+            "      let x = f in\n",
+            "      ret x\n",
+            "  end\n",
+            "end\n",
+        );
+        let parsed = ParsedSource::new(source);
+        let formatted = parsed.render(LayoutIntentions::Preserve);
+        assert_eq!(formatted, expected, "source: {source}");
+
+        let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+        assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+    }
+
+    #[test]
+    fn format_annotations_scope_line_width() {
+        let cases = [
+            (
+                "@[format(width(24))] ! (bool/if) (Ret Int64) greater { ret left } { ret right }\n",
+                concat!(
+                    "@[format(width(24))]\n",
+                    "! (bool/if) (Ret Int64)\n",
+                    "  greater { ret left } {\n",
+                    "  ret right\n",
+                    "}\n",
+                ),
+            ),
+            (
+                concat!(
+                    "@[format(width(20))] ! (bool/if)\n",
+                    "\n",
+                    "  (Ret Int64)\n",
+                    "  greater\n",
+                    "  { ret left }\n",
+                    "  { ret right }\n",
+                ),
+                concat!(
+                    "@[format(width(20))]\n",
+                    "! (bool/if)\n",
+                    "\n",
+                    "  (Ret Int64)\n",
+                    "  greater\n",
+                    "  { ret left }\n",
+                    "  { ret right }\n",
+                ),
+            ),
+            ("@[format(width(24))] A * B\n", "@[format(width(24))] A * B\n"),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, expected, "source: {source}");
+            assert!(formatted.lines().all(|line| line.trim_end() == line), "source: {source}");
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve), "source: {source}");
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape(), "source: {source}");
+        });
+    }
+
+    #[test]
+    fn format_annotations_compose_innermost_first() {
+        let source = concat!(
+            "@[format(width(24))] @[format(layout(ignore))] ! (bool/if)\n",
+            "  (Ret Int64)\n",
+            "  greater\n",
+            "  { ret left }\n",
+            "  { ret right }\n",
+        );
+        let expected = concat!(
+            "@[format(width(24))]\n",
+            "@[format(layout(ignore))]\n",
+            "! (bool/if) (Ret Int64)\n",
+            "  greater { ret left } {\n",
+            "  ret right\n",
+            "}\n",
+        );
+        let parsed = ParsedSource::new(source);
+        let formatted = parsed.render(LayoutIntentions::Preserve);
+        assert_eq!(formatted, expected, "source: {source}");
+
+        let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+        assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+    }
+
+    #[test]
+    fn format_annotations_scope_whole_annotated_terms() {
+        let source = concat!(
+            "@[format(layout(ignore))] ! (bool/if)\n",
+            "  (Ret Int64)\n",
+            "  greater\n",
+            "  { ret left }\n",
+            "  { ret right }\n",
+            "* ! (other/if)\n",
+            "  (Ret Int64)\n",
+            "  other\n",
+            "  { ret a }\n",
+            "  { ret b }\n",
+        );
+        let expected = concat!(
+            "@[format(layout(ignore))] ! (bool/if) (Ret Int64) greater { ret left } { ret right } * ! (other/if)\n",
+            "  (Ret Int64) other { ret a } { ret b }\n",
+        );
+        let parsed = ParsedSource::new(source);
+        let formatted = parsed.render_with_options(PrettyOptions::default());
+        assert_eq!(formatted, expected, "source: {source}");
+        assert!(formatted.lines().all(|line| line.len() <= 100), "{formatted}");
+
+        let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(formatted, reparsed.render_with_options(PrettyOptions::default()));
+        assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+    }
+
+    #[test]
+    fn malformed_format_annotations_remain_inert() {
+        let cases = [
+            "@[format(nope(1))] (field = field, ((x)))\n",
+            "@[format(width(0))] (field = field, ((x)))\n",
+            "@[format(100)] (field = field, ((x)))\n",
+        ];
+
+        cases.into_iter().for_each(|source| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(
+                formatted,
+                source.replace("(field = field, ((x)))", "(= field, x)"),
+                "source: {source}"
+            );
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
         });
     }
 

@@ -1,7 +1,7 @@
 //! Independent policy choices for textual pretty printing.
 
 /// A positive indentation width representable by the document renderer.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct IndentWidth(isize);
 
 impl IndentWidth {
@@ -31,7 +31,7 @@ impl Default for IndentWidth {
 }
 
 /// Whether parsed line-breaking choices should influence pretty printing.
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Eq, Hash, PartialEq)]
 pub enum LayoutIntentions {
     /// Let document width determine every optional break.
     Ignore,
@@ -43,7 +43,7 @@ pub enum LayoutIntentions {
 }
 
 /// How singleton grouping parentheses should be treated.
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Eq, Hash, PartialEq)]
 pub enum Parentheses {
     /// Retain every parsed singleton grouping node.
     Preserve,
@@ -94,6 +94,17 @@ impl PrettyOptions {
     pub fn with_parentheses(mut self, parentheses: Parentheses) -> Self {
         self.parentheses = parentheses;
         self
+    }
+
+    /// Override the options that a format directive names, leaving the
+    /// remaining options unchanged.
+    pub(super) fn with_format_meta(self, meta: &crate::metadata::FormatMeta) -> Self {
+        Self {
+            line_width: meta.width.unwrap_or(self.line_width),
+            indent: meta.indent.unwrap_or(self.indent),
+            layout_intentions: meta.layout.unwrap_or(self.layout_intentions),
+            parentheses: meta.parentheses.unwrap_or(self.parentheses),
+        }
     }
 }
 
