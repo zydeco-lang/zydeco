@@ -2729,6 +2729,7 @@ dependencies = [
 name = "zydeco-session"
 version = "0.2.2"
 dependencies = [
+ "ariadne",
  "dashmap 6.2.1",
  "salsa",
  "tempfile",

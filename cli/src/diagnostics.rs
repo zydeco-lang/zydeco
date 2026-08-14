@@ -1,7 +1,6 @@
 use crate::CompileError;
-use ariadne::{FnCache, Label, Report, ReportKind};
-use std::{collections::HashMap, path::PathBuf};
-use zydeco_session::{AnalysisError, ProgramAnalysis, SourceGraph};
+use ariadne::{Label, Report, ReportKind};
+use zydeco_session::{AnalysisError, ProgramAnalysis, SourceCaches, SourceGraph};
 use zydeco_statics::{TyckObservation, fmt as static_fmt, syntax as ss};
 use zydeco_syntax::{Pretty, SpanView, Ugly};
 use zydeco_utils::span::PathDisplay;
@@ -17,13 +16,13 @@ impl DiagnosticRenderer {
                 Self::observations(analysis);
                 if let Some(reports) = analysis.outcome().reports() {
                     reports.iter().for_each(|report| {
-                        let _ = report.eprint(Self::analysis_cache(analysis));
+                        let _ = report.eprint(SourceCaches::analysis(analysis));
                     });
                 }
             }
             | CompileError::Analysis(AnalysisError::Resolve { error, graph }) => {
                 Self::graph_warnings(graph);
-                let _ = error.to_report().eprint(Self::graph_cache(graph));
+                let _ = error.to_report().eprint(SourceCaches::graph(graph));
             }
             | _ => eprintln!("{error}"),
         }
@@ -34,7 +33,7 @@ impl DiagnosticRenderer {
     }
 
     fn graph_warnings(graph: &SourceGraph) {
-        let mut cache = Self::graph_cache(graph);
+        let mut cache = SourceCaches::graph(graph);
         graph.warnings().into_iter().for_each(|site| {
             let path = PathDisplay::from(site.path().to_path_buf());
             let span = (path, site.warning.range().clone());
@@ -121,51 +120,5 @@ impl DiagnosticRenderer {
         T: for<'format> Pretty<'format, static_fmt::Formatter<'format>>,
     {
         format!("\n\t{}", Self::pretty(formatter, item).replace('\n', "\n\t"))
-    }
-
-    fn analysis_cache(
-        analysis: &ProgramAnalysis,
-    ) -> FnCache<
-        PathDisplay,
-        impl FnMut(&PathDisplay) -> Result<String, Box<dyn std::fmt::Debug>>,
-        String,
-    > {
-        Self::source_cache(
-            analysis
-                .sources()
-                .map(|(path, source)| (path.to_path_buf(), source.to_owned()))
-                .collect(),
-        )
-    }
-
-    fn graph_cache(
-        graph: &SourceGraph,
-    ) -> FnCache<
-        PathDisplay,
-        impl FnMut(&PathDisplay) -> Result<String, Box<dyn std::fmt::Debug>>,
-        String,
-    > {
-        Self::source_cache(
-            graph
-                .sources
-                .iter()
-                .map(|(_, source)| (source.path.clone(), source.source.clone()))
-                .collect(),
-        )
-    }
-
-    fn source_cache(
-        sources: HashMap<PathBuf, String>,
-    ) -> FnCache<
-        PathDisplay,
-        impl FnMut(&PathDisplay) -> Result<String, Box<dyn std::fmt::Debug>>,
-        String,
-    > {
-        FnCache::new(move |path: &PathDisplay| {
-            sources.get(path.as_path()).cloned().ok_or_else(|| {
-                Box::new(format!("source file not found: {}", path.as_path().display()))
-                    as Box<dyn std::fmt::Debug>
-            })
-        })
     }
 }

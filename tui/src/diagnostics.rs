@@ -1,7 +1,4 @@
-use ariadne::FnCache;
-use std::{collections::HashMap, path::PathBuf};
-use zydeco_session::{AnalysisError, ProgramAnalysis, SourceGraph};
-use zydeco_utils::span::PathDisplay;
+use zydeco_session::{AnalysisError, ProgramAnalysis, SourceCaches};
 
 pub(crate) struct DiagnosticText;
 
@@ -10,7 +7,7 @@ impl DiagnosticText {
         match error {
             | AnalysisError::Resolve { error, graph } => {
                 let mut output = Vec::new();
-                let _ = error.to_report().write(Self::graph_cache(graph), &mut output);
+                let _ = error.to_report().write(SourceCaches::graph(graph), &mut output);
                 Self::plain(output)
             }
             | _ => error.to_string(),
@@ -23,55 +20,9 @@ impl DiagnosticText {
         };
         let mut output = Vec::new();
         reports.iter().for_each(|report| {
-            let _ = report.write(Self::analysis_cache(analysis), &mut output);
+            let _ = report.write(SourceCaches::analysis(analysis), &mut output);
         });
         Self::plain(output)
-    }
-
-    fn analysis_cache(
-        analysis: &ProgramAnalysis,
-    ) -> FnCache<
-        PathDisplay,
-        impl FnMut(&PathDisplay) -> Result<String, Box<dyn std::fmt::Debug>>,
-        String,
-    > {
-        Self::source_cache(
-            analysis
-                .sources()
-                .map(|(path, source)| (path.to_path_buf(), source.to_owned()))
-                .collect(),
-        )
-    }
-
-    fn graph_cache(
-        graph: &SourceGraph,
-    ) -> FnCache<
-        PathDisplay,
-        impl FnMut(&PathDisplay) -> Result<String, Box<dyn std::fmt::Debug>>,
-        String,
-    > {
-        Self::source_cache(
-            graph
-                .sources
-                .iter()
-                .map(|(_, source)| (source.path.clone(), source.source.clone()))
-                .collect(),
-        )
-    }
-
-    fn source_cache(
-        sources: HashMap<PathBuf, String>,
-    ) -> FnCache<
-        PathDisplay,
-        impl FnMut(&PathDisplay) -> Result<String, Box<dyn std::fmt::Debug>>,
-        String,
-    > {
-        FnCache::new(move |path: &PathDisplay| {
-            sources.get(path.as_path()).cloned().ok_or_else(|| {
-                Box::new(format!("source file not found: {}", path.as_path().display()))
-                    as Box<dyn std::fmt::Debug>
-            })
-        })
     }
 
     fn plain(output: Vec<u8>) -> String {

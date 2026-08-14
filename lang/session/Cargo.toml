@@ -14,6 +14,7 @@ description = "revisioned source and semantic analysis sessions for zydeco"
 zydeco-utils = { workspace = true }
 zydeco-surface = { workspace = true }
 zydeco-statics = { workspace = true }
+ariadne = { workspace = true }
 thiserror = { workspace = true }
 dashmap = { workspace = true }
 salsa = { workspace = true }

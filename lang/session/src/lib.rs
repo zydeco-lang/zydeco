@@ -4,7 +4,8 @@ pub mod source;
 
 pub use source::{
     AnalysisError, AnalysisOutcome, CheckedProgram, CompilerSession, ExecutableError,
-    ExecutableProgram, ProgramAnalysis, SourceGraph, SourceId, SourceImportId, SourceLoadError,
+    ExecutableProgram, ProgramAnalysis, SourceCaches, SourceGraph, SourceId, SourceImportId,
+    SourceLoadError,
 };
 
 #[cfg(test)]
