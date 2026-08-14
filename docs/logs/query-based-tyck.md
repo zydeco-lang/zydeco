@@ -269,3 +269,22 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
 - `env_type` records for the intrinsic types are materialized with the default environment: the
   nodes are closed, so normalization's free-variable and skolem lookups never observe them.
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — phase granularity: the four-query checking chain
+
+- Split the wholesale check into a four-query chain, each phase reading the previous phase's
+  stable arena through a tracked struct:
+  `tyck_judgments` -> `Judgments` -> `resolve_holes_phase` -> `Resolved` -> `finish_checked`
+  (normalize + coverage). `check_source` is now the composition; the session API is unchanged.
+- The finish phase itself split in the checker: `resolve_holes_and_collect` (hole solving +
+  solution observation) and `normalize_and_validate_k` (normalization loops + coverage) are
+  separate steps, with `finish_check_k` kept as their composition for direct callers.
+- Two carry-over requirements discovered and solved during the split: the derived allocator's
+  root-site slot counter must ride the phase state (`root_slot` on `Judgments`/`Resolved`), or
+  the next phase's normalization allocations would re-issue the previous phase's identifiers;
+  and the resumed `Tycker` must restore `errors`, `observations`, and the arena so reports and
+  the writer monad behave exactly as the combined pass.
+- This gives normalization its own query phase over a stable arena (the P2 goal at phase
+  granularity) and establishes the keying pattern the table-level fill/normalize queries will
+  use.
+- Workspace suite passes unchanged (61 targets green), clippy clean.
