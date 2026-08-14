@@ -136,6 +136,11 @@ Most constructs use one of these families:
 Each grammatical group makes one width decision for the boundaries it owns.
 If a delimited row overflows, the delimiters and item separators enter their expanded layout together;
 boundaries inside each item remain independent.
+Within a staged binding the placement marker always returns to the binding's indentation,
+wherever the bindee's own layout happens to nest: a joined multiline bindee sits at the binding level,
+a broken bindee one level below it, and a multiline type's definition stage outdents the bindee back
+to the binding level.
+The printer captures the binding indentation dynamically instead of assuming a fixed offset from the bindee.
 Preserved source breaks partition fitting rows, but an overflowing row expands the complete outer layer rather
 than whichever nested boundary happens to encounter the width limit first.
 

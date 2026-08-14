@@ -1698,8 +1698,31 @@ impl<'arena> PrettyFormatter<'arena> {
         self.with_leading_comments(entity.into(), document)
     }
 
+    /// Render one binding while capturing its indentation, so the
+    /// stage-closing placement can return to it regardless of how deeply the
+    /// bindee nests its own layout.
     fn placed_binding(
+        &self, enclosing: TermId, binding: &'arena GenBind<TermId>, placement: Placement,
+    ) -> RcDoc<'arena> {
+        let arena = self.arena;
+        let options = self.options;
+        DOC_ALLOCATOR
+            .nesting(move |binding_nesting| {
+                let binding_nesting = isize::try_from(binding_nesting).unwrap_or(isize::MAX);
+                let formatter = PrettyFormatter {
+                    arena,
+                    grammar: GrammarContext::new(arena),
+                    punning: Punning::new(arena),
+                    options,
+                };
+                formatter.placed_binding_at(enclosing, binding, placement, binding_nesting)
+            })
+            .into_doc()
+    }
+
+    fn placed_binding_at(
         &self, enclosing: TermId, binding: &GenBind<TermId>, placement: Placement,
+        binding_nesting: isize,
     ) -> RcDoc<'arena> {
         let GenBind { fix, comp, binder, params, ty, bindee } = binding;
         let modifiers = [(*comp).then_some("!"), (*fix).then_some("fix")]
@@ -1734,9 +1757,8 @@ impl<'arena> PrettyFormatter<'arena> {
             anchors: head_anchors,
         };
         let placement = self.placement(placement);
-        let bindee = self
-            .term_fragment(*bindee)
-            .map_document(|document| self.bindee_with_placement(document, placement));
+        let bindee =
+            self.bindee_with_placement(self.term_fragment(*bindee), placement, binding_nesting);
         match ty {
             | Some(ty) => {
                 let assignment =
@@ -1754,13 +1776,31 @@ impl<'arena> PrettyFormatter<'arena> {
             .append(self.term_through(tail, TermPrecedence::Binder))
     }
 
+    /// Attach the stage-closing placement to a bindee. The marker stays on
+    /// the bindee's last line when it fits there; otherwise it breaks onto
+    /// its own line at the binding's indentation, wherever the bindee's own
+    /// layout happens to nest.
     fn bindee_with_placement(
-        &self, bindee: RcDoc<'arena>, placement: RcDoc<'arena>,
-    ) -> RcDoc<'arena> {
-        let joined =
-            self.after_line_start(bindee.clone().append(RcDoc::space()).append(placement.clone()));
-        let broken = bindee.append(RcDoc::hardline().append(placement).nest(-self.indent()));
-        self.single_line_or(joined, broken)
+        &self, bindee: LayoutFragment<'arena>, placement: RcDoc<'arena>, binding_nesting: isize,
+    ) -> LayoutFragment<'arena> {
+        let marker = DOC_ALLOCATOR
+            .nesting({
+                let placement = placement.clone();
+                move |bindee_nesting| {
+                    let placement = placement.clone();
+                    let bindee_nesting = isize::try_from(bindee_nesting).unwrap_or(isize::MAX);
+                    RcDoc::hardline()
+                        .append(placement)
+                        .nest(binding_nesting.saturating_sub(bindee_nesting))
+                }
+            })
+            .into_doc();
+        bindee.map_document(|document| {
+            let joined = self.after_line_start(
+                document.clone().append(RcDoc::space()).append(placement.clone()),
+            );
+            self.single_line_or(joined, document.append(marker))
+        })
     }
 
     fn placement(&self, placement: Placement) -> RcDoc<'arena> {
@@ -2498,6 +2538,92 @@ mod tests {
             assert_eq!(formatted, expected, "source: {source}");
             let reparsed = ParsedSource::new(&formatted);
             assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        });
+    }
+
+    #[test]
+    fn placement_closes_at_the_binding_indentation() {
+        let cases = [
+            // A joined multiline bindee sits at the binding level; the
+            // placement must not outdent below it.
+            (
+                concat!(
+                    "begin\n",
+                    "  let value = begin\n",
+                    "  item\n",
+                    "  end in value\n",
+                    "end\n",
+                ),
+                concat!(
+                    "begin\n",
+                    "  let value = begin\n",
+                    "    item\n",
+                    "  end\n",
+                    "  in\n",
+                    "  value\n",
+                    "end\n",
+                ),
+            ),
+            // A broken bindee nests one level below the binding; the
+            // placement returns to the binding level.
+            (
+                concat!("begin\n", "  let value =\n", "    item\n", "  in value\n", "end\n",),
+                concat!("begin\n", "  let value =\n", "    item\n", "  in\n", "  value\n", "end\n",),
+            ),
+            // A multiline type breaks the definition stage, and its outdent
+            // already returns the bindee to the binding level.
+            (
+                concat!(
+                    "begin\n",
+                    "  def branch : Thk (\n",
+                    "    forall (B : CType) .\n",
+                    "      Bool -> Thk B -> Thk B -> B\n",
+                    "  ) = {\n",
+                    "    fn (B : CType)\n",
+                    "       condition\n",
+                    "       when_true\n",
+                    "       when_false =>\n",
+                    "      match condition\n",
+                    "      | +True() => ! when_true\n",
+                    "      | +False() => ! when_false\n",
+                    "      end\n",
+                    "  } that\n",
+                    "  branch\n",
+                    "end\n",
+                ),
+                concat!(
+                    "begin\n",
+                    "  def branch : Thk (\n",
+                    "      forall (B : CType) .\n",
+                    "        Bool -> Thk B -> Thk B -> B\n",
+                    "    )\n",
+                    "  = {\n",
+                    "    fn\n",
+                    "      (B : CType)\n",
+                    "      condition\n",
+                    "      when_true\n",
+                    "      when_false\n",
+                    "    =>\n",
+                    "      match condition\n",
+                    "      | +True() => ! when_true\n",
+                    "      | +False() => ! when_false\n",
+                    "      end\n",
+                    "  }\n",
+                    "  that\n",
+                    "  branch\n",
+                    "end\n",
+                ),
+            ),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, expected, "source: {source}");
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve), "source: {source}");
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape(), "source: {source}");
         });
     }
 
