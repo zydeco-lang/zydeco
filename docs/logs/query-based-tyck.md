@@ -114,3 +114,22 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
     effective diagnosis path for protocol-level hangs.
 - The cajun consumer wiring is deferred until the refresh design stops re-analyzing on every request;
   the fact queries remain the public session API for that future consumer.
+
+## 2026-08-14 — P4 producer: derived identifier scheme (decision A)
+
+- The user chose plan A: migrate the judgment layer into per-node producer queries. Design analysis
+  before implementation:
+  - Packing `(entity, occurrence, slot)` into the 32-bit raw index is too tight for realistic entity
+    counts and cannot express occurrence cleanly; salsa-interned typed IDs are blocked because
+    `ArenaId` requires the private `ArenaIdToken` and every arena and downstream backend expects
+    `new_key_type` IDs.
+  - Chosen scheme: one derived **key space per allocation site**. `KeySpaceId::derive(tag, entity,
+    occurrence)` mixes the site identity into a 64-bit key space, and `derived_id(key_space, slot)`
+    builds the identifier with the local allocation slot as the raw index. Re-executing a query
+    reproduces its identifiers without a shared cursor; distinct sites can never collide because
+    their key spaces differ. Both constructors live in `zydeco-utils` (`lang/utils/src/arena.rs`)
+    with tests.
+  - Phase boundary: dense arena categories (`AbstId`, `FillId`, `DataId`, `CoDataId`) issue their own
+    `la-arena` raw indices, so they stay on the per-check allocator until `ArenaDense` grows a
+    derived-insert path. The first migration slices therefore cover the sparse categories
+    (`KindId`, `KPatId`, `TPatId`, `TypeId`, `VPatId`, `ValueId`, `CompuId`).

@@ -41,6 +41,35 @@ impl KeySpaceId {
             .expect("key-space identity range exhausted");
         Self(id)
     }
+
+    /// Derive a key space unique to one derived allocation site.
+    ///
+    /// Query-based passes derive their fresh identifiers from `(tag, entity,
+    /// occurrence)` so that re-executing a query reproduces the same identifiers
+    /// without sharing a mutable cursor. `tag` separates identifier categories,
+    /// `entity` is the raw index of the source entity being checked, and
+    /// `occurrence` counts how many times that entity has been checked before.
+    /// See `docs/logs/query-based-tyck.md` for the derivation scheme.
+    pub fn derive(tag: u64, entity: u32, occurrence: u32) -> KeySpaceId {
+        fn mix(mut hash: u64) -> u64 {
+            hash ^= hash >> 33;
+            hash = hash.wrapping_mul(0xff51afd7ed558ccd);
+            hash ^= hash >> 33;
+            hash = hash.wrapping_mul(0xc4ceb9fe1a85ec53);
+            hash ^= hash >> 33;
+            hash
+        }
+        KeySpaceId(mix(mix(tag ^ u64::from(entity)) ^ u64::from(occurrence)))
+    }
+}
+
+/// Construct an arena identifier from a derived key space and a local slot.
+///
+/// This is the sanctioned way to build identifiers without an [`IdAllocator`].
+/// It is sound only when the key space is unique to the allocation site; obtain
+/// one with [`KeySpaceId::derive`].
+pub fn derived_id<Id: ArenaId>(key_space: KeySpaceId, slot: u32) -> Id {
+    Id::from_raw_parts(ArenaIdToken(()), key_space, RawIdx::from_u32(slot))
 }
 
 /// Declares that an allocator scope may issue a particular identifier type.
@@ -1398,5 +1427,32 @@ mod tests {
 
         assert_eq!(relation.forth(&"source"), &[1, 2]);
         assert_eq!(relation.back(&1), &["source", "other"]);
+    }
+}
+
+#[cfg(test)]
+mod derived_id_tests {
+    use super::{ArenaId, KeySpaceId, derived_id};
+    use crate::new_key_type;
+
+    new_key_type! { struct DerivedTestId; }
+
+    #[test]
+    fn derived_ids_are_deterministic_and_site_unique() {
+        let site_a = KeySpaceId::derive(1, 42, 0);
+        let site_b = KeySpaceId::derive(1, 42, 1);
+        let id_a0: DerivedTestId = derived_id(site_a, 0);
+        let id_a1: DerivedTestId = derived_id(site_a, 1);
+        let id_b0: DerivedTestId = derived_id(site_b, 0);
+
+        assert_ne!(id_a0, id_a1, "distinct slots share a key space");
+        assert_ne!(id_a0, id_b0, "distinct sites keep their identifiers apart");
+        assert_eq!(id_a0.key_space(), site_a);
+        assert_eq!(id_a0.raw().into_u32(), 0);
+        assert_eq!(
+            id_a0,
+            derived_id(KeySpaceId::derive(1, 42, 0), 0),
+            "re-deriving a site reproduces its identifiers",
+        );
     }
 }
