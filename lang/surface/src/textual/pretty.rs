@@ -1844,10 +1844,12 @@ impl<'arena> PrettyFormatter<'arena> {
             .append(self.term_through(tail, TermPrecedence::Binder))
     }
 
-    /// Attach the stage-closing placement to a bindee. The marker stays on
-    /// the bindee's last line when it fits there; otherwise it breaks onto
-    /// its own line at the binding's indentation, wherever the bindee's own
-    /// layout happens to nest.
+    /// Attach the stage-closing placement to a bindee. Mirroring the `=`
+    /// stage, the marker has three tiers: it stays on a single-line bindee,
+    /// follows the bindee's final line when that line returns to the binding
+    /// indentation (a delimited closer), and otherwise breaks onto its own
+    /// line at the binding indentation, wherever the bindee's own layout
+    /// happens to nest.
     fn bindee_with_placement(
         &self, bindee: LayoutFragment<'arena>, placement: RcDoc<'arena>, binding_nesting: isize,
     ) -> LayoutFragment<'arena> {
@@ -1864,10 +1866,17 @@ impl<'arena> PrettyFormatter<'arena> {
             })
             .into_doc();
         bindee.map_document(|document| {
-            let joined = self.after_line_start(
+            let inline = self.after_line_start(
                 document.clone().append(RcDoc::space()).append(placement.clone()),
             );
-            self.single_line_or(joined, document.append(marker))
+            let attached = document
+                .clone()
+                .append(Self::at_binding_guard(binding_nesting))
+                .append(RcDoc::space())
+                .append(placement);
+            self.single_line(inline.clone())
+                .union(attached.union(document.append(marker)))
+                .flat_alt(inline)
         })
     }
 
@@ -2610,6 +2619,52 @@ mod tests {
     }
 
     #[test]
+    fn placement_tiers_mirror_the_definition_stage() {
+        let cases = [
+            // A single-line bindee keeps the marker on its own line.
+            (
+                concat!("begin\n", "  def value = item that\n", "  value\n", "end\n",),
+                concat!("begin\n", "  def value = item that\n", "  value\n", "end\n",),
+            ),
+            // A multiline delimited bindee whose closer returns to the
+            // binding level takes the attached tier.
+            (
+                concat!(
+                    "begin\n",
+                    "  let value = begin\n",
+                    "  item\n",
+                    "  end in value\n",
+                    "end\n",
+                ),
+                concat!(
+                    "begin\n",
+                    "  let value = begin\n",
+                    "    item\n",
+                    "  end in\n",
+                    "  value\n",
+                    "end\n",
+                ),
+            ),
+            // A broken bindee hangs one level below the binding, so the
+            // marker breaks onto its own line at the binding indentation.
+            (
+                concat!("begin\n", "  let value =\n", "    item\n", "  in value\n", "end\n",),
+                concat!("begin\n", "  let value =\n", "    item\n", "  in\n", "  value\n", "end\n",),
+            ),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, expected, "source: {source}");
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve), "source: {source}");
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape(), "source: {source}");
+        });
+    }
+
+    #[test]
     fn placement_closes_at_the_binding_indentation() {
         let cases = [
             // A joined multiline bindee sits at the binding level; the
@@ -2626,8 +2681,7 @@ mod tests {
                     "begin\n",
                     "  let value = begin\n",
                     "    item\n",
-                    "  end\n",
-                    "  in\n",
+                    "  end in\n",
                     "  value\n",
                     "end\n",
                 ),
@@ -2675,8 +2729,7 @@ mod tests {
                     "      | +True() => ! when_true\n",
                     "      | +False() => ! when_false\n",
                     "      end\n",
-                    "  }\n",
-                    "  that\n",
+                    "  } that\n",
                     "  branch\n",
                     "end\n",
                 ),
@@ -2707,7 +2760,7 @@ mod tests {
             ),
             (
                 "let value = begin\nitem\nend in value",
-                concat!("let value = begin\n", "  item\n", "end\n", "in\n", "value\n"),
+                concat!("let value = begin\n", "  item\n", "end in\n", "value\n"),
             ),
             (
                 "let Cmp (A : VType) =\n  Thk (A -> A -> Ret Bool)\nthat\nvalue",

@@ -143,9 +143,11 @@ Only a broken boundary hangs the continuation one level below.
 The `=` stage then chooses between three tiers: the whole `type = bindee` stage on one line, the separator attached
 to the type's final line when that line returns to the binding indentation (the delimited closer),
 or the separator on its own line at the binding indentation.
-A broken bindee hangs one level below its separator, and the placement marker always returns
-to the binding indentation wherever the bindee's own layout happens to nest.
-The printer captures the binding indentation dynamically instead of assuming fixed offsets.
+The placement marker mirrors the same three tiers: it stays on a single-line bindee,
+follows the bindee's final line when that line returns to the binding indentation (a delimited closer,
+as in `end in` or `} that`), and otherwise breaks onto its own line at the binding indentation.
+A broken bindee hangs one level below its separator,
+and the printer captures the binding indentation dynamically instead of assuming fixed offsets.
 Preserved source breaks partition fitting rows, but an overflowing row expands the complete outer layer rather
 than whichever nested boundary happens to encounter the width limit first.
 
