@@ -31,15 +31,16 @@ pub(crate) struct InstalledInput {
 
 pub(crate) struct ReplEngine {
     directory: PathBuf,
+    builtin: PathBuf,
     session: CompilerSession,
 }
 
 impl ReplEngine {
-    const BUILTIN_SOURCE_NAME: &'static str = ".zydeco-repl-builtin.zy";
     const INPUT_OBSERVATION: &'static str = "zydeco-tui-input";
 
     pub(crate) fn new(directory: PathBuf) -> Self {
-        Self { directory, session: CompilerSession::default() }
+        let builtin = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib/std/builtin.zy");
+        Self { directory, builtin, session: CompilerSession::default() }
     }
 
     pub(crate) fn install(
@@ -48,10 +49,8 @@ impl ReplEngine {
         let input = number.overlay_path(&self.directory);
         self.session.set_overlay(&input, source)?;
 
-        let builtin = self.directory.join(Self::BUILTIN_SOURCE_NAME);
-        self.session.set_overlay(&builtin, include_str!("../../lib/std/builtin.zy").to_owned())?;
-
         let root = self.directory.join(format!(".zydeco-repl-root-{}", number.get()));
+        let builtin = format!("{:?}", self.builtin.to_string_lossy());
         let wrapper = format!(
             concat!(
                 "param (\n",
@@ -60,11 +59,11 @@ impl ReplEngine {
                 "/Float32; /Float64; /Char; /String; /Bytes; /Reader; /Writer; /OS; ",
                 "/int8; /int16; /int32; /int64; /uint8; /uint16; /uint32; /uint64; ",
                 "/float32; /float64) :\n",
-                "  @[import(\"{}\")] _\n",
+                "  @[import({})] _\n",
                 ") in\n",
                 "  @[debug(\"{}\")] @[import({})] _\n",
             ),
-            Self::BUILTIN_SOURCE_NAME,
+            builtin,
             Self::INPUT_OBSERVATION,
             number.get(),
         );

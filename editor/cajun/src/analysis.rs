@@ -399,6 +399,21 @@ mod tests {
             .collect()
     }
 
+    fn source_position(source: &str, needle: &str) -> Position {
+        let byte = source.find(needle).unwrap_or_else(|| panic!("missing source text: {needle}"));
+        let before = &source[..byte];
+        let line = before.bytes().filter(|byte| *byte == b'\n').count() as u32;
+        let line_start = before.rfind('\n').map_or(0, |newline| newline + 1);
+        let character = source[line_start..byte].encode_utf16().count() as u32;
+        Position::new(line, character)
+    }
+
+    fn definition_url(path: &Path, position: Position) -> Url {
+        let mut definition = Url::from_file_path(path).unwrap();
+        definition.set_fragment(Some(&format!("L{}", position.line + 1)));
+        definition
+    }
+
     struct DecodedToken {
         text: String,
         token_type: String,
@@ -524,13 +539,14 @@ mod tests {
             .join("../../lib/tests/exec/forall.zy")
             .canonicalize()
             .unwrap();
+        let source = std::fs::read_to_string(&path).unwrap();
         let project = ProjectState::load(&path, &HashMap::new()).unwrap();
-        let hover = project.hover(&path, Position::new(7, 9), HoverLineWidth::default()).unwrap();
+        let value = source_position(&source, "value : A");
+        let hover = project.hover(&path, value, HoverLineWidth::default()).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
-        let mut definition = Url::from_file_path(&path).unwrap();
-        definition.set_fragment(Some("L7"));
+        let definition = definition_url(&path, source_position(&source, "A : VType"));
 
         assert_eq!(
             contents.value,
@@ -544,13 +560,14 @@ mod tests {
             .join("../../lib/tests/compile/uniform.zy")
             .canonicalize()
             .unwrap();
+        let source = std::fs::read_to_string(&path).unwrap();
         let project = ProjectState::load(&path, &HashMap::new()).unwrap();
-        let hover = project.hover(&path, Position::new(17, 11), HoverLineWidth::default()).unwrap();
+        let copy = source_position(&source, "copy : Number");
+        let hover = project.hover(&path, copy, HoverLineWidth::default()).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
-        let mut definition = Url::from_file_path(&path).unwrap();
-        definition.set_fragment(Some("L15"));
+        let definition = definition_url(&path, source_position(&source, "forall (A : VType)"));
 
         assert_eq!(
             contents.value,
@@ -564,11 +581,12 @@ mod tests {
             .join("../../lib/std/data/option.zy")
             .canonicalize()
             .unwrap();
+        let source = std::fs::read_to_string(&path).unwrap();
         let project = ProjectState::load(&path, &HashMap::new()).unwrap();
-        let mut parameter = Url::from_file_path(&path).unwrap();
-        parameter.set_fragment(Some("L6"));
+        let option = source_position(&source, "Option (A : VType)");
+        let parameter = definition_url(&path, option);
 
-        let short = project.hover(&path, Position::new(5, 7), HoverLineWidth::default()).unwrap();
+        let short = project.hover(&path, option, HoverLineWidth::default()).unwrap();
         let HoverContents::Markup(short) = short.contents else {
             panic!("type hover should use markup content")
         };
@@ -591,11 +609,22 @@ mod tests {
             )
         );
 
-        let long = project.hover(&path, Position::new(84, 7), HoverLineWidth::default()).unwrap();
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../lib/std/data/option.type.zy")
+            .canonicalize()
+            .unwrap();
+        let source = std::fs::read_to_string(&path).unwrap();
+        let project = ProjectState::load(&path, &HashMap::new()).unwrap();
+        let long = project
+            .hover(&path, source_position(&source, "OptionModule"), HoverLineWidth::default())
+            .unwrap();
         let HoverContents::Markup(long) = long.contents else {
             panic!("type hover should use markup content")
         };
-        assert_eq!(long.value, "```zydeco\nInterface : VType =\n  ...\n```");
+        assert_eq!(
+            long.value,
+            "```zydeco\nOptionModule : VType -> VType -> VType -> VType =\n  ...\n```"
+        );
     }
 
     #[test]
@@ -604,9 +633,10 @@ mod tests {
             .join("../../lib/std/data/option.zy")
             .canonicalize()
             .unwrap();
+        let source = std::fs::read_to_string(&path).unwrap();
         let project = ProjectState::load(&path, &HashMap::new()).unwrap();
         let line_width = HoverLineWidth::new(30).unwrap();
-        let hover = project.hover(&path, Position::new(29, 9), line_width).unwrap();
+        let hover = project.hover(&path, source_position(&source, "map\n"), line_width).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
@@ -636,7 +666,7 @@ mod tests {
         let source = concat!(
             "param (\n",
             "  (/core) :\n",
-            "  @[import(\"builtin.zy\")] _\n",
+            "  @[import(\"../builtin.zy\")] _\n",
             ") in\n",
             "begin\n",
             "  let (/VType; /CType; /Thk; /Ret) = core that\n",
@@ -655,7 +685,8 @@ mod tests {
         let overrides = HashMap::from([(path.clone(), source.to_owned())]);
         let project = ProjectState::load(&path, &overrides).unwrap();
         let line_width = HoverLineWidth::new(72).unwrap();
-        let hover = project.hover(&path, Position::new(12, 9), line_width).unwrap();
+        let hover =
+            project.hover(&path, source_position(source, "ok (A : VType)"), line_width).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
@@ -760,11 +791,12 @@ mod tests {
             })
         };
 
-        assert!(has("VType", "typeParameter", "kind"));
-        assert!(has("Int64", "typeParameter", "valueType"));
-        assert!(has("OS", "typeParameter", "computationType"));
+        assert!(has("VType", "type", "kind"));
+        assert!(has("A", "typeParameter", "valueType"));
+        assert!(has("Int64", "type", "valueType"));
+        assert!(has("OS", "type", "computationType"));
         assert!(has("x", "variable", "value"));
-        assert!(has("process", "parameter", "value"));
+        assert!(has("process", "variable", "value"));
         assert!(
             decoded.iter().any(|token| { token.text == "exit" && token.token_type == "property" })
         );
