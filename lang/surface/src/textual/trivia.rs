@@ -4,8 +4,8 @@ mod comment;
 
 use super::syntax::EntityId;
 pub use comment::{
-    BlockComment, DocumentationComment, LeadingComment, LineComment, LineSeparation,
-    SurfaceComment, TrailingComment,
+    BlockComment, LeadingComment, LineComment, LineSeparation, SurfaceComment, TextBlock,
+    TrailingComment,
 };
 pub(crate) use comment::{CommentCapture, SpannedEntity};
 use zydeco_utils::arena::{ArenaAccess, ArenaAssoc};
@@ -38,32 +38,32 @@ impl SurfaceTrivia {
         self.trailing_comments.get(&entity).map(Vec::as_slice).unwrap_or_default()
     }
 
-    /// The documentation block semantically attached to an immediately
-    /// following `@[doc]` annotation, when present.
-    pub fn attached_documentation(&self, entity: EntityId) -> Option<&DocumentationComment> {
+    /// The text block semantically attached to an immediately
+    /// following `@[doc]` or `@[literal]` annotation, when present.
+    pub fn attached_text(&self, entity: EntityId) -> Option<&TextBlock> {
         self.leading_comments(entity)
             .last()
             .filter(|comment| comment.separation_after() == LineSeparation::NextLine)
-            .and_then(|comment| comment.comment().as_documentation())
+            .and_then(|comment| comment.comment().as_text())
     }
 
-    /// Every documentation block retained from this source arena.
-    pub fn documentation_comments(&self) -> impl Iterator<Item = &DocumentationComment> {
+    /// Every text block retained from this source arena.
+    pub fn text_blocks(&self) -> impl Iterator<Item = &TextBlock> {
         self.leading_comments
             .iter()
             .flat_map(|(_, comments)| comments)
-            .filter_map(|comment| comment.comment().as_documentation())
+            .filter_map(|comment| comment.comment().as_text())
             .chain(
                 self.before_arm_comments
                     .iter()
                     .flat_map(|(_, comments)| comments)
-                    .filter_map(|comment| comment.comment().as_documentation()),
+                    .filter_map(|comment| comment.comment().as_text()),
             )
             .chain(
                 self.trailing_comments
                     .iter()
                     .flat_map(|(_, comments)| comments)
-                    .filter_map(|comment| comment.comment().as_documentation()),
+                    .filter_map(|comment| comment.comment().as_text()),
             )
     }
 

@@ -29,6 +29,7 @@ interp_source!(ifz, "tests/exec/ifz.zy");
 interp_source!(interpreter, "tests/exec/interpreter.zydeco");
 interp_source!(list, "tests/exec/list.zydeco");
 interp_source!(listm, "tests/exec/listm.zydeco");
+interp_source!(literal, "tests/exec/literal.zy");
 interp_source!(loop_, "tests/exec/loop.zydeco");
 interp_source!(loopy, "tests/exec/loopy.zy");
 interp_source!(named_tuple, "tests/exec/named-tuple.zy");

@@ -1,5 +1,8 @@
 use super::syntax::*;
-use crate::metadata::{BuiltinMeta, BuiltinMetaError, DocMeta, IntrinsicMeta, IntrinsicMetaError};
+use crate::metadata::{
+    BuiltinMeta, BuiltinMetaError, DocMeta, IntrinsicMeta, IntrinsicMetaError, LiteralMeta,
+    LiteralMetaError,
+};
 use std::{
     collections::HashSet,
     num::NonZeroU64,
@@ -8,11 +11,11 @@ use std::{
 };
 use thiserror::Error;
 
-/// A decoded `@[doc]` annotation and its optional preceding prose.
+/// A decoded `@[doc]` annotation and its optional preceding text block.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DocumentationDirective {
     pub meta: DocMeta,
-    pub comment: Option<DocumentationComment>,
+    pub comment: Option<TextBlock>,
     pub span: Span,
 }
 
@@ -24,10 +27,25 @@ pub struct DocumentationSite {
     pub directive: DocumentationDirective,
 }
 
-/// A `--|` block that is not consumed by an adjacent `@[doc]` annotation.
+/// A `--|` block that is not consumed by an adjacent annotation.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UnattachedDocumentationWarning {
+pub struct UnattachedTextWarning {
     pub range: Range<usize>,
+}
+
+/// A decoded `@[literal]` annotation and its attached text block.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LiteralDirective {
+    pub text: TextBlock,
+    pub span: Span,
+}
+
+/// One literal term splice in a parsed source unit.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LiteralSite {
+    pub term: TermId,
+    pub payload: TermId,
+    pub directive: LiteralDirective,
 }
 
 /// The provider named by an `@[import(...)]` term splice.
@@ -158,12 +176,27 @@ pub enum IntrinsicDirectiveError {
     PayloadNotHole { term: TermId, span: Span },
 }
 
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+pub enum LiteralDirectiveError {
+    #[error("invalid literal annotation at {span}: {source}")]
+    Invalid {
+        term: TermId,
+        span: Span,
+        #[source]
+        source: LiteralMetaError,
+    },
+    #[error("literal at {span} must annotate a hole expression")]
+    PayloadNotHole { term: TermId, span: Span },
+    #[error("literal at {span} requires an attached `--|` text block")]
+    MissingText { term: TermId, span: Span },
+}
+
 impl SourceUnit {
     /// Collect every explicitly documented term in this source unit.
     ///
-    /// Documentation comments remain parser trivia. The `@[doc]` annotation
+    /// Text blocks remain parser trivia. The `@[doc]` annotation
     /// provides the durable attachment point, and only an uninterrupted block
-    /// of `--|` lines immediately above that annotation becomes its prose.
+    /// of `--|` lines immediately above that annotation becomes its text.
     pub fn documentation(&self, arena: &TextArena, spans: &SpanArena) -> Vec<DocumentationSite> {
         let _root = &arena.terms[&self.root];
         let mut sites = arena
@@ -180,31 +213,55 @@ impl SourceUnit {
         sites
     }
 
-    /// Find documentation blocks that have no semantic attachment.
-    pub fn unattached_documentation(
-        &self, arena: &TextArena,
-    ) -> Vec<UnattachedDocumentationWarning> {
+    /// Whether this metadata annotation consumes an attached `--|` text block.
+    fn consumes_attached_text(meta: &Meta) -> bool {
+        meta.specialize::<DocMeta>().is_ok_and(|option| option.is_some())
+            || meta.specialize::<LiteralMeta>().is_ok_and(|option| option.is_some())
+    }
+
+    /// Find text blocks that have no semantic attachment.
+    pub fn unattached_text(&self, arena: &TextArena) -> Vec<UnattachedTextWarning> {
         let _root = &arena.terms[&self.root];
         let attached = arena
             .terms
             .iter()
             .filter_map(|(term, syntax)| match syntax {
-                | Term::Meta(MetaT(meta, _)) => meta
-                    .specialize::<DocMeta>()
-                    .expect("documentation metadata specialization is infallible")
-                    .and_then(|_| arena.trivia.attached_documentation((*term).into()))
-                    .map(|comment| comment.range.clone()),
+                | Term::Meta(MetaT(meta, _)) if Self::consumes_attached_text(meta) => {
+                    arena.trivia.attached_text((*term).into()).map(|text| text.range.clone())
+                }
                 | _ => None,
             })
             .collect::<HashSet<_>>();
         let mut warnings = arena
             .trivia
-            .documentation_comments()
-            .filter(|comment| !attached.contains(&comment.range))
-            .map(|comment| UnattachedDocumentationWarning { range: comment.range.clone() })
+            .text_blocks()
+            .filter(|text| !attached.contains(&text.range))
+            .map(|text| UnattachedTextWarning { range: text.range.clone() })
             .collect::<Vec<_>>();
         warnings.sort_by_key(|warning| (warning.range.start, warning.range.end));
         warnings
+    }
+
+    /// Decode and validate all `@[literal]` term splices in this source unit.
+    ///
+    /// A literal splice requires a hole payload and an attached `--|` text
+    /// block, which becomes the string value of the hole.
+    pub fn literals(
+        &self, arena: &TextArena, spans: &SpanArena,
+    ) -> Result<Vec<LiteralSite>, LiteralDirectiveError> {
+        let _root = &arena.terms[&self.root];
+        let mut literals = arena
+            .terms
+            .iter()
+            .filter_map(|(term, syntax)| match syntax {
+                | Term::Meta(MetaT(meta, payload)) => {
+                    LiteralSite::decode(*term, meta, *payload, arena, spans)
+                }
+                | _ => None,
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        literals.sort_by_key(|site| site.directive.span.get_cursor1());
+        Ok(literals)
     }
 
     /// Decode all import metadata parsed into this source unit.
@@ -292,8 +349,35 @@ impl DocumentationSite {
             .specialize::<DocMeta>()
             .expect("documentation metadata specialization is infallible")?;
         let span = spans[&EntityId::Term(term)].clone();
-        let comment = arena.trivia.attached_documentation(term.into()).cloned();
+        let comment = arena.trivia.attached_text(term.into()).cloned();
         Some(Self { term, payload, directive: DocumentationDirective { meta, comment, span } })
+    }
+}
+
+impl LiteralSite {
+    fn decode(
+        term: TermId, meta: &Meta, payload: TermId, arena: &TextArena, spans: &SpanArena,
+    ) -> Option<Result<Self, LiteralDirectiveError>> {
+        match meta.specialize::<LiteralMeta>() {
+            | Ok(Some(_)) => {
+                let span = spans[&EntityId::Term(term)].clone();
+                Some(if matches!(arena.terms[&payload], Term::Hole(Hole)) {
+                    match arena.trivia.attached_text(term.into()).cloned() {
+                        | Some(text) => {
+                            Ok(Self { term, payload, directive: LiteralDirective { text, span } })
+                        }
+                        | None => Err(LiteralDirectiveError::MissingText { term, span }),
+                    }
+                } else {
+                    Err(LiteralDirectiveError::PayloadNotHole { term, span })
+                })
+            }
+            | Ok(None) => None,
+            | Err(source) => {
+                let span = spans[&EntityId::Term(term)].clone();
+                Some(Err(LiteralDirectiveError::Invalid { term, span, source }))
+            }
+        }
     }
 }
 

@@ -297,16 +297,13 @@ fn source_unit_collects_documentation_for_arbitrary_annotated_terms() {
         ]
     );
     assert_eq!(
-        package.directive.comment.as_ref().unwrap().markdown.as_ref(),
+        package.directive.comment.as_ref().unwrap().text.as_ref(),
         "Package heading\n\nPackage details."
     );
     assert!(matches!(parser.arena.terms[&package.payload], Term::Block(_)));
 
     assert_eq!(example.directive.meta.arguments, [Meta::ident("example")]);
-    assert_eq!(
-        example.directive.comment.as_ref().unwrap().markdown.as_ref(),
-        "An integer example."
-    );
+    assert_eq!(example.directive.comment.as_ref().unwrap().text.as_ref(), "An integer example.");
     assert!(matches!(
         parser.arena.terms[&example.payload],
         Term::Lit(Literal::Integer(IntegerLiteral::Unresolved(1)))
@@ -333,7 +330,7 @@ fn documentation_annotation_does_not_reach_across_a_blank_or_ordinary_comment() 
 }
 
 #[test]
-fn documentation_comments_without_an_annotation_remain_unattached() {
+fn text_blocks_without_an_annotation_remain_unattached() {
     let source = "--| Informational only\n_";
     let mut parser = Parser::new();
     let unit = parser::SourceUnitParser::new()
@@ -344,7 +341,7 @@ fn documentation_comments_without_an_annotation_remain_unattached() {
 }
 
 #[test]
-fn warns_for_every_documentation_block_without_an_effective_attachment() {
+fn warns_for_every_text_block_without_an_effective_attachment() {
     let source = concat!(
         "(\n",
         "  --| Attached\n",
@@ -367,7 +364,7 @@ fn warns_for_every_documentation_block_without_an_effective_attachment() {
         .unwrap();
 
     let comments = unit
-        .unattached_documentation(&parser.arena)
+        .unattached_text(&parser.arena)
         .iter()
         .map(|warning| source[warning.range.clone()].trim_end().to_owned())
         .collect::<Vec<_>>();
@@ -394,7 +391,67 @@ fn documentation_annotation_accepts_an_explicit_empty_argument_list() {
     let documentation = unit.documentation(&parser.arena, &parser.spans);
     let [site] = documentation.as_slice() else { panic!("expected one documentation attachment") };
     assert!(site.directive.meta.arguments.is_empty());
-    assert_eq!(site.directive.comment.as_ref().unwrap().markdown.as_ref(), "Empty argument list");
+    assert_eq!(site.directive.comment.as_ref().unwrap().text.as_ref(), "Empty argument list");
+}
+
+#[test]
+fn source_unit_decodes_literal_splices_with_attached_text() {
+    let source = "--| First line\n--| Second line\n@[literal] _";
+    let mut parser = Parser::new();
+    let unit = parser::SourceUnitParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let literals = unit.literals(&parser.arena, &parser.spans).unwrap();
+    let [site] = literals.as_slice() else { panic!("expected exactly one literal splice") };
+    assert_eq!(site.directive.text.text.as_ref(), "First line\nSecond line");
+    assert!(matches!(parser.arena.terms[&site.payload], Term::Hole(Hole)));
+    assert!(
+        unit.unattached_text(&parser.arena).is_empty(),
+        "a text block attached to `@[literal]` must not warn"
+    );
+}
+
+#[test]
+fn source_unit_rejects_literal_splices_without_an_attached_text_block() {
+    let source = "@[literal] _";
+    let mut parser = Parser::new();
+    let unit = parser::SourceUnitParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    assert!(matches!(
+        unit.literals(&parser.arena, &parser.spans),
+        Err(LiteralDirectiveError::MissingText { .. })
+    ));
+}
+
+#[test]
+fn source_unit_rejects_literal_on_a_non_hole_term() {
+    let source = "--| Text\n@[literal] 1";
+    let mut parser = Parser::new();
+    let unit = parser::SourceUnitParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    assert!(matches!(
+        unit.literals(&parser.arena, &parser.spans),
+        Err(LiteralDirectiveError::PayloadNotHole { .. })
+    ));
+}
+
+#[test]
+fn source_unit_rejects_literal_metadata_arguments() {
+    let source = "--| Text\n@[literal(extra)] _";
+    let mut parser = Parser::new();
+    let unit = parser::SourceUnitParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    assert!(matches!(
+        unit.literals(&parser.arena, &parser.spans),
+        Err(LiteralDirectiveError::Invalid { .. })
+    ));
 }
 
 #[test]

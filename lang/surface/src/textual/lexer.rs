@@ -116,7 +116,7 @@ pub enum Tok<'input> {
     At,
 
     #[regex(r"--\|[^\n]*\n?", allow_greedy = true)]
-    DocLine(&'input str),
+    TextLine(&'input str),
     #[regex(r"--[^\n]*\n?", allow_greedy = true)]
     CommentLine(&'input str),
     #[token("/-")]
@@ -139,7 +139,7 @@ pub enum LexicalTokenKind {
     Number,
     String,
     Comment,
-    DocumentationComment,
+    TextBlock,
     Operator,
     Punctuation,
     Hole,
@@ -235,7 +235,7 @@ impl<'source> LexicalTokens<'source> {
             | Tok::CommentClose => Kind::Operator,
             | Tok::Hole => Kind::Hole,
             | Tok::At => Kind::Attribute,
-            | Tok::DocLine(_) => Kind::DocumentationComment,
+            | Tok::TextLine(_) => Kind::TextBlock,
             | Tok::CommentLine(_) => Kind::Comment,
             | Tok::CommentOpen | Tok::Unknown(_) => return None,
         })
@@ -342,7 +342,7 @@ impl Display for Tok<'_> {
             | Tok::Assign => write!(f, "<-"),
             | Tok::Hole => write!(f, "_"),
             | Tok::At => write!(f, "@"),
-            | Tok::DocLine(s) => write!(f, "DocLine(\"{}\")", s.escape_debug()),
+            | Tok::TextLine(s) => write!(f, "TextLine(\"{}\")", s.escape_debug()),
             | Tok::CommentLine(s) => write!(f, "CommentLine(\"{}\")", s.escape_debug()),
             | Tok::CommentOpen => write!(f, "/-"),
             | Tok::CommentClose => write!(f, "-/"),
@@ -370,7 +370,7 @@ impl<'source> Iterator for Lexer<'source> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             match self.inner.next() {
-                | Some((Ok(Tok::DocLine(_)), _)) => continue,
+                | Some((Ok(Tok::TextLine(_)), _)) => continue,
                 | Some((Ok(Tok::CommentLine(_)), _)) => continue,
                 | Some((Ok(Tok::CommentOpen), _)) => {
                     self.comment_depth += 1;
@@ -417,7 +417,7 @@ mod tooling_tests {
         let fixture = LexicalFixture::new("begin --| documentation");
         let tokens = fixture.tokens();
         assert_eq!(tokens.len(), 2);
-        assert_eq!(tokens[1].kind, LexicalTokenKind::DocumentationComment);
+        assert_eq!(tokens[1].kind, LexicalTokenKind::TextBlock);
         assert_eq!(fixture.text(&tokens[1]), "--| documentation");
     }
 

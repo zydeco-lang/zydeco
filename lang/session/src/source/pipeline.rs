@@ -1,4 +1,4 @@
-use crate::source::ProgramAssembly;
+use crate::source::TextualProgram;
 use zydeco_surface::{
     bitter::{
         DesugarError, SourceDesugarOut, SourceUnitDesugarer,
@@ -28,9 +28,9 @@ pub(crate) struct ScopedProgram {
     pub root: ScopedTermId,
 }
 
-impl ProgramAssembly {
+impl TextualProgram {
     pub(crate) fn desugar(self) -> Result<BitterProgram, DesugarError> {
-        let ProgramAssembly { spans, arena: textual, unit } = self;
+        let TextualProgram { spans, arena: textual, unit } = self;
         let SourceDesugarOut { arena, prim, root } =
             SourceUnitDesugarer::new(&spans, &textual, unit, Default::default()).run()?;
         Ok(BitterProgram { spans, arena, prim, root })

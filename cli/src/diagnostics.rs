@@ -40,10 +40,7 @@ impl DiagnosticRenderer {
             let span = (path, site.warning.range().clone());
             let report = Report::build(ReportKind::Warning, span.clone())
                 .with_message(site.warning.message())
-                .with_label(
-                    Label::new(span)
-                        .with_message("this documentation block contributes no documentation"),
-                )
+                .with_label(Label::new(span).with_message("this text block contributes no text"))
                 .with_note(site.warning.note())
                 .finish();
             let _ = report.eprint(&mut cache);

@@ -74,10 +74,7 @@ impl Comments {
     fn retained(source: &str) -> Vec<(LexicalTokenKind, String)> {
         LexicalTokens::new(source)
             .filter(|token| {
-                matches!(
-                    token.kind,
-                    LexicalTokenKind::Comment | LexicalTokenKind::DocumentationComment
-                )
+                matches!(token.kind, LexicalTokenKind::Comment | LexicalTokenKind::TextBlock)
             })
             .map(|token| {
                 let comment = &source[token.range];

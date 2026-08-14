@@ -4,10 +4,10 @@ use super::super::{
 };
 use std::{cmp::Reverse, collections::BTreeMap, ops::Range, sync::Arc};
 
-/// Markdown recovered from one contiguous `--|` source block.
+/// Text recovered from one contiguous `--|` source block.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DocumentationComment {
-    pub markdown: Arc<str>,
+pub struct TextBlock {
+    pub text: Arc<str>,
     pub range: Range<usize>,
 }
 
@@ -28,7 +28,7 @@ pub struct BlockComment {
 /// One typed comment retained outside canonical textual syntax.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SurfaceComment {
-    Documentation(DocumentationComment),
+    Text(TextBlock),
     Line(LineComment),
     Block(BlockComment),
 }
@@ -36,15 +36,15 @@ pub enum SurfaceComment {
 impl SurfaceComment {
     pub fn range(&self) -> &Range<usize> {
         match self {
-            | Self::Documentation(comment) => &comment.range,
+            | Self::Text(text) => &text.range,
             | Self::Line(comment) => &comment.range,
             | Self::Block(comment) => &comment.range,
         }
     }
 
-    pub fn as_documentation(&self) -> Option<&DocumentationComment> {
+    pub fn as_text(&self) -> Option<&TextBlock> {
         match self {
-            | Self::Documentation(comment) => Some(comment),
+            | Self::Text(text) => Some(text),
             | Self::Line(_) | Self::Block(_) => None,
         }
     }
@@ -347,14 +347,14 @@ impl CommentCapture {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum CommentTokenKind {
-    DocumentationLine,
+    TextLine,
     Line,
     Block,
 }
 
 impl CommentTokenKind {
     fn is_line(self) -> bool {
-        matches!(self, Self::DocumentationLine | Self::Line)
+        matches!(self, Self::TextLine | Self::Line)
     }
 }
 
@@ -385,7 +385,7 @@ impl<'source> CommentBlocks<'source> {
 
     fn comment_token(&self, lexical: LexicalToken) -> Option<CommentToken> {
         let kind = match lexical.kind {
-            | LexicalTokenKind::DocumentationComment => CommentTokenKind::DocumentationLine,
+            | LexicalTokenKind::TextBlock => CommentTokenKind::TextLine,
             | LexicalTokenKind::Comment
                 if self
                     .source
@@ -414,9 +414,9 @@ impl<'source> CommentBlocks<'source> {
         let last = block.last().expect("comment blocks are non-empty");
         let range = first.lexical.range.start..last.lexical.range.end;
         match first.kind {
-            | CommentTokenKind::DocumentationLine => {
-                let markdown = self.line_block(block, "--|");
-                SurfaceComment::Documentation(DocumentationComment { markdown, range })
+            | CommentTokenKind::TextLine => {
+                let text = self.line_block(block, "--|");
+                SurfaceComment::Text(TextBlock { text, range })
             }
             | CommentTokenKind::Line => {
                 let text = self.line_block(block, "--");

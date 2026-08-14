@@ -18,8 +18,8 @@ but it does not perform desugaring or name resolution.
   `CoPatId`, and `TermId`.
 - `EntityId` is a tagged enum over those categories; it is not an unchecked shared raw index.
 - `SourceUnit` identifies the single complete term in one source file.
-  It decodes typed metadata directives attached to holes and collects `@[doc]` attachments for arbitrary terms
-  without assigning them a presentation.
+  It decodes typed metadata directives attached to holes, collects `@[doc]` attachments for arbitrary terms,
+  and validates `@[literal]` splices without assigning them a presentation.
 - Parsed `Meta` values remain structural across the syntax arenas.
   Concrete interpretations live in `zydeco_surface::metadata`, implement `SpecializeMeta`,
   and are requested explicitly by the phases that consume them.
@@ -29,7 +29,7 @@ but it does not perform desugaring or name resolution.
   It records layout choices such as whether a parsed entity crossed a line boundary
   without adding presentation-only variants to the syntax tree.
 - `SurfaceTrivia` retains source content outside the syntax tree.
-  Documentation, line, and nested block comments are kept as typed values in one source-ordered sequence and anchored
+  Text, line, and nested block comments are kept as typed values in one source-ordered sequence and anchored
   to stable textual entities, so formatters can move the surrounding syntax without discarding comment content.
 - `Parser` combines `TextArena` and `SpanArena` and is passed through the LALRPOP-generated parser.
   It owns the `KeySpace` only while nodes are being parsed, then `finish` returns the two durable arenas
@@ -64,10 +64,12 @@ Line comments are canonicalized as `--` or `--|` lines, nested block comments re
 and relative indentation, and all comment kinds are always printed.
 Arm-boundary anchors keep comments on the intended side of `|` and its header.
 Recorded blank separators remain blank separators after formatting.
-Only an uninterrupted adjacent `--|` block attaches to a following `@[doc]` annotation,
-so an ordinary comment continues to separate documentation prose from the annotation.
+Only an uninterrupted adjacent `--|` block attaches to a following annotation:
+`@[doc]` renders the block as repository prose, while `@[literal]` replaces its hole payload
+with the block text as a string literal.
+An ordinary comment continues to separate text from the annotation.
 Source analysis warns about every `--|` block without such an attachment because
-that block contributes no repository documentation.
+that block contributes no text to any annotation.
 
 The pretty printer treats concise puns as canonical syntax rather than author intent.
 Named terms, named patterns, and projection patterns

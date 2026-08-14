@@ -1,0 +1,17 @@
+-- A `@[literal]` splice becomes a multi-line string value.
+begin
+  param (
+    (/core; /representations; /system) :
+    @[import("../../std/builtin.zy")] _
+  ) that
+  let (/Ret; /Unit) = core that
+  let (/Scalar = String) = representations/string that
+  let (/stdio; /process) = system that
+
+  let message : String =
+    --| Hello literal
+    --| second line
+    @[literal] _
+  in
+  ! (stdio/write_line) message { ! (process/exit) 0 }
+end

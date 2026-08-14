@@ -242,6 +242,9 @@ A compiler session discovers a file dependency graph, orders providers before th
 and substitutes a freshly cloned provider term at each import occurrence.
 Parsed templates are memoized by source input, while each assembled occurrence remains fresh.
 A source boundary around each clone prevents free names and mobile block bindings from crossing the file boundary.
+Text blocks attached to holes supply multi-line string values: `--| text` immediately above `@[literal] _`
+replaces the hole with the recovered text as a string literal,
+so embedded prose shares the attachment discipline of repository documentation.
 
 An implementation source `foo.zy` may have an adjacent signature source `foo.zyi`.
 The companion is optional; when it is absent, source inference and imports behave exactly as before.

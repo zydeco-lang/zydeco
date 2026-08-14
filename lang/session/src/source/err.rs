@@ -9,7 +9,8 @@ use std::{
 use thiserror::Error;
 use zydeco_statics::syntax::TermAnnId;
 use zydeco_surface::textual::{
-    BuiltinDirectiveError, ImportDirectiveError, IntrinsicDirectiveError, SourceNumber,
+    BuiltinDirectiveError, ImportDirectiveError, IntrinsicDirectiveError, LiteralDirectiveError,
+    SourceNumber,
 };
 use zydeco_utils::span::Span;
 
@@ -35,6 +36,12 @@ pub enum SourceParseError {
         path: PathBuf,
         #[source]
         error: IntrinsicDirectiveError,
+    },
+    #[error("invalid literal directive in `{}`: {error}", path.display())]
+    LiteralDirective {
+        path: PathBuf,
+        #[source]
+        error: LiteralDirectiveError,
     },
 }
 
@@ -79,9 +86,11 @@ pub enum SourceLoadError {
 }
 
 #[derive(Clone, Debug, Error)]
-pub enum ProgramAssemblyError {
+pub enum TextualProgramError {
     #[error("source `{}` has no import edge for term {term:?}", path.display())]
     MissingImport { path: PathBuf, term: zydeco_surface::textual::syntax::TermId },
+    #[error("source `{}` has no attached text block for literal term {term:?}", path.display())]
+    MissingLiteralText { path: PathBuf, term: zydeco_surface::textual::syntax::TermId },
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

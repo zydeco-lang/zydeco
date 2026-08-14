@@ -340,7 +340,7 @@ impl<'source> SemanticDocument<'source> {
             | Lexical::Number => TokenStyle::new(SemanticKind::Number),
             | Lexical::String => TokenStyle::new(SemanticKind::String),
             | Lexical::Comment => TokenStyle::new(SemanticKind::Comment),
-            | Lexical::DocumentationComment => {
+            | Lexical::TextBlock => {
                 TokenStyle::new(SemanticKind::Comment).with(SemanticModifier::Documentation)
             }
             | Lexical::Operator | Lexical::Hole => TokenStyle::new(SemanticKind::Operator),

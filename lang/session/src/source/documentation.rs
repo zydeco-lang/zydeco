@@ -79,7 +79,7 @@ mod tests {
 
         assert_eq!(provider_doc.path(), provider.canonicalize().unwrap());
         assert_eq!(
-            provider_doc.site.directive.comment.as_ref().unwrap().markdown.as_ref(),
+            provider_doc.site.directive.comment.as_ref().unwrap().text.as_ref(),
             "Provider term"
         );
         assert_eq!(
@@ -91,21 +91,21 @@ mod tests {
 
         assert_eq!(import_doc.path(), root.canonicalize().unwrap());
         assert_eq!(
-            import_doc.site.directive.comment.as_ref().unwrap().markdown.as_ref(),
+            import_doc.site.directive.comment.as_ref().unwrap().text.as_ref(),
             "Imported provider"
         );
         assert_eq!(import_doc.term_source(), "@[import(\"provider.zy\")] _");
         assert!(matches!(import_doc.term(), Term::Meta(MetaT(meta, _)) if meta.is("import")));
 
         assert_eq!(
-            literal_doc.site.directive.comment.as_ref().unwrap().markdown.as_ref(),
+            literal_doc.site.directive.comment.as_ref().unwrap().text.as_ref(),
             "Root literal"
         );
         assert_eq!(literal_doc.term_source(), "1");
     }
 
     #[test]
-    fn source_graph_orders_unattached_documentation_warnings_across_imports() {
+    fn source_graph_orders_unattached_text_warnings_across_imports() {
         let directory = tempdir().unwrap();
         let provider = directory.path().join("provider.zy");
         let root = directory.path().join("root.zy");

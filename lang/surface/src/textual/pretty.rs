@@ -368,7 +368,7 @@ impl<'arena> PrettyFormatter<'arena> {
             .iter()
             .fold(RcDoc::nil(), |prefix, comment| {
                 prefix
-                    .append(if comment.comment().as_documentation().is_some() {
+                    .append(if comment.comment().as_text().is_some() {
                         self.ensure_line_start()
                     } else {
                         RcDoc::nil()
@@ -415,7 +415,7 @@ impl<'arena> PrettyFormatter<'arena> {
         &'arena self, entity: EntityId, document: RcDoc<'arena>,
     ) -> RcDoc<'arena> {
         self.arena.trivia.trailing_comments(entity).iter().fold(document, |document, comment| {
-            let separation = if comment.comment().as_documentation().is_some()
+            let separation = if comment.comment().as_text().is_some()
                 && comment.separation_before() == LineSeparation::SameLine
             {
                 LineSeparation::NextLine
@@ -430,9 +430,7 @@ impl<'arena> PrettyFormatter<'arena> {
 
     fn comment(&'arena self, comment: &'arena SurfaceComment) -> RcDoc<'arena> {
         match comment {
-            | SurfaceComment::Documentation(comment) => {
-                self.marked_comment_lines("--|", &comment.markdown)
-            }
+            | SurfaceComment::Text(comment) => self.marked_comment_lines("--|", &comment.text),
             | SurfaceComment::Line(comment) => self.marked_comment_lines("--", &comment.text),
             | SurfaceComment::Block(comment) => self.block_comment(comment),
         }
@@ -1877,10 +1875,7 @@ mod tests {
         fn collect(source: &str) -> Vec<(LexicalTokenKind, String)> {
             LexicalTokens::new(source)
                 .filter(|token| {
-                    matches!(
-                        token.kind,
-                        LexicalTokenKind::Comment | LexicalTokenKind::DocumentationComment
-                    )
+                    matches!(token.kind, LexicalTokenKind::Comment | LexicalTokenKind::TextBlock)
                 })
                 .map(|token| {
                     let comment = &source[token.range];
@@ -3115,7 +3110,7 @@ mod tests {
     }
 
     #[test]
-    fn preserves_documentation_comments_around_formatted_syntax() {
+    fn preserves_text_blocks_around_formatted_syntax() {
         let source = concat!(
             "--| Package heading\n",
             "--|\n",

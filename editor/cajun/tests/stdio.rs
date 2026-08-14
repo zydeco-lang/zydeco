@@ -397,7 +397,7 @@ fn stdio_server_formats_the_open_document() {
 }
 
 #[test]
-fn stdio_server_warns_about_ineffective_documentation_comments() {
+fn stdio_server_warns_about_ineffective_text_blocks() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("main.zy");
     let source = "--| Ineffective documentation.\n_";
@@ -430,7 +430,7 @@ fn stdio_server_warns_about_ineffective_documentation_comments() {
     let diagnostics = published["params"]["diagnostics"].as_array().unwrap();
     let [warning] = diagnostics.as_slice() else { panic!("expected one warning: {published}") };
     assert_eq!(warning["severity"], 2);
-    assert_eq!(warning["code"], "unattached-documentation-comment");
+    assert_eq!(warning["code"], "unattached-text-block");
     assert_eq!(warning["source"], "zydeco");
     assert!(warning["message"].as_str().unwrap().contains("has no effect"));
     assert_eq!(

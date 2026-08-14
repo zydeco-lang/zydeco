@@ -307,10 +307,10 @@ impl SourceFixture {
     }
 }
 
-fn resolve_assembly(
-    assembly: ProgramAssembly,
+fn resolve_program(
+    program: TextualProgram,
 ) -> Result<SourceScoped, Box<zydeco_surface::scoped::ResolveError>> {
-    assembly.desugar().unwrap().resolve()
+    program.desugar().unwrap().resolve()
 }
 
 fn checked_trivial_computation() -> SourceChecked {
@@ -715,13 +715,13 @@ fn program_assembly_consumes_import_directives_and_preserves_a_source_boundary()
     fixture.write("library.zy", "1");
     let root = fixture.write("main.zy", r#"@[import("library.zy")] _"#);
 
-    let assembly = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
 
     assert!(matches!(
-        assembly.arena.terms[&assembly.unit.root],
+        program.arena.terms[&program.unit.root],
         zydeco_surface::textual::syntax::Term::SourceBoundary(_)
     ));
-    assert!(assembly.arena.terms.iter().all(|(_, term)| {
+    assert!(program.arena.terms.iter().all(|(_, term)| {
         !matches!(
             term,
             zydeco_surface::textual::syntax::Term::Meta(zydeco_syntax::MetaT(meta, _))
@@ -731,28 +731,28 @@ fn program_assembly_consumes_import_directives_and_preserves_a_source_boundary()
 }
 
 #[test]
-fn program_assembly_ascribes_an_implementation_with_its_signature() {
+fn textual_program_ascribes_an_implementation_with_its_signature() {
     use zydeco_surface::textual::syntax::{Ann, SignatureBoundary, Term};
 
     let fixture = SourceFixture::new();
     fixture.write("library.zyi", "@[intrinsic(unit)] _");
     let root = fixture.write("library.zy", "()");
 
-    let assembly = SourceGraph::load(root).unwrap().assemble().unwrap();
-    let Term::Ann(Ann { tm: _, ty }) = assembly.arena.terms[&assembly.unit.root] else {
+    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let Term::Ann(Ann { tm: _, ty }) = program.arena.terms[&program.unit.root] else {
         panic!("expected a root ascription")
     };
 
-    assert!(matches!(assembly.arena.terms[&ty], Term::SignatureBoundary(SignatureBoundary(_))));
+    assert!(matches!(program.arena.terms[&ty], Term::SignatureBoundary(SignatureBoundary(_))));
 }
 
 #[test]
 fn builtin_operation_roles_remain_specializable_through_name_resolution() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "@[builtin(int64_add)] _");
-    let assembly = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
 
-    let resolved = resolve_assembly(assembly).unwrap();
+    let resolved = resolve_program(program).unwrap();
     let zydeco_surface::scoped::syntax::Term::Meta(zydeco_syntax::MetaT(meta, payload)) =
         &resolved.arena.terms[&resolved.root]
     else {
@@ -778,24 +778,24 @@ fn program_assembly_freshens_each_import_occurrence() {
     let root =
         fixture.write("main.zy", r#"(@[import("library.zy")] _, @[import("library.zy")] _)"#);
 
-    let assembly = SourceGraph::load(root).unwrap().assemble().unwrap();
-    let Term::Paren(Paren(imports)) = &assembly.arena.terms[&assembly.unit.root] else {
+    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let Term::Paren(Paren(imports)) = &program.arena.terms[&program.unit.root] else {
         panic!("expected a pair of imports")
     };
     let definitions = imports
         .iter()
         .map(|import| {
-            let Term::SourceBoundary(SourceBoundary(function)) = &assembly.arena.terms[import]
+            let Term::SourceBoundary(SourceBoundary(function)) = &program.arena.terms[import]
             else {
                 panic!("expected a source boundary")
             };
-            let Term::Abs(Abs(copattern, _)) = &assembly.arena.terms[function] else {
+            let Term::Abs(Abs(copattern, _)) = &program.arena.terms[function] else {
                 panic!("expected an imported function")
             };
-            let CoPattern::Pat(pattern) = assembly.arena.copats[copattern] else {
+            let CoPattern::Pat(pattern) = program.arena.copats[copattern] else {
                 panic!("expected a parameter pattern")
             };
-            let Pattern::Var(definition) = assembly.arena.pats[&pattern] else {
+            let Pattern::Var(definition) = program.arena.pats[&pattern] else {
                 panic!("expected a variable parameter")
             };
             definition
@@ -804,7 +804,7 @@ fn program_assembly_freshens_each_import_occurrence() {
 
     assert_eq!(definitions.len(), 2);
     assert_ne!(definitions[0], definitions[1]);
-    assert_eq!(assembly.arena.defs[&definitions[0]], assembly.arena.defs[&definitions[1]]);
+    assert_eq!(program.arena.defs[&definitions[0]], program.arena.defs[&definitions[1]]);
 }
 
 #[test]
@@ -815,18 +815,18 @@ fn program_assembly_retains_importer_and_provider_spans() {
     fixture.write("library.zy", "fn value => value");
     let root = fixture.write("main.zy", r#"@[import("library.zy")] _"#);
 
-    let assembly = SourceGraph::load(root).unwrap().assemble().unwrap();
-    let boundary = assembly.unit.root;
-    let Term::SourceBoundary(SourceBoundary(provider)) = assembly.arena.terms[&boundary] else {
+    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let boundary = program.unit.root;
+    let Term::SourceBoundary(SourceBoundary(provider)) = program.arena.terms[&boundary] else {
         panic!("expected a source boundary")
     };
 
     assert_eq!(
-        assembly.spans[&boundary.into()].get_path().and_then(|path| path.file_name()),
+        program.spans[&boundary.into()].get_path().and_then(|path| path.file_name()),
         Some(std::ffi::OsStr::new("main.zy"))
     );
     assert_eq!(
-        assembly.spans[&provider.into()].get_path().and_then(|path| path.file_name()),
+        program.spans[&provider.into()].get_path().and_then(|path| path.file_name()),
         Some(std::ffi::OsStr::new("library.zy"))
     );
 }
@@ -840,18 +840,18 @@ fn program_assembly_expands_nested_imports_recursively() {
     fixture.write("library.zy", r#"@[import("leaf.zy")] _"#);
     let root = fixture.write("main.zy", r#"@[import("library.zy")] _"#);
 
-    let assembly = SourceGraph::load(root).unwrap().assemble().unwrap();
-    let Term::SourceBoundary(SourceBoundary(library)) = assembly.arena.terms[&assembly.unit.root]
+    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let Term::SourceBoundary(SourceBoundary(library)) = program.arena.terms[&program.unit.root]
     else {
         panic!("expected the library boundary")
     };
-    let Term::SourceBoundary(SourceBoundary(leaf)) = assembly.arena.terms[&library] else {
+    let Term::SourceBoundary(SourceBoundary(leaf)) = program.arena.terms[&library] else {
         panic!("expected the nested leaf boundary")
     };
 
-    assert!(matches!(assembly.arena.terms[&leaf], Term::Lit(_)));
+    assert!(matches!(program.arena.terms[&leaf], Term::Lit(_)));
     assert_eq!(
-        assembly.spans[&leaf.into()].get_path().and_then(|path| path.file_name()),
+        program.spans[&leaf.into()].get_path().and_then(|path| path.file_name()),
         Some(std::ffi::OsStr::new("leaf.zy"))
     );
 }
@@ -861,9 +861,9 @@ fn imported_free_names_do_not_capture_importer_bindings() {
     let fixture = SourceFixture::new();
     fixture.write("library.zy", "value");
     let root = fixture.write("main.zy", r#"let value = _ in @[import("library.zy")] _"#);
-    let assembly = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
 
-    let Err(error) = resolve_assembly(assembly) else {
+    let Err(error) = resolve_program(program) else {
         panic!("expected name resolution to reject caller capture")
     };
     let zydeco_surface::scoped::ResolveError::UnboundVar(name) = error.as_ref() else {
@@ -882,9 +882,9 @@ fn imported_mobile_bindings_do_not_move_into_an_importer_block() {
     let fixture = SourceFixture::new();
     fixture.write("library.zy", "param value that value");
     let root = fixture.write("main.zy", r#"begin @[import("library.zy")] _ end"#);
-    let assembly = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
 
-    let Err(error) = resolve_assembly(assembly) else {
+    let Err(error) = resolve_program(program) else {
         panic!("expected name resolution to reject cross-file mobility")
     };
     let zydeco_surface::scoped::ResolveError::UnenclosedThat(span) = error.as_ref() else {
@@ -902,9 +902,9 @@ fn a_self_contained_imported_term_resolves_normally() {
     let fixture = SourceFixture::new();
     fixture.write("library.zy", "fn value => value");
     let root = fixture.write("main.zy", r#"@[import("library.zy")] _"#);
-    let assembly = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
 
-    let resolved = resolve_assembly(assembly).unwrap();
+    let resolved = resolve_program(program).unwrap();
 
     assert!(matches!(
         resolved.arena.terms[&resolved.root],
@@ -921,9 +921,9 @@ fn importing_once_and_binding_once_shares_one_lexical_identity() {
     fixture.write("library.zy", "fn value => value");
     let root = fixture
         .write("main.zy", r#"let library = @[import("library.zy")] _ in (library, library)"#);
-    let assembly = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
 
-    let resolved = resolve_assembly(assembly).unwrap();
+    let resolved = resolve_program(program).unwrap();
     let Term::Let(Let { binder, .. }) = resolved.arena.terms[&resolved.root] else {
         panic!("expected an explicit sharing binding")
     };
@@ -946,6 +946,59 @@ fn the_source_pipeline_reaches_statics_without_a_declaration_entry() {
         panic!("an unclassified root hole must not count as a checked source term")
     };
     assert!(!reports.is_empty());
+}
+
+#[test]
+fn a_literal_splice_assembles_to_a_string_literal() {
+    let fixture = SourceFixture::new();
+    let root = fixture.write("main.zy", "--| Line one\n--| Line two\n@[literal] _");
+    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let zydeco_surface::textual::syntax::Term::Lit(
+        zydeco_surface::textual::syntax::Literal::String(text),
+    ) = &program.arena.terms[&program.unit.root]
+    else {
+        panic!("expected `@[literal]` to assemble to a string literal")
+    };
+    assert_eq!(text.as_str(), "Line one\nLine two");
+}
+
+#[test]
+fn a_literal_splice_checks_as_a_string_value() {
+    let fixture = SourceFixture::new();
+    let root = fixture.write("main.zy", "--| Message\n@[literal] _");
+    let checked = TestPipeline::check(root).unwrap();
+
+    assert!(matches!(checked.root, zydeco_statics::syntax::TermAnnId::Value(_, _)));
+}
+
+#[test]
+fn a_literal_splice_without_an_attached_text_block_is_rejected() {
+    let fixture = SourceFixture::new();
+    let root = fixture.write("main.zy", "@[literal] _");
+    let error = SourceGraph::load(root).unwrap_err();
+
+    assert!(matches!(
+        error,
+        SourceLoadError::Parse(SourceParseError::LiteralDirective {
+            error: zydeco_surface::textual::LiteralDirectiveError::MissingText { .. },
+            ..
+        })
+    ));
+}
+
+#[test]
+fn a_literal_splice_on_a_non_hole_term_is_rejected() {
+    let fixture = SourceFixture::new();
+    let root = fixture.write("main.zy", "--| Text\n@[literal] 1");
+    let error = SourceGraph::load(root).unwrap_err();
+
+    assert!(matches!(
+        error,
+        SourceLoadError::Parse(SourceParseError::LiteralDirective {
+            error: zydeco_surface::textual::LiteralDirectiveError::PayloadNotHole { .. },
+            ..
+        })
+    ));
 }
 
 #[test]
@@ -1032,9 +1085,9 @@ fn an_explicit_signature_import_still_rejects_a_non_type_root() {
 
 #[test]
 fn the_declaration_free_unbound_fixture_fails_during_resolution() {
-    let assembly =
+    let program =
         SourceGraph::load(repository_source("tests/fail/unbound.zy")).unwrap().assemble().unwrap();
-    let Err(error) = resolve_assembly(assembly) else {
+    let Err(error) = resolve_program(program) else {
         panic!("the unbound fixture unexpectedly resolved")
     };
     let zydeco_surface::scoped::ResolveError::UnboundVar(name) = error.as_ref() else {
@@ -2057,6 +2110,15 @@ fn small_non_monadic_exec_examples_port_as_root_terms() {
 #[test]
 fn intrinsic_unit_exec_example_ports_as_a_root_term() {
     assert_source_io_program_reaches_zasm("tests/exec/unit.zy", "", "()\n");
+}
+
+#[test]
+fn literal_text_exec_example_runs_through_the_standard_library() {
+    assert_source_io_program_reaches_zasm(
+        "tests/exec/literal.zy",
+        "",
+        "Hello literal\nsecond line\n",
+    );
 }
 
 #[test]

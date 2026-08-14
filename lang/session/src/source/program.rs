@@ -1,36 +1,41 @@
-use crate::source::{ProgramAssemblyError, SourceGraph, SourceId, SourceKind};
+use crate::source::{SourceGraph, SourceId, SourceKind, TextualProgramError};
 use zydeco_surface::textual::syntax as t;
 use zydeco_utils::span::Span;
 
-pub struct ProgramAssembly {
+/// The complete program in textual syntax, merged from one source graph.
+///
+/// `SourceGraph::assemble` clones every reachable template into one fresh
+/// arena: imports become source boundaries, companion signatures become
+/// annotations, and `@[literal]` splices become string literals.
+pub struct TextualProgram {
     pub spans: t::SpanArena,
     pub arena: t::TextArena,
     pub unit: t::SourceUnit,
 }
 
 impl SourceGraph {
-    pub fn assemble(&self) -> Result<ProgramAssembly, ProgramAssemblyError> {
-        ProgramAssembler::new(self).assemble()
+    pub fn assemble(&self) -> Result<TextualProgram, TextualProgramError> {
+        TextualProgramBuilder::new(self).build()
     }
 }
 
-struct ProgramAssembler<'graph> {
+struct TextualProgramBuilder<'graph> {
     graph: &'graph SourceGraph,
     parser: t::Parser,
 }
 
-impl<'graph> ProgramAssembler<'graph> {
+impl<'graph> TextualProgramBuilder<'graph> {
     fn new(graph: &'graph SourceGraph) -> Self {
         Self { graph, parser: t::Parser::new() }
     }
 
-    fn assemble(mut self) -> Result<ProgramAssembly, ProgramAssemblyError> {
+    fn build(mut self) -> Result<TextualProgram, TextualProgramError> {
         let root = self.source(self.graph.root)?;
         let (spans, arena) = self.parser.finish();
-        Ok(ProgramAssembly { spans, arena, unit: t::SourceUnit { root } })
+        Ok(TextualProgram { spans, arena, unit: t::SourceUnit { root } })
     }
 
-    fn source(&mut self, source: SourceId) -> Result<t::TermId, ProgramAssemblyError> {
+    fn source(&mut self, source: SourceId) -> Result<t::TermId, TextualProgramError> {
         let file = &self.graph.sources[&source];
         let root = file.unit.root;
         let kind = file.kind();
@@ -64,7 +69,7 @@ impl<'graph> ProgramAssembler<'graph> {
 
     fn pattern(
         &mut self, source: SourceId, pattern: t::PatId,
-    ) -> Result<t::PatId, ProgramAssemblyError> {
+    ) -> Result<t::PatId, TextualProgramError> {
         let syntax = self.graph.sources[&source].arena.pats[&pattern].clone();
         let syntax = match syntax {
             | t::Pattern::Ann(t::Ann { tm, ty }) => {
@@ -108,7 +113,7 @@ impl<'graph> ProgramAssembler<'graph> {
 
     fn copattern(
         &mut self, source: SourceId, pattern: t::CoPatId,
-    ) -> Result<t::CoPatId, ProgramAssemblyError> {
+    ) -> Result<t::CoPatId, TextualProgramError> {
         let syntax = self.graph.sources[&source].arena.copats[&pattern].clone();
         let syntax = match syntax {
             | t::CoPattern::Pat(pattern) => self.pattern(source, pattern)?.into(),
@@ -126,7 +131,7 @@ impl<'graph> ProgramAssembler<'graph> {
 
     fn existential_parameter(
         &mut self, source: SourceId, parameter: t::ExistentialParameter,
-    ) -> Result<t::ExistentialParameter, ProgramAssemblyError> {
+    ) -> Result<t::ExistentialParameter, TextualProgramError> {
         let t::ExistentialParameter { annotations, binder } = parameter;
         let binder = self.pattern(source, binder)?;
         Ok(t::ExistentialParameter { annotations, binder })
@@ -134,7 +139,7 @@ impl<'graph> ProgramAssembler<'graph> {
 
     fn binding(
         &mut self, source: SourceId, binding: t::GenBind<t::TermId>,
-    ) -> Result<t::GenBind<t::TermId>, ProgramAssemblyError> {
+    ) -> Result<t::GenBind<t::TermId>, TextualProgramError> {
         let t::GenBind { fix, comp, binder, params, ty, bindee } = binding;
         Ok(t::GenBind {
             fix,
@@ -148,12 +153,18 @@ impl<'graph> ProgramAssembler<'graph> {
 
     fn term(
         &mut self, source: SourceId, term: t::TermId,
-    ) -> Result<t::TermId, ProgramAssemblyError> {
-        let syntax = self.graph.sources[&source].arena.terms[&term].clone();
+    ) -> Result<t::TermId, TextualProgramError> {
+        let file = &self.graph.sources[&source];
+        let syntax = file.arena.terms[&term].clone();
         if let t::Term::Meta(t::MetaT(meta, _)) = &syntax
             && meta.is("import")
         {
             return self.import(source, term);
+        }
+        if let t::Term::Meta(t::MetaT(meta, _)) = &syntax
+            && meta.is("literal")
+        {
+            return self.literal(source, term);
         }
 
         let syntax = match syntax {
@@ -256,7 +267,7 @@ impl<'graph> ProgramAssembler<'graph> {
                     .map(|t::DataArm { name, param }| {
                         Ok(t::DataArm { name, param: self.term(source, param)? })
                     })
-                    .collect::<Result<Vec<_>, ProgramAssemblyError>>()?,
+                    .collect::<Result<Vec<_>, TextualProgramError>>()?,
             }
             .into(),
             | t::Term::CoData(t::CoData { arms }) => t::CoData {
@@ -271,7 +282,7 @@ impl<'graph> ProgramAssembler<'graph> {
                             out: self.term(source, out)?,
                         })
                     })
-                    .collect::<Result<Vec<_>, ProgramAssemblyError>>()?,
+                    .collect::<Result<Vec<_>, TextualProgramError>>()?,
             }
             .into(),
             | t::Term::Ctor(t::Ctor(name, body)) => t::Ctor(name, self.term(source, body)?).into(),
@@ -285,7 +296,7 @@ impl<'graph> ProgramAssembler<'graph> {
                             tail: self.term(source, tail)?,
                         })
                     })
-                    .collect::<Result<Vec<_>, ProgramAssemblyError>>()?,
+                    .collect::<Result<Vec<_>, TextualProgramError>>()?,
             }
             .into(),
             | t::Term::CoMatch(t::CoMatchParam { arms }) => t::CoMatchParam {
@@ -297,7 +308,7 @@ impl<'graph> ProgramAssembler<'graph> {
                             tail: self.term(source, tail)?,
                         })
                     })
-                    .collect::<Result<Vec<_>, ProgramAssemblyError>>()?,
+                    .collect::<Result<Vec<_>, TextualProgramError>>()?,
             }
             .into(),
             | t::Term::Dtor(t::Dtor(body, name)) => t::Dtor(self.term(source, body)?, name).into(),
@@ -309,16 +320,33 @@ impl<'graph> ProgramAssembler<'graph> {
 
     fn import(
         &mut self, source: SourceId, term: t::TermId,
-    ) -> Result<t::TermId, ProgramAssemblyError> {
+    ) -> Result<t::TermId, TextualProgramError> {
         let file = &self.graph.sources[&source];
         let import = file
             .imports
             .iter()
             .find(|import| self.graph.imports[import].term == term)
             .copied()
-            .ok_or_else(|| ProgramAssemblyError::MissingImport { path: file.path.clone(), term })?;
+            .ok_or_else(|| TextualProgramError::MissingImport { path: file.path.clone(), term })?;
         let imported = self.graph.imports[&import].imported;
         let body = self.source(imported)?;
         Ok(self.parser.term(self.span(source, term.into()).make(t::SourceBoundary(body).into())))
+    }
+
+    fn literal(
+        &mut self, source: SourceId, term: t::TermId,
+    ) -> Result<t::TermId, TextualProgramError> {
+        let file = &self.graph.sources[&source];
+        let text = file
+            .literals
+            .iter()
+            .find(|site| site.term == term)
+            .map(|site| site.directive.text.text.as_ref())
+            .ok_or_else(|| TextualProgramError::MissingLiteralText {
+                path: file.path.clone(),
+                term,
+            })?;
+        let syntax = t::Term::Lit(t::Literal::String(text.into()));
+        Ok(self.parser.term(self.span(source, term.into()).make(syntax)))
     }
 }

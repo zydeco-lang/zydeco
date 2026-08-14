@@ -42,6 +42,31 @@ pub enum MonadicMetaError {
     Arguments { found: usize },
 }
 
+/// The typed meaning of a `@[literal]` annotation.
+///
+/// The annotation replaces its hole payload with the text of an attached
+/// `--|` block, interpreted verbatim as a string literal.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct LiteralMeta;
+
+impl SpecializeMeta for LiteralMeta {
+    const NAME: &'static str = "literal";
+    type Error = LiteralMetaError;
+
+    fn from_arguments(arguments: &[Meta]) -> Result<Self, Self::Error> {
+        match arguments {
+            | [] => Ok(Self),
+            | arguments => Err(LiteralMetaError::Arguments { found: arguments.len() }),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Error, Hash, PartialEq, Eq)]
+pub enum LiteralMetaError {
+    #[error("literal does not accept arguments, but found {found}")]
+    Arguments { found: usize },
+}
+
 /// A decoded `intrinsic(role)` splice annotation.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IntrinsicMeta {

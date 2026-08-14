@@ -42,11 +42,8 @@ impl SourceTemplate {
                 message: ParseError { error, file_info: &info }.to_string(),
             })?;
         let documentation = unit.documentation(&parser.arena, &parser.spans);
-        let warnings = unit
-            .unattached_documentation(&parser.arena)
-            .into_iter()
-            .map(SourceWarning::from)
-            .collect();
+        let warnings =
+            unit.unattached_text(&parser.arena).into_iter().map(SourceWarning::from).collect();
         let import_sites = unit
             .imports(&parser.arena, &parser.spans)
             .map_err(|error| SourceParseError::Directive { path: path.clone(), error })?;
@@ -54,8 +51,21 @@ impl SourceTemplate {
             .map_err(|error| SourceParseError::BuiltinDirective { path: path.clone(), error })?;
         unit.intrinsics(&parser.arena, &parser.spans)
             .map_err(|error| SourceParseError::IntrinsicDirective { path: path.clone(), error })?;
+        let literals = unit
+            .literals(&parser.arena, &parser.spans)
+            .map_err(|error| SourceParseError::LiteralDirective { path: path.clone(), error })?;
         let (spans, arena) = parser.finish();
-        Ok(Self { path, source, spans, arena, unit, documentation, warnings, import_sites })
+        Ok(Self {
+            path,
+            source,
+            spans,
+            arena,
+            unit,
+            documentation,
+            warnings,
+            import_sites,
+            literals,
+        })
     }
 }
 

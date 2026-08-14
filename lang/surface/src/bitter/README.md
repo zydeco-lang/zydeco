@@ -16,6 +16,10 @@ textual (parser output) -> bitter (desugared surface) -> scoped (name resolution
 `bitter` is intentionally still "surface-shaped" (it keeps source-level names),
 but removes syntactic sugar and inserts explicit nodes the later passes rely on.
 
+Term-level splices are resolved before this pass: the compiler session's assembly phase
+replaces `@[import(...)]` holes with source boundaries and `@[literal]` holes with string literals,
+so bitter only ever sees ordinary `Lit` nodes for embedded text.
+
 ## Data model
 
 `bitter::syntax` defines the desugared AST and the identifiers used to store it:

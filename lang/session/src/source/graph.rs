@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use zydeco_surface::textual::{DocumentationSite, ImportSite, syntax as t};
+use zydeco_surface::textual::{DocumentationSite, ImportSite, LiteralSite, syntax as t};
 use zydeco_utils::prelude::{ArenaDense, ArenaSchema};
 
 zydeco_utils::new_key_type! {
@@ -36,6 +36,7 @@ pub struct SourceTemplate {
     pub documentation: Vec<DocumentationSite>,
     pub warnings: Vec<SourceWarning>,
     pub import_sites: Vec<ImportSite>,
+    pub literals: Vec<LiteralSite>,
 }
 
 /// The role inferred from a source file's extension.

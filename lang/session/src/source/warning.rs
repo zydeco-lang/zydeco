@@ -1,26 +1,26 @@
 use crate::source::{SourceFile, SourceGraph, SourceId};
 use std::{ops::Range, path::Path};
-use zydeco_surface::textual::UnattachedDocumentationWarning;
+use zydeco_surface::textual::UnattachedTextWarning;
 
 /// A non-fatal issue discovered while interpreting one parsed source file.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SourceWarning {
-    UnattachedDocumentation(UnattachedDocumentationWarning),
+    UnattachedText(UnattachedTextWarning),
 }
 
 impl SourceWarning {
     /// Stable tooling identifier for this warning kind.
     pub fn code(&self) -> &'static str {
         match self {
-            | Self::UnattachedDocumentation(_) => "unattached-documentation-comment",
+            | Self::UnattachedText(_) => "unattached-text-block",
         }
     }
 
     /// Primary user-facing warning text.
     pub fn message(&self) -> &'static str {
         match self {
-            | Self::UnattachedDocumentation(_) => {
-                "documentation comment is not attached to `@[doc]` and has no effect"
+            | Self::UnattachedText(_) => {
+                "text block is not attached to an annotation and has no effect"
             }
         }
     }
@@ -28,8 +28,8 @@ impl SourceWarning {
     /// Actionable guidance shared by diagnostic frontends.
     pub fn note(&self) -> &'static str {
         match self {
-            | Self::UnattachedDocumentation(_) => {
-                "Place `@[doc]` immediately after the block, or use `--` for an ordinary comment."
+            | Self::UnattachedText(_) => {
+                "Place `@[doc]` or `@[literal]` immediately after the block, or use `--` for an ordinary comment."
             }
         }
     }
@@ -37,14 +37,14 @@ impl SourceWarning {
     /// Byte range occupied by the ineffective source construct.
     pub fn range(&self) -> &Range<usize> {
         match self {
-            | Self::UnattachedDocumentation(warning) => &warning.range,
+            | Self::UnattachedText(warning) => &warning.range,
         }
     }
 }
 
-impl From<UnattachedDocumentationWarning> for SourceWarning {
-    fn from(warning: UnattachedDocumentationWarning) -> Self {
-        Self::UnattachedDocumentation(warning)
+impl From<UnattachedTextWarning> for SourceWarning {
+    fn from(warning: UnattachedTextWarning) -> Self {
+        Self::UnattachedText(warning)
     }
 }
 

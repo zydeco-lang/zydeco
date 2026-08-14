@@ -1,7 +1,7 @@
 use super::loader::{SourceGraphLoader, SourceProvider};
 use crate::source::{
-    CheckedRootSort, ProgramAssemblyError, ScopedProgram, SourceGraph, SourceLoadError, SourcePath,
-    SourceTemplate,
+    CheckedRootSort, ScopedProgram, SourceGraph, SourceLoadError, SourcePath, SourceTemplate,
+    TextualProgramError,
 };
 use dashmap::{DashMap, mapref::entry::Entry};
 use salsa::{Setter as _, Storage};
@@ -159,10 +159,10 @@ pub enum AnalysisError {
         #[source]
         error: Arc<SourceLoadError>,
     },
-    #[error("Assembly error: {error}")]
-    Assembly {
+    #[error("Textual program error: {error}")]
+    TextualProgram {
         #[source]
-        error: ProgramAssemblyError,
+        error: TextualProgramError,
     },
     #[error("Desugaring error: {error}")]
     Desugar {
@@ -376,8 +376,8 @@ fn analyze_source(
     db: &dyn SourceQueryDb, root: SourceInput,
 ) -> Result<Arc<ProgramAnalysis>, AnalysisError> {
     let graph = source_graph(db, root).map_err(|error| AnalysisError::Source { error })?;
-    let assembly = graph.assemble().map_err(|error| AnalysisError::Assembly { error })?;
-    let bitter = assembly.desugar().map_err(|error| AnalysisError::Desugar { error })?;
+    let program = graph.assemble().map_err(|error| AnalysisError::TextualProgram { error })?;
+    let bitter = program.desugar().map_err(|error| AnalysisError::Desugar { error })?;
     let ScopedProgram { spans, mut arena, prim, root } =
         bitter.resolve().map_err(|error| AnalysisError::Resolve { error, graph: graph.clone() })?;
     let checked = Tycker::new(&spans, &prim, &mut arena).check_source_outcome(root);
