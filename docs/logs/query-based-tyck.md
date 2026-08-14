@@ -133,3 +133,33 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
     `la-arena` raw indices, so they stay on the per-check allocator until `ArenaDense` grows a
     derived-insert path. The first migration slices therefore cover the sparse categories
     (`KindId`, `KPatId`, `TPatId`, `TypeId`, `VPatId`, `ValueId`, `CompuId`).
+
+## 2026-08-14 — P4 producer: derived allocation sites, wired into the checker
+
+- Swapped the `Tycker`'s sequential `IdAllocator` for a `DerivedAllocator` that pushes
+  `(entity_space, entity_raw, occurrence)` sites around every scoped term and pattern check and
+  issues fresh sparse identifiers from the top site with a site-local slot. The wholesale check
+  is still one query, so this is a behavior-neutral refactor with new identifier values; the full
+  workspace suite passes unchanged, including diagnostics that embed `concise()` suffixes.
+- Two collision bugs found and fixed during the swap, each worth remembering:
+  - The scoped identifiers of different categories (patterns vs terms) come from different
+    allocators, so their raw indices overlap across categories. Deriving from the raw index alone
+    collides (`entity=4 occurrence=0 slot=0` issued twice — one pattern, one term). The site
+    identity must be the full `(key_space, raw)` pair of the source entity, not the raw index.
+  - The root site `(0, 0)` collided with the first real entity's first check; the root now uses a
+    sentinel identity.
+  - Occurrence counts checks via a per-check counter table (`Tycker::check_counts`) rather than
+    provenance records, because hole-producing checks record no provenance and would otherwise
+    reuse a site on re-check.
+- Diagnosis notes: an env-gated `HashSet` probe in `DerivedAllocator::fresh` that panics at the
+  second issue of an identifier was far more effective than backtraces at pinning down the
+  colliding pair; `RUST_BACKTRACE=1` showed the allocation path but not the colliding identity.
+
+## Next step
+
+- Decompose the judgment layer into producer queries keyed by interned scoped entities:
+  `env_of_term` (the `TyEnvT` threading as a query DAG) feeding `tyck_term`, `tyck_pat`, and the
+  sort judgments, with `TyckErrorEntry` lists returned as values. The derived allocator makes the
+  identifiers reproducible per site, so judgment queries can construct their output nodes without
+  a shared cursor. `AbstId`/`FillId` allocation still binds the first slices to constructs that do
+  not seal types or introduce holes.
