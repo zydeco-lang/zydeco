@@ -1,4 +1,11 @@
 use super::syntax::*;
+use zydeco_syntax::SpanStore;
+
+impl SpanStore<EntityId> for SpanArena {
+    fn span(&self, entity: EntityId) -> &Span {
+        &self[&entity]
+    }
+}
 
 macro_rules! impl_span_view {
     ($($ty:ty)*) => {
