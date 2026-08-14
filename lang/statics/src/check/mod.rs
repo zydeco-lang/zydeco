@@ -59,9 +59,21 @@ pub struct Tycker<'a> {
     pub(crate) observations: Vec<TyckObservation>,
 }
 
-pub type TyckReports = std::sync::Arc<
-    Vec<ariadne::Report<'static, (zydeco_utils::span::PathDisplay, std::ops::Range<usize>)>>,
->;
+/// Type-check reports with their primary spans, for per-file consumers.
+///
+/// The LSP publishes reports per file, so each report carries its primary
+/// source span and rendered message in a parallel vector.
+#[derive(Clone, Debug)]
+pub struct TyckReports {
+    pub reports: std::sync::Arc<
+        Vec<ariadne::Report<'static, (zydeco_utils::span::PathDisplay, std::ops::Range<usize>)>>,
+    >,
+    /// The primary span and rendered message of each report, parallel to
+    /// [`Self::reports`]; `None` for reports without a source span.
+    pub spans: std::sync::Arc<
+        Vec<Option<(zydeco_utils::span::PathDisplay, std::ops::Range<usize>, String)>>,
+    >,
+}
 
 /// A source-directed observation produced during type checking.
 #[derive(Clone, Debug)]
@@ -1174,27 +1186,25 @@ impl<'a> Tycker<'a> {
 
         let mut seen_blame = HashSet::new();
         let mut seen_coverage = HashSet::new();
-        std::sync::Arc::new(
-            self.errors
-                .iter()
-                .filter(|entry| {
-                    if matches!(entry.error, TyckError::Coverage(_)) {
-                        let span = self
-                            .error_primary_span(&entry.error)
-                            .map(|(path, range)| (path, range.start, range.end));
-                        seen_coverage.insert((span, self.error_message(&entry.error)))
-                    } else {
-                        seen_blame.insert((
-                            entry.blame.file(),
-                            entry.blame.line(),
-                            entry.blame.column(),
-                        ))
-                    }
-                })
-                .cloned()
-                .map(|entry| self.error_entry_report(entry))
-                .collect(),
-        )
+        let mut reports = Vec::new();
+        let mut spans = Vec::new();
+        for entry in self.errors.iter().filter(|entry| {
+            if matches!(entry.error, TyckError::Coverage(_)) {
+                let span = self
+                    .error_primary_span(&entry.error)
+                    .map(|(path, range)| (path, range.start, range.end));
+                seen_coverage.insert((span, self.error_message(&entry.error)))
+            } else {
+                seen_blame.insert((entry.blame.file(), entry.blame.line(), entry.blame.column()))
+            }
+        }) {
+            spans.push(
+                self.error_primary_span(&entry.error)
+                    .map(|(path, range)| (path, range, self.error_message(&entry.error))),
+            );
+            reports.push(self.error_entry_report(entry.clone()));
+        }
+        TyckReports { reports: std::sync::Arc::new(reports), spans: std::sync::Arc::new(spans) }
     }
 
     /// Resolve all holes with solutions (including nested ones).

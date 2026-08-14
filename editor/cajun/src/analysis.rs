@@ -226,7 +226,8 @@ impl ProjectState {
 
     pub(crate) fn diagnostics(&self, file_path: &Path) -> Vec<Diagnostic> {
         let file_path = Self::normalize_path(file_path);
-        self.analysis
+        let mut diagnostics = self
+            .analysis
             .warnings()
             .into_iter()
             .filter(|site| Self::normalize_path(site.path()) == file_path)
@@ -240,7 +241,26 @@ impl ProjectState {
                     ..Diagnostic::default()
                 })
             })
-            .collect()
+            .collect::<Vec<_>>();
+        if let Some(reports) = self.analysis.outcome().reports() {
+            diagnostics.extend(
+                reports
+                    .spans
+                    .iter()
+                    .flatten()
+                    .filter(|(path, _, _)| Self::normalize_path(path.as_path()) == file_path)
+                    .filter_map(|(_, range, message)| {
+                        Some(Diagnostic {
+                            range: self.byte_range(&file_path, range.clone())?,
+                            severity: Some(DiagnosticSeverity::ERROR),
+                            source: Some("zydeco".to_owned()),
+                            message: message.clone(),
+                            ..Diagnostic::default()
+                        })
+                    }),
+            );
+        }
+        diagnostics
     }
 
     fn symbol_at(&self, file_path: &Path, position: Position) -> Option<SymbolOccurrence> {
@@ -702,7 +722,7 @@ mod tests {
             "end\n",
         );
         let overrides = HashMap::from([(path.clone(), source.to_owned())]);
-        let (project, session) = ProjectState::load(&path, &overrides).unwrap();
+        let (project, _session) = ProjectState::load(&path, &overrides).unwrap();
         let line_width = HoverLineWidth::new(72).unwrap();
         let hover = project
             .hover(&session, &path, source_position(source, "ok (A : VType)"), line_width)
@@ -829,6 +849,25 @@ mod tests {
     }
 
     #[test]
+    fn type_errors_surface_as_error_diagnostics() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../lib/tests/exec/forall.zy")
+            .canonicalize()
+            .unwrap();
+        let source = std::fs::read_to_string(&path).unwrap();
+        let broken = source.replace("! id~ OS { ! (process/exit) x }", "x x");
+        assert_ne!(source, broken);
+        let overrides = HashMap::from([(path.clone(), broken.clone())]);
+        let (project, _session) = ProjectState::load(&path, &overrides).unwrap();
+        let diagnostics = project.diagnostics(&path);
+
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic.severity == Some(tower_lsp::lsp_types::DiagnosticSeverity::ERROR)
+                && diagnostic.source.as_deref() == Some("zydeco")
+        }));
+    }
+
+    #[test]
     fn semantic_tokens_retain_established_static_classes_after_type_errors() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../lib/tests/exec/forall.zy")
@@ -838,7 +877,7 @@ mod tests {
         let broken = source.replace("! id~ OS { ! (process/exit) x }", "x x");
         assert_ne!(source, broken);
         let overrides = HashMap::from([(path.clone(), broken.clone())]);
-        let (project, session) = ProjectState::load(&path, &overrides).unwrap();
+        let (project, _session) = ProjectState::load(&path, &overrides).unwrap();
         let encoded = project.semantic_tokens(&path).unwrap();
         let decoded = SemanticTokenDecoder::new(&broken).decode(&encoded);
 

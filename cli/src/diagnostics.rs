@@ -15,7 +15,7 @@ impl DiagnosticRenderer {
                 Self::warnings(analysis);
                 Self::observations(analysis);
                 if let Some(reports) = analysis.outcome().reports() {
-                    reports.iter().for_each(|report| {
+                    reports.reports.iter().for_each(|report| {
                         let _ = report.eprint(SourceCaches::analysis(analysis));
                     });
                 }

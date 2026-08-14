@@ -19,7 +19,7 @@ impl DiagnosticText {
             return "type checking rejected this source".to_owned();
         };
         let mut output = Vec::new();
-        reports.iter().for_each(|report| {
+        reports.reports.iter().for_each(|report| {
             let _ = report.write(SourceCaches::analysis(analysis), &mut output);
         });
         Self::plain(output)

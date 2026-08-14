@@ -347,6 +347,18 @@ impl CompilerSession {
         Ok(normalized_type_at(self, root, id))
     }
 
+    /// The type-check reports recorded for one root, computed on demand from
+    /// its analysis. Each report carries its primary source span so that
+    /// per-file consumers can filter it.
+    pub fn reports(
+        &self, root: impl AsRef<Path>,
+    ) -> Result<Option<zydeco_statics::check::TyckReports>, AnalysisError> {
+        let root = self
+            .source_input(root.as_ref().to_path_buf())
+            .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
+        Ok(reports_at(self, root))
+    }
+
     /// Coverage failures of one root, computed on demand from its analysis.
     pub fn coverage(
         &self, root: impl AsRef<Path>,
@@ -498,6 +510,16 @@ fn analyze_source(
         }) => (statics, AnalysisOutcome::Rejected { reports }, observations),
     };
     Ok(Arc::new(ProgramAnalysis { graph, spans, scoped, statics, outcome, observations }))
+}
+
+/// The type-check reports recorded for one analyzed root, computed on demand
+/// from its analysis. Each report carries its primary source span.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+fn reports_at(
+    db: &dyn SourceQueryDb, root: SourceInput,
+) -> Option<zydeco_statics::check::TyckReports> {
+    let analysis = analyze_source(db, root).ok()?;
+    analysis.outcome().reports().cloned()
 }
 
 /// The normalized type recorded for a typed type node of one analyzed root.
@@ -753,7 +775,7 @@ mod tests {
         let analysis = session.analyze(&root).unwrap();
 
         assert!(analysis.outcome().root().is_none());
-        assert!(analysis.outcome().reports().is_some_and(|reports| !reports.is_empty()));
+        assert!(analysis.outcome().reports().is_some_and(|reports| !reports.reports.is_empty()));
     }
 
     #[test]
@@ -831,7 +853,7 @@ end
         let session = CompilerSession::default();
 
         let analysis = session.analyze(&root).unwrap();
-        assert!(analysis.outcome().reports().is_some_and(|reports| !reports.is_empty()));
+        assert!(analysis.outcome().reports().is_some_and(|reports| !reports.reports.is_empty()));
 
         let coverage = session.coverage(&root).unwrap();
         assert!(coverage.iter().any(|error| {
