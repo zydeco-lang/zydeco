@@ -11,7 +11,7 @@ use std::{
 };
 use thiserror::Error;
 use zydeco_statics::{
-    CheckedSource, RejectedSource, TyckObservation, TyckReports, Tycker,
+    CheckedSource, RejectedSource, TyckObservation, TyckReports,
     arena::StaticsArena,
     syntax::{Fillable, PackPi, TermAnnId, Type},
 };
@@ -188,7 +188,7 @@ struct SourceInput {
 }
 
 #[salsa::db]
-trait SourceQueryDb: salsa::Database {
+trait SourceQueryDb: salsa::Database + zydeco_statics::query::TyckDb {
     fn source_input(&self, path: PathBuf) -> Result<SourceInput, SourceLoadError>;
 }
 
@@ -208,6 +208,9 @@ impl Default for CompilerSession {
 
 #[salsa::db]
 impl salsa::Database for CompilerSession {}
+
+#[salsa::db]
+impl zydeco_statics::query::TyckDb for CompilerSession {}
 
 #[salsa::db]
 impl SourceQueryDb for CompilerSession {
@@ -379,9 +382,11 @@ fn analyze_source(
     let program = graph.assemble().map_err(|error| AnalysisError::TextualProgram { error })?;
     let bitter =
         program.desugar().map_err(|error| AnalysisError::Desugar { error: Box::new(error) })?;
-    let ScopedProgram { spans, mut arena, prim, root } =
+    let ScopedProgram { spans, arena, prim, root } =
         bitter.resolve().map_err(|error| AnalysisError::Resolve { error, graph: graph.clone() })?;
-    let checked = Tycker::new(&spans, &prim, &mut arena).check_source_outcome(root);
+    let data = zydeco_statics::query::ScopedData::new(db, spans.clone(), prim, arena, root);
+    let zydeco_statics::query::TyckOutput { scoped, outcome: checked } =
+        zydeco_statics::query::check_source(db, data);
     let (statics, outcome, observations) = match checked {
         | zydeco_statics::SourceCheckOutcome::Checked(CheckedSource {
             statics,
@@ -394,7 +399,7 @@ fn analyze_source(
             observations,
         }) => (statics, AnalysisOutcome::Rejected { reports }, observations),
     };
-    Ok(Arc::new(ProgramAnalysis { graph, spans, scoped: arena, statics, outcome, observations }))
+    Ok(Arc::new(ProgramAnalysis { graph, spans, scoped, statics, outcome, observations }))
 }
 
 #[cfg(test)]

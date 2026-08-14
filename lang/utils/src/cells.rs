@@ -3,6 +3,7 @@
 /// `init` meaning the cell is empty and we're inserting the value
 ///
 /// `get` meaning the cell is not empty and we're reading the value
+#[derive(Clone)]
 pub struct SingCell<T> {
     cell: Option<T>,
 }

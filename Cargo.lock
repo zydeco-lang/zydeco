@@ -2774,6 +2774,7 @@ dependencies = [
  "indexmap",
  "pretty",
  "rustc-hash",
+ "salsa",
  "thiserror",
  "zydeco-derive",
  "zydeco-surface",

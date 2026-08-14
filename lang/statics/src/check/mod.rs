@@ -52,8 +52,9 @@ pub struct Tycker<'a> {
     observations: Vec<TyckObservation>,
 }
 
-pub type TyckReports =
-    Vec<ariadne::Report<'static, (zydeco_utils::span::PathDisplay, std::ops::Range<usize>)>>;
+pub type TyckReports = std::sync::Arc<
+    Vec<ariadne::Report<'static, (zydeco_utils::span::PathDisplay, std::ops::Range<usize>)>>,
+>;
 
 /// A source-directed observation produced during type checking.
 #[derive(Clone, Debug)]
@@ -63,6 +64,7 @@ pub enum TyckObservation {
 }
 
 /// The typed result of checking one complete source term.
+#[derive(Clone, Debug)]
 pub struct CheckedSource {
     pub statics: StaticsArena,
     pub root: TermAnnId,
@@ -71,6 +73,7 @@ pub struct CheckedSource {
 
 /// A failed source check together with the static facts established before
 /// the failure.
+#[derive(Clone, Debug)]
 pub struct RejectedSource {
     pub statics: StaticsArena,
     pub reports: TyckReports,
@@ -78,6 +81,7 @@ pub struct RejectedSource {
 }
 
 /// The recoverable result of checking one complete source term.
+#[derive(Clone, Debug)]
 pub enum SourceCheckOutcome {
     Checked(CheckedSource),
     Rejected(RejectedSource),
@@ -1093,25 +1097,27 @@ impl<'a> Tycker<'a> {
 
         let mut seen_blame = HashSet::new();
         let mut seen_coverage = HashSet::new();
-        self.errors
-            .iter()
-            .filter(|entry| {
-                if matches!(entry.error, TyckError::Coverage(_)) {
-                    let span = self
-                        .error_primary_span(&entry.error)
-                        .map(|(path, range)| (path, range.start, range.end));
-                    seen_coverage.insert((span, self.error_message(&entry.error)))
-                } else {
-                    seen_blame.insert((
-                        entry.blame.file(),
-                        entry.blame.line(),
-                        entry.blame.column(),
-                    ))
-                }
-            })
-            .cloned()
-            .map(|entry| self.error_entry_report(entry))
-            .collect()
+        std::sync::Arc::new(
+            self.errors
+                .iter()
+                .filter(|entry| {
+                    if matches!(entry.error, TyckError::Coverage(_)) {
+                        let span = self
+                            .error_primary_span(&entry.error)
+                            .map(|(path, range)| (path, range.start, range.end));
+                        seen_coverage.insert((span, self.error_message(&entry.error)))
+                    } else {
+                        seen_blame.insert((
+                            entry.blame.file(),
+                            entry.blame.line(),
+                            entry.blame.column(),
+                        ))
+                    }
+                })
+                .cloned()
+                .map(|entry| self.error_entry_report(entry))
+                .collect(),
+        )
     }
 
     /// Resolve all holes with solutions (including nested ones).

@@ -114,7 +114,7 @@ pub type CoContext = zydeco_utils::context::CoContext<DefId>;
 /// The canonical Builtin signature introduces intrinsic constructors and
 /// assigns host types through typed roles, so name resolution does not
 /// populate these cells from distinguished source spellings.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct PrimDefs {
     pub vtype: SingCell<DefId>,
     pub ctype: SingCell<DefId>,

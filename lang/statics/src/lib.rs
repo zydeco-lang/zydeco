@@ -46,6 +46,9 @@ pub use elaborate::monadic::construct::MonConstruct;
 /// Post-check validation passes over typed syntax.
 pub mod validate;
 
+/// Salsa-backed query entry points for type checking.
+pub mod query;
+
 /// Formatters for scoped and statics syntax.
 pub mod fmt;
 /// Span lookup for typed entities.
