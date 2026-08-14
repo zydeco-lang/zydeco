@@ -52,11 +52,12 @@ and for ordering entities by precision.
 - `err` formats parser errors with file path and location context.
 - `fmt::ugly` renders textual syntax back into a safe surface form for debugging and diagnostics.
 - `fmt::PrettyFormatter` renders the same textual arenas through compositional documents.
-  `PrettyOptions` configures width, indentation, how much recorded line layout is retained
-  (every break, blank lines only, or none), and whether redundant singleton grouping
-  parentheses are preserved.
+  `PrettyOptions` configures width, indentation, how much recorded line layout is retained (every break,
+  blank lines only, or none), and whether redundant singleton grouping parentheses are preserved.
   A meaningful multiline group remains an indentation boundary,
   while an application's own compact-or-hanging layout subsumes an extra singleton wrapper.
+  A `@[format(...)]` directive overrides the options for its annotated expression,
+  nested directives override enclosing ones, and a width change pre-renders its payload as an embedded block.
 
 The [surface formatting design](../../../../docs/ideas/formatting.md) states the printer's preservation laws,
 boundary algebra, and canonical layout families.
@@ -65,18 +66,15 @@ Line comments are canonicalized as `--` or `--|` lines, nested block comments re
 and relative indentation, and all comment kinds are always printed.
 Arm-boundary anchors keep comments on the intended side of `|` and its header.
 Recorded blank separators remain blank separators after formatting.
-Only an uninterrupted adjacent `--|` block attaches to a following annotation:
-`@[doc]` renders the block as repository prose, while `@[literal]` replaces its hole payload
-with the block text as a string literal.
+Only an uninterrupted adjacent `--|` block attaches to a following annotation: `@[doc]` renders the block
+as repository prose, while `@[literal]` replaces its hole payload with the block text as a string literal.
 An ordinary comment continues to separate text from the annotation.
-Source analysis warns about every `--|` block without such an attachment because
-that block contributes no text to any annotation.
+Source analysis warns about every `--|` block without such an attachment because that block contributes no text
+to any annotation.
 
-Parenthesized metadata is sugar for the bracket form with a hole payload:
-`@(meta)` parses as `@[meta] _`.
-The pretty printer renders a metadata annotation in its parenthesized form
-whenever its payload is a hole, so `@[intrinsic(i64)] _` and `@(intrinsic(i64))`
-are indistinguishable and both format as `@(intrinsic(i64))`.
+Parenthesized metadata is sugar for the bracket form with a hole payload: `@(meta)` parses as `@[meta] _`.
+The pretty printer renders a metadata annotation in its parenthesized form whenever its payload is a hole,
+so `@[intrinsic(i64)] _` and `@(intrinsic(i64))` are indistinguishable and both format as `@(intrinsic(i64))`.
 
 The pretty printer treats concise puns as canonical syntax rather than author intent.
 Named terms, named patterns, and projection patterns

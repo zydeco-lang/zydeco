@@ -37,14 +37,24 @@ Format one or more Zydeco source files in place:
 zydeco fmt path/to/main.zy path/to/library.zy
 ```
 
-Add `--check` to report files that would change instead of writing them;
-the command then exits unsuccessfully when at least one file would change.
-`--width` and `--indent` configure the target line width and indentation width in columns.
-`--layout` selects which parsed line breaks the formatter retains:
+Add `--check` to report files that would change instead of writing them; the command then exits unsuccessfully
+when at least one file would change.
 
-- `preserve` keeps observed line breaks and blank lines (the default);
-- `blank-lines` keeps only blank lines while the line width decides every single break;
-- `ignore` lets the line width decide every optional break.
+Formatting policy comes from `@[format(...)]` annotations in the source, scoped to the annotated expression:
+
+```zydeco
+@[format(width(100), indent(4), layout(blank_lines))] begin
+  ...
+end
+```
+
+- `width(columns)` and `indent(columns)` set the line width and indentation width;
+- `layout(preserve)` keeps observed line breaks and blank lines (the default);
+- `layout(blank_lines)` keeps only blank lines while the width decides every single break;
+- `layout(ignore)` lets the width decide every optional break;
+- `parentheses(minimal)` or `parentheses(preserve)` selects singleton-group treatment.
+
+Nested annotations override enclosing options for their payload subtree.
 
 ## Reflow Markdown Documentation
 

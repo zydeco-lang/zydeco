@@ -63,18 +63,16 @@ Vertical separation has the following order:
 joined < broken < one empty line
 ```
 
-Under the `Preserve` policy an observed break is not collapsed and a larger empty region
-becomes one empty line.
-Under `BlankLinesOnly` the same holds for blank lines, while every single break is left to the
-width decision.
+Under the `Preserve` policy an observed break is not collapsed and a larger empty region becomes one empty line.
+Under `BlankLinesOnly` the same holds for blank lines, while every single break is left to the width decision.
 Under `Ignore` no observed separation is retained.
 
 A joined boundary can still break when its compact form does not fit.
-A boundary that always breaks, such as the gap between match arms or between the stages of a
-`do` chain, retains one empty line where the source had at least one.
+A boundary that always breaks, such as the gap between match arms or between the stages of a `do` chain,
+retains one empty line where the source had at least one.
 Local groups remain compact when they fit, even inside an expanded parent.
-Because a retained break persists, a line that the width forced to wrap in an earlier run stays
-wrapped until the author rejoins it; the lower bound never re-joins automatically.
+Because a retained break persists, a line that the width forced to wrap in an earlier run stays wrapped
+until the author rejoins it; the lower bound never re-joins automatically.
 
 ### Boundary composition
 
@@ -112,13 +110,11 @@ or maintain a syntax-specific boundary mode.
 
 ### Canonical gaps
 
-A source gap participates in intention preservation only when a syntax case declares a layout
-boundary for it.
+A source gap participates in intention preservation only when a syntax case declares a layout boundary for it.
 Every other gap between entities is canonical spacing.
-Postfix projections and destructors never break, so a source break before `/` or `.` joins the
-operator to its head.
-`in` and `that` belong to the bindee's line; an empty line written before the placement marker
-is re-anchored between the placement and the following tail.
+Postfix projections and destructors never break, so a source break before `/` or `.` joins the operator to its head.
+`in` and `that` belong to the bindee's line; an empty line written
+before the placement marker is re-anchored between the placement and the following tail.
 Sequence tails always start a new line even when the source joined them.
 Declaring a new boundary is the only way to make a gap intention-aware.
 
@@ -161,6 +157,32 @@ under the active layout policy.
 Applications are the one self-grouping family: their own compact-or-hanging boundary subsumes a singleton wrapper.
 `Parentheses::Preserve` is available when every parsed singleton group must remain.
 
+## Formatter Directives
+
+Printer policy is expressed in the source as a `format` metadata annotation:
+
+```text
+@[format(width(100), indent(4), layout(blank_lines))] expression
+```
+
+Each option is a nested call taking one argument:
+
+- `width(columns)` sets the target line width;
+- `indent(columns)` sets the indentation width;
+- `layout(preserve)`, `layout(blank_lines)`, or `layout(ignore)` selects how much recorded layout is retained;
+- `parentheses(minimal)` or `parentheses(preserve)` selects singleton-group treatment.
+
+A directive applies to the annotated expression and everything inside it.
+Options without a directive keep their enclosing values, so nested annotations override enclosing options field
+by field and the innermost directive wins.
+A malformed `format` annotation is inert: the printer renders it as ordinary metadata and applies no options,
+leaving the misspelled directive visible in the output.
+
+Structural options (indentation, layout intentions, parenthesis treatment) shape the payload document directly.
+A width change instead pre-renders the payload at its own width and embeds the result below the annotation,
+because the document renderer applies one width to the whole document.
+An embedded multiline payload keeps its relative indentation and its empty lines free of trailing whitespace.
+
 ## Components and Policy
 
 `PrettyFormatter` coordinates three reusable components over one arena.
@@ -174,9 +196,9 @@ how much recorded layout is retained, and treatment of transparent parentheses.
 The layout policy has three tiers: `Preserve` keeps every observed break and blank line,
 `BlankLinesOnly` keeps blank lines while the width decides single breaks,
 and `Ignore` leaves every optional break to the width decision.
-`zydeco fmt` exposes the policy through `--layout` (and `--width`, `--indent`, and `--check`),
-Cajun receives it through client initialization options,
-and neither adapter may introduce independent formatting rules.
+Policy comes from `@[format(...)]` directives in the source rather than frontend settings,
+so `zydeco fmt` and Cajun share one behavior and must not introduce independent formatting rules.
+`zydeco fmt --check` remains the only frontend option: it reports files that would change without writing them.
 
 ## Verification and Extension
 

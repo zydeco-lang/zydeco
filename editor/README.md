@@ -15,11 +15,16 @@ Editor integrations live in:
 Both clients start the same `cajun` executable over standard input and output.
 The Zed integration can combine the Tree-sitter syntax tree with Cajun's semantic information.
 
-## Formatter settings
+## Formatting
 
-Cajun's formatting policy comes from client initialization options under the `format` section:
-`lineWidth` (a positive column count) and `layoutIntentions` (one of `preserve`,
-`blank-lines-only`, or `ignore`).
-The VS Code extension exposes both as the `cajun.format.lineWidth`
-and `cajun.format.layoutIntentions` settings.
-Zed users can set the same values under `lsp.cajun.initialization_options.format`.
+Formatting policy lives in the source as `@[format(...)]` annotations, so both clients format identically
+without configuration:
+
+```zydeco
+@[format(width(100), indent(4), layout(blank_lines))] begin
+  ...
+end
+```
+
+Each option applies to the annotated expression and everything inside it,
+and nested annotations override enclosing ones.
