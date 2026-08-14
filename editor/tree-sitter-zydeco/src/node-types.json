@@ -1308,7 +1308,7 @@
     "fields": {
       "body": {
         "multiple": false,
-        "required": true,
+        "required": false,
         "types": [
           {
             "type": "_term",
@@ -1322,6 +1322,34 @@
         "types": [
           {
             "type": "metadata",
+            "named": true
+          },
+          {
+            "type": "metadata_sugar",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "metadata_sugar",
+    "named": true,
+    "fields": {
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "meta_application",
+            "named": true
+          },
+          {
+            "type": "meta_identifier",
+            "named": true
+          },
+          {
+            "type": "string_literal",
             "named": true
           }
         ]

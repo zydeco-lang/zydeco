@@ -71,6 +71,12 @@ An ordinary comment continues to separate text from the annotation.
 Source analysis warns about every `--|` block without such an attachment because
 that block contributes no text to any annotation.
 
+Parenthesized metadata is sugar for the bracket form with a hole payload:
+`@(meta)` parses as `@[meta] _`.
+The pretty printer renders a metadata annotation in its parenthesized form
+whenever its payload is a hole, so `@[intrinsic(i64)] _` and `@(intrinsic(i64))`
+are indistinguishable and both format as `@(intrinsic(i64))`.
+
 The pretty printer treats concise puns as canonical syntax rather than author intent.
 Named terms, named patterns, and projection patterns
 therefore use their punned spelling whenever their payload is the same-named variable, including the annotated forms.

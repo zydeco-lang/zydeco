@@ -338,9 +338,12 @@ module.exports = grammar({
 
     recursion_modifier: _ => 'fix',
 
-    metadata_expression: $ => prec.right(PREC.binding, seq(
-      field('metadata', $.metadata),
-      field('body', $._term),
+    metadata_expression: $ => prec.right(PREC.binding, choice(
+      seq(
+        field('metadata', $.metadata),
+        field('body', $._term),
+      ),
+      field('metadata', $.metadata_sugar),
     )),
 
     metadata: $ => seq(
@@ -348,6 +351,13 @@ module.exports = grammar({
       '[',
       field('value', $._meta),
       ']',
+    ),
+
+    metadata_sugar: $ => seq(
+      '@',
+      '(',
+      field('value', $._meta),
+      ')',
     ),
 
     _meta: $ => choice(

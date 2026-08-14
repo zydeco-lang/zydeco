@@ -54,6 +54,7 @@
 (meta_application
   callee: (meta_identifier) @function)
 (metadata "@" @attribute)
+(metadata_sugar "@" @attribute)
 
 ; Keywords
 [

@@ -274,3 +274,21 @@ exists @[builtin(reader)] (Reader : VType) . Reader
           name: (upper_identifier))))
     body: (variable
       name: (upper_identifier))))
+
+==================
+Parenthesized metadata sugar
+==================
+
+@(import("library.zy"))
+
+---
+
+(source_file
+  body: (metadata_expression
+    metadata: (metadata_sugar
+      value: (meta_application
+        callee: (meta_identifier
+          (lower_identifier))
+        arguments: (meta_arguments
+          (string_literal))))))
+

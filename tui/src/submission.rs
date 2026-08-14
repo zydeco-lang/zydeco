@@ -152,6 +152,10 @@ mod tests {
             SubmissionParser::parse("@[quit] _"),
             SubmissionState::Complete(Ok(Submission::Control(ControlCommand::Quit)))
         ));
+        assert!(matches!(
+            SubmissionParser::parse("@(help)"),
+            SubmissionState::Complete(Ok(Submission::Control(ControlCommand::Help)))
+        ));
     }
 
     #[test]

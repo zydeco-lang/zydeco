@@ -449,6 +449,25 @@ fn source_graph_loads_nested_relative_imports_in_provider_order() {
 }
 
 #[test]
+fn source_graph_accepts_parenthesized_metadata_sugar_for_hole_payloads() {
+    let fixture = SourceFixture::new();
+    fixture.write("leaf.zy", "1");
+    fixture.write("nested/library.zy", r#"@(import("../leaf.zy"))"#);
+    let root = fixture.write("main.zy", r#"@(import("nested/library.zy"))"#);
+
+    let graph = SourceGraph::load(&root).unwrap();
+    let order = graph
+        .provider_order()
+        .into_iter()
+        .map(|source| graph.sources[&source].path.file_name().unwrap().to_owned())
+        .collect::<Vec<_>>();
+
+    assert_eq!(graph.sources.len(), 3);
+    assert_eq!(graph.imports.len(), 2);
+    assert_eq!(order, ["leaf.zy", "library.zy", "main.zy"].map(std::ffi::OsString::from));
+}
+
+#[test]
 fn source_graph_discovers_an_adjacent_signature_before_its_implementation() {
     let fixture = SourceFixture::new();
     fixture.write("main.zyi", "@[intrinsic(unit)] _");

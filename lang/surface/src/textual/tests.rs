@@ -265,6 +265,52 @@ fn metadata_preserves_identifiers_strings_integers_and_applications() {
 }
 
 #[test]
+fn parenthesized_metadata_defaults_its_payload_to_a_hole() {
+    let source = r#"@(debug(name,"value",1,nested("path")))"#;
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::Meta(MetaT(meta, payload)) = &parser.arena.terms[&term] else {
+        panic!("expected a metadata term")
+    };
+    assert_eq!(meta.to_string(), r#"debug(name,"value",1,nested("path"))"#);
+    assert!(matches!(parser.arena.terms[payload], Term::Hole(Hole)));
+
+    // The sugar renders in its parenthesized form and reparses.
+    let rendered = term.ugly(&Formatter::new(&parser.arena));
+    assert_eq!(rendered, source);
+    let mut roundtrip = Parser::new();
+    parser::SingleTermParser::new()
+        .parse(&rendered, &LocationCtx::Plain, &mut roundtrip, lexer::Lexer::new(&rendered))
+        .unwrap();
+
+    // `@(meta)` and `@[meta] _` are indistinguishable once parsed.
+    let bracketed = r#"@[debug(name,"value",1,nested("path"))] _"#;
+    let mut bracketed_parser = Parser::new();
+    let bracketed_term = parser::SingleTermParser::new()
+        .parse(bracketed, &LocationCtx::Plain, &mut bracketed_parser, lexer::Lexer::new(bracketed))
+        .unwrap();
+    assert_eq!(
+        term.ugly(&Formatter::new(&parser.arena)),
+        bracketed_term.ugly(&Formatter::new(&bracketed_parser.arena)),
+    );
+}
+
+#[test]
+fn parenthesized_metadata_rejects_an_empty_annotation() {
+    let source = "@()";
+    let mut parser = Parser::new();
+    assert!(
+        parser::SingleTermParser::new()
+            .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+            .is_err(),
+        "expected `{source}` to be rejected"
+    );
+}
+
+#[test]
 fn source_unit_collects_documentation_for_arbitrary_annotated_terms() {
     let source = concat!(
         "--| Package heading\n",

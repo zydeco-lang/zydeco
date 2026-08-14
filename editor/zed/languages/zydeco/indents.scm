@@ -4,6 +4,7 @@
 (existential_parameter ")" @end) @indent
 (thunk_expression "}" @end) @indent
 (metadata "]" @end) @indent
+(metadata_sugar ")" @end) @indent
 
 (block_expression "end" @end) @indent
 (block_abstraction "end" @end) @indent

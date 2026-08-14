@@ -56,7 +56,18 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
         let mut s = String::new();
         let term = &f.arena.terms[self];
         match term {
-            | Term::Meta(t) => s += &t.ugly(f),
+            | Term::Meta(MetaT(meta, payload)) => {
+                if matches!(&f.arena.terms[payload], Term::Hole(_)) {
+                    s += "@(";
+                    s += &meta.ugly(f);
+                    s += ")";
+                } else {
+                    s += "@[";
+                    s += &meta.ugly(f);
+                    s += "] ";
+                    s += &payload.ugly(f);
+                }
+            }
             | Term::SourceBoundary(SourceBoundary(t)) => s += &t.ugly(f),
             | Term::SignatureBoundary(SignatureBoundary(t)) => s += &t.ugly(f),
             | Term::Ann(t) => s += &t.ugly(f),
@@ -610,22 +621,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for Literal {
             | Literal::String(str) => s += &format!("{:?}", str),
             | Literal::Char(c) => s += &format!("{:?}", c),
         }
-        s
-    }
-}
-
-impl<'a, T> Ugly<'a, Formatter<'a>> for MetaT<T>
-where
-    T: Ugly<'a, Formatter<'a>>,
-{
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let MetaT(meta, decl) = self;
-        s += "@[";
-        s += &meta.ugly(f);
-        s += "]";
-        s += " ";
-        s += &(*decl).ugly(f);
         s
     }
 }

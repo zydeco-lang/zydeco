@@ -238,6 +238,8 @@ so they likewise add no runtime module representation.
 
 Every Zydeco source file contains exactly one complete term.
 Imports are typed metadata on holes, such as `@[import("library.zy")] _`, rather than namespace operations.
+Parenthesized metadata `@(meta)` abbreviates the bracket form whose payload is a hole,
+so `@(import("library.zy"))` names the same import.
 A compiler session discovers a file dependency graph, orders providers before their consumers,
 and substitutes a freshly cloned provider term at each import occurrence.
 Parsed templates are memoized by source input, while each assembled occurrence remains fresh.

@@ -438,6 +438,12 @@ Term: Term = {
     },
     // meta annotated term
     <MetaT<TermGen<Term>>> => <>.into(),
+    // meta annotation sugar: `@(meta)` is `@[meta] _` with an implicit hole payload
+    <start:@L> "@" "(" <meta:Meta> ")" <end:@R> => {
+        let span = Span::new(start, end).under_loc_ctx(loc);
+        let payload = parser.term(span.make(Term::Hole(Hole)));
+        MetaT(meta, payload).into()
+    },
 };
 
 pub SingleTerm: TermId = <term:TermId> => {

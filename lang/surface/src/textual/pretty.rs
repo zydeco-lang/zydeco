@@ -1115,13 +1115,23 @@ impl<'arena> PrettyFormatter<'arena> {
             return self.with_leading_comments(term.into(), document);
         }
         let document = match &self.arena.terms[&term] {
-            | Term::Meta(MetaT(meta, inner)) => RcDoc::text("@[")
-                .append(RcDoc::text(meta.to_string()))
-                .append(self.fragment_boundary(
-                    BoundaryIntent::after_start(term, *inner),
-                    BoundaryLayout::aligned("]"),
-                    self.term_through_fragment(*inner, TermPrecedence::Binder),
-                )),
+            | Term::Meta(MetaT(meta, inner)) => match &self.arena.terms[inner] {
+                // A commentless hole payload collapses into the parenthesized sugar.
+                // A commented hole keeps the bracket form so its comments survive.
+                | Term::Hole(_)
+                    if self.arena.trivia.leading_comments((*inner).into()).is_empty()
+                        && self.arena.trivia.trailing_comments((*inner).into()).is_empty() =>
+                {
+                    RcDoc::text("@(").append(RcDoc::text(meta.to_string())).append(RcDoc::text(")"))
+                }
+                | _ => RcDoc::text("@[").append(RcDoc::text(meta.to_string())).append(
+                    self.fragment_boundary(
+                        BoundaryIntent::after_start(term, *inner),
+                        BoundaryLayout::aligned("]"),
+                        self.term_through_fragment(*inner, TermPrecedence::Binder),
+                    ),
+                ),
+            },
             | Term::SourceBoundary(_) | Term::SignatureBoundary(_) => {
                 unreachable!("source boundaries return before rendering")
             }
@@ -2735,7 +2745,7 @@ mod tests {
             "begin\n",
             "  param (\n",
             "    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /String; /OS; /int64; /string; /stdio; /process) :\n",
-            "    @[import(\"package.zy\")] _\n",
+            "    @(import(\"package.zy\"))\n",
             "  ) that\n",
             "  _\n",
             "end\n",
@@ -2766,7 +2776,7 @@ mod tests {
             "begin\n",
             "  param (\n",
             "    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /Float64; /Char; /String; /Bytes; /Reader; /Writer; /OS) :\n",
-            "    @[import(\"package.zy\")] _\n",
+            "    @(import(\"package.zy\"))\n",
             "  ) in\n",
             "  _\n",
             "end\n",
@@ -2775,7 +2785,7 @@ mod tests {
         let formatted = parsed.render_with_options(PrettyOptions::default());
 
         assert!(formatted.lines().all(|line| line.len() <= 100), "{formatted}");
-        assert!(formatted.contains("/OS\n    )\n    : @[import"), "{formatted}");
+        assert!(formatted.contains("/OS\n    )\n    : @(import"), "{formatted}");
         let reparsed = ParsedSource::new(&formatted);
         assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
         assert_eq!(formatted, reparsed.render_with_options(PrettyOptions::default()));
@@ -3322,8 +3332,8 @@ mod tests {
     #[test]
     fn preserves_separation_of_detached_documentation() {
         [
-            ("--| Detached\n\n@[doc] _", "--| Detached\n\n@[doc] _\n"),
-            ("--| Detached\n-- barrier\n@[doc] _", "--| Detached\n-- barrier\n@[doc] _\n"),
+            ("--| Detached\n\n@[doc] _", "--| Detached\n\n@(doc)\n"),
+            ("--| Detached\n-- barrier\n@[doc] _", "--| Detached\n-- barrier\n@(doc)\n"),
             ("@[doc] value --| Detached", "@[doc] value\n--| Detached\n"),
         ]
         .into_iter()
@@ -3340,6 +3350,40 @@ mod tests {
             };
             assert!(site.directive.comment.is_none());
         });
+    }
+
+    #[test]
+    fn parenthesized_metadata_defaults_its_payload_through_pretty_printing() {
+        let source = "--| Attached text.\n@(doc)";
+        let parsed = ParsedSource::new(source);
+        let formatted = parsed.render(LayoutIntentions::Ignore);
+        assert_eq!(formatted, "--| Attached text.\n@(doc)\n");
+
+        let reparsed = ParsedSource::new(&formatted);
+        let documentation =
+            reparsed.unit.documentation(&reparsed.parser.arena, &reparsed.parser.spans);
+        let [site] = documentation.as_slice() else {
+            panic!("expected one documentation annotation")
+        };
+        assert_eq!(
+            site.directive.comment.as_ref().map(|comment| comment.text.as_ref()),
+            Some("Attached text."),
+        );
+        assert_eq!(formatted, reparsed.render(LayoutIntentions::Ignore));
+    }
+
+    #[test]
+    fn metadata_with_a_commented_hole_payload_keeps_the_bracket_form() {
+        let source = "@[doc]\n-- Keep the hole.\n_";
+        let parsed = ParsedSource::new(source);
+        let formatted = parsed.render(LayoutIntentions::Ignore);
+
+        assert!(formatted.contains("@[doc]"), "{formatted}");
+        assert!(formatted.contains("-- Keep the hole."), "{formatted}");
+        assert!(!formatted.contains("@(doc)"), "{formatted}");
+
+        let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
     }
 
     #[test]

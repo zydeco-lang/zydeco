@@ -1305,22 +1305,35 @@
       "type": "PREC_RIGHT",
       "value": 1,
       "content": {
-        "type": "SEQ",
+        "type": "CHOICE",
         "members": [
+          {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "FIELD",
+                "name": "metadata",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "metadata"
+                }
+              },
+              {
+                "type": "FIELD",
+                "name": "body",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "_term"
+                }
+              }
+            ]
+          },
           {
             "type": "FIELD",
             "name": "metadata",
             "content": {
               "type": "SYMBOL",
-              "name": "metadata"
-            }
-          },
-          {
-            "type": "FIELD",
-            "name": "body",
-            "content": {
-              "type": "SYMBOL",
-              "name": "_term"
+              "name": "metadata_sugar"
             }
           }
         ]
@@ -1348,6 +1361,31 @@
         {
           "type": "STRING",
           "value": "]"
+        }
+      ]
+    },
+    "metadata_sugar": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "@"
+        },
+        {
+          "type": "STRING",
+          "value": "("
+        },
+        {
+          "type": "FIELD",
+          "name": "value",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_meta"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": ")"
         }
       ]
     },
