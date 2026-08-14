@@ -135,7 +135,7 @@ struct InferenceRegion {
 
 impl InferenceRegion {
     fn enter(tycker: &Tycker<'_>) -> Self {
-        let inherited = tycker.statics.fills.iter().map(|(fill, _)| fill).collect();
+        let inherited = tycker.statics.fills.iter().map(|(fill, _)| *fill).collect();
         Self { inherited }
     }
 
@@ -145,7 +145,7 @@ impl InferenceRegion {
             .fills
             .iter()
             .filter_map(|(fill, site)| {
-                (site.is_pattern() && !self.inherited.contains(&fill)).then_some(fill)
+                (site.is_pattern() && !self.inherited.contains(fill)).then_some(*fill)
             })
             .collect::<Vec<_>>();
         let mut unconstrained = Vec::new();

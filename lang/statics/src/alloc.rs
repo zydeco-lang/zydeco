@@ -216,7 +216,9 @@ where
     type Ann = ();
     type Env = ();
     fn alloc(arena: &mut Arena, val: Self, (): Self::Ann, _env: &Self::Env) -> FillId {
-        AsMut::<StaticsArena>::as_mut(arena).fills.alloc(val)
+        let id = arena.fresh();
+        AsMut::<StaticsArena>::as_mut(arena).fills.insert_new(id, val);
+        id
     }
 }
 

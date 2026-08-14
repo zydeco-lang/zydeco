@@ -306,7 +306,8 @@ where
     fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         let cs::Ann(Hole, (kd, site)) = self;
         let (env, kd) = kd.mbuild(tycker, env)?;
-        let fill = tycker.statics.fills.alloc(site.into());
+        let fill: FillId = tycker.fresh();
+        tycker.statics.fills.insert_new(fill, site.into());
         let alloc = Alloc::alloc(tycker, fill, kd, &env.ty);
         Ok((env, alloc))
     }

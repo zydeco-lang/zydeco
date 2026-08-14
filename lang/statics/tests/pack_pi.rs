@@ -83,7 +83,8 @@ fn holes_in_pack_pi_codomain_retain_the_bound_witness_scope() {
         let (witness, codomain) = TestFixture::witness(tycker, ctype);
         let mut source_ids = IdAllocator::<zydeco_surface::bitter::arena::BitterScope>::new();
         let site: zydeco_statics::surface_syntax::TermId = source_ids.alloc();
-        let fill = tycker.statics.fills.alloc(site.into());
+        let fill: zydeco_statics::syntax::FillId =
+            Alloc::alloc(tycker, zydeco_statics::syntax::InferenceSite::Term(site), (), &());
         let body_env = TyEnv::new().with_skolem(witness);
         let hole = Alloc::alloc(tycker, fill, ctype, &body_env);
         let pack_pi = TestFixture::pack_pi(tycker, domain, witness, hole, ctype);

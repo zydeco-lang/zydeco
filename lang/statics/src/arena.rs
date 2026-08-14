@@ -16,6 +16,7 @@ pub use zydeco_surface::arena::*;
 pub enum StaticsScope {}
 
 impl Allocates<KindId> for StaticsScope {}
+impl Allocates<FillId> for StaticsScope {}
 impl Allocates<KPatId> for StaticsScope {}
 impl Allocates<TPatId> for StaticsScope {}
 impl Allocates<TypeId> for StaticsScope {}
@@ -174,7 +175,9 @@ pub struct StaticsArena {
     pub builtin_roles: BuiltinRoles,
     /// arena for context-constrained flexible metavariables and their source sites;
     /// only types and kinds are now fillable
-    pub fills: ArenaDense<StaticsScope, FillId>,
+    /// hole-filling sites, allocated with derived identifiers like the other
+    /// sparse categories so fill states can be query keys
+    pub fills: ArenaSparse<StaticsScope, FillId>,
     /// arena for the solutions of fillings,
     /// i.e. the the [`FillId`] should be assigned as the [`AnnId`]
     pub solus: ArenaAssoc<FillId, AnnId>,

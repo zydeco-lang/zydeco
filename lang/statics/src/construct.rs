@@ -425,7 +425,8 @@ where
     fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
         let cs::Ann(Hole, (kd, site)) = self;
         let kd = kd.build(tycker, env);
-        let fill = tycker.statics.fills.alloc(site.into());
+        let fill: FillId = tycker.fresh();
+        tycker.statics.fills.insert_new(fill, site.into());
         Alloc::alloc(tycker, fill, kd, env)
     }
 }
