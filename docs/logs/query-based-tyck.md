@@ -204,3 +204,22 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
 - `OS` stays checker-side for now: its resolution reads builtin roles from the arena, which is
   still being built during the check and cannot be read by a query.
 - Workspace suite passes unchanged (61 targets green).
+
+## 2026-08-14 — error judgments as query values, and the arena-read wall
+
+- The `Monad`/`Algebra` arms now ride the query result as `InternalJudgment::Error(TyckError)`;
+  the checker routes the returned error into the `err_k` writer. This is the first instance of the
+  planned `err_k`-retirement pattern: decisions move into queries, the writer becomes a sink.
+- Attempted to migrate the `Var` judgment next and hit a wall worth recording precisely: most
+  remaining judgments read arena state that the check itself is still building —
+  `annotations_var` for `Var`, `kinds_pre`/`types_pre` for unification, `env_type` for
+  normalization, builtin roles for `OS`. A salsa query cannot read that mid-check state, and
+  snapshotting it per call would defeat memoization. The queryable subset is therefore exactly the
+  judgments that depend only on `(data, term, env, switch)`: intrinsic leaves today, plus any
+  future judgment whose inputs are threaded through `EnvData`-style carriers.
+- Implication for the remaining migration: the producer layer cannot go all the way without a
+  deeper redesign in which the typed arena becomes query-owned state (interning typed nodes as
+  salsa values and assembling the arena at the materialization boundary). That redesign touches
+  the `new_key_type` foundation and every downstream backend, so it stays parked behind an
+  explicit decision; the worklog keeps the wall documented as the boundary of the current
+  architecture.
