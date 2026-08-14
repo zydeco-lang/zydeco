@@ -789,7 +789,7 @@ fn program_assembly_consumes_import_directives_and_preserves_a_source_boundary()
     fixture.write("library.zy", "1");
     let root = fixture.write("main.zy", r#"@[import("library.zy")] _"#);
 
-    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
     assert!(matches!(
         program.arena.terms[&program.unit.root],
@@ -812,7 +812,7 @@ fn textual_program_ascribes_an_implementation_with_its_signature() {
     fixture.write("library.zyi", "@[intrinsic(unit)] _");
     let root = fixture.write("library.zy", "()");
 
-    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let program = SourceGraph::load(root).unwrap().parse().unwrap();
     let Term::Ann(Ann { tm: _, ty }) = program.arena.terms[&program.unit.root] else {
         panic!("expected a root ascription")
     };
@@ -824,7 +824,7 @@ fn textual_program_ascribes_an_implementation_with_its_signature() {
 fn builtin_operation_roles_remain_specializable_through_name_resolution() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "@[builtin(int64_add)] _");
-    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
     let resolved = resolve_program(program).unwrap();
     let zydeco_surface::scoped::syntax::Term::Meta(zydeco_syntax::MetaT(meta, payload)) =
@@ -852,7 +852,7 @@ fn program_assembly_freshens_each_import_occurrence() {
     let root =
         fixture.write("main.zy", r#"(@[import("library.zy")] _, @[import("library.zy")] _)"#);
 
-    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let program = SourceGraph::load(root).unwrap().parse().unwrap();
     let Term::Paren(Paren(imports)) = &program.arena.terms[&program.unit.root] else {
         panic!("expected a pair of imports")
     };
@@ -889,7 +889,7 @@ fn program_assembly_retains_importer_and_provider_spans() {
     fixture.write("library.zy", "fn value => value");
     let root = fixture.write("main.zy", r#"@[import("library.zy")] _"#);
 
-    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let program = SourceGraph::load(root).unwrap().parse().unwrap();
     let boundary = program.unit.root;
     let Term::SourceBoundary(SourceBoundary(provider)) = program.arena.terms[&boundary] else {
         panic!("expected a source boundary")
@@ -914,7 +914,7 @@ fn program_assembly_expands_nested_imports_recursively() {
     fixture.write("library.zy", r#"@[import("leaf.zy")] _"#);
     let root = fixture.write("main.zy", r#"@[import("library.zy")] _"#);
 
-    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let program = SourceGraph::load(root).unwrap().parse().unwrap();
     let Term::SourceBoundary(SourceBoundary(library)) = program.arena.terms[&program.unit.root]
     else {
         panic!("expected the library boundary")
@@ -935,7 +935,7 @@ fn imported_free_names_do_not_capture_importer_bindings() {
     let fixture = SourceFixture::new();
     fixture.write("library.zy", "value");
     let root = fixture.write("main.zy", r#"let value = _ in @[import("library.zy")] _"#);
-    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
     let Err(error) = resolve_program(program) else {
         panic!("expected name resolution to reject caller capture")
@@ -956,7 +956,7 @@ fn imported_mobile_bindings_do_not_move_into_an_importer_block() {
     let fixture = SourceFixture::new();
     fixture.write("library.zy", "param value that value");
     let root = fixture.write("main.zy", r#"begin @[import("library.zy")] _ end"#);
-    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
     let Err(error) = resolve_program(program) else {
         panic!("expected name resolution to reject cross-file mobility")
@@ -976,7 +976,7 @@ fn a_self_contained_imported_term_resolves_normally() {
     let fixture = SourceFixture::new();
     fixture.write("library.zy", "fn value => value");
     let root = fixture.write("main.zy", r#"@[import("library.zy")] _"#);
-    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
     let resolved = resolve_program(program).unwrap();
 
@@ -995,7 +995,7 @@ fn importing_once_and_binding_once_shares_one_lexical_identity() {
     fixture.write("library.zy", "fn value => value");
     let root = fixture
         .write("main.zy", r#"let library = @[import("library.zy")] _ in (library, library)"#);
-    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
     let resolved = resolve_program(program).unwrap();
     let Term::Let(Let { binder, .. }) = resolved.arena.terms[&resolved.root] else {
@@ -1013,7 +1013,7 @@ fn the_source_pipeline_reaches_statics_without_a_declaration_entry() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "_");
     let scoped =
-        SourceGraph::load(root).unwrap().assemble().unwrap().desugar().unwrap().resolve().unwrap();
+        SourceGraph::load(root).unwrap().parse().unwrap().desugar().unwrap().resolve().unwrap();
 
     let _root_term = &scoped.arena.terms[&scoped.root];
     let Err(reports) = scoped.check() else {
@@ -1023,15 +1023,15 @@ fn the_source_pipeline_reaches_statics_without_a_declaration_entry() {
 }
 
 #[test]
-fn a_literal_splice_assembles_to_a_string_literal() {
+fn a_literal_splice_parses_to_a_string_literal() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "--| Line one\n--| Line two\n@[literal] _");
-    let program = SourceGraph::load(root).unwrap().assemble().unwrap();
+    let program = SourceGraph::load(root).unwrap().parse().unwrap();
     let zydeco_surface::textual::syntax::Term::Lit(
         zydeco_surface::textual::syntax::Literal::String(text),
     ) = &program.arena.terms[&program.unit.root]
     else {
-        panic!("expected `@[literal]` to assemble to a string literal")
+        panic!("expected `@[literal]` to parse to a string literal")
     };
     assert_eq!(text.as_str(), "Line one\nLine two");
 }
@@ -1155,7 +1155,7 @@ fn an_explicit_signature_import_still_rejects_a_non_type_root() {
 #[test]
 fn the_declaration_free_unbound_fixture_fails_during_resolution() {
     let program =
-        SourceGraph::load(repository_source("tests/fail/unbound.zy")).unwrap().assemble().unwrap();
+        SourceGraph::load(repository_source("tests/fail/unbound.zy")).unwrap().parse().unwrap();
     let Err(error) = resolve_program(program) else {
         panic!("the unbound fixture unexpectedly resolved")
     };
@@ -1170,7 +1170,7 @@ fn the_declaration_free_unbound_fixture_fails_during_resolution() {
 fn the_declaration_free_annotation_fixture_fails_during_type_checking() {
     let scoped = SourceGraph::load(repository_source("tests/fail/annotation.zy"))
         .unwrap()
-        .assemble()
+        .parse()
         .unwrap()
         .desugar()
         .unwrap()
@@ -1197,7 +1197,7 @@ fn explicit_intrinsic_splices_produce_canonical_cbpv_terms() {
         let root = fixture.write("main.zy", source);
         let checked = SourceGraph::load(root)
             .unwrap()
-            .assemble()
+            .parse()
             .unwrap()
             .desugar()
             .unwrap()
@@ -1234,7 +1234,7 @@ fn intrinsic_spellings_are_ordinary_bindable_names_in_root_sources() {
 
     SourceGraph::load(root)
         .unwrap()
-        .assemble()
+        .parse()
         .unwrap()
         .desugar()
         .unwrap()
@@ -1250,7 +1250,7 @@ fn a_zero_dependency_source_program_checks_and_runs_as_one_term() {
     let root = fixture.write("main.zy", "ret ()");
     let checked = SourceGraph::load(root)
         .unwrap()
-        .assemble()
+        .parse()
         .unwrap()
         .desugar()
         .unwrap()
@@ -1280,7 +1280,7 @@ fn a_zero_dependency_source_program_lowers_directly_to_stack_ir() {
     let root = fixture.write("main.zy", "ret ()");
     let checked = SourceGraph::load(root)
         .unwrap()
-        .assemble()
+        .parse()
         .unwrap()
         .desugar()
         .unwrap()
@@ -1304,7 +1304,7 @@ fn a_fixed_primitive_intrinsic_classifies_literals_without_a_package_scope() {
     );
     let checked = SourceGraph::load(root)
         .unwrap()
-        .assemble()
+        .parse()
         .unwrap()
         .desugar()
         .unwrap()
@@ -1322,7 +1322,7 @@ fn an_integer_literal_defaults_to_int64_without_a_package_scope() {
     let root = fixture.write("main.zy", "ret 1");
     SourceGraph::load(root)
         .unwrap()
-        .assemble()
+        .parse()
         .unwrap()
         .desugar()
         .unwrap()
@@ -1345,7 +1345,7 @@ fn repeated_primitive_intrinsics_have_one_applicative_identity() {
     );
     SourceGraph::load(root)
         .unwrap()
-        .assemble()
+        .parse()
         .unwrap()
         .desugar()
         .unwrap()
@@ -1372,7 +1372,7 @@ param (
 "#,
     );
     let scoped =
-        SourceGraph::load(root).unwrap().assemble().unwrap().desugar().unwrap().resolve().unwrap();
+        SourceGraph::load(root).unwrap().parse().unwrap().desugar().unwrap().resolve().unwrap();
 
     assert!(scoped.check().is_err());
 }
@@ -1395,7 +1395,7 @@ param (
 "#,
     );
     let scoped =
-        SourceGraph::load(root).unwrap().assemble().unwrap().desugar().unwrap().resolve().unwrap();
+        SourceGraph::load(root).unwrap().parse().unwrap().desugar().unwrap().resolve().unwrap();
 
     assert!(scoped.check().is_err());
 }
@@ -1417,14 +1417,8 @@ fn builtin_host_type_roles_require_abstract_entries_of_the_right_kind() {
     cases.into_iter().for_each(|source| {
         let fixture = SourceFixture::new();
         let root = fixture.write("main.zy", source);
-        let scoped = SourceGraph::load(root)
-            .unwrap()
-            .assemble()
-            .unwrap()
-            .desugar()
-            .unwrap()
-            .resolve()
-            .unwrap();
+        let scoped =
+            SourceGraph::load(root).unwrap().parse().unwrap().desugar().unwrap().resolve().unwrap();
 
         assert!(scoped.check().is_err(), "`{source}` unexpectedly checked");
     });
@@ -1436,7 +1430,7 @@ fn a_builtin_operation_role_attaches_to_its_named_classifier() {
     let root = fixture.write("main.zy", "@[builtin(int64_add)] (add :: @[intrinsic(unit)] _)");
     let checked = SourceGraph::load(root)
         .unwrap()
-        .assemble()
+        .parse()
         .unwrap()
         .desugar()
         .unwrap()
@@ -1462,7 +1456,7 @@ fn a_builtin_operation_role_rejects_an_unnamed_classifier() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "@[builtin(int64_add)] @[intrinsic(unit)] _");
     let scoped =
-        SourceGraph::load(root).unwrap().assemble().unwrap().desugar().unwrap().resolve().unwrap();
+        SourceGraph::load(root).unwrap().parse().unwrap().desugar().unwrap().resolve().unwrap();
 
     assert!(scoped.check().is_err());
 }
@@ -1473,7 +1467,7 @@ fn the_interpreter_constructs_and_applies_a_typed_builtin_package() {
     let root = fixture.write("main.zy", builtin_add_exit_source());
     let checked = SourceGraph::load(root)
         .unwrap()
-        .assemble()
+        .parse()
         .unwrap()
         .desugar()
         .unwrap()
@@ -1557,7 +1551,7 @@ fn stack_ir_constructs_and_applies_the_same_typed_builtin_package() {
     let root = fixture.write("main.zy", builtin_add_exit_source());
     let checked = SourceGraph::load(root)
         .unwrap()
-        .assemble()
+        .parse()
         .unwrap()
         .desugar()
         .unwrap()

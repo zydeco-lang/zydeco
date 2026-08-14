@@ -28,8 +28,8 @@ pub(crate) struct SourceDiscovery {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum AnalysisProgress {
-    Parsing(SourceDiscovery),
-    Assembling { source_count: usize },
+    Loading(SourceDiscovery),
+    Parsing { source_count: usize },
     Desugaring { source_count: usize },
     Resolving { source_count: usize },
     Tycking { source_count: usize },
@@ -197,13 +197,13 @@ impl ProgressMessageFormatter {
 
     fn message(&self, progress: &AnalysisProgress) -> String {
         match progress {
-            | AnalysisProgress::Parsing(progress) => format!(
-                "Parsing {} ({} discovered)",
+            | AnalysisProgress::Loading(progress) => format!(
+                "Loading {} ({} discovered)",
                 self.path(&progress.path),
                 Self::files(progress.discovered),
             ),
-            | AnalysisProgress::Assembling { source_count } => {
-                format!("Assembling {}", Self::files(*source_count))
+            | AnalysisProgress::Parsing { source_count } => {
+                format!("Parsing {}", Self::files(*source_count))
             }
             | AnalysisProgress::Desugaring { source_count } => {
                 format!("Desugaring {}", Self::files(*source_count))
@@ -241,13 +241,13 @@ mod tests {
 
         assert_eq!(PROGRESS_TITLE, "Zydeco");
         assert_eq!(
-            message(AnalysisProgress::Parsing(SourceDiscovery {
+            message(AnalysisProgress::Loading(SourceDiscovery {
                 path: PathBuf::from("/workspace/lib/list.zy"),
                 discovered: 2,
             })),
-            "Parsing lib/list.zy (2 files discovered)"
+            "Loading lib/list.zy (2 files discovered)"
         );
-        assert_eq!(message(AnalysisProgress::Assembling { source_count: 1 }), "Assembling 1 file");
+        assert_eq!(message(AnalysisProgress::Parsing { source_count: 1 }), "Parsing 1 file");
         assert_eq!(
             message(AnalysisProgress::Tycking { source_count: 4 }),
             "Tycking program from 4 files"

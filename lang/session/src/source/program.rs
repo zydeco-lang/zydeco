@@ -4,7 +4,7 @@ use zydeco_utils::span::Span;
 
 /// The complete program in textual syntax, merged from one source graph.
 ///
-/// `SourceGraph::assemble` clones every reachable template into one fresh
+/// `SourceGraph::parse` clones every reachable template into one fresh
 /// arena: imports become source boundaries, companion signatures become
 /// annotations, and `@[literal]` splices become string literals.
 pub struct TextualProgram {
@@ -14,7 +14,7 @@ pub struct TextualProgram {
 }
 
 impl SourceGraph {
-    pub fn assemble(&self) -> Result<TextualProgram, TextualProgramError> {
+    pub fn parse(&self) -> Result<TextualProgram, TextualProgramError> {
         TextualProgramBuilder::new(self).build()
     }
 }

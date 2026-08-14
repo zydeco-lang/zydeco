@@ -319,7 +319,7 @@ impl CompilerSession {
         analyze_source(self, root)
     }
 
-    /// Check a resolved program assembled outside the source pipeline.
+    /// Check a resolved program constructed outside the source pipeline.
     ///
     /// Salsa requires an active query to create tracked structs, so the arenas
     /// cross into the query graph through the session's pending-parts slot.
@@ -489,7 +489,7 @@ fn analyze_source(
     db: &dyn SourceQueryDb, root: SourceInput,
 ) -> Result<Arc<ProgramAnalysis>, AnalysisError> {
     let graph = source_graph(db, root).map_err(|error| AnalysisError::Source { error })?;
-    let program = graph.assemble().map_err(|error| AnalysisError::TextualProgram { error })?;
+    let program = graph.parse().map_err(|error| AnalysisError::TextualProgram { error })?;
     let bitter =
         program.desugar().map_err(|error| AnalysisError::Desugar { error: Box::new(error) })?;
     let ScopedProgram { spans, arena, prim, root } =

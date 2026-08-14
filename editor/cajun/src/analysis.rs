@@ -77,12 +77,12 @@ impl ProjectState {
         let graph = session.graph(source_path).map_err(|error| error.to_string())?;
         let source_count = graph.sources.len();
         graph.sources.iter().enumerate().for_each(|(index, (_, source))| {
-            progress(AnalysisProgress::Parsing(SourceDiscovery {
+            progress(AnalysisProgress::Loading(SourceDiscovery {
                 path: source.path.clone(),
                 discovered: index + 1,
             }))
         });
-        progress(AnalysisProgress::Assembling { source_count });
+        progress(AnalysisProgress::Parsing { source_count });
         progress(AnalysisProgress::Desugaring { source_count });
         progress(AnalysisProgress::Resolving { source_count });
         progress(AnalysisProgress::Tycking { source_count });
@@ -100,7 +100,7 @@ impl ProjectState {
         let source_path = Self::normalize_path(source_path);
         let source = analysis
             .source(&source_path)
-            .ok_or_else(|| format!("assembled source graph omitted `{}`", source_path.display()))?;
+            .ok_or_else(|| format!("the parsed program omitted `{}`", source_path.display()))?;
         progress(AnalysisProgress::Highlighting { path: source_path.clone() });
         let tokens = SemanticHighlighter::compiler_refined(
             source,
@@ -523,9 +523,9 @@ mod tests {
         assert_eq!(
             progress,
             vec![
-                AnalysisProgress::Parsing(SourceDiscovery { path: root.clone(), discovered: 1 }),
-                AnalysisProgress::Parsing(SourceDiscovery { path: library, discovered: 2 }),
-                AnalysisProgress::Assembling { source_count: 2 },
+                AnalysisProgress::Loading(SourceDiscovery { path: root.clone(), discovered: 1 }),
+                AnalysisProgress::Loading(SourceDiscovery { path: library, discovered: 2 }),
+                AnalysisProgress::Parsing { source_count: 2 },
                 AnalysisProgress::Desugaring { source_count: 2 },
                 AnalysisProgress::Resolving { source_count: 2 },
                 AnalysisProgress::Tycking { source_count: 2 },
