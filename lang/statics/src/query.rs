@@ -234,7 +234,7 @@ pub enum LiteralSynOutcome {
 /// environment, exactly as in-context allocation did.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn literal_syn_judgment<'db>(
-    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>, occurrence: u32,
 ) -> Option<LiteralSynOutcome> {
     use zydeco_syntax::{FloatType, IntegerType, Literal, PrimitiveType};
     let lit = match data.scoped(db).terms.get(&term.id(db))? {
@@ -280,7 +280,7 @@ pub fn literal_syn_judgment<'db>(
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
     let id: ss::ValueId =
-        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0), 0);
+        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0);
     Some(LiteralSynOutcome::Value { id, value: ss::Value::Lit(lit), ty })
 }
 
@@ -288,14 +288,14 @@ pub fn literal_syn_judgment<'db>(
 /// the missing node, derived at the term's site without touching the arena.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn term_hole_syn_judgment<'db>(
-    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>, occurrence: u32,
 ) -> Option<ss::FillId> {
     let su::Term::Hole(su::Hole) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    Some(derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0), 0))
+    Some(derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0))
 }
 
 /// The synthesized judgment of a trivial term: the unit value whose type is
@@ -314,7 +314,7 @@ pub struct TrivSynOutcome {
 /// the nodes are structurally identical and closed.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn triv_syn_judgment<'db>(
-    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>, occurrence: u32,
 ) -> Option<TrivSynOutcome> {
     let su::Term::Triv(su::Triv) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
@@ -326,7 +326,7 @@ pub fn triv_syn_judgment<'db>(
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
     let id: ss::ValueId =
-        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0), 0);
+        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0);
     Some(TrivSynOutcome { id, value: ss::Value::Triv(ss::Triv), ty })
 }
 
@@ -356,7 +356,7 @@ pub struct InternedAnn<'db> {
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn var_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, env: EnvData<'db>, term: InternedTerm<'db>,
-    annotation: InternedAnn<'db>,
+    annotation: InternedAnn<'db>, occurrence: u32,
 ) -> Option<VarSynOutcome> {
     let su::Term::Var(def) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
@@ -372,8 +372,10 @@ pub fn var_syn_judgment<'db>(
         | ss::AnnId::Type(ty) => {
             let site_space = term.id(db).key_space().as_u64();
             let site_raw = term.id(db).raw().into_u32();
-            let id: ss::ValueId =
-                derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0), 0);
+            let id: ss::ValueId = derived_id(
+                KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence),
+                0,
+            );
             Some(VarSynOutcome::Value { id, value: ss::Value::Var(def), ty })
         }
         | ss::AnnId::Kind(_) => None,
@@ -410,7 +412,7 @@ pub struct PatTrivSynOutcome {
 /// The synthesized judgment of a trivial pattern, mirroring the trivial term.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn pat_triv_syn_judgment<'db>(
-    db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>,
+    db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>, occurrence: u32,
 ) -> Option<PatTrivSynOutcome> {
     let su::Pattern::Triv(su::Triv) = data.scoped(db).pats.get(&pat.id(db))? else {
         return None;
@@ -422,7 +424,7 @@ pub fn pat_triv_syn_judgment<'db>(
     let site_space = pat.id(db).key_space().as_u64();
     let site_raw = pat.id(db).raw().into_u32();
     let id: ss::VPatId =
-        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0), 0);
+        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0);
     Some(PatTrivSynOutcome { id, value: ss::ValuePattern::Triv(ss::Triv), ty })
 }
 
@@ -447,7 +449,7 @@ pub enum NamedSynOutcome {
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn named_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
-    inner: InternedTermAnn<'db>,
+    inner: InternedTermAnn<'db>, occurrence: u32,
 ) -> Option<NamedSynOutcome> {
     let su::Term::Named(su::Named(name, _inner_term)) = data.scoped(db).terms.get(&term.id(db))?
     else {
@@ -458,7 +460,8 @@ pub fn named_syn_judgment<'db>(
         | ss::TermAnnId::Type(inner, kd) => {
             let site_space = term.id(db).key_space().as_u64();
             let site_raw = term.id(db).raw().into_u32();
-            let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0);
+            let key_space =
+                KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
             let kind_id: ss::KindId = derived_id(key_space, 0);
             let named_id: ss::TypeId = derived_id(key_space, 1);
             Some(NamedSynOutcome::Type {
@@ -492,7 +495,7 @@ pub enum LabelSynOutcome {
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn label_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
-    inner: InternedTermAnn<'db>,
+    inner: InternedTermAnn<'db>, occurrence: u32,
 ) -> Option<LabelSynOutcome> {
     let su::Term::Label(su::Label(name, _inner_term)) = data.scoped(db).terms.get(&term.id(db))?
     else {
@@ -503,8 +506,10 @@ pub fn label_syn_judgment<'db>(
         | ss::TermAnnId::Kind(inner) => {
             let site_space = term.id(db).key_space().as_u64();
             let site_raw = term.id(db).raw().into_u32();
-            let id: ss::KindId =
-                derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0), 0);
+            let id: ss::KindId = derived_id(
+                KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence),
+                0,
+            );
             Some(LabelSynOutcome::Kind { id, kind: ss::Kind::Label(ss::Label(name, inner)) })
         }
         | ss::TermAnnId::Hole(_) => {
@@ -550,6 +555,7 @@ pub enum PatNamedSynOutcome {
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn pat_named_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>, inner: InternedPatAnn<'db>,
+    occurrence: u32,
 ) -> Option<PatNamedSynOutcome> {
     let su::Pattern::Named(su::Named(name, _inner_pat)) = data.scoped(db).pats.get(&pat.id(db))?
     else {
@@ -560,7 +566,8 @@ pub fn pat_named_syn_judgment<'db>(
         | ss::PatAnnId::Type(inner, inner_kind) => {
             let site_space = pat.id(db).key_space().as_u64();
             let site_raw = pat.id(db).raw().into_u32();
-            let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0);
+            let key_space =
+                KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
             let kind_id: ss::KindId = derived_id(key_space, 0);
             let named_id: ss::TPatId = derived_id(key_space, 1);
             Some(PatNamedSynOutcome::Type {
@@ -602,7 +609,7 @@ pub struct ConsSynOutcome {
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn cons_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
-    items: InternedConsItems<'db>, tail: InternedTermAnn<'db>,
+    items: InternedConsItems<'db>, tail: InternedTermAnn<'db>, occurrence: u32,
 ) -> Option<ConsSynOutcome> {
     let su::Term::Cons(su::ConsN(_, _)) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
@@ -627,7 +634,7 @@ pub fn cons_syn_judgment<'db>(
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0);
+    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
     let mut ann = tail_ty;
     let mut prods = Vec::with_capacity(item_values.len());
     for (idx, (_, head_ty)) in item_values.iter().rev().enumerate() {
@@ -666,7 +673,7 @@ pub struct PatConsSynOutcome {
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn pat_cons_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>,
-    items: InternedPatItems<'db>, tail: InternedPatAnn<'db>,
+    items: InternedPatItems<'db>, tail: InternedPatAnn<'db>, occurrence: u32,
 ) -> Option<PatConsSynOutcome> {
     let su::Pattern::Cons(su::ConsN(_, _)) = data.scoped(db).pats.get(&pat.id(db))? else {
         return None;
@@ -691,7 +698,7 @@ pub fn pat_cons_syn_judgment<'db>(
     };
     let site_space = pat.id(db).key_space().as_u64();
     let site_raw = pat.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0);
+    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
     let mut ann = tail_ty;
     let mut prods = Vec::with_capacity(item_values.len());
     for (idx, (_, head_ty)) in item_values.iter().rev().enumerate() {
@@ -722,7 +729,8 @@ pub struct ThunkSynOutcome {
 /// The synthesized judgment of a thunk term.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn thunk_judgment<'db>(
-    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>, body: InternedTermAnn<'db>,
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+    body: InternedTermAnn<'db>, occurrence: u32,
 ) -> Option<ThunkSynOutcome> {
     let su::Term::Thunk(su::Thunk(_)) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
@@ -747,7 +755,7 @@ pub fn thunk_judgment<'db>(
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0);
+    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
     let thk_ty_id: ss::TypeId = derived_id(key_space, 0);
     let thunk_id: ss::ValueId = derived_id(key_space, 1);
     Some(ThunkSynOutcome {
@@ -774,7 +782,8 @@ pub struct RetSynOutcome {
 /// The synthesized judgment of a return term.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn ret_judgment<'db>(
-    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>, body: InternedTermAnn<'db>,
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+    body: InternedTermAnn<'db>, occurrence: u32,
 ) -> Option<RetSynOutcome> {
     let su::Term::Ret(su::Return(_)) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
@@ -799,7 +808,7 @@ pub fn ret_judgment<'db>(
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0);
+    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
     let ret_ty_id: ss::TypeId = derived_id(key_space, 0);
     let ret_id: ss::CompuId = derived_id(key_space, 1);
     Some(RetSynOutcome {
@@ -832,7 +841,7 @@ pub struct InternedForceInput<'db> {
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn force_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
-    input: InternedForceInput<'db>,
+    input: InternedForceInput<'db>, occurrence: u32,
 ) -> Option<ForceSynOutcome> {
     let su::Term::Force(su::Force(_)) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
@@ -840,7 +849,7 @@ pub fn force_judgment<'db>(
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
     let id: ss::CompuId =
-        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0), 0);
+        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0);
     Some(ForceSynOutcome {
         id,
         compu: ss::Computation::Force(ss::Force(input.body(db))),
@@ -869,7 +878,7 @@ pub struct DoSynOutcome {
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn do_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
-    input: InternedDoInput<'db>,
+    input: InternedDoInput<'db>, occurrence: u32,
 ) -> Option<DoSynOutcome> {
     let su::Term::Do(su::Bind { .. }) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
@@ -877,7 +886,7 @@ pub fn do_judgment<'db>(
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
     let id: ss::CompuId =
-        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0), 0);
+        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0);
     Some(DoSynOutcome {
         id,
         compu: ss::Computation::Do(ss::Bind {
@@ -902,14 +911,14 @@ pub enum LetSynOutcome {
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn let_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>, binder: InternedVPat<'db>,
-    bindee: InternedValue<'db>, tail: InternedTermAnn<'db>,
+    bindee: InternedValue<'db>, tail: InternedTermAnn<'db>, occurrence: u32,
 ) -> Option<LetSynOutcome> {
     let su::Term::Let(su::Let { .. }) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0);
+    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
     match tail.id(db) {
         | ss::TermAnnId::Value(tail, ann) => {
             let id: ss::ValueId = derived_id(key_space, 0);
@@ -974,14 +983,14 @@ pub enum AppSynOutcome {
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn app_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
-    input: InternedAppInput<'db>,
+    input: InternedAppInput<'db>, occurrence: u32,
 ) -> Option<AppSynOutcome> {
     let su::Term::App(su::App(_, _)) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0);
+    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
     match input.kind(db) {
         | AppKind::ValueValue { function, argument } => {
             let id: ss::ValueId = derived_id(key_space, 0);
@@ -1042,7 +1051,7 @@ pub struct FixSynOutcome {
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn fix_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
-    input: InternedFixInput<'db>,
+    input: InternedFixInput<'db>, occurrence: u32,
 ) -> Option<FixSynOutcome> {
     let su::Term::Fix(su::Fix(_, _)) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
@@ -1050,7 +1059,7 @@ pub fn fix_judgment<'db>(
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
     let id: ss::CompuId =
-        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0), 0);
+        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0);
     Some(FixSynOutcome {
         id,
         compu: ss::Computation::Fix(ss::Fix(input.binder(db), input.body(db))),
@@ -1091,14 +1100,14 @@ pub enum HoleAnaOutcome {
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn hole_ana_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
-    input: InternedHoleAna<'db>,
+    input: InternedHoleAna<'db>, occurrence: u32,
 ) -> Option<HoleAnaOutcome> {
     let su::Term::Hole(su::Hole) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0);
+    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
     let fill: ss::FillId = derived_id(key_space, 0);
     match input.kind(db) {
         | HoleAnaKind::Type { kd } => {
@@ -1179,13 +1188,14 @@ pub enum PiSynOutcome {
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 pub fn pi_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>, input: InternedPiSyn<'db>,
+    occurrence: u32,
 ) -> Option<PiSynOutcome> {
     let su::Term::Pi(su::Pi(_, _)) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0);
+    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
     match input.arm(db) {
         | PiSynArm::KindArrow { kd_1, kd_2 } => {
             let id: ss::KindId = derived_id(key_space, 0);
@@ -1222,6 +1232,71 @@ pub fn pi_syn_judgment<'db>(
         | PiSynArm::SortMismatch => {
             Some(PiSynOutcome::Error(crate::check::TyckError::SortMismatch))
         }
+    }
+}
+
+/// The arm of a sigma judgment after its binder checks: an existential, a
+/// product, or the kind-level rejection.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum SigmaSynArm {
+    Exists { tpat: ss::TPatId, abst: ss::AbstId, body_ty: ss::TypeId },
+    Prod { ty_1: ss::TypeId, ty_2: ss::TypeId },
+    Expressivity,
+}
+
+/// An interned sigma judgment input, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedSigmaSyn<'db> {
+    pub arm: SigmaSynArm,
+}
+
+/// The allocation tail of a sigma judgment: the existential or product type
+/// node; the kind-level rejection surfaces as an error.
+#[derive(Clone, Debug)]
+pub enum SigmaSynOutcome {
+    Type { id: ss::TypeId, ty: ss::Type, kd: ss::KindId },
+    Error(crate::check::TyckError),
+}
+
+/// The synthesized judgment of a sigma term, keyed on the checked binder and
+/// body arm.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn sigma_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+    input: InternedSigmaSyn<'db>, occurrence: u32,
+) -> Option<SigmaSynOutcome> {
+    let su::Term::Sigma(su::Sigma(_, _)) = data.scoped(db).terms.get(&term.id(db))? else {
+        return None;
+    };
+    let site_space = term.id(db).key_space().as_u64();
+    let site_raw = term.id(db).raw().into_u32();
+    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
+    let vtype = {
+        let key = InternedIntrinsic::new(db, IntrinsicKey::VType);
+        let IntrinsicSingleton::Kind { id, .. } = intrinsic_singleton(db, data, key) else {
+            unreachable!("the vtype singleton is kind-producing")
+        };
+        id
+    };
+    match input.arm(db) {
+        | SigmaSynArm::Exists { tpat, abst, body_ty } => {
+            let id: ss::TypeId = derived_id(key_space, 0);
+            Some(SigmaSynOutcome::Type {
+                id,
+                ty: ss::Type::Exists(ss::Exists::new(
+                    ss::TypeBinder { pattern: tpat, witness: abst },
+                    body_ty,
+                )),
+                kd: vtype,
+            })
+        }
+        | SigmaSynArm::Prod { ty_1, ty_2 } => {
+            let id: ss::TypeId = derived_id(key_space, 0);
+            Some(SigmaSynOutcome::Type { id, ty: ss::Type::Prod(ss::Prod(ty_1, ty_2)), kd: vtype })
+        }
+        | SigmaSynArm::Expressivity => Some(SigmaSynOutcome::Error(
+            crate::check::TyckError::Expressivity("abstract existential kinds are not supported"),
+        )),
     }
 }
 

@@ -469,3 +469,24 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
 - `Pat::Ctor` and `Pat::Alias` Syn became error-only queries returning `MissingAnnotation`,
   completing the pattern-level error arms alongside `Pat::Hole`.
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — occurrence-aware derivation: fixpoint re-checks caught a collision
+
+- The cajun stdio suite caught a real derived-id collision: `duplicate key in sparse
+  arena` on a pi judgment in `lib/std/std.zy`. The backtrace showed `FixPoint`/`RecGroup`
+  re-checking the same binding bodies, which increments the checker's per-entity occurrence —
+  and the producer queries had been deriving their identifiers with occurrence hard-coded to
+  zero. Two checks of the same entity therefore minted the same `KindId`.
+- Fix: `DerivedAllocator::current_site` exposes the innermost `(space, raw, occurrence)`
+  triple, `Tycker::site_occurrence` reads it, and every producer query now takes
+  `occurrence: u32` as its last key ingredient, deriving under
+  `QUERY_DERIVATION_TAG(space, raw, occurrence)` exactly as the checker allocator does under
+  its own tag. Re-checked entities get distinct identifiers; the terms back-map keeps
+  pointing at the last check's nodes, matching the original fresh-per-occurrence behavior.
+- This corrects the earlier claim that entities are checked once: recursion-group fixpoint
+  retries re-check bindings, so occurrence is live state, not vestigial bookkeeping.
+- `sigma_syn_judgment` also landed in this batch: the existential and product tails derive at
+  the term's site (annotated by the shared vtype singleton), and the kind arm's expressivity
+  rejection became a return value.
+- Workspace suite passes unchanged (61 targets green, including the cajun stdio test three
+  times in a row), clippy clean.

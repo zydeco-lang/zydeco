@@ -58,6 +58,18 @@ impl DerivedAllocator {
         Self { sites: vec![(u64::MAX, u32::MAX, u32::MAX, slot)] }
     }
 
+    /// The innermost site: `(entity space, entity raw, occurrence)`.
+    ///
+    /// Producer queries derive their identifiers from this triple under the
+    /// query derivation tag, so re-checked entities (fixpoint and recursion
+    /// retries) get distinct identifiers exactly as the checker's own
+    /// allocator does.
+    pub fn current_site(&self) -> (u64, u32, u32) {
+        let (entity_space, entity_raw, occurrence, _) =
+            *self.sites.last().expect("the root allocation site always exists");
+        (entity_space, entity_raw, occurrence)
+    }
+
     /// Leave the innermost site, resuming the enclosing site's slots.
     pub fn exit(&mut self) {
         assert!(self.sites.len() > 1, "cannot leave the root allocation site");

@@ -1050,6 +1050,13 @@ impl<'a> Tycker<'a> {
         Ok(root)
     }
 
+    /// The occurrence of the innermost allocation site, carried by the
+    /// checker's allocator. Producer queries key their identifiers on it so
+    /// re-checked entities derive distinct ids.
+    pub fn site_occurrence(&self) -> u32 {
+        self.allocator.current_site().2
+    }
+
     /// The root site's next slot, carried between the check's phases.
     pub fn root_slot(&self) -> u32 {
         self.allocator.root_slot()
@@ -2300,6 +2307,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                     tycker.data,
                                     pat,
                                     inner_interned,
+                                    tycker.site_occurrence(),
                                 ) else {
                                     unreachable!(
                                         "the type and rejection arms of named pattern judgments are query-produced"
@@ -2599,9 +2607,12 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
             | Pat::Triv(su::Triv) => match switch {
                 | Switch::Syn => {
                     let pat = crate::query::InternedPat::new(tycker.db, self.inner);
-                    let Some(outcome) =
-                        crate::query::pat_triv_syn_judgment(tycker.db, tycker.data, pat)
-                    else {
+                    let Some(outcome) = crate::query::pat_triv_syn_judgment(
+                        tycker.db,
+                        tycker.data,
+                        pat,
+                        tycker.site_occurrence(),
+                    ) else {
                         unreachable!("trivial pattern judgments are query-produced")
                     };
                     let crate::query::PatTrivSynOutcome { id, value, ty } = outcome;
@@ -2672,6 +2683,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                             pat_interned,
                             items_interned,
                             tail_interned,
+                            tycker.site_occurrence(),
                         ) else {
                             unreachable!("consumed pattern judgments are query-produced")
                         };
@@ -3437,9 +3449,12 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 match switch {
                     | Switch::Syn => {
                         let term = crate::query::InternedTerm::new(tycker.db, self.inner);
-                        let Some(fill) =
-                            crate::query::term_hole_syn_judgment(tycker.db, tycker.data, term)
-                        else {
+                        let Some(fill) = crate::query::term_hole_syn_judgment(
+                            tycker.db,
+                            tycker.data,
+                            term,
+                            tycker.site_occurrence(),
+                        ) else {
                             unreachable!("hole judgments are query-produced")
                         };
                         tycker.statics.fills.insert_new(fill, ss::InferenceSite::Term(self.inner));
@@ -3457,7 +3472,13 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             crate::query::HoleAnaKind::Type { kd },
                         );
                         let Some(crate::query::HoleAnaOutcome::Type { fill, ty, kd }) =
-                            crate::query::hole_ana_judgment(tycker.db, tycker.data, term, input)
+                            crate::query::hole_ana_judgment(
+                                tycker.db,
+                                tycker.data,
+                                term,
+                                input,
+                                tycker.site_occurrence(),
+                            )
                         else {
                             unreachable!("the kind arm of hole judgments is query-produced")
                         };
@@ -3496,6 +3517,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     tycker.data,
                                     term,
                                     input,
+                                    tycker.site_occurrence(),
                                 )
                                 else {
                                     unreachable!(
@@ -3529,6 +3551,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     tycker.data,
                                     term,
                                     input,
+                                    tycker.site_occurrence(),
                                 )
                                 else {
                                     unreachable!(
@@ -3578,6 +3601,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 env_data,
                                 term,
                                 annotation,
+                                tycker.site_occurrence(),
                             )
                         else {
                             unreachable!("the set arm of variable judgments is query-produced")
@@ -3605,6 +3629,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 env_data,
                                 term,
                                 annotation,
+                                tycker.site_occurrence(),
                             )
                         else {
                             unreachable!("the type arm of variable judgments is query-produced")
@@ -3632,6 +3657,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 tycker.data,
                                 term,
                                 inner_interned,
+                                tycker.site_occurrence(),
                             ) else {
                                 unreachable!(
                                     "the type and rejection arms of named judgments are query-produced"
@@ -3756,6 +3782,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 tycker.data,
                                 term,
                                 inner_interned,
+                                tycker.site_occurrence(),
                             ) else {
                                 unreachable!(
                                     "the kind and rejection arms of label judgments are query-produced"
@@ -3812,9 +3839,12 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
             | Tm::Triv(su::Triv) => match switch {
                 | Switch::Syn => {
                     let term = crate::query::InternedTerm::new(tycker.db, self.inner);
-                    let Some(outcome) =
-                        crate::query::triv_syn_judgment(tycker.db, tycker.data, term)
-                    else {
+                    let Some(outcome) = crate::query::triv_syn_judgment(
+                        tycker.db,
+                        tycker.data,
+                        term,
+                        tycker.site_occurrence(),
+                    ) else {
                         unreachable!("trivial judgments are query-produced")
                     };
                     let crate::query::TrivSynOutcome { id, value, ty } = outcome;
@@ -3886,6 +3916,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             term,
                             items_interned,
                             tail_interned,
+                            tycker.site_occurrence(),
                         ) else {
                             unreachable!("consumed judgments are query-produced")
                         };
@@ -4611,8 +4642,13 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     value,
                                     ann,
                                     reported,
-                                }) =
-                                    crate::query::app_judgment(tycker.db, tycker.data, term, input)
+                                }) = crate::query::app_judgment(
+                                    tycker.db,
+                                    tycker.data,
+                                    term,
+                                    input,
+                                    tycker.site_occurrence(),
+                                )
                                 else {
                                     unreachable!("value-type applications are query-produced")
                                 };
@@ -4661,8 +4697,13 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     value,
                                     ann,
                                     reported,
-                                }) =
-                                    crate::query::app_judgment(tycker.db, tycker.data, term, input)
+                                }) = crate::query::app_judgment(
+                                    tycker.db,
+                                    tycker.data,
+                                    term,
+                                    input,
+                                    tycker.site_occurrence(),
+                                )
                                 else {
                                     unreachable!("value applications are query-produced")
                                 };
@@ -4727,8 +4768,13 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     compu,
                                     ann,
                                     reported,
-                                }) =
-                                    crate::query::app_judgment(tycker.db, tycker.data, term, input)
+                                }) = crate::query::app_judgment(
+                                    tycker.db,
+                                    tycker.data,
+                                    term,
+                                    input,
+                                    tycker.site_occurrence(),
+                                )
                                 else {
                                     unreachable!("computation applications are query-produced")
                                 };
@@ -4780,8 +4826,13 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     compu,
                                     ann,
                                     reported,
-                                }) =
-                                    crate::query::app_judgment(tycker.db, tycker.data, term, input)
+                                }) = crate::query::app_judgment(
+                                    tycker.db,
+                                    tycker.data,
+                                    term,
+                                    input,
+                                    tycker.site_occurrence(),
+                                )
                                 else {
                                     unreachable!(
                                         "polymorphic computation applications are query-produced"
@@ -4846,8 +4897,13 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                 let input =
                     crate::query::InternedFixInput::new(tycker.db, binder, body_out, fix_ty);
-                let Some(outcome) = crate::query::fix_judgment(tycker.db, tycker.data, term, input)
-                else {
+                let Some(outcome) = crate::query::fix_judgment(
+                    tycker.db,
+                    tycker.data,
+                    term,
+                    input,
+                    tycker.site_occurrence(),
+                ) else {
                     unreachable!("fixpoint judgments are query-produced")
                 };
                 tycker.statics.compus.insert_new(outcome.id, outcome.compu);
@@ -4903,6 +4959,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                                 tycker.data,
                                                 term,
                                                 input,
+                                                tycker.site_occurrence(),
                                             )
                                         else {
                                             unreachable!(
@@ -4937,6 +4994,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                             tycker.data,
                                             term,
                                             input,
+                                            tycker.site_occurrence(),
                                         ) {
                                             | Some(crate::query::PiSynOutcome::Type {
                                                 id,
@@ -4978,6 +5036,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                                 tycker.data,
                                                 term,
                                                 input,
+                                                tycker.site_occurrence(),
                                             )
                                         else {
                                             unreachable!(
@@ -5001,6 +5060,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                                 tycker.data,
                                                 term,
                                                 input,
+                                                tycker.site_occurrence(),
                                             )
                                         else {
                                             unreachable!(
@@ -5180,12 +5240,27 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         let binder_out_ann =
                             self.mk(binder).tyck_k(tycker, PatternAction::syn())?;
                         match binder_out_ann.annotation {
-                            | PatAnnId::Kind(_) => tycker.err_k(
-                                TyckError::Expressivity(
-                                    "abstract existential kinds are not supported",
-                                ),
-                                std::panic::Location::caller(),
-                            )?,
+                            | PatAnnId::Kind(_) => {
+                                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                                let input = crate::query::InternedSigmaSyn::new(
+                                    tycker.db,
+                                    crate::query::SigmaSynArm::Expressivity,
+                                );
+                                let Some(crate::query::SigmaSynOutcome::Error(error)) =
+                                    crate::query::sigma_syn_judgment(
+                                        tycker.db,
+                                        tycker.data,
+                                        term,
+                                        input,
+                                        tycker.site_occurrence(),
+                                    )
+                                else {
+                                    unreachable!(
+                                        "the kind arm of sigma judgments is query-produced"
+                                    )
+                                };
+                                tycker.err_k(error, std::panic::Location::caller())?
+                            }
                             | PatAnnId::Type(tpat, _kd) => {
                                 // exists
                                 let abst = Alloc::alloc(tycker, tpat, (), &());
@@ -5207,14 +5282,28 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 // body_kd should be of vtype
                                 let vtype = ss::VType.build(tycker, &self.info);
                                 Lub::lub_k(vtype, body_kd, tycker)?;
-                                let binder = ss::TypeBinder { pattern: tpat, witness: abst };
-                                let exists = Alloc::alloc(
-                                    tycker,
-                                    ss::Exists::new(binder, body_ty),
-                                    vtype,
-                                    &self.info,
+                                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                                let input = crate::query::InternedSigmaSyn::new(
+                                    tycker.db,
+                                    crate::query::SigmaSynArm::Exists { tpat, abst, body_ty },
                                 );
-                                TermAnnId::Type(exists, vtype)
+                                let Some(crate::query::SigmaSynOutcome::Type { id, ty, kd }) =
+                                    crate::query::sigma_syn_judgment(
+                                        tycker.db,
+                                        tycker.data,
+                                        term,
+                                        input,
+                                        tycker.site_occurrence(),
+                                    )
+                                else {
+                                    unreachable!(
+                                        "the exists arm of sigma judgments is query-produced"
+                                    )
+                                };
+                                tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(ty));
+                                tycker.statics.annotations_type.insert_new(id, kd);
+                                tycker.statics.env_type.insert_new(id, self.info.clone());
+                                TermAnnId::Type(id, kd)
                             }
                             | PatAnnId::Value(vpat, ty_1) => {
                                 // prod; vpat should not be used
@@ -5238,9 +5327,28 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 )?;
                                 // kd_2 should be of vtype
                                 Lub::lub_k(vtype, kd_2, tycker)?;
-                                let prod =
-                                    Alloc::alloc(tycker, ss::Prod(ty_1, ty_2), vtype, &self.info);
-                                TermAnnId::Type(prod, vtype)
+                                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                                let input = crate::query::InternedSigmaSyn::new(
+                                    tycker.db,
+                                    crate::query::SigmaSynArm::Prod { ty_1, ty_2 },
+                                );
+                                let Some(crate::query::SigmaSynOutcome::Type { id, ty, kd }) =
+                                    crate::query::sigma_syn_judgment(
+                                        tycker.db,
+                                        tycker.data,
+                                        term,
+                                        input,
+                                        tycker.site_occurrence(),
+                                    )
+                                else {
+                                    unreachable!(
+                                        "the product arm of sigma judgments is query-produced"
+                                    )
+                                };
+                                tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(ty));
+                                tycker.statics.annotations_type.insert_new(id, kd);
+                                tycker.statics.env_type.insert_new(id, self.info.clone());
+                                TermAnnId::Type(id, kd)
                             }
                         }
                     }
@@ -5373,9 +5481,13 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     tycker.db,
                     TermAnnId::Compu(body_out, body_ty),
                 );
-                let Some(outcome) =
-                    crate::query::thunk_judgment(tycker.db, tycker.data, term, body_interned)
-                else {
+                let Some(outcome) = crate::query::thunk_judgment(
+                    tycker.db,
+                    tycker.data,
+                    term,
+                    body_interned,
+                    tycker.site_occurrence(),
+                ) else {
                     unreachable!("thunk judgments are query-produced")
                 };
                 tycker
@@ -5435,9 +5547,13 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 };
                 let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                 let input = crate::query::InternedForceInput::new(tycker.db, body, force_ty);
-                let Some(outcome) =
-                    crate::query::force_judgment(tycker.db, tycker.data, term, input)
-                else {
+                let Some(outcome) = crate::query::force_judgment(
+                    tycker.db,
+                    tycker.data,
+                    term,
+                    input,
+                    tycker.site_occurrence(),
+                ) else {
                     unreachable!("force judgments are query-produced")
                 };
                 tycker.statics.compus.insert_new(outcome.id, outcome.compu);
@@ -5471,9 +5587,13 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     tycker.db,
                     TermAnnId::Value(body_out, body_ty),
                 );
-                let Some(outcome) =
-                    crate::query::ret_judgment(tycker.db, tycker.data, term, body_interned)
-                else {
+                let Some(outcome) = crate::query::ret_judgment(
+                    tycker.db,
+                    tycker.data,
+                    term,
+                    body_interned,
+                    tycker.site_occurrence(),
+                ) else {
                     unreachable!("return judgments are query-produced")
                 };
                 tycker
@@ -5525,8 +5645,13 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 let input = crate::query::InternedDoInput::new(
                     tycker.db, binder_out, bindee_out, tail_out, bind_ty,
                 );
-                let Some(outcome) = crate::query::do_judgment(tycker.db, tycker.data, term, input)
-                else {
+                let Some(outcome) = crate::query::do_judgment(
+                    tycker.db,
+                    tycker.data,
+                    term,
+                    input,
+                    tycker.site_occurrence(),
+                ) else {
                     unreachable!("bind judgments are query-produced")
                 };
                 tycker.statics.compus.insert_new(outcome.id, outcome.compu);
@@ -5635,6 +5760,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         binder,
                                         bindee,
                                         tail,
+                                        tycker.site_occurrence(),
                                     )
                                 else {
                                     unreachable!(
@@ -5664,6 +5790,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         binder,
                                         bindee,
                                         tail,
+                                        tycker.site_occurrence(),
                                     )
                                 else {
                                     unreachable!(
@@ -6118,9 +6245,12 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
             | Tm::Lit(lit) => match switch {
                 | Switch::Syn => {
                     let term = crate::query::InternedTerm::new(tycker.db, self.inner);
-                    let Some(outcome) =
-                        crate::query::literal_syn_judgment(tycker.db, tycker.data, term)
-                    else {
+                    let Some(outcome) = crate::query::literal_syn_judgment(
+                        tycker.db,
+                        tycker.data,
+                        term,
+                        tycker.site_occurrence(),
+                    ) else {
                         unreachable!("literal judgments are query-produced")
                     };
                     match outcome {
