@@ -380,6 +380,52 @@ pub fn var_syn_judgment<'db>(
     }
 }
 
+/// An interned scoped pattern, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedPat<'db> {
+    pub id: su::PatId,
+}
+
+/// The synthesized judgment of a hole pattern: it always fails with a missing
+/// annotation, produced without touching the arena.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn pat_hole_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>,
+) -> Option<crate::check::TyckError> {
+    let su::Pattern::Hole(su::Hole) = data.scoped(db).pats.get(&pat.id(db))? else {
+        return None;
+    };
+    Some(crate::check::TyckError::MissingAnnotation)
+}
+
+/// The synthesized judgment of a trivial pattern: the unit value pattern whose
+/// type is the query-owned unit singleton.
+#[derive(Clone, Debug)]
+pub struct PatTrivSynOutcome {
+    pub id: ss::VPatId,
+    pub value: ss::ValuePattern,
+    pub ty: ss::TypeId,
+}
+
+/// The synthesized judgment of a trivial pattern, mirroring the trivial term.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn pat_triv_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>,
+) -> Option<PatTrivSynOutcome> {
+    let su::Pattern::Triv(su::Triv) = data.scoped(db).pats.get(&pat.id(db))? else {
+        return None;
+    };
+    let key = InternedIntrinsic::new(db, IntrinsicKey::Unit);
+    let IntrinsicSingleton::Type { ty: (ty, _), .. } = intrinsic_singleton(db, data, key) else {
+        unreachable!("the unit singleton is type-producing")
+    };
+    let site_space = pat.id(db).key_space().as_u64();
+    let site_raw = pat.id(db).raw().into_u32();
+    let id: ss::VPatId =
+        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0), 0);
+    Some(PatTrivSynOutcome { id, value: ss::ValuePattern::Triv(ss::Triv), ty })
+}
+
 /// The rejection of an intrinsic `Internal` term, carried as a query value so
 /// the checker routes decisions through queries and keeps the writer as a sink.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]

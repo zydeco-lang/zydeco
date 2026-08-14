@@ -369,3 +369,21 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   `lub` result is just a different annotation input, so the arm split is by annotation shape
   rather than by mode.
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — pattern leaves join the query graph
+
+- `Pat::Hole` Syn became an error-only query (`pat_hole_syn_judgment` returns the
+  `MissingAnnotation` rejection, matching the `internal_judgment` shape), and `Pat::Triv` Syn
+  is now produced by `pat_triv_syn_judgment` on the shared unit singleton, deriving the
+  value-pattern node at the pattern's site.
+- The pattern materializer records `vpats` / `annotations_vpat` / `env_vpat` exactly as the
+  pattern allocator did; the Ana arms keep their `lub` path, so the triv pattern's mode split
+  mirrors the triv term's.
+- The term and pattern Syn leaves are now exhausted: every remaining construct (Named, Label,
+  Ann, Cons, Abs, App, the pack-pi family, and the pattern counterparts) is composite — its
+  outer allocation consumes inner judgment results — and the variable's kind arm plus all Ana
+  paths wait on the fill-state pattern. The next slices are therefore DAG-shaped rather than
+  leaf-shaped: either the fill-state conversion (making `lub` query-able, which unblocks the
+  fold's merge step and every Ana arm) or the first composite construct keyed on its inner
+  results.
+- Workspace suite passes unchanged (61 targets green), clippy clean.

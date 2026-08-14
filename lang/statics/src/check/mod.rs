@@ -2238,8 +2238,15 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
             | Pat::Hole(pat) => {
                 let su::Hole = pat;
                 match switch {
-                    | Switch::Syn => tycker
-                        .err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?,
+                    | Switch::Syn => {
+                        let pat = crate::query::InternedPat::new(tycker.db, self.inner);
+                        let Some(error) =
+                            crate::query::pat_hole_syn_judgment(tycker.db, tycker.data, pat)
+                        else {
+                            unreachable!("hole pattern judgments are query-produced")
+                        };
+                        tycker.err_k(error, std::panic::Location::caller())?
+                    }
                     | Switch::Ana(ann) => {
                         self.mk(PatternCheck::new(PatAnnId::mk_hole(tycker, &self.info, ann)))
                     }
@@ -2555,18 +2562,30 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                 | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker
                     .err_k(TyckError::PatternAliasRequiresValue, std::panic::Location::caller())?,
             },
-            | Pat::Triv(su::Triv) => {
-                let unit = ss::UnitTy.build(tycker, &self.info);
-                let ann = match switch {
-                    | Switch::Syn => unit,
-                    | Switch::Ana(AnnId::Type(ana)) => Lub::lub_k(unit, ana, tycker)?,
-                    | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
-                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                    }
-                };
-                let triv = Alloc::alloc(tycker, ss::Triv, ann, &self.info);
-                self.mk(PatternCheck::new(PatAnnId::Value(triv, ann)))
-            }
+            | Pat::Triv(su::Triv) => match switch {
+                | Switch::Syn => {
+                    let pat = crate::query::InternedPat::new(tycker.db, self.inner);
+                    let Some(outcome) =
+                        crate::query::pat_triv_syn_judgment(tycker.db, tycker.data, pat)
+                    else {
+                        unreachable!("trivial pattern judgments are query-produced")
+                    };
+                    let crate::query::PatTrivSynOutcome { id, value, ty } = outcome;
+                    tycker.statics.vpats.insert_new(id, value);
+                    tycker.statics.annotations_vpat.insert_new(id, ty);
+                    tycker.statics.env_vpat.insert_new(id, self.info.clone());
+                    self.mk(PatternCheck::new(PatAnnId::Value(id, ty)))
+                }
+                | Switch::Ana(AnnId::Type(ana)) => {
+                    let unit = ss::UnitTy.build(tycker, &self.info);
+                    let ann = Lub::lub_k(unit, ana, tycker)?;
+                    let triv = Alloc::alloc(tycker, ss::Triv, ann, &self.info);
+                    self.mk(PatternCheck::new(PatAnnId::Value(triv, ann)))
+                }
+                | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
+                    tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                }
+            },
             | Pat::Cons(pat) => {
                 let su::ConsN(items, tail) = pat;
                 match switch {
