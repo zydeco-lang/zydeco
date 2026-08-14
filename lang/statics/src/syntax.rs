@@ -424,6 +424,10 @@ mod impls_structs {
         pub fn len(&self) -> usize {
             self.arms.len()
         }
+
+        pub fn is_empty(&self) -> bool {
+            self.arms.is_empty()
+        }
     }
 
     impl CoData {
@@ -439,6 +443,10 @@ mod impls_structs {
         }
         pub fn len(&self) -> usize {
             self.arms.len()
+        }
+
+        pub fn is_empty(&self) -> bool {
+            self.arms.is_empty()
         }
     }
 }
