@@ -303,3 +303,14 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   `insert_new`. Test fixtures switched to the `Alloc` machinery with explicit
   `InferenceSite` construction.
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — the dense boundary is gone entirely
+
+- `absts`, `datas`, and `codatas` joined `fills` on the sparse, site-derived scheme, so every
+  typed identifier category (`KindId` through `CoDataId`) now derives from `(site, slot)`.
+  Nothing in the checker observes la-arena cursors anymore; the entire `StaticsArena` is
+  reproducible by pure computation from the source program, which was the last prerequisite
+  for rewriting the judgment recursion as queries.
+- Key-check before the conversion: no pass iterates these arenas (only keyed lookups), so the
+  HashMap iteration order cannot leak into diagnostics or resolution order.
+- Workspace suite passes unchanged (61 targets green), clippy clean.
