@@ -239,3 +239,15 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
 - The analysis test helpers (`ProjectState::load`) now return the session alongside the project so
   hover tests exercise the query path.
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — probing the wall: `Var` stays arena-bound
+
+- Tested whether the `Var` judgment could read its annotation from the environment instead of the
+  arena. It cannot: the binder check (`Pat::Var`) writes `annotations_var` through
+  `insert_or_get` followed by `Lub::lub_k` and `replace_existing` when a definition binds multiple
+  times, so the arena annotation can diverge from the environment's `AnnId`. The wall is therefore
+  not an artifact of the current query keys but of genuinely mutable mid-check arena state.
+- The arena-read wall now bounds the producer migration definitively: the queryable layer is
+  complete for this architecture (intrinsic judgments plus the demand-driven fact queries), and
+  the remaining judgment migration requires the redesign decision (typed arena as query-owned
+  state, touching `new_key_type` and the downstream backends).
