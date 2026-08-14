@@ -475,7 +475,7 @@ fn assert_source_program_exits_zero_and_reaches_zasm(relative: impl AsRef<Path>)
 fn assert_source_program_reaches_amd64(relative: impl AsRef<Path>) {
     let native = TestPipeline::amd64(
         repository_source(relative),
-        crate::TestBuildOptions::default(),
+        crate::TestBuildOptions,
         crate::TestOutput::quiet(),
     )
     .unwrap();

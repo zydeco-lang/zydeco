@@ -340,19 +340,6 @@ where
     }
 }
 
-#[cfg(test)]
-mod kind_test {
-    use super::super::{syntax::*, *};
-
-    #[test]
-    fn r#static() {
-        fn _f<'a>(tycker: &mut Tycker<'a>, env: &TyEnv) -> KindId {
-            // VType -> (CType -> CType)
-            Arrow(VType, Arrow(CType, CType)).build(tycker, env)
-        }
-    }
-}
-
 /* ------------------------------- TypePattern ------------------------------ */
 
 impl<'a> Construct<Tycker<'a>, TPatId> for cs::Ann<Option<DefId>, KindId> {
@@ -1246,5 +1233,18 @@ impl<'a> Tycker<'a> {
         dtor: impl Construct<Tycker<'a>, DtorName>,
     ) -> CompuId {
         cs::Dtor(head, dtor).build(self, env)
+    }
+}
+
+#[cfg(test)]
+mod kind_test {
+    use super::super::{syntax::*, *};
+
+    #[test]
+    fn r#static() {
+        fn _f<'a>(tycker: &mut Tycker<'a>, env: &TyEnv) -> KindId {
+            // VType -> (CType -> CType)
+            Arrow(VType, Arrow(CType, CType)).build(tycker, env)
+        }
     }
 }
