@@ -57,6 +57,12 @@ pub struct InternedDef<'db> {
     pub id: su::DefId,
 }
 
+/// An interned scoped term, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedTerm<'db> {
+    pub id: su::TermId,
+}
+
 /// An interned hole-filling site, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedFill<'db> {

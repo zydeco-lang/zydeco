@@ -358,6 +358,17 @@ impl CompilerSession {
         Ok(type_definition_of_def(self, root, def))
     }
 
+    /// The checked annotation of a scoped term, memoized per analysis.
+    pub fn annotation_of_term(
+        &self, root: impl AsRef<Path>, term: zydeco_statics::surface_syntax::TermId,
+    ) -> Result<Option<zydeco_statics::syntax::TermAnnId>, AnalysisError> {
+        let root = self
+            .source_input(root.as_ref().to_path_buf())
+            .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
+        let term = zydeco_statics::query::InternedTerm::new(self, term);
+        Ok(term_annotation_at(self, root, term))
+    }
+
     #[cfg(test)]
     fn template(
         &self, path: impl AsRef<Path>,
@@ -505,6 +516,30 @@ fn type_definition_of_def<'db>(
 ) -> Option<zydeco_statics::syntax::TypeId> {
     let analysis = analyze_source(db, root).ok()?;
     analysis.statics().type_definitions.get(&def.id(db)).copied()
+}
+
+/// The checked annotation of a scoped term: its sorted identity plus the
+/// annotation carried by that sort.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+fn term_annotation_at<'db>(
+    db: &'db dyn SourceQueryDb, root: SourceInput, term: zydeco_statics::query::InternedTerm<'db>,
+) -> Option<zydeco_statics::syntax::TermAnnId> {
+    use zydeco_statics::syntax::TermAnnId;
+    let analysis = analyze_source(db, root).ok()?;
+    let statics = analysis.statics();
+    let typed = *statics.terms.forth(&term.id(db)).last()?;
+    Some(match typed {
+        | zydeco_statics::syntax::TermId::Kind(kind) => TermAnnId::Kind(kind),
+        | zydeco_statics::syntax::TermId::Type(ty) => {
+            TermAnnId::Type(ty, *statics.annotations_type.get(&ty)?)
+        }
+        | zydeco_statics::syntax::TermId::Value(value) => {
+            TermAnnId::Value(value, *statics.annotations_value.get(&value)?)
+        }
+        | zydeco_statics::syntax::TermId::Compu(compu) => {
+            TermAnnId::Compu(compu, *statics.annotations_compu.get(&compu)?)
+        }
+    })
 }
 
 #[cfg(test)]
@@ -771,5 +806,21 @@ end
             matches!(error, zydeco_statics::validate::CoverageError::NonExhaustiveMatch { .. })
         }));
         assert_eq!(coverage.len(), session.coverage(&root).unwrap().len());
+    }
+
+    #[test]
+    fn term_annotation_facts_are_demand_driven_per_analysis() {
+        let fixture = Fixture::new();
+        let root = fixture.write("root.zy", "ret 1");
+        let session = CompilerSession::default();
+
+        let analysis = session.analyze(&root).unwrap();
+        let annotated = analysis
+            .scoped()
+            .terms
+            .iter()
+            .filter_map(|(term, _)| session.annotation_of_term(&root, *term).unwrap())
+            .collect::<Vec<_>>();
+        assert!(!annotated.is_empty(), "some scoped term should carry a checked annotation",);
     }
 }
