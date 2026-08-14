@@ -168,10 +168,25 @@ impl Cajun {
             | Ok(path) => path,
             | Err(error) => return RefreshOutcome::Failed(error),
         };
-        let analysis_path = path.clone();
-        let (snapshot, revision) = {
+        let revision = {
             let session = self.session.lock().await;
-            (session.compiler.snapshot(), session.revision(&path))
+            session.revision(&path)
+        };
+        // Fast path: an unchanged open document reuses its cached analysis.
+        // Re-analyzing on every request would both waste the session's
+        // memoized queries and replace the project editors are reading.
+        if revision.is_some() {
+            let projects = self.projects.read().await;
+            if let Some(cached) = projects.get(&path)
+                && cached.revision == revision
+            {
+                return RefreshOutcome::Updated(path);
+            }
+        }
+        let analysis_path = path.clone();
+        let snapshot = {
+            let session = self.session.lock().await;
+            session.compiler.snapshot()
         };
         let analysis = match tokio::task::spawn_blocking(move || {
             AnalysisTask::run(move || {
@@ -461,10 +476,11 @@ impl LanguageServer for Cajun {
             | RefreshOutcome::Failed(_) | RefreshOutcome::Superseded => return Ok(None),
         };
         let line_width = self.hover_line_width();
+        let session = self.session.lock().await;
         let projects = self.projects.read().await;
-        Ok(projects
-            .get(&path)
-            .and_then(|cached| cached.project.hover(&path, target.position, line_width)))
+        Ok(projects.get(&path).and_then(|cached| {
+            cached.project.hover(&session.compiler, &path, target.position, line_width)
+        }))
     }
 
     async fn document_symbol(

@@ -37,6 +37,9 @@ use crate::{
 /// Compiler analysis state for one editor root.
 pub(crate) struct ProjectState {
     analysis: Arc<ProgramAnalysis>,
+    /// The analyzed root, for fact lookups against the session's memoized
+    /// queries.
+    root: PathBuf,
     file_infos: HashMap<PathBuf, FileInfo>,
     semantic_path: PathBuf,
     semantic_tokens: Vec<SemanticToken>,
@@ -52,7 +55,7 @@ impl ProjectState {
     #[cfg(test)]
     pub(crate) fn load(
         source_path: &Path, overrides: &HashMap<PathBuf, String>,
-    ) -> Result<Self, String> {
+    ) -> Result<(Self, CompilerSession), String> {
         Self::load_with_progress(source_path, overrides, |_| {})
     }
 
@@ -60,12 +63,12 @@ impl ProjectState {
     pub(crate) fn load_with_progress(
         source_path: &Path, overrides: &HashMap<PathBuf, String>,
         progress: impl FnMut(AnalysisProgress),
-    ) -> Result<Self, String> {
+    ) -> Result<(Self, CompilerSession), String> {
         let mut session = CompilerSession::default();
         overrides.iter().try_for_each(|(path, source)| {
             session.set_overlay(path, source.clone()).map_err(|error| error.to_string())
         })?;
-        Self::load_from_session(source_path, &session, progress)
+        Self::load_from_session(source_path, &session, progress).map(|project| (project, session))
     }
 
     pub(crate) fn load_from_session(
@@ -109,7 +112,13 @@ impl ProjectState {
         let semantic_path = source_path;
         let semantic_tokens = tokens;
 
-        Ok(Self { analysis, file_infos, semantic_path, semantic_tokens })
+        Ok(Self {
+            analysis,
+            root: semantic_path.clone(),
+            file_infos,
+            semantic_path,
+            semantic_tokens,
+        })
     }
 
     pub(crate) fn definition(&self, file_path: &Path, position: Position) -> Option<Location> {
@@ -133,13 +142,16 @@ impl ProjectState {
     }
 
     pub(crate) fn hover(
-        &self, file_path: &Path, position: Position, line_width: HoverLineWidth,
+        &self, session: &CompilerSession, file_path: &Path, position: Position,
+        line_width: HoverLineWidth,
     ) -> Option<Hover> {
         let occurrence = self.symbol_at(file_path, position)?;
         let name = &self.scoped().defs[&occurrence.definition];
-        let annotation = self.statics().annotations_var.get(&occurrence.definition)?;
+        let annotation =
+            session.annotation_of_def(&self.root, occurrence.definition).ok().flatten()?;
         let formatter = Formatter::new(self.scoped(), self.statics());
-        let definition_type = self.statics().type_definitions.get(&occurrence.definition).copied();
+        let definition_type =
+            session.type_definition_of_def(&self.root, occurrence.definition).ok().flatten();
         let annotation_width =
             HoverSignature::annotation_width(&name.0, line_width, definition_type.is_some());
         let mut annotation_text = String::new();
@@ -155,7 +167,7 @@ impl ProjectState {
         let displayed_definition =
             definition.as_ref().filter(|definition| definition.is_expanded()).and(definition_type);
         let references =
-            TypeReferenceCollector::collect(self.statics(), *annotation, displayed_definition);
+            TypeReferenceCollector::collect(self.statics(), annotation, displayed_definition);
         let definitions = references
             .definitions()
             .filter(|definition| *definition != occurrence.definition)
@@ -510,7 +522,7 @@ mod tests {
         std::fs::write(&library, "begin\n  let answer = () that\n  (answer, answer)\nend\n")
             .unwrap();
         std::fs::write(&root, "@[import(\"library.zy\")] _\n").unwrap();
-        let project = ProjectState::load(&root, &HashMap::new()).unwrap();
+        let (project, session) = ProjectState::load(&root, &HashMap::new()).unwrap();
 
         let definition = project.definition(&library, Position::new(1, 7)).unwrap();
         assert_eq!(definition.uri.to_file_path().unwrap(), library.canonicalize().unwrap());
@@ -524,8 +536,9 @@ mod tests {
 
         let uses = project.references(&library, Position::new(1, 7), false).unwrap();
         assert_eq!(uses.len(), 2);
-        let hover =
-            project.hover(&library, Position::new(2, 4), HoverLineWidth::default()).unwrap();
+        let hover = project
+            .hover(&session, &library, Position::new(2, 4), HoverLineWidth::default())
+            .unwrap();
         assert_eq!(hover.range.unwrap().start, Position::new(2, 3));
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
@@ -540,9 +553,9 @@ mod tests {
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
-        let project = ProjectState::load(&path, &HashMap::new()).unwrap();
+        let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
         let value = source_position(&source, "value : A");
-        let hover = project.hover(&path, value, HoverLineWidth::default()).unwrap();
+        let hover = project.hover(&session, &path, value, HoverLineWidth::default()).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
@@ -561,9 +574,9 @@ mod tests {
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
-        let project = ProjectState::load(&path, &HashMap::new()).unwrap();
+        let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
         let copy = source_position(&source, "copy : Number");
-        let hover = project.hover(&path, copy, HoverLineWidth::default()).unwrap();
+        let hover = project.hover(&session, &path, copy, HoverLineWidth::default()).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
@@ -582,11 +595,11 @@ mod tests {
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
-        let project = ProjectState::load(&path, &HashMap::new()).unwrap();
+        let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
         let option = source_position(&source, "Option (A : VType)");
         let parameter = definition_url(&path, option);
 
-        let short = project.hover(&path, option, HoverLineWidth::default()).unwrap();
+        let short = project.hover(&session, &path, option, HoverLineWidth::default()).unwrap();
         let HoverContents::Markup(short) = short.contents else {
             panic!("type hover should use markup content")
         };
@@ -614,9 +627,14 @@ mod tests {
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
-        let project = ProjectState::load(&path, &HashMap::new()).unwrap();
+        let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
         let long = project
-            .hover(&path, source_position(&source, "OptionModule"), HoverLineWidth::default())
+            .hover(
+                &session,
+                &path,
+                source_position(&source, "OptionModule"),
+                HoverLineWidth::default(),
+            )
             .unwrap();
         let HoverContents::Markup(long) = long.contents else {
             panic!("type hover should use markup content")
@@ -634,9 +652,10 @@ mod tests {
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
-        let project = ProjectState::load(&path, &HashMap::new()).unwrap();
+        let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
         let line_width = HoverLineWidth::new(30).unwrap();
-        let hover = project.hover(&path, source_position(&source, "map\n"), line_width).unwrap();
+        let hover =
+            project.hover(&session, &path, source_position(&source, "map\n"), line_width).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
@@ -683,10 +702,11 @@ mod tests {
             "end\n",
         );
         let overrides = HashMap::from([(path.clone(), source.to_owned())]);
-        let project = ProjectState::load(&path, &overrides).unwrap();
+        let (project, session) = ProjectState::load(&path, &overrides).unwrap();
         let line_width = HoverLineWidth::new(72).unwrap();
-        let hover =
-            project.hover(&path, source_position(source, "ok (A : VType)"), line_width).unwrap();
+        let hover = project
+            .hover(&session, &path, source_position(source, "ok (A : VType)"), line_width)
+            .unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
@@ -716,8 +736,9 @@ mod tests {
             .join("../../lib/tests/builtin/recursive-data.zy")
             .canonicalize()
             .unwrap();
-        let project = ProjectState::load(&path, &HashMap::new()).unwrap();
-        let hover = project.hover(&path, Position::new(1, 7), HoverLineWidth::default()).unwrap();
+        let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
+        let hover =
+            project.hover(&session, &path, Position::new(1, 7), HoverLineWidth::default()).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
@@ -742,8 +763,10 @@ mod tests {
             .join("../../lib/tests/builtin/recursive-data.zy")
             .canonicalize()
             .unwrap();
-        let project = ProjectState::load(&path, &HashMap::new()).unwrap();
-        let hover = project.hover(&path, Position::new(14, 12), HoverLineWidth::default()).unwrap();
+        let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
+        let hover = project
+            .hover(&session, &path, Position::new(14, 12), HoverLineWidth::default())
+            .unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
@@ -780,7 +803,7 @@ mod tests {
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
-        let project = ProjectState::load(&path, &HashMap::new()).unwrap();
+        let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
         let encoded = project.semantic_tokens(&path).unwrap();
         let decoded = SemanticTokenDecoder::new(&source).decode(&encoded);
         let has = |text: &str, token_type: &str, modifier: &str| {
@@ -815,7 +838,7 @@ mod tests {
         let broken = source.replace("! id~ OS { ! (process/exit) x }", "x x");
         assert_ne!(source, broken);
         let overrides = HashMap::from([(path.clone(), broken.clone())]);
-        let project = ProjectState::load(&path, &overrides).unwrap();
+        let (project, session) = ProjectState::load(&path, &overrides).unwrap();
         let encoded = project.semantic_tokens(&path).unwrap();
         let decoded = SemanticTokenDecoder::new(&broken).decode(&encoded);
 
