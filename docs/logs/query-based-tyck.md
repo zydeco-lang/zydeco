@@ -288,3 +288,18 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   granularity) and establishes the keying pattern the table-level fill/normalize queries will
   use.
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — the dense boundary falls: derived fill identifiers
+
+- `fills` moved from `ArenaDense` to `ArenaSparse` with site-derived identifiers, so `FillId`
+  allocation no longer depends on the la-arena cursor. Every sparse category now derives its
+  identifiers from `(site, slot)`, and the design doc's dense-category boundary shrinks to
+  `AbstId`/`DataId`/`CoDataId` (which remain dense for now).
+- This was the last allocation class blocking fill-state queries: hole-filling sites are now
+  reproducible per site, so `Fillable` states and the `annotations_var` merge fold can be
+  computed as pure queries.
+- Mechanical fallout fixed along the way: `InferenceRegion` and the monadic elaboration
+  allocated fills through the dense `alloc`; both now use the derived allocator plus
+  `insert_new`. Test fixtures switched to the `Alloc` machinery with explicit
+  `InferenceSite` construction.
+- Workspace suite passes unchanged (61 targets green), clippy clean.
