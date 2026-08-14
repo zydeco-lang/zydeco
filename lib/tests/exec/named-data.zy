@@ -2,7 +2,7 @@
 begin
   param (
     (/core; /numeric; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/Unit) = core that
   let (Scalar = Int64, int64) = numeric/int64 that
@@ -10,7 +10,9 @@ begin
 
   def Packet =
     data
-    | +Packet : (tag :: Int64) * (Int64 * (payload :: Int64))
+    | +Packet : (
+      tag :: Int64
+    ) * Int64 * (payload :: Int64)
     | +Empty : Unit
     end
   that
@@ -22,10 +24,10 @@ begin
 
   match packet
   | +Packet(
-      tag = tag : Int64,
-      body : Int64,
-      payload = payload : Int64
-    ) =>
+    = tag : Int64,
+    body : Int64,
+    = payload : Int64
+  ) =>
     do tag_check <- ! (int64/sub) tag 7;
     do body_check <- ! (int64/sub) body 8;
     do payload_check <- ! (int64/sub) payload 9;

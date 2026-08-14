@@ -1,38 +1,38 @@
-param Reader : @[import("../intrinsic/vtype.zy")] _ in
-param Writer : @[import("../intrinsic/vtype.zy")] _ in
-param OS : @[import("../intrinsic/ctype.zy")] _ in
+param Reader : @(import("../intrinsic/vtype.zy")) in
+param Writer : @(import("../intrinsic/vtype.zy")) in
+param OS : @(import("../intrinsic/ctype.zy")) in
   (
     @[builtin(fs_open_reader)] (
-      open_reader :: (@[import("../intrinsic/thk.zy")] _) (
-           (@[import("../intrinsic/string.zy")] _)
-        -> (@[import("../intrinsic/thk.zy")] _) (
-             (@[import("../intrinsic/i64.zy")] _) -> (@[import("../intrinsic/string.zy")] _) -> OS
+      open_reader :: (@(import("../intrinsic/thk.zy"))) (
+           (@(import("../intrinsic/string.zy")))
+        -> (@(import("../intrinsic/thk.zy"))) (
+             (@(import("../intrinsic/i64.zy"))) -> (@(import("../intrinsic/string.zy"))) -> OS
            )
-        -> (@[import("../intrinsic/thk.zy")] _) (Reader -> OS)
+        -> (@(import("../intrinsic/thk.zy"))) (Reader -> OS)
         -> OS
       )
     )
   )
 * (
     @[builtin(fs_create_writer)] (
-      create_writer :: (@[import("../intrinsic/thk.zy")] _) (
-           (@[import("../intrinsic/string.zy")] _)
-        -> (@[import("../intrinsic/thk.zy")] _) (
-             (@[import("../intrinsic/i64.zy")] _) -> (@[import("../intrinsic/string.zy")] _) -> OS
+      create_writer :: (@(import("../intrinsic/thk.zy"))) (
+           (@(import("../intrinsic/string.zy")))
+        -> (@(import("../intrinsic/thk.zy"))) (
+             (@(import("../intrinsic/i64.zy"))) -> (@(import("../intrinsic/string.zy"))) -> OS
            )
-        -> (@[import("../intrinsic/thk.zy")] _) (Writer -> OS)
+        -> (@(import("../intrinsic/thk.zy"))) (Writer -> OS)
         -> OS
       )
     )
   )
 * (
     @[builtin(fs_append_writer)] (
-      append_writer :: (@[import("../intrinsic/thk.zy")] _) (
-           (@[import("../intrinsic/string.zy")] _)
-        -> (@[import("../intrinsic/thk.zy")] _) (
-             (@[import("../intrinsic/i64.zy")] _) -> (@[import("../intrinsic/string.zy")] _) -> OS
+      append_writer :: (@(import("../intrinsic/thk.zy"))) (
+           (@(import("../intrinsic/string.zy")))
+        -> (@(import("../intrinsic/thk.zy"))) (
+             (@(import("../intrinsic/i64.zy"))) -> (@(import("../intrinsic/string.zy"))) -> OS
            )
-        -> (@[import("../intrinsic/thk.zy")] _) (Writer -> OS)
+        -> (@(import("../intrinsic/thk.zy"))) (Writer -> OS)
         -> OS
       )
     )

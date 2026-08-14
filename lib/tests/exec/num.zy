@@ -1,7 +1,7 @@
 begin
   param (
     (/core; /numeric; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/Ret; /Unit) = core that
   let (Scalar = Int64, int64) = numeric/int64 that
@@ -15,7 +15,7 @@ begin
   that
 
   do x <- (fn x => ret 1 : Bool -> Ret Int64) +True();
-  do y <- (fn x => ret +True() : Int64 -> Ret Bool) +123;
+  do y <- (fn x => ret +True() : Int64 -> Ret Bool) 123;
   do z <- (fn x => ret +True() : Int64 -> Ret Bool) -123;
   do x <- ! (int64/mul) x -1;
   do x <- ! (int64/add) 1 x;

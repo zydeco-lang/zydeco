@@ -1,7 +1,7 @@
 begin
   param (
     (/core; /representations; /text; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (/Scalar = String) = representations/string that
@@ -66,13 +66,13 @@ begin
     (ll : Thk (Ret (LList' Tok)))
     (step : Thk (Tok -> Thk ParenCounterTrans -> ParenCounterTrans))
     (final : Thk ParenCounterTrans)
-    : ParenCounterTrans =
-    do l <- ! ll;
-    match l
-    | +Nil() => ! final
-    | +Cons(c, k) =>
-      ! step c { ! paren_foldr k step final }
-    end
+  : ParenCounterTrans =
+      do l <- ! ll;
+      match l
+      | +Nil() => ! final
+      | +Cons(c, k) =>
+        ! step c { ! paren_foldr k step final }
+      end
   that
   def fix reject : ParenCounterStk =
     comatch
@@ -97,11 +97,11 @@ begin
       match c
       | +LParen() => ! k state .some
       | +RParen() =>
-        (comatch
+        comatch
         | .none => ! k (+Reject() : ParenCounterState) .none
         -- Note: would be more efficient to just ! reject here
         | .some => ! k state
-        end)
+        end
       end
   that
   def ! demonstrate (s : String) (expect : Bool) (toks : Thk (Ret (LList' Tok))) (t : Thk OS) : OS =
@@ -112,8 +112,7 @@ begin
       toks
       paren_counter_step
       accept_or_not
-      (+Ok() : ParenCounterState)
-      .none;
+      (+Ok() : ParenCounterState) .none;
     do pass <- ! bool_eq expect b;
     match pass
     | +True() =>

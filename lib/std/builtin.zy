@@ -1,11 +1,11 @@
 exists
   -- Kind-valued manifest components establish the two CBPV universes used by
   -- the rest of the signature.
-  (VType as @[import("builtin/intrinsic/vtype.zy")] _)
-  (CType as @[import("builtin/intrinsic/ctype.zy")] _)
+  (VType as @(import("builtin/intrinsic/vtype.zy")))
+  (CType as @(import("builtin/intrinsic/ctype.zy")))
 .
   begin
-    let BuiltinUnit = @[import("builtin/intrinsic/unit.zy")] _ that
+    let BuiltinUnit = @(import("builtin/intrinsic/unit.zy")) that
 
     -- Effect capabilities remain generative at the provider boundary.
     exists
@@ -14,16 +14,16 @@ exists
       @[builtin(os)] (SystemOS : CType)
     .
         (
-          core :: @[import("builtin/core.zy")] _
+          core :: @(import("builtin/core.zy"))
         )
       * (
-          representations :: @[import("builtin/representations.zy")] _
+          representations :: @(import("builtin/representations.zy"))
         )
       * (
-          numeric :: @[import("builtin/numeric.zy")] _
+          numeric :: @(import("builtin/numeric.zy"))
         )
       * (
-          text :: @[import("builtin/text.zy")] _
+          text :: @(import("builtin/text.zy"))
         )
       * (
           system ::
@@ -34,19 +34,19 @@ exists
           .
               (
                 io ::
-                (@[import("builtin/system/io.zy")] _) SystemReader SystemWriter SystemOS
+                (@(import("builtin/system/io.zy"))) SystemReader SystemWriter SystemOS
               )
             * (
                 fs ::
-                (@[import("builtin/system/fs.zy")] _) SystemReader SystemWriter SystemOS
+                (@(import("builtin/system/fs.zy"))) SystemReader SystemWriter SystemOS
               )
             * (
                 stdio ::
-                (@[import("builtin/system/stdio.zy")] _) SystemReader SystemWriter SystemOS
+                (@(import("builtin/system/stdio.zy"))) SystemReader SystemWriter SystemOS
               )
-            * (args :: @[import("builtin/system/args.zy")] _)
-            * (random :: (@[import("builtin/system/random.zy")] _) SystemOS)
-            * (process :: (@[import("builtin/system/process.zy")] _) SystemOS)
+            * (args :: @(import("builtin/system/args.zy")))
+            * (random :: (@(import("builtin/system/random.zy"))) SystemOS)
+            * (process :: (@(import("builtin/system/process.zy"))) SystemOS)
             * BuiltinUnit
         )
       * BuiltinUnit

@@ -1,20 +1,20 @@
 begin
-  let make_data = @[import("data/package.zy")] _ that
-  let make_text = @[import("text/package.zy")] _ that
-  let make_system = @[import("system/package.zy")] _ that
-  let make_integer = @[import("numeric/integer.zy")] _ that
-  let make_float = @[import("numeric/float.zy")] _ that
-  let Prelude = @[import("data/prelude.type.zy")] _ in
-  let Additive = @[import("numeric/additive.type.zy")] _ in
-  let Multiplicative = @[import("numeric/multiplicative.type.zy")] _ in
-  let PartialEquality = @[import("numeric/partial-equality.type.zy")] _ in
-  let PartialOrder = @[import("numeric/partial-order.type.zy")] _ in
-  let Numeric = @[import("numeric/numeric.type.zy")] _ in
-  let NumericInstance = @[import("numeric/numeric-instance.type.zy")] _ in
-  let IntegerModule = @[import("numeric/integer.type.zy")] _ in
-  let FloatModule = @[import("numeric/float.type.zy")] _ in
-  let PrimitiveIntegerModule = @[import("numeric/primitive-integer.type.zy")] _ in
-  let PrimitiveFloatModule = @[import("numeric/primitive-float.type.zy")] _ in
+  let make_data = @(import("data/package.zy")) that
+  let make_text = @(import("text/package.zy")) that
+  let make_system = @(import("system/package.zy")) that
+  let make_integer = @(import("numeric/integer.zy")) that
+  let make_float = @(import("numeric/float.zy")) that
+  let Prelude = @(import("data/prelude.type.zy")) in
+  let Additive = @(import("numeric/additive.type.zy")) in
+  let Multiplicative = @(import("numeric/multiplicative.type.zy")) in
+  let PartialEquality = @(import("numeric/partial-equality.type.zy")) in
+  let PartialOrder = @(import("numeric/partial-order.type.zy")) in
+  let Numeric = @(import("numeric/numeric.type.zy")) in
+  let NumericInstance = @(import("numeric/numeric-instance.type.zy")) in
+  let IntegerModule = @(import("numeric/integer.type.zy")) in
+  let FloatModule = @(import("numeric/float.type.zy")) in
+  let PrimitiveIntegerModule = @(import("numeric/primitive-integer.type.zy")) in
+  let PrimitiveFloatModule = @(import("numeric/primitive-float.type.zy")) in
 
   begin
     param (
@@ -96,12 +96,11 @@ begin
       make_float core Bool Float64 String bool float64 0.0 1.0
     in
     let prelude : Prelude = (
-        Thunk = Thk,
-        U = Thk,
-        F = Ret,
-        ()
-      )
-    in
+      Thunk = Thk,
+      U = Thk,
+      F = Ret,
+      ()
+    ) in
     (
       = Bool,
       = Option,

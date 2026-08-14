@@ -1,1 +1,1 @@
-@[intrinsic(f64)] _
+@(intrinsic(f64))

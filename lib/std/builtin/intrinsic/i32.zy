@@ -1,1 +1,1 @@
-@[intrinsic(i32)] _
+@(intrinsic(i32))

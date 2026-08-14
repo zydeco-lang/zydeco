@@ -5,190 +5,198 @@
 --|
 --| Check `exnkt.zydeco` for the implementation of `ExnK`, which is the church encoded version of `Exn`.
 begin
-  let monadic_basis = @[import("../../std/control/monad.zy")] _ that
+  let monadic_basis = @(import("../../std/control/monad.zy")) that
   param (
     (/core; builtin) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (= Monad, = Algebra, ()) =
-    monadic_basis builtin in
+    monadic_basis builtin
+  in
   begin
 
-  let Top =
-    codata
-    end
-  that
-  let ! triv : Top =
-    comatch
-    end
-  that
-  let Either (E : VType) (A : VType) =
-    data
-    | +Left : E
-    | +Right : A
-    end
-  that
-  let MonadTrans (T : ((VType) -> (CType)) -> (VType) -> (CType)) =
-    forall (M : (VType) -> (CType)) .
-      Thk (Monad M) ->
+    let Top =
       codata
-      | .monad : Monad (T M)
+      end
+    that
+    let ! triv : Top =
+      comatch
+      end
+    that
+    let Either (E : VType) (A : VType) =
+      data
+      | +Left : E
+      | +Right : A
+      end
+    that
+    let MonadTrans (T : (VType -> CType) -> VType -> CType) =
+      forall (M : VType -> CType) .
+           Thk (Monad M)
+        -> codata
+           | .monad : Monad (T M)
+           | .lift :
+             forall (A : VType) .
+                  Thk (M A)
+               -> T M A
+           end
+    that
+    let Monad' (M : VType -> CType) =
+      codata
+      | .return :
+        forall (A : VType) .
+             Thk Top
+          -> A
+          -> M A
+      | .bind :
+        forall (A : VType) .
+             Thk Top
+          -> (
+               forall (A' : VType) .
+                    Thk Top
+                 -> Thk (M A)
+                 -> Thk (A -> M A')
+                 -> M A'
+             )
+      end
+    that
+    let MonadTransInner (T_M : VType -> CType) =
+      codata
+      | .monad : Monad T_M
       | .lift :
         forall (A : VType) .
-          Thk (M A) ->
-          T M A
+             Thk (Ret A)
+          -> T_M A
       end
-  that
-  let Monad' (M : (VType) -> (CType)) =
-    codata
-    | .return :
-      forall (A : VType) .
-        Thk Top ->
-        A ->
-        M A
-    | .bind :
-      forall (A : VType) .
-        Thk Top ->
-        (
-          forall (A' : VType) .
-            Thk Top ->
-            Thk (M A) ->
-            Thk (A -> M A') ->
-            M A'
-        )
-    end
-  that
-  let MonadTransInner (T_M : (VType) -> (CType)) =
-    codata
-    | .monad : Monad T_M
-    | .lift :
-      forall (A : VType) .
-        Thk (Ret A) ->
-        T_M A
-    end
-  that
-  let MonadTrans' (T : ((VType) -> (CType)) -> (VType) -> (CType)) =
-    forall (M : (VType) -> (CType)) .
-      Thk (Monad M) ->
-      codata
-      | .monad : Monad' (T M)
-      | .lift :
-        forall (A : VType) .
-          Thk Top ->
-          Thk (M A) ->
-          T M A
+    that
+    let MonadTrans' (T : (VType -> CType) -> VType -> CType) =
+      forall (M : VType -> CType) .
+           Thk (Monad M)
+        -> codata
+           | .monad : Monad' (T M)
+           | .lift :
+             forall (A : VType) .
+                  Thk Top
+               -> Thk (M A)
+               -> T M A
+           end
+    that
+    def ! detriv-mo (M : VType -> CType) (mo : Thk (Monad' M)) : Monad M =
+      comatch
+      | .return A => ! mo .return A triv
+      | .bind A A' => ! mo .bind A triv A' triv
       end
-  that
-  def ! detriv-mo (M : (VType) -> (CType)) (mo : Thk (Monad' M)) : Monad M =
-    comatch
-    | .return A => ! mo .return A triv
-    | .bind A A' => ! mo .bind A triv A' triv
-    end
-  that
-  def ! detriv-mt
-    (T : ((VType) -> (CType)) -> (VType) -> (CType))
-    (mt : Thk (MonadTrans' T))
+    that
+    def ! detriv-mt
+      (T : (VType -> CType) -> VType -> CType)
+      (mt : Thk (MonadTrans' T))
     : MonadTrans T =
-    fn (M : (VType) -> (CType)) (mo : Thk (Monad M)) =>
-      comatch
-      | .monad => ! detriv-mo (T M) { ! mt M mo .monad }
-      | .lift A => ! mt M mo .lift A triv
-      end
-  that
-
-  --| Change `Ret` in `Exn` to `M`
-  let Exn (E: VType) (A: VType) =
-    Ret (Either E A)
-  that
-
-  let ExnT (E: VType) (M: VType -> CType) (A: VType) =
-    M (Either E A)
-  that
-
-  --| Monad implementation for `Exn`
-  let ! mo_exn (E: VType) : Monad (Exn E) =
-    comatch
-    | .return A a => ret +Right(a)
-    | .bind A A' m f =>
-      do a? <- ! m;
-      match a?
-      | +Left(e) => ret +Left(e)
-      | +Right(a) => ! f a
-      end
-    end
-  that
-
-  --| Automatically generated implementation of the monad transformer for `ExnT`
-  --|
-  --| Note that the generation for all relative monads to their transformers is
-  --| done mechanically, and the same piece of stub code demonstrated here can
-  --| be used for all relative monads.
-  def ! mt_exn (E: VType) : MonadTrans (ExnT E) =
-    let ! mt' (M: VType -> CType) (mo: Thk (Monad M)) =
-      -- The @[debug(...)] macro can be used to print the terms and their types
-      -- during compilation.
-      -- Readers can utilize this feature to observe the generated code,
-      -- and verify that the algebra translation is correct.
-      @[debug("generated and applied")]
-      (@[monadic] (fn (E: VType) =>
-        @[debug("original")]
-        let ! mo_exn (E: VType) : Monad (Exn E) =
+        fn (M : VType -> CType) (mo : Thk (Monad M)) =>
           comatch
-          | .return A a => ret +Right(a)
-          | .bind A A' m f =>
-            do a? <- ! m;
-            match a?
-            | +Left(e) => ret +Left(e)
-            | +Right(a) => ! f a
-            end
+          | .monad => ! detriv-mo (T M) { ! mt M mo .monad }
+          | .lift A => ! mt M mo .lift A triv
           end
-        in
-        comatch
-        | .monad => ! mo_exn E
-        | .lift A m =>
-          do a <- ! m; ! mo_exn E .return A a
-        end
-      :
-        forall (E: VType) . MonadTransInner (Exn E)
-        -- The following is what MonadTransInner gets expanded to
-        --
-        -- forall (E: VType) . codata
-        -- | .monad : Monad (Exn E)
-        -- | .lift  : forall (A: VType) . Thk (Ret A) -> Exn E A
-        -- end
-      )) M mo E triv
-    in
-    ! detriv-mt (ExnT E) mt'
-  that
+    that
 
-  --| Manual implementation of the monad transformer for `ExnT`
-  --|
-  --| Provided for reference.
-  def ! mt_exn_manual (E: VType) : MonadTrans (ExnT E) = fn M mo =>
-    comatch
-    | .monad =>
+    --| Change `Ret` in `Exn` to `M`
+    let Exn (E : VType) (A : VType) =
+      Ret (Either E A)
+    that
+
+    let ExnT (E : VType) (M : VType -> CType) (A : VType) =
+      M (Either E A)
+    that
+
+    --| Monad implementation for `Exn`
+    let ! mo_exn (E : VType) : Monad (Exn E) =
       comatch
-      | .return A a =>
-        ! mo .return (Either E A) +Right(a)
+      | .return A a => ret +Right(a)
       | .bind A A' m f =>
-        ! mo .bind (Either E A) (Either E A') { ! m }
-        { fn a? =>
-            match a?
-            | +Left(e) => ! mo .return (Either E A') +Left(e)
-            | +Right(a) => ! f a
-            end }
+        do a? <- ! m;
+        match a?
+        | +Left(e) => ret +Left(e)
+        | +Right(a) => ! f a
+        end
       end
-    | .lift A m =>
-      ! mo .bind A (Either E A) m
-      { fn a =>
-        ! mo .return (Either E A) +Right(a) }
-    end
-  that
+    that
 
-  (
-    generated = { ! mt_exn },
-    manual = { ! mt_exn_manual },
-  )
-end
+    --| Automatically generated implementation of the monad transformer for `ExnT`
+    --|
+    --| Note that the generation for all relative monads to their transformers is
+    --| done mechanically, and the same piece of stub code demonstrated here can
+    --| be used for all relative monads.
+    def ! mt_exn (E : VType) : MonadTrans (ExnT E) =
+      let ! mt' (M : VType -> CType) (mo : Thk (Monad M)) =
+        -- The @[debug(...)] macro can be used to print the terms and their types
+        -- during compilation.
+        -- Readers can utilize this feature to observe the generated code,
+        -- and verify that the algebra translation is correct.
+        @[debug("generated and applied")]
+        (
+          @[monadic] (
+            fn (E : VType) =>
+              @[debug("original")]
+              let ! mo_exn (E : VType) : Monad (Exn E) =
+                comatch
+                | .return A a => ret +Right(a)
+                | .bind A A' m f =>
+                  do a? <- ! m;
+                  match a?
+                  | +Left(e) => ret +Left(e)
+                  | +Right(a) => ! f a
+                  end
+                end
+              in
+              comatch
+              | .monad => ! mo_exn E
+              | .lift A m =>
+                do a <- ! m;
+                ! mo_exn E .return A a
+              end
+            : forall (E : VType) . MonadTransInner (Exn E)
+          )
+        )
+          -- The following is what MonadTransInner gets expanded to
+          --
+          -- forall (E: VType) . codata
+          -- | .monad : Monad (Exn E)
+          -- | .lift  : forall (A: VType) . Thk (Ret A) -> Exn E A
+          -- end
+          M mo E triv
+      in
+      ! detriv-mt (ExnT E) mt'
+    that
+
+    --| Manual implementation of the monad transformer for `ExnT`
+    --|
+    --| Provided for reference.
+    def ! mt_exn_manual (E : VType) : MonadTrans (ExnT E) = fn M mo =>
+      comatch
+      | .monad =>
+        comatch
+        | .return A a =>
+          ! mo .return (Either E A) +Right(a)
+        | .bind A A' m f =>
+          ! mo .bind (Either E A) (Either E A') { ! m }
+            {
+              fn a? =>
+                match a?
+                | +Left(e) => ! mo .return (Either E A') +Left(e)
+                | +Right(a) => ! f a
+                end
+            }
+        end
+      | .lift A m =>
+        ! mo .bind A (Either E A) m
+          {
+            fn a =>
+              ! mo .return (Either E A) +Right(a)
+          }
+      end that
+
+    (
+      generated = { ! mt_exn },
+      manual = { ! mt_exn_manual }
+    )
+  end
 end

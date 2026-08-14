@@ -3,13 +3,15 @@
 begin
   param (
     (/numeric; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/process) = system that
 
   let Mixed =
-    (left :: Int64) * (Int64 * (right :: Int64))
+    (
+      left :: Int64
+    ) * Int64 * (right :: Int64)
   that
   def mixed : Mixed = (
     left = 2 : Int64,
@@ -18,9 +20,9 @@ begin
   ) that
 
   let (
-    left = left : Int64,
+    = left : Int64,
     middle : Int64,
-    right = right : Int64
+    = right : Int64
   ) = mixed in
   do tens <- ! (int64/mul) middle 10;
   do hundreds <- ! (int64/mul) right 100;

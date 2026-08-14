@@ -7,20 +7,22 @@
 begin
   param (
     (/core; /system) :
-    @[import("../../lib/std/builtin.zy")] _
+    @(import("../../lib/std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (/process) = system that
 
   let Lens (S : VType) (A : VType) =
-    forall (
-      Fun :
-      (VType) ->
-      (CType)
-    ) .
-      Thk (A -> Fun A) ->
-      S ->
-      Fun S
+    forall
+      (
+        Fun :
+           VType
+        -> CType
+      )
+    .
+         Thk (A -> Fun A)
+      -> S
+      -> Fun S
   that
   def Identity (A : VType) =
     codata
@@ -35,18 +37,20 @@ begin
 
   def over : Thk (
     forall (S : VType) .
-    forall (A : VType) .
-      Thk (Lens S A) ->
-      Thk (A -> Ret A) ->
-      S ->
-      Ret S
+      forall (A : VType) .
+           Thk (Lens S A)
+        -> Thk (A -> Ret A)
+        -> S
+        -> Ret S
   ) = {
-    fn (S : VType)
-       (A : VType)
-       lens
-       function
-       source =>
-      (! lens
+    fn
+      (S : VType)
+      (A : VType)
+      lens
+      function
+      source
+    =>
+      ! lens
         Identity
         {
           fn focused =>
@@ -54,21 +58,22 @@ begin
             | .identity => ! function focused
             end
         }
-        source)
-      .identity
+        source .identity
   } that
   def view : Thk (
     forall (S : VType) .
-    forall (A : VType) .
-      Thk (Lens S A) ->
-      S ->
-      Ret A
+      forall (A : VType) .
+           Thk (Lens S A)
+        -> S
+        -> Ret A
   ) = {
-    fn (S : VType)
-       (A : VType)
-       lens
-       source =>
-      (! lens
+    fn
+      (S : VType)
+      (A : VType)
+      lens
+      source
+    =>
+      ! lens
         (Const A)
         {
           fn focused =>
@@ -76,8 +81,7 @@ begin
             | .constant => ret focused
             end
         }
-        source)
-      .constant
+        source .constant
   } that
 
   ! (process/exit) 0

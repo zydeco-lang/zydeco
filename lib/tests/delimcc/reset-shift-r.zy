@@ -1,89 +1,92 @@
 begin
-  let monadic_basis = @[import("../../std/control/monad.zy")] _ that
+  let monadic_basis = @(import("../../std/control/monad.zy")) that
   param (
     (/core; /numeric; /system; builtin) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/stdio; /process) = system that
   let (= Monad, = Algebra, ()) =
-    monadic_basis builtin in
+    monadic_basis builtin
+  in
   begin
 
-  let Kont (R : CType) (A : VType) =
-    Thk (A -> R) -> R
-  that
-  def ! mkont (R : CType) : Monad (Kont R) =
-    comatch
-    | .return A a =>
-      fn k =>
-        ! k a
-    | .bind A A' m f =>
-      fn k =>
-        ! m {
-          fn a =>
-            ! f a k
-        }
-    end
-  that
-  def ! reset' (A : VType) (e : Thk (Kont (Ret A) A)) : Ret A =
-    ! e {
-      fn x =>
-        ret x
-    }
-  that
-  def ! shift'
-    (A : VType)
-    (A' : VType)
-    (e : Thk (
-      Thk (A -> Ret A') ->
-      Kont (Ret A') A'
-    ))
+    let Kont (R : CType) (A : VType) =
+      Thk (A -> R) -> R
+    that
+    def ! mkont (R : CType) : Monad (Kont R) =
+      comatch
+      | .return A a =>
+        fn k =>
+          ! k a
+      | .bind A A' m f =>
+        fn k =>
+          ! m {
+            fn a =>
+              ! f a k
+          }
+      end
+    that
+    def ! reset' (A : VType) (e : Thk (Kont (Ret A) A)) : Ret A =
+      ! e {
+        fn x =>
+          ret x
+      }
+    that
+    def ! shift'
+      (A : VType)
+      (A' : VType)
+      (
+        e : Thk (
+             Thk (A -> Ret A')
+          -> Kont (Ret A') A'
+        )
+      )
     : Kont (Ret A') A =
-    fn ka' =>
-      ! e
-        ka'
-        {
-          fn x' =>
-            ret x'
-        }
-  that
-  -- reset' and shift' are the primitives of delimited continuations.
-  -- example:
-  -- def ! _ : F Int64 =
-  --   ! reset' {
-  --     do x <- ! shift' { fn cont =>
-  --       do y <- ! cont { ret 4 };
-  --       ! int64/add 17 y
-  --     };
-  --     ! int64/mul 2 x
-  --   }
-  -- end
-  def ! ex : Ret Int64 =
-    ! reset' Int64 {
-      ! mkont (Ret Int64) .bind Int64 Int64
-        {
-          ! shift' Int64 Int64 {
-            fn cont =>
-              do y <- ! cont 4;
-              do res <- ! (int64/add) 17 y;
+        fn ka' =>
+          ! e
+            ka'
+            {
+              fn x' =>
+                ret x'
+            }
+    that
+    -- reset' and shift' are the primitives of delimited continuations.
+    -- example:
+    -- def ! _ : F Int64 =
+    --   ! reset' {
+    --     do x <- ! shift' { fn cont =>
+    --       do y <- ! cont { ret 4 };
+    --       ! int64/add 17 y
+    --     };
+    --     ! int64/mul 2 x
+    --   }
+    -- end
+    def ! ex : Ret Int64 =
+      ! reset' Int64 {
+        ! mkont (Ret Int64) .bind Int64 Int64
+          {
+            ! shift' Int64 Int64 {
+              fn cont =>
+                do y <- ! cont 4;
+                do res <- ! (int64/add) 17 y;
+                ! mkont (Ret Int64) .return Int64 res
+            }
+          }
+          {
+            fn x =>
+              do res <- ! (int64/mul) 2 x;
               ! mkont (Ret Int64) .return Int64 res
           }
-        }
-        {
-          fn x =>
-            do res <- ! (int64/mul) 2 x;
-            ! mkont (Ret Int64) .return Int64 res
-        }
-    }
-  that
+      }
+    that
 
-  do x <- ! ex;
-  do s <- ! (int64/to_string) x;
-  ! (stdio/write_line) s {
-    do zero <- ! (int64/sub) x 25;
-    ! (process/exit) zero
-  }
-end
+    do x <- ! ex;
+    do s <- ! (int64/to_string) x;
+    ! (stdio/write_line) s {
+      do zero <- ! (int64/sub) x 25;
+      ! (process/exit) zero
+    }
+  end
 end

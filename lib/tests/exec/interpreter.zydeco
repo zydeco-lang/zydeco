@@ -5,7 +5,7 @@
 begin
   param (
     (/core; /representations; /text; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (/Scalar = String) = representations/string that
@@ -161,14 +161,12 @@ begin
   that
 
   -- An example
-  do x <- ! interp
-    .comp
+  do x <- ! interp .comp
     +App(
       +Lam("x", +Return(+Var("x"))),
       +False()
     )
-    +Empty()
-    .bind;
+    +Empty() .bind;
   match x
   | +Err(_) => ! (process/exit) 1
   | +Ok(sv) =>

@@ -7,7 +7,7 @@ begin
   that
   param (
     (/core; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/Unit) = core that
   let (/process) = system that

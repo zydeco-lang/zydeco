@@ -2,7 +2,7 @@
 begin
   param (
     (/core; /representations; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /Thk; /Ret; /Unit) = core that
   let (/Scalar = Int64) = representations/i64 that
@@ -48,7 +48,7 @@ begin
   that
   def ! write_list (A : VType) (write : Thk (A -> Thk OS -> OS)) (l : List A) (k : Thk OS) : OS =
     let fix write_list_aux (l : List A) (k : Thk OS) : OS =
-        match l
+      match l
       | +Nil() => ! k
       | +Cons(a, l) =>
         ! write a {
@@ -57,7 +57,7 @@ begin
           }
         }
       end
-      in
+    in
     ! (stdio/write) "[" {
       ! write_list_aux l {
         ! (stdio/write) "]" k
@@ -82,11 +82,11 @@ begin
   that
 
   do t1 <- ! trace Int64 t0 +Nil();
-  ! write_tree Int64 (stdio/write_int) t0 {
+  ! write_tree Int64 stdio/write_int t0 {
     ! (stdio/write_line) "" {
       ! write_tree
         (List Int64)
-        { ! write_list Int64 (stdio/write_int) }
+        { ! write_list Int64 stdio/write_int }
         t1
         {
           ! (stdio/write_line) "" {

@@ -1,7 +1,7 @@
 begin
   param (
     (/system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/process) = system that
   let pair = (10, 0) that

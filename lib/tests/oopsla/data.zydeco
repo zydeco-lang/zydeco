@@ -2,7 +2,7 @@
 begin
   param (
     (/core; /representations; /numeric; /text; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (Scalar = Int64, int64) = numeric/int64 that
@@ -47,15 +47,15 @@ begin
       { fn character => ret character }
   that
   --| identity functions
-  def id : Thunk(forall (A : VType) . A -> Ret A) = {
+  def id : Thunk (forall (A : VType) . A -> Ret A) = {
     fn A a => ret a
   } that
-  def id~ : Thunk(forall (B : CType) . Thunk B -> B) = {
+  def id~ : Thunk (forall (B : CType) . Thunk B -> B) = {
     fn B b => ! b
   } that
--- end module Identity
+  -- end module Identity
 
--- module Pair
+  -- module Pair
   let Pair (A : VType) (A' : VType) : VType =
     data
     | +Cons : A * A'
@@ -65,13 +65,13 @@ begin
   def ! pair (A : VType) (A' : VType) (x : A) (y : A') : Ret (Pair A A') =
     ret +Cons(x, y)
   that
--- end module Pair
+  -- end module Pair
 
--- module Bool
+  -- module Bool
   def true : Bool = +True() that
   def false : Bool = +False() that
 
-  def ! not (x: Bool) : Ret Bool =
+  def ! not (x : Bool) : Ret Bool =
     match x
     | +True() => ret false
     | +False() => ret true
@@ -79,7 +79,7 @@ begin
   that
 
   /- lazy not -/
-  def ! not~ (t~: Thunk(Ret Bool)) : Ret(Bool) =
+  def ! not~ (t~ : Thunk (Ret Bool)) : Ret Bool =
     do x <- ! t~;
     match x
     | +True() => ret false
@@ -87,15 +87,15 @@ begin
     end
   that
 
-  def ! and (x: Bool) (y: Bool) : Ret Bool =
-      match x
-      | +True() => ret y
-      | +False() => ret false
-      end
+  def ! and (x : Bool) (y : Bool) : Ret Bool =
+    match x
+    | +True() => ret y
+    | +False() => ret false
+    end
   that
 
   /- lazy, short-circuiting (left to right) and -/
-  def ! and~ (b1~: Thunk (Ret Bool)) (b2~: Thunk (Ret Bool)) : Ret(Bool) =
+  def ! and~ (b1~ : Thunk (Ret Bool)) (b2~ : Thunk (Ret Bool)) : Ret Bool =
     do b1 <- ! b1~;
     match b1
     | +True() => ! b2~
@@ -103,53 +103,49 @@ begin
     end
   that
 
-  def ! or : Bool -> Bool -> Ret(Bool) = fn x y =>
+  def ! or : Bool -> Bool -> Ret Bool = fn x y =>
     match x
     | +True() => ret true
     | +False() => ret y
-    end
-  that
+    end that
 
   /- lazy, short-circuiting (left to right) or -/
-  def ! or~ : Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool) = fn b1~ b2~ =>
+  def ! or~ : Thunk (Ret Bool) -> Thunk (Ret Bool) -> Ret Bool = fn b1~ b2~ =>
     do b1 <- ! b1~;
     match b1
     | +True() => ret true
     | +False() => ! b2~
-    end
-  that
+    end that
 
-  def ! nand : Bool -> Bool -> Ret(Bool) = fn x y =>
+  def ! nand : Bool -> Bool -> Ret Bool = fn x y =>
     do a <- ! and x y;
-    ! not a
-  that
+    ! not a that
 
-  def ! nor : Bool -> Bool -> Ret(Bool) = fn x y =>
+  def ! nor : Bool -> Bool -> Ret Bool = fn x y =>
     do a <- ! or x y;
-    ! not a
-  that
+    ! not a that
 
-  def ! bool_eq (b: Bool) (b': Bool) : Ret Bool =
+  def ! bool_eq (b : Bool) (b' : Bool) : Ret Bool =
     match b
     | +True() => ret b'
     | +False() => ! not b'
     end
   that
 
-  def ! if (B : CType) (b: Bool) (thn: Thunk B) (els: Thunk B) : B =
+  def ! if (B : CType) (b : Bool) (thn : Thunk B) (els : Thunk B) : B =
     match b
-    | +True()  => ! thn
+    | +True() => ! thn
     | +False() => ! els
     end
   that
 
-  def ! if~ (B : CType) (b: Thunk (Ret Bool)) (thn: Thunk B) (els: Thunk B) : B =
+  def ! if~ (B : CType) (b : Thunk (Ret Bool)) (thn : Thunk B) (els : Thunk B) : B =
     do b <- ! b;
     ! if B b thn els
   that
--- end module Bool
+  -- end module Bool
 
--- module Nat
+  -- module Nat
   def Nat : VType =
     data
     | +Z : Unit
@@ -165,9 +161,9 @@ begin
       ! f x'
     end
   that
--- end module Nat
+  -- end module Nat
 
--- module List
+  -- module List
   def List (A : VType) : VType =
     data
     | +Nil : Unit
@@ -175,58 +171,59 @@ begin
     end
   that
 
-  def ! match_list (A: VType) (B : CType) (xs: List A) (knil: U B) (kcons: U (A -> List A -> B)) : B =
-    match xs
-    | +Nil() => ! knil
-    | +Cons(x,xs) => ! kcons x xs
-    end
+  def ! match_list (A : VType) (B : CType) (xs : List A) (knil : U B) (kcons : U (A -> List A -> B))
+  : B =
+      match xs
+      | +Nil() => ! knil
+      | +Cons(x, xs) => ! kcons x xs
+      end
   that
 
-  def fix foldl (A : VType) (R : VType) (xs: List A) (f: Thunk(A -> R -> Ret R)) (r: R) : Ret R =
-    match xs
-    | +Nil() => ret r
-    | +Cons(x, xs) =>
-      do r' <- ! f x r;
-      ! foldl A R xs f r'
-    end
-  that
+  def fix foldl (A : VType) (R : VType) (xs : List A) (f : Thunk (A -> R -> Ret R)) (r : R) : Ret R
+  = match xs
+  | +Nil() => ret r
+  | +Cons(x, xs) =>
+    do r' <- ! f x r;
+    ! foldl A R xs f r'
+  end that
 
-  def fix foldl~ (A : VType) (R : CType) (xs: List A) (f: Thunk(A -> Thunk R -> R)) (r: Thunk R) : R =
-    match xs
-    | +Nil() => ! r
-    | +Cons(x, xs) =>
-      ! foldl~ A R xs f { ! f x r }
-    end
+  def fix foldl~ (A : VType) (R : CType) (xs : List A) (f : Thunk (A -> Thunk R -> R)) (r : Thunk R)
+  : R =
+      match xs
+      | +Nil() => ! r
+      | +Cons(x, xs) =>
+        ! foldl~ A R xs f { ! f x r }
+      end
   that
 
   def fix reverse (A : VType) (xs : List A) : Ret (List A) =
     ! reverse' A xs +Nil()
   that
 
-  def fix reverse' (A : VType) (xs : List A) (xs': List A) : Ret (List A) =
+  def fix reverse' (A : VType) (xs : List A) (xs' : List A) : Ret (List A) =
     ! foldl A (List A)
-            xs
-            {fn x xs => ret +Cons(x, xs)}
-            xs'
+      xs
+      { fn x xs => ret +Cons(x, xs) }
+      xs'
   that
 
-  def fix get_rec (A : VType) (xs : List A) (index : Int64) : F(Option A) =
+  def fix get_rec (A : VType) (xs : List A) (index : Int64) : F (Option A) =
     match xs
     | +Nil() => ret +None()
     | +Cons(hd, tl) =>
       do minus1 <- ! (int64/sub) index 1;
-      ! if~ (F(Option A)) {! int_eq 0 index} {ret +Some(hd)} {
+      ! if~ (F (Option A)) { ! int_eq 0 index } { ret +Some(hd) } {
         ! get_rec A tl minus1
       }
     end
   that
 
-  def ! get_element (A : VType) (xs : List A) (index : Int64) : F(Option A) =
+  def ! get_element (A : VType) (xs : List A) (index : Int64) : F (Option A) =
     ! get_rec A xs index
   that
--- end module List
+  -- end module List
 
--- module LList
+  -- module LList
   --| Lazy List
   def LListV (A : VType) (B : CType) : VType =
     data
@@ -241,9 +238,10 @@ begin
     end
   that
 
-
   def ! nil (A : VType) : LList A =
-    comatch | .run => ret +Nil() end
+    comatch
+    | .run => ret +Nil()
+    end
   that
 
   def ! cons (A : VType) (hd : A) (tl : U (LList A)) : LList A =
@@ -252,59 +250,75 @@ begin
     end
   that
 
-  def ! match_ll (A: VType) (R : CType) (xs : U(LList A)) (knil : U R) (kcons : U(A -> U(LList A) -> R)) : R =
-    do v <- ! xs .run;
-    match v
-    | +Nil()       => ! knil
-    | +Cons(x, xs) => ! kcons x xs
-    end
+  def ! match_ll
+    (A : VType)
+    (R : CType)
+    (xs : U (LList A))
+    (knil : U R)
+    (kcons : U (A -> U (LList A) -> R))
+  : R =
+      do v <- ! xs .run;
+      match v
+      | +Nil() => ! knil
+      | +Cons(x, xs) => ! kcons x xs
+      end
   that
 
-  def fix foldr (A : VType) (B : CType) (xs : U (LList A)) (b : U B) (f : U(A -> U B -> B)) : B =
+  def fix foldr (A : VType) (B : CType) (xs : U (LList A)) (b : U B) (f : U (A -> U B -> B)) : B =
     do xsv <- ! xs .run;
     match xsv
     | +Nil() => ! b
-    | +Cons(hd, tl) => ! f hd {! foldr A B tl b f}
+    | +Cons(hd, tl) => ! f hd { ! foldr A B tl b f }
     end
   that
 
-  def fix foldl_break (A : VType) (R : VType) (xs : U (LList A)) (acc : R) (f : U (A -> R -> F R)) (cond : U (R -> F Bool)) : F R =
-    do xsv <- ! xs .run;
-    match xsv
-    | +Nil() => ret acc
-    | +Cons(hd, tl) =>
-      do acc' <- ! f hd acc;
-      do b <- ! cond acc';
-      match b
-      | +True() => ret acc'
-      | +False() =>
-        ! foldl_break A R tl acc' f cond
+  def fix foldl_break
+    (A : VType)
+    (R : VType)
+    (xs : U (LList A))
+    (acc : R)
+    (f : U (A -> R -> F R))
+    (cond : U (R -> F Bool))
+  : F R =
+      do xsv <- ! xs .run;
+      match xsv
+      | +Nil() => ret acc
+      | +Cons(hd, tl) =>
+        do acc' <- ! f hd acc;
+        do b <- ! cond acc';
+        match b
+        | +True() => ret acc'
+        | +False() =>
+          ! foldl_break A R tl acc' f cond
+        end
       end
-    end
   that
 
-  def ! foldl' (A : VType) (R : VType) (f : U(A -> R -> F R)) (acc: R) (xs : U(LList A)) : F R =
+  def ! foldl' (A : VType) (R : VType) (f : U (A -> R -> F R)) (acc : R) (xs : U (LList A)) : F R =
     ! foldr A (R -> F R) xs
       { fn x => ret x }
-      { fn x k acc =>
-        do acc <- ! f x acc;
-        ! k acc
+      {
+        fn x k acc =>
+          do acc <- ! f x acc;
+          ! k acc
       }
       acc
   that
 
-  def ! take (A: VType) (n : Int64) (xs : U(LList A)) : LList A =
+  def ! take (A : VType) (n : Int64) (xs : U (LList A)) : LList A =
     ! foldr A (Int64 -> LList A) xs
-            { fn _ => ! nil A }
-            { fn x take_xs n =>
-                !if~ (LList A)
-                    { ! int_lt n 1 }
-                    { ! nil A }
-                    { do n <- ! (int64/sub) n 1;
-                      ! cons A x { ! take_xs n }
-                    }
+      { fn _ => ! nil A }
+      {
+        fn x take_xs n =>
+          ! if~ (LList A)
+            { ! int_lt n 1 }
+            { ! nil A }
+            {
+              do n <- ! (int64/sub) n 1;
+              ! cons A x { ! take_xs n }
             }
-            n
+      }
+      n
   that
 
   def fix forever (A : VType) (x : A) : LList A =
@@ -313,7 +327,7 @@ begin
     end
   that
 
-  def ! head (A : VType) (xs : U(LList A)) : F(Option A) =
+  def ! head (A : VType) (xs : U (LList A)) : F (Option A) =
     do xs' <- ! xs .run;
     match xs'
     | +Nil() => ret +None()
@@ -321,7 +335,7 @@ begin
     end
   that
 
-  def ! is_empty (A : VType) (xs : U(LList A)) : F Bool =
+  def ! is_empty (A : VType) (xs : U (LList A)) : F Bool =
     do xs' <- ! xs .run;
     match xs'
     | +Nil() => ret +True()
@@ -329,68 +343,74 @@ begin
     end
   that
 
-  def ! append (A : VType) (xs : U(LList A)) (ys : U(LList A)) : LList A =
-    ! foldr A (LList A) xs ys {fn x b => ! cons A x b}
+  def ! append (A : VType) (xs : U (LList A)) (ys : U (LList A)) : LList A =
+    ! foldr A (LList A) xs ys { fn x b => ! cons A x b }
   that
 
-  def fix bind (A : VType) (A' : VType) (xs : U(LList A)) (f : U(A -> LList A')) : LList A' =
-    ! foldr A (LList A') xs {! nil (A')} {fn x b => ! append (A') {! f x} b}
+  def fix bind (A : VType) (A' : VType) (xs : U (LList A)) (f : U (A -> LList A')) : LList A' =
+    ! foldr A (LList A') xs { ! nil A' } { fn x b => ! append A' { ! f x } b }
   that
 
-  def ! squash (A : VType) (xs : U(LList (U(LList A)))) : LList A =
-    ! bind (U(LList A)) A xs {fn x => ! x}
+  def ! squash (A : VType) (xs : U (LList (U (LList A)))) : LList A =
+    ! bind (U (LList A)) A xs { fn x => ! x }
   that
 
   def ! singleton_list (A : VType) (x : A) : LList A =
-    ! cons A x {! nil A}
+    ! cons A x { ! nil A }
   that
 
-  def ! map (A : VType) (R : VType) (f : U(A -> F(R))) (xs : U(LList A)) : LList R =
-    ! foldr A (LList R) xs {! nil R} {
+  def ! map (A : VType) (R : VType) (f : U (A -> F R)) (xs : U (LList A)) : LList R =
+    ! foldr A (LList R) xs { ! nil R } {
       fn x b =>
         do x <- ! f x;
         ! cons R x b
     }
   that
 
-  def ! filterMap (A: VType) (A' : VType) (f : U(A -> F(Option A'))) (xs : U(LList A)) : LList A' =
-    ! foldr A (LList A') xs {! nil (A')} {
+  def ! filterMap (A : VType) (A' : VType) (f : U (A -> F (Option A'))) (xs : U (LList A)) : LList
+    A' =
+    ! foldr A (LList A') xs { ! nil A' } {
       fn x l =>
         do o <- ! f x;
         match o
-        | +None()   => ! l
-        | +Some(x') => ! cons (A') x' l
+        | +None() => ! l
+        | +Some(x') => ! cons A' x' l
         end
     }
   that
 
-  def ! filter (A : VType) (f : U(A -> F Bool)) : U(LList A) -> LList A =
-    ! filterMap A A { fn x =>
-      ! if~ (Ret(Option A))
-            { ! f x }
-            { ret +Some(x) }
-            { ret +None() }
+  def ! filter (A : VType) (f : U (A -> F Bool)) : U (LList A) -> LList A =
+    ! filterMap A A {
+      fn x =>
+        ! if~ (Ret (Option A))
+          { ! f x }
+          { ret +Some(x) }
+          { ret +None() }
     }
   that
 
-  def fix print_list (A : VType) (fmt : U(A -> F String)) (xs : U(LList A)) (next : U OS) : OS =
+  def fix print_list (A : VType) (fmt : U (A -> F String)) (xs : U (LList A)) (next : U OS) : OS =
     do xs' <- ! xs .run;
     match xs'
     | +Nil() => ! (stdio/write) "\n" next
     | +Cons(x, tl) =>
       do s <- ! fmt x;
       do st <- ! (string/append) s " ";
-      ! (stdio/write) st {! print_list A fmt tl next}
+      ! (stdio/write) st { ! print_list A fmt tl next }
     end
   that
 
-  def ! length (A : VType) (xs : U(LList A)) : F(Int64) =
-    ! foldr A (F Int64) xs {ret 0} {fn x b => do b' <- !b; ! (int64/add) b' 1}
+  def ! length (A : VType) (xs : U (LList A)) : F Int64 =
+    ! foldr A (F Int64) xs { ret 0 } {
+      fn x b =>
+        do b' <- ! b;
+        ! (int64/add) b' 1
+    }
   that
 
-  let Cmp (A : VType) : VType = U(A -> A -> F(Bool)) that
+  let Cmp (A : VType) : VType = U (A -> A -> F Bool) that
 
-  def fix min_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int64)) =
+  def fix min_list (A : VType) (cmp : Cmp A) (xs : U (LList A)) : F (Option (Pair A Int64)) =
     do xs' <- ! xs .run;
     match xs'
     | +Nil() => ret +None()
@@ -413,7 +433,7 @@ begin
     end
   that
 
-  def fix max_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int64)) =
+  def fix max_list (A : VType) (cmp : Cmp A) (xs : U (LList A)) : F (Option (Pair A Int64)) =
     do xs' <- ! xs .run;
     match xs'
     | +Nil() => ret +None()
@@ -436,67 +456,86 @@ begin
     end
   that
 
-  def ! ll_to_list (A : VType) (xs : U(LList A)) : Ret (List A) =
-    do sx <- !foldl' A (List A) {fn x xs => ret +Cons(x,xs)}
-                    +Nil()
-                    xs;
+  def ! ll_to_list (A : VType) (xs : U (LList A)) : Ret (List A) =
+    do sx <- ! foldl' A (List A) { fn x xs => ret +Cons(x, xs) }
+      +Nil()
+      xs;
     ! reverse A sx
   that
 
   def fix repeat (A : VType) (x : A) (n : Int64) : LList A =
-    ! if~ (LList A) {! int_eq 0 n} {
+    ! if~ (LList A) { ! int_eq 0 n } {
       ! nil A
     } {
       do n1 <- ! (int64/sub) n 1;
-      ! cons A x {! repeat A x n1}
+      ! cons A x { ! repeat A x n1 }
     }
   that
 
   def fix range (left : Int64) (right : Int64) : LList Int64 =
-    ! if~ (LList Int64) {! int_eq left right} {
-      ! nil (Int64)
+    ! if~ (LList Int64) { ! int_eq left right } {
+      ! nil Int64
     } {
       do n1 <- ! (int64/add) left 1;
-      ! cons (Int64) left {! range n1 right}
+      ! cons Int64 left { ! range n1 right }
     }
   that
 
-  def fix any (A : VType) (f : U(A -> F(Bool))) (xs : U(LList A)) : F(Bool) =
-    ! foldr A (F Bool) xs {ret +False()} {fn x b => do b' <- ! b; do x <- ! f x; ! or b' x}
-  that
-
-  def fix all (A : VType) (f : U(A -> F(Bool))) (xs : U(LList A)) : F(Bool) =
-    ! foldr A (F Bool) xs {ret +True()} {fn x b => do b' <- ! b; do x <- ! f x; ! and b' x}
-  that
-
-  def ! map2 (A : VType) (A' : VType) (R : VType) (f : U(A -> A' -> F(R))) (xs : U(LList A)) (ys : U(LList A')) : LList R =
-    ! foldr A (LList R) xs {! nil R} {
-      fn x acc =>
-        ! foldr (A') (LList R) ys acc {
-        fn y acc' =>
-          do r <- ! f x y;
-          ! cons R r acc'
-        }
+  def fix any (A : VType) (f : U (A -> F Bool)) (xs : U (LList A)) : F Bool =
+    ! foldr A (F Bool) xs { ret +False() } {
+      fn x b =>
+        do b' <- ! b;
+        do x <- ! f x;
+        ! or b' x
     }
   that
 
-  def ! cart_prod (A : VType) (A' : VType) (xs : U(LList A)) (ys : U(LList A')) : LList (Pair A A') =
-    ! map2 A (A') (Pair A A') {! pair A (A')} xs ys
+  def fix all (A : VType) (f : U (A -> F Bool)) (xs : U (LList A)) : F Bool =
+    ! foldr A (F Bool) xs { ret +True() } {
+      fn x b =>
+        do b' <- ! b;
+        do x <- ! f x;
+        ! and b' x
+    }
+  that
+
+  def ! map2
+    (A : VType)
+    (A' : VType)
+    (R : VType)
+    (f : U (A -> A' -> F R))
+    (xs : U (LList A))
+    (ys : U (LList A'))
+  : LList R =
+      ! foldr A (LList R) xs { ! nil R } {
+        fn x acc =>
+          ! foldr A' (LList R) ys acc {
+            fn y acc' =>
+              do r <- ! f x y;
+              ! cons R r acc'
+          }
+      }
+  that
+
+  def ! cart_prod (A : VType) (A' : VType) (xs : U (LList A)) (ys : U (LList A')) : LList (
+    Pair A A'
+  ) =
+    ! map2 A A' (Pair A A') { ! pair A A' } xs ys
   that
 
   def ! str_to_list (s : String) : LList Char =
     do sz <- ! (string/length) s;
-    let indexes = {! range 0 sz} in
-    ! foldr (Int64) (LList Char) indexes {! nil (Char)} {
+    let indexes = { ! range 0 sz } in
+    ! foldr Int64 (LList Char) indexes { ! nil Char } {
       fn i acc =>
         do c <- ! str_get_or_space s i;
-        ! cons (Char) c acc
-    }  
+        ! cons Char c acc
+    }
   that
--- end module LList
+  -- end module LList
 
--- module Arith
-  def ! int_le (x: Int64) (y: Int64) : Ret Bool =
+  -- module Arith
+  def ! int_le (x : Int64) (y : Int64) : Ret Bool =
     ! not~ { ! int_gt x y }
   that
 
@@ -517,9 +556,9 @@ begin
       | +False() => ret y
       end
   that
--- end module Arith
+  -- end module Arith
 
--- module String
+  -- module String
   def ! str_split_once (str : String) (sep : Char) : Ret (Option (Pair String String)) =
     ! (string/split_once)
       (Ret (Option (Pair String String)))
@@ -537,8 +576,8 @@ begin
       { fn s1 s2 => ret +Some(+Cons(s1, s2)) }
   that
 
-  def char_eq: Thunk(Char -> Char -> Ret Bool) = {
-    fn (c: Char) (c': Char) =>
+  def char_eq : Thunk (Char -> Char -> Ret Bool) = {
+    fn (c : Char) (c' : Char) =>
       do c <- ! (char/to_string) c;
       do c' <- ! (char/to_string) c';
       ! str_eq c c'
@@ -551,10 +590,10 @@ begin
     | +Some(p) =>
       match p
       | +Cons(s1, s2) =>
-        ! if~ (LList String) {! str_eq s1 ""} {
+        ! if~ (LList String) { ! str_eq s1 "" } {
           ! str_split_by s2 sep
         } {
-          let s2 = {! str_split_by s2 sep} in
+          let s2 = { ! str_split_by s2 sep } in
           ! cons String s1 s2
         }
       end
@@ -574,11 +613,11 @@ begin
       ret ""
     }
   that
--- end module String
+  -- end module String
 
   (
     identity = id,
     lazy_identity = id~,
-    char_eq = char_eq,
+    = char_eq
   )
 end

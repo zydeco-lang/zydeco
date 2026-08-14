@@ -1,1 +1,1 @@
-@[intrinsic(f32)] _
+@(intrinsic(f32))

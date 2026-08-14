@@ -1,118 +1,118 @@
   (
     i8 :: exists
       (
-        Scalar = ScalarType as @[import("intrinsic/i8.zy")] _ :
-        @[import("intrinsic/vtype.zy")] _
+        Scalar = ScalarType as @(import("intrinsic/i8.zy")) :
+        @(import("intrinsic/vtype.zy"))
       )
     .
-      @[import("intrinsic/unit.zy")] _
+      @(import("intrinsic/unit.zy"))
   )
 * (
     i16 :: exists
       (
-        Scalar = ScalarType as @[import("intrinsic/i16.zy")] _ :
-        @[import("intrinsic/vtype.zy")] _
+        Scalar = ScalarType as @(import("intrinsic/i16.zy")) :
+        @(import("intrinsic/vtype.zy"))
       )
     .
-      @[import("intrinsic/unit.zy")] _
+      @(import("intrinsic/unit.zy"))
   )
 * (
     i32 :: exists
       (
-        Scalar = ScalarType as @[import("intrinsic/i32.zy")] _ :
-        @[import("intrinsic/vtype.zy")] _
+        Scalar = ScalarType as @(import("intrinsic/i32.zy")) :
+        @(import("intrinsic/vtype.zy"))
       )
     .
-      @[import("intrinsic/unit.zy")] _
+      @(import("intrinsic/unit.zy"))
   )
 * (
     i64 :: exists
       (
-        Scalar = ScalarType as @[import("intrinsic/i64.zy")] _ :
-        @[import("intrinsic/vtype.zy")] _
+        Scalar = ScalarType as @(import("intrinsic/i64.zy")) :
+        @(import("intrinsic/vtype.zy"))
       )
     .
-      @[import("intrinsic/unit.zy")] _
+      @(import("intrinsic/unit.zy"))
   )
 * (
     u8 :: exists
       (
-        Scalar = ScalarType as @[import("intrinsic/u8.zy")] _ :
-        @[import("intrinsic/vtype.zy")] _
+        Scalar = ScalarType as @(import("intrinsic/u8.zy")) :
+        @(import("intrinsic/vtype.zy"))
       )
     .
-      @[import("intrinsic/unit.zy")] _
+      @(import("intrinsic/unit.zy"))
   )
 * (
     u16 :: exists
       (
-        Scalar = ScalarType as @[import("intrinsic/u16.zy")] _ :
-        @[import("intrinsic/vtype.zy")] _
+        Scalar = ScalarType as @(import("intrinsic/u16.zy")) :
+        @(import("intrinsic/vtype.zy"))
       )
     .
-      @[import("intrinsic/unit.zy")] _
+      @(import("intrinsic/unit.zy"))
   )
 * (
     u32 :: exists
       (
-        Scalar = ScalarType as @[import("intrinsic/u32.zy")] _ :
-        @[import("intrinsic/vtype.zy")] _
+        Scalar = ScalarType as @(import("intrinsic/u32.zy")) :
+        @(import("intrinsic/vtype.zy"))
       )
     .
-      @[import("intrinsic/unit.zy")] _
+      @(import("intrinsic/unit.zy"))
   )
 * (
     u64 :: exists
       (
-        Scalar = ScalarType as @[import("intrinsic/u64.zy")] _ :
-        @[import("intrinsic/vtype.zy")] _
+        Scalar = ScalarType as @(import("intrinsic/u64.zy")) :
+        @(import("intrinsic/vtype.zy"))
       )
     .
-      @[import("intrinsic/unit.zy")] _
+      @(import("intrinsic/unit.zy"))
   )
 * (
     f32 :: exists
       (
-        Scalar = ScalarType as @[import("intrinsic/f32.zy")] _ :
-        @[import("intrinsic/vtype.zy")] _
+        Scalar = ScalarType as @(import("intrinsic/f32.zy")) :
+        @(import("intrinsic/vtype.zy"))
       )
     .
-      @[import("intrinsic/unit.zy")] _
+      @(import("intrinsic/unit.zy"))
   )
 * (
     f64 :: exists
       (
-        Scalar = ScalarType as @[import("intrinsic/f64.zy")] _ :
-        @[import("intrinsic/vtype.zy")] _
+        Scalar = ScalarType as @(import("intrinsic/f64.zy")) :
+        @(import("intrinsic/vtype.zy"))
       )
     .
-      @[import("intrinsic/unit.zy")] _
+      @(import("intrinsic/unit.zy"))
   )
 * (
     char :: exists
       (
-        Scalar = ScalarType as @[import("intrinsic/char.zy")] _ :
-        @[import("intrinsic/vtype.zy")] _
+        Scalar = ScalarType as @(import("intrinsic/char.zy")) :
+        @(import("intrinsic/vtype.zy"))
       )
     .
-      @[import("intrinsic/unit.zy")] _
+      @(import("intrinsic/unit.zy"))
   )
 * (
     string :: exists
       (
-        Scalar = ScalarType as @[import("intrinsic/string.zy")] _ :
-        @[import("intrinsic/vtype.zy")] _
+        Scalar = ScalarType as @(import("intrinsic/string.zy")) :
+        @(import("intrinsic/vtype.zy"))
       )
     .
-      @[import("intrinsic/unit.zy")] _
+      @(import("intrinsic/unit.zy"))
   )
 * (
     bytes :: exists
       (
-        Scalar = ScalarType as @[import("intrinsic/bytes.zy")] _ :
-        @[import("intrinsic/vtype.zy")] _
+        Scalar = ScalarType as @(import("intrinsic/bytes.zy")) :
+        @(import("intrinsic/vtype.zy"))
       )
     .
-      @[import("intrinsic/unit.zy")] _
+      @(import("intrinsic/unit.zy"))
   )
-* (@[import("intrinsic/unit.zy")] _)
+* (@(import("intrinsic/unit.zy")))

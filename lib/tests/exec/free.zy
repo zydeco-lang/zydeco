@@ -1,57 +1,58 @@
 begin
-  let monadic_basis = @[import("../../std/control/monad.zy")] _ that
+  let monadic_basis = @(import("../../std/control/monad.zy")) that
   param (
     (/core; /system; builtin) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk) = core that
   let (/process) = system that
   let (= Monad, = Algebra, ()) =
-    monadic_basis builtin in
+    monadic_basis builtin
+  in
   begin
 
-  let Kont (R : CType) (A : VType) =
-    Thk (A -> R) -> R
-  that
-  let Free (H : (CType) -> (VType)) (A : VType) =
-    forall (R : CType) .
-      H R -> Kont R A
-  that
+    let Kont (R : CType) (A : VType) =
+      Thk (A -> R) -> R
+    that
+    let Free (H : CType -> VType) (A : VType) =
+      forall (R : CType) .
+        H R -> Kont R A
+    that
 
-  def ! mkont (R : CType) : Monad (Kont R) =
-    comatch
-    | .return A a =>
-      fn k =>
-        ! k a
-    | .bind A A' m f =>
-      fn k =>
-        ! m {
-          fn a =>
-            ! f a k
-        }
-    end
-  that
-  def ! mfree
-    (
-      H :
-      (CType) -> (VType)
-    )
-    : Monad (Free H) =
-    comatch
-    | .return A a =>
-      fn R h =>
-        ! mkont R .return A a
-    | .bind A A' m f =>
-      fn R h =>
-        ! mkont R .bind A A'
-          { ! m R h }
-          {
+    def ! mkont (R : CType) : Monad (Kont R) =
+      comatch
+      | .return A a =>
+        fn k =>
+          ! k a
+      | .bind A A' m f =>
+        fn k =>
+          ! m {
             fn a =>
-              ! f a R h
+              ! f a k
           }
-    end
-  that
+      end
+    that
+    def ! mfree
+      (
+        H :
+        CType -> VType
+      )
+    : Monad (Free H) =
+        comatch
+        | .return A a =>
+          fn R h =>
+            ! mkont R .return A a
+        | .bind A A' m f =>
+          fn R h =>
+            ! mkont R .bind A A'
+              { ! m R h }
+              {
+                fn a =>
+                  ! f a R h
+              }
+        end
+    that
 
-  ! (process/exit) 0
-end
+    ! (process/exit) 0
+  end
 end

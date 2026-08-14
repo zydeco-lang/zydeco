@@ -1,196 +1,198 @@
 --| Examples of exception monads
 begin
-  let monadic_basis = @[import("../../std/control/monad.zy")] _ that
+  let monadic_basis = @(import("../../std/control/monad.zy")) that
   param (
     (/core; /numeric; /system; builtin) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/stdio; /process) = system that
   let (= Monad, = Algebra, ()) =
-    monadic_basis builtin in
+    monadic_basis builtin
+  in
   begin
 
-  def Either (E : VType) (A : VType) =
-    data
-    | +Left : E
-    | +Right : A
-    end
-  that
-  def MonadErr (E : VType) (M : (VType) -> (CType)) =
-    codata
-    | .fail :
-      forall (A : VType) .
-        E -> M A
-    end
-  that
-  --| Ret Either exception monad
-  def Exn (E : VType) (A : VType) =
-    codata
-    | .done : Ret (Either E A)
-    end
-  that
-  --| Church-encoded exception monad
-  def ExnK (E : VType) (A : VType) =
-    codata
-    | .run :
-      forall (R : CType) .
-        Thk (E -> R) -> Thk (A -> R) -> R
-    end
-  that
-  --| Defunctionalized exception monad
-  def ExnDe (E : VType) (A : VType) : CType =
-    codata
-    | .try :
-      forall (E' : VType) .
-        Thk (E -> ExnDe E' A) -> ExnDe E' A
-    | .kont :
-      forall (A' : VType) .
-        Thk (A -> ExnDe E A') -> ExnDe E A'
-    | .done : Ret (Either E A)
-    end
-  that
-  let ExnCounter = ExnDe Unit Int64 that
-
-  def ! mexn (E : VType) : Monad (Exn E) =
-    comatch
-    | .return A a =>
-      fn .done =>
-        ret +Right(a)
-    | .bind A A' m f =>
-      do a? <- ! m .done;
-      match a?
-      | +Left(e) =>
-        fn .done =>
-          ret +Left(e)
-      | +Right(a) =>
-        fn .done =>
-          ! f a .done
+    def Either (E : VType) (A : VType) =
+      data
+      | +Left : E
+      | +Right : A
       end
-    end
-  that
-  def ! mexnk (E : VType) : Monad (ExnK E) =
-    comatch
-    | .return A a =>
-      fn .run R ke ka =>
-        ! ka a
-    | .bind A A' m f =>
-      fn .run R ke ka =>
-        ! m .run R ke {
-          fn a =>
-            ! f a .run R ke ka
-        }
-    end
-  that
-  def fix mexnde (E : VType) : Monad (ExnDe E) =
-    comatch
-    | .return =>
-      fn A a =>
-        comatch
-        | .try =>
-          fn E' k =>
-            ! mexnde E' .return A a
-        | .kont =>
-          fn A' k =>
-            ! k a
-        | .done => ret +Right(a)
-        end
-    | .bind =>
-      fn A A' m f =>
-        ! m .kont A' f
-    end
-  that
-  def fix mexnde_err (E : VType) : MonadErr E (ExnDe E) =
-    comatch
-    | .fail =>
-      fn A e =>
-        comatch
-        | .try =>
-          fn E' k =>
-            ! k e
-        | .kont =>
-          fn A' k =>
-            ! mexnde_err E .fail A' e
-        | .done => ret +Left(e)
-        end
-    end
-  that
-  --| Proof of the violation of the monad laws of
-  --| the defunctionalized exception monad above
-  def fix count_kont (E : VType) (A : VType) (i : Int64) (fi : Thk (Int64 -> ExnDe E A)) : ExnDe E A =
-    comatch
-    | .try =>
-      fn E' ke =>
-        ! count_kont E' A i {
-          fn i =>
-            ! fi i .try E' ke
-        }
-    | .kont =>
-      fn A' ka =>
-        do i' <- ! (int64/add) i 1;
-        ! count_kont E A' i' {
-          fn i =>
-            ! fi i .kont A' ka
-        }
-    | .done => ! fi i .done
-    end
-  that
-  def ! bench (impl : Thk (Thk ExnCounter -> ExnCounter)) : Ret Int64 =
-    do i? <- ! impl {
-      ! count_kont Unit Int64 0 {
-        ! mexnde Unit .return Int64
-      }
-    } .done;
-    match i?
-    | +Left(e) => ret -1
-    | +Right(i) => ret i
-    end
-  that
-  -- LHS and RHS of the associativity law
-  def ! lhs
-    (f : Thk (Int64 -> ExnDe Unit Int64))
-    (g : Thk (Int64 -> ExnDe Unit Int64))
-    (m : Thk (ExnDe Unit Int64))
-    : ExnDe Unit Int64 =
-    ! mexnde Unit .bind Int64 Int64
-      {
-        ! mexnde Unit .bind Int64 Int64 m f
-      }
-      g
-  that
-  def ! rhs
-    (f : Thk (Int64 -> ExnDe Unit Int64))
-    (g : Thk (Int64 -> ExnDe Unit Int64))
-    (m : Thk (ExnDe Unit Int64))
-    : ExnDe Unit Int64 =
-    ! mexnde Unit .bind Int64 Int64 m {
-      fn i =>
-        ! mexnde Unit .bind Int64 Int64 { ! f i } g
-    }
-  that
+    that
+    def MonadErr (E : VType) (M : VType -> CType) =
+      codata
+      | .fail :
+        forall (A : VType) .
+          E -> M A
+      end
+    that
+    --| Ret Either exception monad
+    def Exn (E : VType) (A : VType) =
+      codata
+      | .done : Ret (Either E A)
+      end
+    that
+    --| Church-encoded exception monad
+    def ExnK (E : VType) (A : VType) =
+      codata
+      | .run :
+        forall (R : CType) .
+          Thk (E -> R) -> Thk (A -> R) -> R
+      end
+    that
+    --| Defunctionalized exception monad
+    def ExnDe (E : VType) (A : VType) : CType =
+      codata
+      | .try :
+        forall (E' : VType) .
+          Thk (E -> ExnDe E' A) -> ExnDe E' A
+      | .kont :
+        forall (A' : VType) .
+          Thk (A -> ExnDe E A') -> ExnDe E A'
+      | .done : Ret (Either E A)
+      end
+    that
+    let ExnCounter = ExnDe Unit Int64 that
 
-  -- Observable violation of the monad laws because the results are different
-  let ! triv : Int64 -> ExnDe Unit Int64 =
-    ! mexnde Unit .return Int64
-  in
-  do a <- ! bench {
-    fn i =>
-      ! lhs triv triv i
-  };
-  do b <- ! bench {
-    fn i =>
-      ! rhs triv triv i
-  };
-  -- Continuation sequencing is written as an explicit thunk argument.
-  ! (stdio/write_int) a {
-    ! (stdio/write) " != " {
-      ! (stdio/write_int) b {
-        ! (stdio/write) "\n" {
-          ! (process/exit) 0
+    def ! mexn (E : VType) : Monad (Exn E) =
+      comatch
+      | .return A a =>
+        fn .done =>
+          ret +Right(a)
+      | .bind A A' m f =>
+        do a? <- ! m .done;
+        match a?
+        | +Left(e) =>
+          fn .done =>
+            ret +Left(e)
+        | +Right(a) =>
+          fn .done =>
+            ! f a .done
+        end
+      end
+    that
+    def ! mexnk (E : VType) : Monad (ExnK E) =
+      comatch
+      | .return A a =>
+        fn .run R ke ka =>
+          ! ka a
+      | .bind A A' m f =>
+        fn .run R ke ka =>
+          ! m .run R ke {
+            fn a =>
+              ! f a .run R ke ka
+          }
+      end
+    that
+    def fix mexnde (E : VType) : Monad (ExnDe E) =
+      comatch
+      | .return =>
+        fn A a =>
+          comatch
+          | .try =>
+            fn E' k =>
+              ! mexnde E' .return A a
+          | .kont =>
+            fn A' k =>
+              ! k a
+          | .done => ret +Right(a)
+          end
+      | .bind =>
+        fn A A' m f =>
+          ! m .kont A' f
+      end
+    that
+    def fix mexnde_err (E : VType) : MonadErr E (ExnDe E) =
+      comatch
+      | .fail =>
+        fn A e =>
+          comatch
+          | .try =>
+            fn E' k =>
+              ! k e
+          | .kont =>
+            fn A' k =>
+              ! mexnde_err E .fail A' e
+          | .done => ret +Left(e)
+          end
+      end
+    that
+    --| Proof of the violation of the monad laws of
+    --| the defunctionalized exception monad above
+    def fix count_kont (E : VType) (A : VType) (i : Int64) (fi : Thk (Int64 -> ExnDe E A)) : ExnDe E
+      A =
+      comatch
+      | .try =>
+        fn E' ke =>
+          ! count_kont E' A i {
+            fn i =>
+              ! fi i .try E' ke
+          }
+      | .kont =>
+        fn A' ka =>
+          do i' <- ! (int64/add) i 1;
+          ! count_kont E A' i' {
+            fn i =>
+              ! fi i .kont A' ka
+          }
+      | .done => ! fi i .done
+      end
+    that
+    def ! bench (impl : Thk (Thk ExnCounter -> ExnCounter)) : Ret Int64 =
+      do i? <- ! impl {
+        ! count_kont Unit Int64 0 {
+          ! mexnde Unit .return Int64
+        }
+      } .done;
+      match i?
+      | +Left(e) => ret -1
+      | +Right(i) => ret i
+      end
+    that
+    -- LHS and RHS of the associativity law
+    def ! lhs
+      (f : Thk (Int64 -> ExnDe Unit Int64))
+      (g : Thk (Int64 -> ExnDe Unit Int64))
+      (m : Thk (ExnDe Unit Int64))
+    : ExnDe Unit Int64 =
+        ! mexnde Unit .bind Int64 Int64
+          {
+            ! mexnde Unit .bind Int64 Int64 m f
+          }
+          g
+    that
+    def ! rhs
+      (f : Thk (Int64 -> ExnDe Unit Int64))
+      (g : Thk (Int64 -> ExnDe Unit Int64))
+      (m : Thk (ExnDe Unit Int64))
+    : ExnDe Unit Int64 =
+        ! mexnde Unit .bind Int64 Int64 m {
+          fn i =>
+            ! mexnde Unit .bind Int64 Int64 { ! f i } g
+        }
+    that
+
+    -- Observable violation of the monad laws because the results are different
+    let ! triv : Int64 -> ExnDe Unit Int64 =
+      ! mexnde Unit .return Int64
+    in
+    do a <- ! bench {
+      fn i =>
+        ! lhs triv triv i
+    };
+    do b <- ! bench {
+      fn i =>
+        ! rhs triv triv i
+    };
+    -- Continuation sequencing is written as an explicit thunk argument.
+    ! (stdio/write_int) a {
+      ! (stdio/write) " != " {
+        ! (stdio/write_int) b {
+          ! (stdio/write) "\n" {
+            ! (process/exit) 0
+          }
         }
       }
     }
-  }
-end
+  end
 end

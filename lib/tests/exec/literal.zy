@@ -2,7 +2,7 @@
 begin
   param (
     (/core; /representations; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/Ret; /Unit) = core that
   let (/Scalar = String) = representations/string that
@@ -11,7 +11,7 @@ begin
   let message : String =
     --| Hello literal
     --| second line
-    @[literal] _
+    @(literal)
   in
   ! (stdio/write_line) message { ! (process/exit) 0 }
 end

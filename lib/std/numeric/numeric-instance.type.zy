@@ -1,12 +1,12 @@
 begin
-  let Thk = @[import("../builtin/intrinsic/thk.zy")] _ in
-  let Ret = @[import("../builtin/intrinsic/ret.zy")] _ in
-  let Unit = @[import("../builtin/intrinsic/unit.zy")] _ in
-  let Numeric = @[import("numeric.type.zy")] _ in
+  let Thk = @(import("../builtin/intrinsic/thk.zy")) in
+  let Ret = @(import("../builtin/intrinsic/ret.zy")) in
+  let Unit = @(import("../builtin/intrinsic/unit.zy")) in
+  let Numeric = @(import("numeric.type.zy")) in
   let NumericInstance
-    (Bool : @[import("../builtin/intrinsic/vtype.zy")] _)
-    (Representation : @[import("../builtin/intrinsic/vtype.zy")] _) =
-    exists (Scalar = ScalarType as Representation : @[import("../builtin/intrinsic/vtype.zy")] _) .
+    (Bool : @(import("../builtin/intrinsic/vtype.zy")))
+    (Representation : @(import("../builtin/intrinsic/vtype.zy"))) =
+    exists (Scalar = ScalarType as Representation : @(import("../builtin/intrinsic/vtype.zy"))) .
         (dictionary :: Numeric Bool ScalarType)
       * Unit
   in

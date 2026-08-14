@@ -4,7 +4,7 @@
 begin
   param (
     (/core; /numeric; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (Scalar = Int64, int64) = numeric/int64 that
@@ -126,7 +126,7 @@ begin
     ! sumBest xs .add 0
   that
 
-  do n <- ! sum (+Cons(5, +Cons(13, +Nil())));
+  do n <- ! sum +Cons(5, +Cons(13, +Nil()));
   do s <- ! (int64/to_string) n;
   ! (stdio/write_line) s { ! (process/exit) 0 }
 end

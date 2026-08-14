@@ -2,7 +2,7 @@
 begin
   param (
     (/core; /representations; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /Thk; /Ret; /Unit) = core that
   let (/Scalar = Int64) = representations/i64 that
@@ -18,8 +18,8 @@ begin
   def TreeKont (A : VType) =
     codata
     | .run :
-      Thk (Tree A -> Ret (Tree A)) ->
-      Ret (Tree A)
+         Thk (Tree A -> Ret (Tree A))
+      -> Ret (Tree A)
     end
   that
   -- a normal invert without tail-call opt.
@@ -60,7 +60,9 @@ begin
     }
   that
   -- and below is the correct cps solution
-  def fix invert_kont (A : VType) (tree : Tree A) (k : Thk (Tree A -> Ret (Tree A))) : Ret (Tree A) =
+  def fix invert_kont (A : VType) (tree : Tree A) (k : Thk (Tree A -> Ret (Tree A))) : Ret (
+    Tree A
+  ) =
     match tree
     | +Leaf() => ! k +Leaf()
     | +Node(l, a, r) =>

@@ -1,7 +1,7 @@
 begin
   param (
     (/core; /representations; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Unit) = core that
   let (/Scalar = String) = representations/string that
@@ -32,19 +32,19 @@ begin
     (A : VType)
     (B : CType)
     (fl : Thk (List A -> B))
-    : Variadic A B =
-    -- capture
-    let fix r (k : Thk (List A -> B)) : Variadic A B =
-      comatch
-      | .more x =>
-        ! r {
-          fn xs =>
-            ! k +Cons(x, xs)
-        }
-      | .done => ! k +Nil()
-      end
-    in
-    ! r { fn xs => ! fl xs }
+  : Variadic A B =
+      -- capture
+      let fix r (k : Thk (List A -> B)) : Variadic A B =
+        comatch
+        | .more x =>
+          ! r {
+            fn xs =>
+              ! k +Cons(x, xs)
+          }
+        | .done => ! k +Nil()
+        end
+      in
+      ! r { fn xs => ! fl xs }
   that
   -- continuation based mich wand
   -- ! r (B) (A) { ! l (B) (A) fv } == fv
@@ -66,15 +66,12 @@ begin
     String
     (Thk OS -> OS)
     { ! r String (Thk OS -> OS) printl }
-    (+Cons("hello", +Cons("world", +Nil())))
+    +Cons("hello", +Cons("world", +Nil()))
     {
       ! r
         String
         (Thk OS -> OS)
-        { ! l String (Thk OS -> OS) printv }
-        .more "hello"
-        .more "world"
-        .done
+        { ! l String (Thk OS -> OS) printv } .more "hello" .more "world" .done
         { ! (process/exit) 0 }
     }
 end

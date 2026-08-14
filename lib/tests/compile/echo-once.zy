@@ -1,9 +1,9 @@
 param (
   (/system) :
-  @[import("../../std/builtin.zy")] _
+  @(import("../../std/builtin.zy"))
 ) in
 let (/stdio; /process) = system in
-  ! (stdio/read_line) {
-    fn line =>
-      ! (stdio/write_line) line { ! (process/exit) 0 }
-  }
+! (stdio/read_line) {
+  fn line =>
+    ! (stdio/write_line) line { ! (process/exit) 0 }
+}

@@ -1,108 +1,103 @@
 --| The Free monad
 begin
-  let monadic_basis = @[import("../../std/control/monad.zy")] _ that
+  let monadic_basis = @(import("../../std/control/monad.zy")) that
   param (
     (/core; /representations; /system; builtin) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Unit) = core that
   let (/Scalar = String) = representations/string that
   let (/OS; /stdio; /process) = system that
   let (= Monad, = Algebra, ()) =
-    monadic_basis builtin in
+    monadic_basis builtin
+  in
   begin
 
-  def Empty =
-    data
-    end
-  that
-  def Kont (R : CType) (A : VType) =
-    codata
-    | .run : Thk (A -> R) -> R
-    end
-  that
-  -- Types of handlers
-  let KRead (R : CType) =
-    Thk (Unit -> Kont R String)
-  that
-  let KWrite (R : CType) =
-    Thk (String -> Kont R Unit)
-  that
-  let KFail (E : VType) (R : CType) =
-    Thk (E -> Kont R Empty)
-  that
-  -- A specific free monad with three handlers
-  def Free (A : VType) =
-    codata
-    | .run :
-      forall (R : CType) .
-        KRead R ->
-        KWrite R ->
-        KFail String R ->
-        Kont R A
-    end
-  that
+    def Empty =
+      data
+      end
+    that
+    def Kont (R : CType) (A : VType) =
+      codata
+      | .run : Thk (A -> R) -> R
+      end
+    that
+    -- Types of handlers
+    let KRead (R : CType) =
+      Thk (Unit -> Kont R String)
+    that
+    let KWrite (R : CType) =
+      Thk (String -> Kont R Unit)
+    that
+    let KFail (E : VType) (R : CType) =
+      Thk (E -> Kont R Empty)
+    that
+    -- A specific free monad with three handlers
+    def Free (A : VType) =
+      codata
+      | .run :
+        forall (R : CType) .
+             KRead R
+          -> KWrite R
+          -> KFail String R
+          -> Kont R A
+      end
+    that
 
-  def ! mfree : Monad Free =
-    comatch
-    | .return A a =>
+    def ! mfree : Monad Free =
+      comatch
+      | .return A a =>
+        fn .run R read write fail =>
+          fn .run k =>
+            ! k a
+      | .bind A A' m f =>
+        fn .run R read write fail =>
+          fn .run k' =>
+            ! m .run R read write fail .run {
+              fn a =>
+                ! f a .run R read write fail .run k'
+            }
+      end
+    that
+    -- The interface for using Free
+    def ! read (() : Unit) : Free String =
       fn .run R read write fail =>
-      fn .run k =>
-        ! k a
-    | .bind A A' m f =>
+        ! read ()
+    that
+    def ! write (s : String) : Free Unit =
       fn .run R read write fail =>
-      fn .run k' =>
-        ! m
-          .run R read write fail
-          .run {
-            fn a =>
-              ! f a
-                .run R read write fail
-                .run k'
-          }
-    end
-  that
-  -- The interface for using Free
-  def ! read (() : Unit) : Free String =
-    fn .run R read write fail =>
-      ! read ()
-  that
-  def ! write (s : String) : Free Unit =
-    fn .run R read write fail =>
-      ! write s
-  that
-  def ! fail (s : String) : Free Empty =
-    fn .run R read write fail =>
-      ! fail s
-  that
-  def ! read_os (() : Unit) : Kont OS String =
-    fn .run k =>
-      ! (stdio/read_line) k
-  that
-  def ! write_os (s : String) : Kont OS Unit =
-    fn .run k =>
-      ! (stdio/write_line) s {
-        ! k ()
-      }
-  that
-  def ! fail_os (s : String) : Kont OS Empty =
-    fn .run k =>
-      ! (stdio/write_line) s {
-        ! (process/exit) 1
-      }
-  that
-
-  let ! prog : Free Unit =
-    ! mfree .bind String Unit { ! read () } {
-      fn s =>
         ! write s
-    }
-  in
-  ! prog
-    .run OS read_os write_os fail_os
-    .run {
+    that
+    def ! fail (s : String) : Free Empty =
+      fn .run R read write fail =>
+        ! fail s
+    that
+    def ! read_os (() : Unit) : Kont OS String =
+      fn .run k =>
+        ! (stdio/read_line) k
+    that
+    def ! write_os (s : String) : Kont OS Unit =
+      fn .run k =>
+        ! (stdio/write_line) s {
+          ! k ()
+        }
+    that
+    def ! fail_os (s : String) : Kont OS Empty =
+      fn .run k =>
+        ! (stdio/write_line) s {
+          ! (process/exit) 1
+        }
+    that
+
+    let ! prog : Free Unit =
+      ! mfree .bind String Unit { ! read () } {
+        fn s =>
+          ! write s
+      }
+    in
+    ! prog .run OS read_os write_os fail_os .run {
       fn () =>
         ! (process/exit) 0
     }
-end
+  end
 end

@@ -1,8 +1,8 @@
 begin
-  let make_std = @[import("../../std/std.zy")] _ that
+  let make_std = @(import("../../std/std.zy")) that
   param (
     (/core; /representations; /system; builtin) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /Ret) = core that
   let (/Scalar = Int64) = representations/i64 that
@@ -17,18 +17,18 @@ begin
     (right : A)
     (offset : A)
     (expected : A)
-    : Ret Bool =
-    do product <- ! (dictionary/multiplicative/mul) left right;
-    do total <- ! (dictionary/additive/add) product offset;
-    ! (dictionary/order/equality/eq) total expected
+  : Ret Bool =
+      do product <- ! (dictionary/multiplicative/mul) left right;
+      do total <- ! (dictionary/additive/add) product offset;
+      ! (dictionary/order/equality/eq) total expected
   in
   let ! strictly_less
     (A : VType)
     (dictionary : Numeric Bool A)
     (left : A)
     (right : A)
-    : Ret Bool =
-    ! (dictionary/order/lt) left right
+  : Ret Bool =
+      ! (dictionary/order/lt) left right
   in
 
   let (

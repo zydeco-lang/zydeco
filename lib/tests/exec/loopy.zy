@@ -1,7 +1,7 @@
 begin
   param (
     (/core; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (/OS; /process) = system that
@@ -18,10 +18,10 @@ begin
   that
   def ! fix' (B : CType) (f : Thk (Thk B -> B)) : B =
     let ! prim : Y B =
-        comatch
+      comatch
       | .y x => ! f { ! x .y x }
       end
-      in
+    in
     ! prim .y prim
   that
   def ! m : OS =

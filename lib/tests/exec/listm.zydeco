@@ -1,8 +1,8 @@
 begin
-  let make_std = @[import("../../std/std.zy")] _ that
+  let make_std = @(import("../../std/std.zy")) that
   param (
     (/core; /representations; /system; builtin) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (/Scalar = Int64) = representations/i64 that
@@ -19,13 +19,13 @@ begin
     (ll : Thk (Ret (List~ A)))
     (f : Thk (A -> Thk B -> B))
     (b : Thk B)
-    : B =
-    do llv <- ! ll;
-    match llv
-    | +Nil() => ! b
-    | +Cons(a, ll) =>
-      ! f a { ! foldr~ A B ll f b }
-    end
+  : B =
+      do llv <- ! ll;
+      match llv
+      | +Nil() => ! b
+      | +Cons(a, ll) =>
+        ! f a { ! foldr~ A B ll f b }
+      end
   that
 
   let (/bool; /int64; /stdio; /process) = make_std builtin in

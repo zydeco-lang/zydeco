@@ -3,7 +3,7 @@
 begin
   param (
     (/core; /representations; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (/Scalar = Int64) = representations/i64 that
@@ -17,8 +17,10 @@ begin
     ! rr (Ret A) { fn (a : A) => ret a }
   that
   def ! g (A : VType) (r : Thk (Ret A)) : Ret' A =
-    fn (R : CType)
-       (ar : Thk (A -> R)) =>
+    fn
+      (R : CType)
+      (ar : Thk (A -> R))
+    =>
       do a <- ! r;
       ! ar a
   that
@@ -34,5 +36,5 @@ begin
     Int64
     { fn (R : CType) ar => ! ar n }
     OS
-    (process/exit)
+    process/exit
 end

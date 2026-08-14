@@ -1,7 +1,7 @@
 begin
   param (
     (/core; /representations; /numeric; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /Thk; /Ret; /Unit) = core that
   let (Scalar = Int64, int64) = numeric/int64 that
@@ -41,13 +41,13 @@ begin
     end
   that
 
-  def fix iota : Int64 -> F(LList' Int64) =
-    fn (i: Int64) =>
+  def fix iota : Int64 -> F (LList' Int64) =
+    fn (i : Int64) =>
       do i+1 <- ! (int64/add) i 1;
       ret +Cons(i, { ! iota i+1 })
   that
 
-  def fix llist_foldr (ll: U(F(LList' Int64))) (f: U(Int64 -> U OS -> OS)) (b: U OS) : OS =
+  def fix llist_foldr (ll : U (F (LList' Int64))) (f : U (Int64 -> U OS -> OS)) (b : U OS) : OS =
     do llv <- ! ll;
     match llv
     | +Nil() => ! b
@@ -57,12 +57,13 @@ begin
 
   def ! loopy =
     ! llist_foldr
-    { ! iota 0 }
-    { fn (x: Int64) (b: U OS) =>
-      do next? <- ! int_lt x 10;
-      ! write_int_line x b
-    }
-    { ! panic "unreachable" }
+      { ! iota 0 }
+      {
+        fn (x : Int64) (b : U OS) =>
+          do next? <- ! int_lt x 10;
+          ! write_int_line x b
+      }
+      { ! panic "unreachable" }
   that
 
   (loopy = { ! loopy })

@@ -1,7 +1,7 @@
 begin
   param (
     (/core; /numeric; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /Ret) = core that
   let (Scalar = Int64, int64) = numeric/int64 that
@@ -12,7 +12,7 @@ begin
   that
   def packed : Transparent = (
     Int64,
-    42,
+    42
   ) that
   def ! reveal ((Representation, value) : Transparent) : Ret Int64 =
     ret value

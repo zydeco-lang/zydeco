@@ -1,62 +1,62 @@
-param Reader : @[import("../intrinsic/vtype.zy")] _ in
-param Writer : @[import("../intrinsic/vtype.zy")] _ in
-param OS : @[import("../intrinsic/ctype.zy")] _ in
+param Reader : @(import("../intrinsic/vtype.zy")) in
+param Writer : @(import("../intrinsic/vtype.zy")) in
+param OS : @(import("../intrinsic/ctype.zy")) in
   (
     @[builtin(stdin)] (
-      stdin :: (@[import("../intrinsic/thk.zy")] _) ((@[import("../intrinsic/ret.zy")] _) Reader)
+      stdin :: (@(import("../intrinsic/thk.zy"))) ((@(import("../intrinsic/ret.zy"))) Reader)
     )
   )
 * (
     @[builtin(stdout)] (
-      stdout :: (@[import("../intrinsic/thk.zy")] _) ((@[import("../intrinsic/ret.zy")] _) Writer)
+      stdout :: (@(import("../intrinsic/thk.zy"))) ((@(import("../intrinsic/ret.zy"))) Writer)
     )
   )
 * (
     @[builtin(stderr)] (
-      stderr :: (@[import("../intrinsic/thk.zy")] _) ((@[import("../intrinsic/ret.zy")] _) Writer)
+      stderr :: (@(import("../intrinsic/thk.zy"))) ((@(import("../intrinsic/ret.zy"))) Writer)
     )
   )
 * (
     @[builtin(write_str)] (
-      write :: (@[import("../intrinsic/thk.zy")] _) (
-        (@[import("../intrinsic/string.zy")] _) -> (@[import("../intrinsic/thk.zy")] _) OS -> OS
+      write :: (@(import("../intrinsic/thk.zy"))) (
+        (@(import("../intrinsic/string.zy"))) -> (@(import("../intrinsic/thk.zy"))) OS -> OS
       )
     )
   )
 * (
     @[builtin(write_int)] (
-      write_int :: (@[import("../intrinsic/thk.zy")] _) (
-        (@[import("../intrinsic/i64.zy")] _) -> (@[import("../intrinsic/thk.zy")] _) OS -> OS
+      write_int :: (@(import("../intrinsic/thk.zy"))) (
+        (@(import("../intrinsic/i64.zy"))) -> (@(import("../intrinsic/thk.zy"))) OS -> OS
       )
     )
   )
 * (
     @[builtin(write_line)] (
-      write_line :: (@[import("../intrinsic/thk.zy")] _) (
-        (@[import("../intrinsic/string.zy")] _) -> (@[import("../intrinsic/thk.zy")] _) OS -> OS
+      write_line :: (@(import("../intrinsic/thk.zy"))) (
+        (@(import("../intrinsic/string.zy"))) -> (@(import("../intrinsic/thk.zy"))) OS -> OS
       )
     )
   )
 * (
     @[builtin(read_line)] (
-      read_line :: (@[import("../intrinsic/thk.zy")] _) (
-        (@[import("../intrinsic/thk.zy")] _) ((@[import("../intrinsic/string.zy")] _) -> OS) -> OS
+      read_line :: (@(import("../intrinsic/thk.zy"))) (
+        (@(import("../intrinsic/thk.zy"))) ((@(import("../intrinsic/string.zy"))) -> OS) -> OS
       )
     )
   )
 * (
     @[builtin(read_line_as_int)] (
-      read_int :: (@[import("../intrinsic/thk.zy")] _) (
-           (@[import("../intrinsic/thk.zy")] _) OS
-        -> (@[import("../intrinsic/thk.zy")] _) ((@[import("../intrinsic/i64.zy")] _) -> OS)
+      read_int :: (@(import("../intrinsic/thk.zy"))) (
+           (@(import("../intrinsic/thk.zy"))) OS
+        -> (@(import("../intrinsic/thk.zy"))) ((@(import("../intrinsic/i64.zy"))) -> OS)
         -> OS
       )
     )
   )
 * (
     @[builtin(read_till_eof)] (
-      read_all :: (@[import("../intrinsic/thk.zy")] _) (
-        (@[import("../intrinsic/thk.zy")] _) ((@[import("../intrinsic/string.zy")] _) -> OS) -> OS
+      read_all :: (@(import("../intrinsic/thk.zy"))) (
+        (@(import("../intrinsic/thk.zy"))) ((@(import("../intrinsic/string.zy"))) -> OS) -> OS
       )
     )
   )

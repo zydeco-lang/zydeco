@@ -1,7 +1,7 @@
 begin
   param (
     (/representations; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/Scalar = Int64) = representations/i64 that
   let (/OS; /process) = system that
@@ -12,8 +12,11 @@ begin
     end
   that
 
-  (comatch
-  | .left => ! (process/exit) 10
-  | .right i => ! (process/exit) i
-  end : Choice) .right 0
+  (
+    comatch
+    | .left => ! (process/exit) 10
+    | .right i => ! (process/exit) i
+    end
+    : Choice
+  ) .right 0
 end

@@ -1,7 +1,7 @@
 begin
   param (
     (/core; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/Thk) = core that
   let (/OS) = system that

@@ -1,6 +1,6 @@
 param (
   (/core) :
-  @[import("../builtin.zy")] _
+  @(import("../builtin.zy"))
 ) in
 let (/VType; /CType; /Thk; /Ret; /Unit) = core in
 begin

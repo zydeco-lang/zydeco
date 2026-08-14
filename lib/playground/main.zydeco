@@ -1,6 +1,6 @@
 param (
   (/system) :
-  @[import("../std/builtin.zy")] _
+  @(import("../std/builtin.zy"))
 ) in
 let (/process) = system in
-  ! (process/exit) 42
+! (process/exit) 42

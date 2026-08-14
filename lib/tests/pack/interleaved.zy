@@ -1,7 +1,7 @@
 begin
   param (
     (/core; /representations; /numeric; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /Ret; /Unit) = core that
   let (Scalar = Int64, int64) = numeric/int64 that
@@ -19,33 +19,39 @@ begin
       X * Y
   that
   let Reveal =
-    pi (
+    pi
       (
-        Leading,
-        X,
-        AliasX,
-        Middle,
-        Y,
-        AliasY,
-        _,
-        _
-      ) : Interleaved
-    ) .
+        (
+          Leading,
+          X,
+          AliasX,
+          Middle,
+          Y,
+          AliasY,
+          _,
+          _
+        )
+        : Interleaved
+      )
+    .
       Ret (X * Y)
   that
   def ! reveal : Reveal =
-    fn (
+    fn
       (
-        Leading,
-        X,
-        AliasX,
-        Middle,
-        Y,
-        AliasY,
-        x,
-        y
-      ) : Interleaved
-    ) =>
+        (
+          Leading,
+          X,
+          AliasX,
+          Middle,
+          Y,
+          AliasY,
+          x,
+          y
+        )
+        : Interleaved
+      )
+    =>
       ret (x, y)
   that
   def packed : Interleaved = (
@@ -56,7 +62,7 @@ begin
     Char,
     Char,
     40,
-    'z',
+    'z'
   ) that
 
   do (value, _) <- ! reveal packed;

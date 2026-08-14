@@ -7,7 +7,7 @@ begin
   that
   param (
     (/core; /representations; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/Thk; /Unit) = core that
   let (/Scalar = Int64) = representations/i64 that
@@ -21,7 +21,7 @@ begin
       end
   that
 
-  ! f (+True()) {
+  ! f +True() {
     -- a large continuation gets inlined
     fn x =>
       match (+True() : Bool)

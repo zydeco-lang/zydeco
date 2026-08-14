@@ -1,137 +1,140 @@
 begin
-  let monadic_basis = @[import("../../std/control/monad.zy")] _ that
+  let monadic_basis = @(import("../../std/control/monad.zy")) that
   param (
     (/core; /numeric; /system; builtin) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/OS; /process) = system that
   let (= Monad, = Algebra, ()) =
-    monadic_basis builtin in
+    monadic_basis builtin
+  in
   begin
 
-  let Kont (R : CType) (A : VType) =
-    Thk (A -> R) -> R
-  that
-  def ! mret : Monad Ret =
-    comatch
-    | .return A a =>
-      ret a
-    | .bind A A' m f =>
-      do a <- ! m;
-      ! f a
-    end
-  that
-  def ! reset
-    (
-      M :
-      (VType) -> (CType)
-    )
-    (monad : Thk (Monad M))
-    (A : VType)
-    (expression : Thk (Kont (M A) A))
+    let Kont (R : CType) (A : VType) =
+      Thk (A -> R) -> R
+    that
+    def ! mret : Monad Ret =
+      comatch
+      | .return A a =>
+        ret a
+      | .bind A A' m f =>
+        do a <- ! m;
+        ! f a
+      end
+    that
+    def ! reset
+      (
+        M :
+        VType -> CType
+      )
+      (monad : Thk (Monad M))
+      (A : VType)
+      (expression : Thk (Kont (M A) A))
     : M A =
-    ! expression {
-      fn value =>
-        ! monad .return A value
-    }
-  that
-  def ! shift
-    (
-      M :
-      (VType) -> (CType)
-    )
-    (monad : Thk (Monad M))
-    (A : VType)
-    (B : VType)
-    (handler : Thk (
-      Thk (A -> M B) ->
-      Kont (M B) B
-    ))
-    : Kont (M B) A =
-    fn continuation =>
-      ! handler
-        continuation
-        {
+        ! expression {
           fn value =>
-            ! monad .return B value
+            ! monad .return A value
         }
-  that
-  def ! attempt
-    (
-      M :
-      (VType) -> (CType)
-    )
-    (monad : Thk (Monad M))
-    (A : VType)
-    (E : VType)
-    (computation : Thk (Kont (M A) E))
-    (handler : Thk (E -> M A))
+    that
+    def ! shift
+      (
+        M :
+        VType -> CType
+      )
+      (monad : Thk (Monad M))
+      (A : VType)
+      (B : VType)
+      (
+        handler : Thk (
+             Thk (A -> M B)
+          -> Kont (M B) B
+        )
+      )
+    : Kont (M B) A =
+        fn continuation =>
+          ! handler
+            continuation
+            {
+              fn value =>
+                ! monad .return B value
+            }
+    that
+    def ! attempt
+      (
+        M :
+        VType -> CType
+      )
+      (monad : Thk (Monad M))
+      (A : VType)
+      (E : VType)
+      (computation : Thk (Kont (M A) E))
+      (handler : Thk (E -> M A))
     : M A =
-    ! monad .bind
-      (Thk (Kont (M A) E))
-      A
-      {
-        ! reset M monad (Thk (Kont (M A) E)) {
-          fn ignored =>
-            ! monad .return
-              (Thk (Kont (M A) E))
-              computation
-        }
-      }
-      {
-        fn suspended =>
-          ! suspended handler
-      }
-  that
-  def ! throw
-    (
-      M :
-      (VType) -> (CType)
-    )
-    (monad : Thk (Monad M))
-    (A : VType)
-    (E : VType)
-    (exception : E)
+        ! monad .bind
+          (Thk (Kont (M A) E))
+          A
+          {
+            ! reset M monad (Thk (Kont (M A) E)) {
+              fn ignored =>
+                ! monad .return
+                  (Thk (Kont (M A) E))
+                  computation
+            }
+          }
+          {
+            fn suspended =>
+              ! suspended handler
+          }
+    that
+    def ! throw
+      (
+        M :
+        VType -> CType
+      )
+      (monad : Thk (Monad M))
+      (A : VType)
+      (E : VType)
+      (exception : E)
     : Kont (M A) E =
-    ! shift M monad E A {
-      fn continuation ignored =>
-        ! continuation exception
-    }
-  that
+        ! shift M monad E A {
+          fn continuation ignored =>
+            ! continuation exception
+        }
+    that
 
-  do i <- ! attempt Ret mret Int64 Int64
-    {
-      ! throw Ret mret Int64 Int64 42
-    -- fn _ => ret 0
-    }
-    {
-      fn x =>
-        ! (int64/sub) x 42
-    };
-  do j <- ! attempt Ret mret Int64 Int64
-    {
-      -- ! throw Ret mret Int64 Int64 42
-      fn _ =>
-        ret 0
-    }
-    {
-      fn x =>
-        ! (int64/sub) x 42
-    };
-  ! (int64/eq)
-    OS
-    i
-    0
-    {
-      ! (int64/eq)
-        OS
-        j
-        0
-        { ! (process/exit) 0 }
-        { ! (process/exit) 2 }
-    }
-    { ! (process/exit) 1 }
-end
+    do i <- ! attempt Ret mret Int64 Int64
+      {
+        ! throw Ret mret Int64 Int64 42
+      }
+      -- fn _ => ret 0
+      {
+        fn x =>
+          ! (int64/sub) x 42
+      };
+    do j <- ! attempt Ret mret Int64 Int64
+      {
+        -- ! throw Ret mret Int64 Int64 42
+        fn _ =>
+          ret 0
+      }
+      {
+        fn x =>
+          ! (int64/sub) x 42
+      };
+    ! (int64/eq)
+      OS
+      i
+      0
+      {
+        ! (int64/eq)
+          OS
+          j
+          0
+          { ! (process/exit) 0 }
+          { ! (process/exit) 2 }
+      }
+      { ! (process/exit) 1 }
+  end
 end

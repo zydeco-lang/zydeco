@@ -1,7 +1,7 @@
 begin
   param (
     (/core; /representations; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /Thk; /Ret) = core that
   let (/Scalar = Int64) = representations/i64 that
@@ -18,20 +18,18 @@ begin
   that
   def nat :
     exists (X : VType) .
-      Seal X Int64 =
-    (
-      Int64,
-      +Seal(
-        { ! id Int64 },
-        { ! id Int64 },
-      )
+      Seal X Int64
+  = (
+    Int64,
+    +Seal(
+      { ! id Int64 },
+      { ! id Int64 }
     )
-  that
+  ) that
   def packed :
     exists (X : VType) (Y : VType) .
-      X * (Y * Int64) =
-    (Int64, Char, 0, ('z', 0))
-  that
+      X * Y * Int64
+  = (Int64, Char, 0, ('z', 0)) that
 
   match packed
   | (Left, Right, zero, letter, status) =>

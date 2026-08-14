@@ -7,7 +7,7 @@
 begin
   param (
     (/core; /system) :
-    @[import("../../lib/std/builtin.zy")] _
+    @(import("../../lib/std/builtin.zy"))
   ) that
   let (/VType; /Thk; /Ret; /Unit) = core that
   let (/OS; /process) = system that
@@ -60,10 +60,10 @@ begin
   } that
 
   def assert_equal : Thk (
-    Bool ->
-    Bool ->
-    Thk OS ->
-    OS
+       Bool
+    -> Bool
+    -> Thk OS
+    -> OS
   ) = {
     fn actual expected continuation =>
       match actual

@@ -1,8 +1,8 @@
 begin
-  let make_std = @[import("../../std/std.zy")] _ that
+  let make_std = @(import("../../std/std.zy")) that
   param (
     (/core; /representations; /system; builtin) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /Thk; /Unit) = core that
   let (/Scalar = Int64) = representations/i64 that
@@ -19,14 +19,14 @@ begin
     (A : VType)
     (result : Result A IoError)
     (continuation : Thk (A -> OS))
-    : OS =
-    ! (results/fold)
-      A
-      IoError
-      OS
-      result
-      continuation
-      { fn _ => ! (process/exit) 1 }
+  : OS =
+      ! (results/fold)
+        A
+        IoError
+        OS
+        result
+        continuation
+        { fn _ => ! (process/exit) 1 }
   in
   let ! require (condition : Bool) (continuation : Thk OS) : OS =
     ! (bool/if)
@@ -55,7 +55,7 @@ begin
           {
             fn error =>
               do kind <- ! (io/error_kind) error;
-              do correct <- ! (io/kind_eq) kind (io/not_found);
+              do correct <- ! (io/kind_eq) kind io/not_found;
               ! require correct { ! verify_stdio }
           }
     }
@@ -74,7 +74,7 @@ begin
           {
             fn error =>
               do kind <- ! (io/error_kind) error;
-              do correct <- ! (io/kind_eq) kind (io/invalid_data);
+              do correct <- ! (io/kind_eq) kind io/invalid_data;
               ! require correct { ! verify_missing path_string }
           }
     }
@@ -89,7 +89,7 @@ begin
               ! (fs/read_bytes) path {
                 fn read_bytes =>
                   ! expect_ok Bytes read_bytes {
-                  fn contents =>
+                    fn contents =>
                       do length <- ! (bytes/length) contents;
                       do length_correct <- ! (int64/eq) length 8;
                       ! require length_correct { ! verify_invalid_utf8 path_string }
@@ -103,22 +103,22 @@ begin
     (path : Path)
     (path_string : String)
     (writer : Writer)
-    : OS =
-    ! (io/close_writer) writer {
-      fn closed_again =>
-        ! (results/fold)
-          Unit
-          IoError
-          OS
-          closed_again
-          { fn _ => ! (process/exit) 4 }
-          {
-            fn error =>
-              do kind <- ! (io/error_kind) error;
-              do correct <- ! (io/kind_eq) kind (io/closed);
-              ! require correct { ! verify_contents path path_string }
-          }
-    }
+  : OS =
+      ! (io/close_writer) writer {
+        fn closed_again =>
+          ! (results/fold)
+            Unit
+            IoError
+            OS
+            closed_again
+            { fn _ => ! (process/exit) 4 }
+            {
+              fn error =>
+                do kind <- ! (io/error_kind) error;
+                do correct <- ! (io/kind_eq) kind io/closed;
+                ! require correct { ! verify_contents path path_string }
+            }
+      }
   in
   let ! append_marker (path : Path) (path_string : String) : OS =
     ! (fs/append_writer) path {

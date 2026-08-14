@@ -1,68 +1,68 @@
 exists
   (
-    Scalar = ScalarType as @[import("../intrinsic/f64.zy")] _ :
-    @[import("../intrinsic/vtype.zy")] _
+    Scalar = ScalarType as @(import("../intrinsic/f64.zy")) :
+    @(import("../intrinsic/vtype.zy"))
   )
 .
     (
       @[builtin(float64_add)] (
-        add :: (@[import("../intrinsic/thk.zy")] _) (
-          ScalarType -> ScalarType -> (@[import("../intrinsic/ret.zy")] _) ScalarType
+        add :: (@(import("../intrinsic/thk.zy"))) (
+          ScalarType -> ScalarType -> (@(import("../intrinsic/ret.zy"))) ScalarType
         )
       )
     )
   * (
       @[builtin(float64_sub)] (
-        sub :: (@[import("../intrinsic/thk.zy")] _) (
-          ScalarType -> ScalarType -> (@[import("../intrinsic/ret.zy")] _) ScalarType
+        sub :: (@(import("../intrinsic/thk.zy"))) (
+          ScalarType -> ScalarType -> (@(import("../intrinsic/ret.zy"))) ScalarType
         )
       )
     )
   * (
       @[builtin(float64_mul)] (
-        mul :: (@[import("../intrinsic/thk.zy")] _) (
-          ScalarType -> ScalarType -> (@[import("../intrinsic/ret.zy")] _) ScalarType
+        mul :: (@(import("../intrinsic/thk.zy"))) (
+          ScalarType -> ScalarType -> (@(import("../intrinsic/ret.zy"))) ScalarType
         )
       )
     )
   * (
       @[builtin(float64_div)] (
-        div :: (@[import("../intrinsic/thk.zy")] _) (
-          ScalarType -> ScalarType -> (@[import("../intrinsic/ret.zy")] _) ScalarType
+        div :: (@(import("../intrinsic/thk.zy"))) (
+          ScalarType -> ScalarType -> (@(import("../intrinsic/ret.zy"))) ScalarType
         )
       )
     )
   * (
       @[builtin(float64_eq)] (
-        eq :: (@[import("../intrinsic/thk.zy")] _) (
-          forall (R : @[import("../intrinsic/ctype.zy")] _) .
+        eq :: (@(import("../intrinsic/thk.zy"))) (
+          forall (R : @(import("../intrinsic/ctype.zy"))) .
                ScalarType -> ScalarType
-            -> (@[import("../intrinsic/thk.zy")] _) R -> (@[import("../intrinsic/thk.zy")] _) R -> R
+            -> (@(import("../intrinsic/thk.zy"))) R -> (@(import("../intrinsic/thk.zy"))) R -> R
         )
       )
     )
   * (
       @[builtin(float64_lt)] (
-        lt :: (@[import("../intrinsic/thk.zy")] _) (
-          forall (R : @[import("../intrinsic/ctype.zy")] _) .
+        lt :: (@(import("../intrinsic/thk.zy"))) (
+          forall (R : @(import("../intrinsic/ctype.zy"))) .
                ScalarType -> ScalarType
-            -> (@[import("../intrinsic/thk.zy")] _) R -> (@[import("../intrinsic/thk.zy")] _) R -> R
+            -> (@(import("../intrinsic/thk.zy"))) R -> (@(import("../intrinsic/thk.zy"))) R -> R
         )
       )
     )
   * (
       @[builtin(float64_gt)] (
-        gt :: (@[import("../intrinsic/thk.zy")] _) (
-          forall (R : @[import("../intrinsic/ctype.zy")] _) .
+        gt :: (@(import("../intrinsic/thk.zy"))) (
+          forall (R : @(import("../intrinsic/ctype.zy"))) .
                ScalarType -> ScalarType
-            -> (@[import("../intrinsic/thk.zy")] _) R -> (@[import("../intrinsic/thk.zy")] _) R -> R
+            -> (@(import("../intrinsic/thk.zy"))) R -> (@(import("../intrinsic/thk.zy"))) R -> R
         )
       )
     )
   * (
       @[builtin(float64_to_string)] (
-        to_string :: (@[import("../intrinsic/thk.zy")] _) (
-          ScalarType -> (@[import("../intrinsic/ret.zy")] _) (@[import("../intrinsic/string.zy")] _)
+        to_string :: (@(import("../intrinsic/thk.zy"))) (
+          ScalarType -> (@(import("../intrinsic/ret.zy"))) (@(import("../intrinsic/string.zy")))
         )
       )
     )

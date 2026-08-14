@@ -2,7 +2,7 @@ begin
   begin
     param (
       (/core; /representations; /numeric; /text; builtin) :
-      @[import("../builtin.zy")] _
+      @(import("../builtin.zy"))
     ) in
     let (/VType; /CType; /Thk; /Ret; /Unit) = core in
     let (/Scalar = Char) = representations/char in
@@ -22,12 +22,12 @@ begin
       (left : A)
       (right : A)
     : Ret Bool =
-      ! predicate
-        (Ret Bool)
-        left
-        right
-        { ret (bool/true) }
-        { ret (bool/false) }
+        ! predicate
+          (Ret Bool)
+          left
+          right
+          { ret (bool/true) }
+          { ret (bool/false) }
     in
     let ! int64_eq (left : Int64) (right : Int64) : Ret Bool =
       ! compare Int64 int64/eq left right
@@ -39,29 +39,29 @@ begin
       (value : String)
       (separator : Char)
     : Ret (Option (String * String)) =
-      ! (string/split_once)
-        (Ret (Option (String * String)))
-        value
-        separator
-        { ! (option/none) (String * String) }
-        {
-          fn first second =>
-            ! (option/some) (String * String) (first, second)
-        }
+        ! (string/split_once)
+          (Ret (Option (String * String)))
+          value
+          separator
+          { ! (option/none) (String * String) }
+          {
+            fn first second =>
+              ! (option/some) (String * String) (first, second)
+          }
     in
     let ! str_split_at
       (value : String)
       (index : Int64)
     : Ret (Option (String * String)) =
-      ! (string/split_at)
-        (Ret (Option (String * String)))
-        value
-        index
-        { ! (option/none) (String * String) }
-        {
-          fn first second =>
-            ! (option/some) (String * String) (first, second)
-        }
+        ! (string/split_at)
+          (Ret (Option (String * String)))
+          value
+          index
+          { ! (option/none) (String * String) }
+          {
+            fn first second =>
+              ! (option/some) (String * String) (first, second)
+          }
     in
     let ! str_get (value : String) (index : Int64) : Ret (Option Char) =
       ! (string/get)

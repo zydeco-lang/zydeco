@@ -1,7 +1,7 @@
 begin
   param (
     (/core; /representations; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Ret) = core that
   let (/Scalar = Int64) = representations/i64 that

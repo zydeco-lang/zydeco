@@ -1,6 +1,6 @@
 param (
   (/core; /representations; /numeric) :
-  @[import("../builtin.zy")] _
+  @(import("../builtin.zy"))
 ) in
 let (/VType; /CType; /Thk; /Ret; /Unit) = core in
 let (Scalar = Int64, int64) = numeric/int64 in
@@ -95,9 +95,9 @@ begin
     (when_equal : Thk R)
     (when_different : Thk R)
   : R =
-    do left_code <- ! kind_code left;
-    do right_code <- ! kind_code right;
-    ! (int64/eq) R left_code right_code when_equal when_different
+      do left_code <- ! kind_code left;
+      do right_code <- ! kind_code right;
+      ! (int64/eq) R left_code right_code when_equal when_different
   that
   def IoError =
     data

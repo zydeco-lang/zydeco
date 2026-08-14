@@ -1,165 +1,164 @@
 begin
-  let monadic_basis = @[import("../../std/control/monad.zy")] _ that
+  let monadic_basis = @(import("../../std/control/monad.zy")) that
   param (
     (/core; /representations; /system; builtin) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (/Scalar = Int64) = representations/i64 that
   let (/process) = system that
   let (= Monad, = Algebra, ()) =
-    monadic_basis builtin in
+    monadic_basis builtin
+  in
   begin
 
-  def With (B1 : CType) (B2 : CType) =
-    codata
-    | .l : B1
-    | .r : B2
-    end
-  that
-
-  def ! alg_arrow
-    (
-      M :
-      (VType) -> (CType)
-    )
-    (A : VType)
-    (B : CType)
-    (alg : Thk (Algebra M B))
-    : Algebra M (A -> B) =
-    comatch X m f =>
-      fn a =>
-        ! alg X m {
-          fn x =>
-            ! f x a
-        }
-    end
-  that
-  def ! alg_with
-    (
-      M :
-      (VType) -> (CType)
-    )
-    (B1 : CType)
-    (alg1 : Thk (Algebra M B1))
-    (B2 : CType)
-    (alg2 : Thk (Algebra M B2))
-    : Algebra M (With B1 B2) =
-    comatch X m f =>
-      comatch
-      | .l =>
-        ! alg1 X m {
-          fn x =>
-            ! f x .l
-        }
-      | .r =>
-        ! alg2 X m {
-          fn x =>
-            ! f x .r
-        }
+    def With (B1 : CType) (B2 : CType) =
+      codata
+      | .l : B1
+      | .r : B2
       end
-    end
-  that
-  def ! alg_ret
-    (
-      M :
-      (VType) -> (CType)
-    )
-    (mo : Thk (Monad M))
-    (A : VType)
+    that
+
+    def ! alg_arrow
+      (
+        M :
+        VType -> CType
+      )
+      (A : VType)
+      (B : CType)
+      (alg : Thk (Algebra M B))
+    : Algebra M (A -> B) =
+        fn X m f =>
+          fn a =>
+            ! alg X m {
+              fn x =>
+                ! f x a
+            }
+    that
+    def ! alg_with
+      (
+        M :
+        VType -> CType
+      )
+      (B1 : CType)
+      (alg1 : Thk (Algebra M B1))
+      (B2 : CType)
+      (alg2 : Thk (Algebra M B2))
+    : Algebra M (With B1 B2) =
+        fn X m f =>
+          comatch
+          | .l =>
+            ! alg1 X m {
+              fn x =>
+                ! f x .l
+            }
+          | .r =>
+            ! alg2 X m {
+              fn x =>
+                ! f x .r
+            }
+          end
+    that
+    def ! alg_ret
+      (
+        M :
+        VType -> CType
+      )
+      (mo : Thk (Monad M))
+      (A : VType)
     : Algebra M (M A) =
-    comatch X m f =>
-      ! mo .bind X A m f
-    end
-  that
-  def ! alg_forall_ctype
-    (
-      M :
-      (VType) -> (CType)
-    )
-    (
-      S :
-      (CType) -> (CType)
-    )
-    (algS : Thk (
-      forall (Y : CType) .
-        Thk (Algebra M Y) ->
-        Algebra M (S Y)
-    ))
+        fn X m f =>
+          ! mo .bind X A m f
+    that
+    def ! alg_forall_ctype
+      (
+        M :
+        VType -> CType
+      )
+      (
+        S :
+        CType -> CType
+      )
+      (
+        algS : Thk (
+          forall (Y : CType) .
+               Thk (Algebra M Y)
+            -> Algebra M (S Y)
+        )
+      )
     : Algebra M (
-      forall (Y : CType) .
-        Thk (Algebra M Y) ->
-        S Y
-    ) =
-    comatch X m f =>
-      comatch Y algY =>
+        forall (Y : CType) .
+             Thk (Algebra M Y)
+          -> S Y
+      )
+    = fn X m f =>
+      fn Y algY =>
         ! algS Y algY X m {
           fn a =>
             ! f a Y algY
-        }
-      end
-    end
-  that
-  def ! alg_forall_ctype_constructor
-    (
-      M :
-      (VType) -> (CType)
-    )
-    (
-      S :
+        } that
+    def ! alg_forall_ctype_constructor
       (
-        ((CType) -> (CType)) ->
-        (CType)
+        M :
+        VType -> CType
       )
-    )
-    (algS : Thk (
-      forall (
-        F :
-        (CType) -> (CType)
-      ) .
-        Thk (
-          forall (Z : CType) .
-            Thk (Algebra M Z) ->
-            Algebra M (F Z)
-        ) ->
-        Algebra M (S F)
-    ))
+      (
+        S :
+        (
+             (CType -> CType)
+          -> CType
+        )
+      )
+      (
+        algS : Thk (
+          forall
+            (
+              F :
+              CType -> CType
+            )
+          .
+               Thk (
+                 forall (Z : CType) .
+                      Thk (Algebra M Z)
+                   -> Algebra M (F Z)
+               )
+            -> Algebra M (S F)
+        )
+      )
     : Algebra M (
-      forall (
-        F :
-        (CType) -> (CType)
-      ) .
-        Thk (
-          forall (Z : CType) .
-            Thk (Algebra M Z) ->
-            Algebra M (F Z)
-        ) ->
-        S F
-    ) =
-    comatch X m f =>
-      comatch F algZFZ =>
+        forall
+          (
+            F :
+            CType -> CType
+          )
+        .
+             Thk (
+               forall (Z : CType) .
+                    Thk (Algebra M Z)
+                 -> Algebra M (F Z)
+             )
+          -> S F
+      )
+    = fn X m f =>
+      fn F algZFZ =>
         ! algS F algZFZ X m {
           fn a =>
             ! f a F algZFZ
-        }
-      end
-    end
-  that
-  def ! alg_of_ret (R : CType) : Algebra Ret R =
-    comatch X m f =>
-      do x <- ! m;
-      ! f x
-    end
-  that
+        } that
+    def ! alg_of_ret (R : CType) : Algebra Ret R =
+      fn X m f =>
+        do x <- ! m;
+        ! f x
+    that
 
-  do x <- ! alg_of_ret
-    (Ret Int64)
-    Int64
-    { ret 0 }
-    {
-      fn x =>
-        ret x
-    };
-  ! (process/exit) x
-end
+    do x <- ! alg_of_ret
+      (Ret Int64)
+      Int64
+      { ret 0 }
+      {
+        fn x =>
+          ret x
+      };
+    ! (process/exit) x
+  end
 end

@@ -1,166 +1,166 @@
 begin
-  let monadic_basis = @[import("../../std/control/monad.zy")] _ that
+  let monadic_basis = @(import("../../std/control/monad.zy")) that
   param (
     (/core; /numeric; /system; builtin) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/OS; /stdio; /process) = system that
   let (= Monad, = Algebra, ()) =
-    monadic_basis builtin in
+    monadic_basis builtin
+  in
   begin
 
-  def Bool =
-    data
-    | +True : Unit
-    | +False : Unit
-    end
-  that
-  def Pair (A : VType) (A' : VType) =
-    data
-    | +Cons : A * A'
-    end
-  that
-  def List (A : VType) : VType =
-    data
-    | +Nil : Unit
-    | +Cons : A * List A
-    end
-  that
-  def Monoid (M : (VType) -> (CType)) =
-    codata
-    | .empty :
-      forall (A : VType) .
-        M A
-    | .append :
-      forall (A : VType) .
-        Thk (M A) ->
-        Thk (M A) ->
-        M A
-    end
-  that
-  -- codata Monad (M: VType -> CType) where
-  --   | .return : forall (A: VType) . A -> M A
-  --   | .bind : forall (A: VType) (A': VType) . U (M A) -> U (A -> M A') -> M A'
-  -- end
-  def MList (A : VType) =
-    codata
-    | .done : Ret (List A)
+    def Bool =
+      data
+      | +True : Unit
+      | +False : Unit
+      end
+    that
+    def Pair (A : VType) (A' : VType) =
+      data
+      | +Cons : A * A'
+      end
+    that
+    def List (A : VType) : VType =
+      data
+      | +Nil : Unit
+      | +Cons : A * List A
+      end
+    that
+    def Monoid (M : VType -> CType) =
+      codata
+      | .empty :
+        forall (A : VType) .
+          M A
+      | .append :
+        forall (A : VType) .
+             Thk (M A)
+          -> Thk (M A)
+          -> M A
+      end
+    that
+    -- codata Monad (M: VType -> CType) where
+    --   | .return : forall (A: VType) . A -> M A
+    --   | .bind : forall (A: VType) (A': VType) . U (M A) -> U (A -> M A') -> M A'
+    -- end
+    def MList (A : VType) =
+      codata
+      | .done : Ret (List A)
+      end
+    that
     -- | .run : forall (R: CType) . U (U R -> A -> R) -> U R -> R
-    end
-  that
-
-  def ! int_eq (left : Int64) (right : Int64) : Ret Bool =
-    ! (int64/eq)
-      (Ret Bool)
-      left
-      right
-      { ret +True() }
-      { ret +False() }
-  that
-  def ! mnlist : Monoid MList =
-    comatch
-    | .empty A =>
-      fn .done =>
-        ret +Nil()
-    | .append A m1 m2 =>
-      fn .done =>
-        do xs <- ! m1 .done;
-        do ys <- ! m2 .done;
-        let fix loop (xs : List A) : Ret (List A) =
+    def ! int_eq (left : Int64) (right : Int64) : Ret Bool =
+      ! (int64/eq)
+        (Ret Bool)
+        left
+        right
+        { ret +True() }
+        { ret +False() }
+    that
+    def ! mnlist : Monoid MList =
+      comatch
+      | .empty A =>
+        fn .done =>
+          ret +Nil()
+      | .append A m1 m2 =>
+        fn .done =>
+          do xs <- ! m1 .done;
+          do ys <- ! m2 .done;
+          let fix loop (xs : List A) : Ret (List A) =
+            match xs
+            | +Nil() => ret ys
+            | +Cons(x, xs) =>
+              do ys <- ! loop xs;
+              ret +Cons(x, ys)
+            end
+          in
+          ! loop xs
+      end
+    that
+    def ! mlist : Monad MList =
+      comatch
+      | .return A a =>
+        fn .done =>
+          ret +Cons(a, +Nil())
+      | .bind A A' m f =>
+        do xs <- ! m .done;
+        let fix loop (xs : List A) (g : Thk (Thk (MList A') -> MList A')) : MList A' =
           match xs
-          | +Nil() => ret ys
+          | +Nil() =>
+            ! g { ! mnlist .empty A' }
           | +Cons(x, xs) =>
-            do ys <- ! loop xs;
-            ret +Cons(x, ys)
+            ! loop xs {
+              fn ys =>
+                ! g {
+                  ! mnlist .append A'
+                    { ! f x }
+                    ys
+                }
+            }
           end
         in
-        ! loop xs
-    end
-  that
-  def ! mlist : Monad MList =
-    comatch
-    | .return A a =>
-      fn .done =>
-        ret +Cons(a, +Nil())
-    | .bind A A' m f =>
-      do xs <- ! m .done;
-      let fix loop (xs : List A) (g : Thk (Thk (MList A') -> MList A')) : MList A' =
-        match xs
-        | +Nil() =>
-          ! g { ! mnlist .empty A' }
-        | +Cons(x, xs) =>
-          ! loop xs {
-            fn ys =>
-              ! g {
-                ! mnlist .append A'
-                  { ! f x }
-                  ys
-              }
-          }
-        end
-      in
-      ! loop xs {
-        fn ys =>
-          ! ys
-      }
-    end
-  that
-  def ! choose (xs : List Int64) : MList Int64 =
-    fn .done =>
-      ret xs
-  that
-  def ! guard (b : Bool) : MList Unit =
-    match b
-    | +True() => ! mlist .return Unit ()
-    | +False() => ! mnlist .empty Unit
-    end
-  that
-
-  let ! demo : MList (Pair Int64 Int64) =
-    ! mlist .bind Int64 (Pair Int64 Int64)
-      { ! choose +Cons(1, +Cons(2, +Nil())) }
-      {
-        fn x =>
-          ! mlist .bind Int64 (Pair Int64 Int64)
-            { ! choose +Cons(3, +Cons(4, +Nil())) }
-            {
-              fn y =>
-                ! mlist .bind Unit (Pair Int64 Int64)
-                  {
-                    do r <- ! (int64/add) x y;
-                    do b <- ! int_eq r 5;
-                    ! guard b
-                  }
-                  {
-                    fn _ =>
-                      ! mlist .return
-                        (Pair Int64 Int64)
-                        +Cons(x, y)
-                  }
-            }
-      }
-  in
-  do ps <- ! demo .done;
-  let fix print (ps : List (Pair Int64 Int64)) (kont : Thk OS) : OS =
-    match ps
-    | +Nil() => ! kont
-    | +Cons(p, ps) =>
-      match p
-      | +Cons(x, y) =>
-        ! (stdio/write_int) x {
-          ! (stdio/write) " + " {
-            ! (stdio/write_int) y {
-              ! (stdio/write_line) "" {
-                ! print ps kont
-              }
-            }
-          }
+        ! loop xs {
+          fn ys =>
+            ! ys
         }
       end
-    end
-  in
-  ! print ps { ! (process/exit) 0 }
-end
+    that
+    def ! choose (xs : List Int64) : MList Int64 =
+      fn .done =>
+        ret xs
+    that
+    def ! guard (b : Bool) : MList Unit =
+      match b
+      | +True() => ! mlist .return Unit ()
+      | +False() => ! mnlist .empty Unit
+      end
+    that
+
+    let ! demo : MList (Pair Int64 Int64) =
+      ! mlist .bind Int64 (Pair Int64 Int64)
+        { ! choose +Cons(1, +Cons(2, +Nil())) }
+        {
+          fn x =>
+            ! mlist .bind Int64 (Pair Int64 Int64)
+              { ! choose +Cons(3, +Cons(4, +Nil())) }
+              {
+                fn y =>
+                  ! mlist .bind Unit (Pair Int64 Int64)
+                    {
+                      do r <- ! (int64/add) x y;
+                      do b <- ! int_eq r 5;
+                      ! guard b
+                    }
+                    {
+                      fn _ =>
+                        ! mlist .return
+                          (Pair Int64 Int64)
+                          +Cons(x, y)
+                    }
+              }
+        }
+    in
+    do ps <- ! demo .done;
+    let fix print (ps : List (Pair Int64 Int64)) (kont : Thk OS) : OS =
+      match ps
+      | +Nil() => ! kont
+      | +Cons(p, ps) =>
+        match p
+        | +Cons(x, y) =>
+          ! (stdio/write_int) x {
+            ! (stdio/write) " + " {
+              ! (stdio/write_int) y {
+                ! (stdio/write_line) "" {
+                  ! print ps kont
+                }
+              }
+            }
+          }
+        end
+      end
+    in
+    ! print ps { ! (process/exit) 0 }
+  end
 end

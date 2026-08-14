@@ -1,7 +1,7 @@
 begin
   param (
     (/core; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /Ret; /Unit) = core that
   let (/process) = system that
@@ -20,11 +20,11 @@ begin
   that
   def fix odd : Nat -> Ret Bool =
     let fix even (x : Nat) : Ret Bool =
-        match x
+      match x
       | +Z() => ret +True()
       | +S(x) => ! odd x
       end
-      in
+    in
     fn (x : Nat) =>
       match x
       | +Z() => ret +False()

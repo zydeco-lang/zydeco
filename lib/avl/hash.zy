@@ -1,8 +1,8 @@
 begin
-  let make_std = @[import("../std/std.zy")] _ that
+  let make_std = @(import("../std/std.zy")) that
   param (
     (/core; /representations; /system; builtin) :
-    @[import("../std/builtin.zy")] _
+    @(import("../std/builtin.zy"))
   ) that
   let (/VType; /Thk; /Ret; /Unit) = core that
   let (/Scalar = Int64) = representations/i64 that
@@ -19,10 +19,10 @@ begin
       data
       | +Leaf : Unit
       | +Node :
-        (left :: Avl A) *
-        (value :: A) *
-        (tree_height :: Int64) *
-        (right :: Avl A)
+          (left :: Avl A)
+        * (value :: A)
+        * (tree_height :: Int64)
+        * (right :: Avl A)
       end
     that
     def ! leaf (A : VType) : Ret (Avl A) =
@@ -104,7 +104,12 @@ begin
       | +Node(/left; /value; /tree_height; /right) =>
         match left
         | +Leaf() => ret +Leaf()
-        | +Node(/left = left_left; /value = left_value; /tree_height = left_height; /right = left_right) =>
+        | +Node(
+          /left = left_left;
+          /value = left_value;
+          /tree_height = left_height;
+          /right = left_right
+        ) =>
           do new_right <- ! fix_height A +Node(
             left = left_right,
             = value,
@@ -127,8 +132,11 @@ begin
         match right
         | +Leaf() => ret +Leaf()
         | +Node(
-            /left = right_left; /value = right_value; /tree_height = right_height; /right = right_right
-          ) =>
+          /left = right_left;
+          /value = right_value;
+          /tree_height = right_height;
+          /right = right_right
+        ) =>
           do new_left <- ! fix_height A +Node(
             = left,
             = value,
@@ -218,7 +226,9 @@ begin
           }
       end
     that
-    def fix search (A : VType) (item : A) (tree : Avl A) (equal : Cmp A) (less : Cmp A) : Ret (Option A) =
+    def fix search (A : VType) (item : A) (tree : Avl A) (equal : Cmp A) (less : Cmp A) : Ret (
+      Option A
+    ) =
       match tree
       | +Leaf() => ! (option/none) A
       | +Node(/left; /value; /right) =>
@@ -237,7 +247,9 @@ begin
           }
       end
     that
-    def fix change (A : VType) (item : A) (tree : Avl A) (equal : Cmp A) (less : Cmp A) : Ret (Avl A) =
+    def fix change (A : VType) (item : A) (tree : Avl A) (equal : Cmp A) (less : Cmp A) : Ret (
+      Avl A
+    ) =
       match tree
       | +Leaf() => ret tree
       | +Node(/left; /value; /tree_height; /right) =>
@@ -262,7 +274,9 @@ begin
           }
       end
     that
-    def fix delete (A : VType) (item : A) (tree : Avl A) (equal : Cmp A) (less : Cmp A) : Ret (Avl A) =
+    def fix delete (A : VType) (item : A) (tree : Avl A) (equal : Cmp A) (less : Cmp A) : Ret (
+      Avl A
+    ) =
       match tree
       | +Leaf() => ret tree
       | +Node(/left; /value; /tree_height; /right) =>
@@ -354,30 +368,30 @@ begin
       (tree : Avl A)
       (format : Thk (A -> Ret String))
       (continuation : Thk OS)
-      : OS =
-      match tree
-      | +Leaf() => ! continuation
-      | +Node(/left; /value; /tree_height; /right) =>
-        do rendered_value <- ! format value;
-        do with_label <- ! (string/append) rendered_value " h:";
-        do rendered_height <- ! (int64/to_string) tree_height;
-        do line <- ! (string/append) with_label rendered_height;
-        ! (stdio/write_line) line {
-          fn _ =>
-            ! pre_traversal A left format {
-              ! pre_traversal A right format continuation
-            }
-        }
-      end
+    : OS =
+        match tree
+        | +Leaf() => ! continuation
+        | +Node(/left; /value; /tree_height; /right) =>
+          do rendered_value <- ! format value;
+          do with_label <- ! (string/append) rendered_value " h:";
+          do rendered_height <- ! (int64/to_string) tree_height;
+          do line <- ! (string/append) with_label rendered_height;
+          ! (stdio/write_line) line {
+            fn _ =>
+              ! pre_traversal A left format {
+                ! pre_traversal A right format continuation
+              }
+          }
+        end
     that
     --| Hash
     def Hash (K : VType) (V : VType) =
       data
       | +Hash :
-        (body :: Avl (K * V)) *
-        (insert_less :: Cmp (K * V)) *
-        (search_equal :: Cmp (K * V)) *
-        (item_equal :: Cmp (K * V))
+          (body :: Avl (K * V))
+        * (insert_less :: Cmp (K * V))
+        * (search_equal :: Cmp (K * V))
+        * (item_equal :: Cmp (K * V))
       end
     that
     def ! hash_new
@@ -386,45 +400,47 @@ begin
       (insert_key_less : Cmp K)
       (search_key_equal : Cmp K)
       (value_equal : Cmp V)
-      : Ret (Hash K V) =
-      do body <- ! leaf (K * V);
-      ret +Hash(
-        = body,
-        insert_less = {
-          fn first second =>
-            match first
-            | (first_key, _) =>
-              match second
-              | (second_key, _) =>
-                ! insert_key_less first_key second_key
+    : Ret (Hash K V) =
+        do body <- ! leaf (K * V);
+        ret +Hash(
+          = body,
+          insert_less = {
+            fn first second =>
+              match first
+              | (first_key, _) =>
+                match second
+                | (second_key, _) =>
+                  ! insert_key_less first_key second_key
+                end
               end
-            end
-        },
-        search_equal = {
-          fn first second =>
-            match first
-            | (first_key, _) =>
-              match second
-              | (second_key, _) =>
-                ! search_key_equal first_key second_key
+          },
+          search_equal = {
+            fn first second =>
+              match first
+              | (first_key, _) =>
+                match second
+                | (second_key, _) =>
+                  ! search_key_equal first_key second_key
+                end
               end
-            end
-        },
-        item_equal = {
-          fn first second =>
-            match first
-            | (first_key, first_value) =>
-              match second
-              | (second_key, second_value) =>
-                do values_equal <- ! value_equal first_value second_value;
-                do keys_equal <- ! search_key_equal first_key second_key;
-                ! (bool/and) values_equal keys_equal
+          },
+          item_equal = {
+            fn first second =>
+              match first
+              | (first_key, first_value) =>
+                match second
+                | (second_key, second_value) =>
+                  do values_equal <- ! value_equal first_value second_value;
+                  do keys_equal <- ! search_key_equal first_key second_key;
+                  ! (bool/and) values_equal keys_equal
+                end
               end
-            end
-        }
-      )
+          }
+        )
     that
-    def ! hash_insert (K : VType) (V : VType) (key : K) (value : V) (hash : Hash K V) : Ret (Hash K V) =
+    def ! hash_insert (K : VType) (V : VType) (key : K) (value : V) (hash : Hash K V) : Ret (
+      Hash K V
+    ) =
       match hash
       | +Hash(/body; /insert_less; /search_equal; /item_equal) =>
         do new_body <- ! insert (K * V) (key, value) body insert_less;
@@ -432,7 +448,9 @@ begin
       end
     that
     --| in search, a default value for v is needed, because the type of v is unknown
-    def ! hash_search (K : VType) (V : VType) (key : K) (default : V) (hash : Hash K V) : Ret (Option V) =
+    def ! hash_search (K : VType) (V : VType) (key : K) (default : V) (hash : Hash K V) : Ret (
+      Option V
+    ) =
       match hash
       | +Hash(/body; /insert_less; /search_equal) =>
         do result <- ! search (K * V) (key, default) body search_equal insert_less;
@@ -449,14 +467,18 @@ begin
           }
       end
     that
-    def ! hash_delete (K : VType) (V : VType) (key : K) (default : V) (hash : Hash K V) : Ret (Hash K V) =
+    def ! hash_delete (K : VType) (V : VType) (key : K) (default : V) (hash : Hash K V) : Ret (
+      Hash K V
+    ) =
       match hash
       | +Hash(/body; /insert_less; /search_equal; /item_equal) =>
         do new_body <- ! delete (K * V) (key, default) body search_equal insert_less;
         ret +Hash(body = new_body, = insert_less, = search_equal, = item_equal)
       end
     that
-    def ! hash_change (K : VType) (V : VType) (key : K) (value : V) (hash : Hash K V) : Ret (Hash K V) =
+    def ! hash_change (K : VType) (V : VType) (key : K) (value : V) (hash : Hash K V) : Ret (
+      Hash K V
+    ) =
       match hash
       | +Hash(/body; /insert_less; /search_equal; /item_equal) =>
         do new_body <- ! change (K * V) (key, value) body search_equal insert_less;
@@ -474,9 +496,9 @@ begin
     that
 
     do hash <- ! hash_new Int64 String
-      (int64/lt)
-      (int64/eq)
-      (string/eq);
+      int64/lt
+      int64/eq
+      string/eq;
     do hash <- ! hash_insert Int64 String 1 "one" hash;
     do hash <- ! hash_insert Int64 String 2 "two" hash;
     do hash <- ! hash_insert Int64 String 3 "three" hash;
@@ -490,9 +512,9 @@ begin
 
     -- answer
     do expected <- ! hash_new Int64 String
-      (int64/lt)
-      (int64/eq)
-      (string/eq);
+      int64/lt
+      int64/eq
+      string/eq;
     do expected <- ! hash_insert Int64 String 1 "one change" expected;
     do expected <- ! hash_insert Int64 String 2 "two" expected;
     do expected <- ! hash_insert Int64 String 3 "three" expected;

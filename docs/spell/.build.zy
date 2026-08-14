@@ -1,7 +1,7 @@
 begin
   param (
     (/core; /representations; /numeric; /text; /system) :
-    @[import("../../lib/std/builtin.zy")] _
+    @(import("../../lib/std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (Scalar = Int64, int64) = numeric/int64 that
@@ -19,10 +19,12 @@ begin
     forall (B : CType) .
       Bool -> Thk B -> Thk B -> B
   ) = {
-    fn (B : CType)
-       condition
-       when_true
-       when_false =>
+    fn
+      (B : CType)
+      condition
+      when_true
+      when_false
+    =>
       match condition
       | +True() => ! when_true
       | +False() => ! when_false
@@ -64,8 +66,8 @@ begin
 
   -- Return the line without a leading comment marker and whether one existed.
   def classify_line : Thk (
-    String ->
-    Ret (String * Bool)
+       String
+    -> Ret (String * Bool)
   ) = {
     fn line =>
       do length <- ! (string/length) line;
@@ -107,18 +109,19 @@ begin
   } that
 
   def loop : Thk (
-    String ->
-    Bool ->
-    OS
+       String
+    -> Bool
+    -> OS
   ) = {
     fix (
       loop :
       Thk (
-        String ->
-        Bool ->
-        OS
+           String
+        -> Bool
+        -> OS
       )
-    ) =>
+    )
+    =>
       fn remaining in_code =>
         ! (string/split_once)
           OS

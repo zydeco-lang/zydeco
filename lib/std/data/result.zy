@@ -1,6 +1,6 @@
 param (
   (/core) :
-  @[import("../builtin.zy")] _
+  @(import("../builtin.zy"))
 ) in
 let (/VType; /CType; /Thk; /Ret) = core in
 begin
@@ -24,10 +24,10 @@ begin
     (when_ok : Thk (A -> B))
     (when_err : Thk (E -> B))
   : B =
-    match result
-    | +Ok(value) => ! when_ok value
-    | +Err(error) => ! when_err error
-    end
+      match result
+      | +Ok(value) => ! when_ok value
+      | +Err(error) => ! when_err error
+      end
   that
   def ! map
     (A : VType)
@@ -36,12 +36,12 @@ begin
     (result : Result A E)
     (transform : Thk (A -> Ret B))
   : Ret (Result B E) =
-    match result
-    | +Ok(value) =>
-      do transformed <- ! transform value;
-      ! ok B E transformed
-    | +Err(error) => ! err B E error
-    end
+      match result
+      | +Ok(value) =>
+        do transformed <- ! transform value;
+        ! ok B E transformed
+      | +Err(error) => ! err B E error
+      end
   that
   def ! map_err
     (A : VType)
@@ -50,12 +50,12 @@ begin
     (result : Result A E)
     (transform : Thk (E -> Ret F))
   : Ret (Result A F) =
-    match result
-    | +Ok(value) => ! ok A F value
-    | +Err(error) =>
-      do transformed <- ! transform error;
-      ! err A F transformed
-    end
+      match result
+      | +Ok(value) => ! ok A F value
+      | +Err(error) =>
+        do transformed <- ! transform error;
+        ! err A F transformed
+      end
   that
   def ! and_then
     (A : VType)
@@ -64,10 +64,10 @@ begin
     (result : Result A E)
     (transform : Thk (A -> Ret (Result B E)))
   : Ret (Result B E) =
-    match result
-    | +Ok(value) => ! transform value
-    | +Err(error) => ! err B E error
-    end
+      match result
+      | +Ok(value) => ! transform value
+      | +Err(error) => ! err B E error
+      end
   that
   def ! unwrap_or
     (A : VType)
@@ -75,10 +75,10 @@ begin
     (result : Result A E)
     (default : A)
   : Ret A =
-    match result
-    | +Ok(value) => ret value
-    | +Err(_) => ret default
-    end
+      match result
+      | +Ok(value) => ret value
+      | +Err(_) => ret default
+      end
   that
   (
     = Result,

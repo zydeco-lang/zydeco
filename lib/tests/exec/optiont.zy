@@ -1,7 +1,7 @@
 begin
   param (
     (/core; /representations; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Ret; /Unit) = core that
   let (/Scalar = Int64) = representations/i64 that
@@ -13,7 +13,7 @@ begin
     | +Some : A
     end
   that
-  def OptionT (M : (VType) -> (CType)) (A : VType) =
+  def OptionT (M : VType -> CType) (A : VType) =
     codata
     | .trans : M (Option A)
     end

@@ -1,9 +1,9 @@
 @[builtin(arg_list)] (
-  fold :: (@[import("../intrinsic/thk.zy")] _) (
-    forall (R : @[import("../intrinsic/ctype.zy")] _) .
-         (@[import("../intrinsic/thk.zy")] _) R
-      -> (@[import("../intrinsic/thk.zy")] _) (
-           (@[import("../intrinsic/string.zy")] _) -> (@[import("../intrinsic/thk.zy")] _) R -> R
+  fold :: (@(import("../intrinsic/thk.zy"))) (
+    forall (R : @(import("../intrinsic/ctype.zy"))) .
+         (@(import("../intrinsic/thk.zy"))) R
+      -> (@(import("../intrinsic/thk.zy"))) (
+           (@(import("../intrinsic/string.zy"))) -> (@(import("../intrinsic/thk.zy"))) R -> R
          )
       -> R
   )

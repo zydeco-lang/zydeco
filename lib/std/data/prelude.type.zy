@@ -1,26 +1,26 @@
 begin
-  let Thk = @[import("../builtin/intrinsic/thk.zy")] _ in
-  let Ret = @[import("../builtin/intrinsic/ret.zy")] _ in
-  let Unit = @[import("../builtin/intrinsic/unit.zy")] _ in
+  let Thk = @(import("../builtin/intrinsic/thk.zy")) in
+  let Ret = @(import("../builtin/intrinsic/ret.zy")) in
+  let Unit = @(import("../builtin/intrinsic/unit.zy")) in
   let Prelude =
     exists
       (
-        Thunk = ThunkType as Thk : (@[import("../builtin/intrinsic/ctype.zy")] _) -> (
-          @[import("../builtin/intrinsic/vtype.zy")] _
+        Thunk = ThunkType as Thk : (@(import("../builtin/intrinsic/ctype.zy"))) -> (
+          @(import("../builtin/intrinsic/vtype.zy"))
         )
       )
     .
       exists
         (
-          U = UType as Thk : (@[import("../builtin/intrinsic/ctype.zy")] _) -> (
-            @[import("../builtin/intrinsic/vtype.zy")] _
+          U = UType as Thk : (@(import("../builtin/intrinsic/ctype.zy"))) -> (
+            @(import("../builtin/intrinsic/vtype.zy"))
           )
         )
       .
         exists
           (
-            F = FType as Ret : (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
-              @[import("../builtin/intrinsic/ctype.zy")] _
+            F = FType as Ret : (@(import("../builtin/intrinsic/vtype.zy"))) -> (
+              @(import("../builtin/intrinsic/ctype.zy"))
             )
           )
         .

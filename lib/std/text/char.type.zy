@@ -1,15 +1,15 @@
 begin
-  let Thk = @[import("../builtin/intrinsic/thk.zy")] _ in
-  let Ret = @[import("../builtin/intrinsic/ret.zy")] _ in
+  let Thk = @(import("../builtin/intrinsic/thk.zy")) in
+  let Ret = @(import("../builtin/intrinsic/ret.zy")) in
   let CharModule
     (
-      Option : (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
-        @[import("../builtin/intrinsic/vtype.zy")] _
+      Option : (@(import("../builtin/intrinsic/vtype.zy"))) -> (
+        @(import("../builtin/intrinsic/vtype.zy"))
       )
     )
-    (Char : @[import("../builtin/intrinsic/vtype.zy")] _)
-    (Int64 : @[import("../builtin/intrinsic/vtype.zy")] _)
-    (String : @[import("../builtin/intrinsic/vtype.zy")] _) =
+    (Char : @(import("../builtin/intrinsic/vtype.zy")))
+    (Int64 : @(import("../builtin/intrinsic/vtype.zy")))
+    (String : @(import("../builtin/intrinsic/vtype.zy"))) =
       (to_string :: Thk (Char -> Ret String))
     * (codepoint :: Thk (Char -> Ret Int64))
     * (from_codepoint :: Thk (Int64 -> Ret (Option Char)))

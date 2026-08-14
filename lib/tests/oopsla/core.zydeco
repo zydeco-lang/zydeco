@@ -5,7 +5,7 @@ begin
   --| Primitive Base Types
   param (
     (/core; /representations; /numeric; /text; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (Scalar = Int64, int64) = numeric/int64 that
@@ -16,44 +16,50 @@ begin
   let Thunk (B : CType) = Thk B that
 
   --| Interface for Monads and Their Algebras
-  let Monad (M: VType -> CType) =
+  let Monad (M : VType -> CType) =
     codata
-    | .return : forall (A: VType) .
+    | .return : forall (A : VType) .
       A -> M A
-    | .bind : forall (A: VType) (A': VType) .
+    | .bind : forall (A : VType) (A' : VType) .
       Thk (M A) -> Thk (A -> M A') -> M A'
     end
   that
-  let Algebra (M: VType -> CType) (R: CType) =
-    forall (A: VType) . Thk (M A) -> Thk (A -> R) -> R
+  let Algebra (M : VType -> CType) (R : CType) =
+    forall (A : VType) . Thk (M A) -> Thk (A -> R) -> R
   that
--- end module Builtin
+  -- end module Builtin
 
-
--- module Monad
+  -- module Monad
   --| Interface for Monad Transformers
-  let MonadTrans (T: (VType -> CType) -> VType -> CType) =
-    forall (M: VType -> CType) . Thk (Monad M) -> codata
-    | .monad : Monad (T M)
-    | .lift  : forall (A: VType) . Thk (M A) -> T M A
-    end
+  let MonadTrans (T : (VType -> CType) -> VType -> CType) =
+    forall (M : VType -> CType) .
+      Thk (Monad M) -> codata
+      | .monad : Monad (T M)
+      | .lift : forall (A : VType) . Thk (M A) -> T M A
+      end
   that
-  
+
   --| The Trivial Algebra (Structure)
-  def ! triv : Top = comatch end that
+  def ! triv : Top = comatch
+  end that
 
   --| Interface for Monad, Lifted
-  let Monad' (M: VType -> CType) =
+  let Monad' (M : VType -> CType) =
     codata
-    | .return : forall (A: VType) . Thk Top ->
-      A -> M A
-    | .bind : forall (A: VType) . Thk Top -> (forall (A': VType) . Thk Top ->
-      Thk (M A) -> Thk (A -> M A') -> M A')
+    | .return : forall (A : VType) .
+         Thk Top
+      -> A -> M A
+    | .bind : forall (A : VType) .
+      Thk Top -> (
+        forall (A' : VType) .
+             Thk Top
+          -> Thk (M A) -> Thk (A -> M A') -> M A'
+      )
     end
   that
 
   --| Removing the need of trivial algebra for generated monads
-  def ! detriv-mo (M: VType -> CType) (mo: Thk (Monad' M)) : Monad M =
+  def ! detriv-mo (M : VType -> CType) (mo : Thk (Monad' M)) : Monad M =
     comatch
     | .return A => ! mo .return A triv
     | .bind A A' => ! mo .bind A triv A' triv
@@ -61,34 +67,36 @@ begin
   that
 
   --| Interface for Monad Transformers, used for annotating terms inside the monadic block
-  let MonadTransInner (T_M: VType -> CType) =
+  let MonadTransInner (T_M : VType -> CType) =
     codata
     | .monad : Monad T_M
-    | .lift  : forall (A: VType) . Thk (Ret A) -> T_M A
+    | .lift : forall (A : VType) . Thk (Ret A) -> T_M A
     end
   that
 
   --| Interface for Monad Transformers, Lifted
-  let MonadTrans' (T: (VType -> CType) -> VType -> CType) =
-    forall (M: VType -> CType) . Thk (Monad M) -> codata
-    | .monad : Monad' (T M)
-    | .lift  : forall (A: VType) . Thk Top -> Thk (M A) -> T M A
-    end
+  let MonadTrans' (T : (VType -> CType) -> VType -> CType) =
+    forall (M : VType -> CType) .
+      Thk (Monad M) -> codata
+      | .monad : Monad' (T M)
+      | .lift : forall (A : VType) . Thk Top -> Thk (M A) -> T M A
+      end
   that
 
   --| Removing the need of trivial algebra for generated monad transformers
-  def ! detriv-mt (T: (VType -> CType) -> VType -> CType) (mt: Thk (MonadTrans' T)) : MonadTrans T =
-    fn (M: VType -> CType) (mo: Thk (Monad M)) => comatch
+  def ! detriv-mt (T : (VType -> CType) -> VType -> CType) (mt : Thk (MonadTrans' T)) : MonadTrans T
+  = fn (M : VType -> CType) (mo : Thk (Monad M)) =>
+    comatch
     | .monad => ! detriv-mo (T M) { ! mt M mo .monad }
     | .lift A => ! mt M mo .lift A triv
-    end
-  that
--- end module Monad
+    end that
+  -- end module Monad
 
-
--- module Core
-  let Empty = data end that
-  let Top = codata end that
+  -- module Core
+  let Empty = data
+  end that
+  let Top = codata
+  end that
 
   let Option (A : VType) =
     data
@@ -110,10 +118,9 @@ begin
     | +False : Unit
     end
   that
--- end module Core
+  -- end module Core
 
-
--- module Arith
+  -- module Arith
   def ! int_eq (x : Int64) (y : Int64) : Ret Bool =
     ! (int64/eq) (Ret Bool) x y { ret +True() } { ret +False() }
   that
@@ -123,10 +130,9 @@ begin
   def ! int_gt (x : Int64) (y : Int64) : Ret Bool =
     ! (int64/gt) (Ret Bool) x y { ret +True() } { ret +False() }
   that
--- end module Arith
+  -- end module Arith
 
-
--- module String
+  -- module String
   def ! str_eq (x : String) (y : String) : Ret Bool =
     ! (string/eq) (Ret Bool) x y { ret +True() } { ret +False() }
   that
@@ -140,45 +146,44 @@ begin
   that
 
   --| Conversions
-  def unit_to_str : Thk(Unit -> Ret String) = {
+  def unit_to_str : Thk (Unit -> Ret String) = {
     fn (_u : Unit) => ret "()"
   } that
-  def bool_to_str : Thk(Bool -> Ret String) = {
+  def bool_to_str : Thk (Bool -> Ret String) = {
     fn (b : Bool) =>
       match b
       | +True() => ret "True"
       | +False() => ret "False"
       end
   } that
--- end module String
+  -- end module String
 
-
--- module OS
-  def ! read_line_as_int (k : Thk(Option Int64 -> OS)) : OS =
+  -- module OS
+  def ! read_line_as_int (k : Thk (Option Int64 -> OS)) : OS =
     ! (stdio/read_int)
       { ! k +None() }
       { fn i => ! k +Some(i) }
   that
   def halt : Thk OS = { ! (process/exit) 0 } that
 
-  def panic : Thk(String -> OS) = {
-    fn (msg: String) =>
+  def panic : Thk (String -> OS) = {
+    fn (msg : String) =>
       do msg <- ! (string/append) "Program panicked with message: " msg;
       ! (stdio/write_line) msg { ! (process/exit) 1 }
   } that
 
-  def write_int_line : Thk(Int64 -> Thk OS -> OS) = {
-    fn (i: Int64) (k: Thk OS) =>
+  def write_int_line : Thk (Int64 -> Thk OS -> OS) = {
+    fn (i : Int64) (k : Thk OS) =>
       do s <- ! (int64/to_string) i;
       ! (stdio/write_line) s k
   } that
--- end module OS
+  -- end module OS
 
   (
-    halt = halt,
-    panic = panic,
+    = halt,
+    = panic,
     write_line = stdio/write_line,
     write_int = stdio/write_int,
-    write_int_line = write_int_line,
+    = write_int_line
   )
 end

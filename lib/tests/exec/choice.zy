@@ -1,8 +1,8 @@
 begin
-  let make_std = @[import("../../std/std.zy")] _ that
+  let make_std = @(import("../../std/std.zy")) that
   param (
     (/core; /representations; /system; builtin) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Unit) = core that
   let (/Scalar = String) = representations/string that
@@ -28,16 +28,20 @@ begin
 
   let (/bool; /string; /stdio; /process) = make_std builtin in
   def beep : Choice (Thk OS -> OS) =
-    +L({
-      fn k =>
-        ! (stdio/write_line) "0" { fn _ => ! k }
-    })
+    +L(
+      {
+        fn k =>
+          ! (stdio/write_line) "0" { fn _ => ! k }
+      }
+    )
   in
   def boop : Choice (Thk OS -> OS) =
-    +R({
-      fn k =>
-        ! (stdio/write_line) "1" { fn _ => ! k }
-    })
+    +R(
+      {
+        fn k =>
+          ! (stdio/write_line) "1" { fn _ => ! k }
+      }
+    )
   in
   def tree : Tree String =
     +Fork(

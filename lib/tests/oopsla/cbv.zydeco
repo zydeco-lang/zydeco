@@ -4,7 +4,7 @@
 begin
   param (
     (/core; /representations; /text; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (/Scalar = String) = representations/string that
@@ -124,17 +124,17 @@ begin
       | +Lam(x, expr) =>
         -- creates a host language thunk that runs the function body with an
         -- extended environment
-        ! interp .ascend +Closure({
-          fn v =>
-            ! interp .descend (expr, +Cons(x, v, env))
-        })
+        ! interp .ascend +Closure(
+          {
+            fn v =>
+              ! interp .descend (expr, +Cons(x, v, env))
+          }
+        )
       | +App(f, a) =>
         ! interp .descend (f, env) .fun (a, env)
       | +If(c, t, f) =>
-        ! interp
-          .descend
-          (c, env)
-          .if
+        ! interp .descend
+          (c, env) .if
           (t, f, env)
       end
     | .ascend v =>

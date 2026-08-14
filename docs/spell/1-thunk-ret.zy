@@ -8,7 +8,7 @@
 begin
   param (
     (/core; /numeric; /system) :
-    @[import("../../lib/std/builtin.zy")] _
+    @(import("../../lib/std/builtin.zy"))
   ) that
   let (/Thk; /Ret) = core that
   let (Scalar = Int64, int64) = numeric/int64 that
@@ -38,8 +38,8 @@ begin
   -- Function types `A -> B` are computation types. Consequently, a reusable
   -- function is commonly stored as a thunked computation.
   def decrement : Thk (
-    Thk (Ret Int64) ->
-    Ret Int64
+       Thk (Ret Int64)
+    -> Ret Int64
   ) = {
     fn suspended =>
       do value <- ! suspended;

@@ -6,10 +6,10 @@
 -- call-by-push-value.
 
 begin
-  let make_std = @[import("../../lib/std/std.zy")] _ that
+  let make_std = @(import("../../lib/std/std.zy")) that
   param (
     (/core; /representations; /system; builtin) :
-    @[import("../../lib/std/builtin.zy")] _
+    @(import("../../lib/std/builtin.zy"))
   ) that
   let (/CType; /Thk; /Ret) = core that
   let (/Scalar = Int64) = representations/i64 that
@@ -23,11 +23,13 @@ begin
 
   def fixed_point : Thk (
     forall (B : CType) .
-      Thk (Thk B -> B) ->
-      Ret (Thk B)
+         Thk (Thk B -> B)
+      -> Ret (Thk B)
   ) = {
-    fn (B : CType)
-       (function : Thk (Thk B -> B)) =>
+    fn
+      (B : CType)
+      (function : Thk (Thk B -> B))
+    =>
       let self_application : Thk (Y B) = {
         comatch
         | .apply recursive =>
@@ -42,9 +44,9 @@ begin
   let (/bool; /int64; /string; /stdio; /process) = make_std builtin in
   begin
     def factorial_step : Thk (
-      Thk (Int64 -> Ret Int64) ->
-      Int64 ->
-      Ret Int64
+         Thk (Int64 -> Ret Int64)
+      -> Int64
+      -> Ret Int64
     ) = {
       fn recursive number =>
         do is_zero <- ! (int64/eq) number 0;
@@ -59,11 +61,11 @@ begin
           }
     } that
     def check : Thk (
-      Thk (Int64 -> Ret Int64) ->
-      Int64 ->
-      Int64 ->
-      Thk OS ->
-      OS
+         Thk (Int64 -> Ret Int64)
+      -> Int64
+      -> Int64
+      -> Thk OS
+      -> OS
     ) = {
       fn factorial input expected continuation =>
         do actual <- ! factorial input;

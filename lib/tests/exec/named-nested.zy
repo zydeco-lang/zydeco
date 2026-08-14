@@ -3,7 +3,7 @@
 begin
   param (
     (/numeric; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/process) = system that
@@ -18,7 +18,7 @@ begin
     (outer :: inner :: Int64)
   that
   let Ambiguous =
-    (left :: (x :: Int64)) * (right :: (x :: Int64))
+    (left :: x :: Int64) * (right :: x :: Int64)
   that
   let Punnable =
     (punned :: Int64)
@@ -40,10 +40,10 @@ begin
 
   let (
     inner : Inner,
-    z = z : Int64
+    = z : Int64
   ) = nested in
   let (
-    x = x : Int64,
+    = x : Int64,
     y : Int64
   ) = inner in
   let (

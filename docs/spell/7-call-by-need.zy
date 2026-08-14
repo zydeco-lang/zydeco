@@ -8,7 +8,7 @@
 begin
   param (
     (/core) :
-    @[import("../../lib/std/builtin.zy")] _
+    @(import("../../lib/std/builtin.zy"))
   ) that
   let (/VType; /Thk; /Ret; /Unit) = core that
   def Option (A : VType) =
@@ -19,23 +19,31 @@ begin
   that
 
   let ReferenceLibrary =
-    exists (
-      Ref :
-      (VType) ->
-      (VType)
-    ) .
-      (allocate :: Thk (
-        forall (A : VType) .
-          A -> Ret (Ref A)
-      )) *
-      (read :: Thk (
-        forall (A : VType) .
-          Ref A -> Ret A
-      )) *
-      (write :: Thk (
-        forall (A : VType) .
-          Ref A -> A -> Ret Unit
-      ))
+    exists
+      (
+        Ref :
+           VType
+        -> VType
+      )
+    .
+        (
+          allocate :: Thk (
+            forall (A : VType) .
+              A -> Ret (Ref A)
+          )
+        )
+      * (
+          read :: Thk (
+            forall (A : VType) .
+              Ref A -> Ret A
+          )
+        )
+      * (
+          write :: Thk (
+            forall (A : VType) .
+              Ref A -> A -> Ret Unit
+          )
+        )
   that
   param (
     (Ref, references) :
@@ -44,11 +52,13 @@ begin
 
   def call_by_need : Thk (
     forall (A : VType) .
-      Thk (Ret A) ->
-      Ret (Thk (Ret A))
+         Thk (Ret A)
+      -> Ret (Thk (Ret A))
   ) = {
-    fn (A : VType)
-       (suspended : Thk (Ret A)) =>
+    fn
+      (A : VType)
+      (suspended : Thk (Ret A))
+    =>
       do cache <- ! (references/allocate) (Option A) +None();
       ret {
         do cached <- ! (references/read) (Option A) cache;

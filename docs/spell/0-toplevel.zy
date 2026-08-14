@@ -11,14 +11,13 @@ begin
   -- resolved. The block itself does not decide whether its result is a kind,
   -- type, value, or computation.
 
-
   -- `param` turns the block into a function. Here its argument is the canonical
   -- Builtin package: the host types and operations that the launcher supplies.
   -- `that` lets this parameter move within the current block according to the
   -- dependency graph, so later definitions may use its fields.
   param (
     (/core; /representations; /system) :
-    @[import("../../lib/std/builtin.zy")] _
+    @(import("../../lib/std/builtin.zy"))
   ) that
   let (/VType; /Thk; /Ret) = core that
   let (/Scalar = Int64) = representations/i64 that

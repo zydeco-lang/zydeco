@@ -1,13 +1,13 @@
 begin
   param (
     (/numeric; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/process) = system that
   let Point = (x :: Int64) * (y :: Int64) that
   let Rectangle = (top_left :: Point) * (status :: Int64) that
-  let Triple = (first :: Int64) * ((middle :: Int64) * (last :: Int64)) that
+  let Triple = (first :: Int64) * (middle :: Int64) * (last :: Int64) that
   let Nested = ((inner_x :: Int64) * (inner_y :: Int64)) * (outer :: Int64) that
   def rectangle : Rectangle = (
     top_left = (x = 5, y = 1),

@@ -1,8 +1,8 @@
 begin
-  let make_std = @[import("../../std/std.zy")] _ that
+  let make_std = @(import("../../std/std.zy")) that
   param (
     (/core; /representations; builtin) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/Ret) = core that
   let (/Scalar = Int64) = representations/i64 that
@@ -70,7 +70,7 @@ begin
   do transformed_ok <- ! (int64/eq) transformed_value 3;
   do transformed_status <- ! status transformed_ok;
 
-  do exclusive <- ! (bool/xor) (bool/true) (bool/false);
+  do exclusive <- ! (bool/xor) bool/true bool/false;
   do exclusive_status <- ! status exclusive;
 
   do minimum <- ! (int64/min) -3 4;

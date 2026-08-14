@@ -1,14 +1,14 @@
 param (
   (/numeric; /system) :
-  @[import("../../std/builtin.zy")] _
+  @(import("../../std/builtin.zy"))
 ) in
 let (Scalar = Int64, int64) = numeric/int64 in
 let (/process) = system in
-  do x <- ret 40;
-  do y <- ret 30;
-  do z <-
-    do a <- ! (int64/add) x y;
-    do b <- ! (int64/add) a 10;
-    ret x;
-  do r <- ! (int64/sub) z 40;
-  ! (process/exit) r
+do x <- ret 40;
+do y <- ret 30;
+do z <-
+  do a <- ! (int64/add) x y;
+  do b <- ! (int64/add) a 10;
+  ret x;
+do r <- ! (int64/sub) z 40;
+! (process/exit) r

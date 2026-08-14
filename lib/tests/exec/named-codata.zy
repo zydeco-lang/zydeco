@@ -3,7 +3,7 @@
 begin
   param (
     (/core; /numeric; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/Thk; /Ret) = core that
   let (Scalar = Int64, int64) = numeric/int64 that
@@ -22,13 +22,13 @@ begin
     comatch
     | .read =>
       ret (reading = 12 : Int64, 13 : Int64)
-    | .shift (delta = delta : Int64) =>
+    | .shift (= delta : Int64) =>
       ret (reading = delta : Int64)
     end
   that
   def gauge_box : GaugeBox = (
     0,
-    gauge = gauge
+    = gauge
   ) that
 
   let (
@@ -37,7 +37,7 @@ begin
   ) = gauge_box in
   do observation <- ! active_gauge .read;
   let (
-    reading = reading : Int64,
+    = reading : Int64,
     drift : Int64
   ) = observation in
   do reading_check <- ! (int64/sub) reading 12;

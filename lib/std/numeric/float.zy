@@ -1,9 +1,9 @@
 begin
   begin
-    param core : @[import("../builtin/core.zy")] _ in
+    param core : @(import("../builtin/core.zy")) in
     let (/VType; /CType; /Thk; /Ret; /Unit) = core in
-    let NumericInstance = @[import("numeric-instance.type.zy")] _ in
-    let FloatModule = @[import("float.type.zy")] _ in
+    let NumericInstance = @(import("numeric-instance.type.zy")) in
+    let FloatModule = @(import("float.type.zy")) in
     fn (Bool : VType) =>
       fn (Scalar : VType) =>
         fn (String : VType) =>
@@ -23,78 +23,76 @@ begin
                     (left : Scalar)
                     (right : Scalar)
                   : Ret Bool =
-                    ! predicate
-                      (Ret Bool)
-                      left
-                      right
-                      { ret (bool/true) }
-                      { ret (bool/false) }
+                      ! predicate
+                        (Ret Bool)
+                        left
+                        right
+                        { ret (bool/true) }
+                        { ret (bool/false) }
                   in
                   let operations : FloatModule Bool Scalar String = (
-                      add = primitive/add,
-                      sub = primitive/sub,
-                      mul = primitive/mul,
-                      div = primitive/div,
-                      eq = {
-                        fn left right => ! compare primitive/eq left right
-                      },
-                      ne = {
-                        fn left right =>
-                          do equal <- ! compare primitive/eq left right;
-                          ! (bool/not) equal
-                      },
-                      lt = {
-                        fn left right => ! compare primitive/lt left right
-                      },
-                      le = {
-                        fn left right =>
-                          do less <- ! compare primitive/lt left right;
-                          do equal <- ! compare primitive/eq left right;
-                          ! (bool/or) less equal
-                      },
-                      gt = {
-                        fn left right => ! compare primitive/gt left right
-                      },
-                      ge = {
-                        fn left right =>
-                          do greater <- ! compare primitive/gt left right;
-                          do equal <- ! compare primitive/eq left right;
-                          ! (bool/or) greater equal
-                      },
-                      negate = {
-                        fn value => ! (primitive/sub) zero value
-                      },
-                      to_string = primitive/to_string
-                    )
-                  in
+                    add = primitive/add,
+                    sub = primitive/sub,
+                    mul = primitive/mul,
+                    div = primitive/div,
+                    eq = {
+                      fn left right => ! compare primitive/eq left right
+                    },
+                    ne = {
+                      fn left right =>
+                        do equal <- ! compare primitive/eq left right;
+                        ! (bool/not) equal
+                    },
+                    lt = {
+                      fn left right => ! compare primitive/lt left right
+                    },
+                    le = {
+                      fn left right =>
+                        do less <- ! compare primitive/lt left right;
+                        do equal <- ! compare primitive/eq left right;
+                        ! (bool/or) less equal
+                    },
+                    gt = {
+                      fn left right => ! compare primitive/gt left right
+                    },
+                    ge = {
+                      fn left right =>
+                        do greater <- ! compare primitive/gt left right;
+                        do equal <- ! compare primitive/eq left right;
+                        ! (bool/or) greater equal
+                    },
+                    negate = {
+                      fn value => ! (primitive/sub) zero value
+                    },
+                    to_string = primitive/to_string
+                  ) in
                   let instance : NumericInstance Bool Scalar = (
-                      = Scalar,
-                      dictionary = (
-                        additive = (
-                          = zero,
-                          add = operations/add,
-                          sub = operations/sub,
-                          negate = operations/negate
+                    = Scalar,
+                    dictionary = (
+                      additive = (
+                        = zero,
+                        add = operations/add,
+                        sub = operations/sub,
+                        negate = operations/negate
+                      ),
+                      multiplicative = (
+                        = one,
+                        mul = operations/mul
+                      ),
+                      order = (
+                        equality = (
+                          eq = operations/eq,
+                          ne = operations/ne
                         ),
-                        multiplicative = (
-                          = one,
-                          mul = operations/mul
-                        ),
-                        order = (
-                          equality = (
-                            eq = operations/eq,
-                            ne = operations/ne
-                          ),
-                          lt = operations/lt,
-                          le = operations/le,
-                          gt = operations/gt,
-                          ge = operations/ge
-                        ),
-                        ()
+                        lt = operations/lt,
+                        le = operations/le,
+                        gt = operations/gt,
+                        ge = operations/ge
                       ),
                       ()
-                    )
-                  in
+                    ),
+                    ()
+                  ) in
                   (= operations, = instance, ())
   end
 end

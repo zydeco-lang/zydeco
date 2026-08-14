@@ -1,37 +1,38 @@
 begin
-  let monadic_basis = @[import("../../std/control/monad.zy")] _ that
+  let monadic_basis = @(import("../../std/control/monad.zy")) that
   param (
     (/core; /numeric; /system; builtin) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/Ret) = core that
   let (Scalar = Int64, int64) = numeric/int64 that
   let (/OS; /process) = system that
   let (= Monad, = Algebra, ()) =
-    monadic_basis builtin in
+    monadic_basis builtin
+  in
   begin
 
-  def ! ret_monad : Monad Ret =
-    comatch
-    | .return A value => ret value
-    | .bind A B computation function =>
-      do value <- ! computation;
-      ! function value
-    end
-  that
-  def ! translated =
-    @[monadic] begin
-      do value <- ret 1;
-      ret value
-    end
-  that
+    def ! ret_monad : Monad Ret =
+      comatch
+      | .return A value => ret value
+      | .bind A B computation function =>
+        do value <- ! computation;
+        ! function value
+      end
+    that
+    def ! translated =
+      @[monadic] begin
+        do value <- ret 1;
+        ret value
+      end
+    that
 
-  do value <- ! translated Ret { ! ret_monad };
-  ! (int64/eq)
-    OS
-    value
-    1
-    { ! (process/exit) 0 }
-    { ! (process/exit) 1 }
-end
+    do value <- ! translated Ret { ! ret_monad };
+    ! (int64/eq)
+      OS
+      value
+      1
+      { ! (process/exit) 0 }
+      { ! (process/exit) 1 }
+  end
 end

@@ -1,7 +1,7 @@
 begin
   param (
     (/core; /representations; /numeric; /text; /system) :
-    @[import("../../std/builtin.zy")] _
+    @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /Thk; /Ret; /Unit) = core that
   let (Scalar = Int64, int64) = numeric/int64 that
@@ -95,7 +95,7 @@ begin
   that
   def ! str_match (s : String) (p : String) : Ret (Option String) =
     let fix str_match (i : Int64) (s : String) (p : String) : Ret (Option String) =
-        do s_len <- ! (string/length) s;
+      do s_len <- ! (string/length) s;
       do p_len <- ! (string/length) p;
       do i_lt_s <- ! int_lt i s_len;
       do i_lt_p <- ! int_lt i p_len;
@@ -116,7 +116,7 @@ begin
           end
         end
       end
-      in
+    in
     ! str_match 0 s p
   that
   def fix regex : Regex =
