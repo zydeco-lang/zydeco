@@ -379,6 +379,27 @@ declaration-oriented containers that determine how many programs a compilation c
 branch-join and closure-conversion presentations recorded in
 [the paper-aligned Stack IR worklog](docs/logs/paper-aligned-stackir.md).
 
+### Query-Based Analysis
+
+Type checking runs inside the session's salsa graph rather than as a free-standing pass. The session's
+`SourceQueryDb` extends the statics crate's `TyckDb` supertrait, so the checking queries and the source queries
+share one database and one revision system. The name-resolved program enters the graph as the tracked struct
+`ScopedData` (`lang/statics/src/query.rs`); `check_source(db, data)` is a tracked query that still runs the
+wholesale `Tycker` internally, and a layer of demand-driven fact queries answers per-node questions from the
+memoized analysis:
+
+- `normalized_type` / `normalized_kind` read the materialized normalization tables;
+- `coverage` runs the post-check coverage pass on demand;
+- `fill_solution`, `annotation_of_def`, `type_definition_of_def`, and `annotation_of_term` expose per-node facts
+  for editors and tooling.
+
+Facts are keyed by interned node IDs (`InternedType`, `InternedDef`, `InternedTerm`, `InternedFill`) because
+salsa query arguments must be salsa IDs. The `*_normalized` arena tables remain the downstream interface consumed
+by `zydeco-dynamics` and `zydeco-stackir`; the query layer reads them, it does not replace them. The wholesale
+producer path is the remaining piece of the query-based design: the judgment layer still executes inside
+`check_source` rather than as per-node queries, and the plan for that migration lives in the
+[query-based type checking worklog](docs/logs/query-based-tyck.md).
+
 The phases are spread across several core crates:
 
 - `zydeco-surface` (surface syntax, parsing, desugaring, name resolution)

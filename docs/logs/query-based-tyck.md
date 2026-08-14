@@ -84,6 +84,33 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
 
 ### Unresolved
 
-- Fresh `StaticsScope` IDs still come from a sequential `IdAllocator`; making them
-  deterministic per input is prerequisite work for the judgment layer (P3/P4).
+- The judgment layer still executes wholesale inside `check_source`; the per-node producer migration (P4) remains.
+- Fresh `StaticsScope` IDs still come from a sequential `IdAllocator`; making them deterministic per input is
+  prerequisite work for the judgment layer (P3/P4).
 - Whether per-query salsa overhead regresses whole-check time is unmeasured until P7.
+
+## 2026-08-14 — P2–P6: demand-driven fact layer, measured
+
+- Landed the demand-driven fact queries in `lang/session/src/source/query.rs`, each memoized per
+  `(root input, interned key)` and reusing the memoized `analyze_source`:
+  `normalized_type`, `coverage`, `fill_solution`, `annotation_of_def`, `type_definition_of_def`,
+  `annotation_of_term`. Interned key wrappers live in `lang/statics/src/query.rs`
+  (`InternedType`/`InternedKind`/`InternedDef`/`InternedTerm`/`InternedFill`) because salsa query
+  arguments must be salsa IDs; plain `Eq + Hash` node IDs do not qualify.
+- `annotation_of_term` reconstructs `TermAnnId` from the `terms` provenance map and the per-sort
+  annotation tables. Direction lesson: `ArenaBipartite::back` maps typed nodes to source terms, so the
+  scoped-to-typed direction uses `forth`.
+- Measured reuse: first `analyze` of a small root takes ~2.8 ms; the repeated, unchanged analyze takes
+  ~52 µs (about 55×), confirming the memoization behavior already asserted by `Arc::ptr_eq` in the
+  session reuse test.
+- Attempted to make cajun's hover consume the fact queries by storing a session snapshot in
+  `ProjectState`. Reverted after a diagnosed hang: the LSP `refresh` path re-analyzes and replaces the
+  cached project on every request, and running salsa queries on the multi-threaded tokio runtime while
+  holding a `std::sync::Mutex` over the snapshot deadlocks
+  (`stdio_server_synchronizes_documents_and_answers_navigation_requests` hung with every thread parked;
+  a probe run showed the second hover's `refresh` as the last event). Lessons recorded:
+  - per-request consumers must not hold salsa sessions across the refresh/replacement cycle;
+  - instrumenting the LSP binary with `eprintln!` probes plus `sample` on the hung process is an
+    effective diagnosis path for protocol-level hangs.
+- The cajun consumer wiring is deferred until the refresh design stops re-analyzing on every request;
+  the fact queries remain the public session API for that future consumer.
