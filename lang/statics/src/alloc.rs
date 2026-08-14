@@ -172,8 +172,9 @@ where
     type Ann = KindId;
     type Env = ();
     fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, _env: &Self::Env) -> AbstId {
+        let abst: AbstId = arena.fresh();
         let statics = AsMut::<StaticsArena>::as_mut(arena);
-        let abst = statics.absts.alloc(());
+        statics.absts.insert_new(abst, ());
         statics.annotations_abst.insert_new(abst, ann);
         statics.abst_hints.insert_new(abst, val);
         abst
@@ -186,8 +187,9 @@ where
     type Ann = KindId;
     type Env = ();
     fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, _env: &Self::Env) -> AbstId {
+        let abst: AbstId = arena.fresh();
         let statics = AsMut::<StaticsArena>::as_mut(arena);
-        let abst = statics.absts.alloc(());
+        statics.absts.insert_new(abst, ());
         statics.annotations_abst.insert_new(abst, ann);
         if let Some(def) = val {
             statics.abst_hints.insert_new(abst, def);

@@ -2,7 +2,7 @@ mod common;
 
 use common::TestFixture;
 use zydeco_statics::{
-    Alloc,
+    Alloc, StaticsAlloc,
     environment::*,
     fmt::{Formatter, SealedTypeEquation},
     syntax::*,
@@ -32,10 +32,14 @@ fn sealed_types_pretty_print_as_names_with_separate_equations() {
         let (vtype, _) = TestFixture::kinds(tycker);
         let env = TyEnv::new();
         let unit = Alloc::alloc(tycker, UnitTy, vtype, &env);
-        let data = tycker.statics.datas.alloc(Data::new([
-            (CtorName("+True".to_owned()), unit),
-            (CtorName("+False".to_owned()), unit),
-        ]));
+        let data: DataId = tycker.fresh();
+        tycker.statics.datas.insert_new(
+            data,
+            Data::new([
+                (CtorName("+True".to_owned()), unit),
+                (CtorName("+False".to_owned()), unit),
+            ]),
+        );
         let representation = Alloc::alloc(tycker, data, vtype, &env);
         let definition = Alloc::alloc(tycker, VarName("Bool".to_owned()), AnnId::Kind(vtype), &());
         let sealed: AbstId = Alloc::alloc(tycker, definition, vtype, &());

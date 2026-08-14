@@ -17,6 +17,9 @@ pub enum StaticsScope {}
 
 impl Allocates<KindId> for StaticsScope {}
 impl Allocates<FillId> for StaticsScope {}
+impl Allocates<AbstId> for StaticsScope {}
+impl Allocates<DataId> for StaticsScope {}
+impl Allocates<CoDataId> for StaticsScope {}
 impl Allocates<KPatId> for StaticsScope {}
 impl Allocates<TPatId> for StaticsScope {}
 impl Allocates<TypeId> for StaticsScope {}
@@ -162,7 +165,7 @@ pub struct StaticsArena {
     pub terms: ArenaBipartite<su::TermId, TermId>,
 
     /// arena for abstract types
-    pub absts: ArenaDense<StaticsScope, AbstId>,
+    pub absts: ArenaSparse<StaticsScope, AbstId>,
     /// the abstract types generated from sealed types
     pub seals: ArenaAssoc<AbstId, TypeId>,
     /// name hints for abstract types
@@ -186,9 +189,9 @@ pub struct StaticsArena {
     /// which holes are introduced by the user and should be reported
     pub fill_hints: ArenaAssoc<FillId, ()>,
     /// arena for `data`; plural plural
-    pub datas: ArenaDense<StaticsScope, DataId>,
+    pub datas: ArenaSparse<StaticsScope, DataId>,
     /// arena for `codata`; plural plural
-    pub codatas: ArenaDense<StaticsScope, CoDataId>,
+    pub codatas: ArenaSparse<StaticsScope, CoDataId>,
     /// hints for values that need data annotations
     pub data_hints: ArenaAssoc<ValueId, DataId>,
     /// hints for value patterns that need data annotations

@@ -393,7 +393,8 @@ where
                 Ok((ctor, ty_))
             })
             .collect::<Result<im::Vector<_>>>()?;
-        let data = tycker.statics.datas.alloc(Data::new(arms_));
+        let data: DataId = tycker.fresh();
+        tycker.statics.datas.insert_new(data, Data::new(arms_));
         let (env, kd) = VType.mbuild(tycker, env)?;
         let alloc = Alloc::alloc(tycker, data, kd, &env.ty);
         Ok((env, alloc))
@@ -448,7 +449,8 @@ where
                 Ok((dtor, ty_))
             })
             .collect::<Result<im::Vector<_>>>()?;
-        let coda = tycker.statics.codatas.alloc(CoData::new(arms_));
+        let coda: CoDataId = tycker.fresh();
+        tycker.statics.codatas.insert_new(coda, CoData::new(arms_));
         let (env, kd) = CType.mbuild(tycker, env)?;
         let alloc = Alloc::alloc(tycker, coda, kd, &env.ty);
         Ok((env, alloc))

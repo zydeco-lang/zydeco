@@ -2032,7 +2032,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::Binding> {
 
                 // seal the type if needed
                 let bindee = if is_sealed {
-                    let abst = tycker.statics.absts.alloc(());
+                    let abst: AbstId = tycker.fresh();
+                    tycker.statics.absts.insert_new(abst, ());
                     if let (Some(def), _kd) = binder.try_destruct_def(tycker) {
                         tycker.statics.abst_hints.insert_new(abst, def);
                     }
@@ -2134,7 +2135,8 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
             // register the def with abstract type
             let (def, kd) = binder.try_destruct_def(tycker);
             if let Some(def) = def {
-                let abst = tycker.statics.absts.alloc(());
+                let abst: AbstId = tycker.fresh();
+                tycker.statics.absts.insert_new(abst, ());
                 tycker.statics.abst_hints.insert_new(abst, def);
                 let abst_ty = Alloc::alloc(tycker, abst, kd, &env.info);
                 env.info += [(def, abst_ty.into())];
@@ -5067,7 +5069,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             let _ = tycker.statics.type_definitions.upsert(def, bindee_out);
                         }
                         let bindee_out = if is_sealed {
-                            let abst = tycker.statics.absts.alloc(());
+                            let abst: AbstId = tycker.fresh();
+                            tycker.statics.absts.insert_new(abst, ());
                             if let (Some(def), _) = binder_out.try_destruct_def(tycker) {
                                 tycker.statics.abst_hints.insert_new(abst, def);
                             }
@@ -5298,7 +5301,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     };
                     arms_vec.push_back((name, ty));
                 }
-                let id = tycker.statics.datas.alloc(ss::Data::new(arms_vec));
+                let id: DataId = tycker.fresh();
+                tycker.statics.datas.insert_new(id, ss::Data::new(arms_vec));
                 let data = Alloc::alloc(tycker, id, vtype, &self.info);
                 TermAnnId::Type(data, vtype)
             }
@@ -5322,7 +5326,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     };
                     arms_vec.push_back((name, ty));
                 }
-                let id = tycker.statics.codatas.alloc(ss::CoData::new(arms_vec));
+                let id: CoDataId = tycker.fresh();
+                tycker.statics.codatas.insert_new(id, ss::CoData::new(arms_vec));
                 let codata = Alloc::alloc(tycker, id, ctype, &self.info);
                 TermAnnId::Type(codata, ctype)
             }

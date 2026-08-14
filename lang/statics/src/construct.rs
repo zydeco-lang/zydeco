@@ -537,7 +537,8 @@ where
                 (ctor, ty_)
             })
             .collect::<im::Vector<_>>();
-        let data = tycker.statics.datas.alloc(Data::new(arms_));
+        let data: DataId = tycker.fresh();
+        tycker.statics.datas.insert_new(data, Data::new(arms_));
         let kd = VType.build(tycker, env);
         Alloc::alloc(tycker, data, kd, env)
     }
@@ -590,7 +591,8 @@ impl<'a> Construct<Tycker<'a>, TypeId> for OSTy {
 impl<'a> Construct<Tycker<'a>, TypeId> for cs::TopTy {
     fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
         let ctype = CType.build(tycker, env);
-        let coda = tycker.statics.codatas.alloc(CoData::new([]));
+        let coda: CoDataId = tycker.fresh();
+        tycker.statics.codatas.insert_new(coda, CoData::new([]));
         Alloc::alloc(tycker, coda, ctype, env)
     }
 }
@@ -609,7 +611,8 @@ where
                 (dtor, ty_)
             })
             .collect::<im::Vector<_>>();
-        let coda = tycker.statics.codatas.alloc(CoData::new(arms_));
+        let coda: CoDataId = tycker.fresh();
+        tycker.statics.codatas.insert_new(coda, CoData::new(arms_));
         let kd = CType.build(tycker, env);
         Alloc::alloc(tycker, coda, kd, env)
     }

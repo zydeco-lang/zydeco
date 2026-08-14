@@ -466,7 +466,8 @@ impl TypeId {
                     //     *self
                     // } else
                     {
-                        let id_ = tycker.statics.datas.alloc(Data::new(arms_));
+                        let id_: DataId = tycker.fresh();
+                        tycker.statics.datas.insert_new(id_, Data::new(arms_));
                         Alloc::alloc(tycker, id_, kd, env)
                     }
                 }
@@ -490,7 +491,8 @@ impl TypeId {
                     //     *self
                     // } else
                     {
-                        let id_ = tycker.statics.codatas.alloc(CoData::new(arms_));
+                        let id_: CoDataId = tycker.fresh();
+                        tycker.statics.codatas.insert_new(id_, CoData::new(arms_));
                         Alloc::alloc(tycker, id_, kd, env)
                     }
                 }
@@ -717,7 +719,8 @@ impl TypeId {
                     if unchanged {
                         *self
                     } else {
-                        let id_ = tycker.statics.datas.alloc(Data::new(arms_));
+                        let id_: DataId = tycker.fresh();
+                        tycker.statics.datas.insert_new(id_, Data::new(arms_));
                         Alloc::alloc(tycker, id_, kd, &env)
                     }
                 }
@@ -739,7 +742,8 @@ impl TypeId {
                     if unchanged {
                         *self
                     } else {
-                        let id_ = tycker.statics.codatas.alloc(CoData::new(arms_));
+                        let id_: CoDataId = tycker.fresh();
+                        tycker.statics.codatas.insert_new(id_, CoData::new(arms_));
                         Alloc::alloc(tycker, id_, kd, &env)
                     }
                 }
@@ -1471,7 +1475,8 @@ impl TypeId {
                     if unchanged {
                         res
                     } else {
-                        let data = tycker.statics.datas.alloc(Data::new(arms_));
+                        let data: DataId = tycker.fresh();
+                        tycker.statics.datas.insert_new(data, Data::new(arms_));
                         Alloc::alloc(tycker, data, tycker.statics.annotations_type[&res], &env)
                     }
                 }
@@ -1493,7 +1498,8 @@ impl TypeId {
                     if unchanged {
                         res
                     } else {
-                        let codata = tycker.statics.codatas.alloc(CoData::new(arms_));
+                        let codata: CoDataId = tycker.fresh();
+                        tycker.statics.codatas.insert_new(codata, CoData::new(arms_));
                         Alloc::alloc(tycker, codata, tycker.statics.annotations_type[&res], &env)
                     }
                 }
