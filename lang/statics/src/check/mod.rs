@@ -4511,9 +4511,30 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         std::panic::Location::caller(),
                                     )?,
                                 };
-                                let app: ss::ValueId =
-                                    Alloc::alloc(tycker, ss::App(f_out, a_ty), ty_out, &self.info);
-                                TermAnnId::Value(app, ty_out)
+                                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                                let input = crate::query::InternedAppInput::new(
+                                    tycker.db,
+                                    crate::query::AppKind::ValueType {
+                                        function: f_out,
+                                        argument: a_ty,
+                                    },
+                                    ty_out,
+                                    ty_out,
+                                );
+                                let Some(crate::query::AppSynOutcome::Value {
+                                    id,
+                                    value,
+                                    ann,
+                                    reported,
+                                }) =
+                                    crate::query::app_judgment(tycker.db, tycker.data, term, input)
+                                else {
+                                    unreachable!("value-type applications are query-produced")
+                                };
+                                tycker.statics.values.insert_new(id, value);
+                                tycker.statics.annotations_value.insert_new(id, ann);
+                                tycker.statics.env_value.insert_new(id, self.info.clone());
+                                TermAnnId::Value(id, reported)
                             }
                             | ss::Type::VPackPi(signature) => self
                                 .mk(ValuePackPiElimination {
@@ -4540,9 +4561,30 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         std::panic::Location::caller(),
                                     )?,
                                 };
-                                let app: ss::ValueId =
-                                    Alloc::alloc(tycker, ss::App(f_out, a_out), ty_out, &self.info);
-                                TermAnnId::Value(app, ty_out)
+                                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                                let input = crate::query::InternedAppInput::new(
+                                    tycker.db,
+                                    crate::query::AppKind::ValueValue {
+                                        function: f_out,
+                                        argument: a_out,
+                                    },
+                                    ty_out,
+                                    ty_out,
+                                );
+                                let Some(crate::query::AppSynOutcome::Value {
+                                    id,
+                                    value,
+                                    ann,
+                                    reported,
+                                }) =
+                                    crate::query::app_judgment(tycker.db, tycker.data, term, input)
+                                else {
+                                    unreachable!("value applications are query-produced")
+                                };
+                                tycker.statics.values.insert_new(id, value);
+                                tycker.statics.annotations_value.insert_new(id, ann);
+                                tycker.statics.env_value.insert_new(id, self.info.clone());
+                                TermAnnId::Value(id, reported)
                             }
                             | _ => tycker.err_k(
                                 TyckError::TypeExpected {
@@ -4585,9 +4627,30 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         },
                                     }
                                 };
-                                let app =
-                                    Alloc::alloc(tycker, ss::App(f_out, a_out), ty_out, &self.info);
-                                TermAnnId::Compu(app, ty_out)
+                                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                                let input = crate::query::InternedAppInput::new(
+                                    tycker.db,
+                                    crate::query::AppKind::CompuValue {
+                                        function: f_out,
+                                        argument: a_out,
+                                    },
+                                    ty_out,
+                                    ty_out,
+                                );
+                                let Some(crate::query::AppSynOutcome::Compu {
+                                    id,
+                                    compu,
+                                    ann,
+                                    reported,
+                                }) =
+                                    crate::query::app_judgment(tycker.db, tycker.data, term, input)
+                                else {
+                                    unreachable!("computation applications are query-produced")
+                                };
+                                tycker.statics.compus.insert_new(id, compu);
+                                tycker.statics.annotations_compu.insert_new(id, ann);
+                                tycker.statics.env_compu.insert_new(id, self.info.clone());
+                                TermAnnId::Compu(id, reported)
                             }
                             | ss::Type::Forall(ty) => {
                                 // a type-polymorphic term application
@@ -4617,9 +4680,32 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         },
                                     }
                                 };
-                                let app =
-                                    Alloc::alloc(tycker, ss::App(f_out, a_ty), ty_out, &self.info);
-                                TermAnnId::Compu(app, body_ty_subst)
+                                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                                let input = crate::query::InternedAppInput::new(
+                                    tycker.db,
+                                    crate::query::AppKind::CompuType {
+                                        function: f_out,
+                                        argument: a_ty,
+                                    },
+                                    ty_out,
+                                    body_ty_subst,
+                                );
+                                let Some(crate::query::AppSynOutcome::Compu {
+                                    id,
+                                    compu,
+                                    ann,
+                                    reported,
+                                }) =
+                                    crate::query::app_judgment(tycker.db, tycker.data, term, input)
+                                else {
+                                    unreachable!(
+                                        "polymorphic computation applications are query-produced"
+                                    )
+                                };
+                                tycker.statics.compus.insert_new(id, compu);
+                                tycker.statics.annotations_compu.insert_new(id, ann);
+                                tycker.statics.env_compu.insert_new(id, self.info.clone());
+                                TermAnnId::Compu(id, reported)
                             }
                             | ss::Type::PackPi(signature) => self
                                 .mk(PackPiElimination { function: f_out, argument: a, signature })
@@ -4672,8 +4758,17 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     std::panic::Location::caller(),
                 )?;
                 binder_elaboration.close_scope_k(tycker, fix_ty)?;
-                let fix = Alloc::alloc(tycker, ss::Fix(binder, body_out), fix_ty, &self.info);
-                TermAnnId::Compu(fix, fix_ty)
+                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                let input =
+                    crate::query::InternedFixInput::new(tycker.db, binder, body_out, fix_ty);
+                let Some(outcome) = crate::query::fix_judgment(tycker.db, tycker.data, term, input)
+                else {
+                    unreachable!("fixpoint judgments are query-produced")
+                };
+                tycker.statics.compus.insert_new(outcome.id, outcome.compu);
+                tycker.statics.annotations_compu.insert_new(outcome.id, outcome.ann);
+                tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());
+                TermAnnId::Compu(outcome.id, outcome.ann)
             }
             | Tm::Pi(term) => {
                 let su::Pi(binder, body) = term;

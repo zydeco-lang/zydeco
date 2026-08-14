@@ -939,6 +939,125 @@ pub fn let_judgment<'db>(
     }
 }
 
+/// The shape of an application judgment: which sorts the function and
+/// argument were checked as.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum AppKind {
+    ValueValue { function: ss::ValueId, argument: ss::ValueId },
+    ValueType { function: ss::ValueId, argument: ss::TypeId },
+    CompuValue { function: ss::CompuId, argument: ss::ValueId },
+    CompuType { function: ss::CompuId, argument: ss::TypeId },
+}
+
+/// An interned application judgment input, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedAppInput<'db> {
+    pub kind: AppKind,
+    /// The annotation recorded on the application node.
+    pub ann: ss::TypeId,
+    /// The type reported by the judgment; usually the annotation, but the
+    /// polymorphic computation application reports the substituted body type.
+    pub reported: ss::TypeId,
+}
+
+/// The allocation tail of an application judgment, split by the application's
+/// sort.
+#[derive(Clone, Debug)]
+pub enum AppSynOutcome {
+    Value { id: ss::ValueId, value: ss::Value, ann: ss::TypeId, reported: ss::TypeId },
+    Compu { id: ss::CompuId, compu: ss::Computation, ann: ss::TypeId, reported: ss::TypeId },
+}
+
+/// The synthesized judgment of an application term, keyed on the checked
+/// function and argument plus the result types the checker destructured from
+/// the function's arrow or forall.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn app_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+    input: InternedAppInput<'db>,
+) -> Option<AppSynOutcome> {
+    let su::Term::App(su::App(_, _)) = data.scoped(db).terms.get(&term.id(db))? else {
+        return None;
+    };
+    let site_space = term.id(db).key_space().as_u64();
+    let site_raw = term.id(db).raw().into_u32();
+    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0);
+    match input.kind(db) {
+        | AppKind::ValueValue { function, argument } => {
+            let id: ss::ValueId = derived_id(key_space, 0);
+            Some(AppSynOutcome::Value {
+                id,
+                value: ss::Value::VApp(ss::App(function, argument)),
+                ann: input.ann(db),
+                reported: input.reported(db),
+            })
+        }
+        | AppKind::ValueType { function, argument } => {
+            let id: ss::ValueId = derived_id(key_space, 0);
+            Some(AppSynOutcome::Value {
+                id,
+                value: ss::Value::TApp(ss::App(function, argument)),
+                ann: input.ann(db),
+                reported: input.reported(db),
+            })
+        }
+        | AppKind::CompuValue { function, argument } => {
+            let id: ss::CompuId = derived_id(key_space, 0);
+            Some(AppSynOutcome::Compu {
+                id,
+                compu: ss::Computation::VApp(ss::App(function, argument)),
+                ann: input.ann(db),
+                reported: input.reported(db),
+            })
+        }
+        | AppKind::CompuType { function, argument } => {
+            let id: ss::CompuId = derived_id(key_space, 0);
+            Some(AppSynOutcome::Compu {
+                id,
+                compu: ss::Computation::TApp(ss::App(function, argument)),
+                ann: input.ann(db),
+                reported: input.reported(db),
+            })
+        }
+    }
+}
+
+/// An interned fixpoint judgment input, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedFixInput<'db> {
+    pub binder: ss::VPatId,
+    pub body: ss::CompuId,
+    pub ann: ss::TypeId,
+}
+
+/// The allocation tail of a fixpoint judgment: the fix computation node.
+#[derive(Clone, Debug)]
+pub struct FixSynOutcome {
+    pub id: ss::CompuId,
+    pub compu: ss::Computation,
+    pub ann: ss::TypeId,
+}
+
+/// The synthesized judgment of a fixpoint term.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn fix_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+    input: InternedFixInput<'db>,
+) -> Option<FixSynOutcome> {
+    let su::Term::Fix(su::Fix(_, _)) = data.scoped(db).terms.get(&term.id(db))? else {
+        return None;
+    };
+    let site_space = term.id(db).key_space().as_u64();
+    let site_raw = term.id(db).raw().into_u32();
+    let id: ss::CompuId =
+        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0), 0);
+    Some(FixSynOutcome {
+        id,
+        compu: ss::Computation::Fix(ss::Fix(input.binder(db), input.body(db))),
+        ann: input.ann(db),
+    })
+}
+
 /// The rejection of an intrinsic `Internal` term, carried as a query value so
 /// the checker routes decisions through queries and keeps the writer as a sink.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]

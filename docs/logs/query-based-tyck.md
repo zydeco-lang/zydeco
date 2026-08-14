@@ -446,3 +446,15 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   `type_filled_k` destructure) until the fill-state conversion turns those reads into
   `fill_state` query calls; the queries receive their results as inputs.
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — applications and fixpoints allocate through queries
+
+- `app_judgment` covers all four application tails (value and computation applications, term
+  and type arguments) from one interned input (`InternedAppInput` carrying the kind
+  discriminator, the recorded annotation, and the reported type). The polymorphic
+  computation application's quirk — the node records the lub'd type while the judgment
+  reports the substituted body type — is preserved explicitly via the two fields.
+- `fix_judgment` allocates the fix computation node keyed on the checked binder, body, and
+  result type. The checker keeps the arrow/forall destructuring and the argument checks,
+  which read the arena until the fill-state conversion lands.
+- Workspace suite passes unchanged (61 targets green), clippy clean.
