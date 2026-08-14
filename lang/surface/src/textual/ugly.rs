@@ -1,6 +1,6 @@
 use super::syntax::*;
 
-pub use zydeco_syntax::Ugly;
+pub use zydeco_syntax::{Pretty, Ugly};
 /// Formatter for textual syntax using the "ugly" surface form.
 pub struct Formatter<'arena> {
     // spans: SpanArenaTextual,
@@ -12,378 +12,341 @@ impl<'arena> Formatter<'arena> {
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for DefId {
-    fn ugly(&self, f: &'a Formatter) -> String {
+use pretty::RcDoc;
+
+impl<'a> Pretty<'a, Formatter<'a>> for DefId {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let name = &f.arena.defs[self];
-        name.ugly(f)
+        name.pretty(f)
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for PatId {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
+impl<'a> Pretty<'a, Formatter<'a>> for PatId {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let pat = &f.arena.pats[self];
         match pat {
-            | Pattern::Ann(p) => s += &p.ugly(f),
-            | Pattern::Manifest(p) => s += &p.ugly(f),
-            | Pattern::Hole(p) => s += &p.ugly(f),
-            | Pattern::Var(p) => s += &p.ugly(f),
-            | Pattern::Named(p) => s += &p.ugly(f),
-            | Pattern::Ctor(p) => s += &p.ugly(f),
-            | Pattern::Project(p) => s += &p.ugly(f),
-            | Pattern::Alias(p) => s += &p.ugly(f),
-            | Pattern::Paren(p) => s += &p.ugly(f),
+            | Pattern::Ann(p) => p.pretty(f),
+            | Pattern::Manifest(p) => p.pretty(f),
+            | Pattern::Hole(p) => p.pretty(f),
+            | Pattern::Var(p) => p.pretty(f),
+            | Pattern::Named(p) => p.pretty(f),
+            | Pattern::Ctor(p) => p.pretty(f),
+            | Pattern::Project(p) => p.pretty(f),
+            | Pattern::Alias(p) => p.pretty(f),
+            | Pattern::Paren(p) => p.pretty(f),
         }
-        s
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for CoPatId {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
+impl<'a> Pretty<'a, Formatter<'a>> for CoPatId {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let copat = &f.arena.copats[self];
         match copat {
-            | CoPattern::Pat(c) => s += &c.ugly(f),
-            | CoPattern::Dtor(c) => s += &c.ugly(f),
-            | CoPattern::App(c) => s += &c.ugly(f),
+            | CoPattern::Pat(c) => c.pretty(f),
+            | CoPattern::Dtor(c) => c.pretty(f),
+            | CoPattern::App(c) => c.pretty(f),
         }
-        s
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for TermId {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
+impl<'a> Pretty<'a, Formatter<'a>> for TermId {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let term = &f.arena.terms[self];
         match term {
             | Term::Meta(MetaT(meta, payload)) => {
                 if matches!(&f.arena.terms[payload], Term::Hole(_)) {
-                    s += "@(";
-                    s += &meta.ugly(f);
-                    s += ")";
+                    RcDoc::concat([RcDoc::text("@("), meta.pretty(f), RcDoc::text(")")])
                 } else {
-                    s += "@[";
-                    s += &meta.ugly(f);
-                    s += "] ";
-                    s += &payload.ugly(f);
+                    RcDoc::concat([
+                        RcDoc::text("@["),
+                        meta.pretty(f),
+                        RcDoc::text("] "),
+                        payload.pretty(f),
+                    ])
                 }
             }
-            | Term::SourceBoundary(SourceBoundary(t)) => s += &t.ugly(f),
-            | Term::SignatureBoundary(SignatureBoundary(t)) => s += &t.ugly(f),
-            | Term::Ann(t) => s += &t.ugly(f),
-            | Term::Hole(t) => s += &t.ugly(f),
-            | Term::Var(t) => s += &t.ugly(f),
-            | Term::Named(t) => s += &t.ugly(f),
-            | Term::Label(t) => s += &t.ugly(f),
-            | Term::Paren(t) => s += &t.ugly(f),
-            | Term::Abs(t) => s += &t.ugly(f),
-            | Term::App(t) => s += &t.ugly(f),
-            | Term::Fix(t) => s += &t.ugly(f),
-            | Term::Pi(t) => s += &t.ugly(f),
-            | Term::Arrow(t) => s += &t.ugly(f),
-            | Term::Forall(t) => s += &t.ugly(f),
-            | Term::Sigma(t) => s += &t.ugly(f),
-            | Term::Prod(t) => s += &t.ugly(f),
-            | Term::Exists(t) => s += &t.ugly(f),
-            | Term::Thunk(t) => s += &t.ugly(f),
-            | Term::Force(t) => s += &t.ugly(f),
-            | Term::Ret(t) => s += &t.ugly(f),
-            | Term::Do(t) => s += &t.ugly(f),
-            | Term::Let(t) => s += &t.ugly(f),
-            | Term::Param(t) => s += &t.ugly(f),
-            | Term::ContextBind(t) => s += &t.ugly(f),
-            | Term::Block(t) => s += &t.ugly(f),
-            | Term::Data(t) => s += &t.ugly(f),
-            | Term::CoData(t) => s += &t.ugly(f),
-            | Term::Ctor(t) => s += &t.ugly(f),
-            | Term::Match(t) => s += &t.ugly(f),
-            | Term::CoMatch(t) => s += &t.ugly(f),
-            | Term::Dtor(t) => s += &t.ugly(f),
-            | Term::Proj(t) => s += &t.ugly(f),
-            | Term::Lit(t) => s += &t.ugly(f),
+            | Term::SourceBoundary(SourceBoundary(t)) => t.pretty(f),
+            | Term::SignatureBoundary(SignatureBoundary(t)) => t.pretty(f),
+            | Term::Ann(t) => t.pretty(f),
+            | Term::Hole(t) => t.pretty(f),
+            | Term::Var(t) => t.pretty(f),
+            | Term::Named(t) => t.pretty(f),
+            | Term::Label(t) => t.pretty(f),
+            | Term::Paren(t) => t.pretty(f),
+            | Term::Abs(t) => t.pretty(f),
+            | Term::App(t) => t.pretty(f),
+            | Term::Fix(t) => t.pretty(f),
+            | Term::Pi(t) => t.pretty(f),
+            | Term::Arrow(t) => t.pretty(f),
+            | Term::Forall(t) => t.pretty(f),
+            | Term::Sigma(t) => t.pretty(f),
+            | Term::Prod(t) => t.pretty(f),
+            | Term::Exists(t) => t.pretty(f),
+            | Term::Thunk(t) => t.pretty(f),
+            | Term::Force(t) => t.pretty(f),
+            | Term::Ret(t) => t.pretty(f),
+            | Term::Do(t) => t.pretty(f),
+            | Term::Let(t) => t.pretty(f),
+            | Term::Param(t) => t.pretty(f),
+            | Term::ContextBind(t) => t.pretty(f),
+            | Term::Block(t) => t.pretty(f),
+            | Term::Data(t) => t.pretty(f),
+            | Term::CoData(t) => t.pretty(f),
+            | Term::Ctor(t) => t.pretty(f),
+            | Term::Match(t) => t.pretty(f),
+            | Term::CoMatch(t) => t.pretty(f),
+            | Term::Dtor(t) => t.pretty(f),
+            | Term::Proj(t) => t.pretty(f),
+            | Term::Lit(t) => t.pretty(f),
         }
-        s
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Meta {
-    fn ugly(&self, _f: &'a Formatter) -> String {
-        self.to_string()
+impl<'a> Pretty<'a, Formatter<'a>> for Meta {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::text(self.to_string())
     }
 }
 
-impl<'a, S, T> Ugly<'a, Formatter<'a>> for Ann<S, T>
+impl<'a, S, T> Pretty<'a, Formatter<'a>> for Ann<S, T>
 where
-    S: Ugly<'a, Formatter<'a>>,
-    T: Ugly<'a, Formatter<'a>>,
+    S: Pretty<'a, Formatter<'a>>,
+    T: Pretty<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Ann { tm, ty } = self;
-        s += "(";
-        s += &tm.ugly(f);
-        s += " : ";
-        s += &ty.ugly(f);
-        s += ")";
-        s
+        RcDoc::concat([
+            RcDoc::text("("),
+            tm.pretty(f),
+            RcDoc::text(" : "),
+            ty.pretty(f),
+            RcDoc::text(")"),
+        ])
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for ManifestPattern {
-    fn ugly(&self, f: &'a Formatter) -> String {
+impl<'a> Pretty<'a, Formatter<'a>> for ManifestPattern {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let ManifestPattern { binder, definition } = self;
-        format!("({} as {})", binder.ugly(f), definition.ugly(f))
+        RcDoc::concat([
+            RcDoc::text("("),
+            binder.pretty(f),
+            RcDoc::text(" as "),
+            definition.pretty(f),
+            RcDoc::text(")"),
+        ])
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Hole {
-    fn ugly(&self, _f: &'a Formatter) -> String {
-        "_".to_string()
+impl<'a> Pretty<'a, Formatter<'a>> for Hole {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::text("_")
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for FieldName {
-    fn ugly(&self, _f: &'a Formatter) -> String {
-        self.plain()
+impl<'a> Pretty<'a, Formatter<'a>> for FieldName {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::text(self.plain())
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for VarName {
-    fn ugly(&self, _f: &'a Formatter) -> String {
+impl<'a> Pretty<'a, Formatter<'a>> for VarName {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
         let VarName(name) = self;
-        name.clone()
+        RcDoc::text(name.clone())
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for Named<FieldName, T>
+impl<'a, T> Pretty<'a, Formatter<'a>> for Named<FieldName, T>
 where
-    T: Ugly<'a, Formatter<'a>>,
+    T: Pretty<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &'a Formatter) -> String {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Named(name, inner) = self;
-        format!("{} = {}", name.ugly(f), inner.ugly(f))
+        RcDoc::concat([name.pretty(f), RcDoc::text(" = "), inner.pretty(f)])
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for Label<FieldName, T>
+impl<'a, T> Pretty<'a, Formatter<'a>> for Label<FieldName, T>
 where
-    T: Ugly<'a, Formatter<'a>>,
+    T: Pretty<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &'a Formatter) -> String {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Label(name, inner) = self;
-        format!("{} :: {}", name.ugly(f), inner.ugly(f))
+        RcDoc::concat([name.pretty(f), RcDoc::text(" :: "), inner.pretty(f)])
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for CtorName {
-    fn ugly(&self, _f: &'a Formatter) -> String {
+impl<'a> Pretty<'a, Formatter<'a>> for CtorName {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
         let CtorName(name) = self;
-        name.clone()
+        RcDoc::text(name.clone())
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for DtorName {
-    fn ugly(&self, _f: &'a Formatter) -> String {
+impl<'a> Pretty<'a, Formatter<'a>> for DtorName {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
         let DtorName(name) = self;
-        name.clone()
+        RcDoc::text(name.clone())
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for Ctor<CtorName, T>
+impl<'a, T> Pretty<'a, Formatter<'a>> for Ctor<CtorName, T>
 where
-    T: Ugly<'a, Formatter<'a>>,
+    T: Pretty<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Ctor(name, tail) = self;
-        s += &name.ugly(f);
-        s += "(";
-        s += &tail.ugly(f);
-        s += ")";
-        s
+        RcDoc::concat([name.pretty(f), RcDoc::text("("), tail.pretty(f), RcDoc::text(")")])
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for Paren<T>
+impl<'a, T> Pretty<'a, Formatter<'a>> for Paren<T>
 where
-    T: Ugly<'a, Formatter<'a>>,
+    T: Pretty<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Paren(ts) = self;
-        s += "(";
-        s += &ts.iter().map(|t| t.ugly(f)).collect::<Vec<_>>().join(",");
-        s += ")";
-        s
+        RcDoc::concat([
+            RcDoc::text("("),
+            RcDoc::intersperse(ts.iter().map(|t| t.pretty(f)), RcDoc::text(",")),
+            RcDoc::text(")"),
+        ])
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for Alias<T>
+impl<'a, T> Pretty<'a, Formatter<'a>> for Alias<T>
 where
-    T: Ugly<'a, Formatter<'a>>,
+    T: Pretty<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &'a Formatter) -> String {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Alias(patterns) = self;
-        format!(
-            "({})",
-            patterns.iter().map(|pattern| pattern.ugly(f)).collect::<Vec<_>>().join("; ")
-        )
+        RcDoc::concat([
+            RcDoc::text("("),
+            RcDoc::intersperse(patterns.iter().map(|pattern| pattern.pretty(f)), RcDoc::text("; ")),
+            RcDoc::text(")"),
+        ])
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for ProjectionPattern<FieldName, T>
+impl<'a, T> Pretty<'a, Formatter<'a>> for ProjectionPattern<FieldName, T>
 where
-    T: Ugly<'a, Formatter<'a>>,
+    T: Pretty<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &'a Formatter) -> String {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let ProjectionPattern(field, pattern) = self;
-        format!("/{} = {}", field.ugly(f), pattern.ugly(f))
+        RcDoc::concat([RcDoc::text("/"), field.pretty(f), RcDoc::text(" = "), pattern.pretty(f)])
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for Dtor<T, DtorName>
+impl<'a, T> Pretty<'a, Formatter<'a>> for Dtor<T, DtorName>
 where
-    T: Ugly<'a, Formatter<'a>>,
+    T: Pretty<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Dtor(head, name) = self;
-        s += &head.ugly(f);
-        s += " ";
-        s += &name.ugly(f);
-        s
+        RcDoc::concat([head.pretty(f), RcDoc::text(" "), name.pretty(f)])
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for Proj<T, FieldName>
+impl<'a, T> Pretty<'a, Formatter<'a>> for Proj<T, FieldName>
 where
-    T: Ugly<'a, Formatter<'a>>,
+    T: Pretty<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &'a Formatter) -> String {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Proj(head, name) = self;
-        format!("{}/{}", head.ugly(f), name.ugly(f))
+        RcDoc::concat([head.pretty(f), RcDoc::text("/"), name.pretty(f)])
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for Appli<T>
+impl<'a, T> Pretty<'a, Formatter<'a>> for Appli<T>
 where
-    T: Ugly<'a, Formatter<'a>>,
+    T: Pretty<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Appli(ts) = self;
-        s += "(";
-        s += &ts.iter().map(|t| t.ugly(f)).collect::<Vec<_>>().join(" ");
-        s += ")";
-        s
+        RcDoc::concat([
+            RcDoc::text("("),
+            RcDoc::intersperse(ts.iter().map(|t| t.pretty(f)), RcDoc::text(" ")),
+            RcDoc::text(")"),
+        ])
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Abs<CoPatId, TermId> {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
+impl<'a> Pretty<'a, Formatter<'a>> for Abs<CoPatId, TermId> {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Abs(p, t) = self;
-        s += "fn ";
-        s += &p.ugly(f);
-        s += " => ";
-        s += &t.ugly(f);
-        s
+        RcDoc::concat([RcDoc::text("fn "), p.pretty(f), RcDoc::text(" => "), t.pretty(f)])
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Fix<PatId, TermId> {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
+impl<'a> Pretty<'a, Formatter<'a>> for Fix<PatId, TermId> {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Fix(p, t) = self;
-        s += "fix ";
-        s += &p.ugly(f);
-        s += " => ";
-        s += &t.ugly(f);
-        s
+        RcDoc::concat([RcDoc::text("fix "), p.pretty(f), RcDoc::text(" => "), t.pretty(f)])
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Pi {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
+impl<'a> Pretty<'a, Formatter<'a>> for Pi {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Pi(p, t) = self;
-        s += "pi ";
-        s += &p.ugly(f);
-        s += " . ";
-        s += &t.ugly(f);
-        s
+        RcDoc::concat([RcDoc::text("pi "), p.pretty(f), RcDoc::text(" . "), t.pretty(f)])
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for ArrowU<T>
+impl<'a, T> Pretty<'a, Formatter<'a>> for ArrowU<T>
 where
-    T: Ugly<'a, Formatter<'a>>,
+    T: Pretty<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Arrow(t1, t2) = self;
-        s += &t1.ugly(f);
-        s += " -> ";
-        s += &t2.ugly(f);
-        s
+        RcDoc::concat([t1.pretty(f), RcDoc::text(" -> "), t2.pretty(f)])
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Forall {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
+impl<'a> Pretty<'a, Formatter<'a>> for Forall {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Forall(p, t) = self;
-        s += "forall ";
-        s += &p.ugly(f);
-        s += " . ";
-        s += &t.ugly(f);
-        s
+        RcDoc::concat([RcDoc::text("forall "), p.pretty(f), RcDoc::text(" . "), t.pretty(f)])
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Sigma {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
+impl<'a> Pretty<'a, Formatter<'a>> for Sigma {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Sigma(p, t) = self;
-        s += "sigma ";
-        s += &p.ugly(f);
-        s += " . ";
-        s += &t.ugly(f);
-        s
+        RcDoc::concat([RcDoc::text("sigma "), p.pretty(f), RcDoc::text(" . "), t.pretty(f)])
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for ProdU<T>
+impl<'a, T> Pretty<'a, Formatter<'a>> for ProdU<T>
 where
-    T: Ugly<'a, Formatter<'a>>,
+    T: Pretty<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Prod(t1, r2) = self;
-        s += &t1.ugly(f);
-        s += " * ";
-        s += &r2.ugly(f);
-        s
+        RcDoc::concat([t1.pretty(f), RcDoc::text(" * "), r2.pretty(f)])
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Exists {
-    fn ugly(&self, f: &'a Formatter) -> String {
+impl<'a> Pretty<'a, Formatter<'a>> for Exists {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Exists { parameters, body } = self;
-        let parameters =
-            parameters.iter().map(|parameter| parameter.ugly(f)).collect::<Vec<_>>().join(" ");
-        format!("exists {parameters} . {}", body.ugly(f))
+        let parameters = RcDoc::intersperse(
+            parameters.iter().map(|parameter| parameter.pretty(f)),
+            RcDoc::text(" "),
+        );
+        RcDoc::concat([RcDoc::text("exists "), parameters, RcDoc::text(" . "), body.pretty(f)])
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for ExistentialParameter {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let annotations = self
-            .annotations
-            .iter()
-            .map(|annotation| format!("@[{}]", annotation.inner.ugly(f)))
-            .collect::<Vec<_>>()
-            .join(" ");
+impl<'a> Pretty<'a, Formatter<'a>> for ExistentialParameter {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let annotations = RcDoc::intersperse(
+            self.annotations.iter().map(|annotation| {
+                RcDoc::concat([RcDoc::text("@["), annotation.inner.pretty(f), RcDoc::text("]")])
+            }),
+            RcDoc::text(" "),
+        );
         let parameter = match self.binder {
             | binder
                 if matches!(
@@ -391,236 +354,225 @@ impl<'a> Ugly<'a, Formatter<'a>> for ExistentialParameter {
                     Pattern::Ann(_) | Pattern::Manifest(_) | Pattern::Paren(_)
                 ) =>
             {
-                binder.ugly(f)
+                binder.pretty(f)
             }
-            | binder => format!("({})", binder.ugly(f)),
+            | binder => RcDoc::concat([RcDoc::text("("), binder.pretty(f), RcDoc::text(")")]),
         };
-        if annotations.is_empty() { parameter } else { format!("{annotations} {parameter}") }
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for Thunk<TermId> {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let Thunk(t) = self;
-        s += "{ ";
-        s += &t.ugly(f);
-        s += " }";
-        s
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for Force<TermId> {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let Force(t) = self;
-        s += "! ";
-        s += &t.ugly(f);
-        s
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for Return<TermId> {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let Return(t) = self;
-        s += "ret ";
-        s += &t.ugly(f);
-        s
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for Bind<PatId, TermId, TermId> {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let Bind { binder, bindee, tail } = self;
-        s += "do ";
-        s += &binder.ugly(f);
-        s += " <- ";
-        s += &bindee.ugly(f);
-        s += "; ";
-        s += &tail.ugly(f);
-        s
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for GenLet {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let GenLet { binding, tail } = self;
-        s += "let ";
-        s += &binding.ugly(f);
-        s += " in ";
-        s += &tail.ugly(f);
-        s
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for Placement {
-    fn ugly(&self, _f: &'a Formatter) -> String {
-        match self {
-            | Placement::In => "in".to_string(),
-            | Placement::That => "that".to_string(),
+        if self.annotations.is_empty() {
+            parameter
+        } else {
+            RcDoc::concat([annotations, RcDoc::text(" "), parameter])
         }
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Param {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let Param { binder, placement, tail } = self;
-        format!("param {} {} {}", binder.ugly(f), placement.ugly(f), tail.ugly(f))
+impl<'a> Pretty<'a, Formatter<'a>> for Thunk<TermId> {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let Thunk(t) = self;
+        RcDoc::concat([RcDoc::text("{ "), t.pretty(f), RcDoc::text(" }")])
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for ContextBind {
-    fn ugly(&self, f: &'a Formatter) -> String {
+impl<'a> Pretty<'a, Formatter<'a>> for Force<TermId> {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let Force(t) = self;
+        RcDoc::concat([RcDoc::text("! "), t.pretty(f)])
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Return<TermId> {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let Return(t) = self;
+        RcDoc::concat([RcDoc::text("ret "), t.pretty(f)])
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Bind<PatId, TermId, TermId> {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let Bind { binder, bindee, tail } = self;
+        RcDoc::concat([
+            RcDoc::text("do "),
+            binder.pretty(f),
+            RcDoc::text(" <- "),
+            bindee.pretty(f),
+            RcDoc::text("; "),
+            tail.pretty(f),
+        ])
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for GenLet {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let GenLet { binding, tail } = self;
+        RcDoc::concat([RcDoc::text("let "), binding.pretty(f), RcDoc::text(" in "), tail.pretty(f)])
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Placement {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
+        match self {
+            | Placement::In => RcDoc::text("in"),
+            | Placement::That => RcDoc::text("that"),
+        }
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Param {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let Param { binder, placement, tail } = self;
+        RcDoc::concat([
+            RcDoc::text("param "),
+            binder.pretty(f),
+            RcDoc::text(" "),
+            placement.pretty(f),
+            RcDoc::text(" "),
+            tail.pretty(f),
+        ])
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for ContextBind {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let ContextBind { mode, binding, placement, tail } = self;
         let keyword = match mode {
             | DefinitionMode::Transparent => "let",
             | DefinitionMode::Nominal => "def",
         };
-        format!("{} {} {} {}", keyword, binding.ugly(f), placement.ugly(f), tail.ugly(f))
+        RcDoc::concat([
+            RcDoc::text(keyword),
+            RcDoc::text(" "),
+            binding.pretty(f),
+            RcDoc::text(" "),
+            placement.pretty(f),
+            RcDoc::text(" "),
+            tail.pretty(f),
+        ])
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Block {
-    fn ugly(&self, f: &'a Formatter) -> String {
+impl<'a> Pretty<'a, Formatter<'a>> for Block {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Block(body) = self;
-        format!("begin {} end", body.ugly(f))
+        RcDoc::concat([RcDoc::text("begin "), body.pretty(f), RcDoc::text(" end")])
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for GenBind<TermId> {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
+impl<'a> Pretty<'a, Formatter<'a>> for GenBind<TermId> {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let GenBind { fix, comp, binder, params, ty, bindee } = self;
+        let mut doc = RcDoc::nil();
         if *fix {
-            s += "fix ";
+            doc = doc.append(RcDoc::text("fix "));
         }
         if *comp {
-            s += "! ";
+            doc = doc.append(RcDoc::text("! "));
         }
-        s += &binder.ugly(f);
+        doc = doc.append(binder.pretty(f));
         if let Some(params) = params {
-            s += " ";
-            s += &params.ugly(f);
+            doc = doc.append(RcDoc::text(" ")).append(params.pretty(f));
         }
         if let Some(ty) = ty {
-            s += " : ";
-            s += &ty.ugly(f);
+            doc = doc.append(RcDoc::text(" : ")).append(ty.pretty(f));
         }
-        s += " = ";
-        s += &bindee.ugly(f);
-        s
+        doc.append(RcDoc::text(" = ")).append(bindee.pretty(f))
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for GenBind<Option<TermId>> {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
+impl<'a> Pretty<'a, Formatter<'a>> for GenBind<Option<TermId>> {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let GenBind { fix, comp, binder, params, ty, bindee } = self;
+        let mut doc = RcDoc::nil();
         if *fix {
-            s += "fix ";
+            doc = doc.append(RcDoc::text("fix "));
         }
         if *comp {
-            s += "! ";
+            doc = doc.append(RcDoc::text("! "));
         }
-        s += &binder.ugly(f);
+        doc = doc.append(binder.pretty(f));
         if let Some(params) = params {
-            s += " ";
-            s += &params.ugly(f);
+            doc = doc.append(RcDoc::text(" ")).append(params.pretty(f));
         }
         if let Some(ty) = ty {
-            s += " : ";
-            s += &ty.ugly(f);
+            doc = doc.append(RcDoc::text(" : ")).append(ty.pretty(f));
         }
         if let Some(bindee) = bindee {
-            s += " = ";
-            s += &bindee.ugly(f);
+            doc = doc.append(RcDoc::text(" = ")).append(bindee.pretty(f));
         }
-        s
+        doc
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Data {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
+impl<'a> Pretty<'a, Formatter<'a>> for Data {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Data { arms } = self;
-        s += "data";
+        let mut doc = RcDoc::text("data");
         for DataArm { name, param } in arms {
-            s += " | ";
-            s += &name.ugly(f);
-            s += " ";
-            s += &param.ugly(f);
+            doc = doc.append(RcDoc::concat([
+                RcDoc::text(" | "),
+                name.pretty(f),
+                RcDoc::text(" "),
+                param.pretty(f),
+            ]));
         }
-        s += " end";
-        s
+        doc.append(RcDoc::text(" end"))
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for CoData {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
+impl<'a> Pretty<'a, Formatter<'a>> for CoData {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let CoData { arms } = self;
-        s += "codata";
+        let mut doc = RcDoc::text("codata");
         for CoDataArm { name, params, out } in arms {
-            s += " | ";
-            s += &name.ugly(f);
+            doc = doc.append(RcDoc::concat([RcDoc::text(" | "), name.pretty(f)]));
             if let Some(params) = params {
-                s += " ";
-                s += &params.ugly(f);
+                doc = doc.append(RcDoc::text(" ")).append(params.pretty(f));
             }
-            s += " : ";
-            s += &out.ugly(f);
+            doc = doc.append(RcDoc::text(" : ")).append(out.pretty(f));
         }
-        s += " end";
-        s
+        doc.append(RcDoc::text(" end"))
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Match<TermId, PatId, TermId> {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
+impl<'a> Pretty<'a, Formatter<'a>> for Match<TermId, PatId, TermId> {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Match { scrut, arms } = self;
-        s += "match ";
-        s += &scrut.ugly(f);
+        let mut doc = RcDoc::concat([RcDoc::text("match "), scrut.pretty(f)]);
         for Matcher { binder, tail } in arms {
-            s += " | ";
-            s += &binder.ugly(f);
-            s += " => ";
-            s += &tail.ugly(f);
+            doc = doc.append(RcDoc::concat([
+                RcDoc::text(" | "),
+                binder.pretty(f),
+                RcDoc::text(" => "),
+                tail.pretty(f),
+            ]));
         }
-        s += " end";
-        s
+        doc.append(RcDoc::text(" end"))
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for CoMatchParam {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
+impl<'a> Pretty<'a, Formatter<'a>> for CoMatchParam {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let CoMatchParam { arms } = self;
-        s += "comatch";
+        let mut doc = RcDoc::text("comatch");
         for CoMatcherParam { params, tail } in arms {
-            s += " | ";
-            s += &params.ugly(f);
-            s += " => ";
-            s += &tail.ugly(f);
+            doc = doc.append(RcDoc::concat([
+                RcDoc::text(" | "),
+                params.pretty(f),
+                RcDoc::text(" => "),
+                tail.pretty(f),
+            ]));
         }
-        s += " end";
-        s
+        doc.append(RcDoc::text(" end"))
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Literal {
-    fn ugly(&self, _f: &'a Formatter) -> String {
-        let mut s = String::new();
+impl<'a> Pretty<'a, Formatter<'a>> for Literal {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
         match self {
-            | Literal::Integer(i) => s += &format!("{:?}", i),
-            | Literal::Float(value) => s += &format!("{:?}", value),
+            | Literal::Integer(i) => RcDoc::text(format!("{i:?}")),
+            | Literal::Float(value) => RcDoc::text(format!("{value:?}")),
             // Fixme: escape string
-            | Literal::String(str) => s += &format!("{:?}", str),
-            | Literal::Char(c) => s += &format!("{:?}", c),
+            | Literal::String(str) => RcDoc::text(format!("{str:?}")),
+            | Literal::Char(c) => RcDoc::text(format!("{c:?}")),
         }
-        s
     }
 }

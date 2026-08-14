@@ -18,6 +18,7 @@ zydeco-surface = { workspace = true }
 zydeco-statics = { workspace = true }
 im = { workspace = true }
 derive_more = { workspace = true }
+pretty = { workspace = true }
 thiserror = { workspace = true }
 rand = { workspace = true }
 
