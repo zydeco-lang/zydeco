@@ -315,6 +315,49 @@ impl CompilerSession {
         Ok(normalized_type_at(self, root, id))
     }
 
+    /// Coverage failures of one root, computed on demand from its analysis.
+    pub fn coverage(
+        &self, root: impl AsRef<Path>,
+    ) -> Result<Vec<zydeco_statics::validate::CoverageError>, AnalysisError> {
+        let root = self
+            .source_input(root.as_ref().to_path_buf())
+            .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
+        Ok(coverage_at(self, root))
+    }
+
+    /// The recorded solution of a hole-filling site, memoized per analysis.
+    pub fn fill_solution(
+        &self, root: impl AsRef<Path>, fill: zydeco_statics::syntax::FillId,
+    ) -> Result<Option<zydeco_statics::syntax::AnnId>, AnalysisError> {
+        let root = self
+            .source_input(root.as_ref().to_path_buf())
+            .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
+        let fill = zydeco_statics::query::InternedFill::new(self, fill);
+        Ok(fill_solution_at(self, root, fill))
+    }
+
+    /// The type annotation recorded for a scoped definition.
+    pub fn annotation_of_def(
+        &self, root: impl AsRef<Path>, def: zydeco_statics::syntax::DefId,
+    ) -> Result<Option<zydeco_statics::syntax::AnnId>, AnalysisError> {
+        let root = self
+            .source_input(root.as_ref().to_path_buf())
+            .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
+        let def = zydeco_statics::query::InternedDef::new(self, def);
+        Ok(annotation_of_def(self, root, def))
+    }
+
+    /// The checked body of a type definition, if the definition introduces one.
+    pub fn type_definition_of_def(
+        &self, root: impl AsRef<Path>, def: zydeco_statics::syntax::DefId,
+    ) -> Result<Option<zydeco_statics::syntax::TypeId>, AnalysisError> {
+        let root = self
+            .source_input(root.as_ref().to_path_buf())
+            .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
+        let def = zydeco_statics::query::InternedDef::new(self, def);
+        Ok(type_definition_of_def(self, root, def))
+    }
+
     #[cfg(test)]
     fn template(
         &self, path: impl AsRef<Path>,
@@ -424,6 +467,44 @@ fn normalized_type_at<'db>(
 ) -> Option<Type> {
     let analysis = analyze_source(db, root).ok()?;
     analysis.statics().types_normalized.get(&id.id(db)).cloned()
+}
+
+/// Coverage failures of one analyzed root, computed on demand.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+fn coverage_at(
+    db: &dyn SourceQueryDb, root: SourceInput,
+) -> Vec<zydeco_statics::validate::CoverageError> {
+    let Ok(analysis) = analyze_source(db, root) else {
+        return Vec::new();
+    };
+    zydeco_statics::validate::CoverageChecker::new(analysis.statics()).validate()
+}
+
+/// The recorded solution of a hole-filling site, if the checker solved it.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+fn fill_solution_at<'db>(
+    db: &'db dyn SourceQueryDb, root: SourceInput, fill: zydeco_statics::query::InternedFill<'db>,
+) -> Option<zydeco_statics::syntax::AnnId> {
+    let analysis = analyze_source(db, root).ok()?;
+    analysis.statics().solus.get(&fill.id(db)).copied()
+}
+
+/// The type annotation recorded for a scoped definition.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+fn annotation_of_def<'db>(
+    db: &'db dyn SourceQueryDb, root: SourceInput, def: zydeco_statics::query::InternedDef<'db>,
+) -> Option<zydeco_statics::syntax::AnnId> {
+    let analysis = analyze_source(db, root).ok()?;
+    analysis.statics().annotations_var.get(&def.id(db)).copied()
+}
+
+/// The checked body of a type definition, if the definition introduces one.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+fn type_definition_of_def<'db>(
+    db: &'db dyn SourceQueryDb, root: SourceInput, def: zydeco_statics::query::InternedDef<'db>,
+) -> Option<zydeco_statics::syntax::TypeId> {
+    let analysis = analyze_source(db, root).ok()?;
+    analysis.statics().type_definitions.get(&def.id(db)).copied()
 }
 
 #[cfg(test)]
@@ -628,5 +709,67 @@ mod tests {
             repeated.as_ref().map(|ty| format!("{ty:?}")),
             "repeated lookups should agree",
         );
+    }
+
+    #[test]
+    fn coverage_facts_are_demand_driven_per_analysis() {
+        let fixture = Fixture::new();
+        let library = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib/std");
+        let builtin = library.join("builtin.zy").canonicalize().unwrap();
+        let source = format!(
+            r#"let Builtin = @[import("{builtin}")] _ in
+param (
+  (/core; /representations; /numeric; /system; builtin) :
+  Builtin
+) in
+let (/VType; /CType; /Thk; /Ret; /Unit) = core in
+let (/Scalar = Int8) = representations/i8 in
+let (/Scalar = Int16) = representations/i16 in
+let (/Scalar = Int32) = representations/i32 in
+let (/Scalar = Int64) = representations/i64 in
+let (/Scalar = UInt8) = representations/u8 in
+let (/Scalar = UInt16) = representations/u16 in
+let (/Scalar = UInt32) = representations/u32 in
+let (/Scalar = UInt64) = representations/u64 in
+let (/Scalar = Float32) = representations/f32 in
+let (/Scalar = Float64) = representations/f64 in
+let (/Scalar = Char) = representations/char in
+let (/Scalar = String) = representations/string in
+let (/Scalar = Bytes) = representations/bytes in
+let (Scalar = NumericInt64, int64) = numeric/int64 in
+let (/Reader; /Writer; /OS; /process) = system in
+let Thunk = Thk in
+let U = Thk in
+let F = Ret in
+let api = (int64 = int64, exit = process/exit) in
+let exit = process/exit in
+let Top : CType = codata end in
+let triv : Thk Top = {{ comatch end }} in
+begin
+  let Bool =
+    data
+    | +False : Unit
+    | +True : Unit
+    end
+  that
+  let value : Bool = +True() that
+  match value
+  | +True(_) => ret ()
+  end
+end
+"#,
+            builtin = builtin.display(),
+        );
+        let root = fixture.write("root.zy", &source);
+        let session = CompilerSession::default();
+
+        let analysis = session.analyze(&root).unwrap();
+        assert!(analysis.outcome().reports().is_some_and(|reports| !reports.is_empty()));
+
+        let coverage = session.coverage(&root).unwrap();
+        assert!(coverage.iter().any(|error| {
+            matches!(error, zydeco_statics::validate::CoverageError::NonExhaustiveMatch { .. })
+        }));
+        assert_eq!(coverage.len(), session.coverage(&root).unwrap().len());
     }
 }

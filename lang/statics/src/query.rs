@@ -51,6 +51,18 @@ pub struct InternedKind<'db> {
     pub id: ss::KindId,
 }
 
+/// An interned scoped definition, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedDef<'db> {
+    pub id: su::DefId,
+}
+
+/// An interned hole-filling site, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedFill<'db> {
+    pub id: ss::FillId,
+}
+
 /// The complete result of checking one source snapshot.
 #[derive(Clone, Debug)]
 pub struct TyckOutput {
