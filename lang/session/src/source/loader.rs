@@ -44,16 +44,18 @@ impl SourceTemplate {
         let documentation = unit.documentation(&parser.arena, &parser.spans);
         let warnings =
             unit.unattached_text(&parser.arena).into_iter().map(SourceWarning::from).collect();
-        let import_sites = unit
-            .imports(&parser.arena, &parser.spans)
-            .map_err(|error| SourceParseError::Directive { path: path.clone(), error })?;
-        unit.builtins(&parser.arena, &parser.spans)
-            .map_err(|error| SourceParseError::BuiltinDirective { path: path.clone(), error })?;
-        unit.intrinsics(&parser.arena, &parser.spans)
-            .map_err(|error| SourceParseError::IntrinsicDirective { path: path.clone(), error })?;
-        let literals = unit
-            .literals(&parser.arena, &parser.spans)
-            .map_err(|error| SourceParseError::LiteralDirective { path: path.clone(), error })?;
+        let import_sites = unit.imports(&parser.arena, &parser.spans).map_err(|error| {
+            SourceParseError::Directive { path: path.clone(), error: Box::new(error) }
+        })?;
+        unit.builtins(&parser.arena, &parser.spans).map_err(|error| {
+            SourceParseError::BuiltinDirective { path: path.clone(), error: Box::new(error) }
+        })?;
+        unit.intrinsics(&parser.arena, &parser.spans).map_err(|error| {
+            SourceParseError::IntrinsicDirective { path: path.clone(), error: Box::new(error) }
+        })?;
+        let literals = unit.literals(&parser.arena, &parser.spans).map_err(|error| {
+            SourceParseError::LiteralDirective { path: path.clone(), error: Box::new(error) }
+        })?;
         let (spans, arena) = parser.finish();
         Ok(Self {
             path,
@@ -161,13 +163,13 @@ where
             | ImportTarget::Path(_) => SourceLoadError::ImportPath {
                 importer: importer_path.to_path_buf(),
                 requested: requested.clone(),
-                span: site.directive.span.clone(),
+                span: Box::new(site.directive.span.clone()),
                 source,
             },
             | ImportTarget::Input(input) => SourceLoadError::ImportInput {
                 importer: importer_path.to_path_buf(),
                 input: *input,
-                span: site.directive.span.clone(),
+                span: Box::new(site.directive.span.clone()),
                 source,
             },
         };

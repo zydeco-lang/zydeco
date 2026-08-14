@@ -703,7 +703,7 @@ fn source_graph_rejects_an_unknown_builtin_role() {
     else {
         panic!("expected an invalid Builtin directive")
     };
-    let zydeco_surface::textual::BuiltinDirectiveError::Invalid { source, .. } = error else {
+    let zydeco_surface::textual::BuiltinDirectiveError::Invalid { source, .. } = *error else {
         panic!("expected an invalid Builtin role")
     };
     assert!(matches!(source.as_ref(), zydeco_surface::metadata::BuiltinMetaError::UnknownRole(_)));
@@ -720,7 +720,7 @@ fn source_graph_rejects_a_roleless_intrinsic_splice() {
         panic!("expected an invalid intrinsic directive")
     };
     assert!(matches!(
-        error,
+        &*error,
         zydeco_surface::textual::IntrinsicDirectiveError::Invalid {
             source: zydeco_surface::metadata::IntrinsicMetaError::RoleArity { found: 0 },
             ..
@@ -995,14 +995,10 @@ fn a_literal_splice_without_an_attached_text_block_is_rejected() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "@[literal] _");
     let error = SourceGraph::load(root).unwrap_err();
-
-    assert!(matches!(
-        error,
-        SourceLoadError::Parse(SourceParseError::LiteralDirective {
-            error: zydeco_surface::textual::LiteralDirectiveError::MissingText { .. },
-            ..
-        })
-    ));
+    let SourceLoadError::Parse(SourceParseError::LiteralDirective { error, .. }) = error else {
+        panic!("expected an invalid literal splice")
+    };
+    assert!(matches!(&*error, zydeco_surface::textual::LiteralDirectiveError::MissingText { .. }));
 }
 
 #[test]
@@ -1010,13 +1006,12 @@ fn a_literal_splice_on_a_non_hole_term_is_rejected() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "--| Text\n@[literal] 1");
     let error = SourceGraph::load(root).unwrap_err();
-
+    let SourceLoadError::Parse(SourceParseError::LiteralDirective { error, .. }) = error else {
+        panic!("expected an invalid literal splice")
+    };
     assert!(matches!(
-        error,
-        SourceLoadError::Parse(SourceParseError::LiteralDirective {
-            error: zydeco_surface::textual::LiteralDirectiveError::PayloadNotHole { .. },
-            ..
-        })
+        &*error,
+        zydeco_surface::textual::LiteralDirectiveError::PayloadNotHole { .. }
     ));
 }
 

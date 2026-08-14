@@ -167,7 +167,7 @@ pub enum AnalysisError {
     #[error("Desugaring error: {error}")]
     Desugar {
         #[source]
-        error: DesugarError,
+        error: Box<DesugarError>,
     },
     #[error("Resolution error: {error}")]
     Resolve {
@@ -377,7 +377,8 @@ fn analyze_source(
 ) -> Result<Arc<ProgramAnalysis>, AnalysisError> {
     let graph = source_graph(db, root).map_err(|error| AnalysisError::Source { error })?;
     let program = graph.assemble().map_err(|error| AnalysisError::TextualProgram { error })?;
-    let bitter = program.desugar().map_err(|error| AnalysisError::Desugar { error })?;
+    let bitter =
+        program.desugar().map_err(|error| AnalysisError::Desugar { error: Box::new(error) })?;
     let ScopedProgram { spans, mut arena, prim, root } =
         bitter.resolve().map_err(|error| AnalysisError::Resolve { error, graph: graph.clone() })?;
     let checked = Tycker::new(&spans, &prim, &mut arena).check_source_outcome(root);

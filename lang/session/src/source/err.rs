@@ -23,25 +23,25 @@ pub enum SourceParseError {
     Directive {
         path: PathBuf,
         #[source]
-        error: ImportDirectiveError,
+        error: Box<ImportDirectiveError>,
     },
     #[error("invalid Builtin directive in `{}`: {error}", path.display())]
     BuiltinDirective {
         path: PathBuf,
         #[source]
-        error: BuiltinDirectiveError,
+        error: Box<BuiltinDirectiveError>,
     },
     #[error("invalid intrinsic directive in `{}`: {error}", path.display())]
     IntrinsicDirective {
         path: PathBuf,
         #[source]
-        error: IntrinsicDirectiveError,
+        error: Box<IntrinsicDirectiveError>,
     },
     #[error("invalid literal directive in `{}`: {error}", path.display())]
     LiteralDirective {
         path: PathBuf,
         #[source]
-        error: LiteralDirectiveError,
+        error: Box<LiteralDirectiveError>,
     },
 }
 
@@ -61,7 +61,7 @@ pub enum SourceLoadError {
     ImportPath {
         importer: PathBuf,
         requested: PathBuf,
-        span: Span,
+        span: Box<Span>,
         #[source]
         source: Arc<io::Error>,
     },
@@ -69,7 +69,7 @@ pub enum SourceLoadError {
     ImportInput {
         importer: PathBuf,
         input: SourceNumber,
-        span: Span,
+        span: Box<Span>,
         #[source]
         source: Arc<io::Error>,
     },
