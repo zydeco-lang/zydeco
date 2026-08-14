@@ -2061,6 +2061,76 @@ pub fn pat_alias_ana_judgment<'db>(
     })
 }
 
+/// The arm of a named pattern's analyzed judgment.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum PatNamedAnaArm {
+    Kind { name: ss::FieldName, inner: ss::TPatId, expected: ss::KindId },
+    Type { name: ss::FieldName, inner: ss::VPatId, expected: ss::TypeId },
+    SortMismatch,
+}
+
+/// An interned named-pattern analysis input, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedPatNamedAna<'db> {
+    pub arm: PatNamedAnaArm,
+}
+
+/// The allocation tail of a named pattern's analyzed judgment.
+#[derive(Clone, Debug)]
+pub enum PatNamedAnaOutcome {
+    Type { id: ss::TPatId, pat: ss::TypePattern, kd: ss::KindId },
+    Value { id: ss::VPatId, pat: ss::ValuePattern, ty: ss::TypeId },
+    Error(crate::check::TyckError),
+}
+
+/// The synthesized judgment of a named pattern's analyzed arm, keyed on the
+/// checked inner pattern and the destructured expected label.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn pat_named_ana_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>,
+    input: InternedPatNamedAna<'db>, occurrence: u32,
+) -> Option<PatNamedAnaOutcome> {
+    let su::Pattern::Named(_) = data.scoped(db).pats.get(&pat.id(db))? else {
+        return None;
+    };
+    let site_space = pat.id(db).key_space().as_u64();
+    let site_raw = pat.id(db).raw().into_u32();
+    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
+    match input.arm(db) {
+        | PatNamedAnaArm::Kind { name, inner, expected } => {
+            let id: ss::TPatId = derived_id(key_space, 0);
+            Some(PatNamedAnaOutcome::Type {
+                id,
+                pat: ss::TypePattern::Named(ss::Named(name, inner)),
+                kd: expected,
+            })
+        }
+        | PatNamedAnaArm::Type { name, inner, expected } => {
+            let id: ss::VPatId = derived_id(key_space, 0);
+            Some(PatNamedAnaOutcome::Value {
+                id,
+                pat: ss::ValuePattern::Named(ss::Named(name, inner)),
+                ty: expected,
+            })
+        }
+        | PatNamedAnaArm::SortMismatch => {
+            Some(PatNamedAnaOutcome::Error(crate::check::TyckError::SortMismatch))
+        }
+    }
+}
+
+/// The synthesized judgment of a projection pattern: it always fails with a
+/// missing annotation.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn pat_project_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>,
+) -> Option<crate::check::TyckError> {
+    let su::Pattern::Project(_) = data.scoped(db).pats.get(&pat.id(db))? else {
+        return None;
+    };
+    Some(crate::check::TyckError::MissingAnnotation)
+}
+
 /// The rejection of an intrinsic `Internal` term, carried as a query value so
 /// the checker routes decisions through queries and keeps the writer as a sink.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]

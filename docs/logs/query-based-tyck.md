@@ -555,3 +555,18 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
 - The fold itself — the `insert_or_get` + lub merge on `annotations_var` — stays
   checker-side until `lub` is query-able, per the design's step ordering.
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — pattern analysis arms allocate through queries
+
+- The consumed pattern's analyzed product arm reuses `pat_cons_syn_judgment` (the fold shape is
+  identical across modes; only the checker's per-item env threading differs), so the Ana prod
+  tail's product chain and consumed pattern node now derive at the pattern's site.
+- `pat_named_ana_judgment` owns the named pattern's analyzed arms (the named type-pattern and
+  value-pattern nodes plus the set rejection), keyed on the checked inner pattern and the
+  destructured expected label.
+- `pat_ctor_ana_judgment` and `pat_alias_ana_judgment` own the constructor and alias pattern
+  tails (`data_pat_hints` stays checker-side), and `pat_project_syn_judgment` turned the
+  projection pattern's synthesis rejection into an error query.
+- The remaining pattern-side work is the existential-opening arm of consumed patterns, the
+  projection pattern's resolver arms, and the variable-pattern merge fold itself (lub).
+- Workspace suite passes unchanged (61 targets green), clippy clean.

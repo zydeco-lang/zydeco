@@ -2473,9 +2473,28 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                             TyckError::SortMismatch,
                             std::panic::Location::caller(),
                         )?;
-                        let named =
-                            Alloc::alloc(tycker, ss::Named(name, inner), expected, &self.info);
-                        checked.with_annotation(PatAnnId::Type(named, expected))
+                        let pat_i = crate::query::InternedPat::new(tycker.db, self.inner);
+                        let input = crate::query::InternedPatNamedAna::new(
+                            tycker.db,
+                            crate::query::PatNamedAnaArm::Kind { name, inner, expected },
+                        );
+                        let Some(crate::query::PatNamedAnaOutcome::Type { id, pat, kd }) =
+                            crate::query::pat_named_ana_judgment(
+                                tycker.db,
+                                tycker.data,
+                                pat_i,
+                                input,
+                                tycker.site_occurrence(),
+                            )
+                        else {
+                            unreachable!(
+                                "the kind arm of named pattern judgments is query-produced"
+                            )
+                        };
+                        tycker.statics.tpats.insert_new(id, pat);
+                        tycker.statics.annotations_tpat.insert_new(id, kd);
+                        tycker.statics.env_tpat.insert_new(id, self.info.clone());
+                        checked.with_annotation(PatAnnId::Type(id, kd))
                     }
                     | Switch::Ana(AnnId::Type(expected)) => {
                         let expected_view =
@@ -2509,18 +2528,59 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                             TyckError::SortMismatch,
                             std::panic::Location::caller(),
                         )?;
-                        let named =
-                            Alloc::alloc(tycker, ss::Named(name, inner), expected, &self.info);
-                        checked.with_annotation(PatAnnId::Value(named, expected))
+                        let pat_i = crate::query::InternedPat::new(tycker.db, self.inner);
+                        let input = crate::query::InternedPatNamedAna::new(
+                            tycker.db,
+                            crate::query::PatNamedAnaArm::Type { name, inner, expected },
+                        );
+                        let Some(crate::query::PatNamedAnaOutcome::Value { id, pat, ty }) =
+                            crate::query::pat_named_ana_judgment(
+                                tycker.db,
+                                tycker.data,
+                                pat_i,
+                                input,
+                                tycker.site_occurrence(),
+                            )
+                        else {
+                            unreachable!(
+                                "the type arm of named pattern judgments is query-produced"
+                            )
+                        };
+                        tycker.statics.vpats.insert_new(id, pat);
+                        tycker.statics.annotations_vpat.insert_new(id, ty);
+                        tycker.statics.env_vpat.insert_new(id, self.info.clone());
+                        checked.with_annotation(PatAnnId::Value(id, ty))
                     }
                     | Switch::Ana(AnnId::Set) => {
-                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                        let pat_i = crate::query::InternedPat::new(tycker.db, self.inner);
+                        let input = crate::query::InternedPatNamedAna::new(
+                            tycker.db,
+                            crate::query::PatNamedAnaArm::SortMismatch,
+                        );
+                        let Some(crate::query::PatNamedAnaOutcome::Error(error)) =
+                            crate::query::pat_named_ana_judgment(
+                                tycker.db,
+                                tycker.data,
+                                pat_i,
+                                input,
+                                tycker.site_occurrence(),
+                            )
+                        else {
+                            unreachable!("the set arm of named pattern judgments is query-produced")
+                        };
+                        tycker.err_k(error, std::panic::Location::caller())?
                     }
                 }
             }
             | Pat::Project(su::ProjectionPattern(field, inner)) => match switch {
                 | Switch::Syn => {
-                    tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
+                    let pat = crate::query::InternedPat::new(tycker.db, self.inner);
+                    let Some(error) =
+                        crate::query::pat_project_syn_judgment(tycker.db, tycker.data, pat)
+                    else {
+                        unreachable!("projection pattern judgments are query-produced")
+                    };
+                    tycker.err_k(error, std::panic::Location::caller())?
                 }
                 | Switch::Ana(AnnId::Kind(expected)) => {
                     let candidate = FieldProjectionResolver::r#type(tycker, expected, &field)?;
@@ -2867,15 +2927,54 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                 )?;
                                 pattern_env = checked.info;
                                 opened.extend(checked.inner.opened);
-                                let vtype = ss::VType.build(tycker, &pattern_env);
-                                let ann = annotations.into_iter().rev().fold(ann, |ann, head| {
-                                    Alloc::alloc(tycker, ss::Prod(head, ann), vtype, &pattern_env)
-                                });
-                                let cons =
-                                    Alloc::alloc(tycker, ss::ConsN(output, tail), ann, &self.info);
+                                let item_outcomes = output
+                                    .iter()
+                                    .zip(&annotations)
+                                    .map(|(vpat, ty)| PatAnnId::Value(*vpat, *ty))
+                                    .collect::<Vec<_>>();
+                                let pat_interned =
+                                    crate::query::InternedPat::new(tycker.db, self.inner);
+                                let items_interned =
+                                    crate::query::InternedPatItems::new(tycker.db, item_outcomes);
+                                let tail_interned = crate::query::InternedPatAnn::new(
+                                    tycker.db,
+                                    PatAnnId::Value(tail, ann),
+                                );
+                                let Some(outcome) = crate::query::pat_cons_syn_judgment(
+                                    tycker.db,
+                                    tycker.data,
+                                    pat_interned,
+                                    items_interned,
+                                    tail_interned,
+                                    tycker.site_occurrence(),
+                                ) else {
+                                    unreachable!(
+                                        "the product arm of consumed pattern judgments is query-produced"
+                                    )
+                                };
+                                for (id, prod) in outcome.prods {
+                                    tycker
+                                        .statics
+                                        .types_pre
+                                        .insert_new(id, ss::Fillable::Done(prod));
+                                    tycker.statics.annotations_type.insert_new(id, outcome.vtype);
+                                    tycker.statics.env_type.insert_new(id, pattern_env.clone());
+                                }
+                                tycker.statics.vpats.insert_new(outcome.pat_id, outcome.pat);
+                                tycker
+                                    .statics
+                                    .annotations_vpat
+                                    .insert_new(outcome.pat_id, outcome.ann);
+                                tycker
+                                    .statics
+                                    .env_vpat
+                                    .insert_new(outcome.pat_id, self.info.clone());
                                 TyEnvT::new(
                                     pattern_env,
-                                    PatternCheck::with_opened(PatAnnId::Value(cons, ann), opened),
+                                    PatternCheck::with_opened(
+                                        PatAnnId::Value(outcome.pat_id, outcome.ann),
+                                        opened,
+                                    ),
                                 )
                             }
                             | ss::Type::Exists(_) | ss::Type::ManifestKind(_) => {
