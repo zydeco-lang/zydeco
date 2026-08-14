@@ -5,10 +5,11 @@ RUST_MIN_STACK = "4194304"
 rustflags = ['--cfg', 'getrandom_backend="wasm_js"']
 
 [alias]
-test-workspace-low = "test --workspace -- --test-threads=2"
-check-workspace = "check --workspace"
-build-workspace = "build --workspace"
-test-workspace = "test --workspace"
-clippy-workspace = "clippy --workspace"
-clippy-fix-workspace = "clippy --workspace --fix"
-doc-workspace = "doc --workspace"
+check-all = "check --all --all-targets"
+build-all = "build --all --all-targets"
+test-all = "test --all --all-targets"
+test-all-low = "test --all --all-targets -- --test-threads=2"
+test-doc-all = "test --all --doc"
+clippy-all = "clippy --all --all-targets"
+clippy-fix-all = "clippy --all --all-targets --fix"
+doc-all = "doc --all --all-targets"

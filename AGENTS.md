@@ -70,7 +70,7 @@ cargo fmt --all
 ```
 Lint the codebase:
 ```sh
-cargo clippy-workspace
+cargo clippy-all
 ```
 
 Run a Zydeco program:
@@ -79,11 +79,16 @@ zydeco run path/to/main.zy
 ```
 
 Run focused tests for the affected crate or test target while iterating.
-Do not run `cargo test-workspace` as a routine verification step: it is CPU-intensive,
+Do not run `cargo test-all` as a routine verification step: it is CPU-intensive,
 and its native end-to-end tests may also fetch runtime dependencies from crates.io.
 Run the full workspace suite only when the user explicitly requests it:
 ```sh
-cargo test-workspace
+cargo test-all
+```
+`--all-targets` excludes doctests by design (see `cargo test --help`); run the
+documentation tests separately when they were touched:
+```sh
+cargo test-doc-all
 ```
 
 ## Repository Layout

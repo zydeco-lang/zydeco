@@ -7,8 +7,8 @@ repos:
         entry: cargo fmt -- --check
         language: system
         pass_filenames: false
-      - id: cargo-check-workspace
-        name: cargo check-workspace
-        entry: cargo check-workspace
+      - id: cargo-check-all
+        name: cargo check-all
+        entry: cargo check-all
         language: system
         pass_filenames: false

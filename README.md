@@ -92,7 +92,7 @@ For now, you can also choose to browse `lib/` for some example programs.
 
 To run all tests
 ```bash
-cargo test-workspace
+cargo test-all
 ```
 
 ## Editor Support
