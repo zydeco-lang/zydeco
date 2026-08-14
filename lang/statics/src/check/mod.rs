@@ -4137,12 +4137,27 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     | Switch::Syn => {
                         let pat_out_ann = self.mk(pat).tyck_k(tycker, PatternAction::syn())?;
                         match pat_out_ann.annotation {
-                            | PatAnnId::Kind(_) => tycker.err_k(
-                                TyckError::Expressivity(
-                                    "functions cannot abstract over the meta-level `Set`",
-                                ),
-                                std::panic::Location::caller(),
-                            )?,
+                            | PatAnnId::Kind(_) => {
+                                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                                let input = crate::query::InternedAbsSyn::new(
+                                    tycker.db,
+                                    crate::query::AbsSynArm::Expressivity,
+                                );
+                                let Some(crate::query::AbsSynOutcome::Error(error)) =
+                                    crate::query::abs_syn_judgment(
+                                        tycker.db,
+                                        tycker.data,
+                                        term,
+                                        input,
+                                        tycker.site_occurrence(),
+                                    )
+                                else {
+                                    unreachable!(
+                                        "the kind arm of abstraction judgments is query-produced"
+                                    )
+                                };
+                                tycker.err_k(error, std::panic::Location::caller())?
+                            }
                             | PatAnnId::Type(tpat, kd) => {
                                 // could be either type-polymorphic function or type function
                                 let abst = Alloc::alloc(tycker, tpat, (), &());
@@ -4159,8 +4174,6 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 match body_out_ann {
                                     | TermAnnId::Type(ty, body_kd) => {
                                         // a type function
-                                        let ann =
-                                            Alloc::alloc(tycker, ss::Arrow(kd, body_kd), (), &());
                                         // recover abst in ty
                                         let ty = if let (Some(def), _kd) =
                                             tpat.try_destruct_def(tycker)
@@ -4170,55 +4183,169 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         } else {
                                             ty
                                         };
-                                        let abs = Alloc::alloc(
-                                            tycker,
-                                            ss::Abs(tpat, ty),
-                                            ann,
-                                            &self.info,
+                                        let term =
+                                            crate::query::InternedTerm::new(tycker.db, self.inner);
+                                        let input = crate::query::InternedAbsSyn::new(
+                                            tycker.db,
+                                            crate::query::AbsSynArm::TypeFunction {
+                                                tpat,
+                                                kd,
+                                                body_kd,
+                                                ty,
+                                            },
                                         );
-                                        TermAnnId::Type(abs, ann)
+                                        let Some(crate::query::AbsSynOutcome::TypeFunction {
+                                            arrow_id,
+                                            arrow,
+                                            abs_id,
+                                            abs,
+                                        }) = crate::query::abs_syn_judgment(
+                                            tycker.db,
+                                            tycker.data,
+                                            term,
+                                            input,
+                                            tycker.site_occurrence(),
+                                        )
+                                        else {
+                                            unreachable!(
+                                                "the type function arm of abstraction judgments is query-produced"
+                                            )
+                                        };
+                                        tycker
+                                            .statics
+                                            .kinds_pre
+                                            .insert_new(arrow_id, ss::Fillable::Done(arrow));
+                                        tycker
+                                            .statics
+                                            .types_pre
+                                            .insert_new(abs_id, ss::Fillable::Done(abs));
+                                        tycker
+                                            .statics
+                                            .annotations_type
+                                            .insert_new(abs_id, arrow_id);
+                                        tycker
+                                            .statics
+                                            .env_type
+                                            .insert_new(abs_id, self.info.clone());
+                                        TermAnnId::Type(abs_id, arrow_id)
                                     }
                                     | TermAnnId::Compu(compu, body_ty) => {
                                         // a type-polymorphic function
-                                        let ctype = ss::CType.build(tycker, &self.info);
-                                        let binder =
-                                            ss::TypeBinder { pattern: tpat, witness: abst };
-                                        let ann = Alloc::alloc(
-                                            tycker,
-                                            ss::Forall(binder, body_ty),
-                                            ctype,
-                                            &self.info,
+                                        let term =
+                                            crate::query::InternedTerm::new(tycker.db, self.inner);
+                                        let input = crate::query::InternedAbsSyn::new(
+                                            tycker.db,
+                                            crate::query::AbsSynArm::PolymorphicCompu {
+                                                tpat,
+                                                abst,
+                                                compu,
+                                                body_ty,
+                                            },
                                         );
-                                        let abs = Alloc::alloc(
-                                            tycker,
-                                            ss::Abs(tpat, compu),
+                                        let Some(crate::query::AbsSynOutcome::TAbsCompu {
+                                            ann_id,
                                             ann,
-                                            &self.info,
-                                        );
-                                        TermAnnId::Compu(abs, ann)
+                                            kd,
+                                            abs_id,
+                                            abs,
+                                        }) = crate::query::abs_syn_judgment(
+                                            tycker.db,
+                                            tycker.data,
+                                            term,
+                                            input,
+                                            tycker.site_occurrence(),
+                                        )
+                                        else {
+                                            unreachable!(
+                                                "the polymorphic computation arm of abstraction judgments is query-produced"
+                                            )
+                                        };
+                                        tycker
+                                            .statics
+                                            .types_pre
+                                            .insert_new(ann_id, ss::Fillable::Done(ann));
+                                        tycker.statics.annotations_type.insert_new(ann_id, kd);
+                                        tycker
+                                            .statics
+                                            .env_type
+                                            .insert_new(ann_id, self.info.clone());
+                                        tycker.statics.compus.insert_new(abs_id, abs);
+                                        tycker.statics.annotations_compu.insert_new(abs_id, ann_id);
+                                        tycker
+                                            .statics
+                                            .env_compu
+                                            .insert_new(abs_id, self.info.clone());
+                                        TermAnnId::Compu(abs_id, ann_id)
                                     }
                                     | TermAnnId::Value(value, body_ty) => {
-                                        let vtype = ss::VType.build(tycker, &self.info);
-                                        let binder =
-                                            ss::TypeBinder { pattern: tpat, witness: abst };
-                                        let ann = Alloc::alloc(
-                                            tycker,
-                                            ss::ValueForall(binder, body_ty),
-                                            vtype,
-                                            &self.info,
+                                        let term =
+                                            crate::query::InternedTerm::new(tycker.db, self.inner);
+                                        let input = crate::query::InternedAbsSyn::new(
+                                            tycker.db,
+                                            crate::query::AbsSynArm::PolymorphicValue {
+                                                tpat,
+                                                abst,
+                                                value,
+                                                body_ty,
+                                            },
                                         );
-                                        let abs: ss::ValueId = Alloc::alloc(
-                                            tycker,
-                                            ss::Abs(tpat, value),
+                                        let Some(crate::query::AbsSynOutcome::TAbsValue {
+                                            ann_id,
                                             ann,
-                                            &self.info,
-                                        );
-                                        TermAnnId::Value(abs, ann)
+                                            kd,
+                                            abs_id,
+                                            abs,
+                                        }) = crate::query::abs_syn_judgment(
+                                            tycker.db,
+                                            tycker.data,
+                                            term,
+                                            input,
+                                            tycker.site_occurrence(),
+                                        )
+                                        else {
+                                            unreachable!(
+                                                "the polymorphic value arm of abstraction judgments is query-produced"
+                                            )
+                                        };
+                                        tycker
+                                            .statics
+                                            .types_pre
+                                            .insert_new(ann_id, ss::Fillable::Done(ann));
+                                        tycker.statics.annotations_type.insert_new(ann_id, kd);
+                                        tycker
+                                            .statics
+                                            .env_type
+                                            .insert_new(ann_id, self.info.clone());
+                                        tycker.statics.values.insert_new(abs_id, abs);
+                                        tycker.statics.annotations_value.insert_new(abs_id, ann_id);
+                                        tycker
+                                            .statics
+                                            .env_value
+                                            .insert_new(abs_id, self.info.clone());
+                                        TermAnnId::Value(abs_id, ann_id)
                                     }
-                                    | TermAnnId::Hole(_) | TermAnnId::Kind(_) => tycker.err_k(
-                                        TyckError::SortMismatch,
-                                        std::panic::Location::caller(),
-                                    )?,
+                                    | TermAnnId::Hole(_) | TermAnnId::Kind(_) => {
+                                        let term =
+                                            crate::query::InternedTerm::new(tycker.db, self.inner);
+                                        let input = crate::query::InternedAbsSyn::new(
+                                            tycker.db,
+                                            crate::query::AbsSynArm::SortMismatch,
+                                        );
+                                        let Some(crate::query::AbsSynOutcome::Error(error)) =
+                                            crate::query::abs_syn_judgment(
+                                                tycker.db,
+                                                tycker.data,
+                                                term,
+                                                input,
+                                                tycker.site_occurrence(),
+                                            )
+                                        else {
+                                            unreachable!(
+                                                "the sort arm of abstraction judgments is query-produced"
+                                            )
+                                        };
+                                        tycker.err_k(error, std::panic::Location::caller())?
+                                    }
                                 }
                             }
                             | PatAnnId::Value(vpat, ty) => {
@@ -4228,16 +4355,15 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     .tyck_k(tycker, Action::syn())?;
                                 match body_out_ann {
                                     | TermAnnId::Value(value, body_ty) => {
-                                        let vtype = ss::VType.build(tycker, &self.info);
-                                        let ann = match pat_out_ann.package_telescope_k(tycker)? {
+                                        let arm = match pat_out_ann.package_telescope_k(tycker)? {
                                             | None => {
                                                 pat_out_ann.close_scope_k(tycker, body_ty)?;
-                                                Alloc::alloc(
-                                                    tycker,
-                                                    ss::ValueArrow(ty, body_ty),
-                                                    vtype,
-                                                    &self.info,
-                                                )
+                                                crate::query::AbsSynArm::ValueArrow {
+                                                    vpat,
+                                                    ty,
+                                                    value,
+                                                    body_ty,
+                                                }
                                             }
                                             | Some(witnesses) => {
                                                 let pack_pi = ss::ValuePackPi {
@@ -4252,35 +4378,78 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                                         codomain: pack_pi.codomain,
                                                     },
                                                 )?;
-                                                let signature = Alloc::alloc(
-                                                    tycker, pack_pi, vtype, &self.info,
-                                                );
-                                                signature.constrain_to_scope_k(
-                                                    tycker,
-                                                    self.info.skolem_scope(),
-                                                )?;
-                                                signature
+                                                let mut iter = pack_pi.witnesses.iter();
+                                                let first = *iter.next().expect("a package telescope opens at least one witness");
+                                                let rest = iter.copied().collect::<Vec<_>>();
+                                                crate::query::AbsSynArm::ValuePackPi {
+                                                    vpat,
+                                                    domain: ty,
+                                                    first,
+                                                    rest,
+                                                    codomain: body_ty,
+                                                    value,
+                                                }
                                             }
                                         };
-                                        let abs: ss::ValueId = Alloc::alloc(
-                                            tycker,
-                                            ss::Abs(vpat, value),
+                                        let term =
+                                            crate::query::InternedTerm::new(tycker.db, self.inner);
+                                        let input =
+                                            crate::query::InternedAbsSyn::new(tycker.db, arm);
+                                        let Some(crate::query::AbsSynOutcome::VAbsValue {
+                                            ann_id,
                                             ann,
-                                            &self.info,
+                                            kd,
+                                            abs_id,
+                                            abs,
+                                        }) = crate::query::abs_syn_judgment(
+                                            tycker.db,
+                                            tycker.data,
+                                            term,
+                                            input,
+                                            tycker.site_occurrence(),
+                                        )
+                                        else {
+                                            unreachable!(
+                                                "the value arrow arm of abstraction judgments is query-produced"
+                                            )
+                                        };
+                                        let is_pack_pi = matches!(
+                                            &ann,
+                                            ss::Type::VPackPi(_) | ss::Type::PackPi(_)
                                         );
-                                        TermAnnId::Value(abs, ann)
+                                        tycker
+                                            .statics
+                                            .types_pre
+                                            .insert_new(ann_id, ss::Fillable::Done(ann));
+                                        tycker.statics.annotations_type.insert_new(ann_id, kd);
+                                        tycker
+                                            .statics
+                                            .env_type
+                                            .insert_new(ann_id, self.info.clone());
+                                        if is_pack_pi {
+                                            ann_id.constrain_to_scope_k(
+                                                tycker,
+                                                self.info.skolem_scope(),
+                                            )?;
+                                        }
+                                        tycker.statics.values.insert_new(abs_id, abs);
+                                        tycker.statics.annotations_value.insert_new(abs_id, ann_id);
+                                        tycker
+                                            .statics
+                                            .env_value
+                                            .insert_new(abs_id, self.info.clone());
+                                        TermAnnId::Value(abs_id, ann_id)
                                     }
                                     | TermAnnId::Compu(compu, body_ty) => {
-                                        let ctype = ss::CType.build(tycker, &self.info);
-                                        let ann = match pat_out_ann.package_telescope_k(tycker)? {
+                                        let arm = match pat_out_ann.package_telescope_k(tycker)? {
                                             | None => {
                                                 pat_out_ann.close_scope_k(tycker, body_ty)?;
-                                                Alloc::alloc(
-                                                    tycker,
-                                                    ss::Arrow(ty, body_ty),
-                                                    ctype,
-                                                    &self.info,
-                                                )
+                                                crate::query::AbsSynArm::CompuArrow {
+                                                    vpat,
+                                                    ty,
+                                                    compu,
+                                                    body_ty,
+                                                }
                                             }
                                             | Some(witnesses) => {
                                                 let pack_pi = ss::PackPi {
@@ -4289,30 +4458,92 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                                     codomain: body_ty,
                                                 };
                                                 tycker.validate_builtin_signature_k(&pack_pi)?;
-                                                let signature = Alloc::alloc(
-                                                    tycker, pack_pi, ctype, &self.info,
-                                                );
-                                                signature.constrain_to_scope_k(
-                                                    tycker,
-                                                    self.info.skolem_scope(),
-                                                )?;
-                                                signature
+                                                let mut iter = pack_pi.witnesses.iter();
+                                                let first = *iter.next().expect("a package telescope opens at least one witness");
+                                                let rest = iter.copied().collect::<Vec<_>>();
+                                                crate::query::AbsSynArm::CompuPackPi {
+                                                    vpat,
+                                                    domain: ty,
+                                                    first,
+                                                    rest,
+                                                    codomain: body_ty,
+                                                    compu,
+                                                }
                                             }
                                         };
-                                        let abs = Alloc::alloc(
-                                            tycker,
-                                            ss::Abs(vpat, compu),
+                                        let term =
+                                            crate::query::InternedTerm::new(tycker.db, self.inner);
+                                        let input =
+                                            crate::query::InternedAbsSyn::new(tycker.db, arm);
+                                        let Some(crate::query::AbsSynOutcome::VAbsCompu {
+                                            ann_id,
                                             ann,
-                                            &self.info,
+                                            kd,
+                                            abs_id,
+                                            abs,
+                                        }) = crate::query::abs_syn_judgment(
+                                            tycker.db,
+                                            tycker.data,
+                                            term,
+                                            input,
+                                            tycker.site_occurrence(),
+                                        )
+                                        else {
+                                            unreachable!(
+                                                "the computation arrow arm of abstraction judgments is query-produced"
+                                            )
+                                        };
+                                        let is_pack_pi = matches!(
+                                            &ann,
+                                            ss::Type::VPackPi(_) | ss::Type::PackPi(_)
                                         );
-                                        TermAnnId::Compu(abs, ann)
+                                        tycker
+                                            .statics
+                                            .types_pre
+                                            .insert_new(ann_id, ss::Fillable::Done(ann));
+                                        tycker.statics.annotations_type.insert_new(ann_id, kd);
+                                        tycker
+                                            .statics
+                                            .env_type
+                                            .insert_new(ann_id, self.info.clone());
+                                        if is_pack_pi {
+                                            ann_id.constrain_to_scope_k(
+                                                tycker,
+                                                self.info.skolem_scope(),
+                                            )?;
+                                        }
+                                        tycker.statics.compus.insert_new(abs_id, abs);
+                                        tycker.statics.annotations_compu.insert_new(abs_id, ann_id);
+                                        tycker
+                                            .statics
+                                            .env_compu
+                                            .insert_new(abs_id, self.info.clone());
+                                        TermAnnId::Compu(abs_id, ann_id)
                                     }
                                     | TermAnnId::Hole(_)
                                     | TermAnnId::Kind(_)
-                                    | TermAnnId::Type(_, _) => tycker.err_k(
-                                        TyckError::SortMismatch,
-                                        std::panic::Location::caller(),
-                                    )?,
+                                    | TermAnnId::Type(_, _) => {
+                                        let term =
+                                            crate::query::InternedTerm::new(tycker.db, self.inner);
+                                        let input = crate::query::InternedAbsSyn::new(
+                                            tycker.db,
+                                            crate::query::AbsSynArm::SortMismatch,
+                                        );
+                                        let Some(crate::query::AbsSynOutcome::Error(error)) =
+                                            crate::query::abs_syn_judgment(
+                                                tycker.db,
+                                                tycker.data,
+                                                term,
+                                                input,
+                                                tycker.site_occurrence(),
+                                            )
+                                        else {
+                                            unreachable!(
+                                                "the sort arm of abstraction judgments is query-produced"
+                                            )
+                                        };
+                                        tycker.err_k(error, std::panic::Location::caller())?
+                                    }
                                 }
                             }
                         }

@@ -490,3 +490,18 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   rejection became a return value.
 - Workspace suite passes unchanged (61 targets green, including the cajun stdio test three
   times in a row), clippy clean.
+
+## 2026-08-14 — abstractions allocate through a query
+
+- `abs_syn_judgment` covers all seven abstraction tails: the type function (arrow kind +
+  type-level abstraction), the type-polymorphic computation and value functions (forall /
+  value-forall + abstraction node), the pure value arrow and computation arrow, their
+  package-dependent variants (pack-pi signatures with the witness telescope flattened into
+  the interned input and rebuilt by the query), and the two rejections (kind-level
+  expressivity, sort mismatch) as return values.
+- The checker keeps the mid-flow reads and effects: the abstraction and substitution
+  machinery (`try_destruct_def`, `subst_abst_k`), `package_telescope_k`,
+  `validate_builtin_signature_k`, `close_scope_k`, and `constrain_to_scope_k` — now guarded
+  to fire only for pack-pi signatures, exactly as before. The query-owned vtype/ctype
+  singletons annotate the arrow/forall nodes where the checker previously built fresh ones.
+- Workspace suite passes unchanged (61 targets green), clippy clean.

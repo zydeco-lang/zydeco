@@ -1300,6 +1300,236 @@ pub fn sigma_syn_judgment<'db>(
     }
 }
 
+/// The arm of an abstraction judgment after its binder and body checks:
+/// which shapes the pattern and body took.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum AbsSynArm {
+    TypeFunction {
+        tpat: ss::TPatId,
+        kd: ss::KindId,
+        body_kd: ss::KindId,
+        ty: ss::TypeId,
+    },
+    PolymorphicCompu {
+        tpat: ss::TPatId,
+        abst: ss::AbstId,
+        compu: ss::CompuId,
+        body_ty: ss::TypeId,
+    },
+    PolymorphicValue {
+        tpat: ss::TPatId,
+        abst: ss::AbstId,
+        value: ss::ValueId,
+        body_ty: ss::TypeId,
+    },
+    ValueArrow {
+        vpat: ss::VPatId,
+        ty: ss::TypeId,
+        value: ss::ValueId,
+        body_ty: ss::TypeId,
+    },
+    ValuePackPi {
+        vpat: ss::VPatId,
+        domain: ss::TypeId,
+        first: ss::AbstId,
+        rest: Vec<ss::AbstId>,
+        codomain: ss::TypeId,
+        value: ss::ValueId,
+    },
+    CompuArrow {
+        vpat: ss::VPatId,
+        ty: ss::TypeId,
+        compu: ss::CompuId,
+        body_ty: ss::TypeId,
+    },
+    CompuPackPi {
+        vpat: ss::VPatId,
+        domain: ss::TypeId,
+        first: ss::AbstId,
+        rest: Vec<ss::AbstId>,
+        codomain: ss::TypeId,
+        compu: ss::CompuId,
+    },
+    Expressivity,
+    SortMismatch,
+}
+
+/// An interned abstraction judgment input, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedAbsSyn<'db> {
+    pub arm: AbsSynArm,
+}
+
+/// The allocation tail of an abstraction judgment: the arrow or forall
+/// annotation node and the abstraction node; the rejections surface as errors.
+#[derive(Clone, Debug)]
+pub enum AbsSynOutcome {
+    TypeFunction {
+        arrow_id: ss::KindId,
+        arrow: ss::Kind,
+        abs_id: ss::TypeId,
+        abs: ss::Type,
+    },
+    TAbsCompu {
+        ann_id: ss::TypeId,
+        ann: ss::Type,
+        kd: ss::KindId,
+        abs_id: ss::CompuId,
+        abs: ss::Computation,
+    },
+    TAbsValue {
+        ann_id: ss::TypeId,
+        ann: ss::Type,
+        kd: ss::KindId,
+        abs_id: ss::ValueId,
+        abs: ss::Value,
+    },
+    VAbsValue {
+        ann_id: ss::TypeId,
+        ann: ss::Type,
+        kd: ss::KindId,
+        abs_id: ss::ValueId,
+        abs: ss::Value,
+    },
+    VAbsCompu {
+        ann_id: ss::TypeId,
+        ann: ss::Type,
+        kd: ss::KindId,
+        abs_id: ss::CompuId,
+        abs: ss::Computation,
+    },
+    Error(crate::check::TyckError),
+}
+
+/// The synthesized judgment of an abstraction term, keyed on the checked
+/// pattern and body arms.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn abs_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+    input: InternedAbsSyn<'db>, occurrence: u32,
+) -> Option<AbsSynOutcome> {
+    let su::Term::Abs(su::Abs(_, _)) = data.scoped(db).terms.get(&term.id(db))? else {
+        return None;
+    };
+    let site_space = term.id(db).key_space().as_u64();
+    let site_raw = term.id(db).raw().into_u32();
+    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
+    let vtype = |db: &dyn TyckDb, data: ScopedData<'_>| {
+        let key = InternedIntrinsic::new(db, IntrinsicKey::VType);
+        let IntrinsicSingleton::Kind { id, .. } = intrinsic_singleton(db, data, key) else {
+            unreachable!("the vtype singleton is kind-producing")
+        };
+        id
+    };
+    let ctype = |db: &dyn TyckDb, data: ScopedData<'_>| {
+        let key = InternedIntrinsic::new(db, IntrinsicKey::CType);
+        let IntrinsicSingleton::Kind { id, .. } = intrinsic_singleton(db, data, key) else {
+            unreachable!("the ctype singleton is kind-producing")
+        };
+        id
+    };
+    match input.arm(db) {
+        | AbsSynArm::TypeFunction { tpat, kd, body_kd, ty } => {
+            let arrow_id: ss::KindId = derived_id(key_space, 0);
+            let abs_id: ss::TypeId = derived_id(key_space, 1);
+            Some(AbsSynOutcome::TypeFunction {
+                arrow_id,
+                arrow: ss::Kind::Arrow(ss::Arrow(kd, body_kd)),
+                abs_id,
+                abs: ss::Type::Abs(ss::Abs(tpat, ty)),
+            })
+        }
+        | AbsSynArm::PolymorphicCompu { tpat, abst, compu, body_ty } => {
+            let ann_id: ss::TypeId = derived_id(key_space, 0);
+            let abs_id: ss::CompuId = derived_id(key_space, 1);
+            Some(AbsSynOutcome::TAbsCompu {
+                ann_id,
+                ann: ss::Type::Forall(ss::Forall(
+                    ss::TypeBinder { pattern: tpat, witness: abst },
+                    body_ty,
+                )),
+                kd: ctype(db, data),
+                abs_id,
+                abs: ss::Computation::TAbs(ss::Abs(tpat, compu)),
+            })
+        }
+        | AbsSynArm::PolymorphicValue { tpat, abst, value, body_ty } => {
+            let ann_id: ss::TypeId = derived_id(key_space, 0);
+            let abs_id: ss::ValueId = derived_id(key_space, 1);
+            Some(AbsSynOutcome::TAbsValue {
+                ann_id,
+                ann: ss::Type::VForall(ss::ValueForall(
+                    ss::TypeBinder { pattern: tpat, witness: abst },
+                    body_ty,
+                )),
+                kd: vtype(db, data),
+                abs_id,
+                abs: ss::Value::TAbs(ss::Abs(tpat, value)),
+            })
+        }
+        | AbsSynArm::ValueArrow { vpat, ty, value, body_ty } => {
+            let ann_id: ss::TypeId = derived_id(key_space, 0);
+            let abs_id: ss::ValueId = derived_id(key_space, 1);
+            Some(AbsSynOutcome::VAbsValue {
+                ann_id,
+                ann: ss::Type::VArrow(ss::ValueArrow(ty, body_ty)),
+                kd: vtype(db, data),
+                abs_id,
+                abs: ss::Value::VAbs(ss::Abs(vpat, value)),
+            })
+        }
+        | AbsSynArm::ValuePackPi { vpat, domain, first, rest, codomain, value } => {
+            let ann_id: ss::TypeId = derived_id(key_space, 0);
+            let abs_id: ss::ValueId = derived_id(key_space, 1);
+            Some(AbsSynOutcome::VAbsValue {
+                ann_id,
+                ann: ss::Type::VPackPi(ss::ValuePackPi {
+                    domain,
+                    witnesses: ss::PackTelescope::new(first, rest),
+                    codomain,
+                }),
+                kd: vtype(db, data),
+                abs_id,
+                abs: ss::Value::VAbs(ss::Abs(vpat, value)),
+            })
+        }
+        | AbsSynArm::CompuArrow { vpat, ty, compu, body_ty } => {
+            let ann_id: ss::TypeId = derived_id(key_space, 0);
+            let abs_id: ss::CompuId = derived_id(key_space, 1);
+            Some(AbsSynOutcome::VAbsCompu {
+                ann_id,
+                ann: ss::Type::Arrow(ss::Arrow(ty, body_ty)),
+                kd: ctype(db, data),
+                abs_id,
+                abs: ss::Computation::VAbs(ss::Abs(vpat, compu)),
+            })
+        }
+        | AbsSynArm::CompuPackPi { vpat, domain, first, rest, codomain, compu } => {
+            let ann_id: ss::TypeId = derived_id(key_space, 0);
+            let abs_id: ss::CompuId = derived_id(key_space, 1);
+            Some(AbsSynOutcome::VAbsCompu {
+                ann_id,
+                ann: ss::Type::PackPi(ss::PackPi {
+                    domain,
+                    witnesses: ss::PackTelescope::new(first, rest),
+                    codomain,
+                }),
+                kd: ctype(db, data),
+                abs_id,
+                abs: ss::Computation::VAbs(ss::Abs(vpat, compu)),
+            })
+        }
+        | AbsSynArm::Expressivity => {
+            Some(AbsSynOutcome::Error(crate::check::TyckError::Expressivity(
+                "functions cannot abstract over the meta-level `Set`",
+            )))
+        }
+        | AbsSynArm::SortMismatch => {
+            Some(AbsSynOutcome::Error(crate::check::TyckError::SortMismatch))
+        }
+    }
+}
+
 /// The rejection of an intrinsic `Internal` term, carried as a query value so
 /// the checker routes decisions through queries and keeps the writer as a sink.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
