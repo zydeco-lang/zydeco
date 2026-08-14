@@ -1051,6 +1051,9 @@ impl<'a> Tycker<'a> {
 
     /// Check a source while retaining static facts from a rejected term.
     pub fn check_source_outcome(mut self, root: su::TermId) -> SourceCheckOutcome {
+        // The intrinsic singletons are query-owned: materialize them before any
+        // judgment so every `Construct::build` cache read hits.
+        InternalTerm::fill_intrinsics(&mut self);
         match self.run_source_k(root) {
             | Ok(root) => SourceCheckOutcome::Checked(CheckedSource {
                 statics: self.statics,
@@ -1325,84 +1328,99 @@ impl BuiltinTypeResolution {
 struct InternalTerm(su::Internal, su::TermId);
 
 impl InternalTerm {
+    /// Materialize the query-owned intrinsic singletons into `IntrinsicStatics`.
+    fn fill_intrinsics(tycker: &mut Tycker<'_>) {
+        use zydeco_syntax::PrimitiveType;
+        let mut keys = vec![
+            crate::query::IntrinsicKey::VType,
+            crate::query::IntrinsicKey::CType,
+            crate::query::IntrinsicKey::Thk,
+            crate::query::IntrinsicKey::Ret,
+            crate::query::IntrinsicKey::Unit,
+        ];
+        keys.extend(
+            PrimitiveType::ALL
+                .iter()
+                .map(|primitive| crate::query::IntrinsicKey::Primitive(*primitive)),
+        );
+        for key in keys {
+            let interned = crate::query::InternedIntrinsic::new(tycker.db, key);
+            let singleton = crate::query::intrinsic_singleton(tycker.db, tycker.data, interned);
+            match singleton {
+                | crate::query::IntrinsicSingleton::Kind { id, kind } => {
+                    tycker.statics.kinds_pre.insert_new(id, ss::Fillable::Done(kind));
+                    match key {
+                        | crate::query::IntrinsicKey::VType => {
+                            tycker.statics.intrinsics.vtype = Some(id)
+                        }
+                        | crate::query::IntrinsicKey::CType => {
+                            tycker.statics.intrinsics.ctype = Some(id)
+                        }
+                        | _ => {}
+                    }
+                }
+                | crate::query::IntrinsicSingleton::Type { kinds, ty: (ty, ty_node), ann } => {
+                    for (id, kind) in kinds {
+                        tycker.statics.kinds_pre.insert_new(id, ss::Fillable::Done(kind));
+                    }
+                    tycker.statics.types_pre.insert_new(ty, ss::Fillable::Done(ty_node));
+                    tycker.statics.annotations_type.insert_new(ty, ann);
+                    tycker.statics.env_type.insert_new(ty, TyEnv::default());
+                    match key {
+                        | crate::query::IntrinsicKey::Thk => {
+                            tycker.statics.intrinsics.thk = Some(ty)
+                        }
+                        | crate::query::IntrinsicKey::Ret => {
+                            tycker.statics.intrinsics.ret = Some(ty)
+                        }
+                        | crate::query::IntrinsicKey::Unit => {
+                            tycker.statics.intrinsics.unit = Some(ty)
+                        }
+                        | crate::query::IntrinsicKey::Primitive(primitive) => {
+                            tycker.statics.intrinsics.primitives.insert(primitive, ty);
+                        }
+                        | _ => {}
+                    }
+                }
+            }
+        }
+    }
+
     #[track_caller]
     fn tyck_k(
         self, tycker: &mut Tycker<'_>, env: &ss::TyEnv, switch: Switch<AnnId>,
     ) -> ResultKont<TermAnnId> {
-        let synthesized = match self.0.clone() {
-            | su::Internal::VType
-            | su::Internal::CType
-            | su::Internal::Thk
-            | su::Internal::Ret
-            | su::Internal::Unit
-            | su::Internal::Primitive(_)
-            | su::Internal::Monad
-            | su::Internal::Algebra => {
-                // The intrinsic type singletons are cached exactly as
-                // `Construct::build` did; the query produces fresh nodes only
-                // for a cache miss.
-                let cached = match self.0 {
-                    | su::Internal::Thk => tycker.statics.intrinsics.thk,
-                    | su::Internal::Ret => tycker.statics.intrinsics.ret,
-                    | su::Internal::Unit => tycker.statics.intrinsics.unit,
-                    | su::Internal::Primitive(primitive) => {
-                        tycker.statics.intrinsics.primitives.get(&primitive).copied()
-                    }
-                    | _ => None,
-                };
-                match cached {
-                    | Some(ty) => TermAnnId::Type(ty, tycker.statics.annotations_type[&ty]),
-                    | None => {
-                        let term = crate::query::InternedTerm::new(tycker.db, self.1);
-                        let env_data = crate::query::EnvData::new(tycker.db, env.clone());
-                        let Some(judgment) =
-                            crate::query::internal_judgment(tycker.db, tycker.data, term, env_data)
-                        else {
-                            unreachable!("intrinsic judgments are query-produced")
-                        };
-                        match judgment {
-                            | crate::query::InternalJudgment::Kind { id, kind } => {
-                                tycker.statics.kinds_pre.insert_new(id, ss::Fillable::Done(kind));
-                                TermAnnId::Kind(id)
-                            }
-                            | crate::query::InternalJudgment::Error(error) => {
-                                tycker.err_k(error, std::panic::Location::caller())?
-                            }
-                            | crate::query::InternalJudgment::Type {
-                                kinds,
-                                ty: (ty, ty_node),
-                                ann,
-                            } => {
-                                for (id, kind) in kinds {
-                                    tycker
-                                        .statics
-                                        .kinds_pre
-                                        .insert_new(id, ss::Fillable::Done(kind));
-                                }
-                                tycker
-                                    .statics
-                                    .types_pre
-                                    .insert_new(ty, ss::Fillable::Done(ty_node));
-                                tycker.statics.annotations_type.insert_new(ty, ann);
-                                tycker.statics.env_type.insert_new(ty, env.clone());
-                                match self.0 {
-                                    | su::Internal::Thk => tycker.statics.intrinsics.thk = Some(ty),
-                                    | su::Internal::Ret => tycker.statics.intrinsics.ret = Some(ty),
-                                    | su::Internal::Unit => {
-                                        tycker.statics.intrinsics.unit = Some(ty)
-                                    }
-                                    | su::Internal::Primitive(primitive) => {
-                                        tycker.statics.intrinsics.primitives.insert(primitive, ty);
-                                    }
-                                    | _ => unreachable!("kinds cache no type singletons"),
-                                }
-                                TermAnnId::Type(ty, ann)
-                            }
-                        }
-                    }
-                }
+        let synthesized = match self.0 {
+            | su::Internal::VType => TermAnnId::Kind(ss::VType.build(tycker, env)),
+            | su::Internal::CType => TermAnnId::Kind(ss::CType.build(tycker, env)),
+            | su::Internal::Thk => {
+                let ty = ss::ThkTy.build(tycker, env);
+                TermAnnId::Type(ty, tycker.statics.annotations_type[&ty])
+            }
+            | su::Internal::Ret => {
+                let ty = ss::RetTy.build(tycker, env);
+                TermAnnId::Type(ty, tycker.statics.annotations_type[&ty])
+            }
+            | su::Internal::Unit => {
+                let ty = ss::UnitTy.build(tycker, env);
+                TermAnnId::Type(ty, tycker.statics.annotations_type[&ty])
+            }
+            | su::Internal::Primitive(primitive) => {
+                let ty = ss::PrimitiveTy(primitive).build(tycker, env);
+                TermAnnId::Type(ty, tycker.statics.annotations_type[&ty])
             }
             | su::Internal::OS => self.builtin_type_k(tycker, env, ss::BuiltinTypeRole::OS)?,
+            | su::Internal::Monad | su::Internal::Algebra => {
+                let term = crate::query::InternedTerm::new(tycker.db, self.1);
+                let env_data = crate::query::EnvData::new(tycker.db, env.clone());
+                if let Some(error) =
+                    crate::query::internal_judgment(tycker.db, tycker.data, term, env_data)
+                {
+                    tycker.err_k(error, std::panic::Location::caller())?
+                } else {
+                    unreachable!("intrinsic rejections are query-produced")
+                }
+            }
         };
         self.reconcile_k(tycker, synthesized, switch)
     }

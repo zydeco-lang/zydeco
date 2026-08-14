@@ -12,7 +12,7 @@ use crate::check::{SourceCheckOutcome, Tycker};
 use crate::surface_syntax as su;
 use crate::syntax as ss;
 use zydeco_utils::arena::ArenaAccess;
-use zydeco_utils::arena::{ArenaId, KeySpaceId, derived_id};
+use zydeco_utils::arena::{KeySpaceId, derived_id};
 
 /// Databases that can answer type-checking queries.
 ///
@@ -93,73 +93,95 @@ pub struct EnvData<'db> {
     pub env: TyEnv,
 }
 
-/// The nodes produced by checking an intrinsic `Internal` term.
-#[derive(Clone, Debug)]
-pub enum InternalJudgment {
-    Kind {
-        id: ss::KindId,
-        kind: ss::Kind,
-    },
-    Type {
-        kinds: Vec<(ss::KindId, ss::Kind)>,
-        ty: (ss::TypeId, ss::Type),
-        ann: ss::KindId,
-    },
-    /// The judgment rejected the term; the error rides the query result
-    /// instead of a checker-side writer, the first step of retiring `err_k`.
-    Error(crate::check::TyckError),
+/// The singleton key of an intrinsic kind or type.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum IntrinsicKey {
+    VType,
+    CType,
+    Thk,
+    Ret,
+    Unit,
+    Primitive(zydeco_syntax::PrimitiveType),
 }
 
-/// The typed judgment of an intrinsic `Internal` term.
+impl IntrinsicKey {
+    fn discriminant(self) -> u32 {
+        match self {
+            | Self::VType => 0,
+            | Self::CType => 1,
+            | Self::Thk => 2,
+            | Self::Ret => 3,
+            | Self::Unit => 4,
+            | Self::Primitive(primitive) => {
+                5 + zydeco_syntax::PrimitiveType::ALL
+                    .iter()
+                    .position(|candidate| *candidate == primitive)
+                    .expect("every primitive participates in the intrinsic singletons")
+                    as u32
+            }
+        }
+    }
+}
+
+/// An interned intrinsic key, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedIntrinsic<'db> {
+    pub key: IntrinsicKey,
+}
+
+/// The singleton nodes of one intrinsic kind or type, produced by a query and
+/// materialized by the checker before any judgment reads the `IntrinsicStatics`
+/// cache. See `docs/ideas/query-owned-statics.md` for the fill-before-read
+/// invariant.
+#[derive(Clone, Debug)]
+pub enum IntrinsicSingleton {
+    Kind { id: ss::KindId, kind: ss::Kind },
+    Type { kinds: Vec<(ss::KindId, ss::Kind)>, ty: (ss::TypeId, ss::Type), ann: ss::KindId },
+}
+
+/// The singleton judgment of one intrinsic kind or type.
 ///
-/// Produces the fresh nodes for an intrinsic cache miss; the checker owns the
-/// intrinsic singletons (`IntrinsicStatics`) and materializes the returned
-/// nodes, recording the caller's environment exactly as in-context allocation
-/// did. Only `OS` remains checker-side: it resolves against the environment
-/// through the builtin signature, which reads the arena being built.
+/// The derived site is synthetic (not tied to any scoped term): the intrinsic
+/// belongs to the check, not to the term that first spells it. The key's
+/// discriminant separates the singletons so their identifiers never collide.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
-pub fn internal_judgment<'db>(
-    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>, env: EnvData<'db>,
-) -> Option<InternalJudgment> {
-    let _ = env;
-    let internal = match data.scoped(db).terms.get(&term.id(db))? {
-        | su::Term::Internal(internal) => internal,
-        | _ => return None,
-    };
-    let site_space = term.id(db).key_space().as_u64();
-    let site_raw = term.id(db).raw().into_u32();
+pub fn intrinsic_singleton<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, key: InternedIntrinsic<'db>,
+) -> IntrinsicSingleton {
+    let _ = data;
+    let occurrence = key.key(db).discriminant();
     let kind_id = |slot: u32| {
         derived_id::<ss::KindId>(
-            KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0),
+            KeySpaceId::derive(QUERY_DERIVATION_TAG, 0, u32::MAX, occurrence),
             slot,
         )
     };
     let type_id = |slot: u32| {
         derived_id::<ss::TypeId>(
-            KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0),
+            KeySpaceId::derive(QUERY_DERIVATION_TAG, 0, u32::MAX, occurrence),
             slot,
         )
     };
-    match internal {
-        | su::Internal::VType => {
-            Some(InternalJudgment::Kind { id: kind_id(0), kind: ss::Kind::VType(ss::VType) })
+    match key.key(db) {
+        | IntrinsicKey::VType => {
+            IntrinsicSingleton::Kind { id: kind_id(0), kind: ss::Kind::VType(ss::VType) }
         }
-        | su::Internal::CType => {
-            Some(InternalJudgment::Kind { id: kind_id(0), kind: ss::Kind::CType(ss::CType) })
+        | IntrinsicKey::CType => {
+            IntrinsicSingleton::Kind { id: kind_id(0), kind: ss::Kind::CType(ss::CType) }
         }
-        | su::Internal::Unit => {
+        | IntrinsicKey::Unit => {
             let vtype = kind_id(0);
-            Some(InternalJudgment::Type {
+            IntrinsicSingleton::Type {
                 kinds: vec![(vtype, ss::Kind::VType(ss::VType))],
                 ty: (type_id(1), ss::Type::Unit(ss::UnitTy)),
                 ann: vtype,
-            })
+            }
         }
-        | su::Internal::Thk => {
+        | IntrinsicKey::Thk => {
             let ctype = kind_id(0);
             let vtype = kind_id(1);
             let arrow = kind_id(2);
-            Some(InternalJudgment::Type {
+            IntrinsicSingleton::Type {
                 kinds: vec![
                     (ctype, ss::Kind::CType(ss::CType)),
                     (vtype, ss::Kind::VType(ss::VType)),
@@ -167,13 +189,13 @@ pub fn internal_judgment<'db>(
                 ],
                 ty: (type_id(3), ss::Type::Thk(ss::ThkTy)),
                 ann: arrow,
-            })
+            }
         }
-        | su::Internal::Ret => {
+        | IntrinsicKey::Ret => {
             let vtype = kind_id(0);
             let ctype = kind_id(1);
             let arrow = kind_id(2);
-            Some(InternalJudgment::Type {
+            IntrinsicSingleton::Type {
                 kinds: vec![
                     (vtype, ss::Kind::VType(ss::VType)),
                     (ctype, ss::Kind::CType(ss::CType)),
@@ -181,22 +203,33 @@ pub fn internal_judgment<'db>(
                 ],
                 ty: (type_id(3), ss::Type::Ret(ss::RetTy)),
                 ann: arrow,
-            })
+            }
         }
-        | su::Internal::Primitive(primitive) => {
+        | IntrinsicKey::Primitive(primitive) => {
             let vtype = kind_id(0);
-            Some(InternalJudgment::Type {
+            IntrinsicSingleton::Type {
                 kinds: vec![(vtype, ss::Kind::VType(ss::VType))],
-                ty: (type_id(1), ss::Type::Primitive(ss::PrimitiveTy(*primitive))),
+                ty: (type_id(1), ss::Type::Primitive(ss::PrimitiveTy(primitive))),
                 ann: vtype,
-            })
+            }
         }
-        | su::Internal::Monad | su::Internal::Algebra => {
-            Some(InternalJudgment::Error(crate::check::TyckError::Expressivity(
+    }
+}
+
+/// The rejection of an intrinsic `Internal` term, carried as a query value so
+/// the checker routes decisions through queries and keeps the writer as a sink.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn internal_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>, env: EnvData<'db>,
+) -> Option<crate::check::TyckError> {
+    let _ = env;
+    match data.scoped(db).terms.get(&term.id(db))? {
+        | su::Term::Internal(su::Internal::Monad | su::Internal::Algebra) => {
+            Some(crate::check::TyckError::Expressivity(
                 "`Monad` and `Algebra` are ordinary library bindings, not intrinsic terms",
-            )))
+            ))
         }
-        | su::Internal::OS => None,
+        | _ => None,
     }
 }
 
