@@ -1,9 +1,17 @@
 /// Continuation-style result used by `_k` APIs.
 ///
-/// `_k` functions report failures by returning `Err(())` while storing the real
+/// `_k` functions report failures by returning `Err(KontFailure)` while storing the real
 /// error payload elsewhere (e.g., a mutable error list), so the checker can keep
 /// going and accumulate more diagnostics.
-pub type ResultKont<T> = Result<T, ()>;
+pub type ResultKont<T> = Result<T, KontFailure>;
+
+/// The failure marker carried by a [`ResultKont`].
+///
+/// The real diagnostic lives in a mutable error list owned by the pass driver;
+/// this marker only tells the caller that a failure was recorded there and
+/// that the pass should stop descending into the failed branch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KontFailure;
 
 pub trait Errorable<E> {
     type Entry;

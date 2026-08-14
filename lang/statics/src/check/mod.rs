@@ -287,7 +287,7 @@ impl FieldProjectionResolver {
             let current = next.take()?;
             let view = match current.unroll_k(tycker).and_then(|ty| ty.subst_env_k(tycker, env)) {
                 | Ok(view) => view,
-                | Err(()) => return Some(Err(())),
+                | Err(KontFailure) => return Some(Err(KontFailure)),
             };
             match tycker.type_filled_k(&view) {
                 | Ok(ss::Type::Prod(ss::Prod(item, tail))) => {
@@ -295,7 +295,7 @@ impl FieldProjectionResolver {
                     Some(Ok(item))
                 }
                 | Ok(_) => Some(Ok(view)),
-                | Err(()) => Some(Err(())),
+                | Err(KontFailure) => Some(Err(KontFailure)),
             }
         })
         .collect()
@@ -1040,7 +1040,7 @@ impl<'a> Tycker<'a> {
                 root,
                 observations: self.observations,
             }),
-            | Err(()) => {
+            | Err(KontFailure) => {
                 let reports = self.error_reports();
                 SourceCheckOutcome::Rejected(RejectedSource {
                     statics: self.statics,
@@ -1083,7 +1083,7 @@ impl<'a> Tycker<'a> {
             ));
         }
         if !self.errors.is_empty() {
-            Err(())?
+            Err(KontFailure)?
         }
         Ok(())
     }
@@ -1122,7 +1122,7 @@ impl<'a> Tycker<'a> {
         for id in type_ids {
             let solu = match resolver.resolve_k(id, self) {
                 | Ok(res) => res,
-                | Err(()) => continue,
+                | Err(KontFailure) => continue,
             };
             if solu != id {
                 let ty = self.statics.types_pre[&solu].to_owned();
@@ -1182,7 +1182,7 @@ mod impl_tycker {
         #[inline]
         fn push_err_entry_k<T>(&mut self, entry: TyckErrorEntry) -> ResultKont<T> {
             self.errors.push(entry);
-            Err(())
+            Err(KontFailure)
         }
     }
 
@@ -1399,6 +1399,7 @@ impl BuiltinAttachment {
                         blame: std::panic::Location::caller(),
                         stack: tycker.tasks.clone(),
                     });
+                    KontFailure
                 })
             }
             | ss::BuiltinRole::Value(role) => {
@@ -1429,6 +1430,7 @@ impl BuiltinAttachment {
                         blame: std::panic::Location::caller(),
                         stack: tycker.tasks.clone(),
                     });
+                    KontFailure
                 })
             }
         }
