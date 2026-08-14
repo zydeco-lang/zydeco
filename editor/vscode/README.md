@@ -25,6 +25,16 @@ The extension finds `cajun` on `PATH`.
 You can instead set `cajun.server.path` to an explicit executable path.
 If neither is available, the extension offers to run the Cargo command above.
 
+## Formatter settings
+
+Formatting uses the target line width from `cajun.format.lineWidth` (default `100`),
+the indentation width from the editor's tab size,
+and the layout policy from `cajun.format.layoutIntentions`:
+
+- `preserve` keeps observed line breaks and blank lines;
+- `blank-lines-only` keeps only blank lines while the line width decides every single break;
+- `ignore` lets the line width decide every optional break.
+
 ## Development
 
 From this directory:

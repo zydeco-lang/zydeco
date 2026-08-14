@@ -133,12 +133,24 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__fmt)
-            opts="-h --help"
+            opts="-h --check --width --indent --layout --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --width)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --indent)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --layout)
+                    COMPREPLY=($(compgen -W "preserve blank-lines ignore" -- "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;

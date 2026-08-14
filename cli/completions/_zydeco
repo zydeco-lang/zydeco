@@ -30,8 +30,14 @@ _zydeco() {
         case $line[1] in
             (fmt)
 _arguments "${_arguments_options[@]}" : \
-'-h[Print help]' \
-'--help[Print help]' \
+'--width=[Target line width in columns]:COLUMNS:_default' \
+'--indent=[Indentation width in columns]:COLUMNS:_default' \
+'--layout=[Which parsed line-breaking choices the formatter retains]:LAYOUT:((preserve\:"Preserve observed line breaks and blank lines"
+blank-lines\:"Preserve only blank lines; the line width decides every single break"
+ignore\:"Let the line width decide every optional break"))' \
+'--check[Report files that would change without writing them, and exit unsuccessfully when at least one file would change]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
 '*::files -- Paths to the files to format:_files' \
 && ret=0
 ;;

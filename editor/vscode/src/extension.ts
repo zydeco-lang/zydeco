@@ -20,6 +20,16 @@ const INSTALL_REPOSITORY = "https://github.com/zydeco-lang/zydeco.git";
 
 let client: LanguageClient | undefined;
 
+function formatterInitializationOptions(): Record<string, unknown> {
+  const config = workspace.getConfiguration("cajun");
+  return {
+    format: {
+      lineWidth: config.get<number>("format.lineWidth", 100),
+      layoutIntentions: config.get<string>("format.layoutIntentions", "preserve"),
+    },
+  };
+}
+
 export async function activate(context: ExtensionContext): Promise<void> {
   const trace = window.createOutputChannel("Cajun LSP Trace");
   context.subscriptions.push(trace);
@@ -42,6 +52,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
       { scheme: "file", language: "zydeco" },
     ],
     traceOutputChannel: trace,
+    initializationOptions: formatterInitializationOptions(),
   };
 
   client = new LanguageClient(

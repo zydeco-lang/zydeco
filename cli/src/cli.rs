@@ -1,6 +1,18 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
+/// Which parsed line-breaking choices the formatter retains.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
+pub enum LayoutMode {
+    /// Preserve observed line breaks and blank lines
+    #[default]
+    Preserve,
+    /// Preserve only blank lines; the line width decides every single break
+    BlankLines,
+    /// Let the line width decide every optional break
+    Ignore,
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
 pub enum BuildTarget {
     Zir,
@@ -61,6 +73,19 @@ pub enum Commands {
         /// Paths to the files to format
         #[arg(value_name = "FILE", required = true)]
         files: Vec<PathBuf>,
+        /// Report files that would change without writing them, and exit
+        /// unsuccessfully when at least one file would change
+        #[arg(long)]
+        check: bool,
+        /// Target line width in columns
+        #[arg(long, value_name = "COLUMNS", default_value_t = 100, value_parser = clap::builder::RangedU64ValueParser::<usize>::new().range(1..))]
+        width: usize,
+        /// Indentation width in columns
+        #[arg(long, value_name = "COLUMNS", default_value_t = 2, value_parser = clap::builder::RangedU64ValueParser::<usize>::new().range(1..))]
+        indent: usize,
+        /// Which parsed line-breaking choices the formatter retains
+        #[arg(long, value_enum, default_value_t)]
+        layout: LayoutMode,
     },
     /// Run a zydeco program
     Run {

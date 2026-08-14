@@ -37,6 +37,15 @@ Format one or more Zydeco source files in place:
 zydeco fmt path/to/main.zy path/to/library.zy
 ```
 
+Add `--check` to report files that would change instead of writing them;
+the command then exits unsuccessfully when at least one file would change.
+`--width` and `--indent` configure the target line width and indentation width in columns.
+`--layout` selects which parsed line breaks the formatter retains:
+
+- `preserve` keeps observed line breaks and blank lines (the default);
+- `blank-lines` keeps only blank lines while the line width decides every single break;
+- `ignore` lets the line width decide every optional break.
+
 ## Reflow Markdown Documentation
 
 Reflow explicitly named Markdown files after editing their prose:

@@ -30,8 +30,12 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand help 'Print this message or the help of the given subcommand(s)'
         }
         &'zydeco;fmt'= {
-            cand -h 'Print help'
-            cand --help 'Print help'
+            cand --width 'Target line width in columns'
+            cand --indent 'Indentation width in columns'
+            cand --layout 'Which parsed line-breaking choices the formatter retains'
+            cand --check 'Report files that would change without writing them, and exit unsuccessfully when at least one file would change'
+            cand -h 'Print help (see more with ''--help'')'
+            cand --help 'Print help (see more with ''--help'')'
         }
         &'zydeco;run'= {
             cand --dry 'Dry run (don''t execute)'

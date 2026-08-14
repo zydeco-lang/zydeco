@@ -34,8 +34,12 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             break
         }
         'zydeco;fmt' {
-            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
-            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--width', '--width', [CompletionResultType]::ParameterName, 'Target line width in columns')
+            [CompletionResult]::new('--indent', '--indent', [CompletionResultType]::ParameterName, 'Indentation width in columns')
+            [CompletionResult]::new('--layout', '--layout', [CompletionResultType]::ParameterName, 'Which parsed line-breaking choices the formatter retains')
+            [CompletionResult]::new('--check', '--check', [CompletionResultType]::ParameterName, 'Report files that would change without writing them, and exit unsuccessfully when at least one file would change')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
         }
         'zydeco;run' {

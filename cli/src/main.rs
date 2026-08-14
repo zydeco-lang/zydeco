@@ -3,10 +3,11 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 use zydeco_cli::{
     BackendProgram, BuildOptions, BuildTarget, Cli, CommandCompiler, Commands, CompileError,
-    DiagnosticRenderer, NativeError, SourceFormatError, SourceFormatter, TargetArchitecture,
-    TargetOs,
+    DiagnosticRenderer, LayoutMode, NativeError, SourceFormatError, SourceFormatOutcome,
+    SourceFormatter, TargetArchitecture, TargetOs,
 };
 use zydeco_dynamics::ProgKont;
+use zydeco_surface::textual::fmt::{IndentWidth, PrettyOptions};
 use zydeco_tui::{Repl, ReplError};
 
 fn main() {
@@ -28,7 +29,9 @@ struct Application {
 impl Application {
     fn run(&self, command: Commands) -> Result<i32, ApplicationError> {
         match command {
-            | Commands::Fmt { files } => self.format_sources(&files),
+            | Commands::Fmt { files, check, width, indent, layout } => {
+                self.format_sources(&files, check, width, indent, layout)
+            }
             | Commands::Run { file, dry, args } => self.run_source(&file, dry, &args),
             | Commands::Check { file } => self.check_source(&file),
             | Commands::Repl => Repl::launch().map_err(ApplicationError::Repl),
@@ -58,10 +61,28 @@ impl Application {
         }
     }
 
-    fn format_sources(&self, paths: &[PathBuf]) -> Result<i32, ApplicationError> {
-        let formatter = SourceFormatter::default();
-        paths.iter().try_for_each(|path| formatter.format_path(path).map(|_| ()))?;
-        Ok(0)
+    fn format_sources(
+        &self, paths: &[PathBuf], check: bool, width: usize, indent: usize, layout: LayoutMode,
+    ) -> Result<i32, ApplicationError> {
+        let options = PrettyOptions::default()
+            .with_line_width(width)
+            .with_indent(
+                IndentWidth::new(indent).expect("clap validates a positive indentation width"),
+            )
+            .with_layout_intentions(layout.into());
+        let formatter = SourceFormatter::with_options(options);
+        let mut changed = false;
+        for path in paths {
+            let outcome =
+                if check { formatter.check_path(path) } else { formatter.format_path(path) }?;
+            if outcome == SourceFormatOutcome::Changed {
+                changed = true;
+                if check {
+                    println!("{}", path.display());
+                }
+            }
+        }
+        Ok(i32::from(check && changed))
     }
 
     fn analyze(

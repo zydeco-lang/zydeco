@@ -6,9 +6,19 @@ use std::{
 use thiserror::Error;
 use zydeco_surface::textual::{
     Lexer, ParseError, SourceUnitParser,
-    fmt::{PrettyFormatter, PrettyOptions},
+    fmt::{LayoutIntentions, PrettyFormatter, PrettyOptions},
     syntax::Parser,
 };
+
+impl From<crate::cli::LayoutMode> for LayoutIntentions {
+    fn from(mode: crate::cli::LayoutMode) -> Self {
+        match mode {
+            | crate::cli::LayoutMode::Preserve => Self::Preserve,
+            | crate::cli::LayoutMode::BlankLines => Self::BlankLinesOnly,
+            | crate::cli::LayoutMode::Ignore => Self::Ignore,
+        }
+    }
+}
 use zydeco_utils::span::{FileInfo, LocationCtx};
 
 /// Whether formatting changed the source file on disk.
@@ -49,15 +59,30 @@ impl SourceFormatter {
     }
 
     pub fn format_path(&self, path: &Path) -> Result<SourceFormatOutcome, SourceFormatError> {
-        let source = fs::read_to_string(path)
-            .map_err(|source| SourceFormatError::Read { path: path.to_path_buf(), source })?;
-        let formatted = self.render(path, &source)?;
+        let (source, formatted) = self.render_source(path)?;
         if formatted == source {
             return Ok(SourceFormatOutcome::Unchanged);
         }
         fs::write(path, formatted)
             .map_err(|source| SourceFormatError::Write { path: path.to_path_buf(), source })?;
         Ok(SourceFormatOutcome::Changed)
+    }
+
+    /// Format the file in memory and report whether writing it would change it.
+    pub fn check_path(&self, path: &Path) -> Result<SourceFormatOutcome, SourceFormatError> {
+        let (source, formatted) = self.render_source(path)?;
+        Ok(if formatted == source {
+            SourceFormatOutcome::Unchanged
+        } else {
+            SourceFormatOutcome::Changed
+        })
+    }
+
+    fn render_source(&self, path: &Path) -> Result<(String, String), SourceFormatError> {
+        let source = fs::read_to_string(path)
+            .map_err(|source| SourceFormatError::Read { path: path.to_path_buf(), source })?;
+        let formatted = self.render(path, &source)?;
+        Ok((source, formatted))
     }
 
     fn render(&self, path: &Path, source: &str) -> Result<String, SourceFormatError> {

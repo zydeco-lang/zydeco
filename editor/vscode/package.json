@@ -66,6 +66,29 @@
           ],
           "default": "off",
           "description": "Trace communication with Cajun."
+        },
+        "cajun.format.lineWidth": {
+          "type": "number",
+          "scope": "window",
+          "minimum": 1,
+          "default": 100,
+          "description": "Target line width in columns used by the formatter."
+        },
+        "cajun.format.layoutIntentions": {
+          "type": "string",
+          "scope": "window",
+          "enum": [
+            "preserve",
+            "blank-lines-only",
+            "ignore"
+          ],
+          "enumDescriptions": [
+            "Preserve observed line breaks and blank lines.",
+            "Preserve only blank lines; the line width decides every single break.",
+            "Let the line width decide every optional break."
+          ],
+          "default": "preserve",
+          "description": "Which parsed line-breaking choices the formatter retains."
         }
       }
     }

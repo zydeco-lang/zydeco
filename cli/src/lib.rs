@@ -8,7 +8,7 @@ pub mod format;
 pub mod native;
 
 pub use crate::{
-    cli::{BuildTarget, Cli, Commands, TargetArchitecture, TargetOs},
+    cli::{BuildTarget, Cli, Commands, LayoutMode, TargetArchitecture, TargetOs},
     compile::{AssemblyOutcome, BackendProgram, CommandCompiler, CompileError},
     diagnostics::DiagnosticRenderer,
     format::{SourceFormatError, SourceFormatOutcome, SourceFormatter},
