@@ -3358,7 +3358,13 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 let su::Hole = term;
                 match switch {
                     | Switch::Syn => {
-                        let fill = Alloc::alloc(tycker, self.inner, (), &());
+                        let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                        let Some(fill) =
+                            crate::query::term_hole_syn_judgment(tycker.db, tycker.data, term)
+                        else {
+                            unreachable!("hole judgments are query-produced")
+                        };
+                        tycker.statics.fills.insert_new(fill, ss::InferenceSite::Term(self.inner));
                         TermAnnId::Hole(fill)
                     }
                     | Switch::Ana(AnnId::Set) => {
@@ -3578,18 +3584,30 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     }
                 }
             }
-            | Tm::Triv(su::Triv) => {
-                let unit = ss::UnitTy.build(tycker, &self.info);
-                let ann = match switch {
-                    | Switch::Syn => unit,
-                    | Switch::Ana(AnnId::Type(ana)) => Lub::lub_k(unit, ana, tycker)?,
-                    | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
-                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                    }
-                };
-                let triv = Alloc::alloc(tycker, ss::Triv, ann, &self.info);
-                TermAnnId::Value(triv, ann)
-            }
+            | Tm::Triv(su::Triv) => match switch {
+                | Switch::Syn => {
+                    let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                    let Some(outcome) =
+                        crate::query::triv_syn_judgment(tycker.db, tycker.data, term)
+                    else {
+                        unreachable!("trivial judgments are query-produced")
+                    };
+                    let crate::query::TrivSynOutcome { id, value, ty } = outcome;
+                    tycker.statics.values.insert_new(id, value);
+                    tycker.statics.annotations_value.insert_new(id, ty);
+                    tycker.statics.env_value.insert_new(id, self.info.clone());
+                    TermAnnId::Value(id, ty)
+                }
+                | Switch::Ana(AnnId::Type(ana)) => {
+                    let unit = ss::UnitTy.build(tycker, &self.info);
+                    let ann = Lub::lub_k(unit, ana, tycker)?;
+                    let triv = Alloc::alloc(tycker, ss::Triv, ann, &self.info);
+                    TermAnnId::Value(triv, ann)
+                }
+                | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
+                    tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                }
+            },
             | Tm::Cons(term) => {
                 let su::ConsN(items, tail) = term;
                 match switch {

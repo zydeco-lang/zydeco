@@ -336,3 +336,18 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
 - Two pre-existing clippy lints fixed along the way (`new_without_default` on
   `DerivedAllocator`, `clone_on_copy` in the hole-resolution query).
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — hole and trivial judgments join the query graph
+
+- `Tm::Hole` Syn and `Tm::Triv` Syn are query-produced now: `term_hole_syn_judgment`
+  derives the stand-in fill at the term's site, and `triv_syn_judgment` shares the
+  query-owned unit singleton as its type instead of building a fresh `UnitTy` node per site.
+- Both materializers reproduce the old allocation exactly: the hole materializer records
+  the term's `InferenceSite` in `fills`, and the triv materializer records
+  `values` / `annotations_value` / `env_value` with the caller's cloned environment.
+- The checker keeps the Ana arms (they read the arena through `lub` and the kind probe),
+  so the Ana side stays put until the fill-state pattern lands; each branch's Syn arm is
+  now the query materializer.
+- All producer queries derive at their own term's site, so the query family's key spaces
+  stay disjoint per term without any inter-producer coordination.
+- Workspace suite passes unchanged (61 targets green), clippy clean.

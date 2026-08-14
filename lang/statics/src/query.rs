@@ -284,6 +284,52 @@ pub fn literal_syn_judgment<'db>(
     Some(LiteralSynOutcome::Value { id, value: ss::Value::Lit(lit), ty })
 }
 
+/// The synthesized judgment of a hole term: the fill identifier standing for
+/// the missing node, derived at the term's site without touching the arena.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn term_hole_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+) -> Option<ss::FillId> {
+    let su::Term::Hole(su::Hole) = data.scoped(db).terms.get(&term.id(db))? else {
+        return None;
+    };
+    let site_space = term.id(db).key_space().as_u64();
+    let site_raw = term.id(db).raw().into_u32();
+    Some(derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0), 0))
+}
+
+/// The synthesized judgment of a trivial term: the unit value whose type is
+/// the query-owned unit singleton.
+#[derive(Clone, Debug)]
+pub struct TrivSynOutcome {
+    pub id: ss::ValueId,
+    pub value: ss::Value,
+    pub ty: ss::TypeId,
+}
+
+/// The synthesized judgment of a trivial term.
+///
+/// Every `()` checks to the unit singleton type, so the judgment shares the
+/// query-owned intrinsic unit node instead of building a fresh one per site;
+/// the nodes are structurally identical and closed.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn triv_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+) -> Option<TrivSynOutcome> {
+    let su::Term::Triv(su::Triv) = data.scoped(db).terms.get(&term.id(db))? else {
+        return None;
+    };
+    let key = InternedIntrinsic::new(db, IntrinsicKey::Unit);
+    let IntrinsicSingleton::Type { ty: (ty, _), .. } = intrinsic_singleton(db, data, key) else {
+        unreachable!("the unit singleton is type-producing")
+    };
+    let site_space = term.id(db).key_space().as_u64();
+    let site_raw = term.id(db).raw().into_u32();
+    let id: ss::ValueId =
+        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, 0), 0);
+    Some(TrivSynOutcome { id, value: ss::Value::Triv(ss::Triv), ty })
+}
+
 /// The rejection of an intrinsic `Internal` term, carried as a query value so
 /// the checker routes decisions through queries and keeps the writer as a sink.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
