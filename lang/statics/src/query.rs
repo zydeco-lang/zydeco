@@ -2270,6 +2270,33 @@ pub fn value_pack_pi_intro_judgment<'db>(
     })
 }
 
+/// An interned binding index, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedBindingIndex<'db> {
+    pub index: u32,
+}
+
+/// The pre-introduction identities of one recursive-group binding: the
+/// abstract type and the two type-alias nodes the fixpoint introduces, derived
+/// at the group's site by the binding's index.
+///
+/// This is the first half of the design's cycle strategy: the group-level
+/// query introduces the recursive identities before the equation checks run,
+/// mirroring the checker's fixpoint prelude. The seals and the environment
+/// threading stay checker-side.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn rec_group_abst_judgment_at<'db>(
+    db: &'db dyn TyckDb, site: InternedSite<'db>, index: InternedBindingIndex<'db>,
+) -> Option<(ss::AbstId, ss::TypeId, ss::TypeId)> {
+    let key_space =
+        KeySpaceId::derive(QUERY_DERIVATION_TAG, site.space(db), site.raw(db), site.occurrence(db));
+    let base = 3 * index.index(db);
+    let abst: ss::AbstId = derived_id(key_space, base);
+    let ty_1: ss::TypeId = derived_id(key_space, base + 1);
+    let ty_2: ss::TypeId = derived_id(key_space, base + 2);
+    Some((abst, ty_1, ty_2))
+}
+
 /// The rejection of an intrinsic `Internal` term, carried as a query value so
 /// the checker routes decisions through queries and keeps the writer as a sink.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]

@@ -722,7 +722,7 @@ mod tests {
             "end\n",
         );
         let overrides = HashMap::from([(path.clone(), source.to_owned())]);
-        let (project, _session) = ProjectState::load(&path, &overrides).unwrap();
+        let (project, session) = ProjectState::load(&path, &overrides).unwrap();
         let line_width = HoverLineWidth::new(72).unwrap();
         let hover = project
             .hover(&session, &path, source_position(source, "ok (A : VType)"), line_width)

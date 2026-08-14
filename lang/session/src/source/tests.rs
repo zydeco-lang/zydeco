@@ -971,7 +971,7 @@ fn the_source_pipeline_reaches_statics_without_a_declaration_entry() {
     let Err(reports) = scoped.check() else {
         panic!("an unclassified root hole must not count as a checked source term")
     };
-    assert!(!reports.is_empty());
+    assert!(!reports.spans.is_empty());
 }
 
 #[test]
@@ -1054,7 +1054,7 @@ fn a_mismatched_companion_signature_rejects_the_implementation() {
     let analysis = CompilerSession::default().analyze(root).unwrap();
 
     assert!(analysis.outcome().root().is_none());
-    assert!(analysis.outcome().reports().is_some_and(|reports| !reports.is_empty()));
+    assert!(analysis.outcome().reports().is_some_and(|reports| !reports.spans.is_empty()));
 }
 
 #[test]
@@ -1066,7 +1066,7 @@ fn a_signature_root_must_itself_be_a_type() {
     let analysis = CompilerSession::default().analyze(root).unwrap();
 
     assert!(analysis.outcome().root().is_none());
-    assert!(analysis.outcome().reports().is_some_and(|reports| !reports.is_empty()));
+    assert!(analysis.outcome().reports().is_some_and(|reports| !reports.spans.is_empty()));
 }
 
 #[test]
@@ -1101,7 +1101,7 @@ fn an_explicit_signature_import_still_rejects_a_non_type_root() {
     let analysis = CompilerSession::default().analyze(root).unwrap();
 
     assert!(analysis.outcome().root().is_none());
-    assert!(analysis.outcome().reports().is_some_and(|reports| !reports.is_empty()));
+    assert!(analysis.outcome().reports().is_some_and(|reports| !reports.spans.is_empty()));
 }
 
 #[test]

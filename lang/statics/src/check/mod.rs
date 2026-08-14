@@ -2134,7 +2134,7 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
 
         let mut binder_map = HashMap::new();
         let mut abst_map = HashMap::new();
-        for binding in bindings {
+        for (binding_index, binding) in bindings.iter().enumerate() {
             let id = binding.id;
             let su::BindingForm::Definition(su::Definition { binder, bindee }) = binding.inner
             else {
@@ -2159,12 +2159,23 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
             // register the def with abstract type
             let (def, kd) = binder.try_destruct_def(tycker);
             if let Some(def) = def {
-                let abst: AbstId = tycker.fresh();
+                let index =
+                    crate::query::InternedBindingIndex::new(tycker.db, binding_index as u32);
+                let Some((abst, abst_ty, next_abst_ty)) =
+                    crate::query::rec_group_abst_judgment_at(tycker.db, tycker.query_site(), index)
+                else {
+                    unreachable!("recursive-group identities are query-produced")
+                };
                 tycker.statics.absts.insert_new(abst, ());
                 tycker.statics.abst_hints.insert_new(abst, def);
-                let abst_ty = Alloc::alloc(tycker, abst, kd, &env.info);
+                tycker
+                    .statics
+                    .types_pre
+                    .insert_new(abst_ty, ss::Fillable::Done(ss::Type::Abst(abst)));
+                tycker.statics.annotations_type.insert_new(abst_ty, kd);
+                tycker.statics.env_type.insert_new(abst_ty, env.info.clone());
                 env.info += [(def, abst_ty.into())];
-                abst_map.insert(id, (abst, kd));
+                abst_map.insert(id, (abst, next_abst_ty, kd));
             }
         }
         for binding in bindings {
@@ -2195,9 +2206,11 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
                 let _ = tycker.statics.type_definitions.upsert(def, bindee_subst);
             }
             // add the types to the seal arena
-            let (abst, kd) = abst_map[&id];
+            let (abst, abst_ty, kd) = abst_map[&id];
             tycker.statics.seals.insert_new(abst, bindee_subst);
-            let abst_ty = Alloc::alloc(tycker, abst, kd, &env.info);
+            tycker.statics.types_pre.insert_new(abst_ty, ss::Fillable::Done(ss::Type::Abst(abst)));
+            tycker.statics.annotations_type.insert_new(abst_ty, kd);
+            tycker.statics.env_type.insert_new(abst_ty, env.info.clone());
             // add the type into the environment
             let TyEnvT { info: new_env, inner: () } =
                 env.mk(Assign(binder, abst_ty)).tyck_k(tycker, ())?;

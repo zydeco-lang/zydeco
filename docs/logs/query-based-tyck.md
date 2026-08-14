@@ -594,3 +594,14 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   producer queries and their interned inputs are the expected source; the materializer walk at
   the end of the migration will re-measure and decide whether to batch or cache per-judgment
   inputs. Small files stay at ~0.1 s, dominated by startup.
+
+## 2026-08-14 — RecGroup pre-introduction rides a group-level query
+
+- `rec_group_abst_judgment_at` implements the first half of the design's cycle strategy: the
+  fixpoint prelude's identities (the abstract type and its two alias nodes per binding)
+  derive at the group's site by binding index under the query tag, so the recursive group's
+  identities are introduced by a group-level query before the equation checks run. The seals,
+  the type-definition records, and the environment threading stay checker-side, and the
+  salsa-recover backstop stays inapplicable while producer queries are keyed on checker
+  inputs (documented in the achieved-form note).
+- Workspace suite passes unchanged (61 targets green), clippy clean.
