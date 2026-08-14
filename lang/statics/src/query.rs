@@ -1842,6 +1842,57 @@ pub fn dtor_syn_judgment<'db>(
     })
 }
 
+/// An interned projection judgment input, for use as a salsa query key.
+#[salsa::interned]
+pub struct InternedProjInput<'db> {
+    pub head: ss::ValueId,
+    pub name: ss::FieldName,
+    pub products: Vec<(ss::TypeId, usize)>,
+    pub ann: ss::TypeId,
+}
+
+/// The allocation tail of a projection judgment: the projection value node.
+#[derive(Clone, Debug)]
+pub struct ProjSynOutcome {
+    pub id: ss::ValueId,
+    pub value: ss::Value,
+    pub ann: ss::TypeId,
+}
+
+/// The synthesized judgment of a projection term, keyed on the checked head
+/// and the resolved field.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+pub fn proj_syn_judgment<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
+    input: InternedProjInput<'db>, occurrence: u32,
+) -> Option<ProjSynOutcome> {
+    let su::Term::Proj(su::Proj(_, _)) = data.scoped(db).terms.get(&term.id(db))? else {
+        return None;
+    };
+    let site_space = term.id(db).key_space().as_u64();
+    let site_raw = term.id(db).raw().into_u32();
+    let id: ss::ValueId =
+        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0);
+    let field = ss::ResolvedField {
+        name: input.name(db),
+        target: ss::ProjTarget {
+            products: input
+                .products(db)
+                .iter()
+                .map(|(product, position)| ss::ProductProjection {
+                    product: *product,
+                    position: *position,
+                })
+                .collect(),
+        },
+    };
+    Some(ProjSynOutcome {
+        id,
+        value: ss::Value::Proj(ss::Proj(input.head(db), field)),
+        ann: input.ann(db),
+    })
+}
+
 /// The rejection of an intrinsic `Internal` term, carried as a query value so
 /// the checker routes decisions through queries and keeps the writer as a sink.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]

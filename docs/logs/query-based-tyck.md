@@ -532,3 +532,14 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
 - `comatch_syn_judgment` and `dtor_syn_judgment` followed the same recipe for the codata
   counterparts, with `codata_hints` staying checker-side.
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — projections close the term-level allocation sweep
+
+- `proj_syn_judgment` owns the projection tail, keyed on the checked head and the flattened
+  resolved field (name + product projections, rebuilt by the query).
+- With this, every term construct that allocates has its allocation tail on the query graph;
+  the checker retains the arena reads (`lub`, `type_filled_k`, the resolvers, the elaborator)
+  and the group drivers. The remaining term-level paths are delegation (Ann, Meta,
+  boundaries, Residual, Block), the recursion-group drivers, the copattern elaborator, and
+  the package-pi eliminations.
+- Workspace suite passes unchanged (61 targets green), clippy clean.

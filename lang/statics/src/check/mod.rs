@@ -6657,9 +6657,32 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
                         };
                         let field = ss::ResolvedField { name, target };
-                        let projected =
-                            Alloc::alloc(tycker, ss::Proj(head, field), projected_ty, &self.info);
-                        TermAnnId::Value(projected, projected_ty)
+                        let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                        let input = crate::query::InternedProjInput::new(
+                            tycker.db,
+                            head,
+                            field.name,
+                            field
+                                .target
+                                .products
+                                .iter()
+                                .map(|product| (product.product, product.position))
+                                .collect::<Vec<_>>(),
+                            projected_ty,
+                        );
+                        let Some(outcome) = crate::query::proj_syn_judgment(
+                            tycker.db,
+                            tycker.data,
+                            term,
+                            input,
+                            tycker.site_occurrence(),
+                        ) else {
+                            unreachable!("projection judgments are query-produced")
+                        };
+                        tycker.statics.values.insert_new(outcome.id, outcome.value);
+                        tycker.statics.annotations_value.insert_new(outcome.id, outcome.ann);
+                        tycker.statics.env_value.insert_new(outcome.id, self.info.clone());
+                        TermAnnId::Value(outcome.id, outcome.ann)
                     }
                     | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Compu(_, _) => {
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
