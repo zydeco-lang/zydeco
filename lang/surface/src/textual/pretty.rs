@@ -1310,7 +1310,7 @@ impl<'arena> PrettyFormatter<'arena> {
                 BoundaryLayout::hanging("", self.indent()),
                 self.term_through_fragment(*body, TermPrecedence::Atom),
             ),
-            | Term::Do(Bind { binder, bindee, tail }) => self.sequence_block(
+            | Term::Do(Bind { binder, bindee, tail }) => self.block_like(
                 self.prefixed(
                     term,
                     "do",
@@ -1325,12 +1325,12 @@ impl<'arena> PrettyFormatter<'arena> {
                 .append(RcDoc::text(";"))
                 .append(self.sequence_tail((*bindee).into(), *tail)),
             ),
-            | Term::Let(GenLet { binding, tail }) => self.sequence_block(
+            | Term::Let(GenLet { binding, tail }) => self.block_like(
                 RcDoc::text("let")
                     .append(self.placed_binding(term, binding, Placement::In))
                     .append(self.sequence_tail(binding.bindee.into(), *tail)),
             ),
-            | Term::Param(Param { binder, placement, tail }) => self.sequence_block(
+            | Term::Param(Param { binder, placement, tail }) => self.block_like(
                 self.prefixed(
                     term,
                     "param",
@@ -1346,20 +1346,22 @@ impl<'arena> PrettyFormatter<'arena> {
                     | DefinitionMode::Transparent => "let",
                     | DefinitionMode::Nominal => "def",
                 };
-                self.sequence_block(
+                self.block_like(
                     RcDoc::text(keyword)
                         .append(self.placed_binding(term, binding, *placement))
                         .append(self.sequence_tail(binding.bindee.into(), *tail)),
                 )
             }
             | Term::Block(Block(body)) => self.block(term, "begin", *body, "end"),
-            | Term::Data(Data { arms }) => self.data(term, arms),
-            | Term::CoData(CoData { arms }) => self.codata(term, arms),
+            | Term::Data(Data { arms }) => self.block_like(self.data(term, arms)),
+            | Term::CoData(CoData { arms }) => self.block_like(self.codata(term, arms)),
             | Term::Ctor(Ctor(name, body)) => {
                 self.constructor(name).append(self.term_constructor_argument(*body))
             }
-            | Term::Match(Match { scrut, arms }) => self.matcher(term, *scrut, arms),
-            | Term::CoMatch(CoMatchParam { arms }) => self.comatcher(term, arms),
+            | Term::Match(Match { scrut, arms }) => {
+                self.block_like(self.matcher(term, *scrut, arms))
+            }
+            | Term::CoMatch(CoMatchParam { arms }) => self.block_like(self.comatcher(term, arms)),
             | Term::Dtor(Dtor(body, name)) => self
                 .term_through(*body, TermPrecedence::Application)
                 .append(RcDoc::text(" "))
@@ -1870,11 +1872,12 @@ impl<'arena> PrettyFormatter<'arena> {
             .append(self.term_through(tail, TermPrecedence::Binder))
     }
 
-    /// Sequence bindings are block-like: their tail marker always breaks
-    /// onto a new line, so the whole binding must start on its own line.
-    /// The guard fails mid-line and lets an enclosing boundary fall back to
-    /// its broken form instead of anchoring the binding to a running line.
-    fn sequence_block(&self, document: RcDoc<'arena>) -> RcDoc<'arena> {
+    /// Block constructs — sequence bindings, whose tail marker always
+    /// breaks, and arm blocks, whose arms always break — must start on a
+    /// line of their own. The guard fails mid-line and lets an enclosing
+    /// boundary fall back to its broken form instead of anchoring the
+    /// construct to a running line.
+    fn block_like(&self, document: RcDoc<'arena>) -> RcDoc<'arena> {
         RcDoc::column(|column| {
             RcDoc::nesting(
                 move |nesting| {
@@ -3318,6 +3321,72 @@ mod tests {
             let reparsed = ParsedSource::new(&formatted);
             assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape(), "source: {source}");
             assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+        });
+    }
+
+    #[test]
+    fn arm_blocks_start_on_their_own_lines() {
+        let cases = [
+            // An arm block anchored mid-line moves to its own line, and its
+            // arms align with the block keyword.
+            (
+                concat!(
+                    "def Option (A : VType) = data\n",
+                    "| +None : Unit\n",
+                    "| +Some : A\n",
+                    "end that\n",
+                    "option",
+                ),
+                concat!(
+                    "def Option (A : VType) =\n",
+                    "  data\n",
+                    "  | +None : Unit\n",
+                    "  | +Some : A\n",
+                    "  end\n",
+                    "that\n",
+                    "option\n",
+                ),
+            ),
+            (
+                concat!(
+                    "def ! height (tree : Avl A) : Ret Int64 = match tree\n",
+                    "| +Leaf() => ret 0\n",
+                    "| +Node(/tree_height) => ret tree_height\n",
+                    "end that\n",
+                    "height",
+                ),
+                concat!(
+                    "def ! height (tree : Avl A) : Ret Int64 =\n",
+                    "  match tree\n",
+                    "  | +Leaf() => ret 0\n",
+                    "  | +Node(/tree_height) => ret tree_height\n",
+                    "  end\n",
+                    "that\n",
+                    "height\n",
+                ),
+            ),
+            (
+                "fn x => match x\n| +A() => ret 0\n| +B() => ret 1\nend",
+                concat!(
+                    "fn x =>\n",
+                    "  match x\n",
+                    "  | +A() => ret 0\n",
+                    "  | +B() => ret 1\n",
+                    "  end\n",
+                ),
+            ),
+            // An arm block already at a line start stays there.
+            ("match x\n| +A() => ret 0\nend", "match x\n| +A() => ret 0\nend\n"),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, expected, "source: {source}");
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve), "source: {source}");
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape(), "source: {source}");
         });
     }
 
