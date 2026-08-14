@@ -2255,7 +2255,40 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                         tycker.err_k(error, std::panic::Location::caller())?
                     }
                     | Switch::Ana(ann) => {
-                        self.mk(PatternCheck::new(PatAnnId::mk_hole(tycker, &self.info, ann)))
+                        let pat = crate::query::InternedPat::new(tycker.db, self.inner);
+                        let node = crate::query::InternedPatLeafNode::new(
+                            tycker.db,
+                            crate::query::PatLeaf::Hole,
+                            ann,
+                        );
+                        let Some(outcome) = crate::query::pat_leaf_node_judgment(
+                            tycker.db,
+                            tycker.data,
+                            pat,
+                            node,
+                            tycker.site_occurrence(),
+                        ) else {
+                            unreachable!("hole pattern nodes are query-produced")
+                        };
+                        let ann = match outcome {
+                            | crate::query::PatLeafOutcome::Kind { id, pat } => {
+                                tycker.statics.kpats.insert_new(id, pat);
+                                PatAnnId::Kind(id)
+                            }
+                            | crate::query::PatLeafOutcome::Type { id, pat, kd } => {
+                                tycker.statics.tpats.insert_new(id, pat);
+                                tycker.statics.annotations_tpat.insert_new(id, kd);
+                                tycker.statics.env_tpat.insert_new(id, self.info.clone());
+                                PatAnnId::Type(id, kd)
+                            }
+                            | crate::query::PatLeafOutcome::Value { id, pat, ty } => {
+                                tycker.statics.vpats.insert_new(id, pat);
+                                tycker.statics.annotations_vpat.insert_new(id, ty);
+                                tycker.statics.env_vpat.insert_new(id, self.info.clone());
+                                PatAnnId::Value(id, ty)
+                            }
+                        };
+                        self.mk(PatternCheck::new(ann))
                     }
                 }
             }
@@ -2264,11 +2297,34 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                     | Switch::Syn => match tycker.statics.annotations_var.get(&def) {
                         | Some(ann) => ann.to_owned(),
                         | None => {
-                            let vtype = ss::VType.build(tycker, &self.info);
-                            let fill = Alloc::alloc(tycker, self.inner, (), &());
-                            let inferred: ss::TypeId =
-                                Alloc::alloc(tycker, fill, vtype, &self.info);
-                            inferred.into()
+                            let pat = crate::query::InternedPat::new(tycker.db, self.inner);
+                            let Some((fill, ty, vtype)) = crate::query::pat_var_hole_judgment(
+                                tycker.db,
+                                tycker.data,
+                                pat,
+                                tycker.site_occurrence(),
+                            ) else {
+                                unreachable!(
+                                    "the variable pattern's stand-in hole is query-produced"
+                                )
+                            };
+                            tycker
+                                .statics
+                                .fills
+                                .insert_new(fill, ss::InferenceSite::Pattern(self.inner));
+                            tycker.statics.types_pre.insert_new(ty, ss::Fillable::Fill(fill));
+                            tycker.statics.annotations_type.insert_new(ty, vtype);
+                            tycker.statics.env_type.insert_new(ty, self.info.clone());
+                            let scope = self.info.skolem_scope().clone();
+                            if let Some(existing) =
+                                tycker.statics.fill_scopes.insert_or_get(fill, scope.clone())
+                            {
+                                tycker
+                                    .statics
+                                    .fill_scopes
+                                    .replace_existing(fill, existing.intersection(&scope));
+                            }
+                            ty.into()
                         }
                     },
                     | Switch::Ana(ann) => ann,
@@ -2288,7 +2344,40 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                     tycker.statics.annotations_var.replace_existing(def, ann);
                 }
 
-                self.mk(PatternCheck::new(PatAnnId::mk_var(tycker, &self.info, def, ann)))
+                let pat = crate::query::InternedPat::new(tycker.db, self.inner);
+                let node = crate::query::InternedPatLeafNode::new(
+                    tycker.db,
+                    crate::query::PatLeaf::Var(def),
+                    ann,
+                );
+                let Some(outcome) = crate::query::pat_leaf_node_judgment(
+                    tycker.db,
+                    tycker.data,
+                    pat,
+                    node,
+                    tycker.site_occurrence(),
+                ) else {
+                    unreachable!("variable pattern nodes are query-produced")
+                };
+                let ann = match outcome {
+                    | crate::query::PatLeafOutcome::Kind { id, pat } => {
+                        tycker.statics.kpats.insert_new(id, pat);
+                        PatAnnId::Kind(id)
+                    }
+                    | crate::query::PatLeafOutcome::Type { id, pat, kd } => {
+                        tycker.statics.tpats.insert_new(id, pat);
+                        tycker.statics.annotations_tpat.insert_new(id, kd);
+                        tycker.statics.env_tpat.insert_new(id, self.info.clone());
+                        PatAnnId::Type(id, kd)
+                    }
+                    | crate::query::PatLeafOutcome::Value { id, pat, ty } => {
+                        tycker.statics.vpats.insert_new(id, pat);
+                        tycker.statics.annotations_vpat.insert_new(id, ty);
+                        tycker.statics.env_vpat.insert_new(id, self.info.clone());
+                        PatAnnId::Value(id, ty)
+                    }
+                };
+                self.mk(PatternCheck::new(ann))
             }
             | Pat::Named(pat) => {
                 let su::Named(name, inner) = pat;
@@ -2537,10 +2626,28 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                         PatternAction::ana(arm_ty.to_owned().into()).with_skolems(skolems.clone()),
                     )?;
                     let (args, _) = args_out_ann.as_value();
-                    let pat =
-                        Alloc::alloc(tycker, ss::Ctor(ctor.to_owned(), args), ann_ty, &self.info);
-                    tycker.statics.data_pat_hints.insert_new(pat, data_id.to_owned());
-                    args_out_ann.with_annotation(PatAnnId::Value(pat, ann_ty))
+                    let pat_i = crate::query::InternedPat::new(tycker.db, self.inner);
+                    let input = crate::query::InternedPatCtorInput::new(
+                        tycker.db,
+                        ctor.to_owned(),
+                        args,
+                        ann_ty,
+                        data_id.to_owned(),
+                    );
+                    let Some(outcome) = crate::query::pat_ctor_ana_judgment(
+                        tycker.db,
+                        tycker.data,
+                        pat_i,
+                        input,
+                        tycker.site_occurrence(),
+                    ) else {
+                        unreachable!("constructor pattern judgments are query-produced")
+                    };
+                    tycker.statics.vpats.insert_new(outcome.id, outcome.pat);
+                    tycker.statics.annotations_vpat.insert_new(outcome.id, outcome.ann);
+                    tycker.statics.env_vpat.insert_new(outcome.id, self.info.clone());
+                    tycker.statics.data_pat_hints.insert_new(outcome.id, data_id.to_owned());
+                    args_out_ann.with_annotation(PatAnnId::Value(outcome.id, outcome.ann))
                 }
             },
             | Pat::Alias(su::Alias(patterns)) => match switch {
@@ -2593,11 +2700,27 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                 Ok((info, output, opened))
                             },
                         )?;
-                        let patterns = ss::ConsN::from_vec(output).unwrap();
-                        let alias = Alloc::alloc(tycker, ss::Alias(patterns), expected, &self.info);
+                        let pat_i = crate::query::InternedPat::new(tycker.db, self.inner);
+                        let input =
+                            crate::query::InternedPatAliasInput::new(tycker.db, output, expected);
+                        let Some(outcome) = crate::query::pat_alias_ana_judgment(
+                            tycker.db,
+                            tycker.data,
+                            pat_i,
+                            input,
+                            tycker.site_occurrence(),
+                        ) else {
+                            unreachable!("alias pattern judgments are query-produced")
+                        };
+                        tycker.statics.vpats.insert_new(outcome.id, outcome.pat);
+                        tycker.statics.annotations_vpat.insert_new(outcome.id, outcome.ann);
+                        tycker.statics.env_vpat.insert_new(outcome.id, self.info.clone());
                         TyEnvT::new(
                             pattern_env,
-                            PatternCheck::with_opened(PatAnnId::Value(alias, expected), opened),
+                            PatternCheck::with_opened(
+                                PatAnnId::Value(outcome.id, outcome.ann),
+                                opened,
+                            ),
                         )
                     }
                 }

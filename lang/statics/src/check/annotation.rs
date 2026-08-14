@@ -1,42 +1,8 @@
 //! Checker-dependent operations on typed annotation identities.
 
-use crate::{syntax::*, *};
+use crate::*;
 
 impl PatAnnId {
-    pub fn mk_hole(tycker: &mut Tycker<'_>, env: &TyEnv, ann: AnnId) -> Self {
-        match ann {
-            | AnnId::Set => {
-                let term = Alloc::alloc(tycker, Hole, (), env);
-                Self::Kind(term)
-            }
-            | AnnId::Kind(kind) => {
-                let term = Alloc::alloc(tycker, Hole, kind, env);
-                Self::Type(term, kind)
-            }
-            | AnnId::Type(ty) => {
-                let term = Alloc::alloc(tycker, Hole, ty, env);
-                Self::Value(term, ty)
-            }
-        }
-    }
-
-    pub fn mk_var(tycker: &mut Tycker<'_>, env: &TyEnv, definition: DefId, ann: AnnId) -> Self {
-        match ann {
-            | AnnId::Set => {
-                let term = Alloc::alloc(tycker, definition, (), env);
-                Self::Kind(term)
-            }
-            | AnnId::Kind(kind) => {
-                let term = Alloc::alloc(tycker, definition, kind, env);
-                Self::Type(term, kind)
-            }
-            | AnnId::Type(ty) => {
-                let term = Alloc::alloc(tycker, definition, ty, env);
-                Self::Value(term, ty)
-            }
-        }
-    }
-
     pub fn try_as_kind(
         self, tycker: &mut Tycker<'_>, error: TyckError,
         blame: &'static std::panic::Location<'static>,

@@ -543,3 +543,15 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   boundaries, Residual, Block), the recursion-group drivers, the copattern elaborator, and
   the package-pi eliminations.
 - Workspace suite passes unchanged (61 targets green), clippy clean.
+
+## 2026-08-14 — variable patterns take the first fold step
+
+- `pat_var_hole_judgment` produces the unannotated variable pattern's stand-in pair (fill +
+  vtype-annotated `Fillable::Fill` pre-node) at the pattern's site — the second fill-state
+  producer after the analyzed hole — with `fill_scopes` bookkeeping staying checker-side.
+- `pat_leaf_node_judgment` owns the leaf pattern nodes (hole and variable, across all three
+  annotation sorts) at slot 2 of the pattern's site, leaving slots 0 and 1 for the stand-in
+  pair. The `mk_hole`/`mk_var` helpers are gone.
+- The fold itself — the `insert_or_get` + lub merge on `annotations_var` — stays
+  checker-side until `lub` is query-able, per the design's step ordering.
+- Workspace suite passes unchanged (61 targets green), clippy clean.
