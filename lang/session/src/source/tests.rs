@@ -22,18 +22,18 @@ struct SourceStack {
     stackir: zydeco_stackir::BranchJoinProgram,
 }
 
-struct SourceConvertedStack {
+struct SourceSpsLow {
     spans: zydeco_surface::textual::syntax::SpanArena,
     scoped: zydeco_surface::scoped::arena::ScopedArena,
     statics: zydeco_statics::arena::StaticsArena,
-    stackir: zydeco_stackir::StackirProgram,
+    sps_low: zydeco_stackir::SpsLowProgram,
 }
 
 struct SourceAssembly {
     spans: zydeco_surface::textual::syntax::SpanArena,
     scoped: zydeco_surface::scoped::arena::ScopedArena,
     statics: zydeco_statics::arena::StaticsArena,
-    stackir: zydeco_stackir::StackirProgram,
+    sps_low: zydeco_stackir::SpsLowProgram,
     assembly: zydeco_assembly::syntax::AssemblyProgram,
 }
 
@@ -143,24 +143,19 @@ impl SourceChecked {
 }
 
 impl SourceStack {
-    fn convert(self, config: &crate::TestPipelineOptions) -> SourceConvertedStack {
-        let cps = if config.enable_cps {
-            zydeco_stackir::CpsMode::Enabled
-        } else {
-            zydeco_stackir::CpsMode::Disabled
-        };
+    fn convert(self) -> SourceSpsLow {
         let Self { spans, mut scoped, statics, stackir } = self;
-        let stackir = zydeco_stackir::StackirPipeline::new(&mut scoped, cps).run(stackir);
-        SourceConvertedStack { spans, scoped, statics, stackir }
+        let sps_low = zydeco_stackir::SpsLowPipeline::new(&mut scoped).run(stackir);
+        SourceSpsLow { spans, scoped, statics, sps_low }
     }
 }
 
-impl SourceConvertedStack {
+impl SourceSpsLow {
     fn assemble(self) -> SourceAssembly {
-        let Self { spans, scoped, statics, stackir } = self;
+        let Self { spans, scoped, statics, sps_low } = self;
         let assembly =
-            zydeco_assembly::LoweringPipeline::new(&spans, &scoped, &statics, &stackir).run();
-        SourceAssembly { spans, scoped, statics, stackir, assembly }
+            zydeco_assembly::LoweringPipeline::new(&spans, &scoped, &statics, &sps_low).run();
+        SourceAssembly { spans, scoped, statics, sps_low, assembly }
     }
 }
 
@@ -180,18 +175,17 @@ impl TestPipeline {
     }
 
     fn zasm(
-        path: impl AsRef<Path>, config: &crate::TestPipelineOptions, _: crate::TestOutput,
+        path: impl AsRef<Path>, _: crate::TestOutput,
     ) -> Result<SourceAssembly, TestPipelineError> {
-        Ok(Self::check(path)?.stackir_with_builtin()?.convert(config).assemble())
+        Ok(Self::check(path)?.stackir_with_builtin()?.convert().assemble())
     }
 
     fn amd64(
-        path: impl AsRef<Path>, config: &crate::TestPipelineOptions, _: crate::TestBuildOptions,
-        verbosity: crate::TestOutput,
+        path: impl AsRef<Path>, _: crate::TestBuildOptions, verbosity: crate::TestOutput,
     ) -> Result<NativePackage, TestPipelineError> {
         let path = path.as_ref();
         let name = path.file_stem().and_then(|stem| stem.to_str()).unwrap().to_owned();
-        let lowered = Self::zasm(path, config, verbosity)?;
+        let lowered = Self::zasm(path, verbosity)?;
         let target = if cfg!(target_os = "macos") {
             zydeco_amd64::TargetFormat::MachO
         } else {
@@ -201,7 +195,6 @@ impl TestPipeline {
             &lowered.spans,
             &lowered.scoped,
             &lowered.statics,
-            &lowered.stackir,
             &lowered.assembly,
             target,
         )
@@ -287,7 +280,11 @@ impl RepositorySourceFiles {
         let TermAnnId::Value(_, root_type) = checked.root else {
             panic!("expected a pure package value")
         };
-        assert!(matches!(checked.statics.types_pre[&root_type], Fillable::Done(Type::VPackPi(_))));
+        let classifier = &checked.statics.types_pre[&root_type];
+        assert!(
+            matches!(classifier, Fillable::Done(Type::VArrow(_) | Type::VPackPi(_))),
+            "expected a pure package factory, got {classifier:?}"
+        );
     }
 }
 
@@ -368,13 +365,9 @@ fn assert_source_program_exits_zero_and_reaches_amd64(relative: impl AsRef<Path>
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(!native.assembly.is_empty());
@@ -386,13 +379,9 @@ fn assert_source_io_program(relative: impl AsRef<Path>, source_input: &str, expe
     let mut input = std::io::Cursor::new(source_input);
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert_eq!(String::from_utf8(output).unwrap(), expected_output);
@@ -407,12 +396,8 @@ fn assert_source_io_program_reaches_zasm(
     let mut input = std::io::Cursor::new(source_input);
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let SourceAssembly { assembly, .. } = TestPipeline::zasm(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let SourceAssembly { assembly, .. } =
+        TestPipeline::zasm(root, crate::TestOutput::quiet()).unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert_eq!(String::from_utf8(output).unwrap(), expected_output);
@@ -425,12 +410,8 @@ fn assert_source_program_exits_zero_and_reaches_zasm(relative: impl AsRef<Path>)
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let SourceAssembly { assembly, .. } = TestPipeline::zasm(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let SourceAssembly { assembly, .. } =
+        TestPipeline::zasm(root, crate::TestOutput::quiet()).unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(assembly.arena.programs.get(&assembly.root).is_some());
@@ -439,7 +420,6 @@ fn assert_source_program_exits_zero_and_reaches_zasm(relative: impl AsRef<Path>)
 fn assert_source_program_reaches_amd64(relative: impl AsRef<Path>) {
     let native = TestPipeline::amd64(
         repository_source(relative),
-        &crate::TestPipelineOptions::default(),
         crate::TestBuildOptions::default(),
         crate::TestOutput::quiet(),
     )
@@ -1475,29 +1455,20 @@ fn stack_ir_constructs_and_applies_the_same_typed_builtin_package() {
 fn builtin_applied_stack_ir_reaches_analyzed_assembly() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", builtin_add_exit_source());
-    let SourceAssembly { stackir, assembly, scoped, .. } = TestPipeline::zasm(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let SourceAssembly { sps_low, assembly, .. } =
+        TestPipeline::zasm(root, crate::TestOutput::quiet()).unwrap();
 
-    assert!(stackir.arena.inner.compus.get(&stackir.root).is_some());
+    assert!(sps_low.arena().inner.compus.get(&sps_low.root()).is_some());
     assert!(assembly.arena.programs.get(&assembly.root).is_some());
-    zydeco_stackir::sps::check::check(&stackir, &scoped);
 }
 
 #[test]
 fn declaration_free_source_reaches_native_assembly_emission() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", builtin_add_exit_source());
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert_eq!(native.name, "main");
     assert!(!native.assembly.is_empty());
@@ -1510,13 +1481,9 @@ fn canonical_builtin_signature_imports_into_interpreter_and_native_compilation()
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(!native.assembly.is_empty());
@@ -1651,13 +1618,9 @@ fn foundational_comparison_selects_a_computation_without_constructing_bool() {
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(!native.assembly.is_empty());
@@ -1670,13 +1633,9 @@ fn foundational_line_parser_selects_a_continuation_without_constructing_option()
     let mut input = std::io::Cursor::new("42\nnot-an-integer\n");
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(!native.assembly.is_empty());
@@ -1690,12 +1649,8 @@ fn foundational_argument_fold_preserves_sequence_without_constructing_list() {
     let mut output = Vec::new();
     let arguments = ["alpha".to_string(), "beta".to_string()];
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &arguments, dynamics).run();
-    let SourceAssembly { assembly, .. } = TestPipeline::zasm(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let SourceAssembly { assembly, .. } =
+        TestPipeline::zasm(root, crate::TestOutput::quiet()).unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(assembly.arena.programs.get(&assembly.root).is_some());
@@ -1710,13 +1665,9 @@ fn standard_library_package_composes_as_an_ordinary_imported_term() {
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(!native.assembly.is_empty());
@@ -1729,12 +1680,8 @@ fn standard_library_reifies_foundational_comparisons_as_abstract_bool() {
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let SourceAssembly { assembly, .. } = TestPipeline::zasm(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let SourceAssembly { assembly, .. } =
+        TestPipeline::zasm(root, crate::TestOutput::quiet()).unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(assembly.arena.programs.get(&assembly.root).is_some());
@@ -1747,12 +1694,8 @@ fn standard_library_reifies_foundational_splits_as_abstract_option() {
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let SourceAssembly { assembly, .. } = TestPipeline::zasm(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let SourceAssembly { assembly, .. } =
+        TestPipeline::zasm(root, crate::TestOutput::quiet()).unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(assembly.arena.programs.get(&assembly.root).is_some());
@@ -1765,12 +1708,8 @@ fn standard_library_reifies_foundational_line_parsing_as_abstract_option() {
     let mut input = std::io::Cursor::new("42\nnot-an-integer\n");
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let SourceAssembly { assembly, .. } = TestPipeline::zasm(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let SourceAssembly { assembly, .. } =
+        TestPipeline::zasm(root, crate::TestOutput::quiet()).unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(assembly.arena.programs.get(&assembly.root).is_some());
@@ -1784,12 +1723,8 @@ fn standard_library_reifies_foundational_argument_fold_as_abstract_list() {
     let mut output = Vec::new();
     let arguments = ["alpha".to_string(), "beta".to_string()];
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &arguments, dynamics).run();
-    let SourceAssembly { assembly, .. } = TestPipeline::zasm(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let SourceAssembly { assembly, .. } =
+        TestPipeline::zasm(root, crate::TestOutput::quiet()).unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(assembly.arena.programs.get(&assembly.root).is_some());
@@ -1802,13 +1737,9 @@ fn legacy_alias_example_ports_to_uniform_term_composition() {
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(!native.assembly.is_empty());
@@ -1821,13 +1752,9 @@ fn standard_prelude_exports_legacy_thunk_and_return_aliases() {
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(!native.assembly.is_empty());
@@ -1840,13 +1767,9 @@ fn legacy_tuple_example_ports_to_uniform_term_composition() {
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(!native.assembly.is_empty());
@@ -1859,13 +1782,9 @@ fn exact_signed_arithmetic_agrees_through_interpretation_and_native_emission() {
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(native.assembly.contains("call zydeco_int64_div"));
@@ -1879,13 +1798,9 @@ fn recursive_nominal_types_port_to_a_declaration_free_block() {
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(!native.assembly.is_empty());
@@ -1900,13 +1815,9 @@ fn abstract_bool_package_exports_values_and_an_eliminator() {
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(!native.assembly.is_empty());
@@ -1921,13 +1832,9 @@ fn abstract_option_package_exports_a_type_constructor_and_an_eliminator() {
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(!native.assembly.is_empty());
@@ -1942,13 +1849,9 @@ fn abstract_list_package_exports_case_analysis_and_a_recursive_fold() {
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(!native.assembly.is_empty());
@@ -1961,13 +1864,9 @@ fn named_manifest_package_example_ports_without_declarations() {
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(!native.assembly.is_empty());
@@ -1980,13 +1879,9 @@ fn interleaved_pack_pi_example_ports_without_declarations() {
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(!native.assembly.is_empty());
@@ -1999,13 +1894,9 @@ fn legacy_match_example_ports_without_declarations() {
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(!native.assembly.is_empty());
@@ -2018,13 +1909,9 @@ fn legacy_comatch_example_ports_without_declarations() {
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(!native.assembly.is_empty());
@@ -2037,13 +1924,9 @@ fn legacy_continuation_clone_example_ports_without_declarations() {
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(!native.assembly.is_empty());
@@ -2056,13 +1939,9 @@ fn legacy_factorial_example_ports_through_foundational_comparison() {
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert!(!native.assembly.is_empty());
@@ -2186,13 +2065,10 @@ fn choice_exec_example_composes_the_standard_library_as_a_root_term() {
 }
 
 #[test]
-fn choice_root_reaches_zasm_without_the_transitional_cps_pass() {
-    let SourceAssembly { assembly, .. } = TestPipeline::zasm(
-        repository_source("tests/exec/choice.zy"),
-        &crate::TestPipelineOptions { enable_cps: false },
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+fn choice_root_reaches_zasm_through_sps_low() {
+    let SourceAssembly { assembly, .. } =
+        TestPipeline::zasm(repository_source("tests/exec/choice.zy"), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(assembly.arena.programs.get(&assembly.root).is_some());
 }
@@ -2364,13 +2240,9 @@ fn playground_is_a_configuration_free_root_program() {
     let mut input = std::io::empty();
     let mut output = std::io::sink();
     let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-    let native = TestPipeline::amd64(
-        root,
-        &crate::TestPipelineOptions::default(),
-        crate::TestBuildOptions::default(),
-        crate::TestOutput::quiet(),
-    )
-    .unwrap();
+    let native =
+        TestPipeline::amd64(root, crate::TestBuildOptions::default(), crate::TestOutput::quiet())
+            .unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(42)));
     assert!(!native.assembly.is_empty());

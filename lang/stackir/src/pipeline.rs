@@ -1,35 +1,18 @@
-use crate::{BranchJoinProgram, ClosureConverter, CpsTranslator, StackirProgram};
+use crate::{BranchJoinProgram, SpsLowConverter, SpsLowProgram};
 use zydeco_surface::scoped::arena::ScopedArena;
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum CpsMode {
-    #[default]
-    Enabled,
-    Disabled,
-}
-
-/// Prepare branch-join Stack IR for assembly lowering.
-pub struct StackirPipeline<'a> {
+/// Convert branch-join high SPS into first-order SPSLow.
+pub struct SpsLowPipeline<'a> {
     scoped: &'a mut ScopedArena,
-    cps: CpsMode,
 }
 
-impl<'a> StackirPipeline<'a> {
-    pub fn new(scoped: &'a mut ScopedArena, cps: CpsMode) -> Self {
-        Self { scoped, cps }
+impl<'a> SpsLowPipeline<'a> {
+    pub fn new(scoped: &'a mut ScopedArena) -> Self {
+        Self { scoped }
     }
 
-    pub fn run(self, stackir: BranchJoinProgram) -> StackirProgram {
-        let mut stackir = stackir;
+    pub fn run(self, stackir: BranchJoinProgram) -> SpsLowProgram {
         crate::sps::check::check(stackir.as_program(), self.scoped);
-
-        if self.cps == CpsMode::Enabled {
-            stackir = CpsTranslator::new(stackir, self.scoped).translate();
-            crate::sps::check::check(stackir.as_program(), self.scoped);
-        }
-
-        stackir = ClosureConverter::new(stackir, self.scoped).convert();
-        crate::sps::check::check(stackir.as_program(), self.scoped);
-        stackir.into_program()
+        SpsLowConverter::new(stackir, self.scoped).convert()
     }
 }

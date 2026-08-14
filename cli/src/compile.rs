@@ -7,9 +7,7 @@ use zydeco_session::{
     AnalysisError, AnalysisOutcome, CompilerSession, ExecutableError, ExecutableProgram,
     ProgramAnalysis,
 };
-use zydeco_stackir::{
-    BuiltinPackageLowerError, BuiltinRootLowerer, CpsMode, StackirPipeline, StackirProgram,
-};
+use zydeco_stackir::{BuiltinPackageLowerError, BuiltinRootLowerer, SpsLowPipeline, SpsLowProgram};
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax::SpanArena};
 use zydeco_utils::pass::CompilerPass;
@@ -76,8 +74,8 @@ impl CommandCompiler {
         }
     }
 
-    pub fn lower(&self, path: &Path, cps: CpsMode) -> Result<BackendProgram, CompileError> {
-        BackendProgram::lower(self.executable(path)?, cps)
+    pub fn lower(&self, path: &Path) -> Result<BackendProgram, CompileError> {
+        BackendProgram::lower(self.executable(path)?)
     }
 }
 
@@ -86,31 +84,27 @@ pub struct BackendProgram {
     pub spans: SpanArena,
     pub scoped: ScopedArena,
     pub statics: StaticsArena,
-    pub stackir: StackirProgram,
+    pub sps_low: SpsLowProgram,
     pub assembly: AssemblyProgram,
 }
 
 impl BackendProgram {
-    pub fn lower(executable: ExecutableProgram, cps: CpsMode) -> Result<Self, CompileError> {
+    pub fn lower(executable: ExecutableProgram) -> Result<Self, CompileError> {
         let ExecutableProgram { spans, mut scoped, statics, root, signature } = executable;
         let stackir = BuiltinRootLowerer::new(&spans, &mut scoped, &statics, root, signature)
             .run()
             .map_err(CompileError::BuiltinLower)?;
-        let stackir = StackirPipeline::new(&mut scoped, cps).run(stackir);
-        let assembly = LoweringPipeline::new(&spans, &scoped, &statics, &stackir).run();
-        Ok(Self { spans, scoped, statics, stackir, assembly })
+        let sps_low = SpsLowPipeline::new(&mut scoped).run(stackir);
+        let assembly = LoweringPipeline::new(&spans, &scoped, &statics, &sps_low).run();
+        Ok(Self { spans, scoped, statics, sps_low, assembly })
     }
 
-    pub fn render_stackir(&self) -> String {
-        use zydeco_stackir::sps::fmt::*;
-        let formatter = Formatter::new(
-            &self.stackir.arena.admin,
-            &self.stackir.arena.inner,
-            &self.scoped,
-            &self.statics,
-        );
+    pub fn render_sps_low(&self) -> String {
+        use zydeco_stackir::sps_low::fmt::*;
+        let arena = self.sps_low.arena();
+        let formatter = Formatter::new(&arena.admin, &arena.inner, &self.scoped, &self.statics);
         let mut output = String::new();
-        self.stackir.pretty(&formatter).render_fmt(100, &mut output).unwrap();
+        self.sps_low.pretty(&formatter).render_fmt(100, &mut output).unwrap();
         output
     }
 
@@ -141,7 +135,6 @@ impl BackendProgram {
             &self.spans,
             &self.scoped,
             &self.statics,
-            &self.stackir,
             &self.assembly,
             format,
         )
@@ -174,7 +167,6 @@ impl BackendProgram {
             &self.spans,
             &self.scoped,
             &self.statics,
-            &self.stackir,
             &self.assembly,
             target,
         )

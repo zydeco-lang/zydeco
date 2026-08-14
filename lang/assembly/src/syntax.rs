@@ -39,8 +39,6 @@ pub enum Terminator {
     Jump(Jump),
     /// Pop the top value (an address) off the stack, and dynamically jump to it.
     PopJump(PopJump),
-    /// Pop-jump the second value off the stack, keeping the first value at the top.
-    LeapJump(LeapJump),
     /// A jump table.
     PopBranch(PopBranch),
     /// Abort.
@@ -57,10 +55,6 @@ pub enum Instruction {
     PackProduct(Pack<ProductLayout>),
     /// Destruct a product into its logical elements.
     UnpackProduct(Unpack<ProductLayout>),
-    /// Save current context. Push the pointer to the current context onto the stack.
-    PushContext(Push<ContextMarker>),
-    /// Restore current context. Pop a pointer to the context off the stack, and replace the current context with it.
-    PopContext(Pop<ContextMarker>),
     /// Create a new context. Move beyond the end of the last stack frame and start a new one.
     AllocContext(Alloc<ContextMarker>),
     /// Function application. Push the argument onto the stack.
@@ -73,8 +67,6 @@ pub enum Instruction {
     PushTag(Push<Tag>),
     /// Builtin instructions.
     Intrinsic(Intrinsic),
-    /// Swap the top two values on the stack.
-    Swap(Swap),
     /// Clear specified variables from the current context.
     Clear(Context),
 }
@@ -89,8 +81,6 @@ pub struct Push<T>(pub T);
 pub struct Pop<T>(pub T);
 #[derive(Clone, Debug)]
 pub struct Alloc<T>(pub T);
-#[derive(Clone, Debug)]
-pub struct Swap;
 
 /// The physical product arity and the number of logical stack elements.
 ///
@@ -118,8 +108,6 @@ pub struct ContextMarker;
 pub struct Jump(pub ProgId);
 #[derive(Clone, Debug)]
 pub struct PopJump;
-#[derive(Clone, Debug)]
-pub struct LeapJump;
 #[derive(Clone, Debug)]
 pub struct PopBranch(pub Vec<(Tag, ProgId)>);
 #[derive(Clone, Debug)]

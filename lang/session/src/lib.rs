@@ -18,18 +18,6 @@ impl Default for TestBuildOptions {
 }
 
 #[cfg(test)]
-pub(crate) struct TestPipelineOptions {
-    pub enable_cps: bool,
-}
-
-#[cfg(test)]
-impl Default for TestPipelineOptions {
-    fn default() -> Self {
-        Self { enable_cps: true }
-    }
-}
-
-#[cfg(test)]
 #[derive(Clone, Copy)]
 pub(crate) struct TestOutput;
 

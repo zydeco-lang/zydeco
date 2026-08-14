@@ -20,8 +20,9 @@ checked CBPV root
 ```
 
 Each phase consumes one complete program and produces one complete program. A pass may use mutable storage while
-constructing its result, but it does not rewrite its input arena in place. High-level SPS represents lexical syntax;
-first-order `SPS_l` and assembly introduce explicit labels and are the first graph-shaped representations.
+constructing its result, but it does not rewrite its input arena in place. High-level SPS represents lexical syntax.
+First-order `SPS_l` introduces explicit code labels while retaining one lexical occurrence per stored node, and
+assembly materializes the control-flow graph.
 
 ## Branch-Join SPS
 
@@ -111,17 +112,34 @@ The implementation should be checked against structural examples derived from th
 Repository end-to-end tests additionally cover Zydeco extensions and require interpreted behavior alongside
 successful native lowering.
 
-## Implementation Status
+## 2026-08-13 — Branch-Join Boundary
 
 The first transition establishes the high-level boundary: checked terms compile directly to a validated
 `BranchJoinProgram`; product and coproduct elimination are separate syntax; and the substitution-normal form,
-fixed-round schedule, general in-place inliner, and their mutation helpers have been removed. The existing closure
-conversion is now a reachable structural translation. It alpha-renames duplicated lexical binders and constructs a
-compact output arena after consuming its source arena; no source node is retained or rewritten.
+fixed-round schedule, general in-place inliner, and their mutation helpers have been removed. The transitional
+closure and CPS conversions were rebuilt as consuming passes so this boundary could be validated independently.
 
-That structural converter is an implementation bridge, not the final `SPS_l` boundary. The current optional CPS
-translation still represents continuations through thunks, and explicit closure packages still use ordinary product
-syntax. The CPS bridge nevertheless follows the same ownership rule, consuming its source and constructing a compact
-output arena. The next representation change is therefore a distinct `SpsLowProgram` implementing blocks, jumps,
-closure packages, and continuation packages directly. A named, cost-aware local simplifier should be added only
-after those source and target syntaxes make its equations unambiguous.
+## 2026-08-13 — First-Order SPSLow Boundary
+
+The transitional converters have now been removed. `SpsLowConverter` consumes `BranchJoinProgram` and constructs a
+distinct `SpsLowProgram` with its own IDs, arena, syntax, and validator. Source closures become typed value packages
+containing an environment and self-named code block. Source continuations become typed stack packages containing a
+code block and residual stack. Closure invocation and return become separate package-open forms followed by `Jump`.
+The validator makes the first-order boundary executable: every node has one lexical occurrence, block labels are
+unique, the root is closed, and a block has no free value variable other than its own label. Captures must therefore
+cross the boundary through an explicit environment or residual stack.
+
+Computation recursion is the principal Zydeco extension at this boundary. `Fix` becomes a self-named block that pops
+its captured environment, reconstructs the recursive closure package from that environment and its own label, and
+then enters the converted body. High `Fix`, `Force`, `Ret`, closure, and continuation constructors are absent from
+the low syntax by construction.
+
+Assembly now consumes only `SpsLowProgram`. Closure packages retain their two-word runtime object layout because host
+callbacks exchange source-level closures. The compiler's current continuation instead lowers as raw code over its
+residual stack; returning host calls jump directly to that code after pushing the host result. Focused native tests
+cover returning externs, captured closures, and recursive blocks. The old `LeapJump`, context save/restore, and stack
+swap instructions have been removed because they existed only for the superseded implicit-continuation encoding.
+
+The remaining paper-alignment work is the named, cost-aware local SPS simplifier and the reconstruction/recompilation
+projection used when a transformation deliberately leaves the branch-join presentation. Those transformations can
+now be specified without conflating high closures with their low package representation.

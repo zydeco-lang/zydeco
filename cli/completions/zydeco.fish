@@ -50,7 +50,6 @@ llvm-exe\t''"
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s b -l build-dir -d 'Build Directory' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s r -l runtime-dir -d 'Runtime directory' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s x -l execute -d 'Run the program after building'
-complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l no-cps -d 'Skip CPS translation in the StackIR pipeline'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from fmt run check repl build help" -f -a "fmt" -d 'Format Zydeco source files in place'
 complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from fmt run check repl build help" -f -a "run" -d 'Run a zydeco program'

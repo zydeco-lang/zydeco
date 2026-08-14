@@ -9,19 +9,22 @@ and continuations explicit while preserving a close mapping to Zydeco terms.
 textual -> bitter -> scoped -> tyck -> stack
 ```
 
-The stack IR is built from one checked typed expression. Lowering is indexed by the consuming stack and constructs
-the paper's branch-join fragment directly: stack lets occur exactly around value-coproduct matches. A completed
-`StackirProgram` separates its single computation `root` from the arena that stores the root's nodes; auxiliary code
-is reachable through explicit closure and continuation syntax rather than a top-level declaration collection.
+The stack IR is built from one checked typed expression. High-level lowering is indexed by the consuming stack and
+constructs the paper's branch-join fragment directly: stack lets occur exactly around value-coproduct matches.
+Closure conversion then consumes that lexical tree and produces a distinct `SpsLowProgram` with blocks, jumps, and
+explicit closure and continuation packages. Both representations have one computation root rather than a top-level
+declaration collection.
 
 ## Key components
 
-- The `syntax` and `arena` modules define the stack-passing AST, its node arenas, and the single-root program.
-- `lower` translates typed syntax into a validated `BranchJoinProgram`, preserving source mappings.
-- `cps` structurally translates `Ret`/`do` continuations into explicit thunk calls in a fresh arena.
-- `convert` performs a fresh structural closure conversion that makes captures explicit without rewriting its input
-  nodes.
-- `variables` provides free-variable analysis, and `check` validates closed roots and branch-join placement.
+- `sps::syntax` and `sps::arena` define lexical high SPS; `sps::lower` constructs a validated
+  `BranchJoinProgram` directly from checked syntax.
+- `sps::variables` provides free-variable analysis, and `sps::check` validates closed roots, lexical ownership, and
+  branch-join placement.
+- `sps_low::syntax` and `sps_low::arena` define first-order SPS with typed package forms.
+- `sps_low::convert` performs fresh structural closure conversion; `sps_low::check` validates the resulting lexical
+  ownership and retained branch-join invariant.
+- `SpsLowPipeline` is the consuming boundary between high SPS and assembly-ready SPSLow.
 
-The design target and the remaining transition to a distinct first-order `SPS_l` are recorded in
-[`docs/ideas/paper-aligned-stackir.md`](../../../docs/ideas/paper-aligned-stackir.md).
+The paper correspondence and implementation history are recorded in
+[`docs/logs/paper-aligned-stackir.md`](../../../docs/logs/paper-aligned-stackir.md).

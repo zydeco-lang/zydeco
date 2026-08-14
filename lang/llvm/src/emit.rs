@@ -7,7 +7,6 @@ use zydeco_assembly::{
     arena::{AssemblyArena, AssemblyArenaRefLike, AssemblyProgram},
     syntax::{self as sa, Atom, Instruction, Intrinsic, ProgId, Program, Symbol, Terminator},
 };
-use zydeco_stackir::{StackirArena, StackirProgram};
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_syntax::*;
@@ -111,7 +110,6 @@ pub struct Emitter<'e> {
     spans: &'e SpanArena,
     scoped: &'e ScopedArena,
     statics: &'e StaticsArena,
-    stackir: &'e StackirArena,
     assembly: &'e AssemblyArena,
     root: ProgId,
 
@@ -131,13 +129,12 @@ pub struct Emitter<'e> {
 impl<'e> Emitter<'e> {
     pub fn new(
         spans: &'e SpanArena, scoped: &'e ScopedArena, statics: &'e StaticsArena,
-        stackir: &'e StackirProgram, assembly: &'e AssemblyProgram, target_triple: TargetTriple,
+        assembly: &'e AssemblyProgram, target_triple: TargetTriple,
     ) -> Self {
         Self {
             spans,
             scoped,
             statics,
-            stackir: &stackir.arena,
             assembly: &assembly.arena,
             root: assembly.root,
             target_triple,
@@ -302,10 +299,6 @@ impl<'a> Emit<'a> for Terminator {
             | Terminator::PopJump(sa::PopJump) => {
                 let _addr = em.emit_pop();
             }
-            | Terminator::LeapJump(sa::LeapJump) => {
-                let _value = em.emit_pop();
-                let _addr = em.emit_pop();
-            }
             | Terminator::PopBranch(sa::PopBranch(arms)) => {
                 let _tag = em.emit_pop();
                 let _ = arms;
@@ -344,12 +337,6 @@ impl<'a> Emit<'a> for Instruction {
                     em.emit_push(value);
                 }
             }
-            | Instruction::PushContext(sa::Push(sa::ContextMarker)) => {
-                em.emit_push("%env".to_string());
-            }
-            | Instruction::PopContext(sa::Pop(sa::ContextMarker)) => {
-                let _env = em.emit_pop();
-            }
             | Instruction::AllocContext(sa::Alloc(sa::ContextMarker)) => {}
             | Instruction::PushArg(sa::Push(atom)) => {
                 atom.emit(_id, em);
@@ -369,12 +356,6 @@ impl<'a> Emit<'a> for Instruction {
             }
             | Instruction::Intrinsic(intrinsic) => {
                 intrinsic.emit((), em);
-            }
-            | Instruction::Swap(sa::Swap) => {
-                let a = em.emit_pop();
-                let b = em.emit_pop();
-                em.emit_push(a);
-                em.emit_push(b);
             }
             | Instruction::Clear(_) => {
                 while !em.stack.value_stack.values.is_empty() {

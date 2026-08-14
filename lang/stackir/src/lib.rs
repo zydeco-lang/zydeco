@@ -11,7 +11,11 @@ pub mod builtin;
 pub use builtin::*;
 
 mod pipeline;
-pub use pipeline::{CpsMode, StackirPipeline};
+pub use pipeline::SpsLowPipeline;
+
+/// First-order stack-passing IR with blocks, jumps, and explicit packages.
+pub mod sps_low;
+pub use sps_low::{SpsLowConverter, SpsLowError, SpsLowProgram};
 
 /// Passes and utilities specific to stack IR.
 pub mod sps {
@@ -25,10 +29,6 @@ pub mod sps {
     pub mod lower;
     /// Double check the stack IR is well-formed. For debugging purposes only.
     pub mod check;
-    /// CPS translation over stack IR.
-    pub mod cps;
-    /// Closure conversion over stack IR.
-    pub mod convert;
     /// Free-variable analysis for stack IR.
     pub mod variables;
 }
@@ -36,7 +36,5 @@ pub mod sps {
 pub use sps::{
     arena::*,
     check::{BranchJoinError, BranchJoinProgram},
-    convert::ClosureConverter,
-    cps::CpsTranslator,
     lower::{BuiltinRootLowerer, Lowerer, RootLowerer},
 };

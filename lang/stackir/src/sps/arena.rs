@@ -65,9 +65,11 @@ pub(crate) struct StackirRebuild {
 impl StackirProgram {
     pub(crate) fn into_rebuild(self) -> StackirRebuild {
         let Self { arena: StackirArena { mut admin, inner }, root } = self;
-        let mut source_admin = AdminArena::default();
-        source_admin.pats = std::mem::take(&mut admin.pats);
-        source_admin.terms = std::mem::take(&mut admin.terms);
+        let source_admin = AdminArena {
+            pats: std::mem::take(&mut admin.pats),
+            terms: std::mem::take(&mut admin.terms),
+            ..AdminArena::default()
+        };
         StackirRebuild {
             source: StackirArena { admin: source_admin, inner },
             target: StackirArena { admin, inner: StackirInnerArena::default() },

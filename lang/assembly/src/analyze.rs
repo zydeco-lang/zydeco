@@ -110,16 +110,16 @@ impl<'a> CompilerPass for StackAnalyzer<'a> {
             .collect();
         for prog in symbol_programs.iter().copied() {
             let context = self.arena.contexts[&prog]
-                .to_owned()
-                .into_iter()
+                .iter()
+                .copied()
                 .map(|var| (var, Slot::Unknown))
                 .collect();
             let layout = Layout { control: im::Vector::new(), context };
             prog.stack_measure(&mut self, layout);
         }
         let context = self.arena.contexts[&self.root]
-            .to_owned()
-            .into_iter()
+            .iter()
+            .copied()
             .map(|var| (var, Slot::Unknown))
             .collect();
         let layout = Layout { control: im::Vector::new(), context };
@@ -155,7 +155,6 @@ impl<'a> StackMeasure<'a> for ProgId {
                         }
                     }
                     | Terminator::Jump(_)
-                    | Terminator::LeapJump(_)
                     | Terminator::PopBranch(_)
                     | Terminator::Abort(_)
                     | Terminator::Extern(_) => {}
@@ -177,12 +176,6 @@ impl<'a> StackMeasure<'a> for ProgId {
                         items.into_iter().rev().for_each(|item| {
                             si.push_control(&mut layout, item);
                         });
-                    }
-                    | Instruction::PushContext(Push(ContextMarker)) => {
-                        si.push_control(&mut layout, Slot::Unknown);
-                    }
-                    | Instruction::PopContext(Pop(ContextMarker)) => {
-                        si.pop_control(&mut layout);
                     }
                     | Instruction::AllocContext(Alloc(ContextMarker)) => {
                         layout.context.clear();
@@ -213,13 +206,6 @@ impl<'a> StackMeasure<'a> for ProgId {
                         });
                         si.push_control(&mut layout, Slot::Unknown);
                     }
-                    | Instruction::Swap(Swap) if layout.control.len() >= 2 => {
-                        let first = si.pop_control(&mut layout).unwrap();
-                        let second = si.pop_control(&mut layout).unwrap();
-                        si.push_control(&mut layout, first);
-                        si.push_control(&mut layout, second);
-                    }
-                    | Instruction::Swap(Swap) => {}
                     | Instruction::Clear(context) => {
                         let context = std::collections::HashSet::<_>::from_iter(context);
                         layout.context.retain(|(var, _)| !context.contains(var));
@@ -263,13 +249,10 @@ impl<'a> StackInline<'a> for ProgId {
                 | Program::Instruction(
                     Instruction::PackProduct(_)
                     | Instruction::UnpackProduct(_)
-                    | Instruction::PushContext(_)
-                    | Instruction::PopContext(_)
                     | Instruction::AllocContext(_)
                     | Instruction::PopArg(_)
                     | Instruction::PushTag(_)
                     | Instruction::Intrinsic(_)
-                    | Instruction::Swap(_)
                     | Instruction::Clear(_),
                     _,
                 ) => {}

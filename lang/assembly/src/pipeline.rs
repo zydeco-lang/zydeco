@@ -1,5 +1,5 @@
 use crate::{analyze::StackAnalyzer, lower::Lowerer, syntax::AssemblyProgram};
-use zydeco_stackir::StackirProgram;
+use zydeco_stackir::SpsLowProgram;
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax::SpanArena};
 use zydeco_utils::pass::CompilerPass;
@@ -9,19 +9,19 @@ pub struct LoweringPipeline<'a> {
     spans: &'a SpanArena,
     scoped: &'a ScopedArena,
     statics: &'a StaticsArena,
-    stackir: &'a StackirProgram,
+    sps_low: &'a SpsLowProgram,
 }
 
 impl<'a> LoweringPipeline<'a> {
     pub fn new(
         spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena,
-        stackir: &'a StackirProgram,
+        sps_low: &'a SpsLowProgram,
     ) -> Self {
-        Self { spans, scoped, statics, stackir }
+        Self { spans, scoped, statics, sps_low }
     }
 
     pub fn run(self) -> AssemblyProgram {
-        let mut assembly = Lowerer::new(self.spans, self.scoped, self.statics, self.stackir).run();
+        let mut assembly = Lowerer::new(self.spans, self.scoped, self.statics, self.sps_low).run();
         match StackAnalyzer::new(&mut assembly).run() {
             | Ok(_) => assembly,
             | Err(never) => match never {},

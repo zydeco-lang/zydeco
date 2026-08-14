@@ -99,7 +99,6 @@ impl<'a> Pretty<'a, Formatter<'a>> for Terminator {
         match self {
             | Terminator::Jump(jump) => jump.pretty(f),
             | Terminator::PopJump(pop_jump) => pop_jump.pretty(f),
-            | Terminator::LeapJump(leap_jump) => leap_jump.pretty(f),
             | Terminator::PopBranch(branch) => branch.pretty(f),
             | Terminator::Extern(ext) => ext.pretty(f),
             | Terminator::Abort(panic) => panic.pretty(f),
@@ -120,12 +119,6 @@ impl<'a> Pretty<'a, Formatter<'a>> for Jump {
 impl<'a> Pretty<'a, Formatter<'a>> for PopJump {
     fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
         RcDoc::text("popjmp")
-    }
-}
-
-impl<'a> Pretty<'a, Formatter<'a>> for LeapJump {
-    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
-        RcDoc::text("leapjmp")
     }
 }
 
@@ -177,14 +170,11 @@ impl<'a> Pretty<'a, Formatter<'a>> for Instruction {
         match self {
             | Instruction::PackProduct(pack) => pack.pretty(f),
             | Instruction::UnpackProduct(unpack) => unpack.pretty(f),
-            | Instruction::PushContext(pack) => pack.pretty(f),
-            | Instruction::PopContext(unpack) => unpack.pretty(f),
             | Instruction::AllocContext(alloc) => alloc.pretty(f),
             | Instruction::PushArg(push) => push.pretty(f),
             | Instruction::PopArg(pop) => pop.pretty(f),
             | Instruction::PushTag(push) => push.pretty(f),
             | Instruction::Intrinsic(builtin) => builtin.pretty(f),
-            | Instruction::Swap(swap) => swap.pretty(f),
             | Instruction::Clear(context) => context.pretty(f),
         }
     }
@@ -232,12 +222,6 @@ where
 {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         RcDoc::concat([RcDoc::text("alloc"), RcDoc::space(), self.0.pretty(f)])
-    }
-}
-
-impl<'a> Pretty<'a, Formatter<'a>> for Swap {
-    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
-        RcDoc::text("swap")
     }
 }
 

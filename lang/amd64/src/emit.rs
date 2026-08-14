@@ -5,7 +5,6 @@ use zydeco_assembly::{
     arena::{AssemblyArena, AssemblyArenaRefLike, AssemblyProgram},
     syntax::{self as sa, Atom, Instruction, Intrinsic, ProgId, Program, Symbol, Terminator},
 };
-use zydeco_stackir::{StackirArena, StackirProgram};
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_syntax::*;
@@ -29,7 +28,6 @@ pub struct Emitter<'e> {
     pub spans: &'e SpanArena,
     pub scoped: &'e ScopedArena,
     pub statics: &'e StaticsArena,
-    pub stackir: &'e StackirArena,
     pub assembly: &'e AssemblyArena,
     pub root: ProgId,
 
@@ -45,13 +43,12 @@ pub struct Emitter<'e> {
 impl<'e> Emitter<'e> {
     pub fn new(
         spans: &'e SpanArena, scoped: &'e ScopedArena, statics: &'e StaticsArena,
-        stackir: &'e StackirProgram, assembly: &'e AssemblyProgram, target_format: TargetFormat,
+        assembly: &'e AssemblyProgram, target_format: TargetFormat,
     ) -> Self {
         Self {
             spans,
             scoped,
             statics,
-            stackir: &stackir.arena,
             assembly: &assembly.arena,
             root: assembly.root,
             asm: AsmFile::default(),
@@ -271,16 +268,6 @@ impl<'a> Emit<'a> for Terminator {
                 em.asm.text.push(Instr::Pop(Loc::Reg(Reg::Rax)));
                 em.asm.text.push(Instr::Jmp(JmpArgs::Reg(Reg::Rax)));
             }
-            | Terminator::LeapJump(sa::LeapJump) => {
-                // pop value
-                em.asm.text.push(Instr::Pop(Loc::Reg(Reg::Rcx)));
-                // pop address
-                em.asm.text.push(Instr::Pop(Loc::Reg(Reg::Rax)));
-                // push the value back
-                em.asm.text.push(Instr::Push(Arg32::Reg(Reg::Rcx)));
-                // jump to the address
-                em.asm.text.push(Instr::Jmp(JmpArgs::Reg(Reg::Rax)));
-            }
             | Terminator::PopBranch(sa::PopBranch(arms)) => {
                 // pop tag and jump to the corresponding program
                 em.asm.text.push(Instr::Pop(Loc::Reg(Reg::Rax)));
@@ -378,16 +365,7 @@ impl<'a> Emit<'a> for Terminator {
                             ),
                             Instr::Mov(MovArgs::ToReg(Reg::Rcx, Arg64::Reg(Reg::Rax))),
                             Instr::Pop(Loc::Reg(Reg::Rax)),
-                            Instr::Mov(MovArgs::ToReg(
-                                Reg::Rsi,
-                                Arg64::Mem(MemRef { reg: Reg::Rax, offset: 0 }),
-                            )),
-                            Instr::Mov(MovArgs::ToReg(
-                                Reg::Rax,
-                                Arg64::Mem(MemRef { reg: Reg::Rax, offset: 8 }),
-                            )),
                             Instr::Push(Arg32::Reg(Reg::Rcx)),
-                            Instr::Push(Arg32::Reg(Reg::Rsi)),
                             Instr::Jmp(JmpArgs::Reg(Reg::Rax)),
                         ]);
                     }
@@ -502,20 +480,6 @@ impl<'a> Emit<'a> for Instruction {
                     ]);
                 }
             }
-            | Instruction::PushContext(sa::Push(sa::ContextMarker)) => {
-                // Push context pointer onto stack
-                em.asm.text.extend([
-                    Instr::Comment("push_context".to_string()),
-                    Instr::Push(Arg32::Reg(ENV_REG)),
-                ]);
-            }
-            | Instruction::PopContext(sa::Pop(sa::ContextMarker)) => {
-                // Pop context pointer from stack
-                em.asm.text.extend([
-                    Instr::Comment("pop_context".to_string()),
-                    Instr::Pop(Loc::Reg(ENV_REG)),
-                ]);
-            }
             | Instruction::AllocContext(sa::Alloc(sa::ContextMarker)) => {
                 // Allocate new context
                 let frame = em.assembly.contexts[&id].iter().len() as i32;
@@ -553,15 +517,6 @@ impl<'a> Emit<'a> for Instruction {
             }
             | Instruction::Intrinsic(intrinsic) => {
                 intrinsic.emit((), em);
-            }
-            | Instruction::Swap(sa::Swap) => {
-                // Swap the top two values on the stack
-                em.asm.text.extend([
-                    Instr::Pop(Loc::Reg(Reg::Rax)),
-                    Instr::Pop(Loc::Reg(Reg::Rcx)),
-                    Instr::Push(Arg32::Reg(Reg::Rax)),
-                    Instr::Push(Arg32::Reg(Reg::Rcx)),
-                ]);
             }
             | Instruction::Clear(_) => {
                 // Clear variables from context

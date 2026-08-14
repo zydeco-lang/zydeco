@@ -104,8 +104,5 @@ pub enum Commands {
         /// Run the program after building
         #[arg(short = 'x', long, default_value_t = false)]
         execute: bool,
-        /// Skip CPS translation in the StackIR pipeline
-        #[arg(long, default_value_t = false)]
-        no_cps: bool,
     },
 }

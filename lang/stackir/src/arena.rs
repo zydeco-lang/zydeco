@@ -23,7 +23,7 @@ impl Allocates<DefId> for StackirScope {}
 #[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct AdminArena {
     /// ID allocator shared by all stack-IR node categories.
-    allocator: IdAllocator<StackirScope>,
+    pub(crate) allocator: IdAllocator<StackirScope>,
 
     /// builtin operators and functions
     pub builtins: BuiltinMap,

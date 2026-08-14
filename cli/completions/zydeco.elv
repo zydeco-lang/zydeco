@@ -57,7 +57,6 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand --runtime-dir 'Runtime directory'
             cand -x 'Run the program after building'
             cand --execute 'Run the program after building'
-            cand --no-cps 'Skip CPS translation in the StackIR pipeline'
             cand -h 'Print help'
             cand --help 'Print help'
         }

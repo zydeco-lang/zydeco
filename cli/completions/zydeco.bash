@@ -73,7 +73,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__build)
-            opts="-t -b -r -x -h --target-os --target-arch --target --build-dir --runtime-dir --execute --no-cps --help <FILE>"
+            opts="-t -b -r -x -h --target-os --target-arch --target --build-dir --runtime-dir --execute --help <FILE>"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0

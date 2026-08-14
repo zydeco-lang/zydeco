@@ -1,6 +1,6 @@
 use super::syntax::*;
 use zydeco_derive::{AsMutSelf, AsRefSelf};
-use zydeco_stackir::sps::syntax as sk;
+use zydeco_stackir::sps_low::syntax as sk;
 use zydeco_utils::graph::DepGraph;
 
 /// Allocation and owning storage scope for assembly nodes.
@@ -80,7 +80,6 @@ impl AssemblyArena {
             | Program::Terminator(terminator) => match terminator {
                 | Terminator::Jump(Jump(target)) => self.deps.add(id, [target]),
                 | Terminator::PopJump(PopJump)
-                | Terminator::LeapJump(LeapJump)
                 | Terminator::Extern(Extern { .. })
                 | Terminator::Abort(Abort) => {}
                 | Terminator::PopBranch(PopBranch(branches)) => {

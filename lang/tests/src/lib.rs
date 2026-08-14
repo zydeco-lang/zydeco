@@ -5,7 +5,6 @@ pub mod utils {
         BuildOptions, CommandCompiler, CompileError, NativeError, TargetArchitecture, TargetOs,
     };
     use zydeco_session::AnalysisError;
-    use zydeco_stackir::CpsMode;
     use zydeco_statics::syntax::{Fillable, TermAnnId, Type};
 
     #[derive(Debug, Error)]
@@ -111,7 +110,7 @@ pub mod utils {
                 TargetArchitecture::X86_64,
                 operating_system,
             );
-            let backend = CommandCompiler::default().lower(&self.path, CpsMode::Enabled)?;
+            let backend = CommandCompiler::default().lower(&self.path)?;
             let assembly = backend.emit_amd64(operating_system);
             let executable = options.link_amd64("test", &assembly)?;
             let status = executable.run(&self.arguments)?;

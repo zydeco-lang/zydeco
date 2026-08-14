@@ -97,19 +97,6 @@ impl Eval for Terminator {
                 };
                 prog.eval(interp)
             }
-            | Terminator::LeapJump(LeapJump) => {
-                let kept = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
-                let address = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
-                interp.runtime.stack.push(kept);
-                let Value::Atom(Atom::Sym(sym)) = address else {
-                    Err(Error::TypeError(format!("expected symbol, got {:?}", address)))?
-                };
-                let symbol = interp.arena.symbols[&sym].clone();
-                let Symbol::Prog(prog) = symbol.inner else {
-                    Err(Error::TypeError(format!("expected program, got {:?}", symbol.inner)))?
-                };
-                prog.eval(interp)
-            }
             | Terminator::PopBranch(PopBranch(arms)) => {
                 let value = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 let Value::Tag(tag) = value else {
@@ -186,12 +173,6 @@ impl Eval for Instruction {
                 }
                 Ok(())
             }
-            | Instruction::PushContext(Push(ContextMarker)) => {
-                todo!()
-            }
-            | Instruction::PopContext(Pop(ContextMarker)) => {
-                todo!()
-            }
             | Instruction::AllocContext(Alloc(ContextMarker)) => {
                 todo!()
             }
@@ -212,13 +193,6 @@ impl Eval for Instruction {
                 let _ = name;
                 let _ = arity;
                 todo!()
-            }
-            | Instruction::Swap(Swap) => {
-                let a = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
-                let b = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
-                interp.runtime.stack.push(b);
-                interp.runtime.stack.push(a);
-                Ok(())
             }
             | Instruction::Clear(context) => {
                 for var in context {

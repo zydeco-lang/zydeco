@@ -69,7 +69,6 @@ _arguments "${_arguments_options[@]}" : \
 '--runtime-dir=[Runtime directory]:RUNTIME_DIR:_files' \
 '-x[Run the program after building]' \
 '--execute[Run the program after building]' \
-'--no-cps[Skip CPS translation in the StackIR pipeline]' \
 '-h[Print help]' \
 '--help[Print help]' \
 ':file -- Path to the file to compile:_files' \

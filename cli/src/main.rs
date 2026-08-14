@@ -7,7 +7,6 @@ use zydeco_cli::{
     TargetOs,
 };
 use zydeco_dynamics::ProgKont;
-use zydeco_stackir::CpsMode;
 use zydeco_tui::{Repl, ReplError};
 
 fn main() {
@@ -41,7 +40,6 @@ impl Application {
                 build_dir,
                 runtime_dir,
                 execute,
-                no_cps,
             } => self.build_source(
                 &file,
                 target,
@@ -56,7 +54,6 @@ impl Application {
                         .map_err(NativeError::UnsupportedHostOperatingSystem)?,
                 ),
                 execute,
-                if no_cps { CpsMode::Disabled } else { CpsMode::Enabled },
             ),
         }
     }
@@ -94,13 +91,13 @@ impl Application {
     }
 
     fn build_source(
-        &self, path: &Path, target: BuildTarget, options: BuildOptions, execute: bool, cps: CpsMode,
+        &self, path: &Path, target: BuildTarget, options: BuildOptions, execute: bool,
     ) -> Result<i32, ApplicationError> {
         let executable =
             self.analyze(path)?.executable_program().map_err(CompileError::Executable)?;
-        let backend = BackendProgram::lower(executable, cps)?;
+        let backend = BackendProgram::lower(executable)?;
         match target {
-            | BuildTarget::Zir => println!("{}", backend.render_stackir()),
+            | BuildTarget::Zir => println!("{}", backend.render_sps_low()),
             | BuildTarget::Zasm if execute => println!("{}", backend.execute_assembly()?),
             | BuildTarget::Zasm => println!("{}", backend.render_assembly()),
             | BuildTarget::Asm => {

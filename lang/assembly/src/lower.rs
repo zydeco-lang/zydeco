@@ -1,4 +1,4 @@
-//! Lower from [`zydeco_stackir::StackArena`] to [`AssemblyArena`].
+//! Lower from [`zydeco_stackir::sps_low::SpsLowArena`] to [`AssemblyArena`].
 //!
 //! - All global variables and all values are
 //!   compiled into programs that pushes the value onto the stack.
@@ -9,7 +9,7 @@ use super::{
     syntax::*,
 };
 use derive_more::{AsMut, AsRef};
-use zydeco_stackir::{StackirArena, StackirProgram, sps::syntax as sk};
+use zydeco_stackir::{SpsLowProgram, sps_low::syntax as sk};
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_utils::with::With;
@@ -33,7 +33,7 @@ pub struct Lowerer<'a> {
     pub spans: &'a SpanArena,
     pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
-    pub stackir: &'a StackirArena,
+    pub sps_low: &'a sk::SpsLowArena,
     pub root: sk::CompuId,
     pending: Vec<PendingInstruction<'a>>,
 }
@@ -41,9 +41,8 @@ pub struct Lowerer<'a> {
 impl<'a> Lowerer<'a> {
     pub fn new(
         spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena,
-        stackir: &'a StackirProgram,
+        sps_low: &'a SpsLowProgram,
     ) -> Self {
-        let StackirProgram { arena: stackir, root } = stackir;
         let arena = AssemblyArena::default();
         Self {
             allocator: IdAllocator::new(),
@@ -51,23 +50,23 @@ impl<'a> Lowerer<'a> {
             spans,
             scoped,
             statics,
-            stackir,
-            root: *root,
+            sps_low: sps_low.arena(),
+            root: sps_low.root(),
             pending: Vec::new(),
         }
     }
 
     pub fn run(mut self) -> AssemblyProgram {
         // Lower all builtins
-        for builtin in self.stackir.admin.builtins.values() {
+        for builtin in self.sps_low.admin.builtins.values() {
             let sk::Builtin { name, arity, sort } = builtin.clone();
             if let Some(mode) = ExternMode::for_builtin(sort) {
                 self.arena.externs.push(Extern { name, arity, mode });
             }
         }
 
-        let stackir_root = self.root;
-        let root = stackir_root.lower(&mut self, Context::new());
+        let sps_low_root = self.root;
+        let root = sps_low_root.lower(&mut self, Context::new());
         self.finish_pending();
         AssemblyProgram { arena: self.arena, root }
     }
@@ -105,7 +104,7 @@ impl<'a> Lower<'a> for sk::VPatId {
     type Out = ProgId;
 
     fn lower(&self, lo: &mut Lowerer<'a>, With { info: cx, inner: kont }: Self::Kont) -> Self::Out {
-        let vpat = lo.stackir.inner.vpats[self].clone();
+        let vpat = lo.sps_low.inner.vpats[self].clone();
         use sk::ValuePattern as VPat;
         match vpat {
             | VPat::Hole(Hole) => {
@@ -184,7 +183,7 @@ impl<'a> Lower<'a> for sk::ValueId {
     type Out = ProgId;
 
     fn lower(&self, lo: &mut Lowerer<'a>, With { info: cx, inner: kont }: Self::Kont) -> Self::Out {
-        let value = lo.stackir.inner.values[self].clone();
+        let value = lo.sps_low.inner.values[self].clone();
         use sk::Value;
         match value {
             | Value::Hole(Hole) => Abort.build(lo, cx),
@@ -196,13 +195,24 @@ impl<'a> Lower<'a> for sk::ValueId {
                 // Push the atom onto the stack
                 Push(atom).build(lo, With::new(cx, CxKont::same(kont)))
             }
-            | Value::Closure(sk::Closure { stack: sk::Bullet, body }) => {
+            | Value::Block(sk::Block { label, body }) => {
+                let name = lo.scoped.defs[&label].plain().to_string();
+                let sym = Undefined.build(lo, (Some(name.clone()), Some(label)));
                 let body = body.lower(lo, Context::new());
-                // Label the closure code
-                let sym = body.build(lo, (Some(String::from("clo")), None));
-                // Push the atom to the stack
-                let atom = Atom::Sym(sym);
-                Push(atom).build(lo, With::new(cx, CxKont::same(kont)))
+                lo.arena
+                    .symbols
+                    .replace_existing(sym, NamedSymbol { name, inner: Symbol::Prog(body) });
+                lo.arena.labels.insert_new(body, sym);
+                Push(Atom::Sym(sym)).build(lo, With::new(cx, CxKont::same(kont)))
+            }
+            | Value::ClosurePackage(sk::ClosurePackage { environment, code }) => {
+                let product = ProductLayout::new(2, 2);
+                let kont: Kont<'a, Lowerer<'a>> = Box::new(move |lo, cx| {
+                    Pack(product).build(lo, With::new(cx, CxKont::same(kont)))
+                });
+                [environment, code].into_iter().fold(kont, |kont: Kont<'a, Lowerer<'a>>, value| {
+                    Box::new(move |lo, cx| value.lower(lo, With::new(cx, kont)))
+                })(lo, cx)
             }
             | Value::Ctor(Ctor(ctor, body)) => {
                 // Push the body onto the stack
@@ -287,62 +297,9 @@ impl<'a> Lower<'a> for sk::StackId {
     type Out = ProgId;
 
     fn lower(&self, lo: &mut Lowerer<'a>, With { info: cx, inner: kont }: Self::Kont) -> Self::Out {
-        let stack = lo.stackir.inner.stacks[self].clone();
+        let stack = lo.sps_low.inner.stacks[self].clone();
         use sk::Stack;
         match stack {
-            | Stack::Kont(sk::Kont { binder, body }) => {
-                let original_cx = cx.clone();
-                // Lower the continuation code into a symbol
-                // which is `swap; pop ctx; [[binder]]; [[body]]`
-                // The stack shape: [return value, context]
-                let code = Swap.build(
-                    lo,
-                    With::new(
-                        Context::new(),
-                        CxKont::same(Box::new(move |lo, _| {
-                            Pop(ContextMarker).build(
-                                lo,
-                                With::new(
-                                    Context::new(),
-                                    CxKont {
-                                        // Restore the original context
-                                        incr: Box::new(move |_| original_cx),
-                                        kont: Box::new(move |lo, cx| {
-                                            binder.lower(
-                                                lo,
-                                                With::new(
-                                                    cx,
-                                                    Box::new(move |lo, cx| body.lower(lo, cx)),
-                                                ),
-                                            )
-                                        }),
-                                    },
-                                ),
-                            )
-                        })),
-                    ),
-                );
-                let sym = code.build(lo, (Some(String::from("kont")), None));
-                // Push the context pointer, and then the code
-                Push(ContextMarker).build(
-                    lo,
-                    With::new(
-                        cx,
-                        CxKont::same(Box::new(move |lo: &mut Lowerer, cx| {
-                            Push(Atom::Sym(sym)).build(
-                                lo,
-                                With::new(
-                                    cx,
-                                    CxKont::same(Box::new(move |lo: &mut Lowerer, cx| {
-                                        // Finally, we do the rest
-                                        kont(lo, cx)
-                                    })),
-                                ),
-                            )
-                        })),
-                    ),
-                )
-            }
             | Stack::Var(sk::Bullet) => {
                 // Do nothing
                 kont(lo, cx)
@@ -376,6 +333,11 @@ impl<'a> Lower<'a> for sk::StackId {
                     ),
                 )
             }
+            | Stack::ContinuationPackage(sk::ContinuationPackage { code, residual }) => residual
+                .lower(
+                    lo,
+                    With::new(cx, Box::new(move |lo, cx| code.lower(lo, With::new(cx, kont)))),
+                ),
         }
     }
 }
@@ -385,90 +347,37 @@ impl<'a> Lower<'a> for sk::CompuId {
     type Out = ProgId;
 
     fn lower(&self, lo: &mut Lowerer<'a>, cx: Self::Kont) -> Self::Out {
-        let compu = lo.stackir.inner.compus[self].clone();
+        let compu = lo.sps_low.inner.compus[self].clone();
         use sk::Computation as Compu;
         match compu {
             | Compu::Hole(sk::SHole(tail)) => {
                 tail.lower(lo, With::new(cx, Box::new(move |lo, cx| Abort.build(lo, cx))))
             }
-            | Compu::Force(sk::SForce { thunk, stack }) => {
-                // Lower the stack first
-                stack.lower(
-                    lo,
-                    With::new(
-                        cx,
-                        Box::new(move |lo, cx| {
-                            // Lower the thunk to a value on the stack
-                            thunk.lower(
-                                lo,
-                                With::new(
-                                    cx,
-                                    Box::new(move |lo, cx| {
-                                        // Allocate a new context
-                                        Alloc(ContextMarker).build(
-                                            lo,
-                                            With::new(
-                                                cx,
-                                                CxKont::clean(Box::new(move |lo, cx| {
-                                                    // PopJump to the thunk
-                                                    PopJump.build(lo, cx)
-                                                })),
-                                            ),
-                                        )
-                                    }),
-                                ),
-                            )
-                        }),
-                    ),
-                )
-            }
-            | Compu::Ret(sk::SReturn { stack, value }) => {
-                // Lower the stack first
-                stack.lower(
-                    lo,
-                    With::new(
-                        cx,
-                        Box::new(move |lo, cx| {
-                            // Lower the value
-                            value.lower(
-                                lo,
-                                With::new(
-                                    cx,
-                                    Box::new(move |lo, cx| {
-                                        // The stack shape: [return value, return address, context]
-                                        // Leap jump to the continuation
-                                        LeapJump.build(lo, cx)
-                                    }),
-                                ),
-                            )
-                        }),
-                    ),
-                )
-            }
-            | Compu::Fix(sk::SFix { param, stack, body }) => {
-                stack.lower(
-                    lo,
-                    With::new(
-                        cx,
-                        Box::new(move |lo, cx| {
-                            // The explicit capture stack makes the block independent of the
-                            // caller's assembly context.
-                            let name = lo.scoped.defs[&param].plain();
-                            let sym = Undefined.build(lo, (Some(name.to_string()), Some(param)));
-                            let body_prog = body.lower(lo, Context::new());
-                            lo.arena.symbols.replace_existing(
-                                sym,
-                                NamedSymbol {
-                                    name: name.to_string(),
-                                    inner: Symbol::Prog(body_prog),
-                                },
-                            );
-                            lo.arena.labels.insert_new(body_prog, sym);
-                            Jump(body_prog).build(lo, cx)
-                        }),
-                    ),
-                )
-            }
+            | Compu::Jump(sk::Jump { target, stack }) => stack.lower(
+                lo,
+                With::new(
+                    cx,
+                    Box::new(move |lo, cx| {
+                        target.lower(
+                            lo,
+                            With::new(
+                                cx,
+                                Box::new(move |lo, cx| {
+                                    Alloc(ContextMarker).build(
+                                        lo,
+                                        With::new(
+                                            cx,
+                                            CxKont::clean(Box::new(move |lo, cx| {
+                                                PopJump.build(lo, cx)
+                                            })),
+                                        ),
+                                    )
+                                }),
+                            ),
+                        )
+                    }),
+                ),
+            ),
             | Compu::ProductMatch(sk::SProductMatch { scrut, binder, body }) => scrut.lower(
                 lo,
                 With::new(
@@ -490,7 +399,7 @@ impl<'a> Lower<'a> for sk::CompuId {
                             let is_jump_table =
                                 arms.iter().fold(true, |acc, Matcher { binder, tail: _ }| {
                                     use sk::ValuePattern as VPat;
-                                    match lo.stackir.inner.vpats[binder].clone() {
+                                    match lo.sps_low.inner.vpats[binder].clone() {
                                         | VPat::Ctor(_) => acc,
                                         | _ => false,
                                     }
@@ -501,7 +410,7 @@ impl<'a> Lower<'a> for sk::CompuId {
                                 for Matcher { binder, tail } in arms {
                                     // The binder is a constructor or other things.
                                     use sk::ValuePattern as VPat;
-                                    match lo.stackir.inner.vpats[&binder].clone() {
+                                    match lo.sps_low.inner.vpats[&binder].clone() {
                                         | VPat::Ctor(Ctor(ctor, binder)) => {
                                             let idx = ctor.idx;
                                             let name = ctor.name.plain().to_string();
@@ -560,7 +469,7 @@ impl<'a> Lower<'a> for sk::CompuId {
                     ),
                 )
             }
-            | Compu::Join(sk::LetJoin::Value(Let { binder, bindee, tail })) => {
+            | Compu::LetValue(sk::LetValue { binder, bindee, body }) => {
                 // Lower the bindee
                 bindee.lower(
                     lo,
@@ -570,32 +479,17 @@ impl<'a> Lower<'a> for sk::CompuId {
                             // Lower the binder
                             binder.lower(
                                 lo,
-                                With::new(
-                                    cx,
-                                    Box::new(move |lo, cx| {
-                                        // Lower the tail
-                                        tail.lower(lo, cx)
-                                    }),
-                                ),
+                                With::new(cx, Box::new(move |lo, cx| body.lower(lo, cx))),
                             )
                         }),
                     ),
                 )
             }
-            | Compu::Join(sk::LetJoin::Stack(Let { binder: sk::Bullet, bindee, tail })) => {
+            | Compu::LetStack(sk::LetStack { bindee, body }) => {
                 // Lower the bindee
-                bindee.lower(
-                    lo,
-                    With::new(
-                        cx,
-                        Box::new(move |lo, cx| {
-                            // Lower the tail
-                            tail.lower(lo, cx)
-                        }),
-                    ),
-                )
+                bindee.lower(lo, With::new(cx, Box::new(move |lo, cx| body.lower(lo, cx))))
             }
-            | Compu::LetArg(Let { binder: Cons(param, sk::Bullet), bindee, tail }) => {
+            | Compu::LetArg(sk::LetArg { binder: param, bindee, body }) => {
                 // Lower the bindee
                 bindee.lower(
                     lo,
@@ -605,13 +499,7 @@ impl<'a> Lower<'a> for sk::CompuId {
                             // Lower the param
                             param.lower(
                                 lo,
-                                With::new(
-                                    cx,
-                                    Box::new(move |lo, cx| {
-                                        // Lower the tail
-                                        tail.lower(lo, cx)
-                                    }),
-                                ),
+                                With::new(cx, Box::new(move |lo, cx| body.lower(lo, cx))),
                             )
                         }),
                     ),
@@ -644,8 +532,55 @@ impl<'a> Lower<'a> for sk::CompuId {
                     ),
                 )
             }
+            | Compu::OpenClosure(sk::OpenClosure { package, environment, code, body }) => package
+                .lower(
+                    lo,
+                    With::new(
+                        cx,
+                        Box::new(move |lo, cx| {
+                            Unpack(ProductLayout::new(2, 2)).build(
+                                lo,
+                                With::new(
+                                    cx,
+                                    CxKont::same(Box::new(move |lo, cx| {
+                                        environment.lower(
+                                            lo,
+                                            With::new(
+                                                cx,
+                                                Box::new(move |lo, cx| {
+                                                    code.lower(
+                                                        lo,
+                                                        With::new(
+                                                            cx,
+                                                            Box::new(move |lo, cx| {
+                                                                body.lower(lo, cx)
+                                                            }),
+                                                        ),
+                                                    )
+                                                }),
+                                            ),
+                                        )
+                                    })),
+                                ),
+                            )
+                        }),
+                    ),
+                ),
+            | Compu::OpenContinuation(sk::OpenContinuation { package, code, body }) => package
+                .lower(
+                    lo,
+                    With::new(
+                        cx,
+                        Box::new(move |lo, cx| {
+                            code.lower(
+                                lo,
+                                With::new(cx, Box::new(move |lo, cx| body.lower(lo, cx))),
+                            )
+                        }),
+                    ),
+                ),
             | Compu::ExternCall(sk::ExternCall { function, stack }) => {
-                let builtin = &lo.stackir.admin.builtins[&function];
+                let builtin = &lo.sps_low.admin.builtins[&function];
                 let arity = builtin.arity;
                 let mode =
                     ExternMode::for_builtin(builtin.sort.clone()).expect("operator used as extern");
