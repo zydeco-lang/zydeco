@@ -5,6 +5,52 @@
 
 use super::syntax::*;
 use crate::*;
+use zydeco_utils::arena::{ArenaId, KeySpaceId, derived_id};
+
+/// Category tag separating derived identifier key spaces from sequential ones.
+const DERIVATION_TAG: u64 = 0x5A59_4445_434F_5155;
+
+/// Issuer of derived identifiers for query-friendly type checking.
+///
+/// Each checking site pushes its `(entity, occurrence)` identity onto a stack;
+/// fresh identifiers derive their key space from the top site and take the
+/// site-local slot as their raw index, so re-checking a site reproduces its
+/// identifiers without a shared cursor. See `docs/logs/query-based-tyck.md`
+/// for the derivation scheme.
+#[derive(Debug)]
+pub struct DerivedAllocator {
+    sites: Vec<(u64, u32, u32, u32)>,
+}
+
+impl DerivedAllocator {
+    /// Create an allocator with a root site for allocations outside any entity.
+    ///
+    /// The root uses a sentinel identity so that no entity-derived site can
+    /// collide with it.
+    pub fn new() -> Self {
+        Self { sites: vec![(u64::MAX, u32::MAX, u32::MAX, 0)] }
+    }
+
+    /// Enter one entity's checking site; the site-local slot restarts at zero.
+    pub fn enter(&mut self, entity_space: u64, entity_raw: u32, occurrence: u32) {
+        self.sites.push((entity_space, entity_raw, occurrence, 0));
+    }
+
+    /// Leave the innermost site, resuming the enclosing site's slots.
+    pub fn exit(&mut self) {
+        assert!(self.sites.len() > 1, "cannot leave the root allocation site");
+        self.sites.pop();
+    }
+
+    fn fresh<Id: ArenaId>(&mut self) -> Id {
+        let (entity_space, entity_raw, occurrence, slot) =
+            self.sites.last_mut().expect("the root allocation site always exists");
+        let key_space = KeySpaceId::derive(DERIVATION_TAG, *entity_space, *entity_raw, *occurrence);
+        let id: Id = derived_id(key_space, *slot);
+        *slot += 1;
+        id
+    }
+}
 
 /// Trait for allocating entities in [`StaticsArena`].
 /// The only method provided is [`Alloc::alloc`], which takes `&mut` [`Tycker`],
@@ -31,13 +77,13 @@ pub trait Alloc<Arena, T> {
 
 /// Allocation capability held by a live type-checking pass, separate from its
 /// durable [`StaticsArena`] storage.
-pub trait StaticsAlloc: AsMut<IdAllocator<StaticsScope>> + AsMut<StaticsArena> {
+pub trait StaticsAlloc: AsMut<DerivedAllocator> + AsMut<StaticsArena> {
     fn fresh<Id>(&mut self) -> Id
     where
         Id: ArenaId,
         StaticsScope: Allocates<Id>,
     {
-        AsMut::<IdAllocator<StaticsScope>>::as_mut(self).alloc()
+        AsMut::<DerivedAllocator>::as_mut(self).fresh()
     }
 
     fn alloc_kind_pre(&mut self, value: Fillable<Kind>) -> KindId {
@@ -83,10 +129,7 @@ pub trait StaticsAlloc: AsMut<IdAllocator<StaticsScope>> + AsMut<StaticsArena> {
     }
 }
 
-impl<Arena> StaticsAlloc for Arena where
-    Arena: AsMut<IdAllocator<StaticsScope>> + AsMut<StaticsArena>
-{
-}
+impl<Arena> StaticsAlloc for Arena where Arena: AsMut<DerivedAllocator> + AsMut<StaticsArena> {}
 
 /* ------------------------------- Definition ------------------------------- */
 

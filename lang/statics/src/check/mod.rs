@@ -1,7 +1,7 @@
 use derive_more::{AsMut, AsRef, Deref};
 use {
     super::{
-        arena::{StaticsArena, StaticsScope},
+        arena::StaticsArena,
         environment::{MonadicTypeBasis, TyEnv, TyEnvT},
         syntax::{AbstId, AnnId, FillId, Fillable, InferenceSite, PatAnnId, TermAnnId},
         *,
@@ -9,7 +9,7 @@ use {
     crate::surface_syntax::{PrimDefs, ScopedArena, SpanArena},
     crate::validate::CoverageChecker,
     zydeco_surface::metadata::BuiltinMeta,
-    zydeco_utils::prelude::{ArenaAccess, IdAllocator},
+    zydeco_utils::prelude::ArenaAccess,
 };
 
 /// Type-checker error definitions and reporting.
@@ -32,9 +32,9 @@ use copattern::CopatternElaborator;
 /// Type-checking driver that consumes scoped syntax and produces typed arenas.
 #[derive(AsRef, AsMut)]
 pub struct Tycker<'a> {
-    /// Sequential issuer scoped to this type-checking run.
-    #[as_mut(IdAllocator<StaticsScope>)]
-    allocator: IdAllocator<StaticsScope>,
+    /// Issuer of site-derived identifiers for this type-checking run.
+    #[as_mut(DerivedAllocator)]
+    allocator: DerivedAllocator,
     pub spans: &'a SpanArena,
     pub prim: &'a PrimDefs,
     #[as_ref(ScopedArena)]
@@ -45,6 +45,9 @@ pub struct Tycker<'a> {
     pub statics: StaticsArena,
     /// call stack for debugging tycker and error tracking
     pub tasks: im::Vector<TyckTask>,
+    /// how many times each scoped entity has been checked; supplies the
+    /// derivation occurrence so re-checked entities get distinct sites
+    check_counts: ArenaAssoc<su::EntityId, u32>,
     /// meta stack
     pub metas: im::Vector<su::Meta>,
     /// a writer monad for error handling
@@ -973,12 +976,13 @@ impl<'a> Tycker<'a> {
     /// Create a type checker with fresh statics arenas.
     pub fn new(spans: &'a SpanArena, prim: &'a PrimDefs, scoped: &'a mut ScopedArena) -> Self {
         Self {
-            allocator: IdAllocator::new(),
+            allocator: DerivedAllocator::new(),
             spans,
             prim,
             scoped,
             statics: StaticsArena::default(),
             tasks: im::Vector::new(),
+            check_counts: ArenaAssoc::default(),
             metas: im::Vector::new(),
             errors: Vec::new(),
             observations: Vec::new(),
@@ -2063,7 +2067,17 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
         tycker.guarded(|tycker| {
             // administrative
             tycker.tasks.push_back(TyckTask::Pat(self.inner, action.switch));
-            self.tyck_inner_k(tycker, action)
+            let entity = su::EntityId::Pat(self.inner);
+            let occurrence = tycker.check_counts.get(&entity).copied().unwrap_or(0);
+            let _ = tycker.check_counts.upsert(entity, occurrence + 1);
+            tycker.allocator.enter(
+                self.inner.key_space().as_u64(),
+                self.inner.raw().into_u32(),
+                occurrence,
+            );
+            let result = self.tyck_inner_k(tycker, action);
+            tycker.allocator.exit();
+            result
         })
     }
 
@@ -3083,7 +3097,17 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
         tycker.guarded(|tycker| {
             // administrative
             tycker.tasks.push_back(TyckTask::Term(self.inner, switch));
-            self.tyck_inner_k(tycker, Action { switch })
+            let entity = su::EntityId::Term(self.inner);
+            let occurrence = tycker.check_counts.get(&entity).copied().unwrap_or(0);
+            let _ = tycker.check_counts.upsert(entity, occurrence + 1);
+            tycker.allocator.enter(
+                self.inner.key_space().as_u64(),
+                self.inner.raw().into_u32(),
+                occurrence,
+            );
+            let result = self.tyck_inner_k(tycker, Action { switch });
+            tycker.allocator.exit();
+            result
         })
     }
 

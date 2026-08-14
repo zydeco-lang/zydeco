@@ -42,15 +42,19 @@ impl KeySpaceId {
         Self(id)
     }
 
+    /// The numeric identity, exposed for deterministic derivation only.
+    pub fn as_u64(self) -> u64 {
+        self.0
+    }
+
     /// Derive a key space unique to one derived allocation site.
     ///
-    /// Query-based passes derive their fresh identifiers from `(tag, entity,
-    /// occurrence)` so that re-executing a query reproduces the same identifiers
-    /// without sharing a mutable cursor. `tag` separates identifier categories,
-    /// `entity` is the raw index of the source entity being checked, and
-    /// `occurrence` counts how many times that entity has been checked before.
-    /// See `docs/logs/query-based-tyck.md` for the derivation scheme.
-    pub fn derive(tag: u64, entity: u32, occurrence: u32) -> KeySpaceId {
+    /// Query-based passes derive their fresh identifiers from the full identity
+    /// of the source entity — `(entity_space, entity_raw)` — plus `occurrence`,
+    /// the number of earlier checks of that entity. Re-executing a query
+    /// reproduces the same identifiers without a shared cursor. See
+    /// `docs/logs/query-based-tyck.md` for the derivation scheme.
+    pub fn derive(tag: u64, entity_space: u64, entity_raw: u32, occurrence: u32) -> KeySpaceId {
         fn mix(mut hash: u64) -> u64 {
             hash ^= hash >> 33;
             hash = hash.wrapping_mul(0xff51afd7ed558ccd);
@@ -59,7 +63,9 @@ impl KeySpaceId {
             hash ^= hash >> 33;
             hash
         }
-        KeySpaceId(mix(mix(tag ^ u64::from(entity)) ^ u64::from(occurrence)))
+        KeySpaceId(
+            mix(mix(mix(tag ^ entity_space) ^ u64::from(entity_raw)) ^ u64::from(occurrence)),
+        )
     }
 }
 
@@ -1439,8 +1445,8 @@ mod derived_id_tests {
 
     #[test]
     fn derived_ids_are_deterministic_and_site_unique() {
-        let site_a = KeySpaceId::derive(1, 42, 0);
-        let site_b = KeySpaceId::derive(1, 42, 1);
+        let site_a = KeySpaceId::derive(1, 7, 42, 0);
+        let site_b = KeySpaceId::derive(1, 7, 42, 1);
         let id_a0: DerivedTestId = derived_id(site_a, 0);
         let id_a1: DerivedTestId = derived_id(site_a, 1);
         let id_b0: DerivedTestId = derived_id(site_b, 0);
@@ -1451,7 +1457,7 @@ mod derived_id_tests {
         assert_eq!(id_a0.raw().into_u32(), 0);
         assert_eq!(
             id_a0,
-            derived_id(KeySpaceId::derive(1, 42, 0), 0),
+            derived_id(KeySpaceId::derive(1, 7, 42, 0), 0),
             "re-deriving a site reproduces its identifiers",
         );
     }
