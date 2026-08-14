@@ -32,13 +32,8 @@ complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "check" -d 'Check a zy
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "repl" -d 'Start the declaration-free terminal REPL'
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "build"
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
-complete -c zydeco -n "__fish_zydeco_using_subcommand fmt" -l width -d 'Target line width in columns' -r
-complete -c zydeco -n "__fish_zydeco_using_subcommand fmt" -l indent -d 'Indentation width in columns' -r
-complete -c zydeco -n "__fish_zydeco_using_subcommand fmt" -l layout -d 'Which parsed line-breaking choices the formatter retains' -r -f -a "preserve\t'Preserve observed line breaks and blank lines'
-blank-lines\t'Preserve only blank lines; the line width decides every single break'
-ignore\t'Let the line width decide every optional break'"
 complete -c zydeco -n "__fish_zydeco_using_subcommand fmt" -l check -d 'Report files that would change without writing them, and exit unsuccessfully when at least one file would change'
-complete -c zydeco -n "__fish_zydeco_using_subcommand fmt" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c zydeco -n "__fish_zydeco_using_subcommand fmt" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -l dry -d 'Dry run (don\'t execute)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_using_subcommand check" -s h -l help -d 'Print help'

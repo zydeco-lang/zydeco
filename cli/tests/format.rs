@@ -68,97 +68,83 @@ fn fmt_check_is_silent_and_succeeds_for_formatted_files() {
 }
 
 #[test]
-fn fmt_layout_modes_control_break_retention() {
+fn fmt_format_annotations_control_break_retention() {
     let directory = tempfile::tempdir().unwrap();
-    let joined = "! (bool/if) (Ret Int64) greater { ret left } { ret right }\n";
+    let joined =
+        "@[format(layout(ignore))] ! (bool/if) (Ret Int64) greater { ret left } { ret right }\n";
     let wrapped = concat!(
-        "! (bool/if)\n",
+        "@[format(layout(ignore))] ! (bool/if)\n",
         "  (Ret Int64)\n",
-        "\n",
         "  greater\n",
         "  { ret left }\n",
         "  { ret right }\n",
     );
-    let cases = [
-        ("--layout", "preserve", wrapped, wrapped),
-        (
-            "--layout",
-            "blank-lines",
-            wrapped,
-            "! (bool/if) (Ret Int64)\n\n  greater { ret left } { ret right }\n",
-        ),
-        ("--layout", "ignore", wrapped, joined),
-    ];
+    let cases = [("preserve", wrapped, joined), ("joined", joined, joined)];
 
-    for (flag, mode, source, expected) in cases {
-        let file = directory.path().join(format!("{mode}.zy"));
+    for (name, source, expected) in cases {
+        let file = directory.path().join(format!("{name}.zy"));
         fs::write(&file, source).unwrap();
 
-        let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
-            .arg("fmt")
-            .arg(flag)
-            .arg(mode)
-            .arg(&file)
-            .output()
-            .unwrap();
+        let output =
+            Command::new(env!("CARGO_BIN_EXE_zydeco")).arg("fmt").arg(&file).output().unwrap();
 
         assert!(
             output.status.success(),
             "formatting failed: {}",
             String::from_utf8_lossy(&output.stderr)
         );
-        assert_eq!(fs::read_to_string(&file).unwrap(), expected, "layout mode: {mode}");
+        assert_eq!(fs::read_to_string(&file).unwrap(), expected, "case: {name}");
     }
 }
 
 #[test]
-fn fmt_indent_and_width_flags_apply() {
+fn fmt_format_annotations_scope_width_and_indentation() {
     let directory = tempfile::tempdir().unwrap();
-    let source = "begin\nlet x = f\nin ret x\nend\n";
+    let source = concat!(
+        "begin\n",
+        "  @[format(indent(4))] begin\n",
+        "  let x = f\n",
+        "  in ret x\n",
+        "  end\n",
+        "end\n",
+    );
 
     let indented = directory.path().join("indented.zy");
     fs::write(&indented, source).unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
-        .arg("fmt")
-        .arg("--indent")
-        .arg("4")
-        .arg(&indented)
-        .output()
-        .unwrap();
+    let output =
+        Command::new(env!("CARGO_BIN_EXE_zydeco")).arg("fmt").arg(&indented).output().unwrap();
     assert!(output.status.success());
-    assert_eq!(fs::read_to_string(indented).unwrap(), "begin\n    let x = f in\n    ret x\nend\n");
-
-    let wide = directory.path().join("wide.zy");
-    fs::write(&wide, "A *\nB\n").unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
-        .arg("fmt")
-        .arg("--layout")
-        .arg("ignore")
-        .arg("--width")
-        .arg("200")
-        .arg(&wide)
-        .output()
-        .unwrap();
-    assert!(output.status.success());
-    assert_eq!(fs::read_to_string(wide).unwrap(), "A * B\n");
+    assert_eq!(
+        fs::read_to_string(indented).unwrap(),
+        concat!(
+            "begin\n",
+            "  @[format(indent(4))] begin\n",
+            "      let x = f in\n",
+            "      ret x\n",
+            "  end\n",
+            "end\n",
+        )
+    );
 
     let narrow = directory.path().join("narrow.zy");
-    fs::write(&narrow, joined_line()).unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
-        .arg("fmt")
-        .arg("--layout")
-        .arg("ignore")
-        .arg("--width")
-        .arg("24")
-        .arg(&narrow)
-        .output()
-        .unwrap();
+    fs::write(
+        &narrow,
+        "@[format(width(24))] ! (bool/if) (Ret Int64) greater { ret left } { ret right }\n",
+    )
+    .unwrap();
+    let output =
+        Command::new(env!("CARGO_BIN_EXE_zydeco")).arg("fmt").arg(&narrow).output().unwrap();
     assert!(output.status.success());
-    assert!(fs::read_to_string(narrow).unwrap().contains('\n'));
-}
-
-fn joined_line() -> String {
-    "! (bool/if) (Ret Int64) greater { ret left } { ret right }\n".to_owned()
+    assert_eq!(
+        fs::read_to_string(narrow).unwrap(),
+        concat!(
+            "@[format(width(24))]\n",
+            "! (bool/if) (Ret Int64)\n",
+            "  greater { ret left } {\n",
+            "  ret right\n",
+            "}\n",
+        )
+    );
 }
 
 #[test]

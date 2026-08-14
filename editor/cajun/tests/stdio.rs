@@ -397,11 +397,11 @@ fn stdio_server_formats_the_open_document() {
 }
 
 #[test]
-fn stdio_server_applies_format_settings_from_initialization_options() {
+fn stdio_server_follows_source_format_annotations() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("main.zy");
     let source = concat!(
-        "! (bool/if)\n",
+        "@[format(layout(ignore))] ! (bool/if)\n",
         "  (Ret Int64)\n",
         "  greater\n",
         "  { ret left }\n",
@@ -417,12 +417,6 @@ fn stdio_server_applies_format_settings_from_initialization_options() {
             "processId": null,
             "rootUri": Url::from_file_path(directory.path()).unwrap(),
             "capabilities": {},
-            "initializationOptions": {
-                "format": {
-                    "lineWidth": 200,
-                    "layoutIntentions": "ignore",
-                },
-            },
         }),
     );
     server.notify("initialized", json!({}));
@@ -448,7 +442,10 @@ fn stdio_server_applies_format_settings_from_initialization_options() {
     );
     let edits = formatted["result"].as_array().unwrap();
     assert_eq!(edits.len(), 1);
-    assert_eq!(edits[0]["newText"], "! (bool/if) (Ret Int64) greater { ret left } { ret right }\n");
+    assert_eq!(
+        edits[0]["newText"],
+        "@[format(layout(ignore))] ! (bool/if) (Ret Int64) greater { ret left } { ret right }\n"
+    );
 
     server.finish();
 }

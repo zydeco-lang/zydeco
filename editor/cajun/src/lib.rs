@@ -6,7 +6,7 @@ mod semantic;
 mod type_links;
 
 use analysis::ProjectState;
-use format::{DocumentFormatter, FormatterSettings, FormattingOutcome};
+use format::{DocumentFormatter, FormattingOutcome};
 use hover::HoverLineWidth;
 use progress::{AnalysisProgressReporter, AnalysisProgressSession};
 use semantic::SemanticHighlighter;
@@ -141,7 +141,6 @@ pub struct Cajun {
     work_done_progress: AtomicBool,
     semantic_tokens_refresh: AtomicBool,
     hover_line_width: AtomicUsize,
-    format_settings: RwLock<FormatterSettings>,
     next_progress_sequence: AtomicU64,
 }
 
@@ -154,7 +153,6 @@ impl Cajun {
             work_done_progress: AtomicBool::new(false),
             semantic_tokens_refresh: AtomicBool::new(false),
             hover_line_width: AtomicUsize::new(HoverLineWidth::DEFAULT.columns()),
-            format_settings: RwLock::new(FormatterSettings::default()),
             next_progress_sequence: AtomicU64::new(1),
         }
     }
@@ -323,8 +321,6 @@ impl LanguageServer for Cajun {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
         let hover_line_width =
             HoverLineWidth::from_initialization_options(params.initialization_options.as_ref());
-        let format_settings =
-            FormatterSettings::from_initialization_options(params.initialization_options.as_ref());
         let work_done_progress = params
             .capabilities
             .window
@@ -341,7 +337,6 @@ impl LanguageServer for Cajun {
         self.work_done_progress.store(work_done_progress, Ordering::Relaxed);
         self.semantic_tokens_refresh.store(semantic_tokens_refresh, Ordering::Relaxed);
         self.hover_line_width.store(hover_line_width.columns(), Ordering::Relaxed);
-        *self.format_settings.write().await = format_settings;
         Ok(InitializeResult {
             server_info: Some(ServerInfo {
                 name: "Cajun".to_string(),
@@ -518,8 +513,7 @@ impl LanguageServer for Cajun {
         let Some(source) = self.document_source(&path).await else {
             return Ok(None);
         };
-        let formatter =
-            DocumentFormatter::from_lsp(&params.options, *self.format_settings.read().await);
+        let formatter = DocumentFormatter;
         match formatter.format(&source) {
             | FormattingOutcome::Edit(edit) => Ok(Some(vec![edit])),
             | FormattingOutcome::Unchanged => Ok(Some(Vec::new())),

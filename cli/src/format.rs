@@ -5,20 +5,8 @@ use std::{
 };
 use thiserror::Error;
 use zydeco_surface::textual::{
-    Lexer, ParseError, SourceUnitParser,
-    fmt::{LayoutIntentions, PrettyFormatter, PrettyOptions},
-    syntax::Parser,
+    Lexer, ParseError, SourceUnitParser, fmt::PrettyFormatter, syntax::Parser,
 };
-
-impl From<crate::cli::LayoutMode> for LayoutIntentions {
-    fn from(mode: crate::cli::LayoutMode) -> Self {
-        match mode {
-            | crate::cli::LayoutMode::Preserve => Self::Preserve,
-            | crate::cli::LayoutMode::BlankLines => Self::BlankLinesOnly,
-            | crate::cli::LayoutMode::Ignore => Self::Ignore,
-        }
-    }
-}
 use zydeco_utils::span::{FileInfo, LocationCtx};
 
 /// Whether formatting changed the source file on disk.
@@ -47,17 +35,10 @@ pub enum SourceFormatError {
     },
 }
 
-/// Filesystem adapter for the configurable surface pretty printer.
-#[derive(Default)]
-pub struct SourceFormatter {
-    options: PrettyOptions,
-}
+/// Filesystem adapter for the surface pretty printer.
+pub struct SourceFormatter;
 
 impl SourceFormatter {
-    pub fn with_options(options: PrettyOptions) -> Self {
-        Self { options }
-    }
-
     pub fn format_path(&self, path: &Path) -> Result<SourceFormatOutcome, SourceFormatError> {
         let (source, formatted) = self.render_source(path)?;
         if formatted == source {
@@ -95,6 +76,6 @@ impl SourceFormatter {
                 path: path.to_path_buf(),
                 message: ParseError { error, file_info: &file_info }.to_string(),
             })?;
-        Ok(PrettyFormatter::with_options(&parser.arena, self.options).render_unit(unit))
+        Ok(PrettyFormatter::new(&parser.arena).render_unit(unit))
     }
 }
