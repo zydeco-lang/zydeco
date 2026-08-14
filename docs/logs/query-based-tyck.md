@@ -163,3 +163,25 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   identifiers reproducible per site, so judgment queries can construct their output nodes without
   a shared cursor. `AbstId`/`FillId` allocation still binds the first slices to constructs that do
   not seal types or introduce holes.
+
+## 2026-08-14 — first producer query: intrinsic kind judgments
+
+- The first salsa-produced judgment is live: `internal_kind_judgment(db, data, term)` produces the
+  `VType`/`CType` kind node for `Internal` terms, and the checker's `InternalTerm::tyck_k` branch
+  materializes the returned node instead of allocating it in context. `Tycker` now carries
+  `db: &dyn TyckDb` and `data: ScopedData`, threading the salsa graph into the whole pass.
+- Two mechanisms this step required, both worth remembering:
+  - Query-produced identifiers use a separate derivation tag (`QUERY_DERIVATION_TAG`) so they can
+    never collide with checker-allocated identifiers at the same site; the two slot counters are
+    independent, so sharing one tag family would double-issue slot zero.
+  - Salsa forbids creating tracked structs outside an active query ("cannot create a tracked
+    struct disambiguator outside of a tracked function"), so programs assembled outside the source
+    pipeline (tests, tools) cross into the graph through a `PendingParts` slot on the database:
+    the caller fills `pending_parts`, then `intern_pending(db)` runs as a query, takes the slot,
+    and builds the `ScopedData` tracked struct inside the query. `CompilerSession::check_resolved`
+    wraps this for session consumers; the `std::sync::Mutex` slot must be `Arc`-wrapped because
+    `Mutex` is not `Clone` and salsa databases are.
+- The session's `ScopedProgram::check` test helper now goes through `CompilerSession::check_resolved`,
+  so the session tests exercise the query pipeline end to end instead of constructing a `Tycker`
+  directly.
+- Workspace suite passes unchanged (61 targets green).
