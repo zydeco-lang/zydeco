@@ -6,7 +6,6 @@ use zydeco_statics::{
     surface_syntax::ScopedArena,
 };
 use zydeco_syntax::*;
-use zydeco_utils::arena::ArenaAccess;
 
 /// Trait for translating statics syntax nodes into dynamic syntax nodes.
 pub trait Link {
@@ -96,13 +95,7 @@ impl BuiltinPackageLinker {
     }
 
     fn type_view(statics: &StaticsArena, ty: ss::TypeId) -> Option<&ss::Type> {
-        if let Some(normalized) = statics.types_normalized.get(&ty) {
-            return Some(normalized);
-        }
-        match statics.types_pre.get(&ty)? {
-            | ss::Fillable::Done(ty) => Some(ty),
-            | ss::Fillable::Fill(_) => None,
-        }
+        statics.normalized_at(ty)
     }
 }
 

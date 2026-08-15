@@ -141,11 +141,11 @@ impl<'a> Lowerer<'a> {
     }
 
     fn product_arity(&self, ty: ss::TypeId) -> usize {
-        match &self.statics.types_normalized[&ty] {
-            | ss::Type::Unit(_) => 0,
-            | ss::Type::Prod(ss::Prod(_, tail)) => {
-                1 + match &self.statics.types_normalized[tail] {
-                    | ss::Type::Prod(_) => self.product_arity(*tail),
+        match self.statics.normalized_at(ty) {
+            | Some(ss::Type::Unit(_)) => 0,
+            | Some(ss::Type::Prod(ss::Prod(_, tail))) => {
+                1 + match self.statics.normalized_at(*tail) {
+                    | Some(ss::Type::Prod(_)) => self.product_arity(*tail),
                     | _ => 1,
                 }
             }

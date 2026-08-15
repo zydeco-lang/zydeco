@@ -1974,13 +1974,14 @@ impl TypeId {
         if self != res {
             norm.types.insert(res, res);
         }
-        if let Fillable::Done(ty) = tycker.statics.types_pre[&res].to_owned() {
-            if self == res {
-                let _ = tycker.statics.types_normalized.upsert(self, ty);
-            } else {
-                let _ = tycker.statics.types_normalized.upsert(self, ty.clone());
-                let _ = tycker.statics.types_normalized.upsert(res, ty);
-            }
+        // Store the normalized form only when it differs from the pre form:
+        // readers fall back to `types_pre` for unchanged nodes, so the arena
+        // keeps a delta instead of duplicating every type. Solved fill nodes
+        // still store their solution's type, as the pre form is a fill marker.
+        if self != res
+            && let Fillable::Done(ty) = tycker.statics.types_pre[&res].to_owned()
+        {
+            let _ = tycker.statics.types_normalized.upsert(self, ty);
         }
         Ok(res)
     }

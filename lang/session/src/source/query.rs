@@ -531,7 +531,7 @@ fn normalized_type_at<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput, id: zydeco_statics::query::InternedType<'db>,
 ) -> Option<Type> {
     let analysis = analyze_source(db, root).ok()?;
-    analysis.statics().types_normalized.get(&id.id(db)).cloned()
+    analysis.statics().normalized_at(id.id(db)).cloned()
 }
 
 /// Coverage failures of one analyzed root, computed on demand.

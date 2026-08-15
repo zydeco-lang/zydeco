@@ -281,6 +281,15 @@ impl StaticsArena {
     pub fn env_at(&self, id: TypeId) -> TyEnv {
         self.env_type[&id].as_ref().clone()
     }
+
+    /// The normalized form of one type, falling back to the pre-normalization
+    /// form for nodes the normalization phase left unchanged.
+    pub fn normalized_at(&self, id: TypeId) -> Option<&Type> {
+        self.types_normalized.get(&id).or_else(|| match self.types_pre.get(&id)? {
+            | Fillable::Done(ty) => Some(ty),
+            | Fillable::Fill(_) => None,
+        })
+    }
 }
 
 /* -------------------------------- LocalFold ------------------------------- */
