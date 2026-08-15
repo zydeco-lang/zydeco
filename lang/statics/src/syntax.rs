@@ -460,9 +460,9 @@ mod impls_structs {
 
 /// Typed syntax stored in every entry of the dominant paged arena.
 ///
-/// The three 64-byte payloads are rare and indirect so their size does not
-/// become padding in the millions of small application, arrow, label, and
-/// product nodes.
+/// The three 64-byte payloads are rare and indirect, while padding-free arena
+/// IDs keep the largest inline payloads at 40 bytes. Their size therefore does
+/// not become padding in every application, arrow, label, and product node.
 #[derive(From, Clone, Debug)]
 pub enum Type {
     Var(DefId),
@@ -522,8 +522,10 @@ mod type_layout_tests {
 
     #[test]
     fn rare_payloads_keep_type_slots_compact() {
-        assert!(std::mem::size_of::<Type>() <= 56);
-        assert!(std::mem::size_of::<Fillable<Type>>() <= 56);
+        assert_eq!(std::mem::size_of::<TypeBinder>(), 24);
+        assert_eq!(std::mem::size_of::<ManifestKind>(), 36);
+        assert!(std::mem::size_of::<Type>() <= 48);
+        assert!(std::mem::size_of::<Fillable<Type>>() <= 48);
     }
 }
 

@@ -3,7 +3,7 @@ pub use la_arena::RawIdx;
 use la_arena::{Arena as LaArena, Idx as LaIdx};
 use rustc_hash::FxHashMap as HashMap;
 use std::{
-    hash::Hash,
+    hash::{Hash, Hasher},
     marker::PhantomData,
     num::{NonZeroU32, NonZeroU64},
     ops::AddAssign,
@@ -71,6 +71,38 @@ impl KeySpaceId {
             NonZeroU64::new(derived)
                 .unwrap_or_else(|| NonZeroU64::new(u64::MAX).expect("u64::MAX is nonzero")),
         )
+    }
+}
+
+/// Padding-free storage for a [`KeySpaceId`] inside a generated arena ID.
+///
+/// Keeping the high and low words separate lowers the field alignment to four
+/// bytes without losing any identity bits. A generated ID can then store this
+/// eight-byte value beside its four-byte raw slot in exactly twelve bytes.
+#[doc(hidden)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct CompactKeySpaceId {
+    high: u32,
+    low: u32,
+}
+
+impl CompactKeySpaceId {
+    #[inline]
+    pub fn new(id: KeySpaceId) -> Self {
+        let value = id.as_u64();
+        Self { high: (value >> 32) as u32, low: value as u32 }
+    }
+
+    #[inline]
+    pub fn expand(self) -> KeySpaceId {
+        let value = (u64::from(self.high) << 32) | u64::from(self.low);
+        KeySpaceId(NonZeroU64::new(value).expect("a compact key-space identity remains nonzero"))
+    }
+}
+
+impl Hash for CompactKeySpaceId {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.expand().as_u64().hash(state);
     }
 }
 
@@ -1745,19 +1777,22 @@ macro_rules! new_key_type {
     ( $(#[$outer:meta])* $vis:vis struct $name:ident ; $($rest:tt)* ) => {
         $(#[$outer])*
         #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-        $vis struct $name($crate::arena::KeySpaceId, $crate::arena::RawIdx);
+        $vis struct $name($crate::arena::CompactKeySpaceId, $crate::arena::RawIdx);
 
         impl $crate::arena::ArenaId for $name {
+            #[inline]
             fn from_raw_parts(
                 _token: $crate::arena::ArenaIdToken,
                 key_space: $crate::arena::KeySpaceId,
                 raw: $crate::arena::RawIdx,
             ) -> Self {
-                Self(key_space, raw)
+                Self($crate::arena::CompactKeySpaceId::new(key_space), raw)
             }
+            #[inline]
             fn key_space(self) -> $crate::arena::KeySpaceId {
-                self.0
+                self.0.expand()
             }
+            #[inline]
             fn raw(self) -> $crate::arena::RawIdx {
                 self.1
             }
@@ -1765,16 +1800,16 @@ macro_rules! new_key_type {
 
         impl std::fmt::Debug for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{}({:?}, {})", stringify!($name), self.0, self.1.into_u32())
+                write!(f, "{}({:?}, {})", stringify!($name), self.0.expand(), self.1.into_u32())
             }
         }
 
         impl $name {
             pub fn concise(&self) -> String {
-                format!("[{:?}#{}]", self.0, self.1.into_u32())
+                format!("[{:?}#{}]", self.0.expand(), self.1.into_u32())
             }
             pub fn concise_inner(&self) -> String {
-                format!("{:?}#{}", self.0, self.1.into_u32())
+                format!("{:?}#{}", self.0.expand(), self.1.into_u32())
             }
         }
 
@@ -1806,6 +1841,27 @@ mod tests {
     }
     impl ArenaSchema<SparseId> for AlternateScope {
         type Item = usize;
+    }
+
+    #[test]
+    fn generated_ids_store_key_space_and_raw_slot_without_tail_padding() {
+        let key_space = KeySpaceId::derive(u64::MAX, u64::MAX - 1, u32::MAX - 1, u32::MAX);
+        let id: DenseId = derived_id(key_space, u32::MAX);
+        let below_word_boundary = KeySpaceId(NonZeroU64::new(u64::from(u32::MAX)).unwrap());
+        let above_word_boundary = KeySpaceId(NonZeroU64::new(1_u64 << 32).unwrap());
+
+        assert_eq!(id.key_space(), key_space);
+        assert_eq!(id.raw().into_u32(), u32::MAX);
+        assert_eq!(std::mem::size_of::<CompactKeySpaceId>(), 8);
+        assert_eq!(std::mem::align_of::<CompactKeySpaceId>(), 4);
+        assert_eq!(std::mem::size_of::<DenseId>(), 12);
+        assert_eq!(std::mem::align_of::<DenseId>(), 4);
+        assert_eq!(std::mem::size_of::<Option<DenseId>>(), 16);
+        assert!(below_word_boundary < above_word_boundary);
+        assert!(
+            CompactKeySpaceId::new(below_word_boundary)
+                < CompactKeySpaceId::new(above_word_boundary)
+        );
     }
 
     #[test]

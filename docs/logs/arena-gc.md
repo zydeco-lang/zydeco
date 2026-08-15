@@ -2696,3 +2696,62 @@ decisions while implementing the plan.
 - Inspect the 2,747KiB collection of per-source textual term tables together with the 1,608KiB and
   1,394KiB line-intention tables. They share parsed-template lifetime and may duplicate information
   already recoverable from tokens or spans.
+
+## 2026-08-15 — round 56: remove generated-ID tail padding
+
+### Findings
+
+- The post-substitution checker now materializes only 53,969 pre-normalized type nodes for the
+  standard library. The four 48-byte inline payload families account for 2,962 nodes (5.5%): 461
+  type abstractions, 42 value foralls, 2,295 computation foralls, and 164 manifest kind entries.
+  Boxing them would save eight bytes in each type slot but add about 3,000 allocations for a total
+  type-arena opportunity below one megabyte.
+- Each generated arena ID exposed a more general source of waste. Its identity consists of an
+  eight-byte key space and a four-byte local slot, but the key space's eight-byte alignment gave
+  every standalone ID four bytes of tail padding. The 16-byte physical representation propagated
+  into hash keys, syntax payloads, binders, and typed dispatchers across every pipeline phase.
+- Splitting the key-space word into high and low `u32`s preserves all 64 identity bits while lowering
+  its storage alignment to four. A generated ID then occupies exactly twelve bytes. Recombination
+  is a pair of shifts and preserves numeric ordering across the low-word boundary.
+- The atomic change removes padding again at composite boundaries: `TypeBinder` falls from 32 to 24
+  bytes, `ManifestKind` from 48 to 36, `Type` and `Fillable<Type>` from 56 to 48, and the full pattern
+  and term dispatchers from 24 to 16. The common type slot therefore shrinks without any boxes.
+- `TermAnnId` falls from 40 to 28 bytes. Its older 32-byte custom wrapper became larger than the
+  ordinary typed enum, so retaining that local optimization would have defeated part of the base-
+  representation win.
+- `Option<Id>` remains 16 bytes because Rust cannot see the composite nonzero key-space invariant;
+  this change does not regress its old niche-backed size. The reusable rule is to remove alignment
+  waste from the atomic identity before introducing compact wrappers downstream, then re-audit every
+  wrapper whose premise depended on the old layout.
+
+### Changes
+
+- Added `CompactKeySpaceId`, storing the exact high and low words of a `KeySpaceId`, and changed
+  `new_key_type!` to place that representation beside the raw slot. The public `ArenaId` contract,
+  allocator behavior, equality, ordering, hashing, debug forms, and reconstruction APIs are
+  unchanged.
+- Added upper-range round trips, ordering across a 32-bit word boundary, and exact size/alignment
+  regressions for compact key spaces, generated IDs, and optional IDs.
+- Removed `CompactTermAnnId` and store the now-smaller native `TermAnnId` directly in term facts.
+  Updated the static type and dispatcher layout regressions to record the new representation floor.
+
+### Measurements
+
+- Five release checks used 102,203,392, 104,022,016, 103,809,024, 103,972,864, and 104,153,088 bytes
+  peak RSS (median 103,972,864), down 6,356,992 bytes (-5.8%) from round 55. Warm runs took
+  0.18--0.19s wall time and 0.16--0.17s user time; the first launch again paid startup latency.
+- The current-tree baseline is now down from 2,497,757,184 to 103,972,864 bytes (-95.8%).
+- All 30 utility unit tests and four utility documentation tests, all 147 surface tests, all 26
+  statics unit tests and 33 statics integration tests, all 151 session tests, all 9 CLI integration
+  tests, all 31 Cajun unit tests, and all 9 Cajun stdio tests passed. Focused Clippy completed with
+  existing unrelated warnings. The release build and full standard-library check also passed.
+
+### Next
+
+- Remove the now-redundant category byte from each stored provenance key. Provenance is already
+  sharded by typed category, so its `CompactTypedEntityId` needs the category only while selecting a
+  shard; the 43,902 retained entries can use the native twelve-byte identity inside that shard.
+- Capture a fresh live-owner census after the pervasive ID change. It should re-rank sparse maps and
+  multi-ID syntax buffers more strongly than the earlier final-owner list predicts.
+- Continue the parsed-template audit across textual term tables and line-intention tables. Their
+  shared source lifetime remains the largest untested representation opportunity.
