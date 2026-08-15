@@ -1480,3 +1480,49 @@ decisions while implementing the plan.
   value is independently used during checking and lowering.
 - Attribute Salsa's post-static 24MB remainder before optimizing query keys. The durable arena is
   now small enough that transient query state can become the next dominant owner.
+
+## 2026-08-15 — round 33: combine per-term static facts
+
+### Findings
+
+- `term_anns` and `term_norms` used two hash tables over the same source-term identity domain.
+  Every one of 63,574 checked source terms had a final annotation, and 58,664 also retained the
+  normalized form of its annotation type.
+- The two tables serve distinct queries but not distinct lifetimes. Both are built by the same
+  check, shared through the same `StaticsIndexes` generation, and retained specifically so editor
+  facts survive stripping the occurrence payload.
+- Combining them saves one key, hash, control byte, and bucket allocation per source term. The
+  normalized value remains optional because kind-sorted and unresolved terms deliberately have no
+  normalized type fact.
+
+### Changes
+
+- Replaced `term_anns` and `term_norms` with one `ArenaAssoc<TermId, TermFacts>`. Each record carries
+  the final `TermAnnId` and an optional normalized `Type`.
+- `StaticsArena` now owns typed record/update accessors. Recording a new annotation clears any
+  normalized value derived from the prior annotation; finish-phase normalization enriches the same
+  record afterward.
+- Session annotation and normalized-type queries use the accessors, preserving their independent
+  demand-driven Salsa entry points while sharing retained storage.
+- A regression verifies that re-annotating a term invalidates its old normalized fact.
+
+### Measurements
+
+- Three clean release checks used 197,951,488, 197,591,040, and 197,574,656 bytes peak RSS (median
+  197,591,040), down 3,211,264 bytes (-1.6%) from round 32. Warm wall time was 0.26s and warm user
+  time was 0.23s.
+- The current-tree baseline is now down from 2,497,757,184 to 197,591,040 bytes (-92.1%).
+- All 55 statics tests and all 151 session tests passed, along with the release CLI build and full
+  standard-library check.
+
+### Next
+
+- Profile whether term facts need a normalized `Type` clone for all 58,664 terms or whether multiple
+  terms predominantly point at the same normalized annotation `TypeId`. An ID-based retained view
+  would require keeping or separately materializing the referenced type node, so count sharing
+  before changing ownership.
+- Audit `annotations_type` together with `types_pre`. Co-locating each kind ID with its type payload
+  could remove a 5.6MB parallel page hierarchy, but it changes the central typed-node slot and must
+  preserve fill handling and query-derived IDs.
+- Measure Salsa query families by memo count and value shape to explain the remaining post-static
+  24MB rather than treating all memoization as one owner.

@@ -589,7 +589,7 @@ fn normalized_type_at<'db>(
     let analysis = analyze_source(db, root).ok()?;
     let statics = analysis.statics();
     let term = *statics.type_sites.get(&id.id(db))?;
-    statics.term_norms.get(&term).cloned()
+    statics.term_normalized(term).cloned()
 }
 
 /// Coverage failures of one analyzed root, computed on demand.
@@ -637,7 +637,7 @@ fn term_annotation_at<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput, term: zydeco_statics::query::InternedTerm<'db>,
 ) -> Option<zydeco_statics::syntax::TermAnnId> {
     let analysis = analyze_source(db, root).ok()?;
-    analysis.statics().term_anns.get(&term.id(db)).copied()
+    analysis.statics().term_annotation(term.id(db))
 }
 
 #[cfg(test)]

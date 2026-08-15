@@ -144,6 +144,13 @@ pub struct IntrinsicStatics {
     pub(crate) primitives: std::collections::BTreeMap<zydeco_syntax::PrimitiveType, TypeId>,
 }
 
+/// Editor-facing facts keyed by one source term.
+#[derive(Clone, Debug)]
+pub struct TermFacts {
+    annotation: TermAnnId,
+    normalized: Option<Type>,
+}
+
 /// Source-bounded static facts retained after the typed occurrence tree is
 /// discarded.
 ///
@@ -158,13 +165,9 @@ pub struct StaticsIndexes {
     /// Untyped-to-typed term provenance. A surface term can be checked more
     /// than once, while erased constructs can share a typed term.
     pub terms: ArenaBipartite<su::TermId, TermId>,
-    /// The final annotation of each checked term, keyed by the surface term.
-    /// Editor facts read this instead of the per-node annotation tables, which
-    /// the occurrence-payload strip discards.
-    pub term_anns: ArenaAssoc<su::TermId, TermAnnId>,
-    /// The normalized form of each term's annotation type, keyed by the
-    /// surface term, so editor facts answer without the occurrence payload.
-    pub term_norms: ArenaAssoc<su::TermId, Type>,
+    /// Final annotation and normalized annotation type for each checked source
+    /// term. Sharing one key table avoids duplicating the source-term index.
+    pub term_facts: ArenaAssoc<su::TermId, TermFacts>,
     /// The surface term each top annotation type belongs to; inner type nodes
     /// have no entry, so lookups for them answer nothing instead of guessing.
     pub type_sites: ArenaAssoc<TypeId, su::TermId>,
@@ -350,6 +353,35 @@ impl StaticsArena {
         })
     }
 
+    /// Record the final annotation of a source term. Re-checking invalidates
+    /// any normalized fact derived from its previous annotation.
+    pub fn record_term_annotation(&mut self, term: su::TermId, annotation: TermAnnId) {
+        use std::collections::hash_map::Entry;
+
+        match self.term_facts.entry(term) {
+            | Entry::Vacant(entry) => {
+                entry.insert(TermFacts { annotation, normalized: None });
+            }
+            | Entry::Occupied(mut entry) => {
+                *entry.get_mut() = TermFacts { annotation, normalized: None };
+            }
+        }
+    }
+
+    /// Attach the normalized classifier derived from a recorded term
+    /// annotation.
+    pub fn record_term_normalized(&mut self, term: su::TermId, normalized: Type) {
+        self.term_facts[&term].normalized = Some(normalized);
+    }
+
+    pub fn term_annotation(&self, term: su::TermId) -> Option<TermAnnId> {
+        self.term_facts.get(&term).map(|facts| facts.annotation)
+    }
+
+    pub fn term_normalized(&self, term: su::TermId) -> Option<&Type> {
+        self.term_facts.get(&term)?.normalized.as_ref()
+    }
+
     /// Look up either a source definition or one synthesized by typed elaboration.
     pub fn def_name<'a>(&'a self, scoped: &'a su::ScopedArena, id: &DefId) -> &'a su::VarName {
         self.generated_defs.get(id).unwrap_or_else(|| &scoped.defs[id])
@@ -377,6 +409,23 @@ mod tests {
 
         assert!(Arc::ptr_eq(&materialized.indexes, &retained.indexes));
         assert_eq!(retained.types_pre.len(), 0);
+    }
+
+    #[test]
+    fn reannotating_a_term_invalidates_its_normalized_fact() {
+        let term = IdAllocator::<su::ScopedScope>::new().alloc();
+        let mut allocator = IdAllocator::<StaticsScope>::new();
+        let fill: FillId = allocator.alloc();
+        let kind: KindId = allocator.alloc();
+        let mut statics = StaticsArena::default();
+
+        statics.record_term_annotation(term, TermAnnId::Hole(fill));
+        statics.record_term_normalized(term, Type::Unit(UnitTy));
+        assert!(matches!(statics.term_normalized(term), Some(Type::Unit(_))));
+
+        statics.record_term_annotation(term, TermAnnId::Kind(kind));
+        assert_eq!(statics.term_annotation(term), Some(TermAnnId::Kind(kind)));
+        assert!(statics.term_normalized(term).is_none());
     }
 }
 

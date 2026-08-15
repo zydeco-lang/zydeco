@@ -1523,9 +1523,9 @@ impl<'a> Tycker<'a> {
             // Record the normalized form per scoped term, so editor facts can
             // answer for a term's annotation type without the occurrence
             // payload.
-            let terms: Vec<_> = self.statics.term_anns.iter().map(|(term, _)| *term).collect();
+            let terms: Vec<_> = self.statics.term_facts.iter().map(|(term, _)| *term).collect();
             for term in terms {
-                let ty = match self.statics.term_anns.get(&term).copied() {
+                let ty = match self.statics.term_annotation(term) {
                     | Some(ss::TermAnnId::Type(ty, _))
                     | Some(ss::TermAnnId::Value(_, ty))
                     | Some(ss::TermAnnId::Compu(_, ty)) => ty,
@@ -1536,7 +1536,7 @@ impl<'a> Tycker<'a> {
                 let Some(normalized) = self.statics.normalized_at(ty).cloned() else {
                     continue;
                 };
-                let _ = self.statics.term_norms.upsert(term, normalized);
+                self.statics.record_term_normalized(term, normalized);
             }
         }
         if self.errors.is_empty() {
@@ -7624,7 +7624,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
             tycker.statics.terms.ensure(self.inner, out);
             // record the final annotation for editor facts; fixpoint re-checks
             // overwrite the earlier occurrence's entry
-            let _ = tycker.statics.term_anns.upsert(self.inner, out_ann);
+            tycker.statics.record_term_annotation(self.inner, out_ann);
             let _ = match out_ann {
                 | ss::TermAnnId::Type(ty, _)
                 | ss::TermAnnId::Value(_, ty)
