@@ -2308,3 +2308,51 @@ decisions while implementing the plan.
 - Continue treating `env_type` attribution as unproven until a phase-local ownership snapshot
   contradicts checker-state stripping; phase RSS alone does not establish which freed block an
   allocation history names.
+
+## 2026-08-15 — round 49: inline common kind values
+
+### Findings
+
+- The phase audit from round 48 showed that pre-normalization kinds remain live through the process
+  high-water mark, so their concrete layout matters even after resolver allocations have been
+  released or reused. The final arena contains 40,619 entries, and 37,363 of them (92.0%) are the
+  payload-free `VType` or `CType` variants.
+- The previous sparse arena stored a 40-byte `Fillable<Kind>` directly in every hash bucket. This
+  charged the worst-case arrow, label, or unresolved-fill layout to the two common values even
+  though they need only a discriminant. The live-heap census attributed 3,751,936 bytes to that
+  table before this change.
+- A sparse identity map need not store its worst-case discriminated payload in every bucket. An
+  eight-byte node can encode common values directly and point uncommon values into a dense side
+  table. Static values reconstruct the same borrowed references for `VType` and `CType`, so the
+  representation change does not force boxing into the public `Kind` type or alter callers.
+
+### Changes
+
+- Added `KindArena`, whose sparse table stores compact common-kind nodes and whose dense payload
+  vector owns unresolved fills, arrows, and labels. Insertion, lookup, indexing, and iteration
+  preserve the previous borrowed `Fillable<Kind>` interface.
+- Changed `StaticsArena::kinds_pre` to use the compact arena. A regression checks the node layout,
+  verifies that common variants consume no dense payload slots, and round-trips all supported
+  storage forms through indexing and iteration.
+
+### Measurements
+
+- Five release checks used 120,274,944, 119,717,888, 119,668,736, 119,980,032, and 120,209,408 bytes
+  peak RSS (median 119,980,032), down 2,326,528 bytes (-1.9%) from round 48. Warm wall time was
+  0.18--0.19s and warm user time was 0.16--0.17s.
+- The original current-tree baseline is now down from 2,497,757,184 to 119,980,032 bytes (-95.2%).
+- All 26 statics unit tests and 33 statics integration tests, all 151 session tests, all 9 CLI
+  integration tests, all 31 Cajun unit tests, and all 9 Cajun stdio tests passed. Focused Clippy
+  completed with existing unrelated lint warnings. The release CLI build and standard-library
+  check also passed.
+
+### Next
+
+- Capture one final live-owner census after removing the old 3.75MB kind table. Use phase lifetime
+  and retained owner size together to decide whether another structural change is justified at the
+  roughly 120MB peak.
+- Prefer judgment structures over resolver storage when choosing any further target: judgments add
+  about 49MB to the resident high-water mark, while all resolution completes at about 63MB and its
+  released pages are already reused by checking.
+- Treat normalization as a bounded secondary target. It adds roughly 2.8MB after judgments, hole
+  resolution, and their retained editor facts are already present.

@@ -145,6 +145,100 @@ pub struct IntrinsicStatics {
     pub(crate) primitives: std::collections::BTreeMap<zydeco_syntax::PrimitiveType, TypeId>,
 }
 
+/// Compact owning storage for pre-normalization kinds.
+///
+/// `VType` and `CType` dominate this arena and carry no payload. Sparse hash
+/// buckets retain only a compact node for those variants; fill sites, arrows,
+/// and labels occupy a dense side vector whose stable borrow is reconstructed
+/// by [`KindArena::get`] and [`KindArena::iter`].
+#[derive(Clone, Debug, Default)]
+pub struct KindArena {
+    nodes: ArenaSparse<KindStorageScope, KindId>,
+    payloads: Vec<Fillable<Kind>>,
+}
+
+#[derive(Debug)]
+enum KindStorageScope {}
+
+impl ArenaSchema<KindId> for KindStorageScope {
+    type Item = KindNode;
+}
+
+#[derive(Copy, Clone, Debug)]
+enum KindNode {
+    VType,
+    CType,
+    Payload(KindPayloadIndex),
+}
+
+#[derive(Copy, Clone, Debug)]
+struct KindPayloadIndex(u32);
+
+static FILLED_VTYPE: Fillable<Kind> = Fillable::Done(Kind::VType(VType));
+static FILLED_CTYPE: Fillable<Kind> = Fillable::Done(Kind::CType(CType));
+
+impl KindPayloadIndex {
+    fn from_offset(offset: usize) -> Self {
+        Self(u32::try_from(offset).expect("kind payload arena exhausted its u32 index range"))
+    }
+
+    fn offset(self) -> usize {
+        self.0 as usize
+    }
+}
+
+impl KindNode {
+    fn split(value: Fillable<Kind>, payload_offset: usize) -> (Self, Option<Fillable<Kind>>) {
+        match value {
+            | Fillable::Done(Kind::VType(_)) => (Self::VType, None),
+            | Fillable::Done(Kind::CType(_)) => (Self::CType, None),
+            | payload => {
+                (Self::Payload(KindPayloadIndex::from_offset(payload_offset)), Some(payload))
+            }
+        }
+    }
+}
+
+impl KindArena {
+    pub fn insert_new(&mut self, id: KindId, value: Fillable<Kind>) {
+        let (node, payload) = KindNode::split(value, self.payloads.len());
+        self.nodes.insert_new(id, node);
+        self.payloads.extend(payload);
+    }
+
+    pub fn get(&self, id: &KindId) -> Option<&Fillable<Kind>> {
+        self.nodes.get(id).map(|node| self.value(node))
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&KindId, &Fillable<Kind>)> {
+        self.nodes.iter().map(move |(id, node)| (id, self.value(node)))
+    }
+
+    pub fn len(&self) -> usize {
+        self.nodes.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.nodes.len() == 0
+    }
+
+    fn value(&self, node: &KindNode) -> &Fillable<Kind> {
+        match node {
+            | KindNode::VType => &FILLED_VTYPE,
+            | KindNode::CType => &FILLED_CTYPE,
+            | KindNode::Payload(index) => &self.payloads[index.offset()],
+        }
+    }
+}
+
+impl Index<&KindId> for KindArena {
+    type Output = Fillable<Kind>;
+
+    fn index(&self, id: &KindId) -> &Self::Output {
+        self.get(id).expect("key not found")
+    }
+}
+
 /// Editor-facing facts keyed by one source term.
 #[derive(Clone, Debug)]
 pub struct TermFacts {
@@ -437,7 +531,7 @@ pub struct StaticsArena {
     indexes: Arc<StaticsIndexes>,
 
     /// kind arena before normalization
-    pub kinds_pre: ArenaSparse<StaticsScope, KindId>,
+    pub kinds_pre: KindArena,
     /// manifest kind-pattern arena
     pub kpats: ArenaSparse<StaticsScope, KPatId>,
     /// type pattern arena
@@ -592,6 +686,39 @@ impl StaticsArena {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn common_kinds_stay_inline_while_uncommon_payloads_are_dense() {
+        assert!(std::mem::size_of::<KindNode>() <= 8);
+        assert!(std::mem::size_of::<KindNode>() < std::mem::size_of::<Fillable<Kind>>());
+
+        let mut allocator = IdAllocator::<StaticsScope>::new();
+        let vtype: KindId = allocator.alloc();
+        let ctype: KindId = allocator.alloc();
+        let arrow: KindId = allocator.alloc();
+        let label: KindId = allocator.alloc();
+        let fill: FillId = allocator.alloc();
+        let pending: KindId = allocator.alloc();
+        let mut kinds = KindArena::default();
+
+        kinds.insert_new(vtype, Fillable::Done(Kind::VType(VType)));
+        kinds.insert_new(ctype, Fillable::Done(Kind::CType(CType)));
+        kinds.insert_new(arrow, Fillable::Done(Kind::Arrow(Arrow(vtype, ctype))));
+        kinds.insert_new(
+            label,
+            Fillable::Done(Kind::Label(Label(FieldName("field".to_owned()), vtype))),
+        );
+        kinds.insert_new(pending, Fillable::Fill(fill));
+
+        assert_eq!(kinds.len(), 5);
+        assert_eq!(kinds.payloads.len(), 3);
+        assert!(matches!(kinds[&vtype], Fillable::Done(Kind::VType(_))));
+        assert!(matches!(kinds[&ctype], Fillable::Done(Kind::CType(_))));
+        assert!(matches!(kinds[&arrow], Fillable::Done(Kind::Arrow(_))));
+        assert!(matches!(kinds[&label], Fillable::Done(Kind::Label(_))));
+        assert!(matches!(kinds[&pending], Fillable::Fill(id) if id == fill));
+        assert_eq!(kinds.iter().count(), 5);
+    }
 
     #[test]
     fn type_nodes_store_compact_kind_indexes() {
