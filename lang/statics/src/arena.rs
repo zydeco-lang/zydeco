@@ -259,6 +259,18 @@ pub struct StaticsArena {
 }
 
 impl StaticsArena {
+    /// Pre-reserve the type-indexed tables from the name-resolved program's
+    /// size, so the arena grows toward its final shape with fewer bucket-table
+    /// reallocations. A checked program materializes roughly an order of
+    /// magnitude more types than it has scoped terms.
+    pub fn reserve(&mut self, scoped_terms: usize) {
+        let types = scoped_terms.saturating_mul(16);
+        self.types_pre.reserve(types);
+        self.types_normalized.reserve(types);
+        self.annotations_type.reserve(types);
+        self.env_type.reserve(types);
+    }
+
     /// Intern one typing environment and return the shared value for storage
     /// in [`Self::env_type`].
     pub fn intern_env(&mut self, env: &TyEnv) -> std::sync::Arc<TyEnv> {

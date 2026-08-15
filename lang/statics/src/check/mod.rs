@@ -994,6 +994,8 @@ impl<'a> Tycker<'a> {
         db: &'a dyn crate::query::TyckDb, data: crate::query::ScopedData<'a>, spans: &'a SpanArena,
         prim: &'a PrimDefs, scoped: &'a mut ScopedArena,
     ) -> Self {
+        let mut statics = StaticsArena::default();
+        statics.reserve(scoped.terms.len());
         Self {
             allocator: DerivedAllocator::new(),
             db,
@@ -1001,7 +1003,7 @@ impl<'a> Tycker<'a> {
             spans,
             prim,
             scoped,
-            statics: StaticsArena::default(),
+            statics,
             tasks: im::Vector::new(),
             check_counts: ArenaAssoc::default(),
             metas: im::Vector::new(),

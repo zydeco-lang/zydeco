@@ -463,6 +463,10 @@ mod impls {
         pub fn iter(&self) -> impl Iterator<Item = (&Id, &Scope::Item)> {
             self.into_iter()
         }
+        /// Reserve capacity for `additional` entries before a bulk fill.
+        pub fn reserve(&mut self, additional: usize) {
+            self.map.reserve(additional);
+        }
     }
 
     impl<Scope, Id> ArenaAccess<&Id, Scope::Item> for ArenaSparse<Scope, Id>
@@ -625,6 +629,10 @@ mod impls {
     where
         Id: Eq + Hash,
     {
+        /// Reserve capacity for `additional` entries before a bulk fill.
+        pub fn reserve(&mut self, additional: usize) {
+            self.map.reserve(additional);
+        }
         /// Insert a value whose key must not already be present.
         pub fn insert_new(&mut self, id: Id, val: T) {
             use std::collections::hash_map::Entry;
