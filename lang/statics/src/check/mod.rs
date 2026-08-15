@@ -7712,6 +7712,29 @@ mod source_boundary_tests {
         );
     }
 
+    #[test]
+    fn kind_normalization_stores_only_changed_forms() {
+        with_empty_tycker(|tycker| {
+            let unchanged = Alloc::alloc(tycker, ss::VType, (), &());
+            let root = tycker.data.root(tycker.db);
+            let fill = Alloc::alloc(tycker, root, (), &());
+            let pending = Alloc::alloc(tycker, fill, (), &());
+            tycker.statics.solus.insert_new(fill, unchanged.into());
+
+            let mut normalizer = crate::normalize::FilledNormalizer::default();
+            normalizer.normalize_kind_k(unchanged, tycker).unwrap();
+            normalizer.normalize_kind_k(pending, tycker).unwrap();
+
+            assert!(tycker.statics.kinds_normalized.get(&unchanged).is_none());
+            assert!(matches!(
+                tycker.statics.normalized_kind_at(unchanged),
+                Some(ss::Kind::VType(_))
+            ));
+            assert!(matches!(tycker.statics.normalized_kind_at(pending), Some(ss::Kind::VType(_))));
+            assert!(tycker.statics.kinds_normalized.get(&pending).is_some());
+        });
+    }
+
     fn anonymous_type_binder(
         tycker: &mut Tycker<'_>, kind: ss::KindId, environment: &TyEnv,
     ) -> ss::TypeBinder {

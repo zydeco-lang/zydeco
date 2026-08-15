@@ -1863,13 +1863,12 @@ impl KindId {
         if self != res {
             norm.kinds.insert(res, res);
         }
-        if let Fillable::Done(kind) = tycker.statics.kinds_pre[&res].to_owned() {
-            if self == res {
-                let _ = tycker.statics.kinds_normalized.upsert(self, kind);
-            } else {
-                let _ = tycker.statics.kinds_normalized.upsert(self, kind.clone());
-                let _ = tycker.statics.kinds_normalized.upsert(res, kind);
-            }
+        // Unchanged nodes already carry their normal form in `kinds_pre`.
+        // Keep only the old-ID-to-new-form delta for fills and rebuilt paths.
+        if self != res
+            && let Fillable::Done(kind) = tycker.statics.kinds_pre[&res].to_owned()
+        {
+            let _ = tycker.statics.kinds_normalized.upsert(self, kind);
         }
         Ok(res)
     }

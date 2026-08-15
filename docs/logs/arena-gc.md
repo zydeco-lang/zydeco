@@ -1431,3 +1431,52 @@ decisions while implementing the plan.
 - Consider split singleton/multiple hash tables only if relation storage remains prominent after
   the higher-level lifetime audit. The inline representation captures most of the avoidable
   per-edge allocation without complicating lookup.
+
+## 2026-08-15 — round 32: store normalized kinds as a delta
+
+### Findings
+
+- Filled normalization retained all 40,619 pre-normalized kind nodes and also cloned a `Kind` into
+  `kinds_normalized` for every ID. The controlled static drop measured the normalized column at
+  7.4MB, in addition to 3.8MB for `kinds_pre`.
+- Types had already established the right invariant: unchanged nodes are their own normal form,
+  while the normalized table stores only old-ID-to-new-form deltas for solved fills or rebuilt
+  paths. Kind finalization still implemented the older eager-column design.
+- Applying the delta rule left zero normalized-kind entries for the full standard library. Hole
+  resolution has already made every retained kind its own normal form before filled normalization;
+  all 40,619 entries were representational duplicates.
+- The editor is the only downstream normalized-kind reader. It already fell back to `kinds_pre`
+  when a normalized entry was absent, so centralizing that lookup preserves classification for both
+  unchanged kinds and genuine deltas.
+
+### Changes
+
+- Kind finalization now inserts into `kinds_normalized` only when the normalized ID differs from the
+  original ID, matching type finalization.
+- `StaticsArena::normalized_kind_at` owns the delta-plus-fallback lookup, and Cajun semantic
+  highlighting uses that API instead of inspecting both tables itself.
+- A checker regression covers both cases: an unchanged `VType` stores no delta, while a fill solved
+  to that kind remains queryable through a stored old-ID delta.
+- The normalization design note now states the sparse-delta invariant rather than promising a
+  duplicate normalized entry for every finalized ID.
+
+### Measurements
+
+- The full standard-library check retains zero normalized-kind entries instead of 40,619.
+- Three clean release checks used 201,654,272, 200,687,616, and 200,802,304 bytes peak RSS (median
+  200,802,304), down 6,684,672 bytes (-3.2%) from round 31. Warm wall time was 0.25–0.26s and warm
+  user time was 0.22–0.23s.
+- The current-tree baseline is now down from 2,497,757,184 to 200,802,304 bytes (-92.0%).
+- All 54 statics tests, all 151 session tests, and the focused Cajun semantic/stdio tests passed,
+  along with the release CLI build and full standard-library check.
+
+### Next
+
+- Examine `term_norms` and `term_anns` together. They cost 9.8MB and 7.5MB respectively and share
+  the same 63,574 source-term key domain; a single typed record may avoid one complete hash index
+  without weakening demand-driven editor facts.
+- Determine whether `annotations_type` can share the type page layout or move its kind directly into
+  the type slot. Its 53,969-entry parallel page table costs 5.6MB, but unlike normalized kinds every
+  value is independently used during checking and lowering.
+- Attribute Salsa's post-static 24MB remainder before optimizing query keys. The durable arena is
+  now small enough that transient query state can become the next dominant owner.

@@ -8,7 +8,7 @@ use tower_lsp::lsp_types::{
 };
 use zydeco_statics::{
     arena::StaticsArena,
-    syntax::{AnnId, Fillable, Kind, KindId},
+    syntax::{AnnId, Kind, KindId},
 };
 use zydeco_surface::{
     scoped::{
@@ -462,11 +462,7 @@ impl<'arena> NameClassifier<'arena> {
     }
 
     fn kind(&self, id: &KindId) -> Option<&Kind> {
-        let statics = self.statics?;
-        statics.kinds_normalized.get(id).or_else(|| match statics.kinds_pre.get(id)? {
-            | Fillable::Done(kind) => Some(kind),
-            | Fillable::Fill(_) => None,
-        })
+        self.statics?.normalized_kind_at(*id)
     }
 }
 

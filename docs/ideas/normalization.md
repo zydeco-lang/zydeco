@@ -227,7 +227,8 @@ New nodes produced by beta reduction, projection, or structural rebuilding join 
 The pass preserves three invariants:
 
 - every original arena ID remains a valid lookup key, even when its stored structure is replaced by a resolved form;
-- `kinds_normalized` and `types_normalized` contain the normal form associated with every finalized ID; and
+- `kinds_normalized` and `types_normalized` contain deltas for finalized IDs whose pre-normalization
+  form changed, while unchanged IDs expose their existing arena node directly; and
 - missing solutions and sort mismatches remain checker diagnostics rather than partial normalized values exposed to
   later compiler phases.
 

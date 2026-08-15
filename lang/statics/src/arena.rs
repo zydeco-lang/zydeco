@@ -283,7 +283,7 @@ pub struct StaticsArena {
     pub env_compu: ArenaAssoc<CompuId, TyEnv>,
 
     // normalized kinds and types after type checking
-    /// normalized kind free of holes
+    /// normalized kind delta for IDs whose pre-normalization form changed
     pub kinds_normalized: ArenaAssoc<KindId, Kind>,
     /// normalized type free of holes
     pub types_normalized: ArenaAssoc<TypeId, Type>,
@@ -337,6 +337,15 @@ impl StaticsArena {
     pub fn normalized_at(&self, id: TypeId) -> Option<&Type> {
         self.types_normalized.get(&id).or_else(|| match self.types_pre.get(&id)? {
             | Fillable::Done(ty) => Some(ty),
+            | Fillable::Fill(_) => None,
+        })
+    }
+
+    /// The normalized form of one kind, falling back to its unchanged
+    /// pre-normalization form when no delta is stored.
+    pub fn normalized_kind_at(&self, id: KindId) -> Option<&Kind> {
+        self.kinds_normalized.get(&id).or_else(|| match self.kinds_pre.get(&id)? {
+            | Fillable::Done(kind) => Some(kind),
             | Fillable::Fill(_) => None,
         })
     }
