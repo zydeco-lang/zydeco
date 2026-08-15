@@ -5,6 +5,10 @@
 use super::syntax::*;
 use crate::surface_syntax as su;
 use crate::{SkolemScope, TyEnv};
+use std::{
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 use zydeco_derive::{AsMutSelf, AsRefSelf};
 pub use zydeco_surface::arena::*;
@@ -140,23 +144,14 @@ pub struct IntrinsicStatics {
     pub(crate) primitives: std::collections::BTreeMap<zydeco_syntax::PrimitiveType, TypeId>,
 }
 
-/// Typed arena plus annotation tables and translation metadata.
-#[derive(Clone, Debug, Default, AsRefSelf, AsMutSelf)]
-pub struct StaticsArena {
-    /// kind arena before normalization
-    pub kinds_pre: ArenaSparse<StaticsScope, KindId>,
-    /// manifest kind-pattern arena
-    pub kpats: ArenaSparse<StaticsScope, KPatId>,
-    /// type pattern arena
-    pub tpats: ArenaSparse<StaticsScope, TPatId>,
-    /// type arena before normalization
-    pub types_pre: ArenaPaged<StaticsScope, TypeId>,
-    /// value pattern arena
-    pub vpats: ArenaSparse<StaticsScope, VPatId>,
-    /// value arena
-    pub values: ArenaSparse<StaticsScope, ValueId>,
-    /// computation arena
-    pub compus: ArenaSparse<StaticsScope, CompuId>,
+/// Source-bounded static facts retained after the typed occurrence tree is
+/// discarded.
+///
+/// A check builds this generation mutably. Once the check is published, the
+/// full materialization and its retained [`StaticsArena::clone_keyed_indexes`]
+/// view share one immutable allocation.
+#[derive(Clone, Debug, Default)]
+pub struct StaticsIndexes {
     /// Untyped-to-typed pattern provenance. A surface pattern can be checked
     /// more than once, while transparent wrappers can share a typed pattern.
     pub pats: ArenaBipartite<su::PatId, PatId>,
@@ -189,12 +184,10 @@ pub struct StaticsArena {
     /// Builtin roles attached to existential witnesses and named value entries.
     pub builtin_roles: BuiltinRoles,
     /// arena for context-constrained flexible metavariables and their source sites;
-    /// only types and kinds are now fillable
-    /// hole-filling sites, allocated with derived identifiers like the other
-    /// sparse categories so fill states can be query keys
+    /// only types and kinds are now fillable hole-filling sites, allocated with
+    /// derived identifiers so fill states can be query keys
     pub fills: ArenaSparse<StaticsScope, FillId>,
-    /// arena for the solutions of fillings,
-    /// i.e. the the [`FillId`] should be assigned as the [`AnnId`]
+    /// the annotation assigned to each solved filling site
     pub solus: ArenaAssoc<FillId, AnnId>,
     /// existential witnesses that each type hole is allowed to mention
     pub fill_scopes: ArenaAssoc<FillId, SkolemScope>,
@@ -226,7 +219,7 @@ pub struct StaticsArena {
     pub global_defs: ArenaAssoc<DefId, ()>,
     /// terms that are marked global
     pub global_terms: ArenaAssoc<TermId, ()>,
-    /// TODO: hints for all sorts of terms that can be associated with a definition name
+    /// hints associating typed terms with definition names
     pub def_hints: ArenaAssoc<TermId, DefId>,
     /// Definition names synthesized during typed elaboration. Source definitions
     /// remain in the immutable scoped arena; keeping this small delta here avoids
@@ -238,6 +231,28 @@ pub struct StaticsArena {
     pub annotations_var: ArenaAssoc<DefId, AnnId>,
     /// annotations for abstract types
     pub annotations_abst: ArenaAssoc<AbstId, KindId>,
+}
+
+/// Typed arena plus annotation tables and translation metadata.
+#[derive(Clone, Debug, Default, AsRefSelf, AsMutSelf)]
+pub struct StaticsArena {
+    /// Source-bounded facts shared with retained analyses after checking.
+    indexes: Arc<StaticsIndexes>,
+
+    /// kind arena before normalization
+    pub kinds_pre: ArenaSparse<StaticsScope, KindId>,
+    /// manifest kind-pattern arena
+    pub kpats: ArenaSparse<StaticsScope, KPatId>,
+    /// type pattern arena
+    pub tpats: ArenaSparse<StaticsScope, TPatId>,
+    /// type arena before normalization
+    pub types_pre: ArenaPaged<StaticsScope, TypeId>,
+    /// value pattern arena
+    pub vpats: ArenaSparse<StaticsScope, VPatId>,
+    /// value arena
+    pub values: ArenaSparse<StaticsScope, ValueId>,
+    /// computation arena
+    pub compus: ArenaSparse<StaticsScope, CompuId>,
     /// kind annotations for type patterns
     pub annotations_tpat: ArenaAssoc<TPatId, KindId>,
     /// kind annotations for types
@@ -274,6 +289,20 @@ pub struct StaticsArena {
     pub types_normalized: ArenaAssoc<TypeId, Type>,
 }
 
+impl Deref for StaticsArena {
+    type Target = StaticsIndexes;
+
+    fn deref(&self) -> &Self::Target {
+        &self.indexes
+    }
+}
+
+impl DerefMut for StaticsArena {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        Arc::make_mut(&mut self.indexes)
+    }
+}
+
 impl StaticsArena {
     /// Pre-reserve the outer type-page tables from the name-resolved program's
     /// size. Measurements put type-producing key spaces at slightly under one
@@ -300,42 +329,7 @@ impl StaticsArena {
     /// larger occurrence payload in its shared materialization. See
     /// `docs/ideas/arena-gc.md` for the L/S classification.
     pub fn clone_keyed_indexes(&self) -> Self {
-        Self {
-            pats: self.pats.clone(),
-            terms: self.terms.clone(),
-            term_anns: self.term_anns.clone(),
-            term_norms: self.term_norms.clone(),
-            type_sites: self.type_sites.clone(),
-            coverage_errors: self.coverage_errors.clone(),
-            absts: self.absts.clone(),
-            seals: self.seals.clone(),
-            abst_hints: self.abst_hints.clone(),
-            existential_skolems: self.existential_skolems.clone(),
-            intrinsics: self.intrinsics.clone(),
-            builtin_roles: self.builtin_roles.clone(),
-            fills: self.fills.clone(),
-            solus: self.solus.clone(),
-            fill_scopes: self.fill_scopes.clone(),
-            fill_hints: self.fill_hints.clone(),
-            datas: self.datas.clone(),
-            codatas: self.codatas.clone(),
-            data_hints: self.data_hints.clone(),
-            data_pat_hints: self.data_pat_hints.clone(),
-            codata_hints: self.codata_hints.clone(),
-            copattern_matches: self.copattern_matches.clone(),
-            copattern_pack_pi_binders: self.copattern_pack_pi_binders.clone(),
-            value_aliases: self.value_aliases.clone(),
-            package_aliases: self.package_aliases.clone(),
-            type_definitions: self.type_definitions.clone(),
-            inlinables: self.inlinables.clone(),
-            global_defs: self.global_defs.clone(),
-            global_terms: self.global_terms.clone(),
-            def_hints: self.def_hints.clone(),
-            generated_defs: self.generated_defs.clone(),
-            annotations_var: self.annotations_var.clone(),
-            annotations_abst: self.annotations_abst.clone(),
-            ..Self::default()
-        }
+        Self { indexes: Arc::clone(&self.indexes), ..Self::default() }
     }
 
     /// The normalized form of one type, falling back to the pre-normalization
@@ -360,6 +354,20 @@ impl StaticsArena {
         let mut definitions = scoped.defs.clone();
         definitions += self.generated_defs.clone();
         definitions
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retained_indexes_share_the_finished_generation() {
+        let materialized = StaticsArena::default();
+        let retained = materialized.clone_keyed_indexes();
+
+        assert!(Arc::ptr_eq(&materialized.indexes, &retained.indexes));
+        assert_eq!(retained.types_pre.len(), 0);
     }
 }
 

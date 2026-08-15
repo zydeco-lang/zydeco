@@ -370,3 +370,46 @@ decisions while implementing the plan.
   and L tiers simultaneously own deep copies of normalized terms, annotations, and source-site
   indexes. These facts are immutable after checking, so copy-on-write sharing should remove the
   duplication without weakening post-eviction analysis.
+
+## 2026-08-15 — round 11: represent keyed facts as one shared generation
+
+### Findings
+
+- `clone_keyed_indexes` avoided copying the typed occurrence tree, but still deep-cloned every
+  L-tier table while the check memo retained the originals. A retained-heap trace attributed
+  26.1MB of small allocations directly to that clone, plus 11.3MB for the `term_norms` hash
+  table, 7.3MB for `term_anns`, and nested allocations owned by their values and provenance
+  vectors.
+- The common rule is lifecycle rather than table shape: every field selected by
+  `clone_keyed_indexes` is mutable while checking and immutable once the result is published.
+  They form one source-bounded generation. Treating each table as an independent owned value
+  obscured that invariant and made a deep copy appear necessary.
+
+### Changes
+
+- Added `StaticsIndexes`, which owns the complete L generation. `StaticsArena` holds it behind
+  one `Arc`, exposes its fields through `Deref`, and uses `Arc::make_mut` through `DerefMut`
+  during construction. The checker's unique handle therefore mutates in place; a hypothetical
+  write after sharing preserves value semantics with copy-on-write.
+- `clone_keyed_indexes` now shares that generation in O(1) and default-constructs only the empty
+  occurrence payload. A focused test asserts that retained and materialized views share the
+  same generation while the retained S tables remain empty.
+
+### Measurements
+
+- Three full-std minimal checks used 915,406,848, 914,587,648, and 913,965,056 bytes peak RSS
+  (median 914,587,648), down 21.4MB from round 10's 935,968,768-byte median. Warm user time was
+  1.21–1.24s.
+- Sharing only the five largest fields first produced a 914,391,040-byte median. Sharing the
+  rest as one generation was within measurement noise, but removes the whole class of
+  ownership duplication and prevents smaller L tables from accumulating alongside a live memo.
+- The current-tree baseline is now down from 2,497,757,184 to 914,587,648 bytes (-63.4%).
+- All 34 statics tests passed. The 151-test session library suite passed with two threads in
+  38.42s, including the analysis-retention and post-eviction rematerialization tests.
+
+### Next
+
+- With representational duplication removed, the dominant remaining allocation is the 2.51M
+  genuinely distinct eager type-instantiation nodes. Investigate an explicit-substitution
+  representation that can defer recursive rewriting; the two memoization experiments in round
+  6 show that another result cache cannot collapse this work.

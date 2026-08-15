@@ -1158,10 +1158,10 @@ impl<'a> Tycker<'a> {
                         continue;
                     }
                 };
-                let Some(normalized) = self.statics.normalized_at(ty) else {
+                let Some(normalized) = self.statics.normalized_at(ty).cloned() else {
                     continue;
                 };
-                let _ = self.statics.term_norms.upsert(term, normalized.clone());
+                let _ = self.statics.term_norms.upsert(term, normalized);
             }
         }
         if self.errors.is_empty() {
