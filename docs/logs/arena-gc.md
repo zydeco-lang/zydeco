@@ -1224,3 +1224,65 @@ decisions while implementing the plan.
 - Check whether structurally identical imported package classifiers can share an immutable checked
   identity without violating the deliberate freshening of source import occurrences. This is a
   source/query ownership question, not a substitution-cache question.
+
+## 2026-08-15 — round 28: saturate type-application spines
+
+### Findings
+
+- The `Std Reader Writer OS` chain was only the visible tip of the type-application cost. Eagerly
+  substituting each argument built a complete partial result, then field lookup, analytic
+  preparation, and later applications copied those partial trees again. Removing the intermediate
+  trees therefore eliminated much more than the 56,080 nodes attributed directly to beta
+  reduction in round 25.
+- A type application whose result kind is still an arrow cannot yet be inspected as a value or
+  computation classifier. Its existing `Type::App` representation is already a complete typed
+  closure: it names the function, argument, and result kind without materializing the function
+  body. No new syntax variant or mutable side table is required.
+- The right normalization boundary is saturation. A final base-kinded application can collect its
+  complete left-associated spine, walk a direct nest of type abstractions, bind every argument, and
+  apply the ordered abstract assignments in one structural traversal. Neutral or non-direct heads
+  fall back to the previous stepwise behavior.
+- The finish pass must preserve this boundary. A temporary phase census found 53,096 type nodes
+  after judgments, 53,932 after hole resolution, and 53,969 after filled normalization. The finish
+  pass adds only 37 nodes, demonstrating that suspension does not defer the removed materialization
+  debt to the end of checking.
+
+### Changes
+
+- Checked type application now retains arrow-kinded prefixes as `Type::App` and materializes the
+  spine when its result kind ceases to be an arrow.
+- `TypeApplicationSpine` records every argument, result kind, and reusable original application
+  node. Direct abstraction nests compose their witness assignments through `subst_absts`; the
+  general fallback retains the former one-step semantics and reuses unchanged application nodes.
+- Ordinary explicit normalization still forces an application spine for structural consumers.
+  Filled normalization preserves higher-kinded prefixes, while least-upper-bound comparison forces
+  a suspended application only when the other representation is not an application. This retains
+  beta-equivalence without eagerly expanding equal compact spines.
+- Multi-argument normalization uses the same spine operation rather than reintroducing sequential
+  beta reduction through its convenience API.
+- Regressions prove that a checked function-kinded prefix remains an application through filled
+  normalization, a three-binder saturated application allocates only the two nodes in its result
+  product, and a partial application unifies with its explicit beta normal form.
+- The temporary spine and phase counters were removed after measurement.
+
+### Measurements
+
+- The full-std check retains 53,969 type nodes, 263,135 fewer than round 27 (-83.0%).
+- Three clean release checks used 290,373,632, 290,439,168, and 290,275,328 bytes peak RSS (median
+  290,373,632), down 57,016,320 bytes (-16.4%) from round 27. Warm wall time was 0.30s and warm user
+  time was 0.27s, down from 0.38–0.40s and 0.34–0.36s respectively.
+- The current-tree baseline is now down from 2,497,757,184 to 290,373,632 bytes (-88.4%).
+- All 53 statics tests and all 151 session tests passed, along with the release CLI build and full
+  standard-library check.
+
+### Next
+
+- Re-profile the 53,969-node arena from scratch. Every earlier percentage and ordering was measured
+  on a representation dominated by eager partial applications, so field lookup and common analytic
+  preparation need a new census before further changes.
+- Separate remaining typed-arena cost from process-wide retained memory. RSS now falls much less
+  than node count, so immutable source arenas, salsa query state, and non-type static tables are
+  likely the next important owners.
+- Reconsider sharing structurally identical imported classifiers only if the new ownership profile
+  still attributes meaningful memory to them; saturation may already have removed their amplified
+  copies.

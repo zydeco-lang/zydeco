@@ -5578,8 +5578,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 },
                             }
                         };
-                        // normalize the application
-                        let body_ty_norm = f_ty.normalize_app_k(tycker, a_ty, kd_out)?;
+                        // Preserve function-kinded prefixes and normalize once saturated.
+                        let body_ty_norm = f_ty.apply_type_argument_k(tycker, a_ty, kd_out)?;
                         TermAnnId::Type(body_ty_norm, kd_out)
                     }
                     | TermAnnId::Value(f_out, f_ty) => {
@@ -7713,6 +7713,15 @@ mod source_boundary_tests {
         );
     }
 
+    fn anonymous_type_binder(
+        tycker: &mut Tycker<'_>, kind: ss::KindId, environment: &TyEnv,
+    ) -> ss::TypeBinder {
+        let definition: ss::DefId = tycker.fresh();
+        let pattern: ss::TPatId = Alloc::alloc(tycker, definition, kind, environment);
+        let witness = Alloc::alloc(tycker, pattern, (), &());
+        ss::TypeBinder { pattern, witness }
+    }
+
     #[test]
     fn field_substitution_is_independent_of_label_depth() {
         with_empty_tycker(|tycker| {
@@ -7950,6 +7959,56 @@ mod source_boundary_tests {
                 assert!(tycker.errors.is_empty());
             },
         );
+    }
+
+    #[test]
+    fn checked_type_applications_suspend_function_kinded_prefixes() {
+        with_empty_tycker(|tycker| {
+            let environment = TyEnv::default();
+            let vtype = ss::VType.build(tycker, &environment);
+            let result_kind = Alloc::alloc(tycker, ss::Arrow(vtype, vtype), (), &());
+            let function_kind = Alloc::alloc(tycker, ss::Arrow(vtype, result_kind), (), &());
+            let first = anonymous_type_binder(tycker, vtype, &environment);
+            let second = anonymous_type_binder(tycker, vtype, &environment);
+            let first_type = Alloc::alloc(tycker, first.witness, vtype, &environment);
+            let second_type = Alloc::alloc(tycker, second.witness, vtype, &environment);
+            let body = Alloc::alloc(tycker, ss::Prod(first_type, second_type), vtype, &environment);
+            let inner = Alloc::alloc(
+                tycker,
+                ss::TypeAbstraction { binder: second, body },
+                result_kind,
+                &environment,
+            );
+            let function = Alloc::alloc(
+                tycker,
+                ss::TypeAbstraction { binder: first, body: inner },
+                function_kind,
+                &environment,
+            );
+            let first_argument = Alloc::alloc(tycker, ss::UnitTy, vtype, &environment);
+            let second_argument = Alloc::alloc(tycker, ss::OpaqueTy, vtype, &environment);
+
+            let partial =
+                function.apply_type_argument_k(tycker, first_argument, result_kind).unwrap();
+            assert!(matches!(
+                tycker.type_filled_k(&partial).unwrap(),
+                ss::Type::App(ss::App(found, argument))
+                    if found == function && argument == first_argument
+            ));
+
+            let mut normalizer = crate::normalize::FilledNormalizer::default();
+            normalizer.normalize_type_k(partial, tycker).unwrap();
+            assert!(matches!(tycker.statics.normalized_at(partial), Some(ss::Type::App(_))));
+
+            let saturated = partial.apply_type_argument_k(tycker, second_argument, vtype).unwrap();
+            let ss::Type::Prod(ss::Prod(found_first, found_second)) =
+                tycker.type_filled_k(&saturated).unwrap().to_owned()
+            else {
+                panic!("saturating the application should materialize its product body")
+            };
+            assert_eq!((found_first, found_second), (first_argument, second_argument));
+            assert!(tycker.errors.is_empty());
+        });
     }
 
     #[test]

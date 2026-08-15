@@ -127,6 +127,24 @@ impl Debruijn {
     fn lub_inner(self, lhs_id: TypeId, rhs_id: TypeId, tycker: &mut Tycker) -> Result<TypeId> {
         let lhs = tycker.statics.types_pre[&lhs_id].clone();
         let rhs = tycker.statics.types_pre[&rhs_id].clone();
+        let lhs_is_app = matches!(&lhs, Fillable::Done(Type::App(_)));
+        let rhs_is_app = matches!(&rhs, Fillable::Done(Type::App(_)));
+        let both_filled = matches!(&lhs, Fillable::Done(_)) && matches!(&rhs, Fillable::Done(_));
+        if both_filled && lhs_is_app != rhs_is_app {
+            let lhs_normalized = if lhs_is_app {
+                lhs_id.normalize(tycker, tycker.statics.annotations_type[&lhs_id])?
+            } else {
+                lhs_id
+            };
+            let rhs_normalized = if rhs_is_app {
+                rhs_id.normalize(tycker, tycker.statics.annotations_type[&rhs_id])?
+            } else {
+                rhs_id
+            };
+            if lhs_normalized != lhs_id || rhs_normalized != rhs_id {
+                return self.lub_inner(lhs_normalized, rhs_normalized, tycker);
+            }
+        }
         let env = tycker.statics.env_at(lhs_id);
         fn fill_ty(tycker: &mut Tycker, fill: FillId, ty: TypeId) -> Result<TypeId> {
             Ok(fill.fill(tycker, ty.into())?.as_type())

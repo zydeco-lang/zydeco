@@ -862,6 +862,121 @@ impl TypeId {
 
 /* ------------------------------ Normalization ----------------------------- */
 
+#[derive(Clone, Copy)]
+struct TypeApplicationStep {
+    argument: TypeId,
+    result_kind: KindId,
+    original: Option<TypeId>,
+}
+
+/// A left-associated type-application spine.
+///
+/// Higher-kinded intermediate applications stay as compact `Type::App` nodes while the checker
+/// receives more arguments. Once the result kind is saturated, this spine lets a direct chain of
+/// type abstractions compose all abstract assignments and rewrite the body once.
+struct TypeApplicationSpine {
+    function: TypeId,
+    steps: Vec<TypeApplicationStep>,
+}
+
+impl TypeApplicationSpine {
+    fn with_application(
+        tycker: &Tycker<'_>, mut function: TypeId, argument: TypeId, result_kind: KindId,
+    ) -> Self {
+        let mut reversed = vec![TypeApplicationStep { argument, result_kind, original: None }];
+        while let Fillable::Done(Type::App(App(parent, argument))) =
+            tycker.statics.types_pre[&function].to_owned()
+        {
+            reversed.push(TypeApplicationStep {
+                argument,
+                result_kind: tycker.statics.annotations_type[&function],
+                original: Some(function),
+            });
+            function = parent;
+        }
+        reversed.reverse();
+        Self { function, steps: reversed }
+    }
+
+    fn from_root(tycker: &Tycker<'_>, root: TypeId, app: App<TypeId, TypeId>) -> Self {
+        let App(function, argument) = app;
+        let mut spine = Self::with_application(
+            tycker,
+            function,
+            argument,
+            tycker.statics.annotations_type[&root],
+        );
+        spine.steps.last_mut().expect("an application spine is non-empty").original = Some(root);
+        spine
+    }
+
+    fn normalize_components(self, tycker: &mut Tycker<'_>) -> Result<Self> {
+        let function_kind = tycker.statics.annotations_type[&self.function];
+        let function = self.function.normalize(tycker, function_kind)?;
+        let steps = self
+            .steps
+            .into_iter()
+            .map(|step| {
+                let argument_kind = tycker.statics.annotations_type[&step.argument];
+                let argument = step.argument.normalize(tycker, argument_kind)?;
+                Ok(TypeApplicationStep { argument, ..step })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Self { function, steps })
+    }
+
+    fn materialize(self, tycker: &mut Tycker<'_>) -> Result<TypeId> {
+        if let Some(fused) = self.fuse_nested_abstractions(tycker)? {
+            return Ok(fused);
+        }
+
+        self.steps.into_iter().try_fold(self.function, |function, step| {
+            let env = tycker.statics.env_at(function);
+            match tycker.statics.types_pre[&function].to_owned() {
+                | Fillable::Done(Type::Abs(TypeAbstraction { binder, body })) => {
+                    let argument = binder.pattern.bind_argument(tycker, step.argument)?;
+                    body.subst_abst(tycker, (binder.witness, argument))
+                }
+                | Fillable::Fill(_) => Ok(function),
+                | Fillable::Done(_) => {
+                    if let Some(original) = step.original
+                        && matches!(
+                            tycker.statics.types_pre[&original],
+                            Fillable::Done(Type::App(App(found_function, found_argument)))
+                                if found_function == function && found_argument == step.argument
+                        )
+                    {
+                        Ok(original)
+                    } else {
+                        Ok(Alloc::alloc(
+                            tycker,
+                            App(function, step.argument),
+                            step.result_kind,
+                            &env,
+                        ))
+                    }
+                }
+            }
+        })
+    }
+
+    fn fuse_nested_abstractions(&self, tycker: &mut Tycker<'_>) -> Result<Option<TypeId>> {
+        let mut body = self.function;
+        let mut assignments = Vec::with_capacity(self.steps.len());
+        for step in &self.steps {
+            let Fillable::Done(Type::Abs(TypeAbstraction { binder, body: next })) =
+                tycker.statics.types_pre[&body].to_owned()
+            else {
+                return Ok(None);
+            };
+            let argument = binder.pattern.bind_argument(tycker, step.argument)?;
+            assignments.push((binder.witness, argument));
+            body = next;
+        }
+        Ok(Some(body.subst_absts(tycker, &assignments)?))
+    }
+}
+
 impl TypeId {
     pub fn normalize_k(self, tycker: &mut Tycker<'_>, kd: KindId) -> ResultKont<TypeId> {
         let res = self.normalize(tycker, kd);
@@ -871,23 +986,9 @@ impl TypeId {
         let res = match tycker.statics.types_pre[&self].to_owned() {
             | Fillable::Fill(_) => self,
             | Fillable::Done(ty) => match ty {
-                | Type::App(app) => {
-                    let App(ty1, ty2) = app;
-                    let kd2 = tycker.statics.annotations_type[&ty2];
-                    let ty2 = ty2.normalize(tycker, kd2)?;
-                    ty1.normalize_app(tycker, ty2, kd)?
-                }
-                // | Type::App(app) => {
-                //     let App(ty1, ty2) = app;
-                //     let kd2 = tycker.statics.annotations_type[&ty2];
-                //     let ty2 = ty2.normalize(tycker, kd2)?;
-                //     ty1.normalize_app(tycker, ty2, kd)?
-                // }
-                // weak head normalization (?)
-                // | Type::App(app) => {
-                //     let App(ty1, ty2) = app;
-                //     ty1.normalize_app_k(tycker, ty2, kd)?
-                // }
+                | Type::App(app) => TypeApplicationSpine::from_root(tycker, self, app)
+                    .normalize_components(tycker)?
+                    .materialize(tycker)?,
                 | Type::Var(_)
                 | Type::Abst(_)
                 | Type::Abs(_)
@@ -936,23 +1037,25 @@ impl TypeId {
     pub fn normalize_app(
         self, tycker: &mut Tycker<'_>, a_ty: TypeId, kd: KindId,
     ) -> Result<TypeId> {
-        let env = tycker.statics.env_at(self);
-        let res = match tycker.statics.types_pre[&self].to_owned() {
-            | Fillable::Fill(_) => self,
-            | Fillable::Done(ty) => match ty {
-                | Type::Abs(abs) => {
-                    // if f_ty is an abstraction, apply it
-                    let TypeAbstraction { binder, body } = abs;
-                    let argument = binder.pattern.bind_argument(tycker, a_ty)?;
-                    body.subst_abst(tycker, (binder.witness, argument))?
-                }
-                | _ => {
-                    // else, the app is already normalized
-                    Alloc::alloc(tycker, App(self, a_ty), kd, &env)
-                }
-            },
-        };
-        Ok(res)
+        TypeApplicationSpine::with_application(tycker, self, a_ty, kd)
+            .normalize_components(tycker)?
+            .materialize(tycker)
+    }
+
+    /// Apply one checked type argument, retaining an application while its result is still a type
+    /// function. A saturated result materializes the complete left-associated spine at once.
+    pub(crate) fn apply_type_argument_k(
+        self, tycker: &mut Tycker<'_>, argument: TypeId, result_kind: KindId,
+    ) -> ResultKont<TypeId> {
+        let result = (|| {
+            if matches!(tycker.kind_filled(&result_kind)?, Kind::Arrow(_)) {
+                let env = tycker.statics.env_at(self);
+                Ok(Alloc::alloc(tycker, App(self, argument), result_kind, &env))
+            } else {
+                self.normalize_app(tycker, argument, result_kind)
+            }
+        })();
+        tycker.err_p_to_k(result)
     }
     pub fn normalize_apps_k(
         self, tycker: &mut Tycker<'_>, a_tys: Vec<TypeId>,
@@ -961,19 +1064,25 @@ impl TypeId {
         tycker.err_p_to_k(res)
     }
     pub fn normalize_apps(self, tycker: &mut Tycker<'_>, a_tys: Vec<TypeId>) -> Result<TypeId> {
-        let res = a_tys.into_iter().try_fold(self, |f_ty, a_ty| {
-            let abs_kd = tycker.statics.annotations_type[&f_ty];
-            let kd = match tycker.kind_filled(&abs_kd)?.to_owned() {
-                | Kind::Arrow(Arrow(arg_kd, body_kd)) => {
-                    let arg_kd_ = tycker.statics.annotations_type[&a_ty];
-                    Lub::lub(arg_kd_, arg_kd, tycker)?;
-                    body_kd
-                }
-                | _ => tycker.err(TyckError::KindMismatch, std::panic::Location::caller())?,
-            };
-            f_ty.normalize_app(tycker, a_ty, kd)
-        })?;
-        Ok(res)
+        let function_kind = tycker.statics.annotations_type[&self];
+        let (_, steps) = a_tys.into_iter().try_fold(
+            (function_kind, Vec::new()),
+            |(function_kind, mut steps), argument| -> Result<_> {
+                let result_kind = match tycker.kind_filled(&function_kind)?.to_owned() {
+                    | Kind::Arrow(Arrow(arg_kd, body_kd)) => {
+                        let arg_kd_ = tycker.statics.annotations_type[&argument];
+                        Lub::lub(arg_kd_, arg_kd, tycker)?;
+                        body_kd
+                    }
+                    | _ => tycker.err(TyckError::KindMismatch, std::panic::Location::caller())?,
+                };
+                steps.push(TypeApplicationStep { argument, result_kind, original: None });
+                Ok((result_kind, steps))
+            },
+        )?;
+        TypeApplicationSpine { function: self, steps }
+            .normalize_components(tycker)?
+            .materialize(tycker)
     }
 }
 
@@ -1825,23 +1934,29 @@ impl TypeId {
                     let App(f_ty, a_ty) = app;
                     let f_norm = f_ty.filled_norm_id(tycker, norm)?;
                     let a_norm = a_ty.filled_norm_id(tycker, norm)?;
-                    match tycker.statics.types_pre[&f_norm].to_owned() {
-                        | Fillable::Done(Type::Abs(abs)) => {
-                            let TypeAbstraction { binder, body } = abs;
-                            let argument = binder.pattern.bind_argument(tycker, a_norm)?;
-                            let body_subst = body.subst_abst(tycker, (binder.witness, argument))?;
-                            if body_subst == self {
-                                self
-                            } else {
-                                body_subst.filled_norm_id(tycker, norm)?
-                            }
+                    // Arrow-kinded applications are the compact normal form used between
+                    // successive arguments. Structural consumers force them through `normalize`.
+                    if matches!(tycker.kind_filled(&kd_norm)?, Kind::Arrow(_)) {
+                        if f_norm == f_ty && a_norm == a_ty && kd_norm == kd {
+                            self
+                        } else {
+                            Alloc::alloc(tycker, App(f_norm, a_norm), kd_norm, &env)
                         }
-                        | _ => {
-                            if f_norm == f_ty && a_norm == a_ty && kd_norm == kd {
-                                self
-                            } else {
-                                Alloc::alloc(tycker, App(f_norm, a_norm), kd_norm, &env)
-                            }
+                    } else {
+                        let mut spine =
+                            TypeApplicationSpine::with_application(tycker, f_norm, a_norm, kd_norm);
+                        if f_norm == f_ty && a_norm == a_ty && kd_norm == kd {
+                            spine
+                                .steps
+                                .last_mut()
+                                .expect("an application spine is non-empty")
+                                .original = Some(self);
+                        }
+                        let materialized = spine.materialize(tycker)?;
+                        if materialized == self {
+                            self
+                        } else {
+                            materialized.filled_norm_id(tycker, norm)?
                         }
                     }
                 }
