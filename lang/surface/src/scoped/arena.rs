@@ -180,7 +180,7 @@ pub struct ScopedArena {
     /// def user map
     pub users: ArenaForth<DefId, TermId>,
     /// variables that are free within the term
-    pub coctxs_term_local: ArenaAssoc<TermId, CoContext>,
+    pub coctxs_term_local: ArenaPagedAssoc<TermId, CoContext>,
     /// Context DAGs retained for nested `begin` terms.
     pub blocks: ArenaAssoc<TermId, ContextualTerm<BindingContext, BlockBody>>,
 }

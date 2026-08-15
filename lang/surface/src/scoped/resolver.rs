@@ -116,7 +116,7 @@ impl<'a> Resolver<'a> {
         let BitterArena { defs: _, pats: _, terms: _, textual } = bitter;
         let ctxs_pat_local = ArenaAssoc::default();
         let coctxs_pat_local = ArenaAssoc::default();
-        let coctxs_term_local = ArenaAssoc::default();
+        let coctxs_term_local = ArenaPagedAssoc::default();
         let collector = Collector {
             defs,
             pats,
@@ -486,7 +486,7 @@ pub struct Collector {
     pub users: ArenaForth<DefId, TermId>,
     pub ctxs_pat_local: ArenaAssoc<PatId, Context>,
     pub coctxs_pat_local: ArenaAssoc<PatId, CoContext>,
-    pub coctxs_term_local: ArenaAssoc<TermId, CoContext>,
+    pub coctxs_term_local: ArenaPagedAssoc<TermId, CoContext>,
 
     pub blocks: ArenaAssoc<TermId, ContextualTerm<BindingContext, BlockBody>>,
 }

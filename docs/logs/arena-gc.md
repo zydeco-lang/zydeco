@@ -1766,3 +1766,44 @@ decisions while implementing the plan.
   transient collector and term summaries.
 - Compare the next producer-query family against durable provenance by measured retained bytes; the
   earlier snapshot predates both type-node compaction and removal of the two pattern maps.
+
+## 2026-08-15 — round 39: page term free-variable contexts
+
+### Findings
+
+- The remaining term free-variable relation has 64,954 entries but only two identifier key spaces.
+  Paging through each term's raw ID requires 96,052 slots, for 67.6% occupancy. That density is high
+  enough for direct indexing to beat a hash bucket containing both a 16-byte `TermId` and a 24-byte
+  context vector header.
+- The empty slots do not allocate context payload vectors. Their option discriminants live inline in
+  the page, while the 72,733 stored definition IDs keep exactly the same sorted-vector
+  representation as before.
+- The relation remains logically temporary. Paging reduces its overlap cost immediately without
+  constraining the planned ownership change that will eventually drop it after source judgments.
+
+### Changes
+
+- Replaced the `ArenaAssoc<TermId, CoContext>` in the resolver collector and `ScopedArena` with
+  `ArenaPagedAssoc<TermId, CoContext>`.
+- Kept all insertions and reads behind the existing typed arena API. No checker or session behavior
+  changed, and the representation remains cloneable for revision-owned scoped data.
+
+### Measurements
+
+- Three release checks used 174,211,072, 173,981,696, and 177,537,024 bytes peak RSS (median
+  174,211,072), down 2,129,920 bytes (-1.2%) from round 38. The third sample was an allocator-page
+  outlier; the first two agree within 230KB.
+- The current-tree baseline is now down from 2,497,757,184 to 174,211,072 bytes (-93.0%). Warm wall
+  time was 0.24s and warm user time was 0.22s.
+- All 140 surface tests, all 56 statics tests, and all 151 session tests passed, along with the
+  release CLI build and full standard-library check.
+
+### Next
+
+- Give term contexts an explicit checker-local owner and drop them after `run_judgments_k`, before
+  hole resolution, normalization, validation, and construction of the durable analysis.
+- Preserve one postorder context computation per resolved snapshot without storing the result in
+  Salsa's `ScopedData`; recomputing it inside the whole-source check is preferable if the table then
+  follows the check memo's `lru = 1` lifetime instead of every resolved snapshot's lifetime.
+- Re-run the heap census after that phase split, because a smaller retained source baseline may move
+  the peak to an earlier point in term checking.
