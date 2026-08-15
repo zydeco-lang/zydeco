@@ -1204,7 +1204,7 @@ impl ExistentialProjectionPattern {
                         | ss::StaticPatId::Kind(pattern) => ss::PatId::Kind(pattern),
                         | ss::StaticPatId::Type(pattern) => ss::PatId::Type(pattern),
                     };
-                    tycker.statics.pats.ensure(source, selected);
+                    tycker.statics.pats.record(source, selected);
                 }
                 | ([], [candidate]) => {
                     let candidate = candidate.clone().materialize_k(tycker)?;
@@ -1233,7 +1233,7 @@ impl ExistentialProjectionPattern {
                         candidate.clone(),
                         payload_pattern,
                     );
-                    tycker.statics.pats.ensure(source, pattern.into());
+                    tycker.statics.pats.record(source, pattern.into());
                     body_patterns.push(pattern);
                 }
                 | _ => tycker.err_k(
@@ -3696,7 +3696,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
         };
 
         // maintain back mapping
-        tycker.statics.pats.ensure(self.inner, elaboration.annotation.as_pat());
+        tycker.statics.pats.record(self.inner, elaboration.annotation.as_pat());
 
         Ok(elaboration)
     }
@@ -7636,7 +7636,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
 
         if let Some(out) = out_ann.as_term() {
             // maintain back mapping
-            tycker.statics.terms.ensure(self.inner, out);
+            tycker.statics.terms.record(self.inner, out);
             // record the final annotation for editor facts; fixpoint re-checks
             // overwrite the earlier occurrence's entry
             tycker.statics.record_term_annotation(self.inner, out_ann);

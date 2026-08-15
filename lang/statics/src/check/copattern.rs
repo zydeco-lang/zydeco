@@ -480,6 +480,6 @@ impl CopatternElaborator {
     }
 
     fn record(&self, tycker: &mut Tycker<'_>, computation: ss::CompuId) {
-        tycker.statics.terms.ensure(self.source, computation.into());
+        tycker.statics.terms.record(self.source, computation.into());
     }
 }

@@ -314,6 +314,36 @@ impl ArenaAccess<&TypeId, Fillable<Type>> for TypeArena {
     }
 }
 
+/// One source occurrence representative for each typed node.
+///
+/// Diagnostics and source-span queries only need one source location. Rechecks
+/// replace the representative, and transparent source wrappers that share a
+/// typed node collapse to the most recently checked wrapper.
+#[derive(Clone, Debug)]
+pub struct SourceProvenance<Source, Typed> {
+    latest_by_typed: ArenaAssoc<Typed, Source>,
+}
+
+impl<Source, Typed> Default for SourceProvenance<Source, Typed> {
+    fn default() -> Self {
+        Self { latest_by_typed: ArenaAssoc::default() }
+    }
+}
+
+impl<Source, Typed> SourceProvenance<Source, Typed>
+where
+    Source: Copy,
+    Typed: Eq + std::hash::Hash,
+{
+    pub fn record(&mut self, source: Source, typed: Typed) {
+        let _ = self.latest_by_typed.upsert(typed, source);
+    }
+
+    pub fn source(&self, typed: &Typed) -> Option<Source> {
+        self.latest_by_typed.get(typed).copied()
+    }
+}
+
 /// Source-bounded static facts retained after the typed occurrence tree is
 /// discarded.
 ///
@@ -322,12 +352,14 @@ impl ArenaAccess<&TypeId, Fillable<Type>> for TypeArena {
 /// view share one immutable allocation.
 #[derive(Clone, Debug, Default)]
 pub struct StaticsIndexes {
-    /// Untyped-to-typed pattern provenance. A surface pattern can be checked
-    /// more than once, while transparent wrappers can share a typed pattern.
-    pub pats: ArenaBipartite<su::PatId, PatId>,
-    /// Untyped-to-typed term provenance. A surface term can be checked more
-    /// than once, while erased constructs can share a typed term.
-    pub terms: ArenaBipartite<su::TermId, TermId>,
+    /// Representative source pattern for each typed pattern. Rechecking
+    /// replaces the representative, while transparent wrappers collapse to
+    /// the last wrapper checked.
+    pub pats: SourceProvenance<su::PatId, PatId>,
+    /// Representative source term for each typed term. Rechecking replaces the
+    /// representative, while erased constructs collapse to the last source
+    /// term checked.
+    pub terms: SourceProvenance<su::TermId, TermId>,
     /// Final annotation for each checked source term.
     pub term_facts: TermFactsArena,
     /// Normalized classifier for each distinct top annotation type. Inner type
@@ -596,6 +628,28 @@ mod tests {
 
         assert!(Arc::ptr_eq(&materialized.indexes, &retained.indexes));
         assert_eq!(retained.types_pre.len(), 0);
+    }
+
+    #[test]
+    fn source_provenance_retains_the_latest_representative() {
+        let mut source = IdAllocator::<su::BitterScope>::new();
+        let first_source: su::PatId = source.alloc();
+        let second_source: su::PatId = source.alloc();
+        let mut typed = IdAllocator::<StaticsScope>::new();
+        let first_typed = PatId::Kind(typed.alloc());
+        let second_typed = PatId::Value(typed.alloc());
+        let mut provenance = SourceProvenance::default();
+
+        provenance.record(first_source, first_typed);
+        provenance.record(first_source, first_typed);
+        provenance.record(second_source, first_typed);
+        provenance.record(first_source, second_typed);
+
+        assert_eq!(provenance.source(&first_typed), Some(second_source));
+        assert_eq!(provenance.source(&second_typed), Some(first_source));
+
+        provenance.record(first_source, first_typed);
+        assert_eq!(provenance.source(&first_typed), Some(first_source));
     }
 
     #[test]

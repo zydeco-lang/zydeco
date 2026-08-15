@@ -2068,3 +2068,66 @@ decisions while implementing the plan.
   densely while keeping whichever endpoint is actually sparse behind a compact index.
 - Revisit other textual per-entity tables only when their occupancy and lifetime justify doing so.
   The shared allocator does not imply that optional intentions or trivia are dense.
+
+## 2026-08-15 — round 45: retain one source provenance representative
+
+### Findings
+
+- A fresh malloc-stack census after round 44 measured 100.9MB of live malloc-owned storage. The
+  assembled span payload had fallen to 3,948,544 bytes, confirming that the former wide span hashes
+  were gone. The largest remaining concrete allocations included 10,633,216 bytes for one static
+  pattern-provenance direction, 7,487,488 and 6,438,912 bytes for the two textual-to-bitter
+  provenance directions, 6,144,000 bytes for scoped term slots, 5,324,800 bytes for one static
+  term-provenance direction, and 3,751,936 bytes for pre-normalization kind storage. Malloc stack
+  logging inflated total process footprint to 210.1MB, so allocation ownership rather than that
+  instrumented footprint was used for attribution.
+- Static pattern provenance contained 27,151 edges between 27,137 source and 14,632 typed IDs. Only
+  14 source IDs mapped to multiple typed IDs, while 12,519 typed IDs had multiple source IDs; both
+  directions had maximum multiplicity two. Static term provenance contained 63,575 edges between
+  63,574 source and 29,270 typed IDs. Only one source mapped to two typed IDs, but 4,576 typed IDs
+  had multiple sources and one transparent typed term represented 8,831 source wrappers.
+- No repository consumer queried the source-to-typed direction. Every durable typed-to-source
+  consumer immediately selected `.last()` for a diagnostic or source span. Retaining both relation
+  directions, every distinct edge, and idempotence indexes therefore encoded information no caller
+  could observe.
+- Three progressively narrower relation designs separated the relevant costs. A full transient edge
+  set made insertion constant-time but raised median peak RSS to 155,107,328 bytes because its peak
+  overlapped checking. Scanning reverse groups removed that set and reached a 152,141,824-byte median
+  over samples of 153,092,096, 152,027,136, 152,436,736, 152,141,824, and 152,109,056 bytes, but warm
+  user time rose to 0.19--0.20s because the 8,831-source group was scanned repeatedly. Side indexes
+  only for groups of at least 16 sources restored runtime but retained a 153,616,384-byte median over
+  samples of 153,796,608, 153,616,384, 153,714,688, 153,518,080, and 153,600,000 bytes. The consumer
+  contract made all three full-edge variants unnecessarily general.
+
+### Changes
+
+- Replaced both static bidirectional provenance relations with `SourceProvenance`, a typed-keyed map
+  containing one source ID per typed node. Recording a later check replaces the representative;
+  transparent wrappers naturally collapse to the last wrapper checked.
+- Changed diagnostics and typed source-span lookup to request that representative directly. Removed
+  the construction-only duplicate indexes and finish step because the stored representation is now
+  exactly the lasting query result.
+- Added a regression that fixes replacement and independent typed-node behavior without preserving
+  unobservable edge order or multiplicity.
+
+### Measurements
+
+- Five release checks used 150,470,656, 150,847,488, 150,798,336, 150,306,816, and 150,470,656 bytes
+  peak RSS (median 150,470,656), down 4,145,152 bytes (-2.7%) from round 44. Every warm run took 0.20s
+  wall time and 0.18s user time.
+- The current-tree baseline is now down from 2,497,757,184 to 150,470,656 bytes (-94.0%).
+- All 27 utility tests and their doctests, all 143 surface tests, all 25 statics unit tests and 33
+  statics integration tests, all 151 session tests, all CLI tests, all 31 Cajun unit tests, and all 9
+  Cajun stdio tests passed. Focused Clippy passed with the repository's existing unrelated lint
+  allowances. The release CLI build and standard-library check also passed.
+
+### Next
+
+- Re-measure the heap after removing static provenance multiplicity. The two textual-to-bitter
+  provenance directions are now the clearest relation target; audit their direction-specific query
+  use before changing their representation.
+- Determine why 3,227,648 bytes attributed to `env_type` remained live at the measurement pause even
+  though checker-state stripping resets that arena. Distinguish a mislabeled stack from ownership in
+  an earlier Salsa generation before changing its representation.
+- Revisit the remaining source hashes and pre-normalization kind storage only from the refreshed peak;
+  their individual allocations are now close enough that lifetimes may matter more than raw size.

@@ -98,11 +98,11 @@ pub struct TyckErrorEntry {
 
 impl<'a> Tycker<'a> {
     fn statics_term_ariadne_span(&self, term: TermId) -> Option<(PathDisplay, Range<usize>)> {
-        self.statics.terms.back(&term).last().map(|term| term.span(self).to_ariadne_span())
+        self.statics.terms.source(&term).map(|term| term.span(self).to_ariadne_span())
     }
 
     fn statics_pat_ariadne_span(&self, pat: PatId) -> Option<(PathDisplay, Range<usize>)> {
-        self.statics.pats.back(&pat).last().map(|pat| pat.span(self).to_ariadne_span())
+        self.statics.pats.source(&pat).map(|pat| pat.span(self).to_ariadne_span())
     }
 
     fn type_ariadne_span(&self, ty: &TypeId) -> Option<(PathDisplay, Range<usize>)> {

@@ -16,14 +16,14 @@ impl<'a> SpanView<'a, Tycker<'a>> for su::PatId {
 
 impl<'a> SpanView<'a, Tycker<'a>> for TPatId {
     fn span(&self, tycker: &'a Tycker) -> &'a Span {
-        let pat = tycker.statics.pats.back(&(*self).into()).last().unwrap();
+        let pat = tycker.statics.pats.source(&(*self).into()).unwrap();
         pat.span(tycker)
     }
 }
 
 impl<'a> SpanView<'a, Tycker<'a>> for VPatId {
     fn span(&self, tycker: &'a Tycker) -> &'a Span {
-        let pat = tycker.statics.pats.back(&(*self).into()).last().unwrap();
+        let pat = tycker.statics.pats.source(&(*self).into()).unwrap();
         pat.span(tycker)
     }
 }
@@ -36,28 +36,28 @@ impl<'a> SpanView<'a, Tycker<'a>> for su::TermId {
 
 impl<'a> SpanView<'a, Tycker<'a>> for KindId {
     fn span(&self, tycker: &'a Tycker) -> &'a Span {
-        let term = tycker.statics.terms.back(&(*self).into()).last().unwrap();
+        let term = tycker.statics.terms.source(&(*self).into()).unwrap();
         term.span(tycker)
     }
 }
 
 impl<'a> SpanView<'a, Tycker<'a>> for TypeId {
     fn span(&self, tycker: &'a Tycker) -> &'a Span {
-        let term = tycker.statics.terms.back(&(*self).into()).last().unwrap();
+        let term = tycker.statics.terms.source(&(*self).into()).unwrap();
         term.span(tycker)
     }
 }
 
 impl<'a> SpanView<'a, Tycker<'a>> for ValueId {
     fn span(&self, tycker: &'a Tycker) -> &'a Span {
-        let term = tycker.statics.terms.back(&(*self).into()).last().unwrap();
+        let term = tycker.statics.terms.source(&(*self).into()).unwrap();
         term.span(tycker)
     }
 }
 
 impl<'a> SpanView<'a, Tycker<'a>> for CompuId {
     fn span(&self, tycker: &'a Tycker) -> &'a Span {
-        let term = tycker.statics.terms.back(&(*self).into()).last().unwrap();
+        let term = tycker.statics.terms.source(&(*self).into()).unwrap();
         term.span(tycker)
     }
 }
