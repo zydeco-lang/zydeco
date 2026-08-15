@@ -450,3 +450,46 @@ decisions while implementing the plan.
   remaining arena is live data rather than allocator noise. Continue with substitution-call
   attribution, then prototype a compact suspended substitution only at the high-amplification
   boundary rather than adding a lazy case to every type operation speculatively.
+
+## 2026-08-15 — round 13: attribute eager substitution by caller
+
+### Findings
+
+- A temporary call-site profiler counted 2,503,991 ordinary `TypeId` allocations during the
+  full-std check; the final 2,508,856 total includes another 4,865 query-produced insertions.
+  This closes the accounting gap: the remaining node count is created during checking, not by
+  post-check normalization, arena cloning, or retained analysis.
+- `FieldProjectionResolver::product_components_k` attributed 798,317 allocations to 8,075 root
+  substitutions, while `value_candidates_k` attributed 413,066 to 16,441 roots. Together these
+  two structural field-search loops create 1,211,383 nodes, 48.4% of ordinary type allocation.
+- Analytic term annotations contributed 361,349 nodes. Existential projection opening
+  contributed 210,694 environment-substitution nodes plus 165,861 abstract-substitution nodes;
+  the analogous tuple/package traversal contributed another 121,600 plus 116,581.
+- The largest individual substitutions created roughly 4,000–5,000 nodes. In the existential
+  loop, one iteration recursively substitutes the complete remaining package body, opens one
+  binder, recursively substitutes that binder's witness through the same remainder, and then
+  repeats on the tail. Field search similarly substitutes a whole product before recursing into
+  its already-rebuilt components. A source-linear telescope therefore materializes a quadratic
+  sequence of distinct intermediate trees.
+- Simply skipping the repeated calls is unsound. Environment substitution is intentionally not
+  idempotent: replacing a variable returns the mapped type without recursively applying the
+  same environment to that replacement, and each opened existential extends the pending
+  abstract assignment. The next traversal step can therefore expose real additional work.
+
+### Decision
+
+- The first lazy prototype should be a local substitution closure for structural package and
+  field traversal, not a new suspended variant in the global `Type` enum. The closure will carry
+  a root `TypeId`, its environment, and pending abstract assignments; revealing the outer shape
+  should force only variables, applications, projections, and sealed heads. Children retain the
+  closure, and only a selected field or final result is materialized.
+- This boundary directly covers the measured quadratic callers while leaving unification,
+  normalization, formatting, linking, and every ordinary type match unchanged. If the local
+  closure proves the node reduction and its invariants, the same representation can later move
+  into the arena as an explicit-substitution node.
+
+### Next
+
+- Specify the closure's shadowing, chained-variable, abstract-witness, and hole behavior with
+  focused tests. Then migrate one field-projection traversal and re-run the allocation census
+  before widening the mechanism to existential and PackPi traversal.
