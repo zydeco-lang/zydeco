@@ -2471,6 +2471,7 @@ fn finish_checked<'db>(
     match resolved.root(db) {
         | None => {
             let reports = tycker.error_reports();
+            tycker.strip_checker_state();
             SourceCheckOutcome::Rejected(RejectedSource {
                 statics: tycker.statics,
                 reports,
@@ -2478,13 +2479,17 @@ fn finish_checked<'db>(
             })
         }
         | Some(root) => match tycker.normalize_and_validate_k() {
-            | Ok(()) => SourceCheckOutcome::Checked(CheckedSource {
-                statics: tycker.statics,
-                root: *root,
-                observations: tycker.observations,
-            }),
+            | Ok(()) => {
+                tycker.strip_checker_state();
+                SourceCheckOutcome::Checked(CheckedSource {
+                    statics: tycker.statics,
+                    root: *root,
+                    observations: tycker.observations,
+                })
+            }
             | Err(KontFailure) => {
                 let reports = tycker.error_reports();
+                tycker.strip_checker_state();
                 SourceCheckOutcome::Rejected(RejectedSource {
                     statics: tycker.statics,
                     reports,

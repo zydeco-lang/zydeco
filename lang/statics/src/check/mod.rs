@@ -1116,13 +1116,17 @@ impl<'a> Tycker<'a> {
         // judgment so every `Construct::build` cache read hits.
         InternalTerm::fill_intrinsics(&mut self);
         match self.run_source_k(root) {
-            | Ok(root) => SourceCheckOutcome::Checked(CheckedSource {
-                statics: self.statics,
-                root,
-                observations: self.observations,
-            }),
+            | Ok(root) => {
+                self.strip_checker_state();
+                SourceCheckOutcome::Checked(CheckedSource {
+                    statics: self.statics,
+                    root,
+                    observations: self.observations,
+                })
+            }
             | Err(KontFailure) => {
                 let reports = self.error_reports();
+                self.strip_checker_state();
                 SourceCheckOutcome::Rejected(RejectedSource {
                     statics: self.statics,
                     reports,
@@ -1179,6 +1183,22 @@ impl<'a> Tycker<'a> {
             Err(KontFailure)?
         }
         Ok(())
+    }
+
+    /// Drop the checker-internal typing environments from the finished arena.
+    ///
+    /// Environments are consumed entirely by the checking phases: judgment
+    /// synthesis, hole resolution, and normalization. No downstream pass and no
+    /// editor query reads them, but they are the largest retained structure in a
+    /// standard-library-sized arena, so they are stripped before the outcome
+    /// leaves the checker.
+    pub(crate) fn strip_checker_state(&mut self) {
+        self.statics.env_kpat = Default::default();
+        self.statics.env_tpat = Default::default();
+        self.statics.env_type = Default::default();
+        self.statics.env_vpat = Default::default();
+        self.statics.env_value = Default::default();
+        self.statics.env_compu = Default::default();
     }
 
     pub(crate) fn error_reports(&self) -> TyckReports {

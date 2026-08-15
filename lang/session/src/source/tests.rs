@@ -1667,6 +1667,20 @@ fn authored_intrinsic_splices_are_each_introduced_once_in_the_builtin_tree() {
 }
 
 #[test]
+fn checked_arenas_drop_the_checkers_typing_environments() {
+    let checked = TestPipeline::check(repository_source("tests/exec/choice.zy")).unwrap();
+
+    // Environments are checker-internal: the checked arena retains the typed
+    // facts but none of the per-node typing environments.
+    assert_eq!(checked.statics.env_kpat.len(), 0);
+    assert_eq!(checked.statics.env_tpat.len(), 0);
+    assert_eq!(checked.statics.env_type.len(), 0);
+    assert_eq!(checked.statics.env_vpat.len(), 0);
+    assert_eq!(checked.statics.env_value.len(), 0);
+    assert_eq!(checked.statics.env_compu.len(), 0);
+}
+
+#[test]
 fn canonical_builtin_signature_keeps_only_system_capabilities_abstract() {
     use zydeco_statics::syntax::{ExistsMode, Fillable, Kind, ManifestKind, TermAnnId, Type};
     use zydeco_syntax::{BuiltinRole, BuiltinTypeRole};
