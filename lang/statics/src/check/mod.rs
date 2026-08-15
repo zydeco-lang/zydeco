@@ -221,7 +221,7 @@ enum ValueFieldStep {
 #[derive(Clone)]
 enum DeferredValueFieldStep {
     Named { name: FieldName, whole: DeferredEnvType },
-    Product { product: DeferredEnvType, components: Vec<DeferredEnvType>, position: usize },
+    Product { product: DeferredEnvType, position: usize },
 }
 
 /// A type together with the environment operation still owed by structural field lookup.
@@ -341,25 +341,69 @@ impl DeferredEnvTypeView {
 
 impl DeferredValueFieldCandidate {
     fn materialize_k(self, tycker: &mut Tycker<'_>) -> ResultKont<ValueFieldCandidate> {
-        let projected = self.projected.materialize_k(tycker)?;
+        let mut current = None;
         let route = self
             .route
             .into_iter()
             .map(|step| match step {
                 | DeferredValueFieldStep::Named { name, whole } => {
-                    Ok(ValueFieldStep::Named { name, whole: whole.materialize_k(tycker)? })
+                    let materialized = match current {
+                        | Some(candidate)
+                            if matches!(
+                                tycker.type_filled_k(&candidate)?,
+                                ss::Type::Label(ss::Label(found, _)) if found == name
+                            ) =>
+                        {
+                            candidate
+                        }
+                        | _ => whole.materialize_k(tycker)?,
+                    };
+                    let ss::Type::Label(ss::Label(_, projected)) =
+                        tycker.type_filled_k(&materialized)?.to_owned()
+                    else {
+                        unreachable!("a named field route retains its label shape")
+                    };
+                    current = Some(projected);
+                    Ok(ValueFieldStep::Named { name, whole: materialized })
                 }
-                | DeferredValueFieldStep::Product { product, components, position } => {
-                    let product = product.materialize_k(tycker)?;
-                    let components = components
-                        .into_iter()
-                        .map(|component| component.materialize_k(tycker))
-                        .collect::<ResultKont<Vec<_>>>()?;
-                    Ok(ValueFieldStep::Product { product, components, position })
+                | DeferredValueFieldStep::Product { product, position } => {
+                    let materialized = match current {
+                        | Some(candidate)
+                            if matches!(tycker.type_filled_k(&candidate)?, ss::Type::Prod(_)) =>
+                        {
+                            candidate
+                        }
+                        | _ => product.materialize_k(tycker)?,
+                    };
+                    let components = Self::materialized_product_components_k(tycker, materialized)?;
+                    current = Some(components[position]);
+                    Ok(ValueFieldStep::Product { product: materialized, components, position })
                 }
             })
             .collect::<ResultKont<Vec<_>>>()?;
+        let projected = match current {
+            | Some(projected) => projected,
+            | None => self.projected.materialize_k(tycker)?,
+        };
         Ok(ValueFieldCandidate { route, projected })
+    }
+
+    fn materialized_product_components_k(
+        tycker: &mut Tycker<'_>, product: ss::TypeId,
+    ) -> ResultKont<Vec<ss::TypeId>> {
+        let mut next = Some(product);
+        std::iter::from_fn(|| {
+            let current = next.take()?;
+            match tycker.type_filled_k(&current) {
+                | Ok(ss::Type::Prod(ss::Prod(head, tail))) => {
+                    next = Some(tail);
+                    Some(Ok(head))
+                }
+                | Ok(_) => Some(Ok(current)),
+                | Err(KontFailure) => Some(Err(KontFailure)),
+            }
+        })
+        .collect()
     }
 }
 
@@ -386,6 +430,12 @@ impl FieldProjectionResolver {
     fn value_k(
         tycker: &mut Tycker<'_>, env: &ss::TyEnv, root: ss::TypeId, field: &FieldName,
     ) -> ResultKont<ValueFieldCandidate> {
+        Self::deferred_value_k(tycker, env, root, field)?.materialize_k(tycker)
+    }
+
+    fn deferred_value_k(
+        tycker: &mut Tycker<'_>, env: &ss::TyEnv, root: ss::TypeId, field: &FieldName,
+    ) -> ResultKont<DeferredValueFieldCandidate> {
         let candidates = Self::value_candidates_k(
             tycker,
             DeferredEnvType::with_environment(root, env),
@@ -398,7 +448,7 @@ impl FieldProjectionResolver {
                 TyckError::MissingNamedField { field: field.clone(), found: root },
                 std::panic::Location::caller(),
             ),
-            | [candidate] => candidate.clone().materialize_k(tycker),
+            | [candidate] => Ok(candidate.clone()),
             | _ => tycker.err_k(
                 TyckError::DuplicateNamedField { field: field.clone(), found: root },
                 std::panic::Location::caller(),
@@ -442,7 +492,6 @@ impl FieldProjectionResolver {
                             .cloned()
                             .chain([DeferredValueFieldStep::Product {
                                 product: whole.clone(),
-                                components: components.clone(),
                                 position,
                             }])
                             .collect::<Vec<_>>();

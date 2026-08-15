@@ -804,3 +804,60 @@ decisions while implementing the plan.
   assignments rather than replaying the complete old environment.
 - Re-profile the 693,735-node arena before widening `DeferredEnvType`; field materialization was the
   second-largest prior boundary, but tuple and label changes may have removed some of its consumers.
+
+## 2026-08-15 — round 20: reuse materialized field routes
+
+### Findings
+
+- A fresh root-operation profile attributed 689,062 checker-created nodes in the 693,735-node
+  arena. Field lookup remained the largest boundary: final route materialization allocated
+  223,889 nodes and search re-entry allocated another 38,667, for 262,556 nodes in total (38.1%).
+  Common analytic preparation followed at 176,240 nodes; type-application normalization used
+  56,080; type-abstraction recovery used 44,883; prepared product revelation had fallen to 1,597.
+- A deferred field route retained a closure for every label, product, product component, and final
+  payload. Finalization then recursively substituted every closure independently. Substituting a
+  parent already constructs its rewritten children, so materializing the child closures repeated
+  the same recursive work and discarded the parent-produced identifiers.
+- Route materialization can instead carry the selected child of the previous materialized node.
+  A matching label or product reuses that identifier. If the route crosses a seal or another
+  opacity boundary, the expected shape is absent and the stored closure supplies the required
+  one-time environment re-entry.
+- A separate lean finalizer for term projections was valid but saved only five additional nodes on
+  the full standard library (588,244 to 588,239). Term projections do not need the sibling
+  annotations retained for pattern reconstruction, but nearly every relevant route already starts
+  at a product and obtains those siblings from its one necessary materialization. The extra API was
+  removed rather than keeping a workload-insignificant specialization.
+
+### Changes
+
+- Deferred product route steps now retain only the product closure and selected position. Their
+  component identifiers are read from the materialized product spine instead of recursively
+  substituting a second vector of component closures.
+- Finalization threads the selected child through label and product steps and uses it whenever its
+  structure matches the next route node. The final projected type is that same child, avoiding one
+  more independent materialization.
+- The existing opacity-boundary and label-depth regressions exercise the fallback and transparent
+  paths respectively. The temporary allocation counter and the rejected term-only finalizer were
+  removed after measurement.
+
+### Measurements
+
+- The full-std check retains 588,244 type nodes, 105,491 fewer than round 19 (-15.2%).
+- Three clean release checks used 409,075,712, 409,026,560, and 409,370,624 bytes peak RSS (median
+  409,075,712), down 15,122,432 bytes (-3.6%) from round 19. Warm wall time was 0.45s and warm user
+  time was 0.41s.
+- The current-tree baseline is now down from 2,497,757,184 to 409,075,712 bytes (-83.6%).
+- All 41 statics tests and all 151 session tests passed, along with the release CLI build and full
+  standard-library check.
+
+### Next
+
+- Re-profile the 588,244-node arena. Common analytic preparation is likely the largest remaining
+  boundary, but route reuse changes its downstream inputs enough that the round-19 counts are no
+  longer additive.
+- Carry preparation provenance through same-environment arrow, thunk/return, and codata
+  destructors. Treat binder extensions separately: replaying the complete old environment would
+  reproduce the original amplification under a different helper.
+- Inspect `normalize_app` and type-abstraction recovery after analytic preparation. Their previous
+  56,080- and 44,883-node shares were stable across several rounds and may become worthwhile once
+  the expected-type paths are composed.
