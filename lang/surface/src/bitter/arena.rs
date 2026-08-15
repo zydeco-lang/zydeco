@@ -114,8 +114,8 @@ impl TextualOrigins {
 pub struct BitterArena {
     // arenas
     pub defs: ArenaSparse<BitterScope, DefId>,
-    pub pats: ArenaSparse<BitterScope, PatId>,
-    pub terms: ArenaSparse<BitterScope, TermId>,
+    pub pats: ArenaIndexed<BitterScope, PatId>,
+    pub terms: ArenaIndexed<BitterScope, TermId>,
 
     /// Textual source origin of every derived entity.
     pub origins: TextualOrigins,

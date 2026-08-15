@@ -5,7 +5,7 @@ use rustc_hash::FxHashMap as HashMap;
 use std::{
     hash::Hash,
     marker::PhantomData,
-    num::NonZeroU64,
+    num::{NonZeroU32, NonZeroU64},
     ops::AddAssign,
     ops::{Index, IndexMut},
     sync::atomic::{AtomicU64, Ordering},
@@ -284,6 +284,50 @@ pub struct ArenaPagedAssoc<Id: ArenaId, T> {
     marker: PhantomData<fn() -> Id>,
 }
 
+/// Owning storage that separates sparse external identity from dense payloads.
+///
+/// The paged index costs one compact optional `u32` per raw ID slot, while the
+/// full items occupy a dense vector with no gaps or repeated IDs. This is the
+/// useful middle ground when IDs are sparse across categories but the payloads
+/// are too large for [`ArenaPaged`] and too numerous for [`ArenaSparse`].
+#[derive(Debug)]
+pub struct ArenaIndexed<Scope, Id>
+where
+    Id: ArenaId,
+    Scope: ArenaSchema<Id>,
+{
+    indexes: ArenaPagedAssoc<Id, DenseArenaIndex>,
+    values: Vec<Scope::Item>,
+    marker: PhantomData<fn() -> Scope>,
+}
+
+/// One-based so `Option<DenseArenaIndex>` retains the four-byte niche.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+struct DenseArenaIndex(NonZeroU32);
+
+impl DenseArenaIndex {
+    fn from_offset(offset: usize) -> Self {
+        let one_based = offset.checked_add(1).expect("indexed arena payload range exhausted");
+        let one_based = u32::try_from(one_based).expect("indexed arena payload range exhausted");
+        Self(NonZeroU32::new(one_based).expect("an indexed arena offset is one-based"))
+    }
+
+    fn offset(self) -> usize {
+        self.0.get() as usize - 1
+    }
+}
+
+impl<Scope, Id> Clone for ArenaIndexed<Scope, Id>
+where
+    Id: ArenaId,
+    Scope: ArenaSchema<Id>,
+    Scope::Item: Clone,
+{
+    fn clone(&self) -> Self {
+        Self { indexes: self.indexes.clone(), values: self.values.clone(), marker: PhantomData }
+    }
+}
+
 /// Capacity policy shared by paged owning and associative arenas.
 struct PageSlots;
 
@@ -304,16 +348,18 @@ impl PageSlots {
 
     fn reserve_ids<Id: ArenaId, T>(
         pages: &mut HashMap<KeySpaceId, Vec<Option<T>>>, ids: impl IntoIterator<Item = Id>,
-    ) {
-        let required =
-            ids.into_iter().fold(HashMap::<KeySpaceId, usize>::default(), |mut required, id| {
+    ) -> usize {
+        let (required, count) = ids.into_iter().fold(
+            (HashMap::<KeySpaceId, usize>::default(), 0usize),
+            |(mut required, count), id| {
                 let slots = id.raw().into_u32() as usize + 1;
                 required
                     .entry(id.key_space())
                     .and_modify(|current| *current = (*current).max(slots))
                     .or_insert(slots);
-                required
-            });
+                (required, count.checked_add(1).expect("arena item count exhausted usize"))
+            },
+        );
         pages.reserve(required.len());
         required.into_iter().for_each(|(key_space, slots)| {
             let page = pages.entry(key_space).or_default();
@@ -321,6 +367,7 @@ impl PageSlots {
                 page.reserve_exact(slots - page.len());
             }
         });
+        count
     }
 }
 
@@ -741,6 +788,97 @@ mod impls {
         /// Convert and replace an existing owned item.
         pub fn replace_existing_with(&mut self, id: Id, val: impl Into<Scope::Item>) {
             self.replace_existing(id, val.into())
+        }
+    }
+
+    /* ------------------------------ ArenaIndexed ------------------------------ */
+
+    impl<Scope, Id> Default for ArenaIndexed<Scope, Id>
+    where
+        Id: ArenaId,
+        Scope: ArenaSchema<Id>,
+    {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl<Scope, Id> Index<&Id> for ArenaIndexed<Scope, Id>
+    where
+        Id: ArenaId,
+        Scope: ArenaSchema<Id>,
+    {
+        type Output = Scope::Item;
+
+        fn index(&self, id: &Id) -> &Self::Output {
+            self.get(id).unwrap()
+        }
+    }
+
+    impl<Scope, Id> IndexMut<&Id> for ArenaIndexed<Scope, Id>
+    where
+        Id: ArenaId,
+        Scope: ArenaSchema<Id>,
+    {
+        fn index_mut(&mut self, id: &Id) -> &mut Self::Output {
+            self.get_mut(id).unwrap()
+        }
+    }
+
+    impl<Scope, Id> ArenaIndexed<Scope, Id>
+    where
+        Id: ArenaId,
+        Scope: ArenaSchema<Id>,
+    {
+        pub fn new() -> Self {
+            Self { indexes: ArenaPagedAssoc::new(), values: Vec::new(), marker: PhantomData }
+        }
+
+        /// Insert a value whose externally-issued ID must not already exist.
+        pub fn insert_new(&mut self, id: Id, value: Scope::Item) {
+            let index = DenseArenaIndex::from_offset(self.values.len());
+            self.indexes.insert_new(id, index);
+            self.values.push(value);
+        }
+
+        pub fn iter(&self) -> impl Iterator<Item = (Id, &Scope::Item)> {
+            self.indexes.iter().map(|(id, index)| (id, &self.values[index.offset()]))
+        }
+
+        pub fn len(&self) -> usize {
+            self.values.len()
+        }
+
+        pub fn is_empty(&self) -> bool {
+            self.values.is_empty()
+        }
+
+        /// Reserve sparse ID extents and dense payload slots for a future bulk
+        /// fill. Supplied IDs must describe new values rather than existing ones.
+        pub fn reserve_ids(&mut self, ids: impl IntoIterator<Item = Id>) {
+            let additional = PageSlots::reserve_ids(&mut self.indexes.pages, ids);
+            self.values.reserve_exact(additional);
+        }
+
+        /// Replace an existing owned item without changing its dense position.
+        pub fn replace_existing(&mut self, id: Id, value: Scope::Item) {
+            let index = self.indexes.get(&id).copied().expect("key not found");
+            self.values[index.offset()] = value;
+        }
+    }
+
+    impl<Scope, Id> ArenaAccess<&Id, Scope::Item> for ArenaIndexed<Scope, Id>
+    where
+        Id: ArenaId,
+        Scope: ArenaSchema<Id>,
+    {
+        fn get(&self, id: &Id) -> Option<&Scope::Item> {
+            self.indexes.get(id).map(|index| &self.values[index.offset()])
+        }
+
+        fn get_mut(&mut self, id: &Id) -> Option<&mut Scope::Item> {
+            let index = self.indexes.get(id)?.offset();
+            self.values.get_mut(index)
         }
     }
 
@@ -1724,6 +1862,40 @@ mod tests {
         assert_eq!(arena.get(&left_gap), Some(&"left gap"));
         assert_eq!(arena.get(&right_first), Some(&"right first"));
         assert_eq!(arena.iter().count(), 3);
+    }
+
+    #[test]
+    fn indexed_storage_keeps_sparse_identity_and_dense_payloads() {
+        let left_space = KeySpaceId::derive(1, 2, 3, 6);
+        let right_space = KeySpaceId::derive(5, 6, 7, 10);
+        let left_first = derived_id::<SparseId>(left_space, 0);
+        let left_gap = derived_id::<SparseId>(left_space, 95);
+        let right_first = derived_id::<SparseId>(right_space, 0);
+        let mut arena = ArenaIndexed::<TestScope, SparseId>::new();
+
+        arena.reserve_ids([left_first, left_gap, right_first].into_iter().filter(|_| true));
+        arena.insert_new(left_gap, "left gap");
+        arena.insert_new(right_first, "right first");
+        arena.insert_new(left_first, "left first");
+
+        assert_eq!(size_of::<Option<DenseArenaIndex>>(), 4);
+        assert_eq!(arena.len(), 3);
+        assert_eq!(arena.values.len(), 3);
+        assert_eq!(arena.values.capacity(), 3);
+        assert_eq!(arena.get(&left_first), Some(&"left first"));
+        assert_eq!(arena.get(&derived_id::<SparseId>(left_space, 1)), None);
+        assert_eq!(arena.get(&left_gap), Some(&"left gap"));
+        assert_eq!(arena.get(&right_first), Some(&"right first"));
+        assert_eq!(arena.iter().count(), 3);
+    }
+
+    #[test]
+    #[should_panic(expected = "duplicate key in paged associative arena")]
+    fn indexed_storage_rejects_duplicate_ids_without_appending_payloads() {
+        let id = derived_id::<SparseId>(KeySpaceId::derive(1, 1, 1, 2), 0);
+        let mut arena = ArenaIndexed::<TestScope, SparseId>::new();
+        arena.insert_new(id, "first");
+        arena.insert_new(id, "second");
     }
 
     #[test]

@@ -172,8 +172,8 @@ pub trait ArenaScoped {
 pub struct ScopedArena {
     // arenas
     pub defs: ArenaSparse<ScopedScope, DefId>,
-    pub pats: ArenaSparse<ScopedScope, PatId>,
-    pub terms: ArenaPaged<ScopedScope, TermId>,
+    pub pats: ArenaIndexed<ScopedScope, PatId>,
+    pub terms: ArenaIndexed<ScopedScope, TermId>,
     /// Textual source origin of every resolved entity.
     pub origins: TextualOrigins,
 

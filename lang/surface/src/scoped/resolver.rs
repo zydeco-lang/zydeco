@@ -50,8 +50,8 @@ pub struct Resolver<'a> {
 
     // arenas
     pub defs: ArenaSparse<ScopedScope, DefId>,
-    pub pats: ArenaSparse<ScopedScope, PatId>,
-    pub terms: ArenaPaged<ScopedScope, TermId>,
+    pub pats: ArenaIndexed<ScopedScope, PatId>,
+    pub terms: ArenaIndexed<ScopedScope, TermId>,
     pub blocks: ArenaAssoc<TermId, ContextualTerm<BindingContext, BlockBody>>,
 
     pub users: ArenaForth<DefId, TermId>,
@@ -72,8 +72,10 @@ struct ResolvedProgram {
 
 impl<'a> Resolver<'a> {
     pub fn new(spans: &'a SpanArena, bitter: BitterArena, _prim_term: PrimTerms) -> Self {
-        let mut terms = ArenaPaged::default();
-        terms.reserve_ids(bitter.terms.iter().map(|(term, _)| *term));
+        let mut pats = ArenaIndexed::default();
+        pats.reserve_ids(bitter.pats.iter().map(|(pattern, _)| pattern));
+        let mut terms = ArenaIndexed::default();
+        terms.reserve_ids(bitter.terms.iter().map(|(term, _)| term));
         Self {
             allocator: IdAllocator::new(),
             spans,
@@ -81,7 +83,7 @@ impl<'a> Resolver<'a> {
             prim_def: PrimDefs::default(),
 
             defs: ArenaSparse::default(),
-            pats: ArenaSparse::default(),
+            pats,
             terms,
             blocks: ArenaAssoc::default(),
 

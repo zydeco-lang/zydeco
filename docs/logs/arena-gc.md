@@ -2187,3 +2187,71 @@ decisions while implementing the plan.
   evidence matters more than changing its container.
 - Measure whether the remaining peak occurs before or after normalized editor facts are published.
   At 134MB, lifetime overlap may now dominate individual container overhead.
+
+## 2026-08-15 — round 47: index sparse syntax into dense payloads
+
+### Findings
+
+- A fresh malloc-stack census after round 46 found 112,117 live allocations owning 71.2MB, down
+  from 100.9MB after round 44. The former textual and static provenance payloads were absent. The
+  largest actionable surface allocations were the exact 6,144,000-byte scoped term page and a
+  3,719,168-byte pattern hash table; the assembled span payload remained 3,948,544 bytes and
+  pre-normalization kinds occupied 3,751,936 bytes. Stack logging raised physical footprint to
+  189.2MB, so these owner sizes, rather than the instrumented process total, guided the change.
+- The census also attributed a 3,227,648-byte block to `env_type`, despite checker-state stripping
+  replacing that arena with an empty value. The existing session regression confirms that a
+  finished checked arena has zero type environments. As a separate ownership audit, temporarily
+  removing `Clone` from `StaticsArena` still compiled statics, session, CLI, and Cajun, ruling out a
+  production deep clone that preserves pre-strip state. The contradictory stack attribution is
+  therefore allocator-history or block-reuse noise, not evidence for retaining `env_type`; no
+  representation change was made from it.
+- The standard-library scoped arena still has 64,954 terms across 96,052 raw slots, or 67.6%
+  occupancy. Its 64-byte optional payload slots explain the exact 6.1MB page. Patterns occupy only
+  28.3% of the same interleaved raw-ID domain, so direct optional payload pages would waste more
+  memory than their hash table. These are two instances of one storage rule: shared allocation
+  makes identity sparse within each syntax category, while the category's actual payload sequence
+  is dense.
+- A compact sparse index and dense payload vector express that rule without either compromise. A
+  one-based `NonZeroU32` makes each optional index four bytes; gaps cost only that index, and full
+  terms or patterns exist exactly once. Bitter and scoped arenas overlap during name resolution,
+  so applying the representation on both sides removes more peak memory than the final scoped
+  layout alone predicts.
+- Exact reservation still matters even for the compact design. Initially relying on iterator size
+  hints produced a 123,928,576-byte median because paged filtering cannot promise a nonzero lower
+  bound. Counting IDs while deriving page extents and reserving the dense vector from that count
+  reduced the final median by another 1,556,480 bytes without a temporary ID collection.
+
+### Changes
+
+- Added `ArenaIndexed`, a typed owning arena whose paged ID index points into an insertion-dense
+  payload vector. It supports lookup, mutation, replacement, cloning, iteration with reconstructed
+  typed IDs, and exact bulk reservation while preserving duplicate-ID checks.
+- Changed bitter and scoped pattern and term storage to `ArenaIndexed`. The resolver reserves both
+  scoped payload vectors and their compact index pages from the complete bitter ID domains before
+  recursive resolution begins.
+- Added regressions for multiple key spaces, large sparse gaps, four-byte optional indexes, exact
+  reservation through a non-exact-size iterator, out-of-order insertion, and duplicate rejection.
+  Updated Cajun for the value-form IDs produced by indexed iteration.
+
+### Measurements
+
+- Five release checks used 122,388,480, 122,814,464, 122,306,560, 122,372,096, and 122,355,712 bytes
+  peak RSS (median 122,372,096), down 11,567,104 bytes (-8.6%) from round 46. Warm wall time was
+  0.19s and warm user time was 0.17s.
+- The current-tree baseline is now down from 2,497,757,184 to 122,372,096 bytes (-95.1%).
+- All 29 utility tests and their doctests, all 146 surface tests, all 25 statics unit tests and 33
+  statics integration tests, all 151 session tests, all 9 CLI integration tests, all 31 Cajun unit
+  tests, and all 9 Cajun stdio tests passed. Focused Clippy completed with existing unrelated lint
+  warnings. The release CLI build and standard-library check also passed.
+
+### Next
+
+- Capture the next live heap census. Pre-normalization kinds, assembled spans, annotation facts,
+  and the remaining source maps are now similarly sized, so phase overlap should select the next
+  target rather than container size alone.
+- Audit textual syntax payload arenas against their shared parser allocator. The same sparse-ID,
+  dense-payload rule may apply, but per-source Salsa templates and the assembled program have
+  distinct lifetimes that must remain independently reusable.
+- Revisit low-occupancy definition arenas only after measuring their absolute live allocation.
+  Compact indexes are useful when payload hashes are material; density alone is not a reason to
+  generalize every small table.

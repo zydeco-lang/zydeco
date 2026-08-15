@@ -270,7 +270,7 @@ impl<'source> SemanticDocument<'source> {
             let Pattern::Named(Named(field, _)) = body else {
                 return;
             };
-            Self::entity_span(spans, scoped, (*pattern).into())
+            Self::entity_span(spans, scoped, pattern.into())
                 .filter(|span| Self::same_file(span, file_path))
                 .map(ByteRange::from_span)
                 .into_iter()
