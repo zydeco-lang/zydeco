@@ -259,7 +259,7 @@ impl<'source> SemanticDocument<'source> {
                 | _ => None,
             };
             field.into_iter().for_each(|(field, occurrence)| {
-                Self::entity_span(spans, scoped, (*term).into())
+                Self::entity_span(spans, scoped, term.into())
                     .filter(|span| Self::same_file(span, file_path))
                     .map(ByteRange::from_span)
                     .into_iter()

@@ -962,7 +962,7 @@ end
             .scoped()
             .terms
             .iter()
-            .filter_map(|(term, _)| session.annotation_of_term(&root, *term).unwrap())
+            .filter_map(|(term, _)| session.annotation_of_term(&root, term).unwrap())
             .collect::<Vec<_>>();
         assert!(!annotated.is_empty(), "some scoped term should carry a checked annotation",);
     }

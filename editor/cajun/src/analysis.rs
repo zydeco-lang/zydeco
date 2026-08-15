@@ -280,7 +280,7 @@ impl ProjectState {
             let Term::Var(definition) = body else {
                 return None;
             };
-            let entity = self.scoped().textual.back(&(*term).into())?;
+            let entity = self.scoped().textual.back(&term.into())?;
             Some((*definition, &self.analysis.spans()[entity]))
         });
         definitions

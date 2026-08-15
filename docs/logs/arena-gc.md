@@ -1858,3 +1858,57 @@ decisions while implementing the plan.
   or Salsa memos rather than in resolver summaries.
 - Re-evaluate the next producer-query family and typed provenance relation from current measurements
   instead of relying on the round-35 heap snapshot.
+
+## 2026-08-15 — round 41: page scoped terms with known extents
+
+### Findings
+
+- A fresh malloc-stack census attributed one 14,827,520-byte live allocation to the scoped term
+  hash table. Other leading durable owners were textual spans at 15.9MB, static pattern provenance
+  at 11.7MB, term facts at 7.3MB, and the two textual-to-bitter provenance directions at 7.3MB and
+  6.3MB. This made scoped syntax a larger target than any remaining individual producer memo.
+- The standard-library scoped arena contains 64,954 terms in two key spaces spanning 96,052 raw
+  slots, for 67.6% occupancy. An `Option<Term<DefId>>` is 64 bytes, so the occupied ID extents need
+  about 6.1MB of direct slots. Definitions occupy only 3.8% of their raw extent and patterns 28.3%;
+  keeping those two categories sparse avoids paying 2.3MB and 4.6MB logical pages, respectively.
+- A plain switch to `ArenaPaged` did not reduce the peak. Three checks centered on 172,130,304 bytes,
+  effectively unchanged from round 40. The large page had length 95,955 but capacity 137,920 after
+  geometric growth; macOS reported its live allocation as the same 14,827,520-byte size class as
+  the old hash table. This falsified the initial estimate because logical occupancy alone omitted
+  both vector growth slack and allocator size-class behavior.
+- Every prospective scoped term ID is already present in the bitter arena before resolution starts.
+  Reserving each key space to its exact greatest raw ID removes geometric slack before the first
+  insertion. A late `shrink_to_fit` would not solve the test problem because the larger allocation
+  would already have contributed to peak RSS.
+
+### Changes
+
+- Replaced only scoped term ownership with `ArenaPaged`; definitions and patterns remain
+  `ArenaSparse` according to their measured densities.
+- Added `ArenaPaged::reserve_ids`, which groups a known external ID domain by key space and reserves
+  each page to its greatest raw slot without filling gaps. A regression verifies that inserting the
+  reserved IDs does not grow either page.
+- The resolver pre-reserves scoped term pages from the complete bitter term domain before recursive
+  resolution. Editor and session iterators now use the value-form IDs yielded by paged iteration.
+
+### Measurements
+
+- Three release checks used 167,362,560, 167,985,152, and 167,854,080 bytes peak RSS (median
+  167,854,080), down 4,128,768 bytes (-2.4%) from round 40. Warm wall time was 0.23s and warm user
+  time was 0.20s.
+- The current-tree baseline is now down from 2,497,757,184 to 167,854,080 bytes (-93.3%).
+- All 23 utilities tests and their doctests, all 140 surface tests, all 56 statics tests, all 151
+  session tests, all 31 Cajun unit tests, and all 9 Cajun stdio tests passed. The release CLI build
+  and full standard-library check also passed.
+
+### Next
+
+- Measure `TermFacts` occupancy against the same source term extents. Its 7.3MB single hash
+  allocation is the next clear typed table, but it should use exact page reservation from the start
+  rather than repeat the geometric-growth false start.
+- Audit the 15.9MB span owner as separate per-source maps plus the assembled program map. The
+  assembled 12.7MB allocation may admit a typed split by definition, pattern, and term ID, while
+  the source templates need to remain independently reusable.
+- Measure both directions and multiplicities of static pattern provenance before changing it. Its
+  13.3MB total footprint is large, but one-to-many edges and query-derived key spaces make density
+  less predictable than the source term arena.

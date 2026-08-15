@@ -173,7 +173,7 @@ pub struct ScopedArena {
     // arenas
     pub defs: ArenaSparse<ScopedScope, DefId>,
     pub pats: ArenaSparse<ScopedScope, PatId>,
-    pub terms: ArenaSparse<ScopedScope, TermId>,
+    pub terms: ArenaPaged<ScopedScope, TermId>,
     /// entity maps from textural syntax
     pub textual: ArenaForth<t::EntityId, EntityId>,
 

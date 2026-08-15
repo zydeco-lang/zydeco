@@ -782,6 +782,30 @@ mod impls {
             self.len
         }
 
+        /// Reserve every page to the greatest supplied raw ID without filling
+        /// its gaps. This is useful when a pass knows its complete external ID
+        /// domain before it starts inserting owned items.
+        pub fn reserve_ids(&mut self, ids: impl IntoIterator<Item = Id>) {
+            let required = ids.into_iter().fold(
+                HashMap::<KeySpaceId, usize>::default(),
+                |mut required, id| {
+                    let slots = id.raw().into_u32() as usize + 1;
+                    required
+                        .entry(id.key_space())
+                        .and_modify(|current| *current = (*current).max(slots))
+                        .or_insert(slots);
+                    required
+                },
+            );
+            self.pages.reserve(required.len());
+            required.into_iter().for_each(|(key_space, slots)| {
+                let page = self.pages.entry(key_space).or_default();
+                if page.capacity() < slots {
+                    page.reserve_exact(slots - page.len());
+                }
+            });
+        }
+
         /// Reserve outer page entries, one per expected key space.
         pub fn reserve_pages(&mut self, additional: usize) {
             self.pages.reserve(additional);
@@ -1680,6 +1704,29 @@ mod tests {
         assert_eq!(arena.get(&left_gap), Some(&"left gap"));
         assert_eq!(arena.get(&right_first), Some(&"right first"));
         assert_eq!(arena.iter().count(), 3);
+    }
+
+    #[test]
+    fn paged_storage_uses_known_id_extents_without_growth_slack() {
+        let left_space = KeySpaceId::derive(1, 2, 3, 5);
+        let right_space = KeySpaceId::derive(5, 6, 7, 9);
+        let left_first = derived_id::<SparseId>(left_space, 0);
+        let left_last = derived_id::<SparseId>(left_space, 95);
+        let right_last = derived_id::<SparseId>(right_space, 2);
+        let mut arena = ArenaPaged::<TestScope, SparseId>::new();
+
+        arena.reserve_ids([left_last, right_last, left_first]);
+        let left_capacity = arena.pages[&left_space].capacity();
+        let right_capacity = arena.pages[&right_space].capacity();
+        assert!(left_capacity >= 96);
+        assert!(right_capacity >= 3);
+
+        arena.insert_new(left_first, "left first");
+        arena.insert_new(left_last, "left last");
+        arena.insert_new(right_last, "right last");
+
+        assert_eq!(arena.pages[&left_space].capacity(), left_capacity);
+        assert_eq!(arena.pages[&right_space].capacity(), right_capacity);
     }
 
     #[test]
