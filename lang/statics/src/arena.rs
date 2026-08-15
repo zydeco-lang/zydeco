@@ -238,8 +238,12 @@ pub struct StaticsArena {
     pub env_kpat: ArenaAssoc<KPatId, TyEnv>,
     /// typing environments for type patterns
     pub env_tpat: ArenaAssoc<TPatId, TyEnv>,
-    /// typing environments for types
-    pub env_type: ArenaAssoc<TypeId, TyEnv>,
+    /// typing environments for types, interned so structurally identical
+    /// environments from distinct sites share one allocation
+    pub env_type: ArenaAssoc<TypeId, std::sync::Arc<TyEnv>>,
+    /// content-addressed cache behind [`Self::env_type`]; checker-transient
+    /// and stripped with the environments after checking
+    pub env_interner: crate::environment::TyEnvInterner,
     /// typing environments for value patterns
     pub env_vpat: ArenaAssoc<VPatId, TyEnv>,
     /// typing environments for values
@@ -252,6 +256,19 @@ pub struct StaticsArena {
     pub kinds_normalized: ArenaAssoc<KindId, Kind>,
     /// normalized type free of holes
     pub types_normalized: ArenaAssoc<TypeId, Type>,
+}
+
+impl StaticsArena {
+    /// Intern one typing environment and return the shared value for storage
+    /// in [`Self::env_type`].
+    pub fn intern_env(&mut self, env: &TyEnv) -> std::sync::Arc<TyEnv> {
+        self.env_interner.intern(env)
+    }
+
+    /// Materialize one stored typing environment as an owned value.
+    pub fn env_at(&self, id: TypeId) -> TyEnv {
+        self.env_type[&id].as_ref().clone()
+    }
 }
 
 /* -------------------------------- LocalFold ------------------------------- */

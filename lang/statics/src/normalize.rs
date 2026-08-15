@@ -522,7 +522,7 @@ impl TypeId {
     }
     pub fn subst_abst(&self, tycker: &mut Tycker<'_>, assign: (AbstId, TypeId)) -> Result<TypeId> {
         let kd = tycker.statics.annotations_type[self];
-        let env = tycker.statics.env_type[self].clone();
+        let env = tycker.statics.env_at(*self);
         let ty = match tycker.statics.types_pre[self].to_owned() {
             // Todo: add subst obligation to fills
             | Fillable::Fill(_) => *self,
@@ -764,7 +764,7 @@ impl TypeId {
     }
     pub fn unroll(self, tycker: &mut Tycker<'_>) -> Result<TypeId> {
         let kd = tycker.statics.annotations_type[&self];
-        let env = tycker.statics.env_type[&self].clone();
+        let env = tycker.statics.env_at(self);
         let res = match tycker.type_filled(&self)?.to_owned() {
             | Type::Abst(abst) => {
                 match tycker.statics.seals.get(&abst) {
@@ -881,7 +881,7 @@ impl TypeId {
                             inner.normalize(tycker, kd)?
                         }
                         | _ => {
-                            let env = tycker.statics.env_type[&self].clone();
+                            let env = tycker.statics.env_at(self);
                             Alloc::alloc(tycker, Proj(head, name), kd, &env)
                         }
                     }
@@ -899,7 +899,7 @@ impl TypeId {
     pub fn normalize_app(
         self, tycker: &mut Tycker<'_>, a_ty: TypeId, kd: KindId,
     ) -> Result<TypeId> {
-        let env = tycker.statics.env_type[&self].clone();
+        let env = tycker.statics.env_at(self);
         let res = match tycker.statics.types_pre[&self].to_owned() {
             | Fillable::Fill(_) => self,
             | Fillable::Done(ty) => match ty {
@@ -1224,7 +1224,7 @@ impl TypeId {
                 return Ok(resolver.remember(aliases.into_iter().chain([root]), resolved));
             }
         }
-        let env = tycker.statics.env_type[&res].clone();
+        let env = tycker.statics.env_at(res);
         let res = match tycker.statics.types_pre[&res].to_owned() {
             | Fillable::Fill(fill) => {
                 resolver.missing.insert(fill);
@@ -1700,7 +1700,7 @@ impl TypeId {
         }
         let kd = tycker.statics.annotations_type[&self];
         let kd_norm = kd.filled_norm_id(tycker, norm)?;
-        let env = tycker.statics.env_type[&self].clone();
+        let env = tycker.statics.env_at(self);
         let res = match tycker.statics.types_pre[&self].to_owned() {
             | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).cloned() {
                 | Some(AnnId::Type(ty)) => ty.filled_norm_id(tycker, norm)?,

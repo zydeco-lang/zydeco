@@ -210,7 +210,7 @@ impl TypeId {
                 }
             }
             | _ => {
-                let env = tycker.statics.env_type[self].clone();
+                let env = tycker.statics.env_at(*self);
                 Ok(Alloc::alloc(tycker, Proj(*self, expected.clone()), payload_kind, &env))
             }
         }

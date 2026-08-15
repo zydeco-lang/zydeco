@@ -1185,6 +1185,13 @@ impl<'a> Tycker<'a> {
         Ok(())
     }
 
+    /// Intern one typing environment into the arena's environment cache and
+    /// record it as the environment of one type node.
+    pub(crate) fn store_env(&mut self, id: TypeId, env: &TyEnv) {
+        let env = self.statics.intern_env(env);
+        self.statics.env_type.insert_new(id, env);
+    }
+
     /// Drop the checker-internal typing environments from the finished arena.
     ///
     /// Environments are consumed entirely by the checking phases: judgment
@@ -1196,6 +1203,7 @@ impl<'a> Tycker<'a> {
         self.statics.env_kpat = Default::default();
         self.statics.env_tpat = Default::default();
         self.statics.env_type = Default::default();
+        self.statics.env_interner = Default::default();
         self.statics.env_vpat = Default::default();
         self.statics.env_value = Default::default();
         self.statics.env_compu = Default::default();
@@ -1456,7 +1464,7 @@ impl InternalTerm {
                     }
                     tycker.statics.types_pre.insert_new(ty, ss::Fillable::Done(ty_node));
                     tycker.statics.annotations_type.insert_new(ty, ann);
-                    tycker.statics.env_type.insert_new(ty, TyEnv::default());
+                    tycker.store_env(ty, &TyEnv::default());
                     match key {
                         | crate::query::IntrinsicKey::Thk => {
                             tycker.statics.intrinsics.thk = Some(ty)
@@ -2193,7 +2201,7 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
                     .types_pre
                     .insert_new(abst_ty, ss::Fillable::Done(ss::Type::Abst(abst)));
                 tycker.statics.annotations_type.insert_new(abst_ty, kd);
-                tycker.statics.env_type.insert_new(abst_ty, env.info.clone());
+                tycker.store_env(abst_ty, &env.info);
                 env.info += [(def, abst_ty.into())];
                 abst_map.insert(id, (abst, next_abst_ty, kd));
             }
@@ -2230,7 +2238,7 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
             tycker.statics.seals.insert_new(abst, bindee_subst);
             tycker.statics.types_pre.insert_new(abst_ty, ss::Fillable::Done(ss::Type::Abst(abst)));
             tycker.statics.annotations_type.insert_new(abst_ty, kd);
-            tycker.statics.env_type.insert_new(abst_ty, env.info.clone());
+            tycker.store_env(abst_ty, &env.info);
             // add the type into the environment
             let TyEnvT { info: new_env, inner: () } =
                 env.mk(Assign(binder, abst_ty)).tyck_k(tycker, ())?;
@@ -2364,7 +2372,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                 .insert_new(fill, ss::InferenceSite::Pattern(self.inner));
                             tycker.statics.types_pre.insert_new(ty, ss::Fillable::Fill(fill));
                             tycker.statics.annotations_type.insert_new(ty, vtype);
-                            tycker.statics.env_type.insert_new(ty, self.info.clone());
+                            tycker.store_env(ty, &self.info);
                             let scope = self.info.skolem_scope().clone();
                             if let Some(existing) =
                                 tycker.statics.fill_scopes.insert_or_get(fill, scope.clone())
@@ -2923,7 +2931,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                         for (id, prod) in outcome.prods {
                             tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(prod));
                             tycker.statics.annotations_type.insert_new(id, outcome.vtype);
-                            tycker.statics.env_type.insert_new(id, pattern_env.clone());
+                            tycker.store_env(id, &pattern_env);
                         }
                         tycker.statics.vpats.insert_new(outcome.pat_id, outcome.pat);
                         tycker.statics.annotations_vpat.insert_new(outcome.pat_id, outcome.ann);
@@ -3008,7 +3016,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                         .types_pre
                                         .insert_new(id, ss::Fillable::Done(prod));
                                     tycker.statics.annotations_type.insert_new(id, outcome.vtype);
-                                    tycker.statics.env_type.insert_new(id, pattern_env.clone());
+                                    tycker.store_env(id, &pattern_env);
                                 }
                                 tycker.statics.vpats.insert_new(outcome.pat_id, outcome.pat);
                                 tycker
@@ -3463,7 +3471,7 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiIntroduction> {
         };
         tycker.statics.types_pre.insert_new(outcome.sig_id, ss::Fillable::Done(outcome.sig));
         tycker.statics.annotations_type.insert_new(outcome.sig_id, outcome.kd);
-        tycker.statics.env_type.insert_new(outcome.sig_id, self.info.clone());
+        tycker.store_env(outcome.sig_id, &self.info);
         outcome.sig_id.constrain_to_scope_k(tycker, self.info.skolem_scope())?;
         tycker.statics.compus.insert_new(outcome.abs_id, outcome.abs);
         tycker.statics.annotations_compu.insert_new(outcome.abs_id, outcome.sig_id);
@@ -3518,7 +3526,7 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePackPiIntroduction> {
         };
         tycker.statics.types_pre.insert_new(outcome.sig_id, ss::Fillable::Done(outcome.sig));
         tycker.statics.annotations_type.insert_new(outcome.sig_id, outcome.kd);
-        tycker.statics.env_type.insert_new(outcome.sig_id, self.info.clone());
+        tycker.store_env(outcome.sig_id, &self.info);
         outcome.sig_id.constrain_to_scope_k(tycker, self.info.skolem_scope())?;
         tycker.statics.values.insert_new(outcome.abs_id, outcome.abs);
         tycker.statics.annotations_value.insert_new(outcome.abs_id, outcome.sig_id);
@@ -3809,7 +3817,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         tycker.statics.fills.insert_new(fill, ss::InferenceSite::Term(self.inner));
                         tycker.statics.types_pre.insert_new(ty, ss::Fillable::Fill(fill));
                         tycker.statics.annotations_type.insert_new(ty, kd);
-                        tycker.statics.env_type.insert_new(ty, self.info.clone());
+                        tycker.store_env(ty, &self.info);
                         let scope = self.info.skolem_scope().clone();
                         if let Some(existing) =
                             tycker.statics.fill_scopes.insert_or_get(fill, scope.clone())
@@ -4003,7 +4011,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         .types_pre
                                         .insert_new(named_id, ss::Fillable::Done(named));
                                     tycker.statics.annotations_type.insert_new(named_id, kind_id);
-                                    tycker.statics.env_type.insert_new(named_id, self.info.clone());
+                                    tycker.store_env(named_id, &self.info);
                                     TermAnnId::Type(named_id, kind_id)
                                 }
                                 | crate::query::NamedSynOutcome::Error(error) => {
@@ -4247,7 +4255,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         for (id, prod) in outcome.prods {
                             tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(prod));
                             tycker.statics.annotations_type.insert_new(id, outcome.vtype);
-                            tycker.statics.env_type.insert_new(id, self.info.clone());
+                            tycker.store_env(id, &self.info);
                         }
                         tycker.statics.values.insert_new(outcome.cons_id, outcome.cons);
                         tycker.statics.annotations_value.insert_new(outcome.cons_id, outcome.ann);
@@ -4547,10 +4555,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                             .statics
                                             .annotations_type
                                             .insert_new(abs_id, arrow_id);
-                                        tycker
-                                            .statics
-                                            .env_type
-                                            .insert_new(abs_id, self.info.clone());
+                                        tycker.store_env(abs_id, &self.info);
                                         TermAnnId::Type(abs_id, arrow_id)
                                     }
                                     | TermAnnId::Compu(compu, body_ty) => {
@@ -4589,10 +4594,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                             .types_pre
                                             .insert_new(ann_id, ss::Fillable::Done(ann));
                                         tycker.statics.annotations_type.insert_new(ann_id, kd);
-                                        tycker
-                                            .statics
-                                            .env_type
-                                            .insert_new(ann_id, self.info.clone());
+                                        tycker.store_env(ann_id, &self.info);
                                         tycker.statics.compus.insert_new(abs_id, abs);
                                         tycker.statics.annotations_compu.insert_new(abs_id, ann_id);
                                         tycker
@@ -4636,10 +4638,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                             .types_pre
                                             .insert_new(ann_id, ss::Fillable::Done(ann));
                                         tycker.statics.annotations_type.insert_new(ann_id, kd);
-                                        tycker
-                                            .statics
-                                            .env_type
-                                            .insert_new(ann_id, self.info.clone());
+                                        tycker.store_env(ann_id, &self.info);
                                         tycker.statics.values.insert_new(abs_id, abs);
                                         tycker.statics.annotations_value.insert_new(abs_id, ann_id);
                                         tycker
@@ -4746,10 +4745,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                             .types_pre
                                             .insert_new(ann_id, ss::Fillable::Done(ann));
                                         tycker.statics.annotations_type.insert_new(ann_id, kd);
-                                        tycker
-                                            .statics
-                                            .env_type
-                                            .insert_new(ann_id, self.info.clone());
+                                        tycker.store_env(ann_id, &self.info);
                                         if is_pack_pi {
                                             ann_id.constrain_to_scope_k(
                                                 tycker,
@@ -4826,10 +4822,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                             .types_pre
                                             .insert_new(ann_id, ss::Fillable::Done(ann));
                                         tycker.statics.annotations_type.insert_new(ann_id, kd);
-                                        tycker
-                                            .statics
-                                            .env_type
-                                            .insert_new(ann_id, self.info.clone());
+                                        tycker.store_env(ann_id, &self.info);
                                         if is_pack_pi {
                                             ann_id.constrain_to_scope_k(
                                                 tycker,
@@ -5561,10 +5554,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                                     .types_pre
                                                     .insert_new(id, ss::Fillable::Done(ty));
                                                 tycker.statics.annotations_type.insert_new(id, kd);
-                                                tycker
-                                                    .statics
-                                                    .env_type
-                                                    .insert_new(id, self.info.clone());
+                                                tycker.store_env(id, &self.info);
                                                 TermAnnId::Type(id, kd)
                                             }
                                             | Some(crate::query::PiSynOutcome::Error(error)) => {
@@ -5857,7 +5847,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 };
                                 tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(ty));
                                 tycker.statics.annotations_type.insert_new(id, kd);
-                                tycker.statics.env_type.insert_new(id, self.info.clone());
+                                tycker.store_env(id, &self.info);
                                 TermAnnId::Type(id, kd)
                             }
                             | PatAnnId::Value(vpat, ty_1) => {
@@ -5902,7 +5892,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 };
                                 tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(ty));
                                 tycker.statics.annotations_type.insert_new(id, kd);
-                                tycker.statics.env_type.insert_new(id, self.info.clone());
+                                tycker.store_env(id, &self.info);
                                 TermAnnId::Type(id, kd)
                             }
                         }
@@ -5971,7 +5961,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 };
                                 tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(ty));
                                 tycker.statics.annotations_type.insert_new(id, kd);
-                                tycker.statics.env_type.insert_new(id, self.info.clone());
+                                tycker.store_env(id, &self.info);
                                 TermAnnId::Type(id, kd)
                             }
                             | TermAnnId::Type(definition, definition_kind) => {
@@ -6032,7 +6022,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 };
                                 tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(ty));
                                 tycker.statics.annotations_type.insert_new(id, kd);
-                                tycker.statics.env_type.insert_new(id, self.info.clone());
+                                tycker.store_env(id, &self.info);
                                 TermAnnId::Type(id, kd)
                             }
                             | TermAnnId::Hole(_)
@@ -6110,7 +6100,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     .types_pre
                     .insert_new(outcome.thk_ty_id, ss::Fillable::Done(outcome.thk_ty));
                 tycker.statics.annotations_type.insert_new(outcome.thk_ty_id, outcome.vtype);
-                tycker.statics.env_type.insert_new(outcome.thk_ty_id, self.info.clone());
+                tycker.store_env(outcome.thk_ty_id, &self.info);
                 tycker.statics.values.insert_new(outcome.thunk_id, outcome.thunk);
                 tycker.statics.annotations_value.insert_new(outcome.thunk_id, outcome.thk_ty_id);
                 tycker.statics.env_value.insert_new(outcome.thunk_id, self.info.clone());
@@ -6216,7 +6206,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     .types_pre
                     .insert_new(outcome.ret_ty_id, ss::Fillable::Done(outcome.ret_ty));
                 tycker.statics.annotations_type.insert_new(outcome.ret_ty_id, outcome.vtype);
-                tycker.statics.env_type.insert_new(outcome.ret_ty_id, self.info.clone());
+                tycker.store_env(outcome.ret_ty_id, &self.info);
                 tycker.statics.compus.insert_new(outcome.ret_id, outcome.ret);
                 tycker.statics.annotations_compu.insert_new(outcome.ret_id, outcome.ret_ty_id);
                 tycker.statics.env_compu.insert_new(outcome.ret_id, self.info.clone());
@@ -6576,7 +6566,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 tycker.statics.datas.insert_new(outcome.data_id, outcome.data);
                 tycker.statics.types_pre.insert_new(outcome.ty_id, ss::Fillable::Done(outcome.ty));
                 tycker.statics.annotations_type.insert_new(outcome.ty_id, outcome.kd);
-                tycker.statics.env_type.insert_new(outcome.ty_id, self.info.clone());
+                tycker.store_env(outcome.ty_id, &self.info);
                 TermAnnId::Type(outcome.ty_id, outcome.kd)
             }
             | Tm::CoData(term) => {
@@ -6618,7 +6608,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 tycker.statics.codatas.insert_new(outcome.codata_id, outcome.codata);
                 tycker.statics.types_pre.insert_new(outcome.ty_id, ss::Fillable::Done(outcome.ty));
                 tycker.statics.annotations_type.insert_new(outcome.ty_id, outcome.kd);
-                tycker.statics.env_type.insert_new(outcome.ty_id, self.info.clone());
+                tycker.store_env(outcome.ty_id, &self.info);
                 TermAnnId::Type(outcome.ty_id, outcome.kd)
             }
             | Tm::Ctor(term) => {

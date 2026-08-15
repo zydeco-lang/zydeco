@@ -290,3 +290,132 @@ pub struct MonEnv {
     pub monad_ty: TypeId,
     pub monad_impl: ValueId,
 }
+
+/* --------------------------- Environment Interning ------------------------- */
+
+/// Typing environments compare by structural equivalence: clones of one
+/// environment share persistent allocations, so pointer equality answers the
+/// common case in O(1), while independently built environments fall back to a
+/// content comparison.
+impl PartialEq for TyEnv {
+    fn eq(&self, other: &Self) -> bool {
+        if self.defs.0.ptr_eq(&other.defs.0) && self.skolems.0.ptr_eq(&other.skolems.0) {
+            return true;
+        }
+        self.defs.len() == other.defs.len()
+            && self.defs.iter().all(|(def, ann)| other.defs.get(def) == Some(ann))
+            && self.skolems.0.len() == other.skolems.0.len()
+            && self.skolems.0.iter().all(|skolem| other.skolems.contains(skolem))
+    }
+}
+
+impl Eq for TyEnv {}
+
+impl std::hash::Hash for TyEnv {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // Both components are unordered collections, so fold the item hashes
+        // with xor: equal environments hash equally regardless of traversal
+        // order, which the content-based equality requires.
+        let mut acc = 0u64;
+        for (def, ann) in self.defs.iter() {
+            let def = def.key_space().as_u64() ^ u64::from(def.raw().into_u32());
+            let ann = match ann {
+                | AnnId::Set => 1,
+                | AnnId::Kind(kind) => kind.key_space().as_u64() ^ 2,
+                | AnnId::Type(ty) => ty.key_space().as_u64() ^ 3,
+            };
+            acc ^= def ^ ann;
+        }
+        for skolem in self.skolems.0.iter() {
+            acc ^= skolem.key_space().as_u64() ^ u64::from(skolem.raw().into_u32());
+        }
+        acc.hash(state);
+    }
+}
+
+/// Cache of typing environments shared between the millions of per-node
+/// arena entries that repeat one of comparatively few environments. Interning
+/// them leaves the arena holding only shared pointers.
+#[derive(Clone, Debug, Default)]
+pub struct TyEnvInterner {
+    table: std::collections::HashMap<TyEnv, std::sync::Arc<TyEnv>>,
+    /// The most recently interned environment. Adjacent checking sites almost
+    /// always share one environment, so a pointer comparison against this
+    /// entry answers most requests without touching the hash table.
+    last: Option<(TyEnv, std::sync::Arc<TyEnv>)>,
+}
+
+impl TyEnvInterner {
+    pub fn intern(&mut self, env: &TyEnv) -> std::sync::Arc<TyEnv> {
+        // Adjacent sites usually share one environment; a pointer comparison
+        // against the previous entry answers those requests in O(1). Content
+        // equality is resolved by the hash table for everything else.
+        if let Some((last, shared)) = &self.last
+            && last.defs.0.ptr_eq(&env.defs.0)
+            && last.skolems.0.ptr_eq(&env.skolems.0)
+        {
+            return shared.clone();
+        }
+        let shared =
+            self.table.entry(env.clone()).or_insert_with(|| std::sync::Arc::new(env.clone()));
+        self.last = Some((env.clone(), shared.clone()));
+        shared.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zydeco_utils::arena::{KeySpaceId, derived_id};
+
+    fn def(slot: u32) -> DefId {
+        derived_id(KeySpaceId::derive(0xEE11_EE11, 0, 0, 0), slot)
+    }
+
+    fn abst(slot: u32) -> AbstId {
+        derived_id(KeySpaceId::derive(0xEE11_EE12, 0, 0, 0), slot)
+    }
+
+    fn sample() -> TyEnv {
+        TyEnv::from_iter([(
+            def(0),
+            AnnId::Type(derived_id(KeySpaceId::derive(0xEE11_EE13, 0, 0, 0), 0)),
+        )])
+        .with_skolem(abst(0))
+    }
+
+    #[test]
+    fn interning_shares_clones_and_preserves_content() {
+        let mut interner = TyEnvInterner::default();
+        let env = sample();
+
+        let first = interner.intern(&env);
+        let clone = env.clone();
+        let second = interner.intern(&clone);
+
+        // Clones of one environment intern to the same shared value...
+        assert!(std::sync::Arc::ptr_eq(&first, &second));
+        // ...and the stored value keeps the environment's exact content.
+        assert_eq!(
+            second.as_ref().get(&def(0)),
+            Some(&AnnId::Type(derived_id(KeySpaceId::derive(0xEE11_EE13, 0, 0, 0), 0,)))
+        );
+        assert!(second.skolem_scope().contains(&abst(0)));
+    }
+
+    #[test]
+    fn interning_dedupes_independently_built_equal_environments() {
+        let mut interner = TyEnvInterner::default();
+        let env = sample();
+
+        let first = interner.intern(&env);
+        // The same content rebuilt from scratch shares no structure, but the
+        // content comparison still interns it to the same shared value.
+        let rebuilt = sample();
+        let second = interner.intern(&rebuilt);
+
+        assert_eq!(env, rebuilt);
+        assert!(std::sync::Arc::ptr_eq(&first, &second));
+        assert_eq!(second.as_ref().get(&def(0)), first.as_ref().get(&def(0)));
+    }
+}

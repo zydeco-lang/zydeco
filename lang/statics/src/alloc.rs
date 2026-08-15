@@ -400,8 +400,9 @@ where
         let ty = arena.alloc_type_pre(val.into());
         let statics = AsMut::<StaticsArena>::as_mut(arena);
         statics.annotations_type.insert_new(ty, kd);
-        statics.env_type.insert_new(ty, env.clone());
         let scope = env.skolem_scope().clone();
+        let env = statics.intern_env(env);
+        statics.env_type.insert_new(ty, env);
         if let Some(existing) = statics.fill_scopes.insert_or_get(val, scope.clone()) {
             statics.fill_scopes.replace_existing(val, existing.intersection(&scope));
         }
@@ -418,7 +419,8 @@ where
         let ty = arena.alloc_type_pre(Fillable::Done(val));
         let statics = AsMut::<StaticsArena>::as_mut(arena);
         statics.annotations_type.insert_new(ty, kd);
-        statics.env_type.insert_new(ty, env.clone());
+        let env = statics.intern_env(env);
+        statics.env_type.insert_new(ty, env);
         ty
     }
 }

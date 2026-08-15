@@ -127,7 +127,7 @@ impl Debruijn {
     fn lub_inner(self, lhs_id: TypeId, rhs_id: TypeId, tycker: &mut Tycker) -> Result<TypeId> {
         let lhs = tycker.statics.types_pre[&lhs_id].clone();
         let rhs = tycker.statics.types_pre[&rhs_id].clone();
-        let env = tycker.statics.env_type[&lhs_id].clone();
+        let env = tycker.statics.env_at(lhs_id);
         fn fill_ty(tycker: &mut Tycker, fill: FillId, ty: TypeId) -> Result<TypeId> {
             Ok(fill.fill(tycker, ty.into())?.as_type())
         }
