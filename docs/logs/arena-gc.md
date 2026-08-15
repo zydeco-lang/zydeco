@@ -16,41 +16,51 @@ decisions while implementing the plan.
 - salsa 0.26 stores everything per database (`Arc<Zalsa>`, freed on drop) and its
   `evict_lru` only resets revisions — no per-query eviction exists.
 
-## 2026-08-15 — plan and step 1: L/S split with a recompute interface
+## 2026-08-15 — round 1: salsa LRU on the check memo, then the L/S split
 
-### Plan
+### Findings
 
-Implement the roadmap from the design note in two moves:
+- salsa 0.26 supports `lru = <usize>` per tracked function (via the `Lru`
+  eviction policy); eviction fires in `reset_for_new_revision`, reachable without an
+  input write through `Database::trigger_lru_eviction`. Creating new salsa inputs does
+  *not* bump the revision, so multi-root sessions must trigger eviction explicitly.
+- `lru = 1` on `check_source` plus a per-analyze trigger dropped the session suite peak
+  from 18.0GB to 9.93GB; raising the pool cap to 64 grew it to 16.3GB, i.e. per-root
+  judgment memos cost ~115MB and still need the pool cap. The entry-counted LRU cannot
+  express root-scoped eviction for the fine-grained judgment queries (one root has
+  millions of entries per query), so the pool generation remains their policy.
+- A plain re-derivation of the pipeline does *not* hit the check memo: `ScopedData::new`
+  creates a fresh tracked identity every call. Sharing the memo requires a tracked
+  `resolved_data(db, root)` query so every consumer of one root holds the same
+  `ScopedData` and therefore the same `check_source` memo entry.
 
-1. `check_source` keeps returning the full arena for now, but the session retains only
-   the L tier (keyed indexes) and hands the S tier (occurrence payload) to consumers
-   through a scoped, transient materialization interface. This is the drop-after-consume
-   behavior without changing any consumer's traversal logic.
-2. Follow-up (later log entries): strip S from the memoized check output itself, make
-   the linkers demand-driven over judgment replay, and add the memo-layer LRU.
+### Changes
 
-Assumptions per the current direction: nothing needs to survive the type-checking phase
-except the L tier; coverage checking stays inside the check; semantic tokens are out of
-scope for now.
+- `check_source` memoizes with `lru = 1`; the test pool triggers eviction per analysis.
+- `StaticsArena::strip_occurrence_payload` clears the occurrence payload
+  (`types_pre`/`kinds_pre`/`values`/`compus`/patterns/annotations/normalized) and keeps
+  the keyed indexes.
+- `analyze_source` strips before constructing `ProgramAnalysis`; the analysis now
+  retains only the L tier. `CompilerSession::materialize_arena` / `checked_program` /
+  `executable_program` re-materialize on demand from the memoized check; the three
+  S-reading fact queries (`normalized_type_at`, `coverage_facts`,
+  `term_annotation_at`) re-derive through `rechecked`.
+- Consumers migrated: the CLI, the REPL engine, cajun, and the integration tests now
+  obtain the typed arena from the session. cajun's `ProjectState` materializes once at
+  load and holds the arena for the project's lifetime — the project is a live consumer
+  of its root, which the design permits.
 
-### Observations
+### Measurements
 
-- `check_source`'s memoized `TyckOutput` owns the whole arena, so the salsa database
-  retains S for as long as the root's inputs live, no matter what the session keeps.
-  Step 2's strip is therefore what actually frees memory; step 1 only bounds the
-  session's own copies.
-- The judgment queries are the recompute source: every S node's id derives from its
-  site via `KeySpaceId::derive(tag, entity_space, entity_raw, occurrence)` and its
-  content is the judgment query's value, so a transient materializer can replay them.
-- Consumers (dynamics link, stackir lower) traverse the typed tree by ids; they read
-  the arena through `Index` and `get`, so routing them through a materializer view
-  should be mechanical once the view exists.
+- Session suite (2 threads): 149 passed; peak RSS 9.93GB after the LRU step, 6.32GB
+  after the L/S split; 72s wall. Full workspace suite: 739 passed, 0 failed.
 
-### Decisions
+### Known Costs / Next
 
-- Materialization runs outside the salsa memo: the materialized arena is owned by the
-  caller and dropped when consumption finishes, so its retention is exactly the
-  consumer's lifetime.
-- The checker and the materializer share one walk: the checker already walks the scoped
-  program in canonical order, so the materializer reuses the same driver rather than a
-  second traversal.
+- The three S-reading fact queries clone the whole arena per new key (hover pays a
+  transient ~500MB clone). The permanent fix is per-fact judgment replay; until then
+  hover stays correct but heavyweight.
+- `lru = 1` means materializing a stale (non-latest) analysis re-checks its root;
+  acceptable while consumers hold their own materialized copy.
+- Next candidates: per-fact replay for hover, root-scoped policy for judgment memos
+  (the pool cap is the current answer), and quantifying the retained L tier per root.
