@@ -2,9 +2,10 @@ use crate::with::With;
 use std::{
     fmt::Display,
     // hash::Hash,
+    num::NonZeroU32,
     path::PathBuf,
     rc::Rc,
-    sync::{Arc, OnceLock},
+    sync::Arc,
 };
 
 #[derive(Clone, Debug)]
@@ -99,19 +100,58 @@ impl FileInfo {
 #[debug("{self}")]
 pub struct Span {
     span1: (Cursor1, Cursor1),
-    span2: OnceLock<(Cursor2, Cursor2)>,
-    path: OnceLock<Option<Arc<PathBuf>>>,
+    span2: Option<CompactSpan2>,
+    path: Option<Arc<PathBuf>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct CompactSpan2 {
+    start: CompactCursor2,
+    end: CompactCursor2,
+}
+
+impl CompactSpan2 {
+    fn with_cursors(start: Cursor2, end: Cursor2) -> Option<Self> {
+        Some(Self {
+            start: CompactCursor2::with_cursor(start)?,
+            end: CompactCursor2::with_cursor(end)?,
+        })
+    }
+
+    fn cursors(self) -> (Cursor2, Cursor2) {
+        (self.start.cursor(), self.end.cursor())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct CompactCursor2 {
+    line_plus_one: NonZeroU32,
+    column: u32,
+}
+
+impl CompactCursor2 {
+    fn with_cursor(Cursor2 { line, column }: Cursor2) -> Option<Self> {
+        let line_plus_one = u32::try_from(line).ok()?.checked_add(1)?;
+        Some(Self {
+            line_plus_one: NonZeroU32::new(line_plus_one)?,
+            column: u32::try_from(column).ok()?,
+        })
+    }
+
+    fn cursor(self) -> Cursor2 {
+        Cursor2 { line: self.line_plus_one.get() as usize - 1, column: self.column as usize }
+    }
 }
 
 impl Span {
     pub fn new(l: usize, r: usize) -> Span {
-        Span { span1: (l, r), span2: OnceLock::new(), path: OnceLock::new() }
+        Span { span1: (l, r), span2: None, path: None }
     }
     pub fn dummy() -> Span {
         Span::new(0, 0)
     }
     pub fn is_dummy(&self) -> bool {
-        self.span1 == (0, 0) && self.span2.get().is_none() && self.path.get().is_none()
+        self.span1 == (0, 0) && self.span2.is_none() && self.path.is_none()
     }
     pub fn make<T>(&self, inner: T) -> Sp<T> {
         Sp { inner, info: self.clone() }
@@ -128,18 +168,16 @@ impl Span {
     pub fn make_arc<T>(&self, inner: T) -> Arc<Sp<T>> {
         Arc::new(Sp { inner, info: self.clone() })
     }
-    pub fn set_info(&self, r#gen: &FileInfo) {
+    fn set_info(&mut self, r#gen: &FileInfo) {
         let (start, end) = self.span1;
-        self.span2
-            .set((r#gen.trans_span2(start), r#gen.trans_span2(end)))
-            .expect("span2 is already set");
-        self.path.set(r#gen.path.clone()).expect("path is already set");
+        self.span2 = CompactSpan2::with_cursors(r#gen.trans_span2(start), r#gen.trans_span2(end));
+        self.path = r#gen.path.clone();
     }
     pub fn get_cursor1(&self) -> (Cursor1, Cursor1) {
         self.span1
     }
     pub fn get_path(&self) -> Option<&PathBuf> {
-        self.path.get().and_then(|o| o.as_ref()).map(|p| p.as_ref())
+        self.path.as_deref()
     }
     /// Convert a span to an Ariadne-compatible span identifier.
     ///
@@ -161,7 +199,7 @@ impl Span {
         let path = self.get_path()?;
         Some((PathDisplay::from(path), start..end))
     }
-    pub fn under_loc_ctx(self, loc: &LocationCtx) -> Self {
+    pub fn under_loc_ctx(mut self, loc: &LocationCtx) -> Self {
         match loc {
             | LocationCtx::File(info) => {
                 self.set_info(info);
@@ -175,9 +213,9 @@ impl Span {
 impl Display for Span {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (l, r) = self.span1;
-        if let Some(Some(path)) = self.path.get() {
+        if let Some(path) = &self.path {
             write!(f, "{}", path.display())?;
-            if let Some((l2, r2)) = self.span2.get() {
+            if let Some((l2, r2)) = self.span2.map(CompactSpan2::cursors) {
                 write!(f, ":{l2} - {r2}",)?;
             } else {
                 write!(f, ":{l}-{r}",)?;
@@ -310,7 +348,32 @@ impl PathDisplay {
 
 #[cfg(test)]
 mod tests {
-    use super::{Cursor2, FileInfo};
+    use super::{CompactCursor2, Cursor2, FileInfo, LocationCtx, Span};
+    use std::{mem::size_of, path::PathBuf, sync::Arc};
+
+    #[test]
+    fn spans_have_a_compact_layout() {
+        #[cfg(target_pointer_width = "64")]
+        assert_eq!(size_of::<Span>(), 40);
+    }
+
+    #[test]
+    fn compact_cursors_reject_unrepresentable_positions() {
+        assert!(CompactCursor2::with_cursor(Cursor2 { line: usize::MAX, column: 0 }).is_none());
+        assert!(CompactCursor2::with_cursor(Cursor2 { line: 0, column: usize::MAX }).is_none());
+    }
+
+    #[test]
+    fn spans_retain_file_locations() {
+        let source = "alpha\nbeta\n";
+        let path = Arc::new(PathBuf::from("example.zy"));
+        let info = FileInfo::new(source, Some(path));
+        let span = Span::new(6, 10).under_loc_ctx(&LocationCtx::File(info));
+
+        assert_eq!(span.to_string(), "example.zy:2:1 - 2:5");
+        assert_eq!(span.get_cursor1(), (6, 10));
+        assert_eq!(span.get_path(), Some(&PathBuf::from("example.zy")));
+    }
 
     #[test]
     fn utf16_positions_round_trip_through_byte_offsets() {

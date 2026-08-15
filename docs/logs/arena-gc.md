@@ -1963,3 +1963,54 @@ decisions while implementing the plan.
   conflated with the assembled program representation.
 - Measure provenance multiplicities as well as key density. A compact index plus dense edge payload
   may generalize better than replacing either direction with a wide optional relation value.
+
+## 2026-08-15 — round 43: compact resolved source spans
+
+### Findings
+
+- A fresh live-heap census after round 42 measured 110.0MB of malloc-owned storage. Surface hash
+  allocations accounted for 40.2MB, and the largest concrete allocation among them was the
+  12,730,368-byte assembled textual span map. This displaced scoped terms and term facts as the
+  leading individual source-side target.
+- The assembled standard-library program has 98,398 spans in one identifier key space. Definitions,
+  patterns, copatterns, and terms contain 3,431, 8,680, 1,937, and 84,350 entries respectively; their
+  sum exactly equals the greatest allocated raw-ID extent. The shared textual parser allocator makes
+  this relation fully dense even though the entity categories are separate types.
+- Each `Span` occupied 72 bytes: two byte offsets, two resolved `usize` line/column pairs behind a
+  `OnceLock`, and an optional shared path behind a second `OnceLock`. Location attachment consumes a
+  fresh span before the value enters an arena, so neither lock mediated concurrent or repeated
+  initialization. Their state and machine-word coordinates were representation cost rather than a
+  semantic requirement.
+- Source line and column positions fit compactly in two `u32` values. Encoding the one-based line as
+  `NonZeroU32` gives `Option<CompactCursor2>` a niche, so both resolved endpoints occupy 16 bytes and
+  the entire span occupies 40 bytes. A source beyond the compact coordinate range retains its byte
+  offsets and path and falls back to byte-offset display instead of truncating a position.
+
+### Changes
+
+- Replaced both per-span locks with immutable compact location data and the existing shared path.
+  `under_loc_ctx` now attaches that data while it exclusively owns the span.
+- Kept the public byte offsets, path lookup, Ariadne conversion, and file/line/column display
+  behavior unchanged for representable source files.
+- Added layout, overflow, and rendered-location regressions. The 64-bit layout test fixes the intended
+  40-byte bound explicitly.
+
+### Measurements
+
+- Five release checks used 164,642,816, 164,233,216, 164,216,832, 164,413,440, and 164,134,912 bytes
+  peak RSS (median 164,233,216), down 2,572,288 bytes (-1.5%) from round 42. Warm wall time was 0.21s
+  and warm user time was 0.19s.
+- The current-tree baseline is now down from 2,497,757,184 to 164,233,216 bytes (-93.4%).
+- All 27 utility tests and their doctests, all 140 surface tests, all 57 statics tests, all 151 session
+  tests, all CLI tests, all 31 Cajun unit tests, and all 9 Cajun stdio tests passed. The release CLI
+  build and full standard-library check also passed.
+
+### Next
+
+- Replace the assembled span hash map with storage that expresses the observed shared-key-space
+  density. A dense span vector plus one-byte entity-category tags should need about 4.0MB of payload
+  at current sizes while preserving typed iteration.
+- Keep per-source template span maps independently reusable by Salsa. Their separate identifier key
+  spaces and lifetimes require measurement before applying the assembled representation to them.
+- Revisit the 11.7MB static pattern-provenance relation after the span index. Its multiplicity, rather
+  than merely its key density, should determine whether it uses pages or a compact edge index.
