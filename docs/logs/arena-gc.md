@@ -1807,3 +1807,54 @@ decisions while implementing the plan.
   follows the check memo's `lru = 1` lifetime instead of every resolved snapshot's lifetime.
 - Re-run the heap census after that phase split, because a smaller retained source baseline may move
   the peak to an earlier point in term checking.
+
+## 2026-08-15 — round 40: make source contexts checker-local
+
+### Findings
+
+- `ScopedData` owns an `Arc<ScopedArena>` as a tracked Salsa field, `TyckOutput` returns the same arc,
+  and `ProgramAnalysis` retains it for editor and diagnostic queries. Keeping term contexts in that
+  arena therefore gave a checker-only table the lifetime of every resolved snapshot and finished
+  analysis.
+- The three free-variable checks occur only while source judgments run: two classify newly bound
+  definitions as global, and one marks the typed result of each source term as global. Hole solving,
+  normalization, coverage validation, diagnostics, the editor, and every backend use the recorded
+  static facts rather than the source contexts.
+- Pattern binding and free-variable maps are needed only while the postorder equations construct
+  term summaries. Once the term table exists, both pattern maps can be destroyed before the first
+  typed node is allocated.
+
+### Changes
+
+- Removed term contexts from `ScopedArena`; name resolution now returns only durable scoped syntax,
+  users, provenance, and block dependency data.
+- Added the typed `TermContexts::collect` boundary in the surface arena. Its private
+  `ContextCollector` borrows scoped syntax, computes both pattern maps as scratch state, and returns
+  only the paged term free-variable relation.
+- `Tycker` owns `TermContexts`, builds it once for the source root, and exposes one private typed
+  lookup to the three global-classification sites. Both whole-source checking paths release the
+  table immediately after `run_judgments_k`, including the rejected-judgment path, before hole
+  collection and normalization.
+- The global checks now iterate borrowed contexts instead of cloning each sorted vector merely to
+  test membership.
+
+### Measurements
+
+- Three release checks used 172,228,608, 171,982,848, and 171,950,080 bytes peak RSS (median
+  171,982,848), down 2,228,224 bytes (-1.3%) from round 39. The narrow 279KB range confirms that the
+  paged table no longer overlaps the final static-arena peak.
+- The current-tree baseline is now down from 2,497,757,184 to 171,982,848 bytes (-93.1%). Warm wall
+  time was 0.23--0.24s and warm user time was 0.21s.
+- All 140 surface tests, all 56 statics tests, all 151 session tests, all 31 Cajun unit tests, and all
+  9 Cajun stdio tests passed. The release CLI build and full standard-library check also passed.
+
+### Next
+
+- Capture a new malloc-stack census at the 172MB peak. The durable scoped arena now contains no
+  context maps, and old stack categories for resolver collection should disappear before the
+  checker reaches its maximum.
+- Attribute the remaining source-side peak separately from the post-normalization peak. If the
+  checker now peaks after contexts are released, further work belongs in typed facts, provenance,
+  or Salsa memos rather than in resolver summaries.
+- Re-evaluate the next producer-query family and typed provenance relation from current measurements
+  instead of relying on the round-35 heap snapshot.

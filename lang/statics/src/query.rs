@@ -2274,6 +2274,7 @@ pub fn check_source<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> TyckOutp
         let mut tycker = Tycker::new(db, data, data.spans(db), data.prim(db), &scoped);
         crate::check::InternalTerm::fill_intrinsics(&mut tycker);
         root = tycker.run_judgments_k(data.root(db)).ok();
+        tycker.release_source_contexts();
         tycker.resolve_holes_and_collect();
         outcome = match root {
             | None => {

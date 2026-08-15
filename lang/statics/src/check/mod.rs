@@ -6,7 +6,7 @@ use {
         syntax::{AbstId, AnnId, FillId, Fillable, InferenceSite, PatAnnId, TermAnnId},
         *,
     },
-    crate::surface_syntax::{PrimDefs, ScopedArena, SpanArena},
+    crate::surface_syntax::{PrimDefs, ScopedArena, SpanArena, TermContexts},
     crate::validate::CoverageChecker,
     zydeco_surface::metadata::BuiltinMeta,
     zydeco_utils::prelude::ArenaAccess,
@@ -43,6 +43,7 @@ pub struct Tycker<'a> {
     pub prim: &'a PrimDefs,
     #[as_ref(ScopedArena)]
     pub scoped: &'a ScopedArena,
+    source_contexts: TermContexts,
     #[as_ref(StaticsArena)]
     #[as_mut(StaticsArena)]
     pub statics: StaticsArena,
@@ -1436,6 +1437,7 @@ impl<'a> Tycker<'a> {
     ) -> Self {
         let mut statics = StaticsArena::default();
         statics.reserve(scoped.terms.len());
+        let source_contexts = TermContexts::collect(scoped, data.root(db));
         Self {
             allocator: DerivedAllocator::new(),
             db,
@@ -1443,6 +1445,7 @@ impl<'a> Tycker<'a> {
             spans,
             prim,
             scoped,
+            source_contexts,
             statics,
             tasks: im::Vector::new(),
             check_counts: ArenaAssoc::default(),
@@ -1514,9 +1517,19 @@ impl<'a> Tycker<'a> {
     }
 
     pub fn run_source_k(&mut self, root: su::TermId) -> ResultKont<TermAnnId> {
-        let root = self.run_judgments_k(root)?;
+        let root = self.run_judgments_k(root);
+        self.release_source_contexts();
+        let root = root?;
         self.finish_check_k()?;
         Ok(root)
+    }
+
+    pub(crate) fn release_source_contexts(&mut self) {
+        self.source_contexts = TermContexts::default();
+    }
+
+    fn source_free_variables(&self, term: &su::TermId) -> &su::CoContext {
+        self.source_contexts.at(term)
     }
 
     /// The occurrence of the innermost allocation site, carried by the
@@ -2580,9 +2593,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::Binding> {
                 match binder.try_destruct_def(tycker) {
                     | (Some(def), _) => {
                         // coctx defines what the bindee is using that is not local
-                        if (tycker.scoped.coctxs_term_local[&surface_bindee].clone())
-                            .into_iter()
-                            .all(|id| tycker.statics.global_defs.get(&id).is_some())
+                        if tycker
+                            .source_free_variables(&surface_bindee)
+                            .iter()
+                            .all(|id| tycker.statics.global_defs.get(id).is_some())
                         {
                             tycker.statics.global_defs.ensure(def);
                         }
@@ -2603,9 +2617,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::Binding> {
                     | (Some(def), _) => {
                         let _ = tycker.statics.value_aliases.upsert(def, bindee);
                         // coctx defines what the bindee is using that is not local
-                        if (tycker.scoped.coctxs_term_local[&surface_bindee].clone())
-                            .into_iter()
-                            .all(|id| tycker.statics.global_defs.get(&id).is_some())
+                        if tycker
+                            .source_free_variables(&surface_bindee)
+                            .iter()
+                            .all(|id| tycker.statics.global_defs.get(id).is_some())
                         {
                             tycker.statics.global_defs.ensure(def);
                             // consider adding it to the inlinables as well
@@ -7627,7 +7642,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
             tycker.statics.record_term_annotation(self.inner, out_ann);
 
             // check if the term is global
-            let global = tycker.scoped.coctxs_term_local[&self.inner]
+            let global = tycker
+                .source_free_variables(&self.inner)
                 .iter()
                 .all(|def| tycker.statics.global_defs.get(def).is_some());
 
@@ -7699,7 +7715,6 @@ mod source_boundary_tests {
             |allocator, scoped| {
                 let root = allocator.alloc();
                 scoped.terms.insert_new(root, su::Hole.into());
-                scoped.coctxs_term_local.insert_new(root, su::CoContext::new());
                 (root, ())
             },
             |tycker, ()| test(tycker),
@@ -7927,9 +7942,6 @@ mod source_boundary_tests {
                 scoped.pats.insert_new(binder, su::Pattern::Var(binder_def));
                 scoped.terms.insert_new(body, su::Hole.into());
                 scoped.terms.insert_new(root, su::Abs(binder, body).into());
-                [body, root].into_iter().for_each(|term| {
-                    scoped.coctxs_term_local.insert_new(term, su::CoContext::new());
-                });
                 (root, binder_def)
             },
             |tycker, binder_def| {
@@ -8039,9 +8051,6 @@ mod source_boundary_tests {
                 scoped.terms.insert_new(hole, su::Hole.into());
                 scoped.terms.insert_new(annotation, su::Term::Var(source_def));
                 scoped.terms.insert_new(root, su::Ann { tm: hole, ty: annotation }.into());
-                [hole, annotation, root].into_iter().for_each(|term| {
-                    scoped.coctxs_term_local.insert_new(term, su::CoContext::new());
-                });
                 (root, (source_def, target_def))
             },
             |tycker, (source_def, target_def)| {
@@ -8124,9 +8133,6 @@ mod source_boundary_tests {
         let mut scoped = su::ScopedArena::default();
         scoped.terms.insert_new(hole, su::Hole.into());
         scoped.terms.insert_new(boundary, su::SourceBoundary(hole).into());
-        [hole, boundary].into_iter().for_each(|term| {
-            scoped.coctxs_term_local.insert_new(term, su::CoContext::new());
-        });
 
         let spans = su::SpanArena::default();
         let prim = su::PrimDefs::default();
@@ -8135,7 +8141,7 @@ mod source_boundary_tests {
             spans: spans.clone(),
             prim: prim.clone(),
             scoped: scoped.clone(),
-            root: hole,
+            root: boundary,
         }));
         let data = crate::query::intern_pending(&db);
         let mut tycker = Tycker::new(&db, data, &spans, &prim, &mut scoped);
@@ -8156,9 +8162,6 @@ mod source_boundary_tests {
         let mut scoped = su::ScopedArena::default();
         scoped.terms.insert_new(hole, su::Hole.into());
         scoped.terms.insert_new(boundary, su::SourceBoundary(hole).into());
-        [hole, boundary].into_iter().for_each(|term| {
-            scoped.coctxs_term_local.insert_new(term, su::CoContext::new());
-        });
 
         let spans = su::SpanArena::default();
         let prim = su::PrimDefs::default();
@@ -8167,7 +8170,7 @@ mod source_boundary_tests {
             spans: spans.clone(),
             prim: prim.clone(),
             scoped: scoped.clone(),
-            root: hole,
+            root: boundary,
         }));
         let data = crate::query::intern_pending(&db);
         let mut tycker = Tycker::new(&db, data, &spans, &prim, &mut scoped);

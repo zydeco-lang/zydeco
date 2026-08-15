@@ -49,11 +49,11 @@ impl TestFixture {
             terms: Default::default(),
             textual: Default::default(),
             users: Default::default(),
-            coctxs_term_local: Default::default(),
             blocks: Default::default(),
         };
         let db = TestDb::default();
         let root = IdAllocator::<zydeco_surface::scoped::arena::ScopedScope>::new().alloc();
+        scoped.terms.insert_new(root, zydeco_surface::scoped::syntax::Hole.into());
         *db.pending.lock().unwrap() =
             Some(std::sync::Arc::new(zydeco_statics::query::PendingParts {
                 spans: spans.clone(),

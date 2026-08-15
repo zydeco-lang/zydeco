@@ -167,7 +167,7 @@ pub trait ArenaScoped {
     fn term(&self, id: &TermId) -> Term<DefId>;
 }
 
-/// Resolved arena plus name-resolution metadata and dependency/context analysis.
+/// Resolved arena plus name-resolution metadata and dependency analysis.
 #[derive(Clone, Debug, Default, AsRefSelf, AsMutSelf)]
 pub struct ScopedArena {
     // arenas
@@ -179,10 +179,26 @@ pub struct ScopedArena {
 
     /// def user map
     pub users: ArenaForth<DefId, TermId>,
-    /// variables that are free within the term
-    pub coctxs_term_local: ArenaPagedAssoc<TermId, CoContext>,
     /// Context DAGs retained for nested `begin` terms.
     pub blocks: ArenaAssoc<TermId, ContextualTerm<BindingContext, BlockBody>>,
+}
+
+/// Free-variable summaries needed while checking resolved terms.
+#[derive(Debug, Default)]
+pub struct TermContexts {
+    coctxs_term_local: ArenaPagedAssoc<TermId, CoContext>,
+}
+
+impl TermContexts {
+    /// Collect one free-variable summary per term in postorder.
+    pub fn collect(scoped: &ScopedArena, root: TermId) -> Self {
+        ContextCollector::new(scoped).run_source(root)
+    }
+
+    /// Variables used freely by one resolved term.
+    pub fn at(&self, term: &TermId) -> &CoContext {
+        &self.coctxs_term_local[term]
+    }
 }
 
 impl ScopedArena {
@@ -204,17 +220,38 @@ impl ArenaScoped for ScopedArena {
     }
 }
 
-use super::Collector;
+struct ContextCollector<'arena> {
+    scoped: &'arena ScopedArena,
+    ctxs_pat_local: ArenaAssoc<PatId, Context>,
+    coctxs_pat_local: ArenaAssoc<PatId, CoContext>,
+    coctxs_term_local: ArenaPagedAssoc<TermId, CoContext>,
+}
 
-impl ArenaScoped for Collector {
+impl<'arena> ContextCollector<'arena> {
+    fn new(scoped: &'arena ScopedArena) -> Self {
+        Self {
+            scoped,
+            ctxs_pat_local: ArenaAssoc::default(),
+            coctxs_pat_local: ArenaAssoc::default(),
+            coctxs_term_local: ArenaPagedAssoc::default(),
+        }
+    }
+
+    fn run_source(mut self, root: TermId) -> TermContexts {
+        root.obverse_local_post(&mut self, &());
+        TermContexts { coctxs_term_local: self.coctxs_term_local }
+    }
+}
+
+impl ArenaScoped for ContextCollector<'_> {
     fn def(&self, id: &DefId) -> VarName {
-        self.defs[id].to_owned()
+        self.scoped.def(id)
     }
     fn pat(&self, id: &PatId) -> Pattern {
-        self.pats[id].to_owned()
+        self.scoped.pat(id)
     }
     fn term(&self, id: &TermId) -> Term<DefId> {
-        self.terms[id].to_owned()
+        self.scoped.term(id)
     }
 }
 
@@ -228,7 +265,7 @@ pub trait LocalFoldScoped<Cx>: ArenaScoped {
     fn action_term(&mut self, term: TermId, ctx: &Cx);
 }
 
-impl LocalFoldScoped<()> for Collector {
+impl LocalFoldScoped<()> for ContextCollector<'_> {
     fn action_def(&mut self, _def: DefId, _ctx: &()) {}
 
     /// Updates [`Self::ctxs_pat_local`] and [`Self::coctxs_pat_local`].

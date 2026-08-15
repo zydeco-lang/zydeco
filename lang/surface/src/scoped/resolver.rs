@@ -1,5 +1,4 @@
 use crate::scoped::{syntax::*, *};
-use crate::textual::syntax as t;
 use zydeco_utils::prelude::DepGraph;
 
 /// Global name environment collected from top-level binders.
@@ -89,14 +88,14 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    /// Run name resolution and context collection over one complete source term.
+    /// Run name resolution over one complete source term.
     pub fn run_source(mut self, root: TermId) -> Result<ResolveSourceOut> {
         root.resolve(&mut self, (Local::for_body(), &Global::default()))?;
-        let ResolvedProgram { prim, arena } = self.finish(root)?;
+        let ResolvedProgram { prim, arena } = self.finish()?;
         Ok(ResolveSourceOut { prim, arena, root })
     }
 
-    fn finish(self, root: TermId) -> Result<ResolvedProgram> {
+    fn finish(self) -> Result<ResolvedProgram> {
         let Resolver {
             allocator,
             spans: _,
@@ -114,34 +113,9 @@ impl<'a> Resolver<'a> {
         let _ = allocator;
         assert!(block_deps.iter().next().is_none(), "every block dependency graph must be closed");
         let BitterArena { defs: _, pats: _, terms: _, textual } = bitter;
-        let ctxs_pat_local = ArenaAssoc::default();
-        let coctxs_pat_local = ArenaAssoc::default();
-        let coctxs_term_local = ArenaPagedAssoc::default();
-        let collector = Collector {
-            defs,
-            pats,
-            terms,
-            textual,
-            users,
-            ctxs_pat_local,
-            coctxs_pat_local,
-            coctxs_term_local,
-            blocks,
-        };
-        let Collector {
-            defs,
-            pats,
-            terms,
-            textual,
-            users,
-            ctxs_pat_local: _,
-            coctxs_pat_local: _,
-            coctxs_term_local,
-            blocks,
-        } = collector.run_source(root);
         Ok(ResolvedProgram {
             prim,
-            arena: ScopedArena { defs, pats, terms, textual, users, coctxs_term_local, blocks },
+            arena: ScopedArena { defs, pats, terms, textual, users, blocks },
         })
     }
 
@@ -473,27 +447,5 @@ impl Resolve for TermId {
         // save the new term structure
         resolver.terms.insert_new(*self, res);
         Ok(())
-    }
-}
-
-/// See [`ScopedArena`] for more detail.
-pub struct Collector {
-    pub defs: ArenaSparse<ScopedScope, DefId>,
-    pub pats: ArenaSparse<ScopedScope, PatId>,
-    pub terms: ArenaSparse<ScopedScope, TermId>,
-    pub textual: ArenaForth<t::EntityId, EntityId>,
-
-    pub users: ArenaForth<DefId, TermId>,
-    pub ctxs_pat_local: ArenaAssoc<PatId, Context>,
-    pub coctxs_pat_local: ArenaAssoc<PatId, CoContext>,
-    pub coctxs_term_local: ArenaPagedAssoc<TermId, CoContext>,
-
-    pub blocks: ArenaAssoc<TermId, ContextualTerm<BindingContext, BlockBody>>,
-}
-
-impl Collector {
-    pub fn run_source(mut self, root: TermId) -> Self {
-        root.obverse_local_post(&mut self, &());
-        self
     }
 }
