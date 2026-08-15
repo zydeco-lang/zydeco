@@ -176,12 +176,40 @@ struct TestPipeline;
 /// that import `lib/std` only pay for their own root after the first one.
 /// The mutex serializes the analysis phase, which is also what keeps the
 /// heavy tests from saturating every core at once.
-static SHARED_SESSION: LazyLock<Mutex<CompilerSession>> =
-    LazyLock::new(|| Mutex::new(CompilerSession::default()));
+///
+/// The session retains every root analysis forever, and each standard-library
+/// root keeps its arena facts alive, so an unbounded session exhausts memory
+/// over a full suite run. The pool therefore discards the session after
+/// [`SHARED_SESSION_CAP`] analyses and pays for the standard library again on
+/// the next root.
+static SHARED_SESSION: LazyLock<Mutex<SessionPool>> =
+    LazyLock::new(|| Mutex::new(SessionPool { session: CompilerSession::default(), analyses: 0 }));
+
+/// The number of root analyses one shared session retains before it is
+/// replaced. Bounds cumulative arena growth while still amortizing the
+/// standard library's sub-analyses across neighbouring tests.
+const SHARED_SESSION_CAP: usize = 8;
+
+struct SessionPool {
+    session: CompilerSession,
+    analyses: usize,
+}
+
+impl SessionPool {
+    fn session(&mut self) -> &CompilerSession {
+        if self.analyses >= SHARED_SESSION_CAP {
+            self.session = CompilerSession::default();
+            self.analyses = 0;
+        }
+        self.analyses += 1;
+        &self.session
+    }
+}
 
 impl TestPipeline {
     fn check(path: impl AsRef<Path>) -> Result<SourceChecked, TestPipelineError> {
-        let session = SHARED_SESSION.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut pool = SHARED_SESSION.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let session = pool.session();
         let analysis = session.analyze(path).map_err(TestPipelineError::Analysis)?;
         let checked = analysis.checked_program().ok_or(TestPipelineError::Rejected)?;
         Ok(SourceChecked {
@@ -1611,7 +1639,7 @@ fn authored_intrinsic_splices_are_each_introduced_once_in_the_builtin_tree() {
     let builtin_modules = repository_source("std/builtin").canonicalize().unwrap();
     let (builtin_sources, unexpected): (Vec<_>, Vec<_>) = RepositorySourceFiles::all()
         .into_iter()
-        .filter(|path| std::fs::read_to_string(path).unwrap().contains("@[intrinsic("))
+        .filter(|path| std::fs::read_to_string(path).unwrap().contains("@(intrinsic("))
         .partition(|path| path == &builtin_root || path.starts_with(&builtin_modules));
     let source = builtin_sources
         .iter()
@@ -1629,7 +1657,7 @@ fn authored_intrinsic_splices_are_each_introduced_once_in_the_builtin_tree() {
     ]
     .into_iter()
     .for_each(|role| {
-        let spelling = format!("@[intrinsic({role})] _");
+        let spelling = format!("@(intrinsic({role}))");
         assert_eq!(
             source.match_indices(&spelling).count(),
             1,
