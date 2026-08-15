@@ -202,6 +202,10 @@ impl SessionPool {
             self.analyses = 0;
         }
         self.analyses += 1;
+        // `check_source` memoizes with `lru = 1`, so this evicts the previous
+        // root's full arena before the next one materializes; each test already
+        // extracted its own arena out of the analysis it holds.
+        salsa::Database::trigger_lru_eviction(&mut self.session);
         &self.session
     }
 }

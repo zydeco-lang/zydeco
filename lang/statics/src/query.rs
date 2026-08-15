@@ -2349,7 +2349,11 @@ pub struct TyckOutput {
 
 // The outcome owns its arenas and reports and contains no database-tied references.
 // The non-Update escape hatch stays until the judgment layer gains structural equality.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+//
+// `lru = 1` keeps only the most recently used arena memo: the full typed arena of one
+// root is hundreds of megabytes, so the database forgets earlier roots whenever the
+// session triggers LRU eviction between analyses. Judgments stay memoized separately.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types), lru = 1)]
 pub fn check_source<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> TyckOutput {
     // One checker runs the whole pipeline within a single query. Splitting the
     // phases into separate salsa queries required deep-copying the full statics
