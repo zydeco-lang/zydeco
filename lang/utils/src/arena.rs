@@ -83,6 +83,16 @@ pub fn derived_id<Id: ArenaId>(key_space: KeySpaceId, slot: u32) -> Id {
     Id::from_raw_parts(ArenaIdToken(()), key_space, RawIdx::from_u32(slot))
 }
 
+/// Reconstruct an identifier that was previously issued by an allocator.
+///
+/// Dense storage may omit repeated identifier values when it separately
+/// retains the original key space, raw slot, and identifier category. Callers
+/// must not use this function to invent a new allocation.
+#[doc(hidden)]
+pub fn restore_id<Id: ArenaId>(key_space: KeySpaceId, raw: RawIdx) -> Id {
+    Id::from_raw_parts(ArenaIdToken(()), key_space, raw)
+}
+
 /// Declares that an allocator scope may issue a particular identifier type.
 ///
 /// This relation is intentionally independent from [`ArenaSchema`]: a pass may

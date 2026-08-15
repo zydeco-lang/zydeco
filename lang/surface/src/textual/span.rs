@@ -58,7 +58,7 @@ mod impl_span_arena {
                 })
                 .collect();
             hit.sort_by_key(|a| a.1);
-            hit.into_iter().map(|(id, _)| *id).collect()
+            hit.into_iter().map(|(id, _)| id).collect()
         }
 
         /// Find all entities that are **included** in the given span.
@@ -76,7 +76,7 @@ mod impl_span_arena {
                 })
                 .collect();
             hit.sort_by_key(|item| std::cmp::Reverse(item.1));
-            hit.into_iter().map(|(id, _)| *id).collect()
+            hit.into_iter().map(|(id, _)| id).collect()
         }
     }
 

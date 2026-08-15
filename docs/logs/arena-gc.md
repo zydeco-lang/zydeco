@@ -2014,3 +2014,57 @@ decisions while implementing the plan.
   spaces and lifetimes require measurement before applying the assembled representation to them.
 - Revisit the 11.7MB static pattern-provenance relation after the span index. Its multiplicity, rather
   than merely its key density, should determine whether it uses pages or a compact edge index.
+
+## 2026-08-15 — round 44: make parser span identity implicit
+
+### Findings
+
+- Every `SpanArena` is produced by exactly one `Parser`. That parser owns one sequential allocator
+  shared by definitions, patterns, copatterns, and terms, and its only allocation method records one
+  span before returning the new ID. Consequently, a span's raw ID is always its insertion index,
+  there are no gaps, and every arena contains only one key space.
+- The entity category remains semantically necessary: definition ID 7 and pattern ID 7 must not be
+  interchangeable even if their raw parts are equal. The full 24-byte `EntityId` is not necessary in
+  every slot, however. One arena-level key space plus a one-byte category per raw index reconstructs
+  the same typed identity without a hash lookup.
+- At the assembled standard-library size, 98,398 compact spans occupy 3,935,920 bytes and their tags
+  occupy 98,398 bytes. The two vectors and one optional key space add only fixed-size headers. This
+  represents the mandatory relation in about 4.0MB before allocator rounding, with deterministic
+  allocation-order iteration.
+- The invariant applies independently to parsed source templates and to the assembled program. A
+  dense representation reduces both without combining their Salsa lifetimes or key spaces, which
+  explains why the measured gain exceeded the assembled-map estimate from round 43.
+
+### Changes
+
+- Replaced `SpanArena`'s `ArenaAssoc<EntityId, Span>` with parallel dense span and category vectors
+  plus one retained key space. Insertion now verifies the single-parser key space and exact next raw
+  index; lookup verifies both the key space and category.
+- Added a low-level `restore_id` operation for storage that retains proof of a previously issued key
+  space and raw slot. Span iteration uses it to recreate typed IDs and never allocates new identity.
+- Parser finalization shrinks both vectors after construction, so durable source and assembled arenas
+  do not retain geometric growth slack.
+- Added regressions for typed-ID round trips, replacement, one-byte category layout, wrong-category
+  rejection, allocation gaps, and foreign parser key spaces.
+
+### Measurements
+
+- Five release checks used 155,090,944, 154,615,808, 154,206,208, 154,796,032, and 154,222,592 bytes
+  peak RSS (median 154,615,808), down 9,617,408 bytes (-5.9%) from round 43. Warm wall time was
+  0.20--0.21s and warm user time was 0.18--0.19s.
+- The current-tree baseline is now down from 2,497,757,184 to 154,615,808 bytes (-93.8%).
+- All 27 utility tests and their doctests, all 143 surface tests, all 57 statics tests, all 151 session
+  tests, all CLI tests, all 31 Cajun unit tests, and all 9 Cajun stdio tests passed. Focused Clippy
+  passed with the repository's existing unrelated lint allowances. The release CLI build and full
+  standard-library check also passed.
+
+### Next
+
+- Refresh the live heap census. The former 12.7MB assembled span hash allocation and all template
+  span hashes should be absent, making the static pattern-provenance relation the likely largest
+  concrete owner.
+- Measure pattern-provenance edge counts, source and target key-space extents, and direction-specific
+  query use before selecting a dense representation. A one-to-many relation should encode edges
+  densely while keeping whichever endpoint is actually sparse behind a compact index.
+- Revisit other textual per-entity tables only when their occupancy and lifetime justify doing so.
+  The shared allocator does not imply that optional intentions or trivia are dense.

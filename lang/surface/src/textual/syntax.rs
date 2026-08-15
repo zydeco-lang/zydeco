@@ -277,7 +277,8 @@ impl Parser {
         }
     }
     /// Finish parsing, dropping the issuer and returning only durable storage.
-    pub fn finish(self) -> (SpanArena, TextArena) {
+    pub fn finish(mut self) -> (SpanArena, TextArena) {
+        self.spans.shrink_to_fit();
         (self.spans, self.arena)
     }
     fn alloc<Id>(&mut self, span: Span) -> Id
@@ -334,11 +335,11 @@ impl Parser {
         let entities = self
             .spans
             .iter()
-            .filter(|(entity, _)| self.arena.intentions.line_extent(**entity).is_none())
+            .filter(|(entity, _)| self.arena.intentions.line_extent(*entity).is_none())
             .filter_map(|(entity, span)| {
                 let (start, end) = span.get_cursor1();
                 source.get(start..end)?;
-                Some(SpannedEntity::new(*entity, start, end))
+                Some(SpannedEntity::new(entity, start, end))
             })
             .collect::<Vec<_>>();
         let arm_prefixes = self

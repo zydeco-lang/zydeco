@@ -37,14 +37,46 @@ pub struct TextArena {
     pub trivia: SurfaceTrivia,
 }
 
-/// Span storage keyed by textual entity IDs.
-#[derive(Clone, Default, Debug, derive_more::AddAssign, derive_more::Index)]
+/// Dense span storage for the entities issued by one textual parser.
+#[derive(Clone, Default, Debug)]
 pub struct SpanArena {
-    spans: ArenaAssoc<EntityId, Span>,
+    key_space: Option<KeySpaceId>,
+    categories: Vec<EntityCategory>,
+    spans: Vec<Span>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u8)]
+enum EntityCategory {
+    Definition,
+    Pattern,
+    CoPattern,
+    Term,
+}
+
+impl EntityCategory {
+    fn split(entity: EntityId) -> (Self, KeySpaceId, RawIdx) {
+        match entity {
+            | EntityId::Def(id) => (Self::Definition, id.key_space(), id.raw()),
+            | EntityId::Pat(id) => (Self::Pattern, id.key_space(), id.raw()),
+            | EntityId::CoPat(id) => (Self::CoPattern, id.key_space(), id.raw()),
+            | EntityId::Term(id) => (Self::Term, id.key_space(), id.raw()),
+        }
+    }
+
+    fn join(self, key_space: KeySpaceId, raw: RawIdx) -> EntityId {
+        match self {
+            | Self::Definition => EntityId::Def(restore_id(key_space, raw)),
+            | Self::Pattern => EntityId::Pat(restore_id(key_space, raw)),
+            | Self::CoPattern => EntityId::CoPat(restore_id(key_space, raw)),
+            | Self::Term => EntityId::Term(restore_id(key_space, raw)),
+        }
+    }
 }
 
 mod impl_span_arena {
     use super::*;
+    use std::ops::Index;
 
     impl SpanArena {
         /// Create empty span storage.
@@ -56,18 +88,113 @@ mod impl_span_arena {
         where
             Id: Into<EntityId>,
         {
-            self.spans.insert_new(id.into(), span);
+            let (category, key_space, raw) = EntityCategory::split(id.into());
+            match self.key_space {
+                | Some(existing) => {
+                    assert_eq!(existing, key_space, "span ID belongs to another parser")
+                }
+                | None => self.key_space = Some(key_space),
+            }
+            assert_eq!(
+                raw.into_u32() as usize,
+                self.spans.len(),
+                "span IDs must follow the parser allocation sequence",
+            );
+            self.categories.push(category);
+            self.spans.push(span);
         }
         /// Replace the span of an existing textual entity.
         pub fn replace<Id>(&mut self, id: Id, span: Span)
         where
             Id: Into<EntityId>,
         {
-            self.spans[&id.into()] = span;
+            let index = self.index_of(id.into()).expect("span ID not found");
+            self.spans[index] = span;
         }
         /// Iterate over stored spans with their IDs.
-        pub fn iter(&self) -> impl Iterator<Item = (&EntityId, &Span)> {
-            self.spans.iter()
+        pub fn iter(&self) -> impl Iterator<Item = (EntityId, &Span)> {
+            debug_assert_eq!(self.categories.len(), self.spans.len());
+            let key_space = self.key_space;
+            self.categories.iter().copied().zip(&self.spans).enumerate().map(
+                move |(raw, (category, span))| {
+                    let key_space = key_space.expect("a nonempty span arena has a key space");
+                    let raw = u32::try_from(raw).expect("span arena exceeded the raw ID range");
+                    (category.join(key_space, RawIdx::from_u32(raw)), span)
+                },
+            )
+        }
+        /// Release geometric vector growth after parsing finishes.
+        pub(crate) fn shrink_to_fit(&mut self) {
+            self.categories.shrink_to_fit();
+            self.spans.shrink_to_fit();
+        }
+        fn index_of(&self, entity: EntityId) -> Option<usize> {
+            let (category, key_space, raw) = EntityCategory::split(entity);
+            (self.key_space == Some(key_space))
+                .then_some(raw.into_u32() as usize)
+                .filter(|index| self.categories.get(*index) == Some(&category))
+        }
+    }
+
+    impl Index<&EntityId> for SpanArena {
+        type Output = Span;
+
+        fn index(&self, entity: &EntityId) -> &Self::Output {
+            let index = self.index_of(*entity).expect("span ID not found");
+            &self.spans[index]
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use std::mem::size_of;
+
+        #[test]
+        fn span_arena_round_trips_dense_typed_ids() {
+            let mut allocator = IdAllocator::<TextualScope>::new();
+            let definition: DefId = allocator.alloc();
+            let pattern: PatId = allocator.alloc();
+            let copattern: CoPatId = allocator.alloc();
+            let term: TermId = allocator.alloc();
+            let expected = [definition.into(), pattern.into(), copattern.into(), term.into()];
+            let mut spans = SpanArena::new();
+
+            spans.insert_new(definition, Span::new(0, 1));
+            spans.insert_new(pattern, Span::new(1, 2));
+            spans.insert_new(copattern, Span::new(2, 3));
+            spans.insert_new(term, Span::new(3, 4));
+
+            assert_eq!(size_of::<EntityCategory>(), 1);
+            assert_eq!(spans.iter().map(|(entity, _)| entity).collect::<Vec<_>>(), expected);
+            assert_eq!(spans[&EntityId::Term(term)].get_cursor1(), (3, 4));
+
+            spans.replace(pattern, Span::new(10, 20));
+            assert_eq!(spans[&EntityId::Pat(pattern)].get_cursor1(), (10, 20));
+
+            let wrong_category: PatId = restore_id(definition.key_space(), definition.raw());
+            assert!(spans.index_of(wrong_category.into()).is_none());
+        }
+
+        #[test]
+        #[should_panic(expected = "span IDs must follow the parser allocation sequence")]
+        fn span_arena_rejects_allocation_gaps() {
+            let mut allocator = IdAllocator::<TextualScope>::new();
+            let _: DefId = allocator.alloc();
+            let term: TermId = allocator.alloc();
+            SpanArena::new().insert_new(term, Span::dummy());
+        }
+
+        #[test]
+        #[should_panic(expected = "span ID belongs to another parser")]
+        fn span_arena_rejects_another_parser_key_space() {
+            let mut first_allocator = IdAllocator::<TextualScope>::new();
+            let mut second_allocator = IdAllocator::<TextualScope>::new();
+            let first: DefId = first_allocator.alloc();
+            let second: PatId = second_allocator.alloc();
+            let mut spans = SpanArena::new();
+            spans.insert_new(first, Span::dummy());
+            spans.insert_new(second, Span::dummy());
         }
     }
 }
