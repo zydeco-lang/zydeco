@@ -1378,3 +1378,56 @@ decisions while implementing the plan.
   are known.
 - Audit the source textual provenance relation separately after the checker census; its 19.6MB
   remains the largest measured resolved-arena field but may be required by source diagnostics.
+
+## 2026-08-15 — round 31: inline singleton relation edges
+
+### Findings
+
+- The static field-drop census found another common shape behind three large owners. Term
+  provenance used 22.5MB for 63,575 edges from 63,574 source terms, and pattern provenance used
+  6.5MB for 27,151 edges from 27,137 source patterns. Almost every key in both directions therefore
+  had exactly one partner.
+- `ArenaBipartite` represented both directions as `HashMap<Id, Vec<Id>>`, allocating two vector
+  buffers for almost every edge. `ArenaForth` did the same on its multi-valued direction, including
+  the resolved textual provenance previously measured at 19.6MB. The maps must support genuine
+  one-to-many or many-to-many cases, but paying the multi-edge representation at every singleton
+  was unnecessary.
+- After compacting the relation storage, controlled drops measured term provenance at 14.7MB and
+  pattern provenance at 3.6MB. Live heap before checking also fell from 77.8MB to 73.4MB, showing
+  the same benefit in source textual and user relations. The normalization peak fell from 192.3MB
+  to 177.3MB.
+
+### Changes
+
+- Added a private `OneOrMany<T>` sequence to the arena utility layer. Its first element is stored
+  inline; only insertion of a second element transitions to a vector, with exactly two initial
+  slots.
+- `ArenaForth` uses the compact sequence for its forward side, `ArenaBack` for its reverse side, and
+  `ArenaBipartite` for both sides. Their public lookup APIs still expose slices, preserving the
+  relation semantics without exposing the representation.
+- Consuming relation merges now traverse the compact sequence directly, so singleton merging does
+  not allocate a temporary vector. Existing relation tests cover singleton-to-multiple transitions,
+  reverse lookup, duplicate rejection, and idempotent bipartite insertion.
+- The allocator snapshots and destructive static-field census were removed after measurement.
+
+### Measurements
+
+- Three clean release checks used 208,846,848, 207,437,824, and 207,486,976 bytes peak RSS (median
+  207,486,976), down 16,056,320 bytes (-7.2%) from round 30. Warm wall time was 0.25–0.26s and warm
+  user time was 0.23s.
+- The current-tree baseline is now down from 2,497,757,184 to 207,486,976 bytes (-91.7%).
+- All 22 utility tests and utility doctests, 140 surface tests, 53 statics tests, 13 stack-IR tests,
+  and 151 session tests passed, along with the release CLI build and full standard-library check.
+
+### Next
+
+- The static census now attributes 11.2MB to `types_pre`, 5.6MB to type annotations, 9.8MB to
+  per-term normalized types, 7.5MB to term annotations, and 11.2MB combined to pre-normalized and
+  normalized kinds. Determine which pairs duplicate the same fact and which are independent
+  downstream indexes.
+- Roughly 24MB remains live after dropping the entire static arena above the resolved-input
+  baseline. Attribute that remainder to Salsa judgment/query keys and results before changing
+  durable syntax tables.
+- Consider split singleton/multiple hash tables only if relation storage remains prominent after
+  the higher-level lifetime audit. The inline representation captures most of the avoidable
+  per-edge allocation without complicating lookup.

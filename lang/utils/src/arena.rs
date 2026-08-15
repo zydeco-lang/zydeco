@@ -293,11 +293,57 @@ impl PageSlots {
     }
 }
 
+/// A non-empty sequence that keeps its overwhelmingly common singleton case
+/// inline. Bidirectional provenance relations have one edge at nearly every
+/// syntax site; allocating a `Vec` buffer per direction would cost more than
+/// the identifiers themselves.
+#[derive(Debug, Clone)]
+enum OneOrMany<T> {
+    One(T),
+    Many(Vec<T>),
+}
+
+impl<T> OneOrMany<T> {
+    fn push(&mut self, value: T) {
+        match self {
+            | Self::Many(values) => values.push(value),
+            | Self::One(_) => {
+                let Self::One(first) = std::mem::replace(self, Self::Many(Vec::with_capacity(2)))
+                else {
+                    unreachable!("the singleton variant was matched above")
+                };
+                let Self::Many(values) = self else {
+                    unreachable!("the replacement installs the many variant")
+                };
+                values.extend([first, value]);
+            }
+        }
+    }
+
+    fn as_slice(&self) -> &[T] {
+        match self {
+            | Self::One(value) => std::slice::from_ref(value),
+            | Self::Many(values) => values,
+        }
+    }
+}
+
+impl<T> IntoIterator for OneOrMany<T> {
+    type Item = T;
+    type IntoIter = std::iter::Chain<std::option::IntoIter<T>, std::vec::IntoIter<T>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            | Self::One(value) => Some(value).into_iter().chain(Vec::new().into_iter()),
+            | Self::Many(values) => None.into_iter().chain(values.into_iter()),
+        }
+    }
+}
+
 /// A bidirectional single-to-multi-map; a "widen" map.
-#[derive(Debug, Clone, IntoIterator)]
+#[derive(Debug, Clone)]
 pub struct ArenaForth<P, Q> {
-    #[into_iterator(owned, ref)]
-    forward: ArenaAssoc<P, Vec<Q>>,
+    forward: ArenaAssoc<P, OneOrMany<Q>>,
     backward: ArenaAssoc<Q, P>,
 }
 
@@ -306,7 +352,7 @@ pub struct ArenaForth<P, Q> {
 pub struct ArenaBack<P, Q> {
     #[into_iterator(owned, ref)]
     forward: ArenaAssoc<P, Q>,
-    backward: ArenaAssoc<Q, Vec<P>>,
+    backward: ArenaAssoc<Q, OneOrMany<P>>,
 }
 
 /// A bidirectional bijective map.
@@ -318,11 +364,10 @@ pub struct ArenaBijective<P, Q> {
 }
 
 /// A bidirectional multi-map.
-#[derive(Debug, Clone, IntoIterator)]
+#[derive(Debug, Clone)]
 pub struct ArenaBipartite<P, Q> {
-    #[into_iterator(owned, ref)]
-    forward: ArenaAssoc<P, Vec<Q>>,
-    backward: ArenaAssoc<Q, Vec<P>>,
+    forward: ArenaAssoc<P, OneOrMany<Q>>,
+    backward: ArenaAssoc<Q, OneOrMany<P>>,
 }
 
 /// An arena of equivalence classes, designed for types, and structurally shared
@@ -1007,8 +1052,8 @@ mod impls {
         pub fn new() -> Self {
             ArenaForth { forward: ArenaAssoc::new(), backward: ArenaAssoc::new() }
         }
-        pub fn iter(&self) -> impl Iterator<Item = (&P, &Vec<Q>)> {
-            self.into_iter()
+        pub fn iter(&self) -> impl Iterator<Item = (&P, &[Q])> {
+            self.forward.iter().map(|(p, qs)| (p, qs.as_slice()))
         }
     }
 
@@ -1026,7 +1071,11 @@ mod impls {
         /// previous and qurrent
         pub fn insert_new(&mut self, prev: P, qurr: Q) {
             assert!(self.backward.get(&qurr).is_none(), "derived key already has a source");
-            self.forward.map.entry(prev.clone()).or_insert_with(Vec::new).push(qurr.clone());
+            self.forward
+                .map
+                .entry(prev.clone())
+                .and_modify(|values| values.push(qurr.clone()))
+                .or_insert_with(|| OneOrMany::One(qurr.clone()));
             self.backward.insert_new(qurr, prev);
         }
     }
@@ -1037,7 +1086,7 @@ mod impls {
     {
         type Output = [Q];
         fn index(&self, p: &P) -> &Self::Output {
-            self.forward.get(p).map(|q| q.as_slice()).unwrap_or_default()
+            self.forward.get(p).map(OneOrMany::as_slice).unwrap_or_default()
         }
     }
 
@@ -1068,7 +1117,7 @@ mod impls {
         P: Eq + Hash + Clone,
     {
         pub fn forth(&self, p: &P) -> &[Q] {
-            self.forward.get(p).map(|q| q.as_slice()).unwrap_or_default()
+            self.forward.get(p).map(OneOrMany::as_slice).unwrap_or_default()
         }
     }
 
@@ -1116,7 +1165,9 @@ mod impls {
         Q: Eq + Hash + Clone,
     {
         fn add_assign(&mut self, rhs: ArenaForth<P, Q>) {
-            self.extend(rhs);
+            rhs.forward.into_iter().for_each(|(p, qs)| {
+                qs.into_iter().for_each(|q| self.insert_new(p.clone(), q));
+            });
         }
     }
 
@@ -1145,7 +1196,11 @@ mod impls {
         pub fn insert_new(&mut self, p: P, q: Q) {
             assert!(self.forward.get(&p).is_none(), "source key already has a target");
             self.forward.insert_new(p.clone(), q.clone());
-            self.backward.map.entry(q).or_insert_with(Vec::new).push(p);
+            self.backward
+                .map
+                .entry(q)
+                .and_modify(|values| values.push(p.clone()))
+                .or_insert_with(|| OneOrMany::One(p));
         }
     }
 
@@ -1198,7 +1253,7 @@ mod impls {
         Q: Eq + Hash + Clone,
     {
         pub fn back(&self, q: &Q) -> Option<&[P]> {
-            self.backward.get(q).map(|p| p.as_slice())
+            self.backward.get(q).map(OneOrMany::as_slice)
         }
     }
 
@@ -1362,8 +1417,8 @@ mod impls {
         pub fn new() -> Self {
             ArenaBipartite { forward: ArenaAssoc::new(), backward: ArenaAssoc::new() }
         }
-        pub fn iter(&self) -> impl Iterator<Item = (&P, &Vec<Q>)> {
-            self.into_iter()
+        pub fn iter(&self) -> impl Iterator<Item = (&P, &[Q])> {
+            self.forward.iter().map(|(p, qs)| (p, qs.as_slice()))
         }
     }
 
@@ -1380,20 +1435,36 @@ mod impls {
     {
         pub fn insert_new(&mut self, p: P, q: Q) {
             assert!(
-                !self.forward.get(&p).is_some_and(|qs| qs.contains(&q)),
+                !self.forward.get(&p).is_some_and(|qs| qs.as_slice().contains(&q)),
                 "duplicate many-to-many edge"
             );
-            self.forward.map.entry(p.clone()).or_insert_with(Vec::new).push(q.clone());
-            self.backward.map.entry(q).or_insert_with(Vec::new).push(p);
+            self.forward
+                .map
+                .entry(p.clone())
+                .and_modify(|values| values.push(q.clone()))
+                .or_insert_with(|| OneOrMany::One(q.clone()));
+            self.backward
+                .map
+                .entry(q)
+                .and_modify(|values| values.push(p.clone()))
+                .or_insert_with(|| OneOrMany::One(p));
         }
 
         /// Ensure that an edge exists, without duplicating an existing edge.
         pub fn ensure(&mut self, p: P, q: Q) {
-            if self.forward.get(&p).is_some_and(|qs| qs.contains(&q)) {
+            if self.forward.get(&p).is_some_and(|qs| qs.as_slice().contains(&q)) {
                 return;
             }
-            self.forward.map.entry(p.clone()).or_insert_with(Vec::new).push(q.clone());
-            self.backward.map.entry(q).or_insert_with(Vec::new).push(p);
+            self.forward
+                .map
+                .entry(p.clone())
+                .and_modify(|values| values.push(q.clone()))
+                .or_insert_with(|| OneOrMany::One(q.clone()));
+            self.backward
+                .map
+                .entry(q)
+                .and_modify(|values| values.push(p.clone()))
+                .or_insert_with(|| OneOrMany::One(p));
         }
     }
 
@@ -1403,7 +1474,7 @@ mod impls {
     {
         type Output = [Q];
         fn index(&self, p: &P) -> &Self::Output {
-            self.forward.get(p).map(|q| q.as_slice()).unwrap_or_default()
+            self.forward.get(p).map(OneOrMany::as_slice).unwrap_or_default()
         }
     }
 
@@ -1434,7 +1505,7 @@ mod impls {
         P: Eq + Hash + Clone,
     {
         pub fn forth(&self, p: &P) -> &[Q] {
-            self.forward.get(p).map(|q| q.as_slice()).unwrap_or_default()
+            self.forward.get(p).map(OneOrMany::as_slice).unwrap_or_default()
         }
     }
 
@@ -1443,7 +1514,7 @@ mod impls {
         Q: Eq + Hash + Clone,
     {
         pub fn back(&self, q: &Q) -> &[P] {
-            self.backward.get(q).map(|p| p.as_slice()).unwrap_or_default()
+            self.backward.get(q).map(OneOrMany::as_slice).unwrap_or_default()
         }
     }
 
@@ -1467,7 +1538,9 @@ mod impls {
         Q: Eq + Hash + Clone,
     {
         fn add_assign(&mut self, rhs: ArenaBipartite<P, Q>) {
-            self.extend(rhs);
+            rhs.forward.into_iter().for_each(|(p, qs)| {
+                qs.into_iter().for_each(|q| self.insert_new(p.clone(), q));
+            });
         }
     }
 }
