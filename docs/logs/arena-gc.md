@@ -80,11 +80,41 @@ decisions while implementing the plan.
 - Session suite (2 threads): 150 passed; peak RSS 6.33GB; 74s wall. Full workspace
   suite: 740 passed, 0 failed.
 
-### Known Costs / Next
+## 2026-08-15 — round 3: per-term facts become keyed indexes
 
-- `lru = 1` means materializing a stale (non-latest) analysis re-checks its root;
-  acceptable while consumers hold their own materialized copy.
-- Judgment memos keep the pool generation (cap 8) as their root-scoped policy;
-  per-root marginal retention measured at ~115MB.
-- Further candidates: per-fact judgment replay (eliminates even the shared-arena reads
-  for stale roots), and quantifying the L tier's retained size per root.
+### Findings
+
+- Two of the three S-reading fact queries are per-*term*, not per-*node*: their results
+  are bounded by the source size (65K entries), so they belong to L as recorded judgment
+  results rather than as replay logic. The third (`normalized_type_at`) is genuinely
+  per-node and needs the replay path.
+- The site of any typed id is already recoverable from the L-tier `terms` bipartite
+  (`back` for the scoped term, `forth` length for the occurrence), so no new site
+  index table is needed.
+- The normalization environment is what replay lacks: the checker snapshots it per term
+  (`self.info`), so recording per-term env snapshots in L makes future re-normalization
+  exact rather than approximate (the merged `annotations_var` alone would diverge for
+  recursive definitions).
+
+### Changes
+
+- `StaticsArena` gains three L-tier tables: `term_anns` (final `TermAnnId` per scoped
+  term), `term_envs` (interned env snapshot per scoped term), and `coverage_errors`
+  (the finish-phase coverage failures).
+- `term_annotation_at` and `coverage_facts` now read these tables from the stripped
+  analysis; they no longer touch the occurrence payload or the check memo.
+- The checker records the tables at the term dispatch (`term_anns`/`term_envs`) and in
+  `normalize_and_validate_k` (`coverage_errors`).
+
+### Measurements
+
+- Session suite (2 threads): 150 passed; peak RSS 6.38GB; 77s wall. Full workspace
+  suite: 740 passed, 0 failed. L-tier growth per root is in the low megabytes.
+
+### Next
+
+- `normalized_type_at` replay: a recursive `normalize_type` salsa query over the
+  judgment layer, using `terms.back` + `term_envs` for the site and its exact
+  environment, plus the per-variant type-synthesis dispatch for the pre value. Until
+  then it keeps reading the shared-arena memo (fine for the latest root, re-checks a
+  stale one).
