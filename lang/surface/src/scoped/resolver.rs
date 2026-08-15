@@ -114,7 +114,6 @@ impl<'a> Resolver<'a> {
         let _ = allocator;
         assert!(block_deps.iter().next().is_none(), "every block dependency graph must be closed");
         let BitterArena { defs: _, pats: _, terms: _, textual } = bitter;
-        let ctxs_term = ArenaAssoc::default();
         let ctxs_pat_local = ArenaAssoc::default();
         let coctxs_pat_local = ArenaAssoc::default();
         let coctxs_term_local = ArenaAssoc::default();
@@ -124,7 +123,6 @@ impl<'a> Resolver<'a> {
             terms,
             textual,
             users,
-            ctxs_term,
             ctxs_pat_local,
             coctxs_pat_local,
             coctxs_term_local,
@@ -136,12 +134,11 @@ impl<'a> Resolver<'a> {
             terms,
             textual,
             users,
-            ctxs_term,
             ctxs_pat_local,
             coctxs_pat_local,
             coctxs_term_local,
             blocks,
-        } = collector.run_source(root)?;
+        } = collector.run_source(root);
         Ok(ResolvedProgram {
             prim,
             arena: ScopedArena {
@@ -150,7 +147,6 @@ impl<'a> Resolver<'a> {
                 terms,
                 textual,
                 users,
-                ctxs_term,
                 ctxs_pat_local,
                 coctxs_pat_local,
                 coctxs_term_local,
@@ -498,7 +494,6 @@ pub struct Collector {
     pub textual: ArenaForth<t::EntityId, EntityId>,
 
     pub users: ArenaForth<DefId, TermId>,
-    pub ctxs_term: ArenaAssoc<TermId, Context>,
     pub ctxs_pat_local: ArenaAssoc<PatId, Context>,
     pub coctxs_pat_local: ArenaAssoc<PatId, CoContext>,
     pub coctxs_term_local: ArenaAssoc<TermId, CoContext>,
@@ -507,31 +502,8 @@ pub struct Collector {
 }
 
 impl Collector {
-    pub fn run_source(mut self, root: TermId) -> Result<Self> {
-        root.collect(&mut self, Context::new())?;
-        Ok(self)
-    }
-}
-
-/// Collect contexts on every pattern and term site in a contextual term.
-trait Collect {
-    type Out;
-    fn collect(&self, collector: &mut Collector, ctx: Context) -> Result<Self::Out>;
-}
-
-impl Collect for PatId {
-    type Out = Context;
-    fn collect(&self, collector: &mut Collector, ctx: Context) -> Result<Self::Out> {
-        let () = self.obverse_local_post(collector, &ctx);
-        Ok(ctx + collector.ctxs_pat_local[self].to_owned())
-    }
-}
-
-impl Collect for TermId {
-    type Out = ();
-    fn collect(&self, collector: &mut Collector, ctx: Context) -> Result<Self::Out> {
-        // very important! this is where we update term contexts.
-        self.obverse_local_post(collector, &ctx);
-        Ok(())
+    pub fn run_source(mut self, root: TermId) -> Self {
+        root.obverse_local_post(&mut self, &());
+        self
     }
 }

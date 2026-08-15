@@ -179,8 +179,6 @@ pub struct ScopedArena {
 
     /// def user map
     pub users: ArenaForth<DefId, TermId>,
-    /// variables available upon the term
-    pub ctxs_term: ArenaAssoc<TermId, Context>,
     /// variables that are introduced by the pattern
     pub ctxs_pat_local: ArenaAssoc<PatId, Context>,
     /// variables that are free within the pattern (e.g. unbound type variable in annotations)
@@ -234,11 +232,11 @@ pub trait LocalFoldScoped<Cx>: ArenaScoped {
     fn action_term(&mut self, term: TermId, ctx: &Cx);
 }
 
-impl LocalFoldScoped<Context> for Collector {
-    fn action_def(&mut self, _def: DefId, _ctx: &Context) {}
+impl LocalFoldScoped<()> for Collector {
+    fn action_def(&mut self, _def: DefId, _ctx: &()) {}
 
     /// Updates [`Self::ctxs_pat_local`] and [`Self::coctxs_pat_local`].
-    fn action_pat(&mut self, pat: PatId, _ctx: &Context) {
+    fn action_pat(&mut self, pat: PatId, _ctx: &()) {
         let item = self.pat(&pat);
         match item {
             | Pattern::Ann(inner) => {
@@ -291,9 +289,8 @@ impl LocalFoldScoped<Context> for Collector {
         }
     }
 
-    /// Updates [`Self::ctxs_term`] and [`Self::coctxs_term_local`].
-    fn action_term(&mut self, term: TermId, ctx: &Context) {
-        self.ctxs_term.insert_new(term, ctx.to_owned());
+    /// Updates [`Self::coctxs_term_local`].
+    fn action_term(&mut self, term: TermId, _ctx: &()) {
         let item = self.term(&term);
         match item {
             | Term::Meta(inner) => {

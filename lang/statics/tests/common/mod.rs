@@ -49,7 +49,6 @@ impl TestFixture {
             terms: Default::default(),
             textual: Default::default(),
             users: Default::default(),
-            ctxs_term: Default::default(),
             ctxs_pat_local: Default::default(),
             coctxs_pat_local: Default::default(),
             coctxs_term_local: Default::default(),

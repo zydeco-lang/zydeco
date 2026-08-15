@@ -7705,7 +7705,6 @@ mod source_boundary_tests {
             |allocator, scoped| {
                 let root = allocator.alloc();
                 scoped.terms.insert_new(root, su::Hole.into());
-                scoped.ctxs_term.insert_new(root, su::Context::new());
                 scoped.coctxs_term_local.insert_new(root, su::CoContext::new());
                 (root, ())
             },
@@ -7914,7 +7913,6 @@ mod source_boundary_tests {
                 scoped.ctxs_pat_local.insert_new(binder, su::Context::singleton(binder_def));
                 scoped.coctxs_pat_local.insert_new(binder, su::CoContext::new());
                 [body, root].into_iter().for_each(|term| {
-                    scoped.ctxs_term.insert_new(term, su::Context::new());
                     scoped.coctxs_term_local.insert_new(term, su::CoContext::new());
                 });
                 (root, binder_def)
@@ -8027,7 +8025,6 @@ mod source_boundary_tests {
                 scoped.terms.insert_new(annotation, su::Term::Var(source_def));
                 scoped.terms.insert_new(root, su::Ann { tm: hole, ty: annotation }.into());
                 [hole, annotation, root].into_iter().for_each(|term| {
-                    scoped.ctxs_term.insert_new(term, su::Context::new());
                     scoped.coctxs_term_local.insert_new(term, su::CoContext::new());
                 });
                 (root, (source_def, target_def))
@@ -8113,7 +8110,6 @@ mod source_boundary_tests {
         scoped.terms.insert_new(hole, su::Hole.into());
         scoped.terms.insert_new(boundary, su::SourceBoundary(hole).into());
         [hole, boundary].into_iter().for_each(|term| {
-            scoped.ctxs_term.insert_new(term, su::Context::new());
             scoped.coctxs_term_local.insert_new(term, su::CoContext::new());
         });
 
@@ -8146,7 +8142,6 @@ mod source_boundary_tests {
         scoped.terms.insert_new(hole, su::Hole.into());
         scoped.terms.insert_new(boundary, su::SourceBoundary(hole).into());
         [hole, boundary].into_iter().for_each(|term| {
-            scoped.ctxs_term.insert_new(term, su::Context::new());
             scoped.coctxs_term_local.insert_new(term, su::CoContext::new());
         });
 

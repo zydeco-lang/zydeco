@@ -1339,3 +1339,42 @@ decisions while implementing the plan.
 - Revisit the 19.6MB textual provenance map after establishing which editor and diagnostic queries
   consume each direction. Its many one-element vectors may have a similar representation mismatch,
   but unlike `CoContext` it encodes a real one-to-many relation that needs a usage census first.
+
+## 2026-08-15 — round 30: remove empty term contexts
+
+### Findings
+
+- `ScopedArena::ctxs_term` had no production reader anywhere in the workspace. Its only consumers
+  were writes in the resolver and hand-built test fixtures.
+- All 64,954 entries in the full standard-library table contained empty `Context` vectors. The
+  post-resolution collector threaded one root `Context::new()` unchanged through every term and
+  pattern; binder-local definitions are recorded separately in `ctxs_pat_local` and the threaded
+  value never participated in their computation.
+- The table therefore encoded neither lexical scope nor an approximation useful downstream. Its
+  6.4MB measured footprint was pure hash-table overhead for a historical analysis path.
+
+### Changes
+
+- Removed `ctxs_term` from `ScopedArena`, the resolver collector, and checker fixtures.
+- Simplified the post-order collector to a context-free traversal. The unused fallible `Collect`
+  adapter and its pattern result were removed; `ctxs_pat_local`, `coctxs_pat_local`, and
+  `coctxs_term_local` retain their existing computations.
+
+### Measurements
+
+- Three clean release checks used 224,591,872, 223,379,456, and 223,543,296 bytes peak RSS (median
+  223,543,296), down 3,817,472 bytes (-1.7%) from round 29. Warm wall and user time remained 0.27s
+  and 0.24s respectively.
+- The current-tree baseline is now down from 2,497,757,184 to 223,543,296 bytes (-91.0%).
+- All 140 surface tests, all 53 statics tests, and all 151 session tests passed, along with the
+  release CLI build and full standard-library check.
+
+### Next
+
+- Inventory the full static arena at the normalization peak. The source-side census now explains
+  its dominant outliers, while checking still raises live heap by roughly 112MB.
+- Distinguish durable static syntax and indexes from checker-transient query keys and Salsa memo
+  values. A table's retained size is only actionable once its downstream readers and phase lifetime
+  are known.
+- Audit the source textual provenance relation separately after the checker census; its 19.6MB
+  remains the largest measured resolved-arena field but may be required by source diagnostics.
