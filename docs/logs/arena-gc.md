@@ -2467,3 +2467,55 @@ decisions while implementing the plan.
 - Revisit provenance only after another heap census. The compact hash keys remove dispatcher
   overhead, but replacing hashes with paged storage would be counterproductive because typed
   representatives inhabit many small derived key spaces.
+
+## 2026-08-15 — round 52: pack source positions into one word
+
+### Findings
+
+- Assembled spans were the largest remaining concrete source owner at 3,948,544 bytes. Each `Span`
+  occupied 40 bytes: sixteen bytes of authoritative byte offsets, sixteen bytes for two optional
+  line-and-column cursors, and eight bytes for the optional source path.
+- A cursor used eight bytes even though its two coordinates have very different practical ranges.
+  Across every checked-in Zydeco source, the largest file has 1,254 lines and the longest line is
+  158 bytes. Eighteen line bits cover 262,143 one-based lines, while fourteen column bits cover
+  16,384 byte columns; those limits leave substantial headroom without widening the record.
+- Line and column are derived presentation data. Byte offsets remain the authoritative source
+  positions, and `Span` already falls back to displaying byte offsets when a cursor cannot be
+  represented. The compact representation can therefore reject exceptional positions without
+  truncation or changing source identity.
+- The reusable rule is to keep the authoritative coordinate wide and make derived presentation
+  coordinates opportunistically compact. This preserves correctness for unusually large inputs
+  while charging ordinary inputs only for the representation they use.
+
+### Changes
+
+- Replaced the two-field cursor with one `NonZeroU32`: eighteen upper bits hold the one-based line
+  and fourteen lower bits hold the byte column. The nonzero invariant preserves the `Option` niche,
+  reducing each optional two-endpoint cursor pair from sixteen to eight bytes and `Span` from 40 to
+  32 bytes on 64-bit targets.
+- Added exact upper-bound round trips, line and column overflow rejection, and layout regressions for
+  both the packed cursor and `Span`. The existing location, UTF-16, and byte-offset fallback tests
+  continue to exercise the public behavior.
+
+### Measurements
+
+- Five release checks used 116,654,080, 118,472,704, 118,358,016, 118,439,936, and 118,439,936 bytes
+  peak RSS (median 118,439,936), down 868,352 bytes (-0.7%) from round 51. A separate warm sample used
+  118,226,944 bytes and took 0.18s wall time, 0.16s user time, and 0.01s system time.
+- The current-tree baseline is now down from 2,497,757,184 to 118,439,936 bytes (-95.3%).
+- All 29 utility unit tests and four utility documentation tests, all 146 surface tests, all 151
+  session tests, all 9 CLI integration tests, all 31 Cajun unit tests, and all 9 Cajun stdio tests
+  passed. Focused Clippy completed with existing unrelated lint warnings. The release build and full
+  standard-library check also passed.
+
+### Next
+
+- Capture a fresh live-owner census after the packed dispatcher and span changes. Their record-size
+  reductions should change the ranking among source provenance, spans, term facts, and normalized
+  annotations even when allocator reuse hides part of the savings at process-RSS granularity.
+- Use the census together with the normalized-annotation variant counts to decide whether a split
+  representation is worthwhile. Avoid replacing one 56-byte inline value with one allocation per
+  common application or arrow; pointer traffic could cost more than the retained bytes it removes.
+- Continue distinguishing bounded source-linear tuning from the closed quadratic substitution
+  mechanism. A next change should name a concrete retained owner and preserve cheap reconstruction
+  at its public boundary.

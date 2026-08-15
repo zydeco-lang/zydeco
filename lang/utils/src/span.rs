@@ -123,23 +123,34 @@ impl CompactSpan2 {
     }
 }
 
+/// A source position packed into one nonzero word.
+///
+/// Source files need substantially more line range than column range. Eighteen
+/// line bits cover 262,143 one-based lines, while fourteen column bits cover
+/// 16,384 byte columns. Positions outside those bounds retain their byte
+/// offsets and use the existing byte-offset display fallback.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct CompactCursor2 {
-    line_plus_one: NonZeroU32,
-    column: u32,
-}
+struct CompactCursor2(NonZeroU32);
 
 impl CompactCursor2 {
+    const COLUMN_BITS: u32 = 14;
+    const COLUMN_MASK: u32 = (1 << Self::COLUMN_BITS) - 1;
+    const LINE_PLUS_ONE_MAX: u32 = (1 << (u32::BITS - Self::COLUMN_BITS)) - 1;
+
     fn with_cursor(Cursor2 { line, column }: Cursor2) -> Option<Self> {
         let line_plus_one = u32::try_from(line).ok()?.checked_add(1)?;
-        Some(Self {
-            line_plus_one: NonZeroU32::new(line_plus_one)?,
-            column: u32::try_from(column).ok()?,
-        })
+        (line_plus_one <= Self::LINE_PLUS_ONE_MAX).then_some(())?;
+        let column = u32::try_from(column).ok()?;
+        (column <= Self::COLUMN_MASK).then_some(())?;
+        NonZeroU32::new((line_plus_one << Self::COLUMN_BITS) | column).map(Self)
     }
 
     fn cursor(self) -> Cursor2 {
-        Cursor2 { line: self.line_plus_one.get() as usize - 1, column: self.column as usize }
+        let packed = self.0.get();
+        Cursor2 {
+            line: (packed >> Self::COLUMN_BITS) as usize - 1,
+            column: (packed & Self::COLUMN_MASK) as usize,
+        }
     }
 }
 
@@ -354,11 +365,35 @@ mod tests {
     #[test]
     fn spans_have_a_compact_layout() {
         #[cfg(target_pointer_width = "64")]
-        assert_eq!(size_of::<Span>(), 40);
+        assert_eq!(size_of::<Span>(), 32);
+        assert_eq!(size_of::<CompactCursor2>(), 4);
+        assert_eq!(size_of::<Option<CompactCursor2>>(), 4);
     }
 
     #[test]
     fn compact_cursors_reject_unrepresentable_positions() {
+        let largest = Cursor2 {
+            line: CompactCursor2::LINE_PLUS_ONE_MAX as usize - 1,
+            column: CompactCursor2::COLUMN_MASK as usize,
+        };
+        assert_eq!(
+            CompactCursor2::with_cursor(largest.clone()).map(|cursor| cursor.cursor()),
+            Some(largest)
+        );
+        assert!(
+            CompactCursor2::with_cursor(Cursor2 {
+                line: CompactCursor2::LINE_PLUS_ONE_MAX as usize,
+                column: 0,
+            })
+            .is_none()
+        );
+        assert!(
+            CompactCursor2::with_cursor(Cursor2 {
+                line: 0,
+                column: CompactCursor2::COLUMN_MASK as usize + 1,
+            })
+            .is_none()
+        );
         assert!(CompactCursor2::with_cursor(Cursor2 { line: usize::MAX, column: 0 }).is_none());
         assert!(CompactCursor2::with_cursor(Cursor2 { line: 0, column: usize::MAX }).is_none());
     }
