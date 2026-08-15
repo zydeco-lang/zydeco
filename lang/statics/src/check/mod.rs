@@ -5280,7 +5280,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         )?;
                                         let body_out_ann =
                                             TyEnvT::new(binder_elaboration.info.clone(), body)
-                                                .tyck_k(tycker, Action::ana(ty_2.into()))?;
+                                                .tyck_k(
+                                                    tycker,
+                                                    Action::ana_prepared(ty_2.into(), &self.info),
+                                                )?;
                                         let (body_out, body_ty) = body_out_ann.try_as_value(
                                             tycker,
                                             TyckError::SortMismatch,
@@ -5371,7 +5374,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         )?;
                                         let body_out_ann =
                                             TyEnvT::new(binder_elaboration.info.clone(), body)
-                                                .tyck_k(tycker, Action::ana(ty_2.into()))?;
+                                                .tyck_k(
+                                                    tycker,
+                                                    Action::ana_prepared(ty_2.into(), &self.info),
+                                                )?;
                                         let (body_out, body_ty) = body_out_ann.try_as_compu(
                                             tycker,
                                             TyckError::SortMismatch,
@@ -6440,7 +6446,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     unreachable!()
                 };
                 let ss::App(_thunk_ty, body_ty) = thunk_app_body_ty;
-                let body_out_ann = self.mk(body).tyck_k(tycker, Action::ana(body_ty.into()))?;
+                let body_out_ann = self
+                    .mk(body)
+                    .tyck_k(tycker, Action::ana_prepared(body_ty.into(), &self.info))?;
                 let (body_out, body_ty) = body_out_ann.try_as_compu(
                     tycker,
                     TyckError::SortMismatch,
@@ -6498,7 +6506,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     }
                 };
                 let (body, body_ty) = {
-                    let body_out_ann = self.mk(body).tyck_k(tycker, Action::ana(body_ty.into()))?;
+                    let body_out_ann = self
+                        .mk(body)
+                        .tyck_k(tycker, Action::ana_prepared(body_ty.into(), &self.info))?;
                     let (body_out, body_ty) = body_out_ann.try_as_value(
                         tycker,
                         TyckError::SortMismatch,
@@ -6546,7 +6556,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     unreachable!()
                 };
                 let ss::App(_ret_ty, body_ty) = ret_app_body_ty;
-                let body_out_ann = self.mk(body).tyck_k(tycker, Action::ana(body_ty.into()))?;
+                let body_out_ann = self
+                    .mk(body)
+                    .tyck_k(tycker, Action::ana_prepared(body_ty.into(), &self.info))?;
                 let (body_out, body_ty) = body_out_ann.try_as_value(
                     tycker,
                     TyckError::SortMismatch,

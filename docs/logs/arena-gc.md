@@ -917,3 +917,52 @@ decisions while implementing the plan.
 - The substitution implementation already normalizes its result, while common analytic entry calls
   `normalize_k` again. The second pass allocated only hundreds of nodes in this profile, but the API
   contract should be made explicit before removing that redundant-looking call.
+
+## 2026-08-15 — round 22: preserve prepared expected-type components
+
+### Findings
+
+- Preparation provenance applies structurally to components of an analytic type. Once an expected
+  nondependent arrow has been prepared, both its domain and codomain have received the same
+  environment operation. Checking the function body under a value binder extends the lexical term
+  environment, but value terms cannot occur in types, so the codomain remains prepared under the
+  outer environment.
+- Thunk and return syntax encode their payload types as application components. Their analytic
+  paths unify an already prepared expectation with a fresh shape and then immediately extract the
+  payload. That component is likewise current; sending it through a fresh analytic action repeated
+  the complete recursive traversal.
+- This reasoning does not automatically apply to components of a synthesized function type. Such
+  an annotation may have been created at a definition site and can still owe its first substitution
+  at the application site. Those callers remain fresh pending a separate provenance rule.
+
+### Changes
+
+- Value-arrow and computation-arrow bodies now receive `Action::ana_prepared` with the outer
+  environment that prepared their expected arrow. The scope-extension rule from round 21 then
+  carries that provenance through the checked binder.
+- Thunk bodies, forced values, and returned values receive prepared actions for payloads extracted
+  from their current analytic shapes.
+- Type-polymorphic and package-dependent function bodies remain on the fresh path because their
+  codomains can mention the newly opened type witnesses.
+
+### Measurements
+
+- The full-std check retains 449,694 type nodes, 7,110 fewer than round 21 (-1.6%).
+- Three clean release checks used 367,607,808, 367,362,048, and 367,788,032 bytes peak RSS (median
+  367,607,808), down 540,672 bytes (-0.1%) from round 21. This RSS change is near run-to-run noise,
+  while the deterministic arena-node reduction confirms the eliminated work. Warm wall time was
+  0.39–0.41s and warm user time was 0.36–0.37s.
+- The current-tree baseline is now down from 2,497,757,184 to 367,607,808 bytes (-85.3%).
+- All 43 statics tests and all 151 session tests passed, along with the release CLI build and full
+  standard-library check.
+
+### Next
+
+- Give synthesized annotations explicit preparation provenance, or prepare an entire synthesized
+  arrow before destructuring it. Do not mark its domain prepared merely because the arrow node was
+  normalized: normalization does not apply lexical substitutions.
+- Audit explicit ascriptions separately. Their annotation term is synthesized in the current
+  environment, but `Data` and `CoData` substitution currently allocate new definitions even when no
+  arm changes, so allocation alone cannot prove that a substitution was semantically necessary.
+- Re-run root-operation attribution before addressing type-application normalization and
+  type-abstraction recovery.
