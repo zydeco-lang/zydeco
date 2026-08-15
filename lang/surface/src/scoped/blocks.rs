@@ -89,7 +89,8 @@ impl<'a> BlockCandidateCollector<'a> {
                     .chain(self.term(*tail))
                     .collect()
             }
-            | Term::MobileBind(b::MobileBind { binder, bindee, tail }) => {
+            | Term::MobileBind(binding) => {
+                let b::MobileBind { binder, bindee, tail } = &**binding;
                 std::iter::once(MobileCandidate::Definition {
                     source: term,
                     binder: *binder,
@@ -104,12 +105,16 @@ impl<'a> BlockCandidateCollector<'a> {
             | Term::Residual(_) => {
                 unreachable!("residual nodes are introduced only after candidate collection")
             }
-            | Term::Meta(b::MetaT(_, inner))
+            | Term::Meta(term) => {
+                let b::MetaT(_, inner) = &**term;
+                self.term(*inner)
+            }
             | Term::Sealed(b::Sealed(inner))
             | Term::Thunk(b::Thunk(inner))
             | Term::Force(b::Force(inner))
             | Term::Ret(b::Return(inner)) => self.term(*inner),
-            | Term::MoBlock(b::MoBlock { body, basis }) => {
+            | Term::MoBlock(term) => {
+                let b::MoBlock { body, basis } = &**term;
                 [self.term(basis.monad), self.term(basis.algebra), self.term(*body)]
                     .into_iter()
                     .flatten()
@@ -133,14 +138,22 @@ impl<'a> BlockCandidateCollector<'a> {
             | Term::App(b::App(function, argument)) => {
                 [self.term(*function), self.term(*argument)].into_iter().flatten().collect()
             }
-            | Term::ManifestExists(b::ManifestExists { binder, definition, body }) => {
+            | Term::ManifestExists(term) => {
+                let b::ManifestExists { binder, definition, body } = &**term;
                 [self.pattern(*binder), self.term(*definition), self.term(*body)]
                     .into_iter()
                     .flatten()
                     .collect()
             }
-            | Term::Do(b::Bind { binder, bindee, tail })
-            | Term::Let(b::Let { binder, bindee, tail }) => {
+            | Term::Do(term) => {
+                let b::Bind { binder, bindee, tail } = &**term;
+                [self.pattern(*binder), self.term(*bindee), self.term(*tail)]
+                    .into_iter()
+                    .flatten()
+                    .collect()
+            }
+            | Term::Let(term) => {
+                let b::Let { binder, bindee, tail } = &**term;
                 [self.pattern(*binder), self.term(*bindee), self.term(*tail)]
                     .into_iter()
                     .flatten()

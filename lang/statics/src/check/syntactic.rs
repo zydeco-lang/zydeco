@@ -107,7 +107,7 @@ impl SyntacticallyAnnotated for su::TermId {
         use su::Term as Tm;
         match term {
             | Tm::Meta(term) => {
-                let su::MetaT(meta, term) = term;
+                let su::MetaT(meta, term) = *term;
                 let _ = meta;
                 term.syntactically_annotated(tycker)
             }
@@ -170,7 +170,7 @@ impl SyntacticallySealed for su::TermId {
         use surface_syntax::Term as Tm;
         match term {
             | Tm::Meta(term) => {
-                let su::MetaT(meta, term) = term;
+                let su::MetaT(meta, term) = *term;
                 let _ = meta;
                 term.syntactically_sealed(tycker)
             }

@@ -238,7 +238,7 @@ impl Resolve for TermId {
         let term = resolver.bitter.terms[self].clone();
         let res: Term<DefId> = match term {
             | Term::Meta(term) => {
-                let MetaT(_, inner) = term;
+                let MetaT(_, inner) = *term;
                 let () = inner.resolve(resolver, (local, global))?;
                 term.into()
             }
@@ -326,7 +326,7 @@ impl Resolve for TermId {
                 term.into()
             }
             | Term::ManifestExists(term) => {
-                let ManifestExists { binder, definition, body } = &term;
+                let ManifestExists { binder, definition, body } = &*term;
                 let () = definition.resolve(resolver, (local.clone(), global))?;
                 local = binder.resolve(resolver, (local, global))?;
                 let () = body.resolve(resolver, (local, global))?;
@@ -348,14 +348,14 @@ impl Resolve for TermId {
                 term.into()
             }
             | Term::Do(term) => {
-                let Bind { binder, bindee, tail } = &term;
+                let Bind { binder, bindee, tail } = &*term;
                 let () = bindee.resolve(resolver, (local.clone(), global))?;
                 local = binder.resolve(resolver, (local.clone(), global))?;
                 let () = tail.resolve(resolver, (local, global))?;
                 term.into()
             }
             | Term::Let(term) => {
-                let Let { binder, bindee, tail } = &term;
+                let Let { binder, bindee, tail } = &*term;
                 let () = bindee.resolve(resolver, (local.clone(), global))?;
                 local = binder.resolve(resolver, (local.clone(), global))?;
                 let () = tail.resolve(resolver, (local, global))?;
@@ -370,7 +370,7 @@ impl Resolve for TermId {
                 Residual(tail).into()
             }
             | Term::MobileBind(term) => {
-                let MobileBind { binder: _, bindee: _, tail } = term;
+                let MobileBind { binder: _, bindee: _, tail } = *term;
                 if local.boundary.is_none() {
                     Err(ResolveError::UnenclosedThat(self.span(resolver).clone()))?
                 }
@@ -388,7 +388,7 @@ impl Resolve for TermId {
                 unreachable!("recursive groups are introduced only after name resolution")
             }
             | Term::MoBlock(term) => {
-                let MoBlock { body, basis } = &term;
+                let MoBlock { body, basis } = &*term;
                 basis.monad.resolve(resolver, (local.clone(), global))?;
                 basis.algebra.resolve(resolver, (local.clone(), global))?;
                 let () = body.resolve(resolver, (local.clone(), global))?;

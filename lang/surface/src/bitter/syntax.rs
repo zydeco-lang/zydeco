@@ -172,9 +172,14 @@ pub struct CoMatchClauses {
     pub clauses: Vec<CoPatternClause>,
 }
 
+/// Desugared and resolved term syntax stored in the dominant dense arena.
+///
+/// Metadata carries a 64-byte payload, while the ternary binding forms carry
+/// 48-byte payloads. Those uncommon forms are indirect so their size does not
+/// become padding in every atomic and binary term node.
 #[derive(From, Clone, Debug)]
 pub enum Term<Ref> {
-    Meta(MetaT<TermId>),
+    Meta(Box<MetaT<TermId>>),
     SourceBoundary(SourceBoundary<TermId>),
     SignatureBoundary(SignatureBoundary<TermId>),
     Internal(Internal),
@@ -194,20 +199,20 @@ pub enum Term<Ref> {
     // Arrow(Arrow),
     // Forall(Forall),
     Sigma(Sigma),
-    ManifestExists(ManifestExists),
+    ManifestExists(Box<ManifestExists>),
     // Prod(Prod),
     // Exists(Exists),
     Thunk(Thunk<TermId>),
     Force(Force<TermId>),
     Ret(Return<TermId>),
-    Do(Bind<PatId, TermId, TermId>),
-    Let(Let<PatId, TermId, TermId>),
+    Do(Box<Bind<PatId, TermId, TermId>>),
+    Let(Box<Let<PatId, TermId, TermId>>),
     MobileParam(MobileParam),
-    MobileBind(MobileBind),
+    MobileBind(Box<MobileBind>),
     Residual(Residual),
     Block(Block),
     RecGroup(RecGroup),
-    MoBlock(MoBlock),
+    MoBlock(Box<MoBlock>),
     Data(Data),
     CoData(CoData),
     Ctor(Ctor<CtorName, TermId>),
@@ -217,6 +222,52 @@ pub enum Term<Ref> {
     Dtor(Dtor<TermId, DtorName>),
     Proj(Proj<TermId, FieldName>),
     Lit(Literal),
+}
+
+impl<Ref> From<MetaT<TermId>> for Term<Ref> {
+    fn from(value: MetaT<TermId>) -> Self {
+        Self::Meta(Box::new(value))
+    }
+}
+
+impl<Ref> From<ManifestExists> for Term<Ref> {
+    fn from(value: ManifestExists) -> Self {
+        Self::ManifestExists(Box::new(value))
+    }
+}
+
+impl<Ref> From<Bind<PatId, TermId, TermId>> for Term<Ref> {
+    fn from(value: Bind<PatId, TermId, TermId>) -> Self {
+        Self::Do(Box::new(value))
+    }
+}
+
+impl<Ref> From<Let<PatId, TermId, TermId>> for Term<Ref> {
+    fn from(value: Let<PatId, TermId, TermId>) -> Self {
+        Self::Let(Box::new(value))
+    }
+}
+
+impl<Ref> From<MobileBind> for Term<Ref> {
+    fn from(value: MobileBind) -> Self {
+        Self::MobileBind(Box::new(value))
+    }
+}
+
+impl<Ref> From<MoBlock> for Term<Ref> {
+    fn from(value: MoBlock) -> Self {
+        Self::MoBlock(Box::new(value))
+    }
+}
+
+#[cfg(test)]
+mod term_layout_tests {
+    use super::*;
+
+    #[test]
+    fn rare_payloads_keep_term_slots_compact() {
+        assert!(std::mem::size_of::<Term<DefId>>() <= 48);
+    }
 }
 
 #[derive(Clone, Debug)]

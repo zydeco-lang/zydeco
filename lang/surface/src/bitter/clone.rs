@@ -75,7 +75,7 @@ impl DeepClone for b::TermId {
         let prev = desugarer.bitter.origins.source(&(*self).into()).unwrap();
         let term = match &term {
             | b::Term::Meta(term) => {
-                let b::MetaT(meta, term) = term;
+                let b::MetaT(meta, term) = &**term;
                 let term = term.deep_clone(desugarer);
                 b::MetaT(meta.clone(), term).into()
             }
@@ -174,7 +174,7 @@ impl DeepClone for b::TermId {
                 b::Sigma(params, ty).into()
             }
             | b::Term::ManifestExists(term) => {
-                let b::ManifestExists { binder, definition, body } = term;
+                let b::ManifestExists { binder, definition, body } = &**term;
                 b::ManifestExists {
                     binder: binder.deep_clone(desugarer),
                     definition: definition.deep_clone(desugarer),
@@ -198,14 +198,14 @@ impl DeepClone for b::TermId {
                 b::Return(term).into()
             }
             | b::Term::Do(term) => {
-                let b::Bind { binder, bindee, tail } = term;
+                let b::Bind { binder, bindee, tail } = &**term;
                 let binder = binder.deep_clone(desugarer);
                 let bindee = bindee.deep_clone(desugarer);
                 let tail = tail.deep_clone(desugarer);
                 b::Bind { binder, bindee, tail }.into()
             }
             | b::Term::Let(term) => {
-                let b::Let { binder, bindee, tail } = term;
+                let b::Let { binder, bindee, tail } = &**term;
                 let binder = binder.deep_clone(desugarer);
                 let bindee = bindee.deep_clone(desugarer);
                 let tail = tail.deep_clone(desugarer);
@@ -220,7 +220,7 @@ impl DeepClone for b::TermId {
                 .into()
             }
             | b::Term::MobileBind(term) => {
-                let b::MobileBind { binder, bindee, tail } = term;
+                let b::MobileBind { binder, bindee, tail } = &**term;
                 b::MobileBind {
                     binder: binder.deep_clone(desugarer),
                     bindee: bindee.deep_clone(desugarer),
@@ -251,7 +251,7 @@ impl DeepClone for b::TermId {
                 .into()
             }
             | b::Term::MoBlock(term) => {
-                let b::MoBlock { body, basis } = term;
+                let b::MoBlock { body, basis } = &**term;
                 let body = body.deep_clone(desugarer);
                 let basis = b::MonadicBasis {
                     monad: basis.monad.deep_clone(desugarer),

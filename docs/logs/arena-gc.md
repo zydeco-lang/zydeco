@@ -2638,3 +2638,61 @@ decisions while implementing the plan.
 - Revisit the 3,152KiB page allocation only with stronger ownership evidence. Its old `env_type`
   symbol conflicts with the empty finished environment table, so layout matching remains more
   credible than treating the symbol name alone as a retained checker environment.
+
+## 2026-08-15 — round 55: indirect rare surface term payloads
+
+### Findings
+
+- The final live-owner census identified the 4,064KiB scoped term allocation as the largest
+  confirmed source-level owner. `bitter::Term<DefId>` occupied 64 bytes even though its most common
+  variants carry only one or two IDs: the checked standard library contains 13,405 variables,
+  10,073 internal nodes, 9,815 source boundaries, 8,670 applications, and 8,186 products among
+  64,954 scoped terms.
+- Six variants set the enum's 64-byte layout: `MetaT<TermId>` itself occupied 64 bytes, while
+  manifest existentials, sequential binds, lets, mobile binds, and monadic blocks carried 48-byte
+  payloads plus the discriminant. Only 3,488 standard-library terms (5.4%) use any of these variants,
+  and two of the six are absent from the final scoped program.
+- Indirecting those payloads makes the whole enum 48 bytes, a 25% slot reduction. The generic enum
+  backs both desugared `Term<VarName>` and resolved `Term<DefId>` arenas, so the reduction applies to
+  multiple phase products that coexist at the process high-water mark. The added boxes are paid
+  only by rare variants.
+- A final malloc-stack census found 115,831 live allocations owning 62.3MB; stack logging raised
+  physical footprint to 168.1MB. The boxes add about 3,500 allocations and make the retained-live
+  delta look modest, while normal process samples still fall by 3.5MB. The difference is expected:
+  the final census sees one retained generation, whereas peak RSS sees several transient and
+  retained desugared and resolved products using the smaller slot.
+- The reusable rule is to evaluate enum indirection as `slot saving × all resident nodes × all live
+  products`, then compare it with `box cost × rare nodes`. Looking only at one final arena misses the
+  primary benefit when a shared syntax enum spans several pipeline stages.
+
+### Changes
+
+- Boxed the `Meta`, `ManifestExists`, `Do`, `Let`, `MobileBind`, and `MoBlock` payloads in
+  `bitter::Term`. Manual `From` implementations preserve direct construction from the existing
+  typed payload structs, while all pattern matches now cross the ownership boundary explicitly.
+- Added a layout regression requiring `Term<DefId>` to remain at most 48 bytes. This guards against
+  a future rare variant silently widening every surface term slot again.
+
+### Measurements
+
+- Five release checks used 110,329,856, 109,936,640, 109,985,792, 110,657,536, and 110,575,616 bytes
+  peak RSS (median 110,329,856), down 3,506,176 bytes (-3.1%) from round 54. Warm samples took
+  0.18--0.19s wall time and 0.17s user time; the first resource-accounting launch paid unrelated
+  startup overhead.
+- The current-tree baseline is now down from 2,497,757,184 to 110,329,856 bytes (-95.6%).
+- All 147 surface tests, all 27 statics unit tests and 33 statics integration tests, all 151 session
+  tests, all 9 CLI integration tests, all 31 Cajun unit tests, and all 9 Cajun stdio tests passed.
+  Focused Clippy completed with existing unrelated warnings. The release build and full standard-
+  library check also passed.
+
+### Next
+
+- Re-rank the remaining final owners. The largest visible dense source allocation is now about
+  3,632KiB, followed by the unresolved 3,152KiB page attribution, 3,088KiB of assembled spans, and
+  2,064KiB of term facts.
+- Measure all pre-normalized static type variants before attempting another enum split. `Type`
+  remains 56 bytes because four 48-byte payload families are inline; their frequency in retained
+  normalized annotations alone is insufficient evidence for boxing across the checker arena.
+- Inspect the 2,747KiB collection of per-source textual term tables together with the 1,608KiB and
+  1,394KiB line-intention tables. They share parsed-template lifetime and may duplicate information
+  already recoverable from tokens or spans.

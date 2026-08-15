@@ -90,11 +90,10 @@ fn monadic_metadata_lowers_arbitrary_terms_to_monadic_blocks() {
             let output = SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit)
                 .run()
                 .unwrap_or_else(|error| panic!("expected `{source}` to desugar: {error}"));
-            let bitter::Term::MoBlock(bitter::MoBlock { body, .. }) =
-                &output.arena.terms[&output.root]
-            else {
+            let bitter::Term::MoBlock(block) = &output.arena.terms[&output.root] else {
                 panic!("expected `{source}` to lower to a monadic block")
             };
+            let body = &block.body;
 
             assert_eq!(
                 matches!(output.arena.terms[body], bitter::Term::Block(_)),

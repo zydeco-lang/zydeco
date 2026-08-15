@@ -4107,7 +4107,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
         use su::Term as Tm;
         let out_ann = match tycker.scoped.terms[&self.inner].to_owned() {
             | Tm::Meta(term) => {
-                let su::MetaT(meta, term) = term;
+                let su::MetaT(meta, term) = *term;
                 let res = self
                     .mk(term)
                     .tyck_k(tycker, Action::forward(switch, prepared_environment.as_ref()))?;
@@ -6351,7 +6351,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 }
             }
             | Tm::ManifestExists(term) => {
-                let su::ManifestExists { binder, definition, body } = term;
+                let su::ManifestExists { binder, definition, body } = *term;
                 match switch {
                     | Switch::Syn => {
                         let definition = self.mk(definition).tyck_k(tycker, Action::syn())?;
@@ -6656,7 +6656,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 TermAnnId::Compu(outcome.ret_id, outcome.ret_ty_id)
             }
             | Tm::Do(term) => {
-                let su::Bind { binder, bindee, tail } = term;
+                let su::Bind { binder, bindee, tail } = *term;
                 // first, ana bindee with ret_app_hole, and we get a compu that should be ret_app_body_ty
                 let (bindee_out, bindee_ty) = {
                     let ret_app_hole = tycker.ret_hole(&self.info, bindee);
@@ -6708,7 +6708,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 TermAnnId::Compu(outcome.id, outcome.ann)
             }
             | Tm::Let(term) => {
-                let su::Let { binder, bindee, tail } = term;
+                let su::Let { binder, bindee, tail } = *term;
                 let (bindee, is_sealed) = match bindee.syntactically_sealed(tycker) {
                     | Some(bindee) => (bindee, true),
                     | None => (bindee, false),
@@ -6904,7 +6904,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     .tyck_k(tycker, Action::forward(switch, prepared_environment.as_ref()))?
             }
             | Tm::MoBlock(term) => {
-                let su::MoBlock { body, basis: lexical_basis } = term;
+                let su::MoBlock { body, basis: lexical_basis } = *term;
                 let basis =
                     MonadicBasisElaboration::new(&lexical_basis, &self.info).check_k(tycker)?;
 

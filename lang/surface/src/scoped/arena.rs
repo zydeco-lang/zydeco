@@ -327,7 +327,7 @@ impl LocalFoldScoped<()> for ContextCollector<'_> {
         let item = self.term(&term);
         match item {
             | Term::Meta(inner) => {
-                let MetaT(_meta, inner) = inner;
+                let MetaT(_meta, inner) = *inner;
                 let co_term = self.coctxs_term_local[&inner].to_owned();
                 self.coctxs_term_local.insert_new(term, co_term);
             }
@@ -419,7 +419,7 @@ impl LocalFoldScoped<()> for ContextCollector<'_> {
                 self.coctxs_term_local.insert_new(term, co_body - cx_pat + co_pat);
             }
             | Term::ManifestExists(inner) => {
-                let ManifestExists { binder, definition, body } = inner;
+                let ManifestExists { binder, definition, body } = *inner;
                 let co_body = self.coctxs_term_local[&body].to_owned();
                 let cx_binder = self.ctxs_pat_local[&binder].to_owned();
                 let co_binder = self.coctxs_pat_local[&binder].to_owned();
@@ -443,7 +443,7 @@ impl LocalFoldScoped<()> for ContextCollector<'_> {
                 self.coctxs_term_local.insert_new(term, co_body);
             }
             | Term::Do(inner) => {
-                let Bind { binder, bindee, tail } = inner;
+                let Bind { binder, bindee, tail } = *inner;
                 let co_tail = self.coctxs_term_local[&tail].to_owned();
                 let cx_binder = self.ctxs_pat_local[&binder].to_owned();
                 let co_binder = self.coctxs_pat_local[&binder].to_owned();
@@ -452,7 +452,7 @@ impl LocalFoldScoped<()> for ContextCollector<'_> {
                     .insert_new(term, co_tail - cx_binder + co_binder + co_bindee);
             }
             | Term::Let(inner) => {
-                let Let { binder, bindee, tail } = inner;
+                let Let { binder, bindee, tail } = *inner;
                 let co_tail = self.coctxs_term_local[&tail].to_owned();
                 let cx_binder = self.ctxs_pat_local[&binder].to_owned();
                 let co_binder = self.coctxs_pat_local[&binder].to_owned();
@@ -487,7 +487,7 @@ impl LocalFoldScoped<()> for ContextCollector<'_> {
                 self.coctxs_term_local.insert_new(term, free_definitions + free_tail - bound);
             }
             | Term::MoBlock(inner) => {
-                let MoBlock { body, basis } = inner;
+                let MoBlock { body, basis } = *inner;
                 let co_body = self.coctxs_term_local[&body].to_owned();
                 let co_basis = self.coctxs_term_local[&basis.monad].to_owned()
                     + self.coctxs_term_local[&basis.algebra].to_owned();
@@ -652,7 +652,7 @@ mod impl_obverse_local_post {
             let item = f.term(&self);
             match item {
                 | Term::Meta(inner) => {
-                    let MetaT(_meta, term) = inner;
+                    let MetaT(_meta, term) = *inner;
                     term.obverse_local_post(f, ctx);
                 }
                 | Term::SourceBoundary(inner) => {
@@ -720,7 +720,7 @@ mod impl_obverse_local_post {
                     body.obverse_local_post(f, ctx);
                 }
                 | Term::ManifestExists(inner) => {
-                    let ManifestExists { binder, definition, body } = inner;
+                    let ManifestExists { binder, definition, body } = *inner;
                     definition.obverse_local_post(f, ctx);
                     binder.obverse_local_post(f, ctx);
                     body.obverse_local_post(f, ctx);
@@ -738,13 +738,13 @@ mod impl_obverse_local_post {
                     body.obverse_local_post(f, ctx);
                 }
                 | Term::Do(inner) => {
-                    let Bind { binder, bindee, tail } = inner;
+                    let Bind { binder, bindee, tail } = *inner;
                     bindee.obverse_local_post(f, ctx);
                     binder.obverse_local_post(f, ctx);
                     tail.obverse_local_post(f, ctx);
                 }
                 | Term::Let(inner) => {
-                    let Let { binder, bindee, tail } = inner;
+                    let Let { binder, bindee, tail } = *inner;
                     bindee.obverse_local_post(f, ctx);
                     binder.obverse_local_post(f, ctx);
                     tail.obverse_local_post(f, ctx);
@@ -769,7 +769,7 @@ mod impl_obverse_local_post {
                     tail.obverse_local_post(f, ctx);
                 }
                 | Term::MoBlock(inner) => {
-                    let MoBlock { body, basis } = inner;
+                    let MoBlock { body, basis } = *inner;
                     basis.monad.obverse_local_post(f, ctx);
                     basis.algebra.obverse_local_post(f, ctx);
                     body.obverse_local_post(f, ctx);

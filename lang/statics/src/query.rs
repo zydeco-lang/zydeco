@@ -879,7 +879,7 @@ pub fn do_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     input: InternedDoInput<'db>, occurrence: u32,
 ) -> Option<DoSynOutcome> {
-    let su::Term::Do(su::Bind { .. }) = data.scoped(db).terms.get(&term.id(db))? else {
+    let su::Term::Do(_) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
     let site_space = term.id(db).key_space().as_u64();
@@ -912,7 +912,7 @@ pub fn let_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>, binder: InternedVPat<'db>,
     bindee: InternedValue<'db>, tail: InternedTermAnn<'db>, occurrence: u32,
 ) -> Option<LetSynOutcome> {
-    let su::Term::Let(su::Let { .. }) = data.scoped(db).terms.get(&term.id(db))? else {
+    let su::Term::Let(_) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
     let site_space = term.id(db).key_space().as_u64();
@@ -1583,9 +1583,7 @@ pub fn manifest_exists_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     input: InternedManifestSyn<'db>, occurrence: u32,
 ) -> Option<ManifestSynOutcome> {
-    let su::Term::ManifestExists(su::ManifestExists { .. }) =
-        data.scoped(db).terms.get(&term.id(db))?
-    else {
+    let su::Term::ManifestExists(_) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
     let site_space = term.id(db).key_space().as_u64();

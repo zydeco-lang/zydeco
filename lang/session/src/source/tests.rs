@@ -870,11 +870,11 @@ fn builtin_operation_roles_remain_specializable_through_name_resolution() {
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
     let resolved = resolve_program(program).unwrap();
-    let zydeco_surface::scoped::syntax::Term::Meta(zydeco_syntax::MetaT(meta, payload)) =
-        &resolved.arena.terms[&resolved.root]
+    let zydeco_surface::scoped::syntax::Term::Meta(term) = &resolved.arena.terms[&resolved.root]
     else {
         panic!("expected a Builtin metadata term")
     };
+    let zydeco_syntax::MetaT(meta, payload) = &**term;
 
     assert_eq!(
         meta.specialize::<zydeco_surface::metadata::BuiltinMeta>().unwrap().map(|meta| meta.role),
@@ -1034,7 +1034,7 @@ fn a_self_contained_imported_term_resolves_normally() {
 
 #[test]
 fn importing_once_and_binding_once_shares_one_lexical_identity() {
-    use zydeco_surface::scoped::syntax::{Let, Pattern, Term};
+    use zydeco_surface::scoped::syntax::{Pattern, Term};
 
     let fixture = SourceFixture::new();
     fixture.write("library.zy", "fn value => value");
@@ -1043,9 +1043,10 @@ fn importing_once_and_binding_once_shares_one_lexical_identity() {
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
     let resolved = resolve_program(program).unwrap();
-    let Term::Let(Let { binder, .. }) = resolved.arena.terms[&resolved.root] else {
+    let Term::Let(binding) = &resolved.arena.terms[&resolved.root] else {
         panic!("expected an explicit sharing binding")
     };
+    let binder = binding.binder;
     let Pattern::Var(library) = resolved.arena.pats[&binder] else {
         panic!("expected a variable binder")
     };
