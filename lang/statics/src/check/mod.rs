@@ -733,9 +733,12 @@ impl DeferredTelescopeType {
     }
 
     fn materialize_k(&self, tycker: &mut Tycker<'_>) -> ResultKont<ss::TypeId> {
-        let root = self.abstracts.iter().try_fold(self.root, |root, assignment| {
-            root.subst_abst_k(tycker, (assignment.witness, assignment.payload))
-        })?;
+        let assignments = self
+            .abstracts
+            .iter()
+            .map(|assignment| (assignment.witness, assignment.payload))
+            .collect::<Vec<_>>();
+        let root = self.root.subst_absts_k(tycker, &assignments)?;
         let Some(environment) = &self.environment else { return Ok(root) };
         let root = if environment.unroll { root.unroll_k(tycker)? } else { root };
         root.subst_env_k(tycker, &environment.value)
@@ -7596,6 +7599,28 @@ mod source_boundary_tests {
 
             assert_eq!(materialized, target);
             assert_ne!(materialized, unit);
+            assert!(tycker.errors.is_empty());
+        });
+    }
+
+    #[test]
+    fn deferred_telescope_composes_abstract_assignments_in_order() {
+        with_empty_tycker(|tycker| {
+            let environment = TyEnv::default();
+            let vtype = ss::VType.build(tycker, &environment);
+            let unit = ss::UnitTy.build(tycker, &environment);
+            let first: ss::AbstId = Alloc::alloc(tycker, None::<ss::DefId>, vtype, &());
+            let second: ss::AbstId = Alloc::alloc(tycker, None::<ss::DefId>, vtype, &());
+            let first_ty = Alloc::alloc(tycker, first, vtype, &environment);
+            let second_ty = Alloc::alloc(tycker, second, vtype, &environment);
+
+            let materialized = DeferredTelescopeType::new(first_ty)
+                .with_abstract(first, second_ty)
+                .with_abstract(second, unit)
+                .materialize_k(tycker)
+                .unwrap();
+
+            assert_eq!(materialized, unit);
             assert!(tycker.errors.is_empty());
         });
     }

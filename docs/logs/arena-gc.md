@@ -608,3 +608,52 @@ decisions while implementing the plan.
 - Analytic term annotations are now the largest single caller at 361,349 nodes. Addressing them
   likely requires carrying a deferred expected type through `Action<AnnId>`, so keep that broader
   transition behind the two local telescope optimizations.
+
+## 2026-08-15 — round 16: fuse ordered abstract substitutions
+
+### Findings
+
+- Round 15 still allocated 165,374 nodes while replaying 528 abstract substitutions over
+  existential telescope bodies. Applying each assignment separately rebuilt the same remainder
+  once per open binder, even though the ordered composition can be performed in one traversal.
+- The composition rule is directional: when an abstract witness is replaced, its payload must
+  receive only the assignments after that witness's assignment. For example, applying
+  `a -> b` followed by `b -> Unit` to `a` produces `Unit`.
+- A backward-resolved simultaneous map looked attractive and passed the complete standard
+  library, retaining 1,252,221 type nodes with a 569,933,824-byte median peak RSS. It was
+  nevertheless unsound under lexical shadowing. Given `free -> bound; bound -> replacement`, a
+  `PackPi` binding `bound` must insert the locally bound identifier for `free`; resolving the map
+  globally rewrote that identifier before the binder could hide the second assignment. The map
+  prototype was removed.
+- The safe fused representation is therefore the ordered assignment sequence itself. Each
+  abstract occurrence selects its first matching assignment and applies only the suffix to the
+  payload. `PackPi` and `ValuePackPi` filter their bound witnesses from the sequence before it
+  reaches either a body occurrence or a replacement introduced inside that body.
+
+### Changes
+
+- `TypeId::subst_absts` applies an ordered slice of abstract assignments in one structural
+  traversal; the existing single-assignment operation delegates to this primitive.
+- Package-arrow binders filter shadowed assignments while traversing their codomains. A focused
+  regression covers the case that defeated global map precomposition, and the telescope test
+  covers transitive ordered replacement.
+- `DeferredTelescopeType` now collects its persistent assignment list once and forces the final
+  body with the fused operation before applying its composed environment.
+
+### Measurements
+
+- The full-std check retains 1,251,874 type nodes, 143,693 fewer than round 15 (-10.3%). The
+  shadowing-safe traversal costs only 347 nodes more than the rejected simultaneous map.
+- Three release checks used 570,900,480, 570,474,496, and 570,294,272 bytes peak RSS (median
+  570,474,496), down 24,264,704 bytes (-4.1%) from round 15. Warm wall time was 0.78–0.79s.
+- The current-tree baseline is now down from 2,497,757,184 to 570,474,496 bytes (-77.2%).
+- All 40 statics tests and all 151 session tests passed, including standard-library composition
+  and the new ordered-substitution and binder-shadowing regressions.
+
+### Next
+
+- Reuse `DeferredTelescopeType` in tuple/package traversal. Its previous 238,181 attributed nodes
+  came from the same repeated environment-plus-abstract opening shape.
+- Re-run call-site attribution after that migration. Analytic term annotations (previously
+  361,349 nodes) and remaining field materialization (288,938 nodes) are then the largest known
+  boundaries, but their exact shares should be measured against the smaller arena.

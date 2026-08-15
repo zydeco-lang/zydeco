@@ -534,6 +534,24 @@ impl TypeId {
         tycker.err_p_to_k(res)
     }
     pub fn subst_abst(&self, tycker: &mut Tycker<'_>, assign: (AbstId, TypeId)) -> Result<TypeId> {
+        self.subst_absts(tycker, &[assign])
+    }
+    /// Apply ordered abstract assignments in one structural traversal.
+    ///
+    /// A replacement receives only the suffix after its own assignment. Binders such as PackPi
+    /// filter their witnesses before the sequence reaches either the body or a replacement.
+    pub fn subst_absts_k(
+        &self, tycker: &mut Tycker<'_>, assignments: &[(AbstId, TypeId)],
+    ) -> ResultKont<TypeId> {
+        let res = self.subst_absts(tycker, assignments);
+        tycker.err_p_to_k(res)
+    }
+    pub fn subst_absts(
+        &self, tycker: &mut Tycker<'_>, assignments: &[(AbstId, TypeId)],
+    ) -> Result<TypeId> {
+        if assignments.is_empty() {
+            return Ok(*self);
+        }
         let kd = tycker.statics.annotations_type[self];
         let env = tycker.statics.env_at(*self);
         let ty = match tycker.statics.types_pre[self].to_owned() {
@@ -542,18 +560,22 @@ impl TypeId {
             | Fillable::Done(ty) => match ty {
                 | Type::Var(_) => *self,
                 | Type::Abst(abst) => {
-                    let (abst_, with) = assign;
-                    if abst == abst_ { with } else { *self }
+                    match assignments.iter().position(|(witness, _)| *witness == abst) {
+                        | Some(position) => assignments[position]
+                            .1
+                            .subst_absts(tycker, &assignments[position + 1..])?,
+                        | None => *self,
+                    }
                 }
                 | Type::Abs(abs) => {
                     let Abs(tpat, ty) = abs;
-                    let ty_ = ty.subst_abst(tycker, assign)?;
+                    let ty_ = ty.subst_absts(tycker, assignments)?;
                     if ty == ty_ { *self } else { Alloc::alloc(tycker, Abs(tpat, ty_), kd, &env) }
                 }
                 | Type::App(app) => {
                     let App(ty1, ty2) = app;
-                    let ty1_ = ty1.subst_abst(tycker, assign)?;
-                    let ty2_ = ty2.subst_abst(tycker, assign)?;
+                    let ty1_ = ty1.subst_absts(tycker, assignments)?;
+                    let ty2_ = ty2.subst_absts(tycker, assignments)?;
                     if ty1 == ty1_ && ty2 == ty2_ {
                         *self
                     } else {
@@ -562,7 +584,7 @@ impl TypeId {
                 }
                 | Type::Named(named) => {
                     let Named(name, inner) = named;
-                    let inner_ = inner.subst_abst(tycker, assign)?;
+                    let inner_ = inner.subst_absts(tycker, assignments)?;
                     if inner == inner_ {
                         *self
                     } else {
@@ -571,7 +593,7 @@ impl TypeId {
                 }
                 | Type::Label(label) => {
                     let Label(name, inner) = label;
-                    let inner_ = inner.subst_abst(tycker, assign)?;
+                    let inner_ = inner.subst_absts(tycker, assignments)?;
                     if inner == inner_ {
                         *self
                     } else {
@@ -586,7 +608,7 @@ impl TypeId {
                 }
                 | Type::Proj(proj) => {
                     let Proj(head, name) = proj;
-                    let head_ = head.subst_abst(tycker, assign)?;
+                    let head_ = head.subst_absts(tycker, assignments)?;
                     match tycker.type_filled(&head_)?.to_owned() {
                         | Type::Named(Named(found, inner)) if found == name => inner,
                         | _ if head == head_ => *self,
@@ -601,8 +623,8 @@ impl TypeId {
                 | Type::OS(_) => *self,
                 | Type::Arrow(arr) => {
                     let Arrow(ty1, ty2) = arr;
-                    let ty1_ = ty1.subst_abst(tycker, assign)?;
-                    let ty2_ = ty2.subst_abst(tycker, assign)?;
+                    let ty1_ = ty1.subst_absts(tycker, assignments)?;
+                    let ty2_ = ty2.subst_absts(tycker, assignments)?;
                     if ty1 == ty1_ && ty2 == ty2_ {
                         *self
                     } else {
@@ -610,8 +632,8 @@ impl TypeId {
                     }
                 }
                 | Type::VArrow(ValueArrow(ty1, ty2)) => {
-                    let ty1_ = ty1.subst_abst(tycker, assign)?;
-                    let ty2_ = ty2.subst_abst(tycker, assign)?;
+                    let ty1_ = ty1.subst_absts(tycker, assignments)?;
+                    let ty2_ = ty2.subst_absts(tycker, assignments)?;
                     if ty1 == ty1_ && ty2 == ty2_ {
                         *self
                     } else {
@@ -620,7 +642,7 @@ impl TypeId {
                 }
                 | Type::VForall(forall) => {
                     let ValueForall(tpat, ty) = forall;
-                    let ty_ = ty.subst_abst(tycker, assign)?;
+                    let ty_ = ty.subst_absts(tycker, assignments)?;
                     if ty == ty_ {
                         *self
                     } else {
@@ -629,12 +651,13 @@ impl TypeId {
                 }
                 | Type::VPackPi(pack_pi) => {
                     let ValuePackPi { domain, witnesses, codomain } = *pack_pi;
-                    let domain_ = domain.subst_abst(tycker, assign)?;
-                    let codomain_ = if witnesses.contains(&assign.0) {
-                        codomain
-                    } else {
-                        codomain.subst_abst(tycker, assign)?
-                    };
+                    let domain_ = domain.subst_absts(tycker, assignments)?;
+                    let codomain_assignments = assignments
+                        .iter()
+                        .filter(|(witness, _)| !witnesses.contains(witness))
+                        .copied()
+                        .collect::<Vec<_>>();
+                    let codomain_ = codomain.subst_absts(tycker, &codomain_assignments)?;
                     if domain == domain_ && codomain == codomain_ {
                         *self
                     } else {
@@ -648,7 +671,7 @@ impl TypeId {
                 }
                 | Type::Forall(forall) => {
                     let Forall(tpat, ty) = forall;
-                    let ty_ = ty.subst_abst(tycker, assign)?;
+                    let ty_ = ty.subst_absts(tycker, assignments)?;
                     if ty == ty_ {
                         *self
                     } else {
@@ -657,12 +680,13 @@ impl TypeId {
                 }
                 | Type::PackPi(pack_pi) => {
                     let PackPi { domain, witnesses, codomain } = *pack_pi;
-                    let domain_ = domain.subst_abst(tycker, assign)?;
-                    let codomain_ = if witnesses.contains(&assign.0) {
-                        codomain
-                    } else {
-                        codomain.subst_abst(tycker, assign)?
-                    };
+                    let domain_ = domain.subst_absts(tycker, assignments)?;
+                    let codomain_assignments = assignments
+                        .iter()
+                        .filter(|(witness, _)| !witnesses.contains(witness))
+                        .copied()
+                        .collect::<Vec<_>>();
+                    let codomain_ = codomain.subst_absts(tycker, &codomain_assignments)?;
                     if domain == domain_ && codomain == codomain_ {
                         *self
                     } else {
@@ -676,8 +700,8 @@ impl TypeId {
                 }
                 | Type::Prod(prod) => {
                     let Prod(ty1, ty2) = prod;
-                    let ty1_ = ty1.subst_abst(tycker, assign)?;
-                    let ty2_ = ty2.subst_abst(tycker, assign)?;
+                    let ty1_ = ty1.subst_absts(tycker, assignments)?;
+                    let ty2_ = ty2.subst_absts(tycker, assignments)?;
                     if ty1 == ty1_ && ty2 == ty2_ {
                         *self
                     } else {
@@ -689,11 +713,11 @@ impl TypeId {
                     let (mode, definition_changed) = match mode {
                         | ExistsMode::Abstract => (ExistsMode::Abstract, false),
                         | ExistsMode::Manifest(definition) => {
-                            let definition_ = definition.subst_abst(tycker, assign)?;
+                            let definition_ = definition.subst_absts(tycker, assignments)?;
                             (ExistsMode::Manifest(definition_), definition != definition_)
                         }
                     };
-                    let body_ = body.subst_abst(tycker, assign)?;
+                    let body_ = body.subst_absts(tycker, assignments)?;
                     if !definition_changed && body == body_ {
                         *self
                     } else {
@@ -702,7 +726,7 @@ impl TypeId {
                 }
                 | Type::ManifestKind(manifest) => {
                     let ManifestKind { binder, definition, body } = manifest;
-                    let body_ = body.subst_abst(tycker, assign)?;
+                    let body_ = body.subst_absts(tycker, assignments)?;
                     if body == body_ {
                         *self
                     } else {
@@ -720,7 +744,7 @@ impl TypeId {
                     let arms_ = arms
                         .into_iter()
                         .map(|(ctor, ty)| {
-                            let ty_ = ty.subst_abst(tycker, assign)?;
+                            let ty_ = ty.subst_absts(tycker, assignments)?;
                             if ty == ty_ {
                                 Ok((ctor, ty))
                             } else {
@@ -743,7 +767,7 @@ impl TypeId {
                     let arms_ = arms
                         .into_iter()
                         .map(|(dtor, ty)| {
-                            let ty_ = ty.subst_abst(tycker, assign)?;
+                            let ty_ = ty.subst_absts(tycker, assignments)?;
                             if ty == ty_ {
                                 Ok((dtor, ty))
                             } else {
