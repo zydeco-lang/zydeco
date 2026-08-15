@@ -1573,3 +1573,53 @@ decisions while implementing the plan.
 - Attribute Salsa's surviving query state by family. After the durable index reductions, the
   roughly 24MB post-static remainder is a larger fraction of the check and may contain repeated
   environment or input handles.
+
+## 2026-08-15 — round 35: materialize leaf patterns without producer memos
+
+### Findings
+
+- A malloc-stack census of the live heap after the standard-library check attributed 1.76MB to
+  13,772 `pat_leaf_node_judgment` memo allocations. Salsa's automatically interned query tuples
+  occupied another 1.28MB, while the explicit `InternedPatLeafNode` value table and two visible
+  lookup tables occupied at least 1.29MB. Dependency-edge vectors and the leaf patterns' share of
+  `InternedPat` added further overhead.
+- The query did no semantic work that could be reused independently. Its source-pattern argument
+  was used only to derive an identifier, its `ScopedData` argument was deliberately ignored, and
+  its remaining inputs were the already-computed annotation and a hole-or-variable enum. The
+  enclosing `check_source` query already memoizes the whole materialized result.
+- Unannotated variable stand-ins and synthesized-hole errors had the same shape: the caller had
+  already selected the syntax arm, and the producer merely repeated that selection around a
+  deterministic identifier calculation. Under the wholesale `ScopedData` input, retaining these
+  producer memos cannot reuse work after a source change.
+
+### Changes
+
+- Added a typed `Tycker::query_derived_id` boundary that preserves the query allocation tag and
+  exact `(site, occurrence, slot)` identity without requiring a Salsa query to own the ID.
+- Replaced the leaf-pattern producer family with two local materializers: `PatternLeaf` inserts the
+  kind, type, or value pattern at the existing slot 2, and `PatternVariableStandIn` inserts the
+  inference fill and type at slots 0 and 1. The annotation and environment records are unchanged.
+- Removed `pat_leaf_node_judgment`, `pat_var_hole_judgment`, `pat_hole_syn_judgment`, their outcome
+  types, and the high-cardinality `InternedPatLeafNode` key. A synthesized hole now emits the same
+  `MissingAnnotation` error directly.
+
+### Measurements
+
+- Three clean release checks used 181,600,256, 181,878,784, and 182,353,920 bytes peak RSS (median
+  181,878,784), down 6,225,920 bytes (-3.3%) from round 34. Warm wall time was 0.24s and warm user
+  time was 0.21s, also slightly below the prior 0.22--0.23s user-time range.
+- The current-tree baseline is now down from 2,497,757,184 to 181,878,784 bytes (-92.7%).
+- All 55 statics tests and all 151 session tests passed, along with the release CLI build and full
+  standard-library check.
+
+### Next
+
+- Treat producer queries as an optimization only where they expose independently reusable work.
+  Continue removing the highest-cardinality wrappers whose source arm and computed inputs are
+  already known to the materializer; heap evidence identifies `sigma_syn_judgment` as the next
+  visible memo family, though it is much smaller than leaf patterns.
+- Audit `types_pre` and `annotations_type` as a single paged type-node record. They have identical
+  key domains and page topology, and co-location can remove a parallel outer map and slot vector
+  without changing the type graph.
+- Revisit source provenance only after the checker-local opportunities. Its large hash tables are
+  durable editor/diagnostic data, while producer memos are duplicate lifetime by construction.

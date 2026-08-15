@@ -399,18 +399,6 @@ pub struct InternedPat<'db> {
     pub id: su::PatId,
 }
 
-/// The synthesized judgment of a hole pattern: it always fails with a missing
-/// annotation, produced without touching the arena.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
-pub fn pat_hole_syn_judgment<'db>(
-    db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>,
-) -> Option<crate::check::TyckError> {
-    let su::Pattern::Hole(su::Hole) = data.scoped(db).pats.get(&pat.id(db))? else {
-        return None;
-    };
-    Some(crate::check::TyckError::MissingAnnotation)
-}
-
 /// The synthesized judgment of a trivial pattern: the unit value pattern whose
 /// type is the query-owned unit singleton.
 #[derive(Clone, Debug)]
@@ -1927,96 +1915,6 @@ pub fn proj_syn_judgment<'db>(
         value: ss::Value::Proj(ss::Proj(input.head(db), field)),
         ann: input.ann(db),
     })
-}
-
-/// The stand-in hole pair of an unannotated variable pattern: the fill and
-/// the vtype-annotated type pre-node holding it, derived at the pattern's
-/// site.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
-pub fn pat_var_hole_judgment<'db>(
-    db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>, occurrence: u32,
-) -> Option<(ss::FillId, ss::TypeId, ss::KindId)> {
-    let su::Pattern::Var(_) = data.scoped(db).pats.get(&pat.id(db))? else {
-        return None;
-    };
-    let vtype = {
-        let key = InternedIntrinsic::new(db, IntrinsicKey::VType);
-        let IntrinsicSingleton::Kind { id, .. } = intrinsic_singleton(db, data, key) else {
-            unreachable!("the vtype singleton is kind-producing")
-        };
-        id
-    };
-    let site_space = pat.id(db).key_space().as_u64();
-    let site_raw = pat.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
-    let fill: ss::FillId = derived_id(key_space, 0);
-    let ty: ss::TypeId = derived_id(key_space, 1);
-    Some((fill, ty, vtype))
-}
-
-/// A leaf pattern node: a hole or a variable reference.
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub enum PatLeaf {
-    Hole,
-    Var(su::DefId),
-}
-
-/// An interned leaf-pattern node input, for use as a salsa query key.
-#[salsa::interned]
-pub struct InternedPatLeafNode<'db> {
-    pub leaf: PatLeaf,
-    pub ann: ss::AnnId,
-}
-
-/// The allocation tail of a leaf pattern judgment, split by the annotation's
-/// sort: a kind pattern, a type pattern, or a value pattern node.
-#[derive(Clone, Debug)]
-pub enum PatLeafOutcome {
-    Kind { id: ss::KPatId, pat: ss::KindPattern },
-    Type { id: ss::TPatId, pat: ss::TypePattern, kd: ss::KindId },
-    Value { id: ss::VPatId, pat: ss::ValuePattern, ty: ss::TypeId },
-}
-
-/// The synthesized judgment of a leaf pattern node.
-///
-/// The node derives at slot 2 of the pattern's site, leaving slots 0 and 1
-/// for the variable pattern's stand-in hole pair.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
-pub fn pat_leaf_node_judgment<'db>(
-    db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>,
-    node: InternedPatLeafNode<'db>, occurrence: u32,
-) -> Option<PatLeafOutcome> {
-    let site_space = pat.id(db).key_space().as_u64();
-    let site_raw = pat.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
-    let leaf = node.leaf(db);
-    let _ = data;
-    match (leaf, node.ann(db)) {
-        | (PatLeaf::Hole, ss::AnnId::Set) => {
-            let id: ss::KPatId = derived_id(key_space, 2);
-            Some(PatLeafOutcome::Kind { id, pat: ss::KindPattern::Hole(ss::Hole) })
-        }
-        | (PatLeaf::Var(def), ss::AnnId::Set) => {
-            let id: ss::KPatId = derived_id(key_space, 2);
-            Some(PatLeafOutcome::Kind { id, pat: ss::KindPattern::Var(def) })
-        }
-        | (PatLeaf::Hole, ss::AnnId::Kind(kd)) => {
-            let id: ss::TPatId = derived_id(key_space, 2);
-            Some(PatLeafOutcome::Type { id, pat: ss::TypePattern::Hole(ss::Hole), kd })
-        }
-        | (PatLeaf::Var(def), ss::AnnId::Kind(kd)) => {
-            let id: ss::TPatId = derived_id(key_space, 2);
-            Some(PatLeafOutcome::Type { id, pat: ss::TypePattern::Var(def), kd })
-        }
-        | (PatLeaf::Hole, ss::AnnId::Type(ty)) => {
-            let id: ss::VPatId = derived_id(key_space, 2);
-            Some(PatLeafOutcome::Value { id, pat: ss::ValuePattern::Hole(ss::Hole), ty })
-        }
-        | (PatLeaf::Var(def), ss::AnnId::Type(ty)) => {
-            let id: ss::VPatId = derived_id(key_space, 2);
-            Some(PatLeafOutcome::Value { id, pat: ss::ValuePattern::Var(def), ty })
-        }
-    }
 }
 
 /// An interned constructor-pattern judgment input, for use as a salsa query

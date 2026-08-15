@@ -202,6 +202,83 @@ impl PatternCheck {
     }
 }
 
+/// Deterministic materializer for the high-frequency leaf-pattern cases.
+///
+/// These nodes depend only on the current allocation site and the annotation
+/// the checker has already computed. Keeping them inside the active check
+/// avoids retaining a second copy as a salsa producer-query memo.
+enum PatternLeaf {
+    Hole,
+    Variable(su::DefId),
+}
+
+impl PatternLeaf {
+    fn materialize(self, tycker: &mut Tycker<'_>, env: &TyEnv, ann: AnnId) -> PatAnnId {
+        match (self, ann) {
+            | (Self::Hole, AnnId::Set) => {
+                let id = tycker.query_derived_id(2);
+                tycker.statics.kpats.insert_new(id, ss::KindPattern::Hole(ss::Hole));
+                PatAnnId::Kind(id)
+            }
+            | (Self::Variable(def), AnnId::Set) => {
+                let id = tycker.query_derived_id(2);
+                tycker.statics.kpats.insert_new(id, ss::KindPattern::Var(def));
+                PatAnnId::Kind(id)
+            }
+            | (Self::Hole, AnnId::Kind(kd)) => {
+                let id = tycker.query_derived_id(2);
+                tycker.statics.tpats.insert_new(id, ss::TypePattern::Hole(ss::Hole));
+                tycker.statics.annotations_tpat.insert_new(id, kd);
+                tycker.statics.env_tpat.insert_new(id, env.clone());
+                PatAnnId::Type(id, kd)
+            }
+            | (Self::Variable(def), AnnId::Kind(kd)) => {
+                let id = tycker.query_derived_id(2);
+                tycker.statics.tpats.insert_new(id, ss::TypePattern::Var(def));
+                tycker.statics.annotations_tpat.insert_new(id, kd);
+                tycker.statics.env_tpat.insert_new(id, env.clone());
+                PatAnnId::Type(id, kd)
+            }
+            | (Self::Hole, AnnId::Type(ty)) => {
+                let id = tycker.query_derived_id(2);
+                tycker.statics.vpats.insert_new(id, ss::ValuePattern::Hole(ss::Hole));
+                tycker.statics.annotations_vpat.insert_new(id, ty);
+                tycker.statics.env_vpat.insert_new(id, env.clone());
+                PatAnnId::Value(id, ty)
+            }
+            | (Self::Variable(def), AnnId::Type(ty)) => {
+                let id = tycker.query_derived_id(2);
+                tycker.statics.vpats.insert_new(id, ss::ValuePattern::Var(def));
+                tycker.statics.annotations_vpat.insert_new(id, ty);
+                tycker.statics.env_vpat.insert_new(id, env.clone());
+                PatAnnId::Value(id, ty)
+            }
+        }
+    }
+}
+
+/// Materializer for the inference stand-in of an unannotated variable pattern.
+struct PatternVariableStandIn;
+
+impl PatternVariableStandIn {
+    fn materialize(tycker: &mut Tycker<'_>, env: &TyEnv, source: su::PatId) -> AnnId {
+        let fill = tycker.query_derived_id(0);
+        let ty = tycker.query_derived_id(1);
+        let vtype = ss::VType.build(tycker, env);
+
+        tycker.statics.fills.insert_new(fill, ss::InferenceSite::Pattern(source));
+        tycker.statics.types_pre.insert_new(ty, ss::Fillable::Fill(fill));
+        tycker.statics.annotations_type.insert_new(ty, vtype);
+        tycker.store_env(ty, env);
+
+        let scope = env.skolem_scope().clone();
+        if let Some(existing) = tycker.statics.fill_scopes.insert_or_get(fill, scope.clone()) {
+            tycker.statics.fill_scopes.replace_existing(fill, existing.intersection(&scope));
+        }
+        ty.into()
+    }
+}
+
 #[derive(Clone)]
 struct ValueFieldCandidate {
     route: Vec<ValueFieldStep>,
@@ -1448,6 +1525,13 @@ impl<'a> Tycker<'a> {
     /// re-checked entities derive distinct ids.
     pub fn site_occurrence(&self) -> u32 {
         self.allocator.current_site().2
+    }
+
+    /// Derive one identifier in the producer allocation family without
+    /// retaining a salsa query solely to own that identifier.
+    fn query_derived_id<Id: ArenaId>(&self, slot: u32) -> Id {
+        let (space, raw, occurrence) = self.allocator.current_site();
+        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, space, raw, occurrence), slot)
     }
 
     /// The innermost allocation site as a salsa key, for queries of auxiliary
@@ -2697,49 +2781,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
             | Pat::Hole(pat) => {
                 let su::Hole = pat;
                 match switch {
-                    | Switch::Syn => {
-                        let pat = crate::query::InternedPat::new(tycker.db, self.inner);
-                        let Some(error) =
-                            crate::query::pat_hole_syn_judgment(tycker.db, tycker.data, pat)
-                        else {
-                            unreachable!("hole pattern judgments are query-produced")
-                        };
-                        tycker.err_k(error, std::panic::Location::caller())?
-                    }
+                    | Switch::Syn => tycker
+                        .err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?,
                     | Switch::Ana(ann) => {
-                        let pat = crate::query::InternedPat::new(tycker.db, self.inner);
-                        let node = crate::query::InternedPatLeafNode::new(
-                            tycker.db,
-                            crate::query::PatLeaf::Hole,
-                            ann,
-                        );
-                        let Some(outcome) = crate::query::pat_leaf_node_judgment(
-                            tycker.db,
-                            tycker.data,
-                            pat,
-                            node,
-                            tycker.site_occurrence(),
-                        ) else {
-                            unreachable!("hole pattern nodes are query-produced")
-                        };
-                        let ann = match outcome {
-                            | crate::query::PatLeafOutcome::Kind { id, pat } => {
-                                tycker.statics.kpats.insert_new(id, pat);
-                                PatAnnId::Kind(id)
-                            }
-                            | crate::query::PatLeafOutcome::Type { id, pat, kd } => {
-                                tycker.statics.tpats.insert_new(id, pat);
-                                tycker.statics.annotations_tpat.insert_new(id, kd);
-                                tycker.statics.env_tpat.insert_new(id, self.info.clone());
-                                PatAnnId::Type(id, kd)
-                            }
-                            | crate::query::PatLeafOutcome::Value { id, pat, ty } => {
-                                tycker.statics.vpats.insert_new(id, pat);
-                                tycker.statics.annotations_vpat.insert_new(id, ty);
-                                tycker.statics.env_vpat.insert_new(id, self.info.clone());
-                                PatAnnId::Value(id, ty)
-                            }
-                        };
+                        let ann = PatternLeaf::Hole.materialize(tycker, &self.info, ann);
                         self.mk(PatternCheck::new(ann))
                     }
                 }
@@ -2749,34 +2794,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                     | Switch::Syn => match tycker.statics.annotations_var.get(&def) {
                         | Some(ann) => ann.to_owned(),
                         | None => {
-                            let pat = crate::query::InternedPat::new(tycker.db, self.inner);
-                            let Some((fill, ty, vtype)) = crate::query::pat_var_hole_judgment(
-                                tycker.db,
-                                tycker.data,
-                                pat,
-                                tycker.site_occurrence(),
-                            ) else {
-                                unreachable!(
-                                    "the variable pattern's stand-in hole is query-produced"
-                                )
-                            };
-                            tycker
-                                .statics
-                                .fills
-                                .insert_new(fill, ss::InferenceSite::Pattern(self.inner));
-                            tycker.statics.types_pre.insert_new(ty, ss::Fillable::Fill(fill));
-                            tycker.statics.annotations_type.insert_new(ty, vtype);
-                            tycker.store_env(ty, &self.info);
-                            let scope = self.info.skolem_scope().clone();
-                            if let Some(existing) =
-                                tycker.statics.fill_scopes.insert_or_get(fill, scope.clone())
-                            {
-                                tycker
-                                    .statics
-                                    .fill_scopes
-                                    .replace_existing(fill, existing.intersection(&scope));
-                            }
-                            ty.into()
+                            PatternVariableStandIn::materialize(tycker, &self.info, self.inner)
                         }
                     },
                     | Switch::Ana(ann) => ann,
@@ -2796,39 +2814,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                     tycker.statics.annotations_var.replace_existing(def, ann);
                 }
 
-                let pat = crate::query::InternedPat::new(tycker.db, self.inner);
-                let node = crate::query::InternedPatLeafNode::new(
-                    tycker.db,
-                    crate::query::PatLeaf::Var(def),
-                    ann,
-                );
-                let Some(outcome) = crate::query::pat_leaf_node_judgment(
-                    tycker.db,
-                    tycker.data,
-                    pat,
-                    node,
-                    tycker.site_occurrence(),
-                ) else {
-                    unreachable!("variable pattern nodes are query-produced")
-                };
-                let ann = match outcome {
-                    | crate::query::PatLeafOutcome::Kind { id, pat } => {
-                        tycker.statics.kpats.insert_new(id, pat);
-                        PatAnnId::Kind(id)
-                    }
-                    | crate::query::PatLeafOutcome::Type { id, pat, kd } => {
-                        tycker.statics.tpats.insert_new(id, pat);
-                        tycker.statics.annotations_tpat.insert_new(id, kd);
-                        tycker.statics.env_tpat.insert_new(id, self.info.clone());
-                        PatAnnId::Type(id, kd)
-                    }
-                    | crate::query::PatLeafOutcome::Value { id, pat, ty } => {
-                        tycker.statics.vpats.insert_new(id, pat);
-                        tycker.statics.annotations_vpat.insert_new(id, ty);
-                        tycker.statics.env_vpat.insert_new(id, self.info.clone());
-                        PatAnnId::Value(id, ty)
-                    }
-                };
+                let ann = PatternLeaf::Variable(def).materialize(tycker, &self.info, ann);
                 self.mk(PatternCheck::new(ann))
             }
             | Pat::Named(pat) => {
