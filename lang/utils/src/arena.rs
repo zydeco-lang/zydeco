@@ -291,6 +291,27 @@ impl PageSlots {
             page.resize_with(required, || None);
         }
     }
+
+    fn reserve_ids<Id: ArenaId, T>(
+        pages: &mut HashMap<KeySpaceId, Vec<Option<T>>>, ids: impl IntoIterator<Item = Id>,
+    ) {
+        let required =
+            ids.into_iter().fold(HashMap::<KeySpaceId, usize>::default(), |mut required, id| {
+                let slots = id.raw().into_u32() as usize + 1;
+                required
+                    .entry(id.key_space())
+                    .and_modify(|current| *current = (*current).max(slots))
+                    .or_insert(slots);
+                required
+            });
+        pages.reserve(required.len());
+        required.into_iter().for_each(|(key_space, slots)| {
+            let page = pages.entry(key_space).or_default();
+            if page.capacity() < slots {
+                page.reserve_exact(slots - page.len());
+            }
+        });
+    }
 }
 
 /// A non-empty sequence that keeps its overwhelmingly common singleton case
@@ -786,24 +807,7 @@ mod impls {
         /// its gaps. This is useful when a pass knows its complete external ID
         /// domain before it starts inserting owned items.
         pub fn reserve_ids(&mut self, ids: impl IntoIterator<Item = Id>) {
-            let required = ids.into_iter().fold(
-                HashMap::<KeySpaceId, usize>::default(),
-                |mut required, id| {
-                    let slots = id.raw().into_u32() as usize + 1;
-                    required
-                        .entry(id.key_space())
-                        .and_modify(|current| *current = (*current).max(slots))
-                        .or_insert(slots);
-                    required
-                },
-            );
-            self.pages.reserve(required.len());
-            required.into_iter().for_each(|(key_space, slots)| {
-                let page = self.pages.entry(key_space).or_default();
-                if page.capacity() < slots {
-                    page.reserve_exact(slots - page.len());
-                }
-            });
+            PageSlots::reserve_ids(&mut self.pages, ids);
         }
 
         /// Reserve outer page entries, one per expected key space.
@@ -892,6 +896,12 @@ mod impls {
 
         pub fn len(&self) -> usize {
             self.len
+        }
+
+        /// Reserve every page to the greatest supplied raw ID without filling
+        /// its gaps.
+        pub fn reserve_ids(&mut self, ids: impl IntoIterator<Item = Id>) {
+            PageSlots::reserve_ids(&mut self.pages, ids);
         }
 
         /// Reserve outer page entries, one per expected key space.
@@ -1753,6 +1763,24 @@ mod tests {
         assert_eq!(arena.get(&derived_id::<SparseId>(space, 2)), None);
         assert_eq!(arena.get(&second), Some(&40));
         assert_eq!(arena.iter().count(), 2);
+    }
+
+    #[test]
+    fn paged_associations_use_known_id_extents_without_growth_slack() {
+        let space = KeySpaceId::derive(9, 10, 11, 13);
+        let first = derived_id::<SparseId>(space, 0);
+        let last = derived_id::<SparseId>(space, 95);
+        let mut arena = ArenaPagedAssoc::new();
+
+        arena.reserve_ids([first, last]);
+        let capacity = arena.pages[&space].capacity();
+        assert!(capacity >= 96);
+
+        arena.insert_new(first, 20);
+        arena.insert_new(last, 95);
+        assert_eq!(arena.len(), 2);
+        assert_eq!(arena.pages[&space].capacity(), capacity);
+        assert_eq!(arena.get(&first), Some(&20));
     }
 
     #[test]

@@ -1436,7 +1436,7 @@ impl<'a> Tycker<'a> {
         prim: &'a PrimDefs, scoped: &'a ScopedArena,
     ) -> Self {
         let mut statics = StaticsArena::default();
-        statics.reserve(scoped.terms.len());
+        statics.reserve(scoped);
         let source_contexts = TermContexts::collect(scoped, data.root(db));
         Self {
             allocator: DerivedAllocator::new(),
@@ -1619,7 +1619,7 @@ impl<'a> Tycker<'a> {
             // Record the normalized form per scoped term, so editor facts can
             // answer for a term's annotation type without the occurrence
             // payload.
-            let terms: Vec<_> = self.statics.term_facts.iter().map(|(term, _)| *term).collect();
+            let terms: Vec<_> = self.statics.term_facts.iter().map(|(term, _)| term).collect();
             for term in terms {
                 let ty = match self.statics.term_annotation(term) {
                     | Some(ss::TermAnnId::Type(ty, _))

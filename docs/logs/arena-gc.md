@@ -1912,3 +1912,54 @@ decisions while implementing the plan.
 - Measure both directions and multiplicities of static pattern provenance before changing it. Its
   13.3MB total footprint is large, but one-to-many edges and query-derived key spaces make density
   less predictable than the source term arena.
+
+## 2026-08-15 — round 42: separate sparse term identity from dense facts
+
+### Findings
+
+- The final standard-library analysis retains facts for 63,574 of the 96,052 source term slots:
+  66.2% occupancy across extents of 97 and 95,955. `Option<TermFacts>` is 40 bytes, while the
+  existing hash table owned one 7,487,488-byte allocation in the round-41 heap census.
+- Direct paged storage needs 3,842,080 logical bytes at exact capacity, but reserving that entire
+  extent in `Tycker::new` raised median peak RSS to 169,033,728 bytes. The facts are produced
+  progressively during judgments, so eager allocation overlapped source contexts and early checker
+  state that had not overlapped the gradually growing hash table.
+- Allowing the wide page to grow progressively instead produced a stable 166,969,344-byte median
+  over five warm checks. Its 1.5x growth policy still placed 40-byte payloads in every capacity
+  slot, including gaps and the unused tail.
+- Source identity and fact payload have different density requirements. A one-based `NonZeroU32`
+  index makes `Option<TermFactsIndex>` four bytes; storing those indexes in the sparse page and the
+  40-byte facts in an insertion-dense vector needs 2,927,168 logical bytes at final lengths. It also
+  lets the wide payload follow actual judgment progress rather than raw source extents.
+
+### Changes
+
+- Added `TermFactsArena`, which maps each source term through a compact paged index into a dense
+  fact vector. Re-recording a term replaces its existing dense slot, preserving the previous
+  last-annotation semantics without appending duplicates.
+- Extended exact known-ID reservation to `ArenaPagedAssoc` through the shared `PageSlots` policy.
+  Term facts pre-reserve only their four-byte index pages; the dense payload vector remains
+  progressive.
+- Normalization continues to iterate source term/fact pairs through the typed arena boundary. A
+  layout and replacement regression verifies the four-byte optional index and stable dense slot.
+
+### Measurements
+
+- Five release checks used 166,428,672, 166,805,504, 166,772,736, 167,313,408, and 166,920,192
+  bytes peak RSS (median 166,805,504), down 1,048,576 bytes (-0.6%) from round 41. Warm wall time was
+  0.22--0.23s and warm user time was 0.19--0.20s.
+- The current-tree baseline is now down from 2,497,757,184 to 166,805,504 bytes (-93.3%).
+- All 24 utilities tests and their doctests, all 57 statics tests, all 151 session tests, all 31
+  Cajun unit tests, and all 9 Cajun stdio tests passed. The release CLI build and full
+  standard-library check also passed.
+
+### Next
+
+- Refresh the live heap census now that neither scoped terms nor term facts use a wide hash bucket.
+  This should distinguish the assembled span map, source provenance, and static pattern provenance
+  without the former 14.8MB and 7.5MB owners obscuring them.
+- Split the assembled span map by typed source ID category only if measured raw extents support
+  compact pages. Per-source template span maps have independent Salsa reuse and should not be
+  conflated with the assembled program representation.
+- Measure provenance multiplicities as well as key density. A compact index plus dense edge payload
+  may generalize better than replacing either direction with a wide optional relation value.

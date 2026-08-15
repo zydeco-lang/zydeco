@@ -6,6 +6,7 @@ use super::syntax::*;
 use crate::surface_syntax as su;
 use crate::{SkolemScope, TyEnv};
 use std::{
+    num::NonZeroU32,
     ops::{Deref, DerefMut, Index, IndexMut},
     sync::Arc,
 };
@@ -150,6 +151,59 @@ pub struct TermFacts {
     annotation: TermAnnId,
 }
 
+/// One-based index whose zero niche keeps optional source-term slots at four
+/// bytes while the wider facts remain densely packed.
+#[derive(Copy, Clone, Debug)]
+struct TermFactsIndex(NonZeroU32);
+
+impl TermFactsIndex {
+    fn from_offset(offset: usize) -> Self {
+        let index = u32::try_from(offset)
+            .expect("term-facts arena exceeded its index range")
+            .checked_add(1)
+            .expect("term-facts arena exceeded its index range");
+        Self(NonZeroU32::new(index).expect("one-based term-facts index is nonzero"))
+    }
+
+    fn offset(self) -> usize {
+        (self.0.get() - 1) as usize
+    }
+}
+
+/// Sparse source-term identity backed by densely stored editor facts.
+#[derive(Clone, Debug, Default)]
+pub struct TermFactsArena {
+    indexes: ArenaPagedAssoc<su::TermId, TermFactsIndex>,
+    facts: Vec<TermFacts>,
+}
+
+impl TermFactsArena {
+    fn reserve_ids(&mut self, ids: impl IntoIterator<Item = su::TermId>) {
+        self.indexes.reserve_ids(ids);
+    }
+
+    #[must_use]
+    fn upsert(&mut self, term: su::TermId, facts: TermFacts) -> Option<TermFacts> {
+        match self.indexes.get(&term).copied() {
+            | Some(index) => Some(std::mem::replace(&mut self.facts[index.offset()], facts)),
+            | None => {
+                let index = TermFactsIndex::from_offset(self.facts.len());
+                self.facts.push(facts);
+                self.indexes.insert_new(term, index);
+                None
+            }
+        }
+    }
+
+    fn get(&self, term: &su::TermId) -> Option<&TermFacts> {
+        self.indexes.get(term).map(|index| &self.facts[index.offset()])
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (su::TermId, &TermFacts)> {
+        self.indexes.iter().map(|(term, index)| (term, &self.facts[index.offset()]))
+    }
+}
+
 /// Compact index into the distinct kind annotations used by one type arena.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 struct TypeKindIndex(u32);
@@ -275,7 +329,7 @@ pub struct StaticsIndexes {
     /// than once, while erased constructs can share a typed term.
     pub terms: ArenaBipartite<su::TermId, TermId>,
     /// Final annotation for each checked source term.
-    pub term_facts: ArenaAssoc<su::TermId, TermFacts>,
+    pub term_facts: TermFactsArena,
     /// Normalized classifier for each distinct top annotation type. Inner type
     /// nodes have no entry, and terms sharing one annotation ID share one clone.
     pub annotation_norms: ArenaAssoc<TypeId, Type>,
@@ -413,13 +467,14 @@ impl DerefMut for StaticsArena {
 }
 
 impl StaticsArena {
-    /// Pre-reserve the outer type-page tables from the name-resolved program's
-    /// size. Measurements put type-producing key spaces at slightly under one
-    /// half of scoped terms; the millions of inner slots grow in their pages.
-    pub fn reserve(&mut self, scoped_terms: usize) {
-        let type_key_spaces = scoped_terms.saturating_add(1) / 2;
+    /// Pre-reserve source-shaped pages from the name-resolved program. Term
+    /// facts know their exact external ID extents; generated type pages can
+    /// reserve only their estimated outer key-space count.
+    pub fn reserve(&mut self, scoped: &su::ScopedArena) {
+        let type_key_spaces = scoped.terms.len().saturating_add(1) / 2;
         self.types_pre.reserve_pages(type_key_spaces);
         self.env_type.reserve_pages(type_key_spaces);
+        self.term_facts.reserve_ids(scoped.terms.iter().map(|(term, _)| term));
     }
 
     /// Intern one typing environment and return the shared value for storage
@@ -560,6 +615,28 @@ mod tests {
 
         assert!(matches!(statics.normalized_annotation_at(annotation), Some(Type::Unit(_))));
         assert_eq!(statics.annotation_norms.len(), 1);
+    }
+
+    #[test]
+    fn term_facts_keep_sparse_slots_compact_and_replace_in_place() {
+        assert_eq!(std::mem::size_of::<Option<TermFactsIndex>>(), 4);
+        assert!(
+            std::mem::size_of::<Option<TermFactsIndex>>()
+                < std::mem::size_of::<Option<TermFacts>>()
+        );
+
+        let mut surface = IdAllocator::<su::ScopedScope>::new();
+        let term = surface.alloc();
+        let mut allocator = IdAllocator::<StaticsScope>::new();
+        let first: KindId = allocator.alloc();
+        let second: KindId = allocator.alloc();
+        let mut statics = StaticsArena::default();
+
+        statics.record_term_annotation(term, TermAnnId::Kind(first));
+        statics.record_term_annotation(term, TermAnnId::Kind(second));
+
+        assert_eq!(statics.term_facts.facts.len(), 1);
+        assert_eq!(statics.term_annotation(term), Some(TermAnnId::Kind(second)));
     }
 }
 
