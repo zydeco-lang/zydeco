@@ -328,3 +328,45 @@ decisions while implementing the plan.
 - Re-census the retained heap now that syntax clones no longer obscure the type-page footprint.
   In particular, distinguish live slot bytes from geometric `Vec` capacity and allocator
   high-water behavior.
+
+## 2026-08-15 — round 10: bound paged-arena growth slack
+
+### Findings
+
+- The two final type tables each contained 2,533,180 logical slots across 29,279 pages, but
+  ordinary `Vec` doubling left capacity for 3,906,339 slots. The 1,373,159 unused slots were
+  54.2% of the live shape, repeated once for types and once for annotations. A checker-transient
+  environment table follows the same page shape while it is being built.
+- The excess came from applying a growth rule designed for a single long-lived vector to tens
+  of thousands of independently growing, append-dense pages. The pages still need amortized
+  growth, but a smaller factor bounds their aggregate tail slack.
+- Allocator high-water behavior hides much of the retained-byte reduction from process peak
+  RSS: page reallocations temporarily keep both buffers live, and freed size classes remain in
+  the allocator. A retained-heap census nevertheless fell from 762.5MB to 567.2MB across the
+  arena-sharing and page-growth rounds, while the external RSS measurement continued to improve.
+
+### Changes
+
+- Paged owning and associative arenas now share a 1.5x exact-reservation policy. It preserves
+  logarithmic amortized growth while avoiding `Vec`'s 2x capacity step for every derived-ID
+  page.
+
+### Measurements
+
+- Final capacity per type table fell from 3,906,339 to 3,087,852 slots: overhead is 21.9% rather
+  than 54.2%, saving capacity for 818,487 slots in each of the two retained tables.
+- Three full-std minimal checks used 935,198,720, 936,329,216, and 935,968,768 bytes peak RSS
+  (median 935,968,768), down 10.0MB from round 9's 945,946,624-byte median. Warm user time also
+  fell from roughly 1.40s to 1.18s.
+- A 1.25x policy retained only 14.0% slack but raised median peak RSS to 940,326,912 bytes because
+  of additional reallocation churn. A 1.75x policy raised it to 950,845,440 bytes because of
+  unused capacity. Both experiments were removed; 1.5x was the measured optimum.
+- All 14 focused arena tests and all 33 statics tests passed. The 151-test session library suite
+  passed with two threads in 37.66s.
+
+### Next
+
+- The post-round retained heap attributes another large block to `clone_keyed_indexes`: the S
+  and L tiers simultaneously own deep copies of normalized terms, annotations, and source-site
+  indexes. These facts are immutable after checking, so copy-on-write sharing should remove the
+  duplication without weakening post-eviction analysis.

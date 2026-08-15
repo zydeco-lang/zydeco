@@ -274,6 +274,25 @@ pub struct ArenaPagedAssoc<Id: ArenaId, T> {
     marker: PhantomData<fn() -> Id>,
 }
 
+/// Capacity policy shared by paged owning and associative arenas.
+struct PageSlots;
+
+impl PageSlots {
+    /// Grow large pages by 50% instead of `Vec`'s doubling policy. Derived-ID
+    /// pages are append-dense, so this trades a few logarithmic reallocations
+    /// for substantially less unused capacity at the end of a check.
+    fn ensure<T>(page: &mut Vec<Option<T>>, required: usize) {
+        if page.capacity() < required {
+            let grown = page.capacity().saturating_add(page.capacity() / 2).max(4);
+            let target = required.max(grown);
+            page.reserve_exact(target - page.len());
+        }
+        if page.len() < required {
+            page.resize_with(required, || None);
+        }
+    }
+}
+
 /// A bidirectional single-to-multi-map; a "widen" map.
 #[derive(Debug, Clone, IntoIterator)]
 pub struct ArenaForth<P, Q> {
@@ -696,9 +715,7 @@ mod impls {
         pub fn insert_new(&mut self, id: Id, val: Scope::Item) {
             let index = id.raw().into_u32() as usize;
             let page = self.pages.entry(id.key_space()).or_default();
-            if page.len() <= index {
-                page.resize_with(index + 1, || None);
-            }
+            PageSlots::ensure(page, index + 1);
             assert!(page[index].is_none(), "duplicate key in paged arena");
             page[index] = Some(val);
             self.len += 1;
@@ -786,9 +803,7 @@ mod impls {
         pub fn insert_new(&mut self, id: Id, val: T) {
             let index = id.raw().into_u32() as usize;
             let page = self.pages.entry(id.key_space()).or_default();
-            if page.len() <= index {
-                page.resize_with(index + 1, || None);
-            }
+            PageSlots::ensure(page, index + 1);
             assert!(page[index].is_none(), "duplicate key in paged associative arena");
             page[index] = Some(val);
             self.len += 1;
