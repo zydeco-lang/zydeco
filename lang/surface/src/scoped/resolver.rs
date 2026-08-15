@@ -134,23 +134,14 @@ impl<'a> Resolver<'a> {
             terms,
             textual,
             users,
-            ctxs_pat_local,
+            ctxs_pat_local: _,
             coctxs_pat_local: _,
             coctxs_term_local,
             blocks,
         } = collector.run_source(root);
         Ok(ResolvedProgram {
             prim,
-            arena: ScopedArena {
-                defs,
-                pats,
-                terms,
-                textual,
-                users,
-                ctxs_pat_local,
-                coctxs_term_local,
-                blocks,
-            },
+            arena: ScopedArena { defs, pats, terms, textual, users, coctxs_term_local, blocks },
         })
     }
 

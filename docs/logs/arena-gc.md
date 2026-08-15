@@ -1720,3 +1720,49 @@ decisions while implementing the plan.
   recorded `global_terms`; an explicit phase boundary could release their 64,954 vectors sooner.
 - Refresh the live heap census before choosing between the remaining producer-query families and
   provenance relations.
+
+## 2026-08-15 — round 38: derive editor parameters from pattern syntax
+
+### Findings
+
+- `ctxs_pat_local` had only one post-resolution reader. Cajun scanned abstraction, `pi`, `sigma`, and
+  manifest-existential binder roots, then used each stored context solely to collect the variable
+  leaves beneath that pattern.
+- The scoped pattern syntax already preserves precisely that tree. Annotation, name, constructor,
+  and projection nodes forward to one child; alias and product patterns combine their children; a
+  variable leaf contributes its definition. Rewalking those few parameter roots reproduces the
+  editor result without retaining analysis for every pattern.
+- The standard library's 27,137 stored binding contexts contained only 7,231 definition IDs. 20,147
+  entries were empty, 6,906 were singletons, and the largest context contained 14 definitions. As
+  with the pattern free-variable table, the hash buckets and `Vec` headers outweighed the payload.
+
+### Changes
+
+- Cajun's `ParameterDefinitions` now traverses the scoped binder patterns and collects variable
+  leaves directly. Its semantic classification remains a typed `HashSet<DefId>`; only the source of
+  that set changed.
+- Kept pattern binding contexts in the resolver's private `Collector`, where they are required to
+  subtract locally bound variables from term free-variable contexts, but stopped transferring them
+  into `ScopedArena`.
+- Removed the obsolete durable field from static-checker fixtures.
+
+### Measurements
+
+- Three release checks used 175,685,632, 176,340,992, and 176,439,296 bytes peak RSS (median
+  176,340,992), down 1,261,568 bytes (-0.7%) from round 37.
+- The current-tree baseline is now down from 2,497,757,184 to 176,340,992 bytes (-92.9%). Warm wall
+  time was 0.23--0.24s and warm user time was 0.21s.
+- All 140 surface tests, all 56 statics tests, all 151 session tests, all 31 Cajun unit tests, and all
+  9 Cajun stdio tests passed. The release CLI build and full standard-library check also passed.
+
+### Next
+
+- Move term free-variable contexts across the checking boundary rather than retaining them in the
+  durable scoped syntax. Unlike both pattern maps, their values are needed throughout checking, so
+  this requires assigning ownership to the checked-analysis construction rather than simply
+  discarding a resolver field.
+- Refresh the live heap census at the new 176MB peak. The source arena now retains no pattern
+  context tables, so stacks previously attributed to `Context<DefId>` should identify only the
+  transient collector and term summaries.
+- Compare the next producer-query family against durable provenance by measured retained bytes; the
+  earlier snapshot predates both type-node compaction and removal of the two pattern maps.

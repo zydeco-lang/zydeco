@@ -179,8 +179,6 @@ pub struct ScopedArena {
 
     /// def user map
     pub users: ArenaForth<DefId, TermId>,
-    /// variables that are introduced by the pattern
-    pub ctxs_pat_local: ArenaAssoc<PatId, Context>,
     /// variables that are free within the term
     pub coctxs_term_local: ArenaAssoc<TermId, CoContext>,
     /// Context DAGs retained for nested `begin` terms.

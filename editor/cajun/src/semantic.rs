@@ -13,11 +13,11 @@ use zydeco_statics::{
 use zydeco_surface::{
     scoped::{
         arena::ScopedArena,
-        syntax::{DefId, ManifestExists, Pattern, Pi, Sigma, Term},
+        syntax::{DefId, ManifestExists, PatId, Pattern, Pi, Sigma, Term},
     },
     textual::{LexicalTokenKind, LexicalTokens, syntax::SpanArena},
 };
-use zydeco_syntax::{Abs, Label, Named, Proj};
+use zydeco_syntax::{Abs, Alias, Ann, Ctor, Label, Named, Proj, ProjectionPattern};
 use zydeco_utils::{
     arena::ArenaAccess,
     span::{FileInfo, Span},
@@ -406,6 +406,7 @@ impl<'arena> ParameterDefinitions<'arena> {
     }
 
     fn collect(&self) -> HashSet<DefId> {
+        let mut definitions = HashSet::new();
         self.scoped
             .terms
             .iter()
@@ -416,9 +417,26 @@ impl<'arena> ParameterDefinitions<'arena> {
                 | Term::ManifestExists(ManifestExists { binder, .. }) => Some(binder),
                 | _ => None,
             })
-            .filter_map(|pattern| self.scoped.ctxs_pat_local.get(pattern))
-            .flat_map(|context| context.iter().copied())
-            .collect()
+            .for_each(|pattern| self.collect_pattern(pattern, &mut definitions));
+        definitions
+    }
+
+    fn collect_pattern(&self, pattern: &PatId, definitions: &mut HashSet<DefId>) {
+        match &self.scoped.pats[pattern] {
+            | Pattern::Ann(Ann { tm, ty: _ }) => self.collect_pattern(tm, definitions),
+            | Pattern::Hole(_) | Pattern::Triv(_) => {}
+            | Pattern::Var(definition) => {
+                definitions.insert(*definition);
+            }
+            | Pattern::Named(Named(_, inner))
+            | Pattern::Ctor(Ctor(_, inner))
+            | Pattern::Project(ProjectionPattern(_, inner)) => {
+                self.collect_pattern(inner, definitions);
+            }
+            | Pattern::Alias(Alias(items)) | Pattern::Cons(items) => {
+                items.iter().for_each(|item| self.collect_pattern(item, definitions));
+            }
+        }
     }
 }
 
