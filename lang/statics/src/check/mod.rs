@@ -207,9 +207,160 @@ struct ValueFieldCandidate {
 }
 
 #[derive(Clone)]
+struct DeferredValueFieldCandidate {
+    route: Vec<DeferredValueFieldStep>,
+    projected: DeferredEnvType,
+}
+
+#[derive(Clone)]
 enum ValueFieldStep {
     Named { name: FieldName, whole: ss::TypeId },
     Product { product: ss::TypeId, components: Vec<ss::TypeId>, position: usize },
+}
+
+#[derive(Clone)]
+enum DeferredValueFieldStep {
+    Named { name: FieldName, whole: DeferredEnvType },
+    Product { product: DeferredEnvType, components: Vec<DeferredEnvType>, position: usize },
+}
+
+/// A type together with the environment operation still owed by structural field lookup.
+///
+/// Applying the environment eagerly at every label and product node recursively copied the
+/// entire remaining telescope at each depth. This closure distributes one operation through
+/// stable structure without allocating, then materializes only the unique projection route.
+#[derive(Clone)]
+struct DeferredEnvType {
+    root: ss::TypeId,
+    environment: ss::TyEnv,
+    pending: Option<DeferredEnvOperation>,
+}
+
+/// Whether the pending environment application starts a search step or was inherited from an
+/// already inspected parent. Descendants must not unroll their payload merely because the parent
+/// substituted through it: doing so changes sealed projected types into their definitions.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum DeferredEnvOperation {
+    UnrollThenSubstitute,
+    Substitute,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct DeferredEnvIdentity {
+    root: ss::TypeId,
+    pending: Option<DeferredEnvOperation>,
+}
+
+enum DeferredEnvTypeView {
+    Label { name: FieldName, whole: DeferredEnvType, projected: DeferredEnvType },
+    Product { whole: DeferredEnvType, head: DeferredEnvType, tail: DeferredEnvType },
+    Other(DeferredEnvType),
+}
+
+impl DeferredEnvType {
+    fn with_environment(root: ss::TypeId, environment: &ss::TyEnv) -> Self {
+        Self {
+            root,
+            environment: environment.clone(),
+            pending: Some(DeferredEnvOperation::UnrollThenSubstitute),
+        }
+    }
+
+    fn materialized(root: ss::TypeId, environment: ss::TyEnv) -> Self {
+        Self { root, environment, pending: None }
+    }
+
+    fn descend(&self, root: ss::TypeId) -> Self {
+        let pending = self.pending.map(|_| DeferredEnvOperation::Substitute);
+        Self { root, environment: self.environment.clone(), pending }
+    }
+
+    fn materialize_k(&self, tycker: &mut Tycker<'_>) -> ResultKont<ss::TypeId> {
+        let Some(operation) = self.pending else { return Ok(self.root) };
+        let root = match operation {
+            | DeferredEnvOperation::UnrollThenSubstitute => self.root.unroll_k(tycker)?,
+            | DeferredEnvOperation::Substitute => self.root,
+        };
+        root.subst_env_k(tycker, &self.environment)
+    }
+
+    fn reveal_k(self, tycker: &mut Tycker<'_>) -> ResultKont<DeferredEnvTypeView> {
+        match tycker.statics.types_pre[&self.root].to_owned() {
+            | ss::Fillable::Fill(_) => {
+                let ty = tycker.type_filled_k(&self.root)?.to_owned();
+                Ok(Self::materialized(self.root, self.environment).view(ty))
+            }
+            | ss::Fillable::Done(
+                ss::Type::Var(_) | ss::Type::Abst(_) | ss::Type::App(_) | ss::Type::Proj(_),
+            ) => {
+                let needs_search_step =
+                    self.pending != Some(DeferredEnvOperation::UnrollThenSubstitute);
+                let mut root = self.materialize_k(tycker)?;
+                if needs_search_step {
+                    root = root.unroll_k(tycker)?;
+                    root = root.subst_env_k(tycker, &self.environment)?;
+                }
+                let ty = tycker.type_filled_k(&root)?.to_owned();
+                Ok(Self::materialized(root, self.environment).view(ty))
+            }
+            | ss::Fillable::Done(ty) => Ok(self.view(ty)),
+        }
+    }
+
+    fn view(self, ty: ss::Type) -> DeferredEnvTypeView {
+        match ty {
+            | ss::Type::Label(ss::Label(name, projected)) => {
+                let projected = self.descend(projected);
+                DeferredEnvTypeView::Label { name, whole: self, projected }
+            }
+            | ss::Type::Prod(ss::Prod(head, tail)) => {
+                let head = self.descend(head);
+                let tail = self.descend(tail);
+                DeferredEnvTypeView::Product { whole: self, head, tail }
+            }
+            | _ => DeferredEnvTypeView::Other(self),
+        }
+    }
+}
+
+impl DeferredEnvTypeView {
+    fn identity(&self) -> DeferredEnvIdentity {
+        match self {
+            | Self::Label { whole, .. } | Self::Product { whole, .. } | Self::Other(whole) => {
+                DeferredEnvIdentity { root: whole.root, pending: whole.pending }
+            }
+        }
+    }
+
+    fn into_whole(self) -> DeferredEnvType {
+        match self {
+            | Self::Label { whole, .. } | Self::Product { whole, .. } | Self::Other(whole) => whole,
+        }
+    }
+}
+
+impl DeferredValueFieldCandidate {
+    fn materialize_k(self, tycker: &mut Tycker<'_>) -> ResultKont<ValueFieldCandidate> {
+        let projected = self.projected.materialize_k(tycker)?;
+        let route = self
+            .route
+            .into_iter()
+            .map(|step| match step {
+                | DeferredValueFieldStep::Named { name, whole } => {
+                    Ok(ValueFieldStep::Named { name, whole: whole.materialize_k(tycker)? })
+                }
+                | DeferredValueFieldStep::Product { product, components, position } => {
+                    let product = product.materialize_k(tycker)?;
+                    let components = components
+                        .into_iter()
+                        .map(|component| component.materialize_k(tycker))
+                        .collect::<ResultKont<Vec<_>>>()?;
+                    Ok(ValueFieldStep::Product { product, components, position })
+                }
+            })
+            .collect::<ResultKont<Vec<_>>>()?;
+        Ok(ValueFieldCandidate { route, projected })
+    }
 }
 
 #[derive(Clone)]
@@ -237,8 +388,7 @@ impl FieldProjectionResolver {
     ) -> ResultKont<ValueFieldCandidate> {
         let candidates = Self::value_candidates_k(
             tycker,
-            env,
-            root,
+            DeferredEnvType::with_environment(root, env),
             field,
             &[],
             &mut std::collections::HashSet::new(),
@@ -248,7 +398,7 @@ impl FieldProjectionResolver {
                 TyckError::MissingNamedField { field: field.clone(), found: root },
                 std::panic::Location::caller(),
             ),
-            | [candidate] => Ok(candidate.clone()),
+            | [candidate] => candidate.clone().materialize_k(tycker),
             | _ => tycker.err_k(
                 TyckError::DuplicateNamedField { field: field.clone(), found: root },
                 std::panic::Location::caller(),
@@ -257,71 +407,72 @@ impl FieldProjectionResolver {
     }
 
     fn value_candidates_k(
-        tycker: &mut Tycker<'_>, env: &ss::TyEnv, current: ss::TypeId, field: &FieldName,
-        route: &[ValueFieldStep], active: &mut std::collections::HashSet<ss::TypeId>,
-    ) -> ResultKont<Vec<ValueFieldCandidate>> {
-        let view = current.unroll_k(tycker)?.subst_env_k(tycker, env)?;
-        if !active.insert(view) {
+        tycker: &mut Tycker<'_>, current: DeferredEnvType, field: &FieldName,
+        route: &[DeferredValueFieldStep],
+        active: &mut std::collections::HashSet<DeferredEnvIdentity>,
+    ) -> ResultKont<Vec<DeferredValueFieldCandidate>> {
+        let view = current.reveal_k(tycker)?;
+        let identity = view.identity();
+        if !active.insert(identity) {
             return Ok(Vec::new());
         }
-        let structure = tycker.type_filled_k(&view)?.to_owned();
-        let candidates = match structure {
-            | ss::Type::Label(ss::Label(found, projected)) => {
+        let candidates = match view {
+            | DeferredEnvTypeView::Label { name: found, whole, projected } => {
                 let route = route
                     .iter()
                     .cloned()
-                    .chain([ValueFieldStep::Named { name: found.clone(), whole: view }])
+                    .chain([DeferredValueFieldStep::Named { name: found.clone(), whole }])
                     .collect::<Vec<_>>();
-                let direct = (found == *field)
-                    .then(|| ValueFieldCandidate { route: route.clone(), projected });
-                let nested =
-                    Self::value_candidates_k(tycker, env, projected, field, &route, active)?;
+                let direct = (found == *field).then(|| DeferredValueFieldCandidate {
+                    route: route.clone(),
+                    projected: projected.clone(),
+                });
+                let nested = Self::value_candidates_k(tycker, projected, field, &route, active)?;
                 direct.into_iter().chain(nested).collect()
             }
-            | ss::Type::Prod(_) => {
-                let components = Self::product_components_k(tycker, env, view)?;
+            | DeferredEnvTypeView::Product { whole, .. } => {
+                let components = Self::product_components_k(tycker, whole.clone())?;
                 let branches = components
                     .iter()
-                    .copied()
+                    .cloned()
                     .enumerate()
                     .map(|(position, component)| {
                         let route = route
                             .iter()
                             .cloned()
-                            .chain([ValueFieldStep::Product {
-                                product: view,
+                            .chain([DeferredValueFieldStep::Product {
+                                product: whole.clone(),
                                 components: components.clone(),
                                 position,
                             }])
                             .collect::<Vec<_>>();
-                        Self::value_candidates_k(tycker, env, component, field, &route, active)
+                        Self::value_candidates_k(tycker, component, field, &route, active)
                     })
                     .collect::<ResultKont<Vec<_>>>()?;
                 branches.into_iter().flatten().collect()
             }
             | _ => Vec::new(),
         };
-        active.remove(&view);
+        active.remove(&identity);
         Ok(candidates)
     }
 
     fn product_components_k(
-        tycker: &mut Tycker<'_>, env: &ss::TyEnv, product: ss::TypeId,
-    ) -> ResultKont<Vec<ss::TypeId>> {
+        tycker: &mut Tycker<'_>, product: DeferredEnvType,
+    ) -> ResultKont<Vec<DeferredEnvType>> {
         let mut next = Some(product);
         std::iter::from_fn(|| {
             let current = next.take()?;
-            let view = match current.unroll_k(tycker).and_then(|ty| ty.subst_env_k(tycker, env)) {
+            let view = match current.reveal_k(tycker) {
                 | Ok(view) => view,
                 | Err(KontFailure) => return Some(Err(KontFailure)),
             };
-            match tycker.type_filled_k(&view) {
-                | Ok(ss::Type::Prod(ss::Prod(item, tail))) => {
+            match view {
+                | DeferredEnvTypeView::Product { head, tail, .. } => {
                     next = Some(tail);
-                    Some(Ok(item))
+                    Some(Ok(head))
                 }
-                | Ok(_) => Some(Ok(view)),
-                | Err(KontFailure) => Some(Err(KontFailure)),
+                | view => Some(Ok(view.into_whole())),
             }
         })
         .collect()
@@ -693,8 +844,7 @@ impl ExistentialProjectionPattern {
                 .collect::<Vec<_>>();
             let value_candidates = FieldProjectionResolver::value_candidates_k(
                 tycker,
-                &opening.env,
-                opening.body,
+                DeferredEnvType::with_environment(opening.body, &opening.env),
                 &field,
                 &[],
                 &mut std::collections::HashSet::new(),
@@ -767,6 +917,7 @@ impl ExistentialProjectionPattern {
                     tycker.statics.pats.ensure(source, selected);
                 }
                 | ([], [candidate]) => {
+                    let candidate = candidate.clone().materialize_k(tycker)?;
                     let checked = TyEnvT::new(opening.env.clone(), payload).tyck_k(
                         tycker,
                         PatternAction::ana(candidate.projected.into())
@@ -7226,6 +7377,86 @@ mod source_boundary_tests {
         }
     }
     use crate::environment::TyEnv;
+
+    fn with_empty_tycker(test: impl FnOnce(&mut Tycker<'_>)) {
+        let mut allocator = IdAllocator::<su::ScopedScope>::new();
+        let root = allocator.alloc();
+        let mut scoped = su::ScopedArena::default();
+        scoped.terms.insert_new(root, su::Hole.into());
+        scoped.ctxs_term.insert_new(root, su::Context::new());
+        scoped.coctxs_term_local.insert_new(root, su::CoContext::new());
+
+        let spans = su::SpanArena::default();
+        let prim = su::PrimDefs::default();
+        let db = TestDb::default();
+        *db.pending.lock().unwrap() = Some(Arc::new(crate::query::PendingParts {
+            spans: spans.clone(),
+            prim: prim.clone(),
+            scoped: scoped.clone(),
+            root,
+        }));
+        let data = crate::query::intern_pending(&db);
+        let mut tycker = Tycker::new(&db, data, &spans, &prim, &mut scoped);
+        test(&mut tycker);
+    }
+
+    #[test]
+    fn field_substitution_is_independent_of_label_depth() {
+        with_empty_tycker(|tycker| {
+            let empty = TyEnv::default();
+            let vtype = ss::VType.build(tycker, &empty);
+            let unit = ss::UnitTy.build(tycker, &empty);
+            let source_def: ss::DefId = tycker.fresh();
+            let target_def: ss::DefId = tycker.fresh();
+            let source: ss::TypeId = Alloc::alloc(tycker, source_def, vtype, &empty);
+            let target: ss::TypeId = Alloc::alloc(tycker, target_def, vtype, &empty);
+            let environment =
+                TyEnv::from_iter([(source_def, target.into()), (target_def, unit.into())]);
+
+            let field = FieldName("selected".to_owned());
+            let wrapper = FieldName("wrapper".to_owned());
+            let shallow = Alloc::alloc(tycker, ss::Label(field.clone(), source), vtype, &empty);
+            let nested = Alloc::alloc(tycker, ss::Label(field.clone(), source), vtype, &empty);
+            let deep = Alloc::alloc(tycker, ss::Label(wrapper, nested), vtype, &empty);
+
+            let shallow =
+                FieldProjectionResolver::value_k(tycker, &environment, shallow, &field).unwrap();
+            let deep =
+                FieldProjectionResolver::value_k(tycker, &environment, deep, &field).unwrap();
+
+            assert_eq!(shallow.projected, target);
+            assert_eq!(deep.projected, target);
+            assert_ne!(deep.projected, unit);
+            assert!(tycker.errors.is_empty());
+        });
+    }
+
+    #[test]
+    fn field_search_reenters_the_environment_after_unrolling_a_seal() {
+        with_empty_tycker(|tycker| {
+            let environment = TyEnv::default();
+            let vtype = ss::VType.build(tycker, &environment);
+            let unit = ss::UnitTy.build(tycker, &environment);
+            let field = FieldName("selected".to_owned());
+            let wrapper = FieldName("wrapper".to_owned());
+            let definition =
+                Alloc::alloc(tycker, ss::Label(field.clone(), unit), vtype, &environment);
+            let witness: ss::AbstId = Alloc::alloc(tycker, None::<ss::DefId>, vtype, &());
+            tycker.statics.seals.insert_new(witness, definition);
+            let sealed = Alloc::alloc(tycker, witness, vtype, &environment);
+            let root =
+                Alloc::alloc(tycker, ss::Label(wrapper.clone(), sealed), vtype, &environment);
+
+            let direct =
+                FieldProjectionResolver::value_k(tycker, &environment, root, &wrapper).unwrap();
+            let nested =
+                FieldProjectionResolver::value_k(tycker, &environment, root, &field).unwrap();
+
+            assert_eq!(direct.projected, sealed);
+            assert_eq!(nested.projected, unit);
+            assert!(tycker.errors.is_empty());
+        });
+    }
 
     #[test]
     fn expected_kinds_flow_through_source_boundaries() {

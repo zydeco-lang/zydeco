@@ -493,3 +493,62 @@ decisions while implementing the plan.
 - Specify the closure's shadowing, chained-variable, abstract-witness, and hole behavior with
   focused tests. Then migrate one field-projection traversal and re-run the allocation census
   before widening the mechanism to existential and PackPi traversal.
+
+## 2026-08-15 — round 14: distribute field substitution without rebuilding the telescope
+
+### Findings
+
+- An exact-semantics closure deferred field-search substitutions successfully, but materializing
+  every selected route entry independently lost the sharing that eager traversal had created.
+  The full-std check grew from 2,508,856 to 2,582,584 type nodes (+73,728), and three runs used
+  875,085,824, 875,905,024, and 875,036,672 bytes peak RSS (median 875,085,824). That experiment
+  was removed.
+- The repeated eager algorithm conflated two operations. An inspected node needs `unroll` before
+  its environment substitution, while a child reached through a stable label or product only
+  inherits the parent's recursive substitution. Repeating both operations at every transparent
+  depth made substitution results depend on how many labels surrounded a field.
+- A first single-distribution prototype assigned `unroll` to inherited children too. It reached
+  only 455,391 nodes before failing the standard-library check: the projected `IoErrorKind`
+  payload changed from its sealed `Abst` identifier to the underlying `Data` identifier. This
+  established that preserving the selected payload's representation is part of field lookup's
+  contract even when the two types can later be unrolled for comparison.
+- The remaining boundary is explicit: recursively *searching through* a sealed payload must
+  start a fresh `unroll`-then-substitute step, but merely selecting that payload must not. A
+  materialized node therefore retains the environment as search context without carrying
+  another pending rewrite.
+
+### Changes
+
+- `DeferredEnvType` now gives field lookup three typed states: pending
+  `UnrollThenSubstitute`, pending inherited `Substitute`, or materialized. Stable labels and
+  products distribute the inherited state through their children without allocating. Variables,
+  applications, projections, fills, and sealed heads establish materialization boundaries.
+- Candidate discovery retains closures for the route and materializes only the unique result.
+  Missing and duplicate-field searches no longer retain eagerly rewritten copies of every
+  explored branch.
+- Cycle detection keys both the root identifier and pending operation, so revisiting one graph
+  node under a genuinely different deferred state does not look like a structural cycle.
+- A chained-environment regression (`x -> y`, `y -> Unit`) proves that selecting the same field
+  through one or two transparent labels returns `y` in both cases. A seal regression proves that
+  direct selection preserves the abstract identifier while nested search can still unroll the
+  seal and find a field inside its definition.
+
+### Measurements
+
+- The full-std check now retains 1,586,411 type nodes, 922,445 fewer than round 13 (-36.8%).
+- Three release checks used 615,890,944, 614,039,552, and 614,989,824 bytes peak RSS (median
+  614,989,824), down 250,068,992 bytes (-28.9%) from round 12's 865,058,816-byte median. Warm wall
+  time fell from roughly 1.14–1.18s to 0.87s.
+- The current-tree baseline is now down from 2,497,757,184 to 614,989,824 bytes (-75.4%).
+- All 37 statics tests and all 151 session tests passed, including standard-library composition,
+  interpretation, and backend-lowering coverage.
+
+### Next
+
+- Re-run call-site attribution against the smaller arena. The existential opening and
+  tuple/package loops previously contributed about 615,000 environment and abstract-substitution
+  nodes; they have the same “inspect one constructor, rebuild the remainder” shape and are the
+  next candidates for a local closure carrying ordered abstract assignments.
+- Measure route materialization separately. Product annotations still require several related
+  views of the selected route, so a small closure-local materialization cache may preserve more
+  sharing without changing the representation boundary established here.
