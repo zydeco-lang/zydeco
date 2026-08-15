@@ -278,6 +278,13 @@ pub struct TypeBinder {
     pub witness: AbstId,
 }
 
+/// A type-level function whose body refers to its binder through an abstract witness.
+#[derive(Clone, Debug)]
+pub struct TypeAbstraction {
+    pub binder: TypeBinder,
+    pub body: TypeId,
+}
+
 /// A value-level universal type `forall^v (X : K) . A`.
 #[derive(Clone, Debug)]
 pub struct ValueForall(pub TypeBinder, pub TypeId);
@@ -460,7 +467,7 @@ mod impls_structs {
 pub enum Type {
     Var(DefId),
     Abst(AbstId),
-    Abs(Abs<TPatId, TypeId>),
+    Abs(TypeAbstraction),
     App(App<TypeId, TypeId>),
     Named(Named<FieldName, TypeId>),
     Label(Label<FieldName, TypeId>),

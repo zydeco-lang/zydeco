@@ -89,3 +89,22 @@ fn nominal_substitution_reuses_unchanged_definitions() {
         );
     });
 }
+
+#[test]
+fn abstract_substitution_stops_at_type_abstraction_binders() {
+    TestFixture::run(|tycker| {
+        let (vtype, _) = TestFixture::kinds(tycker);
+        let env = TyEnv::new();
+        let (witness, body) = TestFixture::abst_type(tycker, vtype);
+        let binder = TypeBinder::with_witness(tycker, witness, &env);
+        let function_kind = Alloc::alloc(tycker, Arrow(vtype, vtype), (), &());
+        let abstraction =
+            Alloc::alloc(tycker, TypeAbstraction { binder, body }, function_kind, &env);
+        let replacement = Alloc::alloc(tycker, UnitTy, vtype, &env);
+
+        let Ok(substituted) = abstraction.subst_abst(tycker, (witness, replacement)) else {
+            panic!("substitution through a type abstraction failed")
+        };
+        assert_eq!(substituted, abstraction);
+    });
+}

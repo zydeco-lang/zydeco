@@ -450,9 +450,13 @@ where
         let Abs(param, ty) = self;
         let tpat = param.build(tycker, env);
         let (def, param_kd) = tpat.destruct_def(tycker);
-        let body = ty(tpat, def, param_kd).build(tycker, env);
+        let witness: AbstId = Alloc::alloc(tycker, tpat, (), &());
+        let witness_ty = Alloc::alloc(tycker, witness, param_kd, env);
+        let body_env = env.clone() + [(def, witness_ty.into())];
+        let body = ty(tpat, def, param_kd).build(tycker, &body_env);
         let kd = Arrow(param_kd, cs::TypeOf(body)).build(tycker, env);
-        Alloc::alloc(tycker, Abs(tpat, body), kd, env)
+        let binder = TypeBinder { pattern: tpat, witness };
+        Alloc::alloc(tycker, TypeAbstraction { binder, body }, kd, env)
     }
 }
 impl<'a, S, T> Construct<Tycker<'a>, TypeId> for App<S, T>

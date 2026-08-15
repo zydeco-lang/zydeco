@@ -184,7 +184,14 @@ impl TypeSupportCollector {
                         self.support.skolems.insert(abst);
                     }
                 }
-                | Type::Abs(Abs(_, body)) => self.visit(body, tycker)?,
+                | Type::Abs(TypeAbstraction { binder, body }) => {
+                    let newly_bound = self.bound.insert(binder.witness);
+                    let result = self.visit(body, tycker);
+                    if newly_bound {
+                        self.bound.remove(&binder.witness);
+                    }
+                    result?;
+                }
                 | Type::App(App(function, argument)) => {
                     [function, argument].into_iter().try_for_each(|ty| self.visit(ty, tycker))?;
                 }
@@ -297,15 +304,13 @@ impl TypeId {
                 },
                 | Type::Abst(_) => *self,
                 | Type::Abs(abs) => {
-                    let Abs(tpat, ty) = abs;
-                    let (def, _) = tpat.try_destruct_def(tycker);
-                    if let Some(def) = def
-                        && let Some(_with) = env.get(&def)
-                    {
-                        unreachable!()
+                    let TypeAbstraction { binder, body } = abs;
+                    let body_ = body.subst_env(tycker, env)?;
+                    if body == body_ {
+                        *self
+                    } else {
+                        Alloc::alloc(tycker, TypeAbstraction { binder, body: body_ }, kd, env)
                     }
-                    let ty_ = ty.subst_env(tycker, env)?;
-                    if ty == ty_ { *self } else { Alloc::alloc(tycker, Abs(tpat, ty_), kd, env) }
                 }
                 | Type::App(app) => {
                     let App(ty1, ty2) = app;
@@ -554,9 +559,18 @@ impl TypeId {
                     }
                 }
                 | Type::Abs(abs) => {
-                    let Abs(tpat, ty) = abs;
-                    let ty_ = ty.subst_absts(tycker, assignments)?;
-                    if ty == ty_ { *self } else { Alloc::alloc(tycker, Abs(tpat, ty_), kd, &env) }
+                    let TypeAbstraction { binder, body } = abs;
+                    let body_assignments = assignments
+                        .iter()
+                        .filter(|(witness, _)| *witness != binder.witness)
+                        .copied()
+                        .collect::<Vec<_>>();
+                    let body_ = body.subst_absts(tycker, &body_assignments)?;
+                    if body == body_ {
+                        *self
+                    } else {
+                        Alloc::alloc(tycker, TypeAbstraction { binder, body: body_ }, kd, &env)
+                    }
                 }
                 | Type::App(app) => {
                     let App(ty1, ty2) = app;
@@ -928,15 +942,9 @@ impl TypeId {
             | Fillable::Done(ty) => match ty {
                 | Type::Abs(abs) => {
                     // if f_ty is an abstraction, apply it
-                    let Abs(binder, body_ty) = abs;
-                    let (def, _) = binder.try_destruct_def(tycker);
-
-                    if let Some(def) = def {
-                        let argument = binder.bind_argument(tycker, a_ty)?;
-                        body_ty.subst(tycker, def, argument)?
-                    } else {
-                        body_ty
-                    }
+                    let TypeAbstraction { binder, body } = abs;
+                    let argument = binder.pattern.bind_argument(tycker, a_ty)?;
+                    body.subst_abst(tycker, (binder.witness, argument))?
                 }
                 | _ => {
                     // else, the app is already normalized
@@ -1300,15 +1308,14 @@ impl TypeId {
             | Fillable::Done(ty) => match ty {
                 | Type::Var(_) | Type::Abst(_) => res,
                 | Type::Abs(ty) => {
-                    let Abs(tpat, ty) = ty;
-                    let tpat_ = tpat;
-                    let ty_ = resolver.resolve(ty, tycker)?;
-                    if ty == ty_ {
+                    let TypeAbstraction { binder, body } = ty;
+                    let body_ = resolver.resolve(body, tycker)?;
+                    if body == body_ {
                         res
                     } else {
                         Alloc::alloc(
                             tycker,
-                            Abs(tpat_, ty_),
+                            TypeAbstraction { binder, body: body_ },
                             tycker.statics.annotations_type[&res],
                             &env,
                         )
@@ -1800,12 +1807,17 @@ impl TypeId {
                     }
                 }
                 | Type::Abs(abs) => {
-                    let Abs(tpat, body) = abs;
+                    let TypeAbstraction { binder, body } = abs;
                     let body_norm = body.filled_norm_id(tycker, norm)?;
                     if body_norm == body && kd_norm == kd {
                         self
                     } else {
-                        Alloc::alloc(tycker, Abs(tpat, body_norm), kd_norm, &env)
+                        Alloc::alloc(
+                            tycker,
+                            TypeAbstraction { binder, body: body_norm },
+                            kd_norm,
+                            &env,
+                        )
                     }
                 }
                 | Type::App(app) => {
@@ -1814,14 +1826,9 @@ impl TypeId {
                     let a_norm = a_ty.filled_norm_id(tycker, norm)?;
                     match tycker.statics.types_pre[&f_norm].to_owned() {
                         | Fillable::Done(Type::Abs(abs)) => {
-                            let Abs(tpat, body) = abs;
-                            let (def, _) = tpat.try_destruct_def(tycker);
-                            let body_subst = if let Some(def) = def {
-                                let argument = tpat.bind_argument(tycker, a_norm)?;
-                                body.subst(tycker, def, argument)?
-                            } else {
-                                body
-                            };
+                            let TypeAbstraction { binder, body } = abs;
+                            let argument = binder.pattern.bind_argument(tycker, a_norm)?;
+                            let body_subst = body.subst_abst(tycker, (binder.witness, argument))?;
                             if body_subst == self {
                                 self
                             } else {

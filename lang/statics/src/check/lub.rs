@@ -167,20 +167,27 @@ impl Debruijn {
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                     std::panic::Location::caller(),
                 )?,
-                | (Type::Abs(Abs(lpat, lbody)), Type::Abs(Abs(rpat, rbody))) => {
+                | (
+                    Type::Abs(TypeAbstraction { binder: lbinder, body: lbody }),
+                    Type::Abs(TypeAbstraction { binder: rbinder, body: rbody }),
+                ) => {
+                    let lpat = lbinder.pattern;
+                    let rpat = rbinder.pattern;
                     let ldomain = tycker.statics.annotations_tpat[&lpat];
                     let rdomain = tycker.statics.annotations_tpat[&rpat];
                     let _domain = Lub::lub(ldomain, rdomain, tycker)?;
-                    let (ldef, lpayload) = lpat.try_destruct_def(tycker);
-                    let (rdef, rpayload) = rpat.try_destruct_def(tycker);
+                    let (_, lpayload) = lpat.try_destruct_def(tycker);
+                    let (_, rpayload) = rpat.try_destruct_def(tycker);
                     let _payload = Lub::lub(lpayload, rpayload, tycker)?;
-                    let body = self.insert(ldef, rdef).lub(lbody, rbody, tycker)?;
+                    let body = self
+                        .insert(Some(lbinder.witness), Some(rbinder.witness))
+                        .lub(lbody, rbody, tycker)?;
                     if body == lbody {
                         lhs_id
                     } else {
                         let kd = tycker.statics.annotations_type[&lhs_id];
 
-                        Alloc::alloc(tycker, Abs(lpat, body), kd, &env)
+                        Alloc::alloc(tycker, TypeAbstraction { binder: lbinder, body }, kd, &env)
                     }
                 }
                 | (Type::Abs(_), _) => tycker.err(

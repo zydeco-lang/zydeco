@@ -1335,9 +1335,10 @@ pub fn sigma_syn_judgment<'db>(
 pub enum AbsSynArm {
     TypeFunction {
         tpat: ss::TPatId,
+        witness: ss::AbstId,
         kd: ss::KindId,
         body_kd: ss::KindId,
-        ty: ss::TypeId,
+        body: ss::TypeId,
     },
     PolymorphicCompu {
         tpat: ss::TPatId,
@@ -1458,14 +1459,17 @@ pub fn abs_syn_judgment<'db>(
         id
     };
     match input.arm(db) {
-        | AbsSynArm::TypeFunction { tpat, kd, body_kd, ty } => {
+        | AbsSynArm::TypeFunction { tpat, witness, kd, body_kd, body } => {
             let arrow_id: ss::KindId = derived_id(key_space, 0);
             let abs_id: ss::TypeId = derived_id(key_space, 1);
             Some(AbsSynOutcome::TypeFunction {
                 arrow_id,
                 arrow: ss::Kind::Arrow(ss::Arrow(kd, body_kd)),
                 abs_id,
-                abs: ss::Type::Abs(ss::Abs(tpat, ty)),
+                abs: ss::Type::Abs(ss::TypeAbstraction {
+                    binder: ss::TypeBinder { pattern: tpat, witness },
+                    body,
+                }),
             })
         }
         | AbsSynArm::PolymorphicCompu { tpat, abst, compu, body_ty } => {

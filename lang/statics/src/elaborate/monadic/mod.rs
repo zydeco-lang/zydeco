@@ -733,18 +733,23 @@ fn structure_translation(
         }
         | Type::Abs(ty) => {
             // input: fn (X : K) => S
-            let Abs(tpat, ty) = ty;
+            let TypeAbstraction { binder, body } = ty;
             let svar = {
-                let (tvar, _) = tpat.try_destruct_def(tycker);
+                let (tvar, _) = binder.pattern.try_destruct_def(tycker);
                 match tvar {
                     | Some(tvar) => format!("str_{}", tycker.def_name(&tvar).plain()),
                     | None => "str".to_string(),
                 }
             };
             // output: fn (X : K) (str_X : Thk (Sig_K(X))) => Str(S)
-            Abs(cs::Ty(cs::TypeLift { ty: tpat }), move |_tvar, abst| {
-                Abs(cs::StrPat(svar, abst, None), move |_str: VPatId| cs::Structure { ty })
-            })
+            Abs(
+                cs::Ty((cs::TypeLift { ty: binder.pattern }, binder.witness)),
+                move |_tvar, abst| {
+                    Abs(cs::StrPat(svar, abst, None), move |_str: VPatId| cs::Structure {
+                        ty: body,
+                    })
+                },
+            )
             .mbuild(tycker, env)?
         }
         | Type::App(ty) => {
@@ -974,9 +979,13 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
         }
         // | Type::Abst(_abst) => unreachable!(),
         | Type::Abs(ty) => {
-            let Abs(tpat, ty) = ty;
-            // the environment is bound by type pattern lift
-            Abs(cs::TypeLift { ty: tpat }, |_, _, _| cs::TypeLift { ty }).mbuild(tycker, env)?
+            let TypeAbstraction { binder, body } = ty;
+            let (env, pattern) = type_pattern_translation(tycker, env, binder.pattern)?;
+            let witness = env.subst_abst.get(&binder.witness).copied().unwrap_or(binder.witness);
+            let (env, body) = cs::TypeLift { ty: body }.mbuild(tycker, env)?;
+            let abstraction = TypeAbstraction { binder: TypeBinder { pattern, witness }, body };
+            let abstraction = Alloc::alloc(tycker, abstraction, kd, &env.ty);
+            (env, abstraction)
         }
         | Type::App(ty) => {
             let App(ty_f, ty_a) = ty;

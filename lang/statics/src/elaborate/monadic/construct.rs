@@ -330,11 +330,16 @@ where
 {
     fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         let Abs(param, ty) = self;
-        let (env, tpat) = param.mbuild(tycker, env)?;
+        let (mut env, tpat) = param.mbuild(tycker, env)?;
         let (def, param_kd) = tpat.destruct_def(tycker);
+        let witness: AbstId = Alloc::alloc(tycker, tpat, (), &());
+        let witness_ty = Alloc::alloc(tycker, witness, param_kd, &env.ty);
+        env.subst += [(def, def)];
+        env.ty += [(def, witness_ty.into())];
         let (env, body) = ty(tpat, def, param_kd).mbuild(tycker, env)?;
         let (env, kd) = Arrow(param_kd, cs::TypeOf(body)).mbuild(tycker, env)?;
-        let alloc = Alloc::alloc(tycker, Abs(tpat, body), kd, &env.ty);
+        let binder = TypeBinder { pattern: tpat, witness };
+        let alloc = Alloc::alloc(tycker, TypeAbstraction { binder, body }, kd, &env.ty);
         Ok((env, alloc))
     }
 }

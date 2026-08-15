@@ -1008,3 +1008,55 @@ decisions while implementing the plan.
 - Keep the type-abstraction binder explicit in typed syntax rather than adding a side table that
   must be propagated whenever an abstraction node is reconstructed. Substitution, alpha-equivalence,
   normalization, formatting, and monadic elaboration must all agree on the binder.
+
+## 2026-08-15 — round 24: retain type-abstraction witnesses
+
+### Findings
+
+- A synthesized type function previously checked its body with a fresh abstract witness, recursively
+  rewrote that witness back to the source `DefId` when constructing `Type::Abs`, and then recursively
+  rewrote the definition to an argument whenever the function was applied. The first rewrite alone
+  accounted for 44,883 nodes in the last root-operation profile.
+- The source definition is presentation metadata, not the semantic binder of the checked body. The
+  abstract witness already has the required globally unique identity and is also the identity that
+  substitution support, skolem scope, and alpha-equivalence need to recognize.
+- Retaining that witness removed 45,337 full-std nodes. The 454-node difference from the attributed
+  recovery count comes from downstream reconstruction changes, while the near equality confirms
+  that the measured recovery path was causal.
+- Round 23's zero-result operation-local memoization supports the same boundary: duplication was
+  created by two distinct semantic operations with an intervening representation change. Preserving
+  the checked representation removes the operation; caching within either traversal cannot.
+
+### Changes
+
+- `Type::Abs` now contains a `TypeAbstraction` with an explicit `TypeBinder` and body. Synthesis and
+  analytic checking preserve the fresh witness used to check that body instead of recovering a
+  source definition.
+- Type application substitutes the retained witness directly. Abstract substitution shadows it,
+  support collection treats it as bound, and least-upper-bound comparison alpha-renames the two
+  witnesses before comparing bodies.
+- Generic construction, formatting, inference resolution, filled normalization, and monadic
+  elaboration all use the same representation. There is no side table or legacy abstraction form.
+- Regressions cover beta reduction, binder shadowing, and alpha-equivalence between independently
+  allocated type abstractions.
+
+### Measurements
+
+- The full-std check retains 404,270 type nodes, 45,337 fewer than round 23 (-10.1%).
+- Three clean release checks used 358,678,528, 359,202,816, and 359,448,576 bytes peak RSS (median
+  359,202,816), down 8,404,992 bytes (-2.3%) from round 22's last measured median. Warm wall time was
+  0.39–0.40s and warm user time was 0.35–0.36s.
+- The current-tree baseline is now down from 2,497,757,184 to 359,202,816 bytes (-85.6%).
+- All 46 statics tests and all 151 session tests passed, along with the release CLI build and full
+  standard-library check.
+
+### Next
+
+- Re-profile the 404,270-node arena. Type-application normalization previously used 56,080 nodes;
+  its input representation changed, so its current cost and callers need fresh attribution.
+- Look for repeated applications of the same retained type-function body across separate semantic
+  operations. Any useful reuse belongs at that cross-operation boundary rather than inside one
+  substitution traversal.
+- Revisit the remaining common analytic-preparation callers, especially explicit ascriptions and
+  synthesized arrows, only after distinguishing types that owe their first environment application
+  from components that are already current.

@@ -49,3 +49,33 @@ fn alpha_equivalent_value_forall_types_unify() {
         assert_eq!(joined, lhs);
     });
 }
+
+#[test]
+fn alpha_equivalent_type_abstractions_unify() {
+    TestFixture::run(|tycker| {
+        let (vtype, _) = TestFixture::kinds(tycker);
+        let env = TyEnv::new();
+        let (lhs_witness, lhs_body) = TestFixture::abst(tycker, vtype);
+        let (rhs_witness, rhs_body) = TestFixture::abst(tycker, vtype);
+        let lhs_binder = TypeBinder::with_witness(tycker, lhs_witness, &env);
+        let rhs_binder = TypeBinder::with_witness(tycker, rhs_witness, &env);
+        let function_kind = Alloc::alloc(tycker, Arrow(vtype, vtype), (), &());
+        let lhs = Alloc::alloc(
+            tycker,
+            TypeAbstraction { binder: lhs_binder, body: lhs_body },
+            function_kind,
+            &env,
+        );
+        let rhs = Alloc::alloc(
+            tycker,
+            TypeAbstraction { binder: rhs_binder, body: rhs_body },
+            function_kind,
+            &env,
+        );
+
+        let Ok(joined) = lhs.lub(rhs, tycker) else {
+            panic!("alpha-equivalent type abstractions did not unify")
+        };
+        assert_eq!(joined, lhs);
+    });
+}

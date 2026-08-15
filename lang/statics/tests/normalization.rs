@@ -10,9 +10,15 @@ fn type_application_beta_reduces() {
         let env = TyEnv::new();
         let variable = Alloc::alloc(tycker, VarName("X".to_string()), AnnId::Kind(vtype), &());
         let binder: TPatId = Alloc::alloc(tycker, variable, vtype, &env);
-        let body: TypeId = Alloc::alloc(tycker, variable, vtype, &env);
+        let witness: AbstId = Alloc::alloc(tycker, binder, (), &());
+        let body: TypeId = Alloc::alloc(tycker, witness, vtype, &env);
         let function_kind: KindId = Alloc::alloc(tycker, Arrow(vtype, vtype), (), &());
-        let function = Alloc::alloc(tycker, Abs(binder, body), function_kind, &env);
+        let function = Alloc::alloc(
+            tycker,
+            TypeAbstraction { binder: TypeBinder { pattern: binder, witness }, body },
+            function_kind,
+            &env,
+        );
         let argument = Alloc::alloc(tycker, UnitTy, vtype, &env);
         let application = Alloc::alloc(tycker, App(function, argument), vtype, &env);
 

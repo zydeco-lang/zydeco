@@ -347,6 +347,12 @@ where
     }
 }
 
+impl<'a> Pretty<'a, Formatter<'a>> for TypeAbstraction {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        Abs(self.binder.pattern, self.body).pretty(f)
+    }
+}
+
 impl<'a, S, T> Pretty<'a, Formatter<'a>> for App<S, T>
 where
     S: Pretty<'a, Formatter<'a>>,

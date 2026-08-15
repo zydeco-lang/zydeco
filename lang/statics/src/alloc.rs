@@ -434,7 +434,7 @@ macro_rules! AllocType {
 AllocType! {
     DefId
     AbstId
-    Abs<TPatId, TypeId>
+    TypeAbstraction
     App<TypeId, TypeId>
     Named<FieldName, TypeId>
     Label<FieldName, TypeId>

@@ -4857,24 +4857,16 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 match body_out_ann {
                                     | TermAnnId::Type(ty, body_kd) => {
                                         // a type function
-                                        // recover abst in ty
-                                        let ty = if let (Some(def), _kd) =
-                                            tpat.try_destruct_def(tycker)
-                                        {
-                                            let def_ty = Alloc::alloc(tycker, def, kd, &self.info);
-                                            ty.subst_abst_k(tycker, (abst, def_ty))?
-                                        } else {
-                                            ty
-                                        };
                                         let term =
                                             crate::query::InternedTerm::new(tycker.db, self.inner);
                                         let input = crate::query::InternedAbsSyn::new(
                                             tycker.db,
                                             crate::query::AbsSynArm::TypeFunction {
                                                 tpat,
+                                                witness: abst,
                                                 kd,
                                                 body_kd,
-                                                ty,
+                                                body: ty,
                                             },
                                         );
                                         let Some(crate::query::AbsSynOutcome::TypeFunction {
@@ -5238,8 +5230,19 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     TyckError::SortMismatch,
                                     std::panic::Location::caller(),
                                 )?;
-                                let body_out_ann =
-                                    self.mk(body).tyck_k(tycker, Action::ana(kd_2.into()))?;
+                                let witness: ss::AbstId = Alloc::alloc(tycker, binder, (), &());
+                                let body_env = match binder.try_destruct_def(tycker).0 {
+                                    | Some(def) => {
+                                        let payload_kind =
+                                            tycker.statics.annotations_abst[&witness];
+                                        let witness_ty =
+                                            Alloc::alloc(tycker, witness, payload_kind, &self.info);
+                                        self.info.clone() + [(def, witness_ty.into())]
+                                    }
+                                    | None => self.info.clone(),
+                                };
+                                let body_out_ann = TyEnvT::new(body_env, body)
+                                    .tyck_k(tycker, Action::ana(kd_2.into()))?;
                                 let (body_out, body_kd) = body_out_ann.try_as_type(
                                     tycker,
                                     TyckError::SortMismatch,
@@ -5249,7 +5252,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     Alloc::alloc(tycker, ss::Arrow(binder_kd, body_kd), (), &());
                                 let abs = Alloc::alloc(
                                     tycker,
-                                    ss::Abs(binder, body_out),
+                                    ss::TypeAbstraction {
+                                        binder: ss::TypeBinder { pattern: binder, witness },
+                                        body: body_out,
+                                    },
                                     ann,
                                     &self.info,
                                 );
