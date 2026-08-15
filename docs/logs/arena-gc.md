@@ -2860,3 +2860,38 @@ decisions while implementing the plan.
   bounded.
 - Treat the 3.13MB scoped term payload as a representation floor unless a variant census identifies
   enough rare wide payloads to move its 48-byte enum into a lower capacity class.
+
+## 2026-08-15 — round 59: audit classifier duplication in term facts
+
+### Findings
+
+- The next retained typed owner is the 1,851,392-byte `Vec<TermFacts>`. Its 63,574 final records are
+  4,910 kind terms, 54,400 type terms, 2,696 value terms, and 1,568 computation terms; no hole facts
+  survive the successful standard-library check. Each record currently stores a 28-byte
+  `TermAnnId`.
+- A temporary pre-strip census found 8,556 distinct kind classifiers among the type facts and 2,130
+  distinct type classifiers among the value and computation facts. Interning classifiers would
+  remove repetition, but the canonical typed arenas provide a stronger possible representation.
+- Every final value and computation fact's classifier exactly matched the annotation already stored
+  under its `ValueId` or `CompuId`. Type facts differ: 9,309 of 54,400 reported kind classifiers did
+  not match the kind co-located with their `TypeId`. Those differences are observable and rule out
+  erasing all secondary IDs from term facts.
+- A lossless compact design can store one twelve-byte category-independent typed identity plus a
+  four-byte word containing the term category and an optional one-based override index. Canonical
+  classifiers need no side payload; only the 9,309 exceptional type classifiers need a dense
+  `KindId` override. On this workload, the logical payload would fall from 1,780,072 bytes to
+  1,128,892 bytes before vector capacity, a 651,180-byte (36.6%) reduction.
+- The reusable rule is to distinguish duplicated facts from exceptions to a canonical fact. Erasing
+  the duplicated common case is sound only when the exceptional path remains explicit and typed;
+  the 9,309 mismatches show why a census of equality, not just identifier cardinality, is required.
+
+### Handoff
+
+- The probe was removed after collecting the counts; no diagnostic environment variable or output
+  remains in production code.
+- If this owner is pursued, encode the category and override index in a typed metadata wrapper and
+  reconstruct public `TermAnnId`s at the `StaticsArena` boundary. Regressions should cover all five
+  categories, noncanonical type kinds, missing canonical tables in rejected checks, and replacement
+  without unbounded orphaned override entries.
+- The other measured follow-up remains the parsed-source lifetime group: spans, textual syntax,
+  tokens, and line-intention maps should be audited together for repeated location structure.
