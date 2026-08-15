@@ -2346,8 +2346,7 @@ pub fn intern_pending<'db>(db: &'db dyn TyckDb) -> ScopedData<'db> {
 /// The complete result of checking one source snapshot.
 #[derive(Clone, Debug)]
 pub struct TyckOutput {
-    /// The name-resolved arena after checking. The checker may allocate generated
-    /// definitions into it during elaboration.
+    /// The immutable name-resolved arena used during checking.
     pub scoped: std::sync::Arc<su::ScopedArena>,
     /// The recoverable checking outcome.
     pub outcome: SourceCheckOutcome,
@@ -2364,10 +2363,10 @@ pub fn check_source<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> TyckOutp
     // One checker runs the whole pipeline within a single query. Splitting the
     // phases into separate salsa queries required deep-copying the full statics
     // arena across every boundary, which dominated check memory.
-    let mut scoped = data.scoped(db).as_ref().clone();
+    let scoped = std::sync::Arc::clone(data.scoped(db));
     let (root, outcome);
     {
-        let mut tycker = Tycker::new(db, data, data.spans(db), data.prim(db), &mut scoped);
+        let mut tycker = Tycker::new(db, data, data.spans(db), data.prim(db), &scoped);
         crate::check::InternalTerm::fill_intrinsics(&mut tycker);
         root = tycker.run_judgments_k(data.root(db)).ok();
         tycker.resolve_holes_and_collect();
@@ -2402,5 +2401,5 @@ pub fn check_source<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> TyckOutp
             },
         };
     }
-    TyckOutput { scoped: std::sync::Arc::new(scoped), outcome }
+    TyckOutput { scoped, outcome }
 }

@@ -290,3 +290,41 @@ decisions while implementing the plan.
   remaining whole-arena clone.
 - Type pages remain the largest retained category. Measure their logical length versus capacity
   before deciding between exact compaction and a combined page representation.
+
+## 2026-08-15 — round 9: isolate typed elaboration's definition delta
+
+### Findings
+
+- A direct mutation search initially suggested that checking never changed `ScopedArena`. The
+  remaining writes were hidden behind the generic `Alloc<_, DefId>` implementation: typed
+  construction creates fresh binder names and inserted them into `scoped.defs`.
+- Those synthesized names are the only scoped mutation in production type checking. Patterns,
+  terms, provenance, use maps, contexts, cocontexts, and block DAGs are all immutable checker
+  inputs. Cloning all of them to make a small definition-name delta was an ownership mismatch.
+- Dynamic linking and backend lowering only consume definition names from the scoped result.
+  Source diagnostics still need the complete resolved arena, but they need its unchanged source
+  form and can share the query input directly.
+
+### Changes
+
+- Generated definition names now live in `StaticsArena::generated_defs`. Checker and static
+  formatter name lookup jointly view source definitions and that typed-elaboration delta.
+- `Tycker` borrows `ScopedArena` immutably, and `check_source` returns the same shared resolved
+  arena it received instead of cloning it before checking.
+- Dynamics clones and merges only the source and generated definition tables. Stack IR and
+  backend lowering start from a names-only scoped arena, then add their own generated names;
+  they no longer clone source terms or context analyses.
+
+### Measurements
+
+- Three full-std minimal checks used 941,785,088, 945,946,624, and 948,420,608 bytes peak RSS
+  (median 945,946,624), down 3.9% from round 8's 984,481,792-byte median.
+- The current-tree baseline for this work is now down from 2,497,757,184 to 945,946,624 bytes
+  (-62.1%). Focused statics suites passed all 33 tests; the 151-test session suite passed with
+  two threads in 40.15s, including interpretation and backend-lowering coverage.
+
+### Next
+
+- Re-census the retained heap now that syntax clones no longer obscure the type-page footprint.
+  In particular, distinguish live slot bytes from geometric `Vec` capacity and allocator
+  high-water behavior.

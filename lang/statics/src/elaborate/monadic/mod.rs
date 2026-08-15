@@ -735,7 +735,7 @@ fn structure_translation(
             let svar = {
                 let (tvar, _) = tpat.try_destruct_def(tycker);
                 match tvar {
-                    | Some(tvar) => format!("str_{}", tycker.scoped.defs[&tvar].plain()),
+                    | Some(tvar) => format!("str_{}", tycker.def_name(&tvar).plain()),
                     | None => "str".to_string(),
                 }
             };
@@ -926,9 +926,7 @@ fn kind_pattern_translation(
             Ok((env, pattern))
         }
         | KindPattern::Var(source) => {
-            use zydeco_surface::scoped::arena::ArenaScoped;
-
-            let variable = tycker.scoped.def(&source);
+            let variable = tycker.def_name(&source).clone();
             let target = Alloc::alloc(tycker, variable, AnnId::Set, &());
             let mut env = env;
             env.subst += [(source, target)];

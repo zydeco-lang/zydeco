@@ -248,8 +248,7 @@ where
     fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TPatId)> {
         let cs::Pat(def, kd) = self;
         let (mut env, kd) = kd.mbuild(tycker, env)?;
-        use zydeco_surface::scoped::arena::ArenaScoped;
-        let var = tycker.scoped.def(&def);
+        let var = tycker.def_name(&def).clone();
         let def_ = Alloc::alloc(tycker, var, kd.into(), &());
         // track the substitution
         env.subst += [(def, def_)];
@@ -553,8 +552,7 @@ where
     fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, VPatId)> {
         let cs::Pat(def, ty) = self;
         let (mut env, ty) = ty.mbuild(tycker, env)?;
-        use zydeco_surface::scoped::arena::ArenaScoped;
-        let var = tycker.scoped.def(&def);
+        let var = tycker.def_name(&def).clone();
         let def_ = Alloc::alloc(tycker, var, ty.into(), &());
         // track the substitution
         env.subst += [(def, def_)];

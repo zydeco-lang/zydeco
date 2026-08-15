@@ -159,14 +159,15 @@ impl<Arena> StaticsAlloc for Arena where Arena: AsMut<DerivedAllocator> + AsMut<
 
 impl<Arena> Alloc<Arena, DefId> for VarName
 where
-    Arena: AsMut<ScopedArena> + StaticsAlloc,
+    Arena: StaticsAlloc,
 {
     type Ann = AnnId;
     type Env = ();
     fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, (): &Self::Env) -> DefId {
         let id = arena.fresh();
-        AsMut::<ScopedArena>::as_mut(arena).insert_def(id, val);
-        AsMut::<StaticsArena>::as_mut(arena).annotations_var.insert_new(id, ann);
+        let statics = AsMut::<StaticsArena>::as_mut(arena);
+        statics.generated_defs.insert_new(id, val);
+        statics.annotations_var.insert_new(id, ann);
         id
     }
 }

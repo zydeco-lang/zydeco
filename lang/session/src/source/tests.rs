@@ -121,13 +121,16 @@ impl SourceChecked {
             }));
         };
         let Self { spans, scoped, statics, root: _ } = self;
-        let mut scoped = scoped.as_ref().clone();
+        let mut lowering_scoped = zydeco_surface::scoped::arena::ScopedArena::default();
+        lowering_scoped.defs = statics.scoped_definitions(&scoped);
         let stackir =
-            match zydeco_stackir::RootLowerer::new(&spans, &mut scoped, &statics, root).run() {
+            match zydeco_stackir::RootLowerer::new(&spans, &mut lowering_scoped, &statics, root)
+                .run()
+            {
                 | Ok(stackir) => stackir,
                 | Err(never) => match never {},
             };
-        Ok(SourceStack { spans, scoped, statics, stackir })
+        Ok(SourceStack { spans, scoped: lowering_scoped, statics, stackir })
     }
 
     fn stackir_with_builtin(self) -> Result<SourceStack, TestPipelineError> {
@@ -144,12 +147,18 @@ impl SourceChecked {
             }));
         };
         let Self { spans, scoped, statics, root: _ } = self;
-        let mut scoped = scoped.as_ref().clone();
-        let stackir =
-            zydeco_stackir::BuiltinRootLowerer::new(&spans, &mut scoped, &statics, root, signature)
-                .run()
-                .map_err(TestPipelineError::Stack)?;
-        Ok(SourceStack { spans, scoped, statics, stackir })
+        let mut lowering_scoped = zydeco_surface::scoped::arena::ScopedArena::default();
+        lowering_scoped.defs = statics.scoped_definitions(&scoped);
+        let stackir = zydeco_stackir::BuiltinRootLowerer::new(
+            &spans,
+            &mut lowering_scoped,
+            &statics,
+            root,
+            signature,
+        )
+        .run()
+        .map_err(TestPipelineError::Stack)?;
+        Ok(SourceStack { spans, scoped: lowering_scoped, statics, stackir })
     }
 }
 

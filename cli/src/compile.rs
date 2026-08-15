@@ -104,13 +104,15 @@ pub struct BackendProgram {
 impl BackendProgram {
     pub fn lower(executable: ExecutableProgram) -> Result<Self, CompileError> {
         let ExecutableProgram { spans, scoped, statics, root, signature } = executable;
-        let mut scoped = scoped.as_ref().clone();
-        let stackir = BuiltinRootLowerer::new(&spans, &mut scoped, &statics, root, signature)
-            .run()
-            .map_err(CompileError::BuiltinLower)?;
-        let sps_low = SpsLowPipeline::new(&mut scoped).run(stackir);
-        let assembly = LoweringPipeline::new(&spans, &scoped, &statics, &sps_low).run();
-        Ok(Self { spans, scoped, statics, sps_low, assembly })
+        let mut lowering_scoped = ScopedArena::default();
+        lowering_scoped.defs = statics.scoped_definitions(&scoped);
+        let stackir =
+            BuiltinRootLowerer::new(&spans, &mut lowering_scoped, &statics, root, signature)
+                .run()
+                .map_err(CompileError::BuiltinLower)?;
+        let sps_low = SpsLowPipeline::new(&mut lowering_scoped).run(stackir);
+        let assembly = LoweringPipeline::new(&spans, &lowering_scoped, &statics, &sps_low).run();
+        Ok(Self { spans, scoped: lowering_scoped, statics, sps_low, assembly })
     }
 
     pub fn render_sps_low(&self) -> String {

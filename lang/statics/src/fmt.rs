@@ -18,6 +18,10 @@ impl<'arena> Formatter<'arena> {
     pub fn new(scoped: &'arena ScopedArena, statics: &'arena StaticsArena) -> Self {
         Formatter { scoped, statics, indent: 2 }
     }
+
+    fn def_name(&self, id: &DefId) -> &zydeco_syntax::VarName {
+        self.statics.def_name(self.scoped, id)
+    }
 }
 
 /// A source-facing equation that reveals the representation behind one
@@ -39,7 +43,7 @@ use pretty::RcDoc;
 
 impl<'a> Pretty<'a, Formatter<'a>> for DefId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let name = &f.scoped.defs[self];
+        let name = f.def_name(self);
         name.pretty(f)
     }
 }
@@ -219,7 +223,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for AbstId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let () = &f.statics.absts[self];
         match f.statics.abst_hints.get(self) {
-            | Some(hint) => f.scoped.defs[hint].pretty(f),
+            | Some(hint) => f.def_name(hint).pretty(f),
             | None => RcDoc::text(self.concise()),
         }
     }

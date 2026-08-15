@@ -228,6 +228,10 @@ pub struct StaticsArena {
     pub global_terms: ArenaAssoc<TermId, ()>,
     /// TODO: hints for all sorts of terms that can be associated with a definition name
     pub def_hints: ArenaAssoc<TermId, DefId>,
+    /// Definition names synthesized during typed elaboration. Source definitions
+    /// remain in the immutable scoped arena; keeping this small delta here avoids
+    /// cloning every resolved syntax and context table just to add names.
+    pub generated_defs: ArenaSparse<su::ScopedScope, DefId>,
 
     // the type of terms under the context it's type checked; "annotation"
     /// annotations for variable definitions
@@ -327,6 +331,7 @@ impl StaticsArena {
             global_defs: self.global_defs.clone(),
             global_terms: self.global_terms.clone(),
             def_hints: self.def_hints.clone(),
+            generated_defs: self.generated_defs.clone(),
             annotations_var: self.annotations_var.clone(),
             annotations_abst: self.annotations_abst.clone(),
             ..Self::default()
@@ -340,6 +345,21 @@ impl StaticsArena {
             | Fillable::Done(ty) => Some(ty),
             | Fillable::Fill(_) => None,
         })
+    }
+
+    /// Look up either a source definition or one synthesized by typed elaboration.
+    pub fn def_name<'a>(&'a self, scoped: &'a su::ScopedArena, id: &DefId) -> &'a su::VarName {
+        self.generated_defs.get(id).unwrap_or_else(|| &scoped.defs[id])
+    }
+
+    /// Clone the definition-name table needed by dynamic and backend lowering.
+    /// Other resolved syntax tables are source-only and stay shared.
+    pub fn scoped_definitions(
+        &self, scoped: &su::ScopedArena,
+    ) -> ArenaSparse<su::ScopedScope, DefId> {
+        let mut definitions = scoped.defs.clone();
+        definitions += self.generated_defs.clone();
+        definitions
     }
 }
 

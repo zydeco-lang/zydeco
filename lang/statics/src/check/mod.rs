@@ -42,8 +42,7 @@ pub struct Tycker<'a> {
     pub spans: &'a SpanArena,
     pub prim: &'a PrimDefs,
     #[as_ref(ScopedArena)]
-    #[as_mut(ScopedArena)]
-    pub scoped: &'a mut ScopedArena,
+    pub scoped: &'a ScopedArena,
     #[as_ref(StaticsArena)]
     #[as_mut(StaticsArena)]
     pub statics: StaticsArena,
@@ -551,9 +550,7 @@ impl ExistentialProjectionPattern {
 
     fn kind_field_name(tycker: &Tycker<'_>, pattern: ss::KPatId) -> Option<FieldName> {
         match tycker.statics.kpats[&pattern] {
-            | ss::KindPattern::Var(definition) => {
-                Some(tycker.scoped.defs[&definition].plain().into())
-            }
+            | ss::KindPattern::Var(definition) => Some(tycker.def_name(&definition).plain().into()),
             | ss::KindPattern::Hole(_) => None,
         }
     }
@@ -561,14 +558,12 @@ impl ExistentialProjectionPattern {
     fn type_field_name(tycker: &Tycker<'_>, binder: &ss::TypeBinder) -> Option<FieldName> {
         match tycker.statics.tpats[&binder.pattern].to_owned() {
             | ss::TypePattern::Named(ss::Named(field, _)) => Some(field),
-            | ss::TypePattern::Var(definition) => {
-                Some(tycker.scoped.defs[&definition].plain().into())
-            }
+            | ss::TypePattern::Var(definition) => Some(tycker.def_name(&definition).plain().into()),
             | ss::TypePattern::Hole(_) => tycker
                 .statics
                 .abst_hints
                 .get(&binder.witness)
-                .map(|definition| tycker.scoped.defs[definition].plain().into()),
+                .map(|definition| tycker.def_name(definition).plain().into()),
         }
     }
 
@@ -996,7 +991,7 @@ impl<'a> Tycker<'a> {
     /// Create a type checker with fresh statics arenas.
     pub fn new(
         db: &'a dyn crate::query::TyckDb, data: crate::query::ScopedData<'a>, spans: &'a SpanArena,
-        prim: &'a PrimDefs, scoped: &'a mut ScopedArena,
+        prim: &'a PrimDefs, scoped: &'a ScopedArena,
     ) -> Self {
         let mut statics = StaticsArena::default();
         statics.reserve(scoped.terms.len());
@@ -1014,6 +1009,11 @@ impl<'a> Tycker<'a> {
             errors: Vec::new(),
             observations: Vec::new(),
         }
+    }
+
+    /// Resolve a source or elaboration-generated definition name.
+    pub fn def_name(&self, id: &su::DefId) -> &su::VarName {
+        self.statics.def_name(self.scoped, id)
     }
 
     #[track_caller]
@@ -3907,7 +3907,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     tycker.statics.annotations_var.get(&def).copied().unwrap_or_else(|| {
                         panic!(
                             "resolved variable `{}` reached the checker before its binder",
-                            tycker.scoped.defs[&def].plain()
+                            tycker.def_name(&def).plain()
                         )
                     });
                 let ann = {
