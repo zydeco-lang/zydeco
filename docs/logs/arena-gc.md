@@ -246,3 +246,47 @@ decisions while implementing the plan.
   capable of reducing the 37x node count.
 - Test-process concurrency and duplicate backend checks remain independent peak multipliers;
   revisit them after the single-root representation is stable and fully tested.
+
+## 2026-08-15 — round 8: share phase products instead of cloning query results
+
+### Findings
+
+- A retained-heap census after round 7 separated the remaining memory into 336MB of type-page
+  vectors, 281MB of hash-table storage, and about 60MB of persistent `TyEnv` HAMT nodes. The
+  exact allocation histories showed that the largest hash tables were whole syntax and span
+  arenas cloned at Salsa query boundaries, rather than checker lookup tables.
+- `check_source` must clone the resolved arena before elaboration because judgments still read
+  the immutable `ScopedData` input. Its *result* does not need another clone: the check memo,
+  analysis, executable materialization, and dynamics linker all treat the elaborated scoped
+  arena as immutable.
+- `resolved_data` similarly copied the merged `SpanArena` into `ScopedData`, kept another copy
+  in its tuple result, and copied it again into downstream results. A span arena is immutable
+  after resolution, so one shared allocation is the correct ownership model.
+- `term_envs` had no reader. Round 4's per-term normalized facts answered every current query,
+  so retaining environments as a foundation for hypothetical inner-node replay kept a large
+  persistent graph for an API that did not exist.
+
+### Changes
+
+- `ScopedData` owns shared span and resolved arenas. `TyckOutput`, `ProgramAnalysis`, checked and
+  executable programs, and dynamics linkers carry `Arc` handles to the same phase products.
+  Backend lowering makes an owned scoped copy only at the point where it actually inserts
+  generated lowering definitions.
+- Removed `term_envs` and its per-term writes. The checker still interns the environments needed
+  by live type nodes; it no longer retains an unused per-source-term snapshot.
+
+### Measurements
+
+- Removing the dead environment snapshots changed peak RSS from 1,056,161,792 to
+  1,050,476,544 bytes. Sharing phase products brought three repeated runs to 984,006,656,
+  984,481,792, and 985,907,200 bytes (median 984,481,792; -6.8% for the round).
+- Focused statics suites passed (33 tests). The session library suite passed all 151 tests with
+  two test threads in 40.59s.
+
+### Next
+
+- The immutable resolved input and elaborated scoped output are still two full arenas. The
+  checker only adds generated definitions, so a small elaboration overlay may replace that
+  remaining whole-arena clone.
+- Type pages remain the largest retained category. Measure their logical length versus capacity
+  before deciding between exact compaction and a combined page representation.

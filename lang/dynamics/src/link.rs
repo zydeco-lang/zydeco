@@ -16,21 +16,21 @@ pub trait Link {
 
 /// Entry point for linking one checked computation root.
 pub struct RootLinker {
-    pub scoped: ScopedArena,
+    pub scoped: Arc<ScopedArena>,
     pub statics: Arc<StaticsArena>,
     pub root: ss::CompuId,
 }
 
 /// Link one checked value as a computation that returns it.
 pub struct ValueRootLinker {
-    pub scoped: ScopedArena,
+    pub scoped: Arc<ScopedArena>,
     pub statics: Arc<StaticsArena>,
     pub root: ss::ValueId,
 }
 
 /// Link a package-dependent root and apply the concrete host Builtin package.
 pub struct BuiltinRootLinker {
-    pub scoped: ScopedArena,
+    pub scoped: Arc<ScopedArena>,
     pub statics: Arc<StaticsArena>,
     pub root: ss::CompuId,
     pub signature: ss::PackPi,
@@ -38,7 +38,7 @@ pub struct BuiltinRootLinker {
 
 /// Apply host Builtin packages until a package-dependent computation reaches its result.
 pub struct BuiltinComputationRootLinker {
-    pub scoped: ScopedArena,
+    pub scoped: Arc<ScopedArena>,
     pub statics: Arc<StaticsArena>,
     pub root: ss::CompuId,
     pub signature: ss::PackPi,
@@ -46,7 +46,7 @@ pub struct BuiltinComputationRootLinker {
 
 /// Apply host Builtin packages until a pure package-dependent value reaches its result.
 pub struct BuiltinValueRootLinker {
-    pub scoped: ScopedArena,
+    pub scoped: Arc<ScopedArena>,
     pub statics: Arc<StaticsArena>,
     pub root: ss::ValueId,
     pub signature: ss::ValuePackPi,
@@ -103,7 +103,7 @@ impl RootLinker {
     /// Erase static structure and retain one computation as the dynamic root.
     pub fn run(self) -> DynamicsProgram {
         let Self { scoped, statics, root } = self;
-        let defs = scoped.defs.rebind::<ds::DynamicsScope>();
+        let defs = scoped.defs.clone().rebind::<ds::DynamicsScope>();
         let root = root.link(&statics);
         DynamicsProgram { defs, root }
     }
@@ -112,7 +112,7 @@ impl RootLinker {
 impl ValueRootLinker {
     pub fn run(self) -> DynamicsProgram {
         let Self { scoped, statics, root } = self;
-        let defs = scoped.defs.rebind::<ds::DynamicsScope>();
+        let defs = scoped.defs.clone().rebind::<ds::DynamicsScope>();
         let value = root.link(&statics);
         let root = Rc::new(ds::Computation::Ret(Return(value)));
         DynamicsProgram { defs, root }
@@ -124,7 +124,7 @@ impl BuiltinRootLinker {
         let Self { scoped, statics, root, signature } = self;
         let plan = BuiltinPackagePlan::for_executable(&statics, &signature)?;
         let package = BuiltinPackageLinker::link(plan.value)?;
-        let defs = scoped.defs.rebind::<ds::DynamicsScope>();
+        let defs = scoped.defs.clone().rebind::<ds::DynamicsScope>();
         let function = root.link(&statics);
         let root = Rc::new(ds::Computation::VApp(App(function, package)));
         Ok(DynamicsProgram { defs, root })
@@ -134,7 +134,7 @@ impl BuiltinRootLinker {
 impl BuiltinComputationRootLinker {
     pub fn run(self) -> Result<DynamicsProgram, BuiltinPackageError> {
         let Self { scoped, statics, root, signature } = self;
-        let defs = scoped.defs.rebind::<ds::DynamicsScope>();
+        let defs = scoped.defs.clone().rebind::<ds::DynamicsScope>();
         let (root, _) = std::iter::successors(Some(signature), |signature| {
             BuiltinPackageLinker::computation_signature(&statics, signature.codomain)
         })
@@ -159,7 +159,7 @@ impl BuiltinComputationRootLinker {
 impl BuiltinValueRootLinker {
     pub fn run(self) -> Result<DynamicsProgram, BuiltinPackageError> {
         let Self { scoped, statics, root, signature } = self;
-        let defs = scoped.defs.rebind::<ds::DynamicsScope>();
+        let defs = scoped.defs.clone().rebind::<ds::DynamicsScope>();
         let (value, _) = std::iter::successors(Some(signature), |signature| {
             BuiltinPackageLinker::value_signature(&statics, signature.codomain)
         })
@@ -383,8 +383,12 @@ mod tests {
         statics.values.insert_new(value, ss::Triv.into());
         statics.compus.insert_new(root, ss::Return(value).into());
 
-        let arena =
-            RootLinker { scoped: ScopedArena::default(), statics: Arc::new(statics), root }.run();
+        let arena = RootLinker {
+            scoped: Arc::new(ScopedArena::default()),
+            statics: Arc::new(statics),
+            root,
+        }
+        .run();
         let mut input = std::io::empty();
         let mut output = Vec::new();
         let result = ds::Runtime::new(&mut input, &mut output, &[], arena).run();

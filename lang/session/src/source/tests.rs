@@ -7,8 +7,8 @@ type SourceScoped = ScopedProgram;
 
 #[derive(Clone)]
 struct SourceChecked {
-    spans: zydeco_surface::textual::syntax::SpanArena,
-    scoped: zydeco_surface::scoped::arena::ScopedArena,
+    spans: Arc<zydeco_surface::textual::syntax::SpanArena>,
+    scoped: Arc<zydeco_surface::scoped::arena::ScopedArena>,
     statics: Arc<zydeco_statics::arena::StaticsArena>,
     root: zydeco_statics::syntax::TermAnnId,
 }
@@ -18,21 +18,21 @@ struct SourceDynamics {
 }
 
 struct SourceStack {
-    spans: zydeco_surface::textual::syntax::SpanArena,
+    spans: Arc<zydeco_surface::textual::syntax::SpanArena>,
     scoped: zydeco_surface::scoped::arena::ScopedArena,
     statics: Arc<zydeco_statics::arena::StaticsArena>,
     stackir: zydeco_stackir::BranchJoinProgram,
 }
 
 struct SourceSpsLow {
-    spans: zydeco_surface::textual::syntax::SpanArena,
+    spans: Arc<zydeco_surface::textual::syntax::SpanArena>,
     scoped: zydeco_surface::scoped::arena::ScopedArena,
     statics: Arc<zydeco_statics::arena::StaticsArena>,
     sps_low: zydeco_stackir::SpsLowProgram,
 }
 
 struct SourceAssembly {
-    spans: zydeco_surface::textual::syntax::SpanArena,
+    spans: Arc<zydeco_surface::textual::syntax::SpanArena>,
     scoped: zydeco_surface::scoped::arena::ScopedArena,
     statics: Arc<zydeco_statics::arena::StaticsArena>,
     sps_low: zydeco_stackir::SpsLowProgram,
@@ -65,7 +65,7 @@ impl ScopedProgram {
         let output = session.check_resolved(spans.clone(), prim, arena, root);
         let checked = output.outcome.into_result()?;
         Ok(SourceChecked {
-            spans,
+            spans: Arc::new(spans),
             scoped: output.scoped,
             statics: checked.statics,
             root: checked.root,
@@ -120,7 +120,8 @@ impl SourceChecked {
                 found: self.root.into(),
             }));
         };
-        let Self { spans, mut scoped, statics, root: _ } = self;
+        let Self { spans, scoped, statics, root: _ } = self;
+        let mut scoped = scoped.as_ref().clone();
         let stackir =
             match zydeco_stackir::RootLowerer::new(&spans, &mut scoped, &statics, root).run() {
                 | Ok(stackir) => stackir,
@@ -142,7 +143,8 @@ impl SourceChecked {
                 found: ty,
             }));
         };
-        let Self { spans, mut scoped, statics, root: _ } = self;
+        let Self { spans, scoped, statics, root: _ } = self;
+        let mut scoped = scoped.as_ref().clone();
         let stackir =
             zydeco_stackir::BuiltinRootLowerer::new(&spans, &mut scoped, &statics, root, signature)
                 .run()

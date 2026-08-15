@@ -47,7 +47,7 @@ pub struct ScopedData<'db> {
     #[tracked]
     #[no_eq]
     #[returns(ref)]
-    pub spans: su::SpanArena,
+    pub spans: std::sync::Arc<su::SpanArena>,
     #[tracked]
     #[no_eq]
     #[returns(ref)]
@@ -55,7 +55,7 @@ pub struct ScopedData<'db> {
     #[tracked]
     #[no_eq]
     #[returns(ref)]
-    pub scoped: su::ScopedArena,
+    pub scoped: std::sync::Arc<su::ScopedArena>,
     #[tracked]
     pub root: su::TermId,
 }
@@ -2334,7 +2334,13 @@ pub fn intern_pending<'db>(db: &'db dyn TyckDb) -> ScopedData<'db> {
         | Ok(parts) => parts,
         | Err(_) => panic!("pending parts are still shared"),
     };
-    ScopedData::new(db, parts.spans, parts.prim, parts.scoped, parts.root)
+    ScopedData::new(
+        db,
+        std::sync::Arc::new(parts.spans),
+        parts.prim,
+        std::sync::Arc::new(parts.scoped),
+        parts.root,
+    )
 }
 
 /// The complete result of checking one source snapshot.
@@ -2342,7 +2348,7 @@ pub fn intern_pending<'db>(db: &'db dyn TyckDb) -> ScopedData<'db> {
 pub struct TyckOutput {
     /// The name-resolved arena after checking. The checker may allocate generated
     /// definitions into it during elaboration.
-    pub scoped: su::ScopedArena,
+    pub scoped: std::sync::Arc<su::ScopedArena>,
     /// The recoverable checking outcome.
     pub outcome: SourceCheckOutcome,
 }
@@ -2358,7 +2364,7 @@ pub fn check_source<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> TyckOutp
     // One checker runs the whole pipeline within a single query. Splitting the
     // phases into separate salsa queries required deep-copying the full statics
     // arena across every boundary, which dominated check memory.
-    let mut scoped = data.scoped(db).clone();
+    let mut scoped = data.scoped(db).as_ref().clone();
     let (root, outcome);
     {
         let mut tycker = Tycker::new(db, data, data.spans(db), data.prim(db), &mut scoped);
@@ -2396,5 +2402,5 @@ pub fn check_source<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> TyckOutp
             },
         };
     }
-    TyckOutput { scoped, outcome }
+    TyckOutput { scoped: std::sync::Arc::new(scoped), outcome }
 }

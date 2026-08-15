@@ -49,8 +49,8 @@ impl AnalysisOutcome {
 #[derive(Debug)]
 pub struct ProgramAnalysis {
     graph: Arc<SourceGraph>,
-    spans: SpanArena,
-    scoped: ScopedArena,
+    spans: Arc<SpanArena>,
+    scoped: Arc<ScopedArena>,
     statics: StaticsArena,
     outcome: AnalysisOutcome,
     observations: Vec<TyckObservation>,
@@ -104,16 +104,16 @@ impl ProgramAnalysis {
 
 /// A checked program whose immutable static arena is shared with the check memo.
 pub struct CheckedProgram {
-    pub spans: SpanArena,
-    pub scoped: ScopedArena,
+    pub spans: Arc<SpanArena>,
+    pub scoped: Arc<ScopedArena>,
     pub statics: Arc<StaticsArena>,
     pub root: TermAnnId,
 }
 
 /// One checked computation with the host Builtin package contract validated.
 pub struct ExecutableProgram {
-    pub spans: SpanArena,
-    pub scoped: ScopedArena,
+    pub spans: Arc<SpanArena>,
+    pub scoped: Arc<ScopedArena>,
     pub statics: Arc<StaticsArena>,
     pub root: zydeco_statics::syntax::CompuId,
     pub signature: PackPi,
@@ -525,24 +525,24 @@ fn source_graph(
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
 fn resolved_data<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput,
-) -> Result<(SpanArena, zydeco_statics::query::ScopedData<'db>), AnalysisError> {
+) -> Result<zydeco_statics::query::ScopedData<'db>, AnalysisError> {
     let graph = source_graph(db, root).map_err(|error| AnalysisError::Source { error })?;
     let program = graph.parse().map_err(|error| AnalysisError::TextualProgram { error })?;
     let bitter =
         program.desugar().map_err(|error| AnalysisError::Desugar { error: Box::new(error) })?;
     let ScopedProgram { spans, arena, prim, root } =
         bitter.resolve().map_err(|error| AnalysisError::Resolve { error, graph })?;
-    let data = zydeco_statics::query::ScopedData::new(db, spans.clone(), prim, arena, root);
-    Ok((spans, data))
+    Ok(zydeco_statics::query::ScopedData::new(db, Arc::new(spans), prim, Arc::new(arena), root))
 }
 
 /// Run the whole source pipeline for one root and return the memoized check
 /// output. The typed arena stays in the salsa memo (`check_source` keeps only
-/// the latest root via `lru = 1`); callers own whatever they clone out.
+/// the latest root via `lru = 1`); immutable phase arenas are shared with callers.
 fn rechecked(
     db: &dyn SourceQueryDb, root: SourceInput,
-) -> Result<(SpanArena, zydeco_statics::query::TyckOutput), AnalysisError> {
-    let (spans, data) = resolved_data(db, root)?;
+) -> Result<(Arc<SpanArena>, zydeco_statics::query::TyckOutput), AnalysisError> {
+    let data = resolved_data(db, root)?;
+    let spans = Arc::clone(data.spans(db));
     Ok((spans, zydeco_statics::query::check_source(db, data)))
 }
 

@@ -3638,8 +3638,6 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
         tycker.guarded(|tycker| {
             // administrative
             tycker.tasks.push_back(TyckTask::Term(self.inner, switch));
-            let env = tycker.statics.intern_env(&self.info);
-            let _ = tycker.statics.term_envs.upsert(self.inner, env);
             let entity = su::EntityId::Term(self.inner);
             let occurrence = tycker.check_counts.get(&entity).copied().unwrap_or(0);
             let _ = tycker.check_counts.upsert(entity, occurrence + 1);

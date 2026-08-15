@@ -167,10 +167,6 @@ pub struct StaticsArena {
     /// Editor facts read this instead of the per-node annotation tables, which
     /// the occurrence-payload strip discards.
     pub term_anns: ArenaAssoc<su::TermId, TermAnnId>,
-    /// The typing environment snapshot at each checked term site, retained so
-    /// dropped occurrence nodes can be re-normalized with their exact
-    /// environment.
-    pub term_envs: ArenaAssoc<su::TermId, std::sync::Arc<TyEnv>>,
     /// The normalized form of each term's annotation type, keyed by the
     /// surface term, so editor facts answer without the occurrence payload.
     pub term_norms: ArenaAssoc<su::TermId, Type>,
@@ -304,7 +300,6 @@ impl StaticsArena {
             pats: self.pats.clone(),
             terms: self.terms.clone(),
             term_anns: self.term_anns.clone(),
-            term_envs: self.term_envs.clone(),
             term_norms: self.term_norms.clone(),
             type_sites: self.type_sites.clone(),
             coverage_errors: self.coverage_errors.clone(),

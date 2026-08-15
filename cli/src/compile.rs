@@ -94,7 +94,7 @@ impl CommandCompiler {
 
 /// Frozen backend input retaining the provenance needed by renderers and emitters.
 pub struct BackendProgram {
-    pub spans: SpanArena,
+    pub spans: Arc<SpanArena>,
     pub scoped: ScopedArena,
     pub statics: Arc<StaticsArena>,
     pub sps_low: SpsLowProgram,
@@ -103,7 +103,8 @@ pub struct BackendProgram {
 
 impl BackendProgram {
     pub fn lower(executable: ExecutableProgram) -> Result<Self, CompileError> {
-        let ExecutableProgram { spans, mut scoped, statics, root, signature } = executable;
+        let ExecutableProgram { spans, scoped, statics, root, signature } = executable;
+        let mut scoped = scoped.as_ref().clone();
         let stackir = BuiltinRootLowerer::new(&spans, &mut scoped, &statics, root, signature)
             .run()
             .map_err(CompileError::BuiltinLower)?;
