@@ -755,3 +755,52 @@ decisions while implementing the plan.
 - Re-profile before changing the field closure. Its 262,556-node share is now relative to the
   pre-round-18 arena, and eliminating analytic duplication may change how often field routes are
   materialized.
+
+## 2026-08-15 — round 19: distribute prepared product annotations
+
+### Findings
+
+- Round 18 preserved preparation through wrappers, but ordinary tuple checking immediately called
+  `reveal_or_refine_product_k`, which unrolled and recursively substituted the already prepared
+  expected product again. Every subsequent component called `view_product_k` on the tail and then
+  entered its child with a fresh analytic action. A product aligned with tuple syntax therefore
+  still advanced environment substitution once per item.
+- The pre-round-18 profile assigned 74,343 nodes directly to product revelation and 8,405 to the
+  analogous named-value reveal. Their downstream children were counted under the common analytic
+  boundary, explaining why removing the full chain saves more than those two direct totals.
+- Skipping substitution unconditionally would lose the round-14 representation boundary. A direct
+  prepared `Prod` or `Label` needs no work, while unrolling a sealed or projected head can expose a
+  definition that has never received the current environment.
+
+### Changes
+
+- `reveal_or_refine_prepared_product_k` and `view_prepared_product_k` inspect direct product
+  structure without recursively rewriting it. If `unroll` returns a different root, they apply the
+  environment to that newly exposed representation once before refining or destructuring it.
+- Tuple terms use prepared product views for the outer product, each item, and the final tail.
+  `Action::ana_prepared` transfers the current preparation provenance to those child checks.
+- Package tuples use the same prepared views after their static telescope prefix has been forced.
+  Named value terms similarly avoid a second substitution for a direct prepared label while still
+  re-entering the environment when unrolling changes the root.
+- A focused regression proves both sides with a chained environment: direct prepared product
+  components remain at the first replacement, while a product newly exposed through a seal receives
+  that replacement exactly once.
+
+### Measurements
+
+- The full-std check retains 693,735 type nodes, 97,899 fewer than round 18 (-12.4%).
+- Three clean release checks used 423,444,480, 424,607,744, and 424,198,144 bytes peak RSS (median
+  424,198,144), down 14,909,440 bytes (-3.4%) from round 18. Warm wall time was 0.50s and warm user
+  time was 0.46–0.47s.
+- The current-tree baseline is now down from 2,497,757,184 to 424,198,144 bytes (-83.0%).
+- All 41 statics tests and all 151 session tests passed, along with the release CLI build and full
+  standard-library check.
+
+### Next
+
+- Carry preparation provenance through other expected-type destructors, especially arrows,
+  thunks/returns, and codata arms. Their child environments need an explicit rule: same-environment
+  components are already prepared, while binder extensions should apply only the new type-level
+  assignments rather than replaying the complete old environment.
+- Re-profile the 693,735-node arena before widening `DeferredEnvType`; field materialization was the
+  second-largest prior boundary, but tuple and label changes may have removed some of its consumers.

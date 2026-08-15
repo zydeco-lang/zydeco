@@ -1103,11 +1103,55 @@ impl TypeId {
         tycker.err_p_to_k(result)
     }
 
+    /// Reveal a product from an expected type already prepared under `env`.
+    ///
+    /// Direct product structure needs no second recursive substitution. If unrolling exposes a
+    /// different representation (for example, through a seal), that newly exposed tree still
+    /// receives the environment once.
+    #[track_caller]
+    pub(crate) fn reveal_or_refine_prepared_product_k(
+        self, tycker: &mut Tycker<'_>, env: &TyEnv,
+    ) -> ResultKont<Type> {
+        let result = (|| {
+            let view = match InferenceRefinement::unresolved_type_fill(tycker, self)? {
+                | Some(_) => self,
+                | None => {
+                    let unrolled = self.unroll(tycker)?;
+                    if unrolled == self { self } else { unrolled.subst_env(tycker, env)? }
+                }
+            };
+            let vtype = Alloc::alloc(tycker, VType, (), &());
+            let kind = tycker.statics.annotations_type[&view];
+            Lub::lub(kind, vtype, tycker)?;
+            match InferenceRefinement::unresolved_type_fill(tycker, view)? {
+                | Some(fill) => InferenceRefinement::product(tycker, fill, env),
+                | None => tycker.type_filled(&view),
+            }
+        })();
+        tycker.err_p_to_k(result)
+    }
+
     #[track_caller]
     pub(crate) fn view_product_k(
         self, tycker: &mut Tycker<'_>, env: &TyEnv,
     ) -> ResultKont<Prod<TypeId, TypeId>> {
         match self.reveal_or_refine_product_k(tycker, env)? {
+            | Type::Prod(product) => Ok(product),
+            | _ => tycker.err_k(
+                TyckError::TypeExpected {
+                    expected: "a product with enough components".to_string(),
+                    found: self,
+                },
+                std::panic::Location::caller(),
+            ),
+        }
+    }
+
+    #[track_caller]
+    pub(crate) fn view_prepared_product_k(
+        self, tycker: &mut Tycker<'_>, env: &TyEnv,
+    ) -> ResultKont<Prod<TypeId, TypeId>> {
+        match self.reveal_or_refine_prepared_product_k(tycker, env)? {
             | Type::Prod(product) => Ok(product),
             | _ => tycker.err_k(
                 TyckError::TypeExpected {

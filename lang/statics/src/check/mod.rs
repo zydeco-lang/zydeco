@@ -1650,6 +1650,9 @@ impl<Ann> Action<Ann> {
     pub fn ana(ann: Ann) -> Self {
         Self { switch: Switch::Ana(ann), prepared_environment: None }
     }
+    fn ana_prepared(ann: Ann, environment: &ss::TyEnv) -> Self {
+        Self { switch: Switch::Ana(ann), prepared_environment: Some(environment.clone()) }
+    }
     fn forward(switch: Switch<Ann>, prepared_environment: Option<&ss::TyEnv>) -> Self {
         Self { switch, prepared_environment: prepared_environment.cloned() }
     }
@@ -4356,8 +4359,12 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         TermAnnId::Type(named, kd)
                     }
                     | Switch::Ana(AnnId::Type(expected)) => {
-                        let expected_view =
-                            expected.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
+                        let unrolled = expected.unroll_k(tycker)?;
+                        let expected_view = if unrolled == expected {
+                            expected
+                        } else {
+                            unrolled.subst_env_k(tycker, &self.info)?
+                        };
                         let ss::Type::Label(ss::Label(expected_name, inner_ty)) =
                             tycker.type_filled_k(&expected_view)?.to_owned()
                         else {
@@ -4378,8 +4385,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 std::panic::Location::caller(),
                             )?
                         }
-                        let checked =
-                            self.mk(inner).tyck_k(tycker, Action::ana(inner_ty.into()))?;
+                        let checked = self
+                            .mk(inner)
+                            .tyck_k(tycker, Action::ana_prepared(inner_ty.into(), &self.info))?;
                         let (inner, _) = checked.try_as_value(
                             tycker,
                             TyckError::SortMismatch,
@@ -4560,18 +4568,21 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     }
                     | Switch::Ana(AnnId::Type(expected)) => {
                         let expected_view = expected;
-                        match expected_view.reveal_or_refine_product_k(tycker, &self.info)? {
+                        match expected_view
+                            .reveal_or_refine_prepared_product_k(tycker, &self.info)?
+                        {
                             | ss::Type::Prod(_) => {
                                 let mut expected_item = expected_view;
                                 let (output, annotations): (Vec<_>, Vec<_>) = items
                                     .into_iter()
                                     .map(|item| -> ResultKont<_> {
-                                        let ss::Prod(item_ty, next_ty) =
-                                            expected_item.view_product_k(tycker, &self.info)?;
+                                        let ss::Prod(item_ty, next_ty) = expected_item
+                                            .view_prepared_product_k(tycker, &self.info)?;
                                         expected_item = next_ty;
-                                        let checked = self
-                                            .mk(item)
-                                            .tyck_k(tycker, Action::ana(item_ty.into()))?;
+                                        let checked = self.mk(item).tyck_k(
+                                            tycker,
+                                            Action::ana_prepared(item_ty.into(), &self.info),
+                                        )?;
                                         checked.try_as_value(
                                             tycker,
                                             TyckError::SortMismatch,
@@ -4582,9 +4593,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     .into_iter()
                                     .unzip();
 
-                                let checked = self
-                                    .mk(tail)
-                                    .tyck_k(tycker, Action::ana(expected_item.into()))?;
+                                let checked = self.mk(tail).tyck_k(
+                                    tycker,
+                                    Action::ana_prepared(expected_item.into(), &self.info),
+                                )?;
                                 let (tail, ann) = checked.try_as_value(
                                     tycker,
                                     TyckError::SortMismatch,
@@ -4669,9 +4681,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
 
                                 let body_items = &items[body_index..];
                                 let body = if body_items.is_empty() {
-                                    let checked = self
-                                        .mk(tail)
-                                        .tyck_k(tycker, Action::ana(body_ty.into()))?;
+                                    let checked = self.mk(tail).tyck_k(
+                                        tycker,
+                                        Action::ana_prepared(body_ty.into(), &self.info),
+                                    )?;
                                     checked
                                         .try_as_value(
                                             tycker,
@@ -4681,19 +4694,21 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         .0
                                 } else {
                                     let body_view = body_ty;
-                                    let _ = body_view.view_product_k(tycker, &self.info)?;
+                                    let _ =
+                                        body_view.view_prepared_product_k(tycker, &self.info)?;
 
                                     let mut expected_item = body_view;
                                     let (output, annotations): (Vec<_>, Vec<_>) = body_items
                                         .iter()
                                         .copied()
                                         .map(|item| -> ResultKont<_> {
-                                            let ss::Prod(item_ty, next_ty) =
-                                                expected_item.view_product_k(tycker, &self.info)?;
+                                            let ss::Prod(item_ty, next_ty) = expected_item
+                                                .view_prepared_product_k(tycker, &self.info)?;
                                             expected_item = next_ty;
-                                            let checked = self
-                                                .mk(item)
-                                                .tyck_k(tycker, Action::ana(item_ty.into()))?;
+                                            let checked = self.mk(item).tyck_k(
+                                                tycker,
+                                                Action::ana_prepared(item_ty.into(), &self.info),
+                                            )?;
                                             checked.try_as_value(
                                                 tycker,
                                                 TyckError::SortMismatch,
@@ -4704,9 +4719,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         .into_iter()
                                         .unzip();
 
-                                    let checked = self
-                                        .mk(tail)
-                                        .tyck_k(tycker, Action::ana(expected_item.into()))?;
+                                    let checked = self.mk(tail).tyck_k(
+                                        tycker,
+                                        Action::ana_prepared(expected_item.into(), &self.info),
+                                    )?;
                                     let (tail, ann) = checked.try_as_value(
                                         tycker,
                                         TyckError::SortMismatch,
@@ -7599,6 +7615,36 @@ mod source_boundary_tests {
 
             assert_eq!(direct.projected, sealed);
             assert_eq!(nested.projected, unit);
+            assert!(tycker.errors.is_empty());
+        });
+    }
+
+    #[test]
+    fn prepared_products_substitute_once_and_reenter_after_unrolling() {
+        with_empty_tycker(|tycker| {
+            let empty = TyEnv::default();
+            let vtype = ss::VType.build(tycker, &empty);
+            let unit = ss::UnitTy.build(tycker, &empty);
+            let source_def: ss::DefId = tycker.fresh();
+            let target_def: ss::DefId = tycker.fresh();
+            let source: ss::TypeId = Alloc::alloc(tycker, source_def, vtype, &empty);
+            let target: ss::TypeId = Alloc::alloc(tycker, target_def, vtype, &empty);
+            let environment =
+                TyEnv::from_iter([(source_def, target.into()), (target_def, unit.into())]);
+
+            let product = Alloc::alloc(tycker, ss::Prod(source, source), vtype, &empty);
+            let prepared = product.subst_env_k(tycker, &environment).unwrap();
+            let ss::Prod(head, tail) =
+                prepared.view_prepared_product_k(tycker, &environment).unwrap();
+            assert_eq!((head, tail), (target, target));
+
+            let definition = Alloc::alloc(tycker, ss::Prod(source, unit), vtype, &empty);
+            let witness: ss::AbstId = Alloc::alloc(tycker, None::<ss::DefId>, vtype, &());
+            tycker.statics.seals.insert_new(witness, definition);
+            let sealed = Alloc::alloc(tycker, witness, vtype, &empty);
+            let ss::Prod(head, tail) =
+                sealed.view_prepared_product_k(tycker, &environment).unwrap();
+            assert_eq!((head, tail), (target, unit));
             assert!(tycker.errors.is_empty());
         });
     }
