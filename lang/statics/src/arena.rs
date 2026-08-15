@@ -171,6 +171,12 @@ pub struct StaticsArena {
     /// dropped occurrence nodes can be re-normalized with their exact
     /// environment.
     pub term_envs: ArenaAssoc<su::TermId, std::sync::Arc<TyEnv>>,
+    /// The normalized form of each term's annotation type, keyed by the
+    /// surface term, so editor facts answer without the occurrence payload.
+    pub term_norms: ArenaAssoc<su::TermId, Type>,
+    /// The surface term each top annotation type belongs to; inner type nodes
+    /// have no entry, so lookups for them answer nothing instead of guessing.
+    pub type_sites: ArenaAssoc<TypeId, su::TermId>,
     /// Coverage failures recorded during the finish phase, for editor facts.
     pub coverage_errors: Vec<crate::validate::CoverageError>,
 

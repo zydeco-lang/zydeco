@@ -1154,6 +1154,24 @@ impl<'a> Tycker<'a> {
             for id in type_ids {
                 normalizer.normalize_type_k(id, self)?;
             }
+            // Record the normalized form per scoped term, so editor facts can
+            // answer for a term's annotation type without the occurrence
+            // payload.
+            let terms: Vec<_> = self.statics.term_anns.iter().map(|(term, _)| *term).collect();
+            for term in terms {
+                let ty = match self.statics.term_anns.get(&term).copied() {
+                    | Some(ss::TermAnnId::Type(ty, _))
+                    | Some(ss::TermAnnId::Value(_, ty))
+                    | Some(ss::TermAnnId::Compu(_, ty)) => ty,
+                    | Some(ss::TermAnnId::Kind(_)) | Some(ss::TermAnnId::Hole(_)) | None => {
+                        continue;
+                    }
+                };
+                let Some(normalized) = self.statics.normalized_at(ty) else {
+                    continue;
+                };
+                let _ = self.statics.term_norms.upsert(term, normalized.clone());
+            }
         }
         if self.errors.is_empty() {
             let blame = std::panic::Location::caller();
@@ -7154,6 +7172,12 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
             // record the final annotation for editor facts; fixpoint re-checks
             // overwrite the earlier occurrence's entry
             let _ = tycker.statics.term_anns.upsert(self.inner, out_ann);
+            let _ = match out_ann {
+                | ss::TermAnnId::Type(ty, _)
+                | ss::TermAnnId::Value(_, ty)
+                | ss::TermAnnId::Compu(_, ty) => tycker.statics.type_sites.upsert(ty, self.inner),
+                | ss::TermAnnId::Kind(_) | ss::TermAnnId::Hole(_) => None,
+            };
 
             // check if the term is global
             let global = tycker.scoped.coctxs_term_local[&self.inner]

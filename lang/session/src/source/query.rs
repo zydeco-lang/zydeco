@@ -590,9 +590,10 @@ fn reports_at(
 fn normalized_type_at<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput, id: zydeco_statics::query::InternedType<'db>,
 ) -> Option<Type> {
-    let (_, output) = rechecked(db, root).ok()?;
-    let statics = output.outcome.statics_arc();
-    statics.normalized_at(id.id(db)).cloned()
+    let analysis = analyze_source(db, root).ok()?;
+    let statics = analysis.statics();
+    let term = *statics.type_sites.get(&id.id(db))?;
+    statics.term_norms.get(&term).cloned()
 }
 
 /// Coverage failures of one analyzed root, computed on demand.
@@ -836,6 +837,28 @@ mod tests {
         let program = session.checked_program(&analysis).expect("checked program");
         assert!(program.statics.types_pre.len() > 0);
         assert!(program.statics.compus.len() > 0);
+    }
+
+    #[test]
+    fn facts_survive_arena_memo_eviction() {
+        let fixture = Fixture::new();
+        let first = fixture.write("first.zy", "ret 1");
+        let second = fixture.write("second.zy", "ret 2");
+        let mut session = CompilerSession::default();
+
+        let analysis = session.analyze(&first).unwrap();
+        let zydeco_statics::syntax::TermAnnId::Compu(_, ty) = analysis.outcome().root().unwrap()
+        else {
+            panic!("expected a computation root")
+        };
+
+        // Analyzing another root and triggering LRU eviction drops the first
+        // root's arena memo; its facts must still answer from the keyed
+        // indexes.
+        let _ = session.analyze(&second).unwrap();
+        salsa::Database::trigger_lru_eviction(&mut session);
+
+        assert!(session.normalized_type(&first, ty).unwrap().is_some());
     }
 
     #[test]
