@@ -86,15 +86,14 @@ decisions while implementing the plan.
 
 - Two of the three S-reading fact queries are per-*term*, not per-*node*: their results
   are bounded by the source size (65K entries), so they belong to L as recorded judgment
-  results rather than as replay logic. The third (`normalized_type_at`) is genuinely
-  per-node and needs the replay path.
+  results rather than as replay logic. The third (`normalized_type_at`) is per-node, but
+  its callers only ever pass top annotation types, which are per-term.
 - The site of any typed id is already recoverable from the L-tier `terms` bipartite
-  (`back` for the scoped term, `forth` length for the occurrence), so no new site
-  index table is needed.
+  for term tops; inner nodes of an annotation are not, so they need either a site index
+  or an explicit contract.
 - The normalization environment is what replay lacks: the checker snapshots it per term
   (`self.info`), so recording per-term env snapshots in L makes future re-normalization
-  exact rather than approximate (the merged `annotations_var` alone would diverge for
-  recursive definitions).
+  exact rather than approximate.
 
 ### Changes
 
@@ -103,18 +102,45 @@ decisions while implementing the plan.
   (the finish-phase coverage failures).
 - `term_annotation_at` and `coverage_facts` now read these tables from the stripped
   analysis; they no longer touch the occurrence payload or the check memo.
-- The checker records the tables at the term dispatch (`term_anns`/`term_envs`) and in
-  `normalize_and_validate_k` (`coverage_errors`).
 
 ### Measurements
 
 - Session suite (2 threads): 150 passed; peak RSS 6.38GB; 77s wall. Full workspace
   suite: 740 passed, 0 failed. L-tier growth per root is in the low megabytes.
 
+## 2026-08-15 — round 4: normalized types as per-term keyed indexes
+
+### Findings
+
+- `normalized_type_at`'s only callers pass top annotation types. A per-term normalized
+  table therefore answers the actual demand exactly, and the per-node replay machinery
+  (recursive `normalize_type` query + type-synthesis dispatch) would be speculative
+  complexity with no consumer. This deviates from the original replay plan in favor of
+  the L/S criterion the plan itself established: facts bounded by the source's term
+  count are keyed indexes.
+- An annotation type of a computation/value term is *not* the term's `forth` entry (that
+  holds the `CompuId`/`ValueId`), so the term lookup needs a dedicated top-type index.
+  Inner type nodes are deliberately left without an entry: a lookup for them answers
+  nothing rather than guessing with the top type's form.
+
+### Changes
+
+- `StaticsArena` gains `term_norms` (normalized annotation type per scoped term) and
+  `type_sites` (top annotation `TypeId` -> scoped term, recorded at the term dispatch).
+- `normalize_and_validate_k` records `term_norms` after normalization; the checker
+  records `type_sites` next to `term_anns`.
+- `normalized_type_at` reads `type_sites` then `term_norms` from the stripped
+  analysis: all three fact queries now answer entirely from L and survive arena-memo
+  eviction, covered by `facts_survive_arena_memo_eviction`.
+
+### Measurements
+
+- Session suite (2 threads): 151 passed; peak RSS 6.54GB; 74s wall. Full workspace
+  suite: 741 passed, 0 failed.
+
 ### Next
 
-- `normalized_type_at` replay: a recursive `normalize_type` salsa query over the
-  judgment layer, using `terms.back` + `term_envs` for the site and its exact
-  environment, plus the per-variant type-synthesis dispatch for the pre value. Until
-  then it keeps reading the shared-arena memo (fine for the latest root, re-checks a
-  stale one).
+- Per-node replay (recursive `normalize_type` query over the judgment layer, keyed by
+  `type_sites`-style site records and `term_envs`) remains available as the path for a
+  future consumer that needs arbitrary inner nodes; the foundation tables are in place.
+- Judgment-memo root-scoped policy beyond the pool generation remains open.
