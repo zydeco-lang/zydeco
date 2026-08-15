@@ -3311,19 +3311,17 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                             }
                             | ss::Type::Exists(_) | ss::Type::ManifestKind(_) => {
                                 let mut body_env = self.info.clone();
-                                let mut body_ty = expected;
+                                let mut body_ty = DeferredTelescopeType::new(expected);
                                 let mut body_index = items.len();
                                 let mut static_patterns: Vec<ss::StaticPatId> = Vec::new();
                                 let mut opened = Vec::new();
                                 for (index, item) in items.iter().copied().enumerate() {
-                                    let view =
-                                        body_ty.unroll_k(tycker)?.subst_env_k(tycker, &body_env)?;
-                                    match tycker.type_filled_k(&view)?.to_owned() {
-                                        | ss::Type::ManifestKind(ss::ManifestKind {
+                                    match body_ty.with_environment(&body_env).reveal_k(tycker)? {
+                                        | DeferredTelescopeView::ManifestKind {
                                             binder,
                                             definition,
                                             body,
-                                        }) => {
+                                        } => {
                                             let checked = TyEnvT::new(body_env.clone(), item)
                                                 .tyck_k(
                                                     tycker,
@@ -3343,12 +3341,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                             static_patterns.push(pattern.into());
                                             let _ = binder;
                                         }
-                                        | ss::Type::Exists(exists) => {
-                                            let ss::Exists {
-                                                binder: source_binder,
-                                                mode,
-                                                body: next_ty,
-                                            } = *exists;
+                                        | DeferredTelescopeView::Exists {
+                                            binder: source_binder,
+                                            mode,
+                                            body: next_ty,
+                                        } => {
                                             let domain_kind = source_binder.domain_kind(tycker);
                                             let payload_kind = source_binder.payload_kind(tycker);
                                             let checked = TyEnvT::new(body_env.clone(), item)
@@ -3366,7 +3363,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                             opened.extend(checked.inner.opened);
 
                                             match mode {
-                                                | ss::ExistsMode::Abstract => {
+                                                | DeferredTelescopeExistsMode::Abstract => {
                                                     // Ordinary elimination is fresh. Checking a PackPi
                                                     // introduction instead reuses the signature's
                                                     // canonical identity for this pattern component.
@@ -3419,13 +3416,17 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                                     )
                                                     .tyck_k(tycker, ())?
                                                     .info;
-                                                    body_ty = next_ty.subst_abst_k(
-                                                        tycker,
-                                                        (source_binder.witness, abstract_ty),
-                                                    )?;
+                                                    body_ty = next_ty.with_abstract(
+                                                        source_binder.witness,
+                                                        abstract_ty,
+                                                    );
                                                     opened.push(skolem);
                                                 }
-                                                | ss::ExistsMode::Manifest(definition) => {
+                                                | DeferredTelescopeExistsMode::Manifest(
+                                                    definition,
+                                                ) => {
+                                                    let definition =
+                                                        definition.materialize_k(tycker)?;
                                                     let definition_kind = tycker
                                                         .statics
                                                         .annotations_type[&definition];
@@ -3445,15 +3446,16 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                                     )
                                                     .tyck_k(tycker, ())?
                                                     .info;
-                                                    body_ty = next_ty.subst_abst_k(
-                                                        tycker,
-                                                        (source_binder.witness, definition),
-                                                    )?;
+                                                    body_ty = next_ty.with_abstract(
+                                                        source_binder.witness,
+                                                        definition,
+                                                    );
                                                 }
                                             }
                                             static_patterns.push(witness.into());
                                         }
-                                        | _ => {
+                                        | DeferredTelescopeView::Other(body) => {
+                                            body_ty = body;
                                             body_index = index;
                                             break;
                                         }
@@ -3470,6 +3472,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                     )?
                                 }
 
+                                let body_ty =
+                                    body_ty.with_environment(&body_env).materialize_k(tycker)?;
                                 let body_items = &items[body_index..];
                                 let body = if body_items.is_empty() {
                                     let checked = TyEnvT::new(body_env.clone(), tail).tyck_k(
@@ -4578,74 +4582,61 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 TermAnnId::Value(cons, ann)
                             }
                             | ss::Type::Exists(_) | ss::Type::ManifestKind(_) => {
-                                let mut body_ty = expected;
+                                let mut body_ty = DeferredTelescopeType::new(expected);
                                 let mut body_index = items.len();
+                                let mut witnesses: Vec<ss::StaticTermId> = Vec::new();
 
-                                let witnesses = items
-                                    .iter()
-                                    .copied()
-                                    .enumerate()
-                                    .map_while(|(index, item)| {
-                                        (|| -> ResultKont<Option<ss::StaticTermId>> {
-                                            let view = body_ty
-                                                .unroll_k(tycker)?
-                                                .subst_env_k(tycker, &self.info)?;
-                                            match tycker.type_filled_k(&view)?.to_owned() {
-                                                | ss::Type::ManifestKind(ss::ManifestKind {
+                                for (index, item) in items.iter().copied().enumerate() {
+                                    match body_ty.with_environment(&self.info).reveal_k(tycker)? {
+                                        | DeferredTelescopeView::ManifestKind {
+                                            definition,
+                                            body,
+                                            ..
+                                        } => {
+                                            let checked = self
+                                                .mk(item)
+                                                .tyck_k(tycker, Action::ana(AnnId::Set))?;
+                                            let witness = checked.try_as_kind(
+                                                tycker,
+                                                TyckError::SortMismatch,
+                                                std::panic::Location::caller(),
+                                            )?;
+                                            let witness = Lub::lub_k(definition, witness, tycker)?;
+                                            body_ty = body;
+                                            witnesses.push(witness.into());
+                                        }
+                                        | DeferredTelescopeView::Exists { binder, mode, body } => {
+                                            let domain_kind = binder.domain_kind(tycker);
+                                            let checked = self
+                                                .mk(item)
+                                                .tyck_k(tycker, Action::ana(domain_kind.into()))?;
+                                            let (witness, _) = checked.try_as_type(
+                                                tycker,
+                                                TyckError::SortMismatch,
+                                                std::panic::Location::caller(),
+                                            )?;
+                                            let payload =
+                                                binder.pattern.bind_argument_k(tycker, witness)?;
+                                            let payload = match mode {
+                                                | DeferredTelescopeExistsMode::Abstract => payload,
+                                                | DeferredTelescopeExistsMode::Manifest(
                                                     definition,
-                                                    body,
-                                                    ..
-                                                }) => {
-                                                    let checked = self
-                                                        .mk(item)
-                                                        .tyck_k(tycker, Action::ana(AnnId::Set))?;
-                                                    let witness = checked.try_as_kind(
-                                                        tycker,
-                                                        TyckError::SortMismatch,
-                                                        std::panic::Location::caller(),
-                                                    )?;
-                                                    let witness =
-                                                        Lub::lub_k(definition, witness, tycker)?;
-                                                    body_ty = body;
-                                                    Ok(Some(witness.into()))
+                                                ) => {
+                                                    let definition =
+                                                        definition.materialize_k(tycker)?;
+                                                    Lub::lub_k(definition, payload, tycker)?
                                                 }
-                                                | ss::Type::Exists(exists) => {
-                                                    let ss::Exists { binder, mode, body: next_ty } =
-                                                        *exists;
-                                                    let domain_kind = binder.domain_kind(tycker);
-                                                    let checked = self.mk(item).tyck_k(
-                                                        tycker,
-                                                        Action::ana(domain_kind.into()),
-                                                    )?;
-                                                    let (witness, _) = checked.try_as_type(
-                                                        tycker,
-                                                        TyckError::SortMismatch,
-                                                        std::panic::Location::caller(),
-                                                    )?;
-                                                    let payload = binder
-                                                        .pattern
-                                                        .bind_argument_k(tycker, witness)?;
-                                                    let payload = match mode {
-                                                        | ss::ExistsMode::Abstract => payload,
-                                                        | ss::ExistsMode::Manifest(definition) => {
-                                                            Lub::lub_k(definition, payload, tycker)?
-                                                        }
-                                                    };
-                                                    body_ty = next_ty.subst_abst_k(
-                                                        tycker,
-                                                        (binder.witness, payload),
-                                                    )?;
-                                                    Ok(Some(witness.into()))
-                                                }
-                                                | _ => {
-                                                    body_index = index;
-                                                    Ok(None)
-                                                }
-                                            }
-                                        })()
-                                        .transpose()
-                                    })
-                                    .collect::<ResultKont<Vec<_>>>()?;
+                                            };
+                                            body_ty = body.with_abstract(binder.witness, payload);
+                                            witnesses.push(witness.into());
+                                        }
+                                        | DeferredTelescopeView::Other(body) => {
+                                            body_ty = body;
+                                            body_index = index;
+                                            break;
+                                        }
+                                    }
+                                }
 
                                 if witnesses.is_empty() {
                                     tycker.err_k(
@@ -4656,6 +4647,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         std::panic::Location::caller(),
                                     )?
                                 }
+
+                                let body_ty = body_ty.materialize_k(tycker)?;
 
                                 let body_items = &items[body_index..];
                                 let body = if body_items.is_empty() {

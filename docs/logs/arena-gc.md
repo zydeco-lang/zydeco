@@ -657,3 +657,52 @@ decisions while implementing the plan.
 - Re-run call-site attribution after that migration. Analytic term annotations (previously
   361,349 nodes) and remaining field materialization (288,938 nodes) are then the largest known
   boundaries, but their exact shares should be measured against the smaller arena.
+
+## 2026-08-15 — round 17: share telescope state in package construction
+
+### Findings
+
+- Tuple syntax serves two roles during analysis: an ordinary product after the static prefix, and
+  a package constructor or pattern while the expected type exposes `ManifestKind` and `Exists`
+  entries. Both the term and pattern paths had their own eager telescope loop, separate from the
+  existential-projection loop optimized in rounds 15 and 16.
+- Each static tuple item substituted the environment through the complete remaining telescope,
+  substituted its witness through that rewritten tail, and then repeated the process for the
+  next item. This was the same quadratic construction rule under a third surface syntax.
+- The term path has one fixed environment. The pattern path grows its environment with checked
+  pattern bindings and fresh skolems, so it must replace the closure's environment with the
+  newest snapshot before revealing each constructor and before forcing the final body.
+- The previous round-15 attribution assigned 238,181 nodes directly to these loops. The final
+  arena fell by 292,719 nodes after migration; the older caller-local number excluded downstream
+  rebuilding induced by the eagerly materialized intermediate types and preceded round 16, so it
+  was a lower bound rather than an additive prediction for the newer tree.
+
+### Changes
+
+- Package term construction now carries `DeferredTelescopeType` while checking static tuple
+  items. Manifest definitions are forced only for their equality check, abstract payloads are
+  appended to the ordered assignment sequence, and the package value body is materialized once.
+- Package pattern checking uses the same representation while retaining its essential sequential
+  state: checked pattern environments, opened skolems, and source-order static patterns. It forces
+  the remaining package body under the final environment before checking the value-pattern tail.
+- The eager `map_while` term loop became an explicit stateful traversal. The state transition is
+  now shared with projection opening instead of being encoded as repeated recursive substitution.
+
+### Measurements
+
+- The full-std check retains 959,155 type nodes, 292,719 fewer than round 16 (-23.4%).
+- Three clean release checks used 528,515,072, 527,646,720, and 527,761,408 bytes peak RSS (median
+  527,761,408), down 42,713,088 bytes (-7.5%) from round 16. Warm wall time was 0.62–0.63s and warm
+  user time was 0.56–0.57s.
+- The current-tree baseline is now down from 2,497,757,184 to 527,761,408 bytes (-78.9%).
+- All 40 statics tests and all 151 session tests passed. The release CLI build and full standard
+  library check also passed after removing the temporary node counter.
+
+### Next
+
+- Re-run caller attribution against the 959,155-node arena. The prior 361,349-node analytic-term
+  annotation and 288,938-node field-materialization counts can no longer be treated as current,
+  because their inputs and downstream shapes changed with telescope composition.
+- Inspect the other recursive package consumers (`PackageInstantiation`, `PackPiWitnessSkolems`,
+  and `PackPiPatternAssignments`). They open a domain one entry at a time and still perform eager
+  environment and abstract substitution, though their call frequencies may be much lower.
