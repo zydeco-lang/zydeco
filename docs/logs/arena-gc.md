@@ -2519,3 +2519,63 @@ decisions while implementing the plan.
 - Continue distinguishing bounded source-linear tuning from the closed quadratic substitution
   mechanism. A next change should name a concrete retained owner and preserve cheap reconstruction
   at its public boundary.
+
+## 2026-08-15 — round 53: batch and sort normalized annotation facts
+
+### Findings
+
+- A fresh post-round-52 malloc-stack census found 112,310 live allocations owning 63.7MB. Stack
+  logging raised physical footprint to 172.6MB, so its purpose was ownership rather than process
+  measurement. The largest identifiable owners were 4,064KiB of scoped terms, the previously
+  attributed 3,152KiB page table, 3,088KiB of assembled spans, 2,352KiB of normalized annotations,
+  2,128KiB and 1,072KiB of term and pattern provenance, and 2,064KiB of term facts.
+- The census confirms the preceding layout changes at allocation granularity. Assembled spans fell
+  from 3,856KiB to 3,088KiB; the two compact provenance tables now total 3,200KiB; and compact term
+  facts fell from 2,576KiB to 2,064KiB. The 2,352KiB normalized-annotation hash table was therefore
+  the next unchanged owner with a phase boundary that permits a different representation.
+- Normalized annotation facts are produced only after all type normalization completes, and they
+  are immutable afterward. The old loop nevertheless accumulated them one at a time in a hash
+  table while retaining a separate vector of all 63,574 source term IDs. There are only 27,049
+  distinct top annotations among the 58,664 facts whose classifier is a type.
+- Retained lookup is an editor query, not a checker inner loop. Two parallel sorted slices provide
+  borrowed lookup with about fifteen comparisons at this workload. They occupy exactly 432,784
+  bytes of IDs plus 1,514,744 bytes of types, or 1,947,528 bytes total. That is 460,920 bytes (19.1%)
+  less than the former 2,408,448-byte hash allocation, without boxing any type variant.
+- The larger process win comes from batching. Collecting type IDs directly from term facts removes
+  the temporary vector of 63,574 dispatcher IDs and never grows a hash table beside it. The shared
+  rule is that an immutable derived index should be built in its final read representation when its
+  complete input is already available at one phase boundary.
+
+### Changes
+
+- Added `NormalizedAnnotations`, which stores sorted `TypeId` and `Type` boxed slices in parallel
+  and uses binary search for borrowed lookup. Construction asserts equal lengths and strict key
+  ordering.
+- Replaced per-term hash insertion with one batch pass: collect type-bearing annotations, sort and
+  deduplicate their IDs, clone each already-normalized type once, and publish the parallel slices.
+  Kind and hole facts remain excluded.
+- Expanded the arena regression to cover out-of-order IDs, duplicate annotations, multiple type
+  forms, and exclusion of a kind annotation. Public session and editor query behavior is unchanged.
+
+### Measurements
+
+- Five release checks used 115,949,568, 116,146,176, 116,228,096, 116,293,632, and 116,310,016 bytes
+  peak RSS (median 116,228,096), down 2,211,840 bytes (-1.9%) from round 52. Warm wall time remained
+  0.18--0.19s and warm user time remained 0.16--0.17s.
+- The current-tree baseline is now down from 2,497,757,184 to 116,228,096 bytes (-95.3%).
+- All 27 statics unit tests and 33 statics integration tests, all 151 session tests, all 9 CLI
+  integration tests, all 31 Cajun unit tests, and all 9 Cajun stdio tests passed. Focused Clippy
+  completed with existing unrelated warnings. The release build and full standard-library check
+  also passed.
+
+### Next
+
+- Measure the 4,064KiB scoped term payload by variant and field layout before changing it. It is the
+  largest confirmed source owner, but its public syntax is used throughout name resolution and
+  checking, so a storage-only representation should be preferred over pervasive boxing.
+- Evaluate `IndexMap`-style dense entries for mutable provenance. Its 16-byte typed key and 16-byte
+  source value make open-addressed bucket slack expensive; a dense entry vector plus compact hash
+  index may reduce both provenance owners while preserving lookup during checking.
+- Re-measure the phase high-water mark before adding an end-of-phase compaction pass. Converting a
+  live hash table into sorted slices briefly owns both allocations and can erase the retained saving
+  if that conversion itself becomes the process peak.

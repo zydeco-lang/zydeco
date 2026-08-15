@@ -1616,27 +1616,9 @@ impl<'a> Tycker<'a> {
             for id in type_ids {
                 normalizer.normalize_type_k(id, self)?;
             }
-            // Record the normalized form per scoped term, so editor facts can
-            // answer for a term's annotation type without the occurrence
-            // payload.
-            let terms: Vec<_> = self.statics.term_facts.iter().map(|(term, _)| term).collect();
-            for term in terms {
-                let ty = match self.statics.term_annotation(term) {
-                    | Some(ss::TermAnnId::Type(ty, _))
-                    | Some(ss::TermAnnId::Value(_, ty))
-                    | Some(ss::TermAnnId::Compu(_, ty)) => ty,
-                    | Some(ss::TermAnnId::Kind(_)) | Some(ss::TermAnnId::Hole(_)) | None => {
-                        continue;
-                    }
-                };
-                if self.statics.normalized_annotation_at(ty).is_some() {
-                    continue;
-                }
-                let Some(normalized) = self.statics.normalized_at(ty).cloned() else {
-                    continue;
-                };
-                self.statics.record_annotation_normalized(ty, normalized);
-            }
+            // Retain one normalized classifier per distinct top annotation so
+            // editor facts can answer without the occurrence payload.
+            self.statics.retain_normalized_annotations();
         }
         if self.errors.is_empty() {
             let blame = std::panic::Location::caller();

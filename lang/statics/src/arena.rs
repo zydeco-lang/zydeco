@@ -596,6 +596,37 @@ where
     }
 }
 
+/// Immutable normalized classifiers retained for editor queries.
+///
+/// The checker records these facts once, after every type has been normalized.
+/// Sorted parallel slices avoid charging a hash-table bucket and its spare
+/// capacity for each 56-byte type while preserving borrowed lookup.
+#[derive(Clone, Debug, Default)]
+pub struct NormalizedAnnotations {
+    ids: Box<[TypeId]>,
+    types: Box<[Type]>,
+}
+
+impl NormalizedAnnotations {
+    fn with_parallel(ids: Vec<TypeId>, types: Vec<Type>) -> Self {
+        assert_eq!(ids.len(), types.len(), "normalized annotation indexes diverged");
+        assert!(ids.windows(2).all(|pair| pair[0] < pair[1]));
+        Self { ids: ids.into_boxed_slice(), types: types.into_boxed_slice() }
+    }
+
+    pub fn get(&self, id: TypeId) -> Option<&Type> {
+        self.ids.binary_search(&id).ok().and_then(|index| self.types.get(index))
+    }
+
+    pub fn len(&self) -> usize {
+        self.ids.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.ids.is_empty()
+    }
+}
+
 /// Source-bounded static facts retained after the typed occurrence tree is
 /// discarded.
 ///
@@ -616,7 +647,7 @@ pub struct StaticsIndexes {
     pub term_facts: TermFactsArena,
     /// Normalized classifier for each distinct top annotation type. Inner type
     /// nodes have no entry, and terms sharing one annotation ID share one clone.
-    pub annotation_norms: ArenaAssoc<TypeId, Type>,
+    pub annotation_norms: NormalizedAnnotations,
     /// Coverage failures recorded during the finish phase, for editor facts.
     pub coverage_errors: Vec<crate::validate::CoverageError>,
 
@@ -814,9 +845,28 @@ impl StaticsArena {
             .upsert(term, TermFacts { annotation: CompactTermAnnId::new(annotation) });
     }
 
-    /// Attach the normalized classifier of one distinct top annotation type.
-    pub fn record_annotation_normalized(&mut self, annotation: TypeId, normalized: Type) {
-        let _ = self.annotation_norms.upsert(annotation, normalized);
+    /// Retain one normalized classifier for each distinct top annotation type.
+    pub(crate) fn retain_normalized_annotations(&mut self) {
+        let mut annotations: Vec<_> = self
+            .term_facts
+            .iter()
+            .filter_map(|(_, facts)| match facts.annotation.annotation() {
+                | TermAnnId::Type(annotation, _)
+                | TermAnnId::Value(_, annotation)
+                | TermAnnId::Compu(_, annotation) => Some(annotation),
+                | TermAnnId::Kind(_) | TermAnnId::Hole(_) => None,
+            })
+            .collect();
+        annotations.sort_unstable();
+        annotations.dedup();
+
+        let normalized = annotations
+            .iter()
+            .map(|annotation| {
+                self.normalized_at(*annotation).cloned().expect("top annotation was not normalized")
+            })
+            .collect();
+        self.annotation_norms = NormalizedAnnotations::with_parallel(annotations, normalized);
     }
 
     pub fn term_annotation(&self, term: su::TermId) -> Option<TermAnnId> {
@@ -824,7 +874,7 @@ impl StaticsArena {
     }
 
     pub fn normalized_annotation_at(&self, annotation: TypeId) -> Option<&Type> {
-        self.annotation_norms.get(&annotation)
+        self.annotation_norms.get(annotation)
     }
 
     /// Look up either a source definition or one synthesized by typed elaboration.
@@ -929,7 +979,7 @@ mod tests {
         let mut typed = IdAllocator::<StaticsScope>::new();
         let first_typed = PatId::Kind(typed.alloc());
         let second_typed = PatId::Value(typed.alloc());
-        let mut provenance = SourceProvenance::default();
+        let mut provenance: SourceProvenance<su::PatId, PatId> = SourceProvenance::default();
 
         provenance.record(first_source, first_typed);
         provenance.record(first_source, first_typed);
@@ -944,22 +994,29 @@ mod tests {
     }
 
     #[test]
-    fn shared_annotation_ids_share_one_normalized_fact() {
+    fn normalized_annotation_facts_sort_and_deduplicate_top_types() {
         let mut surface = IdAllocator::<su::ScopedScope>::new();
         let first_term = surface.alloc();
         let second_term = surface.alloc();
+        let third_term = surface.alloc();
+        let kind_term = surface.alloc();
         let mut allocator = IdAllocator::<StaticsScope>::new();
         let kind: KindId = allocator.alloc();
-        let annotation: TypeId = allocator.alloc();
+        let first_annotation: TypeId = allocator.alloc();
+        let second_annotation: TypeId = allocator.alloc();
         let mut statics = StaticsArena::default();
 
-        [first_term, second_term].into_iter().for_each(|term| {
-            statics.record_term_annotation(term, TermAnnId::Type(annotation, kind));
-        });
-        statics.record_annotation_normalized(annotation, Type::Unit(UnitTy));
+        statics.types_pre.insert_new(first_annotation, Fillable::Done(Type::Unit(UnitTy)), kind);
+        statics.types_pre.insert_new(second_annotation, Fillable::Done(Type::Thk(ThkTy)), kind);
+        statics.record_term_annotation(first_term, TermAnnId::Type(second_annotation, kind));
+        statics.record_term_annotation(second_term, TermAnnId::Type(first_annotation, kind));
+        statics.record_term_annotation(third_term, TermAnnId::Type(second_annotation, kind));
+        statics.record_term_annotation(kind_term, TermAnnId::Kind(kind));
+        statics.retain_normalized_annotations();
 
-        assert!(matches!(statics.normalized_annotation_at(annotation), Some(Type::Unit(_))));
-        assert_eq!(statics.annotation_norms.len(), 1);
+        assert!(matches!(statics.normalized_annotation_at(first_annotation), Some(Type::Unit(_))));
+        assert!(matches!(statics.normalized_annotation_at(second_annotation), Some(Type::Thk(_))));
+        assert_eq!(statics.annotation_norms.len(), 2);
     }
 
     #[test]
