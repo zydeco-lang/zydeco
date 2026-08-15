@@ -5406,7 +5406,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                             .tyck_k(tycker, ())?
                                             .info;
                                         let body_out_ann = TyEnvT { info: env, inner: body }
-                                            .tyck_k(tycker, Action::ana(ty_body.into()))?;
+                                            .tyck_k(
+                                                tycker,
+                                                Action::ana_prepared(ty_body.into(), &self.info),
+                                            )?;
                                         let (body_out, body_ty) = body_out_ann.try_as_value(
                                             tycker,
                                             TyckError::SortMismatch,
@@ -5500,7 +5503,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                             .tyck_k(tycker, ())?
                                             .info;
                                         let body_out_ann = TyEnvT { info: env, inner: body }
-                                            .tyck_k(tycker, Action::ana(ty_body.into()))?;
+                                            .tyck_k(
+                                                tycker,
+                                                Action::ana_prepared(ty_body.into(), &self.info),
+                                            )?;
                                         // throwing _body_ty away because it has been substituted
                                         // Todo: reuse _body_ty by substituting abst back
                                         let (body_out, body_ty) = body_out_ann.try_as_compu(
@@ -7881,6 +7887,69 @@ mod source_boundary_tests {
             assert_ne!(target, unit);
             assert!(tycker.errors.is_empty());
         });
+    }
+
+    #[test]
+    fn forall_bodies_preserve_prepared_expected_types() {
+        with_tycker(
+            |allocator, scoped| {
+                let binder_def: su::DefId = allocator.alloc();
+                scoped.insert_def(binder_def, su::VarName("A".to_owned()));
+
+                let binder: su::PatId = allocator.alloc();
+                let body: su::TermId = allocator.alloc();
+                let root: su::TermId = allocator.alloc();
+                scoped.pats.insert_new(binder, su::Pattern::Var(binder_def));
+                scoped.terms.insert_new(body, su::Hole.into());
+                scoped.terms.insert_new(root, su::Abs(binder, body).into());
+                scoped.ctxs_pat_local.insert_new(binder, su::Context::singleton(binder_def));
+                scoped.coctxs_pat_local.insert_new(binder, su::CoContext::new());
+                [body, root].into_iter().for_each(|term| {
+                    scoped.ctxs_term.insert_new(term, su::Context::new());
+                    scoped.coctxs_term_local.insert_new(term, su::CoContext::new());
+                });
+                (root, binder_def)
+            },
+            |tycker, binder_def| {
+                let empty = TyEnv::default();
+                let vtype = ss::VType.build(tycker, &empty);
+                let ctype = ss::CType.build(tycker, &empty);
+                let target_def: ss::DefId = tycker.fresh();
+                let target: ss::TypeId = Alloc::alloc(tycker, target_def, ctype, &empty);
+                let terminal_data: ss::CoDataId = tycker.fresh();
+                tycker.statics.codatas.insert_new(terminal_data, ss::CoData::new([]));
+                let terminal = Alloc::alloc(tycker, terminal_data, ctype, &empty);
+                let expected_pattern: ss::TPatId = Alloc::alloc(tycker, binder_def, vtype, &empty);
+                let expected_witness: ss::AbstId = Alloc::alloc(tycker, expected_pattern, (), &());
+                let expected = Alloc::alloc(
+                    tycker,
+                    ss::Forall(
+                        ss::TypeBinder { pattern: expected_pattern, witness: expected_witness },
+                        target,
+                    ),
+                    ctype,
+                    &empty,
+                );
+                let environment = TyEnv::from_iter([(target_def, terminal.into())]);
+                let root = tycker.data.root(tycker.db);
+
+                let checked = TyEnvT::new(environment.clone(), root)
+                    .tyck_k(tycker, Action::ana_prepared(expected.into(), &environment))
+                    .unwrap();
+
+                let TermAnnId::Compu(_, annotation) = checked else {
+                    panic!("a computation forall should check a computation abstraction")
+                };
+                let ss::Type::Forall(ss::Forall(_, body)) =
+                    tycker.type_filled_k(&annotation).unwrap().to_owned()
+                else {
+                    panic!("the checked abstraction should retain a forall annotation")
+                };
+                assert_eq!(body, target);
+                assert_ne!(body, terminal);
+                assert!(tycker.errors.is_empty());
+            },
+        );
     }
 
     #[test]

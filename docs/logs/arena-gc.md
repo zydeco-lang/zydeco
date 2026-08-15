@@ -1171,3 +1171,56 @@ decisions while implementing the plan.
   provenance from another typing rule.
 - Retain the negative beta-cache result as a design constraint: optimize unique large applications
   by composing substitutions, while leaving the thousands of one-node applications simple.
+
+## 2026-08-15 — round 27: preserve prepared universal codomains
+
+### Findings
+
+- Re-profiling the remaining common analytic preparation classified its large callers by source
+  rule. Six nested universal-abstraction bodies in the integer and float package builders allocated
+  334, 333, 332, 294, 293, and 292 nodes, respectively: 1,878 nodes of direct replay.
+- The whole expected universal type had already been substituted and normalized before its outer
+  abstraction was inspected. Opening the type binder extends the lexical environment, but the
+  expected body refers to the retained abstract witness rather than the source `DefId`. That
+  extension therefore creates no new substitution obligation for the codomain.
+- Both universal branches discarded this provenance by entering the body with `Action::ana`.
+  Replaying the complete outer environment at every nested binder copied successively smaller
+  suffixes of the same function type, the same linear-source/quadratic-materialization shape seen
+  in package telescopes.
+- The rest of the large common-preparation roots are genuine first specializations. They include
+  eight 1,076-node Builtin-package arguments, two 515-node Data-package arguments, and the
+  3,913-node standard-library implementation result. Marking those prepared would be unsound;
+  removing them requires sharing equivalent imported classifiers or changing their representation.
+
+### Changes
+
+- Analytic value and computation `forall` abstractions now pass their extracted codomain with
+  `Action::ana_prepared`, recording the environment in which the enclosing expected type was
+  prepared. Lexical extensions continue to be accepted only when they preserve that environment.
+- A checker regression constructs a prepared computation universal whose environment would advance
+  its codomain if replayed. It proves that opening the binder retains the current codomain rather
+  than applying the outer mapping a second time.
+- The temporary caller/source profiler and retained-node counter were removed after measurement.
+
+### Measurements
+
+- The full-std check retains 317,104 type nodes, 2,451 fewer than round 26 (-0.8%). The additional
+  573-node reduction beyond the directly attributed replay comes from downstream types that no
+  longer reconstruct the duplicated codomains.
+- Three clean release checks used 346,357,760, 350,240,768, and 347,389,952 bytes peak RSS (median
+  347,389,952), effectively unchanged from round 26's 347,455,488-byte median. Warm wall time was
+  0.38–0.40s and warm user time was 0.34–0.36s.
+- The current-tree baseline is now down from 2,497,757,184 to 347,389,952 bytes (-86.1%).
+- All 50 statics tests and all 151 session tests passed, along with the release CLI build and full
+  standard-library check.
+
+### Next
+
+- Treat the remaining common analytic preparation as necessary until a representation or sharing
+  boundary proves otherwise. The caller census no longer supports broadening prepared provenance.
+- Design suspended type application around the unique `Std Reader Writer OS` chain. It must compose
+  abstract assignments and materialize the body once while still giving intermediate type terms and
+  the filled normalizer a coherent normal form.
+- Check whether structurally identical imported package classifiers can share an immutable checked
+  identity without violating the deliberate freshening of source import occurrences. This is a
+  source/query ownership question, not a substitution-cache question.
