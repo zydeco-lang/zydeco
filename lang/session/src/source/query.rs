@@ -321,7 +321,7 @@ impl CompilerSession {
         let (root, statics) = match outcome {
             | zydeco_statics::SourceCheckOutcome::Checked(CheckedSource {
                 statics, root, ..
-            }) => (root, statics),
+            }) => (root, (*statics).clone()),
             | zydeco_statics::SourceCheckOutcome::Rejected(_) => return None,
         };
         Some(CheckedProgram { spans, scoped, statics, root })
@@ -340,7 +340,7 @@ impl CompilerSession {
         let (root, statics) = match outcome {
             | zydeco_statics::SourceCheckOutcome::Checked(CheckedSource {
                 statics, root, ..
-            }) => (root, statics),
+            }) => (root, (*statics).clone()),
             | zydeco_statics::SourceCheckOutcome::Rejected(_) => {
                 return Err(ExecutableError::Rejected);
             }
@@ -558,12 +558,12 @@ fn analyze_source(
             statics,
             root,
             observations,
-        }) => (statics, AnalysisOutcome::Checked { root }, observations),
+        }) => ((*statics).clone(), AnalysisOutcome::Checked { root }, observations),
         | zydeco_statics::SourceCheckOutcome::Rejected(RejectedSource {
             statics,
             reports,
             observations,
-        }) => (statics, AnalysisOutcome::Rejected { reports }, observations),
+        }) => ((*statics).clone(), AnalysisOutcome::Rejected { reports }, observations),
     };
     // The analysis retains only the keyed indexes; the occurrence payload stays
     // in the salsa memo and is re-materialized on demand via
@@ -591,7 +591,7 @@ fn normalized_type_at<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput, id: zydeco_statics::query::InternedType<'db>,
 ) -> Option<Type> {
     let (_, output) = rechecked(db, root).ok()?;
-    let statics = output.outcome.into_statics();
+    let statics = output.outcome.statics_arc();
     statics.normalized_at(id.id(db)).cloned()
 }
 
@@ -603,7 +603,7 @@ fn coverage_at(
     let Ok((_, output)) = rechecked(db, root) else {
         return Vec::new();
     };
-    let statics = output.outcome.into_statics();
+    let statics = output.outcome.statics_arc();
     zydeco_statics::validate::CoverageChecker::new(&statics).validate()
 }
 
@@ -642,7 +642,7 @@ fn term_annotation_at<'db>(
 ) -> Option<zydeco_statics::syntax::TermAnnId> {
     use zydeco_statics::syntax::TermAnnId;
     let (_, output) = rechecked(db, root).ok()?;
-    let statics = output.outcome.into_statics();
+    let statics = output.outcome.statics_arc();
     let typed = *statics.terms.forth(&term.id(db)).last()?;
     Some(match typed {
         | zydeco_statics::syntax::TermId::Kind(kind) => TermAnnId::Kind(kind),

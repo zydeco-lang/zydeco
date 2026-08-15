@@ -67,7 +67,7 @@ impl ScopedProgram {
         Ok(SourceChecked {
             spans,
             scoped: output.scoped,
-            statics: checked.statics,
+            statics: (*checked.statics).clone(),
             root: checked.root,
         })
     }

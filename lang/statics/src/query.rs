@@ -2370,7 +2370,7 @@ pub fn check_source<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> TyckOutp
                 let reports = tycker.error_reports();
                 tycker.strip_checker_state();
                 SourceCheckOutcome::Rejected(RejectedSource {
-                    statics: tycker.statics,
+                    statics: std::sync::Arc::new(tycker.statics),
                     reports,
                     observations: tycker.observations,
                 })
@@ -2379,7 +2379,7 @@ pub fn check_source<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> TyckOutp
                 | Ok(()) => {
                     tycker.strip_checker_state();
                     SourceCheckOutcome::Checked(CheckedSource {
-                        statics: tycker.statics,
+                        statics: std::sync::Arc::new(tycker.statics),
                         root,
                         observations: tycker.observations,
                     })
@@ -2388,7 +2388,7 @@ pub fn check_source<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> TyckOutp
                     let reports = tycker.error_reports();
                     tycker.strip_checker_state();
                     SourceCheckOutcome::Rejected(RejectedSource {
-                        statics: tycker.statics,
+                        statics: std::sync::Arc::new(tycker.statics),
                         reports,
                         observations: tycker.observations,
                     })

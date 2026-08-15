@@ -83,9 +83,13 @@ pub enum TyckObservation {
 }
 
 /// The typed result of checking one complete source term.
+///
+/// The arena is shared behind an [`Arc`] so that read-only consumers (editor
+/// facts) can read individual nodes without cloning hundreds of megabytes;
+/// consumers that mutate during lowering clone it out explicitly.
 #[derive(Clone, Debug)]
 pub struct CheckedSource {
-    pub statics: StaticsArena,
+    pub statics: std::sync::Arc<StaticsArena>,
     pub root: TermAnnId,
     pub observations: Vec<TyckObservation>,
 }
@@ -94,7 +98,7 @@ pub struct CheckedSource {
 /// the failure.
 #[derive(Clone, Debug)]
 pub struct RejectedSource {
-    pub statics: StaticsArena,
+    pub statics: std::sync::Arc<StaticsArena>,
     pub reports: TyckReports,
     pub observations: Vec<TyckObservation>,
 }
@@ -115,11 +119,20 @@ impl SourceCheckOutcome {
         }
     }
 
-    /// Retain every static fact established before either outcome.
+    /// A cheap shared handle to the arena, for read-only consumers.
+    pub fn statics_arc(&self) -> std::sync::Arc<StaticsArena> {
+        match self {
+            | Self::Checked(CheckedSource { statics, .. })
+            | Self::Rejected(RejectedSource { statics, .. }) => statics.clone(),
+        }
+    }
+
+    /// Retain every static fact established before either outcome, cloned out
+    /// for consumers that mutate during lowering.
     pub fn into_statics(self) -> StaticsArena {
         match self {
             | Self::Checked(CheckedSource { statics, .. })
-            | Self::Rejected(RejectedSource { statics, .. }) => statics,
+            | Self::Rejected(RejectedSource { statics, .. }) => (*statics).clone(),
         }
     }
 }
@@ -1092,7 +1105,7 @@ impl<'a> Tycker<'a> {
             | Ok(root) => {
                 self.strip_checker_state();
                 SourceCheckOutcome::Checked(CheckedSource {
-                    statics: self.statics,
+                    statics: std::sync::Arc::new(self.statics),
                     root,
                     observations: self.observations,
                 })
@@ -1101,7 +1114,7 @@ impl<'a> Tycker<'a> {
                 let reports = self.error_reports();
                 self.strip_checker_state();
                 SourceCheckOutcome::Rejected(RejectedSource {
-                    statics: self.statics,
+                    statics: std::sync::Arc::new(self.statics),
                     reports,
                     observations: self.observations,
                 })
