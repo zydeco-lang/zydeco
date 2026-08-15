@@ -4185,7 +4185,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     | Switch::Ana(ty_ana) => Lub::lub_k(ty_ann, ty_ana, tycker)?,
                 };
 
-                self.mk(tm).tyck_k(tycker, Action::ana(ann))?
+                self.mk(tm).tyck_k(tycker, Action::ana_prepared(ann, &self.info))?
             }
             | Tm::Hole(term) => {
                 let su::Hole = term;
@@ -7669,13 +7669,16 @@ mod source_boundary_tests {
     }
     use crate::environment::TyEnv;
 
-    fn with_empty_tycker(test: impl FnOnce(&mut Tycker<'_>)) {
-        let mut allocator = IdAllocator::<su::ScopedScope>::new();
-        let root = allocator.alloc();
+    fn with_tycker<T>(
+        build: impl FnOnce(
+            &mut IdAllocator<zydeco_surface::bitter::arena::BitterScope>,
+            &mut su::ScopedArena,
+        ) -> (su::TermId, T),
+        test: impl FnOnce(&mut Tycker<'_>, T),
+    ) {
+        let mut allocator = IdAllocator::<zydeco_surface::bitter::arena::BitterScope>::new();
         let mut scoped = su::ScopedArena::default();
-        scoped.terms.insert_new(root, su::Hole.into());
-        scoped.ctxs_term.insert_new(root, su::Context::new());
-        scoped.coctxs_term_local.insert_new(root, su::CoContext::new());
+        let (root, context) = build(&mut allocator, &mut scoped);
 
         let spans = su::SpanArena::default();
         let prim = su::PrimDefs::default();
@@ -7688,7 +7691,20 @@ mod source_boundary_tests {
         }));
         let data = crate::query::intern_pending(&db);
         let mut tycker = Tycker::new(&db, data, &spans, &prim, &mut scoped);
-        test(&mut tycker);
+        test(&mut tycker, context);
+    }
+
+    fn with_empty_tycker(test: impl FnOnce(&mut Tycker<'_>)) {
+        with_tycker(
+            |allocator, scoped| {
+                let root = allocator.alloc();
+                scoped.terms.insert_new(root, su::Hole.into());
+                scoped.ctxs_term.insert_new(root, su::Context::new());
+                scoped.coctxs_term_local.insert_new(root, su::CoContext::new());
+                (root, ())
+            },
+            |tycker, ()| test(tycker),
+        );
     }
 
     #[test]
@@ -7865,6 +7881,51 @@ mod source_boundary_tests {
             assert_ne!(target, unit);
             assert!(tycker.errors.is_empty());
         });
+    }
+
+    #[test]
+    fn synthesized_ascriptions_preserve_current_annotations() {
+        with_tycker(
+            |allocator, scoped| {
+                let source_def = allocator.alloc();
+                let target_def = allocator.alloc();
+                scoped.insert_def(source_def, su::VarName("Source".to_owned()));
+                scoped.insert_def(target_def, su::VarName("Target".to_owned()));
+
+                let hole = allocator.alloc();
+                let annotation = allocator.alloc();
+                let root = allocator.alloc();
+                scoped.terms.insert_new(hole, su::Hole.into());
+                scoped.terms.insert_new(annotation, su::Term::Var(source_def));
+                scoped.terms.insert_new(root, su::Ann { tm: hole, ty: annotation }.into());
+                [hole, annotation, root].into_iter().for_each(|term| {
+                    scoped.ctxs_term.insert_new(term, su::Context::new());
+                    scoped.coctxs_term_local.insert_new(term, su::CoContext::new());
+                });
+                (root, (source_def, target_def))
+            },
+            |tycker, (source_def, target_def)| {
+                let empty = TyEnv::default();
+                let vtype = ss::VType.build(tycker, &empty);
+                let unit = ss::UnitTy.build(tycker, &empty);
+                let target = Alloc::alloc(tycker, target_def, vtype, &empty);
+                let field = FieldName("field".to_owned());
+                let annotation: ss::TypeId =
+                    Alloc::alloc(tycker, ss::Label(field, target), vtype, &empty);
+                tycker.statics.annotations_var.insert_new(source_def, vtype.into());
+                let environment =
+                    TyEnv::from_iter([(source_def, annotation.into()), (target_def, unit.into())]);
+                let root = tycker.data.root(tycker.db);
+
+                let checked = TyEnvT::new(environment, root).tyck_k(tycker, Action::syn()).unwrap();
+
+                assert!(matches!(
+                    checked,
+                    TermAnnId::Value(_, checked_annotation) if checked_annotation == annotation
+                ));
+                assert!(tycker.errors.is_empty());
+            },
+        );
     }
 
     #[test]

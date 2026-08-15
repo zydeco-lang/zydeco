@@ -1115,3 +1115,59 @@ decisions while implementing the plan.
 - The remaining field misses use 91,471 nodes. Inspect their key distribution and invalidation
   epochs before widening the cache; unique materializations need a representation change, not a
   larger memo table.
+
+## 2026-08-15 — round 26: preserve synthesized ascription annotations
+
+### Findings
+
+- Exact-key profiling ruled out a general beta-result cache as the next change. The full standard
+  library performs 7,871 type applications allocating 56,080 nodes, but has 7,097 distinct
+  `(function, argument, result kind)` triples. Reusing every repeated triple could save only 2,465
+  nodes, too little to justify another mutable-state cache.
+- The expensive applications are predominantly unique materializations. In particular, the
+  `Std Reader Writer OS` signature application allocates 3,917, 3,918, and 3,920 nodes at its three
+  left-associated arguments. Each step rewrites almost the complete remaining standard-library
+  signature; fusing the arguments requires a suspended application representation, not memoization.
+- The same profile reconfirmed 38,736 nodes in common analytic preparation. Explicit ascriptions
+  accounted for exactly 19,123: their annotation term is synthesized in the current environment,
+  but the body was entered with a fresh analytic action and therefore applied that environment
+  again.
+- Synthesis is the provenance boundary. It resolves the annotation using the current environment,
+  and reconciling it with an outer analytic expectation does not make it stale. The ascribed body
+  should receive the synthesized result as already prepared.
+
+### Changes
+
+- Explicit ascription now enters its body with `Action::ana_prepared` and the current environment.
+  Kinds are unaffected; type annotations bypass the redundant substitution while retaining the
+  existing lexical-extension checks for nested scopes.
+- A checker regression synthesizes a labeled annotation whose payload participates in a chained
+  environment. It proves that the body receives the synthesized label unchanged instead of
+  advancing its payload through a second environment application.
+- The source-boundary test fixture now accepts a caller-built scoped arena so the regression
+  exercises the real `Tm::Ann` rule rather than reconstructing its intended action manually.
+- The beta and analytic-preparation profilers were removed after the census; no application cache
+  was retained.
+
+### Measurements
+
+- The full-std check retains 319,555 type nodes, 19,123 fewer than round 25 (-5.6%).
+- Three clean release checks used 347,488,256, 347,455,488, and 347,357,184 bytes peak RSS (median
+  347,455,488), down 1,671,168 bytes (-0.5%) from round 25. Warm wall time was 0.36–0.37s and warm
+  user time was 0.33–0.34s.
+- The current-tree baseline is now down from 2,497,757,184 to 347,455,488 bytes (-86.1%).
+- All 49 statics tests and all 151 session tests passed, along with the release CLI build and full
+  standard-library check.
+
+### Next
+
+- Design a suspended type-application representation that can accumulate the `Std` signature's
+  three abstract assignments and materialize its body once. Intermediate type terms and the filled
+  normalizer both need a coherent account; merely postponing `Type::App` in the checker would cause
+  the finish pass to rebuild the same partial results.
+- Re-profile common preparation after removing ascriptions. Roughly 19,600 nodes remain, led by a
+  3,913-node preparation of the standard-library implementation body and several 1,076-node
+  builtin-package arguments. Determine which are first applications and which have synthesis
+  provenance from another typing rule.
+- Retain the negative beta-cache result as a design constraint: optimize unique large applications
+  by composing substitutions, while leaving the thousands of one-node applications simple.
