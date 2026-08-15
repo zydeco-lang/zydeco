@@ -2755,3 +2755,53 @@ decisions while implementing the plan.
   multi-ID syntax buffers more strongly than the earlier final-owner list predicts.
 - Continue the parsed-template audit across textual term tables and line-intention tables. Their
   shared source lifetime remains the largest untested representation opportunity.
+
+## 2026-08-15 — round 57: erase provenance categories inside category shards
+
+### Findings
+
+- Pattern and term provenance retain 43,902 representatives: 14,632 patterns and 29,270 terms.
+  Round 54 already routed them into seven maps by typed category, but every key still repeated that
+  category beside a key space and raw slot.
+- After round 56, the old categorized key remained 16 bytes while each source ID became twelve.
+  The key's eight-byte alignment made a `(key, source)` dense entry occupy 32 bytes. Within a shard,
+  category is an invariant of the container rather than information belonging to each entry.
+- A category-independent arena identity is twelve bytes. Pairing it with the twelve-byte source ID
+  makes an entry 24 bytes, a 25% slot reduction with no semantic conversion or allocation. At the
+  exact representative count, this removes 351,216 bytes before accounting for `IndexMap` capacity,
+  transient growth, and simultaneously live phase products.
+- The reusable rule is to use a discriminant once at a partition boundary and erase it inside the
+  partition. The enclosing shard becomes the type proof; repeating the discriminant per element is
+  both data duplication and, when it raises alignment, padding duplication.
+
+### Changes
+
+- Added `ArenaIdIdentity`, a category-independent wrapper around the padding-free key-space and raw
+  slot. Its API explicitly requires an enclosing typed context, and its regression round-trips a
+  generated ID while holding the twelve-byte layout.
+- `SourceProvenance` now uses `ArenaIdIdentity` as each shard's stored key. `TypedEntityKey` exists
+  only ephemerally to route a pattern or term dispatcher to its shard; it is never retained in the
+  dense entry buffer.
+- Extended the provenance layout regression to distinguish the 16-byte routing key from the
+  twelve-byte stored identity while preserving replacement and post-compaction lookups.
+
+### Measurements
+
+- Five release checks used 102,678,528, 102,481,920, 102,465,536, 102,072,320, and 102,219,776 bytes
+  peak RSS (median 102,465,536), down 1,507,328 bytes (-1.4%) from round 56. Warm runs took
+  0.18--0.19s wall time and 0.17s user time.
+- The current-tree baseline is now down from 2,497,757,184 to 102,465,536 bytes (-95.9%).
+- All 30 utility unit tests and four utility documentation tests, all 26 statics unit tests and 33
+  statics integration tests, and all 151 session tests passed. Focused Clippy completed with existing
+  unrelated warnings. The release build and full standard-library check also passed.
+
+### Next
+
+- Capture a fresh malloc-stack census. The pervasive ID reduction and the 32-to-24-byte provenance
+  entry transition should materially reorder sparse maps, dense syntax vectors, and source-template
+  owners relative to the round-55 census.
+- Audit parsed-template ownership as one unit: textual term tables, token/span provenance, and the
+  two line-intention maps all share source lifetime and may retain overlapping location data.
+- Inspect optional generated IDs only where a census identifies a concrete owner. Their physical
+  size remains 16 bytes because Rust cannot infer the composite zero-key-space niche, but a custom
+  optional representation is worthwhile only for a large dense field.

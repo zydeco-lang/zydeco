@@ -419,16 +419,15 @@ impl ArenaAccess<&TypeId, Fillable<Type>> for TypeArena {
 #[derive(Clone, Debug)]
 pub struct SourceProvenance<Source, Typed> {
     latest_by_category:
-        [IndexMap<CompactTypedEntityId, Source, FxBuildHasher>; TypedEntityCategory::COUNT],
+        [IndexMap<ArenaIdIdentity, Source, FxBuildHasher>; TypedEntityCategory::COUNT],
     marker: PhantomData<fn() -> Typed>,
 }
 
-/// A common key shape for the pattern and term dispatchers, retaining the
-/// category used to select the provenance shard.
+/// An ephemeral pattern or term dispatcher split into its storage shard and
+/// category-independent arena identity.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-struct CompactTypedEntityId {
-    key_space: KeySpaceId,
-    raw: RawIdx,
+struct TypedEntityKey {
+    identity: ArenaIdIdentity,
     category: TypedEntityCategory,
 }
 
@@ -452,26 +451,26 @@ impl TypedEntityCategory {
     }
 }
 
-impl From<PatId> for CompactTypedEntityId {
+impl From<PatId> for TypedEntityKey {
     fn from(id: PatId) -> Self {
         let (id, category) = match id {
-            | PatId::Kind(id) => ((id.key_space(), id.raw()), TypedEntityCategory::KindPattern),
-            | PatId::Type(id) => ((id.key_space(), id.raw()), TypedEntityCategory::TypePattern),
-            | PatId::Value(id) => ((id.key_space(), id.raw()), TypedEntityCategory::ValuePattern),
+            | PatId::Kind(id) => (ArenaIdIdentity::new(id), TypedEntityCategory::KindPattern),
+            | PatId::Type(id) => (ArenaIdIdentity::new(id), TypedEntityCategory::TypePattern),
+            | PatId::Value(id) => (ArenaIdIdentity::new(id), TypedEntityCategory::ValuePattern),
         };
-        Self { key_space: id.0, raw: id.1, category }
+        Self { identity: id, category }
     }
 }
 
-impl From<TermId> for CompactTypedEntityId {
+impl From<TermId> for TypedEntityKey {
     fn from(id: TermId) -> Self {
         let (id, category) = match id {
-            | TermId::Kind(id) => ((id.key_space(), id.raw()), TypedEntityCategory::KindTerm),
-            | TermId::Type(id) => ((id.key_space(), id.raw()), TypedEntityCategory::TypeTerm),
-            | TermId::Value(id) => ((id.key_space(), id.raw()), TypedEntityCategory::ValueTerm),
-            | TermId::Compu(id) => ((id.key_space(), id.raw()), TypedEntityCategory::CompuTerm),
+            | TermId::Kind(id) => (ArenaIdIdentity::new(id), TypedEntityCategory::KindTerm),
+            | TermId::Type(id) => (ArenaIdIdentity::new(id), TypedEntityCategory::TypeTerm),
+            | TermId::Value(id) => (ArenaIdIdentity::new(id), TypedEntityCategory::ValueTerm),
+            | TermId::Compu(id) => (ArenaIdIdentity::new(id), TypedEntityCategory::CompuTerm),
         };
-        Self { key_space: id.0, raw: id.1, category }
+        Self { identity: id, category }
     }
 }
 
@@ -488,12 +487,12 @@ impl<Source, Typed> SourceProvenance<Source, Typed>
 where
     Source: Copy,
 {
-    fn record_compact(&mut self, source: Source, typed: CompactTypedEntityId) {
-        let _ = self.latest_by_category[typed.category.index()].insert(typed, source);
+    fn record_compact(&mut self, source: Source, typed: TypedEntityKey) {
+        let _ = self.latest_by_category[typed.category.index()].insert(typed.identity, source);
     }
 
-    fn source_compact(&self, typed: CompactTypedEntityId) -> Option<Source> {
-        self.latest_by_category[typed.category.index()].get(&typed).copied()
+    fn source_compact(&self, typed: TypedEntityKey) -> Option<Source> {
+        self.latest_by_category[typed.category.index()].get(&typed.identity).copied()
     }
 
     fn shrink_to_fit(&mut self) {
@@ -905,7 +904,8 @@ mod tests {
 
     #[test]
     fn source_provenance_retains_the_latest_representative() {
-        assert_eq!(std::mem::size_of::<CompactTypedEntityId>(), 16);
+        assert_eq!(std::mem::size_of::<ArenaIdIdentity>(), 12);
+        assert_eq!(std::mem::size_of::<TypedEntityKey>(), 16);
         assert_eq!(std::mem::size_of::<PatId>(), 16);
         assert_eq!(std::mem::size_of::<TermId>(), 16);
 

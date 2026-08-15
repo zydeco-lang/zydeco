@@ -106,6 +106,27 @@ impl Hash for CompactKeySpaceId {
     }
 }
 
+/// The category-independent identity of one generated arena ID.
+///
+/// Use this representation only when an enclosing typed structure or shard
+/// preserves the ID category. It removes the phantom Rust type while retaining
+/// every key-space and raw-slot bit in the same twelve-byte layout.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct ArenaIdIdentity {
+    key_space: CompactKeySpaceId,
+    raw: RawIdx,
+}
+
+impl ArenaIdIdentity {
+    pub fn new<Id: ArenaId>(id: Id) -> Self {
+        Self { key_space: CompactKeySpaceId::new(id.key_space()), raw: id.raw() }
+    }
+
+    pub fn restore<Id: ArenaId>(self) -> Id {
+        restore_id(self.key_space.expand(), self.raw)
+    }
+}
+
 /// Construct an arena identifier from a derived key space and a local slot.
 ///
 /// This is the sanctioned way to build identifiers without an [`IdAllocator`].
@@ -1857,6 +1878,9 @@ mod tests {
         assert_eq!(std::mem::size_of::<DenseId>(), 12);
         assert_eq!(std::mem::align_of::<DenseId>(), 4);
         assert_eq!(std::mem::size_of::<Option<DenseId>>(), 16);
+        let identity = ArenaIdIdentity::new(id);
+        assert_eq!(std::mem::size_of::<ArenaIdIdentity>(), 12);
+        assert_eq!(identity.restore::<DenseId>(), id);
         assert!(below_word_boundary < above_word_boundary);
         assert!(
             CompactKeySpaceId::new(below_word_boundary)
