@@ -663,6 +663,123 @@ struct ExistentialProjectionOpening {
     opened: Vec<ss::AbstId>,
 }
 
+/// A package telescope body with its composed substitutions still pending.
+///
+/// Typing environments only grow while a telescope is opened, so the newest snapshot subsumes
+/// every earlier one. Abstract assignments remain ordered because later payloads may depend on
+/// earlier witnesses. Descending clears only the outer `unroll`; the substitutions stay shared.
+#[derive(Clone)]
+struct DeferredTelescopeType {
+    root: ss::TypeId,
+    environment: Option<DeferredTelescopeEnvironment>,
+    abstracts: im::Vector<DeferredAbstractAssignment>,
+}
+
+#[derive(Clone)]
+struct DeferredTelescopeEnvironment {
+    value: ss::TyEnv,
+    unroll: bool,
+}
+
+#[derive(Clone, Copy)]
+struct DeferredAbstractAssignment {
+    witness: ss::AbstId,
+    payload: ss::TypeId,
+}
+
+enum DeferredTelescopeExistsMode {
+    Abstract,
+    Manifest(DeferredTelescopeType),
+}
+
+enum DeferredTelescopeView {
+    ManifestKind {
+        binder: ss::KPatId,
+        definition: ss::KindId,
+        body: DeferredTelescopeType,
+    },
+    Exists {
+        binder: ss::TypeBinder,
+        mode: DeferredTelescopeExistsMode,
+        body: DeferredTelescopeType,
+    },
+    Other(DeferredTelescopeType),
+}
+
+impl DeferredTelescopeType {
+    fn new(root: ss::TypeId) -> Self {
+        Self { root, environment: None, abstracts: im::Vector::new() }
+    }
+
+    fn with_environment(mut self, environment: &ss::TyEnv) -> Self {
+        self.environment =
+            Some(DeferredTelescopeEnvironment { value: environment.clone(), unroll: true });
+        self
+    }
+
+    fn with_abstract(mut self, witness: ss::AbstId, payload: ss::TypeId) -> Self {
+        self.abstracts.push_back(DeferredAbstractAssignment { witness, payload });
+        self
+    }
+
+    fn descend(&self, root: ss::TypeId) -> Self {
+        Self {
+            root,
+            environment: self.environment.as_ref().map(|environment| {
+                DeferredTelescopeEnvironment { value: environment.value.clone(), unroll: false }
+            }),
+            abstracts: self.abstracts.clone(),
+        }
+    }
+
+    fn materialize_k(&self, tycker: &mut Tycker<'_>) -> ResultKont<ss::TypeId> {
+        let root = self.abstracts.iter().try_fold(self.root, |root, assignment| {
+            root.subst_abst_k(tycker, (assignment.witness, assignment.payload))
+        })?;
+        let Some(environment) = &self.environment else { return Ok(root) };
+        let root = if environment.unroll { root.unroll_k(tycker)? } else { root };
+        root.subst_env_k(tycker, &environment.value)
+    }
+
+    fn reveal_k(self, tycker: &mut Tycker<'_>) -> ResultKont<DeferredTelescopeView> {
+        match tycker.statics.types_pre[&self.root].to_owned() {
+            | ss::Fillable::Fill(_) => {
+                let structure = tycker.type_filled_k(&self.root)?.to_owned();
+                Ok(Self::new(self.root).view(structure))
+            }
+            | ss::Fillable::Done(
+                ss::Type::Var(_) | ss::Type::Abst(_) | ss::Type::App(_) | ss::Type::Proj(_),
+            ) => {
+                let root = self.materialize_k(tycker)?;
+                let structure = tycker.type_filled_k(&root)?.to_owned();
+                Ok(Self::new(root).view(structure))
+            }
+            | ss::Fillable::Done(structure) => Ok(self.view(structure)),
+        }
+    }
+
+    fn view(self, structure: ss::Type) -> DeferredTelescopeView {
+        match structure {
+            | ss::Type::ManifestKind(ss::ManifestKind { binder, definition, body }) => {
+                let body = self.descend(body);
+                DeferredTelescopeView::ManifestKind { binder, definition, body }
+            }
+            | ss::Type::Exists(exists) => {
+                let ss::Exists { binder, mode, body } = *exists;
+                let mode = match mode {
+                    | ss::ExistsMode::Abstract => DeferredTelescopeExistsMode::Abstract,
+                    | ss::ExistsMode::Manifest(definition) => {
+                        DeferredTelescopeExistsMode::Manifest(self.descend(definition))
+                    }
+                };
+                let body = self.descend(body);
+                DeferredTelescopeView::Exists { binder, mode, body }
+            }
+            | _ => DeferredTelescopeView::Other(self),
+        }
+    }
+}
+
 /// Select fields from one package without spelling its static telescope.
 ///
 /// Manifest kind and type entries are substituted transparently, and every
@@ -721,15 +838,14 @@ impl ExistentialProjectionPattern {
     fn open_k(
         tycker: &mut Tycker<'_>, env: &ss::TyEnv, expected: ss::TypeId, skolems: &PatternSkolems,
     ) -> ResultKont<ExistentialProjectionOpening> {
-        let mut body = expected;
+        let mut body = DeferredTelescopeType::new(expected);
         let mut body_env = env.clone();
         let mut slots = Vec::new();
         let mut opened = Vec::new();
 
-        loop {
-            let view = body.unroll_k(tycker)?.subst_env_k(tycker, &body_env)?;
-            match tycker.type_filled_k(&view)?.to_owned() {
-                | ss::Type::ManifestKind(ss::ManifestKind { binder, definition, body: next }) => {
+        let body = loop {
+            match body.with_environment(&body_env).reveal_k(tycker)? {
+                | DeferredTelescopeView::ManifestKind { binder, definition, body: next } => {
                     let field = Self::kind_field_name(tycker, binder);
                     body_env =
                         TyEnvT::new(body_env, Assign(binder, definition)).tyck_k(tycker, ())?.info;
@@ -740,12 +856,11 @@ impl ExistentialProjectionPattern {
                         pattern: binder,
                     });
                 }
-                | ss::Type::Exists(exists) => {
-                    let ss::Exists { binder, mode, body: next } = *exists;
+                | DeferredTelescopeView::Exists { binder, mode, body: next } => {
                     let payload_kind = binder.payload_kind(tycker);
                     let field = Self::type_field_name(tycker, &binder);
                     let (payload, skolem) = match mode {
-                        | ss::ExistsMode::Abstract => {
+                        | DeferredTelescopeExistsMode::Abstract => {
                             let skolem = match skolems.get_witness(&binder.witness) {
                                 | Some(skolem) => {
                                     let canonical_kind = tycker.statics.annotations_abst[&skolem];
@@ -761,7 +876,8 @@ impl ExistentialProjectionPattern {
                             opened.push(skolem);
                             (payload, Some(skolem))
                         }
-                        | ss::ExistsMode::Manifest(definition) => {
+                        | DeferredTelescopeExistsMode::Manifest(definition) => {
+                            let definition = definition.materialize_k(tycker)?;
                             let definition_kind = tycker.statics.annotations_type[&definition];
                             Lub::lub_k(payload_kind, definition_kind, tycker)?;
                             (definition, None)
@@ -772,7 +888,7 @@ impl ExistentialProjectionPattern {
                     body_env = TyEnvT::new(body_env, Assign(binder.pattern, full_payload))
                         .tyck_k(tycker, ())?
                         .info;
-                    body = next.subst_abst_k(tycker, (binder.witness, payload))?;
+                    body = next.with_abstract(binder.witness, payload);
                     slots.push(ExistentialProjectionSlot::Type {
                         field,
                         source_pattern: binder.pattern,
@@ -783,9 +899,9 @@ impl ExistentialProjectionPattern {
                         skolem,
                     });
                 }
-                | _ => break,
+                | DeferredTelescopeView::Other(body) => break body.materialize_k(tycker)?,
             }
-        }
+        };
 
         Ok(ExistentialProjectionOpening { expected, body, slots, env: body_env, opened })
     }
@@ -7454,6 +7570,32 @@ mod source_boundary_tests {
 
             assert_eq!(direct.projected, sealed);
             assert_eq!(nested.projected, unit);
+            assert!(tycker.errors.is_empty());
+        });
+    }
+
+    #[test]
+    fn deferred_telescope_uses_the_final_environment_once() {
+        with_empty_tycker(|tycker| {
+            let empty = TyEnv::default();
+            let vtype = ss::VType.build(tycker, &empty);
+            let unit = ss::UnitTy.build(tycker, &empty);
+            let source_def: ss::DefId = tycker.fresh();
+            let target_def: ss::DefId = tycker.fresh();
+            let source: ss::TypeId = Alloc::alloc(tycker, source_def, vtype, &empty);
+            let target: ss::TypeId = Alloc::alloc(tycker, target_def, vtype, &empty);
+            let first = TyEnv::from_iter([(source_def, target.into())]);
+            let final_environment =
+                TyEnv::from_iter([(source_def, target.into()), (target_def, unit.into())]);
+
+            let deferred = DeferredTelescopeType::new(source)
+                .with_environment(&first)
+                .descend(source)
+                .with_environment(&final_environment);
+            let materialized = deferred.materialize_k(tycker).unwrap();
+
+            assert_eq!(materialized, target);
+            assert_ne!(materialized, unit);
             assert!(tycker.errors.is_empty());
         });
     }

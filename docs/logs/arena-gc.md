@@ -552,3 +552,59 @@ decisions while implementing the plan.
 - Measure route materialization separately. Product annotations still require several related
   views of the selected route, so a small closure-local materialization cache may preserve more
   sharing without changing the representation boundary established here.
+
+## 2026-08-15 — round 15: compose monotonic telescope environments
+
+### Findings
+
+- Re-running call-site attribution after round 14 found 361,349 nodes in analytic term
+  annotations, 288,938 in the remaining field-closure materializations, 210,694 environment and
+  165,861 abstract-substitution nodes in existential projection opening, and another 238,181
+  combined nodes in tuple/package traversal. The temporary profiler was removed after the
+  census.
+- An exact lazy telescope closure retained every environment snapshot and abstract assignment,
+  then replayed them when the final package body was forced. The standard library passed, but
+  forcing still created 209,999 environment and 165,374 abstract-substitution nodes. Deferral
+  moved the work without composing it.
+- The typing environment has a stronger invariant than the abstract assignments: opening a
+  telescope only extends it. Each later snapshot contains every earlier definition mapping and
+  the accumulated skolem scope. Applying all snapshots makes the number of substitutions depend
+  on telescope depth, just as transparent label depth did before round 14.
+- Abstract assignments cannot be discarded by the same rule. Their order is meaningful because
+  a later payload can mention an earlier witness. They remain explicit until a fused traversal
+  can apply the ordered list without rebuilding the type once per assignment.
+
+### Changes
+
+- `DeferredTelescopeType` carries one final environment, one outer-unroll bit, and an ordered
+  persistent vector of abstract assignments. Descending into `ManifestKind` or `Exists` shares
+  that state; replacing the environment snapshot is O(1).
+- Existential projection opening now reveals telescope constructors without materializing their
+  remaining bodies. Manifest type definitions are forced at their use site, and the final value
+  body is forced once after the telescope has been opened.
+- Materialization applies the ordered abstract assignments and then the newest environment once.
+  A focused chained-environment regression proves that an older `x -> y` snapshot followed by a
+  final environment containing both `x -> y` and `y -> Unit` yields `y`, rather than resolving an
+  extra link merely because another telescope entry was traversed.
+
+### Measurements
+
+- The full-std check retains 1,395,567 type nodes, 190,844 fewer than round 14 (-12.0%). The
+  existential environment caller fell from 210,694 to 20,337 nodes; the still-ordered abstract
+  assignments account for 165,374 nodes.
+- Three release checks used 594,739,200, 594,853,888, and 594,608,128 bytes peak RSS (median
+  594,739,200), down 20,250,624 bytes (-3.3%) from round 14. Warm wall time was 0.84–0.85s.
+- The current-tree baseline is now down from 2,497,757,184 to 594,739,200 bytes (-76.2%).
+- All 38 statics tests and all 151 session tests passed, including full standard-library,
+  interpreter, and backend-lowering coverage.
+
+### Next
+
+- Fuse the ordered abstract assignments into one recursive traversal. Replacement nodes must
+  receive only the assignments that occur after their own assignment; PackPi witness binders
+  must continue to shadow matching assignments.
+- Reuse the composed telescope closure in tuple/package traversal, whose 238,181 nodes have the
+  same constructor-by-constructor shape.
+- Analytic term annotations are now the largest single caller at 361,349 nodes. Addressing them
+  likely requires carrying a deferred expected type through `Action<AnnId>`, so keep that broader
+  transition behind the two local telescope optimizations.
