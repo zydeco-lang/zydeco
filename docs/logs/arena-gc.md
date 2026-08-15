@@ -706,3 +706,52 @@ decisions while implementing the plan.
 - Inspect the other recursive package consumers (`PackageInstantiation`, `PackPiWitnessSkolems`,
   and `PackPiPatternAssignments`). They open a domain one entry at a time and still perform eager
   environment and abstract substitution, though their call frequencies may be much lower.
+
+## 2026-08-15 — round 18: preserve prepared analytic annotations
+
+### Findings
+
+- A fresh root-operation profiler attributed 954,482 checker-created type nodes in the
+  959,155-node arena. Eager preparation of analytic term annotations dominated at 360,268 nodes;
+  field materialization followed at 262,556, product revelation at 74,343, type-application
+  normalization at 56,080, and type-abstraction recovery at 44,883. The temporary profiler was
+  removed after the census.
+- Every analytic term entry substituted and normalized its expected type before inspecting the
+  term syntax. Transparent nodes—including metadata, source/signature boundaries, annotation
+  holes, residuals, blocks, and definition tails—then forwarded the resulting `TypeId` as a new
+  action. The child could not distinguish that prepared type from a fresh expectation and applied
+  the same environment again.
+- This was more than duplicated work. Environment substitution deliberately replaces a variable
+  without recursively rewriting the replacement, so applying it once per transparent syntax node
+  made a chained mapping advance according to source-tree depth. The field-label regression in
+  round 14 exposed the same general bug: substitution count must follow a semantic boundary, not
+  the number of representation wrappers crossed.
+
+### Changes
+
+- Analytic `Action` now carries the environment under which its expected type was prepared.
+  Term entry substitutes and normalizes only when the current environment differs.
+- Direct forwarding preserves that provenance. When a binder or definition produces a genuinely
+  different environment, structural `TyEnv` comparison detects the change and performs the
+  required new preparation; persistent clones take the pointer-equality fast path.
+- The old generic `Action::switch` constructor was removed. Callers now choose between a fresh
+  analytic action and explicit forwarding, making the preparation boundary visible in code.
+
+### Measurements
+
+- The full-std check retains 791,634 type nodes, 167,521 fewer than round 17 (-17.5%).
+- Three clean release checks used 438,779,904, 439,107,584, and 439,353,344 bytes peak RSS (median
+  439,107,584), down 88,653,824 bytes (-16.8%) from round 17. Warm wall time was 0.53–0.55s and
+  warm user time was 0.49–0.50s.
+- The current-tree baseline is now down from 2,497,757,184 to 439,107,584 bytes (-82.4%).
+- All 40 statics tests and all 151 session tests passed, along with the release CLI build and full
+  standard-library check.
+
+### Next
+
+- Extend preparation provenance to expected-type components extracted by a typing rule. Those
+  children are already rewritten under the current environment, but `Action::ana` currently marks
+  them fresh and can repeat the traversal.
+- Re-profile before changing the field closure. Its 262,556-node share is now relative to the
+  pre-round-18 arena, and eliminating analytic duplication may change how often field routes are
+  materialized.

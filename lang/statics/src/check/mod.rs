@@ -1634,19 +1634,24 @@ pub enum TyckTask {
 }
 
 /// Wrapper for passing synthesis/analysis mode into `Tyck`.
+///
+/// Analytic term checking records the environment under which an expected type was already
+/// substituted and normalized. Transparent term wrappers forward that provenance so their
+/// source-level nesting does not apply the same environment repeatedly.
 pub struct Action<Ann> {
     pub switch: Switch<Ann>,
+    prepared_environment: Option<ss::TyEnv>,
 }
 
 impl<Ann> Action<Ann> {
     pub fn syn() -> Self {
-        Self { switch: Switch::Syn }
+        Self { switch: Switch::Syn, prepared_environment: None }
     }
     pub fn ana(ann: Ann) -> Self {
-        Self { switch: Switch::Ana(ann) }
+        Self { switch: Switch::Ana(ann), prepared_environment: None }
     }
-    pub fn switch(switch: Switch<Ann>) -> Self {
-        Self { switch }
+    fn forward(switch: Switch<Ann>, prepared_environment: Option<&ss::TyEnv>) -> Self {
+        Self { switch, prepared_environment: prepared_environment.cloned() }
     }
 }
 
@@ -3819,7 +3824,7 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiElimination> {
     type Action = Action<AnnId>;
 
     fn tyck_inner_k(
-        &self, tycker: &mut Tycker<'a>, Action { switch }: Self::Action,
+        &self, tycker: &mut Tycker<'a>, Action { switch, .. }: Self::Action,
     ) -> ResultKont<Self::Out> {
         let PackPiElimination { function, argument, signature } = &self.inner;
         let argument = self.mk(*argument).tyck_k(tycker, Action::ana(signature.domain.into()))?;
@@ -3868,7 +3873,7 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePackPiElimination> {
     type Action = Action<AnnId>;
 
     fn tyck_inner_k(
-        &self, tycker: &mut Tycker<'a>, Action { switch }: Self::Action,
+        &self, tycker: &mut Tycker<'a>, Action { switch, .. }: Self::Action,
     ) -> ResultKont<Self::Out> {
         let ValuePackPiElimination { function, argument, signature } = &self.inner;
         let argument = self.mk(*argument).tyck_k(tycker, Action::ana(signature.domain.into()))?;
@@ -3916,9 +3921,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
     type Out = TermAnnId;
     type Action = Action<AnnId>;
 
-    fn tyck_k(
-        &self, tycker: &mut Tycker<'a>, Action { switch }: Self::Action,
-    ) -> ResultKont<Self::Out> {
+    fn tyck_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
+        let switch = action.switch;
         tycker.guarded(|tycker| {
             // administrative
             tycker.tasks.push_back(TyckTask::Term(self.inner, switch));
@@ -3930,15 +3934,14 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 self.inner.raw().into_u32(),
                 occurrence,
             );
-            let result = self.tyck_inner_k(tycker, Action { switch });
+            let result = self.tyck_inner_k(tycker, action);
             tycker.allocator.exit();
             result
         })
     }
 
-    fn tyck_inner_k(
-        &self, tycker: &mut Tycker<'a>, Action { mut switch }: Self::Action,
-    ) -> ResultKont<Self::Out> {
+    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
+        let Action { mut switch, mut prepared_environment } = action;
         // check if we're analyzing against an unfilled type
         match switch {
             | Switch::Syn => {}
@@ -3974,10 +3977,13 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         }
                     },
                     | _ => {
-                        let kd = tycker.statics.annotations_type[&ty].to_owned();
-                        switch = Switch::Ana(
-                            ty.subst_env_k(tycker, &self.info)?.normalize_k(tycker, kd)?.into(),
-                        )
+                        if prepared_environment.as_ref() != Some(&self.info) {
+                            let kd = tycker.statics.annotations_type[&ty].to_owned();
+                            switch = Switch::Ana(
+                                ty.subst_env_k(tycker, &self.info)?.normalize_k(tycker, kd)?.into(),
+                            );
+                            prepared_environment = Some(self.info.clone());
+                        }
                     }
                 },
             },
@@ -3988,7 +3994,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
         let out_ann = match tycker.scoped.terms[&self.inner].to_owned() {
             | Tm::Meta(term) => {
                 let su::MetaT(meta, term) = term;
-                let res = self.mk(term).tyck_k(tycker, Action::switch(switch))?;
+                let res = self
+                    .mk(term)
+                    .tyck_k(tycker, Action::forward(switch, prepared_environment.as_ref()))?;
                 if let Some(meta) = meta
                     .specialize::<BuiltinMeta>()
                     .expect("builtin metadata is validated during desugaring")
@@ -4005,7 +4013,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
             | Tm::SourceBoundary(su::SourceBoundary(term)) => {
                 tycker.source_guarded(TyckTask::Term(term, switch), |tycker| {
                     let inference = InferenceRegion::enter(tycker);
-                    let checked = self.mk(term).tyck_inner_k(tycker, Action::switch(switch))?;
+                    let checked = self.mk(term).tyck_inner_k(
+                        tycker,
+                        Action::forward(switch, prepared_environment.as_ref()),
+                    )?;
                     inference.close_k(tycker)?;
                     Ok(checked)
                 })?
@@ -4013,7 +4024,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
             | Tm::SignatureBoundary(su::SignatureBoundary(term)) => {
                 tycker.source_guarded(TyckTask::Term(term, switch), |tycker| {
                     let inference = InferenceRegion::enter(tycker);
-                    let checked = self.mk(term).tyck_inner_k(tycker, Action::switch(switch))?;
+                    let checked = self.mk(term).tyck_inner_k(
+                        tycker,
+                        Action::forward(switch, prepared_environment.as_ref()),
+                    )?;
                     let checked = match checked {
                         | TermAnnId::Type(_, _) => checked,
                         | TermAnnId::Hole(_)
@@ -4035,7 +4049,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 // if the ty is a hole, we should stay in current switch
                 match tycker.scoped.terms[&ty] {
                     | Tm::Hole(su::Hole) => {
-                        let res = self.mk(tm).tyck_k(tycker, Action::switch(switch))?;
+                        let res = self.mk(tm).tyck_k(
+                            tycker,
+                            Action::forward(switch, prepared_environment.as_ref()),
+                        )?;
                         return Ok(res);
                     }
                     | _ => {}
@@ -5481,7 +5498,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     argument: a,
                                     signature: *signature,
                                 })
-                                .tyck_k(tycker, Action::switch(switch))?,
+                                .tyck_k(
+                                    tycker,
+                                    Action::forward(switch, prepared_environment.as_ref()),
+                                )?,
                             | ss::Type::VArrow(ss::ValueArrow(ty_arg, ty_out)) => {
                                 let a_out_ann =
                                     self.mk(a).tyck_k(tycker, Action::ana(ty_arg.into()))?;
@@ -5667,7 +5687,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     argument: a,
                                     signature: *signature,
                                 })
-                                .tyck_k(tycker, Action::switch(switch))?,
+                                .tyck_k(
+                                    tycker,
+                                    Action::forward(switch, prepared_environment.as_ref()),
+                                )?,
                             | _ => tycker.err_k(
                                 TyckError::TypeExpected {
                                     expected: "one of `_ -> _`, a package-dependent arrow, or \
@@ -6511,7 +6534,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 // finally, we tyck the tail
                 let (tail_out, tail_ty) = {
                     let tail_out_ann = TyEnvT::new(binder_elaboration.info.clone(), tail)
-                        .tyck_k(tycker, Action::switch(switch))?;
+                        .tyck_k(tycker, Action::forward(switch, prepared_environment.as_ref()))?;
                     tail_out_ann.try_as_compu(
                         tycker,
                         TyckError::SortMismatch,
@@ -6580,7 +6603,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             | (None, _) => {}
                         }
                         // finally, we tyck the tail
-                        let tail_out_ann = env.mk(tail).tyck_k(tycker, Action::switch(switch))?;
+                        let tail_out_ann = env.mk(tail).tyck_k(
+                            tycker,
+                            Action::forward(switch, prepared_environment.as_ref()),
+                        )?;
                         match tail_out_ann {
                             | TermAnnId::Type(tail_out, tail_kd) => {
                                 // the resulting type will be the tail
@@ -6619,7 +6645,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         }
                         // finally, we tyck the tail
                         let tail_out_ann = TyEnvT::new(binder_elaboration.info.clone(), tail)
-                            .tyck_k(tycker, Action::switch(switch))?;
+                            .tyck_k(
+                                tycker,
+                                Action::forward(switch, prepared_environment.as_ref()),
+                            )?;
                         match tail_out_ann {
                             | TermAnnId::Value(tail_out, tail_ty) => {
                                 binder_elaboration.close_scope_k(tycker, tail_ty)?;
@@ -6699,12 +6728,15 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
             }
             | Tm::Residual(term) => {
                 let su::Residual(body) = term;
-                self.mk(body).tyck_k(tycker, Action::switch(switch))?
+                self.mk(body)
+                    .tyck_k(tycker, Action::forward(switch, prepared_environment.as_ref()))?
             }
             | Tm::Block(term) => {
                 let su::Block(body) = term;
                 let inference = InferenceRegion::enter(tycker);
-                let checked = self.mk(body).tyck_k(tycker, Action::switch(switch))?;
+                let checked = self
+                    .mk(body)
+                    .tyck_k(tycker, Action::forward(switch, prepared_environment.as_ref()))?;
                 inference.close_k(tycker)?;
                 checked
             }
@@ -6722,7 +6754,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     })
                     .collect::<Vec<_>>();
                 let env = FixPoint(self.mk(bindings)).tyck_k(tycker, ())?;
-                env.mk(tail).tyck_k(tycker, Action::switch(switch))?
+                env.mk(tail)
+                    .tyck_k(tycker, Action::forward(switch, prepared_environment.as_ref()))?
             }
             | Tm::MoBlock(term) => {
                 let su::MoBlock { body, basis: lexical_basis } = term;
