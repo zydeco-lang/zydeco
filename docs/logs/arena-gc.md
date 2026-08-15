@@ -2255,3 +2255,56 @@ decisions while implementing the plan.
 - Revisit low-occupancy definition arenas only after measuring their absolute live allocation.
   Compact indexes are useful when payload hashes are material; density alone is not a reason to
   generalize every small table.
+
+## 2026-08-15 — round 48: bound resolver-generated payloads and locate the peak
+
+### Findings
+
+- The post-round-47 heap made the scoped term payload the largest concrete allocation at
+  8,306,688 bytes. Its allocation history showed both the resolver's initial exact reservation and
+  a later `grow_one` from `ArenaIndexed::insert_new`. The initial bitter domain contains 64,896
+  terms, while the resolved arena contains 64,954: only 58 context-elaboration terms exceeded the
+  reserved capacity, but `Vec` doubled the 64-byte payload vector to 129,792 slots.
+- Resolver-generated terms have a static upper bound. Context elaboration emits one term per SCC,
+  every SCC contains at least one mobile parameter or definition, and all such source nodes already
+  exist in the bitter arena. Counting those two variants before resolution may reserve a few slots
+  for bindings combined into recursive SCCs, but it cannot underestimate the generated payloads.
+- Removing that final growth did not materially change process peak RSS. Phase-boundary runs located
+  the cumulative high-water mark at 62,603,264 bytes after resolution, 68,648,960 after checker
+  construction, 117,850,112 after judgments, 119,406,592 after hole resolution, 122,224,640 after
+  normalization, and 122,322,944 after checker-state stripping. The dominant remaining growth
+  occurs during judgments, with normalization adding the final roughly 2.8MB. Freed resolver pages
+  are reused by checking, so reducing a retained allocation need not lower the one-shot peak.
+- A typed kind census sharpened the next target: the final arena contains 40,619 pre-normalization
+  kinds, of which 28,605 are `VType`, 8,758 are `CType`, 2,156 are arrows, and 1,100 are labels.
+  `Fillable<Kind>` is 40 bytes even though 92.0% of entries are one of two payload-free variants.
+  Unlike the generated-term slack, this arena remains live through the measured high-water mark.
+
+### Changes
+
+- Extended `ArenaIndexed` bulk reservation with an explicit count of payloads whose IDs will be
+  issued by the consuming pass. Sparse page extents remain limited to IDs that already exist.
+- The resolver now reserves its bitter term domain plus the count of mobile source bindings. A
+  regression inserts one generated ID from a new key space after a non-exact-size external
+  iterator and verifies that the payload vector does not grow.
+
+### Measurements
+
+- Five release checks used 122,634,240, 122,159,104, 122,306,560, 122,388,480, and 122,273,792 bytes
+  peak RSS (median 122,306,560), effectively unchanged from round 47. Warm wall time remained 0.19s
+  and warm user time remained 0.17s.
+- The current-tree baseline remains down from 2,497,757,184 to about 122.3MB (-95.1%). This round
+  improves the retained scoped-arena bound and, more importantly, falsifies resolution as the
+  remaining process peak.
+
+### Next
+
+- Store the two payload-free kind variants inline while keeping uncommon filled kinds behind dense
+  indirection. This preserves borrowed arena access but avoids paying the 40-byte worst-case enum
+  layout in 92% of kind hash buckets.
+- Measure judgments and normalization separately after compacting kinds. Because `kinds_pre` stays
+  live across both phases, a real layout reduction should affect the final high-water mark rather
+  than merely changing allocator reuse.
+- Continue treating `env_type` attribution as unproven until a phase-local ownership snapshot
+  contradicts checker-state stripping; phase RSS alone does not establish which freed block an
+  allocation history names.

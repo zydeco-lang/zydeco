@@ -74,8 +74,19 @@ impl<'a> Resolver<'a> {
     pub fn new(spans: &'a SpanArena, bitter: BitterArena, _prim_term: PrimTerms) -> Self {
         let mut pats = ArenaIndexed::default();
         pats.reserve_ids(bitter.pats.iter().map(|(pattern, _)| pattern));
+        // Context elaboration emits one term per SCC. Every SCC contains at
+        // least one mobile source binding, so their source-node count is a
+        // cheap upper bound available before resolution discovers the graph.
+        let generated_term_upper_bound = bitter
+            .terms
+            .iter()
+            .filter(|(_, term)| matches!(term, Term::MobileParam(_) | Term::MobileBind(_)))
+            .count();
         let mut terms = ArenaIndexed::default();
-        terms.reserve_ids(bitter.terms.iter().map(|(term, _)| term));
+        terms.reserve_ids_with_additional(
+            bitter.terms.iter().map(|(term, _)| term),
+            generated_term_upper_bound,
+        );
         Self {
             allocator: IdAllocator::new(),
             spans,

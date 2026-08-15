@@ -856,8 +856,21 @@ mod impls {
         /// Reserve sparse ID extents and dense payload slots for a future bulk
         /// fill. Supplied IDs must describe new values rather than existing ones.
         pub fn reserve_ids(&mut self, ids: impl IntoIterator<Item = Id>) {
-            let additional = PageSlots::reserve_ids(&mut self.indexes.pages, ids);
-            self.values.reserve_exact(additional);
+            self.reserve_ids_with_additional(ids, 0);
+        }
+
+        /// Reserve an external ID domain plus payloads whose IDs will be issued
+        /// during the consuming pass. The additional IDs need no sparse extents
+        /// yet, but including their payloads prevents one late insertion from
+        /// geometrically growing an otherwise exact vector.
+        pub fn reserve_ids_with_additional(
+            &mut self, ids: impl IntoIterator<Item = Id>, additional: usize,
+        ) {
+            let external = PageSlots::reserve_ids(&mut self.indexes.pages, ids);
+            let total = external
+                .checked_add(additional)
+                .expect("indexed arena reservation exhausted usize");
+            self.values.reserve_exact(total);
         }
 
         /// Replace an existing owned item without changing its dense position.
@@ -1871,22 +1884,30 @@ mod tests {
         let left_first = derived_id::<SparseId>(left_space, 0);
         let left_gap = derived_id::<SparseId>(left_space, 95);
         let right_first = derived_id::<SparseId>(right_space, 0);
+        let generated = derived_id::<SparseId>(KeySpaceId::derive(9, 10, 11, 14), 0);
         let mut arena = ArenaIndexed::<TestScope, SparseId>::new();
 
-        arena.reserve_ids([left_first, left_gap, right_first].into_iter().filter(|_| true));
+        arena.reserve_ids_with_additional(
+            [left_first, left_gap, right_first].into_iter().filter(|_| true),
+            1,
+        );
+        let payload_capacity = arena.values.capacity();
         arena.insert_new(left_gap, "left gap");
         arena.insert_new(right_first, "right first");
         arena.insert_new(left_first, "left first");
+        arena.insert_new(generated, "generated");
 
         assert_eq!(size_of::<Option<DenseArenaIndex>>(), 4);
-        assert_eq!(arena.len(), 3);
-        assert_eq!(arena.values.len(), 3);
-        assert_eq!(arena.values.capacity(), 3);
+        assert_eq!(arena.len(), 4);
+        assert_eq!(arena.values.len(), 4);
+        assert_eq!(payload_capacity, 4);
+        assert_eq!(arena.values.capacity(), payload_capacity);
         assert_eq!(arena.get(&left_first), Some(&"left first"));
         assert_eq!(arena.get(&derived_id::<SparseId>(left_space, 1)), None);
         assert_eq!(arena.get(&left_gap), Some(&"left gap"));
         assert_eq!(arena.get(&right_first), Some(&"right first"));
-        assert_eq!(arena.iter().count(), 3);
+        assert_eq!(arena.get(&generated), Some(&"generated"));
+        assert_eq!(arena.iter().count(), 4);
     }
 
     #[test]
