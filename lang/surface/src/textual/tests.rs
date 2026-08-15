@@ -502,22 +502,29 @@ fn source_unit_rejects_literal_metadata_arguments() {
 
 #[test]
 fn source_unit_decodes_relative_and_absolute_imports() {
-    let source = r#"(@[import("../library.zy")] _, @[import("/opt/zydeco/core.zy")] _)"#;
-    let mut parser = Parser::new();
-    let unit = parser::SourceUnitParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    // `@(import(...))` is sugar for `@[import(...)] _`: both spellings decode
+    // to the same import targets.
+    for source in [
+        r#"(@[import("../library.zy")] _, @[import("/opt/zydeco/core.zy")] _)"#,
+        r#"(@(import("../library.zy")), @(import("/opt/zydeco/core.zy")))"#,
+    ] {
+        let mut parser = Parser::new();
+        let unit = parser::SourceUnitParser::new()
+            .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+            .unwrap();
 
-    let imports = unit.imports(&parser.arena, &parser.spans).unwrap();
-    let targets = imports.iter().map(|site| &site.directive.target).collect::<Vec<_>>();
+        let imports = unit.imports(&parser.arena, &parser.spans).unwrap();
+        let targets = imports.iter().map(|site| &site.directive.target).collect::<Vec<_>>();
 
-    assert_eq!(
-        targets,
-        [
-            &ImportTarget::Path(std::path::PathBuf::from("../library.zy")),
-            &ImportTarget::Path(std::path::PathBuf::from("/opt/zydeco/core.zy")),
-        ]
-    );
+        assert_eq!(
+            targets,
+            [
+                &ImportTarget::Path(std::path::PathBuf::from("../library.zy")),
+                &ImportTarget::Path(std::path::PathBuf::from("/opt/zydeco/core.zy")),
+            ],
+            "spelling `{source}` decoded to different import targets"
+        );
+    }
 }
 
 #[test]
@@ -632,16 +639,27 @@ fn source_unit_decodes_typed_intrinsic_splices() {
     ]
     .into_iter()
     .for_each(|(name, expected)| {
-        let source = format!("@[intrinsic({name})] _");
-        let mut parser = Parser::new();
-        let unit = parser::SourceUnitParser::new()
-            .parse(&source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(&source))
-            .unwrap();
+        // `@(intrinsic(role))` is sugar for `@[intrinsic(role)] _`: both
+        // spellings decode to the same splice with an implicit hole payload.
+        for source in [format!("@(intrinsic({name}))"), format!("@[intrinsic({name})] _")] {
+            let mut parser = Parser::new();
+            let unit = parser::SourceUnitParser::new()
+                .parse(&source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(&source))
+                .unwrap();
 
-        let intrinsics = unit.intrinsics(&parser.arena, &parser.spans).unwrap();
-        let [site] = intrinsics.as_slice() else { panic!("expected one intrinsic splice") };
-        assert_eq!(site.directive.role, expected);
-        assert!(matches!(parser.arena.terms[&site.payload], Term::Hole(Hole)));
+            let intrinsics = unit.intrinsics(&parser.arena, &parser.spans).unwrap();
+            let [site] = intrinsics.as_slice() else {
+                panic!("expected one intrinsic splice in `{source}`")
+            };
+            assert_eq!(
+                site.directive.role, expected,
+                "spelling `{source}` decoded to a different role"
+            );
+            assert!(
+                matches!(parser.arena.terms[&site.payload], Term::Hole(Hole)),
+                "expected a hole payload for `{source}`"
+            );
+        }
     });
 }
 
@@ -656,9 +674,13 @@ fn source_unit_rejects_ambiguous_or_malformed_intrinsic_splices() {
 
     let cases = [
         ("@[intrinsic] _", ExpectedIntrinsicError::RoleArity(0)),
+        ("@(intrinsic)", ExpectedIntrinsicError::RoleArity(0)),
         ("@[intrinsic(vtype,ctype)] _", ExpectedIntrinsicError::RoleArity(2)),
+        ("@(intrinsic(vtype,ctype))", ExpectedIntrinsicError::RoleArity(2)),
         (r#"@[intrinsic("vtype")] _"#, ExpectedIntrinsicError::RoleNotIdentifier),
+        (r#"@(intrinsic("vtype"))"#, ExpectedIntrinsicError::RoleNotIdentifier),
         ("@[intrinsic(monad)] _", ExpectedIntrinsicError::UnknownRole),
+        ("@(intrinsic(monad))", ExpectedIntrinsicError::UnknownRole),
         ("@[intrinsic(unit)] Unit", ExpectedIntrinsicError::PayloadNotHole),
     ];
 
