@@ -2579,3 +2579,62 @@ decisions while implementing the plan.
 - Re-measure the phase high-water mark before adding an end-of-phase compaction pass. Converting a
   live hash table into sorted slices briefly owns both allocations and can erase the retained saving
   if that conversion itself becomes the process peak.
+
+## 2026-08-15 — round 54: shard dense source provenance by typed category
+
+### Findings
+
+- After round 51 packed the typed dispatcher, term and pattern provenance still occupied 2,128KiB
+  and 1,072KiB open-addressed allocations. Each bucket stored a 16-byte typed identity and a
+  16-byte source identity, so growing either table rehashed and copied every complete 32-byte entry.
+- An unsharded `IndexMap` experiment lowered the five-run process median to 114,409,472 bytes because
+  rehashing moved compact indexes rather than full entries. Its first live-heap census exposed a
+  countervailing cost: dense entry buffers and hash indexes totaled about 4,288KiB, more than the
+  3,200KiB retained by the original tables. Right-sizing at the judgment boundary reduced that to
+  about 3,728KiB but could not cross the hash table's capacity steps.
+- The provenance totals sat just above two such steps. Patterns split into 94 kind, 3,535 type, and
+  11,003 value representatives. Terms split into 148 kind, 25,312 type, 2,306 value, and 1,504
+  computation representatives. The combined pattern count of 14,632 exceeded a 14,336-entry usable
+  capacity, while the combined term count of 29,270 exceeded a 28,672-entry capacity.
+- Typed category is already part of identity and equality, so it is a valid hash partition rather
+  than a workload heuristic. Sharding by category keeps every observed group below its next
+  capacity step and prevents unrelated sorts from forcing each other's entry buffers to double.
+- The final malloc-stack census attributes 1,679KiB to six visible right-sized dense entry buffers
+  and 584KiB to seven compact index tables, about 2,263KiB total. That is 937KiB (29.3%) smaller than
+  the two packed open-addressed tables, while the full live heap fell to 62.5MB. Stack logging raised
+  physical footprint to 170.0MB, so normal runs remain the process measurement.
+
+### Changes
+
+- `SourceProvenance` now stores category-sharded `IndexMap`s with the existing Fx hasher. Its public
+  pattern and term APIs still record the latest source representative and reconstruct exactly the
+  same source IDs on lookup.
+- Added an explicit end-of-judgments boundary that drops source contexts and calls `shrink_to_fit`
+  on the nonempty provenance shards before hole resolution and normalization. Both the direct and
+  query-driven checking paths use that boundary, including rejected judgments.
+- Extended the provenance regression through right-sizing, while retaining checks for replacement,
+  cross-category identity, and lookup after repeated updates. `indexmap` was already a workspace
+  dependency of the statics crate, so the change adds no dependency.
+
+### Measurements
+
+- Five release checks used 113,672,192, 113,606,656, 113,917,952, 113,967,104, and 113,836,032 bytes
+  peak RSS (median 113,836,032), down 2,392,064 bytes (-2.1%) from round 53. All warm samples took
+  0.18s wall time and 0.16s user time; the first resource-accounting launch paid unrelated startup
+  overhead but used the same memory range.
+- The current-tree baseline is now down from 2,497,757,184 to 113,836,032 bytes (-95.4%).
+- All 27 statics unit tests and 33 statics integration tests, all 151 session tests, all 9 CLI
+  integration tests, all 31 Cajun unit tests, and all 9 Cajun stdio tests passed. Focused Clippy
+  completed with existing unrelated warnings. The release build and full standard-library check
+  also passed.
+
+### Next
+
+- Census the 4,064KiB scoped term payload by variant. A storage-only dense payload arena may be able
+  to inline common small variants without changing the public `Term` enum, as the kind arena does.
+- Inspect the 2,747KiB collection of per-source textual term tables and the 1,608/1,394KiB line-
+  intention tables together. They share source-template lifetime; removing data duplicated by spans
+  or tokens may be more valuable than shrinking another final static fact.
+- Revisit the 3,152KiB page allocation only with stronger ownership evidence. Its old `env_type`
+  symbol conflicts with the empty finished environment table, so layout matching remains more
+  credible than treating the symbol name alone as a retained checker environment.

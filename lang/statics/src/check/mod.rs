@@ -1518,14 +1518,17 @@ impl<'a> Tycker<'a> {
 
     pub fn run_source_k(&mut self, root: su::TermId) -> ResultKont<TermAnnId> {
         let root = self.run_judgments_k(root);
-        self.release_source_contexts();
+        self.finish_judgments();
         let root = root?;
         self.finish_check_k()?;
         Ok(root)
     }
 
-    pub(crate) fn release_source_contexts(&mut self) {
+    /// Release transient judgment inputs and right-size source facts before
+    /// hole resolution and normalization begin.
+    pub(crate) fn finish_judgments(&mut self) {
         self.source_contexts = TermContexts::default();
+        self.statics.shrink_source_provenance();
     }
 
     fn source_free_variables(&self, term: &su::TermId) -> &su::CoContext {

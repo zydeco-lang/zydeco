@@ -5,6 +5,8 @@
 use super::syntax::*;
 use crate::surface_syntax as su;
 use crate::{SkolemScope, TyEnv};
+use indexmap::IndexMap;
+use rustc_hash::FxBuildHasher;
 use std::{
     marker::PhantomData,
     num::NonZeroU32,
@@ -504,7 +506,8 @@ impl ArenaAccess<&TypeId, Fillable<Type>> for TypeArena {
 /// typed node collapse to the most recently checked wrapper.
 #[derive(Clone, Debug)]
 pub struct SourceProvenance<Source, Typed> {
-    latest_by_typed: ArenaAssoc<CompactTypedEntityId, Source>,
+    latest_by_category:
+        [IndexMap<CompactTypedEntityId, Source, FxBuildHasher>; TypedEntityCategory::COUNT],
     marker: PhantomData<fn() -> Typed>,
 }
 
@@ -526,6 +529,14 @@ enum TypedEntityCategory {
     TypeTerm,
     ValueTerm,
     CompuTerm,
+}
+
+impl TypedEntityCategory {
+    const COUNT: usize = Self::CompuTerm as usize + 1;
+
+    fn index(self) -> usize {
+        self as usize
+    }
 }
 
 impl From<PatId> for CompactTypedEntityId {
@@ -553,7 +564,10 @@ impl From<TermId> for CompactTypedEntityId {
 
 impl<Source, Typed> Default for SourceProvenance<Source, Typed> {
     fn default() -> Self {
-        Self { latest_by_typed: ArenaAssoc::default(), marker: PhantomData }
+        Self {
+            latest_by_category: std::array::from_fn(|_| IndexMap::default()),
+            marker: PhantomData,
+        }
     }
 }
 
@@ -562,11 +576,15 @@ where
     Source: Copy,
 {
     fn record_compact(&mut self, source: Source, typed: CompactTypedEntityId) {
-        let _ = self.latest_by_typed.upsert(typed, source);
+        let _ = self.latest_by_category[typed.category.index()].insert(typed, source);
     }
 
     fn source_compact(&self, typed: CompactTypedEntityId) -> Option<Source> {
-        self.latest_by_typed.get(&typed).copied()
+        self.latest_by_category[typed.category.index()].get(&typed).copied()
+    }
+
+    fn shrink_to_fit(&mut self) {
+        self.latest_by_category.iter_mut().for_each(IndexMap::shrink_to_fit);
     }
 }
 
@@ -845,6 +863,13 @@ impl StaticsArena {
             .upsert(term, TermFacts { annotation: CompactTermAnnId::new(annotation) });
     }
 
+    /// Release spare mutable capacity after source judgments stop producing
+    /// typed pattern and term representatives.
+    pub(crate) fn shrink_source_provenance(&mut self) {
+        self.pats.shrink_to_fit();
+        self.terms.shrink_to_fit();
+    }
+
     /// Retain one normalized classifier for each distinct top annotation type.
     pub(crate) fn retain_normalized_annotations(&mut self) {
         let mut annotations: Vec<_> = self
@@ -990,6 +1015,7 @@ mod tests {
         assert_eq!(provenance.source(&second_typed), Some(first_source));
 
         provenance.record(first_source, first_typed);
+        provenance.shrink_to_fit();
         assert_eq!(provenance.source(&first_typed), Some(first_source));
     }
 
