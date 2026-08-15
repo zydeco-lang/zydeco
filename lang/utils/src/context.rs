@@ -43,42 +43,51 @@ where
     }
 }
 
-/// CoContexts are unordered sets of elements.
+/// CoContexts are unordered sets of elements stored as compact sorted slices.
+///
+/// Free-variable contexts are tiny and numerous. A persistent hash trie gives
+/// each occurrence its own tree nodes and dominates the resolved arena even
+/// when most sets contain zero or one element. Keeping the elements sorted and
+/// unique makes storage proportional to the logical contents instead.
 #[derive(Clone, Debug, IntoIterator)]
-pub struct CoContext<T: std::hash::Hash + Eq>(#[into_iterator(owned, ref)] pub im::HashSet<T>);
+pub struct CoContext<T: Ord>(#[into_iterator(owned, ref)] Vec<T>);
 
 impl<T> FromIterator<T> for CoContext<T>
 where
-    T: std::hash::Hash + Eq + Clone,
+    T: Ord,
 {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        CoContext(iter.into_iter().collect())
+        let mut items = iter.into_iter().collect::<Vec<_>>();
+        items.sort_unstable();
+        items.dedup();
+        CoContext(items)
     }
 }
 
 impl<T> CoContext<T>
 where
-    T: std::hash::Hash + Eq,
+    T: Ord,
 {
     pub fn iter(&self) -> <&Self as IntoIterator>::IntoIter {
         self.into_iter()
     }
 
     pub fn new() -> Self {
-        CoContext(im::HashSet::new())
+        CoContext(Vec::new())
     }
 
-    pub fn singleton(item: T) -> Self
-    where
-        T: Clone,
-    {
+    pub fn singleton(item: T) -> Self {
         CoContext::from_iter([item])
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 }
 
 impl<T> Default for CoContext<T>
 where
-    T: std::hash::Hash + Eq,
+    T: Ord,
 {
     fn default() -> Self {
         CoContext::new()
@@ -87,32 +96,32 @@ where
 
 impl<T, Iter> std::ops::Add<Iter> for CoContext<T>
 where
-    T: std::hash::Hash + Eq + Clone,
+    T: Ord,
     Iter: IntoIterator<Item = T>,
 {
     type Output = Self;
     fn add(self, other: Iter) -> Self {
-        let mut set = self.0;
-        set.extend(other);
-        CoContext(set)
+        CoContext::from_iter(self.0.into_iter().chain(other))
     }
 }
 
 impl<T> std::ops::Sub<&T> for CoContext<T>
 where
-    T: std::hash::Hash + Eq + Clone,
+    T: Ord,
 {
     type Output = Self;
     fn sub(self, item: &T) -> Self {
-        let mut set = self.0;
-        set.remove(item);
-        CoContext(set)
+        let mut items = self.0;
+        if let Ok(index) = items.binary_search(item) {
+            items.remove(index);
+        }
+        CoContext(items)
     }
 }
 
 impl<T> std::ops::Sub<Context<T>> for CoContext<T>
 where
-    T: std::hash::Hash + Eq + Clone,
+    T: Ord,
 {
     type Output = Self;
     fn sub(mut self, ctx: Context<T>) -> Self {
@@ -120,5 +129,26 @@ where
             self = self - &item;
         }
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn co_contexts_store_sorted_unique_elements() {
+        let context = CoContext::from_iter([3, 1, 2, 1]);
+
+        assert_eq!(context.iter().copied().collect::<Vec<_>>(), [1, 2, 3]);
+    }
+
+    #[test]
+    fn co_context_set_operations_preserve_the_invariant() {
+        let context = CoContext::from_iter([3, 1]) + [2, 1];
+        let context = context - &2;
+        let context = context - Context::from_iter([3]);
+
+        assert_eq!(context.iter().copied().collect::<Vec<_>>(), [1]);
     }
 }

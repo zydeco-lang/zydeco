@@ -549,8 +549,7 @@ where
     DefId: Pretty<'a, Formatter<'a>>,
 {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let zydeco_utils::context::CoContext(defs) = self;
-        RcDoc::intersperse(defs.iter().map(|id| id.pretty(f)), RcDoc::text(", "))
+        RcDoc::intersperse(self.iter().map(|id| id.pretty(f)), RcDoc::text(", "))
     }
 }
 

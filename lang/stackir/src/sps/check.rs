@@ -209,15 +209,15 @@ pub fn check(program: &StackirProgram, scoped: &ScopedArena) {
 /// Ensure that the program root is closed (has no free variables).
 fn check_closed_root(program: &StackirProgram, scoped: &ScopedArena) {
     let fv = program.root.free_vars(&program.arena);
-    let fv_str =
-        fv.0.iter()
-            .map(|def| {
-                let name = &scoped.defs[def];
-                format!("{}{}", name.plain(), def.concise())
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-    if !fv.0.is_empty() {
+    let fv_str = fv
+        .iter()
+        .map(|def| {
+            let name = &scoped.defs[def];
+            format!("{}{}", name.plain(), def.concise())
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    if !fv.is_empty() {
         panic!("stack IR root {:?} is not closed; free variables: {}", program.root, fv_str);
     }
 }

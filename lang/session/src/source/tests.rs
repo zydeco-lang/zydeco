@@ -1027,7 +1027,7 @@ fn a_self_contained_imported_term_resolves_normally() {
         resolved.arena.terms[&resolved.root],
         zydeco_surface::scoped::syntax::Term::SourceBoundary(_)
     ));
-    assert!(resolved.arena.coctxs_term_local[&resolved.root].0.is_empty());
+    assert!(resolved.arena.coctxs_term_local[&resolved.root].is_empty());
 }
 
 #[test]

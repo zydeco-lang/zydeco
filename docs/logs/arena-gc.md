@@ -1286,3 +1286,56 @@ decisions while implementing the plan.
 - Reconsider sharing structurally identical imported classifiers only if the new ownership profile
   still attributes meaningful memory to them; saturation may already have removed their amplified
   copies.
+
+## 2026-08-15 — round 29: compact free-variable contexts
+
+### Findings
+
+- macOS allocator snapshots separated the remaining process memory by phase. Live heap grew from
+  14.0MB after loading the source graph to 44.9MB after parsing, 61.2MB after desugaring, and
+  146.0MB after name resolution, before the type checker began. The resolved source arena was
+  therefore already larger than the complete post-saturation checking delta.
+- Controlled field-by-field drops identified the resolved-arena owners including nested
+  allocations. `coctxs_term_local` released 49.1MB and `coctxs_pat_local` released 22.2MB. By
+  comparison, resolved terms released 15.1MB, the textual provenance map 19.6MB, spans 12.7MB,
+  and the remaining fields substantially less.
+- The two dominant tables contain free-variable sets for each resolved occurrence. The standard
+  library has 64,954 term sets containing only 72,733 logical entries in total, and the largest set
+  has 73 entries. Their 71.3MB footprint came from one persistent hash-trie value per occurrence,
+  not from a large amount of semantic data.
+- Persistent structure was the wrong tradeoff at this scale. Most sets are empty or tiny, while the
+  sum of all logical entries is itself small enough to store directly. A compact sorted sequence
+  makes both the representation and its cost match the actual invariant: a small unordered set of
+  resolved identifiers.
+
+### Changes
+
+- `CoContext` now stores a private sorted, deduplicated `Vec` instead of an `im::HashSet`.
+  Construction and union re-establish the invariant; subtraction uses binary search, and callers
+  inspect the set through `iter` and `is_empty` rather than its representation.
+- Regressions cover sorting, deduplication, union, and subtraction. Surface formatting, session
+  assertions, and stack-IR closedness checks use the representation-independent API.
+- The phase snapshots and destructive field-drop instrumentation were removed after the ownership
+  census.
+
+### Measurements
+
+- After the representation change, the resolved live heap is 85.0MB instead of 146.0MB. Controlled
+  drops measure 8.8MB for term free-variable contexts and 1.6MB for pattern free-variable contexts,
+  a combined 61.0MB reduction from their former 71.3MB footprint.
+- Three clean release checks used 227,360,768, 232,013,824, and 227,147,776 bytes peak RSS (median
+  227,360,768), down 63,012,864 bytes (-21.7%) from round 28. Warm wall time was 0.27–0.29s and warm
+  user time was 0.24–0.26s.
+- The current-tree baseline is now down from 2,497,757,184 to 227,360,768 bytes (-90.9%).
+- All 22 utility tests, 140 surface tests, and 151 session tests passed, including utility doctests,
+  along with the release CLI build and full standard-library check.
+
+### Next
+
+- Remove or stop retaining the 64,954-entry `ctxs_term` table. Every stored lexical context is empty
+  in the standard-library program, no production reader exists, and the table still owns 6.4MB.
+- Account for the checker's remaining roughly 112MB live-heap increase from resolved input through
+  normalization. Inventory all static arena tables before changing another substitution path.
+- Revisit the 19.6MB textual provenance map after establishing which editor and diagnostic queries
+  consume each direction. Its many one-element vectors may have a similar representation mismatch,
+  but unlike `CoContext` it encodes a real one-to-many relation that needs a usage census first.
