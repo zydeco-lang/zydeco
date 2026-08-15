@@ -37,6 +37,11 @@ use crate::{
 /// Compiler analysis state for one editor root.
 pub(crate) struct ProjectState {
     analysis: Arc<ProgramAnalysis>,
+    /// The materialized typed arena of the open root. The project is a live
+    /// consumer of its root, so it holds the occurrence payload while the
+    /// project lives; the session and its salsa memo only retain the latest
+    /// root on demand.
+    statics: StaticsArena,
     /// The analyzed root, for fact lookups against the session's memoized
     /// queries.
     root: PathBuf,
@@ -87,8 +92,8 @@ impl ProjectState {
         progress(AnalysisProgress::Resolving { source_count });
         progress(AnalysisProgress::Tycking { source_count });
         let analysis = session.analyze(source_path).map_err(|error| error.to_string())?;
+        let statics = session.materialize_arena(&analysis).map_err(|error| error.to_string())?;
         let scoped = analysis.scoped();
-        let statics = analysis.statics();
         let file_infos = analysis
             .sources()
             .map(|(path, source)| {
@@ -107,13 +112,14 @@ impl ProjectState {
             &source_path,
             analysis.spans(),
             scoped,
-            Some(statics),
+            Some(&statics),
         );
         let semantic_path = source_path;
         let semantic_tokens = tokens;
 
         Ok(Self {
             analysis,
+            statics,
             root: semantic_path.clone(),
             file_infos,
             semantic_path,
@@ -393,7 +399,7 @@ impl ProjectState {
     }
 
     fn statics(&self) -> &StaticsArena {
-        self.analysis.statics()
+        &self.statics
     }
 
     #[allow(deprecated)]

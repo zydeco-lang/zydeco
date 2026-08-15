@@ -1,5 +1,5 @@
 use crate::{diagnostics::DiagnosticText, submission::ExpressionMode};
-use std::{collections::HashSet, path::PathBuf, sync::Arc};
+use std::{collections::HashSet, path::PathBuf};
 use thiserror::Error;
 use zydeco_dynamics::{
     BuiltinComputationRootLinker, BuiltinPackageError, BuiltinValueRootLinker, ProgKont,
@@ -77,11 +77,16 @@ impl ReplEngine {
             return EvaluationOutcome::TypeRejected(DiagnosticText::rejected(&analysis));
         }
 
-        let observations = Self::observations(&analysis);
+        let program = self
+            .session
+            .checked_program(&analysis)
+            .expect("a checked analysis has an owned program");
+        let root = Self::input_root(&analysis);
+        let observations = Self::observations(&analysis, &program);
         let result = match mode {
-            | ExpressionMode::Type => Ok(Self::inspect(&analysis, Self::input_root(&analysis))),
-            | ExpressionMode::Evaluate => Self::evaluate_default(&analysis),
-            | ExpressionMode::Run => Self::run_checked(&analysis, true),
+            | ExpressionMode::Type => Ok(Self::inspect(&program, root)),
+            | ExpressionMode::Evaluate => Self::evaluate_default(program, root),
+            | ExpressionMode::Run => Self::run_checked(program, root, true),
         };
         match result {
             | Ok(result) => {
@@ -91,20 +96,21 @@ impl ReplEngine {
         }
     }
 
-    fn evaluate_default(analysis: &Arc<ProgramAnalysis>) -> Result<String, String> {
-        match Self::input_root(analysis) {
+    fn evaluate_default(program: CheckedProgram, root: TermAnnId) -> Result<String, String> {
+        match root {
             | root @ (TermAnnId::Kind(_) | TermAnnId::Type(_, _)) => {
-                Ok(Self::inspect(analysis, root))
+                Ok(Self::inspect(&program, root))
             }
-            | TermAnnId::Value(_, _) => Self::run_checked(analysis, false),
-            | TermAnnId::Compu(_, _) => Self::run_checked(analysis, false),
+            | TermAnnId::Value(_, _) => Self::run_checked(program, root, false),
+            | TermAnnId::Compu(_, _) => Self::run_checked(program, root, false),
             | TermAnnId::Hole(_) => unreachable!("a checked source root cannot remain a hole"),
         }
     }
 
-    fn run_checked(analysis: &Arc<ProgramAnalysis>, forced: bool) -> Result<String, String> {
-        let program = analysis.checked_program().expect("a checked analysis has an owned program");
-        let classifier = match Self::input_root(analysis) {
+    fn run_checked(
+        program: CheckedProgram, root: TermAnnId, forced: bool,
+    ) -> Result<String, String> {
+        let classifier = match root {
             | TermAnnId::Value(_, ty) => {
                 Some(Self::pretty_in(&program, Self::value_result_type(&program.statics, ty)))
             }
@@ -133,7 +139,7 @@ impl ReplEngine {
             | root @ (TermAnnId::Kind(_) | TermAnnId::Type(_, _)) => {
                 return Err(format!(
                     "cannot run {}; use `@[type] expression` to inspect it",
-                    Self::inspect(analysis, root),
+                    Self::inspect(&program, root),
                 ));
             }
             | TermAnnId::Hole(_) => unreachable!("a checked source root cannot remain a hole"),
@@ -277,8 +283,8 @@ impl ReplEngine {
         }
     }
 
-    fn inspect(analysis: &ProgramAnalysis, root: TermAnnId) -> String {
-        let formatter = StaticFormatter::new(analysis.scoped(), analysis.statics());
+    fn inspect(program: &CheckedProgram, root: TermAnnId) -> String {
+        let formatter = StaticFormatter::new(&program.scoped, &program.statics);
         Self::inspect_with(&formatter, root)
     }
 
@@ -317,8 +323,8 @@ impl ReplEngine {
         }
     }
 
-    fn observations(analysis: &ProgramAnalysis) -> Vec<String> {
-        let formatter = StaticFormatter::new(analysis.scoped(), analysis.statics());
+    fn observations(analysis: &ProgramAnalysis, program: &CheckedProgram) -> Vec<String> {
+        let formatter = StaticFormatter::new(&program.scoped, &program.statics);
         analysis
             .observations()
             .iter()

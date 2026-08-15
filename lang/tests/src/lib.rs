@@ -51,10 +51,12 @@ pub mod utils {
         }
 
         pub fn check(self) {
-            let analysis = CommandCompiler::default().analyze(&self.path).unwrap_or_else(|error| {
+            let compiler = CommandCompiler::default();
+            let analysis = compiler.analyze(&self.path).unwrap_or_else(|error| {
                 panic!("Error checking source {}: {error}", self.path.display())
             });
-            let checked = analysis.checked_program().expect("successful analysis must be checked");
+            let checked =
+                compiler.checked_program(&analysis).expect("successful analysis must be checked");
             let TermAnnId::Value(_, root_type) = checked.root else {
                 panic!("Library source {} must export a value", self.path.display());
             };

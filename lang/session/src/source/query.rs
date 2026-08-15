@@ -97,31 +97,8 @@ impl ProgramAnalysis {
         self.graph.sources.iter().map(|(_, file)| (file.path.as_path(), file.source.as_str()))
     }
 
-    pub fn checked_program(&self) -> Option<CheckedProgram> {
-        let root = self.outcome.root()?;
-        Some(CheckedProgram {
-            spans: self.spans.clone(),
-            scoped: self.scoped.clone(),
-            statics: self.statics.clone(),
-            root,
-        })
-    }
-
-    pub fn executable_program(&self) -> Result<ExecutableProgram, ExecutableError> {
-        let root = self.outcome.root().ok_or(ExecutableError::Rejected)?;
-        let TermAnnId::Compu(root, ty) = root else {
-            return Err(ExecutableError::NonComputation { found: root.into() });
-        };
-        let Fillable::Done(Type::PackPi(signature)) = self.statics.types_pre[&ty].clone() else {
-            return Err(ExecutableError::NonBuiltinExecutable { found: ty });
-        };
-        Ok(ExecutableProgram {
-            spans: self.spans.clone(),
-            scoped: self.scoped.clone(),
-            statics: self.statics.clone(),
-            root,
-            signature,
-        })
+    pub fn root_path(&self) -> &Path {
+        self.graph.sources[&self.graph.root].path.as_path()
     }
 }
 
@@ -146,6 +123,8 @@ pub struct ExecutableProgram {
 pub enum ExecutableError {
     #[error("cannot execute a program rejected during type checking")]
     Rejected,
+    #[error("the analysis could not be re-materialized")]
+    Materialize,
     #[error("cannot execute or lower a source root classified as {found}")]
     NonComputation { found: CheckedRootSort },
     #[error("Builtin execution requires a package-dependent root, but found type {found:?}")]
@@ -319,6 +298,62 @@ impl CompilerSession {
         analyze_source(self, root)
     }
 
+    /// Re-materialize the full typed arena of one analysis from the memoized
+    /// check. The arena is transient: callers own and drop it after use. The
+    /// memo retains only the latest root (`lru = 1`), so materializing a stale
+    /// analysis re-checks its root.
+    pub fn materialize_arena(
+        &self, analysis: &ProgramAnalysis,
+    ) -> Result<zydeco_statics::arena::StaticsArena, AnalysisError> {
+        let root = self
+            .source_input(analysis.root_path().to_path_buf())
+            .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
+        let (_, output) = rechecked(self, root)?;
+        Ok(output.outcome.into_statics())
+    }
+
+    /// Owned clone of a checked program for consumers that perform mutable
+    /// lowering, re-materialized from the memoized check on demand.
+    pub fn checked_program(&self, analysis: &ProgramAnalysis) -> Option<CheckedProgram> {
+        let root = self.source_input(analysis.root_path().to_path_buf()).ok()?;
+        let (spans, zydeco_statics::query::TyckOutput { scoped, outcome }) =
+            rechecked(self, root).ok()?;
+        let (root, statics) = match outcome {
+            | zydeco_statics::SourceCheckOutcome::Checked(CheckedSource {
+                statics, root, ..
+            }) => (root, statics),
+            | zydeco_statics::SourceCheckOutcome::Rejected(_) => return None,
+        };
+        Some(CheckedProgram { spans, scoped, statics, root })
+    }
+
+    /// One checked computation with the host Builtin package contract
+    /// validated, re-materialized from the memoized check on demand.
+    pub fn executable_program(
+        &self, analysis: &ProgramAnalysis,
+    ) -> Result<ExecutableProgram, ExecutableError> {
+        let root = self
+            .source_input(analysis.root_path().to_path_buf())
+            .map_err(|_| ExecutableError::Materialize)?;
+        let (spans, zydeco_statics::query::TyckOutput { scoped, outcome }) =
+            rechecked(self, root).map_err(|_| ExecutableError::Materialize)?;
+        let (root, statics) = match outcome {
+            | zydeco_statics::SourceCheckOutcome::Checked(CheckedSource {
+                statics, root, ..
+            }) => (root, statics),
+            | zydeco_statics::SourceCheckOutcome::Rejected(_) => {
+                return Err(ExecutableError::Rejected);
+            }
+        };
+        let TermAnnId::Compu(root, ty) = root else {
+            return Err(ExecutableError::NonComputation { found: root.into() });
+        };
+        let Fillable::Done(Type::PackPi(signature)) = statics.types_pre[&ty].clone() else {
+            return Err(ExecutableError::NonBuiltinExecutable { found: ty });
+        };
+        Ok(ExecutableProgram { spans, scoped, statics, root, signature })
+    }
+
     /// Check a resolved program constructed outside the source pipeline.
     ///
     /// Salsa requires an active query to create tracked structs, so the arenas
@@ -484,20 +519,41 @@ fn source_graph(
         .map_err(Arc::new)
 }
 
+/// The name-resolved program of one root, memoized so that every consumer of
+/// the root shares one [`ScopedData`] identity — and therefore one
+/// [`zydeco_statics::query::check_source`] memo entry.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
-fn analyze_source(
-    db: &dyn SourceQueryDb, root: SourceInput,
-) -> Result<Arc<ProgramAnalysis>, AnalysisError> {
+fn resolved_data<'db>(
+    db: &'db dyn SourceQueryDb, root: SourceInput,
+) -> Result<(SpanArena, zydeco_statics::query::ScopedData<'db>), AnalysisError> {
     let graph = source_graph(db, root).map_err(|error| AnalysisError::Source { error })?;
     let program = graph.parse().map_err(|error| AnalysisError::TextualProgram { error })?;
     let bitter =
         program.desugar().map_err(|error| AnalysisError::Desugar { error: Box::new(error) })?;
     let ScopedProgram { spans, arena, prim, root } =
-        bitter.resolve().map_err(|error| AnalysisError::Resolve { error, graph: graph.clone() })?;
+        bitter.resolve().map_err(|error| AnalysisError::Resolve { error, graph })?;
     let data = zydeco_statics::query::ScopedData::new(db, spans.clone(), prim, arena, root);
-    let zydeco_statics::query::TyckOutput { scoped, outcome: checked } =
-        zydeco_statics::query::check_source(db, data);
-    let (statics, outcome, observations) = match checked {
+    Ok((spans, data))
+}
+
+/// Run the whole source pipeline for one root and return the memoized check
+/// output. The typed arena stays in the salsa memo (`check_source` keeps only
+/// the latest root via `lru = 1`); callers own whatever they clone out.
+fn rechecked(
+    db: &dyn SourceQueryDb, root: SourceInput,
+) -> Result<(SpanArena, zydeco_statics::query::TyckOutput), AnalysisError> {
+    let (spans, data) = resolved_data(db, root)?;
+    Ok((spans, zydeco_statics::query::check_source(db, data)))
+}
+
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+fn analyze_source(
+    db: &dyn SourceQueryDb, root: SourceInput,
+) -> Result<Arc<ProgramAnalysis>, AnalysisError> {
+    let graph = source_graph(db, root).map_err(|error| AnalysisError::Source { error })?;
+    let (spans, zydeco_statics::query::TyckOutput { scoped, outcome: checked }) =
+        rechecked(db, root)?;
+    let (mut statics, outcome, observations) = match checked {
         | zydeco_statics::SourceCheckOutcome::Checked(CheckedSource {
             statics,
             root,
@@ -509,6 +565,10 @@ fn analyze_source(
             observations,
         }) => (statics, AnalysisOutcome::Rejected { reports }, observations),
     };
+    // The analysis retains only the keyed indexes; the occurrence payload stays
+    // in the salsa memo and is re-materialized on demand via
+    // `CompilerSession::materialize_arena`.
+    statics.strip_occurrence_payload();
     Ok(Arc::new(ProgramAnalysis { graph, spans, scoped, statics, outcome, observations }))
 }
 
@@ -530,8 +590,9 @@ fn reports_at(
 fn normalized_type_at<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput, id: zydeco_statics::query::InternedType<'db>,
 ) -> Option<Type> {
-    let analysis = analyze_source(db, root).ok()?;
-    analysis.statics().normalized_at(id.id(db)).cloned()
+    let (_, output) = rechecked(db, root).ok()?;
+    let statics = output.outcome.into_statics();
+    statics.normalized_at(id.id(db)).cloned()
 }
 
 /// Coverage failures of one analyzed root, computed on demand.
@@ -539,10 +600,11 @@ fn normalized_type_at<'db>(
 fn coverage_at(
     db: &dyn SourceQueryDb, root: SourceInput,
 ) -> Vec<zydeco_statics::validate::CoverageError> {
-    let Ok(analysis) = analyze_source(db, root) else {
+    let Ok((_, output)) = rechecked(db, root) else {
         return Vec::new();
     };
-    zydeco_statics::validate::CoverageChecker::new(analysis.statics()).validate()
+    let statics = output.outcome.into_statics();
+    zydeco_statics::validate::CoverageChecker::new(&statics).validate()
 }
 
 /// The recorded solution of a hole-filling site, if the checker solved it.
@@ -579,8 +641,8 @@ fn term_annotation_at<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput, term: zydeco_statics::query::InternedTerm<'db>,
 ) -> Option<zydeco_statics::syntax::TermAnnId> {
     use zydeco_statics::syntax::TermAnnId;
-    let analysis = analyze_source(db, root).ok()?;
-    let statics = analysis.statics();
+    let (_, output) = rechecked(db, root).ok()?;
+    let statics = output.outcome.into_statics();
     let typed = *statics.terms.forth(&term.id(db)).last()?;
     Some(match typed {
         | zydeco_statics::syntax::TermId::Kind(kind) => TermAnnId::Kind(kind),
@@ -764,6 +826,31 @@ mod tests {
                 .iter()
                 .any(|(_, source)| source.path == SourcePath::identity(&input).unwrap())
         );
+    }
+
+    #[test]
+    fn analyses_retain_only_the_keyed_indexes_and_rematerialize_on_demand() {
+        let fixture = Fixture::new();
+        let root = fixture.write("root.zy", "ret 1");
+        let session = CompilerSession::default();
+
+        let analysis = session.analyze(&root).unwrap();
+
+        // The analysis keeps the keyed indexes and drops the occurrence
+        // payload.
+        let statics = analysis.statics();
+        assert_eq!(statics.types_pre.len(), 0);
+        assert_eq!(statics.kinds_pre.len(), 0);
+        assert_eq!(statics.values.len(), 0);
+        assert_eq!(statics.compus.len(), 0);
+        assert_eq!(statics.types_normalized.len(), 0);
+        assert_eq!(statics.annotations_type.len(), 0);
+        assert_eq!(statics.annotations_compu.len(), 0);
+
+        // The session re-materializes the payload from the memoized check.
+        let program = session.checked_program(&analysis).expect("checked program");
+        assert!(program.statics.types_pre.len() > 0);
+        assert!(program.statics.compus.len() > 0);
     }
 
     #[test]

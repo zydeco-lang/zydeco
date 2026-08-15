@@ -27,8 +27,21 @@ impl CommandCompiler {
         }
     }
 
+    pub fn checked_program(
+        &self, analysis: &ProgramAnalysis,
+    ) -> Option<zydeco_session::CheckedProgram> {
+        self.session.checked_program(analysis)
+    }
+
+    pub fn executable_program(
+        &self, analysis: &ProgramAnalysis,
+    ) -> Result<ExecutableProgram, CompileError> {
+        self.session.executable_program(analysis).map_err(CompileError::Executable)
+    }
+
     pub fn executable(&self, path: &Path) -> Result<ExecutableProgram, CompileError> {
-        self.analyze(path)?.executable_program().map_err(CompileError::Executable)
+        let analysis = self.analyze(path)?;
+        self.executable_program(&analysis)
     }
 
     pub fn interpret(

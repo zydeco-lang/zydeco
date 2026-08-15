@@ -215,7 +215,7 @@ impl TestPipeline {
         let mut pool = SHARED_SESSION.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let session = pool.session();
         let analysis = session.analyze(path).map_err(TestPipelineError::Analysis)?;
-        let checked = analysis.checked_program().ok_or(TestPipelineError::Rejected)?;
+        let checked = session.checked_program(&analysis).ok_or(TestPipelineError::Rejected)?;
         Ok(SourceChecked {
             spans: checked.spans,
             scoped: checked.scoped,

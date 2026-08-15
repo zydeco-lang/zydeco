@@ -91,8 +91,8 @@ impl Application {
     fn run_source(
         &self, path: &Path, dry: bool, arguments: &[String],
     ) -> Result<i32, ApplicationError> {
-        let executable =
-            self.analyze(path)?.executable_program().map_err(CompileError::Executable)?;
+        let analysis = self.analyze(path)?;
+        let executable = self.compiler.executable_program(&analysis)?;
         match CommandCompiler::interpret_program(executable, arguments, dry)? {
             | ProgKont::Dry => Ok(0),
             | ProgKont::ExitCode(code) => Ok(code),
@@ -103,8 +103,8 @@ impl Application {
     fn build_source(
         &self, path: &Path, target: BuildTarget, options: BuildOptions, execute: bool,
     ) -> Result<i32, ApplicationError> {
-        let executable =
-            self.analyze(path)?.executable_program().map_err(CompileError::Executable)?;
+        let analysis = self.analyze(path)?;
+        let executable = self.compiler.executable_program(&analysis)?;
         let backend = BackendProgram::lower(executable)?;
         match target {
             | BuildTarget::Zir => println!("{}", backend.render_sps_low()),

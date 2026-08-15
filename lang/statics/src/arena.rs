@@ -282,6 +282,26 @@ impl StaticsArena {
         self.env_type[&id].as_ref().clone()
     }
 
+    /// Drop the occurrence payload of a finished check, retaining only the
+    /// keyed indexes from which the typed tree can be re-materialized. See
+    /// `docs/ideas/arena-gc.md` for the L/S classification.
+    pub fn strip_occurrence_payload(&mut self) {
+        self.kinds_pre = Default::default();
+        self.kpats = Default::default();
+        self.tpats = Default::default();
+        self.types_pre = Default::default();
+        self.vpats = Default::default();
+        self.values = Default::default();
+        self.compus = Default::default();
+        self.annotations_tpat = Default::default();
+        self.annotations_type = Default::default();
+        self.annotations_vpat = Default::default();
+        self.annotations_value = Default::default();
+        self.annotations_compu = Default::default();
+        self.kinds_normalized = Default::default();
+        self.types_normalized = Default::default();
+    }
+
     /// The normalized form of one type, falling back to the pre-normalization
     /// form for nodes the normalization phase left unchanged.
     pub fn normalized_at(&self, id: TypeId) -> Option<&Type> {
