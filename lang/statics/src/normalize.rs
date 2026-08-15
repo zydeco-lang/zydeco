@@ -211,7 +211,8 @@ impl TypeSupportCollector {
                     }
                     result?;
                 }
-                | Type::Exists(Exists { binder, mode, body }) => {
+                | Type::Exists(exists) => {
+                    let Exists { binder, mode, body } = *exists;
                     if let ExistsMode::Manifest(definition) = mode {
                         self.visit(definition, tycker)?;
                     }
@@ -223,8 +224,20 @@ impl TypeSupportCollector {
                     result?;
                 }
                 | Type::ManifestKind(ManifestKind { body, .. }) => self.visit(body, tycker)?,
-                | Type::VPackPi(ValuePackPi { domain, witnesses, codomain })
-                | Type::PackPi(PackPi { domain, witnesses, codomain }) => {
+                | Type::VPackPi(pack_pi) => {
+                    let ValuePackPi { domain, witnesses, codomain } = *pack_pi;
+                    self.visit(domain, tycker)?;
+                    let outer_bound = self.bound.clone();
+                    let outer_pack_scope = self.pack_scope.clone();
+                    self.bound.extend(witnesses.iter().copied());
+                    self.pack_scope = self.pack_scope.union(&witnesses.iter().copied().collect());
+                    let result = self.visit(codomain, tycker);
+                    self.bound = outer_bound;
+                    self.pack_scope = outer_pack_scope;
+                    result?;
+                }
+                | Type::PackPi(pack_pi) => {
+                    let PackPi { domain, witnesses, codomain } = *pack_pi;
                     self.visit(domain, tycker)?;
                     let outer_bound = self.bound.clone();
                     let outer_pack_scope = self.pack_scope.clone();
@@ -372,7 +385,7 @@ impl TypeId {
                     }
                 }
                 | Type::VPackPi(pack_pi) => {
-                    let ValuePackPi { domain, witnesses, codomain } = pack_pi;
+                    let ValuePackPi { domain, witnesses, codomain } = *pack_pi;
                     let domain_ = domain.subst_env(tycker, env)?;
                     let codomain_ = codomain.subst_env(tycker, env)?;
                     if domain == domain_ && codomain == codomain_ {
@@ -392,7 +405,7 @@ impl TypeId {
                     if ty == ty_ { *self } else { Alloc::alloc(tycker, Forall(tpat, ty_), kd, env) }
                 }
                 | Type::PackPi(pack_pi) => {
-                    let PackPi { domain, witnesses, codomain } = pack_pi;
+                    let PackPi { domain, witnesses, codomain } = *pack_pi;
                     let domain_ = domain.subst_env(tycker, env)?;
                     let codomain_ = codomain.subst_env(tycker, env)?;
                     if domain == domain_ && codomain == codomain_ {
@@ -417,7 +430,7 @@ impl TypeId {
                     }
                 }
                 | Type::Exists(exists) => {
-                    let Exists { binder, mode, body } = exists;
+                    let Exists { binder, mode, body } = *exists;
                     let (mode, definition_changed) = match mode {
                         | ExistsMode::Abstract => (ExistsMode::Abstract, false),
                         | ExistsMode::Manifest(definition) => {
@@ -615,7 +628,7 @@ impl TypeId {
                     }
                 }
                 | Type::VPackPi(pack_pi) => {
-                    let ValuePackPi { domain, witnesses, codomain } = pack_pi;
+                    let ValuePackPi { domain, witnesses, codomain } = *pack_pi;
                     let domain_ = domain.subst_abst(tycker, assign)?;
                     let codomain_ = if witnesses.contains(&assign.0) {
                         codomain
@@ -643,7 +656,7 @@ impl TypeId {
                     }
                 }
                 | Type::PackPi(pack_pi) => {
-                    let PackPi { domain, witnesses, codomain } = pack_pi;
+                    let PackPi { domain, witnesses, codomain } = *pack_pi;
                     let domain_ = domain.subst_abst(tycker, assign)?;
                     let codomain_ = if witnesses.contains(&assign.0) {
                         codomain
@@ -672,7 +685,7 @@ impl TypeId {
                     }
                 }
                 | Type::Exists(exists) => {
-                    let Exists { binder, mode, body } = exists;
+                    let Exists { binder, mode, body } = *exists;
                     let (mode, definition_changed) = match mode {
                         | ExistsMode::Abstract => (ExistsMode::Abstract, false),
                         | ExistsMode::Manifest(definition) => {
@@ -1363,7 +1376,7 @@ impl TypeId {
                     }
                 }
                 | Type::VPackPi(pack_pi) => {
-                    let ValuePackPi { domain, witnesses, codomain } = pack_pi;
+                    let ValuePackPi { domain, witnesses, codomain } = *pack_pi;
                     let domain_ = resolver.resolve(domain, tycker)?;
                     let codomain_ = resolver.resolve(codomain, tycker)?;
                     if domain == domain_ && codomain == codomain_ {
@@ -1393,7 +1406,7 @@ impl TypeId {
                     }
                 }
                 | Type::PackPi(pack_pi) => {
-                    let PackPi { domain, witnesses, codomain } = pack_pi;
+                    let PackPi { domain, witnesses, codomain } = *pack_pi;
                     let domain_ = resolver.resolve(domain, tycker)?;
                     let codomain_ = resolver.resolve(codomain, tycker)?;
                     if domain == domain_ && codomain == codomain_ {
@@ -1423,7 +1436,7 @@ impl TypeId {
                     }
                 }
                 | Type::Exists(ty) => {
-                    let Exists { binder, mode, body } = ty;
+                    let Exists { binder, mode, body } = *ty;
                     let (mode, definition_changed) = match mode {
                         | ExistsMode::Abstract => (ExistsMode::Abstract, false),
                         | ExistsMode::Manifest(definition) => {
@@ -1870,7 +1883,7 @@ impl TypeId {
                     }
                 }
                 | Type::VPackPi(pack_pi) => {
-                    let ValuePackPi { domain, witnesses, codomain } = pack_pi;
+                    let ValuePackPi { domain, witnesses, codomain } = *pack_pi;
                     let domain_norm = domain.filled_norm_id(tycker, norm)?;
                     let codomain_norm = codomain.filled_norm_id(tycker, norm)?;
                     if domain_norm == domain && codomain_norm == codomain && kd_norm == kd {
@@ -1894,7 +1907,7 @@ impl TypeId {
                     }
                 }
                 | Type::PackPi(pack_pi) => {
-                    let PackPi { domain, witnesses, codomain } = pack_pi;
+                    let PackPi { domain, witnesses, codomain } = *pack_pi;
                     let domain_norm = domain.filled_norm_id(tycker, norm)?;
                     let codomain_norm = codomain.filled_norm_id(tycker, norm)?;
                     if domain_norm == domain && codomain_norm == codomain && kd_norm == kd {
@@ -1919,7 +1932,7 @@ impl TypeId {
                     }
                 }
                 | Type::Exists(exists) => {
-                    let Exists { binder, mode, body } = exists;
+                    let Exists { binder, mode, body } = *exists;
                     let (mode, definition_changed) = match mode {
                         | ExistsMode::Abstract => (ExistsMode::Abstract, false),
                         | ExistsMode::Manifest(definition) => {

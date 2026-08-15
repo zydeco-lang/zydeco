@@ -214,7 +214,7 @@ impl ReplEngine {
             {
                 ComputationPlan::Return(*payload)
             }
-            | Some(Type::PackPi(signature)) => ComputationPlan::Builtin(signature.clone()),
+            | Some(Type::PackPi(signature)) => ComputationPlan::Builtin(signature.as_ref().clone()),
             | Some(Type::Abst(witness))
                 if statics.builtin_roles.witness(*witness)
                     == Some(BuiltinRole::Type(BuiltinTypeRole::OS)) =>
@@ -227,7 +227,7 @@ impl ReplEngine {
 
     fn value_plan(statics: &StaticsArena, ty: TypeId) -> ValuePlan {
         match Self::type_view(statics, ty) {
-            | Some(Type::VPackPi(signature)) => ValuePlan::Builtin(signature.clone()),
+            | Some(Type::VPackPi(signature)) => ValuePlan::Builtin(signature.as_ref().clone()),
             | _ => ValuePlan::Plain,
         }
     }

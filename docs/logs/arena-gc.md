@@ -413,3 +413,40 @@ decisions while implementing the plan.
   genuinely distinct eager type-instantiation nodes. Investigate an explicit-substitution
   representation that can defer recursive rewriting; the two memoization experiments in round
   6 show that another result cache cannot collapse this work.
+
+## 2026-08-15 — round 12: indirect only the rare wide type variants
+
+### Findings
+
+- `Type` and `Fillable<Type>` were 72 bytes because `PackPi`, `ValuePackPi`, and `Exists` each
+  carried a 64-byte payload inline. The other 99.29% of full-std nodes paid that enum-wide size
+  even though applications, arrows, labels, and products need far less payload.
+- A full-std census found 17,663 `Exists`, 62 `ValuePackPi`, and one `PackPi` node among
+  2,508,856 types (0.707% combined). Indirection therefore adds very few allocations while
+  removing 16 bytes from every slot in the dominant arena.
+
+### Changes
+
+- The three rare 64-byte variants now own boxed payloads. Direct `From<Exists>`,
+  `From<ValuePackPi>`, and `From<PackPi>` conversions keep construction typed and centralize the
+  indirection; consumers explicitly unwrap only when they take ownership of a signature.
+- A layout regression test caps both `Type` and `Fillable<Type>` at 56 bytes, protecting the
+  arena-wide consequence rather than relying on the current field arrangement by accident.
+
+### Measurements
+
+- `Type` and `Fillable<Type>` both fell from 72 to 56 bytes. At the measured 3,087,852-slot
+  final page capacity, that predicts 49,405,632 saved bytes in `types_pre` alone.
+- Three full-std minimal checks used 865,107,968, 865,058,816, and 864,747,520 bytes peak RSS
+  (median 865,058,816), down 49,528,832 bytes from round 11's median — within 0.25% of the slot
+  calculation. Warm user time was 1.14–1.18s.
+- The current-tree baseline is now down from 2,497,757,184 to 865,058,816 bytes (-65.4%).
+- All 35 statics tests passed. The 151-test session library suite passed with two threads in
+  36.66s; the release CLI/TUI build and a focused cajun check also passed.
+
+### Next
+
+- The close agreement between predicted slot bytes and measured RSS confirms that the
+  remaining arena is live data rather than allocator noise. Continue with substitution-call
+  attribution, then prototype a compact suspended substitution only at the high-amplification
+  boundary rather than adding a lazy case to every type operation speculatively.

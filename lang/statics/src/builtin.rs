@@ -485,7 +485,7 @@ impl<'a> BuiltinSignatureValidator<'a> {
                 return Some(());
             };
             match view {
-                | ss::Type::Exists(ss::Exists { body, .. })
+                | ss::Type::Exists(exists) => pending.push(exists.body),
                 | ss::Type::ManifestKind(ss::ManifestKind { body, .. }) => pending.push(body),
                 | ss::Type::Prod(Prod(head, tail)) => pending.extend([tail, head]),
                 | ss::Type::Named(Named(_, inner)) => pending.push(inner),
@@ -725,7 +725,7 @@ impl BuiltinPackagePlan {
 impl BuiltinPackagePlanner<'_> {
     fn value(&self, ty: ss::TypeId) -> Result<BuiltinPackageValue, BuiltinPackagePlanError> {
         match self.type_view(ty)? {
-            | ss::Type::Exists(ss::Exists { body, .. })
+            | ss::Type::Exists(exists) => self.value(exists.body),
             | ss::Type::ManifestKind(ss::ManifestKind { body, .. }) => self.value(body),
             | ss::Type::Prod(Prod(head, tail)) => {
                 let head = self.value(head)?;

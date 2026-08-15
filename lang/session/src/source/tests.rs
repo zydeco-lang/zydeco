@@ -107,7 +107,7 @@ impl SourceChecked {
             scoped: self.scoped,
             statics: self.statics,
             root,
-            signature,
+            signature: *signature,
         }
         .run()
         .map_err(TestPipelineError::Dynamic)?;
@@ -154,7 +154,7 @@ impl SourceChecked {
             &mut lowering_scoped,
             &statics,
             root,
-            signature,
+            *signature,
         )
         .run()
         .map_err(TestPipelineError::Stack)?;

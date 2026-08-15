@@ -99,7 +99,7 @@ impl CopatternElaborator {
             | ss::Type::Forall(ss::Forall(binder, body)) => {
                 self.elaborate_forall_k(tycker, binder, body)
             }
-            | ss::Type::PackPi(signature) => self.elaborate_pack_pi_k(tycker, signature),
+            | ss::Type::PackPi(signature) => self.elaborate_pack_pi_k(tycker, *signature),
             | _ if self.clauses.is_empty() => tycker.err_k(
                 TyckError::NonExhaustiveCopattern { expected: self.expected },
                 std::panic::Location::caller(),

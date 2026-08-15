@@ -82,14 +82,14 @@ impl BuiltinPackageLinker {
 
     fn computation_signature(statics: &StaticsArena, ty: ss::TypeId) -> Option<ss::PackPi> {
         match Self::type_view(statics, ty) {
-            | Some(ss::Type::PackPi(signature)) => Some(signature.clone()),
+            | Some(ss::Type::PackPi(signature)) => Some(signature.as_ref().clone()),
             | _ => None,
         }
     }
 
     fn value_signature(statics: &StaticsArena, ty: ss::TypeId) -> Option<ss::ValuePackPi> {
         match Self::type_view(statics, ty) {
-            | Some(ss::Type::VPackPi(signature)) => Some(signature.clone()),
+            | Some(ss::Type::VPackPi(signature)) => Some(signature.as_ref().clone()),
             | _ => None,
         }
     }

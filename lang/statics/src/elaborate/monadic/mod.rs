@@ -423,7 +423,8 @@ impl<'a> PackPiWitnessLayoutState<'a> {
                 let tail = Self { domain: body, ..self }.collect(tycker, env)?;
                 Ok(std::iter::once(PackPiWitnessLayoutEntry::KindManifest).chain(tail).collect())
             }
-            | Type::Exists(Exists { binder, mode, body }) => {
+            | Type::Exists(exists) => {
+                let Exists { binder, mode, body } = *exists;
                 let (entry, witnesses, payload) = match mode {
                     | ExistsMode::Abstract => {
                         let Some((&witness, witnesses)) = self.witnesses.split_first() else {
@@ -509,8 +510,9 @@ impl PackPiBinderPattern {
                     | (
                         entry @ (PackPiWitnessLayoutEntry::Abstract(_)
                         | PackPiWitnessLayoutEntry::TypeManifest),
-                        Type::Exists(Exists { binder, mode, body }),
+                        Type::Exists(exists),
                     ) => {
+                        let Exists { binder, mode, body } = *exists;
                         let kind = binder.payload_kind(tycker);
                         let witness_def = Alloc::alloc(
                             tycker,
@@ -893,7 +895,8 @@ fn structure_translation(
             .mbuild(tycker, env)?
         }
         | Type::PackPi(signature) => {
-            PackPiStructureTranslation { source: ty, signature }.translate(tycker, env)?
+            PackPiStructureTranslation { source: ty, signature: *signature }
+                .translate(tycker, env)?
         }
     };
     Ok(res)
@@ -1020,7 +1023,7 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             Prod(ty_1_, ty_2_).mbuild(tycker, env)?
         }
         | Type::Exists(ty) => {
-            let Exists { binder, mode, body } = ty;
+            let Exists { binder, mode, body } = *ty;
             let (env, pattern) = type_pattern_translation(tycker, env, binder.pattern)?;
             let witness = env.subst_abst.get(&binder.witness).copied().unwrap_or(binder.witness);
             let witness_ty = Alloc::alloc(tycker, witness, binder.payload_kind(tycker), &env.ty);
@@ -1072,7 +1075,7 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             (env, forall)
         }
         | Type::VPackPi(pack_pi) => {
-            let ValuePackPi { domain, witnesses, codomain } = pack_pi;
+            let ValuePackPi { domain, witnesses, codomain } = *pack_pi;
             let (env, domain) = cs::TypeLift { ty: domain }.mbuild(tycker, env)?;
             let witnesses =
                 witnesses.map(|witness| env.subst_abst.get(&witness).copied().unwrap_or(witness));
@@ -1101,7 +1104,7 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             (env, forall)
         }
         | Type::PackPi(pack_pi) => {
-            let PackPi { domain, witnesses, codomain } = pack_pi;
+            let PackPi { domain, witnesses, codomain } = *pack_pi;
             let (env, domain) = cs::TypeLift { ty: domain }.mbuild(tycker, env)?;
             let witnesses =
                 witnesses.map(|witness| env.subst_abst.get(&witness).copied().unwrap_or(witness));
@@ -1176,17 +1179,17 @@ fn package_pattern_translation(
             Ok((env, package))
         }
         | StaticPatId::Type(witness) => {
-            let Type::Exists(Exists {
-                binder: translated_binder,
-                mode: translated_mode,
-                body: translated_body_ty,
-            }) = tycker.type_filled(&translated_ty)?.to_owned()
-            else {
+            let Type::Exists(exists) = tycker.type_filled(&translated_ty)?.to_owned() else {
                 return tycker.err(
                     TyckError::PackageWitnessArityMismatch { expected: witnesses.len(), found: 0 },
                     std::panic::Location::caller(),
                 );
             };
+            let Exists {
+                binder: translated_binder,
+                mode: translated_mode,
+                body: translated_body_ty,
+            } = *exists;
             let domain_abst = translated_binder.witness;
             let (env, witness) = cs::TypeLift { ty: witness }.mbuild(tycker, env)?;
             let (witness_var, _) = witness.try_destruct_def(tycker);

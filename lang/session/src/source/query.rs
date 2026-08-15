@@ -351,7 +351,7 @@ impl CompilerSession {
         let Fillable::Done(Type::PackPi(signature)) = statics.types_pre[&ty].clone() else {
             return Err(ExecutableError::NonBuiltinExecutable { found: ty });
         };
-        Ok(ExecutableProgram { spans, scoped, statics, root, signature })
+        Ok(ExecutableProgram { spans, scoped, statics, root, signature: *signature })
     }
 
     /// Check a resolved program constructed outside the source pipeline.

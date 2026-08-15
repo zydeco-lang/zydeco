@@ -451,6 +451,11 @@ mod impls_structs {
     }
 }
 
+/// Typed syntax stored in every entry of the dominant paged arena.
+///
+/// The three 64-byte payloads are rare and indirect so their size does not
+/// become padding in the millions of small application, arrow, label, and
+/// product nodes.
 #[derive(From, Clone, Debug)]
 pub enum Type {
     Var(DefId),
@@ -468,12 +473,12 @@ pub enum Type {
     OS(OSTy),
     VArrow(ValueArrow),
     VForall(ValueForall),
-    VPackPi(ValuePackPi),
+    VPackPi(Box<ValuePackPi>),
     Arrow(ArrowU<TypeId>),
     Forall(Forall),
-    PackPi(PackPi),
+    PackPi(Box<PackPi>),
     Prod(ProdU<TypeId>),
-    Exists(Exists),
+    Exists(Box<Exists>),
     ManifestKind(ManifestKind),
     Data(DataId),
     CoData(CoDataId),
@@ -484,6 +489,35 @@ mod impls_types {
     // use crate::err::*;
 
     impl Type {}
+
+    impl From<ValuePackPi> for Type {
+        fn from(value: ValuePackPi) -> Self {
+            Self::VPackPi(Box::new(value))
+        }
+    }
+
+    impl From<PackPi> for Type {
+        fn from(value: PackPi) -> Self {
+            Self::PackPi(Box::new(value))
+        }
+    }
+
+    impl From<Exists> for Type {
+        fn from(value: Exists) -> Self {
+            Self::Exists(Box::new(value))
+        }
+    }
+}
+
+#[cfg(test)]
+mod type_layout_tests {
+    use super::*;
+
+    #[test]
+    fn rare_payloads_keep_type_slots_compact() {
+        assert!(std::mem::size_of::<Type>() <= 56);
+        assert!(std::mem::size_of::<Fillable<Type>>() <= 56);
+    }
 }
 
 /* ---------------------------------- Value --------------------------------- */

@@ -589,7 +589,8 @@ impl ExistentialProjectionPattern {
                         pattern: binder,
                     });
                 }
-                | ss::Type::Exists(ss::Exists { binder, mode, body: next }) => {
+                | ss::Type::Exists(exists) => {
+                    let ss::Exists { binder, mode, body: next } = *exists;
                     let payload_kind = binder.payload_kind(tycker);
                     let field = Self::type_field_name(tycker, &binder);
                     let (payload, skolem) = match mode {
@@ -1781,7 +1782,8 @@ impl<'a> PackPiInstantiationState<'a> {
                 }
                 .instantiate_k(tycker, env)
             }
-            | ss::Type::Exists(ss::Exists { binder, mode, body }) => {
+            | ss::Type::Exists(exists) => {
+                let ss::Exists { binder, mode, body } = *exists;
                 let Some((&ss::StaticTermId::Type(witness), actual)) = self.actual.split_first()
                 else {
                     return self.mismatch_k(tycker);
@@ -1881,25 +1883,26 @@ impl<'a> PackPiWitnessSkolems<'a> {
                 Self { witnesses: self.witnesses, domain: body, expected: self.expected }
                     .collect_k(tycker, env)
             }
-            | ss::Type::Exists(ss::Exists { binder, mode: ss::ExistsMode::Abstract, body }) => {
-                let Some((&canonical, witnesses)) = self.witnesses.split_first() else {
-                    unreachable!()
-                };
-                let kind = tycker.statics.annotations_abst[&canonical];
-                let payload = Alloc::alloc(tycker, canonical, kind, env);
-                let domain = body.subst_abst_k(tycker, (binder.witness, payload))?;
-                let tail =
-                    Self { witnesses, domain, expected: self.expected }.collect_k(tycker, env)?;
-                Ok(std::iter::once((binder.witness, canonical)).chain(tail).collect())
-            }
-            | ss::Type::Exists(ss::Exists {
-                binder,
-                mode: ss::ExistsMode::Manifest(definition),
-                body,
-            }) => {
-                let domain = body.subst_abst_k(tycker, (binder.witness, definition))?;
-                Self { witnesses: self.witnesses, domain, expected: self.expected }
-                    .collect_k(tycker, env)
+            | ss::Type::Exists(exists) => {
+                let ss::Exists { binder, mode, body } = *exists;
+                match mode {
+                    | ss::ExistsMode::Abstract => {
+                        let Some((&canonical, witnesses)) = self.witnesses.split_first() else {
+                            unreachable!()
+                        };
+                        let kind = tycker.statics.annotations_abst[&canonical];
+                        let payload = Alloc::alloc(tycker, canonical, kind, env);
+                        let domain = body.subst_abst_k(tycker, (binder.witness, payload))?;
+                        let tail = Self { witnesses, domain, expected: self.expected }
+                            .collect_k(tycker, env)?;
+                        Ok(std::iter::once((binder.witness, canonical)).chain(tail).collect())
+                    }
+                    | ss::ExistsMode::Manifest(definition) => {
+                        let domain = body.subst_abst_k(tycker, (binder.witness, definition))?;
+                        Self { witnesses: self.witnesses, domain, expected: self.expected }
+                            .collect_k(tycker, env)
+                    }
+                }
             }
             | _ => tycker.err_k(
                 TyckError::PackageWitnessArityMismatch {
@@ -1946,32 +1949,38 @@ impl<'a> PackPiPatternAssignments<'a> {
                 found: self.found,
             }
             .collect_k(tycker, env),
-            | ss::Type::Exists(ss::Exists { binder, mode: ss::ExistsMode::Abstract, body }) => {
-                let Some((&witness, witnesses)) = self.witnesses.split_first() else {
-                    unreachable!()
-                };
-                let kind = tycker.statics.annotations_abst[&witness];
-                let payload = Alloc::alloc(tycker, witness, kind, env);
-                let domain = body.subst_abst_k(tycker, (binder.witness, payload))?;
-                let tail =
-                    Self { items, witnesses, domain, expected: self.expected, found: self.found }
+            | ss::Type::Exists(exists) => {
+                let ss::Exists { binder, mode, body } = *exists;
+                match mode {
+                    | ss::ExistsMode::Abstract => {
+                        let Some((&witness, witnesses)) = self.witnesses.split_first() else {
+                            unreachable!()
+                        };
+                        let kind = tycker.statics.annotations_abst[&witness];
+                        let payload = Alloc::alloc(tycker, witness, kind, env);
+                        let domain = body.subst_abst_k(tycker, (binder.witness, payload))?;
+                        let tail = Self {
+                            items,
+                            witnesses,
+                            domain,
+                            expected: self.expected,
+                            found: self.found,
+                        }
                         .collect_k(tycker, env)?;
-                Ok(std::iter::once((item, witness)).chain(tail).collect())
-            }
-            | ss::Type::Exists(ss::Exists {
-                binder,
-                mode: ss::ExistsMode::Manifest(definition),
-                body,
-            }) => {
-                let domain = body.subst_abst_k(tycker, (binder.witness, definition))?;
-                Self {
-                    items,
-                    witnesses: self.witnesses,
-                    domain,
-                    expected: self.expected,
-                    found: self.found,
+                        Ok(std::iter::once((item, witness)).chain(tail).collect())
+                    }
+                    | ss::ExistsMode::Manifest(definition) => {
+                        let domain = body.subst_abst_k(tycker, (binder.witness, definition))?;
+                        Self {
+                            items,
+                            witnesses: self.witnesses,
+                            domain,
+                            expected: self.expected,
+                            found: self.found,
+                        }
+                        .collect_k(tycker, env)
+                    }
                 }
-                .collect_k(tycker, env)
             }
             | _ => self.mismatch_k(tycker),
         }
@@ -3064,11 +3073,12 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                             static_patterns.push(pattern.into());
                                             let _ = binder;
                                         }
-                                        | ss::Type::Exists(ss::Exists {
-                                            binder: source_binder,
-                                            mode,
-                                            body: next_ty,
-                                        }) => {
+                                        | ss::Type::Exists(exists) => {
+                                            let ss::Exists {
+                                                binder: source_binder,
+                                                mode,
+                                                body: next_ty,
+                                            } = *exists;
                                             let domain_kind = source_binder.domain_kind(tycker);
                                             let payload_kind = source_binder.payload_kind(tycker);
                                             let checked = TyEnvT::new(body_env.clone(), item)
@@ -4329,11 +4339,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                                     body_ty = body;
                                                     Ok(Some(witness.into()))
                                                 }
-                                                | ss::Type::Exists(ss::Exists {
-                                                    binder,
-                                                    mode,
-                                                    body: next_ty,
-                                                }) => {
+                                                | ss::Type::Exists(exists) => {
+                                                    let ss::Exists { binder, mode, body: next_ty } =
+                                                        *exists;
                                                     let domain_kind = binder.domain_kind(tycker);
                                                     let checked = self.mk(item).tyck_k(
                                                         tycker,
@@ -4950,7 +4958,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         .mk(ValuePackPiIntroduction {
                                             binder: pat,
                                             body,
-                                            signature,
+                                            signature: *signature,
                                         })
                                         .tyck_k(tycker, ())?,
                                     | ss::Type::VForall(ty) => {
@@ -5038,7 +5046,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         TermAnnId::Compu(abs, ann)
                                     }
                                     | ss::Type::PackPi(signature) => self
-                                        .mk(PackPiIntroduction { binder: pat, body, signature })
+                                        .mk(PackPiIntroduction {
+                                            binder: pat,
+                                            body,
+                                            signature: *signature,
+                                        })
                                         .tyck_k(tycker, ())?,
                                     | ss::Type::Forall(ty) => {
                                         let ss::Forall(source_binder, ty_body) = ty;
@@ -5204,7 +5216,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 .mk(ValuePackPiElimination {
                                     function: f_out,
                                     argument: a,
-                                    signature,
+                                    signature: *signature,
                                 })
                                 .tyck_k(tycker, Action::switch(switch))?,
                             | ss::Type::VArrow(ss::ValueArrow(ty_arg, ty_out)) => {
@@ -5387,7 +5399,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 TermAnnId::Compu(id, reported)
                             }
                             | ss::Type::PackPi(signature) => self
-                                .mk(PackPiElimination { function: f_out, argument: a, signature })
+                                .mk(PackPiElimination {
+                                    function: f_out,
+                                    argument: a,
+                                    signature: *signature,
+                                })
                                 .tyck_k(tycker, Action::switch(switch))?,
                             | _ => tycker.err_k(
                                 TyckError::TypeExpected {

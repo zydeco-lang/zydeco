@@ -1314,10 +1314,8 @@ pub fn sigma_syn_judgment<'db>(
             let id: ss::TypeId = derived_id(key_space, 0);
             Some(SigmaSynOutcome::Type {
                 id,
-                ty: ss::Type::Exists(ss::Exists::new(
-                    ss::TypeBinder { pattern: tpat, witness: abst },
-                    body_ty,
-                )),
+                ty: ss::Exists::new(ss::TypeBinder { pattern: tpat, witness: abst }, body_ty)
+                    .into(),
                 kd: vtype,
             })
         }
@@ -1514,11 +1512,12 @@ pub fn abs_syn_judgment<'db>(
             let abs_id: ss::ValueId = derived_id(key_space, 1);
             Some(AbsSynOutcome::VAbsValue {
                 ann_id,
-                ann: ss::Type::VPackPi(ss::ValuePackPi {
+                ann: ss::ValuePackPi {
                     domain,
                     witnesses: ss::PackTelescope::new(first, rest),
                     codomain,
-                }),
+                }
+                .into(),
                 kd: vtype(db, data),
                 abs_id,
                 abs: ss::Value::VAbs(ss::Abs(vpat, value)),
@@ -1540,11 +1539,12 @@ pub fn abs_syn_judgment<'db>(
             let abs_id: ss::CompuId = derived_id(key_space, 1);
             Some(AbsSynOutcome::VAbsCompu {
                 ann_id,
-                ann: ss::Type::PackPi(ss::PackPi {
+                ann: ss::PackPi {
                     domain,
                     witnesses: ss::PackTelescope::new(first, rest),
                     codomain,
-                }),
+                }
+                .into(),
                 kd: ctype(db, data),
                 abs_id,
                 abs: ss::Computation::VAbs(ss::Abs(vpat, compu)),
@@ -1619,11 +1619,12 @@ pub fn manifest_exists_syn_judgment<'db>(
             let id: ss::TypeId = derived_id(key_space, 0);
             Some(ManifestSynOutcome::Type {
                 id,
-                ty: ss::Type::Exists(ss::Exists::with_manifest(
+                ty: ss::Exists::with_manifest(
                     ss::TypeBinder { pattern, witness },
                     definition,
                     body,
-                )),
+                )
+                .into(),
                 kd: vtype,
             })
         }
@@ -2227,11 +2228,12 @@ pub fn pack_pi_intro_judgment<'db>(
     let abs_id: ss::CompuId = derived_id(key_space, 1);
     Some(PackPiIntroOutcome {
         sig_id,
-        sig: ss::Type::PackPi(ss::PackPi {
+        sig: ss::PackPi {
             domain: input.domain(db),
             witnesses: ss::PackTelescope::new(input.first(db), input.rest(db).iter().copied()),
             codomain: input.codomain(db),
-        }),
+        }
+        .into(),
         kd: ctype,
         abs_id,
         abs: ss::Computation::VAbs(ss::Abs(input.pattern(db), input.body(db))),
@@ -2258,11 +2260,12 @@ pub fn value_pack_pi_intro_judgment<'db>(
     let abs_id: ss::ValueId = derived_id(key_space, 1);
     Some(ValuePackPiIntroOutcome {
         sig_id,
-        sig: ss::Type::VPackPi(ss::ValuePackPi {
+        sig: ss::ValuePackPi {
             domain: input.domain(db),
             witnesses: ss::PackTelescope::new(input.first(db), input.rest(db).iter().copied()),
             codomain: input.codomain(db),
-        }),
+        }
+        .into(),
         kd: vtype,
         abs_id,
         abs: ss::Value::VAbs(ss::Abs(input.pattern(db), input.body(db))),

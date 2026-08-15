@@ -325,19 +325,19 @@ impl TypeId {
     }
     pub fn destruct_pack_pi(&self, tycker: &mut Tycker) -> Option<PackPi> {
         match tycker.type_filled(self).ok()?.to_owned() {
-            | Type::PackPi(pack_pi) => Some(pack_pi),
+            | Type::PackPi(pack_pi) => Some(*pack_pi),
             | _ => None,
         }
     }
     pub fn destruct_value_pack_pi(&self, tycker: &mut Tycker) -> Option<ValuePackPi> {
         match tycker.type_filled(self).ok()?.to_owned() {
-            | Type::VPackPi(pack_pi) => Some(pack_pi),
+            | Type::VPackPi(pack_pi) => Some(*pack_pi),
             | _ => None,
         }
     }
     pub fn destruct_exists(&self, tycker: &mut Tycker) -> Option<(AbstId, TypeId)> {
         match tycker.type_filled(self).ok()?.to_owned() {
-            | Type::Exists(Exists { binder, body, .. }) => Some((binder.witness, body)),
+            | Type::Exists(exists) => Some((exists.binder.witness, exists.body)),
             | _ => None,
         }
     }

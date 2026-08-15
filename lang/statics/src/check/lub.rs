@@ -344,18 +344,17 @@ impl Debruijn {
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                     std::panic::Location::caller(),
                 )?,
-                | (
-                    Type::VPackPi(ValuePackPi {
+                | (Type::VPackPi(lhs), Type::VPackPi(rhs)) => {
+                    let ValuePackPi {
                         domain: lhs_domain,
                         witnesses: lhs_witnesses,
                         codomain: lhs_codomain,
-                    }),
-                    Type::VPackPi(ValuePackPi {
+                    } = *lhs;
+                    let ValuePackPi {
                         domain: rhs_domain,
                         witnesses: rhs_witnesses,
                         codomain: rhs_codomain,
-                    }),
-                ) => {
+                    } = *rhs;
                     if lhs_witnesses.len() != rhs_witnesses.len() {
                         tycker.err(
                             TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
@@ -425,18 +424,17 @@ impl Debruijn {
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                     std::panic::Location::caller(),
                 )?,
-                | (
-                    Type::PackPi(PackPi {
+                | (Type::PackPi(lhs), Type::PackPi(rhs)) => {
+                    let PackPi {
                         domain: lhs_domain,
                         witnesses: lhs_witnesses,
                         codomain: lhs_codomain,
-                    }),
-                    Type::PackPi(PackPi {
+                    } = *lhs;
+                    let PackPi {
                         domain: rhs_domain,
                         witnesses: rhs_witnesses,
                         codomain: rhs_codomain,
-                    }),
-                ) => {
+                    } = *rhs;
                     if lhs_witnesses.len() != rhs_witnesses.len() {
                         tycker.err(
                             TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
@@ -486,10 +484,9 @@ impl Debruijn {
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                     std::panic::Location::caller(),
                 )?,
-                | (
-                    Type::Exists(Exists { binder: lbind, mode: lmode, body: lbody }),
-                    Type::Exists(Exists { binder: rbind, mode: rmode, body: rbody }),
-                ) => {
+                | (Type::Exists(lhs), Type::Exists(rhs)) => {
+                    let Exists { binder: lbind, mode: lmode, body: lbody } = *lhs;
+                    let Exists { binder: rbind, mode: rmode, body: rbody } = *rhs;
                     let _domain =
                         Lub::lub(lbind.domain_kind(tycker), rbind.domain_kind(tycker), tycker)?;
                     let _payload =
