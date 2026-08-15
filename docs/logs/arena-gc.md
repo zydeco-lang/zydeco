@@ -2805,3 +2805,58 @@ decisions while implementing the plan.
 - Inspect optional generated IDs only where a census identifies a concrete owner. Their physical
   size remains 16 bytes because Rust cannot infer the composite zero-key-space niche, but a custom
   optional representation is worthwhile only for a large dense field.
+
+## 2026-08-15 — round 58: let transient type environments grow from evidence
+
+### Findings
+
+- A fresh malloc-stack census after round 57 found 115,630 live allocations owning 55.3MB. Stack
+  logging raised physical footprint to 160MB, so the uninstrumented release measurements remain the
+  process baseline. The largest source-linear owners were assembled spans at 3,162,112 bytes, the
+  scoped term payload at 3,129,344, term facts at 1,851,392, compact pre-normalization kinds and one
+  Salsa edge buffer at 1,392,640 each, scoped patterns and normalized annotation payloads at
+  1,310,720 each, value patterns at 1,081,344, and textual origins at 1,064,960.
+- One 2,179,072-byte page-directory allocation was again symbolized through `env_type` reservation.
+  The final ownership label remains ambiguous because checker stripping empties that table before
+  publication, but peak lifetime is a separate question: `Tycker::new` reserves the directory before
+  judgments and holds it until checking completes. A transient table can therefore raise the process
+  high-water mark without surviving in the finished arena.
+- The reservation estimated type-environment key spaces as half of the 64,954 scoped terms, or
+  32,477 pages. A temporary pre-strip probe measured the actual table at 53,969 entries spread over
+  26,689 pages. With the estimate, `HashMap::reserve` selected capacity 57,344; growing from actual
+  inserts selected capacity 28,672. The estimate was only 21.7% above the final page count, but it
+  crossed a discrete growth boundary and doubled the directory.
+- This sharpens the reservation rule: reserve from an exact or conservative lower-bound domain when
+  storage is retained and dense, but do not transfer a proxy estimate into a transient sparse hash
+  table. Hash-table capacity classes amplify small estimate errors, while organic growth already
+  tracks the observed key domain.
+
+### Changes
+
+- Removed speculative outer-page reservation from `env_type`. Type environments retain the same
+  paged representation and insertion semantics and now allocate only for key spaces checking
+  actually visits.
+- Kept the source-derived reservation for the retained pre-normalization type arena and exact ID
+  reservation for term facts. Updated the reservation contract to distinguish those lasting stores
+  from checker-transient environments.
+
+### Measurements
+
+- Five release checks used 99,614,720, 99,663,872, 100,073,472, 99,713,024, and 99,532,800 bytes peak
+  RSS (median 99,663,872), down 2,801,664 bytes (-2.7%) from round 57. Every sample took 0.18s wall
+  time and 0.16--0.17s user time.
+- The current-tree baseline is now down from 2,497,757,184 to 99,663,872 bytes (-96.0%).
+- All 26 statics unit tests and 33 statics integration tests and all 151 session tests passed.
+  Focused Clippy completed with existing unrelated warnings. Formatting, the release CLI build, and
+  the full standard-library check also passed.
+
+### Next
+
+- Re-rank the fresh owners after excluding the environment directory. The largest remaining mutable
+  typed store is the 1,851,392-byte term-facts payload; audit whether its final dispatcher can be
+  split by annotation category without duplicating source identity.
+- Audit the parsed source template as one lifetime group. Assembled spans, textual terms, tokens, and
+  line-intention maps may repeat source location structure even though each individual owner is now
+  bounded.
+- Treat the 3.13MB scoped term payload as a representation floor unless a variant census identifies
+  enough rare wide payloads to move its 48-byte enum into a lower capacity class.

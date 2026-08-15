@@ -712,13 +712,13 @@ impl DerefMut for StaticsArena {
 }
 
 impl StaticsArena {
-    /// Pre-reserve source-shaped pages from the name-resolved program. Term
-    /// facts know their exact external ID extents; generated type pages can
-    /// reserve only their estimated outer key-space count.
+    /// Pre-reserve retained, source-shaped storage from the name-resolved
+    /// program. Term facts know their exact external ID extents; generated
+    /// type pages can reserve only their estimated outer key-space count.
+    /// Checker-transient type environments grow from their actual inserts.
     pub fn reserve(&mut self, scoped: &su::ScopedArena) {
         let type_key_spaces = scoped.terms.len().saturating_add(1) / 2;
         self.types_pre.reserve_pages(type_key_spaces);
-        self.env_type.reserve_pages(type_key_spaces);
         self.term_facts.reserve_ids(scoped.terms.iter().map(|(term, _)| term));
     }
 
