@@ -3630,7 +3630,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
             // administrative
             tycker.tasks.push_back(TyckTask::Term(self.inner, switch));
             let env = tycker.statics.intern_env(&self.info);
-            tycker.statics.term_envs.upsert(self.inner, env);
+            let _ = tycker.statics.term_envs.upsert(self.inner, env);
             let entity = su::EntityId::Term(self.inner);
             let occurrence = tycker.check_counts.get(&entity).copied().unwrap_or(0);
             let _ = tycker.check_counts.upsert(entity, occurrence + 1);
@@ -7153,7 +7153,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
             tycker.statics.terms.ensure(self.inner, out);
             // record the final annotation for editor facts; fixpoint re-checks
             // overwrite the earlier occurrence's entry
-            tycker.statics.term_anns.upsert(self.inner, out_ann);
+            let _ = tycker.statics.term_anns.upsert(self.inner, out_ann);
 
             // check if the term is global
             let global = tycker.scoped.coctxs_term_local[&self.inner]
