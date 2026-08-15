@@ -3,11 +3,11 @@ use zydeco_statics::{
     arena::StaticsArena,
     syntax::{
         AbstId, AnnId, CoDataId, DataId, ExistsMode, Fillable, KPatId, Kind, KindId, KindPattern,
-        TPatId, Type, TypeBinder, TypeId, TypePattern, ValueArrow,
+        TPatId, Type, TypeAbstraction, TypeBinder, TypeId, TypePattern, ValueArrow,
     },
 };
 use zydeco_surface::scoped::syntax::DefId;
-use zydeco_syntax::{Abs, App, Arrow, Label, Named, Prod, Proj};
+use zydeco_syntax::{App, Arrow, Label, Named, Prod, Proj};
 use zydeco_utils::arena::ArenaAccess;
 
 pub(crate) struct TypeReferences {
@@ -149,8 +149,8 @@ impl<'arena> TypeReferenceCollector<'arena> {
                     .for_each(|abstract_type| self.visit_abstract(abstract_type));
             }
             | Type::Abst(abstract_type) => self.visit_abstract(*abstract_type),
-            | Type::Abs(Abs(pattern, body)) => {
-                self.visit_type_pattern(*pattern);
+            | Type::Abs(TypeAbstraction { binder, body }) => {
+                self.visit_type_binder(binder);
                 self.visit_type(*body);
             }
             | Type::App(App(function, argument)) => {
