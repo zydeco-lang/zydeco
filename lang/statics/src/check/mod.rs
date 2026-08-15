@@ -1533,10 +1533,13 @@ impl<'a> Tycker<'a> {
                         continue;
                     }
                 };
+                if self.statics.normalized_annotation_at(ty).is_some() {
+                    continue;
+                }
                 let Some(normalized) = self.statics.normalized_at(ty).cloned() else {
                     continue;
                 };
-                self.statics.record_term_normalized(term, normalized);
+                self.statics.record_annotation_normalized(ty, normalized);
             }
         }
         if self.errors.is_empty() {
@@ -7625,12 +7628,6 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
             // record the final annotation for editor facts; fixpoint re-checks
             // overwrite the earlier occurrence's entry
             tycker.statics.record_term_annotation(self.inner, out_ann);
-            let _ = match out_ann {
-                | ss::TermAnnId::Type(ty, _)
-                | ss::TermAnnId::Value(_, ty)
-                | ss::TermAnnId::Compu(_, ty) => tycker.statics.type_sites.upsert(ty, self.inner),
-                | ss::TermAnnId::Kind(_) | ss::TermAnnId::Hole(_) => None,
-            };
 
             // check if the term is global
             let global = tycker.scoped.coctxs_term_local[&self.inner]

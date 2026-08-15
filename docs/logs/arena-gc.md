@@ -1526,3 +1526,50 @@ decisions while implementing the plan.
   preserve fill handling and query-derived IDs.
 - Measure Salsa query families by memo count and value shape to explain the remaining post-static
   24MB rather than treating all memoization as one owner.
+
+## 2026-08-15 — round 34: deduplicate normalized annotation facts
+
+### Findings
+
+- The 58,664 normalized term facts refer to only 27,049 distinct top annotation `TypeId`s. A source
+  term can share its classifier with wrappers and other occurrences, and the normalized `Type`
+  depends on that classifier identity rather than on the term that happened to expose it.
+- `type_sites` existed only to gate normalized-type queries: it mapped a top annotation ID back to a
+  source term, which then selected the per-term normalized clone. Inner type IDs had no site and
+  therefore answered no fact. A normalized map keyed directly by top annotation ID enforces the
+  same boundary without the reverse hop.
+- This identity is durable across occurrence-payload eviction. Storing only the `TypeId` would lose
+  the payload when the full arena memo is evicted, but storing one cloned `Type` per distinct top ID
+  preserves stale-analysis facts while removing duplicate clones.
+
+### Changes
+
+- Source-term facts now retain only the final `TermAnnId`. Normalized annotation forms live in
+  `annotation_norms: ArenaAssoc<TypeId, Type>`.
+- Finish-phase normalization inserts the first normalized form for each distinct annotation ID and
+  skips later terms sharing that ID. The demand-driven normalized-type query reads this map
+  directly; membership both proves that the ID is a top annotation and supplies its durable form.
+- Removed `type_sites` and the per-term optional normalized field. A regression records two terms
+  with the same annotation ID and verifies that they share one normalized entry.
+
+### Measurements
+
+- The retained normalized-fact key domain falls from 58,664 source terms to at most 27,049 distinct
+  top annotation types (-53.9%), while preserving the same query behavior.
+- Three clean release checks used 189,267,968, 188,104,704, and 187,990,016 bytes peak RSS (median
+  188,104,704), down 9,486,336 bytes (-4.8%) from round 33. Warm wall time was 0.25s and warm user
+  time was 0.22–0.23s.
+- The current-tree baseline is now down from 2,497,757,184 to 188,104,704 bytes (-92.5%).
+- All 55 statics tests and all 151 session tests passed, along with the release CLI build and full
+  standard-library check.
+
+### Next
+
+- Re-run the static ownership census after the source and retained-index changes. Earlier absolute
+  field sizes are now stale, and the next target should be selected from the new peak rather than by
+  subtracting old measurements.
+- Audit `annotations_type` and `types_pre` as one typed-node record. Their IDs and page topology are
+  identical, making this a stronger co-location candidate than unrelated hash indexes.
+- Attribute Salsa's surviving query state by family. After the durable index reductions, the
+  roughly 24MB post-static remainder is a larger fraction of the check and may contain repeated
+  environment or input handles.

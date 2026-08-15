@@ -148,7 +148,6 @@ pub struct IntrinsicStatics {
 #[derive(Clone, Debug)]
 pub struct TermFacts {
     annotation: TermAnnId,
-    normalized: Option<Type>,
 }
 
 /// Source-bounded static facts retained after the typed occurrence tree is
@@ -165,12 +164,11 @@ pub struct StaticsIndexes {
     /// Untyped-to-typed term provenance. A surface term can be checked more
     /// than once, while erased constructs can share a typed term.
     pub terms: ArenaBipartite<su::TermId, TermId>,
-    /// Final annotation and normalized annotation type for each checked source
-    /// term. Sharing one key table avoids duplicating the source-term index.
+    /// Final annotation for each checked source term.
     pub term_facts: ArenaAssoc<su::TermId, TermFacts>,
-    /// The surface term each top annotation type belongs to; inner type nodes
-    /// have no entry, so lookups for them answer nothing instead of guessing.
-    pub type_sites: ArenaAssoc<TypeId, su::TermId>,
+    /// Normalized classifier for each distinct top annotation type. Inner type
+    /// nodes have no entry, and terms sharing one annotation ID share one clone.
+    pub annotation_norms: ArenaAssoc<TypeId, Type>,
     /// Coverage failures recorded during the finish phase, for editor facts.
     pub coverage_errors: Vec<crate::validate::CoverageError>,
 
@@ -353,33 +351,22 @@ impl StaticsArena {
         })
     }
 
-    /// Record the final annotation of a source term. Re-checking invalidates
-    /// any normalized fact derived from its previous annotation.
+    /// Record the final annotation of a source term.
     pub fn record_term_annotation(&mut self, term: su::TermId, annotation: TermAnnId) {
-        use std::collections::hash_map::Entry;
-
-        match self.term_facts.entry(term) {
-            | Entry::Vacant(entry) => {
-                entry.insert(TermFacts { annotation, normalized: None });
-            }
-            | Entry::Occupied(mut entry) => {
-                *entry.get_mut() = TermFacts { annotation, normalized: None };
-            }
-        }
+        let _ = self.term_facts.upsert(term, TermFacts { annotation });
     }
 
-    /// Attach the normalized classifier derived from a recorded term
-    /// annotation.
-    pub fn record_term_normalized(&mut self, term: su::TermId, normalized: Type) {
-        self.term_facts[&term].normalized = Some(normalized);
+    /// Attach the normalized classifier of one distinct top annotation type.
+    pub fn record_annotation_normalized(&mut self, annotation: TypeId, normalized: Type) {
+        let _ = self.annotation_norms.upsert(annotation, normalized);
     }
 
     pub fn term_annotation(&self, term: su::TermId) -> Option<TermAnnId> {
         self.term_facts.get(&term).map(|facts| facts.annotation)
     }
 
-    pub fn term_normalized(&self, term: su::TermId) -> Option<&Type> {
-        self.term_facts.get(&term)?.normalized.as_ref()
+    pub fn normalized_annotation_at(&self, annotation: TypeId) -> Option<&Type> {
+        self.annotation_norms.get(&annotation)
     }
 
     /// Look up either a source definition or one synthesized by typed elaboration.
@@ -412,20 +399,22 @@ mod tests {
     }
 
     #[test]
-    fn reannotating_a_term_invalidates_its_normalized_fact() {
-        let term = IdAllocator::<su::ScopedScope>::new().alloc();
+    fn shared_annotation_ids_share_one_normalized_fact() {
+        let mut surface = IdAllocator::<su::ScopedScope>::new();
+        let first_term = surface.alloc();
+        let second_term = surface.alloc();
         let mut allocator = IdAllocator::<StaticsScope>::new();
-        let fill: FillId = allocator.alloc();
         let kind: KindId = allocator.alloc();
+        let annotation: TypeId = allocator.alloc();
         let mut statics = StaticsArena::default();
 
-        statics.record_term_annotation(term, TermAnnId::Hole(fill));
-        statics.record_term_normalized(term, Type::Unit(UnitTy));
-        assert!(matches!(statics.term_normalized(term), Some(Type::Unit(_))));
+        [first_term, second_term].into_iter().for_each(|term| {
+            statics.record_term_annotation(term, TermAnnId::Type(annotation, kind));
+        });
+        statics.record_annotation_normalized(annotation, Type::Unit(UnitTy));
 
-        statics.record_term_annotation(term, TermAnnId::Kind(kind));
-        assert_eq!(statics.term_annotation(term), Some(TermAnnId::Kind(kind)));
-        assert!(statics.term_normalized(term).is_none());
+        assert!(matches!(statics.normalized_annotation_at(annotation), Some(Type::Unit(_))));
+        assert_eq!(statics.annotation_norms.len(), 1);
     }
 }
 

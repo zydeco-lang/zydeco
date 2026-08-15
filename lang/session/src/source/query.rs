@@ -588,8 +588,7 @@ fn normalized_type_at<'db>(
 ) -> Option<Type> {
     let analysis = analyze_source(db, root).ok()?;
     let statics = analysis.statics();
-    let term = *statics.type_sites.get(&id.id(db))?;
-    statics.term_normalized(term).cloned()
+    statics.normalized_annotation_at(id.id(db)).cloned()
 }
 
 /// Coverage failures of one analyzed root, computed on demand.
