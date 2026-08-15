@@ -2356,3 +2356,55 @@ decisions while implementing the plan.
   released pages are already reused by checking.
 - Treat normalization as a bounded secondary target. It adds roughly 2.8MB after judgments, hole
   resolution, and their retained editor facts are already present.
+
+## 2026-08-15 — round 50: close the ownership audit on the test workload
+
+### Findings
+
+- The final malloc-stack census found 112,309 live allocations owning 66.0MB. Stack logging raised
+  physical footprint to 176.1MB, so the normal five-run median from round 49 remains the process
+  measurement. The census is useful for ownership: the former 3,751,936-byte kind table is gone,
+  replaced by a 1,654,784-byte compact-node table and a 245,760-byte uncommon-payload table. Their
+  combined 1,900,544 bytes are 49.3% smaller than the previous owner.
+- The remaining large allocations are all bounded by source or final typed facts: the scoped term
+  payload is 4,161,536 bytes; assembled spans are 3,948,544; term provenance is 2,703,360; term
+  facts are 2,637,824; normalized annotations are 2,408,448; Salsa owns 1,392,640; pattern
+  provenance is 1,359,872; the scoped pattern payload is 1,310,720; value patterns are 1,081,344;
+  and compact textual origins are 1,064,960 bytes. None grows with repeated traversal of a type
+  suffix.
+- One 3,227,648-byte paged-table allocation is still symbolized as `env_type`. Finished arenas have
+  zero type environments, `strip_checker_state` replaces the table with a fresh default value, and
+  the existing regression observes the empty result. The matching live owner is the type-page
+  directory, allocated through a layout-equivalent generic reservation path; code folding or stack
+  attribution to that monomorphization is the most likely explanation. This is an inference from
+  ownership and layout, not evidence that the environment table survives stripping.
+- The phase measurements and final owner census now agree. Resolution ends around 62.6MB, checker
+  construction around 68.6MB, judgments raise the high-water mark to 117.9MB, and normalization
+  adds about 2.8MB. What remains at the roughly 120MB normal peak is simultaneous source-linear
+  compiler state, rather than another hidden eager-instantiation sequence or retained phase clone.
+
+### Test-workload validation
+
+- The complete focused session library suite passed all 151 tests with two threads in 7.54s and
+  used 455,426,048 bytes peak RSS. The last comparable suite measurement before the substitution
+  and representation work was about 6.54GB and 74s, so test-suite peak memory is down roughly 93%
+  and runtime roughly 90%.
+- A full standard-library release check remains at the round-49 median of 119,980,032 bytes, down
+  95.2% from the 2,497,757,184-byte baseline. Its typed arena contains 53,969 type nodes rather
+  than the original 2,508,856, even though the resolved input still has about 65,000 source terms.
+
+### Conclusion
+
+- The root cause was eager recursive substitution at semantic wrappers, field searches, package
+  telescopes, and partial type applications. Each step rebuilt the complete remaining type, so a
+  source-linear sequence produced a quadratic sequence of distinct intermediate trees. Caching
+  could not help because the intermediate substitutions were genuinely distinct; the fix was to
+  preserve prepared representations, carry typed deferred substitutions across structural
+  traversal, compose ordered assignments, and materialize once at a semantic boundary.
+- Arena layout, full-phase cloning, transient environment retention, Salsa root retention, and
+  test-session concurrency multiplied the cost of those generated nodes. Sharing immutable phase
+  products, stripping checker-only state, bounding memo retention, and matching storage to measured
+  key density removed those multipliers after the semantic node explosion was fixed.
+- Further reductions are ordinary source-linear memory tuning. They may still be useful, but the
+  pathological test-memory problem and its multiplicative mechanism are closed by the evidence
+  above.
