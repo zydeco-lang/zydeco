@@ -5,6 +5,7 @@ use rustc_hash::FxHashMap as HashMap;
 use std::{
     hash::Hash,
     marker::PhantomData,
+    num::NonZeroU64,
     ops::AddAssign,
     ops::{Index, IndexMut},
     sync::atomic::{AtomicU64, Ordering},
@@ -30,7 +31,7 @@ pub trait ArenaId: Copy + Eq + Hash {
 /// Process-unique identity domain for generated IDs.
 #[derive(Copy, Clone, derive_more::Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[debug("{_0}")]
-pub struct KeySpaceId(u64);
+pub struct KeySpaceId(NonZeroU64);
 
 impl KeySpaceId {
     fn fresh() -> Self {
@@ -39,12 +40,13 @@ impl KeySpaceId {
         let id = NEXT_KEY_SPACE_ID
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
             .expect("key-space identity range exhausted");
-        Self(id)
+        let id = id.checked_add(1).expect("key-space identity range exhausted");
+        Self(NonZeroU64::new(id).expect("a fresh key-space identity is nonzero"))
     }
 
     /// The numeric identity, exposed for deterministic derivation only.
     pub fn as_u64(self) -> u64 {
-        self.0
+        self.0.get()
     }
 
     /// Derive a key space unique to one derived allocation site.
@@ -63,8 +65,11 @@ impl KeySpaceId {
             hash ^= hash >> 33;
             hash
         }
+        let derived =
+            mix(mix(mix(tag ^ entity_space) ^ u64::from(entity_raw)) ^ u64::from(occurrence));
         KeySpaceId(
-            mix(mix(mix(tag ^ entity_space) ^ u64::from(entity_raw)) ^ u64::from(occurrence)),
+            NonZeroU64::new(derived)
+                .unwrap_or_else(|| NonZeroU64::new(u64::MAX).expect("u64::MAX is nonzero")),
         )
     }
 }
@@ -214,6 +219,34 @@ where
     marker: PhantomData<fn() -> Scope>,
 }
 
+/// Sparse owning storage whose externally-issued IDs are dense inside each
+/// key space.
+///
+/// Query-derived IDs use one key space per checking site and sequential raw
+/// slots inside that site. Grouping those slots into pages stores the key
+/// space once per site instead of once per arena item.
+#[derive(Debug)]
+pub struct ArenaPaged<Scope, Id>
+where
+    Id: ArenaId,
+    Scope: ArenaSchema<Id>,
+{
+    pages: HashMap<KeySpaceId, Vec<Option<Scope::Item>>>,
+    len: usize,
+    marker: PhantomData<fn() -> (Scope, Id)>,
+}
+
+impl<Scope, Id> Clone for ArenaPaged<Scope, Id>
+where
+    Id: ArenaId,
+    Scope: ArenaSchema<Id>,
+    Scope::Item: Clone,
+{
+    fn clone(&self) -> Self {
+        Self { pages: self.pages.clone(), len: self.len, marker: PhantomData }
+    }
+}
+
 impl<Scope, Id> Clone for ArenaSparse<Scope, Id>
 where
     Id: ArenaId,
@@ -231,6 +264,14 @@ where
 pub struct ArenaAssoc<Id, T> {
     #[into_iterator(owned, ref)]
     map: HashMap<Id, T>,
+}
+
+/// An associative arena paged by the key-space component of an [`ArenaId`].
+#[derive(Debug, Clone)]
+pub struct ArenaPagedAssoc<Id: ArenaId, T> {
+    pages: HashMap<KeySpaceId, Vec<Option<T>>>,
+    len: usize,
+    marker: PhantomData<fn() -> Id>,
 }
 
 /// A bidirectional single-to-multi-map; a "widen" map.
@@ -605,6 +646,183 @@ mod impls {
         /// Convert and replace an existing owned item.
         pub fn replace_existing_with(&mut self, id: Id, val: impl Into<Scope::Item>) {
             self.replace_existing(id, val.into())
+        }
+    }
+
+    /* ------------------------------- ArenaPaged ------------------------------- */
+
+    impl<Scope, Id> Default for ArenaPaged<Scope, Id>
+    where
+        Id: ArenaId,
+        Scope: ArenaSchema<Id>,
+    {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl<Scope, Id> Index<&Id> for ArenaPaged<Scope, Id>
+    where
+        Id: ArenaId,
+        Scope: ArenaSchema<Id>,
+    {
+        type Output = Scope::Item;
+
+        fn index(&self, id: &Id) -> &Self::Output {
+            self.get(id).unwrap()
+        }
+    }
+
+    impl<Scope, Id> IndexMut<&Id> for ArenaPaged<Scope, Id>
+    where
+        Id: ArenaId,
+        Scope: ArenaSchema<Id>,
+    {
+        fn index_mut(&mut self, id: &Id) -> &mut Self::Output {
+            self.get_mut(id).unwrap()
+        }
+    }
+
+    impl<Scope, Id> ArenaPaged<Scope, Id>
+    where
+        Id: ArenaId,
+        Scope: ArenaSchema<Id>,
+    {
+        pub fn new() -> Self {
+            Self { pages: HashMap::default(), len: 0, marker: PhantomData }
+        }
+
+        /// Insert a value whose externally-issued ID must not already be present.
+        pub fn insert_new(&mut self, id: Id, val: Scope::Item) {
+            let index = id.raw().into_u32() as usize;
+            let page = self.pages.entry(id.key_space()).or_default();
+            if page.len() <= index {
+                page.resize_with(index + 1, || None);
+            }
+            assert!(page[index].is_none(), "duplicate key in paged arena");
+            page[index] = Some(val);
+            self.len += 1;
+        }
+
+        pub fn iter(&self) -> impl Iterator<Item = (Id, &Scope::Item)> {
+            self.pages.iter().flat_map(|(key_space, page)| {
+                let key_space = *key_space;
+                page.iter().enumerate().filter_map(move |(raw, value)| {
+                    let value = value.as_ref()?;
+                    let raw = u32::try_from(raw).expect("arena page exceeded the raw ID range");
+                    let id = Id::from_raw_parts(ArenaIdToken(()), key_space, RawIdx::from_u32(raw));
+                    Some((id, value))
+                })
+            })
+        }
+
+        pub fn len(&self) -> usize {
+            self.len
+        }
+
+        /// Reserve outer page entries, one per expected key space.
+        pub fn reserve_pages(&mut self, additional: usize) {
+            self.pages.reserve(additional);
+        }
+
+        /// Replace an existing owned item.
+        pub fn replace_existing(&mut self, id: Id, val: Scope::Item) {
+            let Some(slot) = self
+                .pages
+                .get_mut(&id.key_space())
+                .and_then(|page| page.get_mut(id.raw().into_u32() as usize))
+            else {
+                panic!("key not found");
+            };
+            let Some(existing) = slot.as_mut() else {
+                panic!("key not found");
+            };
+            *existing = val;
+        }
+    }
+
+    impl<Scope, Id> ArenaAccess<&Id, Scope::Item> for ArenaPaged<Scope, Id>
+    where
+        Id: ArenaId,
+        Scope: ArenaSchema<Id>,
+    {
+        fn get(&self, id: &Id) -> Option<&Scope::Item> {
+            self.pages.get(&id.key_space())?.get(id.raw().into_u32() as usize)?.as_ref()
+        }
+
+        fn get_mut(&mut self, id: &Id) -> Option<&mut Scope::Item> {
+            self.pages.get_mut(&id.key_space())?.get_mut(id.raw().into_u32() as usize)?.as_mut()
+        }
+    }
+
+    /* ---------------------------- ArenaPagedAssoc ----------------------------- */
+
+    impl<Id: ArenaId, T> Default for ArenaPagedAssoc<Id, T> {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl<Id: ArenaId, T> Index<&Id> for ArenaPagedAssoc<Id, T> {
+        type Output = T;
+
+        fn index(&self, id: &Id) -> &Self::Output {
+            self.get(id).unwrap()
+        }
+    }
+
+    impl<Id: ArenaId, T> IndexMut<&Id> for ArenaPagedAssoc<Id, T> {
+        fn index_mut(&mut self, id: &Id) -> &mut Self::Output {
+            self.get_mut(id).unwrap()
+        }
+    }
+
+    impl<Id: ArenaId, T> ArenaPagedAssoc<Id, T> {
+        pub fn new() -> Self {
+            Self { pages: HashMap::default(), len: 0, marker: PhantomData }
+        }
+
+        /// Insert a value whose key must not already be present.
+        pub fn insert_new(&mut self, id: Id, val: T) {
+            let index = id.raw().into_u32() as usize;
+            let page = self.pages.entry(id.key_space()).or_default();
+            if page.len() <= index {
+                page.resize_with(index + 1, || None);
+            }
+            assert!(page[index].is_none(), "duplicate key in paged associative arena");
+            page[index] = Some(val);
+            self.len += 1;
+        }
+
+        pub fn iter(&self) -> impl Iterator<Item = (Id, &T)> {
+            self.pages.iter().flat_map(|(key_space, page)| {
+                let key_space = *key_space;
+                page.iter().enumerate().filter_map(move |(raw, value)| {
+                    let value = value.as_ref()?;
+                    let raw = u32::try_from(raw).expect("arena page exceeded the raw ID range");
+                    let id = Id::from_raw_parts(ArenaIdToken(()), key_space, RawIdx::from_u32(raw));
+                    Some((id, value))
+                })
+            })
+        }
+
+        pub fn len(&self) -> usize {
+            self.len
+        }
+
+        /// Reserve outer page entries, one per expected key space.
+        pub fn reserve_pages(&mut self, additional: usize) {
+            self.pages.reserve(additional);
+        }
+    }
+
+    impl<Id: ArenaId, T> ArenaAccess<&Id, T> for ArenaPagedAssoc<Id, T> {
+        fn get(&self, id: &Id) -> Option<&T> {
+            self.pages.get(&id.key_space())?.get(id.raw().into_u32() as usize)?.as_ref()
+        }
+
+        fn get_mut(&mut self, id: &Id) -> Option<&mut T> {
+            self.pages.get_mut(&id.key_space())?.get_mut(id.raw().into_u32() as usize)?.as_mut()
         }
     }
 
@@ -1353,6 +1571,53 @@ mod tests {
 
         assert_eq!(source.get(&id), Some(&"source"));
         assert_eq!(alternate.get(&id), Some(&42));
+    }
+
+    #[test]
+    fn paged_storage_groups_dense_slots_without_conflating_key_spaces() {
+        let left_space = KeySpaceId::derive(1, 2, 3, 4);
+        let right_space = KeySpaceId::derive(5, 6, 7, 8);
+        let left_first = derived_id::<SparseId>(left_space, 0);
+        let left_gap = derived_id::<SparseId>(left_space, 3);
+        let right_first = derived_id::<SparseId>(right_space, 0);
+        let mut arena = ArenaPaged::<TestScope, SparseId>::new();
+
+        arena.insert_new(left_first, "left first");
+        arena.insert_new(left_gap, "left gap");
+        arena.insert_new(right_first, "right first");
+
+        assert_eq!(arena.len(), 3);
+        assert_eq!(arena.get(&left_first), Some(&"left first"));
+        assert_eq!(arena.get(&derived_id::<SparseId>(left_space, 1)), None);
+        assert_eq!(arena.get(&left_gap), Some(&"left gap"));
+        assert_eq!(arena.get(&right_first), Some(&"right first"));
+        assert_eq!(arena.iter().count(), 3);
+    }
+
+    #[test]
+    #[should_panic(expected = "duplicate key in paged arena")]
+    fn paged_storage_rejects_duplicate_ids() {
+        let id = derived_id::<SparseId>(KeySpaceId::derive(1, 1, 1, 1), 0);
+        let mut arena = ArenaPaged::<TestScope, SparseId>::new();
+        arena.insert_new(id, "first");
+        arena.insert_new(id, "second");
+    }
+
+    #[test]
+    fn paged_associations_preserve_sparse_gaps() {
+        let space = KeySpaceId::derive(9, 10, 11, 12);
+        let first = derived_id::<SparseId>(space, 1);
+        let second = derived_id::<SparseId>(space, 4);
+        let mut arena = ArenaPagedAssoc::new();
+
+        arena.insert_new(first, 10);
+        arena.insert_new(second, 40);
+
+        assert_eq!(arena.len(), 2);
+        assert_eq!(arena.get(&first), Some(&10));
+        assert_eq!(arena.get(&derived_id::<SparseId>(space, 2)), None);
+        assert_eq!(arena.get(&second), Some(&40));
+        assert_eq!(arena.iter().count(), 2);
     }
 
     #[test]

@@ -294,7 +294,7 @@ pub struct Forall(pub TypeBinder, pub TypeId);
 #[derive(Clone, Debug)]
 pub struct PackTelescope {
     first: AbstId,
-    rest: im::Vector<AbstId>,
+    rest: std::sync::Arc<[AbstId]>,
 }
 
 /// A package-dependent computation arrow.
@@ -382,7 +382,7 @@ mod impls_structs {
 
     impl PackTelescope {
         pub fn new(first: AbstId, rest: impl IntoIterator<Item = AbstId>) -> Self {
-            Self { first, rest: rest.into_iter().collect() }
+            Self { first, rest: rest.into_iter().collect::<Vec<_>>().into() }
         }
 
         pub fn singleton(witness: AbstId) -> Self {
@@ -406,7 +406,7 @@ mod impls_structs {
         }
 
         pub fn map(self, mut f: impl FnMut(AbstId) -> AbstId) -> Self {
-            Self::new(f(self.first), self.rest.into_iter().map(f))
+            Self::new(f(self.first), self.rest.iter().copied().map(f))
         }
     }
 

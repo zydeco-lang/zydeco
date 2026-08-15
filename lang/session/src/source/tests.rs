@@ -1,6 +1,6 @@
 use super::*;
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use zydeco_utils::{arena::ArenaAccess, pass::CompilerPass};
 
 type SourceScoped = ScopedProgram;
@@ -9,7 +9,7 @@ type SourceScoped = ScopedProgram;
 struct SourceChecked {
     spans: zydeco_surface::textual::syntax::SpanArena,
     scoped: zydeco_surface::scoped::arena::ScopedArena,
-    statics: zydeco_statics::arena::StaticsArena,
+    statics: Arc<zydeco_statics::arena::StaticsArena>,
     root: zydeco_statics::syntax::TermAnnId,
 }
 
@@ -20,21 +20,21 @@ struct SourceDynamics {
 struct SourceStack {
     spans: zydeco_surface::textual::syntax::SpanArena,
     scoped: zydeco_surface::scoped::arena::ScopedArena,
-    statics: zydeco_statics::arena::StaticsArena,
+    statics: Arc<zydeco_statics::arena::StaticsArena>,
     stackir: zydeco_stackir::BranchJoinProgram,
 }
 
 struct SourceSpsLow {
     spans: zydeco_surface::textual::syntax::SpanArena,
     scoped: zydeco_surface::scoped::arena::ScopedArena,
-    statics: zydeco_statics::arena::StaticsArena,
+    statics: Arc<zydeco_statics::arena::StaticsArena>,
     sps_low: zydeco_stackir::SpsLowProgram,
 }
 
 struct SourceAssembly {
     spans: zydeco_surface::textual::syntax::SpanArena,
     scoped: zydeco_surface::scoped::arena::ScopedArena,
-    statics: zydeco_statics::arena::StaticsArena,
+    statics: Arc<zydeco_statics::arena::StaticsArena>,
     sps_low: zydeco_stackir::SpsLowProgram,
     assembly: zydeco_assembly::syntax::AssemblyProgram,
 }
@@ -67,7 +67,7 @@ impl ScopedProgram {
         Ok(SourceChecked {
             spans,
             scoped: output.scoped,
-            statics: (*checked.statics).clone(),
+            statics: checked.statics,
             root: checked.root,
         })
     }
@@ -203,8 +203,8 @@ impl SessionPool {
         }
         self.analyses += 1;
         // `check_source` memoizes with `lru = 1`, so this evicts the previous
-        // root's full arena before the next one materializes; each test already
-        // extracted its own arena out of the analysis it holds.
+        // root's memo before the next one materializes. A live test keeps its
+        // arena through its own shared handle.
         salsa::Database::trigger_lru_eviction(&mut self.session);
         &self.session
     }
@@ -412,7 +412,7 @@ fn checked_trivial_computation() -> SourceChecked {
     SourceChecked {
         spans: Default::default(),
         scoped: Default::default(),
-        statics,
+        statics: Arc::new(statics),
         root: ss::TermAnnId::Compu(root, ty),
     }
 }

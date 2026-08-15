@@ -41,7 +41,7 @@ pub(crate) struct ProjectState {
     /// consumer of its root, so it holds the occurrence payload while the
     /// project lives; the session and its salsa memo only retain the latest
     /// root on demand.
-    statics: StaticsArena,
+    statics: Arc<StaticsArena>,
     /// The analyzed root, for fact lookups against the session's memoized
     /// queries.
     root: PathBuf,

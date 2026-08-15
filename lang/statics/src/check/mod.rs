@@ -126,15 +126,6 @@ impl SourceCheckOutcome {
             | Self::Rejected(RejectedSource { statics, .. }) => statics.clone(),
         }
     }
-
-    /// Retain every static fact established before either outcome, cloned out
-    /// for consumers that mutate during lowering.
-    pub fn into_statics(self) -> StaticsArena {
-        match self {
-            | Self::Checked(CheckedSource { statics, .. })
-            | Self::Rejected(RejectedSource { statics, .. }) => (*statics).clone(),
-        }
-    }
 }
 
 /// Non-contextual output of the pattern-checking judgment.

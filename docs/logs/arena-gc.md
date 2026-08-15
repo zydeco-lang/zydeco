@@ -144,3 +144,105 @@ decisions while implementing the plan.
   `type_sites`-style site records and `term_envs`) remains available as the path for a
   future consumer that needs arbitrary inner nodes; the foundation tables are in place.
 - Judgment-memo root-scoped policy beyond the pool generation remains open.
+
+## 2026-08-15 — round 5: clone only L, share S through every consumer
+
+### Findings
+
+- `analyze_source` still performed `(*statics).clone()` before
+  `strip_occurrence_payload`. The strip made retention small, but the clone first copied all
+  2.51M type nodes and their parallel tables. This was the single-check peak after the earlier
+  retention rounds.
+- Dynamics linking, Stack IR lowering, CLI backend retention, the TUI, cajun, and the session
+  test pipeline only read `StaticsArena`. Their owned arena fields expressed an ownership
+  requirement that the algorithms did not have.
+- `types_normalized` had become a 71-entry delta, but `StaticsArena::reserve` still gave it the
+  same capacity estimate as the 2.51M-entry `types_pre` table.
+
+### Changes
+
+- `StaticsArena::clone_keyed_indexes` constructs the L tier directly from the shared checked
+  arena. `analyze_source` no longer clones S just to clear it.
+- Full materializations and checked/executable programs now carry `Arc<StaticsArena>` all the
+  way through dynamics, lowering, the CLI, the TUI, cajun, and test helpers. The obsolete
+  owned-clone path was removed.
+- The sparse normalized delta is no longer pre-reserved as if it were dense.
+
+### Measurements
+
+- Full-std minimal check: 2,497,757,184 -> 1,907,752,960 bytes peak RSS (-24%).
+- Full-std dry run: 2,589,868,032 -> 1,949,368,320 bytes peak RSS (-25%).
+- The focused analysis-retention and post-eviction fact tests remained green.
+
+## 2026-08-15 — round 6: shrink the dominant enum instead of boxing every node
+
+### Findings
+
+- `Type` and `Fillable<Type>` were both 120 bytes. The largest variant was `PackPi`: its
+  `PackTelescope` was 80 bytes because `im::Vector<AbstId>` alone occupied 64 bytes, even
+  though package telescopes are usually singletons.
+- Replacing the telescope tail with immutable shared slice storage makes `PackTelescope` 32
+  bytes and `PackPi` 64 bytes. That drops the whole `Type` enum to 72 bytes without adding an
+  allocation to each of the 2.51M nodes; only the comparatively rare telescope tail owns an
+  `Arc<[AbstId]>`.
+
+### Changes
+
+- `PackTelescope::rest` now uses `Arc<[AbstId]>`. Its public construction, iteration,
+  containment, length, and mapping behavior is unchanged.
+
+### Measurements
+
+- Full-std minimal check: 1,907,752,960 -> 1,442,791,424 bytes peak RSS (-24%).
+- Full-std dry run: 1,949,368,320 -> 1,495,891,968 bytes peak RSS (-23%).
+- The PackPi and Builtin-role integration targets passed (12 tests).
+
+### Rejected experiments
+
+- A per-substitution recursive cache avoided only 104 of 2,508,856 nodes (0.004%). Shared
+  subgraphs inside one substitution are not the source of the expansion.
+- A cross-judgment cache keyed by `(body, witness, argument)`, invalidated on hole-solution
+  changes, avoided only 2,800 nodes (0.11%). The expansion is overwhelmingly distinct
+  instantiation work, so the cache and its inference-state complexity were removed.
+- Raising the pre-reservation factor from 16x to 40x increased peak RSS by 43MB and slowed the
+  check. The final hash-table capacity is not the remaining explanation.
+
+## 2026-08-15 — round 7: page the derived type-ID key space
+
+### Findings
+
+- The 2,508,856 `TypeId`s occupy 2,533,180 raw slots across 29,279 derived key spaces: 99.0%
+  density. A hash table therefore repeats a 16-byte `(key_space, raw)` ID millions of times to
+  represent data that is already almost a dense array inside each checking site.
+- This property is specific to types. The other owning typed arenas are sparse within their
+  key spaces: kinds 3.9%, type patterns 1.8%, value patterns 0.9%, values 0.7%, data 8.2%; they
+  remain hash-backed.
+- `Option<KindId>` occupied 24 bytes because zero was a valid `KeySpaceId`. Key-space identity
+  has no meaningful zero value, so representing it as `NonZeroU64` exposes a Rust layout niche
+  while preserving the 64-bit process/query identity.
+
+### Changes
+
+- Added `ArenaPaged` and `ArenaPagedAssoc`: an outer `FxHashMap` stores one vector per key
+  space, and raw IDs index slots directly inside the vector. Missing mixed-category slots stay
+  explicit as `None`; type pages are dense enough that this costs only 1%.
+- `types_pre`, `annotations_type`, and checker-transient `env_type` use paged storage. The
+  remaining sparse tables keep `ArenaSparse` / `ArenaAssoc`.
+- `KeySpaceId` now wraps `NonZeroU64`, reducing `Option<KindId>` from 24 to 16 bytes. Outer page
+  capacity is reserved for half the scoped-term count, matching the measured 43% key-space
+  ratio rather than the 37x inner-node amplification.
+
+### Measurements
+
+- Paged type tables: 1,442,791,424 -> 1,086,537,728 bytes peak RSS; wall time 3.78s -> 2.73s.
+- Nonzero key spaces and page-capacity tuning: 1,086,537,728 -> 1,056,161,792 bytes peak RSS.
+- Whole round so far: 2,497,757,184 -> 1,056,161,792 bytes (-58%); the node count remains
+  2,508,856, confirming that this round changes representation rather than semantics.
+
+### Next
+
+- The remaining per-root floor is genuine eager instantiation. Memoization experiments show
+  that a lazy explicit-substitution representation, not another cache, is the next mechanism
+  capable of reducing the 37x node count.
+- Test-process concurrency and duplicate backend checks remain independent peak multipliers;
+  revisit them after the single-root representation is stable and fully tested.

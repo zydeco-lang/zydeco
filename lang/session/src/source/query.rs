@@ -102,11 +102,11 @@ impl ProgramAnalysis {
     }
 }
 
-/// An owned clone of a checked program for consumers that perform mutable lowering.
+/// A checked program whose immutable static arena is shared with the check memo.
 pub struct CheckedProgram {
     pub spans: SpanArena,
     pub scoped: ScopedArena,
-    pub statics: StaticsArena,
+    pub statics: Arc<StaticsArena>,
     pub root: TermAnnId,
 }
 
@@ -114,7 +114,7 @@ pub struct CheckedProgram {
 pub struct ExecutableProgram {
     pub spans: SpanArena,
     pub scoped: ScopedArena,
-    pub statics: StaticsArena,
+    pub statics: Arc<StaticsArena>,
     pub root: zydeco_statics::syntax::CompuId,
     pub signature: PackPi,
 }
@@ -298,22 +298,22 @@ impl CompilerSession {
         analyze_source(self, root)
     }
 
-    /// Re-materialize the full typed arena of one analysis from the memoized
-    /// check. The arena is transient: callers own and drop it after use. The
-    /// memo retains only the latest root (`lru = 1`), so materializing a stale
-    /// analysis re-checks its root.
+    /// Recover the full typed arena of one analysis from the memoized check.
+    /// The arena is shared immutably with its memo and dropped after its last
+    /// consumer. The memo retains only the latest root (`lru = 1`), so
+    /// materializing a stale analysis re-checks its root.
     pub fn materialize_arena(
         &self, analysis: &ProgramAnalysis,
-    ) -> Result<zydeco_statics::arena::StaticsArena, AnalysisError> {
+    ) -> Result<Arc<zydeco_statics::arena::StaticsArena>, AnalysisError> {
         let root = self
             .source_input(analysis.root_path().to_path_buf())
             .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
         let (_, output) = rechecked(self, root)?;
-        Ok(output.outcome.into_statics())
+        Ok(output.outcome.statics_arc())
     }
 
-    /// Owned clone of a checked program for consumers that perform mutable
-    /// lowering, re-materialized from the memoized check on demand.
+    /// Checked program with a shared immutable arena, recovered from the
+    /// memoized check on demand.
     pub fn checked_program(&self, analysis: &ProgramAnalysis) -> Option<CheckedProgram> {
         let root = self.source_input(analysis.root_path().to_path_buf()).ok()?;
         let (spans, zydeco_statics::query::TyckOutput { scoped, outcome }) =
@@ -321,7 +321,7 @@ impl CompilerSession {
         let (root, statics) = match outcome {
             | zydeco_statics::SourceCheckOutcome::Checked(CheckedSource {
                 statics, root, ..
-            }) => (root, (*statics).clone()),
+            }) => (root, statics),
             | zydeco_statics::SourceCheckOutcome::Rejected(_) => return None,
         };
         Some(CheckedProgram { spans, scoped, statics, root })
@@ -340,7 +340,7 @@ impl CompilerSession {
         let (root, statics) = match outcome {
             | zydeco_statics::SourceCheckOutcome::Checked(CheckedSource {
                 statics, root, ..
-            }) => (root, (*statics).clone()),
+            }) => (root, statics),
             | zydeco_statics::SourceCheckOutcome::Rejected(_) => {
                 return Err(ExecutableError::Rejected);
             }
@@ -553,22 +553,18 @@ fn analyze_source(
     let graph = source_graph(db, root).map_err(|error| AnalysisError::Source { error })?;
     let (spans, zydeco_statics::query::TyckOutput { scoped, outcome: checked }) =
         rechecked(db, root)?;
-    let (mut statics, outcome, observations) = match checked {
+    let (statics, outcome, observations) = match checked {
         | zydeco_statics::SourceCheckOutcome::Checked(CheckedSource {
             statics,
             root,
             observations,
-        }) => ((*statics).clone(), AnalysisOutcome::Checked { root }, observations),
+        }) => (statics.clone_keyed_indexes(), AnalysisOutcome::Checked { root }, observations),
         | zydeco_statics::SourceCheckOutcome::Rejected(RejectedSource {
             statics,
             reports,
             observations,
-        }) => ((*statics).clone(), AnalysisOutcome::Rejected { reports }, observations),
+        }) => (statics.clone_keyed_indexes(), AnalysisOutcome::Rejected { reports }, observations),
     };
-    // The analysis retains only the keyed indexes; the occurrence payload stays
-    // in the salsa memo and is re-materialized on demand via
-    // `CompilerSession::materialize_arena`.
-    statics.strip_occurrence_payload();
     Ok(Arc::new(ProgramAnalysis { graph, spans, scoped, statics, outcome, observations }))
 }
 

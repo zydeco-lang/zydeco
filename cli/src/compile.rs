@@ -96,7 +96,7 @@ impl CommandCompiler {
 pub struct BackendProgram {
     pub spans: SpanArena,
     pub scoped: ScopedArena,
-    pub statics: StaticsArena,
+    pub statics: Arc<StaticsArena>,
     pub sps_low: SpsLowProgram,
     pub assembly: AssemblyProgram,
 }

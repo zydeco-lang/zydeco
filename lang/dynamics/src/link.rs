@@ -1,5 +1,5 @@
 use crate::{builtin::BuiltinRuntime, syntax::DynamicsProgram, *};
-use std::{collections::HashSet, rc::Rc};
+use std::{collections::HashSet, rc::Rc, sync::Arc};
 use thiserror::Error;
 use zydeco_statics::{
     BuiltinPackagePlan, BuiltinPackagePlanError, BuiltinPackageValue, arena::StaticsArena,
@@ -17,21 +17,21 @@ pub trait Link {
 /// Entry point for linking one checked computation root.
 pub struct RootLinker {
     pub scoped: ScopedArena,
-    pub statics: StaticsArena,
+    pub statics: Arc<StaticsArena>,
     pub root: ss::CompuId,
 }
 
 /// Link one checked value as a computation that returns it.
 pub struct ValueRootLinker {
     pub scoped: ScopedArena,
-    pub statics: StaticsArena,
+    pub statics: Arc<StaticsArena>,
     pub root: ss::ValueId,
 }
 
 /// Link a package-dependent root and apply the concrete host Builtin package.
 pub struct BuiltinRootLinker {
     pub scoped: ScopedArena,
-    pub statics: StaticsArena,
+    pub statics: Arc<StaticsArena>,
     pub root: ss::CompuId,
     pub signature: ss::PackPi,
 }
@@ -39,7 +39,7 @@ pub struct BuiltinRootLinker {
 /// Apply host Builtin packages until a package-dependent computation reaches its result.
 pub struct BuiltinComputationRootLinker {
     pub scoped: ScopedArena,
-    pub statics: StaticsArena,
+    pub statics: Arc<StaticsArena>,
     pub root: ss::CompuId,
     pub signature: ss::PackPi,
 }
@@ -47,7 +47,7 @@ pub struct BuiltinComputationRootLinker {
 /// Apply host Builtin packages until a pure package-dependent value reaches its result.
 pub struct BuiltinValueRootLinker {
     pub scoped: ScopedArena,
-    pub statics: StaticsArena,
+    pub statics: Arc<StaticsArena>,
     pub root: ss::ValueId,
     pub signature: ss::ValuePackPi,
 }
@@ -383,7 +383,8 @@ mod tests {
         statics.values.insert_new(value, ss::Triv.into());
         statics.compus.insert_new(root, ss::Return(value).into());
 
-        let arena = RootLinker { scoped: ScopedArena::default(), statics, root }.run();
+        let arena =
+            RootLinker { scoped: ScopedArena::default(), statics: Arc::new(statics), root }.run();
         let mut input = std::io::empty();
         let mut output = Vec::new();
         let result = ds::Runtime::new(&mut input, &mut output, &[], arena).run();

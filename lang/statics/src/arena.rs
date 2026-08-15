@@ -150,7 +150,7 @@ pub struct StaticsArena {
     /// type pattern arena
     pub tpats: ArenaSparse<StaticsScope, TPatId>,
     /// type arena before normalization
-    pub types_pre: ArenaSparse<StaticsScope, TypeId>,
+    pub types_pre: ArenaPaged<StaticsScope, TypeId>,
     /// value pattern arena
     pub vpats: ArenaSparse<StaticsScope, VPatId>,
     /// value arena
@@ -241,7 +241,7 @@ pub struct StaticsArena {
     /// kind annotations for type patterns
     pub annotations_tpat: ArenaAssoc<TPatId, KindId>,
     /// kind annotations for types
-    pub annotations_type: ArenaAssoc<TypeId, KindId>,
+    pub annotations_type: ArenaPagedAssoc<TypeId, KindId>,
     /// type annotations for value patterns
     pub annotations_vpat: ArenaAssoc<VPatId, TypeId>,
     /// type annotations for values
@@ -256,7 +256,7 @@ pub struct StaticsArena {
     pub env_tpat: ArenaAssoc<TPatId, TyEnv>,
     /// typing environments for types, interned so structurally identical
     /// environments from distinct sites share one allocation
-    pub env_type: ArenaAssoc<TypeId, std::sync::Arc<TyEnv>>,
+    pub env_type: ArenaPagedAssoc<TypeId, std::sync::Arc<TyEnv>>,
     /// content-addressed cache behind [`Self::env_type`]; checker-transient
     /// and stripped with the environments after checking
     pub env_interner: crate::environment::TyEnvInterner,
@@ -275,16 +275,14 @@ pub struct StaticsArena {
 }
 
 impl StaticsArena {
-    /// Pre-reserve the type-indexed tables from the name-resolved program's
-    /// size, so the arena grows toward its final shape with fewer bucket-table
-    /// reallocations. A checked program materializes roughly an order of
-    /// magnitude more types than it has scoped terms.
+    /// Pre-reserve the outer type-page tables from the name-resolved program's
+    /// size. Measurements put type-producing key spaces at slightly under one
+    /// half of scoped terms; the millions of inner slots grow in their pages.
     pub fn reserve(&mut self, scoped_terms: usize) {
-        let types = scoped_terms.saturating_mul(16);
-        self.types_pre.reserve(types);
-        self.types_normalized.reserve(types);
-        self.annotations_type.reserve(types);
-        self.env_type.reserve(types);
+        let type_key_spaces = scoped_terms.saturating_add(1) / 2;
+        self.types_pre.reserve_pages(type_key_spaces);
+        self.annotations_type.reserve_pages(type_key_spaces);
+        self.env_type.reserve_pages(type_key_spaces);
     }
 
     /// Intern one typing environment and return the shared value for storage
@@ -298,24 +296,46 @@ impl StaticsArena {
         self.env_type[&id].as_ref().clone()
     }
 
-    /// Drop the occurrence payload of a finished check, retaining only the
-    /// keyed indexes from which the typed tree can be re-materialized. See
+    /// Clone only the keyed indexes of a finished check, leaving the much
+    /// larger occurrence payload in its shared materialization. See
     /// `docs/ideas/arena-gc.md` for the L/S classification.
-    pub fn strip_occurrence_payload(&mut self) {
-        self.kinds_pre = Default::default();
-        self.kpats = Default::default();
-        self.tpats = Default::default();
-        self.types_pre = Default::default();
-        self.vpats = Default::default();
-        self.values = Default::default();
-        self.compus = Default::default();
-        self.annotations_tpat = Default::default();
-        self.annotations_type = Default::default();
-        self.annotations_vpat = Default::default();
-        self.annotations_value = Default::default();
-        self.annotations_compu = Default::default();
-        self.kinds_normalized = Default::default();
-        self.types_normalized = Default::default();
+    pub fn clone_keyed_indexes(&self) -> Self {
+        Self {
+            pats: self.pats.clone(),
+            terms: self.terms.clone(),
+            term_anns: self.term_anns.clone(),
+            term_envs: self.term_envs.clone(),
+            term_norms: self.term_norms.clone(),
+            type_sites: self.type_sites.clone(),
+            coverage_errors: self.coverage_errors.clone(),
+            absts: self.absts.clone(),
+            seals: self.seals.clone(),
+            abst_hints: self.abst_hints.clone(),
+            existential_skolems: self.existential_skolems.clone(),
+            intrinsics: self.intrinsics.clone(),
+            builtin_roles: self.builtin_roles.clone(),
+            fills: self.fills.clone(),
+            solus: self.solus.clone(),
+            fill_scopes: self.fill_scopes.clone(),
+            fill_hints: self.fill_hints.clone(),
+            datas: self.datas.clone(),
+            codatas: self.codatas.clone(),
+            data_hints: self.data_hints.clone(),
+            data_pat_hints: self.data_pat_hints.clone(),
+            codata_hints: self.codata_hints.clone(),
+            copattern_matches: self.copattern_matches.clone(),
+            copattern_pack_pi_binders: self.copattern_pack_pi_binders.clone(),
+            value_aliases: self.value_aliases.clone(),
+            package_aliases: self.package_aliases.clone(),
+            type_definitions: self.type_definitions.clone(),
+            inlinables: self.inlinables.clone(),
+            global_defs: self.global_defs.clone(),
+            global_terms: self.global_terms.clone(),
+            def_hints: self.def_hints.clone(),
+            annotations_var: self.annotations_var.clone(),
+            annotations_abst: self.annotations_abst.clone(),
+            ..Self::default()
+        }
     }
 
     /// The normalized form of one type, falling back to the pre-normalization
