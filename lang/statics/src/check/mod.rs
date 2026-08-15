@@ -1076,35 +1076,6 @@ impl<'a> Tycker<'a> {
         crate::query::InternedSite::new(self.db, space, raw, occurrence)
     }
 
-    /// The root site's next slot, carried between the check's phases.
-    pub fn root_slot(&self) -> u32 {
-        self.allocator.root_slot()
-    }
-
-    /// Resume a check after its judgment phase, restoring the accumulated
-    /// errors and observations for the finish phase.
-    #[allow(clippy::too_many_arguments)]
-    pub fn resume(
-        db: &'a dyn crate::query::TyckDb, data: crate::query::ScopedData<'a>, spans: &'a SpanArena,
-        prim: &'a PrimDefs, scoped: &'a mut ScopedArena, statics: StaticsArena,
-        errors: Vec<TyckErrorEntry>, observations: Vec<TyckObservation>, root_slot: u32,
-    ) -> Self {
-        Self {
-            allocator: DerivedAllocator::resume_from_root_slot(root_slot),
-            db,
-            data,
-            spans,
-            prim,
-            scoped,
-            statics,
-            tasks: im::Vector::new(),
-            metas: im::Vector::new(),
-            check_counts: ArenaAssoc::default(),
-            errors,
-            observations,
-        }
-    }
-
     /// Consume the checker and retain the typed identity of a complete source term.
     pub fn check_source(self, root: su::TermId) -> std::result::Result<CheckedSource, TyckReports> {
         self.check_source_outcome(root).into_result()

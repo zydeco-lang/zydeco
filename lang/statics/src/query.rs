@@ -8,7 +8,6 @@
 
 use crate::TyEnv;
 use crate::alloc::QUERY_DERIVATION_TAG;
-use crate::arena::StaticsArena;
 use crate::check::{CheckedSource, KontFailure, RejectedSource, SourceCheckOutcome, Tycker};
 use crate::surface_syntax as su;
 use crate::syntax as ss;
@@ -2348,146 +2347,22 @@ pub struct TyckOutput {
     pub outcome: SourceCheckOutcome,
 }
 
-/// The intermediate state between the judgment and finish phases of a check,
-/// carried as a tracked struct so both phases are separate queries.
-#[salsa::tracked]
-pub struct Judgments<'db> {
-    #[tracked]
-    #[no_eq]
-    #[returns(ref)]
-    pub scoped: su::ScopedArena,
-    #[tracked]
-    #[no_eq]
-    #[returns(ref)]
-    pub statics: StaticsArena,
-    #[tracked]
-    #[no_eq]
-    #[returns(ref)]
-    pub errors: Vec<crate::check::TyckErrorEntry>,
-    #[tracked]
-    #[no_eq]
-    #[returns(ref)]
-    pub observations: Vec<crate::check::TyckObservation>,
-    #[tracked]
-    #[no_eq]
-    #[returns(ref)]
-    pub root: Option<ss::TermAnnId>,
-    #[tracked]
-    pub root_slot: u32,
-}
-
-/// The intermediate state between the hole-resolution and the normalization
-/// phases, carried as a tracked struct so each finish step is its own query.
-#[salsa::tracked]
-pub struct Resolved<'db> {
-    #[tracked]
-    #[no_eq]
-    #[returns(ref)]
-    pub scoped: su::ScopedArena,
-    #[tracked]
-    #[no_eq]
-    #[returns(ref)]
-    pub statics: StaticsArena,
-    #[tracked]
-    #[no_eq]
-    #[returns(ref)]
-    pub errors: Vec<crate::check::TyckErrorEntry>,
-    #[tracked]
-    #[no_eq]
-    #[returns(ref)]
-    pub observations: Vec<crate::check::TyckObservation>,
-    #[tracked]
-    #[no_eq]
-    #[returns(ref)]
-    pub root: Option<ss::TermAnnId>,
-    #[tracked]
-    pub root_slot: u32,
-}
-
-/// The judgment phase: check the whole scoped program, producing the typed
-/// arena, the accumulated errors, and the root annotation.
+// The outcome owns its arenas and reports and contains no database-tied references.
+// The non-Update escape hatch stays until the judgment layer gains structural equality.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
-fn tyck_judgments<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> Judgments<'db> {
+pub fn check_source<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> TyckOutput {
+    // One checker runs the whole pipeline within a single query. Splitting the
+    // phases into separate salsa queries required deep-copying the full statics
+    // arena across every boundary, which dominated check memory.
     let mut scoped = data.scoped(db).clone();
-    let mut tycker = Tycker::new(db, data, data.spans(db), data.prim(db), &mut scoped);
-    crate::check::InternalTerm::fill_intrinsics(&mut tycker);
-    let root = tycker.run_judgments_k(data.root(db)).ok();
-    let root_slot = tycker.root_slot();
-    let statics = std::mem::take(&mut tycker.statics);
-    let errors = std::mem::take(&mut tycker.errors);
-    let observations = std::mem::take(&mut tycker.observations);
-    drop(tycker);
-    Judgments::new(db, scoped, statics, errors, observations, root, root_slot)
-}
-
-/// The hole-resolution phase: resolve every fillable site and collect the
-/// solutions, given the judgment phase's arena.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
-fn resolve_holes_phase<'db>(
-    db: &'db dyn TyckDb, data: ScopedData<'db>, judgments: Judgments<'db>,
-) -> Resolved<'db> {
-    let mut scoped = judgments.scoped(db).clone();
-    let mut tycker = Tycker::resume(
-        db,
-        data,
-        data.spans(db),
-        data.prim(db),
-        &mut scoped,
-        judgments.statics(db).clone(),
-        judgments.errors(db).clone(),
-        judgments.observations(db).clone(),
-        judgments.root_slot(db),
-    );
-    tycker.resolve_holes_and_collect();
-    let root_slot = tycker.root_slot();
-    let statics = std::mem::take(&mut tycker.statics);
-    let errors = std::mem::take(&mut tycker.errors);
-    let observations = std::mem::take(&mut tycker.observations);
-    let root = *judgments.root(db);
-    drop(tycker);
-    Resolved::new(db, scoped, statics, errors, observations, root, root_slot)
-}
-
-/// The normalization phase: normalize and validate the checked arena, given
-/// the hole-resolution phase's arena. Reconstructs the checker around the
-/// previous phase's state so error reporting and the writer monad behave
-/// exactly as the combined pass did.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
-fn finish_checked<'db>(
-    db: &'db dyn TyckDb, data: ScopedData<'db>, resolved: Resolved<'db>,
-) -> SourceCheckOutcome {
-    let mut scoped = resolved.scoped(db).clone();
-    let mut tycker = Tycker::resume(
-        db,
-        data,
-        data.spans(db),
-        data.prim(db),
-        &mut scoped,
-        resolved.statics(db).clone(),
-        resolved.errors(db).clone(),
-        resolved.observations(db).clone(),
-        resolved.root_slot(db),
-    );
-    match resolved.root(db) {
-        | None => {
-            let reports = tycker.error_reports();
-            tycker.strip_checker_state();
-            SourceCheckOutcome::Rejected(RejectedSource {
-                statics: tycker.statics,
-                reports,
-                observations: tycker.observations,
-            })
-        }
-        | Some(root) => match tycker.normalize_and_validate_k() {
-            | Ok(()) => {
-                tycker.strip_checker_state();
-                SourceCheckOutcome::Checked(CheckedSource {
-                    statics: tycker.statics,
-                    root: *root,
-                    observations: tycker.observations,
-                })
-            }
-            | Err(KontFailure) => {
+    let (root, outcome);
+    {
+        let mut tycker = Tycker::new(db, data, data.spans(db), data.prim(db), &mut scoped);
+        crate::check::InternalTerm::fill_intrinsics(&mut tycker);
+        root = tycker.run_judgments_k(data.root(db)).ok();
+        tycker.resolve_holes_and_collect();
+        outcome = match root {
+            | None => {
                 let reports = tycker.error_reports();
                 tycker.strip_checker_state();
                 SourceCheckOutcome::Rejected(RejectedSource {
@@ -2496,16 +2371,26 @@ fn finish_checked<'db>(
                     observations: tycker.observations,
                 })
             }
-        },
+            | Some(root) => match tycker.normalize_and_validate_k() {
+                | Ok(()) => {
+                    tycker.strip_checker_state();
+                    SourceCheckOutcome::Checked(CheckedSource {
+                        statics: tycker.statics,
+                        root,
+                        observations: tycker.observations,
+                    })
+                }
+                | Err(KontFailure) => {
+                    let reports = tycker.error_reports();
+                    tycker.strip_checker_state();
+                    SourceCheckOutcome::Rejected(RejectedSource {
+                        statics: tycker.statics,
+                        reports,
+                        observations: tycker.observations,
+                    })
+                }
+            },
+        };
     }
-}
-
-// The outcome owns its arenas and reports and contains no database-tied references.
-// The non-Update escape hatch stays until the judgment layer gains structural equality.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
-pub fn check_source<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> TyckOutput {
-    let judgments = tyck_judgments(db, data);
-    let resolved = resolve_holes_phase(db, data, judgments);
-    let outcome = finish_checked(db, data, resolved);
-    TyckOutput { scoped: resolved.scoped(db).clone(), outcome }
+    TyckOutput { scoped, outcome }
 }
