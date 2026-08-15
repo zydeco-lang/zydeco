@@ -1675,3 +1675,48 @@ decisions while implementing the plan.
 - Reconsider the provenance relation representation now that term provenance is again one of the
   largest durable checker fields. A split singleton/multiple layout may avoid paying an enum-sized
   value in every hash bucket while preserving the rare one-to-many cases.
+
+## 2026-08-15 — round 37: discard resolver-local pattern free variables
+
+### Findings
+
+- Pattern free-variable contexts are an intermediate result of the resolver's postorder fold. A
+  parent term combines a pattern's annotations with its body and bound variables to compute the
+  term free-variable context; no checker, editor, diagnostic, or downstream pass reads the pattern
+  free-variable map afterward.
+- The standard library creates 27,137 pattern free-variable entries. Of those, 18,342 are empty;
+  the remaining entries contain 11,940 definition IDs in total, with a maximum context size of 14.
+  Retaining the surrounding hash map and one `Vec` value per pattern therefore costs much more than
+  the semantic payload.
+- The other scoped summaries have distinct lifetimes. Pattern binding contexts are read by Cajun to
+  identify parameter definitions, while all 64,954 term free-variable contexts participate in the
+  checker's incremental global-term classification. They cannot be removed at the same boundary.
+
+### Changes
+
+- Kept `coctxs_pat_local` as private `Collector` scratch state so the resolver's postorder equations
+  are unchanged, but stopped transferring it into the durable `ScopedArena`.
+- Removed the dead field from downstream arena fixtures. No compatibility field or recomputation
+  path remains because there is no post-resolution consumer.
+
+### Measurements
+
+- Three release checks used 177,537,024, 177,602,560, and 177,946,624 bytes peak RSS (median
+  177,602,560), down 491,520 bytes (-0.3%) from round 36. The smaller RSS change than the dead
+  table's logical footprint indicates that the allocator already reused part of its released pages
+  before the later static-checking peak.
+- The current-tree baseline is now down from 2,497,757,184 to 177,602,560 bytes (-92.9%). Warm wall
+  time was 0.23--0.24s and warm user time was 0.21s.
+- All 140 surface tests, all 56 statics tests, and all 151 session tests passed, along with the
+  release CLI build and full standard-library check.
+
+### Next
+
+- Measure which pattern binding contexts contain information beyond the direct binder leaves. Cajun
+  needs the union only to enumerate parameter definitions, so a direct binder-to-role index may
+  replace 27,137 retained vectors without moving resolver scratch state into the editor.
+- Separate term free-variable summaries needed during checking from durable scoped syntax. They are
+  consulted while global definitions accumulate, but become dead once the checked arena has
+  recorded `global_terms`; an explicit phase boundary could release their 64,954 vectors sooner.
+- Refresh the live heap census before choosing between the remaining producer-query families and
+  provenance relations.

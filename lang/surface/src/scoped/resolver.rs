@@ -135,7 +135,7 @@ impl<'a> Resolver<'a> {
             textual,
             users,
             ctxs_pat_local,
-            coctxs_pat_local,
+            coctxs_pat_local: _,
             coctxs_term_local,
             blocks,
         } = collector.run_source(root);
@@ -148,7 +148,6 @@ impl<'a> Resolver<'a> {
                 textual,
                 users,
                 ctxs_pat_local,
-                coctxs_pat_local,
                 coctxs_term_local,
                 blocks,
             },

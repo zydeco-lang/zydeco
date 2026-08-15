@@ -7928,7 +7928,6 @@ mod source_boundary_tests {
                 scoped.terms.insert_new(body, su::Hole.into());
                 scoped.terms.insert_new(root, su::Abs(binder, body).into());
                 scoped.ctxs_pat_local.insert_new(binder, su::Context::singleton(binder_def));
-                scoped.coctxs_pat_local.insert_new(binder, su::CoContext::new());
                 [body, root].into_iter().for_each(|term| {
                     scoped.coctxs_term_local.insert_new(term, su::CoContext::new());
                 });
