@@ -320,12 +320,12 @@ impl Resolver<'_> {
     fn alloc_scoped_term(&mut self, source: TermId, term: Term<DefId>) -> TermId {
         let id = self.allocator.alloc();
         self.terms.insert_new(id, term);
-        let textual = *self
+        let textual = self
             .bitter
-            .textual
-            .back(&source.into())
+            .origins
+            .source(&source.into())
             .expect("a source term must retain its textual origin");
-        self.bitter.textual.insert_new(textual, id.into());
+        self.bitter.origins.insert_new(textual, id.into());
         id
     }
 }

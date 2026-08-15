@@ -2131,3 +2131,59 @@ decisions while implementing the plan.
   an earlier Salsa generation before changing its representation.
 - Revisit the remaining source hashes and pre-normalization kind storage only from the refreshed peak;
   their individual allocations are now close enough that lifetimes may matter more than raw size.
+
+## 2026-08-15 — round 46: encode textual origins as dense slots
+
+### Findings
+
+- The round-45 heap census attributed 7,487,488 and 6,438,912-byte live allocations to the forward
+  and reverse directions of the textual-to-derived relation. Repository-wide use showed no query of
+  textual-to-derived edges. Desugaring, deep cloning, error spans, name resolution, editor spans, and
+  navigation all queried only one textual origin for a derived entity.
+- One `Desugarer` allocator issues every bitter definition, pattern, and term ID in a shared sequence,
+  and each allocation records its origin immediately. Resolution preserves those IDs; the only new
+  resolved terms come from one second sequential allocator and are also recorded immediately. Raw
+  derived IDs are therefore dense within each of the two key spaces, independent of entity category.
+- A complete assembled textual program likewise has one parser key space. The full textual `EntityId`
+  occupied 24 bytes because it repeated that key space and its category at every relation edge. Once
+  the key space is stored at arena level, a textual origin needs only a four-byte raw ID and one-byte
+  category, with an eight-byte aligned slot. A separate one-byte tag validates the derived category
+  without retaining its ID.
+- `SourceUnitDesugarer::new` still accepted an existing bitter arena even though every caller supplied
+  an empty one. That obsolete path could combine different complete textual programs and invalidate
+  the one-source-key-space invariant. Removing it makes the storage contract match the actual compiler
+  phase boundary.
+
+### Changes
+
+- Replaced the bidirectional `ArenaForth` with `TextualOrigins`: one arena-level textual key space and
+  dense origin/tag vectors per derived key space. Lookup reconstructs a previously issued typed
+  textual ID and rejects a category mismatch.
+- Routed bitter and scoped span lookup, deep cloning, synthetic scoped-term allocation, and Cajun
+  navigation directly through derived-to-source lookup. No forward relation or derived-ID hash table
+  remains.
+- Made source-unit desugaring always start with an empty bitter arena. Added regressions for compact
+  slot layout, all derived categories, wrong-category queries, allocation gaps, and mixed textual
+  key spaces.
+
+### Measurements
+
+- Five release checks used 133,939,200, 134,447,104, 134,168,576, 133,922,816, and 133,840,896 bytes
+  peak RSS (median 133,939,200), down 16,531,456 bytes (-11.0%) from round 45. Warm wall time was
+  0.19--0.20s and warm user time was 0.17--0.18s.
+- The current-tree baseline is now down from 2,497,757,184 to 133,939,200 bytes (-94.6%).
+- All 27 utility tests and their doctests, all 146 surface tests, all 25 statics unit tests and 33
+  statics integration tests, all 151 session tests, all CLI tests, all 31 Cajun unit tests, and all 9
+  Cajun stdio tests passed. Focused Clippy passed with the repository's existing unrelated lint
+  allowances. The release CLI build and standard-library check also passed.
+
+### Next
+
+- Capture a fresh heap census. Both formerly leading textual-provenance allocations and the static
+  provenance edge payloads should be absent; use the new peak to decide between scoped syntax,
+  pre-normalization kinds, spans, and retained editor facts.
+- Trace the 3,227,648-byte allocation previously attributed to `env_type` through checker-state
+  stripping and Salsa publication. It should not survive in a finished `StaticsArena`, so ownership
+  evidence matters more than changing its container.
+- Measure whether the remaining peak occurs before or after normalized editor facts are published.
+  At 134MB, lifetime overlap may now dominate individual container overhead.

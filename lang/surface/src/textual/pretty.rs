@@ -2141,9 +2141,7 @@ impl<'a> Pretty<'a, PrettyFormatter<'a>> for TermId {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bitter::{
-        SourceUnitDesugarer, arena::BitterArena, fmt::Formatter as BitterFormatter,
-    };
+    use crate::bitter::{SourceUnitDesugarer, fmt::Formatter as BitterFormatter};
     use crate::textual::{Lexer, LexicalTokenKind, LexicalTokens, SourceUnitParser};
     use zydeco_syntax::Ugly;
     use zydeco_utils::pass::CompilerPass;
@@ -2198,14 +2196,10 @@ mod tests {
         }
 
         fn desugared_shape(&self) -> String {
-            let output = SourceUnitDesugarer::new(
-                &self.parser.spans,
-                &self.parser.arena,
-                self.unit,
-                BitterArena::default(),
-            )
-            .run()
-            .unwrap();
+            let output =
+                SourceUnitDesugarer::new(&self.parser.spans, &self.parser.arena, self.unit)
+                    .run()
+                    .unwrap();
             output.root.ugly(&BitterFormatter::new(&output.arena))
         }
     }

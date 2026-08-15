@@ -13,7 +13,7 @@ impl Alloc for b::DefId {
     fn alloc(desugarer: &mut Desugarer, entity: Self::Entity, prev: Self::Prev) -> Self {
         let curr = desugarer.fresh();
         desugarer.bitter.defs.insert_new(curr, entity);
-        desugarer.bitter.textual.insert_new(prev, curr.into());
+        desugarer.bitter.origins.insert_new(prev, curr.into());
         curr
     }
 }
@@ -23,7 +23,7 @@ impl Alloc for b::PatId {
     fn alloc(desugarer: &mut Desugarer, entity: Self::Entity, prev: Self::Prev) -> Self {
         let curr = desugarer.fresh();
         desugarer.bitter.pats.insert_new(curr, entity);
-        desugarer.bitter.textual.insert_new(prev, curr.into());
+        desugarer.bitter.origins.insert_new(prev, curr.into());
         curr
     }
 }
@@ -33,7 +33,7 @@ impl Alloc for b::TermId {
     fn alloc(desugarer: &mut Desugarer, entity: Self::Entity, prev: Self::Prev) -> Self {
         let curr = desugarer.fresh();
         desugarer.bitter.terms.insert_new(curr, entity);
-        desugarer.bitter.textual.insert_new(prev, curr.into());
+        desugarer.bitter.origins.insert_new(prev, curr.into());
         curr
     }
 }

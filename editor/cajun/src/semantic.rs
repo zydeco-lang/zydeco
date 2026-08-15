@@ -353,7 +353,7 @@ impl<'source> SemanticDocument<'source> {
         spans: &'a SpanArena, scoped: &ScopedArena,
         entity: zydeco_surface::scoped::syntax::EntityId,
     ) -> Option<&'a Span> {
-        scoped.textual.back(&entity).map(|textual| &spans[textual])
+        scoped.origins.source(&entity).map(|textual| &spans[&textual])
     }
 
     fn same_file(span: &Span, file_path: &Path) -> bool {

@@ -2,7 +2,7 @@
 
 use super::{PrettyFormatter, PrettyOptions};
 use crate::{
-    bitter::{SourceUnitDesugarer, arena::BitterArena, fmt::Formatter as BitterFormatter},
+    bitter::{SourceUnitDesugarer, fmt::Formatter as BitterFormatter},
     textual::{Lexer, LexicalTokenKind, LexicalTokens, SourceUnitParser, syntax::*},
 };
 use std::{
@@ -56,14 +56,9 @@ impl ParsedSource {
     }
 
     fn desugared_shape(&self) -> String {
-        let output = SourceUnitDesugarer::new(
-            &self.parser.spans,
-            &self.parser.arena,
-            self.unit,
-            BitterArena::default(),
-        )
-        .run()
-        .expect("repository sources should desugar");
+        let output = SourceUnitDesugarer::new(&self.parser.spans, &self.parser.arena, self.unit)
+            .run()
+            .expect("repository sources should desugar");
         output.root.ugly(&BitterFormatter::new(&output.arena))
     }
 }

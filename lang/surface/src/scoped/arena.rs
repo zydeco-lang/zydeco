@@ -1,5 +1,5 @@
 use super::syntax::*;
-use crate::textual::syntax as t;
+use crate::bitter::arena::TextualOrigins;
 use zydeco_derive::{AsMutSelf, AsRefSelf};
 use zydeco_utils::prelude::{DepGraph, Kosaraju, SccGraph};
 
@@ -174,8 +174,8 @@ pub struct ScopedArena {
     pub defs: ArenaSparse<ScopedScope, DefId>,
     pub pats: ArenaSparse<ScopedScope, PatId>,
     pub terms: ArenaPaged<ScopedScope, TermId>,
-    /// entity maps from textural syntax
-    pub textual: ArenaForth<t::EntityId, EntityId>,
+    /// Textual source origin of every resolved entity.
+    pub origins: TextualOrigins,
 
     /// def user map
     pub users: ArenaForth<DefId, TermId>,

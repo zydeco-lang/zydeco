@@ -32,7 +32,7 @@ impl TextualProgram {
     pub(crate) fn desugar(self) -> Result<BitterProgram, DesugarError> {
         let TextualProgram { spans, arena: textual, unit } = self;
         let SourceDesugarOut { arena, prim, root } =
-            SourceUnitDesugarer::new(&spans, &textual, unit, Default::default()).run()?;
+            SourceUnitDesugarer::new(&spans, &textual, unit).run()?;
         Ok(BitterProgram { spans, arena, prim, root })
     }
 }

@@ -47,7 +47,7 @@ impl TestFixture {
             defs: Default::default(),
             pats: Default::default(),
             terms: Default::default(),
-            textual: Default::default(),
+            origins: Default::default(),
             users: Default::default(),
             blocks: Default::default(),
         };

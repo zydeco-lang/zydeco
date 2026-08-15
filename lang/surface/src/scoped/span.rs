@@ -9,7 +9,7 @@ impl TextualBack for ScopedArena {
     type Entity = t::EntityId;
 
     fn textual_back(&self, id: EntityId) -> Option<t::EntityId> {
-        self.textual.back(&id).copied()
+        self.origins.source(&id)
     }
 }
 

@@ -204,8 +204,8 @@ impl ProjectState {
             .defs
             .iter()
             .filter_map(|(definition, name)| {
-                let entity = self.scoped().textual.back(&(*definition).into())?;
-                let span = &self.analysis.spans()[entity];
+                let entity = self.scoped().origins.source(&(*definition).into())?;
+                let span = &self.analysis.spans()[&entity];
                 (span.get_path().map(|path| Self::normalize_path(path)) == Some(file_path.clone()))
                     .then(|| {
                         let range = self.span_range(span)?;
@@ -273,15 +273,15 @@ impl ProjectState {
         let file_path = Self::normalize_path(file_path);
         let offset = self.offset(&file_path, position)?;
         let definitions = self.scoped().defs.iter().filter_map(|(definition, _)| {
-            let entity = self.scoped().textual.back(&(*definition).into())?;
-            Some((*definition, &self.analysis.spans()[entity]))
+            let entity = self.scoped().origins.source(&(*definition).into())?;
+            Some((*definition, &self.analysis.spans()[&entity]))
         });
         let uses = self.scoped().terms.iter().filter_map(|(term, body)| {
             let Term::Var(definition) = body else {
                 return None;
             };
-            let entity = self.scoped().textual.back(&term.into())?;
-            Some((*definition, &self.analysis.spans()[entity]))
+            let entity = self.scoped().origins.source(&term.into())?;
+            Some((*definition, &self.analysis.spans()[&entity]))
         });
         definitions
             .chain(uses)
@@ -308,8 +308,8 @@ impl ProjectState {
     }
 
     fn definition_location(&self, definition: DefId) -> Option<Location> {
-        let entity = self.scoped().textual.back(&definition.into())?;
-        self.entity_location(entity)
+        let entity = self.scoped().origins.source(&definition.into())?;
+        self.entity_location(&entity)
     }
 
     fn type_definition_link(&self, definition: DefId) -> Option<TypeDefinitionLink> {
@@ -332,8 +332,8 @@ impl ProjectState {
     }
 
     fn term_location(&self, term: TermId) -> Option<Location> {
-        let entity = self.scoped().textual.back(&term.into())?;
-        self.entity_location(entity)
+        let entity = self.scoped().origins.source(&term.into())?;
+        self.entity_location(&entity)
     }
 
     fn entity_location(&self, entity: &EntityId) -> Option<Location> {

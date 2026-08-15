@@ -1,8 +1,5 @@
 use crate::{
-    bitter::{
-        SourceUnitDesugarer, arena::BitterArena, fmt::Formatter as BitterFormatter,
-        syntax as bitter,
-    },
+    bitter::{SourceUnitDesugarer, fmt::Formatter as BitterFormatter, syntax as bitter},
     metadata::{BuiltinMetaError, IntrinsicMeta, IntrinsicMetaError, MonadicMetaError},
     textual::{
         arena::TextualScope,
@@ -90,14 +87,9 @@ fn monadic_metadata_lowers_arbitrary_terms_to_monadic_blocks() {
             let unit = parser::SourceUnitParser::new()
                 .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
                 .unwrap_or_else(|error| panic!("expected `{source}` to parse: {error}"));
-            let output = SourceUnitDesugarer::new(
-                &parser.spans,
-                &parser.arena,
-                unit,
-                BitterArena::default(),
-            )
-            .run()
-            .unwrap_or_else(|error| panic!("expected `{source}` to desugar: {error}"));
+            let output = SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit)
+                .run()
+                .unwrap_or_else(|error| panic!("expected `{source}` to desugar: {error}"));
             let bitter::Term::MoBlock(bitter::MoBlock { body, .. }) =
                 &output.arena.terms[&output.root]
             else {
@@ -119,13 +111,10 @@ fn monadic_metadata_rejects_arguments() {
     let unit = parser::SourceUnitParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
         .unwrap();
-    let error =
-        match SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit, BitterArena::default())
-            .run()
-        {
-            | Ok(_) => panic!("monadic metadata must not accept arguments"),
-            | Err(error) => error,
-        };
+    let error = match SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit).run() {
+        | Ok(_) => panic!("monadic metadata must not accept arguments"),
+        | Err(error) => error,
+    };
 
     assert!(matches!(
         error,
@@ -143,20 +132,14 @@ fn monadic_metadata_extent_survives_bitter_formatting() {
     let unit = parser::SourceUnitParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
         .unwrap();
-    let output =
-        SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit, BitterArena::default())
-            .run()
-            .unwrap();
+    let output = SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit).run().unwrap();
     let rendered = output.root.ugly(&BitterFormatter::new(&output.arena));
 
     let mut reparsed = Parser::new();
     let unit = parser::SourceUnitParser::new()
         .parse(&rendered, &LocationCtx::Plain, &mut reparsed, lexer::Lexer::new(&rendered))
         .unwrap_or_else(|error| panic!("expected `{rendered}` to reparse: {error}"));
-    let output =
-        SourceUnitDesugarer::new(&reparsed.spans, &reparsed.arena, unit, BitterArena::default())
-            .run()
-            .unwrap();
+    let output = SourceUnitDesugarer::new(&reparsed.spans, &reparsed.arena, unit).run().unwrap();
     let bitter::Term::App(bitter::App(function, _)) = output.arena.terms[&output.root] else {
         panic!("expected the reparsed root to remain an application")
     };

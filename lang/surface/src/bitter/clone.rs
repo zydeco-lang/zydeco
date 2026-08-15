@@ -27,14 +27,14 @@ impl DeepClone for b::CoPatternSpine {
 impl DeepClone for b::DefId {
     fn deep_clone(&self, desugarer: &mut Desugarer) -> Self {
         let def = desugarer.bitter.defs[self].clone();
-        let prev = *desugarer.bitter.textual.back(&(*self).into()).unwrap();
+        let prev = desugarer.bitter.origins.source(&(*self).into()).unwrap();
         Alloc::alloc(desugarer, def, prev)
     }
 }
 impl DeepClone for b::PatId {
     fn deep_clone(&self, desugarer: &mut Desugarer) -> Self {
         let pat = desugarer.bitter.pats[self].clone();
-        let prev = *desugarer.bitter.textual.back(&(*self).into()).unwrap();
+        let prev = desugarer.bitter.origins.source(&(*self).into()).unwrap();
         let pat = match &pat {
             | b::Pattern::Ann(pat) => {
                 let b::Ann { tm, ty } = pat;
@@ -72,7 +72,7 @@ impl DeepClone for b::PatId {
 impl DeepClone for b::TermId {
     fn deep_clone(&self, desugarer: &mut Desugarer) -> Self {
         let term = desugarer.bitter.terms[self].clone();
-        let prev = *desugarer.bitter.textual.back(&(*self).into()).unwrap();
+        let prev = desugarer.bitter.origins.source(&(*self).into()).unwrap();
         let term = match &term {
             | b::Term::Meta(term) => {
                 let b::MetaT(meta, term) = term;

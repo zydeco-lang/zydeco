@@ -35,14 +35,12 @@ pub struct SourceUnitDesugarer<'a> {
 }
 
 impl<'a> Desugarer<'a> {
-    fn with_arena(
-        spans: &'a t::SpanArena, textual: &'a t::TextArena, bitter: b::BitterArena,
-    ) -> Self {
+    fn new(spans: &'a t::SpanArena, textual: &'a t::TextArena) -> Self {
         Self {
             allocator: IdAllocator::new(),
             spans,
             textual,
-            bitter,
+            bitter: b::BitterArena::default(),
             prim: b::PrimTerms::default(),
         }
     }
@@ -57,11 +55,8 @@ impl<'a> Desugarer<'a> {
 }
 
 impl<'a> SourceUnitDesugarer<'a> {
-    pub fn new(
-        spans: &'a t::SpanArena, textual: &'a t::TextArena, unit: t::SourceUnit,
-        bitter: b::BitterArena,
-    ) -> Self {
-        Self { desugarer: Desugarer::with_arena(spans, textual, bitter), unit }
+    pub fn new(spans: &'a t::SpanArena, textual: &'a t::TextArena, unit: t::SourceUnit) -> Self {
+        Self { desugarer: Desugarer::new(spans, textual), unit }
     }
 }
 

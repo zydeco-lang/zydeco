@@ -45,35 +45,6 @@ pub struct SpanArena {
     spans: Vec<Span>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(u8)]
-enum EntityCategory {
-    Definition,
-    Pattern,
-    CoPattern,
-    Term,
-}
-
-impl EntityCategory {
-    fn split(entity: EntityId) -> (Self, KeySpaceId, RawIdx) {
-        match entity {
-            | EntityId::Def(id) => (Self::Definition, id.key_space(), id.raw()),
-            | EntityId::Pat(id) => (Self::Pattern, id.key_space(), id.raw()),
-            | EntityId::CoPat(id) => (Self::CoPattern, id.key_space(), id.raw()),
-            | EntityId::Term(id) => (Self::Term, id.key_space(), id.raw()),
-        }
-    }
-
-    fn join(self, key_space: KeySpaceId, raw: RawIdx) -> EntityId {
-        match self {
-            | Self::Definition => EntityId::Def(restore_id(key_space, raw)),
-            | Self::Pattern => EntityId::Pat(restore_id(key_space, raw)),
-            | Self::CoPattern => EntityId::CoPat(restore_id(key_space, raw)),
-            | Self::Term => EntityId::Term(restore_id(key_space, raw)),
-        }
-    }
-}
-
 mod impl_span_arena {
     use super::*;
     use std::ops::Index;
@@ -88,7 +59,7 @@ mod impl_span_arena {
         where
             Id: Into<EntityId>,
         {
-            let (category, key_space, raw) = EntityCategory::split(id.into());
+            let (category, key_space, raw) = id.into().into_parts();
             match self.key_space {
                 | Some(existing) => {
                     assert_eq!(existing, key_space, "span ID belongs to another parser")
@@ -119,7 +90,7 @@ mod impl_span_arena {
                 move |(raw, (category, span))| {
                     let key_space = key_space.expect("a nonempty span arena has a key space");
                     let raw = u32::try_from(raw).expect("span arena exceeded the raw ID range");
-                    (category.join(key_space, RawIdx::from_u32(raw)), span)
+                    (category.restore(key_space, RawIdx::from_u32(raw)), span)
                 },
             )
         }
@@ -129,7 +100,7 @@ mod impl_span_arena {
             self.spans.shrink_to_fit();
         }
         fn index_of(&self, entity: EntityId) -> Option<usize> {
-            let (category, key_space, raw) = EntityCategory::split(entity);
+            let (category, key_space, raw) = entity.into_parts();
             (self.key_space == Some(key_space))
                 .then_some(raw.into_u32() as usize)
                 .filter(|index| self.categories.get(*index) == Some(&category))

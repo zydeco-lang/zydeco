@@ -28,6 +28,39 @@ pub enum EntityId {
     Term(TermId),
 }
 
+/// Compact tag used when storage retains an entity's key space and raw ID
+/// separately.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u8)]
+pub(crate) enum EntityCategory {
+    Definition,
+    Pattern,
+    CoPattern,
+    Term,
+}
+
+impl EntityId {
+    pub(crate) fn into_parts(self) -> (EntityCategory, KeySpaceId, RawIdx) {
+        match self {
+            | Self::Def(id) => (EntityCategory::Definition, id.key_space(), id.raw()),
+            | Self::Pat(id) => (EntityCategory::Pattern, id.key_space(), id.raw()),
+            | Self::CoPat(id) => (EntityCategory::CoPattern, id.key_space(), id.raw()),
+            | Self::Term(id) => (EntityCategory::Term, id.key_space(), id.raw()),
+        }
+    }
+}
+
+impl EntityCategory {
+    pub(crate) fn restore(self, key_space: KeySpaceId, raw: RawIdx) -> EntityId {
+        match self {
+            | Self::Definition => EntityId::Def(restore_id(key_space, raw)),
+            | Self::Pattern => EntityId::Pat(restore_id(key_space, raw)),
+            | Self::CoPattern => EntityId::CoPat(restore_id(key_space, raw)),
+            | Self::Term => EntityId::Term(restore_id(key_space, raw)),
+        }
+    }
+}
+
 /* --------------------------------- Pattern -------------------------------- */
 
 #[derive(From, Clone, Debug)]

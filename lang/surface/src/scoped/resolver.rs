@@ -114,10 +114,10 @@ impl<'a> Resolver<'a> {
         } = self;
         let _ = allocator;
         assert!(block_deps.iter().next().is_none(), "every block dependency graph must be closed");
-        let BitterArena { defs: _, pats: _, terms: _, textual } = bitter;
+        let BitterArena { defs: _, pats: _, terms: _, origins } = bitter;
         Ok(ResolvedProgram {
             prim,
-            arena: ScopedArena { defs, pats, terms, textual, users, blocks },
+            arena: ScopedArena { defs, pats, terms, origins, users, blocks },
         })
     }
 
