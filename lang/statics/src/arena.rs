@@ -6,6 +6,7 @@ use super::syntax::*;
 use crate::surface_syntax as su;
 use crate::{SkolemScope, TyEnv};
 use std::{
+    marker::PhantomData,
     num::NonZeroU32,
     ops::{Deref, DerefMut, Index, IndexMut},
     sync::Arc,
@@ -242,7 +243,95 @@ impl Index<&KindId> for KindArena {
 /// Editor-facing facts keyed by one source term.
 #[derive(Clone, Debug)]
 pub struct TermFacts {
-    annotation: TermAnnId,
+    annotation: CompactTermAnnId,
+}
+
+/// An annotation dispatcher stored without the enum's external discriminant.
+///
+/// Every arena ID consists of an eight-byte key space and a four-byte raw
+/// index. Storing the annotation category after the two raw indexes lets it
+/// occupy alignment padding, so both one-ID and two-ID variants use 32 bytes
+/// instead of [`TermAnnId`]'s 40-byte worst-case layout.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct CompactTermAnnId {
+    primary_space: KeySpaceId,
+    secondary_space: KeySpaceId,
+    primary_raw: RawIdx,
+    secondary_raw: RawIdx,
+    category: TermAnnCategory,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u8)]
+enum TermAnnCategory {
+    Hole,
+    Kind,
+    Type,
+    Value,
+    Compu,
+}
+
+impl CompactTermAnnId {
+    fn new(annotation: TermAnnId) -> Self {
+        match annotation {
+            | TermAnnId::Hole(id) => Self::single(id, TermAnnCategory::Hole),
+            | TermAnnId::Kind(id) => Self::single(id, TermAnnCategory::Kind),
+            | TermAnnId::Type(primary, secondary) => {
+                Self::pair(primary, secondary, TermAnnCategory::Type)
+            }
+            | TermAnnId::Value(primary, secondary) => {
+                Self::pair(primary, secondary, TermAnnCategory::Value)
+            }
+            | TermAnnId::Compu(primary, secondary) => {
+                Self::pair(primary, secondary, TermAnnCategory::Compu)
+            }
+        }
+    }
+
+    fn single<Id: ArenaId>(id: Id, category: TermAnnCategory) -> Self {
+        Self {
+            primary_space: id.key_space(),
+            secondary_space: id.key_space(),
+            primary_raw: id.raw(),
+            secondary_raw: id.raw(),
+            category,
+        }
+    }
+
+    fn pair<Primary: ArenaId, Secondary: ArenaId>(
+        primary: Primary, secondary: Secondary, category: TermAnnCategory,
+    ) -> Self {
+        Self {
+            primary_space: primary.key_space(),
+            secondary_space: secondary.key_space(),
+            primary_raw: primary.raw(),
+            secondary_raw: secondary.raw(),
+            category,
+        }
+    }
+
+    fn annotation(self) -> TermAnnId {
+        match self.category {
+            | TermAnnCategory::Hole => {
+                TermAnnId::Hole(restore_id(self.primary_space, self.primary_raw))
+            }
+            | TermAnnCategory::Kind => {
+                TermAnnId::Kind(restore_id(self.primary_space, self.primary_raw))
+            }
+            | TermAnnCategory::Type => TermAnnId::Type(
+                restore_id(self.primary_space, self.primary_raw),
+                restore_id(self.secondary_space, self.secondary_raw),
+            ),
+            | TermAnnCategory::Value => TermAnnId::Value(
+                restore_id(self.primary_space, self.primary_raw),
+                restore_id(self.secondary_space, self.secondary_raw),
+            ),
+            | TermAnnCategory::Compu => TermAnnId::Compu(
+                restore_id(self.primary_space, self.primary_raw),
+                restore_id(self.secondary_space, self.secondary_raw),
+            ),
+        }
+    }
 }
 
 /// One-based index whose zero niche keeps optional source-term slots at four
@@ -415,26 +504,95 @@ impl ArenaAccess<&TypeId, Fillable<Type>> for TypeArena {
 /// typed node collapse to the most recently checked wrapper.
 #[derive(Clone, Debug)]
 pub struct SourceProvenance<Source, Typed> {
-    latest_by_typed: ArenaAssoc<Typed, Source>,
+    latest_by_typed: ArenaAssoc<CompactTypedEntityId, Source>,
+    marker: PhantomData<fn() -> Typed>,
+}
+
+/// A pattern or term dispatcher whose category occupies ID alignment padding.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+struct CompactTypedEntityId {
+    key_space: KeySpaceId,
+    raw: RawIdx,
+    category: TypedEntityCategory,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[repr(u8)]
+enum TypedEntityCategory {
+    KindPattern,
+    TypePattern,
+    ValuePattern,
+    KindTerm,
+    TypeTerm,
+    ValueTerm,
+    CompuTerm,
+}
+
+impl From<PatId> for CompactTypedEntityId {
+    fn from(id: PatId) -> Self {
+        let (id, category) = match id {
+            | PatId::Kind(id) => ((id.key_space(), id.raw()), TypedEntityCategory::KindPattern),
+            | PatId::Type(id) => ((id.key_space(), id.raw()), TypedEntityCategory::TypePattern),
+            | PatId::Value(id) => ((id.key_space(), id.raw()), TypedEntityCategory::ValuePattern),
+        };
+        Self { key_space: id.0, raw: id.1, category }
+    }
+}
+
+impl From<TermId> for CompactTypedEntityId {
+    fn from(id: TermId) -> Self {
+        let (id, category) = match id {
+            | TermId::Kind(id) => ((id.key_space(), id.raw()), TypedEntityCategory::KindTerm),
+            | TermId::Type(id) => ((id.key_space(), id.raw()), TypedEntityCategory::TypeTerm),
+            | TermId::Value(id) => ((id.key_space(), id.raw()), TypedEntityCategory::ValueTerm),
+            | TermId::Compu(id) => ((id.key_space(), id.raw()), TypedEntityCategory::CompuTerm),
+        };
+        Self { key_space: id.0, raw: id.1, category }
+    }
 }
 
 impl<Source, Typed> Default for SourceProvenance<Source, Typed> {
     fn default() -> Self {
-        Self { latest_by_typed: ArenaAssoc::default() }
+        Self { latest_by_typed: ArenaAssoc::default(), marker: PhantomData }
     }
 }
 
 impl<Source, Typed> SourceProvenance<Source, Typed>
 where
     Source: Copy,
-    Typed: Eq + std::hash::Hash,
 {
-    pub fn record(&mut self, source: Source, typed: Typed) {
+    fn record_compact(&mut self, source: Source, typed: CompactTypedEntityId) {
         let _ = self.latest_by_typed.upsert(typed, source);
     }
 
-    pub fn source(&self, typed: &Typed) -> Option<Source> {
-        self.latest_by_typed.get(typed).copied()
+    fn source_compact(&self, typed: CompactTypedEntityId) -> Option<Source> {
+        self.latest_by_typed.get(&typed).copied()
+    }
+}
+
+impl<Source> SourceProvenance<Source, PatId>
+where
+    Source: Copy,
+{
+    pub fn record(&mut self, source: Source, typed: PatId) {
+        self.record_compact(source, typed.into());
+    }
+
+    pub fn source(&self, typed: &PatId) -> Option<Source> {
+        self.source_compact((*typed).into())
+    }
+}
+
+impl<Source> SourceProvenance<Source, TermId>
+where
+    Source: Copy,
+{
+    pub fn record(&mut self, source: Source, typed: TermId) {
+        self.record_compact(source, typed.into());
+    }
+
+    pub fn source(&self, typed: &TermId) -> Option<Source> {
+        self.source_compact((*typed).into())
     }
 }
 
@@ -651,7 +809,9 @@ impl StaticsArena {
 
     /// Record the final annotation of a source term.
     pub fn record_term_annotation(&mut self, term: su::TermId, annotation: TermAnnId) {
-        let _ = self.term_facts.upsert(term, TermFacts { annotation });
+        let _ = self
+            .term_facts
+            .upsert(term, TermFacts { annotation: CompactTermAnnId::new(annotation) });
     }
 
     /// Attach the normalized classifier of one distinct top annotation type.
@@ -660,7 +820,7 @@ impl StaticsArena {
     }
 
     pub fn term_annotation(&self, term: su::TermId) -> Option<TermAnnId> {
-        self.term_facts.get(&term).map(|facts| facts.annotation)
+        self.term_facts.get(&term).map(|facts| facts.annotation.annotation())
     }
 
     pub fn normalized_annotation_at(&self, annotation: TypeId) -> Option<&Type> {
@@ -759,6 +919,10 @@ mod tests {
 
     #[test]
     fn source_provenance_retains_the_latest_representative() {
+        assert_eq!(std::mem::size_of::<CompactTypedEntityId>(), 16);
+        assert!(std::mem::size_of::<CompactTypedEntityId>() < std::mem::size_of::<PatId>());
+        assert!(std::mem::size_of::<CompactTypedEntityId>() < std::mem::size_of::<TermId>());
+
         let mut source = IdAllocator::<su::BitterScope>::new();
         let first_source: su::PatId = source.alloc();
         let second_source: su::PatId = source.alloc();
@@ -801,6 +965,8 @@ mod tests {
     #[test]
     fn term_facts_keep_sparse_slots_compact_and_replace_in_place() {
         assert_eq!(std::mem::size_of::<Option<TermFactsIndex>>(), 4);
+        assert_eq!(std::mem::size_of::<CompactTermAnnId>(), 32);
+        assert!(std::mem::size_of::<CompactTermAnnId>() < std::mem::size_of::<TermAnnId>());
         assert!(
             std::mem::size_of::<Option<TermFactsIndex>>()
                 < std::mem::size_of::<Option<TermFacts>>()
@@ -818,6 +984,23 @@ mod tests {
 
         assert_eq!(statics.term_facts.facts.len(), 1);
         assert_eq!(statics.term_annotation(term), Some(TermAnnId::Kind(second)));
+    }
+
+    #[test]
+    fn compact_term_annotations_round_trip_independent_key_spaces() {
+        let mut primary = IdAllocator::<StaticsScope>::new();
+        let mut secondary = IdAllocator::<StaticsScope>::new();
+        let annotations = [
+            TermAnnId::Hole(primary.alloc()),
+            TermAnnId::Kind(primary.alloc()),
+            TermAnnId::Type(primary.alloc(), secondary.alloc()),
+            TermAnnId::Value(primary.alloc(), secondary.alloc()),
+            TermAnnId::Compu(primary.alloc(), secondary.alloc()),
+        ];
+
+        annotations.into_iter().for_each(|annotation| {
+            assert_eq!(CompactTermAnnId::new(annotation).annotation(), annotation);
+        });
     }
 }
 

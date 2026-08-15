@@ -2408,3 +2408,62 @@ decisions while implementing the plan.
 - Further reductions are ordinary source-linear memory tuning. They may still be useful, but the
   pathological test-memory problem and its multiplicative mechanism are closed by the evidence
   above.
+
+## 2026-08-15 — round 51: pack retained annotation and provenance dispatchers
+
+### Findings
+
+- The final owner census left term facts and static source provenance among the largest retained
+  judgment structures. A typed census found 63,574 final term facts: 4,910 kind annotations,
+  54,400 type annotations, 2,696 value annotations, and 1,568 computation annotations. No holes
+  survived. The checker replaced an existing fact 487 times, but none changed annotation category.
+- `TermAnnId` occupied 40 bytes. Its largest variants contain two ordinary 16-byte arena IDs; the
+  remaining eight bytes came from storing the enum discriminant after the payload. Both IDs already
+  contain four bytes of alignment padding after their raw indexes, so a storage-only record can
+  place the category there and preserve both complete key spaces without interning or assuming that
+  the two IDs share an allocation site. The census confirmed that 38,491 of 58,664 paired facts use
+  different key spaces, ruling out a same-key-space shortcut.
+- `PatId` and `TermId` dispatcher enums likewise occupied 24 bytes even though one concrete ID is 16
+  bytes. Source provenance needs the dispatcher only as a hash key and never reconstructs it during
+  iteration. Splitting the key into key space, raw index, and a one-byte category stores the category
+  in existing padding and reduces the key to 16 bytes. This applies to 29,270 term representatives
+  and 14,632 pattern representatives in the standard-library check.
+- The shared rule is narrower than globally changing public syntax: when a dispatcher is an internal
+  storage key or payload and callers still need the public enum, preserve the public representation
+  at the boundary and pack its tag into the arena ID's alignment padding internally.
+
+### Changes
+
+- Term facts now own a 32-byte `CompactTermAnnId` and reconstruct the exact public `TermAnnId` on
+  lookup. All five variants round-trip, including pairs whose IDs belong to independent key spaces;
+  replacement semantics and the four-byte sparse source index are unchanged.
+- Static pattern and term provenance now hash a 16-byte compact typed-entity identity rather than a
+  24-byte dispatcher enum. Pattern and term APIs remain separately typed, and category tags still
+  prevent cross-sort collisions.
+- Added layout regressions for both compact records, independent-key-space annotation round trips,
+  and the existing latest-source replacement behavior.
+
+### Measurements
+
+- Five release checks used 118,734,848, 119,357,440, 119,422,976, 119,308,288, and 119,275,520 bytes
+  peak RSS (median 119,308,288), down 671,744 bytes (-0.6%) from round 49. The retained-record byte
+  reduction is larger than the RSS movement because freed size classes continue to back later
+  checking allocations.
+- The current-tree baseline is now down from 2,497,757,184 to 119,308,288 bytes (-95.2%).
+- All 27 statics unit tests and 33 statics integration tests, all 151 session tests, all 9 CLI
+  integration tests, all 31 Cajun unit tests, and all 9 Cajun stdio tests passed. Focused Clippy
+  completed with existing unrelated lint warnings. The release build and full standard-library
+  check also passed.
+
+### Next
+
+- Pack source line and column pairs inside `Span`. The current two-u32 cursor record is already
+  compact individually, but two such records make every span pay 16 bytes; a nonzero packed u32 per
+  endpoint can preserve practical ranges and the existing byte-offset fallback in eight bytes.
+- Use the measured normalized-annotation variant distribution before changing that 2.4MB owner.
+  Applications and arrows account for 16,013 of 27,049 entries, while labels and products add
+  another 6,915; any useful split representation must preserve cheap reconstruction without adding
+  one heap allocation per common node.
+- Revisit provenance only after another heap census. The compact hash keys remove dispatcher
+  overhead, but replacing hashes with paged storage would be counterproductive because typed
+  representatives inhabit many small derived key spaces.
