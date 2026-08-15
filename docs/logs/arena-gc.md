@@ -1623,3 +1623,55 @@ decisions while implementing the plan.
   without changing the type graph.
 - Revisit source provenance only after the checker-local opportunities. Its large hash tables are
   durable editor/diagnostic data, while producer memos are duplicate lifetime by construction.
+
+## 2026-08-15 — round 36: co-locate type nodes and compact kind annotations
+
+### Findings
+
+- `types_pre` and `annotations_type` had an exact one-to-one key invariant: all 53,969 type nodes
+  in the standard-library check had one kind annotation, every insertion site wrote the pair, and
+  no annotation existed independently of its type payload. Separate paged arenas therefore stored
+  the same key-space map, page vector, occupancy bit, and allocation boundary twice.
+- The annotations themselves were also highly repetitive. The 53,969 occurrences referred to only
+  4,684 distinct `KindId`s; the intrinsic `VType` accounted for 19,144 occurrences and `CType` for
+  another 4,036. A full `KindId` is 16 bytes, so retaining one at every type slot encoded identity
+  information much more often than necessary.
+- A combined slot containing `Fillable<Type>` and a 32-bit arena-local kind index is smaller than
+  the former pair of optional type and kind slots. The dictionary is arena-local because these IDs
+  are meaningful only within the same checked generation.
+
+### Changes
+
+- Replaced `ArenaPaged<StaticsScope, TypeId>` plus `ArenaPagedAssoc<TypeId, KindId>` with one typed
+  `TypeArena`. Each page slot owns a `TypeNode { value, kind_index }`; one compact vector resolves
+  kind indexes back to `KindId`.
+- Type insertion now takes the payload and classifier together, making the one-to-one invariant an
+  API property rather than a convention spread across callers. `StaticsArena::type_kind` and
+  `type_kind_at` provide the read boundary used by checking, normalization, formatting, the editor,
+  and downstream inspection.
+- An `FxHashMap` interns kind IDs while the arena is being built. `strip_checker_state` drops this
+  construction-only reverse index; the forward vector remains, and a later insertion can rebuild
+  the reverse index lazily without duplicating a kind.
+- A layout and behavior regression verifies compact slots, shared kind entries, lookup after
+  stripping, and lazy reconstruction after stripping.
+
+### Measurements
+
+- Three clean release checks used 179,486,720, 177,995,776, and 178,094,080 bytes peak RSS (median
+  178,094,080), down 3,784,704 bytes (-2.1%) from round 35. Warm wall time was 0.23s and warm user
+  time was 0.21s.
+- The current-tree baseline is now down from 2,497,757,184 to 178,094,080 bytes (-92.9%).
+- All 56 statics tests and all 151 session tests passed. The focused Cajun semantic suite and its
+  semantic-token stdio flow passed, along with the release CLI build and full standard-library
+  check.
+
+### Next
+
+- Refresh the ownership census: the former 5.6MB `annotations_type` owner no longer exists, and the
+  type payload, compact dictionary, and page topology now need to be measured as one unit.
+- Inspect whether the remaining producer-query families justify independent memoization. The heap
+  snapshot identified `sigma_syn_judgment` as the next visible family, but its roughly 3,084 memos
+  are small enough that a broader rule may be more useful than another isolated rewrite.
+- Reconsider the provenance relation representation now that term provenance is again one of the
+  largest durable checker fields. A split singleton/multiple layout may avoid paying an enum-sized
+  value in every hash bucket while preserving the rare one-to-many cases.

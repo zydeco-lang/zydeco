@@ -32,7 +32,7 @@ pub struct SealedTypeEquation(AbstId);
 impl SealedTypeEquation {
     pub fn new(statics: &StaticsArena, sealed: AbstId) -> Option<Self> {
         let definition = statics.seals.get(&sealed)?;
-        statics.annotations_type.get(definition)?;
+        statics.type_kind_at(*definition)?;
         Some(Self(sealed))
     }
 }
@@ -233,7 +233,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for SealedTypeEquation {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let sealed = self.0;
         let definition = f.statics.seals[&sealed];
-        let kind = f.statics.annotations_type[&definition];
+        let kind = f.statics.type_kind(definition);
         RcDoc::concat([
             sealed.pretty(f),
             RcDoc::text(" :"),

@@ -287,7 +287,7 @@ impl TypeId {
         tycker.err_p_to_k(res)
     }
     pub fn subst_env(&self, tycker: &mut Tycker<'_>, env: &TyEnv) -> Result<TypeId> {
-        let kd = tycker.statics.annotations_type[self];
+        let kd = tycker.statics.type_kind(*self);
         let ty = tycker.statics.types_pre[self].to_owned();
         let ty = match ty {
             // Fixme: should invoke substitution once the type is filled
@@ -502,7 +502,7 @@ impl TypeId {
                 }
             },
         };
-        let kd = tycker.statics.annotations_type[&ty];
+        let kd = tycker.statics.type_kind(ty);
         let ty = ty.normalize(tycker, kd)?;
         Ok(ty)
     }
@@ -543,7 +543,7 @@ impl TypeId {
         if assignments.is_empty() {
             return Ok(*self);
         }
-        let kd = tycker.statics.annotations_type[self];
+        let kd = tycker.statics.type_kind(*self);
         let env = tycker.statics.env_at(*self);
         let ty = match tycker.statics.types_pre[self].to_owned() {
             // Todo: add subst obligation to fills
@@ -786,7 +786,7 @@ impl TypeId {
                 }
             },
         };
-        let kd = tycker.statics.annotations_type[&ty];
+        let kd = tycker.statics.type_kind(ty);
         let ty = ty.normalize(tycker, kd)?;
         Ok(ty)
     }
@@ -800,7 +800,7 @@ impl TypeId {
         tycker.err_p_to_k(res)
     }
     pub fn unroll(self, tycker: &mut Tycker<'_>) -> Result<TypeId> {
-        let kd = tycker.statics.annotations_type[&self];
+        let kd = tycker.statics.type_kind(self);
         let env = tycker.statics.env_at(self);
         let res = match tycker.type_filled(&self)?.to_owned() {
             | Type::Abst(abst) => {
@@ -850,7 +850,7 @@ impl TypeId {
                 match tycker.type_filled(&head)?.to_owned() {
                     | Type::Named(Named(found, inner)) if found == name => inner.unroll(tycker)?,
                     | _ => {
-                        let payload_kind = tycker.statics.annotations_type[&self];
+                        let payload_kind = tycker.statics.type_kind(self);
                         Alloc::alloc(tycker, Proj(head, name), payload_kind, &env)
                     }
                 }
@@ -889,7 +889,7 @@ impl TypeApplicationSpine {
         {
             reversed.push(TypeApplicationStep {
                 argument,
-                result_kind: tycker.statics.annotations_type[&function],
+                result_kind: tycker.statics.type_kind(function),
                 original: Some(function),
             });
             function = parent;
@@ -900,24 +900,20 @@ impl TypeApplicationSpine {
 
     fn from_root(tycker: &Tycker<'_>, root: TypeId, app: App<TypeId, TypeId>) -> Self {
         let App(function, argument) = app;
-        let mut spine = Self::with_application(
-            tycker,
-            function,
-            argument,
-            tycker.statics.annotations_type[&root],
-        );
+        let mut spine =
+            Self::with_application(tycker, function, argument, tycker.statics.type_kind(root));
         spine.steps.last_mut().expect("an application spine is non-empty").original = Some(root);
         spine
     }
 
     fn normalize_components(self, tycker: &mut Tycker<'_>) -> Result<Self> {
-        let function_kind = tycker.statics.annotations_type[&self.function];
+        let function_kind = tycker.statics.type_kind(self.function);
         let function = self.function.normalize(tycker, function_kind)?;
         let steps = self
             .steps
             .into_iter()
             .map(|step| {
-                let argument_kind = tycker.statics.annotations_type[&step.argument];
+                let argument_kind = tycker.statics.type_kind(step.argument);
                 let argument = step.argument.normalize(tycker, argument_kind)?;
                 Ok(TypeApplicationStep { argument, ..step })
             })
@@ -1012,7 +1008,7 @@ impl TypeId {
                 | Type::Data(_)
                 | Type::CoData(_) => self,
                 | Type::Proj(Proj(head, name)) => {
-                    let head_kind = tycker.statics.annotations_type[&head];
+                    let head_kind = tycker.statics.type_kind(head);
                     let head = head.normalize(tycker, head_kind)?;
                     match tycker.type_filled(&head)?.to_owned() {
                         | Type::Named(Named(found, inner)) if found == name => {
@@ -1064,13 +1060,13 @@ impl TypeId {
         tycker.err_p_to_k(res)
     }
     pub fn normalize_apps(self, tycker: &mut Tycker<'_>, a_tys: Vec<TypeId>) -> Result<TypeId> {
-        let function_kind = tycker.statics.annotations_type[&self];
+        let function_kind = tycker.statics.type_kind(self);
         let (_, steps) = a_tys.into_iter().try_fold(
             (function_kind, Vec::new()),
             |(function_kind, mut steps), argument| -> Result<_> {
                 let result_kind = match tycker.kind_filled(&function_kind)?.to_owned() {
                     | Kind::Arrow(Arrow(arg_kd, body_kd)) => {
-                        let arg_kd_ = tycker.statics.annotations_type[&argument];
+                        let arg_kd_ = tycker.statics.type_kind(argument);
                         Lub::lub(arg_kd_, arg_kd, tycker)?;
                         body_kd
                     }
@@ -1156,7 +1152,7 @@ impl TypeId {
     ) -> ResultKont<Type> {
         let result = (|| {
             let vtype = Alloc::alloc(tycker, VType, (), &());
-            let kind = tycker.statics.annotations_type[&self];
+            let kind = tycker.statics.type_kind(self);
             Lub::lub(kind, vtype, tycker)?;
             match InferenceRefinement::unresolved_type_fill(tycker, self)? {
                 | Some(fill) => InferenceRefinement::value_arrow(tycker, fill, env),
@@ -1174,7 +1170,7 @@ impl TypeId {
     ) -> ResultKont<Type> {
         let result = (|| {
             let ctype = Alloc::alloc(tycker, CType, (), &());
-            let kind = tycker.statics.annotations_type[&self];
+            let kind = tycker.statics.type_kind(self);
             Lub::lub(kind, ctype, tycker)?;
             match InferenceRefinement::unresolved_type_fill(tycker, self)? {
                 | Some(fill) => InferenceRefinement::arrow(tycker, fill, env),
@@ -1196,7 +1192,7 @@ impl TypeId {
                 | None => self.unroll(tycker)?.subst_env(tycker, env)?,
             };
             let vtype = Alloc::alloc(tycker, VType, (), &());
-            let kind = tycker.statics.annotations_type[&view];
+            let kind = tycker.statics.type_kind(view);
             Lub::lub(kind, vtype, tycker)?;
             match InferenceRefinement::unresolved_type_fill(tycker, view)? {
                 | Some(fill) => InferenceRefinement::product(tycker, fill, env),
@@ -1224,7 +1220,7 @@ impl TypeId {
                 }
             };
             let vtype = Alloc::alloc(tycker, VType, (), &());
-            let kind = tycker.statics.annotations_type[&view];
+            let kind = tycker.statics.type_kind(view);
             Lub::lub(kind, vtype, tycker)?;
             match InferenceRefinement::unresolved_type_fill(tycker, view)? {
                 | Some(fill) => InferenceRefinement::product(tycker, fill, env),
@@ -1426,7 +1422,7 @@ impl TypeId {
                         Alloc::alloc(
                             tycker,
                             TypeAbstraction { binder, body: body_ },
-                            tycker.statics.annotations_type[&res],
+                            tycker.statics.type_kind(res),
                             &env,
                         )
                     }
@@ -1438,12 +1434,7 @@ impl TypeId {
                     if f_ty == f_ty_ && a_ty == a_ty_ {
                         res
                     } else {
-                        Alloc::alloc(
-                            tycker,
-                            App(f_ty_, a_ty_),
-                            tycker.statics.annotations_type[&res],
-                            &env,
-                        )
+                        Alloc::alloc(tycker, App(f_ty_, a_ty_), tycker.statics.type_kind(res), &env)
                     }
                 }
                 | Type::Named(ty) => {
@@ -1455,7 +1446,7 @@ impl TypeId {
                         Alloc::alloc(
                             tycker,
                             Named(name, inner_),
-                            tycker.statics.annotations_type[&res],
+                            tycker.statics.type_kind(res),
                             &env,
                         )
                     }
@@ -1469,7 +1460,7 @@ impl TypeId {
                         let target = Alloc::alloc(
                             tycker,
                             Label(name, inner_),
-                            tycker.statics.annotations_type[&res],
+                            tycker.statics.type_kind(res),
                             &env,
                         );
                         tycker
@@ -1491,7 +1482,7 @@ impl TypeId {
                         | _ => Alloc::alloc(
                             tycker,
                             Proj(head_, name),
-                            tycker.statics.annotations_type[&res],
+                            tycker.statics.type_kind(res),
                             &env,
                         ),
                     }
@@ -1509,12 +1500,7 @@ impl TypeId {
                     if ty1 == ty1_ && ty2 == ty2_ {
                         res
                     } else {
-                        Alloc::alloc(
-                            tycker,
-                            Arrow(ty1_, ty2_),
-                            tycker.statics.annotations_type[&res],
-                            &env,
-                        )
+                        Alloc::alloc(tycker, Arrow(ty1_, ty2_), tycker.statics.type_kind(res), &env)
                     }
                 }
                 | Type::VArrow(ValueArrow(ty1, ty2)) => {
@@ -1526,7 +1512,7 @@ impl TypeId {
                         Alloc::alloc(
                             tycker,
                             ValueArrow(ty1_, ty2_),
-                            tycker.statics.annotations_type[&res],
+                            tycker.statics.type_kind(res),
                             &env,
                         )
                     }
@@ -1541,7 +1527,7 @@ impl TypeId {
                         Alloc::alloc(
                             tycker,
                             ValueForall(tpat_, ty_),
-                            tycker.statics.annotations_type[&res],
+                            tycker.statics.type_kind(res),
                             &env,
                         )
                     }
@@ -1556,7 +1542,7 @@ impl TypeId {
                         Alloc::alloc(
                             tycker,
                             ValuePackPi { domain: domain_, witnesses, codomain: codomain_ },
-                            tycker.statics.annotations_type[&res],
+                            tycker.statics.type_kind(res),
                             &env,
                         )
                     }
@@ -1571,7 +1557,7 @@ impl TypeId {
                         Alloc::alloc(
                             tycker,
                             Forall(tpat_, ty_),
-                            tycker.statics.annotations_type[&res],
+                            tycker.statics.type_kind(res),
                             &env,
                         )
                     }
@@ -1586,7 +1572,7 @@ impl TypeId {
                         Alloc::alloc(
                             tycker,
                             PackPi { domain: domain_, witnesses, codomain: codomain_ },
-                            tycker.statics.annotations_type[&res],
+                            tycker.statics.type_kind(res),
                             &env,
                         )
                     }
@@ -1598,12 +1584,7 @@ impl TypeId {
                     if ty1 == ty1_ && ty2 == ty2_ {
                         res
                     } else {
-                        Alloc::alloc(
-                            tycker,
-                            Prod(ty1_, ty2_),
-                            tycker.statics.annotations_type[&res],
-                            &env,
-                        )
+                        Alloc::alloc(tycker, Prod(ty1_, ty2_), tycker.statics.type_kind(res), &env)
                     }
                 }
                 | Type::Exists(ty) => {
@@ -1622,7 +1603,7 @@ impl TypeId {
                         Alloc::alloc(
                             tycker,
                             Exists { binder, mode, body: body_ },
-                            tycker.statics.annotations_type[&res],
+                            tycker.statics.type_kind(res),
                             &env,
                         )
                     }
@@ -1636,7 +1617,7 @@ impl TypeId {
                         Alloc::alloc(
                             tycker,
                             ManifestKind { binder, definition, body: body_ },
-                            tycker.statics.annotations_type[&res],
+                            tycker.statics.type_kind(res),
                             &env,
                         )
                     }
@@ -1661,7 +1642,7 @@ impl TypeId {
                     } else {
                         let data: DataId = tycker.fresh();
                         tycker.statics.datas.insert_new(data, Data::new(arms_));
-                        Alloc::alloc(tycker, data, tycker.statics.annotations_type[&res], &env)
+                        Alloc::alloc(tycker, data, tycker.statics.type_kind(res), &env)
                     }
                 }
                 | Type::CoData(codata) => {
@@ -1684,7 +1665,7 @@ impl TypeId {
                     } else {
                         let codata: CoDataId = tycker.fresh();
                         tycker.statics.codatas.insert_new(codata, CoData::new(arms_));
-                        Alloc::alloc(tycker, codata, tycker.statics.annotations_type[&res], &env)
+                        Alloc::alloc(tycker, codata, tycker.statics.type_kind(res), &env)
                     }
                 }
             },
@@ -1881,7 +1862,7 @@ impl TypeId {
         if let Some(normalized) = norm.types.get(&self).cloned() {
             return Ok(normalized);
         }
-        let kd = tycker.statics.annotations_type[&self];
+        let kd = tycker.statics.type_kind(self);
         let kd_norm = kd.filled_norm_id(tycker, norm)?;
         let env = tycker.statics.env_at(self);
         let res = match tycker.statics.types_pre[&self].to_owned() {

@@ -451,8 +451,8 @@ impl<'arena> NameClassifier<'arena> {
                 | Kind::Arrow(_) | Kind::Label(_) => NameClass::Type,
             },
             | AnnId::Type(r#type) => {
-                let kind = statics.annotations_type.get(&r#type)?;
-                match self.kind(kind)? {
+                let kind = statics.type_kind_at(r#type)?;
+                match self.kind(&kind)? {
                     | Kind::VType(_) => NameClass::Value,
                     | Kind::CType(_) => NameClass::Computation,
                     | Kind::Arrow(_) | Kind::Label(_) => NameClass::Value,

@@ -351,10 +351,10 @@ where
     fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         let App(ty_1, ty_2) = self;
         let (env, ty_1) = ty_1.mbuild(tycker, env)?;
-        let kd_1 = tycker.statics.annotations_type[&ty_1];
+        let kd_1 = tycker.statics.type_kind(ty_1);
         let Some((_kd_a, kd_b)) = kd_1.destruct_arrow(tycker) else { unreachable!() };
         let (env, ty_2) = ty_2.mbuild(tycker, env)?;
-        // let kd_2 = tycker.statics.annotations_type[&ty_2];
+        // let kd_2 = tycker.statics.type_kind(ty_2);
         // let Ok(_) = Lub::lub(kd_a, kd_2, tycker) else { unreachable!() };
         // normalize the result of type application (including the type argument)
         let ty = Alloc::alloc(tycker, App(ty_1, ty_2), kd_b, &env.ty);
@@ -940,7 +940,7 @@ where
         // Todo: check if the substitution is necessary
         // let arg = arg.subst_env(tycker, &env.ty)?;
         let domain_kd = binder.domain_kind(tycker);
-        let arg_kd = tycker.statics.annotations_type[&arg];
+        let arg_kd = tycker.statics.type_kind(arg);
         Lub::lub(domain_kd, arg_kd, tycker)?;
         let payload = binder.pattern.bind_argument(tycker, arg)?;
         let ty = body_ty.subst_abst(tycker, (binder.witness, payload))?;

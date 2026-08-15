@@ -128,9 +128,9 @@ pub trait StaticsAlloc: AsMut<DerivedAllocator> + AsMut<StaticsArena> {
         id
     }
 
-    fn alloc_type_pre(&mut self, value: Fillable<Type>) -> TypeId {
+    fn alloc_type_pre(&mut self, value: Fillable<Type>, kind: KindId) -> TypeId {
         let id = self.fresh();
-        AsMut::<StaticsArena>::as_mut(self).types_pre.insert_new(id, value);
+        AsMut::<StaticsArena>::as_mut(self).types_pre.insert_new(id, value, kind);
         id
     }
 
@@ -388,9 +388,8 @@ where
     type Ann = KindId;
     type Env = TyEnv;
     fn alloc(arena: &mut Arena, val: Self, kd: Self::Ann, env: &Self::Env) -> TypeId {
-        let ty = arena.alloc_type_pre(val.into());
+        let ty = arena.alloc_type_pre(val.into(), kd);
         let statics = AsMut::<StaticsArena>::as_mut(arena);
-        statics.annotations_type.insert_new(ty, kd);
         let scope = env.skolem_scope().clone();
         let env = statics.intern_env(env);
         statics.env_type.insert_new(ty, env);
@@ -407,9 +406,8 @@ where
     type Ann = KindId;
     type Env = TyEnv;
     fn alloc(arena: &mut Arena, val: Self, kd: Self::Ann, env: &Self::Env) -> TypeId {
-        let ty = arena.alloc_type_pre(Fillable::Done(val));
+        let ty = arena.alloc_type_pre(Fillable::Done(val), kd);
         let statics = AsMut::<StaticsArena>::as_mut(arena);
-        statics.annotations_type.insert_new(ty, kd);
         let env = statics.intern_env(env);
         statics.env_type.insert_new(ty, env);
         ty

@@ -144,7 +144,7 @@ impl TPatId {
         let domain_kind = tycker.statics.annotations_tpat[self];
         match tycker.statics.tpats[self].to_owned() {
             | TypePattern::Hole(_) | TypePattern::Var(_) => {
-                let payload_kind = tycker.statics.annotations_type[&payload];
+                let payload_kind = tycker.statics.type_kind(payload);
                 Lub::lub(domain_kind, payload_kind, tycker)?;
                 Ok(payload)
             }
@@ -182,7 +182,7 @@ impl TypeId {
     pub fn project_named(
         &self, tycker: &mut Tycker<'_>, expected: &FieldName, payload_kind: KindId,
     ) -> Result<TypeId> {
-        let kind = tycker.statics.annotations_type[self];
+        let kind = tycker.statics.type_kind(*self);
         match tycker.kind_filled(&kind)?.to_owned() {
             | Kind::Label(Label(found, inner_kind)) => {
                 if &found != expected {
@@ -221,12 +221,12 @@ impl TypeId {
         tycker.err_p_to_k(res)
     }
     pub fn destruct_type_app_nf(&self, tycker: &mut Tycker) -> Result<(TypeId, Vec<TypeId>)> {
-        let ty = self.normalize(tycker, tycker.statics.annotations_type[self].to_owned())?;
+        let ty = self.normalize(tycker, tycker.statics.type_kind(*self))?;
         let res = match tycker.type_filled(&ty)?.to_owned() {
             | Type::App(app_ty) => {
                 let App(f_ty, a_ty) = app_ty;
                 let (f_ty, mut a_tys) = f_ty.destruct_type_app_nf(tycker)?;
-                let a_ty = a_ty.normalize(tycker, tycker.statics.annotations_type[&a_ty])?;
+                let a_ty = a_ty.normalize(tycker, tycker.statics.type_kind(a_ty))?;
                 a_tys.push(a_ty);
                 (f_ty, a_tys)
             }

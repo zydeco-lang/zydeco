@@ -132,12 +132,12 @@ impl Debruijn {
         let both_filled = matches!(&lhs, Fillable::Done(_)) && matches!(&rhs, Fillable::Done(_));
         if both_filled && lhs_is_app != rhs_is_app {
             let lhs_normalized = if lhs_is_app {
-                lhs_id.normalize(tycker, tycker.statics.annotations_type[&lhs_id])?
+                lhs_id.normalize(tycker, tycker.statics.type_kind(lhs_id))?
             } else {
                 lhs_id
             };
             let rhs_normalized = if rhs_is_app {
-                rhs_id.normalize(tycker, tycker.statics.annotations_type[&rhs_id])?
+                rhs_id.normalize(tycker, tycker.statics.type_kind(rhs_id))?
             } else {
                 rhs_id
             };
@@ -203,7 +203,7 @@ impl Debruijn {
                     if body == lbody {
                         lhs_id
                     } else {
-                        let kd = tycker.statics.annotations_type[&lhs_id];
+                        let kd = tycker.statics.type_kind(lhs_id);
 
                         Alloc::alloc(tycker, TypeAbstraction { binder: lbinder, body }, kd, &env)
                     }
@@ -218,7 +218,7 @@ impl Debruijn {
                     if f == lf && a == la {
                         lhs_id
                     } else {
-                        let kd = tycker.statics.annotations_type[&lhs_id];
+                        let kd = tycker.statics.type_kind(lhs_id);
                         let app = Alloc::alloc(tycker, App(f, a), kd, &env);
                         app.normalize(tycker, kd)?
                     }
@@ -244,7 +244,7 @@ impl Debruijn {
                     if inner == lhs_inner {
                         lhs_id
                     } else {
-                        let kd = tycker.statics.annotations_type[&lhs_id];
+                        let kd = tycker.statics.type_kind(lhs_id);
                         Alloc::alloc(tycker, Named(lhs_name, inner), kd, &env)
                     }
                 }
@@ -269,7 +269,7 @@ impl Debruijn {
                     if inner == lhs_inner {
                         lhs_id
                     } else {
-                        let kd = tycker.statics.annotations_type[&lhs_id];
+                        let kd = tycker.statics.type_kind(lhs_id);
                         Alloc::alloc(tycker, Label(lhs_name, inner), kd, &env)
                     }
                 }
@@ -291,7 +291,7 @@ impl Debruijn {
                     if head == lhs_head {
                         lhs_id
                     } else {
-                        let kd = tycker.statics.annotations_type[&lhs_id];
+                        let kd = tycker.statics.type_kind(lhs_id);
                         Alloc::alloc(tycker, Proj(head, lhs_name), kd, &env)
                     }
                 }
@@ -339,7 +339,7 @@ impl Debruijn {
                     if a == la && b == lb {
                         lhs_id
                     } else {
-                        let kd = tycker.statics.annotations_type[&lhs_id];
+                        let kd = tycker.statics.type_kind(lhs_id);
                         Alloc::alloc(tycker, ValueArrow(a, b), kd, &env)
                     }
                 }
@@ -361,7 +361,7 @@ impl Debruijn {
                     if body == lbody {
                         lhs_id
                     } else {
-                        let kd = tycker.statics.annotations_type[&lhs_id];
+                        let kd = tycker.statics.type_kind(lhs_id);
                         Alloc::alloc(tycker, ValueForall(lbind, body), kd, &env)
                     }
                 }
@@ -401,7 +401,7 @@ impl Debruijn {
                     if domain == lhs_domain && codomain == lhs_codomain {
                         lhs_id
                     } else {
-                        let kd = tycker.statics.annotations_type[&lhs_id];
+                        let kd = tycker.statics.type_kind(lhs_id);
                         Alloc::alloc(
                             tycker,
                             ValuePackPi { domain, witnesses: lhs_witnesses, codomain },
@@ -420,7 +420,7 @@ impl Debruijn {
                     if a == la && b == lb {
                         lhs_id
                     } else {
-                        let kd = tycker.statics.annotations_type[&lhs_id];
+                        let kd = tycker.statics.type_kind(lhs_id);
 
                         Alloc::alloc(tycker, Arrow(a, b), kd, &env)
                     }
@@ -440,7 +440,7 @@ impl Debruijn {
                     if body == lbody {
                         lhs_id
                     } else {
-                        let kd = tycker.statics.annotations_type[&lhs_id];
+                        let kd = tycker.statics.type_kind(lhs_id);
 
                         Alloc::alloc(tycker, Forall(lbind, body), kd, &env)
                     }
@@ -481,7 +481,7 @@ impl Debruijn {
                     if domain == lhs_domain && codomain == lhs_codomain {
                         lhs_id
                     } else {
-                        let kd = tycker.statics.annotations_type[&lhs_id];
+                        let kd = tycker.statics.type_kind(lhs_id);
                         Alloc::alloc(
                             tycker,
                             PackPi { domain, witnesses: lhs_witnesses, codomain },
@@ -500,7 +500,7 @@ impl Debruijn {
                     if a == la && b == lb {
                         lhs_id
                     } else {
-                        let kd = tycker.statics.annotations_type[&lhs_id];
+                        let kd = tycker.statics.type_kind(lhs_id);
 
                         Alloc::alloc(tycker, Prod(a, b), kd, &env)
                     }
@@ -539,7 +539,7 @@ impl Debruijn {
                     if mode_unchanged && body == lbody {
                         lhs_id
                     } else {
-                        let kd = tycker.statics.annotations_type[&lhs_id];
+                        let kd = tycker.statics.type_kind(lhs_id);
 
                         Alloc::alloc(tycker, Exists { binder: lbind, mode, body }, kd, &env)
                     }
@@ -565,7 +565,7 @@ impl Debruijn {
                     if definition == lhs_definition && body == lhs_body {
                         lhs_id
                     } else {
-                        let kind = tycker.statics.annotations_type[&lhs_id];
+                        let kind = tycker.statics.type_kind(lhs_id);
                         Alloc::alloc(
                             tycker,
                             ManifestKind { binder: lhs_binder, definition, body },

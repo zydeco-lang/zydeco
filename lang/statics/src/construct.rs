@@ -298,7 +298,7 @@ impl<'a> Construct<Tycker<'a>, KindId> for cs::TypeOf<TPatId> {
 impl<'a> Construct<Tycker<'a>, KindId> for cs::TypeOf<TypeId> {
     fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> KindId {
         let cs::TypeOf(ty) = self;
-        tycker.statics.annotations_type[&ty]
+        tycker.statics.type_kind(ty)
     }
 }
 impl<'a> Construct<Tycker<'a>, KindId> for cs::TypeOf<AbstId> {
@@ -467,10 +467,10 @@ where
     fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
         let App(ty_1, ty_2) = self;
         let ty_1 = ty_1.build(tycker, env);
-        let kd_1 = tycker.statics.annotations_type[&ty_1];
+        let kd_1 = tycker.statics.type_kind(ty_1);
         let Some((_kd_a, kd_b)) = kd_1.destruct_arrow(tycker) else { unreachable!() };
         let ty_2 = ty_2.build(tycker, env);
-        // let kd_2 = tycker.statics.annotations_type[&ty_2];
+        // let kd_2 = tycker.statics.type_kind(ty_2);
         // let Ok(_) = Lub::lub(kd_a, kd_2, tycker) else { unreachable!() };
         // Note: note that the resulting type application of [`Construct::build`] is not normalized
         Alloc::alloc(tycker, App(ty_1, ty_2), kd_b, env)
@@ -995,7 +995,7 @@ where
         let Some((binder, body_ty)) = abs_ty.destruct_forall_binder(tycker) else { unreachable!() };
         let arg = arg.build(tycker, env);
         let domain_kd = binder.domain_kind(tycker);
-        let arg_kd = tycker.statics.annotations_type[&arg];
+        let arg_kd = tycker.statics.type_kind(arg);
         let Ok(_) = Lub::lub(domain_kd, arg_kd, tycker) else { unreachable!() };
         let Ok(payload) = binder.pattern.bind_argument(tycker, arg) else { unreachable!() };
         let Ok(ty) = body_ty.subst_abst(tycker, (binder.witness, payload)) else { unreachable!() };

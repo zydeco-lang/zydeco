@@ -6,7 +6,7 @@ use super::syntax::*;
 use crate::surface_syntax as su;
 use crate::{SkolemScope, TyEnv};
 use std::{
-    ops::{Deref, DerefMut},
+    ops::{Deref, DerefMut, Index, IndexMut},
     sync::Arc,
 };
 
@@ -150,6 +150,116 @@ pub struct TermFacts {
     annotation: TermAnnId,
 }
 
+/// Compact index into the distinct kind annotations used by one type arena.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+struct TypeKindIndex(u32);
+
+/// One typed node and its classifier, co-located under the same [`TypeId`].
+#[derive(Clone, Debug)]
+struct TypeNode {
+    value: Fillable<Type>,
+    kind: TypeKindIndex,
+}
+
+/// Paged type storage with compact, arena-local kind annotation indexes.
+///
+/// Type payloads and their kind annotations have exactly the same key domain.
+/// Keeping them in one record removes a parallel page hierarchy, while the
+/// local kind table stores the 16-byte [`KindId`] once per distinct annotation
+/// rather than once per type occurrence.
+#[derive(Clone, Debug, Default)]
+pub struct TypeArena {
+    nodes: ArenaPagedAssoc<TypeId, TypeNode>,
+    kinds: Vec<KindId>,
+    kind_indexes: rustc_hash::FxHashMap<KindId, TypeKindIndex>,
+}
+
+impl TypeArena {
+    pub fn insert_new(&mut self, id: TypeId, value: Fillable<Type>, kind: KindId) {
+        let kind = self.intern_kind(kind);
+        self.nodes.insert_new(id, TypeNode { value, kind });
+    }
+
+    pub fn replace_existing(&mut self, id: TypeId, value: Fillable<Type>) {
+        self.nodes[&id].value = value;
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (TypeId, &Fillable<Type>)> {
+        self.nodes.iter().map(|(id, node)| (id, &node.value))
+    }
+
+    pub fn len(&self) -> usize {
+        self.nodes.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.nodes.len() == 0
+    }
+
+    pub fn reserve_pages(&mut self, additional: usize) {
+        self.nodes.reserve_pages(additional);
+    }
+
+    fn kind_at(&self, id: &TypeId) -> Option<KindId> {
+        let index = self.nodes.get(id)?.kind.0 as usize;
+        self.kinds.get(index).copied()
+    }
+
+    fn intern_kind(&mut self, kind: KindId) -> TypeKindIndex {
+        if self.kind_indexes.len() != self.kinds.len() {
+            self.kind_indexes = self
+                .kinds
+                .iter()
+                .enumerate()
+                .map(|(index, kind)| {
+                    let index =
+                        u32::try_from(index).expect("type kind table exhausted u32 indexes");
+                    (*kind, TypeKindIndex(index))
+                })
+                .collect();
+        }
+        if let Some(index) = self.kind_indexes.get(&kind) {
+            return *index;
+        }
+        let index = TypeKindIndex(
+            u32::try_from(self.kinds.len()).expect("type kind table exhausted u32 indexes"),
+        );
+        self.kinds.push(kind);
+        self.kind_indexes.insert(kind, index);
+        index
+    }
+
+    /// Drop the construction-only reverse index. The compact forward table
+    /// remains available to every downstream kind lookup.
+    pub(crate) fn strip_kind_index(&mut self) {
+        self.kind_indexes = Default::default();
+    }
+}
+
+impl Index<&TypeId> for TypeArena {
+    type Output = Fillable<Type>;
+
+    fn index(&self, id: &TypeId) -> &Self::Output {
+        &self.nodes[id].value
+    }
+}
+
+impl IndexMut<&TypeId> for TypeArena {
+    fn index_mut(&mut self, id: &TypeId) -> &mut Self::Output {
+        &mut self.nodes[id].value
+    }
+}
+
+impl ArenaAccess<&TypeId, Fillable<Type>> for TypeArena {
+    fn get(&self, id: &TypeId) -> Option<&Fillable<Type>> {
+        self.nodes.get(id).map(|node| &node.value)
+    }
+
+    fn get_mut(&mut self, id: &TypeId) -> Option<&mut Fillable<Type>> {
+        self.nodes.get_mut(id).map(|node| &mut node.value)
+    }
+}
+
 /// Source-bounded static facts retained after the typed occurrence tree is
 /// discarded.
 ///
@@ -247,7 +357,7 @@ pub struct StaticsArena {
     /// type pattern arena
     pub tpats: ArenaSparse<StaticsScope, TPatId>,
     /// type arena before normalization
-    pub types_pre: ArenaPaged<StaticsScope, TypeId>,
+    pub types_pre: TypeArena,
     /// value pattern arena
     pub vpats: ArenaSparse<StaticsScope, VPatId>,
     /// value arena
@@ -256,8 +366,6 @@ pub struct StaticsArena {
     pub compus: ArenaSparse<StaticsScope, CompuId>,
     /// kind annotations for type patterns
     pub annotations_tpat: ArenaAssoc<TPatId, KindId>,
-    /// kind annotations for types
-    pub annotations_type: ArenaPagedAssoc<TypeId, KindId>,
     /// type annotations for value patterns
     pub annotations_vpat: ArenaAssoc<VPatId, TypeId>,
     /// type annotations for values
@@ -311,7 +419,6 @@ impl StaticsArena {
     pub fn reserve(&mut self, scoped_terms: usize) {
         let type_key_spaces = scoped_terms.saturating_add(1) / 2;
         self.types_pre.reserve_pages(type_key_spaces);
-        self.annotations_type.reserve_pages(type_key_spaces);
         self.env_type.reserve_pages(type_key_spaces);
     }
 
@@ -324,6 +431,16 @@ impl StaticsArena {
     /// Materialize one stored typing environment as an owned value.
     pub fn env_at(&self, id: TypeId) -> TyEnv {
         self.env_type[&id].as_ref().clone()
+    }
+
+    /// The kind annotation co-located with one type node.
+    pub fn type_kind(&self, id: TypeId) -> KindId {
+        self.types_pre.kind_at(&id).expect("type node has no kind annotation")
+    }
+
+    /// The kind annotation of a type node, when the node is present.
+    pub fn type_kind_at(&self, id: TypeId) -> Option<KindId> {
+        self.types_pre.kind_at(&id)
     }
 
     /// Clone only the keyed indexes of a finished check, leaving the much
@@ -388,6 +505,34 @@ impl StaticsArena {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn type_nodes_store_compact_kind_indexes() {
+        assert!(
+            std::mem::size_of::<Option<TypeNode>>()
+                < std::mem::size_of::<Option<Fillable<Type>>>()
+                    + std::mem::size_of::<Option<KindId>>()
+        );
+
+        let mut allocator = IdAllocator::<StaticsScope>::new();
+        let kind: KindId = allocator.alloc();
+        let first: TypeId = allocator.alloc();
+        let second: TypeId = allocator.alloc();
+        let third: TypeId = allocator.alloc();
+        let mut types = TypeArena::default();
+
+        [first, second].into_iter().for_each(|id| {
+            types.insert_new(id, Fillable::Done(Type::Unit(UnitTy)), kind);
+        });
+        assert_eq!(types.kinds, vec![kind]);
+        assert_eq!(types.kind_at(&first), Some(kind));
+        assert_eq!(types.kind_at(&second), Some(kind));
+
+        types.strip_kind_index();
+        assert_eq!(types.kind_at(&first), Some(kind));
+        types.insert_new(third, Fillable::Done(Type::Unit(UnitTy)), kind);
+        assert_eq!(types.kinds, vec![kind]);
+    }
 
     #[test]
     fn retained_indexes_share_the_finished_generation() {

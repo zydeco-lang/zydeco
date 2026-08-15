@@ -267,8 +267,7 @@ impl PatternVariableStandIn {
         let vtype = ss::VType.build(tycker, env);
 
         tycker.statics.fills.insert_new(fill, ss::InferenceSite::Pattern(source));
-        tycker.statics.types_pre.insert_new(ty, ss::Fillable::Fill(fill));
-        tycker.statics.annotations_type.insert_new(ty, vtype);
+        tycker.statics.types_pre.insert_new(ty, ss::Fillable::Fill(fill), vtype);
         tycker.store_env(ty, env);
 
         let scope = env.skolem_scope().clone();
@@ -1052,7 +1051,7 @@ impl ExistentialProjectionPattern {
                         }
                         | DeferredTelescopeExistsMode::Manifest(definition) => {
                             let definition = definition.materialize_k(tycker)?;
-                            let definition_kind = tycker.statics.annotations_type[&definition];
+                            let definition_kind = tycker.statics.type_kind(definition);
                             Lub::lub_k(payload_kind, definition_kind, tycker)?;
                             (definition, None)
                         }
@@ -1370,7 +1369,7 @@ impl<'a> MonadicBasisElaboration<'a> {
     fn expect_kind_k(
         &self, tycker: &mut Tycker<'_>, ty: ss::TypeId, expected: ss::KindId,
     ) -> ResultKont<()> {
-        let actual = tycker.statics.annotations_type[&ty];
+        let actual = tycker.statics.type_kind(ty);
         Lub::lub_k(actual, expected, tycker)?;
         Ok(())
     }
@@ -1657,6 +1656,7 @@ impl<'a> Tycker<'a> {
     /// standard-library-sized arena, so they are stripped before the outcome
     /// leaves the checker.
     pub(crate) fn strip_checker_state(&mut self) {
+        self.statics.types_pre.strip_kind_index();
         self.statics.env_kpat = Default::default();
         self.statics.env_tpat = Default::default();
         self.statics.env_type = Default::default();
@@ -1927,8 +1927,7 @@ impl InternalTerm {
                     for (id, kind) in kinds {
                         tycker.statics.kinds_pre.insert_new(id, ss::Fillable::Done(kind));
                     }
-                    tycker.statics.types_pre.insert_new(ty, ss::Fillable::Done(ty_node));
-                    tycker.statics.annotations_type.insert_new(ty, ann);
+                    tycker.statics.types_pre.insert_new(ty, ss::Fillable::Done(ty_node), ann);
                     tycker.store_env(ty, &TyEnv::default());
                     match key {
                         | crate::query::IntrinsicKey::Thk => {
@@ -1959,19 +1958,19 @@ impl InternalTerm {
             | su::Internal::CType => TermAnnId::Kind(ss::CType.build(tycker, env)),
             | su::Internal::Thk => {
                 let ty = ss::ThkTy.build(tycker, env);
-                TermAnnId::Type(ty, tycker.statics.annotations_type[&ty])
+                TermAnnId::Type(ty, tycker.statics.type_kind(ty))
             }
             | su::Internal::Ret => {
                 let ty = ss::RetTy.build(tycker, env);
-                TermAnnId::Type(ty, tycker.statics.annotations_type[&ty])
+                TermAnnId::Type(ty, tycker.statics.type_kind(ty))
             }
             | su::Internal::Unit => {
                 let ty = ss::UnitTy.build(tycker, env);
-                TermAnnId::Type(ty, tycker.statics.annotations_type[&ty])
+                TermAnnId::Type(ty, tycker.statics.type_kind(ty))
             }
             | su::Internal::Primitive(primitive) => {
                 let ty = ss::PrimitiveTy(primitive).build(tycker, env);
-                TermAnnId::Type(ty, tycker.statics.annotations_type[&ty])
+                TermAnnId::Type(ty, tycker.statics.type_kind(ty))
             }
             | su::Internal::OS => self.builtin_type_k(tycker, env, ss::BuiltinTypeRole::OS)?,
             | su::Internal::Monad | su::Internal::Algebra => {
@@ -1994,7 +1993,7 @@ impl InternalTerm {
         &self, tycker: &mut Tycker<'_>, env: &ss::TyEnv, role: ss::BuiltinTypeRole,
     ) -> ResultKont<TermAnnId> {
         let ty = BuiltinTypeResolution(role).resolve_k(tycker, env)?;
-        Ok(TermAnnId::Type(ty, tycker.statics.annotations_type[&ty]))
+        Ok(TermAnnId::Type(ty, tycker.statics.type_kind(ty)))
     }
 
     #[track_caller]
@@ -2269,7 +2268,7 @@ impl<'a> PackPiInstantiationState<'a> {
                             unreachable!()
                         };
                         let canonical_kind = tycker.statics.annotations_abst[&canonical];
-                        let payload_kind = tycker.statics.annotations_type[&payload];
+                        let payload_kind = tycker.statics.type_kind(payload);
                         Lub::lub_k(canonical_kind, payload_kind, tycker)?;
                         let codomain = self.codomain.subst_abst_k(tycker, (canonical, payload))?;
                         let domain = body.subst_abst_k(tycker, (binder.witness, payload))?;
@@ -2674,11 +2673,11 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
                 };
                 tycker.statics.absts.insert_new(abst, ());
                 tycker.statics.abst_hints.insert_new(abst, def);
-                tycker
-                    .statics
-                    .types_pre
-                    .insert_new(abst_ty, ss::Fillable::Done(ss::Type::Abst(abst)));
-                tycker.statics.annotations_type.insert_new(abst_ty, kd);
+                tycker.statics.types_pre.insert_new(
+                    abst_ty,
+                    ss::Fillable::Done(ss::Type::Abst(abst)),
+                    kd,
+                );
                 tycker.store_env(abst_ty, &env.info);
                 env.info += [(def, abst_ty.into())];
                 abst_map.insert(id, (abst, next_abst_ty, kd));
@@ -2714,8 +2713,11 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
             // add the types to the seal arena
             let (abst, abst_ty, kd) = abst_map[&id];
             tycker.record_seal(abst, bindee_subst);
-            tycker.statics.types_pre.insert_new(abst_ty, ss::Fillable::Done(ss::Type::Abst(abst)));
-            tycker.statics.annotations_type.insert_new(abst_ty, kd);
+            tycker.statics.types_pre.insert_new(
+                abst_ty,
+                ss::Fillable::Done(ss::Type::Abst(abst)),
+                kd,
+            );
             tycker.store_env(abst_ty, &env.info);
             // add the type into the environment
             let TyEnvT { info: new_env, inner: () } =
@@ -2804,7 +2806,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                     | AnnId::Kind(kd) => kd.into(),
                     | AnnId::Type(ty) => {
                         let vtype = ss::VType.build(tycker, &self.info);
-                        let kd = tycker.statics.annotations_type[&ty].to_owned();
+                        let kd = tycker.statics.type_kind(ty);
                         Lub::lub_k(vtype, kd, tycker)?;
                         ty.into()
                     }
@@ -2868,7 +2870,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                 }
                             }
                             | PatAnnId::Value(inner, inner_ty) => {
-                                let inner_kind = tycker.statics.annotations_type[&inner_ty];
+                                let inner_kind = tycker.statics.type_kind(inner_ty);
                                 let vtype = ss::VType.build(tycker, &self.info);
                                 Lub::lub_k(vtype, inner_kind, tycker)?;
                                 let named_ty = Alloc::alloc(
@@ -3309,8 +3311,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                             unreachable!("consumed pattern judgments are query-produced")
                         };
                         for (id, prod) in outcome.prods {
-                            tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(prod));
-                            tycker.statics.annotations_type.insert_new(id, outcome.vtype);
+                            tycker.statics.types_pre.insert_new(
+                                id,
+                                ss::Fillable::Done(prod),
+                                outcome.vtype,
+                            );
                             tycker.store_env(id, &pattern_env);
                         }
                         tycker.statics.vpats.insert_new(outcome.pat_id, outcome.pat);
@@ -3391,11 +3396,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                     )
                                 };
                                 for (id, prod) in outcome.prods {
-                                    tycker
-                                        .statics
-                                        .types_pre
-                                        .insert_new(id, ss::Fillable::Done(prod));
-                                    tycker.statics.annotations_type.insert_new(id, outcome.vtype);
+                                    tycker.statics.types_pre.insert_new(
+                                        id,
+                                        ss::Fillable::Done(prod),
+                                        outcome.vtype,
+                                    );
                                     tycker.store_env(id, &pattern_env);
                                 }
                                 tycker.statics.vpats.insert_new(outcome.pat_id, outcome.pat);
@@ -3533,9 +3538,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                                 ) => {
                                                     let definition =
                                                         definition.materialize_k(tycker)?;
-                                                    let definition_kind = tycker
-                                                        .statics
-                                                        .annotations_type[&definition];
+                                                    let definition_kind =
+                                                        tycker.statics.type_kind(definition);
                                                     Lub::lub_k(
                                                         payload_kind,
                                                         definition_kind,
@@ -3717,7 +3721,7 @@ impl<'a> Tyck<'a> for TyEnvT<Assign<ss::TPatId, ss::TypeId>> {
                     ann.as_kind()
                 };
                 // def_kd should correctly be the type of assignee
-                let assignee_kd = { tycker.statics.annotations_type[&assignee].to_owned() };
+                let assignee_kd = { tycker.statics.type_kind(assignee) };
                 Lub::lub_k(def_kd, assignee_kd, tycker)?;
                 let mut env = self.info.clone();
                 env += [(def, assignee.into())];
@@ -3748,7 +3752,7 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiFormation> {
             )?
         }
 
-        let domain_kind = tycker.statics.annotations_type[&domain];
+        let domain_kind = tycker.statics.type_kind(domain);
         let vtype = ss::VType.build(tycker, &self.info);
         Lub::lub_k(vtype, domain_kind, tycker)?;
 
@@ -3854,8 +3858,11 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiIntroduction> {
         ) else {
             unreachable!("pack-pi introduction judgments are query-produced")
         };
-        tycker.statics.types_pre.insert_new(outcome.sig_id, ss::Fillable::Done(outcome.sig));
-        tycker.statics.annotations_type.insert_new(outcome.sig_id, outcome.kd);
+        tycker.statics.types_pre.insert_new(
+            outcome.sig_id,
+            ss::Fillable::Done(outcome.sig),
+            outcome.kd,
+        );
         tycker.store_env(outcome.sig_id, &self.info);
         outcome.sig_id.constrain_to_scope_k(tycker, self.info.skolem_scope())?;
         tycker.statics.compus.insert_new(outcome.abs_id, outcome.abs);
@@ -3909,8 +3916,11 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePackPiIntroduction> {
         ) else {
             unreachable!("value pack-pi introduction judgments are query-produced")
         };
-        tycker.statics.types_pre.insert_new(outcome.sig_id, ss::Fillable::Done(outcome.sig));
-        tycker.statics.annotations_type.insert_new(outcome.sig_id, outcome.kd);
+        tycker.statics.types_pre.insert_new(
+            outcome.sig_id,
+            ss::Fillable::Done(outcome.sig),
+            outcome.kd,
+        );
         tycker.store_env(outcome.sig_id, &self.info);
         outcome.sig_id.constrain_to_scope_k(tycker, self.info.skolem_scope())?;
         tycker.statics.values.insert_new(outcome.abs_id, outcome.abs);
@@ -4082,7 +4092,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             .as_ref()
                             .is_some_and(|prepared| self.info.is_extension_of(prepared));
                         if !preparation_is_valid {
-                            let kd = tycker.statics.annotations_type[&ty].to_owned();
+                            let kd = tycker.statics.type_kind(ty);
                             switch = Switch::Ana(
                                 ty.subst_env_k(tycker, &self.info)?.normalize_k(tycker, kd)?.into(),
                             );
@@ -4215,8 +4225,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             unreachable!("the kind arm of hole judgments is query-produced")
                         };
                         tycker.statics.fills.insert_new(fill, ss::InferenceSite::Term(self.inner));
-                        tycker.statics.types_pre.insert_new(ty, ss::Fillable::Fill(fill));
-                        tycker.statics.annotations_type.insert_new(ty, kd);
+                        tycker.statics.types_pre.insert_new(ty, ss::Fillable::Fill(fill), kd);
                         tycker.store_env(ty, &self.info);
                         let scope = self.info.skolem_scope().clone();
                         if let Some(existing) =
@@ -4231,7 +4240,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     }
                     | Switch::Ana(AnnId::Type(ty)) => {
                         // a hole in either value or computation; like undefined in Haskell
-                        let kd = tycker.statics.annotations_type[&ty].to_owned();
+                        let kd = tycker.statics.type_kind(ty);
                         match tycker.kind_filled_k(&kd)?.to_owned() {
                             | ss::Kind::VType(ss::VType) => {
                                 let term = crate::query::InternedTerm::new(tycker.db, self.inner);
@@ -4406,11 +4415,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         .statics
                                         .kinds_pre
                                         .insert_new(kind_id, ss::Fillable::Done(kind));
-                                    tycker
-                                        .statics
-                                        .types_pre
-                                        .insert_new(named_id, ss::Fillable::Done(named));
-                                    tycker.statics.annotations_type.insert_new(named_id, kind_id);
+                                    tycker.statics.types_pre.insert_new(
+                                        named_id,
+                                        ss::Fillable::Done(named),
+                                        kind_id,
+                                    );
                                     tycker.store_env(named_id, &self.info);
                                     TermAnnId::Type(named_id, kind_id)
                                 }
@@ -4420,7 +4429,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             }
                         }
                         | TermAnnId::Value(inner, inner_ty) => {
-                            let inner_kind = tycker.statics.annotations_type[&inner_ty];
+                            let inner_kind = tycker.statics.type_kind(inner_ty);
                             let vtype = ss::VType.build(tycker, &self.info);
                             Lub::lub_k(vtype, inner_kind, tycker)?;
                             let named_ty = Alloc::alloc(
@@ -4658,8 +4667,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             unreachable!("consumed judgments are query-produced")
                         };
                         for (id, prod) in outcome.prods {
-                            tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(prod));
-                            tycker.statics.annotations_type.insert_new(id, outcome.vtype);
+                            tycker.statics.types_pre.insert_new(
+                                id,
+                                ss::Fillable::Done(prod),
+                                outcome.vtype,
+                            );
                             tycker.store_env(id, &self.info);
                         }
                         tycker.statics.values.insert_new(outcome.cons_id, outcome.cons);
@@ -4939,14 +4951,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                             .statics
                                             .kinds_pre
                                             .insert_new(arrow_id, ss::Fillable::Done(arrow));
-                                        tycker
-                                            .statics
-                                            .types_pre
-                                            .insert_new(abs_id, ss::Fillable::Done(abs));
-                                        tycker
-                                            .statics
-                                            .annotations_type
-                                            .insert_new(abs_id, arrow_id);
+                                        tycker.statics.types_pre.insert_new(
+                                            abs_id,
+                                            ss::Fillable::Done(abs),
+                                            arrow_id,
+                                        );
                                         tycker.store_env(abs_id, &self.info);
                                         TermAnnId::Type(abs_id, arrow_id)
                                     }
@@ -4981,11 +4990,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                                 "the polymorphic computation arm of abstraction judgments is query-produced"
                                             )
                                         };
-                                        tycker
-                                            .statics
-                                            .types_pre
-                                            .insert_new(ann_id, ss::Fillable::Done(ann));
-                                        tycker.statics.annotations_type.insert_new(ann_id, kd);
+                                        tycker.statics.types_pre.insert_new(
+                                            ann_id,
+                                            ss::Fillable::Done(ann),
+                                            kd,
+                                        );
                                         tycker.store_env(ann_id, &self.info);
                                         tycker.statics.compus.insert_new(abs_id, abs);
                                         tycker.statics.annotations_compu.insert_new(abs_id, ann_id);
@@ -5025,11 +5034,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                                 "the polymorphic value arm of abstraction judgments is query-produced"
                                             )
                                         };
-                                        tycker
-                                            .statics
-                                            .types_pre
-                                            .insert_new(ann_id, ss::Fillable::Done(ann));
-                                        tycker.statics.annotations_type.insert_new(ann_id, kd);
+                                        tycker.statics.types_pre.insert_new(
+                                            ann_id,
+                                            ss::Fillable::Done(ann),
+                                            kd,
+                                        );
                                         tycker.store_env(ann_id, &self.info);
                                         tycker.statics.values.insert_new(abs_id, abs);
                                         tycker.statics.annotations_value.insert_new(abs_id, ann_id);
@@ -5132,11 +5141,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                             &ann,
                                             ss::Type::VPackPi(_) | ss::Type::PackPi(_)
                                         );
-                                        tycker
-                                            .statics
-                                            .types_pre
-                                            .insert_new(ann_id, ss::Fillable::Done(ann));
-                                        tycker.statics.annotations_type.insert_new(ann_id, kd);
+                                        tycker.statics.types_pre.insert_new(
+                                            ann_id,
+                                            ss::Fillable::Done(ann),
+                                            kd,
+                                        );
                                         tycker.store_env(ann_id, &self.info);
                                         if is_pack_pi {
                                             ann_id.constrain_to_scope_k(
@@ -5209,11 +5218,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                             &ann,
                                             ss::Type::VPackPi(_) | ss::Type::PackPi(_)
                                         );
-                                        tycker
-                                            .statics
-                                            .types_pre
-                                            .insert_new(ann_id, ss::Fillable::Done(ann));
-                                        tycker.statics.annotations_type.insert_new(ann_id, kd);
+                                        tycker.statics.types_pre.insert_new(
+                                            ann_id,
+                                            ss::Fillable::Done(ann),
+                                            kd,
+                                        );
                                         tycker.store_env(ann_id, &self.info);
                                         if is_pack_pi {
                                             ann_id.constrain_to_scope_k(
@@ -5312,7 +5321,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             }
                             | AnnId::Type(ty) => {
                                 // could be either a term function or a type-polymorphic term function
-                                let kind = tycker.statics.annotations_type[&ty];
+                                let kind = tycker.statics.type_kind(ty);
                                 let expected = match tycker.kind_filled_k(&kind)?.to_owned() {
                                     | ss::Kind::VType(_) => ty
                                         .normalize_k(tycker, kind)?
@@ -5572,7 +5581,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         TermAnnId::Type(body_ty_norm, kd_out)
                     }
                     | TermAnnId::Value(f_out, f_ty) => {
-                        let f_kd = tycker.statics.annotations_type[&f_ty];
+                        let f_kd = tycker.statics.type_kind(f_ty);
                         let f_ty = f_ty.normalize_k(tycker, f_kd)?;
                         match f_ty.reveal_or_refine_value_arrow_k(tycker, &self.info)? {
                             | ss::Type::VForall(ss::ValueForall(binder, ty_body)) => {
@@ -5697,7 +5706,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         }
                     }
                     | TermAnnId::Compu(f_out, f_ty) => {
-                        let f_kd = tycker.statics.annotations_type[&f_ty].to_owned();
+                        let f_kd = tycker.statics.type_kind(f_ty);
                         let f_ty = f_ty.normalize_k(tycker, f_kd)?;
                         // either a term-term application or a type-polymorphic term application
                         match f_ty.reveal_or_refine_arrow_k(tycker, &self.info)? {
@@ -5981,11 +5990,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                                 ty,
                                                 kd,
                                             }) => {
-                                                tycker
-                                                    .statics
-                                                    .types_pre
-                                                    .insert_new(id, ss::Fillable::Done(ty));
-                                                tycker.statics.annotations_type.insert_new(id, kd);
+                                                tycker.statics.types_pre.insert_new(
+                                                    id,
+                                                    ss::Fillable::Done(ty),
+                                                    kd,
+                                                );
                                                 tycker.store_env(id, &self.info);
                                                 TermAnnId::Type(id, kd)
                                             }
@@ -6277,8 +6286,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         "the exists arm of sigma judgments is query-produced"
                                     )
                                 };
-                                tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(ty));
-                                tycker.statics.annotations_type.insert_new(id, kd);
+                                tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(ty), kd);
                                 tycker.store_env(id, &self.info);
                                 TermAnnId::Type(id, kd)
                             }
@@ -6293,7 +6301,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     )?
                                 }
                                 // ty should be of vtype
-                                let kd_1 = tycker.statics.annotations_type[&ty_1].to_owned();
+                                let kd_1 = tycker.statics.type_kind(ty_1);
                                 let vtype = ss::VType.build(tycker, &self.info);
                                 Lub::lub_k(vtype, kd_1, tycker)?;
                                 let ty_2 = self.mk(body).tyck_k(tycker, Action::syn())?;
@@ -6322,8 +6330,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         "the product arm of sigma judgments is query-produced"
                                     )
                                 };
-                                tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(ty));
-                                tycker.statics.annotations_type.insert_new(id, kd);
+                                tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(ty), kd);
                                 tycker.store_env(id, &self.info);
                                 TermAnnId::Type(id, kd)
                             }
@@ -6391,8 +6398,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         "the kind arm of manifest-exists judgments is query-produced"
                                     )
                                 };
-                                tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(ty));
-                                tycker.statics.annotations_type.insert_new(id, kd);
+                                tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(ty), kd);
                                 tycker.store_env(id, &self.info);
                                 TermAnnId::Type(id, kd)
                             }
@@ -6452,8 +6458,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         "the type arm of manifest-exists judgments is query-produced"
                                     )
                                 };
-                                tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(ty));
-                                tycker.statics.annotations_type.insert_new(id, kd);
+                                tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(ty), kd);
                                 tycker.store_env(id, &self.info);
                                 TermAnnId::Type(id, kd)
                             }
@@ -6529,11 +6534,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 ) else {
                     unreachable!("thunk judgments are query-produced")
                 };
-                tycker
-                    .statics
-                    .types_pre
-                    .insert_new(outcome.thk_ty_id, ss::Fillable::Done(outcome.thk_ty));
-                tycker.statics.annotations_type.insert_new(outcome.thk_ty_id, outcome.vtype);
+                tycker.statics.types_pre.insert_new(
+                    outcome.thk_ty_id,
+                    ss::Fillable::Done(outcome.thk_ty),
+                    outcome.vtype,
+                );
                 tycker.store_env(outcome.thk_ty_id, &self.info);
                 tycker.statics.values.insert_new(outcome.thunk_id, outcome.thunk);
                 tycker.statics.annotations_value.insert_new(outcome.thunk_id, outcome.thk_ty_id);
@@ -6559,7 +6564,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             };
                             // check ana_ty is computation type
                             let ctype = ss::CType.build(tycker, &self.info);
-                            let ana_ty_kd = tycker.statics.annotations_type[&ana_ty].to_owned();
+                            let ana_ty_kd = tycker.statics.type_kind(ana_ty);
                             Lub::lub_k(ctype, ana_ty_kd, tycker)?;
                             // if ana, then ana the body with thunked body_ty
                             cs::Thk(ana_ty).build(tycker, &self.info)
@@ -6639,11 +6644,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 ) else {
                     unreachable!("return judgments are query-produced")
                 };
-                tycker
-                    .statics
-                    .types_pre
-                    .insert_new(outcome.ret_ty_id, ss::Fillable::Done(outcome.ret_ty));
-                tycker.statics.annotations_type.insert_new(outcome.ret_ty_id, outcome.vtype);
+                tycker.statics.types_pre.insert_new(
+                    outcome.ret_ty_id,
+                    ss::Fillable::Done(outcome.ret_ty),
+                    outcome.vtype,
+                );
                 tycker.store_env(outcome.ret_ty_id, &self.info);
                 tycker.statics.compus.insert_new(outcome.ret_id, outcome.ret);
                 tycker.statics.annotations_compu.insert_new(outcome.ret_id, outcome.ret_ty_id);
@@ -7012,8 +7017,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     unreachable!("data declaration judgments are query-produced")
                 };
                 tycker.statics.datas.insert_new(outcome.data_id, outcome.data);
-                tycker.statics.types_pre.insert_new(outcome.ty_id, ss::Fillable::Done(outcome.ty));
-                tycker.statics.annotations_type.insert_new(outcome.ty_id, outcome.kd);
+                tycker.statics.types_pre.insert_new(
+                    outcome.ty_id,
+                    ss::Fillable::Done(outcome.ty),
+                    outcome.kd,
+                );
                 tycker.store_env(outcome.ty_id, &self.info);
                 TermAnnId::Type(outcome.ty_id, outcome.kd)
             }
@@ -7054,8 +7062,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     unreachable!("codata declaration judgments are query-produced")
                 };
                 tycker.statics.codatas.insert_new(outcome.codata_id, outcome.codata);
-                tycker.statics.types_pre.insert_new(outcome.ty_id, ss::Fillable::Done(outcome.ty));
-                tycker.statics.annotations_type.insert_new(outcome.ty_id, outcome.kd);
+                tycker.statics.types_pre.insert_new(
+                    outcome.ty_id,
+                    ss::Fillable::Done(outcome.ty),
+                    outcome.kd,
+                );
                 tycker.store_env(outcome.ty_id, &self.info);
                 TermAnnId::Type(outcome.ty_id, outcome.kd)
             }

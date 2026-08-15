@@ -825,12 +825,11 @@ mod tests {
         assert_eq!(statics.values.len(), 0);
         assert_eq!(statics.compus.len(), 0);
         assert_eq!(statics.types_normalized.len(), 0);
-        assert_eq!(statics.annotations_type.len(), 0);
         assert_eq!(statics.annotations_compu.len(), 0);
 
         // The session re-materializes the payload from the memoized check.
         let program = session.checked_program(&analysis).expect("checked program");
-        assert!(program.statics.types_pre.len() > 0);
+        assert!(!program.statics.types_pre.is_empty());
         assert!(program.statics.compus.len() > 0);
     }
 
