@@ -966,3 +966,45 @@ decisions while implementing the plan.
   arm changes, so allocation alone cannot prove that a substitution was semantically necessary.
 - Re-run root-operation attribution before addressing type-application normalization and
   type-abstraction recovery.
+
+## 2026-08-15 — round 23: reuse unchanged nominal definitions
+
+### Findings
+
+- `subst_env` rebuilt every `Data` and `CoData` definition unconditionally. Even an empty
+  environment allocated a fresh nominal identity after recursively visiting unchanged arms. This
+  violates the substitution invariant used by every other constructor: an unchanged subtree keeps
+  its original `TypeId`.
+- This was a real semantic and allocation defect but not the explanation for the remaining large
+  ascription cost. Restoring no-op reuse removes only 87 nodes from the full standard library.
+- Operation-local memoization was also tested and removed. A map from input `TypeId` to substituted
+  result passed all 43 then-current statics tests but left the arena exactly unchanged at 449,694
+  nodes. The hot structures are effectively trees within one traversal; amplification occurs across
+  separate substitution operations, so per-operation DAG caching only adds lookup overhead.
+
+### Changes
+
+- Data and codata substitution now compares each original arm type with its substituted result. It
+  returns the original nominal type when every arm is identical and allocates a fresh definition
+  only when at least one arm changes.
+- A regression covers both constructors and both paths: an empty substitution preserves identity,
+  while a mapping used by one arm creates a distinct nominal definition containing the replacement.
+- The temporary node counter and the zero-benefit memoization prototype were removed.
+
+### Measurements
+
+- The full-std check retains 449,607 type nodes, 87 fewer than round 22. This deterministic change is
+  below process-RSS measurement resolution, so the last clean median remains the useful memory
+  reference at 367,607,808 bytes (-85.3% from baseline).
+- All 44 statics tests and all 151 session tests passed, along with the release CLI build and full
+  standard-library check.
+
+### Next
+
+- Eliminate the cross-operation roundtrip in synthesized type functions. Their body is checked with
+  a fresh abstract witness, recursively rewritten back to the source `DefId` when constructing
+  `Type::Abs`, and recursively rewritten to an argument at every application. Retaining the witness
+  in the abstraction representation can remove the 44,883-node recovery pass entirely.
+- Keep the type-abstraction binder explicit in typed syntax rather than adding a side table that
+  must be propagated whenever an abstraction node is reconstructed. Substitution, alpha-equivalence,
+  normalization, formatting, and monadic elaboration must all agree on the binder.

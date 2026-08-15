@@ -461,24 +461,17 @@ impl TypeId {
                 }
                 | Type::Data(id) => {
                     let arms = tycker.statics.datas[&id].clone();
-                    // let mut unchanged = true;
                     let arms_ = arms
-                        .into_iter()
-                        .map(|(ctor, ty)| {
-                            let ty_ = ty.subst_env(tycker, env)?;
-                            // if ty == ty_ {
-                            //     Ok((ctor, ty))
-                            // } else {
-                            //     unchanged = false;
-                            //     Ok((ctor, ty_))
-                            // }
-                            Ok((ctor, ty_))
-                        })
+                        .iter()
+                        .map(|(ctor, ty)| Ok((ctor.clone(), ty.subst_env(tycker, env)?)))
                         .collect::<Result<im::Vector<_>>>()?;
-                    // if unchanged {
-                    //     *self
-                    // } else
-                    {
+                    let unchanged = arms
+                        .iter()
+                        .zip(arms_.iter())
+                        .all(|((_, original), (_, substituted))| original == substituted);
+                    if unchanged {
+                        *self
+                    } else {
                         let id_: DataId = tycker.fresh();
                         tycker.statics.datas.insert_new(id_, Data::new(arms_));
                         Alloc::alloc(tycker, id_, kd, env)
@@ -486,24 +479,17 @@ impl TypeId {
                 }
                 | Type::CoData(id) => {
                     let arms = tycker.statics.codatas[&id].clone();
-                    // let mut unchanged = true;
                     let arms_ = arms
-                        .into_iter()
-                        .map(|(dtor, ty)| {
-                            let ty_ = ty.subst_env(tycker, env)?;
-                            // if ty == ty_ {
-                            //     Ok((dtor, ty))
-                            // } else {
-                            //     unchanged = false;
-                            //     Ok((dtor, ty_))
-                            // }
-                            Ok((dtor, ty_))
-                        })
+                        .iter()
+                        .map(|(dtor, ty)| Ok((dtor.clone(), ty.subst_env(tycker, env)?)))
                         .collect::<Result<im::Vector<_>>>()?;
-                    // if unchanged {
-                    //     *self
-                    // } else
-                    {
+                    let unchanged = arms
+                        .iter()
+                        .zip(arms_.iter())
+                        .all(|((_, original), (_, substituted))| original == substituted);
+                    if unchanged {
+                        *self
+                    } else {
                         let id_: CoDataId = tycker.fresh();
                         tycker.statics.codatas.insert_new(id_, CoData::new(arms_));
                         Alloc::alloc(tycker, id_, kd, env)
