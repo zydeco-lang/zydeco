@@ -1157,13 +1157,13 @@ impl<'a> Tycker<'a> {
         }
         if self.errors.is_empty() {
             let blame = std::panic::Location::caller();
-            self.errors.extend(CoverageChecker::new(&self.statics).validate().into_iter().map(
-                |error| TyckErrorEntry {
-                    error: TyckError::Coverage(error),
-                    blame,
-                    stack: im::Vector::new(),
-                },
-            ));
+            let coverage = CoverageChecker::new(&self.statics).validate();
+            self.statics.coverage_errors = coverage.clone();
+            self.errors.extend(coverage.into_iter().map(|error| TyckErrorEntry {
+                error: TyckError::Coverage(error),
+                blame,
+                stack: im::Vector::new(),
+            }));
         }
         if !self.errors.is_empty() {
             Err(KontFailure)?
@@ -3629,6 +3629,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
         tycker.guarded(|tycker| {
             // administrative
             tycker.tasks.push_back(TyckTask::Term(self.inner, switch));
+            let env = tycker.statics.intern_env(&self.info);
+            tycker.statics.term_envs.upsert(self.inner, env);
             let entity = su::EntityId::Term(self.inner);
             let occurrence = tycker.check_counts.get(&entity).copied().unwrap_or(0);
             let _ = tycker.check_counts.upsert(entity, occurrence + 1);
@@ -7149,6 +7151,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
         if let Some(out) = out_ann.as_term() {
             // maintain back mapping
             tycker.statics.terms.ensure(self.inner, out);
+            // record the final annotation for editor facts; fixpoint re-checks
+            // overwrite the earlier occurrence's entry
+            tycker.statics.term_anns.upsert(self.inner, out_ann);
 
             // check if the term is global
             let global = tycker.scoped.coctxs_term_local[&self.inner]

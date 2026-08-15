@@ -600,11 +600,10 @@ fn normalized_type_at<'db>(
 fn coverage_at(
     db: &dyn SourceQueryDb, root: SourceInput,
 ) -> Vec<zydeco_statics::validate::CoverageError> {
-    let Ok((_, output)) = rechecked(db, root) else {
+    let Ok(analysis) = analyze_source(db, root) else {
         return Vec::new();
     };
-    let statics = output.outcome.statics_arc();
-    zydeco_statics::validate::CoverageChecker::new(&statics).validate()
+    analysis.statics().coverage_errors.clone()
 }
 
 /// The recorded solution of a hole-filling site, if the checker solved it.
@@ -640,22 +639,8 @@ fn type_definition_of_def<'db>(
 fn term_annotation_at<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput, term: zydeco_statics::query::InternedTerm<'db>,
 ) -> Option<zydeco_statics::syntax::TermAnnId> {
-    use zydeco_statics::syntax::TermAnnId;
-    let (_, output) = rechecked(db, root).ok()?;
-    let statics = output.outcome.statics_arc();
-    let typed = *statics.terms.forth(&term.id(db)).last()?;
-    Some(match typed {
-        | zydeco_statics::syntax::TermId::Kind(kind) => TermAnnId::Kind(kind),
-        | zydeco_statics::syntax::TermId::Type(ty) => {
-            TermAnnId::Type(ty, *statics.annotations_type.get(&ty)?)
-        }
-        | zydeco_statics::syntax::TermId::Value(value) => {
-            TermAnnId::Value(value, *statics.annotations_value.get(&value)?)
-        }
-        | zydeco_statics::syntax::TermId::Compu(compu) => {
-            TermAnnId::Compu(compu, *statics.annotations_compu.get(&compu)?)
-        }
-    })
+    let analysis = analyze_source(db, root).ok()?;
+    analysis.statics().term_anns.get(&term.id(db)).copied()
 }
 
 #[cfg(test)]

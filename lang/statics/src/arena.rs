@@ -163,6 +163,16 @@ pub struct StaticsArena {
     /// Untyped-to-typed term provenance. A surface term can be checked more
     /// than once, while erased constructs can share a typed term.
     pub terms: ArenaBipartite<su::TermId, TermId>,
+    /// The final annotation of each checked term, keyed by the surface term.
+    /// Editor facts read this instead of the per-node annotation tables, which
+    /// the occurrence-payload strip discards.
+    pub term_anns: ArenaAssoc<su::TermId, TermAnnId>,
+    /// The typing environment snapshot at each checked term site, retained so
+    /// dropped occurrence nodes can be re-normalized with their exact
+    /// environment.
+    pub term_envs: ArenaAssoc<su::TermId, std::sync::Arc<TyEnv>>,
+    /// Coverage failures recorded during the finish phase, for editor facts.
+    pub coverage_errors: Vec<crate::validate::CoverageError>,
 
     /// arena for abstract types
     pub absts: ArenaSparse<StaticsScope, AbstId>,
