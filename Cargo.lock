@@ -195,7 +195,7 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "cajun"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "clap",
  "salsa",
@@ -2467,7 +2467,7 @@ checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 
 [[package]]
 name = "zydeco-amd64"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "derive_more",
  "im",
@@ -2481,7 +2481,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-assembly"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "derive_more",
  "im",
@@ -2498,7 +2498,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-cli"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "ariadne",
  "clap",
@@ -2520,7 +2520,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-derive"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "quote",
  "syn 2.0.119",
@@ -2528,7 +2528,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-dynamics"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "derive_more",
  "im",
@@ -2544,7 +2544,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-llvm"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "derive_more",
  "im",
@@ -2558,7 +2558,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-session"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "ariadne",
  "dashmap 6.2.1",
@@ -2577,7 +2577,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-stackir"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "derive_more",
  "im",
@@ -2595,7 +2595,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-statics"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "ariadne",
  "auto_impl",
@@ -2614,7 +2614,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-surface"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "ariadne",
  "auto_impl",
@@ -2635,7 +2635,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-syntax"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "derive_more",
  "impl-tools",
@@ -2646,7 +2646,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-tests"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "tempfile",
  "thiserror",
@@ -2658,7 +2658,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-tui"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "ariadne",
  "lalrpop-util",
@@ -2675,7 +2675,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-utils"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "derive_more",
  "im",

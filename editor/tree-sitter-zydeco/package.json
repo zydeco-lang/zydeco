@@ -1,6 +1,6 @@
 {
   "name": "tree-sitter-zydeco",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Zydeco grammar for Tree-sitter",
   "private": true,
   "license": "MIT",

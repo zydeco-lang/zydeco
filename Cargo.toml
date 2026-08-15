@@ -22,7 +22,7 @@ members = [
 exclude = ["build"]
 
 [workspace.package]
-version = "0.2.2"
+version = "0.3.0"
 rust-version = "1.97"
 authors = ["The Zydeco Project Developers"]
 edition = "2024"

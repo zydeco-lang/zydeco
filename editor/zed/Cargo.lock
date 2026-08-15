@@ -822,7 +822,7 @@ checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 
 [[package]]
 name = "zydeco-zed"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "zed_extension_api",
 ]

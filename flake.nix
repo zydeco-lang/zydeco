@@ -16,7 +16,7 @@
       packages.${system}.zydeco =
         pkgs.rustPlatform.buildRustPackage {
           pname = "zydeco";
-          version = "0.2.2";
+          version = "0.3.0";
           src = ./.;
           cargoLock.lockFile = ./Cargo.lock;
         };

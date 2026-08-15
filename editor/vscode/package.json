@@ -3,7 +3,7 @@
   "displayName": "Zydeco (Cajun)",
   "description": "Zydeco language support powered by the Cajun language server",
   "license": "MIT",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "keywords": [
     "Zydeco",
     "language-server",
