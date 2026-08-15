@@ -1686,7 +1686,7 @@ pub enum TyckTask {
 ///
 /// Analytic term checking records the environment under which an expected type was already
 /// substituted and normalized. Transparent term wrappers forward that provenance so their
-/// source-level nesting does not apply the same environment repeatedly.
+/// source-level nesting and inner lexical extensions do not apply the same environment repeatedly.
 pub struct Action<Ann> {
     pub switch: Switch<Ann>,
     prepared_environment: Option<ss::TyEnv>,
@@ -4029,7 +4029,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         }
                     },
                     | _ => {
-                        if prepared_environment.as_ref() != Some(&self.info) {
+                        let preparation_is_valid = prepared_environment
+                            .as_ref()
+                            .is_some_and(|prepared| self.info.is_extension_of(prepared));
+                        if !preparation_is_valid {
                             let kd = tycker.statics.annotations_type[&ty].to_owned();
                             switch = Switch::Ana(
                                 ty.subst_env_k(tycker, &self.info)?.normalize_k(tycker, kd)?.into(),
@@ -7694,6 +7697,34 @@ mod source_boundary_tests {
             let ss::Prod(head, tail) =
                 sealed.view_prepared_product_k(tycker, &environment).unwrap();
             assert_eq!((head, tail), (target, unit));
+            assert!(tycker.errors.is_empty());
+        });
+    }
+
+    #[test]
+    fn prepared_annotations_survive_lexical_environment_extensions() {
+        with_empty_tycker(|tycker| {
+            let empty = TyEnv::default();
+            let vtype = ss::VType.build(tycker, &empty);
+            let unit = ss::UnitTy.build(tycker, &empty);
+            let source_def: ss::DefId = tycker.fresh();
+            let target_def: ss::DefId = tycker.fresh();
+            let inner_def: ss::DefId = tycker.fresh();
+            let source: ss::TypeId = Alloc::alloc(tycker, source_def, vtype, &empty);
+            let target: ss::TypeId = Alloc::alloc(tycker, target_def, vtype, &empty);
+            let prepared_environment =
+                TyEnv::from_iter([(source_def, target.into()), (target_def, unit.into())]);
+            let prepared = source.subst_env_k(tycker, &prepared_environment).unwrap();
+            assert_eq!(prepared, target);
+
+            let extended_environment = prepared_environment.clone() + [(inner_def, unit.into())];
+            let hole = tycker.data.root(tycker.db);
+            let checked = TyEnvT::new(extended_environment, hole)
+                .tyck_k(tycker, Action::ana_prepared(prepared.into(), &prepared_environment))
+                .unwrap();
+
+            assert!(matches!(checked, TermAnnId::Value(_, annotation) if annotation == target));
+            assert_ne!(target, unit);
             assert!(tycker.errors.is_empty());
         });
     }

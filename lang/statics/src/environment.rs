@@ -128,6 +128,17 @@ mod impls_ty_env {
             self
         }
 
+        /// Whether this environment preserves every binding and skolem visible in `base`.
+        pub fn is_extension_of(&self, base: &Self) -> bool {
+            let preserves_definitions = self.defs.0.ptr_eq(&base.defs.0)
+                || (self.defs.len() >= base.defs.len()
+                    && base.defs.iter().all(|(def, ann)| self.defs.get(def) == Some(ann)));
+            let preserves_skolems = self.skolems.0.ptr_eq(&base.skolems.0)
+                || (self.skolems.0.len() >= base.skolems.0.len()
+                    && base.skolems.0.iter().all(|skolem| self.skolems.contains(skolem)));
+            preserves_definitions && preserves_skolems
+        }
+
         pub fn monadic_new(tycker: &mut Tycker<'_>, ori: &TyEnv) -> Self {
             use zydeco_surface::arena::ArenaAccess;
 
@@ -417,5 +428,24 @@ mod tests {
         assert_eq!(env, rebuilt);
         assert!(std::sync::Arc::ptr_eq(&first, &second));
         assert_eq!(second.as_ref().get(&def(0)), first.as_ref().get(&def(0)));
+    }
+
+    #[test]
+    fn environment_extensions_preserve_existing_bindings_and_skolems() {
+        let base = sample();
+        let added_type = derived_id(KeySpaceId::derive(0xEE11_EE13, 0, 0, 0), 1);
+        let extension = (base.clone() + [(def(1), AnnId::Type(added_type))]).with_skolem(abst(1));
+
+        assert!(extension.is_extension_of(&base));
+        assert!(base.is_extension_of(&base));
+
+        let replaced = base.clone() + [(def(0), AnnId::Type(added_type))];
+        assert!(!replaced.is_extension_of(&base));
+
+        let missing_definition = TyEnv::default().with_skolem(abst(0));
+        assert!(!missing_definition.is_extension_of(&base));
+
+        let missing_skolem = TyEnv::from_iter(base.clone());
+        assert!(!missing_skolem.is_extension_of(&base));
     }
 }

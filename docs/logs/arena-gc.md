@@ -861,3 +861,59 @@ decisions while implementing the plan.
 - Inspect `normalize_app` and type-abstraction recovery after analytic preparation. Their previous
   56,080- and 44,883-node shares were stable across several rounds and may become worthwhile once
   the expected-type paths are composed.
+
+## 2026-08-15 — round 21: preserve preparation through lexical extensions
+
+### Findings
+
+- Caller-aware instrumentation attributed 177,549 nodes to common analytic preparation in the
+  round-20 tree. Two `let`-tail forwarding sites alone used 74,693 and 56,619 nodes, totaling
+  131,312. Both passed an outer expected result type into a tail whose environment had gained the
+  freshly bound local definition.
+- Equality was too strong for preparation provenance. A type formed outside an inner binder's
+  lexical scope cannot contain that binder's globally unique `DefId`, so adding the binder does not
+  create a substitution obligation for the outer type. Every old definition mapping and visible
+  skolem remaining unchanged is the relevant condition; unrelated new entries are harmless.
+- Replaying the complete old environment is observably wrong even when the new binding is
+  unrelated. Given the ordered mappings `x -> y` and `y -> Unit`, one preparation of `x` yields
+  `y`. A second traversal caused only by entering a larger scope advances it to `Unit`. The count
+  of environment applications therefore follows lexical provenance, not equality of whole context
+  snapshots.
+- This rule does not cover replacement environments. Monadic translation can remove mappings, and
+  any changed definition mapping or removed skolem invalidates the provenance and still triggers
+  preparation.
+
+### Changes
+
+- `TyEnv::is_extension_of` checks that every definition mapping and skolem in a base environment
+  remains present with the same identity. Persistent-map pointer equality handles unchanged
+  components directly; a subset comparison handles ordinary lexical extension.
+- Analytic term entry accepts a prepared environment when the current environment extends it. It
+  retains the original provenance rather than pretending the new entries were applied.
+- An environment regression covers additions, replacements, missing definitions, and missing
+  skolems. A checker regression uses the `x -> y -> Unit` chain to prove that an unrelated inner
+  binding cannot advance an already prepared annotation.
+- Temporary caller and allocation instrumentation was removed after the census.
+
+### Measurements
+
+- The full-std check retains 456,804 type nodes, 131,440 fewer than round 20 (-22.3%). The exact
+  reduction consists of the two `let` paths plus a 128-node recursive-group tail with the same
+  monotone-extension shape.
+- Three clean release checks used 367,968,256, 368,738,304, and 368,148,480 bytes peak RSS (median
+  368,148,480), down 40,927,232 bytes (-10.0%) from round 20. Warm wall time was 0.40s and warm user
+  time was 0.36s.
+- The current-tree baseline is now down from 2,497,757,184 to 368,148,480 bytes (-85.3%).
+- All 43 statics tests and all 151 session tests passed, along with the release CLI build and full
+  standard-library check.
+
+### Next
+
+- The remaining common-preparation callers total about 46,000 nodes. Explicit annotations lead at
+  19,123, value-function bodies at 8,838, package introductions at 5,250, and value-arrow bodies at
+  3,900. Separate already-prepared components from genuinely fresh annotations at those sites.
+- Type-application normalization and type-abstraction recovery were previously 56,080 and 44,883
+  nodes. Re-profile them against the smaller arena before deciding whether they now dominate.
+- The substitution implementation already normalizes its result, while common analytic entry calls
+  `normalize_k` again. The second pass allocated only hundreds of nodes in this profile, but the API
+  contract should be made explicit before removing that redundant-looking call.
