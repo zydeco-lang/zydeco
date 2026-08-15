@@ -461,7 +461,10 @@ mod tests {
         let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
         terminal.draw(|frame| repl.render(frame)).unwrap();
         let rendered = terminal.backend().to_string();
-        assert!(rendered.contains("error occurred here"), "{rendered}");
+        // The marker label sits after the error underline, so it can wrap at
+        // the gutter; assert both fragments instead of one contiguous string.
+        assert!(rendered.contains("error"), "{rendered}");
+        assert!(rendered.contains("occurred here"), "{rendered}");
         assert!(rendered.contains("type error · edit and retry"), "{rendered}");
 
         repl.editor.clear();
