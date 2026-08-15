@@ -20,10 +20,10 @@ decisions while implementing the plan.
 
 ### Findings
 
-- salsa 0.26 supports `lru = <usize>` per tracked function (via the `Lru`
-  eviction policy); eviction fires in `reset_for_new_revision`, reachable without an
-  input write through `Database::trigger_lru_eviction`. Creating new salsa inputs does
-  *not* bump the revision, so multi-root sessions must trigger eviction explicitly.
+- salsa 0.26 supports `lru = <usize>` per tracked function (via the `Lru` eviction
+  policy); eviction fires in `reset_for_new_revision`, reachable without an input write
+  through `Database::trigger_lru_eviction`. Creating new salsa inputs does *not* bump the
+  revision, so multi-root sessions must trigger eviction explicitly.
 - `lru = 1` on `check_source` plus a per-analyze trigger dropped the session suite peak
   from 18.0GB to 9.93GB; raising the pool cap to 64 grew it to 16.3GB, i.e. per-root
   judgment memos cost ~115MB and still need the pool cap. The entry-counted LRU cannot
@@ -55,12 +55,36 @@ decisions while implementing the plan.
 - Session suite (2 threads): 149 passed; peak RSS 9.93GB after the LRU step, 6.32GB
   after the L/S split; 72s wall. Full workspace suite: 739 passed, 0 failed.
 
+## 2026-08-15 — round 2: shared-arena outcome, per-fact reads without cloning
+
+### Findings
+
+- `check_source`'s `returns(clone)` semantics handed every reader a deep copy of the
+  arena, so the three S-reading fact queries paid a transient ~500MB clone per new key.
+- Wrapping the outcome's arena in an `Arc` moves that cost: the memo and every reader
+  share one arena; read-only consumers (the fact queries) read through the `Arc` in
+  O(1), and only consumers that mutate during lowering (`checked_program`,
+  `executable_program`, cajun's project) clone the arena out explicitly.
+- `analyze_source` still clones before stripping: mutating the shared arena would
+  corrupt the memo, and the stripped L tier is what the analysis owns.
+
+### Changes
+
+- `CheckedSource`/`RejectedSource` carry `Arc<StaticsArena>`;
+  `SourceCheckOutcome::statics_arc` is the cheap shared read, `into_statics` clones for
+  owned consumers.
+- The fact queries read through `statics_arc` — hover no longer materializes the arena.
+
+### Measurements
+
+- Session suite (2 threads): 150 passed; peak RSS 6.33GB; 74s wall. Full workspace
+  suite: 740 passed, 0 failed.
+
 ### Known Costs / Next
 
-- The three S-reading fact queries clone the whole arena per new key (hover pays a
-  transient ~500MB clone). The permanent fix is per-fact judgment replay; until then
-  hover stays correct but heavyweight.
 - `lru = 1` means materializing a stale (non-latest) analysis re-checks its root;
   acceptable while consumers hold their own materialized copy.
-- Next candidates: per-fact replay for hover, root-scoped policy for judgment memos
-  (the pool cap is the current answer), and quantifying the retained L tier per root.
+- Judgment memos keep the pool generation (cap 8) as their root-scoped policy;
+  per-root marginal retention measured at ~115MB.
+- Further candidates: per-fact judgment replay (eliminates even the shared-arena reads
+  for stale roots), and quantifying the L tier's retained size per root.
