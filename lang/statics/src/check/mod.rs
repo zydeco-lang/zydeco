@@ -53,6 +53,8 @@ pub struct Tycker<'a> {
     check_counts: ArenaAssoc<su::EntityId, u32>,
     /// meta stack
     pub metas: im::Vector<su::Meta>,
+    /// Results of field-search materializations under the current inference state.
+    field_materializations: DeferredEnvMaterializationCache,
     /// a writer monad for error handling
     pub errors: Vec<TyckErrorEntry>,
     pub(crate) observations: Vec<TyckObservation>,
@@ -245,6 +247,39 @@ enum DeferredEnvOperation {
     Substitute,
 }
 
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct DeferredEnvMaterializationKey {
+    root: ss::TypeId,
+    environment: ss::TyEnv,
+    operation: DeferredEnvOperation,
+}
+
+impl DeferredEnvMaterializationKey {
+    fn new(root: ss::TypeId, environment: &ss::TyEnv, operation: DeferredEnvOperation) -> Self {
+        Self { root, environment: environment.clone(), operation }
+    }
+}
+
+/// Cross-operation field-search results, valid only while mutable type state is unchanged.
+#[derive(Default)]
+struct DeferredEnvMaterializationCache {
+    entries: std::collections::HashMap<DeferredEnvMaterializationKey, ss::TypeId>,
+}
+
+impl DeferredEnvMaterializationCache {
+    fn get(&self, key: &DeferredEnvMaterializationKey) -> Option<ss::TypeId> {
+        self.entries.get(key).copied()
+    }
+
+    fn insert(&mut self, key: DeferredEnvMaterializationKey, materialized: ss::TypeId) {
+        self.entries.insert(key, materialized);
+    }
+
+    fn clear(&mut self) {
+        self.entries.clear();
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct DeferredEnvIdentity {
     root: ss::TypeId,
@@ -277,11 +312,17 @@ impl DeferredEnvType {
 
     fn materialize_k(&self, tycker: &mut Tycker<'_>) -> ResultKont<ss::TypeId> {
         let Some(operation) = self.pending else { return Ok(self.root) };
+        let key = DeferredEnvMaterializationKey::new(self.root, &self.environment, operation);
+        if let Some(materialized) = tycker.field_materializations.get(&key) {
+            return Ok(materialized);
+        }
         let root = match operation {
             | DeferredEnvOperation::UnrollThenSubstitute => self.root.unroll_k(tycker)?,
             | DeferredEnvOperation::Substitute => self.root,
         };
-        root.subst_env_k(tycker, &self.environment)
+        let materialized = root.subst_env_k(tycker, &self.environment)?;
+        tycker.field_materializations.insert(key, materialized);
+        Ok(materialized)
     }
 
     fn reveal_k(self, tycker: &mut Tycker<'_>) -> ResultKont<DeferredEnvTypeView> {
@@ -297,8 +338,12 @@ impl DeferredEnvType {
                     self.pending != Some(DeferredEnvOperation::UnrollThenSubstitute);
                 let mut root = self.materialize_k(tycker)?;
                 if needs_search_step {
-                    root = root.unroll_k(tycker)?;
-                    root = root.subst_env_k(tycker, &self.environment)?;
+                    root = Self {
+                        root,
+                        environment: self.environment.clone(),
+                        pending: Some(DeferredEnvOperation::UnrollThenSubstitute),
+                    }
+                    .materialize_k(tycker)?;
                 }
                 let ty = tycker.type_filled_k(&root)?.to_owned();
                 Ok(Self::materialized(root, self.environment).view(ty))
@@ -1326,9 +1371,19 @@ impl<'a> Tycker<'a> {
             tasks: im::Vector::new(),
             check_counts: ArenaAssoc::default(),
             metas: im::Vector::new(),
+            field_materializations: DeferredEnvMaterializationCache::default(),
             errors: Vec::new(),
             observations: Vec::new(),
         }
+    }
+
+    pub(crate) fn invalidate_field_materializations(&mut self) {
+        self.field_materializations.clear();
+    }
+
+    fn record_seal(&mut self, witness: ss::AbstId, definition: ss::TypeId) {
+        self.statics.seals.insert_new(witness, definition);
+        self.invalidate_field_materializations();
     }
 
     /// Resolve a source or elaboration-generated definition name.
@@ -1928,17 +1983,22 @@ impl BuiltinAttachment {
                         std::panic::Location::caller(),
                     );
                 };
-                tycker.statics.builtin_roles.attach_value(entry, role).map_err(|existing| {
-                    tycker.errors.push(TyckErrorEntry {
-                        error: TyckError::ConflictingBuiltinRole {
-                            existing: ss::BuiltinRole::Value(existing),
-                            found: self.role,
-                        },
-                        blame: std::panic::Location::caller(),
-                        stack: tycker.tasks.clone(),
+                let result =
+                    tycker.statics.builtin_roles.attach_value(entry, role).map_err(|existing| {
+                        tycker.errors.push(TyckErrorEntry {
+                            error: TyckError::ConflictingBuiltinRole {
+                                existing: ss::BuiltinRole::Value(existing),
+                                found: self.role,
+                            },
+                            blame: std::panic::Location::caller(),
+                            stack: tycker.tasks.clone(),
+                        });
+                        KontFailure
                     });
-                    KontFailure
-                })
+                if result.is_ok() {
+                    tycker.invalidate_field_materializations();
+                }
+                result
             }
         }
     }
@@ -2420,7 +2480,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::Binding> {
                     if let (Some(def), _kd) = binder.try_destruct_def(tycker) {
                         tycker.statics.abst_hints.insert_new(abst, def);
                     }
-                    tycker.statics.seals.insert_new(abst, ty);
+                    tycker.record_seal(abst, ty);
                     Alloc::alloc(tycker, abst, kd, &env.info)
                 } else {
                     bindee
@@ -2566,7 +2626,7 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
             }
             // add the types to the seal arena
             let (abst, abst_ty, kd) = abst_map[&id];
-            tycker.statics.seals.insert_new(abst, bindee_subst);
+            tycker.record_seal(abst, bindee_subst);
             tycker.statics.types_pre.insert_new(abst_ty, ss::Fillable::Done(ss::Type::Abst(abst)));
             tycker.statics.annotations_type.insert_new(abst_ty, kd);
             tycker.store_env(abst_ty, &env.info);
@@ -6671,7 +6731,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             if let (Some(def), _) = binder_out.try_destruct_def(tycker) {
                                 tycker.statics.abst_hints.insert_new(abst, def);
                             }
-                            tycker.statics.seals.insert_new(abst, bindee_out);
+                            tycker.record_seal(abst, bindee_out);
                             Alloc::alloc(tycker, abst, bindee_kd, &self.info)
                         } else {
                             bindee_out
@@ -7673,7 +7733,7 @@ mod source_boundary_tests {
             let definition =
                 Alloc::alloc(tycker, ss::Label(field.clone(), unit), vtype, &environment);
             let witness: ss::AbstId = Alloc::alloc(tycker, None::<ss::DefId>, vtype, &());
-            tycker.statics.seals.insert_new(witness, definition);
+            tycker.record_seal(witness, definition);
             let sealed = Alloc::alloc(tycker, witness, vtype, &environment);
             let root =
                 Alloc::alloc(tycker, ss::Label(wrapper.clone(), sealed), vtype, &environment);
@@ -7685,6 +7745,66 @@ mod source_boundary_tests {
 
             assert_eq!(direct.projected, sealed);
             assert_eq!(nested.projected, unit);
+            assert!(tycker.errors.is_empty());
+        });
+    }
+
+    #[test]
+    fn repeated_field_search_reuses_materialization_until_inference_changes() {
+        with_empty_tycker(|tycker| {
+            let empty = TyEnv::default();
+            let vtype = ss::VType.build(tycker, &empty);
+            let unit = ss::UnitTy.build(tycker, &empty);
+            let source_def: ss::DefId = tycker.fresh();
+            let source = Alloc::alloc(tycker, source_def, vtype, &empty);
+            let environment = TyEnv::from_iter([(source_def, unit.into())]);
+            let field = FieldName("selected".to_owned());
+            let definition = Alloc::alloc(tycker, ss::Label(field.clone(), source), vtype, &empty);
+            let witness: ss::AbstId = Alloc::alloc(tycker, None::<ss::DefId>, vtype, &());
+            tycker.record_seal(witness, definition);
+            let sealed = Alloc::alloc(tycker, witness, vtype, &empty);
+
+            let before = tycker.statics.types_pre.len();
+            let first =
+                FieldProjectionResolver::value_k(tycker, &environment, sealed, &field).unwrap();
+            let after_first = tycker.statics.types_pre.len();
+            let second =
+                FieldProjectionResolver::value_k(tycker, &environment, sealed, &field).unwrap();
+            let after_second = tycker.statics.types_pre.len();
+
+            assert_eq!(first.projected, unit);
+            assert_eq!(second.projected, unit);
+            assert!(after_first > before);
+            assert_eq!(after_second, after_first);
+
+            let site = tycker.data.root(tycker.db);
+            let fill: ss::FillId = Alloc::alloc(tycker, ss::InferenceSite::Term(site), (), &());
+            assert!(fill.fill(tycker, unit.into()).is_ok());
+            let third =
+                FieldProjectionResolver::value_k(tycker, &environment, sealed, &field).unwrap();
+
+            assert_eq!(third.projected, unit);
+            assert!(tycker.statics.types_pre.len() > after_second);
+            assert!(tycker.errors.is_empty());
+        });
+    }
+
+    #[test]
+    fn adding_a_seal_invalidates_cached_field_materialization() {
+        with_empty_tycker(|tycker| {
+            let empty = TyEnv::default();
+            let vtype = ss::VType.build(tycker, &empty);
+            let unit = ss::UnitTy.build(tycker, &empty);
+            let witness: ss::AbstId = Alloc::alloc(tycker, None::<ss::DefId>, vtype, &());
+            let sealed = Alloc::alloc(tycker, witness, vtype, &empty);
+            let deferred = DeferredEnvType::with_environment(sealed, &empty);
+
+            let before = deferred.materialize_k(tycker).unwrap();
+            tycker.record_seal(witness, unit);
+            let after = deferred.materialize_k(tycker).unwrap();
+
+            assert_eq!(before, sealed);
+            assert_eq!(after, unit);
             assert!(tycker.errors.is_empty());
         });
     }
@@ -7710,7 +7830,7 @@ mod source_boundary_tests {
 
             let definition = Alloc::alloc(tycker, ss::Prod(source, unit), vtype, &empty);
             let witness: ss::AbstId = Alloc::alloc(tycker, None::<ss::DefId>, vtype, &());
-            tycker.statics.seals.insert_new(witness, definition);
+            tycker.record_seal(witness, definition);
             let sealed = Alloc::alloc(tycker, witness, vtype, &empty);
             let ss::Prod(head, tail) =
                 sealed.view_prepared_product_k(tycker, &environment).unwrap();

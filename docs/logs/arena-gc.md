@@ -1060,3 +1060,58 @@ decisions while implementing the plan.
 - Revisit the remaining common analytic-preparation callers, especially explicit ascriptions and
   synthesized arrows, only after distinguishing types that owe their first environment application
   from components that are already current.
+
+## 2026-08-15 — round 25: cache field materialization across lookups
+
+### Findings
+
+- A fresh root-operation census attributed 382,605 of the 404,270 full-std type nodes. Structural
+  field search was again the largest boundary: initial closure materialization used 118,398 nodes
+  across 5,754 roots, and re-entry after an opacity boundary used another 38,665 across 5,394 roots.
+  Together they accounted for 157,063 nodes, 38.9% of the complete arena.
+- Round 20 reused children produced by one route's parent materialization, but separate field
+  lookups still forced identical closures. The semantic identity is the source `TypeId`, exact
+  `TyEnv`, and pending operation (`Substitute` or `UnrollThenSubstitute`). Repeating that triple
+  while type state is stable produces the same immutable result.
+- This is the cross-operation reuse that round 23's traversal-local memo could not see. Caching at
+  the field-closure boundary removed 65,592 nodes; the remaining profiled field materializations
+  used 91,471 nodes and represent cache misses or work after a necessary invalidation.
+- The cache cannot survive arbitrary checker mutation. Filling an inference variable can change
+  normalization, adding a seal changes unrolling, and attaching a value builtin role changes the
+  metadata transferred to substituted labels. Each mutation therefore clears the cache.
+
+### Changes
+
+- The live checker owns a typed field-materialization cache keyed by root, structural environment,
+  and deferred operation. It is transient checker state and is dropped before a checked outcome is
+  published.
+- Both inherited substitution and opacity-boundary re-entry use the same cache path. This keeps the
+  two semantic operations distinct while allowing either result to be reused by a later lookup.
+- Seal registration is centralized so it cannot bypass invalidation. Successful inference fills
+  and value-role attachments clear the same cache; clearing retains the hash-table capacity to
+  avoid allocation churn while dropping every state-dependent entry.
+- Regressions prove that a repeated field lookup allocates no new type nodes while state is stable,
+  that an inference update forces rematerialization, and that adding a seal invalidates a cached
+  unsealed result.
+
+### Measurements
+
+- The full-std check retains 338,678 type nodes, 65,592 fewer than round 24 (-16.2%).
+- Three clean release checks used 349,028,352, 349,274,112, and 349,126,656 bytes peak RSS (median
+  349,126,656), down 10,076,160 bytes (-2.8%) from round 24. Warm wall time was 0.37s and warm user
+  time was 0.33–0.34s.
+- The current-tree baseline is now down from 2,497,757,184 to 349,126,656 bytes (-86.0%).
+- All 48 statics tests and all 151 session tests passed, along with the release CLI build and full
+  standard-library check.
+
+### Next
+
+- Type-application normalization is now the largest single stable root operation at 56,080 nodes.
+  Attribute those applications by function identity and argument reuse before choosing between a
+  cross-operation beta cache and a representation that keeps applications suspended longer.
+- Common analytic preparation still uses 38,736 nodes. Its remaining callers need provenance
+  classification rather than a global cache because the same environment is deliberately
+  non-idempotent across genuine semantic boundaries.
+- The remaining field misses use 91,471 nodes. Inspect their key distribution and invalidation
+  epochs before widening the cache; unique materializations need a representation change, not a
+  larger memo table.

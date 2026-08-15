@@ -1186,6 +1186,7 @@ impl FillId {
             }
             self.constrain_solution(tycker, solution)?;
             let _ = tycker.statics.solus.upsert(*self, solution);
+            tycker.invalidate_field_materializations();
             Ok(solution)
         })();
         if result.is_err() {
