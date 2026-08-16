@@ -76,6 +76,8 @@ A type checking error leaves the editor and input number unchanged so the source
 
 ## Intro to Zydeco
 
+For a complete source-level guide, see [docs/tutorial/zydeco-guide.md](docs/tutorial/zydeco-guide.md).
+
 We now have a toy "literate zydeco" written in zydeco!
 Try it out by running
 ```bash
