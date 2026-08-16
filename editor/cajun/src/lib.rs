@@ -581,9 +581,13 @@ mod tests {
 
     #[test]
     fn accepts_only_zydeco_source_extensions() {
-        ["file:///workspace/main.zy", "file:///workspace/library.zyi", "file:///workspace/main.zydeco"]
-            .into_iter()
-            .for_each(|uri| assert!(ZydecoDocument::accepts(&Url::parse(uri).unwrap())));
+        [
+            "file:///workspace/main.zy",
+            "file:///workspace/library.zyi",
+            "file:///workspace/main.zydeco",
+        ]
+        .into_iter()
+        .for_each(|uri| assert!(ZydecoDocument::accepts(&Url::parse(uri).unwrap())));
 
         [
             "file:///workspace/.gitignore",
