@@ -47,7 +47,11 @@ impl<'a> Lowerer<'a> {
         sps_low: &'a SpsLowProgram,
     ) -> Self {
         let arena = AssemblyArena::default();
-        let unboxing = crate::unbox::LocalUnboxing::collect(sps_low);
+        let unboxing = if std::env::var_os("ZYDECO_DISABLE_UNBOXING").is_some() {
+            crate::unbox::LocalUnboxing::default()
+        } else {
+            crate::unbox::LocalUnboxing::collect(sps_low)
+        };
         Self {
             allocator: IdAllocator::new(),
             arena,
