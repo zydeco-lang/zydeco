@@ -26,6 +26,8 @@ pub enum Slot {
     Sym(SymId),
     Imm(Imm),
     Product(Vec<Slot>),
+    /// A product allocated in the current stack frame rather than the GC heap.
+    StackProduct(Vec<Slot>),
     /// An interior pointer `offset` words into a product shaped like `fields`.
     ProductSuffix {
         fields: Vec<Slot>,
@@ -140,96 +142,106 @@ impl<'a> CompilerPass for StackAnalyzer<'a> {
 
 impl<'a> StackMeasure<'a> for ProgId {
     fn stack_measure(self, si: &mut StackAnalyzer<'a>, layout: Layout) {
-        let _ = si.program_chain(self).into_iter().fold(layout, |mut layout, program_id| {
-            let program = si.arena.programs[&program_id].to_owned();
-            let _ = si.layouts.upsert(program_id, layout.to_owned());
-            match program {
-                | Program::Terminator(terminator) => match terminator {
-                    | Terminator::PopJump(PopJump) => {
-                        if let Some(slot_id) = layout.control.pop_back()
-                            && matches!(
-                                si.slots[&slot_id],
-                                Slot::Sym(sym)
-                                    if matches!(
-                                        si.arena.symbols[&sym].inner,
-                                        Symbol::Prog(_)
-                                    )
-                            )
-                        {
-                            si.inlined[&slot_id] = true;
-                        }
-                    }
-                    | Terminator::Jump(_)
-                    | Terminator::PopBranch(_)
-                    | Terminator::Abort(_)
-                    | Terminator::Extern(_) => {}
-                },
-                | Program::Instruction(instruction, _) => match instruction {
-                    | Instruction::PackProduct(Pack(product)) => {
-                        let items = (0..product.elements)
-                            .map(|_| si.pop_control(&mut layout).unwrap_or(Slot::Unknown))
-                            .collect();
-                        si.push_control(&mut layout, Slot::Product(items));
-                    }
-                    | Instruction::UnpackProduct(Unpack(product)) => {
-                        let items = match si.pop_control(&mut layout) {
-                            | Some(Slot::Product(items)) if items.len() == product.elements => {
-                                items
+        let _ =
+            si.program_chain(self).into_iter().fold(layout, |mut layout, program_id| {
+                let program = si.arena.programs[&program_id].to_owned();
+                let _ = si.layouts.upsert(program_id, layout.to_owned());
+                match program {
+                    | Program::Terminator(terminator) => match terminator {
+                        | Terminator::PopJump(PopJump) => {
+                            if let Some(slot_id) = layout.control.pop_back()
+                                && matches!(
+                                    si.slots[&slot_id],
+                                    Slot::Sym(sym)
+                                        if matches!(
+                                            si.arena.symbols[&sym].inner,
+                                            Symbol::Prog(_)
+                                        )
+                                )
+                            {
+                                si.inlined[&slot_id] = true;
                             }
-                            | _ => vec![Slot::Unknown; product.elements],
-                        };
-                        let last = product.elements - 1;
-                        for (position, item) in items.into_iter().enumerate().rev() {
-                            if position == last && product.elements < product.arity {
-                                si.push_control(
-                                    &mut layout,
-                                    Slot::ProductSuffix {
-                                        fields: vec![item.clone()],
-                                        offset: last,
-                                    },
-                                );
+                        }
+                        | Terminator::Jump(_)
+                        | Terminator::PopBranch(_)
+                        | Terminator::Abort(_)
+                        | Terminator::Extern(_) => {}
+                    },
+                    | Program::Instruction(instruction, _) => match instruction {
+                        | Instruction::PackProduct(Pack(product)) => {
+                            let items = (0..product.elements)
+                                .map(|_| si.pop_control(&mut layout).unwrap_or(Slot::Unknown))
+                                .collect();
+                            if product.stack_alloc {
+                                si.push_control(&mut layout, Slot::StackProduct(items));
                             } else {
-                                si.push_control(&mut layout, item);
+                                si.push_control(&mut layout, Slot::Product(items));
                             }
                         }
-                    }
-                    | Instruction::AllocContext(Alloc(ContextMarker)) => {
-                        layout.context.clear();
-                    }
-                    | Instruction::PushArg(Push(atom)) => {
-                        let slot = match atom {
-                            | Atom::Var(var) => layout
-                                .context
-                                .iter()
-                                .find(|(candidate, _)| candidate == &var)
-                                .map(|(_, slot)| slot.clone())
-                                .unwrap_or(Slot::Unknown),
-                            | Atom::Sym(sym) => Slot::Sym(sym),
-                            | Atom::Imm(imm) => Slot::Imm(imm),
-                        };
-                        si.push_control(&mut layout, slot);
-                    }
-                    | Instruction::PopArg(Pop(var)) => {
-                        let slot = si.pop_control(&mut layout).unwrap_or(Slot::Unknown);
-                        layout.context.push_back((var, slot));
-                    }
-                    | Instruction::PushTag(Push(_)) => {
-                        si.push_control(&mut layout, Slot::Tag);
-                    }
-                    | Instruction::Intrinsic(Intrinsic { name: _, arity }) => {
-                        (0..arity).for_each(|_| {
-                            si.pop_control(&mut layout);
-                        });
-                        si.push_control(&mut layout, Slot::Unknown);
-                    }
-                    | Instruction::Clear(context) => {
-                        let context = std::collections::HashSet::<_>::from_iter(context);
-                        layout.context.retain(|(var, _)| !context.contains(var));
-                    }
-                },
-            }
-            layout
-        });
+                        | Instruction::UnpackProduct(Unpack(product)) => {
+                            let items = match si.pop_control(&mut layout) {
+                                | Some(Slot::Product(items)) if items.len() == product.elements => {
+                                    items
+                                }
+                                | Some(Slot::StackProduct(items))
+                                    if items.len() == product.elements =>
+                                {
+                                    items
+                                }
+                                | _ => vec![Slot::Unknown; product.elements],
+                            };
+                            let last = product.elements - 1;
+                            for (position, item) in items.into_iter().enumerate().rev() {
+                                if position == last && product.elements < product.arity {
+                                    si.push_control(
+                                        &mut layout,
+                                        Slot::ProductSuffix {
+                                            fields: vec![item.clone()],
+                                            offset: last,
+                                        },
+                                    );
+                                } else {
+                                    si.push_control(&mut layout, item);
+                                }
+                            }
+                        }
+                        | Instruction::AllocContext(Alloc(ContextMarker)) => {
+                            layout.context.clear();
+                        }
+                        | Instruction::PushArg(Push(atom)) => {
+                            let slot = match atom {
+                                | Atom::Var(var) => layout
+                                    .context
+                                    .iter()
+                                    .find(|(candidate, _)| candidate == &var)
+                                    .map(|(_, slot)| slot.clone())
+                                    .unwrap_or(Slot::Unknown),
+                                | Atom::Sym(sym) => Slot::Sym(sym),
+                                | Atom::Imm(imm) => Slot::Imm(imm),
+                            };
+                            si.push_control(&mut layout, slot);
+                        }
+                        | Instruction::PopArg(Pop(var)) => {
+                            let slot = si.pop_control(&mut layout).unwrap_or(Slot::Unknown);
+                            layout.context.push_back((var, slot));
+                        }
+                        | Instruction::PushTag(Push(_)) => {
+                            si.push_control(&mut layout, Slot::Tag);
+                        }
+                        | Instruction::Intrinsic(Intrinsic { name: _, arity }) => {
+                            (0..arity).for_each(|_| {
+                                si.pop_control(&mut layout);
+                            });
+                            si.push_control(&mut layout, Slot::Unknown);
+                        }
+                        | Instruction::Clear(context) => {
+                            let context = std::collections::HashSet::<_>::from_iter(context);
+                            layout.context.retain(|(var, _)| !context.contains(var));
+                        }
+                    },
+                }
+                layout
+            });
     }
 }
 
@@ -248,6 +260,7 @@ impl<'a> StackInline<'a> for ProgId {
                             },
                             | Slot::Imm(_)
                             | Slot::Product(_)
+                            | Slot::StackProduct(_)
                             | Slot::ProductSuffix { .. }
                             | Slot::Tag
                             | Slot::Unknown => None,

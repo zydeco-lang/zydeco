@@ -67,6 +67,7 @@ impl Slot {
             },
             | Slot::Imm(_) | Slot::Tag => SlotClass::Scalar,
             | Slot::Product(_) => SlotClass::HeapPointer,
+            | Slot::StackProduct(_) => SlotClass::Scalar,
             | Slot::ProductSuffix { offset, .. } => SlotClass::InteriorPointer {
                 offset_words: u32::try_from(*offset).expect("interior pointer offset overflow"),
             },

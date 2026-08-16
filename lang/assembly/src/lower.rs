@@ -9,6 +9,7 @@ use super::{
     syntax::*,
 };
 use derive_more::{AsMut, AsRef};
+use std::collections::HashMap;
 use zydeco_stackir::{SpsLowProgram, sps_low::syntax as sk};
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
@@ -35,6 +36,8 @@ pub struct Lowerer<'a> {
     pub statics: &'a StaticsArena,
     pub sps_low: &'a sk::SpsLowArena,
     pub root: sk::CompuId,
+    unboxing: crate::unbox::LocalUnboxing,
+    unboxed_var_slots: HashMap<sk::DefId, Vec<VarId>>,
     pending: Vec<PendingInstruction<'a>>,
 }
 
@@ -44,6 +47,7 @@ impl<'a> Lowerer<'a> {
         sps_low: &'a SpsLowProgram,
     ) -> Self {
         let arena = AssemblyArena::default();
+        let unboxing = crate::unbox::LocalUnboxing::collect(sps_low);
         Self {
             allocator: IdAllocator::new(),
             arena,
@@ -52,6 +56,8 @@ impl<'a> Lowerer<'a> {
             statics,
             sps_low: sps_low.arena(),
             root: sps_low.root(),
+            unboxing,
+            unboxed_var_slots: HashMap::new(),
             pending: Vec::new(),
         }
     }
@@ -133,11 +139,29 @@ impl<'a> Lower<'a> for sk::VPatId {
                 Pop(var).build(lo, With::new(cx, CxKont { incr, kont }))
             }
             | VPat::Var(def_id) => {
-                // Pop the value from the stack into the variable
-                let name = lo.scoped.defs[&def_id].clone();
-                let var = name.build(lo, Some(def_id));
-                let incr = Box::new(move |cx: &Context| cx.clone() + [var]);
-                Pop(var).build(lo, With::new(cx, CxKont { incr, kont }))
+                if let Some(&arity) = lo.unboxing.unboxed_vars.get(&def_id) {
+                    let name = lo.scoped.defs[&def_id].clone();
+                    let vars: Vec<VarId> = (0..arity)
+                        .map(|index| {
+                            VarName::from(format!("{}#unbox{}", name.plain(), index))
+                                .build(lo, None)
+                        })
+                        .collect();
+                    lo.unboxed_var_slots.insert(def_id, vars.clone());
+                    let kont = vars.iter().rev().fold(kont, |kont, &var| {
+                        let incr = Box::new(move |cx: &Context| cx.clone() + [var]);
+                        Box::new(move |lo, cx| {
+                            Pop(var).build(lo, With::new(cx, CxKont { incr, kont }))
+                        })
+                    });
+                    kont(lo, cx)
+                } else {
+                    // Pop the value from the stack into the variable
+                    let name = lo.scoped.defs[&def_id].clone();
+                    let var = name.build(lo, Some(def_id));
+                    let incr = Box::new(move |cx: &Context| cx.clone() + [var]);
+                    Pop(var).build(lo, With::new(cx, CxKont { incr, kont }))
+                }
             }
             | VPat::Ctor(Ctor(ctor, param)) => {
                 let _ = ctor;
@@ -186,12 +210,17 @@ impl<'a> Lower<'a> for sk::VPatId {
                 Pop(var).build(lo, With::new(cx, CxKont { incr, kont }))
             }
             | VPat::VCons(sk::VCons { items, layout }) => {
-                let product = ProductLayout::new(layout.arity, items.len());
+                let element_len = items.len();
                 let kont =
                     items.into_iter().rev().fold(kont, |kont: Kont<'a, Lowerer<'a>>, item| {
                         Box::new(move |lo, cx| item.lower(lo, With::new(cx, kont)))
                     });
-                Unpack(product).build(lo, With::new(cx, CxKont::same(kont)))
+                if lo.unboxing.patterns.contains(self) {
+                    kont(lo, cx)
+                } else {
+                    let product = ProductLayout::new(layout.arity, element_len);
+                    Unpack(product).build(lo, With::new(cx, CxKont::same(kont)))
+                }
             }
         }
     }
@@ -208,12 +237,21 @@ impl<'a> Lower<'a> for sk::ValueId {
         match value {
             | Value::Hole(Hole) => Abort.build(lo, cx),
             | Value::Var(def_id) => {
-                let atom = match lo.arena.defs.forth(&def_id).clone() {
-                    | DefId::Var(var_id) => Atom::Var(var_id),
-                    | DefId::Sym(sym_id) => Atom::Sym(sym_id),
-                };
-                // Push the atom onto the stack
-                Push(atom).build(lo, With::new(cx, CxKont::same(kont)))
+                if let Some(vars) = lo.unboxed_var_slots.get(&def_id) {
+                    let kont = vars.iter().fold(kont, |kont, &var| {
+                        Box::new(move |lo, cx| {
+                            Push(Atom::Var(var)).build(lo, With::new(cx, CxKont::same(kont)))
+                        })
+                    });
+                    kont(lo, cx)
+                } else {
+                    let atom = match lo.arena.defs.forth(&def_id).clone() {
+                        | DefId::Var(var_id) => Atom::Var(var_id),
+                        | DefId::Sym(sym_id) => Atom::Sym(sym_id),
+                    };
+                    // Push the atom onto the stack
+                    Push(atom).build(lo, With::new(cx, CxKont::same(kont)))
+                }
             }
             | Value::Block(sk::Block { label, body }) => {
                 let name = lo.scoped.defs[&label].plain().to_string();
@@ -226,14 +264,22 @@ impl<'a> Lower<'a> for sk::ValueId {
                 Push(Atom::Sym(sym)).build(lo, With::new(cx, CxKont::same(kont)))
             }
             | Value::ClosurePackage(sk::ClosurePackage { environment, code }) => {
-                let product = ProductLayout::new_with_fields(
-                    2,
-                    2,
-                    vec![FieldClass::HeapPointer, FieldClass::Scalar],
-                );
-                let kont: Kont<'a, Lowerer<'a>> = Box::new(move |lo, cx| {
-                    Pack(product).build(lo, With::new(cx, CxKont::same(kont)))
-                });
+                let stack_alloc = lo.unboxing.stack_values.contains(self);
+                let kont: Kont<'a, Lowerer<'a>> = if lo.unboxing.values.contains(self) {
+                    kont
+                } else {
+                    let mut product = ProductLayout::new_with_fields(
+                        2,
+                        2,
+                        vec![FieldClass::HeapPointer, FieldClass::Scalar],
+                    );
+                    if stack_alloc {
+                        product.stack_alloc = true;
+                    }
+                    Box::new(move |lo, cx| {
+                        Pack(product).build(lo, With::new(cx, CxKont::same(kont)))
+                    })
+                };
                 [environment, code].into_iter().fold(kont, |kont: Kont<'a, Lowerer<'a>>, value| {
                     Box::new(move |lo, cx| value.lower(lo, With::new(cx, kont)))
                 })(lo, cx)
@@ -272,11 +318,19 @@ impl<'a> Lower<'a> for sk::ValueId {
                 Push(atom).build(lo, With::new(cx, CxKont::same(kont)))
             }
             | Value::VCons(sk::VCons { items, layout }) => {
-                let product =
-                    ProductLayout::new_with_fields(layout.arity, items.len(), layout.fields);
-                let kont: Kont<'a, Lowerer<'a>> = Box::new(move |lo, cx| {
-                    Pack(product).build(lo, With::new(cx, CxKont::same(kont)))
-                });
+                let stack_alloc = lo.unboxing.stack_values.contains(self);
+                let kont: Kont<'a, Lowerer<'a>> = if lo.unboxing.values.contains(self) {
+                    kont
+                } else {
+                    let mut product =
+                        ProductLayout::new_with_fields(layout.arity, items.len(), layout.fields);
+                    if stack_alloc {
+                        product.stack_alloc = true;
+                    }
+                    Box::new(move |lo, cx| {
+                        Pack(product).build(lo, With::new(cx, CxKont::same(kont)))
+                    })
+                };
                 let kont = items.into_iter().fold(kont, |kont: Kont<'a, Lowerer<'a>>, item| {
                     Box::new(move |lo, cx| item.lower(lo, With::new(cx, kont)))
                 });
@@ -560,40 +614,60 @@ impl<'a> Lower<'a> for sk::CompuId {
                     ),
                 )
             }
-            | Compu::OpenClosure(sk::OpenClosure { package, environment, code, body }) => package
-                .lower(
+            | Compu::OpenClosure(sk::OpenClosure { package, environment, code, body }) => {
+                let unboxed = lo.unboxing.values.contains(&package);
+                package.lower(
                     lo,
                     With::new(
                         cx,
                         Box::new(move |lo, cx| {
-                            Unpack(ProductLayout::new(2, 2)).build(
-                                lo,
-                                With::new(
-                                    cx,
-                                    CxKont::same(Box::new(move |lo, cx| {
-                                        environment.lower(
-                                            lo,
-                                            With::new(
-                                                cx,
-                                                Box::new(move |lo, cx| {
-                                                    code.lower(
-                                                        lo,
-                                                        With::new(
-                                                            cx,
-                                                            Box::new(move |lo, cx| {
-                                                                body.lower(lo, cx)
-                                                            }),
-                                                        ),
-                                                    )
-                                                }),
-                                            ),
-                                        )
-                                    })),
-                                ),
-                            )
+                            if unboxed {
+                                environment.lower(
+                                    lo,
+                                    With::new(
+                                        cx,
+                                        Box::new(move |lo, cx| {
+                                            code.lower(
+                                                lo,
+                                                With::new(
+                                                    cx,
+                                                    Box::new(move |lo, cx| body.lower(lo, cx)),
+                                                ),
+                                            )
+                                        }),
+                                    ),
+                                )
+                            } else {
+                                Unpack(ProductLayout::new(2, 2)).build(
+                                    lo,
+                                    With::new(
+                                        cx,
+                                        CxKont::same(Box::new(move |lo, cx| {
+                                            environment.lower(
+                                                lo,
+                                                With::new(
+                                                    cx,
+                                                    Box::new(move |lo, cx| {
+                                                        code.lower(
+                                                            lo,
+                                                            With::new(
+                                                                cx,
+                                                                Box::new(move |lo, cx| {
+                                                                    body.lower(lo, cx)
+                                                                }),
+                                                            ),
+                                                        )
+                                                    }),
+                                                ),
+                                            )
+                                        })),
+                                    ),
+                                )
+                            }
                         }),
                     ),
-                ),
+                )
+            }
             | Compu::OpenContinuation(sk::OpenContinuation { package, code, body }) => package
                 .lower(
                     lo,

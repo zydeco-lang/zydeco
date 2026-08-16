@@ -19,6 +19,8 @@ e2e_sources!({
     fn_cmp_ret => "tests/compile/fn-cmp-ret.zy",
     tuple => "tests/compile/tuple.zy",
     tuple_do => "tests/compile/tuple-do.zy",
+    direct_tuple => "tests/compile/direct-tuple.zy",
+    direct_closure => "tests/compile/direct-closure.zy",
     triple => "tests/compile/triple.zy",
     sum => "tests/compile/sum.zy",
     fact => "tests/compile/fact.zy",

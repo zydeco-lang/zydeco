@@ -378,7 +378,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Slot {
         match self {
             | Slot::Sym(sym) => sym.pretty(f),
             | Slot::Imm(imm) => imm.pretty(f),
-            | Slot::Product(items) => RcDoc::concat([
+            | Slot::Product(items) | Slot::StackProduct(items) => RcDoc::concat([
                 RcDoc::text("("),
                 RcDoc::intersperse(items.iter().map(|item| item.pretty(f)), RcDoc::text(", ")),
                 RcDoc::text(")"),

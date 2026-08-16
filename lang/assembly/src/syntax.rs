@@ -93,6 +93,8 @@ pub struct ProductLayout {
     pub arity: usize,
     pub elements: usize,
     pub fields: Vec<FieldClass>,
+    /// Allocate the cell in the current stack frame instead of the GC heap.
+    pub stack_alloc: bool,
 }
 
 impl ProductLayout {
@@ -100,7 +102,7 @@ impl ProductLayout {
         assert!(arity > 0);
         assert!(elements > 0);
         assert!(elements <= arity);
-        Self { arity, elements, fields: vec![FieldClass::MaybePointer; arity] }
+        Self { arity, elements, fields: vec![FieldClass::MaybePointer; arity], stack_alloc: false }
     }
 
     pub fn new_with_fields(arity: usize, elements: usize, fields: Vec<FieldClass>) -> Self {
@@ -108,7 +110,12 @@ impl ProductLayout {
         assert!(elements > 0);
         assert!(elements <= arity);
         assert_eq!(fields.len(), arity);
-        Self { arity, elements, fields }
+        Self { arity, elements, fields, stack_alloc: false }
+    }
+
+    pub fn with_stack_alloc(mut self) -> Self {
+        self.stack_alloc = true;
+        self
     }
 }
 
