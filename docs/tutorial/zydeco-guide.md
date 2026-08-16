@@ -147,34 +147,42 @@ let State (S : VType) (A : VType) = S -> Ret (A * S) that
 Markdown documentation blocks are written with `--|` and attach to a following `@[doc]`
 annotation. An unattached `--|` block is a warning; use `--` for implementation notes.
 
-### `!` on a binding is not decoration
+### The `!` in a binding is part of the (co)pattern
 
-The general binding form supports a leading `!`:
+A binding header is read as an elimination pattern for the name being bound. The general form
 
 ```text
 def ! name params : B = body that
 let ! name params : B = body that
 ```
 
-`def ! name ... : B` means the binding is the **thunk** `{ body }` with the classifier `Thk B`.
-In particular, `def ! f (A : VType) ... : B` binds `f : Thk (forall A . ...)`; force it first,
-then apply the type arguments:
+therefore says: at a use site, this name is eliminated with `!`. The binding is the
+thunk-pattern spelling of
 
-```zydeco
-! f Int64 "argument"
+```text
+def name params : Thk B = { body } that
 ```
 
-Consequences that repeatedly confuse new users:
+The two spellings have the same meaning. Which one to write is determined by how the name is
+used, not by a separate “computation versus value” mode:
 
-- Use `def !` only when `B` is a computation type (`CType`).
-- A package value has a value type. Bind it with plain `let`, never `let !`:
+```text
+use site:  ! f Int64 "argument"
+binding:   def ! f (A : VType) ... : B = body that
 
-  ```zydeco
-  let capability : Capability = (get = getter, put = putter) in
-  ```
+use site:  capability
+binding:   let capability : Capability = (...) in
+```
 
-- A thunked value parameter is written `arg : Thk B` and passed as `arg`; a computation
-  argument is often passed as `{ ! f }`, which re-suspends the forced computation.
+In the first line the consumer forces `f` and then applies type and value arguments, so the
+binding pattern carries `!`. In the second line the consumer uses `capability` directly as a
+package value, so the binding pattern is plain.
+
+The same duality applies at every elimination site. A thunk binding can be consumed either as
+the value `f : Thk B` or as the forced computation `! f : B`; the binding pattern simply records
+which shape the reader should expect at the primary use site. This is why `def !` is only
+well-kinded when `B` is a computation type: `Thk B` is a value type exactly when `B` is a
+computation type. A package or other VType value therefore uses plain `let` or `def`.
 
 ---
 
@@ -447,8 +455,9 @@ def ! mo_ret : Monad Ret =
 that
 ```
 
-`def !` here means `mo_ret : Thk (Monad Ret)`; application sites therefore write
-`{ ! mo_ret }` when a thunk is required.
+The binding pattern `! mo_ret` records that `mo_ret` is a thunk. A use site may take the
+value `mo_ret`, or force it as `! mo_ret`; sites requiring a `Thk (Monad Ret)` therefore write
+`{ ! mo_ret }` to force and immediately re-suspend.
 
 ---
 
@@ -676,8 +685,11 @@ The three traps here are the same three syntax rules from earlier sections:
 3. **`do` only eliminates `Ret`** — an `OS`, a function, or an arbitrary `M A` computation is
    not directly bindable. Sequence `OS` actions by passing continuations; sequence a relative
    monad with `bind` or a monadic block.
-4. **`let !` is only for computations** — a package or other VType value uses plain `let`.
-5. **`def !` creates a thunk** — force before applying its type or value arguments.
+4. **`!` in a binding mirrors the use site** — if consumers write `! name`, bind with
+   `def ! name` or `let ! name`; if consumers write `name`, bind without `!`. A package or
+   other VType value therefore uses plain `let`.
+5. **A thunk binding may still be used as a value** — `def ! f` gives `f : Thk B`; pass `f`
+   directly where a thunk is expected, or force it as `! f` where a computation is expected.
 6. **`let` versus `def`** — transparent aliases need `let`; nominal `data`/`codata` normally
    use `def`. A carrier alias such as `State` must be `let` if clients need its arrow.
 7. **Monadic blocks need lexical `Monad` and `Algebra`** — open `monad.zy` in the scope where
@@ -728,7 +740,7 @@ begin term end                 mobile-binding block
 param P in/that term           parameter
 let P = term in/that term      transparent binding
 def P = term in/that term      sealed binding
-def ! P ... : B = term         thunked computation binding
+def ! P ... : B = term         thunk-pattern binding; use site is !P
 @[monadic] term                algebra translation
 @(import("path"))              import sugar
 ```

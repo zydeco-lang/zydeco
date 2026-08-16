@@ -69,10 +69,13 @@ def ! apply
 that
 ```
 
-Here `!` says that `apply` is bound as a thunked computation.
-The parameters wrap the body in the appropriate type-level, polymorphic, or value abstractions.
-The expanded spelling would repeat those same parameters in a `Thk` classifier and a `fn`;
-genbind keeps the source at the level at which the operation is normally read.
+The `!` is part of the binding pattern, so the header mirrors the use site:
+where a caller writes `! apply A B function value`, the definition writes `def ! apply`.
+A plain binding pattern corresponds to a use site that consumes the name without forcing it,
+such as passing a package value directly.
+The thunk-pattern spelling expands to `def apply ... : Thk (Ret B) = { ... }`;
+the parameters wrap the body in the appropriate type-level, polymorphic, or value abstractions.
+Genbind keeps the source at the level at which the operation is normally read.
 
 The binding keyword controls transparency.
 `def` seals its right-hand side and, for a type, establishes nominal identity.
