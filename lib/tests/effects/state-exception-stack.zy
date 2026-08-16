@@ -28,57 +28,86 @@ begin
   ) = state_exn_basis builtin in
   begin
 
-    -- The user writes this once. `ret`/`do` are generic; every effect
-    -- operation arrives as an argument whose source signature mentions `Ret`.
-    -- The algebra translation replaces `Ret` with whichever M is supplied
-    -- at the application site below.
-    def ! user_program =
+    -- The user-facing capability signature. Every field is written with `Ret`;
+    -- the algebra translation turns it into the ambient monad M.
+    let StateExnCapability (S : VType) (E : VType) =
+      (get :: Thk (Ret S))
+    * (put :: Thk (S -> Ret Unit))
+    * (raise :: Thk (forall (A : VType) . E -> Ret A))
+    * (catch :: Thk (
+        forall (A : VType) .
+          Thk (Ret A) -> Thk (E -> Ret A) -> Ret A
+      ))
+    * (add :: Thk (S -> S -> Ret S))
+    that
+    let Top = codata end that
+
+    -- The user writes this once. Projection under force must be parenthesized:
+    -- `! (cap/get)` forces the selected thunk, while `! cap/get` means
+    -- `(! cap) / get`.
+    def ! user_program (S : VType) (E : VType) =
       @[monadic] begin
-        fn (get : Thk (Ret Int64))
-           (put : Thk (Int64 -> Ret Unit))
-           (raise : Thk (forall (A : VType) . String -> Ret A))
-           (catch : Thk (
-             forall (A : VType) .
-               Thk (Ret A) -> Thk (String -> Ret A) -> Ret A
-           ))
-           (add : Thk (Int64 -> Int64 -> Ret Int64))
-        =>
-          do n <- ! get;
-          do recovered <- ! catch Int64
+        fn (cap : StateExnCapability S E) (one : S) (msg : E) =>
+          do n <- ! (cap/get);
+          do recovered <- ! (cap/catch) S
             {
-              do _ <- ! raise Int64 "boom";
+              do _ <- ! (cap/raise) S msg;
               ret n
             }
             {
-              fn _ => do m <- ! get; ret m
+              fn _ => do m <- ! (cap/get); ret m
             };
-          do n' <- ! add recovered 1;
-          do _ <- ! put n';
+          do n' <- ! (cap/add) recovered one;
+          do _ <- ! (cap/put) n';
           ret n'
       end
     that
 
-    -- A State-specific operation, lifted into the concrete stack. It is also
-    -- just another argument at the instantiation site.
+    -- A State-specific operation lifted into the concrete stack.
     def ! add_state_exn (x : Int64) (y : Int64) : StateExn Int64 String Int64 =
       do z <- ! (int64/add) x y;
       ! mo_state_exn Int64 String .return Int64 z
     that
 
-    -- Only here do we choose the concrete monad and its operation instances.
-    -- Replacing this block replaces the meaning of the generic user code.
-    let ! production : StateExn Int64 String Int64 =
-      (! user_program)
-        (StateExn Int64 String)
-        { ! mo_state_exn Int64 String }
-        { ! get Int64 String }
-        { ! put Int64 String }
-        { ! raise Int64 String }
-        { ! catch Int64 String }
-        add_state_exn
+    -- Only here do we choose M, its Monad instance, and one capability package
+    -- implementing the source signature above.
+    let capability : (
+         get :: Thk (StateExn Int64 String Int64)
+      ) * (
+         put :: Thk (Int64 -> StateExn Int64 String Unit)
+      ) * (
+         raise :: Thk (
+           forall (A : VType) .
+             Thk Top -> String -> StateExn Int64 String A
+         )
+      ) * (
+         catch :: Thk (
+           forall (A : VType) .
+             Thk Top -> Thk (StateExn Int64 String A)
+           -> Thk (String -> StateExn Int64 String A)
+           -> StateExn Int64 String A
+         )
+      ) * (
+         add :: Thk (Int64 -> Int64 -> StateExn Int64 String Int64)
+      ) = (
+        get = { ! get Int64 String },
+        put = { ! put Int64 String },
+        raise = { ! raise Int64 String },
+        catch = { ! catch Int64 String },
+        add = add_state_exn
+      )
     in
 
-    ! run_state_exn Int64 String Int64 OS 40 { ! production }
+    let ! production : StateExn Int64 String Int64 =
+      (! user_program Int64 String)
+        (StateExn Int64 String)
+        { ! mo_state_exn Int64 String }
+        capability
+        1
+        "boom"
+    in
+
+    ! run_state_exn Int64 String Int64 OS 7 { ! production }
       {
         fn msg =>
           ! (stdio/write_line) msg {
@@ -91,8 +120,8 @@ begin
             ! (stdio/write) " " {
               ! (stdio/write_int) final_state {
                 ! (stdio/write) "\n" {
-                  ! (int64/eq) OS answer 41 {
-                    ! (int64/eq) OS final_state 41 {
+                  ! (int64/eq) OS answer 8 {
+                    ! (int64/eq) OS final_state 8 {
                       ! (process/exit) 0
                     } {
                       ! (process/exit) 2
