@@ -1,7 +1,7 @@
 # Package modularization with projection patterns
 
 Zydeco represents libraries with ordinary functions, products, and existential packages,
-following the account in [Uniform Term Composition](term.md) and [Compile-Time Normalization](normalization.md).
+following the account in [Uniform Term Composition](../ideas/term.md) and [Compile-Time Normalization](normalization.md).
 This gives libraries a precise term-level meaning,
 but a positional package pattern makes every consumer repeat the provider's complete public telescope.
 Adding one standard-library type or module then changes programs that never use it.

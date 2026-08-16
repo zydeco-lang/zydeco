@@ -754,7 +754,7 @@ def ! P ... : B = term         thunk-pattern binding; use site is !P
 - [`lib/tests/oopsla/README.md`](../../lib/tests/oopsla/README.md) — the artifact walkthrough,
   including the monad-law violation example and relative-monad transformers.
 - [`docs/ideas/syntax.md`](../ideas/syntax.md) — why the concrete syntax looks the way it does.
-- [`docs/ideas/style.md`](../ideas/style.md) — naming, layout, package-opening, and monadic
+- [`docs/proposals/style.md`](../proposals/style.md) — naming, layout, package-opening, and monadic
   style conventions.
 - [`docs/spell/`](../spell/) — the self-hosting literate tutorial.
 - [`lib/tests/delimcc/`](../../lib/tests/delimcc/) — `reset`/`shift` delimited continuations and

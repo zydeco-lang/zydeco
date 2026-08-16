@@ -279,7 +279,7 @@ and `@[help] _` and `@[quit] _` are control commands.
 Unknown metadata remains ordinary Zydeco syntax.
 As a result, command recognition is a frontend policy while each numbered expression still passes
 through the same source graph, resolver, checker, linker, and evaluator as a file.
-The rationale, lifecycle, and review invariants are recorded in the [declaration-free REPL design](docs/ideas/repl.md).
+The rationale, lifecycle, and review invariants are recorded in the [declaration-free REPL design](docs/proposals/repl.md).
 
 The session owns revisioned source inputs and immutable frontend analysis results shared
 by the CLI, TUI, and language server.
@@ -331,7 +331,7 @@ The launcher-supplied Builtin contract is structurally divided into `core`, `rep
 their manifest packages can be assembled independently while retaining one identity. `Reader`, `Writer`, and
 `OS` remain abstract provider capabilities and share one generative `system` opening. This separates stable data
 layout from runtime ownership without adding a module runtime or type tags. See
-[`docs/ideas/primitive-packages.md`](docs/ideas/primitive-packages.md).
+[`docs/proposals/primitive-packages.md`](docs/proposals/primitive-packages.md).
 
 Strings are immutable, shared UTF-8 values throughout the compiler and interpreter.
 The foundational text ABI distinguishes encoded byte length from Unicode scalar length,
@@ -414,7 +414,7 @@ Within `zydeco-statics`, `syntax`, `environment`, and `arena` define the durable
 Its coverage pass checks data matches with a typed pattern matrix.
 Generalized comatch clauses are first elaborated type-directly into shared argument matches and unique codata arms,
 after which the same pass checks argument coverage and missing destructors along every observation path.
-The [exhaustiveness design note](docs/ideas/exhaustiveness.md) explains matrix specialization,
+The [exhaustiveness design note](docs/proposals/exhaustiveness.md) explains matrix specialization,
 copattern elaboration, counterexample construction, and the invariants supplied by typed syntax.
 This separation lets validation consume completed typed syntax without becoming more type-checking branches.
 

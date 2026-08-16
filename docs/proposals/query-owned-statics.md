@@ -89,7 +89,7 @@ commit per table.
 ## Related
 
 - Worklog and wall evidence: [query-based type checking](../logs/query-based-tyck.md)
-- `docs/ideas/normalization.md` for the normalization semantics behind the fill-state pattern.
+- `docs/proposals/normalization.md` for the normalization semantics behind the fill-state pattern.
 
 ## Achieved Form (2026-08-14)
 

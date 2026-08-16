@@ -255,7 +255,7 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
 ## 2026-08-14 — query-owned statics: first table, the intrinsic singletons
 
 - The user approved the query-owned-statics redesign; the design now lives in
-  `docs/ideas/query-owned-statics.md` (four table-conversion patterns, fill-before-read
+  `docs/proposals/query-owned-statics.md` (four table-conversion patterns, fill-before-read
   invariant, materialization boundary, migration order).
 - First conversion landed: `IntrinsicStatics` is query-owned. `intrinsic_singleton(db, data, key)`
   produces each singleton at a synthetic site discriminated by the key, and
@@ -616,7 +616,7 @@ tests and the session reuse test (`Arc::ptr_eq` across repeated analyses).
   `fill_solution` fact query; P4 every allocation-producing judgment as a producer query
   keyed on interned inputs with `err_k`-to-return rejections, the arena-reading algorithmic
   core remaining checker-side by the wall (achieved-form note in
-  `docs/ideas/query-owned-statics.md`); P5 the group-level pre-introduction query for
+  `docs/proposals/query-owned-statics.md`); P5 the group-level pre-introduction query for
   recursive groups, the coverage query, and per-source derived reports with primary spans
   (the salsa-recover backstop documented as inapplicable to input-keyed producers); P6 the
   session's per-source fact queries consumed by cajun, including per-file error diagnostics;

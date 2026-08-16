@@ -62,7 +62,7 @@ Fixed representations are compiler-canonical intrinsics, so independent packages
 `Int64` identity. Only the runtime-owned system capabilities are generative existential types. Consumers first
 project the groups they need and then open those narrower packages; the composition root retains the complete
 Builtin value when it must pass the dependency onward. See
-[Modular primitive packages](../../docs/ideas/primitive-packages.md) for the design and usage examples.
+[Modular primitive packages](../../docs/proposals/primitive-packages.md) for the design and usage examples.
 Each intrinsic splice is authored once under `builtin/intrinsic/`; contracts elsewhere import those canonical
 terms rather than spelling compiler metadata again.
 
@@ -149,7 +149,7 @@ Filesystem contents are bytes by default. Text conveniences explicitly validate 
 and every fallible operation reports `Result A IoError` to its `OS` continuation.
 EOF is represented as `Option` by line reads; it is not conflated with an empty line or an I/O failure.
 The full rationale and lifecycle contract are documented
-in [`docs/ideas/filesystem.md`](../../docs/ideas/filesystem.md).
+in [`docs/proposals/filesystem.md`](../../docs/proposals/filesystem.md).
 
 The component files are independently importable pure package functions.
 `std.zy` is the composition root used by most programs and re-exports their abstract type witnesses in one package.

@@ -7,7 +7,7 @@ In particular, the source should reveal where a name is available, whether its d
 and where computation is sequenced.
 
 The conventions below favor Zydeco's direct forms and use annotations where they clarify a type-system boundary.
-The [surface syntax principles](syntax.md) explain the language-design choices behind the notation itself.
+The [surface syntax principles](../ideas/syntax.md) explain the language-design choices behind the notation itself.
 
 ## The Shape of a Source File
 

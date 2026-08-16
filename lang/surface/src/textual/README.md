@@ -59,7 +59,7 @@ and for ordering entities by precision.
   A `@[format(...)]` directive overrides the options for its annotated expression,
   nested directives override enclosing ones, and a width change pre-renders its payload as an embedded block.
 
-The [surface formatting design](../../../../docs/ideas/formatting.md) states the printer's preservation laws,
+The [surface formatting design](../../../../docs/proposals/formatting.md) states the printer's preservation laws,
 boundary algebra, and canonical layout families.
 
 Line comments are canonicalized as `--` or `--|` lines, nested block comments retain their delimiters

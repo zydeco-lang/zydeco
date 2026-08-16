@@ -1,6 +1,6 @@
 # Arena Reclamation Worklog
 
-Companion to [docs/ideas/arena-gc.md](../ideas/arena-gc.md), which holds the design and
+Companion to [docs/proposals/arena-gc.md](../proposals/arena-gc.md), which holds the design and
 the classification tables. This log records attempts, observations, measurements, and
 decisions while implementing the plan.
 

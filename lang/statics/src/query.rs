@@ -132,7 +132,7 @@ pub struct InternedIntrinsic<'db> {
 
 /// The singleton nodes of one intrinsic kind or type, produced by a query and
 /// materialized by the checker before any judgment reads the `IntrinsicStatics`
-/// cache. See `docs/ideas/query-owned-statics.md` for the fill-before-read
+/// cache. See `docs/proposals/query-owned-statics.md` for the fill-before-read
 /// invariant.
 #[derive(Clone, Debug)]
 pub enum IntrinsicSingleton {
