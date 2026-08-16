@@ -24,7 +24,7 @@ do not manufacture novelty for its own sake.
 ### Preserve a reviewable design record
 
 As substantial exploratory or design-heavy work converges,
-propose formalizing it as a Markdown or Typst review document.
+propose formalizing it as a Markdown or Typst review document under `docs/proposals/`.
 The proposal should identify the questions that the document would make easier to review, such as the problem,
 constraints, alternatives, chosen invariants, representative examples, and remaining uncertainty.
 Propose this artifact rather than creating it automatically, and skip the suggestion for small routine changes.
@@ -118,10 +118,12 @@ Each phase generally includes `syntax`, `arena`, `err`, `fmt`, and `span` module
 - Prefer updating `DESIGN.md` or `CONTRIBUTE.md` when modifying architecture or workflows.
 - Put exploratory design notes in `docs/ideas/`. Explain the motivating problem, relevant constraints,
   alternatives, and the principles by which a later decision should be judged.
+- Put stable design proposals in `docs/proposals/`. Explain the motivating problem, relevant constraints,
+  chosen invariants, representative examples, and remaining uncertainty.
 - Put chronological implementation worklogs in `docs/logs/`. Record attempts, observations, failures,
   measurements, decisions, and unresolved questions so later work can build on the evidence.
-- Cross-link a design note and its worklogs instead of duplicating their contents. Keep the stable design account
-  in the idea or canonical architecture document, and keep the history of how it was reached in the worklog.
+- Cross-link a design proposal and its worklogs instead of duplicating their contents. Keep the stable design
+  account in the proposal or canonical architecture document, and keep the history of how it was reached in the worklog.
 - Keep doc examples consistent with CLI flags and scripts in the repo.
 - If you add new example projects under `lib/`, consider wiring them into `lang/tests`.
 
