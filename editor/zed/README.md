@@ -1,7 +1,10 @@
 # Zydeco for Zed
 
-This extension recognizes `.zy` and `.zydeco` files
+This extension recognizes `.zy`, `.zyi`, and `.zydeco` files
 and starts the [Cajun language server](https://github.com/zydeco-lang/zydeco/tree/main/editor/cajun).
+A `.zyi` file is the optional companion type annotation beside a `.zy` implementation;
+it holds one ordinary Zydeco term whose root must be a type, so it shares the language's
+highlighting, queries, and server analysis.
 It provides live syntax and name-resolution diagnostics, document symbols, definition and reference lookup
 across imported files, inferred kind and type information on hover with links to type definitions,
 and compiler-aware semantic highlighting.

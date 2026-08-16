@@ -1,5 +1,5 @@
 name = "Zydeco"
-path_suffixes = ["zy", "zydeco"]
+path_suffixes = ["zy", "zyi", "zydeco"]
 line_comments = ["-- "]
 block_comment = ["/-", "-/"]
 tab_size = 2

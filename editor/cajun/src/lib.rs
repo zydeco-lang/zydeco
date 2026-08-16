@@ -44,7 +44,7 @@ impl ZydecoDocument {
         uri.to_file_path().ok().is_some_and(|path| {
             matches!(
                 path.extension().and_then(|extension| extension.to_str()),
-                Some("zy") | Some("zydeco")
+                Some("zy") | Some("zyi") | Some("zydeco")
             )
         })
     }
@@ -581,7 +581,7 @@ mod tests {
 
     #[test]
     fn accepts_only_zydeco_source_extensions() {
-        ["file:///workspace/main.zy", "file:///workspace/main.zydeco"]
+        ["file:///workspace/main.zy", "file:///workspace/library.zyi", "file:///workspace/main.zydeco"]
             .into_iter()
             .for_each(|uri| assert!(ZydecoDocument::accepts(&Url::parse(uri).unwrap())));
 
