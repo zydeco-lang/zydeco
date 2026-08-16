@@ -4,6 +4,7 @@
 pub mod syntax;
 pub mod arena;
 pub mod fmt;
+pub mod gc;
 pub mod lower;
 pub mod analyze;
 pub mod interp;

@@ -126,7 +126,11 @@ impl BackendProgram {
 
     pub fn render_assembly(&self) -> String {
         use zydeco_assembly::fmt::*;
-        let formatter = Formatter::new(&self.assembly.arena, None, None);
+        let formatter = Formatter::new(
+            &self.assembly.arena,
+            Some(&self.assembly.layouts),
+            Some(&self.assembly.slots),
+        );
         let mut output = String::new();
         self.assembly.pretty(&formatter).render_fmt(100, &mut output).unwrap();
         output

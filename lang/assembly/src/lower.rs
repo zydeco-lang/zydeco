@@ -68,7 +68,27 @@ impl<'a> Lowerer<'a> {
         let sps_low_root = self.root;
         let root = sps_low_root.lower(&mut self, Context::new());
         self.finish_pending();
-        AssemblyProgram { arena: self.arena, root }
+        AssemblyProgram {
+            arena: self.arena,
+            root,
+            layouts: ArenaAssoc::new(),
+            slots: ArenaSparse::new(),
+        }
+    }
+
+    /// GC class of the runtime value produced by one SPSLow value.
+    fn value_field_class(&self, value: sk::ValueId) -> FieldClass {
+        match &self.sps_low.inner.values[&value] {
+            | sk::Value::Hole(_) | sk::Value::Var(_) | sk::Value::Complex(_) => {
+                FieldClass::MaybePointer
+            }
+            | sk::Value::Block(_) | sk::Value::Triv(_) | sk::Value::Literal(_) => {
+                FieldClass::Scalar
+            }
+            | sk::Value::ClosurePackage(_) | sk::Value::Ctor(_) | sk::Value::VCons(_) => {
+                FieldClass::HeapPointer
+            }
+        }
     }
 
     fn finish_pending(&mut self) {
@@ -206,7 +226,11 @@ impl<'a> Lower<'a> for sk::ValueId {
                 Push(Atom::Sym(sym)).build(lo, With::new(cx, CxKont::same(kont)))
             }
             | Value::ClosurePackage(sk::ClosurePackage { environment, code }) => {
-                let product = ProductLayout::new(2, 2);
+                let product = ProductLayout::new_with_fields(
+                    2,
+                    2,
+                    vec![FieldClass::HeapPointer, FieldClass::Scalar],
+                );
                 let kont: Kont<'a, Lowerer<'a>> = Box::new(move |lo, cx| {
                     Pack(product).build(lo, With::new(cx, CxKont::same(kont)))
                 });
@@ -215,6 +239,9 @@ impl<'a> Lower<'a> for sk::ValueId {
                 })(lo, cx)
             }
             | Value::Ctor(Ctor(ctor, body)) => {
+                let body_class = lo.value_field_class(body);
+                let product =
+                    ProductLayout::new_with_fields(2, 2, vec![FieldClass::Scalar, body_class]);
                 // Push the body onto the stack
                 body.lower(
                     lo,
@@ -231,7 +258,7 @@ impl<'a> Lower<'a> for sk::ValueId {
                                     cx,
                                     CxKont::same(Box::new(move |lo: &mut Lowerer, cx| {
                                         // Pack them into a pair value
-                                        Pack(ProductLayout::new(2, 2))
+                                        Pack(product.clone())
                                             .build(lo, With::new(cx, CxKont::same(kont)))
                                     })),
                                 ),
@@ -245,7 +272,8 @@ impl<'a> Lower<'a> for sk::ValueId {
                 Push(atom).build(lo, With::new(cx, CxKont::same(kont)))
             }
             | Value::VCons(sk::VCons { items, layout }) => {
-                let product = ProductLayout::new(layout.arity, items.len());
+                let product =
+                    ProductLayout::new_with_fields(layout.arity, items.len(), layout.fields);
                 let kont: Kont<'a, Lowerer<'a>> = Box::new(move |lo, cx| {
                     Pack(product).build(lo, With::new(cx, CxKont::same(kont)))
                 });

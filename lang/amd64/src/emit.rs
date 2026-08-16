@@ -1,9 +1,12 @@
 use super::syntax::*;
 use derive_more::{AsMut, AsRef};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use zydeco_assembly::{
     arena::{AssemblyArena, AssemblyArenaRefLike, AssemblyProgram},
-    syntax::{self as sa, Atom, Instruction, Intrinsic, ProgId, Program, Symbol, Terminator},
+    gc::{self as asm_gc, GcRootMap},
+    syntax::{
+        self as sa, Atom, FieldClass, Instruction, Intrinsic, ProgId, Program, Symbol, Terminator,
+    },
 };
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
@@ -16,6 +19,33 @@ pub const ENV_REG: Reg = Reg::Rbp;
 pub enum TargetFormat {
     Elf,
     MachO,
+}
+
+/// Alignment of `rsp` at the current assembly position.
+///
+/// The SysV amd64 ABI requires `rsp % 16 == 0` immediately before a `call`.
+/// Function entries receive `rsp % 16 == 8`, and every emitted push/pop flips
+/// the parity. [`StackParity::Unknown`] marks positions whose parity depends on
+/// a dynamically chosen continuation, where calls are aligned at runtime.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum StackParity {
+    /// `rsp % 16 == 0`
+    Aligned,
+    /// `rsp % 16 == 8`
+    Misaligned,
+    /// Reachable with either parity; align each call dynamically.
+    #[default]
+    Unknown,
+}
+
+impl StackParity {
+    fn flip(self) -> Self {
+        match self {
+            | Self::Aligned => Self::Misaligned,
+            | Self::Misaligned => Self::Aligned,
+            | Self::Unknown => Self::Unknown,
+        }
+    }
 }
 
 pub trait Emit<'a> {
@@ -38,6 +68,10 @@ pub struct Emitter<'e> {
     target_format: TargetFormat,
     tables: Vec<JumpTable>,
     visited: HashSet<ProgId>,
+    gc_maps: HashMap<ProgId, GcRootMap>,
+    stack_parity: StackParity,
+    entry_parities: HashMap<ProgId, StackParity>,
+    dynamic_entries: HashSet<ProgId>,
 }
 
 impl<'e> Emitter<'e> {
@@ -45,6 +79,15 @@ impl<'e> Emitter<'e> {
         spans: &'e SpanArena, scoped: &'e ScopedArena, statics: &'e StaticsArena,
         assembly: &'e AssemblyProgram, target_format: TargetFormat,
     ) -> Self {
+        let entry_parities = Self::compute_entry_parities(&assembly.arena, assembly.root);
+        let dynamic_entries = Self::compute_dynamic_entries(&assembly.arena);
+        let gc_maps = assembly
+            .layouts
+            .iter()
+            .map(|(program, layout)| {
+                (*program, asm_gc::root_map(&assembly.arena, layout, &assembly.slots))
+            })
+            .collect();
         Self {
             spans,
             scoped,
@@ -55,7 +98,225 @@ impl<'e> Emitter<'e> {
             target_format,
             tables: Vec::new(),
             visited: HashSet::new(),
+            gc_maps,
+            stack_parity: entry_parities
+                .get(&assembly.root)
+                .copied()
+                .unwrap_or(StackParity::Unknown),
+            entry_parities,
+            dynamic_entries,
         }
+    }
+
+    /// Propagate the known `rsp` parity at function entry through the program graph.
+    ///
+    /// The root program is entered by a SysV call, so its parity is
+    /// [`StackParity::Misaligned`]. Each program edge applies the stack effect of
+    /// the instruction or terminator that connects it to its successors. Programs
+    /// that are only reachable through dynamic continuations have no single
+    /// statically known entry parity and stay [`StackParity::Unknown`].
+    fn compute_entry_parities(
+        assembly: &AssemblyArena, root: ProgId,
+    ) -> HashMap<ProgId, StackParity> {
+        const ODD: u8 = 0b01;
+        const EVEN: u8 = 0b10;
+
+        fn flip_mask(mask: u8) -> u8 {
+            ((mask & ODD) << 1) | ((mask & EVEN) >> 1)
+        }
+
+        fn merge(
+            parities: &mut HashMap<ProgId, u8>, queue: &mut VecDeque<ProgId>, target: ProgId,
+            mask: u8,
+        ) {
+            let merged = parities.get(&target).copied().unwrap_or_default() | mask;
+            if parities.insert(target, merged) != Some(merged) {
+                queue.push_back(target);
+            }
+        }
+
+        let mut parities = HashMap::new();
+        let mut queue = VecDeque::new();
+        parities.insert(root, ODD);
+        queue.push_back(root);
+
+        while let Some(prog_id) = queue.pop_front() {
+            let Some(&mask) = parities.get(&prog_id) else { continue };
+            match &assembly.programs[&prog_id] {
+                | Program::Instruction(instruction, next) => {
+                    let mask = if Self::instruction_flips_stack(instruction) {
+                        flip_mask(mask)
+                    } else {
+                        mask
+                    };
+                    merge(&mut parities, &mut queue, *next, mask);
+                }
+                | Program::Terminator(terminator) => match terminator {
+                    | Terminator::Jump(sa::Jump(target)) => {
+                        merge(&mut parities, &mut queue, *target, mask);
+                    }
+                    | Terminator::PopBranch(sa::PopBranch(arms)) => {
+                        let mask = flip_mask(mask);
+                        for (_, target) in arms {
+                            merge(&mut parities, &mut queue, *target, mask);
+                        }
+                    }
+                    | Terminator::PopJump(_) | Terminator::Extern(_) | Terminator::Abort(_) => {}
+                },
+            }
+        }
+
+        parities
+            .into_iter()
+            .map(|(prog_id, mask)| {
+                let parity = match mask {
+                    | ODD => StackParity::Misaligned,
+                    | EVEN => StackParity::Aligned,
+                    | _ => StackParity::Unknown,
+                };
+                (prog_id, parity)
+            })
+            .collect()
+    }
+
+    fn instruction_flips_stack(instruction: &Instruction) -> bool {
+        match instruction {
+            | Instruction::PackProduct(sa::Pack(layout))
+            | Instruction::UnpackProduct(sa::Unpack(layout)) => layout.elements % 2 == 0,
+            | Instruction::PushArg(_) | Instruction::PushTag(_) | Instruction::PopArg(_) => true,
+            | Instruction::Intrinsic(Intrinsic { arity, .. }) => arity % 2 == 0,
+            | Instruction::AllocContext(_) | Instruction::Clear(_) => false,
+        }
+    }
+
+    /// Collect program labels that are pushed as code addresses and therefore
+    /// can be entered through a dynamic `popjmp` with unknown parity.
+    fn compute_dynamic_entries(assembly: &AssemblyArena) -> HashSet<ProgId> {
+        let mut dynamic_entries = HashSet::new();
+        for (_, program) in &assembly.programs {
+            if let Program::Instruction(Instruction::PushArg(sa::Push(Atom::Sym(sym_id))), _) =
+                program
+                && let Symbol::Prog(prog_id) = assembly.symbols[sym_id].inner
+            {
+                dynamic_entries.insert(prog_id);
+            }
+        }
+        dynamic_entries
+    }
+
+    /// Apply the net stack effect of a batch of emitted stack operations.
+    ///
+    /// Only the parity matters for ABI alignment, so an even number of moved
+    /// words leaves [`Self::stack_parity`] unchanged.
+    fn shift_stack_parity(&mut self, words: i64) {
+        if words % 2 != 0 {
+            self.stack_parity = self.stack_parity.flip();
+        }
+    }
+
+    /// Check in debug builds that a static edge reaches `target` with the
+    /// parity propagated by [`Self::compute_entry_parities`].
+    fn debug_assert_edge_parity(&self, target: ProgId) {
+        if self.dynamic_entries.contains(&target) {
+            return;
+        }
+        if let Some(&target_parity) = self.entry_parities.get(&target)
+            && self.stack_parity != StackParity::Unknown
+            && target_parity != StackParity::Unknown
+        {
+            debug_assert_eq!(
+                self.stack_parity,
+                target_parity,
+                "static stack-parity analysis disagrees with emission for {}",
+                target.concise_inner()
+            );
+        }
+    }
+
+    /// Emit a `call` that satisfies the SysV ABI at its entry.
+    ///
+    /// When the current parity is statically known, one balanced `sub`/`add`
+    /// pair fixes it. For dynamic continuations with unknown parity, save the
+    /// original `rsp` below the aligned stack, call, and restore it afterwards.
+    fn emit_aligned_call(&mut self, target: JmpArgs) {
+        match self.stack_parity {
+            | StackParity::Aligned => self.asm.text.push(Instr::Call(target)),
+            | StackParity::Misaligned => {
+                self.asm.text.extend([
+                    Instr::Comment("pad the stack for the SysV call".to_string()),
+                    Instr::Sub(BinArgs::ToReg(Reg::Rsp, Arg32::Signed(8))),
+                    Instr::Call(target),
+                    Instr::Add(BinArgs::ToReg(Reg::Rsp, Arg32::Signed(8))),
+                ]);
+            }
+            | StackParity::Unknown => {
+                self.asm.text.extend([
+                    Instr::Comment(
+                        "align rsp for the host call and restore it afterwards".to_string(),
+                    ),
+                    Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Reg(Reg::Rsp))),
+                    Instr::And(BinArgs::ToReg(Reg::Rsp, Arg32::Signed(-16))),
+                    Instr::Sub(BinArgs::ToReg(Reg::Rsp, Arg32::Signed(16))),
+                    Instr::Mov(MovArgs::ToMem(
+                        MemRef { reg: Reg::Rsp, offset: 0 },
+                        Reg32::Reg(Reg::Rax),
+                    )),
+                    Instr::Call(target),
+                    Instr::Mov(MovArgs::ToReg(
+                        Reg::Rcx,
+                        Arg64::Mem(MemRef { reg: Reg::Rsp, offset: 0 }),
+                    )),
+                    Instr::Mov(MovArgs::ToReg(Reg::Rsp, Arg64::Reg(Reg::Rcx))),
+                ]);
+            }
+        }
+    }
+
+    fn gc_label(&self, id: ProgId, kind: &str) -> String {
+        format!("{kind}_{}", id.concise_inner().replace('#', "_"))
+    }
+
+    /// Append the root map and object descriptor for one allocation site to
+    /// `.rodata`, returning the labels that address them.
+    fn emit_gc_metadata(&mut self, id: ProgId, fields: &[FieldClass]) -> (String, String) {
+        let map = self.gc_maps.get(&id).expect("allocation site lacks a GC root map");
+        let map_label = self.gc_label(id, "gc_map");
+        let descriptor_label = self.gc_label(id, "gc_descriptor");
+        self.asm.rodata.extend([
+            Instr::Comment(format!("GC root map for {}", id.concise())),
+            Instr::Label(map_label.clone()),
+            Instr::Db(ByteSequence(map.encode())),
+            Instr::Comment(format!("GC object descriptor for {}", id.concise())),
+            Instr::Label(descriptor_label.clone()),
+            Instr::Db(ByteSequence(asm_gc::descriptor_bytes(fields))),
+        ]);
+        (map_label, descriptor_label)
+    }
+
+    /// Call `zydeco_gc_alloc(size, descriptor, map, caller_rsp, rbp)`.
+    ///
+    /// `rcx` captures the caller `rsp` *before* the alignment fixups of
+    /// [`Self::emit_aligned_call`], so root-map offsets stay relative to the
+    /// untouched control stack.
+    fn emit_gc_alloc_call(&mut self, size_words: usize, map_label: &str, descriptor_label: &str) {
+        self.asm.text.extend([
+            Instr::Comment("allocate a GC-managed product cell".to_string()),
+            Instr::Mov(MovArgs::ToReg(
+                Reg::Rdi,
+                Arg64::Unsigned(u64::try_from(size_words).expect("product arity overflow")),
+            )),
+            Instr::Lea(
+                Reg::Rsi,
+                LeaArgs::RelLabel(RelLabel { label: descriptor_label.to_string(), offset: None }),
+            ),
+            Instr::Lea(
+                Reg::Rdx,
+                LeaArgs::RelLabel(RelLabel { label: map_label.to_string(), offset: None }),
+            ),
+            Instr::Mov(MovArgs::ToReg(Reg::Rcx, Arg64::Reg(Reg::Rsp))),
+            Instr::Mov(MovArgs::ToReg(Reg::R8, Arg64::Reg(Reg::Rbp))),
+        ]);
+        self.emit_aligned_call(JmpArgs::Label("zydeco_gc_alloc".to_string()));
     }
 }
 
@@ -67,8 +328,8 @@ impl<'e> CompilerPass for Emitter<'e> {
         self.asm.text.extend([
             // zydeco_abort
             Instr::Extern("zydeco_abort".to_string()),
-            // zydeco_alloc
-            Instr::Extern("zydeco_alloc".to_string()),
+            // zydeco_gc_alloc
+            Instr::Extern("zydeco_gc_alloc".to_string()),
             // host callback used by runtime-created argument-fold thunks
             Instr::Extern("zydeco_arg_fold_resume".to_string()),
             // construct an owned host string from static UTF-8 bytes
@@ -81,7 +342,10 @@ impl<'e> CompilerPass for Emitter<'e> {
             self.asm.text.push(Instr::Extern(label));
         }
 
-        // Emit host-to-Zydeco resumption bridges.
+        // Emit host-to-Zydeco resumption bridges. Each bridge is entered by a
+        // SysV call when Rust invokes it, so its entry parity is misaligned;
+        // it pushes arguments before tail-jumping into Zydeco code.
+        self.stack_parity = StackParity::Misaligned;
         self.asm.text.extend([
             Instr::Global("rust_resume_zydeco_0".to_string()),
             Instr::Label("rust_resume_zydeco_0".to_string()),
@@ -91,6 +355,9 @@ impl<'e> CompilerPass for Emitter<'e> {
             Instr::Push(Arg32::Reg(Reg::Rsi)),
             Instr::Jmp(JmpArgs::Reg(Reg::Rax)),
         ]);
+        self.shift_stack_parity(1);
+
+        self.stack_parity = StackParity::Misaligned;
         self.asm.text.extend([
             Instr::Global("rust_resume_zydeco_1".to_string()),
             Instr::Label("rust_resume_zydeco_1".to_string()),
@@ -102,6 +369,9 @@ impl<'e> CompilerPass for Emitter<'e> {
             Instr::Push(Arg32::Reg(Reg::Rsi)),
             Instr::Jmp(JmpArgs::Reg(Reg::Rax)),
         ]);
+        self.shift_stack_parity(2);
+
+        self.stack_parity = StackParity::Misaligned;
         self.asm.text.extend([
             Instr::Global("rust_resume_zydeco_2".to_string()),
             Instr::Label("rust_resume_zydeco_2".to_string()),
@@ -115,17 +385,27 @@ impl<'e> CompilerPass for Emitter<'e> {
             Instr::Push(Arg32::Reg(Reg::Rsi)),
             Instr::Jmp(JmpArgs::Reg(Reg::Rax)),
         ]);
+        self.shift_stack_parity(3);
+
+        // This tail is reached by a jump through a runtime-created closure, so
+        // its entry parity is not statically known.
+        self.stack_parity = StackParity::Unknown;
         self.asm.text.extend([
             Instr::Global("rust_arg_fold_tail".to_string()),
             Instr::Label("rust_arg_fold_tail".to_string()),
             Instr::Comment("pass the runtime-created thunk environment to Rust".to_string()),
             Instr::Pop(Loc::Reg(Reg::Rdi)),
-            Instr::Call(JmpArgs::Label("zydeco_arg_fold_resume".to_string())),
+        ]);
+        self.shift_stack_parity(-1);
+        self.emit_aligned_call(JmpArgs::Label("zydeco_arg_fold_resume".to_string()));
+        self.asm.text.extend([
             Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::Rax))),
             Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Mem(MemRef { reg: Reg::Rdi, offset: 0 }))),
             Instr::Jmp(JmpArgs::Reg(Reg::Rax)),
         ]);
 
+        self.stack_parity =
+            self.entry_parities.get(&self.root).copied().unwrap_or(StackParity::Unknown);
         self.asm.text.extend([
             Instr::Global("entry".to_string()),
             Instr::Label("entry".to_string()),
@@ -140,6 +420,11 @@ impl<'e> CompilerPass for Emitter<'e> {
         // Emit the named blocks
         for (prog_id, _) in &self.assembly.programs {
             if let Some(label) = self.assembly.prog_label(prog_id) {
+                self.stack_parity = if self.dynamic_entries.contains(prog_id) {
+                    StackParity::Unknown
+                } else {
+                    self.entry_parities.get(prog_id).copied().unwrap_or(StackParity::Unknown)
+                };
                 self.asm.text.push(Instr::Label(label));
                 prog_id.emit((), &mut self);
             }
@@ -251,6 +536,7 @@ impl<'a> Emit<'a> for Terminator {
                 match em.assembly.prog_label(target) {
                     | Some(label) => {
                         // if the target is a named block, then jump to the label
+                        em.debug_assert_edge_parity(*target);
                         em.asm.text.push(Instr::Jmp(JmpArgs::Label(label)));
                     }
                     | None => {
@@ -266,11 +552,16 @@ impl<'a> Emit<'a> for Terminator {
             | Terminator::PopJump(sa::PopJump) => {
                 // pop value and jump to it
                 em.asm.text.push(Instr::Pop(Loc::Reg(Reg::Rax)));
+                em.shift_stack_parity(-1);
                 em.asm.text.push(Instr::Jmp(JmpArgs::Reg(Reg::Rax)));
             }
             | Terminator::PopBranch(sa::PopBranch(arms)) => {
                 // pop tag and jump to the corresponding program
                 em.asm.text.push(Instr::Pop(Loc::Reg(Reg::Rax)));
+                em.shift_stack_parity(-1);
+                for (_, target) in arms {
+                    em.debug_assert_edge_parity(*target);
+                }
                 // register the jump table
                 let sorted_arms: BTreeMap<_, _> = arms
                     .iter()
@@ -344,18 +635,10 @@ impl<'a> Emit<'a> for Terminator {
                         todo!()
                     }
                 }
-                // add padding to the stack
-                let frame = em.assembly.contexts[&id].iter().len() as i32;
-                let padding = 8 * ((frame + 1) % 2);
-                if padding > 0 {
-                    em.asm.text.push(Instr::Sub(BinArgs::ToReg(Reg::Rsp, Arg32::Signed(padding))));
-                }
-                // All externs must be non-tail called so that we can restore the padding from the stack.
-                em.asm.text.push(Instr::Call(JmpArgs::Label(zydeco_extern_name)));
-                // Restore the padding from the stack
-                if padding > 0 {
-                    em.asm.text.push(Instr::Add(BinArgs::ToReg(Reg::Rsp, Arg32::Signed(padding))));
-                }
+                em.shift_stack_parity(-i64::try_from(*arity).expect("extern arity overflow"));
+                // All externs must be non-tail called so that we can restore the
+                // alignment padding from the stack.
+                em.emit_aligned_call(JmpArgs::Label(zydeco_extern_name));
                 match mode {
                     | sa::ExternMode::Returning => {
                         em.asm.text.extend([
@@ -368,6 +651,8 @@ impl<'a> Emit<'a> for Terminator {
                             Instr::Push(Arg32::Reg(Reg::Rcx)),
                             Instr::Jmp(JmpArgs::Reg(Reg::Rax)),
                         ]);
+                        em.shift_stack_parity(-1);
+                        em.shift_stack_parity(1);
                     }
                     | sa::ExternMode::Control => {
                         em.asm.text.extend([
@@ -401,13 +686,8 @@ impl<'a> Emit<'a> for Instruction {
                     "pack_product {}/{}",
                     layout.elements, layout.arity
                 )));
-                em.asm.text.extend([
-                    Instr::Mov(MovArgs::ToReg(
-                        Reg::Rdi,
-                        Arg64::Signed(i64::try_from(layout.arity).expect("product arity overflow")),
-                    )),
-                    Instr::Call(JmpArgs::Label("zydeco_alloc".to_string())),
-                ]);
+                let (map_label, descriptor_label) = em.emit_gc_metadata(id, &layout.fields);
+                em.emit_gc_alloc_call(layout.arity, &map_label, &descriptor_label);
                 for index in 0..layout.elements {
                     let destination = i32::try_from(index * 8).expect("product offset overflow");
                     if index + 1 == layout.elements && layout.elements < layout.arity {
@@ -438,7 +718,11 @@ impl<'a> Emit<'a> for Instruction {
                         ]);
                     }
                 }
+                em.shift_stack_parity(
+                    -i64::try_from(layout.elements).expect("product elements overflow"),
+                );
                 em.asm.text.push(Instr::Push(Arg32::Reg(Reg::Rax)));
+                em.shift_stack_parity(1);
             }
             | Instruction::UnpackProduct(sa::Unpack(layout)) => {
                 em.asm.text.push(Instr::Comment(format!(
@@ -479,6 +763,9 @@ impl<'a> Emit<'a> for Instruction {
                         Instr::Push(Arg32::Reg(Reg::Rcx)),
                     ]);
                 }
+                em.shift_stack_parity(
+                    i64::try_from(layout.elements).expect("product elements overflow") - 1,
+                );
             }
             | Instruction::AllocContext(sa::Alloc(sa::ContextMarker)) => {
                 // Allocate new context
@@ -505,7 +792,8 @@ impl<'a> Emit<'a> for Instruction {
                         MemRef { reg: ENV_REG, offset: 8 * idx },
                         Reg32::Reg(Reg::Rax),
                     )),
-                ])
+                ]);
+                em.shift_stack_parity(-1);
             }
             | Instruction::PushTag(sa::Push(tag)) => {
                 // Push tag onto stack
@@ -514,9 +802,10 @@ impl<'a> Emit<'a> for Instruction {
                     // push tag to stack
                     Instr::Push(Arg32::Signed(tag.idx as i32)),
                 ]);
+                em.shift_stack_parity(1);
             }
             | Instruction::Intrinsic(intrinsic) => {
-                intrinsic.emit((), em);
+                intrinsic.emit(id, em);
             }
             | Instruction::Clear(_) => {
                 // Clear variables from context
@@ -551,6 +840,7 @@ impl<'a> Emit<'a> for Atom {
                     )),
                     Instr::Push(Arg32::Reg(Reg::Rax)),
                 ]);
+                em.shift_stack_parity(1);
             }
             | Atom::Sym(sym_id) => {
                 let symbol = &em.assembly.symbols[sym_id];
@@ -570,6 +860,7 @@ impl<'a> Emit<'a> for Atom {
                             ),
                             Instr::Push(Arg32::Reg(Reg::Rax)),
                         ]);
+                        em.shift_stack_parity(1);
                     }
                     | Symbol::Undefined(sa::Undefined) => {
                         unreachable!("undefined symbol should never be emitted")
@@ -589,9 +880,10 @@ impl<'a> Emit<'a> for Atom {
                                     u64::try_from(length).expect("string literal length overflow"),
                                 ),
                             )),
-                            Instr::Call(JmpArgs::Label("zydeco_string_literal".to_string())),
-                            Instr::Push(Arg32::Reg(Reg::Rax)),
                         ]);
+                        em.emit_aligned_call(JmpArgs::Label("zydeco_string_literal".to_string()));
+                        em.asm.text.push(Instr::Push(Arg32::Reg(Reg::Rax)));
+                        em.shift_stack_parity(1);
                     }
                 }
             }
@@ -599,6 +891,7 @@ impl<'a> Emit<'a> for Atom {
                 | sa::Imm::Triv(Triv) => {
                     em.asm.text.push(Instr::Comment("push_imm_triv".to_string()));
                     em.asm.text.push(Instr::Push(Arg32::Signed(0)));
+                    em.shift_stack_parity(1);
                 }
                 | sa::Imm::Integer(i) => {
                     em.asm.text.push(Instr::Comment(format!("push_imm_integer {:?}", i)));
@@ -606,6 +899,7 @@ impl<'a> Emit<'a> for Atom {
                         Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(i.to_word_bits()))),
                         Instr::Push(Arg32::Reg(Reg::Rax)),
                     ]);
+                    em.shift_stack_parity(1);
                 }
                 | sa::Imm::Float(value) => {
                     em.asm.text.push(Instr::Comment(format!("push_imm_float {:?}", value)));
@@ -613,10 +907,12 @@ impl<'a> Emit<'a> for Atom {
                         Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(value.to_bits()))),
                         Instr::Push(Arg32::Reg(Reg::Rax)),
                     ]);
+                    em.shift_stack_parity(1);
                 }
                 | sa::Imm::Char(c) => {
                     em.asm.text.push(Instr::Comment(format!("push_imm_char {:?}", c)));
                     em.asm.text.extend([Instr::Push(Arg32::Signed(c as i32))]);
+                    em.shift_stack_parity(1);
                 }
             },
         }
@@ -624,40 +920,53 @@ impl<'a> Emit<'a> for Atom {
 }
 
 impl<'a> Emit<'a> for Intrinsic {
-    type Env = ();
-    fn emit(&self, (): Self::Env, em: &mut Emitter) {
+    type Env = ProgId;
+    fn emit(&self, id: Self::Env, em: &mut Emitter) {
         let Intrinsic { name, arity } = self;
+
+        fn emit_ba(op: fn(BinArgs) -> Instr, em: &mut Emitter) {
+            em.asm.text.push(op(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rcx))));
+        }
+        fn emit_compare(cc: ConditionCode, id: ProgId, em: &mut Emitter) {
+            // Allocate the two-word boolean cell while both operands are still
+            // on the control stack, so the safepoint map matches `layouts[id]`.
+            let (map_label, descriptor_label) =
+                em.emit_gc_metadata(id, &[FieldClass::Scalar, FieldClass::Scalar]);
+            em.emit_gc_alloc_call(2, &map_label, &descriptor_label);
+            // Save the fresh cell and evaluate the comparison.
+            em.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(Reg::Rax))));
+            em.asm.text.extend([Instr::Pop(Loc::Reg(Reg::Rax)), Instr::Pop(Loc::Reg(Reg::Rcx))]);
+            em.shift_stack_parity(-2);
+            emit_ba(Instr::Cmp, em);
+            em.asm.text.extend([
+                Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Signed(0))),
+                Instr::SetCC(cc, Reg8::Al),
+                Instr::Mov(MovArgs::ToMem(
+                    MemRef { reg: Reg::Rdx, offset: 0 },
+                    Reg32::Reg(Reg::Rax),
+                )),
+                Instr::Mov(MovArgs::ToMem(MemRef { reg: Reg::Rdx, offset: 8 }, Reg32::Imm(0))),
+                Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Reg(Reg::Rdx))),
+            ]);
+        }
+
         match (name.as_str(), arity) {
+            | (_, 2) if matches!(name.as_str(), "int_eq" | "int_lt" | "int_gt") => {
+                let cc = match name.as_str() {
+                    | "int_eq" => ConditionCode::E,
+                    | "int_lt" => ConditionCode::L,
+                    | "int_gt" => ConditionCode::G,
+                    | _ => unreachable!("matched comparison intrinsic"),
+                };
+                emit_compare(cc, id, em);
+                em.asm.text.push(Instr::Push(Arg32::Reg(Reg::Rax)));
+                em.shift_stack_parity(1);
+            }
             | (_, 2) => {
                 em.asm
                     .text
                     .extend([Instr::Pop(Loc::Reg(Reg::Rax)), Instr::Pop(Loc::Reg(Reg::Rcx))]);
-                fn emit_ba(op: fn(BinArgs) -> Instr, em: &mut Emitter) {
-                    em.asm.text.push(op(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rcx))));
-                }
-                fn emit_cc(cc: ConditionCode, em: &mut Emitter) {
-                    em.asm.text.extend([
-                        Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Signed(0))),
-                        Instr::SetCC(cc, Reg8::Al),
-                        // temporarily store the result on the stack
-                        Instr::Push(Arg32::Reg(Reg::Rax)),
-                        // make boolean
-                        Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(2))),
-                        Instr::Call(JmpArgs::Label("zydeco_alloc".to_string())),
-                        Instr::Pop(Loc::Reg(Reg::Rcx)),
-                        // store the result in the allocated memory
-                        // [rax] = rcx
-                        Instr::Mov(MovArgs::ToMem(
-                            MemRef { reg: Reg::Rax, offset: 0 },
-                            Reg32::Reg(Reg::Rcx),
-                        )),
-                        // [rax + 8] = 0
-                        Instr::Mov(MovArgs::ToMem(
-                            MemRef { reg: Reg::Rax, offset: 8 },
-                            Reg32::Imm(0),
-                        )),
-                    ]);
-                }
+                em.shift_stack_parity(-2);
                 match name.as_str() {
                     | "add" => {
                         emit_ba(Instr::Add, em);
@@ -687,23 +996,12 @@ impl<'a> Emit<'a> for Intrinsic {
                     | "xor" => {
                         emit_ba(Instr::Xor, em);
                     }
-                    | "int_eq" => {
-                        emit_ba(Instr::Cmp, em);
-                        emit_cc(ConditionCode::E, em);
-                    }
-                    | "int_lt" => {
-                        emit_ba(Instr::Cmp, em);
-                        emit_cc(ConditionCode::L, em);
-                    }
-                    | "int_gt" => {
-                        emit_ba(Instr::Cmp, em);
-                        emit_cc(ConditionCode::G, em);
-                    }
                     | _ => {
                         unimplemented!("intrinsic {} with arity {} not implemented", name, arity)
                     }
                 }
                 em.asm.text.push(Instr::Push(Arg32::Reg(Reg::Rax)));
+                em.shift_stack_parity(1);
             }
             | _ => unimplemented!("intrinsic {} with arity {} not implemented", name, arity),
         }

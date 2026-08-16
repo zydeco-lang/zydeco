@@ -1,11 +1,480 @@
 use std::{
     cell::{RefCell, UnsafeCell},
-    collections::HashMap,
+    collections::{BTreeMap, BTreeSet, HashMap},
     fs::{File, OpenOptions},
     io::{self, BufRead, BufReader, Read, Write},
 };
 
 type Word = usize;
+
+/// Every GC-managed pointer is a payload pointer: the object header sits at a
+/// fixed negative offset and the raw-word ABI is unchanged.
+const GC_HEADER_BYTES: usize = 16;
+
+const KIND_PRODUCT: u8 = 0;
+const KIND_STRING: u8 = 1;
+const KIND_BYTES: u8 = 2;
+const KIND_TRANSFER: u8 = 3;
+const KIND_CLOSURE: u8 = 4;
+const KIND_FREE: u8 = 5;
+
+const FLAG_MARKED: u8 = 0b0000_0001;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct GcHeader {
+    kind: u8,
+    flags: u8,
+    _pad: [u8; 2],
+    size_words: u32,
+    /// Descriptor for products, null for host cells.
+    descriptor: *const u8,
+}
+
+const _: () = {
+    assert!(std::mem::size_of::<GcHeader>() == GC_HEADER_BYTES);
+    assert!(std::mem::align_of::<GcHeader>() == 8);
+};
+
+impl GcHeader {
+    fn new(kind: u8, size_words: u32, descriptor: *const u8) -> Self {
+        Self { kind, flags: 0, _pad: [0; 2], size_words, descriptor }
+    }
+}
+
+/// A host-owned value placed under the same header discipline as products.
+/// `payload` stays at offset `GC_HEADER_BYTES`, so existing `&String`-style
+/// dereferences keep working.
+#[repr(C)]
+struct HostCell<T> {
+    header: GcHeader,
+    payload: T,
+}
+
+impl<T> HostCell<T> {
+    fn leak(kind: u8, payload: T) -> *mut T {
+        let cell = Box::into_raw(Box::new(Self {
+            header: GcHeader::new(kind, 0, std::ptr::null()),
+            payload,
+        }));
+        let payload = unsafe { std::ptr::addr_of_mut!((*cell).payload) };
+        HEAP.with(|heap| heap.borrow_mut().register_host(payload.cast::<u8>()));
+        payload
+    }
+}
+
+const HEAP_SEGMENT_BYTES: usize = 1024 * 1024;
+const GC_THRESHOLD_BYTES: usize = 64 * 1024;
+
+const CLASS_SCALAR: u8 = 0;
+const CLASS_HEAP_POINTER: u8 = 1;
+const CLASS_INTERIOR_POINTER: u8 = 2;
+const CLASS_MAYBE_POINTER: u8 = 3;
+
+/// Byte-format mirrors of the metadata emitted by `zydeco-assembly::gc`.
+#[repr(C)]
+struct GcDescriptor {
+    arity: u32,
+    // GcField entries follow immediately.
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct GcField {
+    class: u8,
+    _pad: [u8; 3],
+    offset_words: u32,
+}
+
+#[repr(C)]
+struct GcMap {
+    control_count: u32,
+    context_count: u32,
+    // GcMapEntry entries follow immediately.
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct GcMapEntry {
+    offset_words: u32,
+    class: u8,
+    _pad: [u8; 3],
+    interior_offset_words: u32,
+}
+
+const _: () = {
+    assert!(std::mem::size_of::<GcField>() == 8);
+    assert!(std::mem::size_of::<GcMapEntry>() == 12);
+};
+
+/// One contiguous growable span of the Zydeco heap.
+struct Segment {
+    base: *mut u8,
+    used: usize,
+    capacity: usize,
+}
+
+/// Mutable runtime heap state. Single-threaded by construction.
+struct HeapState {
+    segments: Vec<Segment>,
+    /// Free product cells keyed by exact payload size in words. Rebuilt by
+    /// every sweep; free cells keep their headers so segments stay walkable.
+    free: BTreeMap<u32, Vec<*mut u8>>,
+    /// Cells freed by the most recent sweep, ineligible for reuse until the
+    /// next collection so that stale untracked register references die first.
+    free_deferred: BTreeMap<u32, Vec<*mut u8>>,
+    /// Payload pointers of host cells, in allocation order.
+    host_cells: Vec<*mut u8>,
+    /// Address set used by the conservative `MaybePointer` fallback.
+    host_addresses: BTreeSet<usize>,
+    /// Sorted cell base addresses, rebuilt before each collection so that
+    /// interior pointers can be resolved to their containing cell.
+    cell_bases: Vec<usize>,
+    allocated_since_gc: usize,
+    collections: usize,
+}
+
+impl HeapState {
+    const fn new() -> Self {
+        Self {
+            segments: Vec::new(),
+            free: BTreeMap::new(),
+            free_deferred: BTreeMap::new(),
+            host_cells: Vec::new(),
+            host_addresses: BTreeSet::new(),
+            cell_bases: Vec::new(),
+            allocated_since_gc: 0,
+            collections: 0,
+        }
+    }
+
+    fn register_host(&mut self, payload: *mut u8) {
+        self.host_cells.push(payload);
+        self.host_addresses.insert(payload as usize);
+    }
+
+    fn unregister_host(&mut self, payload: *mut u8) {
+        self.host_addresses.remove(&(payload as usize));
+        if let Some(index) = self.host_cells.iter().position(|candidate| *candidate == payload) {
+            self.host_cells.swap_remove(index);
+        }
+    }
+
+    fn bump(&mut self, bytes: usize) -> *mut u8 {
+        for segment in self.segments.iter_mut().rev() {
+            if segment.capacity - segment.used >= bytes {
+                let pointer = unsafe { segment.base.add(segment.used) };
+                segment.used += bytes;
+                return pointer;
+            }
+        }
+        let capacity = HEAP_SEGMENT_BYTES.max(bytes);
+        let layout = std::alloc::Layout::from_size_align(capacity, 8).unwrap();
+        let base = unsafe { std::alloc::alloc(layout) };
+        self.segments.push(Segment { base, used: bytes, capacity });
+        base
+    }
+
+    fn write_product_header(payload: *mut u8, size_words: u32, descriptor: *const u8) {
+        let base = unsafe { payload.byte_sub(GC_HEADER_BYTES) };
+        unsafe {
+            base.cast::<GcHeader>().write(GcHeader::new(KIND_PRODUCT, size_words, descriptor))
+        };
+    }
+
+    /// Reuse a dead cell of the exact requested size, or return `None`.
+    fn take_free(&mut self, size_words: u32, descriptor: *const u8) -> Option<*mut u8> {
+        let list = self.free.get_mut(&size_words)?;
+        let payload = list.pop()?;
+        if list.is_empty() {
+            self.free.remove(&size_words);
+        }
+        Self::write_product_header(payload, size_words, descriptor);
+        Some(payload)
+    }
+
+    /// Bump a fresh product cell, updating the collection trigger counter.
+    fn bump_product(&mut self, size_words: u32, descriptor: *const u8) -> *mut u8 {
+        let cell_bytes = GC_HEADER_BYTES + size_words as usize * 8;
+        let base = self.bump(cell_bytes);
+        unsafe {
+            base.cast::<GcHeader>().write(GcHeader::new(KIND_PRODUCT, size_words, descriptor))
+        };
+        self.allocated_since_gc += cell_bytes;
+        unsafe { base.add(GC_HEADER_BYTES) }
+    }
+
+    /// Legacy ABI allocation: grow without collecting.
+    fn alloc_product(&mut self, size_words: usize, descriptor: *const u8) -> *mut u8 {
+        assert!(size_words > 0, "product arity must be positive");
+        let size_words = u32::try_from(size_words).expect("product too large for one cell");
+        self.bump_product(size_words, descriptor)
+    }
+
+    fn gc_threshold_bytes() -> usize {
+        std::env::var("ZYDECO_GC_THRESHOLD")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(GC_THRESHOLD_BYTES)
+    }
+
+    /// GC-aware allocation used by the amd64 backend.
+    fn gc_alloc(
+        &mut self, size_words: usize, descriptor: *const u8, map: *const u8, rsp: usize, rbp: usize,
+    ) -> *mut u8 {
+        assert!(size_words > 0, "product arity must be positive");
+        let size_words = u32::try_from(size_words).expect("product too large for one cell");
+        if let Some(payload) = self.take_free(size_words, descriptor) {
+            return payload;
+        }
+        if self.allocated_since_gc >= Self::gc_threshold_bytes() {
+            self.collect(map, rsp, rbp);
+            if let Some(payload) = self.take_free(size_words, descriptor) {
+                return payload;
+            }
+        }
+        self.bump_product(size_words, descriptor)
+    }
+
+    fn rebuild_cell_index(&mut self) {
+        self.cell_bases.clear();
+        for segment in &self.segments {
+            let start = segment.base as usize;
+            let end = start + segment.used;
+            let mut cursor = start;
+            while cursor < end {
+                let header = unsafe { &*(cursor as *const GcHeader) };
+                let size_words = header.size_words as usize;
+                self.cell_bases.push(cursor);
+                cursor += GC_HEADER_BYTES + size_words * 8;
+            }
+        }
+        self.cell_bases.sort_unstable();
+    }
+
+    /// Map an arbitrary word to the payload of the cell that contains it.
+    fn resolve_segment_payload(&self, word: usize) -> Option<usize> {
+        let index = self.cell_bases.partition_point(|base| *base <= word);
+        let index = index.checked_sub(1)?;
+        let base = self.cell_bases[index];
+        let header = unsafe { &*(base as *const GcHeader) };
+        let payload = base + GC_HEADER_BYTES;
+        let end = payload + header.size_words as usize * 8;
+        (word >= payload && word < end).then_some(payload)
+    }
+
+    fn collect(&mut self, map: *const u8, rsp: usize, rbp: usize) {
+        self.free = std::mem::take(&mut self.free_deferred);
+        self.rebuild_cell_index();
+        let mut worklist = Vec::new();
+        unsafe { self.collect_roots(map, rsp, rbp, &mut worklist) };
+        // Conservative backstop until control-stack entry layouts propagate
+        // through every dynamic continuation: scan the raw Zydeco control and
+        // environment ranges for words that look like managed pointers.
+        unsafe { self.scan_raw_root_ranges(rsp, rbp, &mut worklist) };
+        while let Some(payload) = worklist.pop() {
+            self.trace_known(payload, &mut worklist);
+        }
+        self.sweep_segments();
+        self.sweep_host_cells();
+        self.allocated_since_gc = 0;
+        self.collections += 1;
+    }
+
+    unsafe fn scan_raw_root_ranges(&mut self, rsp: usize, _rbp: usize, worklist: &mut Vec<usize>) {
+        let stack_limit = STACK_LIMIT.with(|limit| unsafe { *limit.get() });
+        let mut cursor = rsp & !7;
+        while cursor < stack_limit {
+            let word = unsafe { *(cursor as *const usize) };
+            self.trace_payload(word, worklist);
+            cursor += 8;
+        }
+        let env_base = ENV.with(|env| unsafe { *env.get() }) as usize;
+        let env_end = env_base + BUFFER_SIZE;
+        let mut cursor = env_base;
+        while cursor < env_end {
+            let word = unsafe { *(cursor as *const usize) };
+            self.trace_payload(word, worklist);
+            cursor += 8;
+        }
+    }
+
+    unsafe fn collect_roots(
+        &mut self, map: *const u8, rsp: usize, rbp: usize, worklist: &mut Vec<usize>,
+    ) {
+        let Some(map) = (unsafe { map.cast::<GcMap>().as_ref() }) else { return };
+        let entry = map as *const GcMap as *const u8;
+        let mut entry = unsafe { entry.add(8).cast::<GcMapEntry>() };
+        for _ in 0..map.control_count {
+            let entry_value = unsafe { *entry };
+            let word = unsafe { *((rsp + entry_value.offset_words as usize * 8) as *const usize) };
+            self.scan_root(entry_value, word, worklist);
+            entry = unsafe { entry.add(1) };
+        }
+        for _ in 0..map.context_count {
+            let entry_value = unsafe { *entry };
+            let word = unsafe { *((rbp + entry_value.offset_words as usize * 8) as *const usize) };
+            self.scan_root(entry_value, word, worklist);
+            entry = unsafe { entry.add(1) };
+        }
+    }
+
+    fn scan_root(&mut self, entry: GcMapEntry, word: usize, worklist: &mut Vec<usize>) {
+        match entry.class {
+            | CLASS_SCALAR => {}
+            | CLASS_HEAP_POINTER => self.trace_payload(word, worklist),
+            | CLASS_INTERIOR_POINTER => {
+                let offset = entry.interior_offset_words as usize * 8;
+                self.trace_payload(word.wrapping_sub(offset), worklist);
+            }
+            | CLASS_MAYBE_POINTER => self.trace_payload(word, worklist),
+            | _ => {}
+        }
+    }
+
+    /// Enqueue `word` if it points at a managed product or host cell.
+    fn trace_payload(&mut self, word: usize, worklist: &mut Vec<usize>) {
+        if let Some(payload) = self.resolve_segment_payload(word) {
+            worklist.push(payload);
+        } else if self.host_addresses.contains(&word) {
+            worklist.push(word);
+        }
+    }
+
+    fn trace_known(&mut self, payload: usize, worklist: &mut Vec<usize>) {
+        if self.resolve_segment_payload(payload) == Some(payload) {
+            self.trace_product(payload, worklist);
+        } else if self.host_addresses.contains(&payload) {
+            self.trace_host(payload, worklist);
+        }
+    }
+
+    fn trace_product(&mut self, payload: usize, worklist: &mut Vec<usize>) {
+        let header = unsafe { &mut *((payload - GC_HEADER_BYTES) as *mut GcHeader) };
+        if header.flags & FLAG_MARKED != 0 {
+            return;
+        }
+        header.flags |= FLAG_MARKED;
+        let size_words = header.size_words as usize;
+        let descriptor = header.descriptor;
+        let payload = payload as *const u8;
+        if descriptor.is_null() {
+            // Legacy allocations carry no descriptor: scan every word
+            // conservatively rather than guessing at layout.
+            for index in 0..size_words {
+                let word = unsafe { *(payload.add(index * 8) as *const usize) };
+                self.trace_payload(word, worklist);
+            }
+            return;
+        }
+        let arity = unsafe { (*descriptor.cast::<GcDescriptor>()).arity as usize };
+        let fields = unsafe { descriptor.add(4).cast::<GcField>() };
+        for index in 0..arity {
+            let field = unsafe { *fields.add(index) };
+            let word = unsafe { *(payload.add(index * 8) as *const usize) };
+            match field.class {
+                | CLASS_SCALAR => {}
+                | CLASS_HEAP_POINTER => worklist.push(word),
+                | CLASS_INTERIOR_POINTER => {
+                    let offset = field.offset_words as usize * 8;
+                    worklist.push(word.wrapping_sub(offset));
+                }
+                | CLASS_MAYBE_POINTER => self.trace_payload(word, worklist),
+                | _ => {}
+            }
+        }
+    }
+
+    fn trace_host(&mut self, payload: usize, worklist: &mut Vec<usize>) {
+        let header = unsafe { &mut *((payload - GC_HEADER_BYTES) as *mut GcHeader) };
+        if header.flags & FLAG_MARKED != 0 {
+            return;
+        }
+        header.flags |= FLAG_MARKED;
+        if header.kind == KIND_TRANSFER {
+            let transfer = unsafe { &*(payload as *const ControlTransfer) };
+            for word in [transfer.closure, transfer.first, transfer.second] {
+                self.trace_payload(word, worklist);
+            }
+        }
+    }
+
+    fn sweep_segments(&mut self) {
+        let spans: Vec<(usize, usize)> =
+            self.segments.iter().map(|segment| (segment.base as usize, segment.used)).collect();
+        for (base, used) in spans {
+            let end = base + used;
+            let mut cursor = base;
+            while cursor < end {
+                let header = unsafe { &mut *(cursor as *mut GcHeader) };
+                let size_words = header.size_words as usize;
+                if header.kind == KIND_FREE {
+                    // Already an eligible cell carried over by `free`; do not
+                    // re-enqueue it in the deferred generation.
+                } else if header.flags & FLAG_MARKED != 0 {
+                    header.flags &= !FLAG_MARKED;
+                } else if size_words == 1 {
+                    // Single-word cells are pinned for now: a live reference to
+                    // them can escape the compiler-emitted root maps, so
+                    // reclaiming them provokes use-after-free. Fix stack-layout
+                    // propagation for dynamically entered blocks first.
+                    header.flags = 0;
+                } else {
+                    header.kind = KIND_FREE;
+                    header.flags = 0;
+                    header.descriptor = std::ptr::null();
+                    self.free_deferred
+                        .entry(header.size_words)
+                        .or_default()
+                        .push((cursor + GC_HEADER_BYTES) as *mut u8);
+                }
+                cursor += GC_HEADER_BYTES + size_words * 8;
+            }
+        }
+    }
+
+    fn sweep_host_cells(&mut self) {
+        let mut dead = Vec::new();
+        for payload in &self.host_cells {
+            let header = unsafe { &mut *((*payload as usize - GC_HEADER_BYTES) as *mut GcHeader) };
+            if header.flags & FLAG_MARKED != 0 {
+                header.flags &= !FLAG_MARKED;
+            } else {
+                dead.push(*payload);
+            }
+        }
+        for payload in dead {
+            self.unregister_host(payload);
+            unsafe { self.finalize_host(payload) };
+        }
+    }
+
+    /// Drop the Rust box behind a dead host cell. Host closures own their
+    /// argument-fold environment until resumed; dropping an unresumed closure
+    /// leaks that environment, which is the pre-GC behavior.
+    unsafe fn finalize_host(&self, payload: *mut u8) {
+        let header = unsafe { &*(payload.byte_sub(GC_HEADER_BYTES).cast::<GcHeader>()) };
+        match header.kind {
+            | KIND_STRING => unsafe {
+                drop(Box::from_raw(payload.byte_sub(GC_HEADER_BYTES).cast::<HostCell<String>>()));
+            },
+            | KIND_BYTES => unsafe {
+                drop(Box::from_raw(payload.byte_sub(GC_HEADER_BYTES).cast::<HostCell<Vec<u8>>>()));
+            },
+            | KIND_TRANSFER => unsafe {
+                drop(Box::from_raw(
+                    payload.byte_sub(GC_HEADER_BYTES).cast::<HostCell<ControlTransfer>>(),
+                ));
+            },
+            | KIND_CLOSURE => unsafe {
+                drop(Box::from_raw(
+                    payload.byte_sub(GC_HEADER_BYTES).cast::<HostCell<ZydecoClosure>>(),
+                ));
+            },
+            | KIND_PRODUCT | KIND_FREE | _ => unsafe { std::hint::unreachable_unchecked() },
+        }
+    }
+}
 
 #[repr(C)]
 struct ZydecoClosure {
@@ -36,7 +505,7 @@ impl ControlTransfer {
 
     fn leak(resume: unsafe extern "sysv64" fn(), closure: Word, first: Word, second: Word) -> Word {
         let resume = resume as *const () as *mut u8;
-        Box::into_raw(Box::new(Self { resume, closure, first, second })) as Word
+        HostCell::<Self>::leak(KIND_TRANSFER, Self { resume, closure, first, second }) as Word
     }
 }
 
@@ -44,7 +513,7 @@ struct HostString;
 
 impl HostString {
     fn leak(string: String) -> Word {
-        Box::into_raw(Box::new(string)) as Word
+        HostCell::<String>::leak(KIND_STRING, string) as Word
     }
 
     unsafe fn borrow<'a>(raw: Word) -> &'a str {
@@ -80,7 +549,7 @@ struct HostBytes;
 
 impl HostBytes {
     fn leak(bytes: Vec<u8>) -> Word {
-        Box::into_raw(Box::new(bytes)) as Word
+        HostCell::<Vec<u8>>::leak(KIND_BYTES, bytes) as Word
     }
 
     unsafe fn borrow<'a>(raw: Word) -> &'a [u8] {
@@ -322,7 +791,7 @@ impl ArgumentFold {
     fn into_thunk(self) -> Word {
         let environment = Box::into_raw(Box::new(self)).cast::<u8>();
         let code = rust_arg_fold_tail as *const () as *mut u8;
-        Box::into_raw(Box::new(ZydecoClosure { environment, code })) as Word
+        HostCell::<ZydecoClosure>::leak(KIND_CLOSURE, ZydecoClosure { environment, code }) as Word
     }
 
     unsafe fn from_environment(environment: *mut u8) -> Box<Self> {
@@ -348,21 +817,18 @@ extern "sysv64" fn zydeco_abort() -> ! {
 
 #[unsafe(export_name = "\x01zydeco_alloc")]
 extern "sysv64" fn zydeco_alloc(size: usize) -> *mut u8 {
-    HEAP.with(|heap| {
-        HEAP_SIZE.with(|heap_size| unsafe {
-            let heap_ptr = *heap.get();
-            let heap_size_ptr = heap_size.get();
-            let ptr = heap_ptr.add(*heap_size_ptr);
-            assert!(
-                ptr as usize % ALIGNMENT == 0,
-                "allocated pointer is not aligned to {}-byte boundary",
-                ALIGNMENT
-            );
-            *heap_size_ptr += size * 8;
-            assert!(*heap_size_ptr <= BUFFER_SIZE, "Zydeco heap exhausted");
-            ptr
-        })
-    })
+    HEAP.with(|heap| heap.borrow_mut().alloc_product(size, std::ptr::null()))
+}
+
+/// GC-aware product allocation for backends that emit stack maps.
+///
+/// Arguments are, in SysV order: payload size in words, object descriptor,
+/// root map, the caller `rsp` captured before alignment fixups, and `rbp`.
+#[unsafe(export_name = "\x01zydeco_gc_alloc")]
+extern "sysv64" fn zydeco_gc_alloc(
+    size: usize, descriptor: *const u8, map: *const u8, rsp: usize, rbp: usize,
+) -> *mut u8 {
+    HEAP.with(|heap| heap.borrow_mut().gc_alloc(size, descriptor, map, rsp, rbp))
 }
 
 unsafe extern "sysv64" {
@@ -984,9 +1450,24 @@ const ALIGNMENT: usize = 8;
 
 thread_local! {
     static ENV: UnsafeCell<*mut u8> = UnsafeCell::new(init_buffer());
-    static HEAP: UnsafeCell<*mut u8> = UnsafeCell::new(init_buffer());
-    static HEAP_SIZE: UnsafeCell<usize> = const { UnsafeCell::new(0) };
+    static HEAP: RefCell<HeapState> = RefCell::new(HeapState::new());
     static HOST_IO: RefCell<HostIoRuntime> = RefCell::new(HostIoRuntime::new());
+    static STACK_LIMIT: UnsafeCell<usize> = const { UnsafeCell::new(0) };
+}
+
+fn current_stack_pointer() -> usize {
+    #[cfg(target_arch = "x86_64")]
+    {
+        let pointer: usize;
+        unsafe {
+            std::arch::asm!("mov {}, rsp", out(reg) pointer, options(nomem, nostack, preserves_flags));
+        }
+        pointer
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        0
+    }
 }
 
 fn init_buffer() -> *mut u8 {
@@ -1000,6 +1481,7 @@ fn init_buffer() -> *mut u8 {
 }
 
 fn main() {
+    STACK_LIMIT.with(|limit| unsafe { *limit.get() = current_stack_pointer() });
     ENV.with(|environment| unsafe {
         let environment = *environment.get();
         entry(environment);

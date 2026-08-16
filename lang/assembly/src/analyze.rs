@@ -26,6 +26,12 @@ pub enum Slot {
     Sym(SymId),
     Imm(Imm),
     Product(Vec<Slot>),
+    /// An interior pointer `offset` words into a product shaped like `fields`.
+    ProductSuffix {
+        fields: Vec<Slot>,
+        offset: usize,
+    },
+    Tag,
     Unknown,
 }
 
@@ -54,8 +60,7 @@ pub struct StackAnalyzer<'a> {
 }
 
 /// Durable results of stack analysis; the temporary slot issuer has been dropped.
-pub struct StackAnalysis<'a> {
-    pub arena: &'a mut AssemblyArena,
+pub struct StackAnalysis {
     pub layouts: ArenaAssoc<ProgId, Layout>,
     pub slots: ArenaSparse<StackAnalysisScope, SlotId>,
     pub inlined: ArenaAssoc<SlotId, bool>,
@@ -63,7 +68,7 @@ pub struct StackAnalysis<'a> {
 
 impl<'a> StackAnalyzer<'a> {
     pub fn new(program: &'a mut AssemblyProgram) -> Self {
-        let AssemblyProgram { arena, root } = program;
+        let AssemblyProgram { arena, root, .. } = program;
         Self {
             arena,
             root: *root,
@@ -96,7 +101,7 @@ impl<'a> StackAnalyzer<'a> {
 
 impl<'a> CompilerPass for StackAnalyzer<'a> {
     type Arena = AssemblyArena;
-    type Out = StackAnalysis<'a>;
+    type Out = StackAnalysis;
     type Error = std::convert::Infallible;
     fn run(mut self) -> Result<Self::Out, Self::Error> {
         let symbol_programs: Vec<_> = self
@@ -128,8 +133,8 @@ impl<'a> CompilerPass for StackAnalyzer<'a> {
             prog.stack_inline(&mut self);
         }
         self.root.stack_inline(&mut self);
-        let Self { arena, root: _, allocator: _, layouts, slots, inlined } = self;
-        Ok(StackAnalysis { arena, layouts, slots, inlined })
+        let Self { arena: _, root: _, allocator: _, layouts, slots, inlined } = self;
+        Ok(StackAnalysis { layouts, slots, inlined })
     }
 }
 
@@ -173,9 +178,20 @@ impl<'a> StackMeasure<'a> for ProgId {
                             }
                             | _ => vec![Slot::Unknown; product.elements],
                         };
-                        items.into_iter().rev().for_each(|item| {
-                            si.push_control(&mut layout, item);
-                        });
+                        let last = product.elements - 1;
+                        for (position, item) in items.into_iter().enumerate().rev() {
+                            if position == last && product.elements < product.arity {
+                                si.push_control(
+                                    &mut layout,
+                                    Slot::ProductSuffix {
+                                        fields: vec![item.clone()],
+                                        offset: last,
+                                    },
+                                );
+                            } else {
+                                si.push_control(&mut layout, item);
+                            }
+                        }
                     }
                     | Instruction::AllocContext(Alloc(ContextMarker)) => {
                         layout.context.clear();
@@ -198,7 +214,7 @@ impl<'a> StackMeasure<'a> for ProgId {
                         layout.context.push_back((var, slot));
                     }
                     | Instruction::PushTag(Push(_)) => {
-                        si.push_control(&mut layout, Slot::Unknown);
+                        si.push_control(&mut layout, Slot::Tag);
                     }
                     | Instruction::Intrinsic(Intrinsic { name: _, arity }) => {
                         (0..arity).for_each(|_| {
@@ -230,7 +246,11 @@ impl<'a> StackInline<'a> for ProgId {
                                 | Symbol::Prog(target) => Some(target),
                                 | Symbol::Undefined(_) | Symbol::StringLiteral(_) => None,
                             },
-                            | Slot::Imm(_) | Slot::Product(_) | Slot::Unknown => None,
+                            | Slot::Imm(_)
+                            | Slot::Product(_)
+                            | Slot::ProductSuffix { .. }
+                            | Slot::Tag
+                            | Slot::Unknown => None,
                         })
                     {
                         si.arena

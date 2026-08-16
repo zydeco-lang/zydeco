@@ -22,8 +22,19 @@ impl<'a> LoweringPipeline<'a> {
 
     pub fn run(self) -> AssemblyProgram {
         let mut assembly = Lowerer::new(self.spans, self.scoped, self.statics, self.sps_low).run();
+        // First pass performs stack-directed inlining, mutating the program
+        // graph. The pre-inline layouts are therefore stale for root maps.
         match StackAnalyzer::new(&mut assembly).run() {
-            | Ok(_) => assembly,
+            | Ok(_) => {}
+            | Err(never) => match never {},
+        }
+        // Second pass measures the final program graph that backends emit.
+        match StackAnalyzer::new(&mut assembly).run() {
+            | Ok(analysis) => {
+                assembly.layouts = analysis.layouts;
+                assembly.slots = analysis.slots;
+                assembly
+            }
             | Err(never) => match never {},
         }
     }

@@ -383,6 +383,16 @@ impl<'a> Pretty<'a, Formatter<'a>> for Slot {
                 RcDoc::intersperse(items.iter().map(|item| item.pretty(f)), RcDoc::text(", ")),
                 RcDoc::text(")"),
             ]),
+            | Slot::ProductSuffix { fields, offset } => RcDoc::concat([
+                RcDoc::text("(+"),
+                RcDoc::text(offset.to_string()),
+                RcDoc::text(" "),
+                RcDoc::text("("),
+                RcDoc::intersperse(fields.iter().map(|item| item.pretty(f)), RcDoc::text(", ")),
+                RcDoc::text(")"),
+                RcDoc::text(")"),
+            ]),
+            | Slot::Tag => RcDoc::text("#tag"),
             | Slot::Unknown => RcDoc::text("<?>"),
         }
     }
