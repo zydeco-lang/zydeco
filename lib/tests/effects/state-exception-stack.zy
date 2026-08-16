@@ -31,16 +31,21 @@ begin
     -- The user-facing capability signature. Every field is written with `Ret`;
     -- the algebra translation turns it into the ambient monad M.
     let StateExnCapability (S : VType) (E : VType) =
-      (get :: Thk (Ret S))
-    * (put :: Thk (S -> Ret Unit))
-    * (raise :: Thk (forall (A : VType) . E -> Ret A))
-    * (catch :: Thk (
-        forall (A : VType) .
-          Thk (Ret A) -> Thk (E -> Ret A) -> Ret A
-      ))
-    * (add :: Thk (S -> S -> Ret S))
+        (get :: Thk (Ret S))
+      * (put :: Thk (S -> Ret Unit))
+      * (raise :: Thk (forall (A : VType) . E -> Ret A))
+      * (
+          catch :: Thk (
+            forall (A : VType) .
+              Thk (Ret A) -> Thk (E -> Ret A) -> Ret A
+          )
+        )
+      * (add :: Thk (S -> S -> Ret S))
     that
-    let Top = codata end that
+    let Top =
+      codata
+      end
+    that
 
     -- The user writes this once. Projection under force must be parenthesized:
     -- `! (cap/get)` forces the selected thunk, while `! cap/get` means
@@ -55,7 +60,9 @@ begin
               ret n
             }
             {
-              fn _ => do m <- ! (cap/get); ret m
+              fn _ =>
+                do m <- ! (cap/get);
+                ret m
             };
           do n' <- ! (cap/add) recovered one;
           do _ <- ! (cap/put) n';
@@ -72,34 +79,33 @@ begin
     -- Only here do we choose M, its Monad instance, and one capability package
     -- implementing the source signature above.
     let capability : (
-         get :: Thk (StateExn Int64 String Int64)
-      ) * (
-         put :: Thk (Int64 -> StateExn Int64 String Unit)
-      ) * (
-         raise :: Thk (
-           forall (A : VType) .
-             Thk Top -> String -> StateExn Int64 String A
-         )
-      ) * (
-         catch :: Thk (
-           forall (A : VType) .
-             Thk Top -> Thk (StateExn Int64 String A)
-           -> Thk (String -> StateExn Int64 String A)
-           -> StateExn Int64 String A
-         )
-      ) * (
-         add :: Thk (Int64 -> Int64 -> StateExn Int64 String Int64)
-      ) = (
-        get = { ! get Int64 String },
-        put = { ! put Int64 String },
-        raise = { ! raise Int64 String },
-        catch = { ! catch Int64 String },
-        add = add_state_exn
+      get :: Thk (StateExn Int64 String Int64)
+    ) * (
+      put :: Thk (Int64 -> StateExn Int64 String Unit)
+    ) * (
+      raise :: Thk (
+        forall (A : VType) .
+          Thk Top -> String -> StateExn Int64 String A
       )
-    in
+    ) * (
+      catch :: Thk (
+        forall (A : VType) .
+             Thk Top -> Thk (StateExn Int64 String A)
+          -> Thk (String -> StateExn Int64 String A)
+          -> StateExn Int64 String A
+      )
+    ) * (
+      add :: Thk (Int64 -> Int64 -> StateExn Int64 String Int64)
+    ) = (
+      get = { ! get Int64 String },
+      put = { ! put Int64 String },
+      raise = { ! raise Int64 String },
+      catch = { ! catch Int64 String },
+      add = add_state_exn
+    ) in
 
     let ! production : StateExn Int64 String Int64 =
-      (! user_program Int64 String)
+      ! user_program Int64 String
         (StateExn Int64 String)
         { ! mo_state_exn Int64 String }
         capability

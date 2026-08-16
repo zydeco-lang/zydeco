@@ -180,12 +180,14 @@ begin
   that
 
   def fix foldl (A : VType) (R : VType) (xs : List A) (f : Thunk (A -> R -> Ret R)) (r : R) : Ret R
-  = match xs
-  | +Nil() => ret r
-  | +Cons(x, xs) =>
-    do r' <- ! f x r;
-    ! foldl A R xs f r'
-  end that
+  =
+    match xs
+    | +Nil() => ret r
+    | +Cons(x, xs) =>
+      do r' <- ! f x r;
+      ! foldl A R xs f r'
+    end
+  that
 
   def fix foldl~ (A : VType) (R : CType) (xs : List A) (f : Thunk (A -> Thunk R -> R)) (r : Thunk R)
   : R =

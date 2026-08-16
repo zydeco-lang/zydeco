@@ -1,6 +1,6 @@
 begin
-  let BoolModule = @[import("bool.type.zy")] _ in
-  pi (_ : @[import("../builtin.zy")] _) .
-    exists (Bool = AbstractBool : @[import("../builtin/intrinsic/vtype.zy")] _) .
+  let BoolModule = @(import("bool.type.zy")) in
+  pi (_ : @(import("../builtin.zy"))) .
+    exists (Bool = AbstractBool : @(import("../builtin/intrinsic/vtype.zy"))) .
       BoolModule AbstractBool
 end

@@ -1,5 +1,5 @@
 begin
-  let Std = @[import("std.type.zy")] _ in
+  let Std = @(import("std.type.zy")) in
   pi
     (
       (
@@ -9,7 +9,7 @@ begin
         /system = (/Reader; /Writer; /OS);
         builtin
       )
-      : @[import("builtin.zy")] _
+      : @(import("builtin.zy"))
     )
   .
     Std Reader Writer OS

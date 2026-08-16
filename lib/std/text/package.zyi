@@ -1,7 +1,7 @@
 begin
-  let DataPackage = @[import("../data/package.type.zy")] _ in
-  let TextPackage = @[import("package.type.zy")] _ in
-  pi (_ : @[import("../builtin.zy")] _) .
+  let DataPackage = @(import("../data/package.type.zy")) in
+  let TextPackage = @(import("package.type.zy")) in
+  pi (_ : @(import("../builtin.zy"))) .
     pi
       (
         (/Bool; /Option; /List) :

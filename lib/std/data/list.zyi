@@ -1,33 +1,33 @@
 begin
-  let Thk = @[import("../builtin/intrinsic/thk.zy")] _ that
-  let Ret = @[import("../builtin/intrinsic/ret.zy")] _ that
-  let Unit = @[import("../builtin/intrinsic/unit.zy")] _ that
-  let Int64 = @[import("../builtin/intrinsic/i64.zy")] _ that
-  pi (_ : @[import("../builtin.zy")] _) .
+  let Thk = @(import("../builtin/intrinsic/thk.zy")) that
+  let Ret = @(import("../builtin/intrinsic/ret.zy")) that
+  let Unit = @(import("../builtin/intrinsic/unit.zy")) that
+  let Int64 = @(import("../builtin/intrinsic/i64.zy")) that
+  pi (_ : @(import("../builtin.zy"))) .
     exists
       (
         List = AbstractList :
-        (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
-          @[import("../builtin/intrinsic/vtype.zy")] _
+        (@(import("../builtin/intrinsic/vtype.zy"))) -> (
+          @(import("../builtin/intrinsic/vtype.zy"))
         )
       )
     .
         (
           nil :: Thk (
-            forall (A : @[import("../builtin/intrinsic/vtype.zy")] _) .
+            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
               Ret (AbstractList A)
           )
         )
       * (
           cons :: Thk (
-            forall (A : @[import("../builtin/intrinsic/vtype.zy")] _) .
+            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
               A -> AbstractList A -> Ret (AbstractList A)
           )
         )
       * (
           case :: Thk (
-            forall (A : @[import("../builtin/intrinsic/vtype.zy")] _) .
-              forall (B : @[import("../builtin/intrinsic/ctype.zy")] _) .
+            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
+              forall (B : @(import("../builtin/intrinsic/ctype.zy"))) .
                    AbstractList A
                 -> Thk B
                 -> Thk (A -> AbstractList A -> B)
@@ -36,8 +36,8 @@ begin
         )
       * (
           fold :: Thk (
-            forall (A : @[import("../builtin/intrinsic/vtype.zy")] _) .
-              forall (B : @[import("../builtin/intrinsic/ctype.zy")] _) .
+            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
+              forall (B : @(import("../builtin/intrinsic/ctype.zy"))) .
                    AbstractList A
                 -> Thk B
                 -> Thk (A -> Thk B -> B)
@@ -46,39 +46,39 @@ begin
         )
       * (
           singleton :: Thk (
-            forall (A : @[import("../builtin/intrinsic/vtype.zy")] _) .
+            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
               A -> Ret (AbstractList A)
           )
         )
       * (
           append :: Thk (
-            forall (A : @[import("../builtin/intrinsic/vtype.zy")] _) .
+            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
               AbstractList A -> AbstractList A -> Ret (AbstractList A)
           )
         )
       * (
           map :: Thk (
-            forall (A : @[import("../builtin/intrinsic/vtype.zy")] _) .
-              forall (B : @[import("../builtin/intrinsic/vtype.zy")] _) .
+            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
+              forall (B : @(import("../builtin/intrinsic/vtype.zy"))) .
                 AbstractList A -> Thk (A -> Ret B) -> Ret (AbstractList B)
           )
         )
       * (
           fold_left :: Thk (
-            forall (A : @[import("../builtin/intrinsic/vtype.zy")] _) .
-              forall (B : @[import("../builtin/intrinsic/vtype.zy")] _) .
+            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
+              forall (B : @(import("../builtin/intrinsic/vtype.zy"))) .
                 AbstractList A -> B -> Thk (B -> A -> Ret B) -> Ret B
           )
         )
       * (
           reverse :: Thk (
-            forall (A : @[import("../builtin/intrinsic/vtype.zy")] _) .
+            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
               AbstractList A -> Ret (AbstractList A)
           )
         )
       * (
           length :: Thk (
-            forall (A : @[import("../builtin/intrinsic/vtype.zy")] _) .
+            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
               AbstractList A -> Ret Int64
           )
         )

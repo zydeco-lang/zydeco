@@ -1,6 +1,6 @@
 begin
-  let DataPackage = @[import("../data/package.type.zy")] _ in
-  let SystemPackage = @[import("package.type.zy")] _ in
+  let DataPackage = @(import("../data/package.type.zy")) in
+  let SystemPackage = @(import("package.type.zy")) in
   pi
     (
       (
@@ -11,7 +11,7 @@ begin
         /system = (/Reader; /Writer; /OS; /io; /fs; /stdio; /args; /random; /process);
         builtin
       )
-      : @[import("../builtin.zy")] _
+      : @(import("../builtin.zy"))
     )
   .
     pi

@@ -1,5 +1,5 @@
 begin
-  let DataPackage = @[import("package.type.zy")] _ in
-  pi (_ : @[import("../builtin.zy")] _) .
+  let DataPackage = @(import("package.type.zy")) in
+  pi (_ : @(import("../builtin.zy"))) .
     DataPackage
 end

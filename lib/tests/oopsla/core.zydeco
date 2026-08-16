@@ -33,15 +33,18 @@ begin
   --| Interface for Monad Transformers
   let MonadTrans (T : (VType -> CType) -> VType -> CType) =
     forall (M : VType -> CType) .
-      Thk (Monad M) -> codata
-      | .monad : Monad (T M)
-      | .lift : forall (A : VType) . Thk (M A) -> T M A
-      end
+         Thk (Monad M)
+      -> codata
+         | .monad : Monad (T M)
+         | .lift : forall (A : VType) . Thk (M A) -> T M A
+         end
   that
 
   --| The Trivial Algebra (Structure)
-  def ! triv : Top = comatch
-  end that
+  def ! triv : Top =
+    comatch
+    end
+  that
 
   --| Interface for Monad, Lifted
   let Monad' (M : VType -> CType) =
@@ -77,10 +80,11 @@ begin
   --| Interface for Monad Transformers, Lifted
   let MonadTrans' (T : (VType -> CType) -> VType -> CType) =
     forall (M : VType -> CType) .
-      Thk (Monad M) -> codata
-      | .monad : Monad' (T M)
-      | .lift : forall (A : VType) . Thk Top -> Thk (M A) -> T M A
-      end
+         Thk (Monad M)
+      -> codata
+         | .monad : Monad' (T M)
+         | .lift : forall (A : VType) . Thk Top -> Thk (M A) -> T M A
+         end
   that
 
   --| Removing the need of trivial algebra for generated monad transformers
@@ -93,10 +97,14 @@ begin
   -- end module Monad
 
   -- module Core
-  let Empty = data
-  end that
-  let Top = codata
-  end that
+  let Empty =
+    data
+    end
+  that
+  let Top =
+    codata
+    end
+  that
 
   let Option (A : VType) =
     data

@@ -55,8 +55,8 @@ begin
     def ! state_program =
       @[monadic] begin
         fn (get : Thk (Ret Int64))
-           (put : Thk (Int64 -> Ret Unit))
-           (add : Thk (Int64 -> Int64 -> Ret Int64))
+          (put : Thk (Int64 -> Ret Unit))
+          (add : Thk (Int64 -> Int64 -> Ret Int64))
         =>
           do n <- ! get;
           do n' <- ! add n 1;
@@ -66,7 +66,7 @@ begin
     that
 
     let ! state_run : State Int64 Int64 =
-      (! state_program)
+      ! state_program
         (State Int64)
         { ! mo_state Int64 }
         { ! get Int64 }
@@ -93,7 +93,7 @@ begin
       ! throw_ops String .throw Int64 "direct"
     in
     let ! monadic_failure : Exception String Int64 =
-      (! fail String) (Exception String) { ! mo_exception String } { ! raise String } "monadic"
+      ! fail String (Exception String) { ! mo_exception String } { ! raise String } "monadic"
     in
     let ! direct_recovered : Exception String Int64 =
       ! try_exception String Int64 { ! direct_failure } {

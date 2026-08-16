@@ -1,12 +1,12 @@
 begin
-  let Thk = @[import("../builtin/intrinsic/thk.zy")] _ that
-  let Ret = @[import("../builtin/intrinsic/ret.zy")] _ that
-  let Int64 = @[import("../builtin/intrinsic/i64.zy")] _ that
-  let String = @[import("../builtin/intrinsic/string.zy")] _ that
-  pi (_ : @[import("../builtin.zy")] _) .
-    exists (IoErrorKind = AbstractIoErrorKind : @[import("../builtin/intrinsic/vtype.zy")] _) .
-      exists (IoError = AbstractIoError : @[import("../builtin/intrinsic/vtype.zy")] _) .
-        exists (Path = AbstractPath : @[import("../builtin/intrinsic/vtype.zy")] _) .
+  let Thk = @(import("../builtin/intrinsic/thk.zy")) that
+  let Ret = @(import("../builtin/intrinsic/ret.zy")) that
+  let Int64 = @(import("../builtin/intrinsic/i64.zy")) that
+  let String = @(import("../builtin/intrinsic/string.zy")) that
+  pi (_ : @(import("../builtin.zy"))) .
+    exists (IoErrorKind = AbstractIoErrorKind : @(import("../builtin/intrinsic/vtype.zy"))) .
+      exists (IoError = AbstractIoError : @(import("../builtin/intrinsic/vtype.zy"))) .
+        exists (Path = AbstractPath : @(import("../builtin/intrinsic/vtype.zy"))) .
             (not_found :: AbstractIoErrorKind)
           * (permission_denied :: AbstractIoErrorKind)
           * (already_exists :: AbstractIoErrorKind)
@@ -18,7 +18,7 @@ begin
           * (from_code :: Thk (Int64 -> Ret AbstractIoErrorKind))
           * (
               kind_eq_branch :: Thk (
-                forall (R : @[import("../builtin/intrinsic/ctype.zy")] _) .
+                forall (R : @(import("../builtin/intrinsic/ctype.zy"))) .
                   AbstractIoErrorKind -> AbstractIoErrorKind -> Thk R -> Thk R -> R
               )
             )
