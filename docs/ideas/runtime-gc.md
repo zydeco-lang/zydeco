@@ -324,23 +324,60 @@ measurements show fragmentation-dominated allocation.
 
 ## 7. Open Questions
 
-- Where exactly should descriptors live: attached in SPS, ZASM, or synthesized by the
-  AMD64 emitter? The plan favors SPS as the single source of type knowledge.
-- How should `MaybePointer` fields containing erased interior pointers be resolved?
-  Options: prove such values cannot occur after lowering, or maintain segment-level base
-  maps and pay the lookup only on the conservative fallback.
-- Should host cells (`ControlTransfer`, `ZydecoClosure`) be GC-managed traceable objects
-  or explicit runtime roots? The former reclaims them; the latter is simpler to audit.
-- What is the correct finalization order, and may finalizers allocate? The first
-  collector forbids allocation and resurrection; host strings make that restriction easy
-  to enforce, transfers less so.
-- Do workloads that allocate only host strings need a host-side collection trigger, or
-  is triggering at the next Zydeco allocation sufficient?
-- What is the measurable rate of conservative scanning on polymorphic fields, and at
-  what point does Tolmach-style explicit type passing [4] become preferable to the
-  fallback?
-- Which root-map encoding balances emitter simplicity against map size for large
-  control-stack frames?
+Each question is annotated with the choice made by the implemented collector, or with
+the reason it remains open.
+
+**Descriptor placement. Resolved for the first collector.** `FieldClass` is computed in
+SPS lowering from normalized statics types (`lang/stackir/src/sps/lower.rs`), carried
+through SpsLow into ZASM `ProductLayout::fields` (`lang/assembly/src/lower.rs`), and
+encoded into per-allocation-site byte descriptors by `lang/assembly/src/gc.rs` for the
+AMD64 emitter. SPS remains the single source of type knowledge; ZASM is the carrier and
+the emitter is only an encoder.
+
+**Erased interior pointers. Preliminarily resolved with segment-level base maps.** The
+runtime rebuilds a sorted `cell_bases` index before each collection and maps arbitrary
+words to their containing cell with `resolve_segment_payload`. Explicit
+`InteriorPointer` offsets are still used wherever lowering knows them; the alternative
+of proving erased interior pointers impossible after lowering was not attempted.
+
+**Host cells. Resolved: GC-managed traceable objects.** `String` and `Bytes` cells are
+leaves with finalizers, `ControlTransfer` cells trace their three word fields, and
+host-created closures are leaves with finalizers. They are registered in a payload
+address set and swept alongside product cells.
+
+**Finalization. Preliminarily resolved.** Finalizers run after sweep and only drop the
+Rust box behind the host cell; they may not allocate or resurrect. There is no ordering
+guarantee among finalizers, and an unresumed host closure still leaks its
+argument-fold environment exactly as it did before collection.
+
+**Host-only string allocation trigger. Open.** Collection still triggers only at
+`zydeco_gc_alloc`; a program that allocates host strings without allocating products
+can grow the host registry without bound. No host-side trigger has been added.
+
+**Conservative scanning rate. Open; not yet measured.** The current implementation
+scans more than the plan proposed (the raw control-stack and environment ranges are
+full backstops), so any measurement now would overstate the polymorphic-field rate.
+Tolmach-style explicit type parameters remain an unquantified future option.
+
+**Root-map encoding. Preliminarily resolved.** The encoding is fixed-width: two `u32`
+counts followed by 12-byte entries (`offset_words`, class, padding,
+`interior_offset_words`). It is simple and shared by emitter and runtime, but no map
+size or compression measurement has been made.
+
+Newly identified during implementation:
+
+- **Dynamic continuation entry layouts.** Stack analysis still seeds every named block
+  with an empty control stack, so roots carried into dynamically entered continuation
+  blocks can escape the emitted maps. The current mitigations are the raw stack and
+  environment backstop, the one-cycle reuse delay, and pinning single-word cells. The
+  real fix is fixed-point stack-layout propagation across jumps; until then the
+  collector is precise only modulo these backstops.
+- **One-cycle reuse delay.** Cells freed by a sweep become eligible only at the next
+  collection. The delay is a safety margin, not a measured requirement; it should be
+  revisited once the stack-layout fix above lands.
+- **Environment stack growth.** The 1 MiB environment buffer is still a hard limit and
+  is intentionally outside this collector's scope; it needs a separate growth
+  mechanism (reserved address space, segmented stack, or heap-allocated frames).
 
 ## 8. References
 
