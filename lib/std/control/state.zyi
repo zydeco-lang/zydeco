@@ -1,0 +1,106 @@
+begin
+  let Thk = @[import("../builtin/intrinsic/thk.zy")] _ that
+  let Ret = @[import("../builtin/intrinsic/ret.zy")] _ that
+  let Unit = @[import("../builtin/intrinsic/unit.zy")] _ that
+  let Monad
+    (
+      M : (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+        @[import("../builtin/intrinsic/ctype.zy")] _
+      )
+    ) =
+    codata
+    | .return :
+      forall (A : @[import("../builtin/intrinsic/vtype.zy")] _) .
+        A -> M A
+    | .bind :
+      forall (A : @[import("../builtin/intrinsic/vtype.zy")] _) .
+        forall (B : @[import("../builtin/intrinsic/vtype.zy")] _) .
+             Thk (M A)
+          -> Thk (A -> M B)
+          -> M B
+    end
+  that
+  let MonadState
+    (S : @[import("../builtin/intrinsic/vtype.zy")] _)
+    (
+      M : (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+        @[import("../builtin/intrinsic/ctype.zy")] _
+      )
+    ) =
+    codata
+    | .get : M S
+    | .put : S -> M Unit
+    end
+  that
+  pi (_ : @[import("../builtin.zy")] _) .
+    exists
+      (
+        State = StateType :
+        (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+          @[import("../builtin/intrinsic/vtype.zy")] _
+        ) -> (@[import("../builtin/intrinsic/ctype.zy")] _)
+      )
+    .
+      exists
+        (
+          MonadState = ExportedMonadState as MonadState :
+          (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+            (@[import("../builtin/intrinsic/vtype.zy")] _) -> (
+              @[import("../builtin/intrinsic/ctype.zy")] _
+            )
+          ) -> (@[import("../builtin/intrinsic/ctype.zy")] _)
+        )
+      .
+        (
+          mo_state :: Thk (
+            forall (S : @[import("../builtin/intrinsic/vtype.zy")] _) .
+              Monad (StateType S)
+          )
+        )
+      * (
+          state :: Thk (
+            forall (S : @[import("../builtin/intrinsic/vtype.zy")] _) .
+              MonadState S (StateType S)
+          )
+        )
+      * (
+          get :: Thk (
+            forall (S : @[import("../builtin/intrinsic/vtype.zy")] _) .
+              StateType S S
+          )
+        )
+      * (
+          put :: Thk (
+            forall (S : @[import("../builtin/intrinsic/vtype.zy")] _) .
+              S -> StateType S Unit
+          )
+        )
+      * (
+          modify :: Thk (
+            forall (S : @[import("../builtin/intrinsic/vtype.zy")] _) .
+                 Thk (S -> Ret S)
+              -> StateType S Unit
+          )
+        )
+      * (
+          run_state :: Thk (
+            forall (S : @[import("../builtin/intrinsic/vtype.zy")] _) .
+              forall (A : @[import("../builtin/intrinsic/vtype.zy")] _) .
+                forall (B : @[import("../builtin/intrinsic/ctype.zy")] _) .
+                     S
+                  -> Thk (StateType S A)
+                  -> Thk (S -> A -> B)
+                  -> B
+          )
+        )
+      * (
+          eval_state :: Thk (
+            forall (S : @[import("../builtin/intrinsic/vtype.zy")] _) .
+              forall (A : @[import("../builtin/intrinsic/vtype.zy")] _) .
+                   S
+                -> Thk (StateType S A)
+                -> Ret A
+          )
+        )
+end
+-- end module State

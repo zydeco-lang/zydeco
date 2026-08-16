@@ -1,0 +1,98 @@
+-- The Exception effect, packaged as a pure library over the Builtin signature.
+param (
+  (/core; builtin) :
+  @(import("../builtin.zy"))
+) in
+let (/VType; /CType; /Thk; /Ret; /Unit) = core in
+begin
+  let monadic_basis = @(import("monad.zy")) that
+  let (= Monad, = Algebra, ()) = monadic_basis builtin in
+  begin
+    def Either (E : VType) (A : VType) =
+      data
+      | +Left : E
+      | +Right : A
+      end
+    that
+    let Top =
+      codata
+      end
+    that
+
+    -- The operations of the Exception effect, relative to an ambient monad M.
+    let MonadThrow (E : VType) (M : VType -> CType) =
+      codata
+      | .throw :
+        forall (A : VType) .
+          E -> M A
+      end
+    that
+
+    -- The canonical Exception relative monad: a returned Either observation.
+    let Exception (E : VType) (A : VType) = Ret (Either E A) that
+
+    def ! mo_exception (E : VType) : Monad (Exception E) =
+      comatch
+      | .return A a =>
+        ret +Right(a)
+      | .bind A A' m f =>
+        do r <- ! m;
+        match r
+        | +Left(e) => ret +Left(e)
+        | +Right(a) => ! f a
+        end
+      end
+    that
+
+    def ! throw_ops (E : VType) : MonadThrow E (Exception E) =
+      comatch
+      | .throw A e =>
+        ret +Left(e)
+      end
+    that
+
+    -- A monadic-block-ready raise function. The leading Top argument carries
+    -- the structure required by the algebra translation for the answer type A.
+    def ! raise (E : VType) : forall (A : VType) . Thk Top -> E -> Exception E A =
+      fn (A : VType) (_ : Thk Top) (e : E) =>
+        ret +Left(e)
+    that
+
+    def ! handle_exception (E : VType)
+      (A : VType)
+      (B : CType)
+      (m : Thk (Exception E A))
+      (on_error : Thk (E -> B))
+      (on_value : Thk (A -> B))
+    : B =
+        do r <- ! m;
+        match r
+        | +Left(e) => ! on_error e
+        | +Right(a) => ! on_value a
+        end
+    that
+
+    def ! try_exception (E : VType)
+      (A : VType)
+      (m : Thk (Exception E A))
+      (on_error : Thk (E -> Exception E A))
+    : Exception E A =
+        do r <- ! m;
+        match r
+        | +Left(e) => ! on_error e
+        | +Right(a) => ret +Right(a)
+        end
+    that
+
+    (
+      = Exception,
+      = MonadThrow,
+      = mo_exception,
+      = throw_ops,
+      = raise,
+      = handle_exception,
+      = try_exception
+    )
+  end
+end
+-- end module Exception

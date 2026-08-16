@@ -1,0 +1,109 @@
+-- User code over an unspecified M that supports State and Exception.
+begin
+  let monadic_basis = @(import("../../std/control/monad.zy")) that
+  let state_basis = @(import("../../std/control/state.zy")) that
+  let exception_basis = @(import("../../std/control/exception.zy")) that
+  let state_exn_basis = @(import("../../std/control/state-exn.zy")) that
+  param (
+    (/core; /representations; /numeric; /system; builtin) :
+    @(import("../../std/builtin.zy"))
+  ) that
+  let (/VType; /CType; /Thk; /Ret; /Unit) = core that
+  let (/Scalar = String) = representations/string that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let (/OS; /stdio; /process) = system that
+  let (= Monad, = Algebra, ()) = monadic_basis builtin in
+  let (/MonadState) = state_basis builtin in
+  let (/MonadThrow) = exception_basis builtin in
+  let (
+    = StateExn,
+    = mo_state_exn,
+    = state_ops,
+    = throw_ops,
+    = get,
+    = put,
+    = raise,
+    = catch,
+    = run_state_exn
+  ) = state_exn_basis builtin in
+  begin
+
+    -- The user writes this once. `ret`/`do` are generic; every effect
+    -- operation arrives as an argument whose source signature mentions `Ret`.
+    -- The algebra translation replaces `Ret` with whichever M is supplied
+    -- at the application site below.
+    def ! user_program =
+      @[monadic] begin
+        fn (get : Thk (Ret Int64))
+           (put : Thk (Int64 -> Ret Unit))
+           (raise : Thk (forall (A : VType) . String -> Ret A))
+           (catch : Thk (
+             forall (A : VType) .
+               Thk (Ret A) -> Thk (String -> Ret A) -> Ret A
+           ))
+           (add : Thk (Int64 -> Int64 -> Ret Int64))
+        =>
+          do n <- ! get;
+          do recovered <- ! catch Int64
+            {
+              do _ <- ! raise Int64 "boom";
+              ret n
+            }
+            {
+              fn _ => do m <- ! get; ret m
+            };
+          do n' <- ! add recovered 1;
+          do _ <- ! put n';
+          ret n'
+      end
+    that
+
+    -- A State-specific operation, lifted into the concrete stack. It is also
+    -- just another argument at the instantiation site.
+    def ! add_state_exn (x : Int64) (y : Int64) : StateExn Int64 String Int64 =
+      do z <- ! (int64/add) x y;
+      ! mo_state_exn Int64 String .return Int64 z
+    that
+
+    -- Only here do we choose the concrete monad and its operation instances.
+    -- Replacing this block replaces the meaning of the generic user code.
+    let ! production : StateExn Int64 String Int64 =
+      (! user_program)
+        (StateExn Int64 String)
+        { ! mo_state_exn Int64 String }
+        { ! get Int64 String }
+        { ! put Int64 String }
+        { ! raise Int64 String }
+        { ! catch Int64 String }
+        add_state_exn
+    in
+
+    ! run_state_exn Int64 String Int64 OS 40 { ! production }
+      {
+        fn msg =>
+          ! (stdio/write_line) msg {
+            ! (process/exit) 1
+          }
+      }
+      {
+        fn final_state answer =>
+          ! (stdio/write_int) answer {
+            ! (stdio/write) " " {
+              ! (stdio/write_int) final_state {
+                ! (stdio/write) "\n" {
+                  ! (int64/eq) OS answer 41 {
+                    ! (int64/eq) OS final_state 41 {
+                      ! (process/exit) 0
+                    } {
+                      ! (process/exit) 2
+                    }
+                  } {
+                    ! (process/exit) 3
+                  }
+                }
+              }
+            }
+          }
+      }
+  end
+end

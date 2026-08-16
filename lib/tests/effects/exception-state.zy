@@ -1,0 +1,151 @@
+-- Exception and State as packaged relative-monad effects.
+begin
+  let monadic_basis = @(import("../../std/control/monad.zy")) that
+  let exception_basis = @(import("../../std/control/exception.zy")) that
+  let state_basis = @(import("../../std/control/state.zy")) that
+  param (
+    (/core; /representations; /numeric; /system; builtin) :
+    @(import("../../std/builtin.zy"))
+  ) that
+  let (/VType; /CType; /Thk; /Ret; /Unit) = core that
+  let (/Scalar = String) = representations/string that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let (/OS; /stdio; /process) = system that
+  let (= Monad, = Algebra, ()) = monadic_basis builtin in
+  let (
+    = Exception,
+    = MonadThrow,
+    = mo_exception,
+    = throw_ops,
+    = raise,
+    = handle_exception,
+    = try_exception
+  ) = exception_basis builtin in
+  let (
+    = State,
+    = MonadState,
+    = mo_state,
+    = state,
+    = get,
+    = put,
+    = modify,
+    = run_state,
+    = eval_state
+  ) = state_basis builtin in
+  begin
+
+    -- A monadic block whose only effect operation is `raise`. The exception
+    -- monad and its instance are supplied at the use site.
+    def ! fail (E : VType) =
+      @[monadic] begin
+        fn (raise : Thk (forall (A : VType) . E -> Ret A)) (msg : E) =>
+          do answer <- ! raise Int64 msg;
+          ret answer
+      end
+    that
+
+    -- A monadic State program. Its operation arguments use `Ret` in their
+    -- source signatures; the algebra translation replaces `Ret` with the
+    -- ambient monad, so the concrete arguments are State operations.
+    def ! add_state (x : Int64) (y : Int64) : State Int64 Int64 =
+      do z <- ! (int64/add) x y;
+      ! mo_state Int64 .return Int64 z
+    that
+
+    def ! state_program =
+      @[monadic] begin
+        fn (get : Thk (Ret Int64))
+           (put : Thk (Int64 -> Ret Unit))
+           (add : Thk (Int64 -> Int64 -> Ret Int64))
+        =>
+          do n <- ! get;
+          do n' <- ! add n 1;
+          do _ <- ! put n';
+          ret n'
+      end
+    that
+
+    let ! state_run : State Int64 Int64 =
+      (! state_program)
+        (State Int64)
+        { ! mo_state Int64 }
+        { ! get Int64 }
+        { ! put Int64 }
+        add_state
+    in
+    let ! state_run_with_modify : State Int64 Int64 =
+      ! mo_state Int64 .bind Int64 Int64 { ! state_run } {
+        fn answer =>
+          ! mo_state Int64 .bind Unit Int64 {
+            ! modify Int64 {
+              fn n => ! (int64/add) n 1
+            }
+          } {
+            fn _ => ! mo_state Int64 .return Int64 answer
+          }
+      }
+    in
+
+    -- Two ways to introduce the Exception effect into user code: call the
+    -- dictionary method directly, or instantiate a monadic block with the
+    -- packaged raise operation.
+    let ! direct_failure : Exception String Int64 =
+      ! throw_ops String .throw Int64 "direct"
+    in
+    let ! monadic_failure : Exception String Int64 =
+      (! fail String) (Exception String) { ! mo_exception String } { ! raise String } "monadic"
+    in
+    let ! direct_recovered : Exception String Int64 =
+      ! try_exception String Int64 { ! direct_failure } {
+        fn _ => ! mo_exception String .return Int64 -3
+      }
+    in
+    let ! caught_direct : Ret Int64 =
+      ! handle_exception String Int64 (Ret Int64) { ! direct_recovered }
+        { fn _ => ret -1 }
+        { fn answer => ret answer }
+    in
+    let ! caught_monadic : Ret Int64 =
+      ! handle_exception String Int64 (Ret Int64) monadic_failure
+        { fn _ => ret -2 }
+        { fn answer => ret answer }
+    in
+
+    def ! check_int (actual : Int64) (expected : Int64) (k : Thk OS) : OS =
+      ! (int64/eq) OS actual expected k {
+        ! (process/exit) 1
+      }
+    that
+
+    do direct <- ! caught_direct;
+    do monadic <- ! caught_monadic;
+    ! (stdio/write_int) direct {
+      ! (stdio/write) " " {
+        ! (stdio/write_int) monadic {
+          ! (stdio/write) "\n" {
+            ! check_int direct -3 {
+              ! check_int monadic -2 {
+                ! run_state Int64 Int64 OS 40 { ! state_run_with_modify } {
+                  fn final_state answer =>
+                    ! (stdio/write_int) answer {
+                      ! (stdio/write) " " {
+                        ! (stdio/write_int) final_state {
+                          ! (stdio/write) "\n" {
+                            ! check_int answer 41 {
+                              ! check_int final_state 42 {
+                                ! (process/exit) 0
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  end
+end

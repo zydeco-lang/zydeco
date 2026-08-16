@@ -1,0 +1,133 @@
+-- A combined State + Exception stack, built from the two effect interfaces.
+param (
+  (/core; builtin) :
+  @(import("../builtin.zy"))
+) in
+let (/VType; /CType; /Thk; /Ret; /Unit) = core in
+begin
+  let monadic_basis = @(import("monad.zy")) that
+  let state_basis = @(import("state.zy")) that
+  let exception_basis = @(import("exception.zy")) that
+  let (= Monad, = Algebra, ()) = monadic_basis builtin in
+  let (/MonadState) = state_basis builtin in
+  let (/MonadThrow) = exception_basis builtin in
+  begin
+    def Either (E : VType) (A : VType) =
+      data
+      | +Left : E
+      | +Right : A
+      end
+    that
+    let Top =
+      codata
+      end
+    that
+
+    -- State layered over Exception: each step returns an Either observation.
+    let StateExn (S : VType) (E : VType) (A : VType) =
+      S -> Ret (Either E (A * S))
+    that
+
+    def ! mo_state_exn (S : VType) (E : VType) : Monad (StateExn S E) =
+      comatch
+      | .return A a =>
+        fn s =>
+          ret +Right(a, s)
+      | .bind A A' m f =>
+        fn s =>
+          do r <- ! m s;
+          match r
+          | +Left(e) => ret +Left(e)
+          | +Right(a, s') => ! f a s'
+          end
+      end
+    that
+
+    def ! state_ops (S : VType) (E : VType) : MonadState S (StateExn S E) =
+      comatch
+      | .get =>
+        fn s =>
+          ret +Right(s, s)
+      | .put s' =>
+        fn _ =>
+          ret +Right((), s')
+      end
+    that
+
+    def ! throw_ops (S : VType) (E : VType) : MonadThrow E (StateExn S E) =
+      comatch
+      | .throw A e =>
+        fn _ =>
+          ret +Left(e)
+      end
+    that
+
+    -- Concrete operations for direct use.
+    def ! get (S : VType) (E : VType) : StateExn S E S =
+      fn s =>
+        ret +Right(s, s)
+    that
+
+    def ! put (S : VType) (E : VType) (s' : S) : StateExn S E Unit =
+      fn _ =>
+        ret +Right((), s')
+    that
+
+    -- Monadic-block-ready operations. The Top argument carries the structure
+    -- inserted by the algebra translation for the answer type A.
+    def ! raise (S : VType)
+      (E : VType)
+      (A : VType)
+      (_ : Thk Top)
+      (e : E)
+    : StateExn S E A =
+        fn _ =>
+          ret +Left(e)
+    that
+
+    def ! catch (S : VType)
+      (E : VType)
+      (A : VType)
+      (_ : Thk Top)
+      (m : Thk (StateExn S E A))
+      (h : Thk (E -> StateExn S E A))
+    : StateExn S E A =
+        fn s =>
+          do r <- ! m s;
+          match r
+          | +Left(e) => ! h e s
+          | +Right(a, s') => ret +Right(a, s')
+          end
+    that
+
+    -- Runner: observe the error or the answer and the final state.
+    def ! run_state_exn (S : VType)
+      (E : VType)
+      (A : VType)
+      (B : CType)
+      (initial : S)
+      (m : Thk (StateExn S E A))
+      (on_error : Thk (E -> B))
+      (on_value : Thk (S -> A -> B))
+    : B =
+        do r <- ! m initial;
+        match r
+        | +Left(e) => ! on_error e
+        | +Right(a, s') => ! on_value s' a
+        end
+    that
+
+    (
+      = StateExn,
+      = mo_state_exn,
+      = state_ops,
+      = throw_ops,
+      = get,
+      = put,
+      = raise,
+      = catch,
+      = run_state_exn
+    )
+  end
+end
+-- end module StateExn
