@@ -2,7 +2,10 @@
 
 This extension provides Zydeco syntax highlighting
 and starts the [Cajun language server](https://github.com/zydeco-lang/zydeco/tree/main/editor/cajun)
-for `.zy` and `.zydeco` files.
+for `.zy`, `.zyi`, and `.zydeco` files.
+A `.zyi` file is the optional companion type annotation beside a `.zy` implementation;
+it holds one ordinary Zydeco term whose root must be a type, so it shares the language's
+highlighting and server analysis.
 
 ## Features
 

@@ -7,6 +7,7 @@
       "path": ".",
       "file-types": [
         "zy",
+        "zyi",
         "zydeco"
       ],
       "injection-regex": "^zy(deco)?$"

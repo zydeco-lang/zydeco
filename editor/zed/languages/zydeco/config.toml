@@ -1,4 +1,5 @@
 name = "Zydeco"
+grammar = "zydeco"
 path_suffixes = ["zy", "zyi", "zydeco"]
 line_comments = ["-- "]
 block_comment = ["/-", "-/"]

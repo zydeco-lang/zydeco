@@ -9,22 +9,25 @@ It provides live syntax and name-resolution diagnostics, document symbols, defin
 across imported files, inferred kind and type information on hover with links to type definitions,
 and compiler-aware semantic highlighting.
 
-The extension does not activate its Tree-sitter grammar until a committed grammar revision is available to Zed.
-Enable Cajun's full-document semantic tokens for Zydeco in Zed settings:
+The extension activates its Tree-sitter grammar from the repository revision pinned in `extension.toml`
+and applies the Zed query files under `languages/zydeco` for highlighting, brackets, indentation, and outlines.
+Zed compiles the grammar itself when it installs the extension, so the pinned revision must contain
+the generated parser committed under `../tree-sitter-zydeco`.
+Keep Tree-sitter highlighting and add Cajun's compiler-aware refinements with combined semantic tokens:
 
 ```json
 {
   "languages": {
     "Zydeco": {
-      "semantic_tokens": "full"
+      "semantic_tokens": "combined"
     }
   }
 }
 ```
 
-Cajun keeps lexical highlighting available while a file is incomplete,
-then refines resolved binders and references with kind, value-type, computation-type,
-value, and computation information when the corresponding compiler phases succeed.
+Cajun refines resolved binders and references with kind, value-type, computation-type,
+value, and computation information when the corresponding compiler phases succeed,
+while Tree-sitter keeps lexical highlighting available while a file is incomplete.
 
 ## Hover width
 
@@ -50,9 +53,9 @@ For consistently narrower panes, set a matching column budget in Zed settings:
 ```
 
 The repository contains the Tree-sitter grammar under `../tree-sitter-zydeco`
-and Zed query files under `languages/zydeco`.
-Activating it in the extension is a two-commit release operation: first commit the generated parser,
-then add its commit SHA to `extension.toml` and set `grammar = "zydeco"` in `config.toml`:
+and the Zed query files under `languages/zydeco`.
+Updating the grammar is a two-commit release operation: first commit the regenerated parser,
+then bump the grammar revision in `extension.toml`:
 
 ```toml
 [grammars.zydeco]
@@ -60,9 +63,6 @@ repository = "https://github.com/zydeco-lang/zydeco"
 rev = "<commit-containing-the-generated-parser>"
 path = "editor/tree-sitter-zydeco"
 ```
-
-Once the grammar is active, use `"semantic_tokens": "combined"` to retain Tree-sitter highlighting
-while applying Cajun's compiler-aware refinements.
 
 ## Installing Cajun
 

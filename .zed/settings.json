@@ -5,7 +5,7 @@
 {
   "languages": {
     "Zydeco": {
-      "semantic_tokens": "full"
+      "semantic_tokens": "combined"
     }
   },
   "lsp": {
