@@ -54,37 +54,6 @@ pub mod fmt;
 /// Span lookup for typed entities.
 mod source_span;
 
-/// Compatibility facade for the former checker-centric module layout.
-///
-/// New code should use the responsibility-specific modules at the crate root.
-pub mod tyck {
-    pub use crate::alloc;
-    pub use crate::arena;
-    pub use crate::builtin;
-    pub use crate::check;
-    pub use crate::check::error as err;
-    pub use crate::check::lub;
-    pub use crate::check::syntactic;
-    pub use crate::construct;
-    pub use crate::destruct;
-    pub use crate::elaborate::monadic;
-    pub use crate::elaborate::monadic::construct as moncons;
-    pub use crate::environment as env;
-    pub use crate::fmt;
-    pub use crate::normalize as norm;
-    pub mod syntax {
-        pub use crate::arena::*;
-        pub use crate::environment::*;
-        pub use crate::syntax::*;
-    }
-
-    pub use crate::alloc::*;
-    pub use crate::builtin::*;
-    pub use crate::check::*;
-    pub use crate::construct::*;
-    pub use crate::elaborate::monadic::construct::*;
-}
-
 pub(crate) use construct::syntax as cs;
 pub(crate) use surface_syntax as su;
 

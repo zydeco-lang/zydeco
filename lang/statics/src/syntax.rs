@@ -422,8 +422,7 @@ mod impls_structs {
             Self { arms: arms.into_iter().collect() }
         }
         pub fn get(&self, ctor: &CtorName) -> Option<TypeId> {
-            use std::collections::HashMap;
-            self.arms.iter().cloned().collect::<HashMap<_, _>>().get(ctor).cloned()
+            self.arms.iter().find_map(|(name, ty)| (name == ctor).then_some(*ty))
         }
         pub fn iter(&self) -> impl Iterator<Item = &(CtorName, TypeId)> {
             self.into_iter()
@@ -442,8 +441,7 @@ mod impls_structs {
             Self { arms: arms.into_iter().collect() }
         }
         pub fn get(&self, dtor: &DtorName) -> Option<TypeId> {
-            use std::collections::HashMap;
-            self.arms.iter().cloned().collect::<HashMap<_, _>>().get(dtor).cloned()
+            self.arms.iter().find_map(|(name, ty)| (name == dtor).then_some(*ty))
         }
         pub fn iter(&self) -> impl Iterator<Item = &(DtorName, TypeId)> {
             self.into_iter()

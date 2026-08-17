@@ -579,25 +579,22 @@ impl Debruijn {
                     std::panic::Location::caller(),
                 )?,
                 | (Type::Data(lhs), Type::Data(rhs)) => {
-                    use std::collections::HashMap;
-                    let lhs_query =
-                        tycker.statics.datas[&lhs].clone().into_iter().collect::<HashMap<_, _>>();
-                    let rhs_query =
-                        tycker.statics.datas[&rhs].clone().into_iter().collect::<HashMap<_, _>>();
-                    if lhs_query.len() != rhs_query.len() {
+                    let lhs_arms = tycker.statics.datas[&lhs].clone();
+                    let rhs_arms = tycker.statics.datas[&rhs].clone();
+                    if lhs_arms.len() != rhs_arms.len() {
                         tycker.err(
                             TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                             std::panic::Location::caller(),
                         )?
                     }
-                    for (ctor, lhs_ty) in lhs_query.iter() {
-                        let Some(rhs_ty) = rhs_query.get(ctor) else {
+                    for (ctor, lhs_ty) in lhs_arms {
+                        let Some(rhs_ty) = rhs_arms.get(&ctor) else {
                             tycker.err(
-                                TyckError::Expressivity("unexpeceted data constructor"),
+                                TyckError::Expressivity("unexpected data constructor"),
                                 std::panic::Location::caller(),
                             )?
                         };
-                        let _ = self.clone().lub(lhs_ty.to_owned(), rhs_ty.to_owned(), tycker)?;
+                        let _ = self.clone().lub(lhs_ty, rhs_ty, tycker)?;
                     }
 
                     // Fixme: try to make id-equality check work
@@ -616,25 +613,22 @@ impl Debruijn {
                     std::panic::Location::caller(),
                 )?,
                 | (Type::CoData(lhs), Type::CoData(rhs)) => {
-                    use std::collections::HashMap;
-                    let lhs_query =
-                        tycker.statics.codatas[&lhs].clone().into_iter().collect::<HashMap<_, _>>();
-                    let rhs_query =
-                        tycker.statics.codatas[&rhs].clone().into_iter().collect::<HashMap<_, _>>();
-                    if lhs_query.len() != rhs_query.len() {
+                    let lhs_arms = tycker.statics.codatas[&lhs].clone();
+                    let rhs_arms = tycker.statics.codatas[&rhs].clone();
+                    if lhs_arms.len() != rhs_arms.len() {
                         tycker.err(
                             TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                             std::panic::Location::caller(),
                         )?
                     }
-                    for (dtor, lhs_ty) in lhs_query.iter() {
-                        let Some(rhs_ty) = rhs_query.get(dtor) else {
+                    for (dtor, lhs_ty) in lhs_arms {
+                        let Some(rhs_ty) = rhs_arms.get(&dtor) else {
                             tycker.err(
-                                TyckError::Expressivity("unexpeceted data constructor"),
+                                TyckError::Expressivity("unexpected codata destructor"),
                                 std::panic::Location::caller(),
                             )?
                         };
-                        let _ = self.clone().lub(lhs_ty.to_owned(), rhs_ty.to_owned(), tycker)?;
+                        let _ = self.clone().lub(lhs_ty, rhs_ty, tycker)?;
                     }
 
                     // Fixme: try to make id-equality check work
