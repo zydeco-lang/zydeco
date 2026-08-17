@@ -1,4 +1,5 @@
 begin
+  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
   let CharModule = @(import("char.type.zy")) in
   let StringModule = @(import("string.type.zy")) in
   let BytesModule = @(import("bytes.type.zy")) in
@@ -7,15 +8,15 @@ begin
   let Char = @(import("../builtin/intrinsic/char.zy")) in
   let String = @(import("../builtin/intrinsic/string.zy")) in
   let Bytes = @(import("../builtin/intrinsic/bytes.zy")) in
-  let Package (Bool : @(import("../builtin/intrinsic/vtype.zy")))
+  let Package (Bool : VType)
     (
-      Option : (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-        @(import("../builtin/intrinsic/vtype.zy"))
+      Option : VType -> (
+        VType
       )
     )
     (
-      List : (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-        @(import("../builtin/intrinsic/vtype.zy"))
+      List : VType -> (
+        VType
       )
     ) =
       (char :: CharModule Option Char Int64 String)

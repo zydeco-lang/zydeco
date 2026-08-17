@@ -1,22 +1,23 @@
 begin
+  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
   let BoolModule = @(import("../data/bool.type.zy")) in
   let NumericInstance = @(import("numeric-instance.type.zy")) in
   let FloatModule = @(import("float.type.zy")) in
   let PrimitiveFloatModule = @(import("primitive-float.type.zy")) in
   let Unit = @(import("../builtin/intrinsic/unit.zy")) in
   let Package
-    (Bool : @(import("../builtin/intrinsic/vtype.zy")))
-    (Scalar : @(import("../builtin/intrinsic/vtype.zy")))
-    (String : @(import("../builtin/intrinsic/vtype.zy"))) =
+    (Bool : VType)
+    (Scalar : VType)
+    (String : VType) =
       (operations :: FloatModule Bool Scalar String)
     * (instance :: NumericInstance Bool Scalar)
     * Unit
   in
   pi (_ : @(import("../builtin/core.zy"))) .
     forall
-      (Bool : @(import("../builtin/intrinsic/vtype.zy")))
-      (Scalar : @(import("../builtin/intrinsic/vtype.zy")))
-      (String : @(import("../builtin/intrinsic/vtype.zy")))
+      (Bool : VType)
+      (Scalar : VType)
+      (String : VType)
     .
          BoolModule Bool
       -> PrimitiveFloatModule Scalar String

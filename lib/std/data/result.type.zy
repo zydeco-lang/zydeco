@@ -1,75 +1,26 @@
 begin
+  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
+  let ResultCore = @(import("result-core.type.zy")) in
   let Thk = @(import("../builtin/intrinsic/thk.zy")) in
   let Ret = @(import("../builtin/intrinsic/ret.zy")) in
-  let Unit = @(import("../builtin/intrinsic/unit.zy")) in
-  let ResultModule (Bool : @(import("../builtin/intrinsic/vtype.zy")))
+  let ResultModule
+    (Bool : VType)
     (
-      Result : (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-        @(import("../builtin/intrinsic/vtype.zy"))
-      ) -> (@(import("../builtin/intrinsic/vtype.zy")))
+      Result : VType -> (
+        VType
+      ) -> VType
     ) =
-      (
-        ok :: Thk (
-          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-            forall (E : @(import("../builtin/intrinsic/vtype.zy"))) . A -> Ret (Result A E)
-        )
-      )
-    * (
-        err :: Thk (
-          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-            forall (E : @(import("../builtin/intrinsic/vtype.zy"))) . E -> Ret (Result A E)
-        )
-      )
-    * (
-        fold :: Thk (
-          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-            forall (E : @(import("../builtin/intrinsic/vtype.zy"))) .
-              forall (B : @(import("../builtin/intrinsic/ctype.zy"))) .
-                Result A E -> Thk (A -> B) -> Thk (E -> B) -> B
-        )
-      )
-    * (
-        map :: Thk (
-          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-            forall (B : @(import("../builtin/intrinsic/vtype.zy"))) .
-              forall (E : @(import("../builtin/intrinsic/vtype.zy"))) .
-                Result A E -> Thk (A -> Ret B) -> Ret (Result B E)
-        )
-      )
-    * (
-        map_err :: Thk (
-          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-            forall (E : @(import("../builtin/intrinsic/vtype.zy"))) .
-              forall (F : @(import("../builtin/intrinsic/vtype.zy"))) .
-                Result A E -> Thk (E -> Ret F) -> Ret (Result A F)
-        )
-      )
-    * (
-        and_then :: Thk (
-          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-            forall (B : @(import("../builtin/intrinsic/vtype.zy"))) .
-              forall (E : @(import("../builtin/intrinsic/vtype.zy"))) .
-                   Result A E
-                -> Thk (A -> Ret (Result B E))
-                -> Ret (Result B E)
-        )
-      )
-    * (
-        unwrap_or :: Thk (
-          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-            forall (E : @(import("../builtin/intrinsic/vtype.zy"))) . Result A E -> A -> Ret A
-        )
-      )
+      (core :: ResultCore Result)
     * (
         is_ok :: Thk (
-          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-            forall (E : @(import("../builtin/intrinsic/vtype.zy"))) . Result A E -> Ret Bool
+          forall (A : VType) .
+            forall (E : VType) . Result A E -> Ret Bool
         )
       )
     * (
         is_err :: Thk (
-          forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-            forall (E : @(import("../builtin/intrinsic/vtype.zy"))) . Result A E -> Ret Bool
+          forall (A : VType) .
+            forall (E : VType) . Result A E -> Ret Bool
         )
       )
   in

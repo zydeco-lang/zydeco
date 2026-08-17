@@ -1,20 +1,21 @@
 begin
+  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
   let Thk = @(import("../builtin/intrinsic/thk.zy")) in
   let Ret = @(import("../builtin/intrinsic/ret.zy")) in
-  let StringModule (Bool : @(import("../builtin/intrinsic/vtype.zy")))
+  let StringModule (Bool : VType)
     (
-      Option : (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-        @(import("../builtin/intrinsic/vtype.zy"))
+      Option : VType -> (
+        VType
       )
     )
     (
-      List : (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-        @(import("../builtin/intrinsic/vtype.zy"))
+      List : VType -> (
+        VType
       )
     )
-    (Int64 : @(import("../builtin/intrinsic/vtype.zy")))
-    (Char : @(import("../builtin/intrinsic/vtype.zy")))
-    (String : @(import("../builtin/intrinsic/vtype.zy"))) =
+    (Int64 : VType)
+    (Char : VType)
+    (String : VType) =
       (empty :: String)
     * (length :: Thk (String -> Ret Int64))
     * (byte_length :: Thk (String -> Ret Int64))

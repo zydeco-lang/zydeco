@@ -1,45 +1,18 @@
 begin
-  let Thk = @(import("../builtin/intrinsic/thk.zy")) that
-  let Unit = @(import("../builtin/intrinsic/unit.zy")) that
-  let Monad
-    (
-      M : (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-        @(import("../builtin/intrinsic/ctype.zy"))
-      )
-    ) =
-    codata
-    | .return :
-      forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-        A -> M A
-    | .bind :
-      forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-        forall (B : @(import("../builtin/intrinsic/vtype.zy"))) .
-             Thk (M A)
-          -> Thk (A -> M B)
-          -> M B
-    end
-  that
-  let Algebra
-    (
-      M : (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-        @(import("../builtin/intrinsic/ctype.zy"))
-      )
-    )
-    (R : @(import("../builtin/intrinsic/ctype.zy"))) =
-    forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-         Thk (M A)
-      -> Thk (A -> R)
-      -> R
-  that
+  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
+  let CType = @(import("../builtin/intrinsic/ctype.zy")) in
+  let Monad = @(import("monad.type.zy")) in
+  let Algebra = @(import("algebra.type.zy")) in
+  let Unit = @(import("../builtin/intrinsic/unit.zy")) in
   pi (_ : @(import("../builtin.zy"))) .
     exists
       (
         Monad = ExportedMonad as Monad :
         (
-          (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-            @(import("../builtin/intrinsic/ctype.zy"))
+          VType -> (
+            CType
           )
-        ) -> (@(import("../builtin/intrinsic/ctype.zy")))
+        ) -> CType
       )
     .
       exists
@@ -47,12 +20,12 @@ begin
           Algebra = ExportedAlgebra as Algebra :
           (
                (
-                 (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-                   @(import("../builtin/intrinsic/ctype.zy"))
+                 VType -> (
+                   CType
                  )
                )
-            -> (@(import("../builtin/intrinsic/ctype.zy")))
-            -> (@(import("../builtin/intrinsic/ctype.zy")))
+            -> CType
+            -> CType
           )
         )
       .

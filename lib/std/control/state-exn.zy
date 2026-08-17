@@ -18,10 +18,7 @@ begin
       | +Right : A
       end
     that
-    let Top =
-      codata
-      end
-    that
+    let Top = @(import("top.type.zy")) that
 
     -- State layered over Exception: each step returns an Either observation.
     let StateExn (S : VType) (E : VType) (A : VType) =

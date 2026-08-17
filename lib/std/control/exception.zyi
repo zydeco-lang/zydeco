@@ -1,77 +1,47 @@
 begin
-  let Thk = @(import("../builtin/intrinsic/thk.zy")) that
-  let Ret = @(import("../builtin/intrinsic/ret.zy")) that
-  let Unit = @(import("../builtin/intrinsic/unit.zy")) that
-  let Top =
-    codata
-    end
-  that
-  let Monad
-    (
-      M : (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-        @(import("../builtin/intrinsic/ctype.zy"))
-      )
-    ) =
-    codata
-    | .return :
-      forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-        A -> M A
-    | .bind :
-      forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-        forall (B : @(import("../builtin/intrinsic/vtype.zy"))) .
-             Thk (M A)
-          -> Thk (A -> M B)
-          -> M B
-    end
-  that
-  let MonadThrow
-    (E : @(import("../builtin/intrinsic/vtype.zy")))
-    (
-      M : (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-        @(import("../builtin/intrinsic/ctype.zy"))
-      )
-    ) =
-    codata
-    | .throw :
-      forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-        E -> M A
-    end
-  that
+  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
+  let CType = @(import("../builtin/intrinsic/ctype.zy")) in
+  let Thk = @(import("../builtin/intrinsic/thk.zy")) in
+  let Ret = @(import("../builtin/intrinsic/ret.zy")) in
+  let Unit = @(import("../builtin/intrinsic/unit.zy")) in
+  let Top = @(import("top.type.zy")) in
+  let Monad = @(import("monad.type.zy")) in
+  let MonadThrow = @(import("exception.type.zy")) in
   pi (_ : @(import("../builtin.zy"))) .
     exists
       (
         Exception = ExceptionType :
-        (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-          @(import("../builtin/intrinsic/vtype.zy"))
-        ) -> (@(import("../builtin/intrinsic/ctype.zy")))
+        VType -> (
+          VType
+        ) -> CType
       )
     .
       exists
         (
           MonadThrow = ExportedMonadThrow as MonadThrow :
-          (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-            (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-              @(import("../builtin/intrinsic/ctype.zy"))
+          VType -> (
+            VType -> (
+              CType
             )
-          ) -> (@(import("../builtin/intrinsic/ctype.zy")))
+          ) -> CType
         )
       .
           (
             mo_exception :: Thk (
-              forall (E : @(import("../builtin/intrinsic/vtype.zy"))) .
+              forall (E : VType) .
                 Monad (ExceptionType E)
             )
           )
         * (
             throw_ops :: Thk (
-              forall (E : @(import("../builtin/intrinsic/vtype.zy"))) .
+              forall (E : VType) .
                 MonadThrow E (ExceptionType E)
             )
           )
         * (
             raise :: Thk (
-              forall (E : @(import("../builtin/intrinsic/vtype.zy"))) .
-                forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
+              forall (E : VType) .
+                forall (A : VType) .
                      Thk Top
                   -> E
                   -> ExceptionType E A
@@ -79,9 +49,9 @@ begin
           )
         * (
             handle_exception :: Thk (
-              forall (E : @(import("../builtin/intrinsic/vtype.zy"))) .
-                forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-                  forall (B : @(import("../builtin/intrinsic/ctype.zy"))) .
+              forall (E : VType) .
+                forall (A : VType) .
+                  forall (B : CType) .
                        Thk (ExceptionType E A)
                     -> Thk (E -> B)
                     -> Thk (A -> B)
@@ -90,8 +60,8 @@ begin
           )
         * (
             try_exception :: Thk (
-              forall (E : @(import("../builtin/intrinsic/vtype.zy"))) .
-                forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
+              forall (E : VType) .
+                forall (A : VType) .
                      Thk (ExceptionType E A)
                   -> Thk (E -> ExceptionType E A)
                   -> ExceptionType E A

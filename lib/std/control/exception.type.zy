@@ -1,0 +1,17 @@
+begin
+  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
+  let CType = @(import("../builtin/intrinsic/ctype.zy")) in
+  let MonadThrow
+    (E : VType)
+    (
+      M : VType -> (
+        CType
+      )
+    ) =
+    codata
+    | .throw :
+      forall (A : VType) . E -> M A
+    end
+  in
+  MonadThrow
+end

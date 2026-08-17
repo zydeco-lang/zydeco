@@ -1,85 +1,15 @@
 begin
-  let Thk = @(import("../builtin/intrinsic/thk.zy")) that
-  let Ret = @(import("../builtin/intrinsic/ret.zy")) that
-  let Unit = @(import("../builtin/intrinsic/unit.zy")) that
-  let Int64 = @(import("../builtin/intrinsic/i64.zy")) that
+  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
+  let ListCore = @(import("list-core.type.zy")) in
+  let Int64 = @(import("../builtin/intrinsic/i64.zy")) in
   pi (_ : @(import("../builtin.zy"))) .
     exists
       (
         List = AbstractList :
-        (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-          @(import("../builtin/intrinsic/vtype.zy"))
+        VType -> (
+          VType
         )
       )
     .
-        (
-          nil :: Thk (
-            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-              Ret (AbstractList A)
-          )
-        )
-      * (
-          cons :: Thk (
-            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-              A -> AbstractList A -> Ret (AbstractList A)
-          )
-        )
-      * (
-          case :: Thk (
-            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-              forall (B : @(import("../builtin/intrinsic/ctype.zy"))) .
-                   AbstractList A
-                -> Thk B
-                -> Thk (A -> AbstractList A -> B)
-                -> B
-          )
-        )
-      * (
-          fold :: Thk (
-            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-              forall (B : @(import("../builtin/intrinsic/ctype.zy"))) .
-                   AbstractList A
-                -> Thk B
-                -> Thk (A -> Thk B -> B)
-                -> B
-          )
-        )
-      * (
-          singleton :: Thk (
-            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-              A -> Ret (AbstractList A)
-          )
-        )
-      * (
-          append :: Thk (
-            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-              AbstractList A -> AbstractList A -> Ret (AbstractList A)
-          )
-        )
-      * (
-          map :: Thk (
-            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-              forall (B : @(import("../builtin/intrinsic/vtype.zy"))) .
-                AbstractList A -> Thk (A -> Ret B) -> Ret (AbstractList B)
-          )
-        )
-      * (
-          fold_left :: Thk (
-            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-              forall (B : @(import("../builtin/intrinsic/vtype.zy"))) .
-                AbstractList A -> B -> Thk (B -> A -> Ret B) -> Ret B
-          )
-        )
-      * (
-          reverse :: Thk (
-            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-              AbstractList A -> Ret (AbstractList A)
-          )
-        )
-      * (
-          length :: Thk (
-            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-              AbstractList A -> Ret Int64
-          )
-        )
+      ListCore AbstractList Int64
 end

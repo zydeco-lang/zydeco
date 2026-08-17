@@ -1,0 +1,7 @@
+begin
+  let Top =
+    codata
+    end
+  in
+  Top
+end

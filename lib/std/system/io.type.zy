@@ -1,26 +1,28 @@
 begin
+  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
+  let CType = @(import("../builtin/intrinsic/ctype.zy")) in
   let Thk = @(import("../builtin/intrinsic/thk.zy")) in
   let Ret = @(import("../builtin/intrinsic/ret.zy")) in
   let Unit = @(import("../builtin/intrinsic/unit.zy")) in
-  let IoModule (Bool : @(import("../builtin/intrinsic/vtype.zy")))
+  let IoModule (Bool : VType)
     (
-      Option : (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-        @(import("../builtin/intrinsic/vtype.zy"))
+      Option : VType -> (
+        VType
       )
     )
     (
-      Result : (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-        @(import("../builtin/intrinsic/vtype.zy"))
-      ) -> (@(import("../builtin/intrinsic/vtype.zy")))
+      Result : VType -> (
+        VType
+      ) -> VType
     )
-    (Int64 : @(import("../builtin/intrinsic/vtype.zy")))
-    (String : @(import("../builtin/intrinsic/vtype.zy")))
-    (Bytes : @(import("../builtin/intrinsic/vtype.zy")))
-    (Reader : @(import("../builtin/intrinsic/vtype.zy")))
-    (Writer : @(import("../builtin/intrinsic/vtype.zy")))
-    (IoErrorKind : @(import("../builtin/intrinsic/vtype.zy")))
-    (IoError : @(import("../builtin/intrinsic/vtype.zy")))
-    (OS : @(import("../builtin/intrinsic/ctype.zy"))) =
+    (Int64 : VType)
+    (String : VType)
+    (Bytes : VType)
+    (Reader : VType)
+    (Writer : VType)
+    (IoErrorKind : VType)
+    (IoError : VType)
+    (OS : CType) =
       (not_found :: IoErrorKind)
     * (permission_denied :: IoErrorKind)
     * (already_exists :: IoErrorKind)

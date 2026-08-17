@@ -1,9 +1,10 @@
 begin
+  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
+  let CType = @(import("../builtin/intrinsic/ctype.zy")) in
   let Thk = @(import("../builtin/intrinsic/thk.zy")) in
   let Ret = @(import("../builtin/intrinsic/ret.zy")) in
-  let Unit = @(import("../builtin/intrinsic/unit.zy")) in
-  let PrimitiveIntegerModule (Integer : @(import("../builtin/intrinsic/vtype.zy")))
-    (String : @(import("../builtin/intrinsic/vtype.zy"))) =
+  let PrimitiveIntegerModule (Integer : VType)
+    (String : VType) =
       (add :: Thk (Integer -> Integer -> Ret Integer))
     * (sub :: Thk (Integer -> Integer -> Ret Integer))
     * (mul :: Thk (Integer -> Integer -> Ret Integer))
@@ -11,19 +12,19 @@ begin
     * (mod :: Thk (Integer -> Integer -> Ret Integer))
     * (
         eq :: Thk (
-          forall (R : @(import("../builtin/intrinsic/ctype.zy"))) .
+          forall (R : CType) .
             Integer -> Integer -> Thk R -> Thk R -> R
         )
       )
     * (
         lt :: Thk (
-          forall (R : @(import("../builtin/intrinsic/ctype.zy"))) .
+          forall (R : CType) .
             Integer -> Integer -> Thk R -> Thk R -> R
         )
       )
     * (
         gt :: Thk (
-          forall (R : @(import("../builtin/intrinsic/ctype.zy"))) .
+          forall (R : CType) .
             Integer -> Integer -> Thk R -> Thk R -> R
         )
       )

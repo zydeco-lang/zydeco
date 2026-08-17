@@ -1,0 +1,18 @@
+begin
+  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
+  let CType = @(import("../builtin/intrinsic/ctype.zy")) in
+  let Thk = @(import("../builtin/intrinsic/thk.zy")) in
+  let Algebra
+    (
+      M : VType -> (
+        CType
+      )
+    )
+    (R : CType) =
+    forall (A : VType) .
+         Thk (M A)
+      -> Thk (A -> R)
+      -> R
+  in
+  Algebra
+end

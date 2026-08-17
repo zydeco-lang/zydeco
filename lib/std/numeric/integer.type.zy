@@ -1,10 +1,10 @@
 begin
+  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
   let Thk = @(import("../builtin/intrinsic/thk.zy")) in
   let Ret = @(import("../builtin/intrinsic/ret.zy")) in
-  let Unit = @(import("../builtin/intrinsic/unit.zy")) in
-  let IntegerModule (Bool : @(import("../builtin/intrinsic/vtype.zy")))
-    (Integer : @(import("../builtin/intrinsic/vtype.zy")))
-    (String : @(import("../builtin/intrinsic/vtype.zy"))) =
+  let IntegerModule (Bool : VType)
+    (Integer : VType)
+    (String : VType) =
       (add :: Thk (Integer -> Integer -> Ret Integer))
     * (sub :: Thk (Integer -> Integer -> Ret Integer))
     * (mul :: Thk (Integer -> Integer -> Ret Integer))

@@ -1,20 +1,22 @@
 begin
+  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
+  let CType = @(import("../builtin/intrinsic/ctype.zy")) in
   let Thk = @(import("../builtin/intrinsic/thk.zy")) in
   let Ret = @(import("../builtin/intrinsic/ret.zy")) in
   let Unit = @(import("../builtin/intrinsic/unit.zy")) in
   let FsModule
     (
-      Result : (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-        @(import("../builtin/intrinsic/vtype.zy"))
-      ) -> (@(import("../builtin/intrinsic/vtype.zy")))
+      Result : VType -> (
+        VType
+      ) -> VType
     )
-    (String : @(import("../builtin/intrinsic/vtype.zy")))
-    (Bytes : @(import("../builtin/intrinsic/vtype.zy")))
-    (Reader : @(import("../builtin/intrinsic/vtype.zy")))
-    (Writer : @(import("../builtin/intrinsic/vtype.zy")))
-    (Path : @(import("../builtin/intrinsic/vtype.zy")))
-    (IoError : @(import("../builtin/intrinsic/vtype.zy")))
-    (OS : @(import("../builtin/intrinsic/ctype.zy"))) =
+    (String : VType)
+    (Bytes : VType)
+    (Reader : VType)
+    (Writer : VType)
+    (Path : VType)
+    (IoError : VType)
+    (OS : CType) =
       (path :: Thk (String -> Ret Path))
     * (path_string :: Thk (Path -> Ret String))
     * (

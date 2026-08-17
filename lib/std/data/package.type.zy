@@ -1,31 +1,32 @@
 begin
+  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
   let BoolModule = @(import("bool.type.zy")) in
   let OptionModule = @(import("option.type.zy")) in
   let ResultModule = @(import("result.type.zy")) in
   let ListModule = @(import("list.type.zy")) in
   let Unit = @(import("../builtin/intrinsic/unit.zy")) in
   let Int64 = @(import("../builtin/intrinsic/i64.zy")) in
-  exists (Bool = BoolType : @(import("../builtin/intrinsic/vtype.zy")))
+  exists (Bool = BoolType : VType)
     (
       Option = OptionType :
-      (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-        @(import("../builtin/intrinsic/vtype.zy"))
+      VType -> (
+        VType
       )
     )
   .
     exists
       (
         Result = ResultType :
-        (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-          @(import("../builtin/intrinsic/vtype.zy"))
-        ) -> (@(import("../builtin/intrinsic/vtype.zy")))
+        VType -> (
+          VType
+        ) -> VType
       )
     .
       exists
         (
           List = ListType :
-          (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-            @(import("../builtin/intrinsic/vtype.zy"))
+          VType -> (
+            VType
           )
         )
       .

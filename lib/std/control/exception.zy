@@ -14,19 +14,10 @@ begin
       | +Right : A
       end
     that
-    let Top =
-      codata
-      end
-    that
+    let Top = @(import("top.type.zy")) that
 
     -- The operations of the Exception effect, relative to an ambient monad M.
-    let MonadThrow (E : VType) (M : VType -> CType) =
-      codata
-      | .throw :
-        forall (A : VType) .
-          E -> M A
-      end
-    that
+    let MonadThrow = @(import("exception.type.zy")) that
 
     -- The canonical Exception relative monad: a returned Either observation.
     let Exception (E : VType) (A : VType) = Ret (Either E A) that

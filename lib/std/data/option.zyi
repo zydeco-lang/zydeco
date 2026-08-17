@@ -1,72 +1,14 @@
 begin
-  let Thk = @(import("../builtin/intrinsic/thk.zy")) that
-  let Ret = @(import("../builtin/intrinsic/ret.zy")) that
-  let Unit = @(import("../builtin/intrinsic/unit.zy")) that
+  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
+  let OptionCore = @(import("option-core.type.zy")) in
   pi (_ : @(import("../builtin.zy"))) .
     exists
       (
         Option = AbstractOption :
-        (@(import("../builtin/intrinsic/vtype.zy"))) -> (
-          @(import("../builtin/intrinsic/vtype.zy"))
+        VType -> (
+          VType
         )
       )
     .
-        (
-          none :: Thk (
-            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-              Ret (AbstractOption A)
-          )
-        )
-      * (
-          some :: Thk (
-            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-              A -> Ret (AbstractOption A)
-          )
-        )
-      * (
-          fold :: Thk (
-            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-              forall (B : @(import("../builtin/intrinsic/ctype.zy"))) .
-                AbstractOption A -> Thk B -> Thk (A -> B) -> B
-          )
-        )
-      * (
-          map :: Thk (
-            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-              forall (B : @(import("../builtin/intrinsic/vtype.zy"))) .
-                AbstractOption A -> Thk (A -> Ret B) -> Ret (AbstractOption B)
-          )
-        )
-      * (
-          and_then :: Thk (
-            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-              forall (B : @(import("../builtin/intrinsic/vtype.zy"))) .
-                   AbstractOption A
-                -> Thk (A -> Ret (AbstractOption B))
-                -> Ret (AbstractOption B)
-          )
-        )
-      * (
-          unwrap_or :: Thk (
-            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-              AbstractOption A -> A -> Ret A
-          )
-        )
-      * (
-          or_else :: Thk (
-            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-                 AbstractOption A
-              -> Thk (Ret (AbstractOption A))
-              -> Ret (AbstractOption A)
-          )
-        )
-      * (
-          zip :: Thk (
-            forall (A : @(import("../builtin/intrinsic/vtype.zy"))) .
-              forall (B : @(import("../builtin/intrinsic/vtype.zy"))) .
-                   AbstractOption A
-                -> AbstractOption B
-                -> Ret (AbstractOption (A * B))
-          )
-        )
+      OptionCore AbstractOption
 end

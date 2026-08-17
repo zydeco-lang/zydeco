@@ -1,12 +1,14 @@
 begin
+  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
+  let CType = @(import("../builtin/intrinsic/ctype.zy")) in
   let Thk = @(import("../builtin/intrinsic/thk.zy")) that
   let Ret = @(import("../builtin/intrinsic/ret.zy")) that
   let Int64 = @(import("../builtin/intrinsic/i64.zy")) that
   let String = @(import("../builtin/intrinsic/string.zy")) that
   pi (_ : @(import("../builtin.zy"))) .
-    exists (IoErrorKind = AbstractIoErrorKind : @(import("../builtin/intrinsic/vtype.zy"))) .
-      exists (IoError = AbstractIoError : @(import("../builtin/intrinsic/vtype.zy"))) .
-        exists (Path = AbstractPath : @(import("../builtin/intrinsic/vtype.zy"))) .
+    exists (IoErrorKind = AbstractIoErrorKind : VType) .
+      exists (IoError = AbstractIoError : VType) .
+        exists (Path = AbstractPath : VType) .
             (not_found :: AbstractIoErrorKind)
           * (permission_denied :: AbstractIoErrorKind)
           * (already_exists :: AbstractIoErrorKind)
@@ -18,7 +20,7 @@ begin
           * (from_code :: Thk (Int64 -> Ret AbstractIoErrorKind))
           * (
               kind_eq_branch :: Thk (
-                forall (R : @(import("../builtin/intrinsic/ctype.zy"))) .
+                forall (R : CType) .
                   AbstractIoErrorKind -> AbstractIoErrorKind -> Thk R -> Thk R -> R
               )
             )

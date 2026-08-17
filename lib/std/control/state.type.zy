@@ -1,0 +1,18 @@
+begin
+  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
+  let CType = @(import("../builtin/intrinsic/ctype.zy")) in
+  let Unit = @(import("../builtin/intrinsic/unit.zy")) in
+  let MonadState
+    (S : VType)
+    (
+      M : VType -> (
+        CType
+      )
+    ) =
+    codata
+    | .get : M S
+    | .put : S -> M Unit
+    end
+  in
+  MonadState
+end

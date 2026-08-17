@@ -9,6 +9,10 @@ but never construct library-defined `Bool`, `Option`, `Result`, or `List` values
 and assembles a value of that package type. Topic implementations use the same adjacent `.zy`/`.zyi` pairing.
 Reusable package-type constructors live in `.type.zy` sources and are imported by both leaf companions and
 aggregate signatures, so the contracts have one definition even when several boundaries expose them.
+Modules whose composed package adds operations on top of an independently checkable leaf split the type into a
+`*-core.type.zy` leaf contract and an extended `.type.zy` package type.
+Signature and type files bind `VType` and `CType` once at the top of the file and use those aliases in
+every classifier below.
 
 This separation keeps algebraic data in the language.
 The interpreter and native runtime only need to agree on the small Builtin ABI, while the files under `data/`
@@ -35,10 +39,11 @@ data/*.zy                  Bool, Option, Result, List, and their composed packag
 numeric/{integer,float}.zy explicitly polymorphic derived numeric builders
 text/package.zy            cross-representation text operations
 system/{types,package}.zy  shared system data and capability-preserving assembly
-control/monad.zy           reusable control abstractions
+control/*.zy               monadic basis, State, Exception, and their combination
 
 **/*.zyi                   optional whole-file annotations beside value implementations
 **/*.type.zy               reusable type terms imported by companions and aggregate types
+**/*-core.type.zy          leaf module contract shared by a `.zyi` and its extended `.type.zy`
 ```
 
 Leaf sources are independently checkable package values or package functions. Topic package files assemble values

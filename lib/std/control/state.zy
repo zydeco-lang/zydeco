@@ -9,12 +9,7 @@ begin
   let (= Monad, = Algebra, ()) = monadic_basis builtin in
   begin
     -- The operations of the State effect, relative to an ambient monad M.
-    let MonadState (S : VType) (M : VType -> CType) =
-      codata
-      | .get : M S
-      | .put : S -> M Unit
-      end
-    that
+    let MonadState = @(import("state.type.zy")) that
 
     -- The canonical State relative monad: thread S through Ret and return
     -- both the answer and the final state.
