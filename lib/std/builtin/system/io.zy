@@ -1,90 +1,47 @@
-param Reader : @(import("../intrinsic/vtype.zy")) in
-param Writer : @(import("../intrinsic/vtype.zy")) in
-param OS : @(import("../intrinsic/ctype.zy")) in
-  (
-    @[builtin(io_read)] (
-      read :: (@(import("../intrinsic/thk.zy"))) (
-           Reader
-        -> (@(import("../intrinsic/i64.zy")))
-        -> (@(import("../intrinsic/thk.zy"))) (
-             (@(import("../intrinsic/i64.zy"))) -> (@(import("../intrinsic/string.zy"))) -> OS
-           )
-        -> (@(import("../intrinsic/thk.zy"))) ((@(import("../intrinsic/bytes.zy"))) -> OS)
-        -> OS
+begin
+  let VType = @(import("../intrinsic/vtype.zy")) in
+  let CType = @(import("../intrinsic/ctype.zy")) in
+  let Thk = @(import("../intrinsic/thk.zy")) in
+  let String = @(import("../intrinsic/string.zy")) in
+  let Int64 = @(import("../intrinsic/i64.zy")) in
+  let Bytes = @(import("../intrinsic/bytes.zy")) in
+  param Reader : VType in
+  param Writer : VType in
+  param OS : CType in
+  let Error = Thk (Int64 -> String -> OS) in
+  let Success (A : VType) = Thk (A -> OS) in
+  let Done = Thk OS in
+    (
+      @[builtin(io_read)] (
+        read :: Thk (Reader -> Int64 -> Error -> Success Bytes -> OS)
       )
     )
-  )
-* (
-    @[builtin(io_read_line)] (
-      read_line :: (@(import("../intrinsic/thk.zy"))) (
-           Reader
-        -> (@(import("../intrinsic/thk.zy"))) (
-             (@(import("../intrinsic/i64.zy"))) -> (@(import("../intrinsic/string.zy"))) -> OS
-           )
-        -> (@(import("../intrinsic/thk.zy"))) OS
-        -> (@(import("../intrinsic/thk.zy"))) ((@(import("../intrinsic/bytes.zy"))) -> OS)
-        -> OS
+  * (
+      @[builtin(io_read_line)] (
+        read_line :: Thk (Reader -> Error -> Done -> Success Bytes -> OS)
       )
     )
-  )
-* (
-    @[builtin(io_read_all)] (
-      read_all :: (@(import("../intrinsic/thk.zy"))) (
-           Reader
-        -> (@(import("../intrinsic/thk.zy"))) (
-             (@(import("../intrinsic/i64.zy"))) -> (@(import("../intrinsic/string.zy"))) -> OS
-           )
-        -> (@(import("../intrinsic/thk.zy"))) ((@(import("../intrinsic/bytes.zy"))) -> OS)
-        -> OS
+  * (
+      @[builtin(io_read_all)] (
+        read_all :: Thk (Reader -> Error -> Success Bytes -> OS)
       )
     )
-  )
-* (
-    @[builtin(io_write_all)] (
-      write_all :: (@(import("../intrinsic/thk.zy"))) (
-           Writer
-        -> (@(import("../intrinsic/bytes.zy")))
-        -> (@(import("../intrinsic/thk.zy"))) (
-             (@(import("../intrinsic/i64.zy"))) -> (@(import("../intrinsic/string.zy"))) -> OS
-           )
-        -> (@(import("../intrinsic/thk.zy"))) OS
-        -> OS
+  * (
+      @[builtin(io_write_all)] (
+        write_all :: Thk (Writer -> Bytes -> Error -> Done -> OS)
       )
     )
-  )
-* (
-    @[builtin(io_flush)] (
-      flush :: (@(import("../intrinsic/thk.zy"))) (
-           Writer
-        -> (@(import("../intrinsic/thk.zy"))) (
-             (@(import("../intrinsic/i64.zy"))) -> (@(import("../intrinsic/string.zy"))) -> OS
-           )
-        -> (@(import("../intrinsic/thk.zy"))) OS
-        -> OS
+  * (
+      @[builtin(io_flush)] (flush :: Thk (Writer -> Error -> Done -> OS))
+    )
+  * (
+      @[builtin(io_close_reader)] (
+        close_reader :: Thk (Reader -> Error -> Done -> OS)
       )
     )
-  )
-* (
-    @[builtin(io_close_reader)] (
-      close_reader :: (@(import("../intrinsic/thk.zy"))) (
-           Reader
-        -> (@(import("../intrinsic/thk.zy"))) (
-             (@(import("../intrinsic/i64.zy"))) -> (@(import("../intrinsic/string.zy"))) -> OS
-           )
-        -> (@(import("../intrinsic/thk.zy"))) OS
-        -> OS
+  * (
+      @[builtin(io_close_writer)] (
+        close_writer :: Thk (Writer -> Error -> Done -> OS)
       )
     )
-  )
-* (
-    @[builtin(io_close_writer)] (
-      close_writer :: (@(import("../intrinsic/thk.zy"))) (
-           Writer
-        -> (@(import("../intrinsic/thk.zy"))) (
-             (@(import("../intrinsic/i64.zy"))) -> (@(import("../intrinsic/string.zy"))) -> OS
-           )
-        -> (@(import("../intrinsic/thk.zy"))) OS
-        -> OS
-      )
-    )
-  )
+end

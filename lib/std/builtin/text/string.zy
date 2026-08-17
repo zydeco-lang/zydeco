@@ -1,94 +1,45 @@
-  (
-    @[builtin(str_scalar_length)] (
-      length :: (@(import("../intrinsic/thk.zy"))) (
-        (@(import("../intrinsic/string.zy"))) -> (@(import("../intrinsic/ret.zy"))) (
-          @(import("../intrinsic/i64.zy"))
+begin
+  let CType = @(import("../intrinsic/ctype.zy")) in
+  let Thk = @(import("../intrinsic/thk.zy")) in
+  let Ret = @(import("../intrinsic/ret.zy")) in
+  let Char = @(import("../intrinsic/char.zy")) in
+  let Int64 = @(import("../intrinsic/i64.zy")) in
+  let String = @(import("../intrinsic/string.zy")) in
+  let Count = Thk (String -> Ret Int64) in
+  let Append = Thk (String -> String -> Ret String) in
+  let Eq = Thk (forall (R : CType) . String -> String -> Thk R -> Thk R -> R) in
+    (@[builtin(str_scalar_length)] (length :: Count))
+  * (@[builtin(str_byte_length)] (byte_length :: Count))
+  * (@[builtin(str_append)] (append :: Append))
+  * (
+      @[builtin(str_split_once)] (
+        split_once :: Thk (
+          forall (R : CType) .
+            String -> Char -> Thk R -> Thk (String -> String -> R) -> R
         )
       )
     )
-  )
-* (
-    @[builtin(str_byte_length)] (
-      byte_length :: (@(import("../intrinsic/thk.zy"))) (
-        (@(import("../intrinsic/string.zy"))) -> (@(import("../intrinsic/ret.zy"))) (
-          @(import("../intrinsic/i64.zy"))
+  * (
+      @[builtin(str_split_at)] (
+        split_at :: Thk (
+          forall (R : CType) .
+            String -> Int64 -> Thk R -> Thk (String -> String -> R) -> R
         )
       )
     )
-  )
-* (
-    @[builtin(str_append)] (
-      append :: (@(import("../intrinsic/thk.zy"))) (
-           (@(import("../intrinsic/string.zy")))
-        -> (@(import("../intrinsic/string.zy")))
-        -> (@(import("../intrinsic/ret.zy"))) (@(import("../intrinsic/string.zy")))
+  * (@[builtin(str_eq)] (eq :: Eq))
+  * (
+      @[builtin(str_get)] (
+        get :: Thk (
+          forall (R : CType) . String -> Int64 -> Thk R -> Thk (Char -> R) -> R
+        )
       )
     )
-  )
-* (
-    @[builtin(str_split_once)] (
-      split_once :: (@(import("../intrinsic/thk.zy"))) (
-        forall (R : @(import("../intrinsic/ctype.zy"))) .
-             (@(import("../intrinsic/string.zy")))
-          -> (@(import("../intrinsic/char.zy")))
-          -> (@(import("../intrinsic/thk.zy"))) R
-          -> (@(import("../intrinsic/thk.zy"))) (
-               (@(import("../intrinsic/string.zy"))) -> (
-                 @(import("../intrinsic/string.zy"))
-               ) -> R
-             )
-          -> R
+  * (
+      @[builtin(str_parse_int)] (
+        parse_int :: Thk (
+          forall (R : CType) . String -> Thk R -> Thk (Int64 -> R) -> R
+        )
       )
     )
-  )
-* (
-    @[builtin(str_split_at)] (
-      split_at :: (@(import("../intrinsic/thk.zy"))) (
-        forall (R : @(import("../intrinsic/ctype.zy"))) .
-             (@(import("../intrinsic/string.zy")))
-          -> (@(import("../intrinsic/i64.zy")))
-          -> (@(import("../intrinsic/thk.zy"))) R
-          -> (@(import("../intrinsic/thk.zy"))) (
-               (@(import("../intrinsic/string.zy"))) -> (
-                 @(import("../intrinsic/string.zy"))
-               ) -> R
-             )
-          -> R
-      )
-    )
-  )
-* (
-    @[builtin(str_eq)] (
-      eq :: (@(import("../intrinsic/thk.zy"))) (
-        forall (R : @(import("../intrinsic/ctype.zy"))) .
-             (@(import("../intrinsic/string.zy")))
-          -> (@(import("../intrinsic/string.zy")))
-          -> (@(import("../intrinsic/thk.zy"))) R
-          -> (@(import("../intrinsic/thk.zy"))) R
-          -> R
-      )
-    )
-  )
-* (
-    @[builtin(str_get)] (
-      get :: (@(import("../intrinsic/thk.zy"))) (
-        forall (R : @(import("../intrinsic/ctype.zy"))) .
-             (@(import("../intrinsic/string.zy")))
-          -> (@(import("../intrinsic/i64.zy")))
-          -> (@(import("../intrinsic/thk.zy"))) R
-          -> (@(import("../intrinsic/thk.zy"))) ((@(import("../intrinsic/char.zy"))) -> R)
-          -> R
-      )
-    )
-  )
-* (
-    @[builtin(str_parse_int)] (
-      parse_int :: (@(import("../intrinsic/thk.zy"))) (
-        forall (R : @(import("../intrinsic/ctype.zy"))) .
-             (@(import("../intrinsic/string.zy")))
-          -> (@(import("../intrinsic/thk.zy"))) R
-          -> (@(import("../intrinsic/thk.zy"))) ((@(import("../intrinsic/i64.zy"))) -> R)
-          -> R
-      )
-    )
-  )
+end

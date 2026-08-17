@@ -1,4 +1,7 @@
-param OS : @(import("../intrinsic/ctype.zy")) in
-@[builtin(exit)] (
-  exit :: (@(import("../intrinsic/thk.zy"))) ((@(import("../intrinsic/i64.zy"))) -> OS)
-)
+begin
+  let CType = @(import("../intrinsic/ctype.zy")) in
+  let Thk = @(import("../intrinsic/thk.zy")) in
+  let Int64 = @(import("../intrinsic/i64.zy")) in
+  param OS : CType in
+  @[builtin(exit)] (exit :: Thk (Int64 -> OS))
+end

@@ -1,10 +1,13 @@
-@[builtin(arg_list)] (
-  fold :: (@(import("../intrinsic/thk.zy"))) (
-    forall (R : @(import("../intrinsic/ctype.zy"))) .
-         (@(import("../intrinsic/thk.zy"))) R
-      -> (@(import("../intrinsic/thk.zy"))) (
-           (@(import("../intrinsic/string.zy"))) -> (@(import("../intrinsic/thk.zy"))) R -> R
-         )
-      -> R
+begin
+  let CType = @(import("../intrinsic/ctype.zy")) in
+  let Thk = @(import("../intrinsic/thk.zy")) in
+  let String = @(import("../intrinsic/string.zy")) in
+  @[builtin(arg_list)] (
+    fold :: Thk (
+      forall (R : CType) .
+           Thk R
+        -> Thk (String -> Thk R -> R)
+        -> R
+    )
   )
-)
+end

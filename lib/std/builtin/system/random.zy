@@ -1,6 +1,9 @@
-param OS : @(import("../intrinsic/ctype.zy")) in
-@[builtin(random_int)] (
-  generate :: (@(import("../intrinsic/thk.zy"))) (
-    (@(import("../intrinsic/thk.zy"))) ((@(import("../intrinsic/i64.zy"))) -> OS) -> OS
+begin
+  let CType = @(import("../intrinsic/ctype.zy")) in
+  let Thk = @(import("../intrinsic/thk.zy")) in
+  let Int64 = @(import("../intrinsic/i64.zy")) in
+  param OS : CType in
+  @[builtin(random_int)] (
+    generate :: Thk (Thk (Int64 -> OS) -> OS)
   )
-)
+end

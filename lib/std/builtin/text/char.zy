@@ -1,29 +1,17 @@
-  (
-    @[builtin(char_to_str)] (
-      to_string :: (@(import("../intrinsic/thk.zy"))) (
-        (@(import("../intrinsic/char.zy"))) -> (@(import("../intrinsic/ret.zy"))) (
-          @(import("../intrinsic/string.zy"))
+begin
+  let CType = @(import("../intrinsic/ctype.zy")) in
+  let Thk = @(import("../intrinsic/thk.zy")) in
+  let Ret = @(import("../intrinsic/ret.zy")) in
+  let Char = @(import("../intrinsic/char.zy")) in
+  let Int64 = @(import("../intrinsic/i64.zy")) in
+  let String = @(import("../intrinsic/string.zy")) in
+    (@[builtin(char_to_str)] (to_string :: Thk (Char -> Ret String)))
+  * (@[builtin(char_codepoint)] (codepoint :: Thk (Char -> Ret Int64)))
+  * (
+      @[builtin(char_from_codepoint)] (
+        from_codepoint :: Thk (
+          forall (R : CType) . Int64 -> Thk R -> Thk (Char -> R) -> R
         )
       )
     )
-  )
-* (
-    @[builtin(char_codepoint)] (
-      codepoint :: (@(import("../intrinsic/thk.zy"))) (
-        (@(import("../intrinsic/char.zy"))) -> (@(import("../intrinsic/ret.zy"))) (
-          @(import("../intrinsic/i64.zy"))
-        )
-      )
-    )
-  )
-* (
-    @[builtin(char_from_codepoint)] (
-      from_codepoint :: (@(import("../intrinsic/thk.zy"))) (
-        forall (R : @(import("../intrinsic/ctype.zy"))) .
-             (@(import("../intrinsic/i64.zy")))
-          -> (@(import("../intrinsic/thk.zy"))) R
-          -> (@(import("../intrinsic/thk.zy"))) ((@(import("../intrinsic/char.zy"))) -> R)
-          -> R
-      )
-    )
-  )
+end

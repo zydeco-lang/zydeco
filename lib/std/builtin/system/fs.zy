@@ -1,39 +1,18 @@
-param Reader : @(import("../intrinsic/vtype.zy")) in
-param Writer : @(import("../intrinsic/vtype.zy")) in
-param OS : @(import("../intrinsic/ctype.zy")) in
-  (
-    @[builtin(fs_open_reader)] (
-      open_reader :: (@(import("../intrinsic/thk.zy"))) (
-           (@(import("../intrinsic/string.zy")))
-        -> (@(import("../intrinsic/thk.zy"))) (
-             (@(import("../intrinsic/i64.zy"))) -> (@(import("../intrinsic/string.zy"))) -> OS
-           )
-        -> (@(import("../intrinsic/thk.zy"))) (Reader -> OS)
-        -> OS
-      )
-    )
-  )
-* (
-    @[builtin(fs_create_writer)] (
-      create_writer :: (@(import("../intrinsic/thk.zy"))) (
-           (@(import("../intrinsic/string.zy")))
-        -> (@(import("../intrinsic/thk.zy"))) (
-             (@(import("../intrinsic/i64.zy"))) -> (@(import("../intrinsic/string.zy"))) -> OS
-           )
-        -> (@(import("../intrinsic/thk.zy"))) (Writer -> OS)
-        -> OS
-      )
-    )
-  )
-* (
-    @[builtin(fs_append_writer)] (
-      append_writer :: (@(import("../intrinsic/thk.zy"))) (
-           (@(import("../intrinsic/string.zy")))
-        -> (@(import("../intrinsic/thk.zy"))) (
-             (@(import("../intrinsic/i64.zy"))) -> (@(import("../intrinsic/string.zy"))) -> OS
-           )
-        -> (@(import("../intrinsic/thk.zy"))) (Writer -> OS)
-        -> OS
-      )
-    )
-  )
+begin
+  let VType = @(import("../intrinsic/vtype.zy")) in
+  let CType = @(import("../intrinsic/ctype.zy")) in
+  let Thk = @(import("../intrinsic/thk.zy")) in
+  let String = @(import("../intrinsic/string.zy")) in
+  let Int64 = @(import("../intrinsic/i64.zy")) in
+  param Reader : VType in
+  param Writer : VType in
+  param OS : CType in
+  let Error = Thk (Int64 -> String -> OS) in
+  let ReaderCont = Thk (Reader -> OS) in
+  let WriterCont = Thk (Writer -> OS) in
+  let Path = Thk (String -> Error -> ReaderCont -> OS) in
+  let WriterPath = Thk (String -> Error -> WriterCont -> OS) in
+    (@[builtin(fs_open_reader)] (open_reader :: Path))
+  * (@[builtin(fs_create_writer)] (create_writer :: WriterPath))
+  * (@[builtin(fs_append_writer)] (append_writer :: WriterPath))
+end

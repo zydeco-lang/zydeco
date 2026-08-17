@@ -1,45 +1,19 @@
-  (
-    @[builtin(bytes_empty)] (
-      empty :: (@(import("../intrinsic/thk.zy"))) (
-        (@(import("../intrinsic/ret.zy"))) (@(import("../intrinsic/bytes.zy")))
-      )
-    )
-  )
-* (
-    @[builtin(bytes_length)] (
-      length :: (@(import("../intrinsic/thk.zy"))) (
-        (@(import("../intrinsic/bytes.zy"))) -> (@(import("../intrinsic/ret.zy"))) (
-          @(import("../intrinsic/i64.zy"))
+begin
+  let CType = @(import("../intrinsic/ctype.zy")) in
+  let Thk = @(import("../intrinsic/thk.zy")) in
+  let Ret = @(import("../intrinsic/ret.zy")) in
+  let Bytes = @(import("../intrinsic/bytes.zy")) in
+  let Int64 = @(import("../intrinsic/i64.zy")) in
+  let String = @(import("../intrinsic/string.zy")) in
+    (@[builtin(bytes_empty)] (empty :: Thk (Ret Bytes)))
+  * (@[builtin(bytes_length)] (length :: Thk (Bytes -> Ret Int64)))
+  * (@[builtin(bytes_append)] (append :: Thk (Bytes -> Bytes -> Ret Bytes)))
+  * (@[builtin(bytes_from_str)] (from_string :: Thk (String -> Ret Bytes)))
+  * (
+      @[builtin(bytes_to_str)] (
+        to_string :: Thk (
+          forall (R : CType) . Bytes -> Thk R -> Thk (String -> R) -> R
         )
       )
     )
-  )
-* (
-    @[builtin(bytes_append)] (
-      append :: (@(import("../intrinsic/thk.zy"))) (
-           (@(import("../intrinsic/bytes.zy")))
-        -> (@(import("../intrinsic/bytes.zy")))
-        -> (@(import("../intrinsic/ret.zy"))) (@(import("../intrinsic/bytes.zy")))
-      )
-    )
-  )
-* (
-    @[builtin(bytes_from_str)] (
-      from_string :: (@(import("../intrinsic/thk.zy"))) (
-        (@(import("../intrinsic/string.zy"))) -> (@(import("../intrinsic/ret.zy"))) (
-          @(import("../intrinsic/bytes.zy"))
-        )
-      )
-    )
-  )
-* (
-    @[builtin(bytes_to_str)] (
-      to_string :: (@(import("../intrinsic/thk.zy"))) (
-        forall (R : @(import("../intrinsic/ctype.zy"))) .
-             (@(import("../intrinsic/bytes.zy")))
-          -> (@(import("../intrinsic/thk.zy"))) R
-          -> (@(import("../intrinsic/thk.zy"))) ((@(import("../intrinsic/string.zy"))) -> R)
-          -> R
-      )
-    )
-  )
+end

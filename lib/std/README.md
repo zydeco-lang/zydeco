@@ -70,6 +70,8 @@ Builtin value when it must pass the dependency onward. See
 [Modular primitive packages](../../docs/proposals/primitive-packages.md) for the design and usage examples.
 Each intrinsic splice is authored once under `builtin/intrinsic/`; contracts elsewhere import those canonical
 terms rather than spelling compiler metadata again.
+Builtin leaves bind the intrinsic kinds and constructors they use at the top of the file, so their classifiers
+read as ordinary type expressions.
 
 ## Text model
 

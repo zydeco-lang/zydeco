@@ -2,12 +2,12 @@ exists (VType as @(import("intrinsic/vtype.zy")))
   (CType as @(import("intrinsic/ctype.zy")))
   (
     Thk = CoreThk as @(import("intrinsic/thk.zy")) :
-    (@(import("intrinsic/ctype.zy"))) -> (@(import("intrinsic/vtype.zy")))
+    CType -> VType
   )
   (
     Ret = CoreRet as @(import("intrinsic/ret.zy")) :
-    (@(import("intrinsic/vtype.zy"))) -> (@(import("intrinsic/ctype.zy")))
+    VType -> CType
   )
-  (Unit = CoreUnit as @(import("intrinsic/unit.zy")) : @(import("intrinsic/vtype.zy")))
+  (Unit = CoreUnit as @(import("intrinsic/unit.zy")) : VType)
 .
   @(import("intrinsic/unit.zy"))
