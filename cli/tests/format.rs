@@ -148,6 +148,28 @@ fn fmt_format_annotations_scope_width_and_indentation() {
 }
 
 #[test]
+fn fmt_format_verbatim_preserves_long_payload() {
+    let directory = tempfile::tempdir().unwrap();
+    let file = directory.path().join("verbatim.zy");
+    let source = concat!(
+        "@[format(verbatim)] (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, ",
+        "16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, ",
+        "35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, ",
+        "54, 55, 56, 57, 58, 59, 60, 61, 62, 63)\n",
+    );
+    fs::write(&file, source).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_zydeco")).arg("fmt").arg(&file).output().unwrap();
+
+    assert!(
+        output.status.success(),
+        "formatting failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(fs::read_to_string(file).unwrap(), source);
+}
+
+#[test]
 fn fmt_rejects_invalid_syntax_without_overwriting_it() {
     let directory = tempfile::tempdir().unwrap();
     let source = directory.path().join("invalid.zy");

@@ -28,3 +28,4 @@ end
 
 Each option applies to the annotated expression and everything inside it,
 and nested annotations override enclosing ones.
+Use `@[format(verbatim)]` to copy an annotated region's original source text unchanged.

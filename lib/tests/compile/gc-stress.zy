@@ -8,6 +8,7 @@ begin
   let (/Scalar = Int64) = representations/i64 that
 
   let (/bool; /int64; /process) = make_std builtin in
+  @[format(verbatim)]
   def fix churn (i : Int64) : Ret Int64 =
     do zero? <- ! (int64/eq) i 0;
     ! (bool/if)

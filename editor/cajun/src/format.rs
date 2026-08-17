@@ -48,7 +48,8 @@ impl DocumentFormatter {
             | Ok(unit) => unit,
             | Err(_) => return FormattingOutcome::Skipped(FormattingSkip::InvalidSyntax),
         };
-        let formatted = PrettyFormatter::new(&parser.arena).render_unit(unit);
+        let formatted =
+            PrettyFormatter::with_source(&parser.arena, &parser.spans, source).render_unit(unit);
         if formatted == source {
             return FormattingOutcome::Unchanged;
         }

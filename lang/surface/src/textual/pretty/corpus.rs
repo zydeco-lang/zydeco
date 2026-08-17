@@ -39,6 +39,7 @@ impl ZydecoCorpus {
 struct ParsedSource {
     unit: SourceUnit,
     parser: Parser,
+    source: String,
 }
 
 impl ParsedSource {
@@ -47,12 +48,17 @@ impl ParsedSource {
         let unit = SourceUnitParser::new()
             .parse(source, &LocationCtx::Plain, &mut parser, Lexer::new(source))
             .unwrap_or_else(|error| panic!("failed to parse {name}: {error:?}"));
-        Self { unit, parser }
+        Self { unit, parser, source: source.to_owned() }
     }
 
     fn format(&self) -> String {
-        PrettyFormatter::with_options(&self.parser.arena, PrettyOptions::default())
-            .render_unit(self.unit)
+        PrettyFormatter::with_options_source(
+            &self.parser.arena,
+            &self.parser.spans,
+            PrettyOptions::default(),
+            &self.source,
+        )
+        .render_unit(self.unit)
     }
 
     fn desugared_shape(&self) -> String {

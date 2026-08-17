@@ -57,7 +57,8 @@ and for ordering entities by precision.
   A meaningful multiline group remains an indentation boundary,
   while an application's own compact-or-hanging layout subsumes an extra singleton wrapper.
   A `@[format(...)]` directive overrides the options for its annotated expression,
-  nested directives override enclosing ones, and a width change pre-renders its payload as an embedded block.
+  nested directives override enclosing ones, a width change pre-renders its payload as an embedded block,
+  and `@[format(verbatim)]` copies the annotated source text unchanged.
 
 The [surface formatting design](../../../../docs/proposals/formatting.md) states the printer's preservation laws,
 boundary algebra, and canonical layout families.

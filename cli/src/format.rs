@@ -76,6 +76,6 @@ impl SourceFormatter {
                 path: path.to_path_buf(),
                 message: ParseError { error, file_info: &file_info }.to_string(),
             })?;
-        Ok(PrettyFormatter::new(&parser.arena).render_unit(unit))
+        Ok(PrettyFormatter::with_source(&parser.arena, &parser.spans, source).render_unit(unit))
     }
 }

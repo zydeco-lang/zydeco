@@ -76,7 +76,7 @@ source -> lexer and parser -> textual arenas and spans
 
 Punning belongs to canonical syntax rather than intention.
 If a named term or pattern contains the same-named variable, the printer always chooses its concise form.
-Raw whitespace is not retained.
+Raw whitespace is not retained except under an explicit `@[format(verbatim)]` directive.
 
 ## Formatter Laws
 
@@ -223,12 +223,14 @@ Printer policy is expressed in the source as a `format` metadata annotation:
 @[format(width(100), indent(4), layout(blank_lines))] expression
 ```
 
-Each option is a nested call taking one argument:
+Each option is a nested call taking one argument, except `verbatim`, which takes no argument:
 
 - `width(columns)` sets the target line width;
 - `indent(columns)` sets the indentation width;
 - `layout(preserve)`, `layout(blank_lines)`, or `layout(ignore)` selects how much recorded layout is retained;
-- `parentheses(minimal)` or `parentheses(preserve)` selects singleton-group treatment.
+- `parentheses(minimal)` or `parentheses(preserve)` selects singleton-group treatment;
+- `verbatim` copies the annotated expression's original source text unchanged, including its internal line breaks,
+  indentation, and comments.
 
 A directive applies to the annotated expression and everything inside it.
 Options without a directive keep their enclosing values, so nested annotations override enclosing options field
@@ -240,6 +242,8 @@ Structural options (indentation, layout intentions, parenthesis treatment) shape
 A width change instead pre-renders the payload at its own width and embeds the result below the annotation,
 because the document renderer applies one width to the whole document.
 An embedded multiline payload keeps its relative indentation and its empty lines free of trailing whitespace.
+A verbatim payload is emitted as source text rather than through the document algebra,
+so it is the explicit way to opt a region out of canonical formatting.
 
 ## Components and Policy
 
@@ -249,8 +253,8 @@ An embedded multiline payload keeps its relative indentation and its empty lines
 The boundary compositor combines anchored documents with retained layout.
 
 Semantic preservation, comment retention, punning, and convergence are laws rather than options.
-Printer policy controls the positive `IndentWidth`, target line width,
-how much recorded layout is retained, and treatment of transparent parentheses.
+Printer policy controls the positive `IndentWidth`, target line width, how much recorded layout is retained,
+treatment of transparent parentheses, and the explicit `verbatim` escape hatch.
 The layout policy has three tiers: `Preserve` keeps every observed break and blank line,
 `BlankLinesOnly` keeps blank lines while the width decides single breaks,
 and `Ignore` leaves every optional break to the width decision.

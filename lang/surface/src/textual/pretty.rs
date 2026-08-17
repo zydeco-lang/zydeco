@@ -21,6 +21,8 @@ static DOC_ALLOCATOR: RcAllocator = RcAllocator;
 /// A pretty printer over one parsed textual arena.
 pub struct PrettyFormatter<'arena> {
     arena: &'arena TextArena,
+    spans: &'arena SpanArena,
+    source: Option<&'arena str>,
     grammar: GrammarContext<'arena>,
     punning: Punning<'arena>,
     options: PrettyOptions,
@@ -307,18 +309,49 @@ impl DelimiterSpacing {
 }
 
 impl<'arena> PrettyFormatter<'arena> {
-    pub fn new(arena: &'arena TextArena) -> Self {
-        Self::with_options(arena, PrettyOptions::default())
+    pub fn new(arena: &'arena TextArena, spans: &'arena SpanArena) -> Self {
+        Self::with_options(arena, spans, PrettyOptions::default())
     }
 
-    pub fn with_options(arena: &'arena TextArena, options: PrettyOptions) -> Self {
-        Self { arena, grammar: GrammarContext::new(arena), punning: Punning::new(arena), options }
+    pub fn with_options(
+        arena: &'arena TextArena, spans: &'arena SpanArena, options: PrettyOptions,
+    ) -> Self {
+        Self {
+            arena,
+            spans,
+            source: None,
+            grammar: GrammarContext::new(arena),
+            punning: Punning::new(arena),
+            options,
+        }
+    }
+
+    pub fn with_source(
+        arena: &'arena TextArena, spans: &'arena SpanArena, source: &'arena str,
+    ) -> Self {
+        Self::with_options_source(arena, spans, PrettyOptions::default(), source)
+    }
+
+    pub fn with_options_source(
+        arena: &'arena TextArena, spans: &'arena SpanArena, options: PrettyOptions,
+        source: &'arena str,
+    ) -> Self {
+        Self {
+            arena,
+            spans,
+            source: Some(source),
+            grammar: GrammarContext::new(arena),
+            punning: Punning::new(arena),
+            options,
+        }
     }
 
     /// Render one subtree with different policy over the same arena.
     fn scoped(&self, options: PrettyOptions) -> Self {
         Self {
             arena: self.arena,
+            spans: self.spans,
+            source: self.source,
             grammar: GrammarContext::new(self.arena),
             punning: Punning::new(self.arena),
             options,
@@ -1423,6 +1456,11 @@ impl<'arena> PrettyFormatter<'arena> {
     fn format_annotated(
         &self, term: TermId, meta: &'arena Meta, inner: TermId, directive: FormatMeta,
     ) -> RcDoc<'arena> {
+        if directive.verbatim {
+            if let Some(document) = self.format_verbatim(term, meta, inner) {
+                return document;
+            }
+        }
         let scoped = self.scoped(self.options.with_format_meta(&directive));
         let prefix = self.annotation_prefix(meta);
         let payload = scoped.term_through_fragment(inner, TermPrecedence::Binder);
@@ -1442,6 +1480,31 @@ impl<'arena> PrettyFormatter<'arena> {
             BoundaryLayout::aligned(""),
             LayoutFragment::entity(inner.into(), RcDoc::text(rendered)),
         ))
+    }
+
+    /// Render a `@[format(verbatim)]` annotation by copying the annotated
+    /// payload's original source text unchanged.
+    ///
+    /// The whitespace between the annotation and its payload is copied too,
+    /// so comments or line breaks written there survive exactly. If the
+    /// original source is unavailable, the caller falls back to normal
+    /// formatting.
+    fn format_verbatim(
+        &self, term: TermId, meta: &'arena Meta, inner: TermId,
+    ) -> Option<RcDoc<'arena>> {
+        let source = self.source?;
+        let (outer_start, _) = self.spans[&EntityId::Term(term)].get_cursor1();
+        let (inner_start, inner_end) = self.spans[&EntityId::Term(inner)].get_cursor1();
+        let annotation_end = source
+            .get(outer_start..inner_start)?
+            .rfind(']')?
+            .checked_add(outer_start)?
+            .checked_add(1)?;
+        let boundary = source.get(annotation_end..inner_start)?;
+        let payload = source.get(inner_start..inner_end)?;
+        Some(
+            self.annotation_prefix(meta).append(RcDoc::text(boundary)).append(RcDoc::text(payload)),
+        )
     }
 
     /// The complete `@[...]` text of one annotation.
@@ -1833,12 +1896,16 @@ impl<'arena> PrettyFormatter<'arena> {
         &self, enclosing: TermId, binding: &'arena GenBind<TermId>, placement: Placement,
     ) -> RcDoc<'arena> {
         let arena = self.arena;
+        let spans = self.spans;
+        let source = self.source;
         let options = self.options;
         DOC_ALLOCATOR
             .nesting(move |binding_nesting| {
                 let binding_nesting = isize::try_from(binding_nesting).unwrap_or(isize::MAX);
                 let formatter = PrettyFormatter {
                     arena,
+                    spans,
+                    source,
                     grammar: GrammarContext::new(arena),
                     punning: Punning::new(arena),
                     options,
@@ -2150,6 +2217,7 @@ mod tests {
     struct ParsedSource {
         unit: SourceUnit,
         parser: Parser,
+        source: String,
     }
 
     struct RetainedComments;
@@ -2180,7 +2248,7 @@ mod tests {
             let unit = SourceUnitParser::new()
                 .parse(source, &LocationCtx::Plain, &mut parser, Lexer::new(source))
                 .unwrap_or_else(|error| panic!("failed to parse {name}: {error:?}\n{source}"));
-            Self { unit, parser }
+            Self { unit, parser, source: source.to_owned() }
         }
 
         fn render(&self, layout_intentions: LayoutIntentions) -> String {
@@ -2192,7 +2260,13 @@ mod tests {
         }
 
         fn render_with_options(&self, options: PrettyOptions) -> String {
-            PrettyFormatter::with_options(&self.parser.arena, options).render_unit(self.unit)
+            PrettyFormatter::with_options_source(
+                &self.parser.arena,
+                &self.parser.spans,
+                options,
+                &self.source,
+            )
+            .render_unit(self.unit)
         }
 
         fn desugared_shape(&self) -> String {
@@ -2519,6 +2593,7 @@ mod tests {
 
         let formatted = PrettyFormatter::with_options(
             &parser.arena,
+            &parser.spans,
             PrettyOptions::default().with_line_width(120),
         )
         .render_unit(second_unit);
@@ -4142,6 +4217,63 @@ mod tests {
         let reparsed = ParsedSource::new(&formatted);
         assert_eq!(formatted, reparsed.render_with_options(PrettyOptions::default()));
         assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+    }
+
+    #[test]
+    fn format_verbatim_keeps_long_payloads_on_one_line() {
+        let source = concat!(
+            "@[format(verbatim)] (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, ",
+            "16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, ",
+            "35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, ",
+            "54, 55, 56, 57, 58, 59, 60, 61, 62, 63)\n",
+        );
+        let parsed = ParsedSource::new(source);
+        let formatted = parsed.render_with_options(PrettyOptions::default().with_line_width(20));
+        assert_eq!(formatted, source, "verbatim must not reflow the payload");
+
+        let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(formatted, reparsed.render_with_options(PrettyOptions::default()));
+        assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+    }
+
+    #[test]
+    fn format_verbatim_preserves_multiline_source_and_comments() {
+        let source = concat!(
+            "begin\n",
+            "  @[format(verbatim)]\n",
+            "  -- Keep this comment.\n",
+            "  (0,\n",
+            "  1,\n",
+            "  2)\n",
+            "end\n",
+        );
+        let parsed = ParsedSource::new(source);
+        let formatted = parsed.render_with_options(PrettyOptions::default().with_line_width(20));
+        assert_eq!(formatted, source, "verbatim must preserve the annotated source text");
+
+        let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(formatted, reparsed.render_with_options(PrettyOptions::default()));
+        assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        assert_eq!(RetainedComments::collect(source), RetainedComments::collect(&formatted));
+    }
+
+    #[test]
+    fn format_verbatim_accepts_bare_and_call_spellings() {
+        let cases = [
+            "@[format(verbatim)] (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)\n",
+            "@[format(verbatim())] (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)\n",
+        ];
+
+        for source in cases {
+            let parsed = ParsedSource::new(source);
+            let formatted =
+                parsed.render_with_options(PrettyOptions::default().with_line_width(20));
+            assert_eq!(formatted, source, "source: {source}");
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render_with_options(PrettyOptions::default()));
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        }
     }
 
     #[test]

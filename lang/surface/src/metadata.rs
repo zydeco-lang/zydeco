@@ -135,7 +135,8 @@ pub enum BuiltinMetaError {
 /// renders the annotated expression and everything inside it.
 ///
 /// Each option is a nested call, as in
-/// `@[format(width(100), indent(4), layout(blank_lines))]`.
+/// `@[format(width(100), indent(4), layout(blank_lines))]`;
+/// the `verbatim` option may also be written without arguments.
 /// A directive without options leaves the surrounding policy unchanged,
 /// so options always compose with enclosing directives.
 #[derive(Copy, Clone, Debug, Default, Hash, PartialEq, Eq)]
@@ -144,6 +145,7 @@ pub struct FormatMeta {
     pub indent: Option<IndentWidth>,
     pub layout: Option<LayoutIntentions>,
     pub parentheses: Option<Parentheses>,
+    pub verbatim: bool,
 }
 
 /// Guards a `format` option slot against a repeated spelling.
@@ -162,74 +164,94 @@ impl SpecializeMeta for FormatMeta {
     fn from_arguments(arguments: &[Meta]) -> Result<Self, Self::Error> {
         let mut meta = Self::default();
         for argument in arguments {
-            let Meta::Apply { callee, args } = argument else {
-                return Err(FormatMetaError::OptionNotCall(argument.clone()));
-            };
-            let [value] = args.as_slice() else {
-                return Err(FormatMetaError::OptionArity {
-                    name: callee.clone(),
-                    found: args.len(),
-                });
-            };
-            match callee.as_str() {
-                | "width" => {
-                    ensure_unique!(meta.width, callee, FormatMetaError::DuplicateOption);
-                    let Meta::Integer(value) = value else {
-                        return Err(FormatMetaError::OptionNotInteger(
-                            callee.clone(),
-                            value.clone(),
-                        ));
-                    };
-                    let width = usize::try_from(*value)
-                        .ok()
-                        .filter(|width| *width > 0)
-                        .ok_or(FormatMetaError::WidthOutOfRange(*value))?;
-                    meta.width = Some(width);
+            match argument {
+                | Meta::Ident(name) if name == "verbatim" => {
+                    if meta.verbatim {
+                        return Err(FormatMetaError::DuplicateOption(name.clone()));
+                    }
+                    meta.verbatim = true;
                 }
-                | "indent" => {
-                    ensure_unique!(meta.indent, callee, FormatMetaError::DuplicateOption);
-                    let Meta::Integer(value) = value else {
-                        return Err(FormatMetaError::OptionNotInteger(
-                            callee.clone(),
-                            value.clone(),
-                        ));
-                    };
-                    let indent = usize::try_from(*value)
-                        .ok()
-                        .and_then(IndentWidth::new)
-                        .ok_or(FormatMetaError::IndentOutOfRange(*value))?;
-                    meta.indent = Some(indent);
+                | Meta::Apply { callee, args } if callee == "verbatim" && args.is_empty() => {
+                    if meta.verbatim {
+                        return Err(FormatMetaError::DuplicateOption(callee.clone()));
+                    }
+                    meta.verbatim = true;
                 }
-                | "layout" => {
-                    ensure_unique!(meta.layout, callee, FormatMetaError::DuplicateOption);
-                    let Meta::Ident(value) = value else {
-                        return Err(FormatMetaError::OptionNotIdentifier(
-                            callee.clone(),
-                            value.clone(),
-                        ));
+                | Meta::Apply { callee, args } => {
+                    let [value] = args.as_slice() else {
+                        return Err(FormatMetaError::OptionArity {
+                            name: callee.clone(),
+                            found: args.len(),
+                        });
                     };
-                    meta.layout = Some(match value.as_str() {
-                        | "preserve" => LayoutIntentions::Preserve,
-                        | "blank_lines" => LayoutIntentions::BlankLinesOnly,
-                        | "ignore" => LayoutIntentions::Ignore,
-                        | _ => return Err(FormatMetaError::UnknownLayout(value.clone())),
-                    });
+                    match callee.as_str() {
+                        | "width" => {
+                            ensure_unique!(meta.width, callee, FormatMetaError::DuplicateOption);
+                            let Meta::Integer(value) = value else {
+                                return Err(FormatMetaError::OptionNotInteger(
+                                    callee.clone(),
+                                    value.clone(),
+                                ));
+                            };
+                            let width = usize::try_from(*value)
+                                .ok()
+                                .filter(|width| *width > 0)
+                                .ok_or(FormatMetaError::WidthOutOfRange(*value))?;
+                            meta.width = Some(width);
+                        }
+                        | "indent" => {
+                            ensure_unique!(meta.indent, callee, FormatMetaError::DuplicateOption);
+                            let Meta::Integer(value) = value else {
+                                return Err(FormatMetaError::OptionNotInteger(
+                                    callee.clone(),
+                                    value.clone(),
+                                ));
+                            };
+                            let indent = usize::try_from(*value)
+                                .ok()
+                                .and_then(IndentWidth::new)
+                                .ok_or(FormatMetaError::IndentOutOfRange(*value))?;
+                            meta.indent = Some(indent);
+                        }
+                        | "layout" => {
+                            ensure_unique!(meta.layout, callee, FormatMetaError::DuplicateOption);
+                            let Meta::Ident(value) = value else {
+                                return Err(FormatMetaError::OptionNotIdentifier(
+                                    callee.clone(),
+                                    value.clone(),
+                                ));
+                            };
+                            meta.layout = Some(match value.as_str() {
+                                | "preserve" => LayoutIntentions::Preserve,
+                                | "blank_lines" => LayoutIntentions::BlankLinesOnly,
+                                | "ignore" => LayoutIntentions::Ignore,
+                                | _ => return Err(FormatMetaError::UnknownLayout(value.clone())),
+                            });
+                        }
+                        | "parentheses" => {
+                            ensure_unique!(
+                                meta.parentheses,
+                                callee,
+                                FormatMetaError::DuplicateOption
+                            );
+                            let Meta::Ident(value) = value else {
+                                return Err(FormatMetaError::OptionNotIdentifier(
+                                    callee.clone(),
+                                    value.clone(),
+                                ));
+                            };
+                            meta.parentheses = Some(match value.as_str() {
+                                | "minimal" => Parentheses::Minimal,
+                                | "preserve" => Parentheses::Preserve,
+                                | _ => {
+                                    return Err(FormatMetaError::UnknownParentheses(value.clone()));
+                                }
+                            });
+                        }
+                        | _ => return Err(FormatMetaError::UnknownOption(callee.clone())),
+                    }
                 }
-                | "parentheses" => {
-                    ensure_unique!(meta.parentheses, callee, FormatMetaError::DuplicateOption);
-                    let Meta::Ident(value) = value else {
-                        return Err(FormatMetaError::OptionNotIdentifier(
-                            callee.clone(),
-                            value.clone(),
-                        ));
-                    };
-                    meta.parentheses = Some(match value.as_str() {
-                        | "minimal" => Parentheses::Minimal,
-                        | "preserve" => Parentheses::Preserve,
-                        | _ => return Err(FormatMetaError::UnknownParentheses(value.clone())),
-                    });
-                }
-                | _ => return Err(FormatMetaError::UnknownOption(callee.clone())),
+                | _ => return Err(FormatMetaError::OptionNotCall(argument.clone())),
             }
         }
         Ok(meta)
@@ -238,7 +260,9 @@ impl SpecializeMeta for FormatMeta {
 
 #[derive(Clone, Debug, Error, Hash, PartialEq, Eq)]
 pub enum FormatMetaError {
-    #[error("format option must be a call such as `width(80)`, but found `{0}`")]
+    #[error(
+        "format option must be a call such as `width(80)` or the bare option `verbatim`, but found `{0}`"
+    )]
     OptionNotCall(Meta),
     #[error("`{name}` expects one argument, but found {found}")]
     OptionArity { name: String, found: usize },
