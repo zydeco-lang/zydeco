@@ -1291,6 +1291,32 @@ fn intrinsic_spellings_are_ordinary_bindable_names_in_root_sources() {
 }
 
 #[test]
+fn intrinsic_kind_spellings_bind_as_ordinary_kind_aliases() {
+    let fixture = SourceFixture::new();
+    let root = fixture.write(
+        "main.zy",
+        r#"begin
+  let VType = @[intrinsic(vtype)] _ in
+  let CType = @[intrinsic(ctype)] _ in
+  let Unit = @[intrinsic(unit)] _ in
+  exists (X = XType : VType) (Y : CType) .
+    Unit
+end"#,
+    );
+
+    SourceGraph::load(root)
+        .unwrap()
+        .parse()
+        .unwrap()
+        .desugar()
+        .unwrap()
+        .resolve()
+        .unwrap()
+        .check()
+        .unwrap();
+}
+
+#[test]
 fn a_zero_dependency_source_program_checks_and_runs_as_one_term() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "ret ()");

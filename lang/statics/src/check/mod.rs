@@ -6771,6 +6771,35 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
                         }
                     }
+                    | TermAnnId::Kind(bindee_out) => {
+                        // a kind alias
+                        // Kind binders have no classifier, so check the
+                        // binder against the set of kinds.
+                        let binder_out_ann =
+                            self.mk(binder).tyck_k(tycker, PatternAction::ana(AnnId::Set))?;
+                        let ss::PatId::Kind(binder_out) = binder_out_ann.annotation.as_pat() else {
+                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                        };
+                        let env = self.mk(Assign(binder_out, bindee_out)).tyck_k(tycker, ())?;
+                        // finally, we tyck the tail
+                        let tail_out_ann = env.mk(tail).tyck_k(
+                            tycker,
+                            Action::forward(switch, prepared_environment.as_ref()),
+                        )?;
+                        match tail_out_ann {
+                            | TermAnnId::Type(tail_out, tail_kd) => {
+                                TermAnnId::Type(tail_out, tail_kd)
+                            }
+                            | TermAnnId::Value(tail_out, tail_ty) => {
+                                TermAnnId::Value(tail_out, tail_ty)
+                            }
+                            | TermAnnId::Compu(tail_out, tail_ty) => {
+                                TermAnnId::Compu(tail_out, tail_ty)
+                            }
+                            | TermAnnId::Hole(_) | TermAnnId::Kind(_) => tycker
+                                .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
+                        }
+                    }
                     | TermAnnId::Value(bindee_out, bindee_ty) => {
                         // a value alias
                         // then, ana binder with bindee_ty
@@ -6864,7 +6893,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             }
                         }
                     }
-                    | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Compu(_, _) => {
+                    | TermAnnId::Hole(_) | TermAnnId::Compu(_, _) => {
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     }
                 }
