@@ -20,9 +20,6 @@
   "engines": {
     "vscode": "^1.96.0"
   },
-  "activationEvents": [
-    "onLanguage:zydeco"
-  ],
   "main": "./dist/extension.js",
   "contributes": {
     "languages": [
