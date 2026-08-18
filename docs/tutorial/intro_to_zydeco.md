@@ -1,4 +1,8 @@
 # Intro to Zydeco
+
+> Legacy tutorial. Prefer [`zydeco-guide.md`](zydeco-guide.md) and the literate
+> [`../spell/`](../spell/) corpus; some old spellings here no longer match the root-term syntax.
+
 ## Types
 Zydeco has two kinds (`VType` and `CType`) of types: value type (`A`) and computation type (`B`). 
 

@@ -24,3 +24,9 @@ nice support for relative monads.
 
 Should study some more recent proposals too, such as the following,
 which is related to EEC/CBPV: https://arxiv.org/abs/1910.11629
+
+## Our current design
+
+We've got `OS` to encapsulate the effects that are allowed in main.
+(Relative) monads are then required to implement algebras w.r.t. `OS`
+to be able to run on the main stack.
