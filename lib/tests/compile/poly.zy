@@ -1,0 +1,28 @@
+begin
+  param (
+    (/core; /representations; /system) :
+    @(import("/Users/arctic/Arc/zydeco-lang/zydeco/lib/std/builtin.zy"))
+  ) that
+  let (/CType; /Thk; /Ret) = core that
+  let (/Scalar = Int64) = representations/i64 that
+  let (/process) = system that
+  def ! allocate_then_force (B : CType) (body : Thk B) : B =
+    let garbage1 = (10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28) in
+    let (_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) = garbage1 in
+    let garbage2 = (30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48) in
+    let (_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) = garbage2 in
+    let garbage3 = (50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68) in
+    let (_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) = garbage3 in
+    ! body
+  that
+  let live = (0, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99) in
+  do result <- ! allocate_then_force
+    (Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 *
+      Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 -> Ret Int64)
+    { fn tuple =>
+        let (answer, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) = tuple in
+        ret answer
+    }
+    live;
+  ! (process/exit) result
+end
