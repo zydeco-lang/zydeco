@@ -26,14 +26,8 @@ pub enum Slot {
     Sym(SymId),
     Imm(Imm),
     Product(Vec<Slot>),
-    /// A product allocated in the current stack frame rather than the GC heap.
+    /// A product allocated in the current stack frame rather than the static region.
     StackProduct(Vec<Slot>),
-    /// An interior pointer `offset` words into a product shaped like `fields`.
-    ProductSuffix {
-        fields: Vec<Slot>,
-        offset: usize,
-    },
-    Tag,
     Unknown,
 }
 
@@ -62,7 +56,8 @@ pub struct StackAnalyzer<'a> {
 }
 
 /// Durable results of stack analysis; the temporary slot issuer has been dropped.
-pub struct StackAnalysis {
+pub struct StackAnalysis<'a> {
+    pub arena: &'a mut AssemblyArena,
     pub layouts: ArenaAssoc<ProgId, Layout>,
     pub slots: ArenaSparse<StackAnalysisScope, SlotId>,
     pub inlined: ArenaAssoc<SlotId, bool>,
@@ -70,7 +65,7 @@ pub struct StackAnalysis {
 
 impl<'a> StackAnalyzer<'a> {
     pub fn new(program: &'a mut AssemblyProgram) -> Self {
-        let AssemblyProgram { arena, root, .. } = program;
+        let AssemblyProgram { arena, root } = program;
         Self {
             arena,
             root: *root,
@@ -103,7 +98,7 @@ impl<'a> StackAnalyzer<'a> {
 
 impl<'a> CompilerPass for StackAnalyzer<'a> {
     type Arena = AssemblyArena;
-    type Out = StackAnalysis;
+    type Out = StackAnalysis<'a>;
     type Error = std::convert::Infallible;
     fn run(mut self) -> Result<Self::Out, Self::Error> {
         let symbol_programs: Vec<_> = self
@@ -135,8 +130,8 @@ impl<'a> CompilerPass for StackAnalyzer<'a> {
             prog.stack_inline(&mut self);
         }
         self.root.stack_inline(&mut self);
-        let Self { arena: _, root: _, allocator: _, layouts, slots, inlined } = self;
-        Ok(StackAnalysis { layouts, slots, inlined })
+        let Self { arena, root: _, allocator: _, layouts, slots, inlined } = self;
+        Ok(StackAnalysis { arena, layouts, slots, inlined })
     }
 }
 
@@ -190,20 +185,9 @@ impl<'a> StackMeasure<'a> for ProgId {
                                 }
                                 | _ => vec![Slot::Unknown; product.elements],
                             };
-                            let last = product.elements - 1;
-                            for (position, item) in items.into_iter().enumerate().rev() {
-                                if position == last && product.elements < product.arity {
-                                    si.push_control(
-                                        &mut layout,
-                                        Slot::ProductSuffix {
-                                            fields: vec![item.clone()],
-                                            offset: last,
-                                        },
-                                    );
-                                } else {
-                                    si.push_control(&mut layout, item);
-                                }
-                            }
+                            items.into_iter().rev().for_each(|item| {
+                                si.push_control(&mut layout, item);
+                            });
                         }
                         | Instruction::AllocContext(Alloc(ContextMarker)) => {
                             layout.context.clear();
@@ -226,7 +210,7 @@ impl<'a> StackMeasure<'a> for ProgId {
                             layout.context.push_back((var, slot));
                         }
                         | Instruction::PushTag(Push(_)) => {
-                            si.push_control(&mut layout, Slot::Tag);
+                            si.push_control(&mut layout, Slot::Unknown);
                         }
                         | Instruction::Intrinsic(Intrinsic { name: _, arity }) => {
                             (0..arity).for_each(|_| {
@@ -261,8 +245,6 @@ impl<'a> StackInline<'a> for ProgId {
                             | Slot::Imm(_)
                             | Slot::Product(_)
                             | Slot::StackProduct(_)
-                            | Slot::ProductSuffix { .. }
-                            | Slot::Tag
                             | Slot::Unknown => None,
                         })
                     {

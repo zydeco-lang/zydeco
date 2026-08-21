@@ -53,8 +53,7 @@ end
 - `layout(blank_lines)` keeps only blank lines while the width decides every single break;
 - `layout(ignore)` lets the width decide every optional break;
 - `parentheses(minimal)` or `parentheses(preserve)` selects singleton-group treatment;
-- `verbatim` copies the annotated expression's original source text unchanged,
-  which is useful for stress-test regions such as the large tuples in `lib/tests/compile/gc-stress.zy`.
+- `verbatim` copies the annotated expression's original source text unchanged.
 
 Nested annotations override enclosing options for their payload subtree.
 

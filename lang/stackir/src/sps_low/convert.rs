@@ -135,9 +135,7 @@ impl<'a> SpsLowConverter<'a> {
     fn build_product_pattern(&mut self, items: Vec<low::VPatId>) -> low::VPatId {
         let arity = items.len();
         match low::ConsN::from_vec(items) {
-            | Some(items) => {
-                low::VCons::new(items, low::ProductLayout::conservative(arity)).build(self, None)
-            }
+            | Some(items) => low::VCons::new(items, low::ProductLayout { arity }).build(self, None),
             | None => low::Triv.build(self, None),
         }
     }
@@ -147,9 +145,7 @@ impl<'a> SpsLowConverter<'a> {
     ) -> low::ValueId {
         let arity = items.len();
         match low::ConsN::from_vec(items) {
-            | Some(items) => {
-                low::VCons::new(items, low::ProductLayout::conservative(arity)).build(self, site)
-            }
+            | Some(items) => low::VCons::new(items, low::ProductLayout { arity }).build(self, site),
             | None => low::Triv.build(self, site),
         }
     }

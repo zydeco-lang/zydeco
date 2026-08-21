@@ -4,7 +4,7 @@
 # Usage: scripts/bench-native.sh [runs] [file...]
 #
 # For each file, this script:
-#   1. builds AMD64 assembly and reports the number of `call zydeco_gc_alloc`
+#   1. builds AMD64 assembly and reports the number of `call zydeco_alloc`
 #      sites;
 #   2. builds a native executable and reports the best wall time over `runs`
 #      executions.
@@ -27,7 +27,6 @@ if [[ $# -eq 0 ]]; then
         lib/tests/compile/direct-closure.zy
         lib/tests/compile/tuple.zy
         lib/tests/compile/triple.zy
-        lib/tests/compile/gc-stress.zy
         lib/tests/compile/fact.zy
     )
 else
@@ -51,7 +50,7 @@ for file in "${files[@]}"; do
         echo "assembly build failed: $file" >&2
         continue
     fi
-    alloc_sites="$(grep -c 'call zydeco_gc_alloc' "$asm_file" || true)"
+    alloc_sites="$(grep -c 'call zydeco_alloc' "$asm_file" || true)"
 
     if ! "$bin" build -t exe --target-arch x86-64 "$file" -b "$build_dir" >/dev/null 2>&1; then
         echo "executable build failed: $file" >&2
@@ -82,5 +81,5 @@ INNER
         fi
     done
 
-    printf '%-40s gc_alloc=%-4s best_of_%s=%ss\n' "$file" "$alloc_sites" "$runs" "$best"
+    printf '%-40s alloc=%-4s best_of_%s=%ss\n' "$file" "$alloc_sites" "$runs" "$best"
 done

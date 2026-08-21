@@ -36,7 +36,6 @@ e2e_sources!({
     string_literal => "tests/compile/string-literal.zy",
     pure_functions => "tests/compile/pure-functions.zy",
     numeric_widths => "tests/builtin/numeric-widths.zy",
-    gc_stress => "tests/compile/gc-stress.zy",
 });
 
 mod host_arguments {

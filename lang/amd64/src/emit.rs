@@ -3,10 +3,7 @@ use derive_more::{AsMut, AsRef};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use zydeco_assembly::{
     arena::{AssemblyArena, AssemblyArenaRefLike, AssemblyProgram},
-    gc::{self as asm_gc, GcRootMap},
-    syntax::{
-        self as sa, Atom, FieldClass, Instruction, Intrinsic, ProgId, Program, Symbol, Terminator,
-    },
+    syntax::{self as sa, Atom, Instruction, Intrinsic, ProgId, Program, Symbol, Terminator},
 };
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
@@ -68,7 +65,6 @@ pub struct Emitter<'e> {
     target_format: TargetFormat,
     tables: Vec<JumpTable>,
     visited: HashSet<ProgId>,
-    gc_maps: HashMap<ProgId, GcRootMap>,
     stack_parity: StackParity,
     entry_parities: HashMap<ProgId, StackParity>,
     dynamic_entries: HashSet<ProgId>,
@@ -81,13 +77,6 @@ impl<'e> Emitter<'e> {
     ) -> Self {
         let entry_parities = Self::compute_entry_parities(&assembly.arena, assembly.root);
         let dynamic_entries = Self::compute_dynamic_entries(&assembly.arena);
-        let gc_maps = assembly
-            .layouts
-            .iter()
-            .map(|(program, layout)| {
-                (*program, asm_gc::root_map(&assembly.arena, layout, &assembly.slots))
-            })
-            .collect();
         Self {
             spans,
             scoped,
@@ -98,7 +87,6 @@ impl<'e> Emitter<'e> {
             target_format,
             tables: Vec::new(),
             visited: HashSet::new(),
-            gc_maps,
             stack_parity: entry_parities
                 .get(&assembly.root)
                 .copied()
@@ -272,51 +260,16 @@ impl<'e> Emitter<'e> {
         }
     }
 
-    fn gc_label(&self, id: ProgId, kind: &str) -> String {
-        format!("{kind}_{}", id.concise_inner().replace('#', "_"))
-    }
-
-    /// Append the root map and object descriptor for one allocation site to
-    /// `.rodata`, returning the labels that address them.
-    fn emit_gc_metadata(&mut self, id: ProgId, fields: &[FieldClass]) -> (String, String) {
-        let map = self.gc_maps.get(&id).expect("allocation site lacks a GC root map");
-        let map_label = self.gc_label(id, "gc_map");
-        let descriptor_label = self.gc_label(id, "gc_descriptor");
-        self.asm.rodata.extend([
-            Instr::Comment(format!("GC root map for {}", id.concise())),
-            Instr::Label(map_label.clone()),
-            Instr::Db(ByteSequence(map.encode())),
-            Instr::Comment(format!("GC object descriptor for {}", id.concise())),
-            Instr::Label(descriptor_label.clone()),
-            Instr::Db(ByteSequence(asm_gc::descriptor_bytes(fields))),
-        ]);
-        (map_label, descriptor_label)
-    }
-
-    /// Call `zydeco_gc_alloc(size, descriptor, map, caller_rsp, rbp)`.
-    ///
-    /// `rcx` captures the caller `rsp` *before* the alignment fixups of
-    /// [`Self::emit_aligned_call`], so root-map offsets stay relative to the
-    /// untouched control stack.
-    fn emit_gc_alloc_call(&mut self, size_words: usize, map_label: &str, descriptor_label: &str) {
+    /// Allocate one product from the runtime's static memory region.
+    fn emit_alloc_call(&mut self, size_words: usize) {
         self.asm.text.extend([
-            Instr::Comment("allocate a GC-managed product cell".to_string()),
+            Instr::Comment("allocate product in the static region".to_string()),
             Instr::Mov(MovArgs::ToReg(
                 Reg::Rdi,
                 Arg64::Unsigned(u64::try_from(size_words).expect("product arity overflow")),
             )),
-            Instr::Lea(
-                Reg::Rsi,
-                LeaArgs::RelLabel(RelLabel { label: descriptor_label.to_string(), offset: None }),
-            ),
-            Instr::Lea(
-                Reg::Rdx,
-                LeaArgs::RelLabel(RelLabel { label: map_label.to_string(), offset: None }),
-            ),
-            Instr::Mov(MovArgs::ToReg(Reg::Rcx, Arg64::Reg(Reg::Rsp))),
-            Instr::Mov(MovArgs::ToReg(Reg::R8, Arg64::Reg(Reg::Rbp))),
         ]);
-        self.emit_aligned_call(JmpArgs::Label("zydeco_gc_alloc".to_string()));
+        self.emit_aligned_call(JmpArgs::Label("zydeco_alloc".to_string()));
     }
 }
 
@@ -328,8 +281,8 @@ impl<'e> CompilerPass for Emitter<'e> {
         self.asm.text.extend([
             // zydeco_abort
             Instr::Extern("zydeco_abort".to_string()),
-            // zydeco_gc_alloc
-            Instr::Extern("zydeco_gc_alloc".to_string()),
+            // zydeco_alloc
+            Instr::Extern("zydeco_alloc".to_string()),
             // host callback used by runtime-created argument-fold thunks
             Instr::Extern("zydeco_arg_fold_resume".to_string()),
             // construct an owned host string from static UTF-8 bytes
@@ -696,8 +649,7 @@ impl<'a> Emit<'a> for Instruction {
                         Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Reg(Reg::Rsp))),
                     ]);
                 } else {
-                    let (map_label, descriptor_label) = em.emit_gc_metadata(id, &layout.fields);
-                    em.emit_gc_alloc_call(layout.arity, &map_label, &descriptor_label);
+                    em.emit_alloc_call(layout.arity);
                 }
                 for index in 0..layout.elements {
                     let destination = i32::try_from(index * 8).expect("product offset overflow");
@@ -937,18 +889,14 @@ impl<'a> Emit<'a> for Atom {
 
 impl<'a> Emit<'a> for Intrinsic {
     type Env = ProgId;
-    fn emit(&self, id: Self::Env, em: &mut Emitter) {
+    fn emit(&self, _id: Self::Env, em: &mut Emitter) {
         let Intrinsic { name, arity } = self;
 
         fn emit_ba(op: fn(BinArgs) -> Instr, em: &mut Emitter) {
             em.asm.text.push(op(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rcx))));
         }
-        fn emit_compare(cc: ConditionCode, id: ProgId, em: &mut Emitter) {
-            // Allocate the two-word boolean cell while both operands are still
-            // on the control stack, so the safepoint map matches `layouts[id]`.
-            let (map_label, descriptor_label) =
-                em.emit_gc_metadata(id, &[FieldClass::Scalar, FieldClass::Scalar]);
-            em.emit_gc_alloc_call(2, &map_label, &descriptor_label);
+        fn emit_compare(cc: ConditionCode, em: &mut Emitter) {
+            em.emit_alloc_call(2);
             // Save the fresh cell and evaluate the comparison.
             em.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(Reg::Rax))));
             em.asm.text.extend([Instr::Pop(Loc::Reg(Reg::Rax)), Instr::Pop(Loc::Reg(Reg::Rcx))]);
@@ -974,7 +922,7 @@ impl<'a> Emit<'a> for Intrinsic {
                     | "int_gt" => ConditionCode::G,
                     | _ => unreachable!("matched comparison intrinsic"),
                 };
-                emit_compare(cc, id, em);
+                emit_compare(cc, em);
                 em.asm.text.push(Instr::Push(Arg32::Reg(Reg::Rax)));
                 em.shift_stack_parity(1);
             }

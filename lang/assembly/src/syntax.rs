@@ -8,7 +8,6 @@ pub use super::{
     analyze::{Layout, Slot, SlotId},
     arena::*,
 };
-pub use zydeco_stackir::syntax::FieldClass;
 pub use zydeco_syntax::*;
 pub use zydeco_utils::arena::*;
 
@@ -86,14 +85,12 @@ pub struct Alloc<T>(pub T);
 /// The physical product arity and the number of logical stack elements.
 ///
 /// When `elements < arity`, the final logical element is a pointer to the
-/// suffix beginning at field `elements - 1`. `fields` gives the GC class of
-/// every physical word, in storage order.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+/// suffix beginning at field `elements - 1`.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ProductLayout {
     pub arity: usize,
     pub elements: usize,
-    pub fields: Vec<FieldClass>,
-    /// Allocate the cell in the current stack frame instead of the GC heap.
+    /// Allocate the cell in the current stack frame instead of the static region.
     pub stack_alloc: bool,
 }
 
@@ -102,15 +99,7 @@ impl ProductLayout {
         assert!(arity > 0);
         assert!(elements > 0);
         assert!(elements <= arity);
-        Self { arity, elements, fields: vec![FieldClass::MaybePointer; arity], stack_alloc: false }
-    }
-
-    pub fn new_with_fields(arity: usize, elements: usize, fields: Vec<FieldClass>) -> Self {
-        assert!(arity > 0);
-        assert!(elements > 0);
-        assert!(elements <= arity);
-        assert_eq!(fields.len(), arity);
-        Self { arity, elements, fields, stack_alloc: false }
+        Self { arity, elements, stack_alloc: false }
     }
 
     pub fn with_stack_alloc(mut self) -> Self {
@@ -131,14 +120,14 @@ pub struct PopBranch(pub Vec<(Tag, ProgId)>);
 #[derive(Clone, Debug)]
 pub struct Abort;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Tag {
     pub idx: usize,
     pub name: Option<String>,
 }
 
 /// Values in ZIR.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum Atom {
     Var(VarId),
     Sym(SymId),
@@ -168,7 +157,7 @@ pub enum Symbol {
 #[derive(Clone, Debug)]
 pub struct Undefined;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum Imm {
     Triv(Triv),
     Integer(IntegerLiteral),

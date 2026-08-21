@@ -1,5 +1,4 @@
 use super::syntax::*;
-use crate::analyze::StackAnalysisScope;
 use zydeco_derive::{AsMutSelf, AsRefSelf};
 use zydeco_stackir::sps_low::syntax as sk;
 use zydeco_utils::graph::DepGraph;
@@ -50,10 +49,6 @@ pub struct AssemblyArena {
 pub struct AssemblyProgram {
     pub arena: AssemblyArena,
     pub root: ProgId,
-    /// Stack layouts *before* each program point, from [`super::analyze::StackAnalyzer`].
-    pub layouts: ArenaAssoc<ProgId, Layout>,
-    /// Shapes of the control-stack slots named by `layouts`.
-    pub slots: ArenaSparse<StackAnalysisScope, SlotId>,
 }
 
 pub trait AssemblyArenaRefLike {

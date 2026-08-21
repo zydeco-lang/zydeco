@@ -1,6 +1,6 @@
 //! Local representation analysis for first-order SPSLow.
 //!
-//! The analysis marks values and patterns that can avoid a GC heap cell. A value
+//! The analysis marks values and patterns that can avoid a region-allocated cell. A value
 //! that is constructed and consumed by a single projection-like use can be
 //! represented by its fields directly. A variable bound to such a value can also
 //! be expanded into several field slots when every use is a projection.
@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 use zydeco_stackir::{SpsLowProgram, sps_low::syntax as sk};
 
 /// Values, patterns, and variables that the assembly lowerer may represent
-/// without a GC heap cell.
+/// without a region-allocated cell.
 #[derive(Debug, Default)]
 pub struct LocalUnboxing {
     pub values: HashSet<sk::ValueId>,
@@ -377,7 +377,7 @@ mod tests {
         let field_a: sk::ValueId = sk::Triv.build(&mut arena, None);
         let field_b: sk::ValueId = sk::Triv.build(&mut arena, None);
         let items = sk::ConsN::from_vec(vec![field_a, field_b]).unwrap();
-        let layout = sk::ProductLayout::conservative(2);
+        let layout = sk::ProductLayout { arity: 2 };
         let value: sk::ValueId = sk::VCons::new(items, layout.clone()).build(&mut arena, None);
 
         let pattern_a: sk::VPatId = sk::Hole.build(&mut arena, None);
@@ -402,7 +402,7 @@ mod tests {
         let field_a: sk::ValueId = sk::Triv.build(&mut arena, None);
         let field_b: sk::ValueId = sk::Triv.build(&mut arena, None);
         let items = sk::ConsN::from_vec(vec![field_a, field_b]).unwrap();
-        let layout = sk::ProductLayout::conservative(2);
+        let layout = sk::ProductLayout { arity: 2 };
         let value: sk::ValueId = sk::VCons::new(items, layout.clone()).build(&mut arena, None);
 
         let binder: sk::VPatId = sk::Hole.build(&mut arena, None);

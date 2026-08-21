@@ -2,7 +2,7 @@
 //!
 //! The pointer to control stack is stored in Rsp.
 //! The pointer to environment stack is stored in Rbp.
-//! The pointer to the heap is managed by the runtime, not the assembly side.
+//! The pointer to the static memory region is managed by the runtime, not the assembly side.
 
 pub mod syntax;
 pub mod emit;

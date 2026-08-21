@@ -39,32 +39,10 @@ pub struct DtorIdx {
 
 /* ---------------------------------- Value --------------------------------- */
 
-/// How the garbage collector treats one word of a product cell.
+/// Physical layout of a product value.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum FieldClass {
-    /// A fixed-width immediate or code label; not a GC pointer.
-    Scalar,
-    /// A payload pointer to a GC-managed object.
-    HeapPointer,
-    /// A pointer `offset_words` words into its base object.
-    InteriorPointer { offset_words: u32 },
-    /// An erased value whose pointer-ness is unknown; scan conservatively.
-    MaybePointer,
-}
-
-/// Physical layout of a product value, including per-field GC classes.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ProductLayout {
     pub arity: usize,
-    pub fields: Vec<FieldClass>,
-}
-
-impl ProductLayout {
-    /// A layout whose every field is scanned conservatively.
-    pub fn conservative(arity: usize) -> Self {
-        assert!(arity > 0, "product arity must be positive");
-        Self { arity, fields: vec![FieldClass::MaybePointer; arity] }
-    }
 }
 
 /// A logical value cons together with its canonical physical product layout.

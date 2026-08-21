@@ -154,39 +154,7 @@ impl<'a> Lowerer<'a> {
     }
 
     fn product_layout(&self, ty: ss::TypeId) -> ProductLayout {
-        ProductLayout { arity: self.product_arity(ty), fields: self.product_fields(ty) }
-    }
-
-    fn product_fields(&self, ty: ss::TypeId) -> Vec<FieldClass> {
-        match self.statics.normalized_at(ty) {
-            | Some(ss::Type::Unit(_)) => Vec::new(),
-            | Some(ss::Type::Prod(ss::Prod(head, tail))) => {
-                let mut fields = vec![self.field_class(*head)];
-                match self.statics.normalized_at(*tail) {
-                    | Some(ss::Type::Prod(_)) => fields.extend(self.product_fields(*tail)),
-                    | _ => fields.push(self.field_class(*tail)),
-                }
-                fields
-            }
-            | _ => vec![FieldClass::MaybePointer; self.product_arity(ty)],
-        }
-    }
-
-    fn field_class(&self, ty: ss::TypeId) -> FieldClass {
-        match self.statics.normalized_at(ty) {
-            | Some(ss::Type::Unit(_)) | Some(ss::Type::Primitive(_)) => FieldClass::Scalar,
-            | Some(ss::Type::Prod(_))
-            | Some(ss::Type::Thk(_))
-            | Some(ss::Type::VArrow(_))
-            | Some(ss::Type::VForall(_))
-            | Some(ss::Type::VPackPi(_))
-            | Some(ss::Type::Data(_))
-            | Some(ss::Type::CoData(_)) => FieldClass::HeapPointer,
-            | Some(ss::Type::Var(_)) | Some(ss::Type::Abst(_)) | Some(ss::Type::Opaque(_)) => {
-                FieldClass::MaybePointer
-            }
-            | _ => FieldClass::MaybePointer,
-        }
+        ProductLayout { arity: self.product_arity(ty) }
     }
 
     fn alloc_projection_def(&mut self) -> DefId {
@@ -283,7 +251,7 @@ impl BuiltinPackageLowering {
                     .into_iter()
                     .map(|value| Self::lower(value, lowerer))
                     .collect::<Result<Vec<_>, _>>()?;
-                let layout = ProductLayout::conservative(values.len());
+                let layout = ProductLayout { arity: values.len() };
                 let items = ConsN::from_vec(values).expect("a checked product plan is non-empty");
                 Ok(VCons::new(items, layout).build(lowerer, None))
             }
