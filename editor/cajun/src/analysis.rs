@@ -617,7 +617,7 @@ mod tests {
     #[test]
     fn type_hover_expands_short_definitions_and_collapses_long_ones() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/std/data/option.zy")
+            .join("../../lib/std/data/package.zy")
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
@@ -649,7 +649,7 @@ mod tests {
         );
 
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/std/data/option.type.zy")
+            .join("../../lib/std/data/body.type.zy")
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
@@ -674,14 +674,14 @@ mod tests {
     #[test]
     fn type_hover_pretty_prints_within_the_client_column_budget() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/std/data/option.zy")
+            .join("../../lib/std/data/package.zy")
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
         let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
         let line_width = HoverLineWidth::new(30).unwrap();
         let hover = project
-            .hover(&session, &path, source_position(&source, "map (A : VType)"), line_width)
+            .hover(&session, &path, source_position(&source, "zip (A : VType)"), line_width)
             .unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
@@ -706,7 +706,7 @@ mod tests {
     #[test]
     fn type_hover_breaks_result_constructor_signatures_at_72_columns() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/std/data/result.zy")
+            .join("../../lib/std/data/package.zy")
             .canonicalize()
             .unwrap();
         let source = concat!(

@@ -1,23 +1,15 @@
 begin
   let VType = @(import("../builtin/intrinsic/vtype.zy")) in
   let CType = @(import("../builtin/intrinsic/ctype.zy")) in
-  let IoModule = @(import("io.type.zy")) in
-  let FsModule = @(import("fs.type.zy")) in
-  let StdioModule = @(import("stdio.type.zy")) in
-  let ProcessModule = @(import("process.type.zy")) in
-  let Unit = @(import("../builtin/intrinsic/unit.zy")) in
-  let Int64 = @(import("../builtin/intrinsic/i64.zy")) in
-  let String = @(import("../builtin/intrinsic/string.zy")) in
-  let Bytes = @(import("../builtin/intrinsic/bytes.zy")) in
-  let Package (Bool : VType)
+  let SystemBody = @(import("body.type.zy")) in
+  let SystemPackage (Bool : VType)
     (
       Option : VType -> (
         VType
       )
     )
     (
-      Result :
-      VType -> (
+      Result : VType -> (
         VType
       ) -> VType
     )
@@ -32,21 +24,17 @@ begin
     exists (Path = PathType : VType) .
       exists (IoErrorKind = IoErrorKindType : VType) .
         exists (IoError = IoErrorType : VType) .
-            (
-              io :: IoModule
-                Bool Option Result Int64 String Bytes Reader Writer
-                IoErrorKindType IoErrorType OS
-            )
-          * (
-              fs :: FsModule
-                Result String Bytes Reader Writer PathType IoErrorType OS
-            )
-          * (
-              stdio :: StdioModule
-                Option Result String Reader Writer IoErrorType OS
-            )
-          * (process :: ProcessModule List Int64 String OS)
-          * Unit
+          SystemBody
+            Bool
+            Option
+            Result
+            List
+            Reader
+            Writer
+            PathType
+            IoErrorKindType
+            IoErrorType
+            OS
   in
-  Package
+  SystemPackage
 end

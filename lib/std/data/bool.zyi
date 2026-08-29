@@ -1,7 +1,0 @@
-begin
-  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
-  let BoolModule = @(import("bool.type.zy")) in
-  pi (_ : @(import("../builtin.zy"))) .
-    exists (Bool = AbstractBool : VType) .
-      BoolModule AbstractBool
-end

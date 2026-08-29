@@ -1,35 +1,146 @@
 begin
-  let make_io_types = @(import("types.zy")) that
-
+  param (
+    (
+      /core;
+      /representations;
+      /numeric;
+      /text;
+      /system = (/Reader; /Writer; /OS; /io; /fs; /stdio; /args; /random; /process);
+      builtin
+    )
+  ) in
+  let (/VType; /CType; /Thk; /Ret; /Unit) = core in
+  let (Scalar = Int64, int64) = numeric/int64 in
+  let (/Scalar = String) = representations/string in
+  let (/Scalar = Bytes) = representations/bytes in
+  let (/bytes) = text in
+  param (/Bool; /Option; /Result; /List; /bool; /option; /result; /list) in
   begin
-    param (
-      (
-        /core;
-        /representations;
-        /numeric;
-        /text;
-        /system = (/Reader; /Writer; /OS; /io; /fs; /stdio; /args; /random; /process);
-        builtin
-      )
-    ) in
-    let (/VType; /CType; /Thk; /Ret; /Unit) = core in
-    let (Scalar = Int64, int64) = numeric/int64 in
-    let (/Scalar = String) = representations/string in
-    let (/Scalar = Bytes) = representations/bytes in
-    let (/bytes) = text in
-    let (
-      = IoErrorKind,
-      = IoError,
-      = Path,
-      io_types
-    ) = make_io_types builtin in
-    param (/Bool; /Option; /Result; /List; /bool; /option; /result; /list) in
+    def IoErrorKind =
+      data
+      | +NotFound : Unit
+      | +PermissionDenied : Unit
+      | +AlreadyExists : Unit
+      | +InvalidInput : Unit
+      | +InvalidData : Unit
+      | +BrokenPipe : Unit
+      | +Closed : Unit
+      | +Other : Unit
+      end
+    that
+    def not_found : IoErrorKind = +NotFound() that
+    def permission_denied : IoErrorKind = +PermissionDenied() that
+    def already_exists : IoErrorKind = +AlreadyExists() that
+    def invalid_input : IoErrorKind = +InvalidInput() that
+    def invalid_data : IoErrorKind = +InvalidData() that
+    def broken_pipe : IoErrorKind = +BrokenPipe() that
+    def closed : IoErrorKind = +Closed() that
+    def other : IoErrorKind = +Other() that
+    def ! from_code (code : Int64) : Ret IoErrorKind = ! (int64/eq)
+      (Ret IoErrorKind)
+      code
+      0
+      { ret not_found }
+      {
+        ! (int64/eq)
+          (Ret IoErrorKind)
+          code
+          1
+          { ret permission_denied }
+          {
+            ! (int64/eq)
+              (Ret IoErrorKind)
+              code
+              2
+              { ret already_exists }
+              {
+                ! (int64/eq)
+                  (Ret IoErrorKind)
+                  code
+                  3
+                  { ret invalid_input }
+                  {
+                    ! (int64/eq)
+                      (Ret IoErrorKind)
+                      code
+                      4
+                      { ret invalid_data }
+                      {
+                        ! (int64/eq)
+                          (Ret IoErrorKind)
+                          code
+                          5
+                          { ret broken_pipe }
+                          {
+                            ! (int64/eq)
+                              (Ret IoErrorKind)
+                              code
+                              6
+                              { ret closed }
+                              { ret other }
+                          }
+                      }
+                  }
+              }
+          }
+      } that
+    def ! kind_code (kind : IoErrorKind) : Ret Int64 =
+      match kind
+      | +NotFound(_) => ret 0
+      | +PermissionDenied(_) => ret 1
+      | +AlreadyExists(_) => ret 2
+      | +InvalidInput(_) => ret 3
+      | +InvalidData(_) => ret 4
+      | +BrokenPipe(_) => ret 5
+      | +Closed(_) => ret 6
+      | +Other(_) => ret 7
+      end
+    that
+    def ! kind_eq_branch (R : CType)
+      (left : IoErrorKind)
+      (right : IoErrorKind)
+      (when_equal : Thk R)
+      (when_different : Thk R)
+    : R =
+        do left_code <- ! kind_code left;
+        do right_code <- ! kind_code right;
+        ! (int64/eq) R left_code right_code when_equal when_different
+    that
+    def IoError =
+      data
+      | +IoError : (kind :: IoErrorKind) * (message :: String)
+      end
+    that
+    def ! error (kind : IoErrorKind) (message : String) : Ret IoError =
+      ret +IoError(= kind, = message)
+    that
+    def ! error_kind (error : IoError) : Ret IoErrorKind =
+      match error
+      | +IoError(/kind) => ret kind
+      end
+    that
+    def ! error_message (error : IoError) : Ret String =
+      match error
+      | +IoError(/message) => ret message
+      end
+    that
+    def Path =
+      data
+      | +Path : String
+      end
+    that
+    def ! path (string : String) : Ret Path = ret +Path(string) that
+    def ! path_string (path : Path) : Ret String =
+      match path
+      | +Path(string) => ret string
+      end
+    that
     let ! make_io_error (code : Int64) (message : String) : Ret IoError =
-      do kind <- ! (io_types/from_code) code;
-      ! (io_types/error) kind message
+      do kind <- ! from_code code;
+      ! error kind message
     in
     let ! io_kind_eq (left : IoErrorKind) (right : IoErrorKind) : Ret Bool =
-      ! (io_types/kind_eq_branch)
+      ! kind_eq_branch
         (Ret Bool)
         left
         right
@@ -125,7 +236,7 @@ begin
     let ! fs_open_reader (path : Path)
       (continuation : Thk (Result Reader IoError -> OS))
     : OS =
-        do string <- ! (io_types/path_string) path;
+        do string <- ! path_string path;
         ! (fs/open_reader)
           string
           { fn code message => ! continue_host_error Reader continuation code message }
@@ -134,7 +245,7 @@ begin
     let ! fs_create_writer (path : Path)
       (continuation : Thk (Result Writer IoError -> OS))
     : OS =
-        do string <- ! (io_types/path_string) path;
+        do string <- ! path_string path;
         ! (fs/create_writer)
           string
           { fn code message => ! continue_host_error Writer continuation code message }
@@ -143,7 +254,7 @@ begin
     let ! fs_append_writer (path : Path)
       (continuation : Thk (Result Writer IoError -> OS))
     : OS =
-        do string <- ! (io_types/path_string) path;
+        do string <- ! path_string path;
         ! (fs/append_writer)
           string
           { fn code message => ! continue_host_error Writer continuation code message }
@@ -229,8 +340,8 @@ begin
                   OS
                   contents
                   {
-                    do error <- ! (io_types/error)
-                      io_types/invalid_data
+                    do error <- ! error
+                      invalid_data
                       "file is not valid UTF-8";
                     ! continue_io_error String continuation error
                   }
@@ -321,8 +432,8 @@ begin
                           OS
                           line_bytes
                           {
-                            do error <- ! (io_types/error)
-                              io_types/invalid_data
+                            do error <- ! error
+                              invalid_data
                               "standard input is not valid UTF-8";
                             ! continue_io_error (Option String) continuation error
                           }
@@ -380,17 +491,17 @@ begin
       = IoErrorKind,
       = IoError,
       io = (
-        not_found = io_types/not_found,
-        permission_denied = io_types/permission_denied,
-        already_exists = io_types/already_exists,
-        invalid_input = io_types/invalid_input,
-        invalid_data = io_types/invalid_data,
-        broken_pipe = io_types/broken_pipe,
-        closed = io_types/closed,
-        other = io_types/other,
+        = not_found,
+        = permission_denied,
+        = already_exists,
+        = invalid_input,
+        = invalid_data,
+        = broken_pipe,
+        = closed,
+        = other,
         kind_eq = io_kind_eq,
-        error_kind = io_types/error_kind,
-        error_message = io_types/error_message,
+        = error_kind,
+        = error_message,
         read = io_read,
         read_line = io_read_line,
         read_all = io_read_all,
@@ -400,8 +511,8 @@ begin
         close_writer = io_close_writer
       ),
       fs = (
-        path = io_types/path,
-        path_string = io_types/path_string,
+        = path,
+        = path_string,
         open_reader = fs_open_reader,
         create_writer = fs_create_writer,
         append_writer = fs_append_writer,

@@ -1,0 +1,94 @@
+begin
+  let make_integer = @(import("integer.zy")) that
+  let make_float = @(import("float.zy")) that
+
+  begin
+    param (
+      (/core; /representations; /numeric) :
+      @(import("../builtin.zy"))
+    ) in
+    let (/VType; /CType; /Thk; /Ret; /Unit) = core in
+    let (/Scalar = String) = representations/string in
+    param (/Bool; /bool) in
+    let (Scalar = Int8, int8) = numeric/int8 in
+    let (Scalar = Int16, int16) = numeric/int16 in
+    let (Scalar = Int32, int32) = numeric/int32 in
+    let (Scalar = Int64, int64) = numeric/int64 in
+    let (Scalar = UInt8, uint8) = numeric/uint8 in
+    let (Scalar = UInt16, uint16) = numeric/uint16 in
+    let (Scalar = UInt32, uint32) = numeric/uint32 in
+    let (Scalar = UInt64, uint64) = numeric/uint64 in
+    let (Scalar = Float32, float32) = numeric/float32 in
+    let (Scalar = Float64, float64) = numeric/float64 in
+    let (/operations = int8_module; /instance = int8_instance) =
+      make_integer core Bool Int8 String bool int8 0 1
+    in
+    let (/operations = int16_module; /instance = int16_instance) =
+      make_integer core Bool Int16 String bool int16 0 1
+    in
+    let (/operations = int32_module; /instance = int32_instance) =
+      make_integer core Bool Int32 String bool int32 0 1
+    in
+    let (/operations = int64_module; /instance = int64_instance) =
+      make_integer core Bool Int64 String bool int64 0 1
+    in
+    let (/operations = uint8_module; /instance = uint8_instance) =
+      make_integer core Bool UInt8 String bool uint8 0 1
+    in
+    let (/operations = uint16_module; /instance = uint16_instance) =
+      make_integer core Bool UInt16 String bool uint16 0 1
+    in
+    let (/operations = uint32_module; /instance = uint32_instance) =
+      make_integer core Bool UInt32 String bool uint32 0 1
+    in
+    let (/operations = uint64_module; /instance = uint64_instance) =
+      make_integer core Bool UInt64 String bool uint64 0 1
+    in
+    let (/operations = float32_module; /instance = float32_instance) =
+      make_float core Bool Float32 String bool float32 0.0 1.0
+    in
+    let (/operations = float64_module; /instance = float64_instance) =
+      make_float core Bool Float64 String bool float64 0.0 1.0
+    in
+    (
+      numeric = (
+        = int8_instance,
+        = int16_instance,
+        = int32_instance,
+        = int64_instance,
+        = uint8_instance,
+        = uint16_instance,
+        = uint32_instance,
+        = uint64_instance,
+        = float32_instance,
+        = float64_instance,
+        ()
+      ),
+      primitives = (
+        i8 = int8,
+        i16 = int16,
+        i32 = int32,
+        i64 = int64,
+        u8 = uint8,
+        u16 = uint16,
+        u32 = uint32,
+        u64 = uint64,
+        f32 = float32,
+        f64 = float64,
+        ()
+      ),
+      int8 = int8_module,
+      int16 = int16_module,
+      int32 = int32_module,
+      int64 = int64_module,
+      uint8 = uint8_module,
+      uint16 = uint16_module,
+      uint32 = uint32_module,
+      uint64 = uint64_module,
+      float32 = float32_module,
+      float64 = float64_module,
+      ()
+    )
+  end
+end
+-- end module Numeric

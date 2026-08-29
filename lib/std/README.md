@@ -5,14 +5,16 @@ The standard library has two boundaries.
 Its operations expose representation-independent observations and effects,
 but never construct library-defined `Bool`, `Option`, `Result`, or `List` values.
 [`std.zyi`](std.zyi) annotates the public package independently from its implementation.
-[`std.zy`](std.zy) applies the ordinary Zydeco modules in this directory, derives higher-level operations,
-and assembles a value of that package type. Topic implementations use the same adjacent `.zy`/`.zyi` pairing.
-Reusable package-type constructors live in `.type.zy` sources and are imported by both leaf companions and
-aggregate signatures, so the contracts have one definition even when several boundaries expose them.
-Modules whose composed package adds operations on top of an independently checkable leaf split the type into a
-`*-core.type.zy` leaf contract and an extended `.type.zy` package type.
-Signature and type files bind `VType` and `CType` once at the top of the file and use those aliases in
-every classifier below.
+[`std.zy`](std.zy) applies the topic packages in this directory and assembles a value of that package type.
+
+Each topic owns exactly one implementation and one companion: `data`, `text`, `system`, and `numeric`
+each provide `package.zy` with `package.zyi` beside it.
+The implementation defines its topic's data types and operations in one dependency-scheduled block,
+so derived operations sit next to the types they observe and no per-module contract split remains.
+Reusable type terms live in `.type.zy` sources beside their topic:
+`body.type.zy` defines the topic's record-shape constructor together with its module telescopes,
+and `package.type.zy` wraps that body in the topic's existential witnesses where the topic owns any.
+Type files bind `VType` and `CType` once at the top of the file and use those aliases in every classifier below.
 
 This separation keeps algebraic data in the language.
 The interpreter and native runtime only need to agree on the small Builtin ABI, while the files under `data/`
@@ -24,7 +26,6 @@ The files at the root of this directory are composition boundaries, not implemen
 
 ```text
 builtin.zy                 complete host ABI and shared system witness telescope
-std.type.zy                reusable public `Std` package-type constructor
 std.zyi                    companion annotation for `std.zy`
 std.zy                     wiring for the public package
 
@@ -35,19 +36,30 @@ builtin/numeric/*.zy       exact-width primitive operations
 builtin/text/*.zy          Char, String, and Bytes host operations
 builtin/system/*.zy        I/O, filesystem, streams, arguments, randomness, process
 
-data/*.zy                  Bool, Option, Result, List, and their composed package
+data/package.zy            Bool, Option, Result, List, and every derived operation
+data/body.type.zy          DataBody constructor and the option/result/list telescopes
+data/package.type.zy       DataPackage existential wrapper
+data/bool.type.zy          BoolModule telescope shared with the numeric builders
+data/prelude.type.zy       thunk and return aliases re-exported by `std`
+
 numeric/{integer,float}.zy explicitly polymorphic derived numeric builders
+numeric/package.zy         the ten width modules, instances, and primitive groups
+numeric/body.type.zy       NumericBody constructor over the shared telescopes
+
 text/package.zy            cross-representation text operations
-system/{types,package}.zy  shared system data and capability-preserving assembly
+text/body.type.zy          TextBody constructor and the char/string/bytes telescopes
+
+system/package.zy          system data types and capability-preserving assembly
+system/body.type.zy        SystemBody constructor and the io/fs/stdio/process telescopes
+system/package.type.zy     SystemPackage existential wrapper
+
 control/*.zy               monadic basis, State, Exception, and their combination
 
 **/*.zyi                   optional whole-file annotations beside value implementations
-**/*.type.zy               reusable type terms imported by companions and aggregate types
-**/*-core.type.zy          leaf module contract shared by a `.zyi` and its extended `.type.zy`
+**/*.type.zy               reusable type terms imported by companions and other type files
 ```
 
-Leaf sources are independently checkable package values or package functions. Topic package files assemble values
-whose operations genuinely share several leaves. In particular, the public system package keeps one opening for
+Topic implementations are independently checkable package functions. The public package keeps one opening for
 `Reader`, `Writer`, and `OS`; splitting that opening would give related I/O operations incompatible abstract types.
 No compatibility forwarding files remain at the old flat paths.
 
@@ -158,7 +170,9 @@ EOF is represented as `Option` by line reads; it is not conflated with an empty 
 The full rationale and lifecycle contract are documented
 in [`docs/proposals/filesystem.md`](../../docs/proposals/filesystem.md).
 
-The component files are independently importable pure package functions.
+The topic files are independently importable pure package functions.
 `std.zy` is the composition root used by most programs and re-exports their abstract type witnesses in one package.
-Its companion keeps the exposed contract reviewable without reading the implementation machinery, while imported
-`.type.zy` constructors let topic and aggregate signatures share the same definitions.
+Its public record nests one sub-record per topic, matching the body constructors imported by its companion,
+so the exposed contract stays reviewable without reading the implementation machinery.
+Consumers still select individual modules and types directly, such as `let (/option; /process) = make_std builtin in`,
+because slash projection searches the nested structure.

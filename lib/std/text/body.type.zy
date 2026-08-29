@@ -2,6 +2,23 @@ begin
   let VType = @(import("../builtin/intrinsic/vtype.zy")) in
   let Thk = @(import("../builtin/intrinsic/thk.zy")) in
   let Ret = @(import("../builtin/intrinsic/ret.zy")) in
+  let Unit = @(import("../builtin/intrinsic/unit.zy")) in
+  let Int64 = @(import("../builtin/intrinsic/i64.zy")) in
+  let Char = @(import("../builtin/intrinsic/char.zy")) in
+  let String = @(import("../builtin/intrinsic/string.zy")) in
+  let Bytes = @(import("../builtin/intrinsic/bytes.zy")) in
+
+  let CharModule
+    (
+      Option : VType -> (
+        VType
+      )
+    ) =
+      (to_string :: Thk (Char -> Ret String))
+    * (codepoint :: Thk (Char -> Ret Int64))
+    * (from_codepoint :: Thk (Int64 -> Ret (Option Char)))
+  in
+
   let StringModule (Bool : VType)
     (
       Option : VType -> (
@@ -12,10 +29,7 @@ begin
       List : VType -> (
         VType
       )
-    )
-    (Int64 : VType)
-    (Char : VType)
-    (String : VType) =
+    ) =
       (empty :: String)
     * (length :: Thk (String -> Ret Int64))
     * (byte_length :: Thk (String -> Ret Int64))
@@ -48,5 +62,35 @@ begin
     * (from_chars :: Thk (List Char -> Ret String))
     * (parse_int :: Thk (String -> Ret (Option Int64)))
   in
-  StringModule
+
+  let BytesModule
+    (
+      Option : VType -> (
+        VType
+      )
+    ) =
+      (empty :: Thk (Ret Bytes))
+    * (length :: Thk (Bytes -> Ret Int64))
+    * (append :: Thk (Bytes -> Bytes -> Ret Bytes))
+    * (from_string :: Thk (String -> Ret Bytes))
+    * (to_string :: Thk (Bytes -> Ret (Option String)))
+  in
+
+  let TextBody (Bool : VType)
+    (
+      Option : VType -> (
+        VType
+      )
+    )
+    (
+      List : VType -> (
+        VType
+      )
+    ) =
+      (char :: CharModule Option)
+    * (string :: StringModule Bool Option List)
+    * (bytes :: BytesModule Option)
+    * Unit
+  in
+  TextBody
 end

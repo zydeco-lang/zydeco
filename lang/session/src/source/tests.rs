@@ -2015,7 +2015,7 @@ fn recursive_nominal_types_port_to_a_declaration_free_block() {
 
 #[test]
 fn abstract_bool_package_exports_values_and_an_eliminator() {
-    RepositorySourceFiles::assert_pure_package("std/data/bool.zy");
+    RepositorySourceFiles::assert_pure_package("std/data/package.zy");
 
     let root = repository_source("tests/std/bool.zy");
     let checked = TestPipeline::check(&root).unwrap();
@@ -2032,7 +2032,7 @@ fn abstract_bool_package_exports_values_and_an_eliminator() {
 
 #[test]
 fn abstract_option_package_exports_a_type_constructor_and_an_eliminator() {
-    RepositorySourceFiles::assert_pure_package("std/data/option.zy");
+    RepositorySourceFiles::assert_pure_package("std/data/package.zy");
 
     let root = repository_source("tests/std/option.zy");
     let checked = TestPipeline::check(&root).unwrap();
@@ -2049,7 +2049,7 @@ fn abstract_option_package_exports_a_type_constructor_and_an_eliminator() {
 
 #[test]
 fn abstract_list_package_exports_case_analysis_and_a_recursive_fold() {
-    RepositorySourceFiles::assert_pure_package("std/data/list.zy");
+    RepositorySourceFiles::assert_pure_package("std/data/package.zy");
 
     let root = repository_source("tests/std/list.zy");
     let checked = TestPipeline::check(&root).unwrap();

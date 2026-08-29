@@ -4488,21 +4488,25 @@ mod tests {
         assert_eq!(first, second);
     }
 
-    #[test]
-    fn standard_library_has_no_named_term_punning_backlog() {
-        let sources = [
-            ("bool.zy", include_str!("../../../../lib/std/data/bool.zy")),
-            ("io-types.zy", include_str!("../../../../lib/std/system/types.zy")),
-            ("list.zy", include_str!("../../../../lib/std/data/list.zy")),
+    /// Representative standard-library sources shared by repository audits:
+    /// one entry per composition boundary and topic, so adding a topic or
+    /// reshaping the library updates every audit at once.
+    fn standard_library_sources() -> Vec<(&'static str, &'static str)> {
+        vec![
+            ("builtin.zy", include_str!("../../../../lib/std/builtin.zy")),
+            ("data-package.zy", include_str!("../../../../lib/std/data/package.zy")),
             ("monad.zy", include_str!("../../../../lib/std/control/monad.zy")),
-            ("option.zy", include_str!("../../../../lib/std/data/option.zy")),
-            ("result.zy", include_str!("../../../../lib/std/data/result.zy")),
-            ("std.type.zy", include_str!("../../../../lib/std/std.type.zy")),
+            ("numeric-package.zy", include_str!("../../../../lib/std/numeric/package.zy")),
             ("std.zy", include_str!("../../../../lib/std/std.zy")),
             ("std.zyi", include_str!("../../../../lib/std/std.zyi")),
-        ];
+            ("system-package.zy", include_str!("../../../../lib/std/system/package.zy")),
+            ("text-package.zy", include_str!("../../../../lib/std/text/package.zy")),
+        ]
+    }
 
-        let remaining = sources
+    #[test]
+    fn standard_library_has_no_named_term_punning_backlog() {
+        let remaining = standard_library_sources()
             .into_iter()
             .filter_map(|(name, source)| {
                 let parsed = ParsedSource::new(source);
@@ -4519,20 +4523,7 @@ mod tests {
 
     #[test]
     fn standard_library_pretty_printing_reparses_idempotently() {
-        let sources = [
-            ("bool.zy", include_str!("../../../../lib/std/data/bool.zy")),
-            ("builtin.zy", include_str!("../../../../lib/std/builtin.zy")),
-            ("io-types.zy", include_str!("../../../../lib/std/system/types.zy")),
-            ("list.zy", include_str!("../../../../lib/std/data/list.zy")),
-            ("monad.zy", include_str!("../../../../lib/std/control/monad.zy")),
-            ("option.zy", include_str!("../../../../lib/std/data/option.zy")),
-            ("result.zy", include_str!("../../../../lib/std/data/result.zy")),
-            ("std.type.zy", include_str!("../../../../lib/std/std.type.zy")),
-            ("std.zy", include_str!("../../../../lib/std/std.zy")),
-            ("std.zyi", include_str!("../../../../lib/std/std.zyi")),
-        ];
-
-        sources.into_iter().for_each(|(name, source)| {
+        standard_library_sources().into_iter().for_each(|(name, source)| {
             let original = ParsedSource::new(source);
             let first = original.render(LayoutIntentions::Ignore);
             let reparsed = ParsedSource::named(&first, name);

@@ -1,0 +1,222 @@
+begin
+  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
+  let CType = @(import("../builtin/intrinsic/ctype.zy")) in
+  let Thk = @(import("../builtin/intrinsic/thk.zy")) in
+  let Ret = @(import("../builtin/intrinsic/ret.zy")) in
+  let Unit = @(import("../builtin/intrinsic/unit.zy")) in
+  let Int64 = @(import("../builtin/intrinsic/i64.zy")) in
+  let BoolModule = @(import("bool.type.zy")) in
+
+  let OptionModule (Bool : VType)
+    (
+      Option : VType -> (
+        VType
+      )
+    ) =
+      (none :: Thk (forall (A : VType) . Ret (Option A)))
+    * (some :: Thk (forall (A : VType) . A -> Ret (Option A)))
+    * (
+        fold :: Thk (
+          forall (A : VType) .
+            forall (B : CType) .
+              Option A -> Thk B -> Thk (A -> B) -> B
+        )
+      )
+    * (
+        map :: Thk (
+          forall (A : VType) .
+            forall (B : VType) .
+              Option A -> Thk (A -> Ret B) -> Ret (Option B)
+        )
+      )
+    * (
+        and_then :: Thk (
+          forall (A : VType) .
+            forall (B : VType) .
+                 Option A
+              -> Thk (A -> Ret (Option B))
+              -> Ret (Option B)
+        )
+      )
+    * (unwrap_or :: Thk (forall (A : VType) . Option A -> A -> Ret A))
+    * (
+        or_else :: Thk (
+          forall (A : VType) .
+               Option A
+            -> Thk (Ret (Option A))
+            -> Ret (Option A)
+        )
+      )
+    * (
+        zip :: Thk (
+          forall (A : VType) .
+            forall (B : VType) .
+              Option A -> Option B -> Ret (Option (A * B))
+        )
+      )
+    * (is_some :: Thk (forall (A : VType) . Option A -> Ret Bool))
+    * (is_none :: Thk (forall (A : VType) . Option A -> Ret Bool))
+  in
+
+  let ResultModule (Bool : VType)
+    (
+      Result : VType -> (
+        VType
+      ) -> VType
+    ) =
+      (
+        ok :: Thk (
+          forall (A : VType) .
+            forall (E : VType) . A -> Ret (Result A E)
+        )
+      )
+    * (
+        err :: Thk (
+          forall (A : VType) .
+            forall (E : VType) . E -> Ret (Result A E)
+        )
+      )
+    * (
+        fold :: Thk (
+          forall (A : VType) .
+            forall (E : VType) .
+              forall (B : CType) .
+                Result A E -> Thk (A -> B) -> Thk (E -> B) -> B
+        )
+      )
+    * (
+        map :: Thk (
+          forall (A : VType) .
+            forall (B : VType) .
+              forall (E : VType) .
+                Result A E -> Thk (A -> Ret B) -> Ret (Result B E)
+        )
+      )
+    * (
+        map_err :: Thk (
+          forall (A : VType) .
+            forall (E : VType) .
+              forall (F : VType) .
+                Result A E -> Thk (E -> Ret F) -> Ret (Result A F)
+        )
+      )
+    * (
+        and_then :: Thk (
+          forall (A : VType) .
+            forall (B : VType) .
+              forall (E : VType) .
+                   Result A E
+                -> Thk (A -> Ret (Result B E))
+                -> Ret (Result B E)
+        )
+      )
+    * (
+        unwrap_or :: Thk (
+          forall (A : VType) .
+            forall (E : VType) . Result A E -> A -> Ret A
+        )
+      )
+    * (
+        is_ok :: Thk (
+          forall (A : VType) .
+            forall (E : VType) . Result A E -> Ret Bool
+        )
+      )
+    * (
+        is_err :: Thk (
+          forall (A : VType) .
+            forall (E : VType) . Result A E -> Ret Bool
+        )
+      )
+  in
+
+  let ListModule (Bool : VType)
+    (
+      Option : VType -> (
+        VType
+      )
+    )
+    (
+      List : VType -> (
+        VType
+      )
+    )
+    (Int64 : VType) =
+      (nil :: Thk (forall (A : VType) . Ret (List A)))
+    * (cons :: Thk (forall (A : VType) . A -> List A -> Ret (List A)))
+    * (
+        case :: Thk (
+          forall (A : VType) .
+            forall (B : CType) .
+                 List A
+              -> Thk B
+              -> Thk (A -> List A -> B)
+              -> B
+        )
+      )
+    * (
+        fold :: Thk (
+          forall (A : VType) .
+            forall (B : CType) .
+                 List A
+              -> Thk B
+              -> Thk (A -> Thk B -> B)
+              -> B
+        )
+      )
+    * (singleton :: Thk (forall (A : VType) . A -> Ret (List A)))
+    * (append :: Thk (forall (A : VType) . List A -> List A -> Ret (List A)))
+    * (
+        map :: Thk (
+          forall (A : VType) .
+            forall (B : VType) .
+              List A -> Thk (A -> Ret B) -> Ret (List B)
+        )
+      )
+    * (
+        fold_left :: Thk (
+          forall (A : VType) .
+            forall (B : VType) .
+              List A -> B -> Thk (B -> A -> Ret B) -> Ret B
+        )
+      )
+    * (reverse :: Thk (forall (A : VType) . List A -> Ret (List A)))
+    * (length :: Thk (forall (A : VType) . List A -> Ret Int64))
+    * (is_empty :: Thk (forall (A : VType) . List A -> Ret Bool))
+    * (head :: Thk (forall (A : VType) . List A -> Ret (Option A)))
+    * (
+        tail :: Thk (
+          forall (A : VType) . List A -> Ret (Option (List A))
+        )
+      )
+    * (
+        get :: Thk (
+          forall (A : VType) . List A -> Int64 -> Ret (Option A)
+        )
+      )
+  in
+
+  let DataBody (Bool : VType)
+    (
+      Option : VType -> (
+        VType
+      )
+    )
+    (
+      Result : VType -> (
+        VType
+      ) -> VType
+    )
+    (
+      List : VType -> (
+        VType
+      )
+    ) =
+      (bool :: BoolModule Bool)
+    * (option :: OptionModule Bool Option)
+    * (result :: ResultModule Bool Result)
+    * (list :: ListModule Bool Option List Int64)
+    * Unit
+  in
+  DataBody
+end

@@ -1,0 +1,63 @@
+begin
+  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
+  let Unit = @(import("../builtin/intrinsic/unit.zy")) in
+  let String = @(import("../builtin/intrinsic/string.zy")) in
+  let Int8 = @(import("../builtin/intrinsic/i8.zy")) in
+  let Int16 = @(import("../builtin/intrinsic/i16.zy")) in
+  let Int32 = @(import("../builtin/intrinsic/i32.zy")) in
+  let Int64 = @(import("../builtin/intrinsic/i64.zy")) in
+  let UInt8 = @(import("../builtin/intrinsic/u8.zy")) in
+  let UInt16 = @(import("../builtin/intrinsic/u16.zy")) in
+  let UInt32 = @(import("../builtin/intrinsic/u32.zy")) in
+  let UInt64 = @(import("../builtin/intrinsic/u64.zy")) in
+  let Float32 = @(import("../builtin/intrinsic/f32.zy")) in
+  let Float64 = @(import("../builtin/intrinsic/f64.zy")) in
+  let NumericInstance = @(import("numeric-instance.type.zy")) in
+  let PrimitiveIntegerModule = @(import("primitive-integer.type.zy")) in
+  let PrimitiveFloatModule = @(import("primitive-float.type.zy")) in
+  let IntegerModule = @(import("integer.type.zy")) in
+  let FloatModule = @(import("float.type.zy")) in
+
+  let NumericBody (Bool : VType) =
+      (
+        numeric ::
+          (int8_instance :: NumericInstance Bool Int8)
+        * (int16_instance :: NumericInstance Bool Int16)
+        * (int32_instance :: NumericInstance Bool Int32)
+        * (int64_instance :: NumericInstance Bool Int64)
+        * (uint8_instance :: NumericInstance Bool UInt8)
+        * (uint16_instance :: NumericInstance Bool UInt16)
+        * (uint32_instance :: NumericInstance Bool UInt32)
+        * (uint64_instance :: NumericInstance Bool UInt64)
+        * (float32_instance :: NumericInstance Bool Float32)
+        * (float64_instance :: NumericInstance Bool Float64)
+        * Unit
+      )
+    * (
+        primitives ::
+          (i8 :: PrimitiveIntegerModule Int8 String)
+        * (i16 :: PrimitiveIntegerModule Int16 String)
+        * (i32 :: PrimitiveIntegerModule Int32 String)
+        * (i64 :: PrimitiveIntegerModule Int64 String)
+        * (u8 :: PrimitiveIntegerModule UInt8 String)
+        * (u16 :: PrimitiveIntegerModule UInt16 String)
+        * (u32 :: PrimitiveIntegerModule UInt32 String)
+        * (u64 :: PrimitiveIntegerModule UInt64 String)
+        * (f32 :: PrimitiveFloatModule Float32 String)
+        * (f64 :: PrimitiveFloatModule Float64 String)
+        * Unit
+      )
+    * (int8 :: IntegerModule Bool Int8 String)
+    * (int16 :: IntegerModule Bool Int16 String)
+    * (int32 :: IntegerModule Bool Int32 String)
+    * (int64 :: IntegerModule Bool Int64 String)
+    * (uint8 :: IntegerModule Bool UInt8 String)
+    * (uint16 :: IntegerModule Bool UInt16 String)
+    * (uint32 :: IntegerModule Bool UInt32 String)
+    * (uint64 :: IntegerModule Bool UInt64 String)
+    * (float32 :: FloatModule Bool Float32 String)
+    * (float64 :: FloatModule Bool Float64 String)
+    * Unit
+  in
+  NumericBody
+end

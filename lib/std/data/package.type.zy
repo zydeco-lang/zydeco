@@ -1,38 +1,29 @@
 begin
   let VType = @(import("../builtin/intrinsic/vtype.zy")) in
-  let BoolModule = @(import("bool.type.zy")) in
-  let OptionModule = @(import("option.type.zy")) in
-  let ResultModule = @(import("result.type.zy")) in
-  let ListModule = @(import("list.type.zy")) in
-  let Unit = @(import("../builtin/intrinsic/unit.zy")) in
-  let Int64 = @(import("../builtin/intrinsic/i64.zy")) in
-  exists (Bool = BoolType : VType)
-    (
-      Option = OptionType :
-      VType -> (
-        VType
-      )
-    )
-  .
+  let DataBody = @(import("body.type.zy")) in
+  let DataPackage =
     exists
+      (Bool = BoolType : VType)
+      (
+        Option = OptionType :
+        VType -> (
+          VType
+        )
+      )
       (
         Result = ResultType :
         VType -> (
           VType
         ) -> VType
       )
-    .
-      exists
-        (
-          List = ListType :
-          VType -> (
-            VType
-          )
+      (
+        List = ListType :
+        VType -> (
+          VType
         )
-      .
-          (bool :: BoolModule BoolType)
-        * (option :: OptionModule BoolType OptionType)
-        * (result :: ResultModule BoolType ResultType)
-        * (list :: ListModule BoolType OptionType ListType Int64)
-        * Unit
+      )
+    .
+      DataBody BoolType OptionType ResultType ListType
+  in
+  DataPackage
 end

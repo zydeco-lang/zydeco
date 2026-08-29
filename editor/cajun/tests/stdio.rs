@@ -563,7 +563,7 @@ fn stdio_hover_links_referenced_type_definitions() {
 #[test]
 fn stdio_hover_uses_the_initialized_line_width() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../lib/std/data/option.zy")
+        .join("../../lib/std/data/package.zy")
         .canonicalize()
         .unwrap();
     let source = std::fs::read_to_string(&path).unwrap();
@@ -600,7 +600,7 @@ fn stdio_hover_uses_the_initialized_line_width() {
         "textDocument/hover",
         json!({
             "textDocument": { "uri": uri },
-            "position": { "line": 25, "character": 9 },
+            "position": { "line": 116, "character": 8 },
         }),
     );
     assert_eq!(hover["result"]["contents"]["kind"], "markdown");
@@ -630,9 +630,8 @@ fn stdio_server_treats_overlapping_open_analyses_as_superseded() {
     let repository =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
     let documents = [
-        "lib/std/data/bool.zy",
         "lib/std/builtin.zy",
-        "lib/std/data/list.zy",
+        "lib/std/data/package.zy",
         "lib/std/control/monad.zy",
         "lib/std/std.zy",
     ]
