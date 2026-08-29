@@ -36,6 +36,7 @@ e2e_sources!({
     string_literal => "tests/compile/string-literal.zy",
     pure_functions => "tests/compile/pure-functions.zy",
     numeric_widths => "tests/builtin/numeric-widths.zy",
+    tagged_values => "tests/compile/tagged-values.zy",
 });
 
 mod host_arguments {
@@ -53,5 +54,14 @@ mod host_arguments {
     #[test]
     fn amd64() {
         program().test(TestBackend::Amd64);
+    }
+}
+
+mod gc_stress {
+    use zydeco_tests::utils::{SourceProgram, TestBackend};
+
+    #[test]
+    fn amd64() {
+        SourceProgram::setup("tests/compile/gc-stress.zy").test(TestBackend::Amd64);
     }
 }

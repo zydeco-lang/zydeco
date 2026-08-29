@@ -26,7 +26,7 @@ pub enum Slot {
     Sym(SymId),
     Imm(Imm),
     Product(Vec<Slot>),
-    /// A product allocated in the current stack frame rather than the static region.
+    /// A product allocated in the current stack frame rather than the copying heap.
     StackProduct(Vec<Slot>),
     Unknown,
 }

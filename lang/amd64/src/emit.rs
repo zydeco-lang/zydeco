@@ -12,6 +12,122 @@ use zydeco_utils::pass::CompilerPass;
 
 pub const ENV_REG: Reg = Reg::Rbp;
 
+const IMMEDIATE_TAG: u64 = 1;
+const IMMEDIATE_UNSIGNED_MAX: u64 = u64::MAX >> 1;
+const IMMEDIATE_SIGNED_MIN: i64 = -(1_i64 << 62);
+const IMMEDIATE_SIGNED_MAX: i64 = (1_i64 << 62) - 1;
+
+#[derive(Clone, Copy)]
+enum AllocationKind {
+    Scanned,
+    Opaque,
+}
+
+impl AllocationKind {
+    fn symbol(self) -> &'static str {
+        match self {
+            | Self::Scanned => "zydeco_alloc_scanned",
+            | Self::Opaque => "zydeco_alloc_opaque",
+        }
+    }
+}
+
+enum EncodedLiteral {
+    Immediate(u64),
+    Boxed(u64),
+}
+
+/// The one-word value convention shared with the native runtime.
+///
+/// Odd words are immediates. Even words are pointer-shaped values; the collector
+/// only moves those that point into its active semispace. Wide scalars that cannot
+/// surrender one tag bit use one-word opaque heap blocks.
+struct TaggedValue;
+
+impl TaggedValue {
+    fn unsigned(value: u64) -> Option<u64> {
+        (value <= IMMEDIATE_UNSIGNED_MAX).then_some((value << 1) | IMMEDIATE_TAG)
+    }
+
+    fn signed(value: i64) -> Option<u64> {
+        (IMMEDIATE_SIGNED_MIN..=IMMEDIATE_SIGNED_MAX)
+            .contains(&value)
+            .then_some(((value as u64) << 1) | IMMEDIATE_TAG)
+    }
+
+    fn integer(value: IntegerLiteral) -> EncodedLiteral {
+        use IntegerLiteral::*;
+        let immediate = match value {
+            | Int8(value) => Self::signed(value.into()),
+            | Int16(value) => Self::signed(value.into()),
+            | Int32(value) => Self::signed(value.into()),
+            | Int64(value) => Self::signed(value),
+            | UInt8(value) => Self::unsigned(value.into()),
+            | UInt16(value) => Self::unsigned(value.into()),
+            | UInt32(value) => Self::unsigned(value.into()),
+            | UInt64(value) => Self::unsigned(value),
+            | Unresolved(_) => panic!("unresolved integer literal reached emission"),
+        };
+        immediate
+            .map_or_else(|| EncodedLiteral::Boxed(value.to_word_bits()), EncodedLiteral::Immediate)
+    }
+
+    fn float(value: FloatLiteral) -> EncodedLiteral {
+        match value {
+            | FloatLiteral::Float32(bits) => EncodedLiteral::Immediate(
+                Self::unsigned(bits.into()).expect("Float32 payload fits an immediate"),
+            ),
+            | FloatLiteral::Float64(bits) => EncodedLiteral::Boxed(bits),
+        }
+    }
+
+    fn index(value: usize) -> u64 {
+        Self::unsigned(u64::try_from(value).expect("runtime tag index overflow"))
+            .expect("runtime tag index does not fit an immediate")
+    }
+}
+
+struct HostCall;
+
+#[derive(Clone, Copy)]
+enum SpareBox {
+    Unused,
+    Opaque,
+}
+
+impl HostCall {
+    /// Numeric arithmetic receives a hidden spare-box pointer after its source arguments.
+    fn spare_box(role: BuiltinValueRole) -> Option<SpareBox> {
+        match role {
+            | BuiltinValueRole::Integer(
+                integer,
+                IntegerOperation::Add
+                | IntegerOperation::Sub
+                | IntegerOperation::Mul
+                | IntegerOperation::Div
+                | IntegerOperation::Mod,
+            ) => Some(if matches!(integer, IntegerType::Int64 | IntegerType::UInt64) {
+                SpareBox::Opaque
+            } else {
+                SpareBox::Unused
+            }),
+            | BuiltinValueRole::Float(
+                float,
+                FloatOperation::Add
+                | FloatOperation::Sub
+                | FloatOperation::Mul
+                | FloatOperation::Div,
+            ) => {
+                Some(if float == FloatType::Float64 { SpareBox::Opaque } else { SpareBox::Unused })
+            }
+            | BuiltinValueRole::StrParseInt
+            | BuiltinValueRole::ReadLineAsInt
+            | BuiltinValueRole::RandomInt => Some(SpareBox::Opaque),
+            | _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TargetFormat {
     Elf,
@@ -260,16 +376,58 @@ impl<'e> Emitter<'e> {
         }
     }
 
-    /// Allocate one product from the runtime's static memory region.
-    fn emit_alloc_call(&mut self, size_words: usize) {
+    fn argument_register(index: usize) -> Reg {
+        match index {
+            | 1 => Reg::Rdi,
+            | 2 => Reg::Rsi,
+            | 3 => Reg::Rdx,
+            | 4 => Reg::Rcx,
+            | 5 => Reg::R8,
+            | 6 => Reg::R9,
+            | _ => panic!("SysV register argument index {index} is out of range"),
+        }
+    }
+
+    /// Allocate one block from the runtime's fixed two-space heap.
+    ///
+    /// The collector is otherwise runtime-only: it updates the live control-stack
+    /// words and the current environment frame passed here. Tagged immediates make
+    /// pointer recognition precise without stack maps.
+    fn emit_alloc_call(&mut self, size_words: usize, kind: AllocationKind, context_words: usize) {
         self.asm.text.extend([
-            Instr::Comment("allocate product in the static region".to_string()),
+            Instr::Comment(format!(
+                "allocate {} block in the copying heap",
+                match kind {
+                    | AllocationKind::Scanned => "scanned",
+                    | AllocationKind::Opaque => "opaque",
+                }
+            )),
             Instr::Mov(MovArgs::ToReg(
                 Reg::Rdi,
                 Arg64::Unsigned(u64::try_from(size_words).expect("product arity overflow")),
             )),
+            // Capture the root cursor before `emit_aligned_call` adds any temporary
+            // ABI padding beneath it.
+            Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rsp))),
+            Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(ENV_REG))),
+            Instr::Mov(MovArgs::ToReg(
+                Reg::Rcx,
+                Arg64::Unsigned(
+                    u64::try_from(context_words).expect("environment root count overflow"),
+                ),
+            )),
         ]);
-        self.emit_aligned_call(JmpArgs::Label("zydeco_alloc".to_string()));
+        self.emit_aligned_call(JmpArgs::Label(kind.symbol().to_string()));
+    }
+
+    fn emit_boxed_bits(&mut self, bits: u64, context_words: usize) {
+        self.emit_alloc_call(1, AllocationKind::Opaque, context_words);
+        self.asm.text.extend([
+            Instr::Mov(MovArgs::ToReg(Reg::Rcx, Arg64::Unsigned(bits))),
+            Instr::Mov(MovArgs::ToMem(MemRef { reg: Reg::Rax, offset: 0 }, Reg32::Reg(Reg::Rcx))),
+            Instr::Push(Arg32::Reg(Reg::Rax)),
+        ]);
+        self.shift_stack_parity(1);
     }
 }
 
@@ -281,8 +439,16 @@ impl<'e> CompilerPass for Emitter<'e> {
         self.asm.text.extend([
             // zydeco_abort
             Instr::Extern("zydeco_abort".to_string()),
-            // zydeco_alloc
-            Instr::Extern("zydeco_alloc".to_string()),
+            // fixed-heap allocation entry points
+            Instr::Extern("zydeco_alloc_scanned".to_string()),
+            Instr::Extern("zydeco_alloc_opaque".to_string()),
+            // legacy intrinsic comparison helpers
+            Instr::Extern("zydeco_intrinsic_int64_eq".to_string()),
+            Instr::Extern("zydeco_intrinsic_int64_lt".to_string()),
+            Instr::Extern("zydeco_intrinsic_int64_gt".to_string()),
+            Instr::Extern("zydeco_intrinsic_int64_and".to_string()),
+            Instr::Extern("zydeco_intrinsic_int64_or".to_string()),
+            Instr::Extern("zydeco_intrinsic_int64_xor".to_string()),
             // host callback used by runtime-created argument-fold thunks
             Instr::Extern("zydeco_arg_fold_resume".to_string()),
             // construct an owned host string from static UTF-8 bytes
@@ -510,7 +676,10 @@ impl<'a> Emit<'a> for Terminator {
             }
             | Terminator::PopBranch(sa::PopBranch(arms)) => {
                 // pop tag and jump to the corresponding program
-                em.asm.text.push(Instr::Pop(Loc::Reg(Reg::Rax)));
+                em.asm.text.extend([
+                    Instr::Pop(Loc::Reg(Reg::Rax)),
+                    Instr::Shr(ShArgs { reg: Reg::Rax, by: 1 }),
+                ]);
                 em.shift_stack_parity(-1);
                 for (_, target) in arms {
                     em.debug_assert_edge_parity(*target);
@@ -564,29 +733,42 @@ impl<'a> Emit<'a> for Terminator {
                     }
                 }
             }
-            | Terminator::Extern(sa::Extern { name, arity, mode }) => {
+            | Terminator::Extern(sa::Extern { role, name, arity, mode }) => {
                 em.asm.text.push(Instr::Comment(format!("extern: {}/{}", name, arity)));
 
                 let zydeco_extern_name = format!("zydeco_{}", name);
+                let spare_box = HostCall::spare_box(*role);
+                match spare_box {
+                    | Some(SpareBox::Opaque) => {
+                        let context_words = em.assembly.contexts[&id].iter().len();
+                        em.emit_alloc_call(1, AllocationKind::Opaque, context_words);
+                        em.asm
+                            .text
+                            .push(Instr::Mov(MovArgs::ToReg(Reg::R11, Arg64::Reg(Reg::Rax))));
+                    }
+                    | Some(SpareBox::Unused) => {
+                        em.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::R11, Arg64::Unsigned(0))))
+                    }
+                    | None => {}
+                }
                 for i in 1..=*arity {
                     // place the arguments accordingly
                     // using system V AMD64 ABI
                     if i <= 6 {
-                        let reg = match i {
-                            | 1 => Reg::Rdi,
-                            | 2 => Reg::Rsi,
-                            | 3 => Reg::Rdx,
-                            | 4 => Reg::Rcx,
-                            | 5 => Reg::R8,
-                            | 6 => Reg::R9,
-                            | _ => unreachable!(),
-                        };
+                        let reg = Emitter::argument_register(i);
                         em.asm.text.push(Instr::Pop(Loc::Reg(reg)));
                     } else {
                         // load to stack - but it's already on the stack
                         // we just need to make sure the position is correct
                         todo!()
                     }
+                }
+                if spare_box.is_some() {
+                    let spare_index = arity + 1;
+                    let spare_register = Emitter::argument_register(spare_index);
+                    em.asm
+                        .text
+                        .push(Instr::Mov(MovArgs::ToReg(spare_register, Arg64::Reg(Reg::R11))));
                 }
                 em.shift_stack_parity(-i64::try_from(*arity).expect("extern arity overflow"));
                 // All externs must be non-tail called so that we can restore the
@@ -649,7 +831,8 @@ impl<'a> Emit<'a> for Instruction {
                         Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Reg(Reg::Rsp))),
                     ]);
                 } else {
-                    em.emit_alloc_call(layout.arity);
+                    let context_words = em.assembly.contexts[&id].iter().len();
+                    em.emit_alloc_call(layout.arity, AllocationKind::Scanned, context_words);
                 }
                 for index in 0..layout.elements {
                     let destination = i32::try_from(index * 8).expect("product offset overflow");
@@ -736,12 +919,11 @@ impl<'a> Emit<'a> for Instruction {
                 );
             }
             | Instruction::AllocContext(sa::Alloc(sa::ContextMarker)) => {
-                // Allocate new context
-                let frame = em.assembly.contexts[&id].iter().len() as i32;
-                em.asm.text.extend([
-                    Instr::Comment("alloc_context".to_string()),
-                    Instr::Add(BinArgs::ToReg(Reg::Rbp, Arg32::Signed(8 * frame))),
-                ]);
+                // Calls are tail calls: everything needed by the callee has already
+                // moved to the control stack, so the next environment can reuse the
+                // fixed buffer from offset zero. Keeping Rbp unchanged also prevents
+                // recursive programs from exhausting a separate environment arena.
+                em.asm.text.push(Instr::Comment("reuse environment for tail call".to_string()));
             }
             | Instruction::PushArg(sa::Push(atom)) => {
                 // Push argument onto stack
@@ -768,7 +950,10 @@ impl<'a> Emit<'a> for Instruction {
                 em.asm.text.extend([
                     Instr::Comment(format!("push_tag {}", tag.idx)),
                     // push tag to stack
-                    Instr::Push(Arg32::Signed(tag.idx as i32)),
+                    Instr::Push(Arg32::Unsigned(
+                        u32::try_from(TaggedValue::index(tag.idx))
+                            .expect("runtime tag does not fit a push immediate"),
+                    )),
                 ]);
                 em.shift_stack_parity(1);
             }
@@ -858,28 +1043,49 @@ impl<'a> Emit<'a> for Atom {
             | Atom::Imm(imm) => match imm.clone() {
                 | sa::Imm::Triv(Triv) => {
                     em.asm.text.push(Instr::Comment("push_imm_triv".to_string()));
-                    em.asm.text.push(Instr::Push(Arg32::Signed(0)));
+                    em.asm.text.push(Instr::Push(Arg32::Unsigned(
+                        u32::try_from(TaggedValue::index(0)).unwrap(),
+                    )));
                     em.shift_stack_parity(1);
                 }
                 | sa::Imm::Integer(i) => {
                     em.asm.text.push(Instr::Comment(format!("push_imm_integer {:?}", i)));
-                    em.asm.text.extend([
-                        Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(i.to_word_bits()))),
-                        Instr::Push(Arg32::Reg(Reg::Rax)),
-                    ]);
-                    em.shift_stack_parity(1);
+                    match TaggedValue::integer(i) {
+                        | EncodedLiteral::Immediate(word) => {
+                            em.asm.text.extend([
+                                Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(word))),
+                                Instr::Push(Arg32::Reg(Reg::Rax)),
+                            ]);
+                            em.shift_stack_parity(1);
+                        }
+                        | EncodedLiteral::Boxed(bits) => {
+                            let context_words = em.assembly.contexts[&id].iter().len();
+                            em.emit_boxed_bits(bits, context_words);
+                        }
+                    }
                 }
                 | sa::Imm::Float(value) => {
                     em.asm.text.push(Instr::Comment(format!("push_imm_float {:?}", value)));
-                    em.asm.text.extend([
-                        Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(value.to_bits()))),
-                        Instr::Push(Arg32::Reg(Reg::Rax)),
-                    ]);
-                    em.shift_stack_parity(1);
+                    match TaggedValue::float(value) {
+                        | EncodedLiteral::Immediate(word) => {
+                            em.asm.text.extend([
+                                Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(word))),
+                                Instr::Push(Arg32::Reg(Reg::Rax)),
+                            ]);
+                            em.shift_stack_parity(1);
+                        }
+                        | EncodedLiteral::Boxed(bits) => {
+                            let context_words = em.assembly.contexts[&id].iter().len();
+                            em.emit_boxed_bits(bits, context_words);
+                        }
+                    }
                 }
                 | sa::Imm::Char(c) => {
                     em.asm.text.push(Instr::Comment(format!("push_imm_char {:?}", c)));
-                    em.asm.text.extend([Instr::Push(Arg32::Signed(c as i32))]);
+                    em.asm.text.push(Instr::Push(Arg32::Unsigned(
+                        u32::try_from(TaggedValue::index(c as usize))
+                            .expect("tagged character does not fit a push immediate"),
+                    )));
                     em.shift_stack_parity(1);
                 }
             },
@@ -889,81 +1095,67 @@ impl<'a> Emit<'a> for Atom {
 
 impl<'a> Emit<'a> for Intrinsic {
     type Env = ProgId;
-    fn emit(&self, _id: Self::Env, em: &mut Emitter) {
+    fn emit(&self, id: Self::Env, em: &mut Emitter) {
         let Intrinsic { name, arity } = self;
-
-        fn emit_ba(op: fn(BinArgs) -> Instr, em: &mut Emitter) {
-            em.asm.text.push(op(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rcx))));
-        }
-        fn emit_compare(cc: ConditionCode, em: &mut Emitter) {
-            em.emit_alloc_call(2);
-            // Save the fresh cell and evaluate the comparison.
-            em.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(Reg::Rax))));
-            em.asm.text.extend([Instr::Pop(Loc::Reg(Reg::Rax)), Instr::Pop(Loc::Reg(Reg::Rcx))]);
-            em.shift_stack_parity(-2);
-            emit_ba(Instr::Cmp, em);
-            em.asm.text.extend([
-                Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Signed(0))),
-                Instr::SetCC(cc, Reg8::Al),
-                Instr::Mov(MovArgs::ToMem(
-                    MemRef { reg: Reg::Rdx, offset: 0 },
-                    Reg32::Reg(Reg::Rax),
-                )),
-                Instr::Mov(MovArgs::ToMem(MemRef { reg: Reg::Rdx, offset: 8 }, Reg32::Imm(0))),
-                Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Reg(Reg::Rdx))),
-            ]);
-        }
 
         match (name.as_str(), arity) {
             | (_, 2) if matches!(name.as_str(), "int_eq" | "int_lt" | "int_gt") => {
-                let cc = match name.as_str() {
-                    | "int_eq" => ConditionCode::E,
-                    | "int_lt" => ConditionCode::L,
-                    | "int_gt" => ConditionCode::G,
+                let target = match name.as_str() {
+                    | "int_eq" => "zydeco_intrinsic_int64_eq",
+                    | "int_lt" => "zydeco_intrinsic_int64_lt",
+                    | "int_gt" => "zydeco_intrinsic_int64_gt",
                     | _ => unreachable!("matched comparison intrinsic"),
                 };
-                emit_compare(cc, em);
+                em.asm
+                    .text
+                    .extend([Instr::Pop(Loc::Reg(Reg::Rdi)), Instr::Pop(Loc::Reg(Reg::Rsi))]);
+                em.shift_stack_parity(-2);
+                em.emit_aligned_call(JmpArgs::Label(target.to_string()));
+                // Keep the tagged constructor index rooted while allocation may collect.
                 em.asm.text.push(Instr::Push(Arg32::Reg(Reg::Rax)));
+                em.shift_stack_parity(1);
+                let context_words = em.assembly.contexts[&id].iter().len();
+                em.emit_alloc_call(2, AllocationKind::Scanned, context_words);
+                em.asm.text.extend([
+                    Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(Reg::Rax))),
+                    Instr::Pop(Loc::Reg(Reg::Rcx)),
+                    Instr::Mov(MovArgs::ToMem(
+                        MemRef { reg: Reg::Rdx, offset: 0 },
+                        Reg32::Reg(Reg::Rcx),
+                    )),
+                    Instr::Mov(MovArgs::ToMem(
+                        MemRef { reg: Reg::Rdx, offset: 8 },
+                        Reg32::Imm(IMMEDIATE_TAG as i32),
+                    )),
+                    Instr::Push(Arg32::Reg(Reg::Rdx)),
+                ]);
+                em.shift_stack_parity(-1);
                 em.shift_stack_parity(1);
             }
             | (_, 2) => {
-                em.asm
-                    .text
-                    .extend([Instr::Pop(Loc::Reg(Reg::Rax)), Instr::Pop(Loc::Reg(Reg::Rcx))]);
-                em.shift_stack_parity(-2);
-                match name.as_str() {
-                    | "add" => {
-                        emit_ba(Instr::Add, em);
-                    }
-                    | "sub" => {
-                        emit_ba(Instr::Sub, em);
-                    }
-                    | "mul" => {
-                        emit_ba(Instr::IMul, em);
-                    }
-                    | "div" => {
-                        em.asm.text.extend([Instr::Cqo, Instr::IDiv(Reg::Rcx)]);
-                    }
-                    | "mod" => {
-                        em.asm.text.extend([
-                            Instr::Cqo,
-                            Instr::IDiv(Reg::Rcx),
-                            Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Reg(Reg::Rdx))),
-                        ]);
-                    }
-                    | "and" => {
-                        emit_ba(Instr::And, em);
-                    }
-                    | "or" => {
-                        emit_ba(Instr::Or, em);
-                    }
-                    | "xor" => {
-                        emit_ba(Instr::Xor, em);
-                    }
+                let target = match name.as_str() {
+                    | "add" => "zydeco_int64_add",
+                    | "sub" => "zydeco_int64_sub",
+                    | "mul" => "zydeco_int64_mul",
+                    | "div" => "zydeco_int64_div",
+                    | "mod" => "zydeco_int64_mod",
+                    | "and" => "zydeco_intrinsic_int64_and",
+                    | "or" => "zydeco_intrinsic_int64_or",
+                    | "xor" => "zydeco_intrinsic_int64_xor",
                     | _ => {
                         unimplemented!("intrinsic {} with arity {} not implemented", name, arity)
                     }
-                }
+                };
+                let context_words = em.assembly.contexts[&id].iter().len();
+                em.emit_alloc_call(1, AllocationKind::Opaque, context_words);
+                em.asm.text.extend([
+                    Instr::Mov(MovArgs::ToReg(Reg::R11, Arg64::Reg(Reg::Rax))),
+                    Instr::Pop(Loc::Reg(Reg::Rdi)),
+                    Instr::Pop(Loc::Reg(Reg::Rsi)),
+                    Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(Reg::R11))),
+                ]);
+                em.shift_stack_parity(-2);
+                em.emit_aligned_call(JmpArgs::Label(target.to_string()));
                 em.asm.text.push(Instr::Push(Arg32::Reg(Reg::Rax)));
                 em.shift_stack_parity(1);
             }

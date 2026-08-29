@@ -69,9 +69,9 @@ impl<'a> Lowerer<'a> {
     pub fn run(mut self) -> AssemblyProgram {
         // Lower all builtins
         for builtin in self.sps_low.admin.builtins.values() {
-            let sk::Builtin { name, arity, sort } = builtin.clone();
+            let sk::Builtin { role, name, arity, sort } = builtin.clone();
             if let Some(mode) = ExternMode::for_builtin(sort) {
-                self.arena.externs.push(Extern { name, arity, mode });
+                self.arena.externs.push(Extern { role, name, arity, mode });
             }
         }
 
@@ -660,6 +660,7 @@ impl<'a> Lower<'a> for sk::CompuId {
                 ),
             | Compu::ExternCall(sk::ExternCall { function, stack }) => {
                 let builtin = &lo.sps_low.admin.builtins[&function];
+                let role = builtin.role;
                 let arity = builtin.arity;
                 let mode =
                     ExternMode::for_builtin(builtin.sort.clone()).expect("operator used as extern");
@@ -668,7 +669,7 @@ impl<'a> Lower<'a> for sk::CompuId {
                     With::new(
                         cx,
                         Box::new(move |lo, cx| {
-                            Extern { name: function, arity, mode }.build(lo, cx)
+                            Extern { role, name: function, arity, mode }.build(lo, cx)
                         }),
                     ),
                 )

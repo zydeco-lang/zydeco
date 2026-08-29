@@ -105,7 +105,7 @@ impl Eval for Terminator {
                 let arm = arms.iter().find(|(t, _)| t.idx == tag.idx).unwrap();
                 arm.1.eval(interp)
             }
-            | Terminator::Extern(Extern { name, arity, mode }) => {
+            | Terminator::Extern(Extern { role: _, name, arity, mode }) => {
                 let _ = (name, arity, mode);
                 todo!()
             }

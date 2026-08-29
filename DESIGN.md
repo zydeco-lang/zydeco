@@ -31,6 +31,18 @@ An integer or decimal literal is checked against its expected numeric type, incl
 When no expected type selects a representation, integer literals synthesize `Int64` and decimal literals
 synthesize `Float64`. There are no implicit conversions between numeric representations.
 
+The AMD64 runtime represents every value in one machine word. The low bit is a runtime tag:
+
+- Odd words are immediate values. They represent `Unit`, constructor indices, `Char`, all integers through
+  32 bits, `Float32`, `Int64` values from `-2^62` through `2^62 - 1`, and `UInt64` values through `2^63 - 1`.
+- Even words are pointer-shaped values. Region-allocated products and closures refer to scanned blocks in the
+  fixed two-space heap. An `Int64` or `UInt64` outside the immediate range and every `Float64` instead point to
+  an opaque one-word block containing all 64 payload bits.
+
+This encoding preserves the full source-level numeric domains while letting the copying collector distinguish
+immediates from movable pointers exactly. Opaque scalar blocks are copied but their payload bits are never
+traced. Aligned Rust-owned pointers, such as host strings, are outside both semispaces and remain unchanged.
+
 Surface notation distinguishes classifier arrows from term bodies while leaving constructor
 and destructor spines whitespace-guided.
 The [surface syntax principles](docs/ideas/syntax.md) record the rationale and the intended use of juxtaposition,

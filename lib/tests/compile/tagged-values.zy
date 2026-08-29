@@ -1,0 +1,26 @@
+begin
+  param (
+    (/numeric; /system) :
+    @(import("../../std/builtin.zy"))
+  ) that
+  let (Scalar = Int64, int64) = numeric/int64 that
+  let (Scalar = UInt64, uint64) = numeric/uint64 that
+  let (/OS; /process) = system that
+
+  do positive_box <- ! (int64/add) 4611686018427387903 1;
+  ! (int64/eq) OS positive_box 4611686018427387904 {
+    do negative_box <- ! (int64/sub) -4611686018427387904 1;
+    ! (int64/eq) OS negative_box -4611686018427387905 {
+      do unsigned_box <- ! (uint64/add) 9223372036854775807 1;
+      ! (uint64/eq) OS unsigned_box 9223372036854775808 {
+        do immediate_again <- ! (int64/sub) positive_box 1;
+        ! (int64/eq)
+          OS
+          immediate_again
+          4611686018427387903
+          { ! (process/exit) 0 }
+          { ! (process/exit) 1 }
+      } { ! (process/exit) 1 }
+    } { ! (process/exit) 1 }
+  } { ! (process/exit) 1 }
+end

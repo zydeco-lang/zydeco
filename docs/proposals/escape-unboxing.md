@@ -4,7 +4,8 @@ Status: draft; core unboxing is implemented.
 
 ## Summary
 
-Zydeco's native backend allocates every product, constructor, and closure package in a static memory region.
+Zydeco's native backend allocates every escaping product, constructor, and closure package in a fixed two-space
+copying heap.
 The call-by-push-value pipeline already places control and continuation structure on the machine stack,
 but values that are created and consumed locally still consume region space.
 This proposal adds a constraint-based escape analysis over SPSLow and an unboxing rewrite
@@ -19,7 +20,7 @@ whose uses are all projections.
 
 ## Motivation
 
-The current AMD64 backend lowers `PackProduct` to a call to `zydeco_alloc`.
+The current AMD64 backend lowers `PackProduct` to a call to `zydeco_alloc_scanned`.
 That is correct, but it is also unnecessary for values that never escape their creating frame.
 Two common patterns pay this cost today:
 
@@ -37,8 +38,8 @@ do x <- ! { fn (x : Int64) => ret x } 0;
 ```
 
 In both cases the value is constructed and immediately projected or forced.
-A stack machine already has the fields available; the region cell only adds allocation
-and advances the fixed bump pointer.
+A stack machine already has the fields available; the heap cell only adds allocation
+and eventual copying work.
 Unboxing removes the cell and keeps the fields in the machine's natural stack-shaped representation.
 
 ## Background
@@ -52,9 +53,10 @@ Relevant facts:
   and `VPatId` occurs exactly once in the lexical IR.
   Sharing is represented by `LetValue` binders and `DefId` variables.
 - Assembly lowering turns every `VCons`, `Ctor`, and `ClosurePackage` into a `PackProduct` instruction.
-- The AMD64 emitter calls `zydeco_alloc` for every region-allocated `PackProduct`.
-- The runtime provides one fixed static memory region with bump allocation.
-  SPSLow product layouts carry only their physical arity.
+- The AMD64 emitter calls `zydeco_alloc_scanned` for every region-allocated `PackProduct`.
+- The runtime provides two fixed semispaces and uses Cheney copying collection when the active space fills.
+  SPSLow product layouts carry only their physical arity. Odd runtime words are tagged immediates;
+  aligned even words can be managed pointers, so the collector needs no compiler-generated pointer maps.
 
 The CBPV value/computation distinction is what makes this design attractive: computation is already stack-shaped,
 while values are inert and can be flattened when they do not need a stable pointer identity.
@@ -99,7 +101,7 @@ rep(v) = U  if U ∈ Allowed(v)
 
 ### Field representation constraints
 
-A boxed value stores each field as one word.
+A boxed value stores each field as one tagged runtime word.
 An unboxed value has no cell, so its fields are independent values.
 Define:
 
@@ -180,7 +182,7 @@ If a variable is unboxed, its binding expands into one field slot per logical el
 Uses of the variable push those slots back in the same order as an unboxed `VCons`.
 
 If `rep(v) = S`, lowering keeps a single pointer but allocates the cell
-in the current stack frame instead of calling `zydeco_alloc`.
+in the current stack frame instead of calling `zydeco_alloc_scanned`.
 The AMD64 emitter supports this via a `stack_alloc` flag on `ProductLayout`.
 
 ## Worked Example
@@ -289,7 +291,8 @@ avoiding duplicated representations.
 - How should unboxed values interact with host calls that expect pointer arguments?
   The current implementation marks all extern arguments as `R`.
 - How much of the analysis must cross recursive `Fix` blocks before the results are useful?
-- Does unboxing increase environment-stack pressure enough to require a segmented or growable environment stack first?
+- How much fixed environment space should one function activation be allowed to use?
+  Tail calls reuse the environment buffer, so only the largest live frame determines this pressure.
 
 ## Related Documents
 

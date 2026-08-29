@@ -90,7 +90,7 @@ pub struct Alloc<T>(pub T);
 pub struct ProductLayout {
     pub arity: usize,
     pub elements: usize,
-    /// Allocate the cell in the current stack frame instead of the static region.
+    /// Allocate the cell in the current stack frame instead of the copying heap.
     pub stack_alloc: bool,
 }
 
@@ -173,6 +173,7 @@ pub struct Intrinsic {
 
 #[derive(Clone, Debug)]
 pub struct Extern {
+    pub role: BuiltinValueRole,
     pub name: String,
     pub arity: usize,
     pub mode: ExternMode,

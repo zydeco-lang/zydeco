@@ -18,6 +18,7 @@ pub enum BuiltinPackageLowerError {
 #[derive(Clone, Debug, derive_more::Display)]
 #[display("{name}/{arity}")]
 pub struct Builtin {
+    pub role: BuiltinValueRole,
     pub name: String,
     pub arity: usize,
     pub sort: BuiltinSort,
@@ -89,11 +90,7 @@ impl Builtin {
             | BuiltinValueRole::Exit => Control,
             | _ => Returning,
         };
-        Builtin::new(role.host_name(), role.arity(), Function(mode))
-    }
-
-    pub fn new(name: impl Into<String>, arity: usize, sort: BuiltinSort) -> Self {
-        Builtin { name: name.into(), arity, sort }
+        Builtin { role, name: role.host_name(), arity: role.arity(), sort: Function(mode) }
     }
 
     fn generate(self) -> (String, Self) {

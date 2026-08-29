@@ -4,7 +4,7 @@
 # Usage: scripts/bench-native.sh [runs] [file...]
 #
 # For each file, this script:
-#   1. builds AMD64 assembly and reports the number of `call zydeco_alloc`
+#   1. builds AMD64 assembly and reports the number of fixed-heap allocation calls
 #      sites;
 #   2. builds a native executable and reports the best wall time over `runs`
 #      executions.
@@ -50,7 +50,7 @@ for file in "${files[@]}"; do
         echo "assembly build failed: $file" >&2
         continue
     fi
-    alloc_sites="$(grep -c 'call zydeco_alloc' "$asm_file" || true)"
+    alloc_sites="$(grep -Ec 'call zydeco_alloc_(scanned|opaque)' "$asm_file" || true)"
 
     if ! "$bin" build -t exe --target-arch x86-64 "$file" -b "$build_dir" >/dev/null 2>&1; then
         echo "executable build failed: $file" >&2

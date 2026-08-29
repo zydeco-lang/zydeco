@@ -16,7 +16,6 @@ members = [
     "tui",
     "cli",
     # "web",
-    # "runtime",
     "editor/cajun",
 ]
 exclude = ["build"]
