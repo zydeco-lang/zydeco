@@ -200,31 +200,34 @@ lib/std/
     text.zy
     text/{char,string,bytes}.zy
     system/{io,fs,stdio,args,random,process}.zy
-  data/{bool,option,result,list,package}.zy
-  data/{bool,option,result,list,package}.zyi
-  data/*.type.zy
+  data/package.zy
+  data/package.zyi
+  data/{body,package,bool,prelude}.type.zy
   numeric/{integer,float}.zy
   numeric/{integer,float}.zyi
+  numeric/package.zy
+  numeric/package.zyi
   numeric/*.type.zy
   text/package.zy
   text/package.zyi
-  text/*.type.zy
-  system/{types,package}.zy
-  system/{types,package}.zyi
-  system/*.type.zy
+  text/body.type.zy
+  system/package.zy
+  system/package.zyi
+  system/{body,package}.type.zy
   control/monad.zy
   control/monad.zyi
-  std.type.zy
   std.zyi
   std.zy
 ```
 
 `builtin.zy` and `std.zy` are deliberately thin composition roots. The first closes the complete host ABI and
-introduces the shared generative system witnesses; the second applies the topic implementations and constructs the
-public package. Each value implementation has an optional adjacent `.zyi` annotation. Reusable `.type.zy` terms
-define topic contracts once and are imported by both leaf companions and aggregate package types, so locality does
-not require copying a contract. A topic leaf depends on a selected package boundary rather than on names inherited
-from a monolithic source file.
+introduces the shared generative system witnesses; the second applies the topic packages and constructs the
+public package. Each topic implementation has one adjacent `.zyi` annotation and defines its data types,
+operations, and derived operations in one dependency-scheduled block, so no per-module contract split remains.
+Reusable `.type.zy` terms define each topic's record-shape constructor (`body.type.zy`) and, where the topic owns
+abstract witnesses, its existential wrapper (`package.type.zy`); the aggregate signature imports those
+constructors rather than restating the public fields, so locality does not require copying a contract.
+A topic depends on a selected package boundary rather than on names inherited from a monolithic source file.
 
 The derived integer and floating-point builders share algorithms across the fixed-width representations through
 explicitly annotated `forall` parameters. Their result types retain the input `Bool`, scalar, and `String`
@@ -268,6 +271,10 @@ let (/Result; /Path; /IoError; /result; /bytes; /io; /fs; /process) = make_std b
 The implementation uses the same rule. Each standard-library source selects its own Builtin groups,
 and `std.zy` retains a whole alias while forwarding the package to its component modules.
 The complete nested product remains only in the provider representation and host/runtime construction boundary.
+
+The current source shape and the implementation evidence that reached it,
+including the checker constraints that motivated the one-companion-per-topic split,
+are recorded in the [topic consolidation worklog](../logs/std-topic-consolidation.md).
 
 ## Elaboration and runtime representation
 
