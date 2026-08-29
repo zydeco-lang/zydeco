@@ -4,28 +4,23 @@
 
 One type-checked root materializes a `StaticsArena` whose size is bounded by the
 *elaboration* of the program, not by its source. Checking the standard library alone
-(`std/std.zy`, 65K scoped terms) produces 2.06M `types_pre` nodes plus per-node annotations,
+(`std/std.zy`, 65K scoped terms) materializes 2.06M `types_pre` nodes plus per-node annotations,
 environments, and a normalized copy — a 32x amplification over the scoped program, dominated
-by tiny structural nodes (46% `App`, 25% `Arrow`, 13% `Label`, 11% `Prod`). Measured peaks for
-one fresh check dropped from 7.5GB to 2.42GB after the phase merge, the normalized delta, and
-table pre-reservation, but the arena still retains hundreds of megabytes per root, and a
-long-lived session that analyzes many roots accumulates them without bound. That accumulation
-was the original cause of the test-suite OOM (a shared session reached ~29GB before the
-`SessionPool` workaround capped it), and it is the editor's fate as well: one salsa database
-per workspace, one arena per analyzed root, nothing ever reclaimed.
+by tiny structural nodes (46% `App`, 25% `Arrow`, 13% `Label`, 11% `Prod`).
+A long-lived session that analyzes many roots accumulates these arenas without bound,
+which was the original cause of the test-suite OOM (a shared session reached ~29GB before
+the `SessionPool` workaround capped it) and would be the editor's fate as well.
 
 salsa 0.26 offers no per-query eviction (`Database::evict_lru` resets revisions only; the
-storage is freed when the whole database drops). Reclamation therefore has to be designed by
-us, at the arena layer, with deterministic rules.
+storage is freed when the whole database drops). Reclamation therefore lives at the arena
+layer, with deterministic rules.
 
 ## Principle: Recomputation
 
-The judgment-layer migration has already made the arena a *cache* (see
-[query-owned-statics.md](query-owned-statics.md) and
-[docs/logs/query-based-tyck.md](../logs/query-based-tyck.md)). Every node's identifier is
-derived deterministically from its site — `KeySpaceId::derive(tag, entity_space, entity_raw,
-occurrence)` — and every node's content is the value of a small memoized judgment query keyed
-by that site. Re-executing a query reproduces the same identifiers without a shared cursor, so
+The judgment layer makes the arena a *cache* (see
+[query-owned statics](query-owned-statics.md)). Every node's identifier is derived
+deterministically from its site, and every node's content is the value of a small memoized
+judgment query keyed by that site. Re-executing a query reproduces the same identifiers, so
 a dropped arena node can be rebuilt exactly, provided the query's inputs (the scoped program
 and the salsa database) survive. The salsa judgment memos are the durable, recomputable layer;
 the arena is its materialization.
@@ -43,9 +38,8 @@ The checker and the linkers read the arena in two fundamentally different ways:
   hole, or an abstract identity. Nothing in the neighborhood of the read site determines these
   entries; they are the global context that the checker extends and the linkers follow.
 - **Traversal by occurrence.** The typed tree (`values`, `compus`, `types_pre`) is reached by
-  walking from roots — the root annotation, definition bodies, pattern binders — along the
-  child references embedded in each node. Every node along such a walk is the judgment value
-  at an occurrence site and can be replayed.
+  walking from roots along the child references embedded in each node. Every node along such a
+  walk is the judgment value at an occurrence site and can be replayed.
 
 This splits the arena into two generations:
 
@@ -54,11 +48,6 @@ This splits the arena into two generations:
   the context against which later checks run.
 - **S (short-lived): occurrence payload**, bounded by the *elaboration* size (millions), valid
   while one root's consumers traverse it, then discarded.
-
-The user-facing anchors this criterion predicts are variable names (the `DefId` index into
-types) and hole solutions (the `FillId` index into unification outcomes): both are keyed,
-globally consulted context, and both are exactly what the editor shows to the user. The
-proposal generalizes them to every declaration-shaped table.
 
 ## Table Classification
 
@@ -73,6 +62,7 @@ proposal generalizes them to every declaration-shaped table.
 | `existential_skolems` | skolem markers opened with packages |
 | `terms` / hints | the scoped-entity-to-typed-id site index that makes S replayable |
 | `intrinsics` / `builtin_roles` | query-owned singletons and role attachments |
+| `term_norms` / `type_sites` | normalized annotation type per term, keyed by term site |
 
 | Discard (S) | Rationale |
 | --- | --- |
@@ -81,65 +71,52 @@ proposal generalizes them to every declaration-shaped table.
 | `annotations_type` / `annotations_compu` / `annotations_value` | per-node annotations ride along with their node |
 | `kinds_normalized` / `types_normalized` | derived columns of the same nodes |
 
-## Lifecycle
+## As Built
 
-- S lives in **one per-root materialization slot**. A root is checked into the slot, consumed
-  (linked to dynamics, lowered to stackir, or queried for editor facts), and the slot is then
-  discarded. Reclamation is deterministic: no heuristics, no reference counting, one
-  generation. In the session this replaces `ProgramAnalysis`'s ownership of the arena with a
-  scoped borrow.
-- L lives as long as the database and stays small. Its own reclamation — if ever needed —
-  belongs to the memo layer, not to this design: dropping L means re-*checking* regions, not
-  re-materializing nodes, so it is a separate, much more expensive policy (root-scoped LRU over
-  the salsa database, in the spirit of the test-suite `SessionPool`, productionized).
-- The salsa judgment memos are the recompute source and are **not** part of S. Their growth
-  across many roots in one database is the remaining retention question; see open questions.
+The generation split is the policy in force; replay replaced it where measurement
+showed keyed indexes answer the actual demand.
 
-## Replay Protocol
+- `analyze_source` runs the check through the memo, then strips the occurrence payload
+  (`StaticsArena::strip_occurrence_payload`) before constructing the `ProgramAnalysis`.
+  An analysis therefore retains only the L tier. `CompilerSession::materialize_arena`,
+  `checked_program`, and `executable_program` re-materialize the full arena from the
+  memoized check on demand. Consumers (CLI, REPL engine, cajun, integration tests) obtain
+  the typed arena through the session; cajun's `ProjectState` is a live root consumer and
+  holds its materialization for the project's lifetime.
+- `check_source` returns its arena behind an `Arc`. Read-only fact queries share it in O(1);
+  only consumers that mutate during lowering clone the arena out explicitly.
+- The three S-reading fact queries (`normalized_type_at`, `coverage_facts`,
+  `term_annotation_at`) answer entirely from L: `normalized_type_at` reads the keyed
+  `type_sites` and `term_norms` tables, so every editor fact survives arena-memo eviction.
+  Per-node normalized-type replay (a recursive `normalize_type` query over the judgment
+  layer) was measured to have no consumer — the only callers ask for top annotation types —
+  so the keyed index is the delivered form and replay remains available for a future
+  consumer that needs arbitrary inner nodes.
+- `check_source` memoizes with salsa's `lru = 1` and the test pool triggers eviction per
+  analysis. The entry-counted LRU cannot express root-scoped eviction for the millions of
+  fine-grained judgment entries, so the pool generation remains their policy.
+- Retention was additionally reduced by shrinking the dominant node enum, paging the derived
+  type-ID key space with bounded growth slack, sharing phase products instead of cloning
+  query results, isolating typed elaboration's definition delta, and packing source
+  positions into one word.
 
-Dropped S nodes are rebuilt in one of two ways, converging on the second:
+### Measurements
 
-1. **Scoped slot (step 1).** The arena stays a materialized whole while a root is being
-   consumed; only the drop-after-consume behavior changes. No consumer is modified.
-2. **Demand-driven consumers (step 2).** `dynamics` linking and `stackir` lowering become
-   traversals that request each node from an arena accessor, which replays the node's judgment
-   query and materializes on demand. Editor facts already work this way
-   (`normalized_type_at` and friends), so only the two backends need the conversion. The site
-   index (`terms`/hints, part of L) is what lets the accessor map a typed id back to its
-   judgment site.
-
-## Alternatives Considered
-
-- **Whole-database swap** (the `SessionPool` pattern). Already proven for tests, but it drops
-  L along with S and pays for the standard library's sub-analyses again; retain it as the
-  backstop, not the policy.
-- **Shared arena behind `Arc<Mutex<_>>`.** Eliminates phase clones but breaks salsa's
-  value-semantics snapshots: two database clones would observe each other's mutations.
-- **Value hash-consing of the arena.** Measured 69.8% of the std types are content-unique, so
-  deduplication saves at most ~30% of one table — not worth an interning layer over the query
-  architecture.
-- **Shape-based heuristics** ("certain types are worth keeping"). Rejected as a tiering rule:
-  a type's value comes from being reachable from an L root, not from its shape. Canonicality
-  is useful only as the hash-cons key for L payloads, should L itself need compression.
-- **Construction/elimination rules as the criterion.** Correct in spirit but derivative:
-  declaration forms are exactly the name-keyed entries; their *use sites* remain occurrence
-  payload.
-
-## Roadmap
-
-1. Session-level drop-after-consume: `ProgramAnalysis` scopes the arena; tests assert that the
-   S tables are empty once the root's consumer finishes. No consumer changes; suite green.
-2. Demand-driven linking and lowering: replay-backed accessors for `values`/`compus`/`types`,
-   then delete the wholesale materialization path for the backends.
-3. Memo-layer policy: root-scoped LRU for the salsa database (after verifying what salsa 0.26
-   supports for dropping individual inputs).
+- Session suite peak RSS fell from 18.0GB (pool cap) to 6.32GB through the LRU step and the
+  generation split; a long-running session no longer grows per root.
+- One full-std check retains ~914MB peak RSS (down from 2.42GB after the earlier phase merge
+  and delta work, and from 7.5GB before them); warm re-checks run in ~1.2s.
+- Value hash-consing was measured and rejected: 69.8% of std's types are content-unique, so
+  deduplication saves at most ~30% of one table — not worth an interning layer.
 
 ## Open Questions
 
 - Can salsa 0.26 remove one root's inputs and memos without dropping the whole database? This
-  decides whether the memo LRU lives inside one database or across generations of databases.
-- Do `inlinables` / `value_aliases` / `package_aliases` have consumers outside the checker?
-  If not, they only serve L-to-S replay and can merge into the site index.
-- Which editor facts need S after the root is consumed? Hover reads annotations on demand, but
-  the full-facts batch (semantic tokens, coverage) may require the traversal to complete before
-  the slot drops.
+  decides whether the memo policy lives inside one database or across generations of databases.
+- The retained `Vec<TermFacts>` (63,574 records) could compact its classifiers: every value and
+  computation fact's classifier matches its stored annotation, while 9,309 of 54,400 type facts
+  report a kind that differs from the co-located one, so a compact encoding needs an explicit
+  override path rather than plain erasure. A census of equality, not just identifier
+  cardinality, is the prerequisite.
+- The parsed-source lifetime group (spans, textual syntax, tokens, line-intention maps) should
+  be audited together for repeated location structure.

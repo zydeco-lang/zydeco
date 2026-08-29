@@ -242,6 +242,6 @@ representation change where key-space-aware sparse storage is unnecessary.
 
 This eager arena-wide pass is an intermediate architecture. A future query-driven semantic model may normalize only
 closed types requested by a consumer, as described in the
-[query type-system worklog](../logs/query-type-system-worklog.md#5-make-normalization-and-consumers-demand-driven).
+[query-owned statics](query-owned-statics.md).
 The shared finalizer establishes the same essential boundary now: inference mutates local facts, then finalization
 reads a stable solution graph and publishes reusable semantic forms.

@@ -1,7 +1,7 @@
 # Package modularization with projection patterns
 
 Zydeco represents libraries with ordinary functions, products, and existential packages,
-following the account in [Uniform Term Composition](../ideas/term.md) and [Compile-Time Normalization](normalization.md).
+following the account in [Uniform Term Composition](term.md) and [Compile-Time Normalization](normalization.md).
 This gives libraries a precise term-level meaning,
 but a positional package pattern makes every consumer repeat the provider's complete public telescope.
 Adding one standard-library type or module then changes programs that never use it.
@@ -272,9 +272,25 @@ The implementation uses the same rule. Each standard-library source selects its 
 and `std.zy` retains a whole alias while forwarding the package to its component modules.
 The complete nested product remains only in the provider representation and host/runtime construction boundary.
 
-The current source shape and the implementation evidence that reached it,
-including the checker constraints that motivated the one-companion-per-topic split,
-are recorded in the [topic consolidation worklog](../logs/std-topic-consolidation.md).
+## Checker constraints on the topic layout
+
+Four checker facts determine how far the modularization can fold, and each one is load-bearing
+for the layout above.
+
+- A bare record literal has no principal type, so every package-producing source needs a
+  whole-file annotation. The `.zyi` companion is that annotation: source assembly elaborates the
+  pair as `(implementation : signature)`, and importers see the ascribed type.
+- A `def`-bound data type cannot cross a file boundary by disclosure, because an annotation can
+  only name a definition through an import and only compiler intrinsics are canonical importable
+  terms. Existential witnesses therefore remain the only cross-file naming device for library
+  data types, which is why each topic wraps its body in `exists` inside `package.type.zy`.
+- A type-level application of a transparent `let` function reduces during analysis, so an
+  implementation record may nest one sub-record per applied body constructor without new
+  checker support, and the nested shape is what the projection resolver walks.
+- Structural projection searches nested named products but never descends into an unopened
+  existential package. The public package therefore reintroduces the shared witnesses in one
+  `exists` and keeps topic packages opaque inside their groups, while consumers still select
+  `(/option; /process)` across the nesting unchanged.
 
 ## Elaboration and runtime representation
 

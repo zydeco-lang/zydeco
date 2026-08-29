@@ -1,7 +1,5 @@
 # Escape Analysis and Unboxing for Zydeco
 
-Status: draft; core unboxing is implemented.
-
 ## Summary
 
 Zydeco's native backend allocates every escaping product, constructor, and closure package in a fixed two-space
@@ -251,7 +249,6 @@ The following is implemented:
 - A `stack_alloc` flag on assembly `ProductLayout` and AMD64 emission support for stack-frame product allocation.
 
 The analysis lives in `lang/assembly/src/unbox.rs` and is consumed by `lang/assembly/src/lower.rs`.
-See `docs/logs/escape-unboxing.md` for the worklog.
 
 ## File Touchpoints
 
@@ -296,5 +293,5 @@ avoiding duplicated representations.
 
 ## Related Documents
 
-- `docs/logs/paper-aligned-stackir.md` records the SPSLow boundary this analysis builds on.
+- The Stack IR phase boundaries in [`DESIGN.md`](../../DESIGN.md) record the SPSLow invariants this analysis builds on.
 - `docs/legacy/ideas/products.md` explains the canonical product layouts that unboxing must respect.

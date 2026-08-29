@@ -45,7 +45,7 @@ traced. Aligned Rust-owned pointers, such as host strings, are outside both semi
 
 Surface notation distinguishes classifier arrows from term bodies while leaving constructor
 and destructor spines whitespace-guided.
-The [surface syntax principles](docs/ideas/syntax.md) record the rationale and the intended use of juxtaposition,
+The [surface syntax principles](docs/proposals/syntax.md) record the rationale and the intended use of juxtaposition,
 grouping, and block delimiters.
 
 ## Products and Existential Packages
@@ -331,11 +331,12 @@ Consequently, `param`, `let`, `def`, and `begin ... end` can assemble a type
 or value package directly whenever their residual term is pure.
 Computation-producing packages continue to use the CBPV forms required by their effects.
 
-The standard-library components and their aggregate package use this pure boundary.
-Importing `data/bool.zy`, `data/option.zy`, `data/list.zy`, or `std.zy` yields a value-level package function;
-clients apply it and open its result with `let`. Builtin and the standard-package root are composition boundaries;
-value contracts live in adjacent `.zyi` companions, and reusable type terms live beside their topic implementations
-beneath `lib/std`.
+The standard-library topics and their aggregate package use this pure boundary.
+Importing `data/package.zy`, `text/package.zy`, `system/package.zy`, `numeric/package.zy`, or `std.zy`
+yields a value-level package function; clients apply it and open its result with `let`.
+Builtin and the standard-package root are composition boundaries; each topic keeps one `.zyi`
+companion beside its implementation, a `body.type.zy` record-shape constructor, and — where it owns
+abstract witnesses — a `package.type.zy` existential wrapper beneath `lib/std`.
 The operations exported inside those packages retain their computation types.
 
 The launcher-supplied Builtin contract is structurally divided into `core`, `representations`, `numeric`,
@@ -387,9 +388,14 @@ Zydeco is implemented as a pipeline with an interpreter and native-code branch:
 Every completed representation after type checking carries exactly one top-level expression or program root.
 `DynamicsProgram`, `BranchJoinProgram`, `SpsLowProgram`, and `AssemblyProgram` pair that root with the storage needed
 by their syntax. Node arenas and labeled block collections are therefore implementation storage, not
-declaration-oriented containers that determine how many programs a compilation contains. Stack IR follows the
-branch-join and closure-conversion presentations recorded in
-[the paper-aligned Stack IR worklog](docs/logs/paper-aligned-stackir.md).
+declaration-oriented containers that determine how many programs a compilation contains.
+Stack IR follows the branch-join and closure-conversion presentations of the adjacent
+stack-passing-style paper, which remains authoritative for the formal syntax, typing judgments,
+and equational theories. Each semantic phase consumes one complete program and produces one
+complete program; high SPS is lexical branch-join syntax, SPSLow is first-order with explicit
+code labels while retaining one lexical occurrence per stored node, and assembly materializes
+the control-flow graph. The single-occurrence invariant is what later passes rely on: a value
+node consumed by exactly one pattern makes representation decisions such as unboxing local.
 
 ### Query-Based Analysis
 
@@ -407,10 +413,12 @@ memoized analysis:
 
 Facts are keyed by interned node IDs (`InternedType`, `InternedDef`, `InternedTerm`, `InternedFill`) because
 salsa query arguments must be salsa IDs. The `*_normalized` arena tables remain the downstream interface consumed
-by `zydeco-dynamics` and `zydeco-stackir`; the query layer reads them, it does not replace them. The wholesale
-producer path is the remaining piece of the query-based design: the judgment layer still executes inside
-`check_source` rather than as per-node queries, and the plan for that migration lives in the
-[query-based type checking worklog](docs/logs/query-based-tyck.md).
+by `zydeco-dynamics` and `zydeco-stackir`; the query layer reads them, it does not replace them.
+Every allocation-producing judgment is a producer query keyed by its occurrence site, and the checker
+materializes the query results into the arena; the arena reads inside the algorithmic core
+(unification, fill resolution, and the existential-opening internals) stay checker-side because a pre-node's
+content is not a pure function of its site. The [query-owned statics design](docs/proposals/query-owned-statics.md)
+records the achieved architecture and the conversion patterns behind it.
 
 The phases are spread across several core crates:
 

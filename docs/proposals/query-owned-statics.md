@@ -7,8 +7,7 @@ judgments read tables of the `StaticsArena` while the check is still writing the
 `annotations_var` (lub-merged on repeated binders, diverging from the environment), the
 `Fillable` pre-node state, `env_type` records, the builtin roles, and the `IntrinsicStatics`
 singletons. Salsa queries cannot read that mid-check state, and per-call snapshots would
-destroy memoization. Evidence and failed workarounds are recorded in
-[docs/logs/query-based-tyck.md](../logs/query-based-tyck.md).
+destroy memoization.
 
 ## Target Architecture
 
@@ -88,7 +87,6 @@ commit per table.
 
 ## Related
 
-- Worklog and wall evidence: [query-based type checking](../logs/query-based-tyck.md)
 - `docs/proposals/normalization.md` for the normalization semantics behind the fill-state pattern.
 
 ## Achieved Form (2026-08-14)

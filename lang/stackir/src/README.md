@@ -26,5 +26,6 @@ declaration collection.
   ownership and retained branch-join invariant.
 - `SpsLowPipeline` is the consuming boundary between high SPS and assembly-ready SPSLow.
 
-The paper correspondence and implementation history are recorded in
-[`docs/logs/paper-aligned-stackir.md`](../../../docs/logs/paper-aligned-stackir.md).
+The paper correspondence and the phase invariants are summarized in the implementation
+architecture section of [`DESIGN.md`](../../../DESIGN.md); the stack-passing-style paper remains
+authoritative for the formal presentations.
