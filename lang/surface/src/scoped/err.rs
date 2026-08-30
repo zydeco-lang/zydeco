@@ -1,8 +1,9 @@
 use crate::bitter::syntax::*;
+use crate::textual::syntax::SpanArena;
 use ariadne::{Label, Report, ReportKind};
 use std::ops::Range;
 use thiserror::Error;
-use zydeco_utils::span::PathDisplay;
+use zydeco_utils::span::{PathDisplay, Span, internal_ariadne_span};
 
 /// Errors reported during name resolution.
 #[derive(Error, Debug, Clone)]
@@ -19,10 +20,19 @@ pub enum ResolveError {
 
 impl ResolveError {
     /// Create an Ariadne report for this resolve error.
-    pub fn to_report(&self) -> Report<'static, (PathDisplay, Range<usize>)> {
+    ///
+    /// `spans` is the merged program's span arena; its attached source map
+    /// resolves each span into a file and byte range.
+    pub fn to_report(&self, spans: &SpanArena) -> Report<'static, (PathDisplay, Range<usize>)> {
+        let resolve = |span: &Span| {
+            spans
+                .source_map()
+                .and_then(|map| map.ariadne_range(*span))
+                .unwrap_or_else(internal_ariadne_span)
+        };
         match self {
             | ResolveError::UnboundVar(var) => {
-                let (file_path, range) = var.info.to_ariadne_span();
+                let (file_path, range) = resolve(&var.info);
                 Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
                     .with_message("Unbound variable")
                     .with_label(
@@ -32,8 +42,8 @@ impl ResolveError {
                     .finish()
             }
             | ResolveError::DuplicateDefinition(var1, var2) => {
-                let (file_path1, range1) = var1.info.to_ariadne_span();
-                let (file_path2, range2) = var2.info.to_ariadne_span();
+                let (file_path1, range1) = resolve(&var1.info);
+                let (file_path2, range2) = resolve(&var2.info);
                 let primary_span = (file_path1.clone(), range1.clone());
                 let mut report = Report::build(ReportKind::Error, primary_span)
                     .with_message("Duplicate definition")
@@ -50,7 +60,7 @@ impl ResolveError {
                 report.finish()
             }
             | ResolveError::UnenclosedThat(span) => {
-                let (file_path, range) = span.to_ariadne_span();
+                let (file_path, range) = resolve(span);
                 Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
                     .with_message("Mobile binding without a block")
                     .with_label(
@@ -60,7 +70,7 @@ impl ResolveError {
                     .finish()
             }
             | ResolveError::RecursiveParameter(span) => {
-                let (file_path, range) = span.to_ariadne_span();
+                let (file_path, range) = resolve(span);
                 Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
                     .with_message("Recursive parameter component")
                     .with_label(

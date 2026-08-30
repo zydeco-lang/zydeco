@@ -30,6 +30,8 @@ impl ArenaSchema<SourceImportId> for SourceGraphScope {
 pub struct SourceTemplate {
     pub path: PathBuf,
     pub source: String,
+    /// File-local map decoding this template's spans for parse diagnostics.
+    pub file: zydeco_utils::span::FileMap,
     pub spans: t::SpanArena,
     pub arena: t::TextArena,
     pub unit: t::SourceUnit,

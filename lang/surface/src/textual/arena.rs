@@ -1,5 +1,6 @@
 use super::syntax::*;
 use super::{SurfaceIntentions, SurfaceTrivia};
+use std::sync::Arc;
 
 /* ---------------------------------- Arena --------------------------------- */
 
@@ -43,6 +44,7 @@ pub struct SpanArena {
     key_space: Option<KeySpaceId>,
     categories: Vec<EntityCategory>,
     spans: Vec<Span>,
+    map: Option<Arc<SourceMap>>,
 }
 
 mod impl_span_arena {
@@ -94,6 +96,17 @@ mod impl_span_arena {
                 },
             )
         }
+        /// Attach the source map that decodes the stored spans' address space.
+        ///
+        /// Template-local arenas keep `None`: their spans are file-relative and
+        /// resolve through the template's own `FileMap`.
+        pub fn attach_map(&mut self, map: Arc<SourceMap>) {
+            self.map = Some(map);
+        }
+        /// The source map decoding the stored spans, when one was attached.
+        pub fn source_map(&self) -> Option<&SourceMap> {
+            self.map.as_deref()
+        }
         /// Release geometric vector growth after parsing finishes.
         pub(crate) fn shrink_to_fit(&mut self) {
             self.categories.shrink_to_fit();
@@ -138,10 +151,10 @@ mod impl_span_arena {
 
             assert_eq!(size_of::<EntityCategory>(), 1);
             assert_eq!(spans.iter().map(|(entity, _)| entity).collect::<Vec<_>>(), expected);
-            assert_eq!(spans[&EntityId::Term(term)].get_cursor1(), (3, 4));
+            assert_eq!(spans[&EntityId::Term(term)].range(), 3..4);
 
             spans.replace(pattern, Span::new(10, 20));
-            assert_eq!(spans[&EntityId::Pat(pattern)].get_cursor1(), (10, 20));
+            assert_eq!(spans[&EntityId::Pat(pattern)].range(), 10..20);
 
             let wrong_category: PatId = restore_id(definition.key_space(), definition.raw());
             assert!(spans.index_of(wrong_category.into()).is_none());

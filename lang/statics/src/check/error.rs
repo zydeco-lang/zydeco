@@ -5,7 +5,7 @@ use crate::validate::CoverageError;
 use crate::{syntax::*, *};
 use ariadne::{Label, Report, ReportKind};
 use std::ops::Range;
-use zydeco_utils::span::PathDisplay;
+use zydeco_utils::span::{PathDisplay, Span, internal_ariadne_span};
 
 pub use zydeco_utils::err::*;
 
@@ -97,12 +97,20 @@ pub struct TyckErrorEntry {
 }
 
 impl<'a> Tycker<'a> {
+    /// Resolve a span through the merged program's source map.
+    fn ariadne_span(&self, span: &Span) -> (PathDisplay, Range<usize>) {
+        self.spans
+            .source_map()
+            .and_then(|map| map.ariadne_range(*span))
+            .unwrap_or_else(internal_ariadne_span)
+    }
+
     fn statics_term_ariadne_span(&self, term: TermId) -> Option<(PathDisplay, Range<usize>)> {
-        self.statics.terms.source(&term).map(|term| term.span(self).to_ariadne_span())
+        self.statics.terms.source(&term).map(|term| self.ariadne_span(term.span(self)))
     }
 
     fn statics_pat_ariadne_span(&self, pat: PatId) -> Option<(PathDisplay, Range<usize>)> {
-        self.statics.pats.source(&pat).map(|pat| pat.span(self).to_ariadne_span())
+        self.statics.pats.source(&pat).map(|pat| self.ariadne_span(pat.span(self)))
     }
 
     fn type_ariadne_span(&self, ty: &TypeId) -> Option<(PathDisplay, Range<usize>)> {
@@ -111,8 +119,8 @@ impl<'a> Tycker<'a> {
 
     fn inference_site_ariadne_span(&self, site: InferenceSite) -> (PathDisplay, Range<usize>) {
         match site {
-            | InferenceSite::Term(term) => term.span(self).to_ariadne_span(),
-            | InferenceSite::Pattern(pattern) => pattern.span(self).to_ariadne_span(),
+            | InferenceSite::Term(term) => self.ariadne_span(term.span(self)),
+            | InferenceSite::Pattern(pattern) => self.ariadne_span(pattern.span(self)),
         }
     }
 
@@ -461,11 +469,11 @@ impl<'a> Tycker<'a> {
             | TyckError::OccursCheck(fill) => {
                 Some(self.inference_site_ariadne_span(self.statics.fills[fill]))
             }
-            | TyckError::NotInlinable(def) => Some(def.span(self).to_ariadne_span()),
+            | TyckError::NotInlinable(def) => Some(self.ariadne_span(def.span(self))),
             | TyckError::NotInlinableSeal(abst) => {
                 // AbstId doesn't have a direct span, but we can get it from the hint if available
                 use zydeco_utils::arena::ArenaAccess;
-                self.statics.abst_hints.get(abst).map(|hint| hint.span(self).to_ariadne_span())
+                self.statics.abst_hints.get(abst).map(|hint| self.ariadne_span(hint.span(self)))
             }
             | TyckError::Coverage(error) => {
                 self.statics_term_ariadne_span(error.computation().into())
@@ -617,8 +625,8 @@ impl<'a> Tycker<'a> {
             .or_else(|| {
                 // If no primary span in error, try to get from the last stack frame
                 stack.last().and_then(|task| match task {
-                    | TyckTask::Pat(pat, _) => Some(pat.span(self).to_ariadne_span()),
-                    | TyckTask::Term(term, _) => Some(term.span(self).to_ariadne_span()),
+                    | TyckTask::Pat(pat, _) => Some(self.ariadne_span(pat.span(self))),
+                    | TyckTask::Term(term, _) => Some(self.ariadne_span(term.span(self))),
                     | _ => None,
                 })
             })
@@ -673,7 +681,7 @@ impl<'a> Tycker<'a> {
             | TyckError::NotInlinableSeal(abst) => {
                 use zydeco_utils::arena::ArenaAccess;
                 if let Some(hint) = self.statics.abst_hints.get(abst) {
-                    let hint_span = hint.span(self).to_ariadne_span();
+                    let hint_span = self.ariadne_span(hint.span(self));
                     report = report.with_label(
                         Label::new(hint_span)
                             .with_message("defined here")
@@ -697,11 +705,11 @@ impl<'a> Tycker<'a> {
         for task in stack.iter().rev() {
             let task_label = match task {
                 | TyckTask::Pat(pat, _switch) => {
-                    let span = pat.span(self).to_ariadne_span();
+                    let span = self.ariadne_span(pat.span(self));
                     Some(Label::new(span).with_message("when tycking pattern"))
                 }
                 | TyckTask::Term(term, _switch) => {
-                    let span = term.span(self).to_ariadne_span();
+                    let span = self.ariadne_span(term.span(self));
                     Some(Label::new(span).with_message("when tycking term"))
                 }
                 | TyckTask::Lub(lhs, _rhs) => {

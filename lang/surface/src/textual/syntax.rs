@@ -5,10 +5,9 @@ pub use super::intention::*;
 pub use super::trivia::*;
 pub use crate::{arena::*, syntax::*};
 pub use zydeco_syntax::*;
-pub use zydeco_utils::span::{LocationCtx, Sp, Span};
+pub use zydeco_utils::span::{FileMap, SourceMap, Sp, Span};
 
 use derive_more::From;
-use zydeco_utils::span::FileInfo;
 
 /* ------------------------------- Identifier ------------------------------- */
 
@@ -364,15 +363,15 @@ impl Parser {
     /// Existing spans let printers reuse selected layout decisions without
     /// introducing layout-only variants into the textual AST.
     pub fn capture_source_information(&mut self, source: &str) {
-        let file_info = FileInfo::new(source, None);
+        let file_map = FileMap::local(source, None);
         let entities = self
             .spans
             .iter()
             .filter(|(entity, _)| self.arena.intentions.line_extent(*entity).is_none())
             .filter_map(|(entity, span)| {
-                let (start, end) = span.get_cursor1();
-                source.get(start..end)?;
-                Some(SpannedEntity::new(entity, start, end))
+                let span = span.range();
+                source.get(span.start..span.end)?;
+                Some(SpannedEntity::new(entity, span.start, span.end))
             })
             .collect::<Vec<_>>();
         let arm_prefixes = self
@@ -393,35 +392,38 @@ impl Parser {
             .iter()
             .map(|entity| {
                 let occupied_end = entity.end().saturating_sub(1).max(entity.start());
-                let first = file_info.trans_span2(entity.start()).line;
-                let last = file_info.trans_span2(occupied_end).line;
+                let first = file_map.line_col(entity.start()).line as usize;
+                let last = file_map.line_col(occupied_end).line as usize;
                 let presentation_start =
                     comments.presentation_start(entity.entity(), entity.start());
-                let presentation_start = SourceLine(file_info.trans_span2(presentation_start).line);
+                let presentation_start =
+                    SourceLine(file_map.line_col(presentation_start).line as usize);
                 (entity.entity(), LineExtent::new(first, last), presentation_start)
             })
             .collect::<Vec<_>>();
         let arm_layouts = arm_prefixes
             .iter()
             .filter_map(|prefix| {
-                let (payload_start, payload_end) = self.spans[&prefix.payload].get_cursor1();
+                let payload = self.spans[&prefix.payload].range();
+                let (payload_start, payload_end) = (payload.start, payload.end);
                 source.get(payload_start..payload_end)?;
-                let prefix_line = SourceLine(file_info.trans_span2(prefix.start).line);
+                let prefix_line = SourceLine(file_map.line_col(prefix.start).line as usize);
                 let presentation_start = comments.arm_payload_start(prefix.payload, payload_start);
-                let presentation_line = SourceLine(file_info.trans_span2(presentation_start).line);
+                let presentation_line =
+                    SourceLine(file_map.line_col(presentation_start).line as usize);
                 Some((prefix.payload, prefix_line, presentation_line))
             })
             .collect::<Vec<_>>();
         let existential_layouts = existential_prefixes
             .iter()
             .filter_map(|prefix| {
-                let (parameter_start, parameter_end) =
-                    self.spans[&EntityId::Pat(prefix.parameter)].get_cursor1();
+                let parameter = self.spans[&EntityId::Pat(prefix.parameter)].range();
+                let (parameter_start, parameter_end) = (parameter.start, parameter.end);
                 source.get(parameter_start..parameter_end)?;
                 let presentation_start =
                     comments.presentation_start(prefix.parameter.into(), parameter_start);
                 let prefix_start = prefix.start.min(presentation_start);
-                Some((prefix.parameter, SourceLine(file_info.trans_span2(prefix_start).line)))
+                Some((prefix.parameter, SourceLine(file_map.line_col(prefix_start).line as usize)))
             })
             .collect::<Vec<_>>();
         self.arena.intentions.record_source_layout(
@@ -459,13 +461,12 @@ impl Parser {
     /// `field = ((binder as definition) : classifier)`.
     pub fn manifest_pattern(
         &mut self, binder: PatId, definition: TermId, classifier: Option<TermId>, end: usize,
-        loc: &LocationCtx,
     ) -> PatId {
-        let (start, _) = self.spans[&EntityId::Pat(binder)].get_cursor1();
-        let span = Span::new(start, end).under_loc_ctx(loc);
+        let start = self.spans[&EntityId::Pat(binder)].lo();
+        let span = Span::new(start, end);
         match self.arena.pats[&binder].clone() {
             | Pattern::Named(Named(field, inner)) => {
-                let inner = self.manifest_pattern(inner, definition, classifier, end, loc);
+                let inner = self.manifest_pattern(inner, definition, classifier, end);
                 self.arena.pats[&binder] = Named(field, inner).into();
                 self.spans.replace(binder, span);
                 binder

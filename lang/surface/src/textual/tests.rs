@@ -14,7 +14,7 @@ use crate::{
     },
 };
 use zydeco_syntax::Ugly;
-use zydeco_utils::{arena::IdAllocator, pass::CompilerPass, span::LocationCtx};
+use zydeco_utils::{arena::IdAllocator, pass::CompilerPass};
 
 use super::*;
 
@@ -37,7 +37,7 @@ fn parsing_1() {
     let source = "!(!1)";
     let mut parser = Parser::new();
     let _ = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 }
 #[test]
@@ -45,7 +45,7 @@ fn parsing_2() {
     let source = "{ let x = 1 in ! exit x }";
     let mut parser = Parser::new();
     let _ = parser::SourceUnitParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 }
 
@@ -55,14 +55,14 @@ fn rejects_retired_do_tilde_syntax() {
     let mut parser = Parser::new();
     assert!(
         parser::SingleTermParser::new()
-            .parse(retired, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(retired))
+            .parse(retired, &mut parser, lexer::Lexer::new(retired))
             .is_err()
     );
 
     let explicit = "first { second }";
     let mut parser = Parser::new();
     parser::SingleTermParser::new()
-        .parse(explicit, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(explicit))
+        .parse(explicit, &mut parser, lexer::Lexer::new(explicit))
         .expect("explicit continuation application must remain available");
 }
 
@@ -72,7 +72,7 @@ fn rejects_retired_monadic_block_syntax() {
     let mut parser = Parser::new();
     assert!(
         parser::SingleTermParser::new()
-            .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+            .parse(source, &mut parser, lexer::Lexer::new(source))
             .is_err(),
         "the delimited monadic keyword form must remain retired"
     );
@@ -85,7 +85,7 @@ fn monadic_metadata_lowers_arbitrary_terms_to_monadic_blocks() {
         .for_each(|(source, expects_block_body)| {
             let mut parser = Parser::new();
             let unit = parser::SourceUnitParser::new()
-                .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+                .parse(source, &mut parser, lexer::Lexer::new(source))
                 .unwrap_or_else(|error| panic!("expected `{source}` to parse: {error}"));
             let output = SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit)
                 .run()
@@ -108,7 +108,7 @@ fn monadic_metadata_rejects_arguments() {
     let source = "@[monadic(extra)] ret ()";
     let mut parser = Parser::new();
     let unit = parser::SourceUnitParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
     let error = match SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit).run() {
         | Ok(_) => panic!("monadic metadata must not accept arguments"),
@@ -129,14 +129,14 @@ fn monadic_metadata_extent_survives_bitter_formatting() {
     let source = "(@[monadic] fn value => ret value) argument";
     let mut parser = Parser::new();
     let unit = parser::SourceUnitParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
     let output = SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit).run().unwrap();
     let rendered = output.root.ugly(&BitterFormatter::new(&output.arena));
 
     let mut reparsed = Parser::new();
     let unit = parser::SourceUnitParser::new()
-        .parse(&rendered, &LocationCtx::Plain, &mut reparsed, lexer::Lexer::new(&rendered))
+        .parse(&rendered, &mut reparsed, lexer::Lexer::new(&rendered))
         .unwrap_or_else(|error| panic!("expected `{rendered}` to reparse: {error}"));
     let output = SourceUnitDesugarer::new(&reparsed.spans, &reparsed.arena, unit).run().unwrap();
     let bitter::Term::App(bitter::App(function, _)) = output.arena.terms[&output.root] else {
@@ -151,7 +151,7 @@ fn retired_monadic_keywords_are_available_as_identifiers() {
     let source = "let monadic = 1 in let monadically = monadic in monadically";
     let mut parser = Parser::new();
     parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .expect("retired monadic keywords must lex as ordinary identifiers");
 }
 
@@ -161,7 +161,7 @@ fn parses_decimal_and_scientific_float_literals() {
         |(source, expected)| {
             let mut parser = Parser::new();
             let term = parser::SingleTermParser::new()
-                .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+                .parse(source, &mut parser, lexer::Lexer::new(source))
                 .unwrap();
             let Term::Lit(Literal::Float(value)) = parser.arena.terms[&term] else {
                 panic!("expected `{source}` to parse as a float literal")
@@ -173,7 +173,7 @@ fn parses_decimal_and_scientific_float_literals() {
     let source = "1";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
     assert!(matches!(
         parser.arena.terms[&term],
@@ -195,7 +195,7 @@ fn separates_term_body_arrows_from_type_arrows() {
     .for_each(|source| {
         let mut parser = Parser::new();
         parser::SingleTermParser::new()
-            .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+            .parse(source, &mut parser, lexer::Lexer::new(source))
             .unwrap_or_else(|error| panic!("expected `{source}` to parse: {error}"));
     });
 
@@ -212,7 +212,7 @@ fn separates_term_body_arrows_from_type_arrows() {
         let mut parser = Parser::new();
         assert!(
             parser::SingleTermParser::new()
-                .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+                .parse(source, &mut parser, lexer::Lexer::new(source))
                 .is_err(),
             "expected `{source}` to be rejected"
         );
@@ -224,7 +224,7 @@ fn metadata_preserves_identifiers_strings_integers_and_applications() {
     let source = r#"@[debug(name,"value",1,nested("path"))] _"#;
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Term::Meta(MetaT(meta, payload)) = &parser.arena.terms[&term] else {
@@ -251,7 +251,7 @@ fn parenthesized_metadata_defaults_its_payload_to_a_hole() {
     let source = r#"@(debug(name,"value",1,nested("path")))"#;
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Term::Meta(MetaT(meta, payload)) = &parser.arena.terms[&term] else {
@@ -265,14 +265,14 @@ fn parenthesized_metadata_defaults_its_payload_to_a_hole() {
     assert_eq!(rendered, source);
     let mut roundtrip = Parser::new();
     parser::SingleTermParser::new()
-        .parse(&rendered, &LocationCtx::Plain, &mut roundtrip, lexer::Lexer::new(&rendered))
+        .parse(&rendered, &mut roundtrip, lexer::Lexer::new(&rendered))
         .unwrap();
 
     // `@(meta)` and `@[meta] _` are indistinguishable once parsed.
     let bracketed = r#"@[debug(name,"value",1,nested("path"))] _"#;
     let mut bracketed_parser = Parser::new();
     let bracketed_term = parser::SingleTermParser::new()
-        .parse(bracketed, &LocationCtx::Plain, &mut bracketed_parser, lexer::Lexer::new(bracketed))
+        .parse(bracketed, &mut bracketed_parser, lexer::Lexer::new(bracketed))
         .unwrap();
     assert_eq!(
         term.ugly(&Formatter::new(&parser.arena)),
@@ -286,7 +286,7 @@ fn parenthesized_metadata_rejects_an_empty_annotation() {
     let mut parser = Parser::new();
     assert!(
         parser::SingleTermParser::new()
-            .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+            .parse(source, &mut parser, lexer::Lexer::new(source))
             .is_err(),
         "expected `{source}` to be rejected"
     );
@@ -308,7 +308,7 @@ fn source_unit_collects_documentation_for_arbitrary_annotated_terms() {
     );
     let mut parser = Parser::new();
     let unit = parser::SourceUnitParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let documentation = unit.documentation(&parser.arena, &parser.spans);
@@ -344,7 +344,7 @@ fn documentation_annotation_does_not_reach_across_a_blank_or_ordinary_comment() 
         |source| {
             let mut parser = Parser::new();
             let unit = parser::SourceUnitParser::new()
-                .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+                .parse(source, &mut parser, lexer::Lexer::new(source))
                 .unwrap();
             let documentation = unit.documentation(&parser.arena, &parser.spans);
             let [site] = documentation.as_slice() else {
@@ -362,7 +362,7 @@ fn text_blocks_without_an_annotation_remain_unattached() {
     let source = "--| Informational only\n_";
     let mut parser = Parser::new();
     let unit = parser::SourceUnitParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     assert!(unit.documentation(&parser.arena, &parser.spans).is_empty());
@@ -388,7 +388,7 @@ fn warns_for_every_text_block_without_an_effective_attachment() {
     );
     let mut parser = Parser::new();
     let unit = parser::SourceUnitParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let comments = unit
@@ -413,7 +413,7 @@ fn documentation_annotation_accepts_an_explicit_empty_argument_list() {
     let source = "--| Empty argument list\n@[doc()] _";
     let mut parser = Parser::new();
     let unit = parser::SourceUnitParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let documentation = unit.documentation(&parser.arena, &parser.spans);
@@ -427,7 +427,7 @@ fn source_unit_decodes_literal_splices_with_attached_text() {
     let source = "--| First line\n--| Second line\n@[literal] _";
     let mut parser = Parser::new();
     let unit = parser::SourceUnitParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let literals = unit.literals(&parser.arena, &parser.spans).unwrap();
@@ -445,7 +445,7 @@ fn source_unit_rejects_literal_splices_without_an_attached_text_block() {
     let source = "@[literal] _";
     let mut parser = Parser::new();
     let unit = parser::SourceUnitParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     assert!(matches!(
@@ -459,7 +459,7 @@ fn source_unit_rejects_literal_on_a_non_hole_term() {
     let source = "--| Text\n@[literal] 1";
     let mut parser = Parser::new();
     let unit = parser::SourceUnitParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     assert!(matches!(
@@ -473,7 +473,7 @@ fn source_unit_rejects_literal_metadata_arguments() {
     let source = "--| Text\n@[literal(extra)] _";
     let mut parser = Parser::new();
     let unit = parser::SourceUnitParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     assert!(matches!(
@@ -492,7 +492,7 @@ fn source_unit_decodes_relative_and_absolute_imports() {
     ] {
         let mut parser = Parser::new();
         let unit = parser::SourceUnitParser::new()
-            .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+            .parse(source, &mut parser, lexer::Lexer::new(source))
             .unwrap();
 
         let imports = unit.imports(&parser.arena, &parser.spans).unwrap();
@@ -514,7 +514,7 @@ fn source_unit_decodes_a_numbered_input_import() {
     let source = "@[import(7)] _";
     let mut parser = Parser::new();
     let unit = parser::SourceUnitParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let imports = unit.imports(&parser.arena, &parser.spans).unwrap();
@@ -544,7 +544,7 @@ fn source_unit_rejects_import_without_one_supported_target() {
     cases.into_iter().for_each(|(source, expected)| {
         let mut parser = Parser::new();
         let unit = parser::SourceUnitParser::new()
-            .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+            .parse(source, &mut parser, lexer::Lexer::new(source))
             .unwrap();
         let error = unit.imports(&parser.arena, &parser.spans).unwrap_err();
 
@@ -572,7 +572,7 @@ fn source_unit_rejects_import_on_a_non_hole_term() {
     let source = r#"@[import("library.zy")] value"#;
     let mut parser = Parser::new();
     let unit = parser::SourceUnitParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     assert!(matches!(
@@ -586,7 +586,7 @@ fn source_unit_decodes_builtin_operation_roles_on_terms() {
     let source = "@[builtin(int64_add)] _";
     let mut parser = Parser::new();
     let unit = parser::SourceUnitParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let builtins = unit.builtins(&parser.arena, &parser.spans).unwrap();
@@ -626,7 +626,7 @@ fn source_unit_decodes_typed_intrinsic_splices() {
         for source in [format!("@(intrinsic({name}))"), format!("@[intrinsic({name})] _")] {
             let mut parser = Parser::new();
             let unit = parser::SourceUnitParser::new()
-                .parse(&source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(&source))
+                .parse(&source, &mut parser, lexer::Lexer::new(&source))
                 .unwrap();
 
             let intrinsics = unit.intrinsics(&parser.arena, &parser.spans).unwrap();
@@ -669,7 +669,7 @@ fn source_unit_rejects_ambiguous_or_malformed_intrinsic_splices() {
     cases.into_iter().for_each(|(source, expected)| {
         let mut parser = Parser::new();
         let unit = parser::SourceUnitParser::new()
-            .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+            .parse(source, &mut parser, lexer::Lexer::new(source))
             .unwrap();
         let error = unit.intrinsics(&parser.arena, &parser.spans).unwrap_err();
 
@@ -724,7 +724,7 @@ fn source_unit_rejects_malformed_builtin_roles() {
     cases.into_iter().for_each(|(source, expected)| {
         let mut parser = Parser::new();
         let unit = parser::SourceUnitParser::new()
-            .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+            .parse(source, &mut parser, lexer::Lexer::new(source))
             .unwrap();
         let error = unit.builtins(&parser.arena, &parser.spans).unwrap_err();
 
@@ -748,7 +748,7 @@ fn source_unit_wraps_exactly_one_complete_term() {
     let source = "begin let value = 1 that value end";
     let mut parser = Parser::new();
     let SourceUnit { root } = parser::SourceUnitParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     assert!(matches!(parser.arena.terms[&root], Term::Block(_)));
@@ -759,7 +759,7 @@ fn parses_uniform_term_composition_forms() {
     let source = "begin let answer = seed that param seed that ret answer end";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Term::Block(Block(body)) = &parser.arena.terms[&term] else {
@@ -782,7 +782,7 @@ fn parses_uniform_term_composition_forms() {
 
     let nominal = "def Hidden = Int64 in Hidden";
     let nominal = parser::SingleTermParser::new()
-        .parse(nominal, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(nominal))
+        .parse(nominal, &mut parser, lexer::Lexer::new(nominal))
         .unwrap();
     assert!(matches!(
         parser.arena.terms[&nominal],
@@ -799,7 +799,7 @@ fn parses_manifest_existential_with_a_punned_field_binder() {
     let source = "exists (= Counter as Int64 : VType) . Counter";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Term::Exists(Exists { parameters, body }) = &parser.arena.terms[&term] else {
@@ -838,7 +838,7 @@ fn parses_manifest_existential_with_a_punned_field_binder() {
     assert_eq!(rendered, "exists (#Counter = ((Counter as Int64) : VType)) . Counter");
     let mut roundtrip = Parser::new();
     parser::SingleTermParser::new()
-        .parse(&rendered, &LocationCtx::Plain, &mut roundtrip, lexer::Lexer::new(&rendered))
+        .parse(&rendered, &mut roundtrip, lexer::Lexer::new(&rendered))
         .unwrap();
 }
 
@@ -847,7 +847,7 @@ fn parses_manifest_existential_inside_an_explicit_named_pattern() {
     let source = "exists (#Counter = ((Representation as Int64) : VType)) . Representation";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Term::Exists(Exists { parameters, .. }) = &parser.arena.terms[&term] else {
@@ -889,7 +889,7 @@ fn parses_manifest_existential_with_an_inferred_classifier() {
     let source = "exists (VType as @[intrinsic(vtype)] _) . VType";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Term::Exists(Exists { parameters, body }) = &parser.arena.terms[&term] else {
@@ -929,7 +929,7 @@ fn parses_interleaved_abstract_and_manifest_existential_parameters() {
     let source = "exists (X : VType) (Y as X : VType) (value : Y) . X";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Term::Exists(Exists { parameters, body }) = &parser.arena.terms[&term] else {
@@ -955,7 +955,7 @@ fn parses_named_term_fields() {
     let source = "(#x = 1, #y = 2)";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
@@ -988,7 +988,7 @@ fn parses_comma_separated_named_terms_without_early_sorting() {
     let source = "(#x = Int64, #y = String)";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
@@ -1018,7 +1018,7 @@ fn parses_labeled_product_type() {
     let source = "(#x :: Int64) * (#y :: String)";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Term::Prod(Prod(left, right)) = &parser.arena.terms[&term] else {
@@ -1057,7 +1057,7 @@ fn parses_chained_labels_right_associatively() {
     let source = "(#outer :: #inner :: Int64)";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
@@ -1082,7 +1082,7 @@ fn annotation_binds_inside_a_named_classifier() {
     let source = "(#field :: A : K)";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
@@ -1110,7 +1110,7 @@ fn parses_mixed_named_and_labeled_terms_right_associatively() {
     let source = "(#outer = #inner :: Int64)";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
@@ -1135,7 +1135,7 @@ fn parentheses_classify_the_whole_named_introduction() {
     let source = "((#field = value) : (#field :: classifier))";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Term::Paren(Paren(annotations)) = &parser.arena.terms[&term] else {
@@ -1179,7 +1179,7 @@ fn parses_named_term_payload_annotation() {
     let source = "(#name = 1 : _)";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
@@ -1206,7 +1206,7 @@ fn parses_punned_named_terms_and_payload_annotations() {
     let source = "(= left, middle, = right : Int64)";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
@@ -1249,7 +1249,7 @@ fn field_names_and_puns_accept_uppercase_variable_names() {
     let source = "(#Explicit = payload, = Inferred)";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
@@ -1279,12 +1279,8 @@ fn field_names_and_puns_accept_uppercase_variable_names() {
 fn rejects_punning_a_non_variable_term() {
     let source = "(= 1)";
     let mut parser = Parser::new();
-    let parsed = parser::SingleTermParser::new().parse(
-        source,
-        &LocationCtx::Plain,
-        &mut parser,
-        lexer::Lexer::new(source),
-    );
+    let parsed =
+        parser::SingleTermParser::new().parse(source, &mut parser, lexer::Lexer::new(source));
 
     assert!(parsed.is_err());
 }
@@ -1294,7 +1290,7 @@ fn parses_chained_named_terms() {
     let source = "(#outer = #inner = 1)";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
@@ -1321,7 +1317,7 @@ fn parses_named_pattern_fields() {
     let source = "(#x = left, #y = right)";
     let mut parser = Parser::new();
     let pattern = parser::SinglePatternParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Pattern::Paren(Paren(fields)) = &parser.arena.pats[&pattern] else {
@@ -1351,7 +1347,7 @@ fn parses_semicolon_pattern_aliases_in_source_order() {
     let source = "(whole; first; second)";
     let mut parser = Parser::new();
     let pattern = parser::SinglePatternParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Pattern::Alias(Alias(patterns)) = &parser.arena.pats[&pattern] else {
@@ -1375,7 +1371,7 @@ fn parses_field_projection_patterns_as_alias_members() {
     let source = "(/x = left; /y = right; whole)";
     let mut parser = Parser::new();
     let pattern = parser::SinglePatternParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Pattern::Alias(Alias(patterns)) = &parser.arena.pats[&pattern] else {
@@ -1407,7 +1403,7 @@ fn parses_punned_field_projection_patterns_and_payload_annotations() {
     let source = "(/left : Int64; /Right; whole)";
     let mut parser = Parser::new();
     let pattern = parser::SinglePatternParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Pattern::Alias(Alias(patterns)) = &parser.arena.pats[&pattern] else {
@@ -1444,7 +1440,7 @@ fn parses_chained_field_projection_patterns_right_associatively() {
     let source = "(/outer = /inner = payload)";
     let mut parser = Parser::new();
     let pattern = parser::SinglePatternParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Pattern::Paren(Paren(patterns)) = &parser.arena.pats[&pattern] else {
@@ -1468,7 +1464,7 @@ fn parses_named_pattern_payload_annotation() {
     let source = "(#name = payload : _)";
     let mut parser = Parser::new();
     let pattern = parser::SinglePatternParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Pattern::Paren(Paren(fields)) = &parser.arena.pats[&pattern] else {
@@ -1495,7 +1491,7 @@ fn parses_punned_named_patterns_and_payload_annotations() {
     let source = "(= left : Int64, middle, = right)";
     let mut parser = Parser::new();
     let pattern = parser::SinglePatternParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Pattern::Paren(Paren(fields)) = &parser.arena.pats[&pattern] else {
@@ -1538,7 +1534,7 @@ fn parses_chained_named_patterns() {
     let source = "(#outer = #inner = payload)";
     let mut parser = Parser::new();
     let pattern = parser::SinglePatternParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Pattern::Paren(Paren(fields)) = &parser.arena.pats[&pattern] else {
@@ -1565,7 +1561,7 @@ fn parses_chained_named_projection() {
     let source = "rectangle/top_left/x";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Term::Proj(Proj(inner, x)) = &parser.arena.terms[&term] else {
@@ -1588,7 +1584,7 @@ fn named_projection_binds_tighter_than_application() {
     let source = "service/inspect rectangle/top_left";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Term::App(Appli(items)) = &parser.arena.terms[&term] else {
@@ -1619,7 +1615,7 @@ fn parses_chained_dot_elimination() {
     let source = "rectangle .top_left .x";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
-        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
     let Term::Dtor(Dtor(inner, x)) = &parser.arena.terms[&term] else {

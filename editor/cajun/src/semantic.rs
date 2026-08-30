@@ -20,7 +20,7 @@ use zydeco_surface::{
 use zydeco_syntax::{Abs, Alias, Ann, Ctor, Label, Named, Proj, ProjectionPattern};
 use zydeco_utils::{
     arena::ArenaAccess,
-    span::{FileInfo, Span},
+    span::{FileMap, Span},
 };
 
 /// Compiler-backed semantic highlighting for one source document.
@@ -63,9 +63,10 @@ impl ByteRange {
         Self { start, end }
     }
 
-    fn from_span(span: &Span) -> Self {
-        let (start, end) = span.get_cursor1();
-        Self::new(start, end)
+    /// The file-local range of a merged-program span.
+    fn from_span(spans: &SpanArena, span: &Span) -> Option<Self> {
+        let (_, range) = spans.source_map()?.range(*span)?;
+        Some(Self::new(range.start, range.end))
     }
 
     fn line_ranges(self, source: &str) -> impl Iterator<Item = Self> + '_ {
@@ -232,14 +233,20 @@ impl<'source> SemanticDocument<'source> {
         scoped.defs.iter().for_each(|(definition, name)| {
             let style = classifier.classify(*definition, name.0.as_str());
             Self::entity_span(spans, scoped, (*definition).into())
-                .filter(|span| Self::same_file(span, file_path))
-                .map(ByteRange::from_span)
+                .and_then(|span| {
+                    Self::same_file(spans, span, file_path)
+                        .then(|| ByteRange::from_span(spans, span))
+                        .flatten()
+                })
                 .into_iter()
                 .for_each(|range| self.overlay(range, style.with(SemanticModifier::Declaration)));
             scoped.users.forth(definition).iter().for_each(|term| {
                 Self::entity_span(spans, scoped, (*term).into())
-                    .filter(|span| Self::same_file(span, file_path))
-                    .map(ByteRange::from_span)
+                    .and_then(|span| {
+                        Self::same_file(spans, span, file_path)
+                            .then(|| ByteRange::from_span(spans, span))
+                            .flatten()
+                    })
                     .into_iter()
                     .for_each(|range| self.overlay(range, style));
             });
@@ -260,8 +267,11 @@ impl<'source> SemanticDocument<'source> {
             };
             field.into_iter().for_each(|(field, occurrence)| {
                 Self::entity_span(spans, scoped, term.into())
-                    .filter(|span| Self::same_file(span, file_path))
-                    .map(ByteRange::from_span)
+                    .and_then(|span| {
+                        Self::same_file(spans, span, file_path)
+                            .then(|| ByteRange::from_span(spans, span))
+                            .flatten()
+                    })
                     .into_iter()
                     .for_each(|within| self.overlay_field(within, field, occurrence));
             });
@@ -271,8 +281,11 @@ impl<'source> SemanticDocument<'source> {
                 return;
             };
             Self::entity_span(spans, scoped, pattern.into())
-                .filter(|span| Self::same_file(span, file_path))
-                .map(ByteRange::from_span)
+                .and_then(|span| {
+                    Self::same_file(spans, span, file_path)
+                        .then(|| ByteRange::from_span(spans, span))
+                        .flatten()
+                })
                 .into_iter()
                 .for_each(|within| {
                     self.overlay_field(within, field.0.as_str(), FieldOccurrence::First)
@@ -282,15 +295,15 @@ impl<'source> SemanticDocument<'source> {
     }
 
     fn finish(self) -> Vec<SemanticToken> {
-        let info = FileInfo::new(self.source, None);
+        let map = FileMap::local(self.source, None);
         let source = self.source;
         self.tokens
             .into_iter()
             .flat_map(|(range, style)| {
-                let info = &info;
+                let map = &map;
                 range
                     .line_ranges(source)
-                    .filter_map(move |range| PositionedToken::new(source, info, range, style))
+                    .filter_map(move |range| PositionedToken::new(map, range, style))
             })
             .scan((0_u32, 0_u32), |previous, token| {
                 let delta_line = token.line - previous.0;
@@ -357,9 +370,11 @@ impl<'source> SemanticDocument<'source> {
         scoped.origins.source(&entity).map(|textual| &spans[&textual])
     }
 
-    fn same_file(span: &Span, file_path: &Path) -> bool {
-        span.get_path()
-            .is_some_and(|path| path == file_path || Self::normalize_path(path) == file_path)
+    fn same_file(spans: &SpanArena, span: &Span, file_path: &Path) -> bool {
+        spans.source_map().and_then(|map| map.range(*span)).is_some_and(|(file, _)| {
+            let path = file.path();
+            path == file_path || Self::normalize_path(&path) == file_path
+        })
     }
 
     fn normalize_path(path: &Path) -> PathBuf {
@@ -382,9 +397,9 @@ struct PositionedToken {
 }
 
 impl PositionedToken {
-    fn new(source: &str, info: &FileInfo, range: ByteRange, style: TokenStyle) -> Option<Self> {
-        let start = info.trans_span2_utf16(source, range.start)?;
-        let end = info.trans_span2_utf16(source, range.end)?;
+    fn new(map: &FileMap, range: ByteRange, style: TokenStyle) -> Option<Self> {
+        let start = map.line_col_utf16(range.start)?;
+        let end = map.line_col_utf16(range.end)?;
         if start.line != end.line || start.column >= end.column {
             return None;
         }

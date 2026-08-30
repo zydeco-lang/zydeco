@@ -5,9 +5,9 @@ pub(crate) struct DiagnosticText;
 impl DiagnosticText {
     pub(crate) fn analysis_error(error: &AnalysisError) -> String {
         match error {
-            | AnalysisError::Resolve { error, graph } => {
+            | AnalysisError::Resolve { error, graph, spans } => {
                 let mut output = Vec::new();
-                let _ = error.to_report().write(SourceCaches::graph(graph), &mut output);
+                let _ = error.to_report(spans).write(SourceCaches::graph(graph), &mut output);
                 Self::plain(output)
             }
             | _ => error.to_string(),

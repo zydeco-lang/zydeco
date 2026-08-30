@@ -1,76 +1,174 @@
 use crate::with::With;
-use std::{
-    fmt::Display,
-    // hash::Hash,
-    num::NonZeroU32,
-    path::PathBuf,
-    rc::Rc,
-    sync::Arc,
-};
+use std::{fmt::Display, ops::Range, path::PathBuf, rc::Rc, sync::Arc};
 
-#[derive(Clone, Debug)]
-pub enum LocationCtx {
-    File(FileInfo),
-    Plain,
+/// A byte position in one program's address space.
+///
+/// Positions inside one merged program are globally unique: each file's
+/// contribution is rebased onto a session-assigned base when the source graph
+/// merges, so a position identifies both its file and its offset within it.
+/// Position `0` is reserved for dummy spans; real files start at base `1`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct BytePos(pub u32);
+
+impl BytePos {
+    pub fn to_usize(self) -> usize {
+        self.0 as usize
+    }
 }
 
+/// A byte range in one program's address space. Exactly 8 bytes and `Copy`.
+///
+/// A span carries no file or line information; resolve it through the
+/// [`SourceMap`] that owns the address space it was created in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Span {
+    lo: BytePos,
+    hi: BytePos,
+}
+
+impl Span {
+    pub fn new(l: usize, r: usize) -> Span {
+        debug_assert!(l <= r, "span end precedes its start");
+        Span {
+            lo: BytePos(u32::try_from(l).expect("span offset exceeds u32")),
+            hi: BytePos(u32::try_from(r).expect("span offset exceeds u32")),
+        }
+    }
+    pub fn dummy() -> Span {
+        Span { lo: BytePos(0), hi: BytePos(0) }
+    }
+    pub fn is_dummy(&self) -> bool {
+        self.lo.0 == 0 && self.hi.0 == 0
+    }
+    pub fn lo(&self) -> usize {
+        self.lo.to_usize()
+    }
+    pub fn hi(&self) -> usize {
+        self.hi.to_usize()
+    }
+    pub fn range(&self) -> Range<usize> {
+        self.lo()..self.hi()
+    }
+    /// Shift both endpoints by `base`, moving a file-local span into a merged
+    /// program's address space.
+    pub fn rebase(self, base: BytePos) -> Span {
+        Span { lo: BytePos(self.lo.0 + base.0), hi: BytePos(self.hi.0 + base.0) }
+    }
+    pub fn make<T>(&self, inner: T) -> Sp<T> {
+        Sp { inner, info: *self }
+    }
+    pub fn make_box<T>(&self, inner: T) -> Box<Sp<T>> {
+        Box::new(Sp { inner, info: *self })
+    }
+    pub fn make_ref<'a, T>(&self, inner: &'a T) -> Sp<&'a T> {
+        Sp { inner, info: *self }
+    }
+    pub fn make_rc<T>(&self, inner: T) -> Rc<Sp<T>> {
+        Rc::new(Sp { inner, info: *self })
+    }
+    pub fn make_arc<T>(&self, inner: T) -> Arc<Sp<T>> {
+        Arc::new(Sp { inner, info: *self })
+    }
+}
+
+impl Display for Span {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}-{}", self.lo(), self.hi())
+    }
+}
+
+/// A resolved human-facing position: zero-based line and zero-based
+/// character column within that line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LineCol {
+    pub line: u32,
+    pub column: u32,
+}
+
+impl Display for LineCol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.line + 1, self.column + 1)
+    }
+}
+
+pub type Sp<T> = With<Span, T>;
+
+impl<T: Display> Display for Sp<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let info =
+            if self.info.is_dummy() { "<internal>".to_owned() } else { format!("{}", self.info) };
+        write!(f, "{} ({})", self.inner, info)
+    }
+}
+
+/// One file's contribution to a program's address space.
 #[derive(Clone, Debug)]
-pub struct FileInfo {
-    line_starts: Vec<usize>,
-    text_len: usize,
+pub struct FileMap {
     path: Option<Arc<PathBuf>>,
+    source: Arc<str>,
+    base: BytePos,
+    /// File-relative byte offsets at which each line starts; entry `0` is `0`.
+    line_starts: Vec<u32>,
 }
-impl FileInfo {
-    pub fn new(s: &str, path: Option<Arc<PathBuf>>) -> Self {
+
+impl FileMap {
+    pub fn new(source: impl Into<Arc<str>>, path: Option<Arc<PathBuf>>, base: BytePos) -> Self {
+        let source: Arc<str> = source.into();
         let mut line_starts = vec![0];
-        for (i, c) in s.char_indices() {
+        for (i, c) in source.char_indices() {
             if c == '\n' {
-                line_starts.push(i + 1);
+                line_starts.push(u32::try_from(i + 1).expect("file exceeds u32 offsets"));
             }
         }
-        let text_len = s.len();
-        FileInfo { line_starts, text_len, path }
+        FileMap { path, source, base, line_starts }
     }
-    pub fn trans_span2(&self, offset: usize) -> Cursor2 {
-        if offset > self.text_len {
-            panic!("Span: offset {} is not in {:?}", offset, self)
-        }
-        let idx = {
-            let mut l = 0;
-            let mut r = self.line_starts.len();
-            while l < r {
-                let mid = l + (r - l) / 2;
-                if self.line_starts[mid] > offset {
-                    r = mid;
-                } else {
-                    l = mid + 1;
-                }
-            }
-            l
-        };
-        let line = idx.saturating_sub(1);
-        Cursor2 { line, column: offset - self.line_starts[line] }
+    /// A file-local map at base `0`, for contexts that never merge files.
+    pub fn local(source: impl Into<Arc<str>>, path: Option<Arc<PathBuf>>) -> Self {
+        Self::new(source, path, BytePos(0))
     }
-    pub fn trans_span1(&self, source: &str, cursor2: Cursor2) -> Option<Cursor1> {
-        let Cursor2 { line, column } = cursor2;
-        let line_start = *self.line_starts.get(line)?;
-        if line_start > source.len() {
+    pub fn path(&self) -> PathBuf {
+        self.path.as_ref().map(|p| p.to_path_buf()).unwrap_or_default()
+    }
+    pub fn base(&self) -> BytePos {
+        self.base
+    }
+    pub fn len(&self) -> usize {
+        self.source.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.source.is_empty()
+    }
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+    /// Resolve a file-local byte offset into a line and character column.
+    ///
+    /// Offsets past the end of the file clamp to the final position.
+    pub fn line_col(&self, offset: usize) -> LineCol {
+        let offset = offset.min(self.source.len());
+        let line = self.line_index(offset);
+        let line_start = self.line_starts[line] as usize;
+        let column = self.source[line_start..offset].chars().count();
+        LineCol { line: line as u32, column: column as u32 }
+    }
+    /// Resolve a file-local byte offset into a line and UTF-16 column.
+    pub fn line_col_utf16(&self, offset: usize) -> Option<LineCol> {
+        if offset > self.source.len() || !self.source.is_char_boundary(offset) {
             return None;
         }
-        let line_end = self.line_starts.get(line + 1).copied().unwrap_or(self.text_len);
-        let line_text = &source[line_start..line_end];
-        let byte_count = line_text.chars().take(column).map(|c| c.len_utf8()).sum::<usize>();
-        let offset = line_start + byte_count;
-        (offset <= line_end).then_some(offset)
+        let line = self.line_index(offset);
+        let line_start = self.line_starts[line] as usize;
+        let column = self.source.get(line_start..offset)?.encode_utf16().count();
+        Some(LineCol { line: line as u32, column: column as u32 })
     }
-    pub fn trans_span1_utf16(&self, source: &str, cursor2: Cursor2) -> Option<Cursor1> {
-        let Cursor2 { line, column } = cursor2;
-        let line_start = *self.line_starts.get(line)?;
-        if line_start > source.len() {
-            return None;
-        }
-        let line_end = self.line_starts.get(line + 1).copied().unwrap_or(self.text_len);
-        let line = source.get(line_start..line_end)?;
+    /// Resolve a line and UTF-16 column into a file-local byte offset.
+    pub fn offset_utf16(&self, pos: LineCol) -> Option<usize> {
+        let LineCol { line, column } = pos;
+        let line_start = *self.line_starts.get(line as usize)? as usize;
+        let line_end =
+            self.line_starts.get(line as usize + 1).copied().unwrap_or(self.source.len() as u32)
+                as usize;
+        let line = self.source.get(line_start..line_end)?;
         let line_text = line
             .strip_suffix('\n')
             .map(|line| line.strip_suffix('\r').unwrap_or(line))
@@ -80,260 +178,103 @@ impl FileInfo {
                 *utf16_count += ch.len_utf16();
                 Some((byte + ch.len_utf8(), *utf16_count))
             }))
-            .find_map(|(byte, utf16_count)| (utf16_count == column).then_some(line_start + byte))
+            .find_map(|(byte, utf16_count)| {
+                (utf16_count == column as usize).then_some(line_start + byte)
+            })
     }
-    pub fn trans_span2_utf16(&self, source: &str, offset: Cursor1) -> Option<Cursor2> {
-        if offset > self.text_len || !source.is_char_boundary(offset) {
-            return None;
-        }
-        let cursor = self.trans_span2(offset);
-        let line_start = *self.line_starts.get(cursor.line)?;
-        let column = source.get(line_start..offset)?.encode_utf16().count();
-        Some(Cursor2 { line: cursor.line, column })
-    }
-    pub fn path(&self) -> PathBuf {
-        self.path.as_ref().map(|p| p.to_path_buf()).unwrap_or_default()
-    }
-}
-
-#[derive(Clone, Default, derive_more::Debug, PartialEq, Eq)]
-#[debug("{self}")]
-pub struct Span {
-    span1: (Cursor1, Cursor1),
-    span2: Option<CompactSpan2>,
-    path: Option<Arc<PathBuf>>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct CompactSpan2 {
-    start: CompactCursor2,
-    end: CompactCursor2,
-}
-
-impl CompactSpan2 {
-    fn with_cursors(start: Cursor2, end: Cursor2) -> Option<Self> {
-        Some(Self {
-            start: CompactCursor2::with_cursor(start)?,
-            end: CompactCursor2::with_cursor(end)?,
-        })
-    }
-
-    fn cursors(self) -> (Cursor2, Cursor2) {
-        (self.start.cursor(), self.end.cursor())
-    }
-}
-
-/// A source position packed into one nonzero word.
-///
-/// Source files need substantially more line range than column range. Eighteen
-/// line bits cover 262,143 one-based lines, while fourteen column bits cover
-/// 16,384 byte columns. Positions outside those bounds retain their byte
-/// offsets and use the existing byte-offset display fallback.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct CompactCursor2(NonZeroU32);
-
-impl CompactCursor2 {
-    const COLUMN_BITS: u32 = 14;
-    const COLUMN_MASK: u32 = (1 << Self::COLUMN_BITS) - 1;
-    const LINE_PLUS_ONE_MAX: u32 = (1 << (u32::BITS - Self::COLUMN_BITS)) - 1;
-
-    fn with_cursor(Cursor2 { line, column }: Cursor2) -> Option<Self> {
-        let line_plus_one = u32::try_from(line).ok()?.checked_add(1)?;
-        (line_plus_one <= Self::LINE_PLUS_ONE_MAX).then_some(())?;
-        let column = u32::try_from(column).ok()?;
-        (column <= Self::COLUMN_MASK).then_some(())?;
-        NonZeroU32::new((line_plus_one << Self::COLUMN_BITS) | column).map(Self)
-    }
-
-    fn cursor(self) -> Cursor2 {
-        let packed = self.0.get();
-        Cursor2 {
-            line: (packed >> Self::COLUMN_BITS) as usize - 1,
-            column: (packed & Self::COLUMN_MASK) as usize,
-        }
-    }
-}
-
-impl Span {
-    pub fn new(l: usize, r: usize) -> Span {
-        Span { span1: (l, r), span2: None, path: None }
-    }
-    pub fn dummy() -> Span {
-        Span::new(0, 0)
-    }
-    pub fn is_dummy(&self) -> bool {
-        self.span1 == (0, 0) && self.span2.is_none() && self.path.is_none()
-    }
-    pub fn make<T>(&self, inner: T) -> Sp<T> {
-        Sp { inner, info: self.clone() }
-    }
-    pub fn make_box<T>(&self, inner: T) -> Box<Sp<T>> {
-        Box::new(Sp { inner, info: self.clone() })
-    }
-    pub fn make_ref<'a, T>(&self, inner: &'a T) -> Sp<&'a T> {
-        Sp { inner, info: self.clone() }
-    }
-    pub fn make_rc<T>(&self, inner: T) -> Rc<Sp<T>> {
-        Rc::new(Sp { inner, info: self.clone() })
-    }
-    pub fn make_arc<T>(&self, inner: T) -> Arc<Sp<T>> {
-        Arc::new(Sp { inner, info: self.clone() })
-    }
-    fn set_info(&mut self, r#gen: &FileInfo) {
-        let (start, end) = self.span1;
-        self.span2 = CompactSpan2::with_cursors(r#gen.trans_span2(start), r#gen.trans_span2(end));
-        self.path = r#gen.path.clone();
-    }
-    pub fn get_cursor1(&self) -> (Cursor1, Cursor1) {
-        self.span1
-    }
-    pub fn get_path(&self) -> Option<&PathBuf> {
-        self.path.as_deref()
-    }
-    /// Convert a span to an Ariadne-compatible span identifier.
-    ///
-    /// Returns `(file_path, byte_range)` tuple suitable for use with Ariadne's `Report::build()`.
-    /// For dummy spans (those without a file path), returns `(PathDisplay::from(PathBuf::from("<internal>")), 0..0)`.
-    pub fn to_ariadne_span(&self) -> (PathDisplay, std::ops::Range<usize>) {
-        let (start, end) = self.get_cursor1();
-        let path = self
-            .get_path()
-            .map(|p| PathDisplay::from(p))
-            .unwrap_or_else(|| PathDisplay::from(PathBuf::from("<internal>")));
-        (path, start..end)
-    }
-    /// Convert a span to an Ariadne-compatible span identifier, returning an option.
-    ///
-    /// Returns `None` for dummy spans without a file path.
-    pub fn to_ariadne_span_opt(&self) -> Option<(PathDisplay, std::ops::Range<usize>)> {
-        let (start, end) = self.get_cursor1();
-        let path = self.get_path()?;
-        Some((PathDisplay::from(path), start..end))
-    }
-    pub fn under_loc_ctx(mut self, loc: &LocationCtx) -> Self {
-        match loc {
-            | LocationCtx::File(info) => {
-                self.set_info(info);
-                self
-            }
-            | LocationCtx::Plain => self,
-        }
-    }
-}
-
-impl Display for Span {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let (l, r) = self.span1;
-        if let Some(path) = &self.path {
-            write!(f, "{}", path.display())?;
-            if let Some((l2, r2)) = self.span2.map(CompactSpan2::cursors) {
-                write!(f, ":{l2} - {r2}",)?;
+    /// Index of the line containing a file-local byte offset.
+    fn line_index(&self, offset: usize) -> usize {
+        let mut l = 0;
+        let mut r = self.line_starts.len();
+        while l < r {
+            let mid = l + (r - l) / 2;
+            if self.line_starts[mid] as usize > offset {
+                r = mid;
             } else {
-                write!(f, ":{l}-{r}",)?;
+                l = mid + 1;
             }
-        } else {
-            write!(f, "{l}-{r}")?;
         }
-        Ok(())
+        l.saturating_sub(1)
     }
 }
 
-pub type Cursor1 = usize;
-
-#[derive(Debug, Clone, derive_more::Display, PartialEq, Eq)]
-#[display("{}:{}", line + 1, column + 1)]
-pub struct Cursor2 {
-    pub line: usize,
-    pub column: usize,
+/// One file registered into a [`SourceMap`].
+#[derive(Clone, Debug)]
+pub struct FileSource {
+    pub path: Option<Arc<PathBuf>>,
+    pub source: Arc<str>,
 }
-pub type Sp<T> = With<Span, T>;
 
-// #[derive(Default, Clone, Debug)]
-// pub struct Sp<T> {
-//     pub inner: T,
-//     pub info: Span,
-// }
+/// The address space of one merged program: every file it was built from,
+/// each rebased onto its own global offset.
+///
+/// Spans resolve lazily through this map; constructing a span never consults
+/// line tables or file paths.
+#[derive(Clone, Debug, Default)]
+pub struct SourceMap {
+    /// Sorted by base; the first file starts at base `1`.
+    files: Vec<FileMap>,
+}
 
-// impl<T: Clone> Sp<T> {
-//     #[inline]
-//     pub fn inner_clone(&self) -> T {
-//         self.inner.clone()
-//     }
-// }
+impl SourceMap {
+    /// Build a map from the files of one program, assigning each a base
+    /// directly after the previous file's text. Bases start at `1` so that
+    /// position `0` remains reserved for dummy spans.
+    pub fn from_sources(sources: impl IntoIterator<Item = FileSource>) -> Self {
+        let mut base = 1u32;
+        let files = sources
+            .into_iter()
+            .map(|FileSource { path, source }| {
+                let file = FileMap::new(source, path, BytePos(base));
+                base = base
+                    .checked_add(u32::try_from(file.len()).expect("file exceeds u32"))
+                    .expect("program address space exceeds u32");
+                file
+            })
+            .collect();
+        SourceMap { files }
+    }
+    /// The file containing a global byte offset, if it falls in a real file.
+    pub fn file_of(&self, offset: usize) -> Option<&FileMap> {
+        let offset = u32::try_from(offset).ok()?;
+        let index = self.files.partition_point(|file| file.base.0 <= offset);
+        index.checked_sub(1).and_then(|index| self.files.get(index))
+    }
+    /// Resolve a span into its file and a file-local byte range.
+    pub fn range(&self, span: Span) -> Option<(&FileMap, Range<usize>)> {
+        let file = self.file_of(span.lo())?;
+        let base = file.base().to_usize();
+        Some((file, span.lo() - base..span.hi() - base))
+    }
+    /// Resolve a span into an Ariadne-compatible `(path, byte_range)` pair.
+    pub fn ariadne_range(&self, span: Span) -> Option<(PathDisplay, Range<usize>)> {
+        let (file, range) = self.range(span)?;
+        Some((PathDisplay::from(file.path()), range))
+    }
+    /// Render a span as `path:line:col - line:col` for humans.
+    pub fn display(&self, span: Span) -> impl Display + '_ {
+        SpanDisplay { map: self, span }
+    }
+}
 
-// impl<T> Sp<T> {
-//     #[inline]
-//     pub fn inner_ref(&self) -> &T {
-//         &self.inner
-//     }
-//     #[inline]
-//     pub fn inner(self) -> T {
-//         self.inner
-//     }
+/// The Ariadne span used when no source map can resolve a span.
+pub fn internal_ariadne_span() -> (PathDisplay, Range<usize>) {
+    (PathDisplay::from(PathBuf::from("<internal>")), 0..0)
+}
 
-//     pub fn map_rc<F, U>(&self, f: F) -> Rc<Sp<U>>
-//     where
-//         F: FnOnce(&T) -> U,
-//     {
-//         Rc::new(self.info.make(f(&self.inner)))
-//     }
-//     pub fn map_ref<F, U>(&self, f: F) -> Sp<U>
-//     where
-//         F: FnOnce(&T) -> U,
-//     {
-//         self.info.to_owned().make(f(&self.inner))
-//     }
-//     pub fn map<F, U>(self, f: F) -> Sp<U>
-//     where
-//         F: FnOnce(T) -> U,
-//     {
-//         self.info.to_owned().make(f(self.inner))
-//     }
-//     pub fn try_map<F, U, E>(self, f: F) -> Result<Sp<U>, E>
-//     where
-//         F: FnOnce(T) -> Result<U, E>,
-//     {
-//         Ok(self.info.make(f(self.inner)?))
-//     }
-//     pub fn try_map_rc<F, U, E>(self, f: F) -> Result<Rc<Sp<U>>, E>
-//     where
-//         F: FnOnce(T) -> Result<U, E>,
-//     {
-//         Ok(Rc::new(self.info.make(f(self.inner)?)))
-//     }
-//     pub fn try_map_ref<F, U, E>(&self, f: F) -> Result<Sp<U>, E>
-//     where
-//         F: FnOnce(&T) -> Result<U, E>,
-//     {
-//         Ok(self.info.make(f(&self.inner)?))
-//     }
-//     pub fn try_map_rc_ref<F, U, E>(&self, f: F) -> Result<Rc<Sp<U>>, E>
-//     where
-//         F: FnOnce(&T) -> Result<U, E>,
-//     {
-//         Ok(Rc::new(self.info.make(f(&self.inner)?)))
-//     }
-// }
+struct SpanDisplay<'a> {
+    map: &'a SourceMap,
+    span: Span,
+}
 
-// impl<T: PartialEq> PartialEq for Sp<T> {
-//     fn eq(&self, other: &Self) -> bool {
-//         self.inner.eq(&other.inner)
-//     }
-// }
-
-// impl<T: Eq> Eq for Sp<T> {}
-
-// impl<T: Hash> Hash for Sp<T> {
-//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-//         self.inner.hash(state);
-//     }
-// }
-
-impl<T: Display> Display for Sp<T> {
+impl Display for SpanDisplay<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let info =
-            if self.info.is_dummy() { format!("<internal>") } else { format!("{}", self.info) };
-        write!(f, "{} ({})", self.inner, info)
+        match self.map.range(self.span) {
+            | Some((file, range)) => match (file.line_col(range.start), file.line_col(range.end)) {
+                | (start, end) => write!(f, "{}:{} - {}", file.path().display(), start, end),
+            },
+            | None => write!(f, "{}", self.span),
+        }
     }
 }
 
@@ -359,75 +300,67 @@ impl PathDisplay {
 
 #[cfg(test)]
 mod tests {
-    use super::{CompactCursor2, Cursor2, FileInfo, LocationCtx, Span};
+    use super::{BytePos, FileMap, FileSource, LineCol, SourceMap, Span};
     use std::{mem::size_of, path::PathBuf, sync::Arc};
 
     #[test]
     fn spans_have_a_compact_layout() {
-        #[cfg(target_pointer_width = "64")]
-        assert_eq!(size_of::<Span>(), 32);
-        assert_eq!(size_of::<CompactCursor2>(), 4);
-        assert_eq!(size_of::<Option<CompactCursor2>>(), 4);
+        assert_eq!(size_of::<Span>(), 8);
+        assert_eq!(size_of::<BytePos>(), 4);
     }
 
     #[test]
-    fn compact_cursors_reject_unrepresentable_positions() {
-        let largest = Cursor2 {
-            line: CompactCursor2::LINE_PLUS_ONE_MAX as usize - 1,
-            column: CompactCursor2::COLUMN_MASK as usize,
-        };
-        assert_eq!(
-            CompactCursor2::with_cursor(largest.clone()).map(|cursor| cursor.cursor()),
-            Some(largest)
-        );
-        assert!(
-            CompactCursor2::with_cursor(Cursor2 {
-                line: CompactCursor2::LINE_PLUS_ONE_MAX as usize,
-                column: 0,
-            })
-            .is_none()
-        );
-        assert!(
-            CompactCursor2::with_cursor(Cursor2 {
-                line: 0,
-                column: CompactCursor2::COLUMN_MASK as usize + 1,
-            })
-            .is_none()
-        );
-        assert!(CompactCursor2::with_cursor(Cursor2 { line: usize::MAX, column: 0 }).is_none());
-        assert!(CompactCursor2::with_cursor(Cursor2 { line: 0, column: usize::MAX }).is_none());
+    fn dummy_spans_are_unambiguous() {
+        assert!(Span::dummy().is_dummy());
+        assert!(!Span::new(1, 1).is_dummy());
+        let map = SourceMap::from_sources([FileSource { path: None, source: "a".into() }]);
+        // A real span in the merged space starts at base 1 and is never dummy.
+        let span = Span::new(0, 1).rebase(BytePos(1));
+        assert!(!span.is_dummy());
+        assert_eq!(map.range(span).map(|(_, range)| range), Some(0..1));
     }
 
     #[test]
-    fn spans_retain_file_locations() {
-        let source = "alpha\nbeta\n";
-        let path = Arc::new(PathBuf::from("example.zy"));
-        let info = FileInfo::new(source, Some(path));
-        let span = Span::new(6, 10).under_loc_ctx(&LocationCtx::File(info));
+    fn rebased_spans_resolve_through_the_source_map() {
+        let map = SourceMap::from_sources([
+            FileSource {
+                path: Some(Arc::new(PathBuf::from("a.zy"))),
+                source: "alpha\nbeta\n".into(),
+            },
+            FileSource { path: Some(Arc::new(PathBuf::from("b.zy"))), source: "gamma\n".into() },
+        ]);
+        let second_base = BytePos(1 + "alpha\nbeta\n".len() as u32);
+        let span = Span::new(1, 5).rebase(second_base);
+        let (file, range) = map.range(span).expect("span must fall in b.zy");
+        assert_eq!(file.path(), PathBuf::from("b.zy"));
+        assert_eq!(range, 1..5);
+        assert_eq!(map.display(span).to_string(), "b.zy:1:2 - 1:6");
+        assert_eq!(file.line_col(0).line, 0);
+    }
 
-        assert_eq!(span.to_string(), "example.zy:2:1 - 2:5");
-        assert_eq!(span.get_cursor1(), (6, 10));
-        assert_eq!(span.get_path(), Some(&PathBuf::from("example.zy")));
+    #[test]
+    fn columns_count_characters_not_bytes() {
+        let file = FileMap::local("aλmb\nx", None);
+        assert_eq!(file.line_col(4), LineCol { line: 0, column: 3 });
+        assert_eq!(file.line_col(6), LineCol { line: 1, column: 0 });
     }
 
     #[test]
     fn utf16_positions_round_trip_through_byte_offsets() {
-        let source = "a😀b\nλ";
-        let info = FileInfo::new(source, None);
+        let file = FileMap::local("a😀b\nλ", None);
         let positions = [
-            Cursor2 { line: 0, column: 0 },
-            Cursor2 { line: 0, column: 1 },
-            Cursor2 { line: 0, column: 3 },
-            Cursor2 { line: 0, column: 4 },
-            Cursor2 { line: 1, column: 0 },
-            Cursor2 { line: 1, column: 1 },
+            LineCol { line: 0, column: 0 },
+            LineCol { line: 0, column: 1 },
+            LineCol { line: 0, column: 3 },
+            LineCol { line: 0, column: 4 },
+            LineCol { line: 1, column: 0 },
+            LineCol { line: 1, column: 1 },
         ];
-
         positions.into_iter().for_each(|position| {
-            let offset = info.trans_span1_utf16(source, position.clone()).unwrap();
-            assert_eq!(info.trans_span2_utf16(source, offset), Some(position));
+            let offset = file.offset_utf16(position).unwrap();
+            assert_eq!(file.line_col_utf16(offset), Some(position));
         });
-        assert_eq!(info.trans_span1_utf16(source, Cursor2 { line: 0, column: 2 }), None,);
-        assert_eq!(info.trans_span1_utf16(source, Cursor2 { line: 0, column: 5 }), None,);
+        assert_eq!(file.offset_utf16(LineCol { line: 0, column: 2 }), None);
+        assert_eq!(file.offset_utf16(LineCol { line: 0, column: 5 }), None);
     }
 }

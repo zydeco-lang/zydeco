@@ -5,7 +5,6 @@ use crate::textual::{
 // LALRPOP grammar for the textual surface syntax.
 grammar<'input, 'arena>(
     input: &'input str,
-    loc: &'input LocationCtx,
     parser: &'arena mut Parser,
 );
 
@@ -75,9 +74,9 @@ extern {
 
 //* -------------------------------- Utilities ------------------------------- */
 
-// Attach a span to a parsed node using the current location context.
+// Attach a span to a parsed node.
 Sp<T>: Sp<T> = <l:@L> <inner:T> <r:@R> => Sp {
-    info: Span::new(l, r).under_loc_ctx(loc), inner,
+    info: Span::new(l, r), inner,
 };
 
 // Parse a delimited sequence with optional trailing item.
@@ -186,7 +185,7 @@ PatternAnn: Pattern = {
     #[precedence(level="2")] #[assoc(side="right")]
     "=" <l:@L> <field:Sp<FieldName>> <ty:(":" <TermId>)?> <r:@R> => {
         let ty = ty.map(|ty| Sp {
-            info: Span::new(l, r).under_loc_ctx(loc),
+            info: Span::new(l, r),
             inner: ty,
         });
         parser.pun_pattern(field, ty)
@@ -196,7 +195,7 @@ PatternAnn: Pattern = {
     #[precedence(level="2")] #[assoc(side="right")]
     "/" <l:@L> <field:Sp<FieldName>> <ty:(":" <TermId>)?> <r:@R> => {
         let ty = ty.map(|ty| Sp {
-            info: Span::new(l, r).under_loc_ctx(loc),
+            info: Span::new(l, r),
             inner: ty,
         });
         parser.pun_projection_pattern(field, ty)
@@ -251,7 +250,7 @@ CoPatternAtom: CoPattern = {
 ExistentialParameter: ExistentialParameter = {
     <start:@L> <annotations:MetaAnnotation*> "(" <binder:PatternAnnId> "as" <definition:TermId>
         <classifier:(":" <TermId>)?> <r:@R> ")" => {
-        let binder = parser.manifest_pattern(binder, definition, classifier, r, loc);
+        let binder = parser.manifest_pattern(binder, definition, classifier, r);
         parser.existential_prefix(binder, start);
         ExistentialParameter { annotations, binder }
     },
@@ -327,7 +326,7 @@ TermAnn: Term = {
     #[precedence(level="2")] #[assoc(side="right")]
     "=" <l:@L> <field:Sp<FieldName>> <ty:(":" <TermId>)?> <r:@R> => {
         let ty = ty.map(|ty| Sp {
-            info: Span::new(l, r).under_loc_ctx(loc),
+            info: Span::new(l, r),
             inner: ty,
         });
         parser.pun_term(field, ty)
@@ -444,7 +443,7 @@ Term: Term = {
     <MetaT<TermGen<Term>>> => <>.into(),
     // meta annotation sugar: `@(meta)` is `@[meta] _` with an implicit hole payload
     <start:@L> "@" "(" <meta:Meta> ")" <end:@R> => {
-        let span = Span::new(start, end).under_loc_ctx(loc);
+        let span = Span::new(start, end);
         let payload = parser.term(span.make(Term::Hole(Hole)));
         MetaT(meta, payload).into()
     },

@@ -1,10 +1,6 @@
 use tower_lsp::lsp_types::{Position, Range, TextEdit};
-use zydeco_surface::textual::{
-    Lexer, SourceUnitParser,
-    fmt::PrettyFormatter,
-    syntax::{LocationCtx, Parser},
-};
-use zydeco_utils::span::FileInfo;
+use zydeco_surface::textual::{Lexer, SourceUnitParser, fmt::PrettyFormatter, syntax::Parser};
+use zydeco_utils::span::FileMap;
 
 /// One complete outcome of a whole-document formatting request.
 #[derive(Clone, Debug, PartialEq)]
@@ -39,12 +35,7 @@ pub(crate) struct DocumentFormatter;
 impl DocumentFormatter {
     pub(crate) fn format(&self, source: &str) -> FormattingOutcome {
         let mut parser = Parser::new();
-        let unit = match SourceUnitParser::new().parse(
-            source,
-            &LocationCtx::Plain,
-            &mut parser,
-            Lexer::new(source),
-        ) {
+        let unit = match SourceUnitParser::new().parse(source, &mut parser, Lexer::new(source)) {
             | Ok(unit) => unit,
             | Err(_) => return FormattingOutcome::Skipped(FormattingSkip::InvalidSyntax),
         };
@@ -64,7 +55,7 @@ struct WholeDocumentEdit;
 
 impl WholeDocumentEdit {
     fn replacing(source: &str, new_text: String) -> Option<TextEdit> {
-        let cursor = FileInfo::new(source, None).trans_span2_utf16(source, source.len())?;
+        let cursor = FileMap::local(source, None).line_col_utf16(source.len())?;
         let line = u32::try_from(cursor.line).ok()?;
         let character = u32::try_from(cursor.column).ok()?;
         Some(TextEdit {

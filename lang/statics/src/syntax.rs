@@ -1,5 +1,5 @@
 pub use zydeco_syntax::*;
-pub use zydeco_utils::span::{LocationCtx, Sp, Span};
+pub use zydeco_utils::span::{Sp, Span};
 
 use crate::surface_syntax as su;
 use derive_more::{From, IntoIterator};

@@ -403,10 +403,18 @@ impl SourceFixture {
     }
 }
 
-fn resolve_program(
-    program: TextualProgram,
-) -> Result<SourceScoped, Box<zydeco_surface::scoped::ResolveError>> {
+fn resolve_program(program: TextualProgram) -> Result<SourceScoped, crate::source::ResolveFailure> {
     program.desugar().unwrap().resolve()
+}
+
+/// The file a merged-program span belongs to, via the arena's source map.
+fn span_file(
+    spans: &zydeco_surface::textual::syntax::SpanArena, span: &zydeco_utils::span::Span,
+) -> Option<std::ffi::OsString> {
+    spans
+        .source_map()
+        .and_then(|map| map.range(*span))
+        .and_then(|(file, _)| file.path().file_name().map(|name| name.to_owned()))
 }
 
 fn checked_trivial_computation() -> SourceChecked {
@@ -726,7 +734,7 @@ fn source_graph_rejects_cycles_with_every_import_site() {
         names,
         [("first.zy".into(), "second.zy".into()), ("second.zy".into(), "first.zy".into()),]
     );
-    assert!(cycle.steps.iter().all(|step| step.span.get_path().is_some()));
+    assert!(cycle.steps.iter().all(|step| !step.span.is_dummy()));
 }
 
 #[test]
@@ -740,10 +748,7 @@ fn source_graph_rejects_a_self_import_at_its_site() {
     let [step] = cycle.steps.as_slice() else { panic!("expected one self-import step") };
 
     assert_eq!(step.dependent, step.dependency);
-    assert_eq!(
-        step.span.get_path().and_then(|path| path.file_name()),
-        Some(std::ffi::OsStr::new("main.zy"))
-    );
+    assert_eq!(step.dependent.file_name(), Some(std::ffi::OsStr::new("main.zy")));
 }
 
 #[test]
@@ -774,10 +779,6 @@ fn source_graph_reports_a_missing_import_at_its_source_site() {
 
     assert_eq!(importer.file_name().unwrap(), "main.zy");
     assert_eq!(requested.file_name().unwrap(), "missing.zy");
-    assert_eq!(
-        span.get_path().and_then(|path| path.file_name()),
-        Some(std::ffi::OsStr::new("main.zy"))
-    );
 }
 
 #[test]
@@ -939,12 +940,12 @@ fn program_assembly_retains_importer_and_provider_spans() {
     };
 
     assert_eq!(
-        program.spans[&boundary.into()].get_path().and_then(|path| path.file_name()),
-        Some(std::ffi::OsStr::new("main.zy"))
+        span_file(&program.spans, &program.spans[&boundary.into()]),
+        Some(std::ffi::OsString::from("main.zy"))
     );
     assert_eq!(
-        program.spans[&provider.into()].get_path().and_then(|path| path.file_name()),
-        Some(std::ffi::OsStr::new("library.zy"))
+        span_file(&program.spans, &program.spans[&provider.into()]),
+        Some(std::ffi::OsString::from("library.zy"))
     );
 }
 
@@ -968,8 +969,8 @@ fn program_assembly_expands_nested_imports_recursively() {
 
     assert!(matches!(program.arena.terms[&leaf], Term::Lit(_)));
     assert_eq!(
-        program.spans[&leaf.into()].get_path().and_then(|path| path.file_name()),
-        Some(std::ffi::OsStr::new("leaf.zy"))
+        span_file(&program.spans, &program.spans[&leaf.into()]),
+        Some(std::ffi::OsString::from("leaf.zy"))
     );
 }
 
@@ -980,18 +981,15 @@ fn imported_free_names_do_not_capture_importer_bindings() {
     let root = fixture.write("main.zy", r#"let value = _ in @[import("library.zy")] _"#);
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
-    let Err(error) = resolve_program(program) else {
+    let Err(failure) = resolve_program(program) else {
         panic!("expected name resolution to reject caller capture")
     };
-    let zydeco_surface::scoped::ResolveError::UnboundVar(name) = error.as_ref() else {
-        panic!("expected an unbound imported name, got {error}")
+    let zydeco_surface::scoped::ResolveError::UnboundVar(name) = failure.error.as_ref() else {
+        panic!("expected an unbound imported name, got {}", failure.error)
     };
 
     assert_eq!(name.inner.0, "value");
-    assert_eq!(
-        name.info.get_path().and_then(|path| path.file_name()),
-        Some(std::ffi::OsStr::new("library.zy"))
-    );
+    assert_eq!(span_file(&failure.spans, &name.info), Some(std::ffi::OsString::from("library.zy")));
 }
 
 #[test]
@@ -1001,17 +999,14 @@ fn imported_mobile_bindings_do_not_move_into_an_importer_block() {
     let root = fixture.write("main.zy", r#"begin @[import("library.zy")] _ end"#);
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
-    let Err(error) = resolve_program(program) else {
+    let Err(failure) = resolve_program(program) else {
         panic!("expected name resolution to reject cross-file mobility")
     };
-    let zydeco_surface::scoped::ResolveError::UnenclosedThat(span) = error.as_ref() else {
-        panic!("expected an unenclosed imported binding, got {error}")
+    let zydeco_surface::scoped::ResolveError::UnenclosedThat(span) = failure.error.as_ref() else {
+        panic!("expected an unenclosed imported binding, got {}", failure.error)
     };
 
-    assert_eq!(
-        span.get_path().and_then(|path| path.file_name()),
-        Some(std::ffi::OsStr::new("library.zy"))
-    );
+    assert_eq!(span_file(&failure.spans, span), Some(std::ffi::OsString::from("library.zy")));
 }
 
 #[test]
@@ -1202,11 +1197,11 @@ fn an_explicit_signature_import_still_rejects_a_non_type_root() {
 fn the_declaration_free_unbound_fixture_fails_during_resolution() {
     let program =
         SourceGraph::load(repository_source("tests/fail/unbound.zy")).unwrap().parse().unwrap();
-    let Err(error) = resolve_program(program) else {
+    let Err(failure) = resolve_program(program) else {
         panic!("the unbound fixture unexpectedly resolved")
     };
-    let zydeco_surface::scoped::ResolveError::UnboundVar(name) = error.as_ref() else {
-        panic!("expected an unbound variable, got {error}")
+    let zydeco_surface::scoped::ResolveError::UnboundVar(name) = failure.error.as_ref() else {
+        panic!("expected an unbound variable, got {}", failure.error)
     };
 
     assert_eq!(name.inner.0, "x");

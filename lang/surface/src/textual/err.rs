@@ -1,19 +1,19 @@
 use super::lexer::Tok;
 use ariadne::{Label, Report, ReportKind};
 use std::fmt::Display;
-use zydeco_utils::span::{Cursor1, FileInfo, PathDisplay};
+use zydeco_utils::span::{FileMap, PathDisplay};
 
 /// Wrapper around LALRPOP parse errors with file context.
 pub struct ParseError<'input> {
-    pub error: lalrpop_util::ParseError<Cursor1, Tok<'input>, &'input str>,
-    pub file_info: &'input FileInfo,
+    pub error: lalrpop_util::ParseError<usize, Tok<'input>, &'input str>,
+    pub file_map: &'input FileMap,
 }
 
 impl ParseError<'_> {
     /// Create an Ariadne report for this parse error.
     pub fn to_report(&self) -> Report<'static, (PathDisplay, std::ops::Range<usize>)> {
         use lalrpop_util::ParseError::*;
-        let ParseError { error, file_info: info } = self;
+        let ParseError { error, file_map: info } = self;
         let file_path = PathDisplay::from(info.path());
 
         match error {
@@ -25,7 +25,7 @@ impl ParseError<'_> {
             .with_note(error.to_string())
             .finish(),
             | InvalidToken { location } => {
-                let location_str = info.trans_span2(*location);
+                let location_str = info.line_col(*location);
                 Report::build(ReportKind::Error, (file_path.clone(), *location..*location))
                     .with_message("Invalid token")
                     .with_label(
@@ -35,7 +35,7 @@ impl ParseError<'_> {
                     .finish()
             }
             | UnrecognizedEof { location, expected } => {
-                let location_str = info.trans_span2(*location);
+                let location_str = info.line_col(*location);
                 let expected_msg = fmt_expected(expected);
                 let mut report =
                     Report::build(ReportKind::Error, (file_path.clone(), *location..*location))
@@ -51,8 +51,8 @@ impl ParseError<'_> {
                 report.finish()
             }
             | UnrecognizedToken { token: (start, token, end), expected } => {
-                let start_str = info.trans_span2(*start);
-                let end_str = info.trans_span2(*end);
+                let start_str = info.line_col(*start);
+                let end_str = info.line_col(*end);
                 let expected_msg = fmt_expected(expected);
                 let mut report =
                     Report::build(ReportKind::Error, (file_path.clone(), *start..*end))
@@ -69,8 +69,8 @@ impl ParseError<'_> {
                 report.finish()
             }
             | ExtraToken { token: (start, token, end) } => {
-                let start_str = info.trans_span2(*start);
-                let end_str = info.trans_span2(*end);
+                let start_str = info.line_col(*start);
+                let end_str = info.line_col(*end);
                 Report::build(ReportKind::Error, (file_path.clone(), *start..*end))
                     .with_message(format!("Extra token `{}`", token))
                     .with_label(Label::new((file_path.clone(), *start..*end)).with_message(
@@ -85,23 +85,18 @@ impl ParseError<'_> {
 impl Display for ParseError<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use lalrpop_util::ParseError::*;
-        let ParseError { error, file_info: info } = self;
+        let ParseError { error, file_map: info } = self;
         match error {
             | User { error } => write!(f, "{error}"),
             | InvalidToken { location } => {
-                write!(
-                    f,
-                    "Invalid token at {}:{}",
-                    info.path().display(),
-                    info.trans_span2(*location)
-                )
+                write!(f, "Invalid token at {}:{}", info.path().display(), info.line_col(*location))
             }
             | UnrecognizedEof { location, expected } => {
                 write!(
                     f,
                     "Unrecognized EOF found at {}:{}{}",
                     info.path().display(),
-                    info.trans_span2(*location),
+                    info.line_col(*location),
                     fmt_expected(expected)
                 )
             }
@@ -110,8 +105,8 @@ impl Display for ParseError<'_> {
                     f,
                     "Unrecognized token `{token}` found at {}:{} - {}{}",
                     info.path().display(),
-                    info.trans_span2(*start),
-                    info.trans_span2(*end),
+                    info.line_col(*start),
+                    info.line_col(*end),
                     fmt_expected(expected)
                 )
             }
@@ -120,8 +115,8 @@ impl Display for ParseError<'_> {
                     f,
                     "Extra token `{token}` found at {}:{} - {}",
                     info.path().display(),
-                    info.trans_span2(*start),
-                    info.trans_span2(*end),
+                    info.line_col(*start),
+                    info.line_col(*end),
                 )
             }
         }

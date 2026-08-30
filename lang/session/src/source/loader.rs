@@ -10,10 +10,7 @@ use std::{
 use zydeco_surface::textual::{
     ImportSite, ImportTarget, Lexer, ParseError, SourceUnitParser, syntax as t,
 };
-use zydeco_utils::{
-    prelude::ArenaDense,
-    span::{FileInfo, LocationCtx},
-};
+use zydeco_utils::{prelude::ArenaDense, span::FileMap};
 
 pub(crate) trait SourceProvider {
     fn load(&mut self, path: &Path) -> Result<Arc<SourceTemplate>, SourceLoadError>;
@@ -32,14 +29,13 @@ pub(crate) struct SourceGraphLoader<Provider> {
 
 impl SourceTemplate {
     pub(crate) fn parse(path: PathBuf, source: String) -> Result<Self, SourceParseError> {
-        let info = FileInfo::new(&source, Some(Arc::new(path.clone())));
-        let location = LocationCtx::File(info.clone());
+        let file = FileMap::local(source.as_str(), Some(Arc::new(path.clone())));
         let mut parser = t::Parser::new();
         let unit = SourceUnitParser::new()
-            .parse(&source, &location, &mut parser, Lexer::new(&source))
+            .parse(&source, &mut parser, Lexer::new(&source))
             .map_err(|error| SourceParseError::Parse {
                 path: path.clone(),
-                message: ParseError { error, file_info: &info }.to_string(),
+                message: ParseError { error, file_map: &file }.to_string(),
             })?;
         let documentation = unit.documentation(&parser.arena, &parser.spans);
         let warnings =
@@ -60,6 +56,7 @@ impl SourceTemplate {
         Ok(Self {
             path,
             source,
+            file,
             spans,
             arena,
             unit,

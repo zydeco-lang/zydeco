@@ -209,7 +209,7 @@ impl SourceUnit {
                 | _ => None,
             })
             .collect::<Vec<_>>();
-        sites.sort_by_key(|site| site.directive.span.get_cursor1());
+        sites.sort_by_key(|site| site.directive.span.lo());
         sites
     }
 
@@ -260,7 +260,7 @@ impl SourceUnit {
                 | _ => None,
             })
             .collect::<Result<Vec<_>, _>>()?;
-        literals.sort_by_key(|site| site.directive.span.get_cursor1());
+        literals.sort_by_key(|site| site.directive.span.lo());
         Ok(literals)
     }
 
@@ -282,7 +282,7 @@ impl SourceUnit {
                 | _ => None,
             })
             .collect::<Result<Vec<_>, _>>()?;
-        imports.sort_by_key(|site| site.directive.span.get_cursor1());
+        imports.sort_by_key(|site| site.directive.span.lo());
         Ok(imports)
     }
 
@@ -317,7 +317,7 @@ impl SourceUnit {
             })
             .collect::<Result<Vec<_>, _>>()?;
         let mut builtins = term_sites.into_iter().chain(parameter_sites).collect::<Vec<_>>();
-        builtins.sort_by_key(|site| site.directive.span.get_cursor1());
+        builtins.sort_by_key(|site| site.directive.span.lo());
         Ok(builtins)
     }
 
@@ -336,7 +336,7 @@ impl SourceUnit {
                 | _ => None,
             })
             .collect::<Result<Vec<_>, _>>()?;
-        intrinsics.sort_by_key(|site| site.directive.span.get_cursor1());
+        intrinsics.sort_by_key(|site| site.directive.span.lo());
         Ok(intrinsics)
     }
 }

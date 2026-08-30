@@ -37,11 +37,23 @@ impl TextualProgram {
     }
 }
 
+/// A resolution failure together with the merged program's span arena, so
+/// diagnostics can still resolve the error's spans after the failure.
+#[derive(Debug)]
+pub(crate) struct ResolveFailure {
+    pub error: Box<ResolveError>,
+    pub spans: t::SpanArena,
+}
+
 impl BitterProgram {
-    pub(crate) fn resolve(self) -> Result<ScopedProgram, Box<ResolveError>> {
+    pub(crate) fn resolve(self) -> Result<ScopedProgram, ResolveFailure> {
         let Self { spans, arena, prim, root } = self;
-        let ResolveSourceOut { prim, arena, root } =
-            Resolver::new(&spans, arena, prim).run_source(root)?;
-        Ok(ScopedProgram { spans, arena, prim, root })
+        let resolved = Resolver::new(&spans, arena, prim).run_source(root);
+        match resolved {
+            | Ok(ResolveSourceOut { prim, arena, root }) => {
+                Ok(ScopedProgram { spans, arena, prim, root })
+            }
+            | Err(error) => Err(ResolveFailure { error, spans }),
+        }
     }
 }

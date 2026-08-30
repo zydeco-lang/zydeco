@@ -7,7 +7,7 @@ use thiserror::Error;
 use zydeco_surface::textual::{
     Lexer, ParseError, SourceUnitParser, fmt::PrettyFormatter, syntax::Parser,
 };
-use zydeco_utils::span::{FileInfo, LocationCtx};
+use zydeco_utils::span::FileMap;
 
 /// Whether formatting changed the source file on disk.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -67,15 +67,14 @@ impl SourceFormatter {
     }
 
     fn render(&self, path: &Path, source: &str) -> Result<String, SourceFormatError> {
-        let file_info = FileInfo::new(source, Some(Arc::new(path.to_path_buf())));
-        let location = LocationCtx::File(file_info.clone());
+        let file = FileMap::local(source, Some(Arc::new(path.to_path_buf())));
         let mut parser = Parser::new();
-        let unit = SourceUnitParser::new()
-            .parse(source, &location, &mut parser, Lexer::new(source))
-            .map_err(|error| SourceFormatError::Parse {
+        let unit = SourceUnitParser::new().parse(source, &mut parser, Lexer::new(source)).map_err(
+            |error| SourceFormatError::Parse {
                 path: path.to_path_buf(),
-                message: ParseError { error, file_info: &file_info }.to_string(),
-            })?;
+                message: ParseError { error, file_map: &file }.to_string(),
+            },
+        )?;
         Ok(PrettyFormatter::with_source(&parser.arena, &parser.spans, source).render_unit(unit))
     }
 }

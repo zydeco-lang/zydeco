@@ -99,7 +99,8 @@ impl<'source, 'arena> NamedTermPunningAudit<'source, 'arena> {
     }
 
     fn source_is_punned(&self, term: TermId) -> bool {
-        let (start, end) = self.spans[&EntityId::Term(term)].get_cursor1();
+        let span = self.spans[&EntityId::Term(term)].range();
+        let (start, end) = (span.start, span.end);
         self.source.get(start..end).is_some_and(|source| source.starts_with('='))
     }
 }

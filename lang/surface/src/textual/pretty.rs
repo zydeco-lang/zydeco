@@ -1495,8 +1495,9 @@ impl<'arena> PrettyFormatter<'arena> {
         &self, term: TermId, meta: &'arena Meta, inner: TermId,
     ) -> Option<RcDoc<'arena>> {
         let source = self.source?;
-        let (outer_start, _) = self.spans[&EntityId::Term(term)].get_cursor1();
-        let (inner_start, inner_end) = self.spans[&EntityId::Term(inner)].get_cursor1();
+        let outer_start = self.spans[&EntityId::Term(term)].lo();
+        let inner = self.spans[&EntityId::Term(inner)].range();
+        let (inner_start, inner_end) = (inner.start, inner.end);
         let annotation_end = source
             .get(outer_start..inner_start)?
             .rfind(']')?
@@ -2219,7 +2220,6 @@ mod tests {
     use crate::textual::{Lexer, LexicalTokenKind, LexicalTokens, SourceUnitParser};
     use zydeco_syntax::Ugly;
     use zydeco_utils::pass::CompilerPass;
-    use zydeco_utils::span::LocationCtx;
 
     struct ParsedSource {
         unit: SourceUnit,
@@ -2253,7 +2253,7 @@ mod tests {
         fn named(source: &str, name: &str) -> Self {
             let mut parser = Parser::new();
             let unit = SourceUnitParser::new()
-                .parse(source, &LocationCtx::Plain, &mut parser, Lexer::new(source))
+                .parse(source, &mut parser, Lexer::new(source))
                 .unwrap_or_else(|error| panic!("failed to parse {name}: {error:?}\n{source}"));
             Self { unit, parser, source: source.to_owned() }
         }
@@ -2592,10 +2592,10 @@ mod tests {
         let second = concat!("begin\n", "  let b =\n", "    value\n", "  in\n", "  b\n", "end");
         let mut parser = Parser::new();
         SourceUnitParser::new()
-            .parse(first, &LocationCtx::Plain, &mut parser, Lexer::new(first))
+            .parse(first, &mut parser, Lexer::new(first))
             .expect("the first source should parse");
         let second_unit = SourceUnitParser::new()
-            .parse(second, &LocationCtx::Plain, &mut parser, Lexer::new(second))
+            .parse(second, &mut parser, Lexer::new(second))
             .expect("the second source should parse");
 
         let formatted = PrettyFormatter::with_options(

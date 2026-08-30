@@ -20,9 +20,9 @@ impl DiagnosticRenderer {
                     });
                 }
             }
-            | CompileError::Analysis(AnalysisError::Resolve { error, graph }) => {
+            | CompileError::Analysis(AnalysisError::Resolve { error, graph, spans }) => {
                 Self::graph_warnings(graph);
-                let _ = error.to_report().eprint(SourceCaches::graph(graph));
+                let _ = error.to_report(spans).eprint(SourceCaches::graph(graph));
             }
             | _ => eprintln!("{error}"),
         }
@@ -66,6 +66,11 @@ impl DiagnosticRenderer {
                     | ss::InferenceSite::Term(term) => term.span(&span_context),
                     | ss::InferenceSite::Pattern(pattern) => pattern.span(&span_context),
                 };
+                let span = analysis
+                    .spans()
+                    .source_map()
+                    .map(|map| map.display(*span).to_string())
+                    .unwrap_or_else(|| span.to_string());
                 let solution = solution.map_or_else(
                     || "???".to_owned(),
                     |solution| {

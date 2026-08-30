@@ -2,7 +2,7 @@ use lalrpop_util::ParseError as LalrpopError;
 use thiserror::Error;
 use zydeco_surface::textual::{
     Lexer, SourceUnitParser,
-    syntax::{Hole, LocationCtx, Meta, MetaT, Parser, Term},
+    syntax::{Hole, Meta, MetaT, Parser, Term},
 };
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -41,12 +41,7 @@ impl SubmissionParser {
         }
 
         let mut parser = Parser::new();
-        match SourceUnitParser::new().parse(
-            source,
-            &LocationCtx::Plain,
-            &mut parser,
-            Lexer::new(source),
-        ) {
+        match SourceUnitParser::new().parse(source, &mut parser, Lexer::new(source)) {
             | Ok(unit) => SubmissionState::Complete(Self::decode(unit.root, &parser)),
             | Err(LalrpopError::UnrecognizedEof { .. }) => SubmissionState::Incomplete,
             | Err(_) => SubmissionState::Invalid,

@@ -1,7 +1,7 @@
 pub use super::arena::*;
 pub use crate::{arena::*, syntax::*};
 pub use zydeco_syntax::*;
-pub use zydeco_utils::span::{LocationCtx, Sp, Span};
+pub use zydeco_utils::span::{Sp, Span};
 
 use crate::textual::syntax as t;
 use derive_more::From;

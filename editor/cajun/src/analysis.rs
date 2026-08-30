@@ -21,7 +21,7 @@ use zydeco_surface::{
 use zydeco_syntax::Pretty;
 use zydeco_utils::{
     arena::ArenaAccess,
-    span::{Cursor2, FileInfo, Span},
+    span::{FileMap, LineCol, Span},
 };
 
 use crate::{
@@ -45,7 +45,7 @@ pub(crate) struct ProjectState {
     /// The analyzed root, for fact lookups against the session's memoized
     /// queries.
     root: PathBuf,
-    file_infos: HashMap<PathBuf, FileInfo>,
+    file_maps: HashMap<PathBuf, FileMap>,
     semantic_path: PathBuf,
     semantic_tokens: Vec<SemanticToken>,
 }
@@ -94,12 +94,11 @@ impl ProjectState {
         let analysis = session.analyze(source_path).map_err(|error| error.to_string())?;
         let statics = session.materialize_arena(&analysis).map_err(|error| error.to_string())?;
         let scoped = analysis.scoped();
-        let file_infos = analysis
+        let file_maps = analysis
             .sources()
             .map(|(path, source)| {
                 let path = Self::normalize_path(path);
-                let info = FileInfo::new(source, Some(Arc::new(path.clone())));
-                (path, info)
+                (path.clone(), FileMap::local(source, Some(Arc::new(path))))
             })
             .collect();
         let source_path = Self::normalize_path(source_path);
@@ -121,7 +120,7 @@ impl ProjectState {
             analysis,
             statics,
             root: semantic_path.clone(),
-            file_infos,
+            file_maps,
             semantic_path,
             semantic_tokens,
         })
@@ -206,7 +205,7 @@ impl ProjectState {
             .filter_map(|(definition, name)| {
                 let entity = self.scoped().origins.source(&(*definition).into())?;
                 let span = &self.analysis.spans()[&entity];
-                (span.get_path().map(|path| Self::normalize_path(path)) == Some(file_path.clone()))
+                (self.span_file(span) == Some(file_path.clone()))
                     .then(|| {
                         let range = self.span_range(span)?;
                         Some(Self::document_symbol(name.0.clone(), range))
@@ -295,13 +294,20 @@ impl ProjectState {
     fn containing_occurrence(
         &self, file_path: &Path, offset: usize, definition: DefId, span: &Span,
     ) -> Option<(usize, SymbolOccurrence)> {
-        let same_file =
-            span.get_path().map(|path| Self::normalize_path(path)) == Some(file_path.to_path_buf());
-        let (start, end) = span.get_cursor1();
-        (same_file && start <= offset && offset < end)
+        let same_file = self.span_file(span) == Some(file_path.to_path_buf());
+        let range = self
+            .analysis
+            .spans()
+            .source_map()
+            .and_then(|map| map.range(*span))
+            .map(|(_, range)| range)?;
+        (same_file && range.start <= offset && offset < range.end)
             .then(|| {
-                self.span_range(span).map(|range| {
-                    (end.saturating_sub(start), SymbolOccurrence { definition, range })
+                self.span_range(span).map(|hit| {
+                    (
+                        range.end.saturating_sub(range.start),
+                        SymbolOccurrence { definition, range: hit },
+                    )
                 })
             })
             .flatten()
@@ -338,7 +344,7 @@ impl ProjectState {
 
     fn entity_location(&self, entity: &EntityId) -> Option<Location> {
         let span = &self.analysis.spans()[entity];
-        let path = Self::normalize_path(span.get_path()?);
+        let path = self.span_file(span)?;
         Some(Location { uri: Url::from_file_path(path).ok()?, range: self.span_range(span)? })
     }
 
@@ -364,30 +370,33 @@ impl ProjectState {
     }
 
     fn offset(&self, file_path: &Path, position: Position) -> Option<usize> {
-        let source = self.analysis.source(file_path)?;
-        self.file_infos.get(file_path)?.trans_span1_utf16(
-            source,
-            Cursor2 { line: position.line as usize, column: position.character as usize },
-        )
+        self.file_maps
+            .get(file_path)?
+            .offset_utf16(LineCol { line: position.line, column: position.character })
+    }
+
+    /// The normalized path of the file a merged span belongs to.
+    fn span_file(&self, span: &Span) -> Option<PathBuf> {
+        let (file, _) = self.analysis.spans().source_map()?.range(*span)?;
+        Some(Self::normalize_path(&file.path()))
     }
 
     fn span_range(&self, span: &Span) -> Option<Range> {
-        let path = Self::normalize_path(span.get_path()?);
-        let (start, end) = span.get_cursor1();
-        self.byte_range(&path, start..end)
+        let (file, range) = self.analysis.spans().source_map()?.range(*span)?;
+        let path = Self::normalize_path(&file.path());
+        self.byte_range(&path, range)
     }
 
     fn byte_range(&self, path: &Path, range: std::ops::Range<usize>) -> Option<Range> {
-        let source = self.analysis.source(path)?;
-        let file_info = self.file_infos.get(path)?;
+        let file_map = self.file_maps.get(path)?;
         Some(Range::new(
-            Self::position(file_info.trans_span2_utf16(source, range.start)?),
-            Self::position(file_info.trans_span2_utf16(source, range.end)?),
+            Self::position(file_map.line_col_utf16(range.start)?),
+            Self::position(file_map.line_col_utf16(range.end)?),
         ))
     }
 
-    fn position(cursor: Cursor2) -> Position {
-        Position::new(cursor.line as u32, cursor.column as u32)
+    fn position(cursor: LineCol) -> Position {
+        Position::new(cursor.line, cursor.column)
     }
 
     fn normalize_path(path: &Path) -> PathBuf {
@@ -427,7 +436,7 @@ mod tests {
     };
     use std::{collections::HashMap, path::Path};
     use tower_lsp::lsp_types::{HoverContents, Position, SemanticToken, SemanticTokensLegend, Url};
-    use zydeco_utils::span::{Cursor2, FileInfo};
+    use zydeco_utils::span::{FileMap, LineCol};
 
     fn fenced_zydeco_sources(markdown: &str) -> Vec<&str> {
         markdown
@@ -460,7 +469,7 @@ mod tests {
 
     struct SemanticTokenDecoder<'source> {
         source: &'source str,
-        info: FileInfo,
+        map: FileMap,
         legend: SemanticTokensLegend,
     }
 
@@ -468,7 +477,7 @@ mod tests {
         fn new(source: &'source str) -> Self {
             Self {
                 source,
-                info: FileInfo::new(source, None),
+                map: FileMap::local(source, None),
                 legend: SemanticHighlighter::legend(),
             }
         }
@@ -484,14 +493,9 @@ mod tests {
                         token.delta_start
                     };
                     *previous = (line, start);
-                    let byte_start = self.info.trans_span1_utf16(
-                        self.source,
-                        Cursor2 { line: line as usize, column: start as usize },
-                    )?;
-                    let byte_end = self.info.trans_span1_utf16(
-                        self.source,
-                        Cursor2 { line: line as usize, column: (start + token.length) as usize },
-                    )?;
+                    let byte_start = self.map.offset_utf16(LineCol { line, column: start })?;
+                    let byte_end =
+                        self.map.offset_utf16(LineCol { line, column: start + token.length })?;
                     let token_type =
                         self.legend.token_types[token.token_type as usize].as_str().to_owned();
                     let modifiers = self

@@ -12,7 +12,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use zydeco_syntax::Ugly;
-use zydeco_utils::{pass::CompilerPass, span::LocationCtx};
+use zydeco_utils::pass::CompilerPass;
 
 struct ZydecoCorpus;
 
@@ -46,7 +46,7 @@ impl ParsedSource {
     fn new(source: &str, name: &str) -> Self {
         let mut parser = Parser::new();
         let unit = SourceUnitParser::new()
-            .parse(source, &LocationCtx::Plain, &mut parser, Lexer::new(source))
+            .parse(source, &mut parser, Lexer::new(source))
             .unwrap_or_else(|error| panic!("failed to parse {name}: {error:?}"));
         Self { unit, parser, source: source.to_owned() }
     }

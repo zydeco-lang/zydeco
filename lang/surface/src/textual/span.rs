@@ -33,8 +33,6 @@ impl_span_view! {
 
 mod impl_span_arena {
     use super::*;
-    use std::path::PathBuf;
-    use zydeco_utils::span::*;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
     enum Category {
@@ -47,14 +45,15 @@ mod impl_span_arena {
     impl SpanArena {
         /// Find all entities that **includes** the given cursor.
         /// The result is sorted: smallest entity first.
-        pub fn lookup_cursor(&self, path: Option<&PathBuf>, cursor: Cursor1) -> Vec<EntityId> {
+        pub fn lookup_cursor(&self, cursor: usize) -> Vec<EntityId> {
             let mut hit: Vec<_> = (self.iter())
                 .filter_map(|(id, s)| {
-                    if s.get_path() != path {
-                        return None;
+                    let span = s.range();
+                    if span.start <= cursor && cursor <= span.end {
+                        Some((id, span.end - span.start))
+                    } else {
+                        None
                     }
-                    let (start, end) = s.get_cursor1();
-                    if start <= cursor && cursor <= end { Some((id, end - start)) } else { None }
                 })
                 .collect();
             hit.sort_by_key(|a| a.1);
@@ -64,15 +63,15 @@ mod impl_span_arena {
         /// Find all entities that are **included** in the given span.
         /// The result is sorted: largest entity first.
         pub fn lookup_span(&self, span: Span) -> Vec<EntityId> {
-            let path = span.get_path();
-            let range = span.get_cursor1();
+            let range = span.range();
             let mut hit: Vec<_> = (self.iter())
                 .filter_map(|(id, s)| {
-                    if s.get_path() != path {
-                        return None;
+                    let inner = s.range();
+                    if range.start <= inner.start && inner.end <= range.end {
+                        Some((id, inner.end - inner.start))
+                    } else {
+                        None
                     }
-                    let (start, end) = s.get_cursor1();
-                    if range.0 <= start && end <= range.1 { Some((id, end - start)) } else { None }
                 })
                 .collect();
             hit.sort_by_key(|item| std::cmp::Reverse(item.1));

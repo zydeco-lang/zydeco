@@ -1,6 +1,8 @@
 use crate::source::{SourceGraph, SourceId, SourceKind, TextualProgramError};
+use std::collections::HashMap;
+use std::sync::Arc;
 use zydeco_surface::textual::syntax as t;
-use zydeco_utils::span::Span;
+use zydeco_utils::span::{BytePos, FileSource, SourceMap, Span};
 
 /// The complete program in textual syntax, merged from one source graph.
 ///
@@ -22,17 +24,56 @@ impl SourceGraph {
 struct TextualProgramBuilder<'graph> {
     graph: &'graph SourceGraph,
     parser: t::Parser,
+    /// Global base of each file's span range, assigned in provider order.
+    bases: HashMap<SourceId, BytePos>,
 }
 
 impl<'graph> TextualProgramBuilder<'graph> {
     fn new(graph: &'graph SourceGraph) -> Self {
-        Self { graph, parser: t::Parser::new() }
+        Self { graph, parser: t::Parser::new(), bases: Self::assign_bases(graph) }
+    }
+
+    /// Give every reachable file a disjoint global offset range, starting
+    /// after the dummy position `0`.
+    fn assign_bases(graph: &'graph SourceGraph) -> HashMap<SourceId, BytePos> {
+        let mut base = 1u32;
+        graph
+            .provider_order()
+            .into_iter()
+            .map(|source| {
+                let len = graph.sources[&source].source.len();
+                let assigned = BytePos(base);
+                base += u32::try_from(len).expect("program address space exceeds u32");
+                (source, assigned)
+            })
+            .collect()
     }
 
     fn build(mut self) -> Result<TextualProgram, TextualProgramError> {
         let root = self.source(self.graph.root)?;
-        let (spans, arena) = self.parser.finish();
+        let map = self.source_map();
+        let (mut spans, arena) = self.parser.finish();
+        spans.attach_map(Arc::new(map));
         Ok(TextualProgram { spans, arena, unit: t::SourceUnit { root } })
+    }
+
+    /// The address space of this program: one entry per file, in base order.
+    fn source_map(&self) -> SourceMap {
+        let order = self.bases_order();
+        SourceMap::from_sources(order.into_iter().map(|source| {
+            let file = &self.graph.sources[&source];
+            FileSource {
+                path: Some(Arc::new(file.path.clone())),
+                source: file.source.as_str().into(),
+            }
+        }))
+    }
+
+    /// Files ordered by their assigned base.
+    fn bases_order(&self) -> Vec<SourceId> {
+        let mut order: Vec<_> = self.graph.provider_order();
+        order.sort_by_key(|source| self.bases[source]);
+        order
     }
 
     fn source(&mut self, source: SourceId) -> Result<t::TermId, TextualProgramError> {
@@ -58,7 +99,7 @@ impl<'graph> TextualProgramBuilder<'graph> {
     }
 
     fn span(&self, source: SourceId, entity: t::EntityId) -> Span {
-        self.graph.sources[&source].spans[&entity].clone()
+        self.graph.sources[&source].spans[&entity].rebase(self.bases[&source])
     }
 
     fn definition(&mut self, source: SourceId, definition: t::DefId) -> t::DefId {

@@ -154,6 +154,8 @@ pub enum AnalysisError {
         #[source]
         error: Box<ResolveError>,
         graph: Arc<SourceGraph>,
+        /// The merged program's span arena, whose source map resolves spans.
+        spans: Arc<SpanArena>,
     },
 }
 
@@ -531,7 +533,11 @@ fn resolved_data<'db>(
     let bitter =
         program.desugar().map_err(|error| AnalysisError::Desugar { error: Box::new(error) })?;
     let ScopedProgram { spans, arena, prim, root } =
-        bitter.resolve().map_err(|error| AnalysisError::Resolve { error, graph })?;
+        bitter.resolve().map_err(|failure| AnalysisError::Resolve {
+            error: failure.error,
+            graph,
+            spans: std::sync::Arc::new(failure.spans),
+        })?;
     Ok(zydeco_statics::query::ScopedData::new(db, Arc::new(spans), prim, Arc::new(arena), root))
 }
 

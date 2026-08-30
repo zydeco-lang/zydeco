@@ -22,8 +22,8 @@ impl RepositoryDocumentationEntry<'_> {
 
     pub fn term_source(&self) -> &str {
         let span = &self.file.spans[&t::EntityId::Term(self.site.payload)];
-        let (start, end) = span.get_cursor1();
-        &self.file.source[start..end]
+        let range = span.range();
+        &self.file.source[range.start..range.end]
     }
 }
 
