@@ -1674,7 +1674,7 @@
             "name": "name",
             "content": {
               "type": "SYMBOL",
-              "name": "_variable_name"
+              "name": "field_identifier"
             }
           },
           {
@@ -1703,7 +1703,7 @@
             "name": "name",
             "content": {
               "type": "SYMBOL",
-              "name": "_variable_name"
+              "name": "field_identifier"
             }
           },
           {
@@ -2034,7 +2034,7 @@
             "name": "name",
             "content": {
               "type": "SYMBOL",
-              "name": "_variable_name"
+              "name": "field_identifier"
             }
           },
           {
@@ -2308,6 +2308,22 @@
       "content": {
         "type": "PATTERN",
         "value": "\\.[a-z][a-zA-Z0-9_'?+*\\-=~]*"
+      }
+    },
+    "field_identifier": {
+      "type": "TOKEN",
+      "content": {
+        "type": "CHOICE",
+        "members": [
+          {
+            "type": "PATTERN",
+            "value": "#[A-Za-z][a-zA-Z0-9_'?+*\\-=~]*"
+          },
+          {
+            "type": "PATTERN",
+            "value": "#_[a-zA-Z0-9_'?+*\\-=~]+"
+          }
+        ]
       }
     },
     "documentation_comment": {
