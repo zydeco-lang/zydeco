@@ -75,15 +75,17 @@ begin
         end
     that
 
-    (
-      = Exception,
-      = MonadThrow,
+    pack
+        (= Exception : VType -> VType -> CType) is Exception
+        (= MonadThrow as MonadThrow : VType -> (VType -> CType) -> CType)
+    where
       = mo_exception,
       = throw_ops,
       = raise,
       = handle_exception,
-      = try_exception
-    )
+      = try_exception,
+      ()
+    end
   end
 end
 -- end module Exception

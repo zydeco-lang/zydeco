@@ -8,6 +8,11 @@ begin
   let Monad = @(import("monad.type.zy")) that
   let Algebra = @(import("algebra.type.zy")) that
 
-  (= Monad, = Algebra, ())
+  pack
+      (= Monad as Monad : (VType -> CType) -> CType)
+      (= Algebra as Algebra : (VType -> CType) -> CType -> CType)
+  where
+    ()
+  end
 end
 -- end module Monad

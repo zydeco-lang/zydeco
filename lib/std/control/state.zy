@@ -81,17 +81,19 @@ begin
         ret a
     that
 
-    (
-      = State,
-      = MonadState,
+    pack
+        (= State : VType -> VType -> CType) is State
+        (= MonadState as MonadState : VType -> (VType -> CType) -> CType)
+    where
       = mo_state,
       = state,
       = get,
       = put,
       = modify,
       = run_state,
-      = eval_state
-    )
+      = eval_state,
+      ()
+    end
   end
 end
 -- end module State

@@ -206,8 +206,7 @@ lib/std/
   numeric/*.type.zy
   text/package.zy
   system/package.zy
-  control/monad.zy
-  control/monad.zyi
+  control/*.zy
   std.zy
 ```
 
@@ -274,8 +273,8 @@ for the layout above.
 - A bare record literal has no principal type, so a package-producing source needs either a
   whole-file annotation or a synthesizing final form. Sealed `pack` introductions synthesize
   their existential type, so every standard-library package source ends in one and imports its
-  peers without a companion; `.zyi` annotations remain only for sources that do not end in a
-  synthesizing pack, such as the control modules and the numeric builders.
+  peers without a companion; `.zyi` annotations remain only for the numeric builders, whose
+  transparent parametric contracts do not end in a synthesizing pack.
 - A `def`-bound data type cannot cross a file boundary by disclosure, because an annotation can
   only name a definition through an import and only compiler intrinsics are canonical importable
   terms. Existential witnesses therefore remain the only cross-file naming device for library

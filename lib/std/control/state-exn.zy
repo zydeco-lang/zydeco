@@ -114,8 +114,9 @@ begin
         end
     that
 
-    (
-      = StateExn,
+    pack
+        (= StateExn : VType -> VType -> VType -> CType) is StateExn
+    where
       = mo_state_exn,
       = state_ops,
       = throw_ops,
@@ -123,8 +124,9 @@ begin
       = put,
       = raise,
       = catch,
-      = run_state_exn
-    )
+      = run_state_exn,
+      ()
+    end
   end
 end
 -- end module StateExn
