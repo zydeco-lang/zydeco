@@ -11,7 +11,7 @@
   "lsp": {
     "cajun": {
       "binary": {
-        "path": "/Users/arctic/Arc/zydeco-lang/zydeco/target/debug/cajun"
+        "path": "./target/debug/cajun"
       }
     }
   }
