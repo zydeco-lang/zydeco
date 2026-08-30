@@ -31,3 +31,36 @@ fn filesystem_interpreter() {
 fn filesystem_amd64() {
     FilesystemCase::run(TestBackend::Amd64);
 }
+
+#[test]
+fn filesystem_wasm_am() {
+    FilesystemCase::run(TestBackend::WasmAm);
+}
+
+#[test]
+fn filesystem_wasm_sps() {
+    FilesystemCase::run(TestBackend::WasmSps);
+}
+
+struct ArgumentListCase;
+
+impl ArgumentListCase {
+    fn run(backend: TestBackend) {
+        SourceProgram::setup("tests/std/arg-list.zy").with_args(["alpha"]).test(backend);
+    }
+}
+
+#[test]
+fn argument_list_interpreter() {
+    ArgumentListCase::run(TestBackend::Interpreter);
+}
+
+#[test]
+fn argument_list_wasm_am() {
+    ArgumentListCase::run(TestBackend::WasmAm);
+}
+
+#[test]
+fn argument_list_wasm_sps() {
+    ArgumentListCase::run(TestBackend::WasmSps);
+}

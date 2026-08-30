@@ -1,0 +1,19 @@
+[package]
+name = "zydeco-wasm-sps"
+version = { workspace = true }
+rust-version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+readme = { workspace = true }
+description = "Structured SPSLow-to-WebAssembly backend for Zydeco"
+
+[dependencies]
+zydeco-syntax = { workspace = true }
+zydeco-stackir = { workspace = true }
+thiserror = { workspace = true }
+wasm-encoder = { workspace = true }
+
+[dev-dependencies]
+wasmparser = { workspace = true }

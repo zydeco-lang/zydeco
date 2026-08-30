@@ -22,12 +22,15 @@ zydeco-stackir = { workspace = true }
 zydeco-assembly = { workspace = true }
 zydeco-amd64 = { workspace = true }
 zydeco-llvm = { workspace = true }
+zydeco-wasm-am = { workspace = true }
+zydeco-wasm-sps = { workspace = true }
 zydeco-utils = { workspace = true }
 ariadne = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+wasmparser = { workspace = true }
 
 [build-dependencies]
 clap = { workspace = true }

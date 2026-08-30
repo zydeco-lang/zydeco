@@ -1,5 +1,8 @@
 use crate::{TargetArchitecture, TargetOs};
-use std::{path::Path, sync::Arc};
+use std::{
+    path::Path,
+    sync::{Arc, OnceLock},
+};
 use thiserror::Error;
 use zydeco_assembly::{LoweringPipeline, syntax::AssemblyProgram};
 use zydeco_dynamics::{BuiltinPackageError, BuiltinRootLinker, ProgKont, Runtime};
@@ -98,7 +101,8 @@ pub struct BackendProgram {
     pub scoped: ScopedArena,
     pub statics: Arc<StaticsArena>,
     pub sps_low: SpsLowProgram,
-    pub assembly: AssemblyProgram,
+    /// Populated only when an assembly-derived target is requested.
+    assembly: OnceLock<AssemblyProgram>,
 }
 
 impl BackendProgram {
@@ -111,8 +115,7 @@ impl BackendProgram {
                 .run()
                 .map_err(CompileError::BuiltinLower)?;
         let sps_low = SpsLowPipeline::new(&mut lowering_scoped).run(stackir);
-        let assembly = LoweringPipeline::new(&spans, &lowering_scoped, &statics, &sps_low).run();
-        Ok(Self { spans, scoped: lowering_scoped, statics, sps_low, assembly })
+        Ok(Self { spans, scoped: lowering_scoped, statics, sps_low, assembly: OnceLock::new() })
     }
 
     pub fn render_sps_low(&self) -> String {
@@ -126,14 +129,19 @@ impl BackendProgram {
 
     pub fn render_assembly(&self) -> String {
         use zydeco_assembly::fmt::*;
-        let formatter = Formatter::new(&self.assembly.arena, None, None);
+        let assembly = self.assembly();
+        let formatter = Formatter::new(&assembly.arena, None, None);
         let mut output = String::new();
-        self.assembly.pretty(&formatter).render_fmt(100, &mut output).unwrap();
+        assembly.pretty(&formatter).render_fmt(100, &mut output).unwrap();
         output
     }
 
     pub fn execute_assembly(self) -> Result<AssemblyOutcome, CompileError> {
-        match zydeco_assembly::interp::Interpreter::new(self.assembly)
+        let Self { spans, scoped, statics, sps_low, assembly } = self;
+        let assembly = assembly
+            .into_inner()
+            .unwrap_or_else(|| LoweringPipeline::new(&spans, &scoped, &statics, &sps_low).run());
+        match zydeco_assembly::interp::Interpreter::new(assembly)
             .run()
             .map_err(CompileError::AssemblyInterpreter)?
         {
@@ -143,18 +151,13 @@ impl BackendProgram {
     }
 
     pub fn emit_amd64(&self, operating_system: TargetOs) -> String {
+        let assembly = self.assembly();
         let format = match operating_system {
             | TargetOs::Linux => zydeco_amd64::TargetFormat::Elf,
             | TargetOs::Macos => zydeco_amd64::TargetFormat::MachO,
         };
-        match zydeco_amd64::Emitter::new(
-            &self.spans,
-            &self.scoped,
-            &self.statics,
-            &self.assembly,
-            format,
-        )
-        .run()
+        match zydeco_amd64::Emitter::new(&self.spans, &self.scoped, &self.statics, assembly, format)
+            .run()
         {
             | Ok(assembly) => assembly.to_string(),
             | Err(never) => match never {},
@@ -164,7 +167,8 @@ impl BackendProgram {
     pub fn emit_llvm(
         &self, architecture: TargetArchitecture, operating_system: TargetOs,
     ) -> Result<String, CompileError> {
-        self.validate_llvm_locals()?;
+        let assembly = self.assembly();
+        Self::validate_llvm_locals(assembly)?;
         let target = match (architecture, operating_system) {
             | (TargetArchitecture::X86_64, TargetOs::Linux) => {
                 zydeco_llvm::TargetTriple::X86_64Linux
@@ -179,24 +183,38 @@ impl BackendProgram {
                 zydeco_llvm::TargetTriple::Aarch64MacOS
             }
         };
-        match zydeco_llvm::Emitter::new(
-            &self.spans,
-            &self.scoped,
-            &self.statics,
-            &self.assembly,
-            target,
-        )
-        .run()
+        match zydeco_llvm::Emitter::new(&self.spans, &self.scoped, &self.statics, assembly, target)
+            .run()
         {
             | Ok(module) => Ok(module.to_string()),
             | Err(never) => match never {},
         }
     }
 
-    fn validate_llvm_locals(&self) -> Result<(), CompileError> {
+    pub fn emit_wasm_am(&self) -> Result<Vec<u8>, CompileError> {
+        zydeco_wasm_am::Emitter::new(self.assembly())
+            .run()
+            .map(zydeco_wasm_am::WasmModule::into_bytes)
+            .map_err(CompileError::WasmAm)
+    }
+
+    pub fn emit_wasm_sps(&self) -> Result<Vec<u8>, CompileError> {
+        zydeco_wasm_sps::Emitter::new(&self.sps_low)
+            .run()
+            .map(zydeco_wasm_sps::WasmModule::into_bytes)
+            .map_err(CompileError::WasmSps)
+    }
+
+    fn assembly(&self) -> &AssemblyProgram {
+        self.assembly.get_or_init(|| {
+            LoweringPipeline::new(&self.spans, &self.scoped, &self.statics, &self.sps_low).run()
+        })
+    }
+
+    fn validate_llvm_locals(assembly: &AssemblyProgram) -> Result<(), CompileError> {
         use zydeco_assembly::syntax::{Atom, Instruction, Program};
 
-        self.assembly
+        assembly
             .arena
             .programs
             .iter()
@@ -212,7 +230,7 @@ impl BackendProgram {
                     ) => Some(*variable),
                     | _ => None,
                 }?;
-                (!self.assembly.arena.contexts[program].iter().any(|local| local == &variable))
+                (!assembly.arena.contexts[program].iter().any(|local| local == &variable))
                     .then_some((*program, variable))
             })
             .map_or(Ok(()), |(program, variable)| {
@@ -250,6 +268,10 @@ pub enum CompileError {
     BuiltinLower(BuiltinPackageLowerError),
     #[error(transparent)]
     AssemblyInterpreter(zydeco_assembly::interp::Error),
+    #[error(transparent)]
+    WasmAm(zydeco_wasm_am::EmitError),
+    #[error(transparent)]
+    WasmSps(zydeco_wasm_sps::EmitError),
     #[error("source test expected exit code 0, got {0:?}")]
     TestFailure(ProgKont),
     #[error("LLVM emitter cannot represent local {variable:?} at assembly program {program:?}")]

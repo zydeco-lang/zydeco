@@ -11,6 +11,8 @@ members = [
     "lang/assembly",
     "lang/amd64",
     "lang/llvm",
+    "lang/wasm-am",
+    "lang/wasm-sps",
     "lang/session",
     "lang/tests",
     "tui",
@@ -40,6 +42,8 @@ zydeco-statics = { path = "lang/statics" }
 zydeco-dynamics = { path = "lang/dynamics" }
 zydeco-amd64 = { path = "lang/amd64" }
 zydeco-llvm = { path = "lang/llvm" }
+zydeco-wasm-am = { path = "lang/wasm-am" }
+zydeco-wasm-sps = { path = "lang/wasm-sps" }
 zydeco-assembly = { path = "lang/assembly" }
 zydeco-stackir = { path = "lang/stackir" }
 zydeco-session = { path = "lang/session" }
@@ -69,6 +73,12 @@ serde_plain = "1.0"
 serde_json = "1.0"
 toml = "1.1"
 toml_edit = "0.25"
+wasm-encoder = { version = "0.227.1", default-features = false }
+wasmparser = { version = "0.227.1", default-features = false, features = [
+    "prefer-btree-collections",
+    "std",
+    "validate",
+] }
 # parallelism
 salsa = "0.26.2"
 # error handling

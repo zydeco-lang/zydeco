@@ -19,6 +19,9 @@ jobs:
     - uses: dtolnay/rust-toolchain@stable
       with:
         components: rustfmt
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
     - name: Install build tools
       run: |
         sudo apt-get update

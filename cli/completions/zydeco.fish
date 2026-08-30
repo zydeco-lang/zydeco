@@ -46,6 +46,8 @@ complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s t -l target -d '
 zasm\t''
 asm\t''
 llvm\t''
+wasm-am\t''
+wasm-sps\t''
 exe\t''
 llvm-exe\t''"
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s b -l build-dir -d 'Build Directory' -r -F

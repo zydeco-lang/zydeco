@@ -28,20 +28,24 @@ Integer arithmetic wraps within the selected representation, comparisons retain 
 and floating-point operations follow IEEE 754 at the selected width.
 
 An integer or decimal literal is checked against its expected numeric type, including an exact range check.
-When no expected type selects a representation, integer literals synthesize `Int64` and decimal literals
-synthesize `Float64`. There are no implicit conversions between numeric representations.
+When no expected type selects a representation, integer literals synthesize `Int64`
+and decimal literals synthesize `Float64`.
+There are no implicit conversions between numeric representations.
 
-The AMD64 runtime represents every value in one machine word. The low bit is a runtime tag:
+The AMD64 runtime represents every value in one machine word.
+The low bit is a runtime tag:
 
-- Odd words are immediate values. They represent `Unit`, constructor indices, `Char`, all integers through
-  32 bits, `Float32`, `Int64` values from `-2^62` through `2^62 - 1`, and `UInt64` values through `2^63 - 1`.
-- Even words are pointer-shaped values. Region-allocated products and closures refer to scanned blocks in the
-  fixed two-space heap. An `Int64` or `UInt64` outside the immediate range and every `Float64` instead point to
-  an opaque one-word block containing all 64 payload bits.
+- Odd words are immediate values. They represent `Unit`, constructor indices, `Char`, all integers through 32 bits,
+  `Float32`, `Int64` values from `-2^62` through `2^62 - 1`, and `UInt64` values through `2^63 - 1`.
+- Even words are pointer-shaped values.
+  Region-allocated products and closures refer to scanned blocks in the fixed two-space heap.
+  An `Int64` or `UInt64` outside the immediate range and every `Float64` instead point
+  to an opaque one-word block containing all 64 payload bits.
 
-This encoding preserves the full source-level numeric domains while letting the copying collector distinguish
-immediates from movable pointers exactly. Opaque scalar blocks are copied but their payload bits are never
-traced. Aligned Rust-owned pointers, such as host strings, are outside both semispaces and remain unchanged.
+This encoding preserves the full source-level numeric domains while letting the copying collector distinguish immediates
+from movable pointers exactly.
+Opaque scalar blocks are copied but their payload bits are never traced.
+Aligned Rust-owned pointers, such as host strings, are outside both semispaces and remain unchanged.
 
 Surface notation distinguishes classifier arrows from term bodies while leaving constructor
 and destructor spines whitespace-guided.
@@ -81,8 +85,8 @@ Positions that already announce a field carry no marker: `term/field` projects, 
 and `= field` puns, as before.
 
 This distinction matters because a payload type does not itself contain its field name.
-In particular, `(#field = value) : (#field :: A)` relates the term-level name to a classifier that records the same name,
-rather than reusing `=` structurally at both levels.
+In particular, `(#field = value) : (#field :: A)` relates the term-level name to a classifier
+that records the same name, rather than reusing `=` structurally at both levels.
 
 The value-level rules are:
 
@@ -142,8 +146,8 @@ When a field and a variable or pattern binder have the same name, prefix `=` pro
 (= x : Int64, middle, = y)  -- the annotation describes the payload x
 ```
 
-The set of valid field names is exactly the set of valid variable names;
-the `#` marker, consumed by the lexer like the constructor `+` and destructor `.` prefixes, carries the role distinction.
+The set of valid field names is exactly the set of valid variable names; the `#` marker,
+consumed by the lexer like the constructor `+` and destructor `.` prefixes, carries the role distinction.
 The parser expands the shorthand directly into `Named` syntax.
 In a term it creates an ordinary same-spelled variable reference;
 in a pattern it creates an ordinary same-spelled binder.
@@ -324,24 +328,26 @@ A compiler session discovers a file dependency graph, orders providers before th
 and substitutes a freshly cloned provider term at each import occurrence.
 Parsed templates are memoized by source input, while each assembled occurrence remains fresh.
 A source boundary around each clone prevents free names and mobile block bindings from crossing the file boundary.
-Text blocks attached to holes supply multi-line string values: `--| text` immediately above `@[literal] _`
-replaces the hole with the recovered text as a string literal,
+Text blocks attached to holes supply multi-line string values:
+`--| text` immediately above `@[literal] _` replaces the hole with the recovered text as a string literal,
 so embedded prose shares the attachment discipline of repository documentation.
 
 An implementation source `foo.zy` may have an adjacent signature source `foo.zyi`.
 The companion is optional; when it is absent, source inference and imports behave exactly as before.
 The signature contains one ordinary Zydeco term, and that root must synthesize a type.
-When the companion exists, source assembly elaborates the pair as though the complete implementation root
-were written `(implementation : signature)`; importing `foo.zy` therefore checks and exposes the ascribed type
-while retaining the implementation term for evaluation. Signature files participate in the same dependency graph,
-may use ordinary imports, and may themselves be checked or imported when a type expression is needed.
+When the companion exists, source assembly elaborates the pair as
+though the complete implementation root were written `(implementation : signature)`; importing `foo.zy`
+therefore checks and exposes the ascribed type while retaining the implementation term for evaluation.
+Signature files participate in the same dependency graph, may use ordinary imports,
+and may themselves be checked or imported when a type expression is needed.
 They introduce no declaration language, namespace, or runtime module representation.
 Companion discovery applies to reusable `.zy` sources only; `.zydeco` program roots remain unpaired.
 
 A companion is an annotation boundary, rather than the only place where its type may be written.
-Ordinary `.zy` sources whose roots are type terms remain independently importable, so reusable package schemas use
-the descriptive `.type.zy` suffix. A leaf `.zyi` and an aggregate type can import the same constructor and apply it
-to their shared type witnesses. This keeps each implementation pairing local without duplicating its public schema.
+Ordinary `.zy` sources whose roots are type terms remain independently importable,
+so reusable package schemas use the descriptive `.type.zy` suffix.
+A leaf `.zyi` and an aggregate type can import the same constructor and apply it to their shared type witnesses.
+This keeps each implementation pairing local without duplicating its public schema.
 
 Interactive sessions reuse that source model instead of maintaining a mutable declaration environment.
 The Ratatui REPL stores every submitted term as a session overlay with a nonzero input identity,
@@ -359,7 +365,8 @@ and `@[help] _` and `@[quit] _` are control commands.
 Unknown metadata remains ordinary Zydeco syntax.
 As a result, command recognition is a frontend policy while each numbered expression still passes
 through the same source graph, resolver, checker, linker, and evaluator as a file.
-The rationale, lifecycle, and review invariants are recorded in the [declaration-free REPL design](docs/proposals/repl.md).
+The rationale, lifecycle, and review invariants are recorded
+in the [declaration-free REPL design](docs/proposals/repl.md).
 
 The session owns revisioned source inputs and immutable frontend analysis results shared
 by the CLI, TUI, and language server.
@@ -400,19 +407,20 @@ or value package directly whenever their residual term is pure.
 Computation-producing packages continue to use the CBPV forms required by their effects.
 
 The standard-library topics and their aggregate package use this pure boundary.
-Importing `data/package.zy`, `text/package.zy`, `system/package.zy`, `numeric/package.zy`, or `std.zy`
-yields a value-level package function; clients apply it and open its result with `let`.
-Builtin and the standard-package root are composition boundaries; each topic keeps one `.zyi`
-companion beside its implementation, a `body.type.zy` record-shape constructor, and — where it owns
-abstract witnesses — a `package.type.zy` existential wrapper beneath `lib/std`.
+Importing `data/package.zy`, `text/package.zy`, `system/package.zy`, `numeric/package.zy`,
+or `std.zy` yields a value-level package function; clients apply it and open its result with `let`.
+Builtin and the standard-package root are composition boundaries;
+each topic keeps one `.zyi` companion beside its implementation, a `body.type.zy` record-shape constructor,
+and — where it owns abstract witnesses — a `package.type.zy` existential wrapper beneath `lib/std`.
 The operations exported inside those packages retain their computation types.
 
-The launcher-supplied Builtin contract is structurally divided into `core`, `representations`, `numeric`,
-`text`, and `system`. Fixed-width numbers, `Char`, `String`, and `Bytes` are compiler-canonical primitive types;
-their manifest packages can be assembled independently while retaining one identity. `Reader`, `Writer`, and
-`OS` remain abstract provider capabilities and share one generative `system` opening. This separates stable data
-layout from runtime ownership without adding a module runtime or type tags. See
-[`docs/proposals/primitive-packages.md`](docs/proposals/primitive-packages.md).
+The launcher-supplied Builtin contract is structurally divided into `core`,
+`representations`, `numeric`, `text`, and `system`.
+Fixed-width numbers, `Char`, `String`, and `Bytes` are compiler-canonical primitive types;
+their manifest packages can be assembled independently while retaining one identity.
+`Reader`, `Writer`, and `OS` remain abstract provider capabilities and share one generative `system` opening.
+This separates stable data layout from runtime ownership without adding a module runtime or type tags.
+See [`docs/proposals/primitive-packages.md`](docs/proposals/primitive-packages.md).
 
 Strings are immutable, shared UTF-8 values throughout the compiler and interpreter.
 The foundational text ABI distinguishes encoded byte length from Unicode scalar length,
@@ -441,7 +449,7 @@ inlinable status needed by algebra translation.
 
 ## Implementation Architecture
 
-Zydeco is implemented as a pipeline with an interpreter and native-code branch:
+Zydeco is implemented as a pipeline with an interpreter and compiled-code branch:
 
 1. parsing (`lang/surface/src/textual`)
 2. desugaring (`lang/surface/src/bitter`)
@@ -450,43 +458,47 @@ Zydeco is implemented as a pipeline with an interpreter and native-code branch:
 5. linking and evaluation (`lang/dynamics/src`), or
 6. single-root branch-join high SPS (`lang/stackir/src/sps`)
 7. single-root closure conversion into first-order SPSLow (`lang/stackir/src/sps_low`)
-8. single-root assembly lowering (`lang/assembly/src`)
-9. AMD64 or LLVM emission (`lang/amd64/src`, `lang/llvm/src`)
+8. structured WebAssembly emission (`lang/wasm-sps/src`), or single-root assembly lowering (`lang/assembly/src`)
+9. AMD64, LLVM, or abstract-machine WebAssembly emission from assembly
+   (`lang/amd64/src`, `lang/llvm/src`, `lang/wasm-am/src`)
 
 Every completed representation after type checking carries exactly one top-level expression or program root.
-`DynamicsProgram`, `BranchJoinProgram`, `SpsLowProgram`, and `AssemblyProgram` pair that root with the storage needed
-by their syntax. Node arenas and labeled block collections are therefore implementation storage, not
-declaration-oriented containers that determine how many programs a compilation contains.
-Stack IR follows the branch-join and closure-conversion presentations of the adjacent
-stack-passing-style paper, which remains authoritative for the formal syntax, typing judgments,
-and equational theories. Each semantic phase consumes one complete program and produces one
-complete program; high SPS is lexical branch-join syntax, SPSLow is first-order with explicit
-code labels while retaining one lexical occurrence per stored node, and assembly materializes
-the control-flow graph. The single-occurrence invariant is what later passes rely on: a value
-node consumed by exactly one pattern makes representation decisions such as unboxing local.
+`DynamicsProgram`, `BranchJoinProgram`, `SpsLowProgram`, and `AssemblyProgram` pair
+that root with the storage needed by their syntax.
+Node arenas and labeled block collections are therefore implementation storage,
+not declaration-oriented containers that determine how many programs a compilation contains.
+Stack IR follows the branch-join and closure-conversion presentations of the adjacent stack-passing-style paper,
+which remains authoritative for the formal syntax, typing judgments, and equational theories.
+Each semantic phase consumes one complete program and produces one complete program;
+high SPS is lexical branch-join syntax, SPSLow is first-order with explicit code labels
+while retaining one lexical occurrence per stored node, and assembly materializes the control-flow graph.
+The single-occurrence invariant is what later passes rely on: a value node consumed
+by exactly one pattern makes representation decisions such as unboxing local.
 
 ### Query-Based Analysis
 
-Type checking runs inside the session's salsa graph rather than as a free-standing pass. The session's
-`SourceQueryDb` extends the statics crate's `TyckDb` supertrait, so the checking queries and the source queries
-share one database and one revision system. The name-resolved program enters the graph as the tracked struct
-`ScopedData` (`lang/statics/src/query.rs`); `check_source(db, data)` is a tracked query that still runs the
-wholesale `Tycker` internally, and a layer of demand-driven fact queries answers per-node questions from the
-memoized analysis:
+Type checking runs inside the session's salsa graph rather than as a free-standing pass.
+The session's `SourceQueryDb` extends the statics crate's `TyckDb` supertrait,
+so the checking queries and the source queries share one database and one revision system.
+The name-resolved program enters the graph as the tracked struct `ScopedData` (`lang/statics/src/query.rs`);
+`check_source(db, data)` is a tracked query that still runs the wholesale `Tycker` internally,
+and a layer of demand-driven fact queries answers per-node questions from the memoized analysis:
 
 - `normalized_type` / `normalized_kind` read the materialized normalization tables;
 - `coverage` runs the post-check coverage pass on demand;
 - `fill_solution`, `annotation_of_def`, `type_definition_of_def`, and `annotation_of_term` expose per-node facts
   for editors and tooling.
 
-Facts are keyed by interned node IDs (`InternedType`, `InternedDef`, `InternedTerm`, `InternedFill`) because
-salsa query arguments must be salsa IDs. The `*_normalized` arena tables remain the downstream interface consumed
-by `zydeco-dynamics` and `zydeco-stackir`; the query layer reads them, it does not replace them.
-Every allocation-producing judgment is a producer query keyed by its occurrence site, and the checker
-materializes the query results into the arena; the arena reads inside the algorithmic core
-(unification, fill resolution, and the existential-opening internals) stay checker-side because a pre-node's
-content is not a pure function of its site. The [query-owned statics design](docs/proposals/query-owned-statics.md)
-records the achieved architecture and the conversion patterns behind it.
+Facts are keyed by interned node IDs (`InternedType`, `InternedDef`, `InternedTerm`,
+`InternedFill`) because salsa query arguments must be salsa IDs.
+The `*_normalized` arena tables remain the downstream interface consumed by `zydeco-dynamics`
+and `zydeco-stackir`; the query layer reads them, it does not replace them.
+Every allocation-producing judgment is a producer query keyed by its occurrence site,
+and the checker materializes the query results into the arena; the arena reads inside the algorithmic core (unification,
+fill resolution, and the existential-opening internals) stay checker-side
+because a pre-node's content is not a pure function of its site.
+The [query-owned statics design](docs/proposals/query-owned-statics.md) records the achieved architecture
+and the conversion patterns behind it.
 
 The phases are spread across several core crates:
 
@@ -495,6 +507,8 @@ The phases are spread across several core crates:
 - `zydeco-dynamics` (operational semantics and interpreter)
 - `zydeco-stackir` and `zydeco-assembly` (lowered, stack-oriented IRs)
 - `zydeco-amd64` and `zydeco-llvm` (native-code backends)
+- `zydeco-wasm-sps` (structured SPSLow WebAssembly backend)
+- `zydeco-wasm-am` (ZASM abstract-machine WebAssembly backend)
 
 Within `zydeco-statics`, `syntax`, `environment`, and `arena` define the durable typed representation.
 `check` owns local kinding and typing rules, `normalize` owns substitution and definitional normalization,
@@ -505,6 +519,63 @@ after which the same pass checks argument coverage and missing destructors along
 The [exhaustiveness design note](docs/proposals/exhaustiveness.md) explains matrix specialization,
 copattern elaboration, counterexample construction, and the invariants supplied by typed syntax.
 This separation lets validation consume completed typed syntax without becoming more type-checking branches.
+
+### WebAssembly backend
+
+WebAssembly emission forks at first-order SPSLow so the repository can compare two implementation strategies.
+The `wasm-sps` target consumes SPSLow directly. The `wasm-am` target first lowers SPSLow to ZASM,
+then embeds that abstract machine in WebAssembly. Their explicit names keep the architectural choice visible
+while neither implementation is yet the preferred unqualified WebAssembly target.
+The CLI caches assembly lowering on demand, so selecting `wasm-sps` does not construct an unused ZASM program.
+The [WebAssembly backend strategies proposal](docs/proposals/wasm-backends.md) records the alternatives,
+prototype evidence, open runtime questions, and criteria for choosing a future `wasm` default.
+
+#### Structured SPS backend
+
+SPSLow has already made closures and continuations first order: code is represented by explicit blocks,
+closure packages pair an environment with code, and continuation packages pair code with a residual stack.
+The structured backend maps the root and each SPSLow block to one WebAssembly function.
+Lexical computations inside a block become structured instructions in that function,
+and value bindings become WebAssembly locals instead of entries in a global environment array.
+
+Dynamic jumps still require indirection because core WebAssembly does not expose raw function addresses.
+The backend assigns tagged table-index handles to blocks and uses a trampoline between blocks,
+so recursive Zydeco calls do not consume the host call stack.
+Products, closure packages, boxed scalars, and persistent stack frames live in linear memory.
+This retains SPSLow's block granularity without reconstructing the instruction-level ZASM machine.
+
+#### Abstract-machine backend
+
+The abstract-machine backend consumes ZASM, the same first-order stack machine used by the native emitters.
+It assigns every ZASM program point a private table index and emits each point as a `() -> ()` WebAssembly function.
+The exported `entry` function repeatedly dispatches the current index through that table.
+Direct jumps, dynamic continuation jumps, and branches all update the machine's program counter,
+so higher-order control does not require tail-call or function-reference proposal features.
+
+The reusable variable environment, one-megabyte operand/control stack, products, closure packages,
+and boxed 64-bit scalars live in linear memory.
+Products currently use a growing bump heap rather than a collector; ZASM products marked
+for stack allocation are conservatively placed in that heap as well.
+
+#### Shared runtime ABI
+
+Both backends use `i64` runtime data words and retain the native low-bit convention:
+odd words are immediate values and aligned even words are pointer-shaped.
+The SPS backend encodes its block handles as tagged immediates;
+the abstract-machine backend keeps ZASM code addresses as backend-private table indices.
+Generated modules import builtins from the `zydeco` namespace through these typed forms:
+
+- A returning builtin accepts its Zydeco arguments as `i64` parameters and returns one `i64` runtime word.
+- A control builtin accepts its Zydeco arguments and returns four `i64` values:
+  an untagged argument count from zero through two, a module-created closure pointer, and up to two arguments.
+  The backend supplies the arguments and closure environment before resuming the selected code block.
+- An operation that may produce a boxed full-width scalar receives a trailing `i32` address for a one-word spare box.
+  Narrow operations receive zero in this position when their shared ABI includes the parameter.
+
+The additional `string_literal(i32, i32) -> i64` import receives an offset and UTF-8 byte length
+in exported memory and returns the host's opaque string value.
+Each module exports `entry`, the conventional `_start` alias, and `memory`,
+but the embedding must supply the imports before invoking either function.
 
 ### Arena and ID invariants
 
@@ -536,8 +607,8 @@ Two separate type-level relations constrain IDs:
 - Issuers live on the operation that creates nodes: `Parser`, `Desugarer`, `Tycker`,
   assembly `Lowerer`, and stack analysis.
   Their output arenas do not retain the cursor.
-  Stack IR is the deliberate exception: high SPS retains its definition issuer until the consuming SPSLow
-  conversion, which moves that issuer into the low administrative arena for globally unique synthetic definitions.
+  Stack IR is the deliberate exception: high SPS retains its definition issuer until the consuming SPSLow conversion,
+  which moves that issuer into the low administrative arena for globally unique synthetic definitions.
   SPSLow nodes use a separate low-syntax issuer and never reuse high node IDs.
 - Provenance tables encode their actual cardinality.
   In particular, repeated type checking and transparent syntax make surface-to-typed provenance many-to-many,
@@ -560,6 +631,14 @@ Two separate type-level relations constrain IDs:
 The artifact documents a few important limitations:
 
 - The LLVM emitter is experimental; the tested native backend targets AMD64.
+- WebAssembly modules require a `zydeco` host embedding.
+  The abstract-machine backend uses a bounded operand/control-stack region,
+  while the SPS backend allocates persistent stack frames.
+  Both currently use growing, non-collecting heaps.
+  The SPS backend also boxes products uniformly rather than applying ZASM's local-unboxing analysis.
+  The shared control-transfer ABI cannot yet represent the host-created lazy tail closure needed
+  after the first item of a multi-argument process fold;
+  the native runtime's private resumption bridge has no WebAssembly form.
 - Persistent imports currently address relative or absolute source paths;
   interactive compiler sessions additionally expose numbered overlay inputs.
   There is no external package resolver or lock file.

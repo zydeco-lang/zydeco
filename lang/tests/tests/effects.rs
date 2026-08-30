@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use zydeco_cli::CommandCompiler;
 use zydeco_statics::syntax::{Fillable, TermAnnId, Type};
-use zydeco_tests::interp_source;
+use zydeco_tests::runtime_source;
 
 fn check_module(relative: &str) {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib").join(relative);
@@ -39,5 +39,5 @@ fn state_exn_module() {
     check_module("std/control/state-exn.zy");
 }
 
-interp_source!(exception_state, "tests/effects/exception-state.zy");
-interp_source!(state_exception_stack, "tests/effects/state-exception-stack.zy");
+runtime_source!(exception_state, "tests/effects/exception-state.zy");
+runtime_source!(state_exception_stack, "tests/effects/state-exception-stack.zy");

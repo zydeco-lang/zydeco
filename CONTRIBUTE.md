@@ -90,7 +90,28 @@ For example, the declaration-free OOPSLA polynomial root runs with:
 zydeco run lib/tests/oopsla/polynomial.zydeco
 ```
 
+Compile the same source pipeline with either WebAssembly lowering strategy:
+
+```sh
+zydeco build path/to/main.zy --target wasm-am --build-dir build
+zydeco build path/to/main.zy --target wasm-sps --build-dir build
+```
+
+The commands write distinct `.am.wasm` and `.sps.wasm` artifacts. Both modules require the `zydeco` host imports
+documented in `DESIGN.md`.
+
 ## Run Tests
+
+The source harness exercises the interpreter, AMD64, and both WebAssembly backends.
+Cases declared with `e2e_sources!` run on all four; `runtime_source!` cases run on the interpreter
+and both WebAssembly implementations. WebAssembly execution uses the Node.js 24 test host
+in `lang/tests/wasm-host.mjs`; set `NODE` to select a different compatible Node.js executable.
+
+Run only the WebAssembly corpus while iterating on either backend:
+
+```sh
+cargo test -p zydeco-tests wasm_ -- --test-threads=1
+```
 
 The repository provides an aggregate test command:
 

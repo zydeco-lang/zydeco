@@ -1,8 +1,9 @@
 pub mod utils {
-    use std::path::PathBuf;
+    use std::{path::PathBuf, process::Stdio};
     use thiserror::Error;
     use zydeco_cli::{
         BuildOptions, CommandCompiler, CompileError, NativeError, TargetArchitecture, TargetOs,
+        WasmBackendKind,
     };
     use zydeco_session::AnalysisError;
     use zydeco_statics::syntax::{Fillable, TermAnnId, Type};
@@ -17,6 +18,21 @@ pub mod utils {
         Io(#[from] std::io::Error),
         #[error("native source test exited with {0}")]
         NativeExit(std::process::ExitStatus),
+        #[error("failed to start WebAssembly test host `{}`: {source}", executable.display())]
+        WasmHostStart {
+            executable: PathBuf,
+            #[source]
+            source: std::io::Error,
+        },
+        #[error(
+            "{backend:?} WebAssembly source test exited with {status}\nstdout:\n{stdout}\nstderr:\n{stderr}"
+        )]
+        WasmExit {
+            backend: WasmBackendKind,
+            status: std::process::ExitStatus,
+            stdout: String,
+            stderr: String,
+        },
     }
 
     impl CaseError {
@@ -33,6 +49,8 @@ pub mod utils {
     pub enum TestBackend {
         Interpreter,
         Amd64,
+        WasmAm,
+        WasmSps,
     }
 
     pub struct SourceProgram {
@@ -95,6 +113,8 @@ pub mod utils {
                     .test(&self.path, &self.arguments)
                     .map_err(CaseError::Compile),
                 | TestBackend::Amd64 => self.test_amd64(),
+                | TestBackend::WasmAm => self.test_wasm(WasmBackendKind::AbstractMachine),
+                | TestBackend::WasmSps => self.test_wasm(WasmBackendKind::SpsLow),
             };
             if let Err(error) = result {
                 panic!("Error running source {} with {backend:?}: {error}", self.path.display());
@@ -117,6 +137,37 @@ pub mod utils {
             let executable = options.link_amd64("test", &assembly)?;
             let status = executable.run(&self.arguments)?;
             if status.success() { Ok(()) } else { Err(CaseError::NativeExit(status)) }
+        }
+
+        fn test_wasm(&self, backend_kind: WasmBackendKind) -> Result<(), CaseError> {
+            let build_directory = tempfile::tempdir()?;
+            let backend = CommandCompiler::default().lower(&self.path)?;
+            let module = match backend_kind {
+                | WasmBackendKind::AbstractMachine => backend.emit_wasm_am()?,
+                | WasmBackendKind::SpsLow => backend.emit_wasm_sps()?,
+            };
+            let module_path = build_directory.path().join("test.wasm");
+            std::fs::write(&module_path, module)?;
+
+            let host = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("wasm-host.mjs");
+            let node = PathBuf::from(std::env::var_os("NODE").unwrap_or_else(|| "node".into()));
+            let output = std::process::Command::new(&node)
+                .arg(host)
+                .arg(module_path)
+                .args(&self.arguments)
+                .stdin(Stdio::null())
+                .output()
+                .map_err(|source| CaseError::WasmHostStart { executable: node, source })?;
+            if output.status.success() {
+                Ok(())
+            } else {
+                Err(CaseError::WasmExit {
+                    backend: backend_kind,
+                    status: output.status,
+                    stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+                    stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+                })
+            }
         }
     }
 
@@ -242,9 +293,13 @@ macro_rules! check_source {
 }
 
 #[macro_export]
-macro_rules! interp_source {
+macro_rules! runtime_source {
     ($name:ident, $source:expr) => {
-        $crate::__source_test!($name, $source, $crate::utils::TestBackend::Interpreter);
+        mod $name {
+            $crate::__source_test!(interpreter, $source, $crate::utils::TestBackend::Interpreter);
+            $crate::__source_test!(wasm_am, $source, $crate::utils::TestBackend::WasmAm);
+            $crate::__source_test!(wasm_sps, $source, $crate::utils::TestBackend::WasmSps);
+        }
     };
 }
 
@@ -278,6 +333,26 @@ macro_rules! e2e_sources {
                     $name,
                     $source,
                     $crate::utils::TestBackend::Amd64
+                );
+            )*
+        }
+
+        mod wasm_am {
+            $(
+                $crate::__source_test!(
+                    $name,
+                    $source,
+                    $crate::utils::TestBackend::WasmAm
+                );
+            )*
+        }
+
+        mod wasm_sps {
+            $(
+                $crate::__source_test!(
+                    $name,
+                    $source,
+                    $crate::utils::TestBackend::WasmSps
                 );
             )*
         }

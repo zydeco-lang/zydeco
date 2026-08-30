@@ -126,6 +126,43 @@ impl BuildOptions {
         )?;
         Ok(Executable { path: executable_path })
     }
+
+    pub fn write_wasm(
+        &self, artifact: &str, backend: WasmBackendKind, module: &[u8],
+    ) -> Result<WasmArtifact, NativeError> {
+        std::fs::create_dir_all(&self.build_dir).map_err(NativeError::PrepareBuildDirectory)?;
+        let path = self.build_dir.join(format!("{artifact}.{}.wasm", backend.artifact_label()));
+        std::fs::write(&path, module).map_err(NativeError::WriteBackendOutput)?;
+        Ok(WasmArtifact { path })
+    }
+}
+
+/// WebAssembly lowering strategy used to disambiguate side-by-side artifacts.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WasmBackendKind {
+    AbstractMachine,
+    SpsLow,
+}
+
+impl WasmBackendKind {
+    fn artifact_label(self) -> &'static str {
+        match self {
+            | Self::AbstractMachine => "am",
+            | Self::SpsLow => "sps",
+        }
+    }
+}
+
+/// A WebAssembly module ready to instantiate with the Zydeco host imports.
+#[derive(Clone, Debug)]
+pub struct WasmArtifact {
+    path: PathBuf,
+}
+
+impl WasmArtifact {
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
 }
 
 /// A native artifact ready to execute with inherited terminal streams.
@@ -213,4 +250,8 @@ pub enum NativeError {
     CopyExecutable(#[source] std::io::Error),
     #[error("cannot run the executable: {0}")]
     RunExecutable(#[source] std::io::Error),
+    #[error(
+        "WebAssembly execution requires an embedding that implements the `zydeco` host imports"
+    )]
+    WasmExecutionRequiresHost,
 }

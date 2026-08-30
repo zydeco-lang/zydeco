@@ -1064,6 +1064,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "leb128fmt"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
+
+[[package]]
 name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2259,6 +2265,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
+name = "wasm-encoder"
+version = "0.227.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80bb72f02e7fbf07183443b27b0f3d4144abf8c114189f2e088ed95b696a7822"
+dependencies = [
+ "leb128fmt",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.227.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f51cad774fb3c9461ab9bccc9c62dfb7388397b5deda31bf40e8108ccd678b2"
+dependencies = [
+ "bitflags 2.13.1",
+ "indexmap",
+]
+
+[[package]]
 name = "winapi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2505,6 +2530,7 @@ dependencies = [
  "clap_complete",
  "tempfile",
  "thiserror",
+ "wasmparser",
  "zydeco-amd64",
  "zydeco-assembly",
  "zydeco-dynamics",
@@ -2516,6 +2542,8 @@ dependencies = [
  "zydeco-syntax",
  "zydeco-tui",
  "zydeco-utils",
+ "zydeco-wasm-am",
+ "zydeco-wasm-sps",
 ]
 
 [[package]]
@@ -2681,4 +2709,25 @@ dependencies = [
  "im",
  "la-arena",
  "rustc-hash",
+]
+
+[[package]]
+name = "zydeco-wasm-am"
+version = "0.3.0"
+dependencies = [
+ "thiserror",
+ "wasm-encoder",
+ "zydeco-assembly",
+ "zydeco-syntax",
+]
+
+[[package]]
+name = "zydeco-wasm-sps"
+version = "0.3.0"
+dependencies = [
+ "thiserror",
+ "wasm-encoder",
+ "wasmparser",
+ "zydeco-stackir",
+ "zydeco-syntax",
 ]

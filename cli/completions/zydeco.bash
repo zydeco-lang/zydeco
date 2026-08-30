@@ -88,11 +88,11 @@ _zydeco() {
                     return 0
                     ;;
                 --target)
-                    COMPREPLY=($(compgen -W "zir zasm asm llvm exe llvm-exe" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "zir zasm asm llvm wasm-am wasm-sps exe llvm-exe" -- "${cur}"))
                     return 0
                     ;;
                 -t)
-                    COMPREPLY=($(compgen -W "zir zasm asm llvm exe llvm-exe" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "zir zasm asm llvm wasm-am wasm-sps exe llvm-exe" -- "${cur}"))
                     return 0
                     ;;
                 --build-dir)

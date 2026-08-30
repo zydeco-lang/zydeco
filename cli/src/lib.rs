@@ -12,5 +12,5 @@ pub use crate::{
     compile::{AssemblyOutcome, BackendProgram, CommandCompiler, CompileError},
     diagnostics::DiagnosticRenderer,
     format::{SourceFormatError, SourceFormatOutcome, SourceFormatter},
-    native::{BuildOptions, Executable, NativeError},
+    native::{BuildOptions, Executable, NativeError, WasmArtifact, WasmBackendKind},
 };

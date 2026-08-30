@@ -7,6 +7,8 @@ pub enum BuildTarget {
     Zasm,
     Asm,
     Llvm,
+    WasmAm,
+    WasmSps,
     #[default]
     Exe,
     LlvmExe,

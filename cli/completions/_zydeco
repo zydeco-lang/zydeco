@@ -62,8 +62,8 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '--target-os=[Target OS (defaults to host OS)]:TARGET_OS:(linux macos)' \
 '--target-arch=[Target architecture (defaults to host architecture)]:TARGET_ARCH:(x86-64 aarch64)' \
-'-t+[Target backend]:TARGET:(zir zasm asm llvm exe llvm-exe)' \
-'--target=[Target backend]:TARGET:(zir zasm asm llvm exe llvm-exe)' \
+'-t+[Target backend]:TARGET:(zir zasm asm llvm wasm-am wasm-sps exe llvm-exe)' \
+'--target=[Target backend]:TARGET:(zir zasm asm llvm wasm-am wasm-sps exe llvm-exe)' \
 '-b+[Build Directory]:BUILD_DIR:_files' \
 '--build-dir=[Build Directory]:BUILD_DIR:_files' \
 '-r+[Runtime directory]:RUNTIME_DIR:_files' \

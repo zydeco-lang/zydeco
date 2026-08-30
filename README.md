@@ -50,6 +50,24 @@ hello, world!
 
 Run `zydeco --help` for further usage information.
 
+## Building WebAssembly
+
+Zydeco has two experimental WebAssembly lowering strategies. They can be built side by side:
+
+```sh
+zydeco build hello-world.zy --target wasm-am --build-dir build
+zydeco build hello-world.zy --target wasm-sps --build-dir build
+```
+
+The first command lowers ZASM as an abstract machine and writes `build/hello-world.am.wasm`.
+The second starts from first-order SPSLow and writes `build/hello-world.sps.wasm`, compiling each SPS block
+as structured WebAssembly rather than materializing every ZASM instruction.
+Both generated modules export `entry`, `_start`, and `memory`.
+Builtin operations are imports from the `zydeco` namespace,
+so an application must provide the [host ABI described in `DESIGN.md`](DESIGN.md#webassembly-backend)
+before calling `entry`.
+The CLI does not execute WebAssembly modules because it is not itself a host embedding.
+
 ## Interactive REPL
 
 Start the full-screen terminal REPL with:
@@ -132,6 +150,8 @@ The output is written to `target/doc/`.
 │  ├── assembly
 │  ├── amd64
 │  ├── llvm
+│  ├── wasm-am
+│  ├── wasm-sps
 │  ├── tests
 │  └── utils
 ├── cli

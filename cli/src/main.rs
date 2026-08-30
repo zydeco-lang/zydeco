@@ -4,7 +4,7 @@ use thiserror::Error;
 use zydeco_cli::{
     BackendProgram, BuildOptions, BuildTarget, Cli, CommandCompiler, Commands, CompileError,
     DiagnosticRenderer, NativeError, SourceFormatError, SourceFormatOutcome, SourceFormatter,
-    TargetArchitecture, TargetOs,
+    TargetArchitecture, TargetOs, WasmBackendKind,
 };
 use zydeco_dynamics::ProgKont;
 use zydeco_tui::{Repl, ReplError};
@@ -120,6 +120,25 @@ impl Application {
             }
             | BuildTarget::Llvm => {
                 println!("{}", backend.emit_llvm(options.architecture, options.operating_system)?)
+            }
+            | BuildTarget::WasmAm => {
+                if execute {
+                    return Err(NativeError::WasmExecutionRequiresHost.into());
+                }
+                let artifact = Self::artifact_name(path)?;
+                let module = backend.emit_wasm_am()?;
+                let module =
+                    options.write_wasm(&artifact, WasmBackendKind::AbstractMachine, &module)?;
+                println!("{}", module.path().display());
+            }
+            | BuildTarget::WasmSps => {
+                if execute {
+                    return Err(NativeError::WasmExecutionRequiresHost.into());
+                }
+                let artifact = Self::artifact_name(path)?;
+                let module = backend.emit_wasm_sps()?;
+                let module = options.write_wasm(&artifact, WasmBackendKind::SpsLow, &module)?;
+                println!("{}", module.path().display());
             }
             | BuildTarget::Exe => {
                 let artifact = Self::artifact_name(path)?;

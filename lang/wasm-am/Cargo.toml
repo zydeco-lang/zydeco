@@ -1,0 +1,16 @@
+[package]
+name = "zydeco-wasm-am"
+version = { workspace = true }
+rust-version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+readme = { workspace = true }
+description = "ZASM abstract-machine WebAssembly backend for Zydeco"
+
+[dependencies]
+zydeco-syntax = { workspace = true }
+zydeco-assembly = { workspace = true }
+thiserror = { workspace = true }
+wasm-encoder = { workspace = true }

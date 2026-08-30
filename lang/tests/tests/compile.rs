@@ -60,8 +60,22 @@ mod host_arguments {
 mod gc_stress {
     use zydeco_tests::utils::{SourceProgram, TestBackend};
 
+    fn program() -> SourceProgram {
+        SourceProgram::setup("tests/compile/gc-stress.zy")
+    }
+
     #[test]
     fn amd64() {
-        SourceProgram::setup("tests/compile/gc-stress.zy").test(TestBackend::Amd64);
+        program().test(TestBackend::Amd64);
+    }
+
+    #[test]
+    fn wasm_am() {
+        program().test(TestBackend::WasmAm);
+    }
+
+    #[test]
+    fn wasm_sps() {
+        program().test(TestBackend::WasmSps);
     }
 }
