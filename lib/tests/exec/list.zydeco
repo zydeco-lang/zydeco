@@ -5,8 +5,8 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/Ret) = core that
-  let (/Scalar = Int64) = representations/i64 that
-  let (/Scalar = String) = representations/string that
+  let (/Int64) = representations/i64 that
+  let (/String) = representations/string that
 
   let (/List; /list; /int64; /string; /stdio; /process) = make_std builtin in
   def fix foldl (xs : List String) (i : Int64) : Ret Int64 =

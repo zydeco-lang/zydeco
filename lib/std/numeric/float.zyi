@@ -1,7 +1,7 @@
 begin
   let VType = @(intrinsic(vtype)) in
   let BoolModule = @(import("../data/bool.type.zy")) in
-  let NumericInstance = @(import("numeric-instance.type.zy")) in
+  let Numeric = @(import("numeric.type.zy")) in
   let FloatModule = @(import("float.type.zy")) in
   let PrimitiveFloatModule = @(import("primitive-float.type.zy")) in
   let Unit = @(intrinsic(unit)) in
@@ -10,7 +10,7 @@ begin
     (Scalar : VType)
     (String : VType) =
       (#operations :: FloatModule Bool Scalar String)
-    * (#instance :: NumericInstance Bool Scalar)
+    * (#dictionary :: Numeric Bool Scalar)
     * Unit
   in
   pi (_ : @(import("../builtin/core.zy"))) .

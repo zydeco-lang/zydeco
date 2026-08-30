@@ -2,7 +2,7 @@ begin
   begin
     param core : @(import("../builtin/core.zy")) in
     let (/VType; /CType; /Thk; /Ret; /Unit) = core in
-    let NumericInstance = @(import("numeric-instance.type.zy")) in
+    let Numeric = @(import("numeric.type.zy")) in
     let FloatModule = @(import("float.type.zy")) in
     fn (Bool : VType) (Scalar : VType) (String : VType) bool primitive =>
       fn zero =>
@@ -60,33 +60,29 @@ begin
             },
             #to_string = primitive/to_string
           ) in
-          let instance : NumericInstance Bool Scalar = (
-            = Scalar,
-            #dictionary = (
-              #additive = (
-                = zero,
-                #add = operations/add,
-                #sub = operations/sub,
-                #negate = operations/negate
+          let dictionary : Numeric Bool Scalar = (
+            #additive = (
+              = zero,
+              #add = operations/add,
+              #sub = operations/sub,
+              #negate = operations/negate
+            ),
+            #multiplicative = (
+              = one,
+              #mul = operations/mul
+            ),
+            #order = (
+              #equality = (
+                #eq = operations/eq,
+                #ne = operations/ne
               ),
-              #multiplicative = (
-                = one,
-                #mul = operations/mul
-              ),
-              #order = (
-                #equality = (
-                  #eq = operations/eq,
-                  #ne = operations/ne
-                ),
-                #lt = operations/lt,
-                #le = operations/le,
-                #gt = operations/gt,
-                #ge = operations/ge
-              ),
-              ()
+              #lt = operations/lt,
+              #le = operations/le,
+              #gt = operations/gt,
+              #ge = operations/ge
             ),
             ()
           ) in
-          (= operations, = instance, ())
+          (= operations, = dictionary, ())
   end
 end

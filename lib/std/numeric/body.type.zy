@@ -12,7 +12,16 @@ begin
   let UInt64 = @(intrinsic(u64)) in
   let Float32 = @(intrinsic(f32)) in
   let Float64 = @(intrinsic(f64)) in
-  let NumericInstance = @(import("numeric-instance.type.zy")) in
+  let Int8Instance = @(import("instance/int8.type.zy")) in
+  let Int16Instance = @(import("instance/int16.type.zy")) in
+  let Int32Instance = @(import("instance/int32.type.zy")) in
+  let Int64Instance = @(import("instance/int64.type.zy")) in
+  let UInt8Instance = @(import("instance/uint8.type.zy")) in
+  let UInt16Instance = @(import("instance/uint16.type.zy")) in
+  let UInt32Instance = @(import("instance/uint32.type.zy")) in
+  let UInt64Instance = @(import("instance/uint64.type.zy")) in
+  let Float32Instance = @(import("instance/float32.type.zy")) in
+  let Float64Instance = @(import("instance/float64.type.zy")) in
   let PrimitiveIntegerModule = @(import("primitive-integer.type.zy")) in
   let PrimitiveFloatModule = @(import("primitive-float.type.zy")) in
   let IntegerModule = @(import("integer.type.zy")) in
@@ -21,16 +30,16 @@ begin
   let NumericBody (Bool : VType) =
       (
         #numeric ::
-          (#int8_instance :: NumericInstance Bool Int8)
-        * (#int16_instance :: NumericInstance Bool Int16)
-        * (#int32_instance :: NumericInstance Bool Int32)
-        * (#int64_instance :: NumericInstance Bool Int64)
-        * (#uint8_instance :: NumericInstance Bool UInt8)
-        * (#uint16_instance :: NumericInstance Bool UInt16)
-        * (#uint32_instance :: NumericInstance Bool UInt32)
-        * (#uint64_instance :: NumericInstance Bool UInt64)
-        * (#float32_instance :: NumericInstance Bool Float32)
-        * (#float64_instance :: NumericInstance Bool Float64)
+          (#int8_instance :: Int8Instance Bool)
+        * (#int16_instance :: Int16Instance Bool)
+        * (#int32_instance :: Int32Instance Bool)
+        * (#int64_instance :: Int64Instance Bool)
+        * (#uint8_instance :: UInt8Instance Bool)
+        * (#uint16_instance :: UInt16Instance Bool)
+        * (#uint32_instance :: UInt32Instance Bool)
+        * (#uint64_instance :: UInt64Instance Bool)
+        * (#float32_instance :: Float32Instance Bool)
+        * (#float64_instance :: Float64Instance Bool)
         * Unit
       )
     * (

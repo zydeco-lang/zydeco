@@ -1,0 +1,11 @@
+begin
+  let VType = @(intrinsic(vtype)) in
+  let Unit = @(intrinsic(unit)) in
+  let Numeric = @(import("../numeric.type.zy")) in
+  let Int8 = @(intrinsic(i8)) in
+  let Int8Instance (Bool : VType) =
+    exists (#Int8 = ScalarType as Int8 : VType) .
+      (#dictionary :: Numeric Bool ScalarType) * Unit
+  in
+  Int8Instance
+end

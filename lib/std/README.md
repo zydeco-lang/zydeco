@@ -67,9 +67,10 @@ No compatibility forwarding files remain at the old flat paths.
 The host contract is one launcher-supplied value divided into structural dependency groups:
 
 - `core`: `VType`, `CType`, `Thk`, `Ret`, and `Unit`.
-- `representations`: manifest `Scalar` packages for `i8` through `i64`, `u8` through `u64`, `f32`, `f64`,
-  `char`, `string`, and `bytes`.
-- `numeric`: exact-width arithmetic, branch comparisons, and rendering, with a manifest associated `Scalar`.
+- `representations`: manifest packages for `i8` through `i64`, `u8` through `u64`, `f32`, `f64`,
+  `char`, `string`, and `bytes`, each field carrying its public type name.
+- `numeric`: exact-width arithmetic, branch comparisons, and rendering, each package disclosing its carrier
+  under that carrier's name, such as `#Int64`.
 - `text`: operations crossing `Char`, `String`, `Bytes`, and `Int64`.
 - `system`: abstract `Reader`, `Writer`, and `OS` capabilities plus I/O, filesystem, standard stream,
   argument, randomness, and process operations.
@@ -134,7 +135,7 @@ Division by zero, infinities, signed zero, and NaN follow IEEE-754 behavior.
 In particular, every ordered comparison with NaN is false, while `float32/ne` and `float64/ne` report true.
 
 The `numeric` module contains one explicit dictionary for each fixed-width numeric representation.
-Each instance discloses its `Scalar` carrier through a manifest type and nests additive,
+Each instance discloses its carrier through a manifest field named after that carrier and nests additive,
 multiplicative, equality, and ordering capabilities.
 Generic functions accept these dictionaries as ordinary arguments;
 the standard library does not perform implicit instance search.

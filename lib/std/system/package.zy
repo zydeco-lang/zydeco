@@ -10,9 +10,9 @@ begin
     )
   ) in
   let (/VType; /CType; /Thk; /Ret; /Unit) = core in
-  let (#Scalar = Int64, int64) = numeric/int64 in
-  let (/Scalar = String) = representations/string in
-  let (/Scalar = Bytes) = representations/bytes in
+  let (#Int64 = Int64, int64) = numeric/int64 in
+  let (/String) = representations/string in
+  let (/Bytes) = representations/bytes in
   let (/bytes) = text in
   param (/Bool; /Option; /Result; /List; /bool; /option; /result; /list) in
   begin

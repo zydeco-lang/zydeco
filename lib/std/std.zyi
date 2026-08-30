@@ -25,7 +25,6 @@ begin
   let PartialEquality = @(import("numeric/partial-equality.type.zy")) in
   let PartialOrder = @(import("numeric/partial-order.type.zy")) in
   let Numeric = @(import("numeric/numeric.type.zy")) in
-  let NumericInstance = @(import("numeric/numeric-instance.type.zy")) in
   pi
     (
       (
@@ -94,10 +93,6 @@ begin
       )
       (
         #Numeric = NumericType as Numeric :
-        VType -> VType -> VType
-      )
-      (
-        #NumericInstance = NumericInstanceType as NumericInstance :
         VType -> VType -> VType
       )
     .

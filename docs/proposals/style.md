@@ -23,7 +23,7 @@ begin
     @[import("../std/builtin.zy")] _
   ) that
   let (/VType; /Thk) = core that
-  let (/Scalar = String) = representations/string that
+  let (/String) = representations/string that
   let (/OS) = system that
 
   ...
@@ -224,16 +224,16 @@ param (
   @[import("../std/builtin.zy")] _
 ) in
 let (/VType; /Thk) = core in
-let (/Scalar = String) = representations/string in
+let (/String) = representations/string in
 let (/int64; /process) = make_std builtin in
 ...
 ```
 
 Selected outer groups share the same Builtin value. Open each selected group once, place manifest type fields
 before value modules, and retain their interface order when it makes the list easier to compare with the provider.
-Fixed representations use an associated field, such as
-`let (/Scalar = Int64) = representations/i64 in`.
-Use a different explicit rename only when the consumer has a clearer role name.
+A representation discloses its type under that type's public name, so the ordinary pun binds it directly, as in
+`let (/Int64) = representations/i64 in`.
+Use an explicit rename only when the consumer has a clearer role name.
 Select Builtin operations as module values and keep individual calls qualified,
 such as `int64/add` and `process/exit`.
 A final ordinary pattern such as `builtin` retains the complete package for forwarding,
@@ -249,7 +249,7 @@ dependencies, which keeps the names subject to ordinary language-level resolutio
 without repeating the complete host interface.
 
 Within that signature, fixed representations use canonical primitive intrinsics such as
-`@[intrinsic(i64)] _` and are re-exported through manifest `Scalar` packages.
+`@[intrinsic(i64)] _` and are re-exported through manifest packages whose fields carry the public type names.
 Host-type roles are reserved for abstract capability patterns,
 as in `exists @[builtin(reader)] (Reader : VType) . ...`.
 This keeps generative resource identities beside the provider boundary that owns them.

@@ -17,7 +17,7 @@ begin
     @[import("../../std/builtin.zy")] _
   ) in
   let (/VType; /Thk) = core in
-  let (/Scalar = String) = representations/string in
+  let (/String) = representations/string in
   let (/OS) = system in
   let (/Result; /Path; /IoError; /result; /fs; /stdio; /process) = make_std builtin in
 
@@ -100,7 +100,7 @@ param (
   (/representations; /system; builtin) :
   @[import("builtin.zy")] _
 ) in
-let (/Scalar = Bytes) = representations/bytes in
+let (/Bytes) = representations/bytes in
 let (/Reader; /io) = system in
 ...
 ```
@@ -181,8 +181,9 @@ text:             char string bytes
 system:           Reader Writer OS io fs stdio args random process
 ```
 
-Each representation child is a manifest package with an associated `Scalar` type. Each numeric child discloses
-the same `Scalar` identity beside its arithmetic and comparison operations. Text owns operations crossing
+Each representation child is a manifest package whose field carries the public name of its type. Each numeric
+child discloses its carrier under that same name beside its arithmetic and comparison operations. Text owns
+operations crossing
 `Char`, `String`, `Bytes`, and `Int64`; system keeps the generative capabilities and their operations in one
 opening. The full rationale is in [Modular primitive packages](primitive-packages.md).
 
@@ -202,6 +203,7 @@ lib/std/
   data/{body,package,bool,prelude}.type.zy
   numeric/{integer,float}.zy
   numeric/{integer,float}.zyi
+  numeric/instance/{int8,...,uint64,float32,float64}.type.zy
   numeric/package.zy
   numeric/package.zyi
   numeric/*.type.zy
@@ -228,7 +230,8 @@ A topic depends on a selected package boundary rather than on names inherited fr
 
 The derived integer and floating-point builders share algorithms across the fixed-width representations through
 explicitly annotated `forall` parameters. Their result types retain the input `Bool`, scalar, and `String`
-identities, while each public `NumericInstance` still discloses its associated `Scalar` through a manifest field.
+identities, and the numeric assembly wraps each returned dictionary in an instance package whose manifest field
+carries the carrier's public name, such as `#Int64` in `int64_instance`.
 The public system implementation remains one assembly package because `Reader`, `Writer`, and `OS` are abstract
 provider identities shared by `io`, `fs`, and `stdio`. Its host-facing operation contracts are nevertheless split
 into topic leaves, which is the modular boundary that does not duplicate those witnesses.

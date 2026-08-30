@@ -9,26 +9,25 @@ begin
   let PartialEquality = @(import("numeric/partial-equality.type.zy")) in
   let PartialOrder = @(import("numeric/partial-order.type.zy")) in
   let Numeric = @(import("numeric/numeric.type.zy")) in
-  let NumericInstance = @(import("numeric/numeric-instance.type.zy")) in
 
   begin
     param (
       (/core; /representations; /numeric; /system = (/Reader; /Writer; /OS); builtin)
     ) in
     let (/VType; /CType; /Thk; /Ret; /Unit) = core in
-    let (#Scalar = Int8, int8) = numeric/int8 in
-    let (#Scalar = Int16, int16) = numeric/int16 in
-    let (#Scalar = Int32, int32) = numeric/int32 in
-    let (#Scalar = Int64, int64) = numeric/int64 in
-    let (#Scalar = UInt8, uint8) = numeric/uint8 in
-    let (#Scalar = UInt16, uint16) = numeric/uint16 in
-    let (#Scalar = UInt32, uint32) = numeric/uint32 in
-    let (#Scalar = UInt64, uint64) = numeric/uint64 in
-    let (#Scalar = Float32, float32) = numeric/float32 in
-    let (#Scalar = Float64, float64) = numeric/float64 in
-    let (/Scalar = Char) = representations/char in
-    let (/Scalar = String) = representations/string in
-    let (/Scalar = Bytes) = representations/bytes in
+    let (#Int8 = Int8, int8) = numeric/int8 in
+    let (#Int16 = Int16, int16) = numeric/int16 in
+    let (#Int32 = Int32, int32) = numeric/int32 in
+    let (#Int64 = Int64, int64) = numeric/int64 in
+    let (#UInt8 = UInt8, uint8) = numeric/uint8 in
+    let (#UInt16 = UInt16, uint16) = numeric/uint16 in
+    let (#UInt32 = UInt32, uint32) = numeric/uint32 in
+    let (#UInt64 = UInt64, uint64) = numeric/uint64 in
+    let (#Float32 = Float32, float32) = numeric/float32 in
+    let (#Float64 = Float64, float64) = numeric/float64 in
+    let (/Char) = representations/char in
+    let (/String) = representations/string in
+    let (/Bytes) = representations/bytes in
     let (/Bool; /Option; /Result; /List; /bool; /option; /result; /list; base) =
       make_data builtin
     in
@@ -88,7 +87,6 @@ begin
       = PartialEquality,
       = PartialOrder,
       = Numeric,
-      = NumericInstance,
       = prelude,
       (
         = bool,

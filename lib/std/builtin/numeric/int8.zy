@@ -10,7 +10,7 @@ begin
   ) in
   let Render (A : VType) = Thk (A -> Ret String) in
   exists
-    (#Scalar = ScalarType as @(intrinsic(i8)) : VType)
+    (#Int8 = ScalarType as @(intrinsic(i8)) : VType)
   .
       (@[builtin(int8_add)] (#add :: Binary ScalarType))
     * (@[builtin(int8_sub)] (#sub :: Binary ScalarType))

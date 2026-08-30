@@ -5,8 +5,8 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /Ret) = core that
-  let (/Scalar = Int64) = representations/i64 that
-  let (/Scalar = Float64) = representations/f64 that
+  let (/Int64) = representations/i64 that
+  let (/Float64) = representations/f64 that
   let (/OS) = system that
 
   let (/Bool; /Numeric; /numeric; /primitives; /bool; /process) = make_std builtin in
@@ -28,7 +28,7 @@ begin
   : Ret Bool = ! (dictionary/order/lt) left right in
 
   let (
-    #Scalar = IntScalar,
+    #Int64 = IntScalar,
     #dictionary = int_dictionary,
     ()
   ) = numeric/int64_instance in
@@ -41,7 +41,7 @@ begin
   do int_ok <- ! (bool/and) primitive_ok int_operations_ok;
 
   let (
-    #Scalar = FloatScalar,
+    #Float64 = FloatScalar,
     #dictionary = float_dictionary,
     ()
   ) = numeric/float64_instance in

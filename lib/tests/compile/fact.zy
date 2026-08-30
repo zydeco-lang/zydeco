@@ -5,7 +5,7 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/Ret) = core that
-  let (/Scalar = Int64) = representations/i64 that
+  let (/Int64) = representations/i64 that
 
   let (/bool; /int64; /process) = make_std builtin in
   let fix fact (i : Int64) : Ret Int64 =

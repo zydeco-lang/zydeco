@@ -4,7 +4,7 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret) = core that
-  let (/Scalar = Int64) = representations/i64 that
+  let (/Int64) = representations/i64 that
   let (/process) = system that
   def ! apply (A : VType) (B : CType) (f : Thk (A -> B)) (x : A) : B = ! f x that
 

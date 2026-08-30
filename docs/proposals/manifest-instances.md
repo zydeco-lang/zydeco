@@ -6,28 +6,32 @@ Libraries also need a first-class value that packages a carrier with its diction
 while preserving a disclosed concrete representation.
 Manifest existential fields provide precisely that equality.
 
-The standard library uses the following instance shape:
+The standard library gives each width its own instance shape, named after the disclosed carrier:
 
 ```zydeco
-NumericInstance Bool Representation =
-  exists (#Scalar = ScalarType as Representation : VType) .
+Int64Instance Bool =
+  exists (#Int64 = ScalarType as Int64 : VType) .
     (#dictionary :: Numeric Bool ScalarType) *
     Unit
 ```
 
-An integer instance therefore contains a static field `Scalar` with the equation `Scalar ≡ Int64`
-and a dynamic dictionary checked at `Numeric Bool Scalar`.
-The floating-point instance similarly discloses `Scalar ≡ Float64`.
-Opening either package substitutes the manifest definition, so generic results at `Scalar` remain definitionally equal
-to the concrete representation:
+A single generic family `NumericInstance Bool Representation` would force one role label onto every carrier,
+reintroducing the renaming step at each open, so the family was dissolved into per-width types under
+`lib/std/numeric/instance/`.
+
+An integer instance therefore contains a static field `#Int64` with the equation `Int64 ≡ Int64`
+and a dynamic dictionary checked at `Numeric Bool Int64`.
+The floating-point instance similarly discloses `#Float64`.
+Opening either package substitutes the manifest definition, so results at the bound name remain definitionally
+equal to the concrete representation:
 
 ```zydeco
 let (
-  #Scalar = A,
+  #Int64 = Int64,
   #dictionary = operations,
   ()
 ) = numeric/int64_instance in
-  use_numeric A operations
+  use_numeric Int64 operations
 ```
 
 The manifest field is erased.

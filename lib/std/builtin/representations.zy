@@ -1,22 +1,18 @@
 begin
   let VType = @(intrinsic(vtype)) in
   let Unit = @(intrinsic(unit)) in
-  let RepresentationPackage (Representation : VType) =
-    exists (#Scalar = ScalarType as Representation : VType) .
-      Unit
-  in
-    (#i8 :: RepresentationPackage (@(intrinsic(i8))))
-  * (#i16 :: RepresentationPackage (@(intrinsic(i16))))
-  * (#i32 :: RepresentationPackage (@(intrinsic(i32))))
-  * (#i64 :: RepresentationPackage (@(intrinsic(i64))))
-  * (#u8 :: RepresentationPackage (@(intrinsic(u8))))
-  * (#u16 :: RepresentationPackage (@(intrinsic(u16))))
-  * (#u32 :: RepresentationPackage (@(intrinsic(u32))))
-  * (#u64 :: RepresentationPackage (@(intrinsic(u64))))
-  * (#f32 :: RepresentationPackage (@(intrinsic(f32))))
-  * (#f64 :: RepresentationPackage (@(intrinsic(f64))))
-  * (#char :: RepresentationPackage (@(intrinsic(char))))
-  * (#string :: RepresentationPackage (@(intrinsic(string))))
-  * (#bytes :: RepresentationPackage (@(intrinsic(bytes))))
+    (#i8 :: exists (#Int8 = ScalarType as @(intrinsic(i8)) : VType) . Unit)
+  * (#i16 :: exists (#Int16 = ScalarType as @(intrinsic(i16)) : VType) . Unit)
+  * (#i32 :: exists (#Int32 = ScalarType as @(intrinsic(i32)) : VType) . Unit)
+  * (#i64 :: exists (#Int64 = ScalarType as @(intrinsic(i64)) : VType) . Unit)
+  * (#u8 :: exists (#UInt8 = ScalarType as @(intrinsic(u8)) : VType) . Unit)
+  * (#u16 :: exists (#UInt16 = ScalarType as @(intrinsic(u16)) : VType) . Unit)
+  * (#u32 :: exists (#UInt32 = ScalarType as @(intrinsic(u32)) : VType) . Unit)
+  * (#u64 :: exists (#UInt64 = ScalarType as @(intrinsic(u64)) : VType) . Unit)
+  * (#f32 :: exists (#Float32 = ScalarType as @(intrinsic(f32)) : VType) . Unit)
+  * (#f64 :: exists (#Float64 = ScalarType as @(intrinsic(f64)) : VType) . Unit)
+  * (#char :: exists (#Char = ScalarType as @(intrinsic(char)) : VType) . Unit)
+  * (#string :: exists (#String = ScalarType as @(intrinsic(string)) : VType) . Unit)
+  * (#bytes :: exists (#Bytes = ScalarType as @(intrinsic(bytes)) : VType) . Unit)
   * Unit
 end

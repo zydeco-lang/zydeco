@@ -5,7 +5,7 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/CType; /Thk; /Ret) = core that
-  let (/Scalar = Int64) = representations/i64 that
+  let (/Int64) = representations/i64 that
   let (/OS) = system that
   def Y (B : CType) : CType =
     codata

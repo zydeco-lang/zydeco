@@ -282,7 +282,7 @@ begin
       builtin
     ) : Builtin) =>
       let (/VType = SelectedVType) = core in
-      let (/Scalar = SelectedBytes) = representations/bytes in
+      let (/Bytes = SelectedBytes) = representations/bytes in
       let bytes = text/bytes in
       let Selected : SelectedVType = SelectedBytes in
       ! (bytes/empty)

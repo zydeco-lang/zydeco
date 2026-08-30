@@ -4,7 +4,7 @@ begin
     (/representations; /system; builtin) :
     @(import("../../std/builtin.zy"))
   ) that
-  let (/Scalar = String) = representations/string that
+  let (/String) = representations/string that
   let (/OS) = system that
 
   let (/bool; /list; /string; /process) = make_std builtin in

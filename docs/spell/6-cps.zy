@@ -10,7 +10,7 @@ begin
     @(import("../../lib/std/builtin.zy"))
   ) that
   let (/VType; /Thk; /Unit) = core that
-  let (/Scalar = String) = representations/string that
+  let (/String) = representations/string that
   let (/OS; /stdio; /process) = system that
 
   def List (A : VType) : VType =

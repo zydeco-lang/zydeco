@@ -39,15 +39,17 @@ each spelling resolves to the same compiler-canonical identity.
 
 ## Fixed representations
 
-Each child of `representations` is a small manifest package with one associated type named `Scalar`:
+Each child of `representations` is a small manifest package whose field carries the public name of the
+representation it discloses:
 
 ```zydeco
-let (/Scalar = Int64) = representations/i64 in
-let (/Scalar = String) = representations/string in
+let (/Int64) = representations/i64 in
+let (/String) = representations/string in
 ...
 ```
 
-The local names remain descriptive Zydeco type names, while the package paths state the corresponding Rust
+The manifest label names the disclosed type, so a consumer binds that type through an ordinary projection pun
+rather than renaming a role label at every open. The package paths state the corresponding Rust
 representation directly:
 
 | Representation package | Zydeco type | Rust semantic representation |
@@ -72,16 +74,19 @@ type roles are `reader`, `writer`, and `os`.
 ## Numeric operation packages
 
 The `numeric` package separates operations from representation names. Every width-specific package discloses
-the same manifest `Scalar` identity as its representation package and contains only operations for that carrier:
+its carrier under that carrier's public name and contains only operations for that carrier:
 
 ```zydeco
-let (#Scalar = Int64, int64) = numeric/int64 in
+let (#Int64 = Int64, int64) = numeric/int64 in
 do sum <- ! (int64/add) left right;
 ! (int64/lt) Result sum limit when_true when_false
 ```
 
-The associated `Scalar` field is the reusable abstraction. Generic code can accept a package whose operations
-refer to `Scalar`; low-level code can bind it to an exact Rust-shaped type. Arithmetic and comparison packages
+A concrete manifest label lets any consumer bind the disclosed type under its established name, which is the
+name the standard library itself re-exports. An earlier design shared one `#Scalar` label across all widths so
+that a single generic pattern could open any package; no generic consumer of that shape existed, while every
+concrete consumer paid a renaming step at each open, so the shared label was retired. Low-level code still
+binds the manifest to an exact Rust-shaped type, and arithmetic and comparison packages
 can evolve independently of text conversion, I/O, and unrelated widths.
 
 Signed integers expose `Int8` through `Int64`, unsigned integers expose `UInt8` through `UInt64`, and floats
@@ -144,7 +149,7 @@ param (
   @[import("builtin.zy")] _
 ) in
 let (/Ret) = core in
-let (#Scalar = Int64, int64) = numeric/int64 in
+let (#Int64 = Int64, int64) = numeric/int64 in
 ...
 ```
 
@@ -156,7 +161,7 @@ param (
   @[import("builtin.zy")] _
 ) in
 let (/Thk) = core in
-let (/Scalar = String) = representations/string in
+let (/String) = representations/string in
 let (/OS; /stdio; /process) = system in
 ...
 ```

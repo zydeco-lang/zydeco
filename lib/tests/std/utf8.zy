@@ -5,9 +5,9 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/Ret) = core that
-  let (/Scalar = Int64) = representations/i64 that
-  let (/Scalar = Char) = representations/char that
-  let (/Scalar = String) = representations/string that
+  let (/Int64) = representations/i64 that
+  let (/Char) = representations/char that
+  let (/String) = representations/string that
 
   let (/Bool; /bool; /option; /int64; /char; /string; /process) = make_std builtin in
   let ! status (condition : Bool) : Ret Int64 = ! (bool/if)

@@ -5,7 +5,7 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/Ret; /Unit) = core that
-  let (/Scalar = String) = representations/string that
+  let (/String) = representations/string that
   let (/stdio; /process) = system that
 
   let message : String =

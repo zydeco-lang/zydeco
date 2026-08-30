@@ -907,20 +907,20 @@ param (
   Builtin
 ) in
 let (/VType; /CType; /Thk; /Ret; /Unit) = core in
-let (/Scalar = Int8) = representations/i8 in
-let (/Scalar = Int16) = representations/i16 in
-let (/Scalar = Int32) = representations/i32 in
-let (/Scalar = Int64) = representations/i64 in
-let (/Scalar = UInt8) = representations/u8 in
-let (/Scalar = UInt16) = representations/u16 in
-let (/Scalar = UInt32) = representations/u32 in
-let (/Scalar = UInt64) = representations/u64 in
-let (/Scalar = Float32) = representations/f32 in
-let (/Scalar = Float64) = representations/f64 in
-let (/Scalar = Char) = representations/char in
-let (/Scalar = String) = representations/string in
-let (/Scalar = Bytes) = representations/bytes in
-let (#Scalar = NumericInt64, int64) = numeric/int64 in
+let (/Int8) = representations/i8 in
+let (/Int16) = representations/i16 in
+let (/Int32) = representations/i32 in
+let (/Int64) = representations/i64 in
+let (/UInt8) = representations/u8 in
+let (/UInt16) = representations/u16 in
+let (/UInt32) = representations/u32 in
+let (/UInt64) = representations/u64 in
+let (/Float32) = representations/f32 in
+let (/Float64) = representations/f64 in
+let (/Char) = representations/char in
+let (/String) = representations/string in
+let (/Bytes) = representations/bytes in
+let (#Int64 = NumericInt64, int64) = numeric/int64 in
 let (/Reader; /Writer; /OS; /process) = system in
 let Thunk = Thk in
 let U = Thk in

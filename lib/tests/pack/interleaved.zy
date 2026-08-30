@@ -4,8 +4,8 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /Ret; /Unit) = core that
-  let (#Scalar = Int64, int64) = numeric/int64 that
-  let (/Scalar = Char) = representations/char that
+  let (#Int64 = Int64, int64) = numeric/int64 that
+  let (/Char) = representations/char that
   let (/process) = system that
   let Interleaved = exists (Leading as Unit : VType)
     (X : VType)

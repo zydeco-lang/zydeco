@@ -8,8 +8,8 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
-  let (#Scalar = Int64, int64) = numeric/int64 that
-  let (/Scalar = String) = representations/string that
+  let (#Int64 = Int64, int64) = numeric/int64 that
+  let (/String) = representations/string that
   let (/OS; /stdio; /process) = system that
   let Thunk (B : CType) = Thk B that
 

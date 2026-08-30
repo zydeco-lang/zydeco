@@ -6,7 +6,7 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/Thk; /Ret) = core that
-  let (#Scalar = Int64, int64) = numeric/int64 that
+  let (#Int64 = Int64, int64) = numeric/int64 that
   let (/process) = system that
 
   def Gauge =

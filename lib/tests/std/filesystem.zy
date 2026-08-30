@@ -5,9 +5,9 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /Thk; /Unit) = core that
-  let (/Scalar = Int64) = representations/i64 that
-  let (/Scalar = String) = representations/string that
-  let (/Scalar = Bytes) = representations/bytes that
+  let (/Int64) = representations/i64 that
+  let (/String) = representations/string that
+  let (/Bytes) = representations/bytes that
   let (/Writer; /OS) = system that
 
   let (

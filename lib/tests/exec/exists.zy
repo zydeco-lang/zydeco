@@ -4,8 +4,8 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /Thk; /Ret) = core that
-  let (/Scalar = Int64) = representations/i64 that
-  let (/Scalar = Char) = representations/char that
+  let (/Int64) = representations/i64 that
+  let (/Char) = representations/char that
   let (/process) = system that
 
   def Seal (X : VType) (A : VType) =

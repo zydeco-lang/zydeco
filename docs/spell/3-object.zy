@@ -10,8 +10,8 @@ begin
     @(import("../../lib/std/builtin.zy"))
   ) that
   let (/CType; /Thk; /Ret) = core that
-  let (/Scalar = String) = representations/string that
-  let (#Scalar = Int64, int64) = numeric/int64 that
+  let (/String) = representations/string that
+  let (#Int64 = Int64, int64) = numeric/int64 that
   let (/stdio; /process) = system that
 
   def Counter : CType =

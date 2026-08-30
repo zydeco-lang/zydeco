@@ -3,7 +3,7 @@ begin
     (/representations; /system) :
     @(import("../../std/builtin.zy"))
   ) that
-  let (/Scalar = Int64) = representations/i64 that
+  let (/Int64) = representations/i64 that
   let (/process) = system that
 
   let captured : Int64 = 0 that
