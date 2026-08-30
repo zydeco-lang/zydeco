@@ -12,7 +12,14 @@ begin
 
   begin
     param (
-      (/core; /representations; /numeric; /system = (/Reader; /Writer; /OS); builtin)
+      (
+        /core;
+        /representations;
+        /numeric;
+        /system = (/Reader; /Writer; /OS);
+        builtin
+      )
+      : @(import("builtin.zy"))
     ) in
     let (/VType; /CType; /Thk; /Ret; /Unit) = core in
     let (= Int8, int8) = numeric/int8 in

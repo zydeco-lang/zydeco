@@ -1,7 +1,0 @@
-begin
-  let VType = @(intrinsic(vtype)) in
-  let Unit = @(intrinsic(unit)) in
-  let Numeric = @(import("../numeric.type.zy")) in
-  param Bool : VType in
-  exists (= Int16 as @(intrinsic(i16)) : VType) . Numeric Bool Int16
-end

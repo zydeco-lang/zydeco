@@ -15,8 +15,8 @@ exists (= Int64 as @(intrinsic(i64)) : VType) .
 ```
 
 A single generic family `NumericInstance Bool Representation` would force one role label onto every carrier,
-reintroducing the renaming step at each open, so the family was dissolved into per-width types under
-`lib/std/numeric/instance/`.
+reintroducing the renaming step at each open, so the family was dissolved into per-width instance packages
+introduced inline in `numeric/package.zy`.
 
 An integer instance therefore packages one manifest field `Int64`, defined as the primitive `i64` intrinsic,
 with the dictionary as the package body, checked at `Numeric Bool Int64`.

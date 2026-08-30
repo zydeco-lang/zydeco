@@ -4,8 +4,8 @@ The standard library has two boundaries.
 [`builtin.zy`](builtin.zy) is the typed contract between Zydeco programs and the host runtime.
 Its operations expose representation-independent observations and effects,
 but never construct library-defined `Bool`, `Option`, `Result`, or `List` values.
-[`std.zyi`](std.zyi) annotates the public package independently from its implementation.
-[`std.zy`](std.zy) applies the topic packages in this directory and assembles a value of that package type.
+[`std.zy`](std.zy) applies the topic packages in this directory and assembles the public package,
+whose sealed type its final `pack` introduction synthesizes.
 
 Each topic owns exactly one implementation: `data`, `text`, `system`, and `numeric` each provide
 `package.zy`, sealed by a final `pack` introduction whose existential type the checker synthesizes,
@@ -14,9 +14,8 @@ Implementations annotate their parameters in place:
 the Builtin group through `builtin.zy`, and the shared algebraic base through `data/package.type.zy`.
 The implementation defines its topic's data types and operations in one dependency-scheduled block,
 so derived operations sit next to the types they observe and no per-module contract split remains.
-Reusable type terms live in `.type.zy` sources beside their topic:
-`body.type.zy` defines the topic's record-shape constructor together with its module telescopes,
-and `data/package.type.zy` wraps that body in the data topic's existential witnesses.
+`data/package.type.zy` names that shared base type directly,
+carrying the data topic's existential witnesses and module telescopes in one declaration.
 Type files bind `VType` and `CType` once at the top of the file and use those aliases in every classifier below.
 
 This separation keeps algebraic data in the language.
@@ -29,7 +28,6 @@ The files at the root of this directory are composition boundaries, not implemen
 
 ```text
 builtin.zy                 complete host ABI and shared system witness telescope
-std.zyi                    companion annotation for `std.zy`
 std.zy                     wiring for the public package
 
 builtin/core.zy            CBPV kinds and constructors
@@ -39,25 +37,21 @@ builtin/text/*.zy          Char, String, and Bytes host operations
 builtin/system/*.zy        I/O, filesystem, streams, arguments, randomness, process
 
 data/package.zy            Bool, Option, Result, List, and every derived operation
-data/body.type.zy          DataBody constructor and the option/result/list telescopes
-data/package.type.zy       DataPackage existential wrapper, the shared base type
+data/package.type.zy       DataPackage existential wrapper with the module telescopes
 data/bool.type.zy          BoolModule telescope shared with the numeric builders
 data/prelude.type.zy       thunk and return aliases re-exported by `std`
 
 numeric/{integer,float}.zy explicitly polymorphic derived numeric builders
 numeric/package.zy         the ten width modules, instances, and primitive groups
-numeric/body.type.zy       NumericBody constructor over the shared telescopes
 
 text/package.zy            cross-representation text operations
-text/body.type.zy          TextBody constructor and the char/string/bytes telescopes
 
 system/package.zy          system data types and capability-preserving assembly
-system/body.type.zy        SystemBody constructor and the io/fs/stdio/process telescopes
 
 control/*.zy               monadic basis, State, Exception, and their combination
 
 **/*.zyi                   optional whole-file annotations beside value implementations
-**/*.type.zy               reusable type terms imported by companions and other type files
+**/*.type.zy               reusable type terms imported by implementations and companions
 ```
 
 Topic implementations are independently checkable package functions. The public package keeps one opening for
@@ -174,7 +168,7 @@ in [`docs/proposals/filesystem.md`](../../docs/proposals/filesystem.md).
 
 The topic files are independently importable pure package functions.
 `std.zy` is the composition root used by most programs and re-exports their abstract type witnesses in one package.
-Its public record nests one sub-record per topic, matching the body constructors imported by its companion,
-so the exposed contract stays reviewable without reading the implementation machinery.
+Its public record nests one sub-record per topic, and its sealed type is synthesized from the final
+`pack` introduction, so no restated contract sits between the implementation and its consumers.
 Consumers still select individual modules and types directly, such as `let (/option; /process) = make_std builtin in`,
 because slash projection searches the nested structure.

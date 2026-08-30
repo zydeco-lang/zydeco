@@ -4546,7 +4546,6 @@ mod tests {
             ("monad.zy", include_str!("../../../../lib/std/control/monad.zy")),
             ("numeric-package.zy", include_str!("../../../../lib/std/numeric/package.zy")),
             ("std.zy", include_str!("../../../../lib/std/std.zy")),
-            ("std.zyi", include_str!("../../../../lib/std/std.zyi")),
             ("system-package.zy", include_str!("../../../../lib/std/system/package.zy")),
             ("text-package.zy", include_str!("../../../../lib/std/text/package.zy")),
         ]

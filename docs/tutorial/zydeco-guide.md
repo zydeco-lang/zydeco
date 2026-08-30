@@ -569,9 +569,10 @@ The effect-related modules under `lib/std/control` are:
 | `state-exn.zy` | `StateExn`, `mo_state_exn`, `state_ops`, `throw_ops`, `get`, `put`, `raise`, `catch`, `run_state_exn` |
 
 A module source is a package-dependent function from Builtin to an `exists`-wrapped package.
-A public library is usually a pair of files: the `.zy` file is the implementation, and the
+A public library can be a pair of files: the `.zy` file is the implementation, and the
 `.zyi` file is the pure package-type interface. Interface files import intrinsic kinds and
-types directly and use `pi`/`exists` to state the signature the implementation must match.
+types directly and use `pi`/`exists` to state the signature the implementation must match;
+a source ending in a `pack` introduction instead synthesizes its package type and needs no interface file.
 Open a module with a projection group:
 
 ```zydeco
