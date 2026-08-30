@@ -2,12 +2,8 @@ begin
   let VType = @(intrinsic(vtype)) in
   let CType = @(intrinsic(ctype)) in
   let MonadThrow
-    (E : VType)
-    (
-      M : VType -> (
-        CType
-      )
-    ) =
+    (E : VType) (M : VType -> CType)
+  =
     codata
     | .throw :
       forall (A : VType) . E -> M A

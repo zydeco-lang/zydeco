@@ -8,22 +8,16 @@ begin
   let String = @(intrinsic(string)) in
   let Bytes = @(intrinsic(bytes)) in
 
-  let IoModule (Bool : VType)
-    (
-      Option : VType -> (
-        VType
-      )
-    )
-    (
-      Result : VType -> (
-        VType
-      ) -> VType
-    )
+  let IoModule
+    (Bool : VType)
+    (Option : VType -> VType)
+    (Result : VType -> VType -> VType)
     (Reader : VType)
     (Writer : VType)
     (IoErrorKind : VType)
     (IoError : VType)
-    (OS : CType) =
+    (OS : CType)
+  =
       (#not_found :: IoErrorKind)
     * (#permission_denied :: IoErrorKind)
     * (#already_exists :: IoErrorKind)
@@ -91,16 +85,13 @@ begin
   in
 
   let FsModule
-    (
-      Result : VType -> (
-        VType
-      ) -> VType
-    )
+    (Result : VType -> VType -> VType)
     (Reader : VType)
     (Writer : VType)
     (Path : VType)
     (IoError : VType)
-    (OS : CType) =
+    (OS : CType)
+  =
       (#path :: Thk (String -> Ret Path))
     * (#path_string :: Thk (Path -> Ret String))
     * (
@@ -155,20 +146,13 @@ begin
   in
 
   let StdioModule
-    (
-      Option : VType -> (
-        VType
-      )
-    )
-    (
-      Result : VType -> (
-        VType
-      ) -> VType
-    )
+    (Option : VType -> VType)
+    (Result : VType -> VType -> VType)
     (Reader : VType)
     (Writer : VType)
     (IoError : VType)
-    (OS : CType) =
+    (OS : CType)
+  =
       (#stdin :: Thk (Ret Reader))
     * (#stdout :: Thk (Ret Writer))
     * (#stderr :: Thk (Ret Writer))
@@ -209,12 +193,8 @@ begin
   in
 
   let ProcessModule
-    (
-      List : VType -> (
-        VType
-      )
-    )
-    (OS : CType) =
+    (List : VType -> VType) (OS : CType)
+  =
       (#arg_list :: Thk (Thk (List String -> OS) -> OS))
     * (#random_int :: Thk (Thk (Int64 -> OS) -> OS))
     * (#halt :: Thk OS)

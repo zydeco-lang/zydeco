@@ -3,12 +3,8 @@ begin
   let CType = @(intrinsic(ctype)) in
   let Unit = @(intrinsic(unit)) in
   let MonadState
-    (S : VType)
-    (
-      M : VType -> (
-        CType
-      )
-    ) =
+    (S : VType) (M : VType -> CType)
+  =
     codata
     | .get : M S
     | .put : S -> M Unit

@@ -9,27 +9,18 @@ begin
   let Bytes = @(intrinsic(bytes)) in
 
   let CharModule
-    (
-      Option : VType -> (
-        VType
-      )
-    ) =
+    (Option : VType -> VType)
+  =
       (#to_string :: Thk (Char -> Ret String))
     * (#codepoint :: Thk (Char -> Ret Int64))
     * (#from_codepoint :: Thk (Int64 -> Ret (Option Char)))
   in
 
-  let StringModule (Bool : VType)
-    (
-      Option : VType -> (
-        VType
-      )
-    )
-    (
-      List : VType -> (
-        VType
-      )
-    ) =
+  let StringModule
+    (Bool : VType)
+    (Option : VType -> VType)
+    (List : VType -> VType)
+  =
       (#empty :: String)
     * (#length :: Thk (String -> Ret Int64))
     * (#byte_length :: Thk (String -> Ret Int64))
@@ -64,11 +55,8 @@ begin
   in
 
   let BytesModule
-    (
-      Option : VType -> (
-        VType
-      )
-    ) =
+    (Option : VType -> VType)
+  =
       (#empty :: Thk (Ret Bytes))
     * (#length :: Thk (Bytes -> Ret Int64))
     * (#append :: Thk (Bytes -> Bytes -> Ret Bytes))
@@ -76,17 +64,11 @@ begin
     * (#to_string :: Thk (Bytes -> Ret (Option String)))
   in
 
-  let TextBody (Bool : VType)
-    (
-      Option : VType -> (
-        VType
-      )
-    )
-    (
-      List : VType -> (
-        VType
-      )
-    ) =
+  let TextBody
+    (Bool : VType)
+    (Option : VType -> VType)
+    (List : VType -> VType)
+  =
       (#char :: CharModule Option)
     * (#string :: StringModule Bool Option List)
     * (#bytes :: BytesModule Option)
