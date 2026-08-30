@@ -1,6 +1,6 @@
 use tower_lsp::lsp_types::{Position, Range, TextEdit};
 use zydeco_surface::textual::{Lexer, SourceUnitParser, fmt::PrettyFormatter, syntax::Parser};
-use zydeco_utils::span::FileMap;
+use zydeco_utils::span::{FileMap, LineCol};
 
 /// One complete outcome of a whole-document formatting request.
 #[derive(Clone, Debug, PartialEq)]
@@ -56,8 +56,8 @@ struct WholeDocumentEdit;
 impl WholeDocumentEdit {
     fn replacing(source: &str, new_text: String) -> Option<TextEdit> {
         let cursor = FileMap::local(source, None).line_col_utf16(source.len())?;
-        let line = u32::try_from(cursor.line).ok()?;
-        let character = u32::try_from(cursor.column).ok()?;
+        let LineCol { line, column, .. } = cursor;
+        let character = column;
         Some(TextEdit {
             range: Range::new(Position::new(0, 0), Position::new(line, character)),
             new_text,

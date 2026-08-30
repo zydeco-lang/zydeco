@@ -1,16 +1,15 @@
-use super::syntax::*;
 use crate::*;
 use zydeco_syntax::span_via_back;
 
 impl<'a> SpanView<'a, Tycker<'a>> for DefId {
     fn span(&self, tycker: &'a Tycker<'a>) -> &'a Span {
-        span_via_back(tycker.spans, &*tycker.scoped, *self)
+        span_via_back(tycker.spans, tycker.scoped, *self)
     }
 }
 
 impl<'a> SpanView<'a, Tycker<'a>> for su::PatId {
     fn span(&self, tycker: &'a Tycker<'a>) -> &'a Span {
-        span_via_back(tycker.spans, &*tycker.scoped, *self)
+        span_via_back(tycker.spans, tycker.scoped, *self)
     }
 }
 
@@ -30,7 +29,7 @@ impl<'a> SpanView<'a, Tycker<'a>> for VPatId {
 
 impl<'a> SpanView<'a, Tycker<'a>> for su::TermId {
     fn span(&self, tycker: &'a Tycker<'a>) -> &'a Span {
-        span_via_back(tycker.spans, &*tycker.scoped, *self)
+        span_via_back(tycker.spans, tycker.scoped, *self)
     }
 }
 

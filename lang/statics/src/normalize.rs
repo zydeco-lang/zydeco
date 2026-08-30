@@ -1,4 +1,4 @@
-use super::{syntax::*, *};
+use super::*;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use zydeco_utils::arena::ArenaAccess;
 

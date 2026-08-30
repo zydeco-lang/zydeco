@@ -121,8 +121,10 @@ impl SourceChecked {
             }));
         };
         let Self { spans, scoped, statics, root: _ } = self;
-        let mut lowering_scoped = zydeco_surface::scoped::arena::ScopedArena::default();
-        lowering_scoped.defs = statics.scoped_definitions(&scoped);
+        let mut lowering_scoped = zydeco_surface::scoped::arena::ScopedArena {
+            defs: statics.scoped_definitions(&scoped),
+            ..Default::default()
+        };
         let stackir =
             match zydeco_stackir::RootLowerer::new(&spans, &mut lowering_scoped, &statics, root)
                 .run()
@@ -147,8 +149,10 @@ impl SourceChecked {
             }));
         };
         let Self { spans, scoped, statics, root: _ } = self;
-        let mut lowering_scoped = zydeco_surface::scoped::arena::ScopedArena::default();
-        lowering_scoped.defs = statics.scoped_definitions(&scoped);
+        let mut lowering_scoped = zydeco_surface::scoped::arena::ScopedArena {
+            defs: statics.scoped_definitions(&scoped),
+            ..Default::default()
+        };
         let stackir = zydeco_stackir::BuiltinRootLowerer::new(
             &spans,
             &mut lowering_scoped,
@@ -340,35 +344,6 @@ struct SourceFixture {
 struct RepositorySourceFiles;
 
 impl RepositorySourceFiles {
-    fn all() -> Vec<PathBuf> {
-        let repository =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
-        ["cli", "docs", "lib"]
-            .into_iter()
-            .flat_map(|directory| Self::under(&repository.join(directory)).unwrap())
-            .collect()
-    }
-
-    fn under(directory: &Path) -> std::io::Result<Vec<PathBuf>> {
-        std::fs::read_dir(directory)?
-            .map(|entry| {
-                let entry = entry?;
-                let path = entry.path();
-                if entry.file_type()?.is_dir() {
-                    Self::under(&path)
-                } else if matches!(
-                    path.extension().and_then(|extension| extension.to_str()),
-                    Some("zy" | "zyi" | "zydeco")
-                ) {
-                    Ok(vec![path])
-                } else {
-                    Ok(Vec::new())
-                }
-            })
-            .collect::<std::io::Result<Vec<_>>>()
-            .map(|paths| paths.into_iter().flatten().collect())
-    }
-
     fn assert_pure_package(relative: impl AsRef<Path>) {
         use zydeco_statics::syntax::{Fillable, TermAnnId, Type};
 
@@ -771,7 +746,7 @@ fn source_graph_reports_a_missing_import_at_its_source_site() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", r#"@[import("missing.zy")] _"#);
 
-    let SourceLoadError::ImportPath { importer, requested, span, .. } =
+    let SourceLoadError::ImportPath { importer, requested, .. } =
         SourceGraph::load(root).unwrap_err()
     else {
         panic!("expected a missing import")

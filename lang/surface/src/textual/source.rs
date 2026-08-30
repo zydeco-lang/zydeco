@@ -348,7 +348,7 @@ impl DocumentationSite {
         let meta = meta
             .specialize::<DocMeta>()
             .expect("documentation metadata specialization is infallible")?;
-        let span = spans[&EntityId::Term(term)].clone();
+        let span = spans[&EntityId::Term(term)];
         let comment = arena.trivia.attached_text(term.into()).cloned();
         Some(Self { term, payload, directive: DocumentationDirective { meta, comment, span } })
     }
@@ -360,7 +360,7 @@ impl LiteralSite {
     ) -> Option<Result<Self, LiteralDirectiveError>> {
         match meta.specialize::<LiteralMeta>() {
             | Ok(Some(_)) => {
-                let span = spans[&EntityId::Term(term)].clone();
+                let span = spans[&EntityId::Term(term)];
                 Some(if matches!(arena.terms[&payload], Term::Hole(Hole)) {
                     match arena.trivia.attached_text(term.into()).cloned() {
                         | Some(text) => {
@@ -374,7 +374,7 @@ impl LiteralSite {
             }
             | Ok(None) => None,
             | Err(source) => {
-                let span = spans[&EntityId::Term(term)].clone();
+                let span = spans[&EntityId::Term(term)];
                 Some(Err(LiteralDirectiveError::Invalid { term, span, source }))
             }
         }
@@ -386,16 +386,17 @@ impl ImportSite {
         term: TermId, meta: &Meta, payload: TermId, arena: &TextArena, spans: &SpanArena,
     ) -> Option<Result<Self, ImportDirectiveError>> {
         meta.is("import").then(|| {
-            let span = spans[&EntityId::Term(term)].clone();
+            let span = spans[&EntityId::Term(term)];
             let target = match meta.arguments() {
                 | [Meta::String(path)] if path.is_empty() => {
                     return Err(ImportDirectiveError::EmptyPath { term, span });
                 }
                 | [Meta::String(path)] => ImportTarget::Path(PathBuf::from(path)),
                 | [Meta::Integer(number)] => ImportTarget::Input(
-                    u64::try_from(*number).ok().and_then(SourceNumber::new).ok_or_else(|| {
-                        ImportDirectiveError::NonPositiveInput { term, span: span.clone() }
-                    })?,
+                    u64::try_from(*number)
+                        .ok()
+                        .and_then(SourceNumber::new)
+                        .ok_or(ImportDirectiveError::NonPositiveInput { term, span })?,
                 ),
                 | [_] => {
                     return Err(ImportDirectiveError::UnsupportedTarget { term, span });
@@ -423,19 +424,19 @@ impl BuiltinSite {
         let location = BuiltinLocation::Term { annotation: term, payload };
         match meta.specialize::<BuiltinMeta>() {
             | Ok(Some(BuiltinMeta { role: BuiltinRole::Value(role) })) => {
-                let span = spans[&EntityId::Term(term)].clone();
+                let span = spans[&EntityId::Term(term)];
                 Some(Ok(Self {
                     location,
                     directive: BuiltinDirective { role: BuiltinRole::Value(role), span },
                 }))
             }
             | Ok(Some(BuiltinMeta { role: BuiltinRole::Type(role) })) => {
-                let span = spans[&EntityId::Term(term)].clone();
+                let span = spans[&EntityId::Term(term)];
                 Some(Err(BuiltinDirectiveError::TypeRoleOnTerm { term, span, role }))
             }
             | Ok(None) => None,
             | Err(source) => {
-                let span = spans[&EntityId::Term(term)].clone();
+                let span = spans[&EntityId::Term(term)];
                 Some(Err(BuiltinDirectiveError::Invalid {
                     location,
                     span,
@@ -454,23 +455,23 @@ impl BuiltinSite {
                 location,
                 directive: BuiltinDirective {
                     role: BuiltinRole::Type(role),
-                    span: annotation.info.clone(),
+                    span: annotation.info,
                 },
             }),
             | Ok(Some(BuiltinMeta { role: BuiltinRole::Value(role) })) => {
                 Err(BuiltinDirectiveError::ValueRoleOnExistentialPattern {
                     pattern,
-                    span: annotation.info.clone(),
+                    span: annotation.info,
                     role,
                 })
             }
             | Ok(None) => Err(BuiltinDirectiveError::UnsupportedExistentialPattern {
                 pattern,
-                span: annotation.info.clone(),
+                span: annotation.info,
             }),
             | Err(source) => Err(BuiltinDirectiveError::Invalid {
                 location,
-                span: annotation.info.clone(),
+                span: annotation.info,
                 source: Box::new(source),
             }),
         }
@@ -483,7 +484,7 @@ impl IntrinsicSite {
     ) -> Option<Result<Self, IntrinsicDirectiveError>> {
         match meta.specialize::<IntrinsicMeta>() {
             | Ok(Some(meta)) => {
-                let span = spans[&EntityId::Term(term)].clone();
+                let span = spans[&EntityId::Term(term)];
                 Some(if matches!(arena.terms[&payload], Term::Hole(Hole)) {
                     Ok(Self {
                         term,
@@ -496,7 +497,7 @@ impl IntrinsicSite {
             }
             | Ok(None) => None,
             | Err(source) => {
-                let span = spans[&EntityId::Term(term)].clone();
+                let span = spans[&EntityId::Term(term)];
                 Some(Err(IntrinsicDirectiveError::Invalid { term, span, source }))
             }
         }

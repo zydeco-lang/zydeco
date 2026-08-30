@@ -1,6 +1,6 @@
 //! Methods on entities in [`StaticsArena`].
 
-use super::{syntax::*, *};
+use super::*;
 
 impl TypeBinder {
     /// Reconstruct the ordinary, whole-argument pattern used by internal

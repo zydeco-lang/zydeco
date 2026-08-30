@@ -282,8 +282,7 @@ impl<'a> Lower<'a> for sk::ValueId {
                                     cx,
                                     CxKont::same(Box::new(move |lo: &mut Lowerer, cx| {
                                         // Pack them into a pair value
-                                        Pack(product.clone())
-                                            .build(lo, With::new(cx, CxKont::same(kont)))
+                                        Pack(product).build(lo, With::new(cx, CxKont::same(kont)))
                                     })),
                                 ),
                             )

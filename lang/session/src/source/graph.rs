@@ -143,7 +143,7 @@ impl SourceGraph {
                                 kind: SourceDependencyKind::Import(import),
                                 dependent: self.sources[&edge.importer].path.clone(),
                                 dependency: self.sources[&edge.imported].path.clone(),
-                                span: edge.span.clone(),
+                                span: edge.span,
                             }
                         }
                         | SourceDependency::Signature { implementation, signature } => {
@@ -152,7 +152,7 @@ impl SourceGraph {
                                 kind: SourceDependencyKind::Signature,
                                 dependent: self.sources[&implementation].path.clone(),
                                 dependency: signature.path.clone(),
-                                span: signature.spans[&signature.unit.root.into()].clone(),
+                                span: signature.spans[&signature.unit.root.into()],
                             }
                         }
                     })

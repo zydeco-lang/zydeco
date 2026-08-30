@@ -465,8 +465,8 @@ impl<T> IntoIterator for OneOrMany<T> {
 
     fn into_iter(self) -> Self::IntoIter {
         match self {
-            | Self::One(value) => Some(value).into_iter().chain(Vec::new().into_iter()),
-            | Self::Many(values) => None.into_iter().chain(values.into_iter()),
+            | Self::One(value) => Some(value).into_iter().chain(Vec::new()),
+            | Self::Many(values) => None.into_iter().chain(values),
         }
     }
 }

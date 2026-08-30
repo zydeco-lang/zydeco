@@ -62,7 +62,7 @@ impl TestFixture {
                 root,
             }));
         let data = zydeco_statics::query::intern_pending(&db);
-        test(&mut Tycker::new(&db, data, &spans, &prim, &mut scoped));
+        test(&mut Tycker::new(&db, data, &spans, &prim, &scoped));
     }
 
     pub fn kinds(tycker: &mut Tycker<'_>) -> (KindId, KindId) {

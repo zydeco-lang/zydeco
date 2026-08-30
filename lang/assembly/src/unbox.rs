@@ -378,7 +378,7 @@ mod tests {
         let field_b: sk::ValueId = sk::Triv.build(&mut arena, None);
         let items = sk::ConsN::from_vec(vec![field_a, field_b]).unwrap();
         let layout = sk::ProductLayout { arity: 2 };
-        let value: sk::ValueId = sk::VCons::new(items, layout.clone()).build(&mut arena, None);
+        let value: sk::ValueId = sk::VCons::new(items, layout).build(&mut arena, None);
 
         let pattern_a: sk::VPatId = sk::Hole.build(&mut arena, None);
         let pattern_b: sk::VPatId = sk::Hole.build(&mut arena, None);
@@ -403,7 +403,7 @@ mod tests {
         let field_b: sk::ValueId = sk::Triv.build(&mut arena, None);
         let items = sk::ConsN::from_vec(vec![field_a, field_b]).unwrap();
         let layout = sk::ProductLayout { arity: 2 };
-        let value: sk::ValueId = sk::VCons::new(items, layout.clone()).build(&mut arena, None);
+        let value: sk::ValueId = sk::VCons::new(items, layout).build(&mut arena, None);
 
         let binder: sk::VPatId = sk::Hole.build(&mut arena, None);
         let stack: sk::StackId = sk::Bullet.build(&mut arena, None);

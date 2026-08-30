@@ -3,7 +3,6 @@
 //! This module provides the [`Alloc`] trait and all its implementations,
 //! which provides a type-safe approach to allocate in a post-type-check arena.
 
-use super::syntax::*;
 use crate::*;
 use zydeco_utils::arena::{ArenaId, KeySpaceId, derived_id};
 

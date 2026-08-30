@@ -285,8 +285,7 @@ impl<'a> ContextElaboration<'a> {
                                 Ok(b::RecursiveDefinition { binder, bindee })
                             }
                             | BindingForm::Parameter(_) => {
-                                Err(ResolveError::RecursiveParameter(source.span(resolver).clone())
-                                    .into())
+                                Err(ResolveError::RecursiveParameter(*source.span(resolver)).into())
                             }
                         })
                         .collect::<Result<Vec<_>>>()?;

@@ -54,7 +54,6 @@
 //!
 //! Good luck (つ´ω｀)つ
 
-use super::syntax::*;
 use crate::*;
 
 /// Trait for constructing entities in [`Tycker`] with more type inference available.
@@ -1242,7 +1241,7 @@ impl<'a> Tycker<'a> {
 
 #[cfg(test)]
 mod kind_test {
-    use super::super::{syntax::*, *};
+    use super::super::*;
 
     #[test]
     fn r#static() {

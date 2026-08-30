@@ -404,9 +404,9 @@ impl PositionedToken {
             return None;
         }
         Some(Self {
-            line: u32::try_from(start.line).ok()?,
-            start: u32::try_from(start.column).ok()?,
-            length: u32::try_from(end.column - start.column).ok()?,
+            line: start.line,
+            start: start.column,
+            length: end.column - start.column,
             style,
         })
     }

@@ -160,13 +160,13 @@ where
             | ImportTarget::Path(_) => SourceLoadError::ImportPath {
                 importer: importer_path.to_path_buf(),
                 requested: requested.clone(),
-                span: Box::new(site.directive.span.clone()),
+                span: Box::new(site.directive.span),
                 source,
             },
             | ImportTarget::Input(input) => SourceLoadError::ImportInput {
                 importer: importer_path.to_path_buf(),
                 input: *input,
-                span: Box::new(site.directive.span.clone()),
+                span: Box::new(site.directive.span),
                 source,
             },
         };

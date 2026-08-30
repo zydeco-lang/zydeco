@@ -364,7 +364,7 @@ impl Resolve for TermId {
             | Term::MobileParam(term) => {
                 let MobileParam { binder: _, tail } = term;
                 if local.boundary.is_none() {
-                    Err(ResolveError::UnenclosedThat(self.span(resolver).clone()))?
+                    Err(ResolveError::UnenclosedThat(*self.span(resolver)))?
                 }
                 tail.resolve(resolver, (local, global))?;
                 Residual(tail).into()
@@ -372,7 +372,7 @@ impl Resolve for TermId {
             | Term::MobileBind(term) => {
                 let MobileBind { binder: _, bindee: _, tail } = *term;
                 if local.boundary.is_none() {
-                    Err(ResolveError::UnenclosedThat(self.span(resolver).clone()))?
+                    Err(ResolveError::UnenclosedThat(*self.span(resolver)))?
                 }
                 tail.resolve(resolver, (local, global))?;
                 Residual(tail).into()

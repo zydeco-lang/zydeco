@@ -1458,10 +1458,10 @@ impl<'arena> PrettyFormatter<'arena> {
     fn format_annotated(
         &self, term: TermId, meta: &'arena Meta, inner: TermId, directive: FormatMeta,
     ) -> RcDoc<'arena> {
-        if directive.verbatim {
-            if let Some(document) = self.format_verbatim(term, meta, inner) {
-                return document;
-            }
+        if directive.verbatim
+            && let Some(document) = self.format_verbatim(term, meta, inner)
+        {
+            return document;
         }
         let scoped = self.scoped(self.options.with_format_meta(&directive));
         let prefix = self.annotation_prefix(meta);

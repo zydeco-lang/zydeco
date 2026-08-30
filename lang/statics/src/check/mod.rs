@@ -7720,7 +7720,7 @@ mod source_boundary_tests {
             root,
         }));
         let data = crate::query::intern_pending(&db);
-        let mut tycker = Tycker::new(&db, data, &spans, &prim, &mut scoped);
+        let mut tycker = Tycker::new(&db, data, &spans, &prim, &scoped);
         test(&mut tycker, context);
     }
 
@@ -8158,7 +8158,7 @@ mod source_boundary_tests {
             root: boundary,
         }));
         let data = crate::query::intern_pending(&db);
-        let mut tycker = Tycker::new(&db, data, &spans, &prim, &mut scoped);
+        let mut tycker = Tycker::new(&db, data, &spans, &prim, &scoped);
         let env = TyEnv::default();
         let expected = Alloc::alloc(&mut tycker, ss::VType, (), &());
         let checked =
@@ -8187,7 +8187,7 @@ mod source_boundary_tests {
             root: boundary,
         }));
         let data = crate::query::intern_pending(&db);
-        let mut tycker = Tycker::new(&db, data, &spans, &prim, &mut scoped);
+        let mut tycker = Tycker::new(&db, data, &spans, &prim, &scoped);
         let result =
             TyEnvT::new(TyEnv::default(), boundary).tyck_k(&mut tycker, Action::ana(AnnId::Set));
 

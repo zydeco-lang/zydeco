@@ -1,6 +1,6 @@
 //! Environments used by the Zydeco type checker.
 
-use super::{syntax::*, *};
+use super::*;
 use derive_more::{Deref, DerefMut, From, Index, IndexMut, Into, IntoIterator};
 use std::ops::{Add, AddAssign};
 use zydeco_utils::prelude::With;
