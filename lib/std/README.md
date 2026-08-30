@@ -7,13 +7,16 @@ but never construct library-defined `Bool`, `Option`, `Result`, or `List` values
 [`std.zyi`](std.zyi) annotates the public package independently from its implementation.
 [`std.zy`](std.zy) applies the topic packages in this directory and assembles a value of that package type.
 
-Each topic owns exactly one implementation and one companion: `data`, `text`, `system`, and `numeric`
-each provide `package.zy` with `package.zyi` beside it.
+Each topic owns exactly one implementation: `data`, `text`, `system`, and `numeric` each provide
+`package.zy`, sealed by a final `pack` introduction whose existential type the checker synthesizes,
+so importers splice the implementation without a companion annotation.
+Implementations annotate their parameters in place:
+the Builtin group through `builtin.zy`, and the shared algebraic base through `data/package.type.zy`.
 The implementation defines its topic's data types and operations in one dependency-scheduled block,
 so derived operations sit next to the types they observe and no per-module contract split remains.
 Reusable type terms live in `.type.zy` sources beside their topic:
 `body.type.zy` defines the topic's record-shape constructor together with its module telescopes,
-and `package.type.zy` wraps that body in the topic's existential witnesses where the topic owns any.
+and `data/package.type.zy` wraps that body in the data topic's existential witnesses.
 Type files bind `VType` and `CType` once at the top of the file and use those aliases in every classifier below.
 
 This separation keeps algebraic data in the language.
@@ -37,7 +40,7 @@ builtin/system/*.zy        I/O, filesystem, streams, arguments, randomness, proc
 
 data/package.zy            Bool, Option, Result, List, and every derived operation
 data/body.type.zy          DataBody constructor and the option/result/list telescopes
-data/package.type.zy       DataPackage existential wrapper
+data/package.type.zy       DataPackage existential wrapper, the shared base type
 data/bool.type.zy          BoolModule telescope shared with the numeric builders
 data/prelude.type.zy       thunk and return aliases re-exported by `std`
 
@@ -50,7 +53,6 @@ text/body.type.zy          TextBody constructor and the char/string/bytes telesc
 
 system/package.zy          system data types and capability-preserving assembly
 system/body.type.zy        SystemBody constructor and the io/fs/stdio/process telescopes
-system/package.type.zy     SystemPackage existential wrapper
 
 control/*.zy               monadic basis, State, Exception, and their combination
 

@@ -10,7 +10,11 @@ begin
     let (/Bytes) = representations/bytes in
     let (= Int64, int64) = numeric/int64 in
     let (/char; /string; /bytes) = text in
-    param (/Bool; /Option; /List; /bool; /option; /list) in
+    param
+    (
+      (/Bool; /Option; /List; /bool; /option; /list) :
+      @(import("../data/package.type.zy"))
+    ) in
     let ! compare (A : VType)
       (
         predicate : Thk (

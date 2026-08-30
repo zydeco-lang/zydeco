@@ -199,20 +199,16 @@ lib/std/
     text/{char,string,bytes}.zy
     system/{io,fs,stdio,args,random,process}.zy
   data/package.zy
-  data/package.zyi
   data/{body,package,bool,prelude}.type.zy
   numeric/{integer,float}.zy
   numeric/{integer,float}.zyi
   numeric/instance/{int8,...,uint64,float32,float64}.type.zy
   numeric/package.zy
-  numeric/package.zyi
   numeric/*.type.zy
   text/package.zy
-  text/package.zyi
   text/body.type.zy
   system/package.zy
-  system/package.zyi
-  system/{body,package}.type.zy
+  system/body.type.zy
   control/monad.zy
   control/monad.zyi
   std.zyi
@@ -221,11 +217,13 @@ lib/std/
 
 `builtin.zy` and `std.zy` are deliberately thin composition roots. The first closes the complete host ABI and
 introduces the shared generative system witnesses; the second applies the topic packages and constructs the
-public package. Each topic implementation has one adjacent `.zyi` annotation and defines its data types,
-operations, and derived operations in one dependency-scheduled block, so no per-module contract split remains.
-Reusable `.type.zy` terms define each topic's record-shape constructor (`body.type.zy`) and, where the topic owns
-abstract witnesses, its existential wrapper (`package.type.zy`); the aggregate signature imports those
-constructors rather than restating the public fields, so locality does not require copying a contract.
+public package. Each topic implementation carries its parameter annotations in place, ends in a sealed `pack`
+introduction whose existential type the checker synthesizes, and defines its data types, operations, and
+derived operations in one dependency-scheduled block, so no per-module contract split remains.
+Reusable `.type.zy` terms define each topic's record-shape constructor (`body.type.zy`); the data topic
+additionally names its existential wrapper (`package.type.zy`), which the dependent implementations import as
+their shared base type. The aggregate signature imports those constructors rather than restating the public
+fields, so locality does not require copying a contract.
 A topic depends on a selected package boundary rather than on names inherited from a monolithic source file.
 
 The derived integer and floating-point builders share algorithms across the fixed-width representations through
@@ -277,13 +275,16 @@ The complete nested product remains only in the provider representation and host
 Four checker facts determine how far the modularization can fold, and each one is load-bearing
 for the layout above.
 
-- A bare record literal has no principal type, so every package-producing source needs a
-  whole-file annotation. The `.zyi` companion is that annotation: source assembly elaborates the
-  pair as `(implementation : signature)`, and importers see the ascribed type.
+- A bare record literal has no principal type, so a package-producing source needs either a
+  whole-file annotation or a synthesizing final form. Sealed `pack` introductions synthesize
+  their existential type, so each topic implementation ends in one and importers splice it
+  without a companion; `std.zyi` remains the composition root's whole-file annotation, elaborated
+  as `(implementation : signature)`, because the public contract stays reviewable there.
 - A `def`-bound data type cannot cross a file boundary by disclosure, because an annotation can
   only name a definition through an import and only compiler intrinsics are canonical importable
   terms. Existential witnesses therefore remain the only cross-file naming device for library
-  data types, which is why each topic wraps its body in `exists` inside `package.type.zy`.
+  data types, which is why each topic seals its body behind `exists` witnesses, either through
+  the shared `package.type.zy` wrapper or through the pack introduction itself.
 - A type-level application of a transparent `let` function reduces during analysis, so an
   implementation record may nest one sub-record per applied body constructor without new
   checker support, and the nested shape is what the projection resolver walks.

@@ -9,7 +9,11 @@ begin
     ) in
     let (/VType; /CType; /Thk; /Ret; /Unit) = core in
     let (/String) = representations/string in
-    param (/Bool; /bool) in
+    param
+    (
+      (/Bool; /bool) :
+      @(import("../data/package.type.zy"))
+    ) in
     let (= Int8, int8) = numeric/int8 in
     let (= Int16, int16) = numeric/int16 in
     let (= Int32, int32) = numeric/int32 in
@@ -24,71 +28,81 @@ begin
       make_integer core Bool Int8 String bool int8 0 1
     in
     let int8_instance =
-      pack (= Int8 as @(intrinsic(i8)) : VType)
-      where int8_dictionary end
+      pack (= Int8 as @(intrinsic(i8)) : VType) where
+        int8_dictionary
+      end
     in
     let (/operations = int16_module; /dictionary = int16_dictionary) =
       make_integer core Bool Int16 String bool int16 0 1
     in
     let int16_instance =
-      pack (= Int16 as @(intrinsic(i16)) : VType)
-      where int16_dictionary end
+      pack (= Int16 as @(intrinsic(i16)) : VType) where
+        int16_dictionary
+      end
     in
     let (/operations = int32_module; /dictionary = int32_dictionary) =
       make_integer core Bool Int32 String bool int32 0 1
     in
     let int32_instance =
-      pack (= Int32 as @(intrinsic(i32)) : VType)
-      where int32_dictionary end
+      pack (= Int32 as @(intrinsic(i32)) : VType) where
+        int32_dictionary
+      end
     in
     let (/operations = int64_module; /dictionary = int64_dictionary) =
       make_integer core Bool Int64 String bool int64 0 1
     in
     let int64_instance =
-      pack (= Int64 as @(intrinsic(i64)) : VType)
-      where int64_dictionary end
+      pack (= Int64 as @(intrinsic(i64)) : VType) where
+        int64_dictionary
+      end
     in
     let (/operations = uint8_module; /dictionary = uint8_dictionary) =
       make_integer core Bool UInt8 String bool uint8 0 1
     in
     let uint8_instance =
-      pack (= UInt8 as @(intrinsic(u8)) : VType)
-      where uint8_dictionary end
+      pack (= UInt8 as @(intrinsic(u8)) : VType) where
+        uint8_dictionary
+      end
     in
     let (/operations = uint16_module; /dictionary = uint16_dictionary) =
       make_integer core Bool UInt16 String bool uint16 0 1
     in
     let uint16_instance =
-      pack (= UInt16 as @(intrinsic(u16)) : VType)
-      where uint16_dictionary end
+      pack (= UInt16 as @(intrinsic(u16)) : VType) where
+        uint16_dictionary
+      end
     in
     let (/operations = uint32_module; /dictionary = uint32_dictionary) =
       make_integer core Bool UInt32 String bool uint32 0 1
     in
     let uint32_instance =
-      pack (= UInt32 as @(intrinsic(u32)) : VType)
-      where uint32_dictionary end
+      pack (= UInt32 as @(intrinsic(u32)) : VType) where
+        uint32_dictionary
+      end
     in
     let (/operations = uint64_module; /dictionary = uint64_dictionary) =
       make_integer core Bool UInt64 String bool uint64 0 1
     in
     let uint64_instance =
-      pack (= UInt64 as @(intrinsic(u64)) : VType)
-      where uint64_dictionary end
+      pack (= UInt64 as @(intrinsic(u64)) : VType) where
+        uint64_dictionary
+      end
     in
     let (/operations = float32_module; /dictionary = float32_dictionary) =
       make_float core Bool Float32 String bool float32 0.0 1.0
     in
     let float32_instance =
-      pack (= Float32 as @(intrinsic(f32)) : VType)
-      where float32_dictionary end
+      pack (= Float32 as @(intrinsic(f32)) : VType) where
+        float32_dictionary
+      end
     in
     let (/operations = float64_module; /dictionary = float64_dictionary) =
       make_float core Bool Float64 String bool float64 0.0 1.0
     in
     let float64_instance =
-      pack (= Float64 as @(intrinsic(f64)) : VType)
-      where float64_dictionary end
+      pack (= Float64 as @(intrinsic(f64)) : VType) where
+        float64_dictionary
+      end
     in
     (
       #numeric = (

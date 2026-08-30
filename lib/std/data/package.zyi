@@ -1,5 +1,0 @@
-begin
-  let DataPackage = @(import("package.type.zy")) in
-  pi (_ : @(import("../builtin.zy"))) .
-    DataPackage
-end
