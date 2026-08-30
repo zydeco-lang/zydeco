@@ -136,6 +136,10 @@
         "named": true
       },
       {
+        "type": "pack_expression",
+        "named": true
+      },
+      {
         "type": "parameter_expression",
         "named": true
       },
@@ -255,6 +259,10 @@
           },
           {
             "type": "match_expression",
+            "named": true
+          },
+          {
+            "type": "pack_expression",
             "named": true
           },
           {
@@ -495,6 +503,10 @@
           },
           {
             "type": "match_expression",
+            "named": true
+          },
+          {
+            "type": "pack_expression",
             "named": true
           },
           {
@@ -912,6 +924,10 @@
           },
           {
             "type": "match_expression",
+            "named": true
+          },
+          {
+            "type": "pack_expression",
             "named": true
           },
           {
@@ -1441,6 +1457,48 @@
     }
   },
   {
+    "type": "pack_expression",
+    "named": true,
+    "fields": {
+      "component": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "_term",
+            "named": true
+          },
+          {
+            "type": "labeled_term",
+            "named": true
+          },
+          {
+            "type": "named_term",
+            "named": true
+          },
+          {
+            "type": "punned_term",
+            "named": true
+          },
+          {
+            "type": "term_annotation",
+            "named": true
+          }
+        ]
+      },
+      "parameter": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "existential_parameter",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "parameter_expression",
     "named": true,
     "fields": {
@@ -1869,6 +1927,10 @@
             "named": true
           },
           {
+            "type": "pack_expression",
+            "named": true
+          },
+          {
             "type": "parenthesized_term",
             "named": true
           },
@@ -2197,6 +2259,10 @@
     "named": false
   },
   {
+    "type": "pack",
+    "named": false
+  },
+  {
     "type": "param",
     "named": false
   },
@@ -2223,6 +2289,10 @@
   {
     "type": "upper_identifier",
     "named": true
+  },
+  {
+    "type": "where",
+    "named": false
   },
   {
     "type": "{",
