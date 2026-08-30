@@ -1,16 +1,6 @@
 begin
   let make_integer = @(import("integer.zy")) that
   let make_float = @(import("float.zy")) that
-  let Int8Instance = @(import("instance/int8.type.zy")) in
-  let Int16Instance = @(import("instance/int16.type.zy")) in
-  let Int32Instance = @(import("instance/int32.type.zy")) in
-  let Int64Instance = @(import("instance/int64.type.zy")) in
-  let UInt8Instance = @(import("instance/uint8.type.zy")) in
-  let UInt16Instance = @(import("instance/uint16.type.zy")) in
-  let UInt32Instance = @(import("instance/uint32.type.zy")) in
-  let UInt64Instance = @(import("instance/uint64.type.zy")) in
-  let Float32Instance = @(import("instance/float32.type.zy")) in
-  let Float64Instance = @(import("instance/float64.type.zy")) in
 
   begin
     param (
@@ -33,62 +23,72 @@ begin
     let (/operations = int8_module; /dictionary = int8_dictionary) =
       make_integer core Bool Int8 String bool int8 0 1
     in
-    let int8_instance : Int8Instance Bool =
-      (= Int8, int8_dictionary)
+    let int8_instance =
+      pack (= Int8 as @(intrinsic(i8)) : VType)
+      where int8_dictionary end
     in
     let (/operations = int16_module; /dictionary = int16_dictionary) =
       make_integer core Bool Int16 String bool int16 0 1
     in
-    let int16_instance : Int16Instance Bool =
-      (= Int16, int16_dictionary)
+    let int16_instance =
+      pack (= Int16 as @(intrinsic(i16)) : VType)
+      where int16_dictionary end
     in
     let (/operations = int32_module; /dictionary = int32_dictionary) =
       make_integer core Bool Int32 String bool int32 0 1
     in
-    let int32_instance : Int32Instance Bool =
-      (= Int32, int32_dictionary)
+    let int32_instance =
+      pack (= Int32 as @(intrinsic(i32)) : VType)
+      where int32_dictionary end
     in
     let (/operations = int64_module; /dictionary = int64_dictionary) =
       make_integer core Bool Int64 String bool int64 0 1
     in
-    let int64_instance : Int64Instance Bool =
-      (= Int64, int64_dictionary)
+    let int64_instance =
+      pack (= Int64 as @(intrinsic(i64)) : VType)
+      where int64_dictionary end
     in
     let (/operations = uint8_module; /dictionary = uint8_dictionary) =
       make_integer core Bool UInt8 String bool uint8 0 1
     in
-    let uint8_instance : UInt8Instance Bool =
-      (= UInt8, uint8_dictionary)
+    let uint8_instance =
+      pack (= UInt8 as @(intrinsic(u8)) : VType)
+      where uint8_dictionary end
     in
     let (/operations = uint16_module; /dictionary = uint16_dictionary) =
       make_integer core Bool UInt16 String bool uint16 0 1
     in
-    let uint16_instance : UInt16Instance Bool =
-      (= UInt16, uint16_dictionary)
+    let uint16_instance =
+      pack (= UInt16 as @(intrinsic(u16)) : VType)
+      where uint16_dictionary end
     in
     let (/operations = uint32_module; /dictionary = uint32_dictionary) =
       make_integer core Bool UInt32 String bool uint32 0 1
     in
-    let uint32_instance : UInt32Instance Bool =
-      (= UInt32, uint32_dictionary)
+    let uint32_instance =
+      pack (= UInt32 as @(intrinsic(u32)) : VType)
+      where uint32_dictionary end
     in
     let (/operations = uint64_module; /dictionary = uint64_dictionary) =
       make_integer core Bool UInt64 String bool uint64 0 1
     in
-    let uint64_instance : UInt64Instance Bool =
-      (= UInt64, uint64_dictionary)
+    let uint64_instance =
+      pack (= UInt64 as @(intrinsic(u64)) : VType)
+      where uint64_dictionary end
     in
     let (/operations = float32_module; /dictionary = float32_dictionary) =
       make_float core Bool Float32 String bool float32 0.0 1.0
     in
-    let float32_instance : Float32Instance Bool =
-      (= Float32, float32_dictionary)
+    let float32_instance =
+      pack (= Float32 as @(intrinsic(f32)) : VType)
+      where float32_dictionary end
     in
     let (/operations = float64_module; /dictionary = float64_dictionary) =
       make_float core Bool Float64 String bool float64 0.0 1.0
     in
-    let float64_instance : Float64Instance Bool =
-      (= Float64, float64_dictionary)
+    let float64_instance =
+      pack (= Float64 as @(intrinsic(f64)) : VType)
+      where float64_dictionary end
     in
     (
       #numeric = (
