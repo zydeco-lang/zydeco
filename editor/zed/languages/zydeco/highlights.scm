@@ -80,6 +80,8 @@
   "forall"
   "exists"
   "sigma"
+  "pack"
+  "where"
 ] @keyword
 
 ; Operators and punctuation

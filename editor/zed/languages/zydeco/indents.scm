@@ -12,3 +12,4 @@
 (codata_type "end" @end) @indent
 (match_expression "end" @end) @indent
 (comatch_expression "end" @end) @indent
+(pack_expression "end" @end) @indent

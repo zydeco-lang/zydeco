@@ -292,3 +292,62 @@ Parenthesized metadata sugar
         arguments: (meta_arguments
           (string_literal))))))
 
+==================
+Package introduction
+==================
+
+pack (Representation as Int64) where (42 : Representation) end
+
+---
+
+(source_file
+  body: (pack_expression
+    parameter: (existential_parameter
+      binder: (variable_pattern
+        name: (upper_identifier))
+      definition: (variable
+        name: (upper_identifier)))
+    component: (parenthesized_term
+      (term_annotation
+        term: (integer_literal)
+        type: (variable
+          name: (upper_identifier))))))
+
+==================
+Package introduction telescope
+==================
+
+let int64_instance =
+  pack (= Int64 as @(intrinsic(i64)) : VType) where int64_dictionary, end
+in
+int64_instance / dictionary
+
+---
+
+(source_file
+  body: (context_binding
+    kind: (binding_kind)
+    binding: (general_binding
+      binder: (variable_pattern
+        name: (lower_identifier))
+      value: (pack_expression
+        parameter: (existential_parameter
+          binder: (punned_pattern
+            name: (upper_identifier))
+          definition: (metadata_expression
+            metadata: (metadata_sugar
+              value: (meta_application
+                callee: (meta_identifier
+                  (lower_identifier))
+                arguments: (meta_arguments
+                  (meta_identifier
+                    (lower_identifier))))))
+          classifier: (variable
+            name: (upper_identifier)))
+        component: (variable
+          name: (lower_identifier))))
+    placement: (placement)
+    body: (projection_expression
+      value: (variable
+        name: (lower_identifier))
+      field: (lower_identifier))))

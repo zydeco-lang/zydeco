@@ -74,7 +74,7 @@
       "patterns": [
         {
           "name": "keyword.control.zydeco",
-          "match": "\\b(begin|end|in|that|do|ret|match|comatch)\\b"
+          "match": "\\b(begin|end|in|that|do|ret|match|comatch|where)\\b"
         },
         {
           "name": "storage.type.zydeco",
@@ -82,7 +82,7 @@
         },
         {
           "name": "storage.modifier.zydeco",
-          "match": "\\b(as|fn|fix)\\b"
+          "match": "\\b(as|fn|fix|pack)\\b"
         },
         {
           "name": "keyword.declaration.zydeco",

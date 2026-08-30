@@ -431,6 +431,7 @@ impl<'arena> ParameterDefinitions<'arena> {
                 | Term::Pi(Pi(pattern, _))
                 | Term::Sigma(Sigma(pattern, _)) => Some(pattern),
                 | Term::ManifestExists(term) => Some(&term.binder),
+                | Term::Pack(term) => Some(&term.binder),
                 | _ => None,
             })
             .for_each(|pattern| self.collect_pattern(pattern, &mut definitions));

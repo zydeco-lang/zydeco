@@ -37,6 +37,8 @@ const KEYWORDS = [
   'forall',
   'exists',
   'sigma',
+  'pack',
+  'where',
 ];
 
 module.exports = grammar({
@@ -99,6 +101,7 @@ module.exports = grammar({
       $.constructor_expression,
       $.match_expression,
       $.comatch_expression,
+      $.pack_expression,
       $._literal,
     ),
 
@@ -278,6 +281,18 @@ module.exports = grammar({
         )),
       )),
       ')',
+    ),
+
+    // Package introduction; the payload is one nonempty comma sequence
+    // between `where` and `end`, sharing tuple item syntax.
+    pack_expression: $ => seq(
+      'pack',
+      repeat1(field('parameter', $.existential_parameter)),
+      'where',
+      field('component', $._term_item),
+      repeat(seq(',', field('component', $._term_item))),
+      optional(','),
+      'end',
     ),
 
     lambda_expression: $ => prec.right(PREC.binding, seq(
