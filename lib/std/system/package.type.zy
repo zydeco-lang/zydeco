@@ -9,18 +9,20 @@ begin
   param Reader : VType in
   param Writer : VType in
   param OS : CType in
-  exists (#Path = PathType : VType) .
-    exists (#IoErrorKind = IoErrorKindType : VType) .
-      exists (#IoError = IoErrorType : VType) .
-        SystemBody
-          Bool
-          Option
-          Result
-          List
-          Reader
-          Writer
-          PathType
-          IoErrorKindType
-          IoErrorType
-          OS
+  exists
+    (= Path : VType)
+    (= IoErrorKind : VType)
+    (= IoError : VType)
+  .
+    SystemBody
+      Bool
+      Option
+      Result
+      List
+      Reader
+      Writer
+      Path
+      IoErrorKind
+      IoError
+      OS
 end

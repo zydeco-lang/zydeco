@@ -8,73 +8,33 @@ begin
   let MonadState = @(import("state.type.zy")) in
   pi (_ : @(import("../builtin.zy"))) .
     exists
-      (
-        #State = StateType :
-        VType -> (
-          VType
-        ) -> CType
-      )
+      (= State : VType -> VType -> CType)
+      (= MonadState as MonadState : VType -> (VType -> CType) -> CType)
     .
-      exists
-        (
-          #MonadState = ExportedMonadState as MonadState :
-          VType -> (
-            VType -> (
-              CType
-            )
-          ) -> CType
+        (#mo_state :: Thk (forall (S : VType) . Monad (State S)))
+      * (#state :: Thk (forall (S : VType) . MonadState S (State S)))
+      * (#get :: Thk (forall (S : VType) . State S S))
+      * (#put :: Thk (forall (S : VType) . S -> State S Unit))
+      * (
+          #modify :: Thk (
+            forall (S : VType) . Thk (S -> Ret S) -> State S Unit
+          )
         )
-      .
-          (
-            #mo_state :: Thk (
-              forall (S : VType) .
-                Monad (StateType S)
-            )
-          )
-        * (
-            #state :: Thk (
-              forall (S : VType) .
-                MonadState S (StateType S)
-            )
-          )
-        * (
-            #get :: Thk (
-              forall (S : VType) .
-                StateType S S
-            )
-          )
-        * (
-            #put :: Thk (
-              forall (S : VType) .
-                S -> StateType S Unit
-            )
-          )
-        * (
-            #modify :: Thk (
-              forall (S : VType) .
-                   Thk (S -> Ret S)
-                -> StateType S Unit
-            )
-          )
-        * (
-            #run_state :: Thk (
-              forall (S : VType) .
-                forall (A : VType) .
-                  forall (B : CType) .
-                       S
-                    -> Thk (StateType S A)
-                    -> Thk (S -> A -> B)
-                    -> B
-            )
-          )
-        * (
-            #eval_state :: Thk (
-              forall (S : VType) .
-                forall (A : VType) .
+      * (
+          #run_state :: Thk (
+            forall (S : VType) .
+              forall (A : VType) .
+                forall (B : CType) .
                      S
-                  -> Thk (StateType S A)
-                  -> Ret A
-            )
+                  -> Thk (State S A)
+                  -> Thk (S -> A -> B)
+                  -> B
           )
+        )
+      * (
+          #eval_state :: Thk (
+            forall (S : VType) (A : VType) . S -> Thk (State S A) -> Ret A
+          )
+        )
 end
 -- end module State

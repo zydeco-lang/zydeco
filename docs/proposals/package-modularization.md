@@ -127,9 +127,9 @@ in
 
 Type fields conventionally use `UpperCamel` and module values use `lower_snake_case`,
 so their source roles remain visible.
-A declaration such as `exists (Item : VType) . Body` gives the plain existential binder
+A declaration such as `exists (= Item : VType) . Body` gives the plain existential binder
 the punned package field name `Item`.
-An explicitly named binder such as `exists (Item = Hidden : VType) . Body` is selected by its public field name `Item`;
+An explicitly named binder such as `exists (#Item = Hidden : VType) . Body` is selected by its public field name `Item`;
 `Hidden` remains the provider's local payload name.
 
 Selection is structural rather than positional.

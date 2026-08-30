@@ -9,63 +9,36 @@ begin
   let MonadThrow = @(import("exception.type.zy")) in
   pi (_ : @(import("../builtin.zy"))) .
     exists
-      (
-        #Exception = ExceptionType :
-        VType -> (
-          VType
-        ) -> CType
-      )
+      (= Exception : VType -> VType -> CType)
+      (= MonadThrow as MonadThrow : VType -> (VType -> CType) -> CType)
     .
-      exists
-        (
-          #MonadThrow = ExportedMonadThrow as MonadThrow :
-          VType -> (
-            VType -> (
-              CType
-            )
-          ) -> CType
+        (#mo_exception :: Thk (forall (E : VType) . Monad (Exception E)))
+      * (#throw_ops :: Thk (forall (E : VType) . MonadThrow E (Exception E)))
+      * (
+          #raise :: Thk (
+            forall (E : VType) .
+              forall (A : VType) . Thk Top -> E -> Exception E A
+          )
         )
-      .
-          (
-            #mo_exception :: Thk (
-              forall (E : VType) .
-                Monad (ExceptionType E)
-            )
+      * (
+          #handle_exception :: Thk (
+            forall (E : VType) .
+              forall (A : VType) .
+                forall (B : CType) .
+                     Thk (Exception E A)
+                  -> Thk (E -> B)
+                  -> Thk (A -> B)
+                  -> B
           )
-        * (
-            #throw_ops :: Thk (
-              forall (E : VType) .
-                MonadThrow E (ExceptionType E)
-            )
+        )
+      * (
+          #try_exception :: Thk (
+            forall (E : VType) .
+              forall (A : VType) .
+                   Thk (Exception E A)
+                -> Thk (E -> Exception E A)
+                -> Exception E A
           )
-        * (
-            #raise :: Thk (
-              forall (E : VType) .
-                forall (A : VType) .
-                     Thk Top
-                  -> E
-                  -> ExceptionType E A
-            )
-          )
-        * (
-            #handle_exception :: Thk (
-              forall (E : VType) .
-                forall (A : VType) .
-                  forall (B : CType) .
-                       Thk (ExceptionType E A)
-                    -> Thk (E -> B)
-                    -> Thk (A -> B)
-                    -> B
-            )
-          )
-        * (
-            #try_exception :: Thk (
-              forall (E : VType) .
-                forall (A : VType) .
-                     Thk (ExceptionType E A)
-                  -> Thk (E -> ExceptionType E A)
-                  -> ExceptionType E A
-            )
-          )
+        )
 end
 -- end module Exception

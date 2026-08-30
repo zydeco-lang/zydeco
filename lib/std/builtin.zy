@@ -42,9 +42,9 @@ exists
         )
       * (
           #system ::
-          exists (#Reader = ReaderType as SystemReader : VType)
-            (#Writer = WriterType as SystemWriter : VType)
-            (#OS = OSType as SystemOS : CType)
+          exists (= Reader as SystemReader : VType)
+            (= Writer as SystemWriter : VType)
+            (= OS as SystemOS : CType)
           .
               (
                 #io ::

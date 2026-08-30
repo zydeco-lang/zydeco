@@ -238,24 +238,29 @@ forall (A : VType) . A -> Ret A
 `exists` hides type-level witnesses inside a value package. A witness may be abstract:
 
 ```zydeco
-exists (#Option = OptionType : VType -> VType) .
-  (#none :: Thk (forall (A : VType) . Ret (OptionType A)))
-* (#some :: Thk (forall (A : VType) . A -> Ret (OptionType A)))
+exists (= Option : VType -> VType) .
+  (#none :: Thk (forall (A : VType) . Ret (Option A)))
+* (#some :: Thk (forall (A : VType) . A -> Ret (Option A)))
 ```
 
 or manifest, which publishes its definition:
 
 ```zydeco
-exists (#Monad = ExportedMonad as Monad : (VType -> CType) -> CType) .
-  Unit
+exists (= Int64 as @(intrinsic(i64)) : VType) .
+  (#add :: Thk (Int64 -> Int64 -> Ret Int64))
 ```
+
+The leading `=` puns the public field name with the binder, so the two fields above are
+`#Option` and `#Int64`. In the manifest case, `as` discloses the equation
+`Int64 ≡ @(intrinsic(i64))`. An explicit `exists (#Int64 = Hidden : VType) . B` form remains
+available when the public name and the provider's local binder differ.
 
 `pi` abstracts over a whole package pattern. It is how a library states its dependency on the
 builtin provider while opening some of its fields:
 
 ```zydeco
 pi (_ : @[import("../std/builtin.zy")] _) .
-  exists (#State = StateType : VType -> VType -> CType) .
+  exists (= State : VType -> VType -> CType) .
     (#get :: ...) * (#put :: ...) * ...
 ```
 

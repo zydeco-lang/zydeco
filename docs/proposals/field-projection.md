@@ -105,8 +105,8 @@ After substituting every opened field through the package body,
 `/value` and `/consume` use the ordinary structural value resolver.
 The selected types and values consequently refer to one shared package introduction.
 
-A plain binder such as `exists (Item : VType) . Body` supplies the punned field name `Item`.
-For an explicitly named binder such as `exists (Item = Hidden : VType) . Body`, selection uses the public label `Item`.
+A plain binder such as `exists (= Item : VType) . Body` supplies the punned field name `Item`.
+For an explicitly named binder such as `exists (#Item = Hidden : VType) . Body`, selection uses the public label `Item`.
 The punned projection `/Item` binds the selected identity directly as `Item`;
 `/Item = Element` gives it a different source name when that name expresses a useful role in the consumer.
 

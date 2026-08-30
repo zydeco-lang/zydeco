@@ -4,27 +4,10 @@ begin
   let Thk = @(intrinsic(thk)) in
   let Ret = @(intrinsic(ret)) in
   let Unit = @(intrinsic(unit)) in
-  let Prelude = exists
-    (
-      #Thunk = ThunkType as Thk : CType -> (
-        VType
-      )
-    )
+  exists
+    (= Thunk as Thk : CType -> VType)
+    (= U as Thk : CType -> VType)
+    (= F as Ret : VType -> CType)
   .
-    exists
-      (
-        #U = UType as Thk : CType -> (
-          VType
-        )
-      )
-    .
-      exists
-        (
-          #F = FType as Ret : VType -> (
-            CType
-          )
-        )
-      .
-        Unit in
-  Prelude
+    Unit
 end

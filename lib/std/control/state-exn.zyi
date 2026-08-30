@@ -9,59 +9,17 @@ begin
   let MonadState = @(import("state.type.zy")) in
   let MonadThrow = @(import("exception.type.zy")) in
   pi (_ : @(import("../builtin.zy"))) .
-    exists
-      (
-        #StateExn = StateExnType :
-        VType -> (
-          VType
-        ) -> (
-          VType
-        ) -> CType
-      )
-    .
-        (
-          #mo_state_exn :: Thk (
-            forall (S : VType) .
-              forall (E : VType) .
-                Monad (StateExnType S E)
-          )
-        )
-      * (
-          #state_ops :: Thk (
-            forall (S : VType) .
-              forall (E : VType) .
-                MonadState S (StateExnType S E)
-          )
-        )
-      * (
-          #throw_ops :: Thk (
-            forall (S : VType) .
-              forall (E : VType) .
-                MonadThrow E (StateExnType S E)
-          )
-        )
-      * (
-          #get :: Thk (
-            forall (S : VType) .
-              forall (E : VType) .
-                StateExnType S E S
-          )
-        )
-      * (
-          #put :: Thk (
-            forall (S : VType) .
-              forall (E : VType) .
-                S -> StateExnType S E Unit
-          )
-        )
+    exists (= StateExn : VType -> VType -> VType -> CType) .
+        (#mo_state_exn :: Thk (forall (S : VType) (E : VType) . Monad (StateExn S E)))
+      * (#state_ops :: Thk (forall (S : VType) (E : VType) . MonadState S (StateExn S E)))
+      * (#throw_ops :: Thk (forall (S : VType) (E : VType) . MonadThrow E (StateExn S E)))
+      * (#get :: Thk (forall (S : VType) (E : VType) . StateExn S E S))
+      * (#put :: Thk (forall (S : VType) (E : VType) . S -> StateExn S E Unit))
       * (
           #raise :: Thk (
             forall (S : VType) .
               forall (E : VType) .
-                forall (A : VType) .
-                     Thk Top
-                  -> E
-                  -> StateExnType S E A
+                forall (A : VType) . Thk Top -> E -> StateExn S E A
           )
         )
       * (
@@ -70,9 +28,9 @@ begin
               forall (E : VType) .
                 forall (A : VType) .
                      Thk Top
-                  -> Thk (StateExnType S E A)
-                  -> Thk (E -> StateExnType S E A)
-                  -> StateExnType S E A
+                  -> Thk (StateExn S E A)
+                  -> Thk (E -> StateExn S E A)
+                  -> StateExn S E A
           )
         )
       * (
@@ -82,7 +40,7 @@ begin
                 forall (A : VType) .
                   forall (B : CType) .
                        S
-                    -> Thk (StateExnType S E A)
+                    -> Thk (StateExn S E A)
                     -> Thk (E -> B)
                     -> Thk (S -> A -> B)
                     -> B

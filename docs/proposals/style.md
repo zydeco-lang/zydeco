@@ -203,6 +203,11 @@ and value components use `lower_snake_case`.
 Place an abstract type component before the values whose classifiers mention it.
 A manifest existential records a representation equation as part of the interface;
 an ordinary existential publishes the abstract identity alone.
+Write signature binders with the field pun, as in `exists (= Bool : VType)` or
+`exists (= Int64 as @(intrinsic(i64)) : VType)`,
+so the public field name and the payload binder coincide and the body refers to the public name directly.
+The explicit `exists (#Int64 = Hidden : VType)` form is reserved for a provider whose local binder
+genuinely needs a different name.
 The order of these components forms a telescope and remains significant.
 
 Library packages are easiest to use when their components are named.

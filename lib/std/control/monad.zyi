@@ -6,28 +6,8 @@ begin
   let Unit = @(intrinsic(unit)) in
   pi (_ : @(import("../builtin.zy"))) .
     exists
-      (
-        #Monad = ExportedMonad as Monad :
-        (
-          VType -> (
-            CType
-          )
-        ) -> CType
-      )
+      (= Monad as Monad : (VType -> CType) -> CType)
+      (= Algebra as Algebra : (VType -> CType) -> CType -> CType)
     .
-      exists
-        (
-          #Algebra = ExportedAlgebra as Algebra :
-          (
-               (
-                 VType -> (
-                   CType
-                 )
-               )
-            -> CType
-            -> CType
-          )
-        )
-      .
-        Unit
+      Unit
 end

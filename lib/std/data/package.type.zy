@@ -1,29 +1,11 @@
 begin
   let VType = @(intrinsic(vtype)) in
   let DataBody = @(import("body.type.zy")) in
-  let DataPackage =
-    exists
-      (#Bool = BoolType : VType)
-      (
-        #Option = OptionType :
-        VType -> (
-          VType
-        )
-      )
-      (
-        #Result = ResultType :
-        VType -> (
-          VType
-        ) -> VType
-      )
-      (
-        #List = ListType :
-        VType -> (
-          VType
-        )
-      )
-    .
-      DataBody BoolType OptionType ResultType ListType
-  in
-  DataPackage
+  exists
+    (= Bool : VType)
+    (= Option : VType -> VType)
+    (= Result : VType -> VType -> VType)
+    (= List : VType -> VType)
+  .
+    DataBody Bool Option Result List
 end
