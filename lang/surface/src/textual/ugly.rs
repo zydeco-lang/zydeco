@@ -357,6 +357,16 @@ impl<'a> Pretty<'a, Formatter<'a>> for Pack {
     }
 }
 
+impl<'a> Pretty<'a, Formatter<'a>> for PackParameter {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let parameter = self.parameter.pretty(f);
+        match self.evidence {
+            | Some(evidence) => RcDoc::concat([parameter, RcDoc::text(" is "), evidence.pretty(f)]),
+            | None => parameter,
+        }
+    }
+}
+
 impl<'a> Pretty<'a, Formatter<'a>> for ExistentialParameter {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let annotations = RcDoc::intersperse(

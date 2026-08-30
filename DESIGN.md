@@ -237,13 +237,18 @@ from its concrete payload alone would be abduction, so synthesis instead require
 witness bindings to appear in the term. `pack` is that introduction form:
 
 ```zydeco
-pack (X as A : K) (Y as B) where c_1, c_2, ..., c_n end
+pack (X as A : K) (Y : K) is B where c_1, c_2, ..., c_n end
 ```
 
-The telescope reuses existential parameters, except that every binder must be manifest
-(`X as A`): an introduction discloses its witness, while abstract binders remain the
-type-level `exists` spelling. The classifier is optional and defaults to the kind
-synthesized by the definition. Named fields and puns behave exactly as in `exists`.
+The telescope reuses existential parameters verbatim: every binder shape that `exists`
+accepts — abstract or manifest, named or plain, punned or not — is a `pack` parameter.
+Each binder additionally carries its witness in the term. A manifest parameter keeps the
+type-level spelling `X as A` and discloses the witness in the synthesized type.
+An abstract parameter states its witness as sealed evidence after `is`; the synthesized
+type keeps the binder abstract, and the witness rides only in the package value.
+A parameter with neither form is rejected: an introduction must name its evidence.
+The evidence itself is one atomic term, so a compound witness parenthesizes and a
+following parameter's parenthesis is never absorbed as an application argument.
 The `where` body is one nonempty comma sequence at the tuple-element level,
 so annotations, named components, and a trailing comma are all available;
 a single component is the payload itself, and `where () end` packs the explicit `Unit`.
@@ -254,15 +259,23 @@ Synthesis assigns the package its type directly:
 Γ ⊢ A : K                     Γ, X ↦ A : K ⊢ v ⇑ B
 ─────────────────────────────────────────────────────  PACK-SYN
 Γ ⊢ pack (X as A : K) . v ⇑ exists (X as A : K) . B
+
+Γ ⊢ W : K                     Γ, X ↦ W : K ⊢ v ⇑ B
+─────────────────────────────────────────────────────  PACK-SEAL
+Γ ⊢ pack (X : K) is W . v ⇑ exists (X : K) . B[W ↦ X]
 ```
 
-The payload must synthesize as a value, and its type `B` becomes the existential body
-verbatim. The abstract binder therefore reaches the body only through the payload's own
-annotations; an unannotated payload such as `pack (X as Int64) where 42 end`
-synthesizes the degenerate but sound `exists (X as Int64 : VType) . Int64`.
-The manifest stays in the synthesized type, so a `pack`-produced value joins a manifest
-expected existential by the ordinary least-upper-bound operation.
-Checking against a type first synthesizes and then joins with the expectation.
+The payload is always checked against the disclosed witness, and its type `B` becomes the
+existential body. Sealing then rewrites the witness's occurrences in `B` into the binder,
+so the body stays dependent on the seal exactly where the payload speaks about the witness;
+what the payload leaves concrete — such as a literal's primitive type or an intrinsic the
+witness already normalizes to — stays concrete, and the emitted body is then simply
+witness-independent, which is sound. An unannotated payload such as
+`pack (X : VType) is Int64 where 42 end` therefore synthesizes the degenerate but sound
+`exists (X : VType) . Int64`. The manifest form stays in the synthesized type, so a
+disclosed value joins a manifest expected existential by the ordinary least-upper-bound
+operation, and a sealed value joins an abstract one once their bodies agree under the
+respective binders. Checking against a type first synthesizes and then joins.
 
 Both spellings elaborate to the same witness-prefixed value,
 so elimination, dynamics, and the backends cannot distinguish them.

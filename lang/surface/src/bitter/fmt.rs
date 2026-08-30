@@ -327,13 +327,26 @@ impl<'a> Pretty<'a, Formatter<'a>> for ManifestExists {
 
 impl<'a> Pretty<'a, Formatter<'a>> for Pack {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let Pack { binder, definition, body } = self;
+        let Pack { mode, binder, definition, body } = self;
+        let parameter = match mode {
+            | PackMode::Disclosed => RcDoc::concat([
+                RcDoc::text("("),
+                binder.pretty(f),
+                RcDoc::text(" as "),
+                definition.pretty(f),
+                RcDoc::text(")"),
+            ]),
+            | PackMode::Sealed => RcDoc::concat([
+                RcDoc::text("("),
+                binder.pretty(f),
+                RcDoc::text(") is "),
+                definition.pretty(f),
+            ]),
+        };
         RcDoc::concat([
-            RcDoc::text("pack ("),
-            binder.pretty(f),
-            RcDoc::text(" as "),
-            definition.pretty(f),
-            RcDoc::text(") where "),
+            RcDoc::text("pack "),
+            parameter,
+            RcDoc::text(" where "),
             body.pretty(f),
             RcDoc::text(" end"),
         ])

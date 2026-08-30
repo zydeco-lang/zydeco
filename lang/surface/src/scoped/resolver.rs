@@ -333,7 +333,7 @@ impl Resolve for TermId {
                 term.into()
             }
             | Term::Pack(term) => {
-                let Pack { binder, definition, body } = &*term;
+                let Pack { mode: _, binder, definition, body } = &*term;
                 let () = definition.resolve(resolver, (local.clone(), global))?;
                 local = binder.resolve(resolver, (local, global))?;
                 let () = body.resolve(resolver, (local, global))?;

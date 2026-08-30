@@ -6498,10 +6498,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 }
             }
             | Tm::Pack(term) => {
-                let su::Pack { binder, definition, body } = *term;
+                let su::Pack { mode, binder, definition: evidence, body } = *term;
                 match switch {
                     | Switch::Syn => {
-                        let definition = self.mk(definition).tyck_k(tycker, Action::syn())?;
+                        let definition = self.mk(evidence).tyck_k(tycker, Action::syn())?;
                         match definition {
                             | TermAnnId::Type(definition, definition_kind) => {
                                 let binder_action = if tycker.pattern_has_payload_annotation(binder)
@@ -6526,23 +6526,62 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     .mk(Assign(pattern, full_definition))
                                     .tyck_k(tycker, ())?
                                     .info;
+                                // Sealing replaces the payload's references to the
+                                // witness with the abstract binder, so the emitted
+                                // existential body stays dependent on the seal while the
+                                // payload itself checked against the disclosed witness.
+                                let seal_absts = match mode {
+                                    | su::PackMode::Disclosed => None,
+                                    | su::PackMode::Sealed => {
+                                        match tycker.statics.types_pre[&definition].to_owned() {
+                                            | ss::Fillable::Done(ss::Type::Abst(evidence_abst)) => {
+                                                let binder_ty = Alloc::alloc(
+                                                    tycker,
+                                                    witness,
+                                                    payload_kind,
+                                                    &self.info,
+                                                );
+                                                Some(vec![(evidence_abst, binder_ty)])
+                                            }
+                                            | _ => None,
+                                        }
+                                    }
+                                };
                                 let body =
                                     TyEnvT::new(body_env, body).tyck_k(tycker, Action::syn())?;
                                 match body {
-                                    | TermAnnId::Value(body, body_ty) => {
+                                    | TermAnnId::Value(body, raw_body_ty) => {
+                                        let body_ty = match &seal_absts {
+                                            | Some(absts) => {
+                                                raw_body_ty.subst_absts_k(tycker, absts)?
+                                            }
+                                            | None => raw_body_ty,
+                                        };
                                         let vtype = ss::VType.build(tycker, &self.info);
                                         let term =
                                             crate::query::InternedTerm::new(tycker.db, self.inner);
-                                        let input = crate::query::InternedPackSyn::new(
-                                            tycker.db,
-                                            crate::query::PackSynArm::Package {
-                                                pattern,
-                                                witness,
-                                                definition,
-                                                body,
-                                                body_ty,
-                                            },
-                                        );
+                                        let arm = match mode {
+                                            | su::PackMode::Disclosed => {
+                                                crate::query::PackSynArm::Package {
+                                                    pattern,
+                                                    witness,
+                                                    definition,
+                                                    body,
+                                                    body_ty,
+                                                }
+                                            }
+                                            | su::PackMode::Sealed => {
+                                                crate::query::PackSynArm::Sealed {
+                                                    pattern,
+                                                    witness,
+                                                    definition,
+                                                    body,
+                                                    body_ty,
+                                                }
+                                            }
+                                        };
+                                        let input =
+                                            crate::query::InternedPackSyn::new(tycker.db, arm);
                                         let Some(crate::query::PackSynOutcome::Package {
                                             exists_id,
                                             exists,

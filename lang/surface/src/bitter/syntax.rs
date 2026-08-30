@@ -89,12 +89,23 @@ pub struct ManifestExists {
     pub body: TermId,
 }
 
-/// One manifest binder of a desugared `pack` telescope.
+/// Whether a `pack` layer discloses its witness in the synthesized type
+/// or seals it behind an abstract binder.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PackMode {
+    /// The layer's witness is recorded as a manifest binder.
+    Disclosed,
+    /// The layer's witness stays abstract; only the package value carries it.
+    Sealed,
+}
+
+/// One binder of a desugared `pack` telescope.
 ///
 /// Unlike `ManifestExists`, the body is a package payload rather than a type,
 /// so the layer synthesizes a value at the corresponding existential type.
 #[derive(Clone, Debug)]
 pub struct Pack {
+    pub mode: PackMode,
     pub binder: PatId,
     pub definition: TermId,
     pub body: TermId,

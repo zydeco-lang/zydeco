@@ -178,6 +178,15 @@ impl<'graph> TextualProgramBuilder<'graph> {
         Ok(t::ExistentialParameter { annotations, binder })
     }
 
+    fn pack_parameter(
+        &mut self, source: SourceId, parameter: t::PackParameter,
+    ) -> Result<t::PackParameter, TextualProgramError> {
+        let t::PackParameter { parameter, evidence } = parameter;
+        let parameter = self.existential_parameter(source, parameter)?;
+        let evidence = evidence.map(|evidence| self.term(source, evidence)).transpose()?;
+        Ok(t::PackParameter { parameter, evidence })
+    }
+
     fn binding(
         &mut self, source: SourceId, binding: t::GenBind<t::TermId>,
     ) -> Result<t::GenBind<t::TermId>, TextualProgramError> {
@@ -272,7 +281,7 @@ impl<'graph> TextualProgramBuilder<'graph> {
             | t::Term::Pack(t::Pack { parameters, body }) => t::Pack {
                 parameters: parameters
                     .into_iter()
-                    .map(|parameter| self.existential_parameter(source, parameter))
+                    .map(|parameter| self.pack_parameter(source, parameter))
                     .collect::<Result<Vec<_>, _>>()?,
                 body: self.term(source, body)?,
             }

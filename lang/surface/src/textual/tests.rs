@@ -964,13 +964,16 @@ fn parses_pack_introduction_with_a_manifest_telescope() {
     let [classified, inferred] = parameters.as_slice() else {
         panic!("expected two manifest parameters")
     };
-    let Pattern::Ann(Ann { tm: manifest, ty: kind }) = &parser.arena.pats[&classified.binder]
+    assert!(classified.evidence.is_none() && inferred.evidence.is_none());
+    let Pattern::Ann(Ann { tm: manifest, ty: kind }) =
+        &parser.arena.pats[&classified.parameter.binder]
     else {
         panic!("expected the first parameter to carry its classifier")
     };
     assert!(matches!(parser.arena.pats[manifest], Pattern::Manifest(_)));
     let Term::Var(kind) = &parser.arena.terms[kind] else { panic!("expected a classifier") };
-    let Pattern::Manifest(ManifestPattern { binder, .. }) = &parser.arena.pats[&inferred.binder]
+    let Pattern::Manifest(ManifestPattern { binder, .. }) =
+        &parser.arena.pats[&inferred.parameter.binder]
     else {
         panic!("expected the second parameter to infer its classifier")
     };
@@ -1002,6 +1005,43 @@ fn rejects_an_empty_pack_payload() {
             .is_err(),
         "a package payload must list at least one component"
     );
+}
+
+#[test]
+fn parses_pack_introduction_with_sealed_evidence() {
+    let source = "pack (= Bool : VType) is Bool (#Flag = Flag) is (List Bool) where 0 end";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::Pack(Pack { parameters, .. }) = &parser.arena.terms[&term] else {
+        panic!("expected a package introduction")
+    };
+    let [punned, named] = parameters.as_slice() else { panic!("expected two sealed parameters") };
+    let Pattern::Named(Named(field, _)) = &parser.arena.pats[&punned.parameter.binder] else {
+        panic!("expected the first parameter to pun its binder")
+    };
+    assert_eq!(field.plain(), "Bool");
+    let Term::Var(evidence) = &parser.arena.terms[&punned.evidence.expect("sealed evidence")]
+    else {
+        panic!("expected atomic evidence")
+    };
+    assert_eq!(evidence.plain(), "Bool");
+    let Term::Paren(Paren(components)) =
+        &parser.arena.terms[&named.evidence.expect("sealed evidence")]
+    else {
+        panic!("expected parenthesized application evidence")
+    };
+    let Term::App(_) = &parser.arena.terms[&components[0]] else {
+        panic!("expected an application inside the evidence parentheses")
+    };
+
+    let rendered = term.ugly(&Formatter::new(&parser.arena));
+    let mut roundtrip = Parser::new();
+    parser::SingleTermParser::new()
+        .parse(&rendered, &mut roundtrip, lexer::Lexer::new(&rendered))
+        .expect("rendered sealed parameters must reparse");
 }
 
 #[test]

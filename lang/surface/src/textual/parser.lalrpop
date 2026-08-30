@@ -43,6 +43,7 @@ extern {
         "sigma" => Tok::Sigma,
         "pack" => Tok::Pack,
         "where" => Tok::Where,
+        "is" => Tok::Is,
 
         "FloatLit" => Tok::FloatLit(<&'input str>),
         "IntLit" => Tok::IntLit(<&'input str>),
@@ -139,6 +140,7 @@ MetaId: String = {
     "sigma" => "sigma".into(),
     "pack" => "pack".into(),
     "where" => "where".into(),
+    "is" => "is".into(),
 };
 
 VarName: VarName = <MixedId> => VarName(<>);
@@ -264,6 +266,27 @@ ExistentialParameter: ExistentialParameter = {
     },
 };
 
+/// One `pack` telescope entry: an ordinary existential parameter optionally
+/// followed by sealed evidence after `is`. Manifest parameters carry their
+/// evidence in `as`; desugaring rejects a separate `is` for them.
+PackParameter: PackParameter = {
+    <parameter:ExistentialParameter> <evidence:("is" <PackEvidence>)?> => {
+        PackParameter { parameter, evidence }
+    },
+};
+
+/// Sealed evidence after `is`. Deliberately kept below application
+/// precedence so a following parameter's `(` is never absorbed as an
+/// argument; compound evidence parenthesizes.
+PackEvidence: TermId = {
+    <start:@L> <name:VarName> <r:@R> => {
+        parser.term(Span::new(start, r).make(Term::Var(name)))
+    },
+    <start:@L> "(" <term:TermId> ")" <r:@R> => {
+        parser.term(Span::new(start, r).make(Term::Paren(Paren(vec![term]))))
+    },
+};
+
 //* ---------------------------------- Term ---------------------------------- */
 
 TermGen<T>: TermId = <Sp<T>> => parser.term(<>);
@@ -380,7 +403,7 @@ Term: Term = {
     // package introduction; the `where` body is one nonempty comma sequence,
     // kept as a `Paren` so payload components share tuple desugaring.
     // Abstract parameters are rejected during desugaring with a pointed error.
-    "pack" <parameters:ExistentialParameter+> "where" <l:@L> <first:TermAnnId>
+    "pack" <parameters:PackParameter+> "where" <l:@L> <first:TermAnnId>
         <rest:("," <TermAnnId>)*> <_trailing:","?> <r:@R> "end" => {
         let mut components = Vec::new();
         components.push(first);

@@ -1757,12 +1757,12 @@ impl<'arena> PrettyFormatter<'arena> {
         let Some((first, rest)) = parameters.split_first() else {
             unreachable!("the parser requires at least one pack parameter")
         };
-        let parameters = std::iter::once(self.existential_parameter(first))
-            .chain(rest.iter().map(|parameter| self.existential_parameter(parameter)))
+        let parameters = std::iter::once(self.pack_parameter(first))
+            .chain(rest.iter().map(|parameter| self.pack_parameter(parameter)))
             .collect::<Vec<_>>();
         let head = self.parameter_telescope(
             RcDoc::text("pack"),
-            BoundaryIntent::before_existential_parameter(term, first.binder),
+            BoundaryIntent::before_existential_parameter(term, first.parameter.binder),
             &parameters,
         );
         let components = match &self.arena.terms[body] {
@@ -1809,6 +1809,16 @@ impl<'arena> PrettyFormatter<'arena> {
             parameter.binder.into(),
             RcDoc::intersperse(annotations.chain(std::iter::once(binder)), RcDoc::line()).group(),
         )
+    }
+
+    fn pack_parameter(&self, parameter: &PackParameter) -> LayoutFragment<'arena> {
+        let fragment = self.existential_parameter(&parameter.parameter);
+        match parameter.evidence {
+            | Some(evidence) => fragment.map_document(|document| {
+                document.append(RcDoc::text(" is ")).append(self.term(evidence))
+            }),
+            | None => fragment,
+        }
     }
 
     fn manifest_parameter_view(&self, pattern: PatId) -> Option<ManifestParameterView<'arena>> {

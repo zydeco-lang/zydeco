@@ -151,8 +151,16 @@ pub struct Exists {
 /// so a single component unwraps and multiple components form one tuple.
 #[derive(Clone, Debug)]
 pub struct Pack {
-    pub parameters: Vec<ExistentialParameter>,
+    pub parameters: Vec<PackParameter>,
     pub body: TermId,
+}
+
+/// One `pack` telescope entry: the parameter shared with `exists`,
+/// plus sealed evidence after `is` for abstract binders.
+#[derive(Clone, Debug)]
+pub struct PackParameter {
+    pub parameter: ExistentialParameter,
+    pub evidence: Option<TermId>,
 }
 
 /// `let x = a in ...`

@@ -550,7 +550,7 @@ end
 }
 
 #[test]
-fn rejects_an_abstract_pack_parameter() {
+fn rejects_a_pack_parameter_without_evidence() {
     match ExistentialCase::check(
         r#"
 begin
@@ -562,6 +562,135 @@ end
         | Err(_) => {}
         | Ok(()) => panic!("expected an error, but the program was accepted"),
     }
+}
+
+#[test]
+fn rejects_redundant_evidence_on_a_manifest_parameter() {
+    match ExistentialCase::check(
+        r#"
+begin
+  let packed = pack (X as Int64 : VType) is Char where (42 : X) end in
+  packed
+end
+"#,
+    ) {
+        | Err(_) => {}
+        | Ok(()) => panic!("expected an error, but the program was accepted"),
+    }
+}
+
+#[test]
+fn pack_synthesizes_a_sealed_dependent_existential_package() {
+    ExistentialCase::check(
+        r#"
+begin
+  def Switch =
+    data
+    | +Off : Unit
+    | +On : Unit
+    end
+  that
+  let Library =
+    exists (S : VType) . (#state :: S)
+  that
+  def repack : Thk (Library -> Ret Library) = {
+    fn ((S, state) : Library) => ret (S, state)
+  } that
+
+  let library =
+    pack (S : VType) is Switch where #state = (+On () : Switch) end
+  in
+  { ! repack library }
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn sealed_pack_elaborates_to_a_runtime_package() {
+    ExistentialCase::run(
+        r#"
+begin
+  let Sealed = exists (X : VType) . Int64 that
+  let packed = pack (X : VType) is Int64 where 0 end in
+  match packed
+  | (X, value) => ! exit 0
+  end
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn sealed_pack_composes_with_a_disclosed_telescope() {
+    ExistentialCase::check(
+        r#"
+begin
+  let Mixed =
+    exists (Y as Char : VType) (X : VType) . Y * Int64
+  that
+  def packed : Mixed =
+    pack (Y as Char : VType) (X : VType) is Int64 where ('x' : Y, 42) end
+  that
+
+  packed
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn sealed_pack_composes_named_witness_fields() {
+    ExistentialCase::check(
+        r#"
+begin
+  def Switch =
+    data
+    | +Off : Unit
+    | +On : Unit
+    end
+  that
+  let CounterLibrary =
+    exists (#Counter = Representation : VType) . (#zero :: Representation)
+  that
+  def library : CounterLibrary =
+    pack (#Counter = Representation : VType) is Switch
+      where #zero = (+Off () : Switch) end
+  that
+
+  library
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn sealed_pack_takes_a_dependent_payload_annotation() {
+    ExistentialCase::check(
+        r#"
+begin
+  def Switch =
+    data
+    | +Off : Unit
+    | +On : Unit
+    end
+  that
+  let Library =
+    exists (B : VType) . (#value :: B)
+  that
+  def library : Library =
+    pack (B : VType) is Switch where ((#value = +On ()) : (#value :: B)) end
+  that
+
+  library
+end
+"#,
+    )
+    .unwrap();
 }
 
 #[test]

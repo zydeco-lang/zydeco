@@ -1635,6 +1635,13 @@ pub enum PackSynArm {
         body: ss::ValueId,
         body_ty: ss::TypeId,
     },
+    Sealed {
+        pattern: ss::TPatId,
+        witness: ss::AbstId,
+        definition: ss::TypeId,
+        body: ss::ValueId,
+        body_ty: ss::TypeId,
+    },
     PayloadNotValue,
 }
 
@@ -1678,6 +1685,16 @@ pub fn pack_syn_judgment<'db>(
                     body_ty,
                 )
                 .into(),
+                cons_id,
+                cons: ss::Value::SCons(ss::ConsN(vec![definition.into()], body)),
+            })
+        }
+        | PackSynArm::Sealed { pattern, witness, definition, body, body_ty } => {
+            let exists_id: ss::TypeId = derived_id(key_space, 0);
+            let cons_id: ss::ValueId = derived_id(key_space, 1);
+            Some(PackSynOutcome::Package {
+                exists_id,
+                exists: ss::Exists::new(ss::TypeBinder { pattern, witness }, body_ty).into(),
                 cons_id,
                 cons: ss::Value::SCons(ss::ConsN(vec![definition.into()], body)),
             })
