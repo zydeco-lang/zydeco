@@ -1291,11 +1291,13 @@ impl<'arena> PrettyFormatter<'arena> {
             | Term::Hole(_) => RcDoc::text("_"),
             | Term::Var(name) => self.variable(name),
             | Term::Named(Named(field, inner)) => self.named_term(term, field, *inner),
-            | Term::Label(Label(field, inner)) => self.field(field).append(self.fragment_boundary(
-                BoundaryIntent::after_start(term, *inner),
-                BoundaryLayout::aligned(" ::"),
-                self.annotated_term_fragment(*inner),
-            )),
+            | Term::Label(Label(field, inner)) => {
+                self.marked_field(field).append(self.fragment_boundary(
+                    BoundaryIntent::after_start(term, *inner),
+                    BoundaryLayout::aligned(" ::"),
+                    self.annotated_term_fragment(*inner),
+                ))
+            }
             | Term::Paren(Paren(terms)) => match terms.as_slice() {
                 // An application owns the grouping layout, so its singleton
                 // wrapper is always redundant.
@@ -1569,7 +1571,7 @@ impl<'arena> PrettyFormatter<'arena> {
                     self.term_fragment(classifier),
                 ))
             }
-            | _ => self.field(field).append(self.fragment_boundary(
+            | _ => self.marked_field(field).append(self.fragment_boundary(
                 BoundaryIntent::after_start(term, inner),
                 BoundaryLayout::aligned(" ="),
                 self.annotated_term_fragment(inner),
@@ -1638,7 +1640,7 @@ impl<'arena> PrettyFormatter<'arena> {
                     self.term_fragment(classifier),
                 ))
             }
-            | None => self.field(field).append(self.fragment_boundary(
+            | None => self.marked_field(field).append(self.fragment_boundary(
                 BoundaryIntent::after_start(pattern, inner),
                 BoundaryLayout::aligned(" ="),
                 LayoutFragment::entity(inner.into(), self.annotated_pattern(inner)),
@@ -1858,14 +1860,14 @@ impl<'arena> PrettyFormatter<'arena> {
                                 ),
                             )
                         }
-                        | None => self.field(field).append(self.fragment_boundary(
+                        | None => self.marked_field(field).append(self.fragment_boundary(
                             BoundaryIntent::after_start(*named, inner.anchors.first),
                             BoundaryLayout::aligned(" ="),
                             inner,
                         )),
                     }
                 } else {
-                    self.field(field).append(self.fragment_boundary(
+                    self.marked_field(field).append(self.fragment_boundary(
                         BoundaryIntent::after_start(*named, inner.anchors.first),
                         BoundaryLayout::aligned(" ="),
                         inner,
@@ -2157,6 +2159,11 @@ impl<'arena> PrettyFormatter<'arena> {
         RcDoc::text(name.0.clone())
     }
 
+    /// A field name marked with `#`, used on the left of `=` and `::`.
+    fn marked_field(&self, name: &FieldName) -> RcDoc<'arena> {
+        RcDoc::text("#").append(self.field(name))
+    }
+
     fn constructor(&self, name: &CtorName) -> RcDoc<'arena> {
         RcDoc::text(name.0.clone())
     }
@@ -2280,7 +2287,7 @@ mod tests {
 
     #[test]
     fn records_layout_intentions_without_adding_syntax_variants() {
-        let source = "(field = field,\n= kept)";
+        let source = "(#field = field,\n= kept)";
         let parsed = ParsedSource::new(source);
         assert_eq!(
             parsed.parser.arena.intentions.line_extent(parsed.unit.root.into()),
@@ -2298,8 +2305,8 @@ mod tests {
     #[test]
     fn canonicalizes_term_and_pattern_puns_independently() {
         let source = concat!(
-            "let (field = field, /projected = projected) = input in ",
-            "(field = field, = kept, annotated = annotated : Type, renamed = other)",
+            "let (#field = field, /projected = projected) = input in ",
+            "(#field = field, = kept, #annotated = annotated : Type, #renamed = other)",
         );
         let parsed = ParsedSource::new(source);
 
@@ -2307,7 +2314,7 @@ mod tests {
             parsed.render(LayoutIntentions::Preserve),
             concat!(
                 "let (= field, /projected) = input in\n",
-                "(= field, = kept, = annotated : Type, renamed = other)\n",
+                "(= field, = kept, = annotated : Type, #renamed = other)\n",
             )
         );
     }
@@ -2315,8 +2322,8 @@ mod tests {
     #[test]
     fn punned_annotations_use_the_surviving_classifier_boundary() {
         let cases = [
-            ("(field =\nfield : Type)", "(= field : Type)\n"),
-            ("param (field =\nfield : Type) that _", "param = field : Type that\n_\n"),
+            ("(#field =\nfield : Type)", "(= field : Type)\n"),
+            ("param (#field =\nfield : Type) that _", "param = field : Type that\n_\n"),
         ];
 
         cases.into_iter().for_each(|(source, expected)| {
@@ -2334,7 +2341,7 @@ mod tests {
     fn preserves_annotation_ownership_around_punned_fields() {
         let cases = [
             ("param (/process) : Type that _", "param (/process) : Type that\n_\n"),
-            ("((field = field) : Type)", "((= field) : Type)\n"),
+            ("((#field = field) : Type)", "((= field) : Type)\n"),
         ];
 
         cases.into_iter().for_each(|(source, expected)| {
@@ -2389,7 +2396,7 @@ mod tests {
             ("f (value/field)", "f value/field\n"),
             ("f (g x)", "f (g x)\n"),
             ("(f x)/field", "(f x)/field\n"),
-            ("((field = field))", "(= field)\n"),
+            ("((#field = field))", "(= field)\n"),
             ("comatch x => x end", "fn x => x\n"),
             ("! comatch x => x end", "! (fn x => x)\n"),
         ];
@@ -2687,8 +2694,8 @@ mod tests {
     fn starts_a_hanging_infix_chain_at_its_enclosing_layout_boundary() {
         let cases = [
             (
-                "(field :: A *\nB *\nC)",
-                concat!("(\n", "  field ::\n", "    A\n", "  * B\n", "  * C\n", ")\n"),
+                "(#field :: A *\nB *\nC)",
+                concat!("(\n", "  #field ::\n", "    A\n", "  * B\n", "  * C\n", ")\n"),
             ),
             (
                 "data\n| +Pair : A *\nB\nend",
@@ -3171,7 +3178,8 @@ mod tests {
 
     #[test]
     fn compacts_manifest_existentials_when_grouping_is_semantically_transparent() {
-        let parsed = ParsedSource::new("exists (Counter = ((Counter as Int64) : VType)) . Counter");
+        let parsed =
+            ParsedSource::new("exists (#Counter = ((Counter as Int64) : VType)) . Counter");
 
         assert_eq!(
             parsed.render(LayoutIntentions::Ignore),
@@ -3187,9 +3195,9 @@ mod tests {
     #[test]
     fn preserves_comments_on_manifest_parameter_wrappers() {
         let source = concat!(
-            "exists (outer =\n",
+            "exists (#outer =\n",
             "  -- Keep the inner field.\n",
-            "  inner = ((value as Definition) : Classifier)) . body",
+            "  #inner = ((value as Definition) : Classifier)) . body",
         );
         let parsed = ParsedSource::new(source);
         let formatted = parsed.render(LayoutIntentions::Preserve);
@@ -3202,7 +3210,7 @@ mod tests {
 
     #[test]
     fn preserves_observed_line_boundaries() {
-        let parsed = ParsedSource::new("(first = first,\nsecond = second)");
+        let parsed = ParsedSource::new("(#first = first,\n#second = second)");
 
         assert_eq!(parsed.render(LayoutIntentions::Preserve), "(= first,\n  = second)\n");
         assert_eq!(parsed.render(LayoutIntentions::Ignore), "(= first, = second)\n");
@@ -3224,7 +3232,7 @@ mod tests {
     #[test]
     fn preserves_multiple_items_grouped_on_each_source_line() {
         let source =
-            concat!("(first = first, second = second,\n", "third = third, fourth = fourth)",);
+            concat!("(#first = first, #second = second,\n", "#third = third, #fourth = fourth)",);
         let parsed = ParsedSource::new(source);
 
         assert_eq!(
@@ -4279,9 +4287,9 @@ mod tests {
     #[test]
     fn malformed_format_annotations_remain_inert() {
         let cases = [
-            "@[format(nope(1))] (field = field, ((x)))\n",
-            "@[format(width(0))] (field = field, ((x)))\n",
-            "@[format(100)] (field = field, ((x)))\n",
+            "@[format(nope(1))] (#field = field, ((x)))\n",
+            "@[format(width(0))] (#field = field, ((x)))\n",
+            "@[format(100)] (#field = field, ((x)))\n",
         ];
 
         cases.into_iter().for_each(|source| {
@@ -4289,7 +4297,7 @@ mod tests {
             let formatted = parsed.render(LayoutIntentions::Preserve);
             assert_eq!(
                 formatted,
-                source.replace("(field = field, ((x)))", "(= field, x)"),
+                source.replace("(#field = field, ((x)))", "(= field, x)"),
                 "source: {source}"
             );
 
@@ -4405,14 +4413,14 @@ mod tests {
     #[test]
     fn does_not_pun_away_payload_comments() {
         let cases = [
-            "(field =\n-- Keep the term payload.\nfield)",
-            "param (field =\n-- Keep the pattern payload.\nfield) that _",
+            "(#field =\n-- Keep the term payload.\nfield)",
+            "param (#field =\n-- Keep the pattern payload.\nfield) that _",
         ];
 
         cases.into_iter().for_each(|source| {
             let parsed = ParsedSource::new(source);
             let formatted = parsed.render(LayoutIntentions::Preserve);
-            assert!(formatted.contains("field =\n"), "source: {source}\n{formatted}");
+            assert!(formatted.contains("#field =\n"), "source: {source}\n{formatted}");
 
             let reparsed = ParsedSource::new(&formatted);
             assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
@@ -4480,7 +4488,7 @@ mod tests {
 
     #[test]
     fn canonical_pretty_printing_round_trips_idempotently() {
-        let parsed = ParsedSource::new("(field = field, = kept, renamed = other)");
+        let parsed = ParsedSource::new("(#field = field, = kept, #renamed = other)");
         let first = parsed.render(LayoutIntentions::Ignore);
         let reparsed = ParsedSource::new(&first);
         let second = reparsed.render(LayoutIntentions::Ignore);

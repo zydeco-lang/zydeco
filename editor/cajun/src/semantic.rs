@@ -336,6 +336,7 @@ impl<'source> SemanticDocument<'source> {
             | Lexical::LowerIdentifier => TokenStyle::new(SemanticKind::Variable),
             | Lexical::Constructor => TokenStyle::new(SemanticKind::EnumMember),
             | Lexical::Destructor => TokenStyle::new(SemanticKind::Method),
+            | Lexical::Field => TokenStyle::new(SemanticKind::Property),
             | Lexical::Keyword => TokenStyle::new(SemanticKind::Keyword),
             | Lexical::Number => TokenStyle::new(SemanticKind::Number),
             | Lexical::String => TokenStyle::new(SemanticKind::String),

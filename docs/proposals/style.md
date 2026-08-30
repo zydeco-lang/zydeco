@@ -172,14 +172,17 @@ Longer-lived APIs benefit from descriptive words instead of chains of primes.
 ## Named Components and Packages
 
 Named components use one spelling for the classifier and another for the payload.
-`field :: A` classifies a named payload, while `field = value` introduces or patterns against it.
-When the field and variable have the same name, `= field` is the concise field pun.
+`#field :: A` classifies a named payload, while `#field = value` introduces or patterns against it.
+The `#` marker appears exactly where a field name stands on the left of `=` or `::`,
+the positions where a bare identifier would read as a variable or binder;
+announced positions carry no marker, so `term/field` projects, `/field = pattern` searches,
+and `= field` is the concise field pun when field and variable share a name.
 
 Parentheses make the extent of a named component explicit:
 
 ```zydeco
-(name = value) : (name :: A)
-(left :: A) * (right :: B)
+(#name = value) : (#name :: A)
+(#left :: A) * (#right :: B)
 ```
 
 Package fields follow the naming convention of their payload: type components use `UpperCamel`,

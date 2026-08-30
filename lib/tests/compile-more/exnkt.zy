@@ -142,8 +142,8 @@ begin
       end that
 
     (
-      generated = { ! mt_exnk },
-      manual = { ! mt_exnk_manual }
+      #generated = { ! mt_exnk },
+      #manual = { ! mt_exnk_manual }
     )
   end
 end

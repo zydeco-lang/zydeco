@@ -4,17 +4,17 @@ begin
   let Thk = @(intrinsic(thk)) in
   let Ret = @(intrinsic(ret)) in
   let BoolModule (Bool : VType) =
-      (true :: Bool)
-    * (false :: Bool)
-    * (not :: Thk (Bool -> Ret Bool))
-    * (and :: Thk (Bool -> Bool -> Ret Bool))
-    * (or :: Thk (Bool -> Bool -> Ret Bool))
-    * (eq :: Thk (Bool -> Bool -> Ret Bool))
-    * (xor :: Thk (Bool -> Bool -> Ret Bool))
-    * (nand :: Thk (Bool -> Bool -> Ret Bool))
-    * (nor :: Thk (Bool -> Bool -> Ret Bool))
+      (#true :: Bool)
+    * (#false :: Bool)
+    * (#not :: Thk (Bool -> Ret Bool))
+    * (#and :: Thk (Bool -> Bool -> Ret Bool))
+    * (#or :: Thk (Bool -> Bool -> Ret Bool))
+    * (#eq :: Thk (Bool -> Bool -> Ret Bool))
+    * (#xor :: Thk (Bool -> Bool -> Ret Bool))
+    * (#nand :: Thk (Bool -> Bool -> Ret Bool))
+    * (#nor :: Thk (Bool -> Bool -> Ret Bool))
     * (
-        if :: Thk (
+        #if :: Thk (
           forall (B : CType) . Bool -> Thk B -> Thk B -> B
         )
       )

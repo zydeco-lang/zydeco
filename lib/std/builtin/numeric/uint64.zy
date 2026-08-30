@@ -10,15 +10,15 @@ begin
   ) in
   let Render (A : VType) = Thk (A -> Ret String) in
   exists
-    (Scalar = ScalarType as @(intrinsic(u64)) : VType)
+    (#Scalar = ScalarType as @(intrinsic(u64)) : VType)
   .
-      (@[builtin(uint64_add)] (add :: Binary ScalarType))
-    * (@[builtin(uint64_sub)] (sub :: Binary ScalarType))
-    * (@[builtin(uint64_mul)] (mul :: Binary ScalarType))
-    * (@[builtin(uint64_div)] (div :: Binary ScalarType))
-    * (@[builtin(uint64_mod)] (mod :: Binary ScalarType))
-    * (@[builtin(uint64_eq)] (eq :: Branch ScalarType))
-    * (@[builtin(uint64_lt)] (lt :: Branch ScalarType))
-    * (@[builtin(uint64_gt)] (gt :: Branch ScalarType))
-    * (@[builtin(uint64_to_string)] (to_string :: Render ScalarType))
+      (@[builtin(uint64_add)] (#add :: Binary ScalarType))
+    * (@[builtin(uint64_sub)] (#sub :: Binary ScalarType))
+    * (@[builtin(uint64_mul)] (#mul :: Binary ScalarType))
+    * (@[builtin(uint64_div)] (#div :: Binary ScalarType))
+    * (@[builtin(uint64_mod)] (#mod :: Binary ScalarType))
+    * (@[builtin(uint64_eq)] (#eq :: Branch ScalarType))
+    * (@[builtin(uint64_lt)] (#lt :: Branch ScalarType))
+    * (@[builtin(uint64_gt)] (#gt :: Branch ScalarType))
+    * (@[builtin(uint64_to_string)] (#to_string :: Render ScalarType))
 end

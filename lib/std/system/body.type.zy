@@ -24,65 +24,65 @@ begin
     (IoErrorKind : VType)
     (IoError : VType)
     (OS : CType) =
-      (not_found :: IoErrorKind)
-    * (permission_denied :: IoErrorKind)
-    * (already_exists :: IoErrorKind)
-    * (invalid_input :: IoErrorKind)
-    * (invalid_data :: IoErrorKind)
-    * (broken_pipe :: IoErrorKind)
-    * (closed :: IoErrorKind)
-    * (other :: IoErrorKind)
+      (#not_found :: IoErrorKind)
+    * (#permission_denied :: IoErrorKind)
+    * (#already_exists :: IoErrorKind)
+    * (#invalid_input :: IoErrorKind)
+    * (#invalid_data :: IoErrorKind)
+    * (#broken_pipe :: IoErrorKind)
+    * (#closed :: IoErrorKind)
+    * (#other :: IoErrorKind)
     * (
-        kind_eq :: Thk (
+        #kind_eq :: Thk (
           IoErrorKind -> IoErrorKind -> Ret Bool
         )
       )
-    * (error_kind :: Thk (IoError -> Ret IoErrorKind))
-    * (error_message :: Thk (IoError -> Ret String))
+    * (#error_kind :: Thk (IoError -> Ret IoErrorKind))
+    * (#error_message :: Thk (IoError -> Ret String))
     * (
-        read :: Thk (
+        #read :: Thk (
              Reader -> Int64
           -> Thk (Result Bytes IoError -> OS)
           -> OS
         )
       )
     * (
-        read_line :: Thk (
+        #read_line :: Thk (
              Reader
           -> Thk (Result (Option Bytes) IoError -> OS)
           -> OS
         )
       )
     * (
-        read_all :: Thk (
+        #read_all :: Thk (
              Reader
           -> Thk (Result Bytes IoError -> OS)
           -> OS
         )
       )
     * (
-        write_all :: Thk (
+        #write_all :: Thk (
              Writer -> Bytes
           -> Thk (Result Unit IoError -> OS)
           -> OS
         )
       )
     * (
-        flush :: Thk (
+        #flush :: Thk (
              Writer
           -> Thk (Result Unit IoError -> OS)
           -> OS
         )
       )
     * (
-        close_reader :: Thk (
+        #close_reader :: Thk (
              Reader
           -> Thk (Result Unit IoError -> OS)
           -> OS
         )
       )
     * (
-        close_writer :: Thk (
+        #close_writer :: Thk (
              Writer
           -> Thk (Result Unit IoError -> OS)
           -> OS
@@ -101,52 +101,52 @@ begin
     (Path : VType)
     (IoError : VType)
     (OS : CType) =
-      (path :: Thk (String -> Ret Path))
-    * (path_string :: Thk (Path -> Ret String))
+      (#path :: Thk (String -> Ret Path))
+    * (#path_string :: Thk (Path -> Ret String))
     * (
-        open_reader :: Thk (
+        #open_reader :: Thk (
              Path
           -> Thk (Result Reader IoError -> OS)
           -> OS
         )
       )
     * (
-        create_writer :: Thk (
+        #create_writer :: Thk (
              Path
           -> Thk (Result Writer IoError -> OS)
           -> OS
         )
       )
     * (
-        append_writer :: Thk (
+        #append_writer :: Thk (
              Path
           -> Thk (Result Writer IoError -> OS)
           -> OS
         )
       )
     * (
-        read_bytes :: Thk (
+        #read_bytes :: Thk (
              Path
           -> Thk (Result Bytes IoError -> OS)
           -> OS
         )
       )
     * (
-        read_text :: Thk (
+        #read_text :: Thk (
              Path
           -> Thk (Result String IoError -> OS)
           -> OS
         )
       )
     * (
-        write_bytes :: Thk (
+        #write_bytes :: Thk (
              Path -> Bytes
           -> Thk (Result Unit IoError -> OS)
           -> OS
         )
       )
     * (
-        write_text :: Thk (
+        #write_text :: Thk (
              Path -> String
           -> Thk (Result Unit IoError -> OS)
           -> OS
@@ -169,38 +169,38 @@ begin
     (Writer : VType)
     (IoError : VType)
     (OS : CType) =
-      (stdin :: Thk (Ret Reader))
-    * (stdout :: Thk (Ret Writer))
-    * (stderr :: Thk (Ret Writer))
+      (#stdin :: Thk (Ret Reader))
+    * (#stdout :: Thk (Ret Writer))
+    * (#stderr :: Thk (Ret Writer))
     * (
-        read_line :: Thk (
+        #read_line :: Thk (
              Thk (Result (Option String) IoError -> OS)
           -> OS
         )
       )
     * (
-        write :: Thk (
+        #write :: Thk (
              String
           -> Thk (Result Unit IoError -> OS)
           -> OS
         )
       )
     * (
-        write_line :: Thk (
+        #write_line :: Thk (
              String
           -> Thk (Result Unit IoError -> OS)
           -> OS
         )
       )
     * (
-        write_error :: Thk (
+        #write_error :: Thk (
              String
           -> Thk (Result Unit IoError -> OS)
           -> OS
         )
       )
     * (
-        write_error_line :: Thk (
+        #write_error_line :: Thk (
              String
           -> Thk (Result Unit IoError -> OS)
           -> OS
@@ -215,11 +215,11 @@ begin
       )
     )
     (OS : CType) =
-      (arg_list :: Thk (Thk (List String -> OS) -> OS))
-    * (random_int :: Thk (Thk (Int64 -> OS) -> OS))
-    * (halt :: Thk OS)
-    * (panic :: Thk (String -> OS))
-    * (exit :: Thk (Int64 -> OS))
+      (#arg_list :: Thk (Thk (List String -> OS) -> OS))
+    * (#random_int :: Thk (Thk (Int64 -> OS) -> OS))
+    * (#halt :: Thk OS)
+    * (#panic :: Thk (String -> OS))
+    * (#exit :: Thk (Int64 -> OS))
   in
 
   let SystemBody (Bool : VType)
@@ -245,16 +245,16 @@ begin
     (IoError : VType)
     (OS : CType) =
       (
-        io :: IoModule
+        #io :: IoModule
           Bool Option Result Reader Writer IoErrorKind IoError OS
       )
     * (
-        fs :: FsModule Result Reader Writer Path IoError OS
+        #fs :: FsModule Result Reader Writer Path IoError OS
       )
     * (
-        stdio :: StdioModule Option Result Reader Writer IoError OS
+        #stdio :: StdioModule Option Result Reader Writer IoError OS
       )
-    * (process :: ProcessModule List OS)
+    * (#process :: ProcessModule List OS)
     * Unit
   in
   SystemBody

@@ -6,21 +6,21 @@ begin
   let Unit = @(intrinsic(unit)) in
   let Prelude = exists
     (
-      Thunk = ThunkType as Thk : CType -> (
+      #Thunk = ThunkType as Thk : CType -> (
         VType
       )
     )
   .
     exists
       (
-        U = UType as Thk : CType -> (
+        #U = UType as Thk : CType -> (
           VType
         )
       )
     .
       exists
         (
-          F = FType as Ret : VType -> (
+          #F = FType as Ret : VType -> (
             CType
           )
         )

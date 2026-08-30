@@ -21,9 +21,9 @@ begin
     (Reader : VType)
     (Writer : VType)
     (OS : CType) =
-    exists (Path = PathType : VType) .
-      exists (IoErrorKind = IoErrorKindType : VType) .
-        exists (IoError = IoErrorType : VType) .
+    exists (#Path = PathType : VType) .
+      exists (#IoErrorKind = IoErrorKindType : VType) .
+        exists (#IoError = IoErrorType : VType) .
           SystemBody
             Bool
             Option

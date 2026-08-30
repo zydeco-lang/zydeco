@@ -3,5 +3,5 @@ begin
   let Thk = @(intrinsic(thk)) in
   let Int64 = @(intrinsic(i64)) in
   param OS : CType in
-  @[builtin(exit)] (exit :: Thk (Int64 -> OS))
+  @[builtin(exit)] (#exit :: Thk (Int64 -> OS))
 end

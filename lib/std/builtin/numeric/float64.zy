@@ -10,14 +10,14 @@ begin
   ) in
   let Render (A : VType) = Thk (A -> Ret String) in
   exists
-    (Scalar = ScalarType as @(intrinsic(f64)) : VType)
+    (#Scalar = ScalarType as @(intrinsic(f64)) : VType)
   .
-      (@[builtin(float64_add)] (add :: Binary ScalarType))
-    * (@[builtin(float64_sub)] (sub :: Binary ScalarType))
-    * (@[builtin(float64_mul)] (mul :: Binary ScalarType))
-    * (@[builtin(float64_div)] (div :: Binary ScalarType))
-    * (@[builtin(float64_eq)] (eq :: Branch ScalarType))
-    * (@[builtin(float64_lt)] (lt :: Branch ScalarType))
-    * (@[builtin(float64_gt)] (gt :: Branch ScalarType))
-    * (@[builtin(float64_to_string)] (to_string :: Render ScalarType))
+      (@[builtin(float64_add)] (#add :: Binary ScalarType))
+    * (@[builtin(float64_sub)] (#sub :: Binary ScalarType))
+    * (@[builtin(float64_mul)] (#mul :: Binary ScalarType))
+    * (@[builtin(float64_div)] (#div :: Binary ScalarType))
+    * (@[builtin(float64_eq)] (#eq :: Branch ScalarType))
+    * (@[builtin(float64_lt)] (#lt :: Branch ScalarType))
+    * (@[builtin(float64_gt)] (#gt :: Branch ScalarType))
+    * (@[builtin(float64_to_string)] (#to_string :: Render ScalarType))
 end

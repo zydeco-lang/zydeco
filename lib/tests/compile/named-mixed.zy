@@ -4,24 +4,24 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/Thk; /Ret; /Unit) = core that
-  let (Scalar = Int64, int64) = numeric/int64 that
+  let (#Scalar = Int64, int64) = numeric/int64 that
   let (/process) = system that
 
   -- Named components remain ordinary product components. They may be mixed with
   -- unnamed components, nested explicitly, and destructured by ordinary tuple
   -- patterns.
   let FlatMixed = (
-    first :: Int64
-  ) * Int64 * (third :: Int64) that
-  let NestedMixed = ((left :: Int64) * Int64) * (right :: Int64) that
+    #first :: Int64
+  ) * Int64 * (#third :: Int64) that
+  let NestedMixed = ((#left :: Int64) * Int64) * (#right :: Int64) that
   def flat_mixed : FlatMixed = (
-    first = 1 : Int64,
+    #first = 1 : Int64,
     2 : Int64,
-    third = 3 : Int64
+    #third = 3 : Int64
   ) that
   def nested_mixed : NestedMixed = (
-    (left = 4 : Int64, 5 : Int64),
-    right = 6 : Int64
+    (#left = 4 : Int64, 5 : Int64),
+    #right = 6 : Int64
   ) that
 
   def Packet =
@@ -29,28 +29,28 @@ begin
     -- a mixed product, whose labels are checked when its pattern is checked.
     data
     | +Packet : (
-      kind :: Int64
-    ) * Int64 * (payload :: Int64)
+      #kind :: Int64
+    ) * Int64 * (#payload :: Int64)
     | +Empty : Unit
     end
   that
   def packet : Packet = +Packet(
-    kind = 7 : Int64,
+    #kind = 7 : Int64,
     8 : Int64,
-    payload = 9 : Int64
+    #payload = 9 : Int64
   ) that
 
   -- Named value types may contain thunked arrows. The arrow itself is unchanged:
   -- its parameter and result are merely ordinary value types containing names.
-  let FunctionInput = (lhs :: Int64) * Int64 that
-  let FunctionOutput = Int64 * (result :: Int64) that
-  let FunctionBox = (apply :: Thk (FunctionInput -> Ret FunctionOutput)) * Int64 that
+  let FunctionInput = (#lhs :: Int64) * Int64 that
+  let FunctionOutput = Int64 * (#result :: Int64) that
+  let FunctionBox = (#apply :: Thk (FunctionInput -> Ret FunctionOutput)) * Int64 that
   def ! transform ((= lhs : Int64, rhs : Int64) : FunctionInput) : Ret FunctionOutput =
     do result <- ! (int64/add) lhs rhs;
     ret (lhs, = result)
   that
   def function_box : FunctionBox = (
-    apply = transform,
+    #apply = transform,
     0
   ) that
 
@@ -58,15 +58,15 @@ begin
     -- Codata also remains unchanged. A destructor may accept or return named value
     -- types, and a thunked codata object may itself occupy a named product field.
     codata
-    | .read : Ret ((reading :: Int64) * Int64)
-    | .shift : (delta :: Int64) -> Ret (reading :: Int64)
+    | .read : Ret ((#reading :: Int64) * Int64)
+    | .shift : (#delta :: Int64) -> Ret (#reading :: Int64)
     end
   that
-  let GaugeBox = Int64 * (gauge :: Thk Gauge) that
+  let GaugeBox = Int64 * (#gauge :: Thk Gauge) that
   def ! gauge : Gauge =
     comatch
-    | .read => ret (reading = 12 : Int64, 13 : Int64)
-    | .shift (= delta : Int64) => ret (reading = delta : Int64)
+    | .read => ret (#reading = 12 : Int64, 13 : Int64)
+    | .shift (= delta : Int64) => ret (#reading = delta : Int64)
     end
   that
   def gauge_box : GaugeBox = (
@@ -93,12 +93,12 @@ begin
   -- A variable pattern may bind a named component opaquely. It can then be
   -- opened by either a whole-pattern annotation or a payload annotation.
   let (
-    first_field : (first :: Int64),
+    first_field : (#first :: Int64),
     opaque_middle : Int64,
-    third_field : (third :: Int64)
+    third_field : (#third :: Int64)
   ) = flat_mixed in
-  let ((first = opaque_first) : (first :: Int64)) = first_field in
-  let (third = opaque_third : Int64) = third_field in
+  let ((#first = opaque_first) : (#first :: Int64)) = first_field in
+  let (#third = opaque_third : Int64) = third_field in
   do opaque_checksum <- ! checksum3 opaque_first opaque_middle opaque_third;
   do opaque_check <- ! (int64/sub) opaque_checksum 321;
 
@@ -122,7 +122,7 @@ begin
       = apply : Thk (FunctionInput -> Ret FunctionOutput),
       function_marker : Int64
     ) = function_box in
-    do transformed <- ! apply (lhs = 10 : Int64, 11 : Int64);
+    do transformed <- ! apply (#lhs = 10 : Int64, 11 : Int64);
     let (
       echoed : Int64,
       = result : Int64
@@ -132,7 +132,7 @@ begin
 
     let (
       gauge_marker : Int64,
-      gauge = active_gauge : Thk Gauge
+      #gauge = active_gauge : Thk Gauge
     ) = gauge_box in
     do observation <- ! active_gauge .read;
     let (
@@ -142,8 +142,8 @@ begin
     do gauge_checksum <- ! checksum3 reading drift 0;
     do gauge_check <- ! (int64/sub) gauge_checksum 142;
 
-    do shifted <- ! active_gauge .shift (delta = 14 : Int64);
-    let (reading = shifted_reading : Int64) = shifted in
+    do shifted <- ! active_gauge .shift (#delta = 14 : Int64);
+    let (#reading = shifted_reading : Int64) = shifted in
     do shift_pattern_check <- ! (int64/sub) shifted_reading 14;
     do shift_projection_check <- ! (int64/sub) shifted/reading 14;
 

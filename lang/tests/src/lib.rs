@@ -213,13 +213,13 @@ let (/Scalar = Float64) = representations/f64 in
 let (/Scalar = Char) = representations/char in
 let (/Scalar = String) = representations/string in
 let (/Scalar = Bytes) = representations/bytes in
-let (Scalar = NumericInt64, int64) = numeric/int64 in
+let (#Scalar = NumericInt64, int64) = numeric/int64 in
 let (/Reader; /Writer; /OS; /process) = system in
 let Thunk = Thk in
 let U = Thk in
 let F = Ret in
 {open_monadic}
-let api = (int64 = int64, exit = process/exit) in
+let api = (#int64 = int64, #exit = process/exit) in
 let exit = process/exit in
 let Top : CType = codata end in
 let triv : Thk Top = {{ comatch end }} in

@@ -234,7 +234,7 @@ where
 {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Named(name, inner) = self;
-        RcDoc::concat([name.pretty(f), RcDoc::text(" = "), inner.pretty(f)])
+        RcDoc::concat([RcDoc::text("#"), name.pretty(f), RcDoc::text(" = "), inner.pretty(f)])
     }
 }
 
@@ -244,7 +244,7 @@ where
 {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Label(name, inner) = self;
-        RcDoc::concat([name.pretty(f), RcDoc::text(" :: "), inner.pretty(f)])
+        RcDoc::concat([RcDoc::text("#"), name.pretty(f), RcDoc::text(" :: "), inner.pretty(f)])
     }
 }
 

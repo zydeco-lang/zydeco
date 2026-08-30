@@ -3,10 +3,10 @@ begin
   let Thk = @(intrinsic(thk)) in
   let Ret = @(intrinsic(ret)) in
   let Additive (A : VType) =
-      (zero :: A)
-    * (add :: Thk (A -> A -> Ret A))
-    * (sub :: Thk (A -> A -> Ret A))
-    * (negate :: Thk (A -> Ret A))
+      (#zero :: A)
+    * (#add :: Thk (A -> A -> Ret A))
+    * (#sub :: Thk (A -> A -> Ret A))
+    * (#negate :: Thk (A -> Ret A))
   in
   Additive
 end

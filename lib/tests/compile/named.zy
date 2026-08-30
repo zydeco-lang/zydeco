@@ -3,24 +3,24 @@ begin
     (/numeric; /system) :
     @(import("../../std/builtin.zy"))
   ) that
-  let (Scalar = Int64, int64) = numeric/int64 that
+  let (#Scalar = Int64, int64) = numeric/int64 that
   let (/process) = system that
-  let Point = (x :: Int64) * (y :: Int64) that
-  let Rectangle = (top_left :: Point) * (status :: Int64) that
-  let Triple = (first :: Int64) * (middle :: Int64) * (last :: Int64) that
-  let Nested = ((inner_x :: Int64) * (inner_y :: Int64)) * (outer :: Int64) that
+  let Point = (#x :: Int64) * (#y :: Int64) that
+  let Rectangle = (#top_left :: Point) * (#status :: Int64) that
+  let Triple = (#first :: Int64) * (#middle :: Int64) * (#last :: Int64) that
+  let Nested = ((#inner_x :: Int64) * (#inner_y :: Int64)) * (#outer :: Int64) that
   def rectangle : Rectangle = (
-    top_left = (x = 5, y = 1),
-    status = 0
+    #top_left = (#x = 5, #y = 1),
+    #status = 0
   ) that
-  def triple : Triple = (first = 7, middle = -3, last = -4) that
-  def nested : Nested = ((inner_x = 0, inner_y = -12), outer = 0) that
+  def triple : Triple = (#first = 7, #middle = -3, #last = -4) that
+  def nested : Nested = ((#inner_x = 0, #inner_y = -12), #outer = 0) that
   def first_global : Int64 = triple/first that
 
-  let (top_left = point, = status : Int64) = rectangle in
+  let (#top_left = point, = status : Int64) = rectangle in
   let status_field = (= status : Int64) in
-  let direct = (code = point/x) in
-  let (inner, outer = _) = nested in
+  let direct = (#code = point/x) in
+  let (inner, #outer = _) = nested in
   let pair = (triple/first, triple/last) in
   let (first, last) = pair in
   do total <- ! (int64/add) first triple/middle;

@@ -2,21 +2,21 @@ begin
   let VType = @(intrinsic(vtype)) in
   let Unit = @(intrinsic(unit)) in
   let RepresentationPackage (Representation : VType) =
-    exists (Scalar = ScalarType as Representation : VType) .
+    exists (#Scalar = ScalarType as Representation : VType) .
       Unit
   in
-    (i8 :: RepresentationPackage (@(intrinsic(i8))))
-  * (i16 :: RepresentationPackage (@(intrinsic(i16))))
-  * (i32 :: RepresentationPackage (@(intrinsic(i32))))
-  * (i64 :: RepresentationPackage (@(intrinsic(i64))))
-  * (u8 :: RepresentationPackage (@(intrinsic(u8))))
-  * (u16 :: RepresentationPackage (@(intrinsic(u16))))
-  * (u32 :: RepresentationPackage (@(intrinsic(u32))))
-  * (u64 :: RepresentationPackage (@(intrinsic(u64))))
-  * (f32 :: RepresentationPackage (@(intrinsic(f32))))
-  * (f64 :: RepresentationPackage (@(intrinsic(f64))))
-  * (char :: RepresentationPackage (@(intrinsic(char))))
-  * (string :: RepresentationPackage (@(intrinsic(string))))
-  * (bytes :: RepresentationPackage (@(intrinsic(bytes))))
+    (#i8 :: RepresentationPackage (@(intrinsic(i8))))
+  * (#i16 :: RepresentationPackage (@(intrinsic(i16))))
+  * (#i32 :: RepresentationPackage (@(intrinsic(i32))))
+  * (#i64 :: RepresentationPackage (@(intrinsic(i64))))
+  * (#u8 :: RepresentationPackage (@(intrinsic(u8))))
+  * (#u16 :: RepresentationPackage (@(intrinsic(u16))))
+  * (#u32 :: RepresentationPackage (@(intrinsic(u32))))
+  * (#u64 :: RepresentationPackage (@(intrinsic(u64))))
+  * (#f32 :: RepresentationPackage (@(intrinsic(f32))))
+  * (#f64 :: RepresentationPackage (@(intrinsic(f64))))
+  * (#char :: RepresentationPackage (@(intrinsic(char))))
+  * (#string :: RepresentationPackage (@(intrinsic(string))))
+  * (#bytes :: RepresentationPackage (@(intrinsic(bytes))))
   * Unit
 end

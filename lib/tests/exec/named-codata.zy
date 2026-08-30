@@ -6,20 +6,20 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/Thk; /Ret) = core that
-  let (Scalar = Int64, int64) = numeric/int64 that
+  let (#Scalar = Int64, int64) = numeric/int64 that
   let (/process) = system that
 
   def Gauge =
     codata
-    | .read : Ret ((reading :: Int64) * Int64)
-    | .shift : (delta :: Int64) -> Ret (reading :: Int64)
+    | .read : Ret ((#reading :: Int64) * Int64)
+    | .shift : (#delta :: Int64) -> Ret (#reading :: Int64)
     end
   that
-  let GaugeBox = Int64 * (gauge :: Thk Gauge) that
+  let GaugeBox = Int64 * (#gauge :: Thk Gauge) that
   def ! gauge : Gauge =
     comatch
-    | .read => ret (reading = 12 : Int64, 13 : Int64)
-    | .shift (= delta : Int64) => ret (reading = delta : Int64)
+    | .read => ret (#reading = 12 : Int64, 13 : Int64)
+    | .shift (= delta : Int64) => ret (#reading = delta : Int64)
     end
   that
   def gauge_box : GaugeBox = (
@@ -29,7 +29,7 @@ begin
 
   let (
     marker : Int64,
-    gauge = active_gauge : Thk Gauge
+    #gauge = active_gauge : Thk Gauge
   ) = gauge_box in
   do observation <- ! active_gauge .read;
   let (
@@ -38,8 +38,8 @@ begin
   ) = observation in
   do reading_check <- ! (int64/sub) reading 12;
   do drift_check <- ! (int64/sub) drift 13;
-  do shifted <- ! active_gauge .shift (delta = 14 : Int64);
-  let (reading = shifted_reading : Int64) = shifted in
+  do shifted <- ! active_gauge .shift (#delta = 14 : Int64);
+  let (#reading = shifted_reading : Int64) = shifted in
   do shifted_pattern_check <- ! (int64/sub) shifted_reading 14;
   do shifted_projection_check <- ! (int64/sub) shifted/reading 14;
   do total <- ! (int64/add) marker reading_check;

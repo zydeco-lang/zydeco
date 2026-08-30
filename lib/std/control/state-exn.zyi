@@ -11,7 +11,7 @@ begin
   pi (_ : @(import("../builtin.zy"))) .
     exists
       (
-        StateExn = StateExnType :
+        #StateExn = StateExnType :
         VType -> (
           VType
         ) -> (
@@ -20,42 +20,42 @@ begin
       )
     .
         (
-          mo_state_exn :: Thk (
+          #mo_state_exn :: Thk (
             forall (S : VType) .
               forall (E : VType) .
                 Monad (StateExnType S E)
           )
         )
       * (
-          state_ops :: Thk (
+          #state_ops :: Thk (
             forall (S : VType) .
               forall (E : VType) .
                 MonadState S (StateExnType S E)
           )
         )
       * (
-          throw_ops :: Thk (
+          #throw_ops :: Thk (
             forall (S : VType) .
               forall (E : VType) .
                 MonadThrow E (StateExnType S E)
           )
         )
       * (
-          get :: Thk (
+          #get :: Thk (
             forall (S : VType) .
               forall (E : VType) .
                 StateExnType S E S
           )
         )
       * (
-          put :: Thk (
+          #put :: Thk (
             forall (S : VType) .
               forall (E : VType) .
                 S -> StateExnType S E Unit
           )
         )
       * (
-          raise :: Thk (
+          #raise :: Thk (
             forall (S : VType) .
               forall (E : VType) .
                 forall (A : VType) .
@@ -65,7 +65,7 @@ begin
           )
         )
       * (
-          catch :: Thk (
+          #catch :: Thk (
             forall (S : VType) .
               forall (E : VType) .
                 forall (A : VType) .
@@ -76,7 +76,7 @@ begin
           )
         )
       * (
-          run_state_exn :: Thk (
+          #run_state_exn :: Thk (
             forall (S : VType) .
               forall (E : VType) .
                 forall (A : VType) .

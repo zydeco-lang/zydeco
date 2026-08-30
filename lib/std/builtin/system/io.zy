@@ -13,35 +13,35 @@ begin
   let Done = Thk OS in
     (
       @[builtin(io_read)] (
-        read :: Thk (Reader -> Int64 -> Error -> Success Bytes -> OS)
+        #read :: Thk (Reader -> Int64 -> Error -> Success Bytes -> OS)
       )
     )
   * (
       @[builtin(io_read_line)] (
-        read_line :: Thk (Reader -> Error -> Done -> Success Bytes -> OS)
+        #read_line :: Thk (Reader -> Error -> Done -> Success Bytes -> OS)
       )
     )
   * (
       @[builtin(io_read_all)] (
-        read_all :: Thk (Reader -> Error -> Success Bytes -> OS)
+        #read_all :: Thk (Reader -> Error -> Success Bytes -> OS)
       )
     )
   * (
       @[builtin(io_write_all)] (
-        write_all :: Thk (Writer -> Bytes -> Error -> Done -> OS)
+        #write_all :: Thk (Writer -> Bytes -> Error -> Done -> OS)
       )
     )
   * (
-      @[builtin(io_flush)] (flush :: Thk (Writer -> Error -> Done -> OS))
+      @[builtin(io_flush)] (#flush :: Thk (Writer -> Error -> Done -> OS))
     )
   * (
       @[builtin(io_close_reader)] (
-        close_reader :: Thk (Reader -> Error -> Done -> OS)
+        #close_reader :: Thk (Reader -> Error -> Done -> OS)
       )
     )
   * (
       @[builtin(io_close_writer)] (
-        close_writer :: Thk (Writer -> Error -> Done -> OS)
+        #close_writer :: Thk (Writer -> Error -> Done -> OS)
       )
     )
 end

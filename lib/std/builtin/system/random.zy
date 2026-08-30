@@ -4,6 +4,6 @@ begin
   let Int64 = @(intrinsic(i64)) in
   param OS : CType in
   @[builtin(random_int)] (
-    generate :: Thk (Thk (Int64 -> OS) -> OS)
+    #generate :: Thk (Thk (Int64 -> OS) -> OS)
   )
 end

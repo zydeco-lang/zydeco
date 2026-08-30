@@ -18,6 +18,7 @@ extern {
     enum Tok<'input> {
         "UpperId" => Tok::UpperIdent(<&'input str>),
         "LowerId" => Tok::LowerIdent(<&'input str>),
+        "FieldId" => Tok::FieldIdent(<&'input str>),
         "CtorId" => Tok::CtorIdent(<&'input str>),
         "DtorId" => Tok::DtorIdent(<&'input str>),
 
@@ -139,6 +140,9 @@ MetaId: String = {
 
 VarName: VarName = <MixedId> => VarName(<>);
 FieldName: FieldName = <name:VarName> => FieldName(name.0);
+// `#field` marks a field name that stands on the left of `=` or `::`,
+// where a bare identifier would read as a variable or binder instead.
+MarkedFieldName: FieldName = <name:"FieldId"> => FieldName(name[1..].to_string());
 CtorName: CtorName = <"CtorId"> => CtorName(<>.into());
 DtorName: DtorName = <"DtorId"> => DtorName(<>.into());
 
@@ -188,7 +192,7 @@ PatternAnn: Pattern = {
         parser.pun_pattern(field, ty)
     },
     #[precedence(level="2")] #[assoc(side="right")]
-    <name:FieldName> "=" <inner:PatternGen<PatternAnn>> => Named(name, inner).into(),
+    <name:MarkedFieldName> "=" <inner:PatternGen<PatternAnn>> => Named(name, inner).into(),
     #[precedence(level="2")] #[assoc(side="right")]
     "/" <l:@L> <field:Sp<FieldName>> <ty:(":" <TermId>)?> <r:@R> => {
         let ty = ty.map(|ty| Sp {
@@ -329,9 +333,9 @@ TermAnn: Term = {
         parser.pun_term(field, ty)
     },
     #[precedence(level="2")] #[assoc(side="right")]
-    <name:FieldName> "=" <inner:TermGen<TermAnn>> => Named(name, inner).into(),
+    <name:MarkedFieldName> "=" <inner:TermGen<TermAnn>> => Named(name, inner).into(),
     #[precedence(level="2")] #[assoc(side="right")]
-    <name:FieldName> "::" <inner:TermGen<TermAnn>> => Label(name, inner).into(),
+    <name:MarkedFieldName> "::" <inner:TermGen<TermAnn>> => Label(name, inner).into(),
 };
 
 #[inline]

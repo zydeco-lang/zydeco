@@ -17,18 +17,18 @@ begin
       data
       | +Leaf : Unit
       | +Node :
-          (left :: Avl A)
-        * (value :: A)
-        * (tree_height :: Int64)
-        * (right :: Avl A)
+          (#left :: Avl A)
+        * (#value :: A)
+        * (#tree_height :: Int64)
+        * (#right :: Avl A)
       end
     that
     def ! leaf (A : VType) : Ret (Avl A) = ret +Leaf() that
     def ! singleton (A : VType) (value : A) : Ret (Avl A) = ret +Node(
-      left = +Leaf(),
+      #left = +Leaf(),
       = value,
-      tree_height = 1,
-      right = +Leaf()
+      #tree_height = 1,
+      #right = +Leaf()
     ) that
     def ! height (A : VType) (tree : Avl A) : Ret Int64 =
       match tree
@@ -52,7 +52,7 @@ begin
         do right_height <- ! height A right;
         do child_height <- ! int_max left_height right_height;
         do new_height <- ! (int64/add) child_height 1;
-        ret +Node(= left, = value, tree_height = new_height, = right)
+        ret +Node(= left, = value, #tree_height = new_height, = right)
       end
     that
     def ! balance_factor (A : VType) (tree : Avl A) : Ret Int64 =
@@ -104,16 +104,16 @@ begin
           /right = left_right
         ) =>
           do new_right <- ! fix_height A +Node(
-            left = left_right,
+            #left = left_right,
             = value,
             = tree_height,
             = right
           );
           ! fix_height A +Node(
-            left = left_left,
-            value = left_value,
-            tree_height = left_height,
-            right = new_right
+            #left = left_left,
+            #value = left_value,
+            #tree_height = left_height,
+            #right = new_right
           )
         end
       end
@@ -134,13 +134,13 @@ begin
             = left,
             = value,
             = tree_height,
-            right = right_left
+            #right = right_left
           );
           ! fix_height A +Node(
-            left = new_left,
-            value = right_value,
-            tree_height = right_height,
-            right = right_right
+            #left = new_left,
+            #value = right_value,
+            #tree_height = right_height,
+            #right = right_right
           )
         end
       end
@@ -163,7 +163,7 @@ begin
               {
                 do new_left <- ! rotate_left A left;
                 do tree_height <- ! height A tree;
-                ! rotate_right A +Node(left = new_left, = value, = tree_height, = right)
+                ! rotate_right A +Node(#left = new_left, = value, = tree_height, = right)
               }
               { ! rotate_right A tree }
           }
@@ -181,7 +181,7 @@ begin
                   {
                     do new_right <- ! rotate_right A right;
                     do tree_height <- ! height A tree;
-                    ! rotate_left A +Node(= left, = value, = tree_height, right = new_right)
+                    ! rotate_left A +Node(= left, = value, = tree_height, #right = new_right)
                   }
                   { ! rotate_left A tree }
               }
@@ -200,7 +200,7 @@ begin
           {
             do new_left <- ! insert A item left comparison;
             do unbalanced <- ! fix_height A +Node(
-              left = new_left,
+              #left = new_left,
               = value,
               = tree_height,
               = right
@@ -213,7 +213,7 @@ begin
               = left,
               = value,
               = tree_height,
-              right = new_right
+              #right = new_right
             );
             ! balance A unbalanced
           }
@@ -250,7 +250,7 @@ begin
         ! (bool/if)
           (Ret (Avl A))
           found
-          { ret +Node(= left, value = item, = tree_height, = right) }
+          { ret +Node(= left, #value = item, = tree_height, = right) }
           {
             do goes_left <- ! less item value;
             ! (bool/if)
@@ -258,11 +258,11 @@ begin
               goes_left
               {
                 do new_left <- ! change A item left equal less;
-                ret +Node(left = new_left, = value, = tree_height, = right)
+                ret +Node(#left = new_left, = value, = tree_height, = right)
               }
               {
                 do new_right <- ! change A item right equal less;
-                ret +Node(= left, = value, = tree_height, right = new_right)
+                ret +Node(= left, = value, = tree_height, #right = new_right)
               }
           }
       end
@@ -295,9 +295,9 @@ begin
                       do new_right <- ! delete A replacement right equal less;
                       do unbalanced <- ! fix_height A +Node(
                         = left,
-                        value = replacement,
+                        #value = replacement,
                         = tree_height,
-                        right = new_right
+                        #right = new_right
                       );
                       ! balance A unbalanced
                   }
@@ -312,7 +312,7 @@ begin
               {
                 do new_left <- ! delete A item left equal less;
                 do unbalanced <- ! fix_height A +Node(
-                  left = new_left,
+                  #left = new_left,
                   = value,
                   = tree_height,
                   = right
@@ -325,7 +325,7 @@ begin
                   = left,
                   = value,
                   = tree_height,
-                  right = new_right
+                  #right = new_right
                 );
                 ! balance A unbalanced
               }
@@ -380,10 +380,10 @@ begin
     def Hash (K : VType) (V : VType) =
       data
       | +Hash :
-          (body :: Avl (K * V))
-        * (insert_less :: Cmp (K * V))
-        * (search_equal :: Cmp (K * V))
-        * (item_equal :: Cmp (K * V))
+          (#body :: Avl (K * V))
+        * (#insert_less :: Cmp (K * V))
+        * (#search_equal :: Cmp (K * V))
+        * (#item_equal :: Cmp (K * V))
       end
     that
     def ! hash_new (K : VType)
@@ -395,7 +395,7 @@ begin
         do body <- ! leaf (K * V);
         ret +Hash(
           = body,
-          insert_less = {
+          #insert_less = {
             fn first second =>
               match first
               | (first_key, _) =>
@@ -404,7 +404,7 @@ begin
                 end
               end
           },
-          search_equal = {
+          #search_equal = {
             fn first second =>
               match first
               | (first_key, _) =>
@@ -413,7 +413,7 @@ begin
                 end
               end
           },
-          item_equal = {
+          #item_equal = {
             fn first second =>
               match first
               | (first_key, first_value) =>
@@ -433,7 +433,7 @@ begin
       match hash
       | +Hash(/body; /insert_less; /search_equal; /item_equal) =>
         do new_body <- ! insert (K * V) (key, value) body insert_less;
-        ret +Hash(body = new_body, = insert_less, = search_equal, = item_equal)
+        ret +Hash(#body = new_body, = insert_less, = search_equal, = item_equal)
       end
     that
     --| in search, a default value for v is needed, because the type of v is unknown
@@ -462,7 +462,7 @@ begin
       match hash
       | +Hash(/body; /insert_less; /search_equal; /item_equal) =>
         do new_body <- ! delete (K * V) (key, default) body search_equal insert_less;
-        ret +Hash(body = new_body, = insert_less, = search_equal, = item_equal)
+        ret +Hash(#body = new_body, = insert_less, = search_equal, = item_equal)
       end
     that
     def ! hash_change (K : VType) (V : VType) (key : K) (value : V) (hash : Hash K V) : Ret (
@@ -471,7 +471,7 @@ begin
       match hash
       | +Hash(/body; /insert_less; /search_equal; /item_equal) =>
         do new_body <- ! change (K * V) (key, value) body search_equal insert_less;
-        ret +Hash(body = new_body, = insert_less, = search_equal, = item_equal)
+        ret +Hash(#body = new_body, = insert_less, = search_equal, = item_equal)
       end
     that
     def ! hash_equal (K : VType) (V : VType) (first : Hash K V) (second : Hash K V) : Ret Bool =

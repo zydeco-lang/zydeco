@@ -246,16 +246,16 @@ fn checks_selective_package_patterns_against_canonical_witnesses() {
         r#"
 begin
   let Box =
-    exists (Item = ItemType : VType) .
-      (value :: ItemType)
+    exists (#Item = ItemType : VType) .
+      (#value :: ItemType)
   that
 
   let Reveal =
-    pi ((Item = ItemType, _) : Box) . Ret ItemType
+    pi ((#Item = ItemType, _) : Box) . Ret ItemType
   that
 
   def reveal : Thk Reveal = {
-    fn ((Item = ItemType, = value) : Box) => ret value
+    fn ((#Item = ItemType, = value) : Box) => ret value
   } that
 
   def forward : Thk Reveal = {

@@ -9,7 +9,7 @@ begin
   pi (_ : @(import("../builtin.zy"))) .
     exists
       (
-        State = StateType :
+        #State = StateType :
         VType -> (
           VType
         ) -> CType
@@ -17,7 +17,7 @@ begin
     .
       exists
         (
-          MonadState = ExportedMonadState as MonadState :
+          #MonadState = ExportedMonadState as MonadState :
           VType -> (
             VType -> (
               CType
@@ -26,38 +26,38 @@ begin
         )
       .
           (
-            mo_state :: Thk (
+            #mo_state :: Thk (
               forall (S : VType) .
                 Monad (StateType S)
             )
           )
         * (
-            state :: Thk (
+            #state :: Thk (
               forall (S : VType) .
                 MonadState S (StateType S)
             )
           )
         * (
-            get :: Thk (
+            #get :: Thk (
               forall (S : VType) .
                 StateType S S
             )
           )
         * (
-            put :: Thk (
+            #put :: Thk (
               forall (S : VType) .
                 S -> StateType S Unit
             )
           )
         * (
-            modify :: Thk (
+            #modify :: Thk (
               forall (S : VType) .
                    Thk (S -> Ret S)
                 -> StateType S Unit
             )
           )
         * (
-            run_state :: Thk (
+            #run_state :: Thk (
               forall (S : VType) .
                 forall (A : VType) .
                   forall (B : CType) .
@@ -68,7 +68,7 @@ begin
             )
           )
         * (
-            eval_state :: Thk (
+            #eval_state :: Thk (
               forall (S : VType) .
                 forall (A : VType) .
                      S

@@ -4,8 +4,8 @@ begin
   let Ret = @(intrinsic(ret)) in
   let PartialEquality (Bool : VType)
     (A : VType) =
-      (eq :: Thk (A -> A -> Ret Bool))
-    * (ne :: Thk (A -> A -> Ret Bool))
+      (#eq :: Thk (A -> A -> Ret Bool))
+    * (#ne :: Thk (A -> A -> Ret Bool))
   in
   PartialEquality
 end

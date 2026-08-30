@@ -4,8 +4,8 @@ begin
   let Numeric = @(import("numeric.type.zy")) in
   let NumericInstance (Bool : VType)
     (Representation : VType) =
-    exists (Scalar = ScalarType as Representation : VType) .
-        (dictionary :: Numeric Bool ScalarType)
+    exists (#Scalar = ScalarType as Representation : VType) .
+        (#dictionary :: Numeric Bool ScalarType)
       * Unit
   in
   NumericInstance

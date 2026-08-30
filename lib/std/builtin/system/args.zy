@@ -3,7 +3,7 @@ begin
   let Thk = @(intrinsic(thk)) in
   let String = @(intrinsic(string)) in
   @[builtin(arg_list)] (
-    fold :: Thk (
+    #fold :: Thk (
       forall (R : CType) .
            Thk R
         -> Thk (String -> Thk R -> R)

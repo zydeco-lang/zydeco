@@ -8,7 +8,7 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
-  let (Scalar = Int64, int64) = numeric/int64 that
+  let (#Scalar = Int64, int64) = numeric/int64 that
   let (/Scalar = Char) = representations/char that
   let (/Scalar = String) = representations/string that
   let string = text/string that
@@ -190,8 +190,8 @@ begin
   (
     = halt,
     = panic,
-    write_line = stdio/write_line,
-    write_int = stdio/write_int,
+    #write_line = stdio/write_line,
+    #write_int = stdio/write_int,
     = write_int_line
   )
 end

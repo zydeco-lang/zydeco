@@ -13,24 +13,24 @@ begin
         VType
       )
     ) =
-      (none :: Thk (forall (A : VType) . Ret (Option A)))
-    * (some :: Thk (forall (A : VType) . A -> Ret (Option A)))
+      (#none :: Thk (forall (A : VType) . Ret (Option A)))
+    * (#some :: Thk (forall (A : VType) . A -> Ret (Option A)))
     * (
-        fold :: Thk (
+        #fold :: Thk (
           forall (A : VType) .
             forall (B : CType) .
               Option A -> Thk B -> Thk (A -> B) -> B
         )
       )
     * (
-        map :: Thk (
+        #map :: Thk (
           forall (A : VType) .
             forall (B : VType) .
               Option A -> Thk (A -> Ret B) -> Ret (Option B)
         )
       )
     * (
-        and_then :: Thk (
+        #and_then :: Thk (
           forall (A : VType) .
             forall (B : VType) .
                  Option A
@@ -38,9 +38,9 @@ begin
               -> Ret (Option B)
         )
       )
-    * (unwrap_or :: Thk (forall (A : VType) . Option A -> A -> Ret A))
+    * (#unwrap_or :: Thk (forall (A : VType) . Option A -> A -> Ret A))
     * (
-        or_else :: Thk (
+        #or_else :: Thk (
           forall (A : VType) .
                Option A
             -> Thk (Ret (Option A))
@@ -48,14 +48,14 @@ begin
         )
       )
     * (
-        zip :: Thk (
+        #zip :: Thk (
           forall (A : VType) .
             forall (B : VType) .
               Option A -> Option B -> Ret (Option (A * B))
         )
       )
-    * (is_some :: Thk (forall (A : VType) . Option A -> Ret Bool))
-    * (is_none :: Thk (forall (A : VType) . Option A -> Ret Bool))
+    * (#is_some :: Thk (forall (A : VType) . Option A -> Ret Bool))
+    * (#is_none :: Thk (forall (A : VType) . Option A -> Ret Bool))
   in
 
   let ResultModule (Bool : VType)
@@ -65,19 +65,19 @@ begin
       ) -> VType
     ) =
       (
-        ok :: Thk (
+        #ok :: Thk (
           forall (A : VType) .
             forall (E : VType) . A -> Ret (Result A E)
         )
       )
     * (
-        err :: Thk (
+        #err :: Thk (
           forall (A : VType) .
             forall (E : VType) . E -> Ret (Result A E)
         )
       )
     * (
-        fold :: Thk (
+        #fold :: Thk (
           forall (A : VType) .
             forall (E : VType) .
               forall (B : CType) .
@@ -85,7 +85,7 @@ begin
         )
       )
     * (
-        map :: Thk (
+        #map :: Thk (
           forall (A : VType) .
             forall (B : VType) .
               forall (E : VType) .
@@ -93,7 +93,7 @@ begin
         )
       )
     * (
-        map_err :: Thk (
+        #map_err :: Thk (
           forall (A : VType) .
             forall (E : VType) .
               forall (F : VType) .
@@ -101,7 +101,7 @@ begin
         )
       )
     * (
-        and_then :: Thk (
+        #and_then :: Thk (
           forall (A : VType) .
             forall (B : VType) .
               forall (E : VType) .
@@ -111,19 +111,19 @@ begin
         )
       )
     * (
-        unwrap_or :: Thk (
+        #unwrap_or :: Thk (
           forall (A : VType) .
             forall (E : VType) . Result A E -> A -> Ret A
         )
       )
     * (
-        is_ok :: Thk (
+        #is_ok :: Thk (
           forall (A : VType) .
             forall (E : VType) . Result A E -> Ret Bool
         )
       )
     * (
-        is_err :: Thk (
+        #is_err :: Thk (
           forall (A : VType) .
             forall (E : VType) . Result A E -> Ret Bool
         )
@@ -142,10 +142,10 @@ begin
       )
     )
     (Int64 : VType) =
-      (nil :: Thk (forall (A : VType) . Ret (List A)))
-    * (cons :: Thk (forall (A : VType) . A -> List A -> Ret (List A)))
+      (#nil :: Thk (forall (A : VType) . Ret (List A)))
+    * (#cons :: Thk (forall (A : VType) . A -> List A -> Ret (List A)))
     * (
-        case :: Thk (
+        #case :: Thk (
           forall (A : VType) .
             forall (B : CType) .
                  List A
@@ -155,7 +155,7 @@ begin
         )
       )
     * (
-        fold :: Thk (
+        #fold :: Thk (
           forall (A : VType) .
             forall (B : CType) .
                  List A
@@ -164,33 +164,33 @@ begin
               -> B
         )
       )
-    * (singleton :: Thk (forall (A : VType) . A -> Ret (List A)))
-    * (append :: Thk (forall (A : VType) . List A -> List A -> Ret (List A)))
+    * (#singleton :: Thk (forall (A : VType) . A -> Ret (List A)))
+    * (#append :: Thk (forall (A : VType) . List A -> List A -> Ret (List A)))
     * (
-        map :: Thk (
+        #map :: Thk (
           forall (A : VType) .
             forall (B : VType) .
               List A -> Thk (A -> Ret B) -> Ret (List B)
         )
       )
     * (
-        fold_left :: Thk (
+        #fold_left :: Thk (
           forall (A : VType) .
             forall (B : VType) .
               List A -> B -> Thk (B -> A -> Ret B) -> Ret B
         )
       )
-    * (reverse :: Thk (forall (A : VType) . List A -> Ret (List A)))
-    * (length :: Thk (forall (A : VType) . List A -> Ret Int64))
-    * (is_empty :: Thk (forall (A : VType) . List A -> Ret Bool))
-    * (head :: Thk (forall (A : VType) . List A -> Ret (Option A)))
+    * (#reverse :: Thk (forall (A : VType) . List A -> Ret (List A)))
+    * (#length :: Thk (forall (A : VType) . List A -> Ret Int64))
+    * (#is_empty :: Thk (forall (A : VType) . List A -> Ret Bool))
+    * (#head :: Thk (forall (A : VType) . List A -> Ret (Option A)))
     * (
-        tail :: Thk (
+        #tail :: Thk (
           forall (A : VType) . List A -> Ret (Option (List A))
         )
       )
     * (
-        get :: Thk (
+        #get :: Thk (
           forall (A : VType) . List A -> Int64 -> Ret (Option A)
         )
       )
@@ -212,10 +212,10 @@ begin
         VType
       )
     ) =
-      (bool :: BoolModule Bool)
-    * (option :: OptionModule Bool Option)
-    * (result :: ResultModule Bool Result)
-    * (list :: ListModule Bool Option List Int64)
+      (#bool :: BoolModule Bool)
+    * (#option :: OptionModule Bool Option)
+    * (#result :: ResultModule Bool Result)
+    * (#list :: ListModule Bool Option List Int64)
     * Unit
   in
   DataBody

@@ -16,16 +16,16 @@ begin
       (/core; /representations; /numeric; /system = (/Reader; /Writer; /OS); builtin)
     ) in
     let (/VType; /CType; /Thk; /Ret; /Unit) = core in
-    let (Scalar = Int8, int8) = numeric/int8 in
-    let (Scalar = Int16, int16) = numeric/int16 in
-    let (Scalar = Int32, int32) = numeric/int32 in
-    let (Scalar = Int64, int64) = numeric/int64 in
-    let (Scalar = UInt8, uint8) = numeric/uint8 in
-    let (Scalar = UInt16, uint16) = numeric/uint16 in
-    let (Scalar = UInt32, uint32) = numeric/uint32 in
-    let (Scalar = UInt64, uint64) = numeric/uint64 in
-    let (Scalar = Float32, float32) = numeric/float32 in
-    let (Scalar = Float64, float64) = numeric/float64 in
+    let (#Scalar = Int8, int8) = numeric/int8 in
+    let (#Scalar = Int16, int16) = numeric/int16 in
+    let (#Scalar = Int32, int32) = numeric/int32 in
+    let (#Scalar = Int64, int64) = numeric/int64 in
+    let (#Scalar = UInt8, uint8) = numeric/uint8 in
+    let (#Scalar = UInt16, uint16) = numeric/uint16 in
+    let (#Scalar = UInt32, uint32) = numeric/uint32 in
+    let (#Scalar = UInt64, uint64) = numeric/uint64 in
+    let (#Scalar = Float32, float32) = numeric/float32 in
+    let (#Scalar = Float64, float64) = numeric/float64 in
     let (/Scalar = Char) = representations/char in
     let (/Scalar = String) = representations/string in
     let (/Scalar = Bytes) = representations/bytes in
@@ -54,9 +54,9 @@ begin
       make_numeric builtin base
     in
     let prelude : Prelude = (
-      Thunk = Thk,
-      U = Thk,
-      F = Ret,
+      #Thunk = Thk,
+      #U = Thk,
+      #F = Ret,
       ()
     ) in
     (

@@ -1,13 +1,13 @@
 exists (VType as @(intrinsic(vtype)))
   (CType as @(intrinsic(ctype)))
   (
-    Thk = CoreThk as @(intrinsic(thk)) :
+    #Thk = CoreThk as @(intrinsic(thk)) :
     CType -> VType
   )
   (
-    Ret = CoreRet as @(intrinsic(ret)) :
+    #Ret = CoreRet as @(intrinsic(ret)) :
     VType -> CType
   )
-  (Unit = CoreUnit as @(intrinsic(unit)) : VType)
+  (#Unit = CoreUnit as @(intrinsic(unit)) : VType)
 .
   @(intrinsic(unit))

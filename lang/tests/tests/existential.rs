@@ -58,12 +58,12 @@ fn composes_manifest_existentials_with_named_package_fields() {
         r#"
 begin
   let CounterLibrary =
-    exists (Counter = ((Representation as Int64) : VType)) .
-      (zero :: Representation)
+    exists (#Counter = ((Representation as Int64) : VType)) .
+      (#zero :: Representation)
   that
   def library : CounterLibrary = (
-    Counter = Int64,
-    zero = 0,
+    #Counter = Int64,
+    #zero = 0,
   ) that
   def consume : Thk (CounterLibrary -> Ret Int64) = {
     fn ((= Counter, = zero) : CounterLibrary) => ret zero
@@ -82,14 +82,14 @@ fn projection_patterns_select_types_and_values_from_one_package_opening() {
         r#"
 begin
   let Box =
-    exists (Item = Hidden : VType) .
-      (value :: Hidden) *
-      (consume :: Thk (Hidden -> Ret Int64))
+    exists (#Item = Hidden : VType) .
+      (#value :: Hidden) *
+      (#consume :: Thk (Hidden -> Ret Int64))
   that
   def boxed : Box = (
-    Item = Int64,
-    value = 41,
-    consume = { fn value => ret value },
+    #Item = Int64,
+    #value = 41,
+    #consume = { fn value => ret value },
   ) that
 
   {
@@ -109,9 +109,9 @@ fn projection_patterns_treat_plain_existential_binders_as_punned_fields() {
 begin
   let Box =
     exists (Item : VType) .
-      (value :: Item)
+      (#value :: Item)
   that
-  def boxed : Box = (Int64, value = 42) that
+  def boxed : Box = (Int64, #value = 42) that
 
   let (/Item; /value) = boxed in
   def selected : Item = value in
@@ -129,9 +129,9 @@ fn projection_patterns_can_name_one_type_field_twice() {
 begin
   let Box =
     exists (Item : VType) .
-      (value :: Item)
+      (#value :: Item)
   that
-  def boxed : Box = (Int64, value = 42) that
+  def boxed : Box = (Int64, #value = 42) that
 
   let (/Item = Left; /Item = Right; /value) = boxed in
   def left : Left = value in
@@ -150,9 +150,9 @@ fn projection_patterns_reject_a_missing_package_field() {
 begin
   let Box =
     exists (Item : VType) .
-      (value :: Item)
+      (#value :: Item)
   that
-  def boxed : Box = (Int64, value = 42) that
+  def boxed : Box = (Int64, #value = 42) that
 
   let (/Missing) = boxed in
   ()
@@ -168,9 +168,9 @@ fn projection_patterns_reject_an_ambiguous_static_and_value_field() {
 begin
   let Box =
     exists (Item : VType) .
-      (Item :: Item)
+      (#Item :: Item)
   that
-  def boxed : Box = (Int64, Item = 42) that
+  def boxed : Box = (Int64, #Item = 42) that
 
   let (/Item) = boxed in
   ()

@@ -6,9 +6,9 @@ begin
   let PartialOrder = @(import("partial-order.type.zy")) in
   let Numeric (Bool : VType)
     (A : VType) =
-      (additive :: Additive A)
-    * (multiplicative :: Multiplicative A)
-    * (order :: PartialOrder Bool A)
+      (#additive :: Additive A)
+    * (#multiplicative :: Multiplicative A)
+    * (#order :: PartialOrder Bool A)
     * Unit
   in
   Numeric

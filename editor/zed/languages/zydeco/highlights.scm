@@ -20,6 +20,7 @@
 (lower_identifier) @variable
 (constructor_identifier) @constructor
 (destructor_identifier) @function
+(field_identifier) @property
 
 [
   (hole)

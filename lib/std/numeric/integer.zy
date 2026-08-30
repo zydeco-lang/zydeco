@@ -25,78 +25,78 @@ begin
               { ret (bool/false) }
           in
           let operations : IntegerModule Bool Scalar String = (
-            add = primitive/add,
-            sub = primitive/sub,
-            mul = primitive/mul,
-            div = primitive/div,
-            mod = primitive/mod,
-            eq = {
+            #add = primitive/add,
+            #sub = primitive/sub,
+            #mul = primitive/mul,
+            #div = primitive/div,
+            #mod = primitive/mod,
+            #eq = {
               fn left right => ! compare primitive/eq left right
             },
-            ne = {
+            #ne = {
               fn left right =>
                 do equal <- ! compare primitive/eq left right;
                 ! (bool/not) equal
             },
-            lt = {
+            #lt = {
               fn left right => ! compare primitive/lt left right
             },
-            le = {
+            #le = {
               fn left right =>
                 do greater <- ! compare primitive/gt left right;
                 ! (bool/not) greater
             },
-            gt = {
+            #gt = {
               fn left right => ! compare primitive/gt left right
             },
-            ge = {
+            #ge = {
               fn left right =>
                 do less <- ! compare primitive/lt left right;
                 ! (bool/not) less
             },
-            increment = {
+            #increment = {
               fn value => ! (primitive/add) value one
             },
-            decrement = {
+            #decrement = {
               fn value => ! (primitive/sub) value one
             },
-            negate = {
+            #negate = {
               fn value => ! (primitive/sub) zero value
             },
-            min = {
+            #min = {
               fn left right =>
                 do less <- ! compare primitive/lt left right;
                 ! (bool/if) (Ret Scalar) less { ret left } { ret right }
             },
-            max = {
+            #max = {
               fn left right =>
                 do greater <- ! compare primitive/gt left right;
                 ! (bool/if) (Ret Scalar) greater { ret left } { ret right }
             },
-            to_string = primitive/to_string
+            #to_string = primitive/to_string
           ) in
           let instance : NumericInstance Bool Scalar = (
             = Scalar,
-            dictionary = (
-              additive = (
+            #dictionary = (
+              #additive = (
                 = zero,
-                add = operations/add,
-                sub = operations/sub,
-                negate = operations/negate
+                #add = operations/add,
+                #sub = operations/sub,
+                #negate = operations/negate
               ),
-              multiplicative = (
+              #multiplicative = (
                 = one,
-                mul = operations/mul
+                #mul = operations/mul
               ),
-              order = (
-                equality = (
-                  eq = operations/eq,
-                  ne = operations/ne
+              #order = (
+                #equality = (
+                  #eq = operations/eq,
+                  #ne = operations/ne
                 ),
-                lt = operations/lt,
-                le = operations/le,
-                gt = operations/gt,
-                ge = operations/ge
+                #lt = operations/lt,
+                #le = operations/le,
+                #gt = operations/gt,
+                #ge = operations/ge
               ),
               ()
             ),

@@ -120,8 +120,8 @@ fn synthesizes_named_patterns_from_their_payload() {
     InferenceCase::check(
         r#"
 begin
-  let unwrap = { fn (field = value) => ret value } that
-  do result <- ! unwrap (field = ());
+  let unwrap = { fn (#field = value) => ret value } that
+  do result <- ! unwrap (#field = ());
   ret result
 end
 "#,

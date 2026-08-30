@@ -124,8 +124,8 @@ Named terms and existential parameters
 ==================
 
 exists (Counter as Int64 : VType) (= State as Counter)
-  (Public = ((Hidden as Int64) : VType)) .
-  (state = 0, next :: Thk (State -> Ret State), = State)
+  (#Public = ((Hidden as Int64) : VType)) .
+  (#state = 0, #next :: Thk (State -> Ret State), = State)
 
 ---
 
@@ -145,7 +145,7 @@ exists (Counter as Int64 : VType) (= State as Counter)
         name: (upper_identifier)))
     parameter: (existential_parameter
       binder: (named_pattern
-        name: (upper_identifier)
+        name: (field_identifier)
         pattern: (parenthesized_pattern
           (pattern_annotation
             pattern: (manifest_pattern
@@ -157,10 +157,10 @@ exists (Counter as Int64 : VType) (= State as Counter)
               name: (upper_identifier))))))
     body: (parenthesized_term
       (named_term
-        name: (lower_identifier)
+        name: (field_identifier)
         value: (integer_literal))
       (labeled_term
-        name: (lower_identifier)
+        name: (field_identifier)
         value: (application_expression
           function: (variable
             name: (upper_identifier))

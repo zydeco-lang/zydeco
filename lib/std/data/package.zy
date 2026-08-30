@@ -3,7 +3,7 @@ param (
   @(import("../builtin.zy"))
 ) in
 let (/VType; /CType; /Thk; /Ret; /Unit) = core in
-let (Scalar = Int64, int64) = numeric/int64 in
+let (#Scalar = Int64, int64) = numeric/int64 in
 begin
   def Bool =
     data
@@ -371,7 +371,7 @@ begin
     = Option,
     = Result,
     = List,
-    bool = (
+    #bool = (
       = true,
       = false,
       = not,
@@ -383,37 +383,37 @@ begin
       = nor,
       = if
     ),
-    option = (
+    #option = (
       = none,
       = some,
-      fold = option_fold,
-      map = option_map,
-      and_then = option_and_then,
-      unwrap_or = option_unwrap_or,
+      #fold = option_fold,
+      #map = option_map,
+      #and_then = option_and_then,
+      #unwrap_or = option_unwrap_or,
       = or_else,
       = zip,
       = is_some,
       = is_none
     ),
-    result = (
+    #result = (
       = ok,
       = err,
-      fold = result_fold,
-      map = result_map,
+      #fold = result_fold,
+      #map = result_map,
       = map_err,
-      and_then = result_and_then,
-      unwrap_or = result_unwrap_or,
+      #and_then = result_and_then,
+      #unwrap_or = result_unwrap_or,
       = is_ok,
       = is_err
     ),
-    list = (
+    #list = (
       = nil,
       = cons,
       = case,
-      fold = list_fold,
+      #fold = list_fold,
       = singleton,
       = append,
-      map = list_map,
+      #map = list_map,
       = fold_left,
       = reverse,
       = length,

@@ -349,7 +349,7 @@ fn stdio_server_synchronizes_documents_and_answers_navigation_requests() {
 fn stdio_server_formats_the_open_document() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("main.zy");
-    let source = "(field = field, ((x)))";
+    let source = "(#field = field, ((x)))";
     std::fs::write(&path, source).unwrap();
     let uri = Url::from_file_path(&path).unwrap().to_string();
     let mut server = LspProcess::start();

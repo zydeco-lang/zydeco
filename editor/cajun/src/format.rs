@@ -81,7 +81,7 @@ mod tests {
 
     #[test]
     fn formats_with_canonical_punning_and_minimal_parentheses() {
-        let source = "(field = field, ((x)))";
+        let source = "(#field = field, ((x)))";
         let formatter = DocumentFormatter;
         let FormattingOutcome::Edit(edit) = formatter.format(source) else {
             panic!("expected a formatting edit")
@@ -98,7 +98,7 @@ mod tests {
             "--| Keep this documentation.\n",
             "-- Keep this comment.\n",
             "/- Keep this block. -/\n",
-            "(field = field, ((x)))",
+            "(#field = field, ((x)))",
         );
         let formatter = DocumentFormatter;
         let FormattingOutcome::Edit(edit) = formatter.format(source) else {

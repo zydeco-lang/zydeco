@@ -9,8 +9,8 @@ begin
     (Bool : VType)
     (Scalar : VType)
     (String : VType) =
-      (operations :: IntegerModule Bool Scalar String)
-    * (instance :: NumericInstance Bool Scalar)
+      (#operations :: IntegerModule Bool Scalar String)
+    * (#instance :: NumericInstance Bool Scalar)
     * Unit
   in
   pi (_ : @(import("../builtin/core.zy"))) .

@@ -18,6 +18,9 @@ pub enum Tok<'input> {
     CtorIdent(&'input str),
     #[regex(r"\.[a-z](?&ident)*")]
     DtorIdent(&'input str),
+    #[regex(r"\#[A-Za-z](?&ident)*")]
+    #[regex(r"\#_(?&ident)+")]
+    FieldIdent(&'input str),
 
     #[token("end")]
     End,
@@ -135,6 +138,7 @@ pub enum LexicalTokenKind {
     LowerIdentifier,
     Constructor,
     Destructor,
+    Field,
     Keyword,
     Number,
     String,
@@ -190,6 +194,7 @@ impl<'source> LexicalTokens<'source> {
             | Tok::LowerIdent(_) => Kind::LowerIdentifier,
             | Tok::CtorIdent(_) => Kind::Constructor,
             | Tok::DtorIdent(_) => Kind::Destructor,
+            | Tok::FieldIdent(_) => Kind::Field,
             | Tok::End
             | Tok::Begin
             | Tok::Data
@@ -296,6 +301,7 @@ impl Display for Tok<'_> {
             | Tok::LowerIdent(s) => write!(f, "LowerIdent({})", s),
             | Tok::CtorIdent(s) => write!(f, "CtorIdent({})", s),
             | Tok::DtorIdent(s) => write!(f, "DtorIdent({})", s),
+            | Tok::FieldIdent(s) => write!(f, "FieldIdent({})", s),
             | Tok::End => write!(f, "end"),
             | Tok::Begin => write!(f, "begin"),
             | Tok::Data => write!(f, "data"),

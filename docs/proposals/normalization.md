@@ -60,7 +60,7 @@ where the classifier `S` may be `Set` or an ordinary kind.
 `type X : K` is abstract. `type X as A : K` is manifest and contributes the definitional equality `X ≡ A`.
 The `as` keyword states an equation on an otherwise ordinary existential type binder.
 A value entry carries an ordinary runtime value whose type may mention preceding type entries.
-Its source-level classifier is `x :: A`, while `x = v` introduces the corresponding named value.
+Its source-level classifier is `#x :: A`, while `#x = v` introduces the corresponding named value.
 
 The package signature can be represented by nested package and product types:
 
@@ -68,7 +68,7 @@ The package signature can be represented by nested package and product types:
 ⟦ type X : K; Θ ⟧      = exists (X : K). ⟦ Θ ⟧
 ⟦ type X as A : K; Θ ⟧ = exists (X as A : K). ⟦ Θ ⟧
 ⟦ static X as D : S; Θ ⟧ = exists (X as D : S). ⟦ Θ ⟧
-⟦ val x : B; Θ ⟧       = (x :: B) * ⟦ Θ ⟧
+⟦ val x : B; Θ ⟧       = (#x :: B) * ⟦ Θ ⟧
 ```
 
 This translation preserves the order of the telescope and permits type and value entries to be interleaved.
@@ -82,8 +82,8 @@ The `as` decoration belongs to the binder payload and composes with ordinary pat
 than introducing a separate naming form:
 
 ```text
-exists (field = ((X as A) : K)) . B
-exists (= X as A : K) . B  ≡  exists (X = ((X as A) : K)) . B
+exists (#field = ((X as A) : K)) . B
+exists (= X as A : K) . B  ≡  exists (#X = ((X as A) : K)) . B
 ```
 
 The second line uses ordinary named-pattern punning.

@@ -3,21 +3,21 @@ begin
   let DataBody = @(import("body.type.zy")) in
   let DataPackage =
     exists
-      (Bool = BoolType : VType)
+      (#Bool = BoolType : VType)
       (
-        Option = OptionType :
+        #Option = OptionType :
         VType -> (
           VType
         )
       )
       (
-        Result = ResultType :
+        #Result = ResultType :
         VType -> (
           VType
         ) -> VType
       )
       (
-        List = ListType :
+        #List = ListType :
         VType -> (
           VType
         )

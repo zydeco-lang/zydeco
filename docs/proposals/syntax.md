@@ -64,7 +64,7 @@ match value
 end
 
 comatch
-| .read  => ret current
+| .read => ret current
 | .write next => ! update next
 end
 ```

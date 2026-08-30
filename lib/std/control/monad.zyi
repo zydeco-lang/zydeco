@@ -7,7 +7,7 @@ begin
   pi (_ : @(import("../builtin.zy"))) .
     exists
       (
-        Monad = ExportedMonad as Monad :
+        #Monad = ExportedMonad as Monad :
         (
           VType -> (
             CType
@@ -17,7 +17,7 @@ begin
     .
       exists
         (
-          Algebra = ExportedAlgebra as Algebra :
+          #Algebra = ExportedAlgebra as Algebra :
           (
                (
                  VType -> (

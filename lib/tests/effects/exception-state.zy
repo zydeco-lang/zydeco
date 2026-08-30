@@ -9,7 +9,7 @@ begin
   ) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (/Scalar = String) = representations/string that
-  let (Scalar = Int64, int64) = numeric/int64 that
+  let (#Scalar = Int64, int64) = numeric/int64 that
   let (/OS; /stdio; /process) = system that
   let (= Monad, = Algebra, ()) = monadic_basis builtin in
   let (

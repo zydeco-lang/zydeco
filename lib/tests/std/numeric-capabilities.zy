@@ -28,8 +28,8 @@ begin
   : Ret Bool = ! (dictionary/order/lt) left right in
 
   let (
-    Scalar = IntScalar,
-    dictionary = int_dictionary,
+    #Scalar = IntScalar,
+    #dictionary = int_dictionary,
     ()
   ) = numeric/int64_instance in
   do primitive_total <- ! (primitives/i64/add) 40 2;
@@ -41,8 +41,8 @@ begin
   do int_ok <- ! (bool/and) primitive_ok int_operations_ok;
 
   let (
-    Scalar = FloatScalar,
-    dictionary = float_dictionary,
+    #Scalar = FloatScalar,
+    #dictionary = float_dictionary,
     ()
   ) = numeric/float64_instance in
   do float_arithmetic <- ! multiply_add_equal

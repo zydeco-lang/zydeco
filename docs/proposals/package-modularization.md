@@ -43,11 +43,11 @@ Opening the public standard package positionally gives a source name to every en
 
 ```zydeco
 let (
-  Bool = Bool,
-  Option = Option,
-  Result = Result,
-  List = List,
-  Int64 = Int64,
+  #Bool = Bool,
+  #Option = Option,
+  #Result = Result,
+  #List = List,
+  #Int64 = Int64,
   ...,
   (/bool; /option; /result; /list; /int64; ...; /process)
 ) = make_std builtin in

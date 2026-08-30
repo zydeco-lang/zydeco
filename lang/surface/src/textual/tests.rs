@@ -835,7 +835,7 @@ fn parses_manifest_existential_with_a_punned_field_binder() {
     assert_eq!(body.plain(), "Counter");
 
     let rendered = term.ugly(&Formatter::new(&parser.arena));
-    assert_eq!(rendered, "exists (Counter = ((Counter as Int64) : VType)) . Counter");
+    assert_eq!(rendered, "exists (#Counter = ((Counter as Int64) : VType)) . Counter");
     let mut roundtrip = Parser::new();
     parser::SingleTermParser::new()
         .parse(&rendered, &LocationCtx::Plain, &mut roundtrip, lexer::Lexer::new(&rendered))
@@ -844,7 +844,7 @@ fn parses_manifest_existential_with_a_punned_field_binder() {
 
 #[test]
 fn parses_manifest_existential_inside_an_explicit_named_pattern() {
-    let source = "exists (Counter = ((Representation as Int64) : VType)) . Representation";
+    let source = "exists (#Counter = ((Representation as Int64) : VType)) . Representation";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
@@ -952,7 +952,7 @@ fn parses_interleaved_abstract_and_manifest_existential_parameters() {
 
 #[test]
 fn parses_named_term_fields() {
-    let source = "(x = 1, y = 2)";
+    let source = "(#x = 1, #y = 2)";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
@@ -985,7 +985,7 @@ fn parses_named_term_fields() {
 
 #[test]
 fn parses_comma_separated_named_terms_without_early_sorting() {
-    let source = "(x = Int64, y = String)";
+    let source = "(#x = Int64, #y = String)";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
@@ -1015,7 +1015,7 @@ fn parses_comma_separated_named_terms_without_early_sorting() {
 
 #[test]
 fn parses_labeled_product_type() {
-    let source = "(x :: Int64) * (y :: String)";
+    let source = "(#x :: Int64) * (#y :: String)";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
@@ -1054,7 +1054,7 @@ fn parses_labeled_product_type() {
 
 #[test]
 fn parses_chained_labels_right_associatively() {
-    let source = "(outer :: inner :: Int64)";
+    let source = "(#outer :: #inner :: Int64)";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
@@ -1079,7 +1079,7 @@ fn parses_chained_labels_right_associatively() {
 
 #[test]
 fn annotation_binds_inside_a_named_classifier() {
-    let source = "(field :: A : K)";
+    let source = "(#field :: A : K)";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
@@ -1107,7 +1107,7 @@ fn annotation_binds_inside_a_named_classifier() {
 
 #[test]
 fn parses_mixed_named_and_labeled_terms_right_associatively() {
-    let source = "(outer = inner :: Int64)";
+    let source = "(#outer = #inner :: Int64)";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
@@ -1132,7 +1132,7 @@ fn parses_mixed_named_and_labeled_terms_right_associatively() {
 
 #[test]
 fn parentheses_classify_the_whole_named_introduction() {
-    let source = "((field = value) : (field :: classifier))";
+    let source = "((#field = value) : (#field :: classifier))";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
@@ -1176,7 +1176,7 @@ fn parentheses_classify_the_whole_named_introduction() {
 
 #[test]
 fn parses_named_term_payload_annotation() {
-    let source = "(name = 1 : _)";
+    let source = "(#name = 1 : _)";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
@@ -1246,7 +1246,7 @@ fn parses_punned_named_terms_and_payload_annotations() {
 
 #[test]
 fn field_names_and_puns_accept_uppercase_variable_names() {
-    let source = "(Explicit = payload, = Inferred)";
+    let source = "(#Explicit = payload, = Inferred)";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
@@ -1291,7 +1291,7 @@ fn rejects_punning_a_non_variable_term() {
 
 #[test]
 fn parses_chained_named_terms() {
-    let source = "(outer = inner = 1)";
+    let source = "(#outer = #inner = 1)";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
@@ -1318,7 +1318,7 @@ fn parses_chained_named_terms() {
 
 #[test]
 fn parses_named_pattern_fields() {
-    let source = "(x = left, y = right)";
+    let source = "(#x = left, #y = right)";
     let mut parser = Parser::new();
     let pattern = parser::SinglePatternParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
@@ -1465,7 +1465,7 @@ fn parses_chained_field_projection_patterns_right_associatively() {
 
 #[test]
 fn parses_named_pattern_payload_annotation() {
-    let source = "(name = payload : _)";
+    let source = "(#name = payload : _)";
     let mut parser = Parser::new();
     let pattern = parser::SinglePatternParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
@@ -1535,7 +1535,7 @@ fn parses_punned_named_patterns_and_payload_annotations() {
 
 #[test]
 fn parses_chained_named_patterns() {
-    let source = "(outer = inner = payload)";
+    let source = "(#outer = #inner = payload)";
     let mut parser = Parser::new();
     let pattern = parser::SinglePatternParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))

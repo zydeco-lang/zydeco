@@ -8,12 +8,12 @@ begin
   let Count = Thk (String -> Ret Int64) in
   let Append = Thk (String -> String -> Ret String) in
   let Eq = Thk (forall (R : CType) . String -> String -> Thk R -> Thk R -> R) in
-    (@[builtin(str_scalar_length)] (length :: Count))
-  * (@[builtin(str_byte_length)] (byte_length :: Count))
-  * (@[builtin(str_append)] (append :: Append))
+    (@[builtin(str_scalar_length)] (#length :: Count))
+  * (@[builtin(str_byte_length)] (#byte_length :: Count))
+  * (@[builtin(str_append)] (#append :: Append))
   * (
       @[builtin(str_split_once)] (
-        split_once :: Thk (
+        #split_once :: Thk (
           forall (R : CType) .
             String -> Char -> Thk R -> Thk (String -> String -> R) -> R
         )
@@ -21,23 +21,23 @@ begin
     )
   * (
       @[builtin(str_split_at)] (
-        split_at :: Thk (
+        #split_at :: Thk (
           forall (R : CType) .
             String -> Int64 -> Thk R -> Thk (String -> String -> R) -> R
         )
       )
     )
-  * (@[builtin(str_eq)] (eq :: Eq))
+  * (@[builtin(str_eq)] (#eq :: Eq))
   * (
       @[builtin(str_get)] (
-        get :: Thk (
+        #get :: Thk (
           forall (R : CType) . String -> Int64 -> Thk R -> Thk (Char -> R) -> R
         )
       )
     )
   * (
       @[builtin(str_parse_int)] (
-        parse_int :: Thk (
+        #parse_int :: Thk (
           forall (R : CType) . String -> Thk R -> Thk (Int64 -> R) -> R
         )
       )

@@ -4,14 +4,14 @@ Named components provide a useful interface only when clients can ask for a fiel
 without reproducing the receiver's product layout.
 Slash projection therefore behaves as a built-in structural `Has` operation.
 Given `value/field`, the type checker searches the receiver's transparent named and product structure
-for occurrences of `field :: Payload` and returns the payload of the unique occurrence.
+for occurrences of `#field :: Payload` and returns the payload of the unique occurrence.
 
 For example, neither the left-hand product nesting nor the outer named wrapper must be repeated at a use site:
 
 ```zydeco
-let Inner = (x :: Int64) * Int64 that
-let Outer = Inner * (z :: Int64) that
-let Wrapped = (outer :: inner :: Int64) that
+let Inner = (#x :: Int64) * Int64 that
+let Outer = Inner * (#z :: Int64) that
+let Wrapped = (#outer :: #inner :: Int64) that
 
 nested/x
 wrapped/inner
@@ -32,7 +32,7 @@ An explicit chain performs a new search at each slash, so `value/outer/inner` re
 to document an intended path and to disambiguate a larger receiver.
 
 Static projection follows the same rule over nested named kinds.
-If `T : (outer :: (inner :: VType))`, both `T/outer/inner` and the uniquely resolved `T/inner` have kind `VType`.
+If `T : (#outer :: (#inner :: VType))`, both `T/outer/inner` and the uniquely resolved `T/inner` have kind `VType`.
 Concrete named introductions reduce during checking; projections from abstract types remain typed static terms
 until substitution exposes their introductions.
 
@@ -59,7 +59,7 @@ let (/x = x) = nested in body
 
 The slash means that `x` is located by the same recursive, exactly-one-match rule as `nested/x`;
 the pattern to the right of `=` is then checked against the selected payload.
-This differs from `x = pattern`, which requires the bindee itself to have `x` as its outer named wrapper.
+This differs from `#x = pattern`, which requires the bindee itself to have `x` as its outer named wrapper.
 
 When the payload binder has the same name as the selected field, `/field` is the punned form of `/field = field`.
 An annotation still describes the payload, so `/field : Type` expands to `/field = field : Type`.

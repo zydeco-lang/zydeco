@@ -398,13 +398,13 @@ module.exports = grammar({
     )),
 
     named_term: $ => prec.right(seq(
-      field('name', $._variable_name),
+      field('name', $.field_identifier),
       '=',
       field('value', $._term_item),
     )),
 
     labeled_term: $ => prec.right(seq(
-      field('name', $._variable_name),
+      field('name', $.field_identifier),
       '::',
       field('value', $._term_item),
     )),
@@ -476,7 +476,7 @@ module.exports = grammar({
     )),
 
     named_pattern: $ => prec.right(seq(
-      field('name', $._variable_name),
+      field('name', $.field_identifier),
       '=',
       field('pattern', $._pattern_item),
     )),
@@ -548,6 +548,11 @@ module.exports = grammar({
     constructor_identifier: _ => token(/\+[A-Z][a-zA-Z0-9_'?+*\-=~]*/),
 
     destructor_identifier: _ => token(/\.[a-z][a-zA-Z0-9_'?+*\-=~]*/),
+
+    field_identifier: _ => token(choice(
+      /#[A-Za-z][a-zA-Z0-9_'?+*\-=~]*/,
+      /#_[a-zA-Z0-9_'?+*\-=~]+/,
+    )),
 
     documentation_comment: _ => token(prec(2, seq('--|', /[^\n]*/))),
 

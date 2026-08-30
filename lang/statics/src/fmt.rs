@@ -407,6 +407,7 @@ where
         let Named(name, inner) = self;
         RcDoc::concat([
             RcDoc::text("("),
+            RcDoc::text("#"),
             name.pretty(f),
             RcDoc::space(),
             RcDoc::text("="),
@@ -423,7 +424,7 @@ where
 {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Label(name, inner) = self;
-        name.pretty(f).append(RcDoc::text(" :: ")).append(inner.pretty(f))
+        RcDoc::text("#").append(name.pretty(f)).append(RcDoc::text(" :: ")).append(inner.pretty(f))
     }
 }
 

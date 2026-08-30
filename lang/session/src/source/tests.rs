@@ -437,13 +437,13 @@ begin
     exists
       @[builtin(os)] (OS : @[intrinsic(ctype)] _)
     .
-      (int64 ::
-        (@[builtin(int64_add)] (add ::
+      (#int64 ::
+        (@[builtin(int64_add)] (#add ::
           (@[intrinsic(thk)] _) (Int64 -> Int64 -> (@[intrinsic(ret)] _) Int64))) *
-        (@[builtin(int64_sub)] (sub ::
+        (@[builtin(int64_sub)] (#sub ::
           (@[intrinsic(thk)] _) (Int64 -> Int64 -> (@[intrinsic(ret)] _) Int64)))) *
-      (process ::
-        @[builtin(exit)] (exit :: (@[intrinsic(thk)] _) (Int64 -> OS)))
+      (#process ::
+        @[builtin(exit)] (#exit :: (@[intrinsic(thk)] _) (Int64 -> OS)))
   ) in
     do sum <- ! (int64/add) 1 2;
     ! (process/exit) sum
@@ -1299,7 +1299,7 @@ fn intrinsic_kind_spellings_bind_as_ordinary_kind_aliases() {
   let VType = @[intrinsic(vtype)] _ in
   let CType = @[intrinsic(ctype)] _ in
   let Unit = @[intrinsic(unit)] _ in
-  exists (X = XType : VType) (Y : CType) .
+  exists (#X = XType : VType) (Y : CType) .
     Unit
 end"#,
     );
@@ -1460,8 +1460,8 @@ param (
   exists
     @[builtin(os)] (OS : @[intrinsic(ctype)] _)
   .
-    ((@[builtin(int64_add)] (first :: @[intrinsic(unit)] _)) *
-     (@[builtin(int64_add)] (second :: @[intrinsic(unit)] _)))
+    ((@[builtin(int64_add)] (#first :: @[intrinsic(unit)] _)) *
+     (@[builtin(int64_add)] (#second :: @[intrinsic(unit)] _)))
 ) in
   ret ()
 "#,
@@ -1499,7 +1499,7 @@ fn builtin_host_type_roles_require_abstract_entries_of_the_right_kind() {
 #[test]
 fn a_builtin_operation_role_attaches_to_its_named_classifier() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", "@[builtin(int64_add)] (add :: @[intrinsic(unit)] _)");
+    let root = fixture.write("main.zy", "@[builtin(int64_add)] (#add :: @[intrinsic(unit)] _)");
     let checked = SourceGraph::load(root)
         .unwrap()
         .parse()
@@ -1569,11 +1569,11 @@ begin
     exists
       @[builtin(os)] (OS : @[intrinsic(ctype)] _)
     .
-      (stdio :: @[builtin(write_int)]
-        (write_int :: (@[intrinsic(thk)] _)
+      (#stdio :: @[builtin(write_int)]
+        (#write_int :: (@[intrinsic(thk)] _)
           (Int64 -> (@[intrinsic(thk)] _) OS -> OS))) *
-      (process :: @[builtin(exit)]
-        (exit :: (@[intrinsic(thk)] _) (Int64 -> OS)))
+      (#process :: @[builtin(exit)]
+        (#exit :: (@[intrinsic(thk)] _) (Int64 -> OS)))
   ) in
     ! (stdio/write_int) 7 { ! (process/exit) 0 }
 end
@@ -1603,8 +1603,8 @@ begin
     exists
       @[builtin(os)] (OS : @[intrinsic(ctype)] _)
     .
-      (int64 :: @[builtin(int64_add)] (add :: Thk (Int64 -> Int64 -> Ret Int64))) *
-      (process :: @[builtin(exit)] (exit :: Thk (Int64 -> OS)))
+      (#int64 :: @[builtin(int64_add)] (#add :: Thk (Int64 -> Int64 -> Ret Int64))) *
+      (#process :: @[builtin(exit)] (#exit :: Thk (Int64 -> OS)))
   ) in
     do sum <- ! (int64/add) 1 2;
     ! (process/exit) sum

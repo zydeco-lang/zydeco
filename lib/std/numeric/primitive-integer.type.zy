@@ -5,30 +5,30 @@ begin
   let Ret = @(intrinsic(ret)) in
   let PrimitiveIntegerModule (Integer : VType)
     (String : VType) =
-      (add :: Thk (Integer -> Integer -> Ret Integer))
-    * (sub :: Thk (Integer -> Integer -> Ret Integer))
-    * (mul :: Thk (Integer -> Integer -> Ret Integer))
-    * (div :: Thk (Integer -> Integer -> Ret Integer))
-    * (mod :: Thk (Integer -> Integer -> Ret Integer))
+      (#add :: Thk (Integer -> Integer -> Ret Integer))
+    * (#sub :: Thk (Integer -> Integer -> Ret Integer))
+    * (#mul :: Thk (Integer -> Integer -> Ret Integer))
+    * (#div :: Thk (Integer -> Integer -> Ret Integer))
+    * (#mod :: Thk (Integer -> Integer -> Ret Integer))
     * (
-        eq :: Thk (
+        #eq :: Thk (
           forall (R : CType) .
             Integer -> Integer -> Thk R -> Thk R -> R
         )
       )
     * (
-        lt :: Thk (
+        #lt :: Thk (
           forall (R : CType) .
             Integer -> Integer -> Thk R -> Thk R -> R
         )
       )
     * (
-        gt :: Thk (
+        #gt :: Thk (
           forall (R : CType) .
             Integer -> Integer -> Thk R -> Thk R -> R
         )
       )
-    * (to_string :: Thk (Integer -> Ret String))
+    * (#to_string :: Thk (Integer -> Ret String))
   in
   PrimitiveIntegerModule
 end

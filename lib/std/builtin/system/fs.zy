@@ -12,7 +12,7 @@ begin
   let WriterCont = Thk (Writer -> OS) in
   let Path = Thk (String -> Error -> ReaderCont -> OS) in
   let WriterPath = Thk (String -> Error -> WriterCont -> OS) in
-    (@[builtin(fs_open_reader)] (open_reader :: Path))
-  * (@[builtin(fs_create_writer)] (create_writer :: WriterPath))
-  * (@[builtin(fs_append_writer)] (append_writer :: WriterPath))
+    (@[builtin(fs_open_reader)] (#open_reader :: Path))
+  * (@[builtin(fs_create_writer)] (#create_writer :: WriterPath))
+  * (@[builtin(fs_append_writer)] (#append_writer :: WriterPath))
 end

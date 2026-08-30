@@ -4,22 +4,22 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /Thk; /Ret) = core that
-  let (Scalar = Int64, int64) = numeric/int64 that
+  let (#Scalar = Int64, int64) = numeric/int64 that
   let (/process) = system that
   let CounterLibrary = exists
     (
-      Counter = Representation as Int64 :
+      #Counter = Representation as Int64 :
       VType
     )
   .
-      (zero :: Representation)
+      (#zero :: Representation)
     * (
-        increment :: Thk (Representation -> Ret Representation)
+        #increment :: Thk (Representation -> Ret Representation)
       ) that
   def counter : CounterLibrary = (
-    Counter = Int64,
-    zero = 0,
-    increment = {
+    #Counter = Int64,
+    #zero = 0,
+    #increment = {
       fn (value : Int64) => ! (int64/add) value 1
     }
   ) that

@@ -10,7 +10,7 @@ begin
   ) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (/Scalar = String) = representations/string that
-  let (Scalar = Int64, int64) = numeric/int64 that
+  let (#Scalar = Int64, int64) = numeric/int64 that
   let (/OS; /stdio; /process) = system that
   let (= Monad, = Algebra, ()) = monadic_basis builtin in
   let (/MonadState) = state_basis builtin in
@@ -31,16 +31,16 @@ begin
     -- The user-facing capability signature. Every field is written with `Ret`;
     -- the algebra translation turns it into the ambient monad M.
     let StateExnCapability (S : VType) (E : VType) =
-        (get :: Thk (Ret S))
-      * (put :: Thk (S -> Ret Unit))
-      * (raise :: Thk (forall (A : VType) . E -> Ret A))
+        (#get :: Thk (Ret S))
+      * (#put :: Thk (S -> Ret Unit))
+      * (#raise :: Thk (forall (A : VType) . E -> Ret A))
       * (
-          catch :: Thk (
+          #catch :: Thk (
             forall (A : VType) .
               Thk (Ret A) -> Thk (E -> Ret A) -> Ret A
           )
         )
-      * (add :: Thk (S -> S -> Ret S))
+      * (#add :: Thk (S -> S -> Ret S))
     that
     let Top =
       codata
@@ -79,29 +79,29 @@ begin
     -- Only here do we choose M, its Monad instance, and one capability package
     -- implementing the source signature above.
     let capability : (
-      get :: Thk (StateExn Int64 String Int64)
+      #get :: Thk (StateExn Int64 String Int64)
     ) * (
-      put :: Thk (Int64 -> StateExn Int64 String Unit)
+      #put :: Thk (Int64 -> StateExn Int64 String Unit)
     ) * (
-      raise :: Thk (
+      #raise :: Thk (
         forall (A : VType) .
           Thk Top -> String -> StateExn Int64 String A
       )
     ) * (
-      catch :: Thk (
+      #catch :: Thk (
         forall (A : VType) .
              Thk Top -> Thk (StateExn Int64 String A)
           -> Thk (String -> StateExn Int64 String A)
           -> StateExn Int64 String A
       )
     ) * (
-      add :: Thk (Int64 -> Int64 -> StateExn Int64 String Int64)
+      #add :: Thk (Int64 -> Int64 -> StateExn Int64 String Int64)
     ) = (
-      get = { ! get Int64 String },
-      put = { ! put Int64 String },
-      raise = { ! raise Int64 String },
-      catch = { ! catch Int64 String },
-      add = add_state_exn
+      #get = { ! get Int64 String },
+      #put = { ! put Int64 String },
+      #raise = { ! raise Int64 String },
+      #catch = { ! catch Int64 String },
+      #add = add_state_exn
     ) in
 
     let ! production : StateExn Int64 String Int64 =

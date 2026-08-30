@@ -14,9 +14,9 @@ begin
         VType
       )
     ) =
-      (to_string :: Thk (Char -> Ret String))
-    * (codepoint :: Thk (Char -> Ret Int64))
-    * (from_codepoint :: Thk (Int64 -> Ret (Option Char)))
+      (#to_string :: Thk (Char -> Ret String))
+    * (#codepoint :: Thk (Char -> Ret Int64))
+    * (#from_codepoint :: Thk (Int64 -> Ret (Option Char)))
   in
 
   let StringModule (Bool : VType)
@@ -30,37 +30,37 @@ begin
         VType
       )
     ) =
-      (empty :: String)
-    * (length :: Thk (String -> Ret Int64))
-    * (byte_length :: Thk (String -> Ret Int64))
-    * (is_empty :: Thk (String -> Ret Bool))
-    * (append :: Thk (String -> String -> Ret String))
-    * (concat :: Thk (List String -> Ret String))
+      (#empty :: String)
+    * (#length :: Thk (String -> Ret Int64))
+    * (#byte_length :: Thk (String -> Ret Int64))
+    * (#is_empty :: Thk (String -> Ret Bool))
+    * (#append :: Thk (String -> String -> Ret String))
+    * (#concat :: Thk (List String -> Ret String))
     * (
-        split_once :: Thk (
+        #split_once :: Thk (
              String
           -> Char
           -> Ret (Option (String * String))
         )
       )
     * (
-        split_at :: Thk (
+        #split_at :: Thk (
              String
           -> Int64
           -> Ret (Option (String * String))
         )
       )
-    * (eq :: Thk (String -> String -> Ret Bool))
-    * (get :: Thk (String -> Int64 -> Ret (Option Char)))
-    * (head :: Thk (String -> Ret (Option Char)))
+    * (#eq :: Thk (String -> String -> Ret Bool))
+    * (#get :: Thk (String -> Int64 -> Ret (Option Char)))
+    * (#head :: Thk (String -> Ret (Option Char)))
     * (
-        uncons :: Thk (
+        #uncons :: Thk (
           String -> Ret (Option (Char * String))
         )
       )
-    * (to_chars :: Thk (String -> Ret (List Char)))
-    * (from_chars :: Thk (List Char -> Ret String))
-    * (parse_int :: Thk (String -> Ret (Option Int64)))
+    * (#to_chars :: Thk (String -> Ret (List Char)))
+    * (#from_chars :: Thk (List Char -> Ret String))
+    * (#parse_int :: Thk (String -> Ret (Option Int64)))
   in
 
   let BytesModule
@@ -69,11 +69,11 @@ begin
         VType
       )
     ) =
-      (empty :: Thk (Ret Bytes))
-    * (length :: Thk (Bytes -> Ret Int64))
-    * (append :: Thk (Bytes -> Bytes -> Ret Bytes))
-    * (from_string :: Thk (String -> Ret Bytes))
-    * (to_string :: Thk (Bytes -> Ret (Option String)))
+      (#empty :: Thk (Ret Bytes))
+    * (#length :: Thk (Bytes -> Ret Int64))
+    * (#append :: Thk (Bytes -> Bytes -> Ret Bytes))
+    * (#from_string :: Thk (String -> Ret Bytes))
+    * (#to_string :: Thk (Bytes -> Ret (Option String)))
   in
 
   let TextBody (Bool : VType)
@@ -87,9 +87,9 @@ begin
         VType
       )
     ) =
-      (char :: CharModule Option)
-    * (string :: StringModule Bool Option List)
-    * (bytes :: BytesModule Option)
+      (#char :: CharModule Option)
+    * (#string :: StringModule Bool Option List)
+    * (#bytes :: BytesModule Option)
     * Unit
   in
   TextBody

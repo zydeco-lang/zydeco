@@ -68,11 +68,17 @@ Product layouts are always nonempty; `Triv` is carried separately through the ba
 Names are an orthogonal wrapper rather than a separate record calculus.
 Two surface constructors distinguish classification from introduction:
 
-- `field :: classifier` says that the classifier expects a payload carrying `field`.
-- `field = term` introduces a payload carrying `field`; the same syntax in a pattern eliminates the wrapper.
+- `#field :: classifier` says that the classifier expects a payload carrying `field`.
+- `#field = term` introduces a payload carrying `field`; the same syntax in a pattern eliminates the wrapper.
+
+The `#` marker distinguishes a field name from a variable or binder wherever the two could be confused:
+a field standing on the left of `=` or `::` is always marked, so an unmarked `=` is always a binding separator
+and a bare identifier is always a variable or binder.
+Positions that already announce a field carry no marker: `term/field` projects, `/field = pattern` searches,
+and `= field` puns, as before.
 
 This distinction matters because a payload type does not itself contain its field name.
-In particular, `(field = value) : (field :: A)` relates the term-level name to a classifier that records the same name,
+In particular, `(#field = value) : (#field :: A)` relates the term-level name to a classifier that records the same name,
 rather than reusing `=` structurally at both levels.
 
 The value-level rules are:
@@ -80,7 +86,7 @@ The value-level rules are:
 ```text
 Γ ⊢ A : VType                   Γ ⊢ value : A
 ─────────────────── LABEL-V     ─────────────────────────── NAME-V
-Γ ⊢ (field :: A) : VType        Γ ⊢ (field = value) : (field :: A)
+Γ ⊢ (#field :: A) : VType       Γ ⊢ (#field = value) : (#field :: A)
 ```
 
 Named values remain limited to value types.
@@ -92,23 +98,23 @@ The same distinction lifts one level to named types and named kinds:
 ```text
 Γ ⊢ K : Set                   Γ ⊢ A : K
 ────────────────── LABEL-K     ─────────────────────── NAME-T
-Γ ⊢ (field :: K) : Set         Γ ⊢ (field = A) : (field :: K)
+Γ ⊢ (#field :: K) : Set        Γ ⊢ (#field = A) : (#field :: K)
 ```
 
-For example, `(item = Int64) : (item :: VType)` is a type-level judgment,
-while `item :: Int64` is the value type classifying values such as `(item = 1) : (item :: Int64)`.
+For example, `(#item = Int64) : (#item :: VType)` is a type-level judgment,
+while `#item :: Int64` is the value type classifying values such as `(#item = 1) : (#item :: Int64)`.
 A type constructor can be named at its higher kind in the same way:
 
 ```zydeco
-alias NamedIdentity : (constructor :: (VType -> VType)) =
-  (constructor = Identity)
+alias NamedIdentity : (#constructor :: (VType -> VType)) =
+  (#constructor = Identity)
 end
 
 alias IntAgain : VType = NamedIdentity/constructor Int64 end
 ```
 
 `Set` remains the meta-level classifier of kinds.
-There is no named-kind introduction `field = K`, because that would require a first-class `field :: Set`;
+There is no named-kind introduction `#field = K`, because that would require a first-class `#field :: Set`;
 the hierarchy therefore stops cleanly at named kinds.
 Labels preserve the existing level instead of adding subkinding or coercions,
 and two labeled classifiers unify only when both their labels and payload classifiers agree.
@@ -116,37 +122,38 @@ and two labeled classifiers unify only when both their labels and payload classi
 Named product types use the existing product operator:
 
 ```zydeco
-(x :: A) * (y :: B)
+(#x :: A) * (#y :: B)
 ```
 
 Their term and pattern forms use the existing comma tuple syntax:
 
 ```zydeco
-(x = a, y = b)
-(x = p, y = q)
+(#x = a, #y = b)
+(#x = p, #y = q)
 ```
 
 When a field and a variable or pattern binder have the same name, prefix `=` provides field-punning syntax:
 
 ```zydeco
-(= x, = y)                 -- equivalent to (x = x, y = y)
+(= x, = y)                 -- equivalent to (#x = x, #y = y)
 (= x : Int64, middle, = y)  -- the annotation describes the payload x
 ```
 
-The set of valid field names is exactly the set of valid variable names.
+The set of valid field names is exactly the set of valid variable names;
+the `#` marker, consumed by the lexer like the constructor `+` and destructor `.` prefixes, carries the role distinction.
 The parser expands the shorthand directly into `Named` syntax.
 In a term it creates an ordinary same-spelled variable reference;
 in a pattern it creates an ordinary same-spelled binder.
 Because parsing remains sort-agnostic, the same syntax may refer to a type variable in a type position.
-Non-variable payloads must continue to use the explicit `field = term` form.
+Non-variable payloads must continue to use the explicit `#field = term` form.
 
-In particular, `(x = A, y = B)` is not alternate product-type syntax.
+In particular, `(#x = A, #y = B)` is not alternate product-type syntax.
 Depending on its expected sort, it can be a tuple containing named values or the witness prefix
 of an existential package containing named types.
 Only `*` forms a product type, and its named components use `::`.
 Product order and explicit grouping remain significant, and named and unnamed components may be mixed.
 
-The parser preserves `field = ...` as `Named` and `field :: ...` as `Label`,
+The parser preserves `#field = ...` as `Named` and `#field :: ...` as `Label`,
 while continuing to defer their precise sorts to type checking.
 Named projection uses postfix slash syntax: `term/field`.
 Selection associates to the left, making `term/outer/inner` a path through nested named terms.
@@ -160,19 +167,19 @@ At the annotation layer, `:` binds more tightly than named-component `=` and `::
 The two named-component operators share one precedence level and associate to the right:
 
 ```text
-field = value : A           ≡  field = (value : A)
-field :: A : K              ≡  field :: (A : K)
-outer = inner :: A          ≡  outer = (inner :: A)
-outer :: inner :: A         ≡  outer :: (inner :: A)
+#field = value : A           ≡  #field = (value : A)
+#field :: A : K              ≡  #field :: (A : K)
+#outer = #inner :: A         ≡  #outer = (#inner :: A)
+#outer :: #inner :: A        ≡  #outer :: (#inner :: A)
 ```
 
 The annotation operator is non-associative.
 Parentheses therefore state whether an annotation describes a payload or the complete named component.
-The canonical judgment spelling is `(field = value) : (field :: classifier)`;
+The canonical judgment spelling is `(#field = value) : (#field :: classifier)`;
 leaving off the first pair would annotate only `value`, and a named classifier used
 to the right of `:` must itself be parenthesized.
 The same parentheses also keep named components from capturing the right side of ordinary operators:
-`(field :: A) * B` labels only `A`, whereas `field :: A * B` means `field :: (A * B)`.
+`(#field :: A) * B` labels only `A`, whereas `#field :: A * B` means `#field :: (A * B)`.
 
 A parenthesized semicolon pattern applies every member to the same bindee.
 For example, `((left, right); whole; copy)` destructures a pair and binds the complete pair twice.
@@ -189,8 +196,8 @@ It requires exactly one matching field across the complete structure and exposes
 missing and ambiguous matches are distinct static errors.
 Other type constructors, including unopened existential packages, are opacity boundaries for term projection.
 An explicit chain performs a fresh search at each slash, so `term/outer/inner` can state or disambiguate a path.
-Type projection is the static counterpart over nested named kinds: if `T : (field :: K)`, then `T/field : K`.
-A concrete projection `(field = A)/field` reduces to `A`.
+Type projection is the static counterpart over nested named kinds: if `T : (#field :: K)`, then `T/field : K`.
+A concrete projection `(#field = A)/field` reduces to `A`.
 Projection from an abstract named type remains explicit in the typed syntax and reduces
 when the abstract type is later instantiated.
 
@@ -217,20 +224,20 @@ explicitly named binders contribute their public label.
 Missing and ambiguous package fields use the ordinary projection errors.
 
 Manifest existential binders compose from the same pattern constructors.
-The fully grouped form `exists (field = ((X as A) : K)) . B` places the transparent binder `X as A`
-inside its payload annotation, then wraps that payload with the ordinary named pattern `field = ...`.
-The compact punned spelling `exists (= X as A : K) . B` expands to `exists (X = ((X as A) : K)) . B`;
+The fully grouped form `exists (#field = ((X as A) : K)) . B` places the transparent binder `X as A`
+inside its payload annotation, then wraps that payload with the ordinary named pattern `#field = ...`.
+The compact punned spelling `exists (= X as A : K) . B` expands to `exists (#X = ((X as A) : K)) . B`;
 `exists` itself adds no field-punning rule.
 
 Type patterns make one additional distinction visible.
-A named pattern `(field = X) : (field :: K)` binds `X : K` to the payload,
-whereas a plain pattern `Whole : (field :: K)` binds the complete named type.
+A named pattern `(#field = X) : (#field :: K)` binds `X : K` to the payload,
+whereas a plain pattern `Whole : (#field :: K)` binds the complete named type.
 Typed `forall`, `exists`, and type-function binders retain this pattern shape.
 Consequently:
 
 ```text
-(fn (field = X) => B) (field = A)  ↦  B[A/X]
-(fn Whole => B) (field = A)        ↦  B[(field = A)/Whole]
+(fn (#field = X) => B) (#field = A)  ↦  B[A/X]
+(fn Whole => B) (#field = A)         ↦  B[(#field = A)/Whole]
 ```
 
 The same payload extraction is used when existential witnesses instantiate a package-dependent result.

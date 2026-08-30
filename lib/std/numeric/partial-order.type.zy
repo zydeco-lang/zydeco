@@ -5,11 +5,11 @@ begin
   let PartialEquality = @(import("partial-equality.type.zy")) in
   let PartialOrder (Bool : VType)
     (A : VType) =
-      (equality :: PartialEquality Bool A)
-    * (lt :: Thk (A -> A -> Ret Bool))
-    * (le :: Thk (A -> A -> Ret Bool))
-    * (gt :: Thk (A -> A -> Ret Bool))
-    * (ge :: Thk (A -> A -> Ret Bool))
+      (#equality :: PartialEquality Bool A)
+    * (#lt :: Thk (A -> A -> Ret Bool))
+    * (#le :: Thk (A -> A -> Ret Bool))
+    * (#gt :: Thk (A -> A -> Ret Bool))
+    * (#ge :: Thk (A -> A -> Ret Bool))
   in
   PartialOrder
 end

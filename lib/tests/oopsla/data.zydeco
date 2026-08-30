@@ -5,7 +5,7 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
-  let (Scalar = Int64, int64) = numeric/int64 that
+  let (#Scalar = Int64, int64) = numeric/int64 that
   let (/Scalar = Char) = representations/char that
   let (/Scalar = String) = representations/string that
   let char = text/char that
@@ -618,8 +618,8 @@ begin
   -- end module String
 
   (
-    identity = id,
-    lazy_identity = id~,
+    #identity = id,
+    #lazy_identity = id~,
     = char_eq
   )
 end

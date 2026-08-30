@@ -10,16 +10,16 @@ begin
     let (/VType; /CType; /Thk; /Ret; /Unit) = core in
     let (/Scalar = String) = representations/string in
     param (/Bool; /bool) in
-    let (Scalar = Int8, int8) = numeric/int8 in
-    let (Scalar = Int16, int16) = numeric/int16 in
-    let (Scalar = Int32, int32) = numeric/int32 in
-    let (Scalar = Int64, int64) = numeric/int64 in
-    let (Scalar = UInt8, uint8) = numeric/uint8 in
-    let (Scalar = UInt16, uint16) = numeric/uint16 in
-    let (Scalar = UInt32, uint32) = numeric/uint32 in
-    let (Scalar = UInt64, uint64) = numeric/uint64 in
-    let (Scalar = Float32, float32) = numeric/float32 in
-    let (Scalar = Float64, float64) = numeric/float64 in
+    let (#Scalar = Int8, int8) = numeric/int8 in
+    let (#Scalar = Int16, int16) = numeric/int16 in
+    let (#Scalar = Int32, int32) = numeric/int32 in
+    let (#Scalar = Int64, int64) = numeric/int64 in
+    let (#Scalar = UInt8, uint8) = numeric/uint8 in
+    let (#Scalar = UInt16, uint16) = numeric/uint16 in
+    let (#Scalar = UInt32, uint32) = numeric/uint32 in
+    let (#Scalar = UInt64, uint64) = numeric/uint64 in
+    let (#Scalar = Float32, float32) = numeric/float32 in
+    let (#Scalar = Float64, float64) = numeric/float64 in
     let (/operations = int8_module; /instance = int8_instance) =
       make_integer core Bool Int8 String bool int8 0 1
     in
@@ -51,7 +51,7 @@ begin
       make_float core Bool Float64 String bool float64 0.0 1.0
     in
     (
-      numeric = (
+      #numeric = (
         = int8_instance,
         = int16_instance,
         = int32_instance,
@@ -64,29 +64,29 @@ begin
         = float64_instance,
         ()
       ),
-      primitives = (
-        i8 = int8,
-        i16 = int16,
-        i32 = int32,
-        i64 = int64,
-        u8 = uint8,
-        u16 = uint16,
-        u32 = uint32,
-        u64 = uint64,
-        f32 = float32,
-        f64 = float64,
+      #primitives = (
+        #i8 = int8,
+        #i16 = int16,
+        #i32 = int32,
+        #i64 = int64,
+        #u8 = uint8,
+        #u16 = uint16,
+        #u32 = uint32,
+        #u64 = uint64,
+        #f32 = float32,
+        #f64 = float64,
         ()
       ),
-      int8 = int8_module,
-      int16 = int16_module,
-      int32 = int32_module,
-      int64 = int64_module,
-      uint8 = uint8_module,
-      uint16 = uint16_module,
-      uint32 = uint32_module,
-      uint64 = uint64_module,
-      float32 = float32_module,
-      float64 = float64_module,
+      #int8 = int8_module,
+      #int16 = int16_module,
+      #int32 = int32_module,
+      #int64 = int64_module,
+      #uint8 = uint8_module,
+      #uint16 = uint16_module,
+      #uint32 = uint32_module,
+      #uint64 = uint64_module,
+      #float32 = float32_module,
+      #float64 = float64_module,
       ()
     )
   end

@@ -16,7 +16,7 @@ let (/Scalar = Float64) = representations/f64 in
 let (/Scalar = Char) = representations/char in
 let (/Scalar = String) = representations/string in
 let (/Scalar = Bytes) = representations/bytes in
-let (Scalar = NumericInt64, int64) = numeric/int64 in
+let (#Scalar = NumericInt64, int64) = numeric/int64 in
 let char = text/char in
 let string = text/string in
 let bytes = text/bytes in

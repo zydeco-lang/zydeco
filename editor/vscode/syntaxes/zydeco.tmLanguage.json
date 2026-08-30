@@ -103,6 +103,10 @@
         {
           "name": "entity.name.function.zydeco",
           "match": "\\.[a-z][A-Za-z0-9_'?+*=~-]*"
+        },
+        {
+          "name": "variable.other.member.zydeco",
+          "match": "#[A-Za-z_][A-Za-z0-9_'?+*=~-]*"
         }
       ]
     },

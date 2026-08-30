@@ -3,8 +3,8 @@ begin
   let Thk = @(intrinsic(thk)) in
   let Ret = @(intrinsic(ret)) in
   let Multiplicative (A : VType) =
-      (one :: A)
-    * (mul :: Thk (A -> A -> Ret A))
+      (#one :: A)
+    * (#mul :: Thk (A -> A -> Ret A))
   in
   Multiplicative
 end

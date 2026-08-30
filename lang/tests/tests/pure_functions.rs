@@ -190,13 +190,13 @@ begin
       let selected : A = identity seed that
       let Output =
         exists (B as A : VType) .
-          (identity :: B -> B) * B
+          (#identity :: B -> B) * B
       that
-      (A, identity = identity, selected) : Output
+      (A, #identity = identity, selected) : Output
     end
   that
 
-  let (B, identity = identity, selected) = make (Int64, 0) that
+  let (B, #identity = identity, selected) = make (Int64, 0) that
   let result : B = identity selected that
   let status : Int64 = result that
   ! exit status

@@ -5,27 +5,27 @@ begin
     (/numeric; /system) :
     @(import("../../std/builtin.zy"))
   ) that
-  let (Scalar = Int64, int64) = numeric/int64 that
+  let (#Scalar = Int64, int64) = numeric/int64 that
   let (/process) = system that
 
-  let Inner = (x :: Int64) * Int64 that
-  let Outer = Inner * (z :: Int64) that
-  let Wrapped = (outer :: inner :: Int64) that
-  let Ambiguous = (left :: x :: Int64) * (right :: x :: Int64) that
-  let Punnable = (punned :: Int64) that
+  let Inner = (#x :: Int64) * Int64 that
+  let Outer = Inner * (#z :: Int64) that
+  let Wrapped = (#outer :: #inner :: Int64) that
+  let Ambiguous = (#left :: #x :: Int64) * (#right :: #x :: Int64) that
+  let Punnable = (#punned :: Int64) that
   def nested : Outer = (
-    (x = 5 : Int64, 6 : Int64),
-    z = 7 : Int64
+    (#x = 5 : Int64, 6 : Int64),
+    #z = 7 : Int64
   ) that
   def wrapped : Wrapped = (
-    outer = inner = 8 : Int64
+    #outer = #inner = 8 : Int64
   ) that
   def ambiguous : Ambiguous = (
-    left = x = 9 : Int64,
-    right = x = 10 : Int64
+    #left = #x = 9 : Int64,
+    #right = #x = 10 : Int64
   ) that
   def punnable : Punnable = (
-    punned = 11 : Int64
+    #punned = 11 : Int64
   ) that
 
   let (
@@ -37,7 +37,7 @@ begin
     y : Int64
   ) = inner in
   let (
-    outer = inner = wrapped_value : Int64
+    #outer = #inner = wrapped_value : Int64
   ) = wrapped in
   let (
     /x = projected_x : Int64;

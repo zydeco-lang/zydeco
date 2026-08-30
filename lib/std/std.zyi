@@ -39,69 +39,69 @@ begin
     )
   .
     exists
-      (Bool = BoolType : VType)
+      (#Bool = BoolType : VType)
       (
-        Option = OptionType :
+        #Option = OptionType :
         VType -> (
           VType
         )
       )
       (
-        Result = ResultType :
+        #Result = ResultType :
         VType -> (
           VType
         ) -> VType
       )
       (
-        List = ListType :
+        #List = ListType :
         VType -> (
           VType
         )
       )
-      (Int8 = Int8Type as Int8 : VType)
-      (Int16 = Int16Type as Int16 : VType)
-      (Int32 = Int32Type as Int32 : VType)
-      (Int64 = Int64Type as Int64 : VType)
-      (UInt8 = UInt8Type as UInt8 : VType)
-      (UInt16 = UInt16Type as UInt16 : VType)
-      (UInt32 = UInt32Type as UInt32 : VType)
-      (UInt64 = UInt64Type as UInt64 : VType)
-      (Float32 = Float32Type as Float32 : VType)
-      (Float64 = Float64Type as Float64 : VType)
-      (Char = CharType as Char : VType)
-      (String = StringType as String : VType)
-      (Bytes = BytesType as Bytes : VType)
-      (Reader = ReaderType as Reader : VType)
-      (Writer = WriterType as Writer : VType)
-      (Path = PathType : VType)
-      (IoErrorKind = IoErrorKindType : VType)
-      (IoError = IoErrorType : VType)
-      (OS = OSType as OS : CType)
-      (Additive = AdditiveType as Additive : VType -> VType)
+      (#Int8 = Int8Type as Int8 : VType)
+      (#Int16 = Int16Type as Int16 : VType)
+      (#Int32 = Int32Type as Int32 : VType)
+      (#Int64 = Int64Type as Int64 : VType)
+      (#UInt8 = UInt8Type as UInt8 : VType)
+      (#UInt16 = UInt16Type as UInt16 : VType)
+      (#UInt32 = UInt32Type as UInt32 : VType)
+      (#UInt64 = UInt64Type as UInt64 : VType)
+      (#Float32 = Float32Type as Float32 : VType)
+      (#Float64 = Float64Type as Float64 : VType)
+      (#Char = CharType as Char : VType)
+      (#String = StringType as String : VType)
+      (#Bytes = BytesType as Bytes : VType)
+      (#Reader = ReaderType as Reader : VType)
+      (#Writer = WriterType as Writer : VType)
+      (#Path = PathType : VType)
+      (#IoErrorKind = IoErrorKindType : VType)
+      (#IoError = IoErrorType : VType)
+      (#OS = OSType as OS : CType)
+      (#Additive = AdditiveType as Additive : VType -> VType)
       (
-        Multiplicative = MultiplicativeType as Multiplicative :
+        #Multiplicative = MultiplicativeType as Multiplicative :
         VType -> (
           VType
         )
       )
       (
-        PartialEquality = PartialEqualityType as PartialEquality :
+        #PartialEquality = PartialEqualityType as PartialEquality :
         VType -> VType -> VType
       )
       (
-        PartialOrder = PartialOrderType as PartialOrder :
+        #PartialOrder = PartialOrderType as PartialOrder :
         VType -> VType -> VType
       )
       (
-        Numeric = NumericType as Numeric :
+        #Numeric = NumericType as Numeric :
         VType -> VType -> VType
       )
       (
-        NumericInstance = NumericInstanceType as NumericInstance :
+        #NumericInstance = NumericInstanceType as NumericInstance :
         VType -> VType -> VType
       )
     .
-        (prelude :: Prelude)
+        (#prelude :: Prelude)
       * DataBody BoolType OptionType ResultType ListType
       * NumericBody BoolType
       * TextBody BoolType OptionType ListType

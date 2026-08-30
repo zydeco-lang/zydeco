@@ -5,13 +5,13 @@ begin
   let Bytes = @(intrinsic(bytes)) in
   let Int64 = @(intrinsic(i64)) in
   let String = @(intrinsic(string)) in
-    (@[builtin(bytes_empty)] (empty :: Thk (Ret Bytes)))
-  * (@[builtin(bytes_length)] (length :: Thk (Bytes -> Ret Int64)))
-  * (@[builtin(bytes_append)] (append :: Thk (Bytes -> Bytes -> Ret Bytes)))
-  * (@[builtin(bytes_from_str)] (from_string :: Thk (String -> Ret Bytes)))
+    (@[builtin(bytes_empty)] (#empty :: Thk (Ret Bytes)))
+  * (@[builtin(bytes_length)] (#length :: Thk (Bytes -> Ret Int64)))
+  * (@[builtin(bytes_append)] (#append :: Thk (Bytes -> Bytes -> Ret Bytes)))
+  * (@[builtin(bytes_from_str)] (#from_string :: Thk (String -> Ret Bytes)))
   * (
       @[builtin(bytes_to_str)] (
-        to_string :: Thk (
+        #to_string :: Thk (
           forall (R : CType) . Bytes -> Thk R -> Thk (String -> R) -> R
         )
       )

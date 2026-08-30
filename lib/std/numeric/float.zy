@@ -25,63 +25,63 @@ begin
               { ret (bool/false) }
           in
           let operations : FloatModule Bool Scalar String = (
-            add = primitive/add,
-            sub = primitive/sub,
-            mul = primitive/mul,
-            div = primitive/div,
-            eq = {
+            #add = primitive/add,
+            #sub = primitive/sub,
+            #mul = primitive/mul,
+            #div = primitive/div,
+            #eq = {
               fn left right => ! compare primitive/eq left right
             },
-            ne = {
+            #ne = {
               fn left right =>
                 do equal <- ! compare primitive/eq left right;
                 ! (bool/not) equal
             },
-            lt = {
+            #lt = {
               fn left right => ! compare primitive/lt left right
             },
-            le = {
+            #le = {
               fn left right =>
                 do less <- ! compare primitive/lt left right;
                 do equal <- ! compare primitive/eq left right;
                 ! (bool/or) less equal
             },
-            gt = {
+            #gt = {
               fn left right => ! compare primitive/gt left right
             },
-            ge = {
+            #ge = {
               fn left right =>
                 do greater <- ! compare primitive/gt left right;
                 do equal <- ! compare primitive/eq left right;
                 ! (bool/or) greater equal
             },
-            negate = {
+            #negate = {
               fn value => ! (primitive/sub) zero value
             },
-            to_string = primitive/to_string
+            #to_string = primitive/to_string
           ) in
           let instance : NumericInstance Bool Scalar = (
             = Scalar,
-            dictionary = (
-              additive = (
+            #dictionary = (
+              #additive = (
                 = zero,
-                add = operations/add,
-                sub = operations/sub,
-                negate = operations/negate
+                #add = operations/add,
+                #sub = operations/sub,
+                #negate = operations/negate
               ),
-              multiplicative = (
+              #multiplicative = (
                 = one,
-                mul = operations/mul
+                #mul = operations/mul
               ),
-              order = (
-                equality = (
-                  eq = operations/eq,
-                  ne = operations/ne
+              #order = (
+                #equality = (
+                  #eq = operations/eq,
+                  #ne = operations/ne
                 ),
-                lt = operations/lt,
-                le = operations/le,
-                gt = operations/gt,
-                ge = operations/ge
+                #lt = operations/lt,
+                #le = operations/le,
+                #gt = operations/gt,
+                #ge = operations/ge
               ),
               ()
             ),

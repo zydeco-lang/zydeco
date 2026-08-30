@@ -26,17 +26,17 @@ begin
     )
   .
       (
-        allocate :: Thk (
+        #allocate :: Thk (
           forall (A : VType) . A -> Ret (Ref A)
         )
       )
     * (
-        read :: Thk (
+        #read :: Thk (
           forall (A : VType) . Ref A -> Ret A
         )
       )
     * (
-        write :: Thk (
+        #write :: Thk (
           forall (A : VType) . Ref A -> A -> Ret Unit
         )
       ) that

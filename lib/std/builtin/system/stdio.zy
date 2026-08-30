@@ -11,17 +11,17 @@ begin
   let Done = Thk OS in
   let Write = Thk (String -> Done -> OS) in
   let Line = Thk (String -> OS) in
-    (@[builtin(stdin)] (stdin :: Thk (Ret Reader)))
-  * (@[builtin(stdout)] (stdout :: Thk (Ret Writer)))
-  * (@[builtin(stderr)] (stderr :: Thk (Ret Writer)))
-  * (@[builtin(write_str)] (write :: Write))
-  * (@[builtin(write_int)] (write_int :: Thk (Int64 -> Done -> OS)))
-  * (@[builtin(write_line)] (write_line :: Write))
-  * (@[builtin(read_line)] (read_line :: Thk (Line -> OS)))
+    (@[builtin(stdin)] (#stdin :: Thk (Ret Reader)))
+  * (@[builtin(stdout)] (#stdout :: Thk (Ret Writer)))
+  * (@[builtin(stderr)] (#stderr :: Thk (Ret Writer)))
+  * (@[builtin(write_str)] (#write :: Write))
+  * (@[builtin(write_int)] (#write_int :: Thk (Int64 -> Done -> OS)))
+  * (@[builtin(write_line)] (#write_line :: Write))
+  * (@[builtin(read_line)] (#read_line :: Thk (Line -> OS)))
   * (
       @[builtin(read_line_as_int)] (
-        read_int :: Thk (Done -> Thk (Int64 -> OS) -> OS)
+        #read_int :: Thk (Done -> Thk (Int64 -> OS) -> OS)
       )
     )
-  * (@[builtin(read_till_eof)] (read_all :: Thk (Line -> OS)))
+  * (@[builtin(read_till_eof)] (#read_all :: Thk (Line -> OS)))
 end

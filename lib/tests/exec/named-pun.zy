@@ -6,13 +6,13 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/VType) = core that
-  let (Scalar = Int64, int64) = numeric/int64 that
+  let (#Scalar = Int64, int64) = numeric/int64 that
   let (/process) = system that
 
-  let Slot (pun_value : VType) = (pun_value :: pun_value) that
-  let UpperSlot (PunValue : VType) = (PunValue :: PunValue) that
-  let PunPair = (pun_x :: Int64) * (pun_y :: Int64) that
-  let Wrapped = (outer :: pun_inner :: Int64) that
+  let Slot (pun_value : VType) = (#pun_value :: pun_value) that
+  let UpperSlot (PunValue : VType) = (#PunValue :: PunValue) that
+  let PunPair = (#pun_x :: Int64) * (#pun_y :: Int64) that
+  let Wrapped = (#outer :: #pun_inner :: Int64) that
   def pun_value : Int64 = 4 that
   def slot : Slot Int64 = (= pun_value) that
   def PunValue : Int64 = 5 that
@@ -25,7 +25,7 @@ begin
   ) that
   def pun_inner : Int64 = 12 that
   def wrapped : Wrapped = (
-    outer = = pun_inner
+    #outer = = pun_inner
   ) that
 
   let (= pun_value : Int64) = slot in
@@ -35,7 +35,7 @@ begin
     = pun_y : Int64
   ) = pun_pair in
   let (
-    outer = = pun_inner : Int64
+    #outer = = pun_inner : Int64
   ) = wrapped in
   do value_check <- ! (int64/sub) pun_value 4;
   do upper_value_check <- ! (int64/sub) PunValue 5;

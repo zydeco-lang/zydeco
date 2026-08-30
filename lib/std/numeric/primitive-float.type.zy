@@ -5,29 +5,29 @@ begin
   let Ret = @(intrinsic(ret)) in
   let PrimitiveFloatModule (Floating : VType)
     (String : VType) =
-      (add :: Thk (Floating -> Floating -> Ret Floating))
-    * (sub :: Thk (Floating -> Floating -> Ret Floating))
-    * (mul :: Thk (Floating -> Floating -> Ret Floating))
-    * (div :: Thk (Floating -> Floating -> Ret Floating))
+      (#add :: Thk (Floating -> Floating -> Ret Floating))
+    * (#sub :: Thk (Floating -> Floating -> Ret Floating))
+    * (#mul :: Thk (Floating -> Floating -> Ret Floating))
+    * (#div :: Thk (Floating -> Floating -> Ret Floating))
     * (
-        eq :: Thk (
+        #eq :: Thk (
           forall (R : CType) .
             Floating -> Floating -> Thk R -> Thk R -> R
         )
       )
     * (
-        lt :: Thk (
+        #lt :: Thk (
           forall (R : CType) .
             Floating -> Floating -> Thk R -> Thk R -> R
         )
       )
     * (
-        gt :: Thk (
+        #gt :: Thk (
           forall (R : CType) .
             Floating -> Floating -> Thk R -> Thk R -> R
         )
       )
-    * (to_string :: Thk (Floating -> Ret String))
+    * (#to_string :: Thk (Floating -> Ret String))
   in
   PrimitiveFloatModule
 end

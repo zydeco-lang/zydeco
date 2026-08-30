@@ -10,8 +10,8 @@ The standard library uses the following instance shape:
 
 ```zydeco
 NumericInstance Bool Representation =
-  exists (Scalar = ScalarType as Representation : VType) .
-    (dictionary :: Numeric Bool ScalarType) *
+  exists (#Scalar = ScalarType as Representation : VType) .
+    (#dictionary :: Numeric Bool ScalarType) *
     Unit
 ```
 
@@ -23,8 +23,8 @@ to the concrete representation:
 
 ```zydeco
 let (
-  Scalar = A,
-  dictionary = operations,
+  #Scalar = A,
+  #dictionary = operations,
   ()
 ) = numeric/int64_instance in
   use_numeric A operations

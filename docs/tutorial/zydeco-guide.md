@@ -50,7 +50,7 @@ begin
   ) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (/Scalar = String) = representations/string that
-  let (Scalar = Int64, int64) = numeric/int64 that
+  let (#Scalar = Int64, int64) = numeric/int64 that
   let (/OS; /stdio; /process) = system that
 
   ! (stdio/write_line) "hello" {
@@ -238,15 +238,15 @@ forall (A : VType) . A -> Ret A
 `exists` hides type-level witnesses inside a value package. A witness may be abstract:
 
 ```zydeco
-exists (Option = OptionType : VType -> VType) .
-  (none :: Thk (forall (A : VType) . Ret (OptionType A)))
-* (some :: Thk (forall (A : VType) . A -> Ret (OptionType A)))
+exists (#Option = OptionType : VType -> VType) .
+  (#none :: Thk (forall (A : VType) . Ret (OptionType A)))
+* (#some :: Thk (forall (A : VType) . A -> Ret (OptionType A)))
 ```
 
 or manifest, which publishes its definition:
 
 ```zydeco
-exists (Monad = ExportedMonad as Monad : (VType -> CType) -> CType) .
+exists (#Monad = ExportedMonad as Monad : (VType -> CType) -> CType) .
   Unit
 ```
 
@@ -255,8 +255,8 @@ builtin provider while opening some of its fields:
 
 ```zydeco
 pi (_ : @[import("../std/builtin.zy")] _) .
-  exists (State = StateType : VType -> VType -> CType) .
-    (get :: ...) * (put :: ...) * ...
+  exists (#State = StateType : VType -> VType -> CType) .
+    (#get :: ...) * (#put :: ...) * ...
 ```
 
 ---
@@ -270,9 +270,9 @@ right-associated products.
 Named fields have two spellings:
 
 ```zydeco
-field :: A          -- a product/payload classifier carrying `field`
-field = value       -- introduce or pattern-match that named payload
-(field = value) : (field :: A)
+#field :: A          -- a product/payload classifier carrying `field`
+#field = value       -- introduce or pattern-match that named payload
+(#field = value) : (#field :: A)
 ```
 
 `term/field` projects a named field; it binds tighter than application. Search is transparent
@@ -291,8 +291,8 @@ let (/VType; /Thk; /Ret) = core in
 `/field = local_name` renames; `/field` alone is the pun `/field = field`. A final ordinary
 member such as `builtin` retains the whole package for forwarding.
 
-Type-level named projection uses the same slash: if `T : (field :: K)`, then `T/field : K`.
-A manifest named type such as `(field = A)/field` reduces to `A`; an abstract named type keeps
+Type-level named projection uses the same slash: if `T : (#field :: K)`, then `T/field : K`.
+A manifest named type such as `(#field = A)/field` reduces to `A`; an abstract named type keeps
 the projection explicit until it is instantiated.
 
 ### Why projection parentheses matter
@@ -357,7 +357,7 @@ that
 
 ```zydeco
 comatch
-| .tick  => ...
+| .tick => ...
 | .value => ret 0
 end
 ```
@@ -395,7 +395,7 @@ Open a fixed representation with its conventional field name:
 
 ```zydeco
 let (/Scalar = String) = representations/string that
-let (Scalar = Int64, int64) = numeric/int64 that
+let (#Scalar = Int64, int64) = numeric/int64 that
 ```
 
 The second pattern binds both the type `Int64` and the operations package `int64`. Typical
@@ -481,7 +481,7 @@ let (= Monad, = Algebra, ()) = monadic_basis builtin in
 A minimal block:
 
 ```zydeco
-def ! translated = @[monadic] begin
+def ! #translated = @[monadic] begin
   do value <- ret 1;
   ret value
 end that
@@ -604,14 +604,14 @@ The source-side signature:
 
 ```zydeco
 let StateExnCapability (S : VType) (E : VType) =
-  (get :: Thk (Ret S))
-* (put :: Thk (S -> Ret Unit))
-* (raise :: Thk (forall (A : VType) . E -> Ret A))
-* (catch :: Thk (
+  (#get :: Thk (Ret S))
+* (#put :: Thk (S -> Ret Unit))
+* (#raise :: Thk (forall (A : VType) . E -> Ret A))
+* (#catch :: Thk (
     forall (A : VType) .
       Thk (Ret A) -> Thk (E -> Ret A) -> Ret A
   ))
-* (add :: Thk (S -> S -> Ret S))
+* (#add :: Thk (S -> S -> Ret S))
 that
 ```
 
@@ -642,24 +642,24 @@ lifted package for the chosen `M`, bind it with plain `let`, and pass it directl
 
 ```zydeco
 let capability : (
-     get :: Thk (M S)
+     #get :: Thk (M S)
   ) * (
-     put :: Thk (S -> M Unit)
+     #put :: Thk (S -> M Unit)
   ) * (
-     raise :: Thk (forall (A : VType) . Thk Top -> E -> M A)
+     #raise :: Thk (forall (A : VType) . Thk Top -> E -> M A)
   ) * (
-     catch :: Thk (
+     #catch :: Thk (
        forall (A : VType) .
          Thk Top -> Thk (M A) -> Thk (E -> M A) -> M A
      )
   ) * (
-     add :: Thk (S -> S -> M S)
+     #add :: Thk (S -> S -> M S)
   ) = (
-    get = { ! get_concrete },
-    put = { ! put_concrete },
-    raise = { ! raise_concrete },
-    catch = { ! catch_concrete },
-    add = add_concrete
+    #get = { ! get_concrete },
+    #put = { ! put_concrete },
+    #raise = { ! raise_concrete },
+    #catch = { ! catch_concrete },
+    #add = add_concrete
   )
 in
 
@@ -733,8 +733,8 @@ comatch | .d => M ... end      codata introduction
 M .d                           codata destructor
 V / field                      named projection
 +Constructor payload           data constructor
-field :: A                     named payload classifier
-field = term                   named payload introduction/pattern
+#field :: A                    named payload classifier
+#field = term                  named payload introduction/pattern
 
 begin term end                 mobile-binding block
 param P in/that term           parameter

@@ -34,26 +34,26 @@ begin
   that
 
   let NamedIdentity :
-    (constructor :: ((VType) -> (VType))) =
-    (constructor = Identity)
+    (#constructor :: ((VType) -> (VType))) =
+    (#constructor = Identity)
   that
 
-  let NamedInt : (item :: VType) =
-    (item = (NamedIdentity/constructor Int64))
+  let NamedInt : (#item :: VType) =
+    (#item = (NamedIdentity/constructor Int64))
   that
 
   let ProjectedInt : VType = NamedInt/item that
   let PayloadOf :
-    (item :: VType) -> (VType) =
+    (#item :: VType) -> (VType) =
     begin
-      param ((item = A) : (item :: VType)) that
+      param ((#item = A) : (#item :: VType)) that
       A
     end
   that
   let WholePayloadOf :
-    (item :: VType) -> (VType) =
+    (#item :: VType) -> (VType) =
     begin
-      param (Whole : (item :: VType)) that
+      param (Whole : (#item :: VType)) that
       Whole/item
     end
   that
@@ -64,20 +64,20 @@ begin
     WholePayloadOf NamedInt
   that
 
-  let NamedOS : (operation :: CType) =
-    (operation = OS)
+  let NamedOS : (#operation :: CType) =
+    (#operation = OS)
   that
   let ProjectedOS : CType = NamedOS/operation that
 
   let PunnedNamedType :
     (VType) ->
-    (Punned :: VType) =
+    (#Punned :: VType) =
     begin
       param (Punned : VType) that
       (= Punned)
     end
   that
-  let PunnedNamedInt : (Punned :: VType) =
+  let PunnedNamedInt : (#Punned :: VType) =
     PunnedNamedType Int64
   that
   let PunnedProjectedInt : VType =
@@ -85,8 +85,8 @@ begin
   that
 
   let NestedNamedInt :
-    (outer :: (inner :: VType)) =
-    (outer = (inner = Int64))
+    (#outer :: (#inner :: VType)) =
+    (#outer = (#inner = Int64))
   that
   let NestedProjectedInt : VType =
     NestedNamedInt/inner
@@ -111,14 +111,14 @@ begin
   def punned_value : PunnedProjectedInt = 4 that
 
   (
-    value = value,
-    pattern_value = pattern_value,
-    whole_value = whole_value,
-    nested_value = nested_value,
-    nested_chained_value = nested_chained_value,
-    nested_pattern_value = nested_pattern_value,
-    nested_punned_pattern_value = nested_punned_pattern_value,
-    punned_value = punned_value,
+    #value = value,
+    #pattern_value = pattern_value,
+    #whole_value = whole_value,
+    #nested_value = nested_value,
+    #nested_chained_value = nested_chained_value,
+    #nested_pattern_value = nested_pattern_value,
+    #nested_punned_pattern_value = nested_punned_pattern_value,
+    #punned_value = punned_value,
   )
 end
 "#,
@@ -132,15 +132,15 @@ fn accepts_named_type_patterns_in_polymorphic_functions() {
         r#"
 begin
   def named_identity : Thk (
-    forall ((item = A) : (item :: VType)) .
+    forall ((#item = A) : (#item :: VType)) .
       A -> Ret A
   ) = {
-    fn ((item = A) : (item :: VType))
+    fn ((#item = A) : (#item :: VType))
        (value : A) =>
       ret value
   } that
 
-  { ! named_identity (item = Int64) 0 }
+  { ! named_identity (#item = Int64) 0 }
 end
 "#,
     )
@@ -164,23 +164,23 @@ begin
   def translated : Thk (Ret Unit) = {
     (@[monadic] begin
       let named_identity = {
-        fn ((item = A) : (item :: VType))
+        fn ((#item = A) : (#item :: VType))
            (value : A) =>
           ret value
       } in
-      ! named_identity (item = Unit) ()
+      ! named_identity (#item = Unit) ()
     end)
     Ret
     { ! mo_ret }
   } that
 
   def translated_polymorphic : Thk (
-    forall ((item = A) : (item :: VType)) .
+    forall ((#item = A) : (#item :: VType)) .
       Thk Top -> A -> Ret A
   ) = {
     (@[monadic] begin
       do _ <- ret ();
-      fn ((item = A) : (item :: VType))
+      fn ((#item = A) : (#item :: VType))
          (value : A) =>
         ret value
     end)
@@ -189,8 +189,8 @@ begin
   } that
 
   (
-    translated = translated,
-    translated_polymorphic = translated_polymorphic,
+    #translated = translated,
+    #translated_polymorphic = translated_polymorphic,
   )
 end
 "#,
@@ -205,22 +205,22 @@ fn distinguishes_payload_and_whole_named_existential_binders() {
 begin
   let PayloadBox =
     exists (
-      (item = A) :
-      (item :: VType)
+      (#item = A) :
+      (#item :: VType)
     ) . A
   that
 
   let WholeBox =
     exists (
       Whole :
-      (item :: VType)
+      (#item :: VType)
     ) . Whole/item
   that
 
-  def payload_box : PayloadBox = (item = Int64, 41) that
-  def whole_box : WholeBox = (item = Int64, 42) that
+  def payload_box : PayloadBox = (#item = Int64, 41) that
+  def whole_box : WholeBox = (#item = Int64, 42) that
 
-  let (item = A, payload) = payload_box in
+  let (#item = A, payload) = payload_box in
   let (Whole, whole) = whole_box in
   (payload_box, whole_box)
 end
@@ -236,20 +236,20 @@ fn instantiates_package_dependent_results_from_named_witnesses() {
 begin
   let Box =
     exists (
-      (item = A) :
-      (item :: VType)
+      (#item = A) :
+      (#item :: VType)
     ) . A
   that
 
   let Reveal =
-    pi ((item = A, _) : Box) . Ret A
+    pi ((#item = A, _) : Box) . Ret A
   that
 
   def reveal : Thk Reveal = {
-    fn ((item = A, value) : Box) => ret value
+    fn ((#item = A, value) : Box) => ret value
   } that
 
-  def boxed : Box = (item = Int64, 41) that
+  def boxed : Box = (#item = Int64, 41) that
 
   { ! reveal boxed }
 end
@@ -263,7 +263,7 @@ fn rejects_named_term_with_mismatched_label() {
     NamedCase::assert_type_error(
         r#"
 begin
-  def bad : (x :: Int64) = (y = 0) that
+  def bad : (#x :: Int64) = (#y = 0) that
   bad
 end
 "#,
@@ -275,8 +275,8 @@ fn rejects_named_pattern_with_mismatched_label() {
     NamedCase::assert_type_error(
         r#"
 begin
-  def value : (x :: Int64) = (x = 0) that
-  let (y = inner) = value in
+  def value : (#x :: Int64) = (#x = 0) that
+  let (#y = inner) = value in
   inner
 end
 "#,
@@ -288,12 +288,12 @@ fn rejects_named_pattern_on_unnamed_mixed_component() {
     NamedCase::assert_type_error(
         r#"
 begin
-  let Mixed = (left :: Int64) * (Int64 * (right :: Int64)) that
-  def value : Mixed = (left = 1, 2, right = 3) that
+  let Mixed = (#left :: Int64) * (Int64 * (#right :: Int64)) that
+  def value : Mixed = (#left = 1, 2, #right = 3) that
   let (
-    left = left : Int64,
-    middle = middle : Int64,
-    right = right : Int64
+    #left = left : Int64,
+    #middle = middle : Int64,
+    #right = right : Int64
   ) = value in
   (left, middle, right)
 end
@@ -306,11 +306,11 @@ fn rejects_mismatched_named_pattern_in_nested_mixed_product() {
     NamedCase::assert_type_error(
         r#"
 begin
-  let Nested = ((left :: Int64) * Int64) * (right :: Int64) that
-  def value : Nested = ((left = 1, 2), right = 3) that
+  let Nested = ((#left :: Int64) * Int64) * (#right :: Int64) that
+  def value : Nested = ((#left = 1, 2), #right = 3) that
   let (
-    (wrong = left : Int64, middle : Int64),
-    right = right : Int64
+    (#wrong = left : Int64, middle : Int64),
+    #right = right : Int64
   ) = value in
   (left, middle, right)
 end
@@ -323,12 +323,12 @@ fn rejects_incompatible_named_payload_annotation_in_mixed_pattern() {
     NamedCase::assert_type_error(
         r#"
 begin
-  let Mixed = (left :: Int64) * (Int64 * (right :: Int64)) that
-  def value : Mixed = (left = 1, 2, right = 3) that
+  let Mixed = (#left :: Int64) * (Int64 * (#right :: Int64)) that
+  def value : Mixed = (#left = 1, 2, #right = 3) that
   let (
-    left = left : String,
+    #left = left : String,
     middle : Int64,
-    right = right : Int64
+    #right = right : Int64
   ) = value in
   (left, middle, right)
 end
@@ -341,8 +341,8 @@ fn rejects_mismatched_named_type_label() {
     NamedCase::assert_type_error(
         r#"
 begin
-  let InvalidNamedType : (operation :: CType) =
-    (other = OS)
+  let InvalidNamedType : (#operation :: CType) =
+    (#other = OS)
   that
   ()
 end
@@ -356,7 +356,7 @@ fn rejects_named_computation_classifiers_without_named_computations() {
         r#"
 begin
   let InvalidNamedComputation : CType =
-    (operation :: OS)
+    (#operation :: OS)
   that
   ()
 end
@@ -369,8 +369,8 @@ fn rejects_missing_named_type_projection() {
     NamedCase::assert_type_error(
         r#"
 begin
-  let NamedInt : (item :: VType) =
-    (item = Int64)
+  let NamedInt : (#item :: VType) =
+    (#item = Int64)
   that
   let InvalidProjection : VType =
     NamedInt/other
@@ -386,8 +386,8 @@ fn rejects_missing_named_projection() {
     NamedCase::assert_type_error(
         r#"
 begin
-  let Point = (x :: Int64) * (y :: Int64) that
-  def point : Point = (x = 0, y = 1) that
+  let Point = (#x :: Int64) * (#y :: Int64) that
+  def point : Point = (#x = 0, #y = 1) that
   point/z
 end
 "#,
@@ -399,8 +399,8 @@ fn rejects_ambiguous_named_projection() {
     NamedCase::assert_type_error(
         r#"
 begin
-  let DuplicateFields = (x :: Int64) * (x :: Int64) that
-  def duplicate : DuplicateFields = (x = 0, x = 1) that
+  let DuplicateFields = (#x :: Int64) * (#x :: Int64) that
+  def duplicate : DuplicateFields = (#x = 0, #x = 1) that
   duplicate/x
 end
 "#,
@@ -412,8 +412,8 @@ fn rejects_ambiguous_nested_named_projection() {
     NamedCase::assert_type_error(
         r#"
 begin
-  let DuplicateFields = ((x :: Int64) * Int64) * (outer :: (x :: Int64)) that
-  def duplicate : DuplicateFields = ((x = 0, 1), outer = x = 2) that
+  let DuplicateFields = ((#x :: Int64) * Int64) * (#outer :: (#x :: Int64)) that
+  def duplicate : DuplicateFields = ((#x = 0, 1), #outer = #x = 2) that
   duplicate/x
 end
 "#,
@@ -425,8 +425,8 @@ fn rejects_ambiguous_nested_named_type_projection() {
     NamedCase::assert_type_error(
         r#"
 begin
-  let DuplicateFields : (x :: (x :: VType)) =
-    (x = (x = Int64))
+  let DuplicateFields : (#x :: (#x :: VType)) =
+    (#x = (#x = Int64))
   that
   let InvalidProjection : VType = DuplicateFields/x that
   ()

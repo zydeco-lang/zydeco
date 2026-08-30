@@ -5,11 +5,11 @@ begin
   let Char = @(intrinsic(char)) in
   let Int64 = @(intrinsic(i64)) in
   let String = @(intrinsic(string)) in
-    (@[builtin(char_to_str)] (to_string :: Thk (Char -> Ret String)))
-  * (@[builtin(char_codepoint)] (codepoint :: Thk (Char -> Ret Int64)))
+    (@[builtin(char_to_str)] (#to_string :: Thk (Char -> Ret String)))
+  * (@[builtin(char_codepoint)] (#codepoint :: Thk (Char -> Ret Int64)))
   * (
       @[builtin(char_from_codepoint)] (
-        from_codepoint :: Thk (
+        #from_codepoint :: Thk (
           forall (R : CType) . Int64 -> Thk R -> Thk (Char -> R) -> R
         )
       )

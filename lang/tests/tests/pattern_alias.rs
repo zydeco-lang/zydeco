@@ -50,8 +50,8 @@ fn rejects_missing_field_projection_patterns() {
     PatternAliasCase::assert_type_error(
         r#"
 begin
-  let Point = (x :: Int64) * (y :: Int64) that
-  def point : Point = (x = 1, y = 2) that
+  let Point = (#x :: Int64) * (#y :: Int64) that
+  def point : Point = (#x = 1, #y = 2) that
   let (/z = missing) = point in
   missing
 end
@@ -64,8 +64,8 @@ fn rejects_ambiguous_field_projection_patterns() {
     PatternAliasCase::assert_type_error(
         r#"
 begin
-  let Ambiguous = (left :: (x :: Int64)) * (right :: (x :: Int64)) that
-  def ambiguous : Ambiguous = (left = x = 1, right = x = 2) that
+  let Ambiguous = (#left :: (#x :: Int64)) * (#right :: (#x :: Int64)) that
+  def ambiguous : Ambiguous = (#left = #x = 1, #right = #x = 2) that
   let (/x = duplicate) = ambiguous in
   duplicate
 end
@@ -84,8 +84,8 @@ begin
     | +None : Unit
     end
   that
-  let Box = (value :: Maybe) that
-  def boxed : Box = (value = +Some(1)) that
+  let Box = (#value :: Maybe) that
+  def boxed : Box = (#value = +Some(1)) that
   match boxed
   | (/value = +Some(payload)) => ret payload
   | (/value = +None()) => ret 0

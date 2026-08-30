@@ -5,21 +5,21 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/Unit) = core that
-  let (Scalar = Int64, int64) = numeric/int64 that
+  let (#Scalar = Int64, int64) = numeric/int64 that
   let (/process) = system that
 
   def Packet =
     data
     | +Packet : (
-      tag :: Int64
-    ) * Int64 * (payload :: Int64)
+      #tag :: Int64
+    ) * Int64 * (#payload :: Int64)
     | +Empty : Unit
     end
   that
   def packet : Packet = +Packet(
-    tag = 7 : Int64,
+    #tag = 7 : Int64,
     8 : Int64,
-    payload = 9 : Int64
+    #payload = 9 : Int64
   ) that
 
   match packet

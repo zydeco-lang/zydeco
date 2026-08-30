@@ -10,7 +10,7 @@ begin
   pi (_ : @(import("../builtin.zy"))) .
     exists
       (
-        Exception = ExceptionType :
+        #Exception = ExceptionType :
         VType -> (
           VType
         ) -> CType
@@ -18,7 +18,7 @@ begin
     .
       exists
         (
-          MonadThrow = ExportedMonadThrow as MonadThrow :
+          #MonadThrow = ExportedMonadThrow as MonadThrow :
           VType -> (
             VType -> (
               CType
@@ -27,19 +27,19 @@ begin
         )
       .
           (
-            mo_exception :: Thk (
+            #mo_exception :: Thk (
               forall (E : VType) .
                 Monad (ExceptionType E)
             )
           )
         * (
-            throw_ops :: Thk (
+            #throw_ops :: Thk (
               forall (E : VType) .
                 MonadThrow E (ExceptionType E)
             )
           )
         * (
-            raise :: Thk (
+            #raise :: Thk (
               forall (E : VType) .
                 forall (A : VType) .
                      Thk Top
@@ -48,7 +48,7 @@ begin
             )
           )
         * (
-            handle_exception :: Thk (
+            #handle_exception :: Thk (
               forall (E : VType) .
                 forall (A : VType) .
                   forall (B : CType) .
@@ -59,7 +59,7 @@ begin
             )
           )
         * (
-            try_exception :: Thk (
+            #try_exception :: Thk (
               forall (E : VType) .
                 forall (A : VType) .
                      Thk (ExceptionType E A)

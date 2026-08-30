@@ -10,7 +10,7 @@ begin
     )
   ) in
   let (/VType; /CType; /Thk; /Ret; /Unit) = core in
-  let (Scalar = Int64, int64) = numeric/int64 in
+  let (#Scalar = Int64, int64) = numeric/int64 in
   let (/Scalar = String) = representations/string in
   let (/Scalar = Bytes) = representations/bytes in
   let (/bytes) = text in
@@ -108,7 +108,7 @@ begin
     that
     def IoError =
       data
-      | +IoError : (kind :: IoErrorKind) * (message :: String)
+      | +IoError : (#kind :: IoErrorKind) * (#message :: String)
       end
     that
     def ! error (kind : IoErrorKind) (message : String) : Ret IoError =
@@ -490,7 +490,7 @@ begin
       = Path,
       = IoErrorKind,
       = IoError,
-      io = (
+      #io = (
         = not_found,
         = permission_denied,
         = already_exists,
@@ -499,44 +499,44 @@ begin
         = broken_pipe,
         = closed,
         = other,
-        kind_eq = io_kind_eq,
+        #kind_eq = io_kind_eq,
         = error_kind,
         = error_message,
-        read = io_read,
-        read_line = io_read_line,
-        read_all = io_read_all,
-        write_all = io_write_all,
-        flush = io_flush,
-        close_reader = io_close_reader,
-        close_writer = io_close_writer
+        #read = io_read,
+        #read_line = io_read_line,
+        #read_all = io_read_all,
+        #write_all = io_write_all,
+        #flush = io_flush,
+        #close_reader = io_close_reader,
+        #close_writer = io_close_writer
       ),
-      fs = (
+      #fs = (
         = path,
         = path_string,
-        open_reader = fs_open_reader,
-        create_writer = fs_create_writer,
-        append_writer = fs_append_writer,
-        read_bytes = fs_read_bytes,
-        read_text = fs_read_text,
-        write_bytes = fs_write_bytes,
-        write_text = fs_write_text
+        #open_reader = fs_open_reader,
+        #create_writer = fs_create_writer,
+        #append_writer = fs_append_writer,
+        #read_bytes = fs_read_bytes,
+        #read_text = fs_read_text,
+        #write_bytes = fs_write_bytes,
+        #write_text = fs_write_text
       ),
-      stdio = (
-        stdin = stdio/stdin,
-        stdout = stdio/stdout,
-        stderr = stdio/stderr,
-        read_line = stdio_read_line,
-        write = stdio_write,
-        write_line = stdio_write_line,
-        write_error = stdio_write_error,
-        write_error_line = stdio_write_error_line
+      #stdio = (
+        #stdin = stdio/stdin,
+        #stdout = stdio/stdout,
+        #stderr = stdio/stderr,
+        #read_line = stdio_read_line,
+        #write = stdio_write,
+        #write_line = stdio_write_line,
+        #write_error = stdio_write_error,
+        #write_error_line = stdio_write_error_line
       ),
-      process = (
+      #process = (
         = arg_list,
-        random_int = random/generate,
+        #random_int = random/generate,
         = halt,
         = panic,
-        exit = process/exit
+        #exit = process/exit
       ),
       ()
     )

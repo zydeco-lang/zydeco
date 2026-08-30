@@ -5,40 +5,40 @@ begin
     (/numeric; /system) :
     @(import("../../std/builtin.zy"))
   ) that
-  let (Scalar = Int64, int64) = numeric/int64 that
+  let (#Scalar = Int64, int64) = numeric/int64 that
   let (/process) = system that
 
   let PatternTarget = (
-    left :: Int64
-  ) * Int64 * (right :: Int64) that
+    #left :: Int64
+  ) * Int64 * (#right :: Int64) that
   def pattern_target : PatternTarget = (
-    left = 1,
+    #left = 1,
     2,
-    right = 3
+    #right = 3
   ) that
 
   -- Payload annotations on named patterns coexist with an annotated unnamed
   -- component.
   let (
-    left = direct_left : Int64,
+    #left = direct_left : Int64,
     direct_middle : Int64,
-    right = direct_right : Int64
+    #right = direct_right : Int64
   ) = pattern_target in
   -- Variable patterns may bind named values without opening them.
   let (
-    left_field : (left :: Int64),
+    left_field : (#left :: Int64),
     opaque_middle : Int64,
-    right_field : (right :: Int64)
+    right_field : (#right :: Int64)
   ) = pattern_target in
   -- The field can later be opened with either an annotation on the complete
   -- named pattern or an annotation on only its payload.
-  let ((left = opaque_left) : (left :: Int64)) = left_field in
-  let (right = opaque_right : Int64) = right_field in
+  let ((#left = opaque_left) : (#left :: Int64)) = left_field in
+  let (#right = opaque_right : Int64) = right_field in
   -- Holes still check the surrounding field labels and product structure.
   let (
-    left = _,
+    #left = _,
     _,
-    right = _
+    #right = _
   ) = pattern_target in
   do direct_left_check <- ! (int64/sub) direct_left 1;
   do direct_middle_check <- ! (int64/sub) direct_middle 2;

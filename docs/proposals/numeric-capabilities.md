@@ -10,30 +10,30 @@ Larger interfaces contain smaller packages as named fields:
 
 ```zydeco
 Additive A =
-  (zero :: A) *
-  (add :: Thk (A -> A -> Ret A)) *
-  (sub :: Thk (A -> A -> Ret A)) *
-  (negate :: Thk (A -> Ret A))
+  (#zero :: A) *
+  (#add :: Thk (A -> A -> Ret A)) *
+  (#sub :: Thk (A -> A -> Ret A)) *
+  (#negate :: Thk (A -> Ret A))
 
 Multiplicative A =
-  (one :: A) *
-  (mul :: Thk (A -> A -> Ret A))
+  (#one :: A) *
+  (#mul :: Thk (A -> A -> Ret A))
 
 PartialEquality Bool A =
-  (eq :: Thk (A -> A -> Ret Bool)) *
-  (ne :: Thk (A -> A -> Ret Bool))
+  (#eq :: Thk (A -> A -> Ret Bool)) *
+  (#ne :: Thk (A -> A -> Ret Bool))
 
 PartialOrder Bool A =
-  (equality :: PartialEquality Bool A) *
-  (lt :: Thk (A -> A -> Ret Bool)) *
-  (le :: Thk (A -> A -> Ret Bool)) *
-  (gt :: Thk (A -> A -> Ret Bool)) *
-  (ge :: Thk (A -> A -> Ret Bool))
+  (#equality :: PartialEquality Bool A) *
+  (#lt :: Thk (A -> A -> Ret Bool)) *
+  (#le :: Thk (A -> A -> Ret Bool)) *
+  (#gt :: Thk (A -> A -> Ret Bool)) *
+  (#ge :: Thk (A -> A -> Ret Bool))
 
 Numeric Bool A =
-  (additive :: Additive A) *
-  (multiplicative :: Multiplicative A) *
-  (order :: PartialOrder Bool A) *
+  (#additive :: Additive A) *
+  (#multiplicative :: Multiplicative A) *
+  (#order :: PartialOrder Bool A) *
   Unit
 ```
 
