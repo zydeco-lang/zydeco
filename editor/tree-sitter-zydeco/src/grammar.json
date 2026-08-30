@@ -994,7 +994,7 @@
             "name": "parameter",
             "content": {
               "type": "SYMBOL",
-              "name": "existential_parameter"
+              "name": "pack_parameter"
             }
           }
         },
@@ -1045,6 +1045,44 @@
         {
           "type": "STRING",
           "value": "end"
+        }
+      ]
+    },
+    "pack_parameter": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "FIELD",
+          "name": "parameter",
+          "content": {
+            "type": "SYMBOL",
+            "name": "existential_parameter"
+          }
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": "is"
+                },
+                {
+                  "type": "FIELD",
+                  "name": "evidence",
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "_atomic_term"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         }
       ]
     },
@@ -1660,6 +1698,10 @@
               {
                 "type": "STRING",
                 "value": "where"
+              },
+              {
+                "type": "STRING",
+                "value": "is"
               }
             ]
           },

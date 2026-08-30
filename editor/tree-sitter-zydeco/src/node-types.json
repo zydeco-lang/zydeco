@@ -1491,6 +1491,88 @@
         "required": true,
         "types": [
           {
+            "type": "pack_parameter",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "pack_parameter",
+    "named": true,
+    "fields": {
+      "evidence": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_literal",
+            "named": true
+          },
+          {
+            "type": "block_abstraction",
+            "named": true
+          },
+          {
+            "type": "block_expression",
+            "named": true
+          },
+          {
+            "type": "codata_type",
+            "named": true
+          },
+          {
+            "type": "comatch_expression",
+            "named": true
+          },
+          {
+            "type": "constructor_expression",
+            "named": true
+          },
+          {
+            "type": "data_type",
+            "named": true
+          },
+          {
+            "type": "force_expression",
+            "named": true
+          },
+          {
+            "type": "hole",
+            "named": true
+          },
+          {
+            "type": "match_expression",
+            "named": true
+          },
+          {
+            "type": "pack_expression",
+            "named": true
+          },
+          {
+            "type": "parenthesized_term",
+            "named": true
+          },
+          {
+            "type": "return_expression",
+            "named": true
+          },
+          {
+            "type": "thunk_expression",
+            "named": true
+          },
+          {
+            "type": "variable",
+            "named": true
+          }
+        ]
+      },
+      "parameter": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
             "type": "existential_parameter",
             "named": true
           }
@@ -2236,6 +2318,10 @@
   {
     "type": "integer_literal",
     "named": true
+  },
+  {
+    "type": "is",
+    "named": false
   },
   {
     "type": "keyword_identifier",
