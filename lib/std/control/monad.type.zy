@@ -1,7 +1,7 @@
 begin
-  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
-  let CType = @(import("../builtin/intrinsic/ctype.zy")) in
-  let Thk = @(import("../builtin/intrinsic/thk.zy")) in
+  let VType = @(intrinsic(vtype)) in
+  let CType = @(intrinsic(ctype)) in
+  let Thk = @(intrinsic(thk)) in
   let Monad
     (
       M : VType -> (

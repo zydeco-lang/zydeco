@@ -1,9 +1,9 @@
 begin
-  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
-  let CType = @(import("../builtin/intrinsic/ctype.zy")) in
+  let VType = @(intrinsic(vtype)) in
+  let CType = @(intrinsic(ctype)) in
   let Monad = @(import("monad.type.zy")) in
   let Algebra = @(import("algebra.type.zy")) in
-  let Unit = @(import("../builtin/intrinsic/unit.zy")) in
+  let Unit = @(intrinsic(unit)) in
   pi (_ : @(import("../builtin.zy"))) .
     exists
       (

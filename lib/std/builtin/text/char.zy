@@ -1,10 +1,10 @@
 begin
-  let CType = @(import("../intrinsic/ctype.zy")) in
-  let Thk = @(import("../intrinsic/thk.zy")) in
-  let Ret = @(import("../intrinsic/ret.zy")) in
-  let Char = @(import("../intrinsic/char.zy")) in
-  let Int64 = @(import("../intrinsic/i64.zy")) in
-  let String = @(import("../intrinsic/string.zy")) in
+  let CType = @(intrinsic(ctype)) in
+  let Thk = @(intrinsic(thk)) in
+  let Ret = @(intrinsic(ret)) in
+  let Char = @(intrinsic(char)) in
+  let Int64 = @(intrinsic(i64)) in
+  let String = @(intrinsic(string)) in
     (@[builtin(char_to_str)] (to_string :: Thk (Char -> Ret String)))
   * (@[builtin(char_codepoint)] (codepoint :: Thk (Char -> Ret Int64)))
   * (

@@ -1,6 +1,6 @@
 begin
-  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
-  let Unit = @(import("../builtin/intrinsic/unit.zy")) in
+  let VType = @(intrinsic(vtype)) in
+  let Unit = @(intrinsic(unit)) in
   let Additive = @(import("additive.type.zy")) in
   let Multiplicative = @(import("multiplicative.type.zy")) in
   let PartialOrder = @(import("partial-order.type.zy")) in

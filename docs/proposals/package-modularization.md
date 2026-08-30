@@ -193,11 +193,8 @@ lib/std/
   builtin.zy
   builtin/
     core.zy
-    intrinsic/{vtype,ctype,thk,ret,unit,i8,...,bytes}.zy
     representations.zy
-    numeric.zy
     numeric/{int8,...,uint64,float32,float64}.zy
-    text.zy
     text/{char,string,bytes}.zy
     system/{io,fs,stdio,args,random,process}.zy
   data/package.zy

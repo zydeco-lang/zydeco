@@ -1,4 +1,0 @@
-  (char :: @(import("text/char.zy")))
-* (string :: @(import("text/string.zy")))
-* (bytes :: @(import("text/bytes.zy")))
-* (@(import("intrinsic/unit.zy")))

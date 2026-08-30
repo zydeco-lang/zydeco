@@ -1,16 +1,16 @@
 begin
-  let VType = @(import("../intrinsic/vtype.zy")) in
-  let CType = @(import("../intrinsic/ctype.zy")) in
-  let Thk = @(import("../intrinsic/thk.zy")) in
-  let Ret = @(import("../intrinsic/ret.zy")) in
-  let String = @(import("../intrinsic/string.zy")) in
+  let VType = @(intrinsic(vtype)) in
+  let CType = @(intrinsic(ctype)) in
+  let Thk = @(intrinsic(thk)) in
+  let Ret = @(intrinsic(ret)) in
+  let String = @(intrinsic(string)) in
   let Binary (A : VType) = Thk (A -> A -> Ret A) in
   let Branch (A : VType) = Thk (
     forall (R : CType) . A -> A -> Thk R -> Thk R -> R
   ) in
   let Render (A : VType) = Thk (A -> Ret String) in
   exists
-    (Scalar = ScalarType as @(import("../intrinsic/u16.zy")) : VType)
+    (Scalar = ScalarType as @(intrinsic(u16)) : VType)
   .
       (@[builtin(uint16_add)] (add :: Binary ScalarType))
     * (@[builtin(uint16_sub)] (sub :: Binary ScalarType))

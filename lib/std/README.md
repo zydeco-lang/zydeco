@@ -30,7 +30,6 @@ std.zyi                    companion annotation for `std.zy`
 std.zy                     wiring for the public package
 
 builtin/core.zy            CBPV kinds and constructors
-builtin/intrinsic/*.zy     one canonical source term for each compiler intrinsic
 builtin/representations.zy fixed representation packages
 builtin/numeric/*.zy       exact-width primitive operations
 builtin/text/*.zy          Char, String, and Bytes host operations
@@ -80,8 +79,8 @@ Fixed representations are compiler-canonical intrinsics, so independent packages
 project the groups they need and then open those narrower packages; the composition root retains the complete
 Builtin value when it must pass the dependency onward. See
 [Modular primitive packages](../../docs/proposals/primitive-packages.md) for the design and usage examples.
-Each intrinsic splice is authored once under `builtin/intrinsic/`; contracts elsewhere import those canonical
-terms rather than spelling compiler metadata again.
+Compiler intrinsics are spliced inline as `@(intrinsic(name))` wherever a contract needs the canonical term,
+so no one-line indirection files sit between type expressions and the compiler metadata they name.
 Builtin leaves bind the intrinsic kinds and constructors they use at the top of the file, so their classifiers
 read as ordinary type expressions.
 

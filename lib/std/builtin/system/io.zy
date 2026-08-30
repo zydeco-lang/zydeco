@@ -1,10 +1,10 @@
 begin
-  let VType = @(import("../intrinsic/vtype.zy")) in
-  let CType = @(import("../intrinsic/ctype.zy")) in
-  let Thk = @(import("../intrinsic/thk.zy")) in
-  let String = @(import("../intrinsic/string.zy")) in
-  let Int64 = @(import("../intrinsic/i64.zy")) in
-  let Bytes = @(import("../intrinsic/bytes.zy")) in
+  let VType = @(intrinsic(vtype)) in
+  let CType = @(intrinsic(ctype)) in
+  let Thk = @(intrinsic(thk)) in
+  let String = @(intrinsic(string)) in
+  let Int64 = @(intrinsic(i64)) in
+  let Bytes = @(intrinsic(bytes)) in
   param Reader : VType in
   param Writer : VType in
   param OS : CType in

@@ -1,22 +1,22 @@
 begin
-  let VType = @(import("intrinsic/vtype.zy")) in
-  let Unit = @(import("intrinsic/unit.zy")) in
+  let VType = @(intrinsic(vtype)) in
+  let Unit = @(intrinsic(unit)) in
   let RepresentationPackage (Representation : VType) =
     exists (Scalar = ScalarType as Representation : VType) .
       Unit
   in
-    (i8 :: RepresentationPackage (@(import("intrinsic/i8.zy"))))
-  * (i16 :: RepresentationPackage (@(import("intrinsic/i16.zy"))))
-  * (i32 :: RepresentationPackage (@(import("intrinsic/i32.zy"))))
-  * (i64 :: RepresentationPackage (@(import("intrinsic/i64.zy"))))
-  * (u8 :: RepresentationPackage (@(import("intrinsic/u8.zy"))))
-  * (u16 :: RepresentationPackage (@(import("intrinsic/u16.zy"))))
-  * (u32 :: RepresentationPackage (@(import("intrinsic/u32.zy"))))
-  * (u64 :: RepresentationPackage (@(import("intrinsic/u64.zy"))))
-  * (f32 :: RepresentationPackage (@(import("intrinsic/f32.zy"))))
-  * (f64 :: RepresentationPackage (@(import("intrinsic/f64.zy"))))
-  * (char :: RepresentationPackage (@(import("intrinsic/char.zy"))))
-  * (string :: RepresentationPackage (@(import("intrinsic/string.zy"))))
-  * (bytes :: RepresentationPackage (@(import("intrinsic/bytes.zy"))))
+    (i8 :: RepresentationPackage (@(intrinsic(i8))))
+  * (i16 :: RepresentationPackage (@(intrinsic(i16))))
+  * (i32 :: RepresentationPackage (@(intrinsic(i32))))
+  * (i64 :: RepresentationPackage (@(intrinsic(i64))))
+  * (u8 :: RepresentationPackage (@(intrinsic(u8))))
+  * (u16 :: RepresentationPackage (@(intrinsic(u16))))
+  * (u32 :: RepresentationPackage (@(intrinsic(u32))))
+  * (u64 :: RepresentationPackage (@(intrinsic(u64))))
+  * (f32 :: RepresentationPackage (@(intrinsic(f32))))
+  * (f64 :: RepresentationPackage (@(intrinsic(f64))))
+  * (char :: RepresentationPackage (@(intrinsic(char))))
+  * (string :: RepresentationPackage (@(intrinsic(string))))
+  * (bytes :: RepresentationPackage (@(intrinsic(bytes))))
   * Unit
 end

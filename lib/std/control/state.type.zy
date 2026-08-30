@@ -1,7 +1,7 @@
 begin
-  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
-  let CType = @(import("../builtin/intrinsic/ctype.zy")) in
-  let Unit = @(import("../builtin/intrinsic/unit.zy")) in
+  let VType = @(intrinsic(vtype)) in
+  let CType = @(intrinsic(ctype)) in
+  let Unit = @(intrinsic(unit)) in
   let MonadState
     (S : VType)
     (

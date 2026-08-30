@@ -1678,39 +1678,6 @@ fn canonical_builtin_signature_imports_into_interpreter_and_native_compilation()
 }
 
 #[test]
-fn authored_intrinsic_splices_are_each_introduced_once_in_the_builtin_tree() {
-    let builtin_root = repository_source("std/builtin.zy").canonicalize().unwrap();
-    let builtin_modules = repository_source("std/builtin").canonicalize().unwrap();
-    let (builtin_sources, unexpected): (Vec<_>, Vec<_>) = RepositorySourceFiles::all()
-        .into_iter()
-        .filter(|path| std::fs::read_to_string(path).unwrap().contains("@(intrinsic("))
-        .partition(|path| path == &builtin_root || path.starts_with(&builtin_modules));
-    let source = builtin_sources
-        .iter()
-        .map(|path| std::fs::read_to_string(path).unwrap())
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    assert!(
-        unexpected.is_empty(),
-        "intrinsic splices outside the canonical Builtin package tree: {unexpected:?}"
-    );
-    [
-        "vtype", "ctype", "thk", "ret", "unit", "i8", "i16", "i32", "i64", "u8", "u16", "u32",
-        "u64", "f32", "f64", "char", "string", "bytes",
-    ]
-    .into_iter()
-    .for_each(|role| {
-        let spelling = format!("@(intrinsic({role}))");
-        assert_eq!(
-            source.match_indices(&spelling).count(),
-            1,
-            "expected exactly one `{role}` intrinsic splice"
-        );
-    });
-}
-
-#[test]
 fn checked_arenas_drop_the_checkers_typing_environments() {
     let checked = TestPipeline::check(repository_source("tests/exec/choice.zy")).unwrap();
 

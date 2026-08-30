@@ -1,6 +1,6 @@
 begin
-  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
-  let Unit = @(import("../builtin/intrinsic/unit.zy")) in
+  let VType = @(intrinsic(vtype)) in
+  let Unit = @(intrinsic(unit)) in
   let Numeric = @(import("numeric.type.zy")) in
   let NumericInstance (Bool : VType)
     (Representation : VType) =

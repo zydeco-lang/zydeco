@@ -1,7 +1,7 @@
 begin
-  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
-  let Thk = @(import("../builtin/intrinsic/thk.zy")) in
-  let Ret = @(import("../builtin/intrinsic/ret.zy")) in
+  let VType = @(intrinsic(vtype)) in
+  let Thk = @(intrinsic(thk)) in
+  let Ret = @(intrinsic(ret)) in
   let Multiplicative (A : VType) =
       (one :: A)
     * (mul :: Thk (A -> A -> Ret A))

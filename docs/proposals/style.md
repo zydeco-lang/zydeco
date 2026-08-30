@@ -238,9 +238,11 @@ while the preceding projections introduce only the requested local names.
 Omit that alias when the consumer does not forward the package.
 This projection-pattern idiom serves the role of package `use` without adding a separate binding form.
 
-The canonical builtin package is the single source of `@[intrinsic]` and `@[builtin(...)]` metadata.
-Other sources acquire intrinsic kinds, types, and host operations by importing that package
-and projecting only their dependencies, which keeps the names subject to ordinary language-level resolution
+The canonical builtin package is the single source of `@[builtin(...)]` host-capability metadata.
+Compiler intrinsics, in contrast, are canonical importable terms in their own right:
+a source splices `@[intrinsic(i64)] _` directly where the term is needed,
+while host operations are acquired by importing the builtin package and projecting only the required
+dependencies, which keeps the names subject to ordinary language-level resolution
 without repeating the complete host interface.
 
 Within that signature, fixed representations use canonical primitive intrinsics such as

@@ -1,5 +1,5 @@
 begin
-  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
+  let VType = @(intrinsic(vtype)) in
   let DataBody = @(import("body.type.zy")) in
   let DataPackage =
     exists

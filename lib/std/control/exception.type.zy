@@ -1,6 +1,6 @@
 begin
-  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
-  let CType = @(import("../builtin/intrinsic/ctype.zy")) in
+  let VType = @(intrinsic(vtype)) in
+  let CType = @(intrinsic(ctype)) in
   let MonadThrow
     (E : VType)
     (

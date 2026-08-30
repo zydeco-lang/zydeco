@@ -1,10 +1,10 @@
 begin
-  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
+  let VType = @(intrinsic(vtype)) in
   let BoolModule = @(import("../data/bool.type.zy")) in
   let NumericInstance = @(import("numeric-instance.type.zy")) in
   let IntegerModule = @(import("integer.type.zy")) in
   let PrimitiveIntegerModule = @(import("primitive-integer.type.zy")) in
-  let Unit = @(import("../builtin/intrinsic/unit.zy")) in
+  let Unit = @(intrinsic(unit)) in
   let Package
     (Bool : VType)
     (Scalar : VType)

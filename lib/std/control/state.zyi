@@ -1,9 +1,9 @@
 begin
-  let VType = @(import("../builtin/intrinsic/vtype.zy")) in
-  let CType = @(import("../builtin/intrinsic/ctype.zy")) in
-  let Thk = @(import("../builtin/intrinsic/thk.zy")) in
-  let Ret = @(import("../builtin/intrinsic/ret.zy")) in
-  let Unit = @(import("../builtin/intrinsic/unit.zy")) in
+  let VType = @(intrinsic(vtype)) in
+  let CType = @(intrinsic(ctype)) in
+  let Thk = @(intrinsic(thk)) in
+  let Ret = @(intrinsic(ret)) in
+  let Unit = @(intrinsic(unit)) in
   let Monad = @(import("monad.type.zy")) in
   let MonadState = @(import("state.type.zy")) in
   pi (_ : @(import("../builtin.zy"))) .

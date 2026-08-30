@@ -1,13 +1,13 @@
-exists (VType as @(import("intrinsic/vtype.zy")))
-  (CType as @(import("intrinsic/ctype.zy")))
+exists (VType as @(intrinsic(vtype)))
+  (CType as @(intrinsic(ctype)))
   (
-    Thk = CoreThk as @(import("intrinsic/thk.zy")) :
+    Thk = CoreThk as @(intrinsic(thk)) :
     CType -> VType
   )
   (
-    Ret = CoreRet as @(import("intrinsic/ret.zy")) :
+    Ret = CoreRet as @(intrinsic(ret)) :
     VType -> CType
   )
-  (Unit = CoreUnit as @(import("intrinsic/unit.zy")) : VType)
+  (Unit = CoreUnit as @(intrinsic(unit)) : VType)
 .
-  @(import("intrinsic/unit.zy"))
+  @(intrinsic(unit))
