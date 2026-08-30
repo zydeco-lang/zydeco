@@ -12,5 +12,5 @@ language_ids = { Zydeco = "zydeco" }
 
 [grammars.zydeco]
 repository = "https://github.com/zydeco-lang/zydeco"
-rev = "53f956eb693e9244894c1afa92d5e11c57b711bc"
+rev = "2640fbb211b9f262fa61027795186370bd15dbc3"
 path = "editor/tree-sitter-zydeco"
