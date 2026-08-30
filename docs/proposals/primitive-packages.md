@@ -77,7 +77,7 @@ The `numeric` package separates operations from representation names. Every widt
 its carrier under that carrier's public name and contains only operations for that carrier:
 
 ```zydeco
-let (#Int64 = Int64, int64) = numeric/int64 in
+let (= Int64, int64) = numeric/int64 in
 do sum <- ! (int64/add) left right;
 ! (int64/lt) Result sum limit when_true when_false
 ```
@@ -149,7 +149,7 @@ param (
   @[import("builtin.zy")] _
 ) in
 let (/Ret) = core in
-let (#Int64 = Int64, int64) = numeric/int64 in
+let (= Int64, int64) = numeric/int64 in
 ...
 ```
 

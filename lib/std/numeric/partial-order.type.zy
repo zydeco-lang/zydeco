@@ -3,13 +3,11 @@ begin
   let Thk = @(intrinsic(thk)) in
   let Ret = @(intrinsic(ret)) in
   let PartialEquality = @(import("partial-equality.type.zy")) in
-  let PartialOrder (Bool : VType)
-    (A : VType) =
-      (#equality :: PartialEquality Bool A)
-    * (#lt :: Thk (A -> A -> Ret Bool))
-    * (#le :: Thk (A -> A -> Ret Bool))
-    * (#gt :: Thk (A -> A -> Ret Bool))
-    * (#ge :: Thk (A -> A -> Ret Bool))
-  in
-  PartialOrder
+  param Bool : VType in
+  param A : VType in
+    (#equality :: PartialEquality Bool A)
+  * (#lt :: Thk (A -> A -> Ret Bool))
+  * (#le :: Thk (A -> A -> Ret Bool))
+  * (#gt :: Thk (A -> A -> Ret Bool))
+  * (#ge :: Thk (A -> A -> Ret Bool))
 end

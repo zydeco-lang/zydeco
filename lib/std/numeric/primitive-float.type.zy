@@ -3,31 +3,29 @@ begin
   let CType = @(intrinsic(ctype)) in
   let Thk = @(intrinsic(thk)) in
   let Ret = @(intrinsic(ret)) in
-  let PrimitiveFloatModule (Floating : VType)
-    (String : VType) =
-      (#add :: Thk (Floating -> Floating -> Ret Floating))
-    * (#sub :: Thk (Floating -> Floating -> Ret Floating))
-    * (#mul :: Thk (Floating -> Floating -> Ret Floating))
-    * (#div :: Thk (Floating -> Floating -> Ret Floating))
-    * (
-        #eq :: Thk (
-          forall (R : CType) .
-            Floating -> Floating -> Thk R -> Thk R -> R
-        )
+  param Floating : VType in
+  param String : VType in
+    (#add :: Thk (Floating -> Floating -> Ret Floating))
+  * (#sub :: Thk (Floating -> Floating -> Ret Floating))
+  * (#mul :: Thk (Floating -> Floating -> Ret Floating))
+  * (#div :: Thk (Floating -> Floating -> Ret Floating))
+  * (
+      #eq :: Thk (
+        forall (R : CType) .
+          Floating -> Floating -> Thk R -> Thk R -> R
       )
-    * (
-        #lt :: Thk (
-          forall (R : CType) .
-            Floating -> Floating -> Thk R -> Thk R -> R
-        )
+    )
+  * (
+      #lt :: Thk (
+        forall (R : CType) .
+          Floating -> Floating -> Thk R -> Thk R -> R
       )
-    * (
-        #gt :: Thk (
-          forall (R : CType) .
-            Floating -> Floating -> Thk R -> Thk R -> R
-        )
+    )
+  * (
+      #gt :: Thk (
+        forall (R : CType) .
+          Floating -> Floating -> Thk R -> Thk R -> R
       )
-    * (#to_string :: Thk (Floating -> Ret String))
-  in
-  PrimitiveFloatModule
+    )
+  * (#to_string :: Thk (Floating -> Ret String))
 end

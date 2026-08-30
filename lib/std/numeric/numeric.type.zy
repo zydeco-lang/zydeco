@@ -4,12 +4,10 @@ begin
   let Additive = @(import("additive.type.zy")) in
   let Multiplicative = @(import("multiplicative.type.zy")) in
   let PartialOrder = @(import("partial-order.type.zy")) in
-  let Numeric (Bool : VType)
-    (A : VType) =
-      (#additive :: Additive A)
-    * (#multiplicative :: Multiplicative A)
-    * (#order :: PartialOrder Bool A)
-    * Unit
-  in
-  Numeric
+  param Bool : VType in
+  param A : VType in
+    (#additive :: Additive A)
+  * (#multiplicative :: Multiplicative A)
+  * (#order :: PartialOrder Bool A)
+  * Unit
 end

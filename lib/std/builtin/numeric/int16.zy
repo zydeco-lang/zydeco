@@ -10,15 +10,15 @@ begin
   ) in
   let Render (A : VType) = Thk (A -> Ret String) in
   exists
-    (#Int16 = ScalarType as @(intrinsic(i16)) : VType)
+    (= Int16 as @(intrinsic(i16)) : VType)
   .
-      (@[builtin(int16_add)] (#add :: Binary ScalarType))
-    * (@[builtin(int16_sub)] (#sub :: Binary ScalarType))
-    * (@[builtin(int16_mul)] (#mul :: Binary ScalarType))
-    * (@[builtin(int16_div)] (#div :: Binary ScalarType))
-    * (@[builtin(int16_mod)] (#mod :: Binary ScalarType))
-    * (@[builtin(int16_eq)] (#eq :: Branch ScalarType))
-    * (@[builtin(int16_lt)] (#lt :: Branch ScalarType))
-    * (@[builtin(int16_gt)] (#gt :: Branch ScalarType))
-    * (@[builtin(int16_to_string)] (#to_string :: Render ScalarType))
+      (@[builtin(int16_add)] (#add :: Binary Int16))
+    * (@[builtin(int16_sub)] (#sub :: Binary Int16))
+    * (@[builtin(int16_mul)] (#mul :: Binary Int16))
+    * (@[builtin(int16_div)] (#div :: Binary Int16))
+    * (@[builtin(int16_mod)] (#mod :: Binary Int16))
+    * (@[builtin(int16_eq)] (#eq :: Branch Int16))
+    * (@[builtin(int16_lt)] (#lt :: Branch Int16))
+    * (@[builtin(int16_gt)] (#gt :: Branch Int16))
+    * (@[builtin(int16_to_string)] (#to_string :: Render Int16))
 end

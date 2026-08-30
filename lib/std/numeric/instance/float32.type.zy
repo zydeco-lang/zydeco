@@ -2,10 +2,6 @@ begin
   let VType = @(intrinsic(vtype)) in
   let Unit = @(intrinsic(unit)) in
   let Numeric = @(import("../numeric.type.zy")) in
-  let Float32 = @(intrinsic(f32)) in
-  let Float32Instance (Bool : VType) =
-    exists (#Float32 = ScalarType as Float32 : VType) .
-      (#dictionary :: Numeric Bool ScalarType) * Unit
-  in
-  Float32Instance
+  param Bool : VType in
+  exists (= Float32 as @(intrinsic(f32)) : VType) . Numeric Bool Float32
 end

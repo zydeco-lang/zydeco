@@ -4,7 +4,7 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/Ret) = core that
-  let (#Int64 = Int64, int64) = numeric/int64 that
+  let (= Int64, int64) = numeric/int64 that
   let (/process) = system that
   def fix sum (i : Int64) (acc : Int64) : Ret Int64 = ! (int64/eq)
     (Ret Int64)

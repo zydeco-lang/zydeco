@@ -8,7 +8,7 @@ begin
     let (/Char) = representations/char in
     let (/String) = representations/string in
     let (/Bytes) = representations/bytes in
-    let (#Int64 = Int64, int64) = numeric/int64 in
+    let (= Int64, int64) = numeric/int64 in
     let (/char; /string; /bytes) = text in
     param (/Bool; /Option; /List; /bool; /option; /list) in
     let ! compare (A : VType)

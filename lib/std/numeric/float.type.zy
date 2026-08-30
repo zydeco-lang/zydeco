@@ -2,21 +2,19 @@ begin
   let VType = @(intrinsic(vtype)) in
   let Thk = @(intrinsic(thk)) in
   let Ret = @(intrinsic(ret)) in
-  let FloatModule (Bool : VType)
-    (Floating : VType)
-    (String : VType) =
-      (#add :: Thk (Floating -> Floating -> Ret Floating))
-    * (#sub :: Thk (Floating -> Floating -> Ret Floating))
-    * (#mul :: Thk (Floating -> Floating -> Ret Floating))
-    * (#div :: Thk (Floating -> Floating -> Ret Floating))
-    * (#eq :: Thk (Floating -> Floating -> Ret Bool))
-    * (#ne :: Thk (Floating -> Floating -> Ret Bool))
-    * (#lt :: Thk (Floating -> Floating -> Ret Bool))
-    * (#le :: Thk (Floating -> Floating -> Ret Bool))
-    * (#gt :: Thk (Floating -> Floating -> Ret Bool))
-    * (#ge :: Thk (Floating -> Floating -> Ret Bool))
-    * (#negate :: Thk (Floating -> Ret Floating))
-    * (#to_string :: Thk (Floating -> Ret String))
-  in
-  FloatModule
+  param Bool : VType in
+  param Floating : VType in
+  param String : VType in
+    (#add :: Thk (Floating -> Floating -> Ret Floating))
+  * (#sub :: Thk (Floating -> Floating -> Ret Floating))
+  * (#mul :: Thk (Floating -> Floating -> Ret Floating))
+  * (#div :: Thk (Floating -> Floating -> Ret Floating))
+  * (#eq :: Thk (Floating -> Floating -> Ret Bool))
+  * (#ne :: Thk (Floating -> Floating -> Ret Bool))
+  * (#lt :: Thk (Floating -> Floating -> Ret Bool))
+  * (#le :: Thk (Floating -> Floating -> Ret Bool))
+  * (#gt :: Thk (Floating -> Floating -> Ret Bool))
+  * (#ge :: Thk (Floating -> Floating -> Ret Bool))
+  * (#negate :: Thk (Floating -> Ret Floating))
+  * (#to_string :: Thk (Floating -> Ret String))
 end

@@ -2,11 +2,9 @@ begin
   let VType = @(intrinsic(vtype)) in
   let Thk = @(intrinsic(thk)) in
   let Ret = @(intrinsic(ret)) in
-  let Additive (A : VType) =
-      (#zero :: A)
-    * (#add :: Thk (A -> A -> Ret A))
-    * (#sub :: Thk (A -> A -> Ret A))
-    * (#negate :: Thk (A -> Ret A))
-  in
-  Additive
+  param A : VType in
+    (#zero :: A)
+  * (#add :: Thk (A -> A -> Ret A))
+  * (#sub :: Thk (A -> A -> Ret A))
+  * (#negate :: Thk (A -> Ret A))
 end

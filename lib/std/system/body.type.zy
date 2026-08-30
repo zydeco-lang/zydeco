@@ -222,40 +222,26 @@ begin
     * (#exit :: Thk (Int64 -> OS))
   in
 
-  let SystemBody (Bool : VType)
+  param Bool : VType in
+  param Option : VType -> VType in
+  param Result : VType -> VType -> VType in
+  param List : VType -> VType in
+  param Reader : VType in
+  param Writer : VType in
+  param Path : VType in
+  param IoErrorKind : VType in
+  param IoError : VType in
+  param OS : CType in
     (
-      Option : VType -> (
-        VType
-      )
+      #io :: IoModule
+        Bool Option Result Reader Writer IoErrorKind IoError OS
     )
-    (
-      Result : VType -> (
-        VType
-      ) -> VType
+  * (
+      #fs :: FsModule Result Reader Writer Path IoError OS
     )
-    (
-      List : VType -> (
-        VType
-      )
+  * (
+      #stdio :: StdioModule Option Result Reader Writer IoError OS
     )
-    (Reader : VType)
-    (Writer : VType)
-    (Path : VType)
-    (IoErrorKind : VType)
-    (IoError : VType)
-    (OS : CType) =
-      (
-        #io :: IoModule
-          Bool Option Result Reader Writer IoErrorKind IoError OS
-      )
-    * (
-        #fs :: FsModule Result Reader Writer Path IoError OS
-      )
-    * (
-        #stdio :: StdioModule Option Result Reader Writer IoError OS
-      )
-    * (#process :: ProcessModule List OS)
-    * Unit
-  in
-  SystemBody
+  * (#process :: ProcessModule List OS)
+  * Unit
 end

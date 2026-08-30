@@ -1,18 +1,18 @@
 begin
   let VType = @(intrinsic(vtype)) in
   let Unit = @(intrinsic(unit)) in
-    (#i8 :: exists (#Int8 = ScalarType as @(intrinsic(i8)) : VType) . Unit)
-  * (#i16 :: exists (#Int16 = ScalarType as @(intrinsic(i16)) : VType) . Unit)
-  * (#i32 :: exists (#Int32 = ScalarType as @(intrinsic(i32)) : VType) . Unit)
-  * (#i64 :: exists (#Int64 = ScalarType as @(intrinsic(i64)) : VType) . Unit)
-  * (#u8 :: exists (#UInt8 = ScalarType as @(intrinsic(u8)) : VType) . Unit)
-  * (#u16 :: exists (#UInt16 = ScalarType as @(intrinsic(u16)) : VType) . Unit)
-  * (#u32 :: exists (#UInt32 = ScalarType as @(intrinsic(u32)) : VType) . Unit)
-  * (#u64 :: exists (#UInt64 = ScalarType as @(intrinsic(u64)) : VType) . Unit)
-  * (#f32 :: exists (#Float32 = ScalarType as @(intrinsic(f32)) : VType) . Unit)
-  * (#f64 :: exists (#Float64 = ScalarType as @(intrinsic(f64)) : VType) . Unit)
-  * (#char :: exists (#Char = ScalarType as @(intrinsic(char)) : VType) . Unit)
-  * (#string :: exists (#String = ScalarType as @(intrinsic(string)) : VType) . Unit)
-  * (#bytes :: exists (#Bytes = ScalarType as @(intrinsic(bytes)) : VType) . Unit)
+    (#i8 :: exists (= Int8 as @(intrinsic(i8)) : VType) . Unit)
+  * (#i16 :: exists (= Int16 as @(intrinsic(i16)) : VType) . Unit)
+  * (#i32 :: exists (= Int32 as @(intrinsic(i32)) : VType) . Unit)
+  * (#i64 :: exists (= Int64 as @(intrinsic(i64)) : VType) . Unit)
+  * (#u8 :: exists (= UInt8 as @(intrinsic(u8)) : VType) . Unit)
+  * (#u16 :: exists (= UInt16 as @(intrinsic(u16)) : VType) . Unit)
+  * (#u32 :: exists (= UInt32 as @(intrinsic(u32)) : VType) . Unit)
+  * (#u64 :: exists (= UInt64 as @(intrinsic(u64)) : VType) . Unit)
+  * (#f32 :: exists (= Float32 as @(intrinsic(f32)) : VType) . Unit)
+  * (#f64 :: exists (= Float64 as @(intrinsic(f64)) : VType) . Unit)
+  * (#char :: exists (= Char as @(intrinsic(char)) : VType) . Unit)
+  * (#string :: exists (= String as @(intrinsic(string)) : VType) . Unit)
+  * (#bytes :: exists (= Bytes as @(intrinsic(bytes)) : VType) . Unit)
   * Unit
 end

@@ -50,7 +50,7 @@ begin
   ) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (/String) = representations/string that
-  let (#Int64 = Int64, int64) = numeric/int64 that
+  let (= Int64, int64) = numeric/int64 that
   let (/OS; /stdio; /process) = system that
 
   ! (stdio/write_line) "hello" {
@@ -395,7 +395,7 @@ Open a fixed representation with its conventional field name:
 
 ```zydeco
 let (/String) = representations/string that
-let (#Int64 = Int64, int64) = numeric/int64 that
+let (= Int64, int64) = numeric/int64 that
 ```
 
 The second pattern binds both the type `Int64` and the operations package `int64`. Typical

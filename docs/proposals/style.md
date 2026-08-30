@@ -49,6 +49,19 @@ let pair = (left, right) in
 ret pair
 ```
 
+When the file itself is a parameterized term, such as a type family or a package constructor,
+write its parameters as leading `param` binders instead of naming a wrapper function and returning it:
+
+```zydeco
+param Bool : VType in
+exists (= Int64 as @(intrinsic(i64)) : VType) .
+  Numeric Bool Int64
+```
+
+The importing file binds the result under whatever name it chooses,
+so a wrapper name that is only returned once adds no information.
+Keep an ordinary `let` when the body references the binding more than once.
+
 The final term of a block determines what leaves the block.
 A library usually ends in a package; an executable ends in its main computation.
 Braces have a separate role: `{ computation }` is a thunk value.
@@ -157,7 +170,7 @@ Names should help the reader recognize the static role of an occurrence before c
 | Kinds, types, and type constructors | `UpperCamel` | `VType`, `Bool`, `Option`, `Monad` |
 | Data constructors | `+UpperCamel` | `+False`, `+Some`, `+Cons` |
 | Values, computations, destructors, and value fields | `lower_snake_case` | `read_line`, `fold`, `.bind` |
-| Type fields in packages | `UpperCamel` | `Bool = Bool`, `Option = Option` |
+| Type fields in packages | `UpperCamel` | `= Bool`, `= Option` |
 | Files and import binders | `lower_snake_case` | `monad.zy`, `monadic_basis` |
 
 The conventional metavariables carry additional information.

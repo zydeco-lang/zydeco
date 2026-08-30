@@ -2,10 +2,6 @@ begin
   let VType = @(intrinsic(vtype)) in
   let Unit = @(intrinsic(unit)) in
   let Numeric = @(import("../numeric.type.zy")) in
-  let UInt16 = @(intrinsic(u16)) in
-  let UInt16Instance (Bool : VType) =
-    exists (#UInt16 = ScalarType as UInt16 : VType) .
-      (#dictionary :: Numeric Bool ScalarType) * Unit
-  in
-  UInt16Instance
+  param Bool : VType in
+  exists (= UInt16 as @(intrinsic(u16)) : VType) . Numeric Bool UInt16
 end

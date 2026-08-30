@@ -43,11 +43,11 @@ Opening the public standard package positionally gives a source name to every en
 
 ```zydeco
 let (
-  #Bool = Bool,
-  #Option = Option,
-  #Result = Result,
-  #List = List,
-  #Int64 = Int64,
+  = Bool,
+  = Option,
+  = Result,
+  = List,
+  = Int64,
   ...,
   (/bool; /option; /result; /list; /int64; ...; /process)
 ) = make_std builtin in
@@ -231,7 +231,7 @@ A topic depends on a selected package boundary rather than on names inherited fr
 The derived integer and floating-point builders share algorithms across the fixed-width representations through
 explicitly annotated `forall` parameters. Their result types retain the input `Bool`, scalar, and `String`
 identities, and the numeric assembly wraps each returned dictionary in an instance package whose manifest field
-carries the carrier's public name, such as `#Int64` in `int64_instance`.
+carries the carrier's public name, such as `Int64` in `int64_instance`.
 The public system implementation remains one assembly package because `Reader`, `Writer`, and `OS` are abstract
 provider identities shared by `io`, `fs`, and `stdio`. Its host-facing operation contracts are nevertheless split
 into topic leaves, which is the modular boundary that does not duplicate those witnesses.

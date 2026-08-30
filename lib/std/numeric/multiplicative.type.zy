@@ -2,9 +2,7 @@ begin
   let VType = @(intrinsic(vtype)) in
   let Thk = @(intrinsic(thk)) in
   let Ret = @(intrinsic(ret)) in
-  let Multiplicative (A : VType) =
-      (#one :: A)
-    * (#mul :: Thk (A -> A -> Ret A))
-  in
-  Multiplicative
+  param A : VType in
+    (#one :: A)
+  * (#mul :: Thk (A -> A -> Ret A))
 end

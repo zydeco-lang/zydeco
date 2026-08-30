@@ -7,7 +7,7 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret) = core that
-  let (#Int64 = Int64, int64) = numeric/int64 that
+  let (= Int64, int64) = numeric/int64 that
   let (/process) = system that
 
   def Fn (A : VType) (B : CType) =

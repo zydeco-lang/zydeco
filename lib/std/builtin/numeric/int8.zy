@@ -10,15 +10,15 @@ begin
   ) in
   let Render (A : VType) = Thk (A -> Ret String) in
   exists
-    (#Int8 = ScalarType as @(intrinsic(i8)) : VType)
+    (= Int8 as @(intrinsic(i8)) : VType)
   .
-      (@[builtin(int8_add)] (#add :: Binary ScalarType))
-    * (@[builtin(int8_sub)] (#sub :: Binary ScalarType))
-    * (@[builtin(int8_mul)] (#mul :: Binary ScalarType))
-    * (@[builtin(int8_div)] (#div :: Binary ScalarType))
-    * (@[builtin(int8_mod)] (#mod :: Binary ScalarType))
-    * (@[builtin(int8_eq)] (#eq :: Branch ScalarType))
-    * (@[builtin(int8_lt)] (#lt :: Branch ScalarType))
-    * (@[builtin(int8_gt)] (#gt :: Branch ScalarType))
-    * (@[builtin(int8_to_string)] (#to_string :: Render ScalarType))
+      (@[builtin(int8_add)] (#add :: Binary Int8))
+    * (@[builtin(int8_sub)] (#sub :: Binary Int8))
+    * (@[builtin(int8_mul)] (#mul :: Binary Int8))
+    * (@[builtin(int8_div)] (#div :: Binary Int8))
+    * (@[builtin(int8_mod)] (#mod :: Binary Int8))
+    * (@[builtin(int8_eq)] (#eq :: Branch Int8))
+    * (@[builtin(int8_lt)] (#lt :: Branch Int8))
+    * (@[builtin(int8_gt)] (#gt :: Branch Int8))
+    * (@[builtin(int8_to_string)] (#to_string :: Render Int8))
 end

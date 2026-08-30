@@ -3,7 +3,7 @@ param (
   @(import("../builtin.zy"))
 ) in
 let (/VType; /CType; /Thk; /Ret; /Unit) = core in
-let (#Int64 = Int64, int64) = numeric/int64 in
+let (= Int64, int64) = numeric/int64 in
 begin
   def Bool =
     data

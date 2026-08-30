@@ -3,8 +3,8 @@ begin
     (/numeric; /system) :
     @(import("../../std/builtin.zy"))
   ) that
-  let (#Int64 = Int64, int64) = numeric/int64 that
-  let (#UInt64 = UInt64, uint64) = numeric/uint64 that
+  let (= Int64, int64) = numeric/int64 that
+  let (= UInt64, uint64) = numeric/uint64 that
   let (/OS; /process) = system that
 
   do positive_box <- ! (int64/add) 4611686018427387903 1;

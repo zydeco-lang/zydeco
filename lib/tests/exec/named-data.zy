@@ -5,7 +5,7 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/Unit) = core that
-  let (#Int64 = Int64, int64) = numeric/int64 that
+  let (= Int64, int64) = numeric/int64 that
   let (/process) = system that
 
   def Packet =

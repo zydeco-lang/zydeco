@@ -9,28 +9,25 @@ Manifest existential fields provide precisely that equality.
 The standard library gives each width its own instance shape, named after the disclosed carrier:
 
 ```zydeco
-Int64Instance Bool =
-  exists (#Int64 = ScalarType as Int64 : VType) .
-    (#dictionary :: Numeric Bool ScalarType) *
-    Unit
+param Bool : VType in
+exists (= Int64 as @(intrinsic(i64)) : VType) .
+  Numeric Bool Int64
 ```
 
 A single generic family `NumericInstance Bool Representation` would force one role label onto every carrier,
 reintroducing the renaming step at each open, so the family was dissolved into per-width types under
 `lib/std/numeric/instance/`.
 
-An integer instance therefore contains a static field `#Int64` with the equation `Int64 ≡ Int64`
-and a dynamic dictionary checked at `Numeric Bool Int64`.
-The floating-point instance similarly discloses `#Float64`.
-Opening either package substitutes the manifest definition, so results at the bound name remain definitionally
+An integer instance therefore packages one manifest field `Int64`, defined as the primitive `i64` intrinsic,
+with the dictionary as the package body, checked at `Numeric Bool Int64`.
+The floating-point instance similarly discloses `Float64`.
+The manifest binder is a pun on the field name, so no intermediate role variable stands between the field
+and its public name.
+Opening the package substitutes the manifest definition, so results at the bound name remain definitionally
 equal to the concrete representation:
 
 ```zydeco
-let (
-  #Int64 = Int64,
-  #dictionary = operations,
-  ()
-) = numeric/int64_instance in
+let (= Int64, operations) = numeric/int64_instance in
   use_numeric Int64 operations
 ```
 
@@ -49,7 +46,7 @@ choose among overlapping dictionaries, or enforce laws.
 Consequently, coherence follows from ordinary lexical binding and explicit value flow.
 
 The same representation can later express associated types by adding abstract
-or manifest static fields before the dictionary value.
+or manifest static fields before the dictionary body.
 Such an extension must respect the current package-dependent-arrow restriction
 that abstract witnesses occur in the leading static telescope.
 No associated type or implicit-resolution mechanism is introduced by this proposal.

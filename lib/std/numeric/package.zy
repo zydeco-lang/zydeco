@@ -20,75 +20,75 @@ begin
     let (/VType; /CType; /Thk; /Ret; /Unit) = core in
     let (/String) = representations/string in
     param (/Bool; /bool) in
-    let (#Int8 = Int8, int8) = numeric/int8 in
-    let (#Int16 = Int16, int16) = numeric/int16 in
-    let (#Int32 = Int32, int32) = numeric/int32 in
-    let (#Int64 = Int64, int64) = numeric/int64 in
-    let (#UInt8 = UInt8, uint8) = numeric/uint8 in
-    let (#UInt16 = UInt16, uint16) = numeric/uint16 in
-    let (#UInt32 = UInt32, uint32) = numeric/uint32 in
-    let (#UInt64 = UInt64, uint64) = numeric/uint64 in
-    let (#Float32 = Float32, float32) = numeric/float32 in
-    let (#Float64 = Float64, float64) = numeric/float64 in
+    let (= Int8, int8) = numeric/int8 in
+    let (= Int16, int16) = numeric/int16 in
+    let (= Int32, int32) = numeric/int32 in
+    let (= Int64, int64) = numeric/int64 in
+    let (= UInt8, uint8) = numeric/uint8 in
+    let (= UInt16, uint16) = numeric/uint16 in
+    let (= UInt32, uint32) = numeric/uint32 in
+    let (= UInt64, uint64) = numeric/uint64 in
+    let (= Float32, float32) = numeric/float32 in
+    let (= Float64, float64) = numeric/float64 in
     let (/operations = int8_module; /dictionary = int8_dictionary) =
       make_integer core Bool Int8 String bool int8 0 1
     in
     let int8_instance : Int8Instance Bool =
-      (= Int8, #dictionary = int8_dictionary, ())
+      (= Int8, int8_dictionary)
     in
     let (/operations = int16_module; /dictionary = int16_dictionary) =
       make_integer core Bool Int16 String bool int16 0 1
     in
     let int16_instance : Int16Instance Bool =
-      (= Int16, #dictionary = int16_dictionary, ())
+      (= Int16, int16_dictionary)
     in
     let (/operations = int32_module; /dictionary = int32_dictionary) =
       make_integer core Bool Int32 String bool int32 0 1
     in
     let int32_instance : Int32Instance Bool =
-      (= Int32, #dictionary = int32_dictionary, ())
+      (= Int32, int32_dictionary)
     in
     let (/operations = int64_module; /dictionary = int64_dictionary) =
       make_integer core Bool Int64 String bool int64 0 1
     in
     let int64_instance : Int64Instance Bool =
-      (= Int64, #dictionary = int64_dictionary, ())
+      (= Int64, int64_dictionary)
     in
     let (/operations = uint8_module; /dictionary = uint8_dictionary) =
       make_integer core Bool UInt8 String bool uint8 0 1
     in
     let uint8_instance : UInt8Instance Bool =
-      (= UInt8, #dictionary = uint8_dictionary, ())
+      (= UInt8, uint8_dictionary)
     in
     let (/operations = uint16_module; /dictionary = uint16_dictionary) =
       make_integer core Bool UInt16 String bool uint16 0 1
     in
     let uint16_instance : UInt16Instance Bool =
-      (= UInt16, #dictionary = uint16_dictionary, ())
+      (= UInt16, uint16_dictionary)
     in
     let (/operations = uint32_module; /dictionary = uint32_dictionary) =
       make_integer core Bool UInt32 String bool uint32 0 1
     in
     let uint32_instance : UInt32Instance Bool =
-      (= UInt32, #dictionary = uint32_dictionary, ())
+      (= UInt32, uint32_dictionary)
     in
     let (/operations = uint64_module; /dictionary = uint64_dictionary) =
       make_integer core Bool UInt64 String bool uint64 0 1
     in
     let uint64_instance : UInt64Instance Bool =
-      (= UInt64, #dictionary = uint64_dictionary, ())
+      (= UInt64, uint64_dictionary)
     in
     let (/operations = float32_module; /dictionary = float32_dictionary) =
       make_float core Bool Float32 String bool float32 0.0 1.0
     in
     let float32_instance : Float32Instance Bool =
-      (= Float32, #dictionary = float32_dictionary, ())
+      (= Float32, float32_dictionary)
     in
     let (/operations = float64_module; /dictionary = float64_dictionary) =
       make_float core Bool Float64 String bool float64 0.0 1.0
     in
     let float64_instance : Float64Instance Bool =
-      (= Float64, #dictionary = float64_dictionary, ())
+      (= Float64, float64_dictionary)
     in
     (
       #numeric = (

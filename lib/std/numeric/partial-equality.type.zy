@@ -2,10 +2,8 @@ begin
   let VType = @(intrinsic(vtype)) in
   let Thk = @(intrinsic(thk)) in
   let Ret = @(intrinsic(ret)) in
-  let PartialEquality (Bool : VType)
-    (A : VType) =
-      (#eq :: Thk (A -> A -> Ret Bool))
-    * (#ne :: Thk (A -> A -> Ret Bool))
-  in
-  PartialEquality
+  param Bool : VType in
+  param A : VType in
+    (#eq :: Thk (A -> A -> Ret Bool))
+  * (#ne :: Thk (A -> A -> Ret Bool))
 end

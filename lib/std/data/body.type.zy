@@ -196,27 +196,13 @@ begin
       )
   in
 
-  let DataBody (Bool : VType)
-    (
-      Option : VType -> (
-        VType
-      )
-    )
-    (
-      Result : VType -> (
-        VType
-      ) -> VType
-    )
-    (
-      List : VType -> (
-        VType
-      )
-    ) =
-      (#bool :: BoolModule Bool)
-    * (#option :: OptionModule Bool Option)
-    * (#result :: ResultModule Bool Result)
-    * (#list :: ListModule Bool Option List Int64)
-    * Unit
-  in
-  DataBody
+  param Bool : VType in
+  param Option : VType -> VType in
+  param Result : VType -> VType -> VType in
+  param List : VType -> VType in
+    (#bool :: BoolModule Bool)
+  * (#option :: OptionModule Bool Option)
+  * (#result :: ResultModule Bool Result)
+  * (#list :: ListModule Bool Option List Int64)
+  * Unit
 end
