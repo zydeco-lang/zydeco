@@ -1356,6 +1356,7 @@ impl<'arena> PrettyFormatter<'arena> {
             | Term::Arrow(_) => self.infix_chain(term, InfixOperator::Arrow),
             | Term::Sigma(_) => self.scoped_form(term, ScopedForm::Sigma),
             | Term::Exists(exists) => self.exists(term, exists),
+            | Term::Pack(pack) => self.pack(term, pack),
             | Term::Prod(_) => self.infix_chain(term, InfixOperator::Product),
             | Term::Thunk(Thunk(body)) => self.delimited_with_spacing(
                 Some(term.into()),
@@ -1749,6 +1750,35 @@ impl<'arena> PrettyFormatter<'arena> {
             anchors: LayoutAnchors { first: first.binder.into(), last: last.binder.into() },
         };
         self.scoped_join(head, ".", self.term_fragment(body), self.indent()).document
+    }
+
+    fn pack(&self, term: TermId, pack: &'arena Pack) -> RcDoc<'arena> {
+        let Pack { parameters, body } = pack;
+        let Some((first, rest)) = parameters.split_first() else {
+            unreachable!("the parser requires at least one pack parameter")
+        };
+        let parameters = std::iter::once(self.existential_parameter(first))
+            .chain(rest.iter().map(|parameter| self.existential_parameter(parameter)))
+            .collect::<Vec<_>>();
+        let head = self.parameter_telescope(
+            RcDoc::text("pack"),
+            BoundaryIntent::before_existential_parameter(term, first.binder),
+            &parameters,
+        );
+        let components = match &self.arena.terms[body] {
+            | Term::Paren(Paren(terms)) => terms.as_slice(),
+            | _ => std::slice::from_ref(body),
+        };
+        let components =
+            components.iter().map(|component| self.annotated_term_fragment(*component)).collect();
+        head.append(RcDoc::line()).nest(self.indent()).append(self.delimited_with_spacing(
+            Some(term.into()),
+            "where",
+            components,
+            ",",
+            "end",
+            DelimiterSpacing::Spaced,
+        ))
     }
 
     fn existential_parameter(&self, parameter: &ExistentialParameter) -> LayoutFragment<'arena> {

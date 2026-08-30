@@ -89,6 +89,17 @@ pub struct ManifestExists {
     pub body: TermId,
 }
 
+/// One manifest binder of a desugared `pack` telescope.
+///
+/// Unlike `ManifestExists`, the body is a package payload rather than a type,
+/// so the layer synthesizes a value at the corresponding existential type.
+#[derive(Clone, Debug)]
+pub struct Pack {
+    pub binder: PatId,
+    pub definition: TermId,
+    pub body: TermId,
+}
+
 /// The ordinary type definitions used to elaborate a monadic block.
 #[derive(Clone, Debug)]
 pub struct MonadicBasis {
@@ -200,6 +211,7 @@ pub enum Term<Ref> {
     // Forall(Forall),
     Sigma(Sigma),
     ManifestExists(Box<ManifestExists>),
+    Pack(Box<Pack>),
     // Prod(Prod),
     // Exists(Exists),
     Thunk(Thunk<TermId>),
@@ -233,6 +245,12 @@ impl<Ref> From<MetaT<TermId>> for Term<Ref> {
 impl<Ref> From<ManifestExists> for Term<Ref> {
     fn from(value: ManifestExists) -> Self {
         Self::ManifestExists(Box::new(value))
+    }
+}
+
+impl<Ref> From<Pack> for Term<Ref> {
+    fn from(value: Pack) -> Self {
+        Self::Pack(Box::new(value))
     }
 }
 

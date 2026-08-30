@@ -63,6 +63,10 @@ pub enum Tok<'input> {
     Sigma,
     #[token("exists")]
     Exists,
+    #[token("pack")]
+    Pack,
+    #[token("where")]
+    Where,
 
     #[regex(r"[\+-]?(?:[0-9]+\.[0-9]+(?:[eE][\+-]?[0-9]+)?|[0-9]+[eE][\+-]?[0-9]+)")]
     FloatLit(&'input str),
@@ -214,7 +218,9 @@ impl<'source> LexicalTokens<'source> {
             | Tok::Comatch
             | Tok::Forall
             | Tok::Sigma
-            | Tok::Exists => Kind::Keyword,
+            | Tok::Exists
+            | Tok::Pack
+            | Tok::Where => Kind::Keyword,
             | Tok::FloatLit(_) | Tok::IntLit(_) => Kind::Number,
             | Tok::StrLit(_) | Tok::CharLit(_) => Kind::String,
             | Tok::ParenOpen
@@ -322,6 +328,8 @@ impl Display for Tok<'_> {
             | Tok::Forall => write!(f, "forall"),
             | Tok::Sigma => write!(f, "sigma"),
             | Tok::Exists => write!(f, "exists"),
+            | Tok::Pack => write!(f, "pack"),
+            | Tok::Where => write!(f, "where"),
             | Tok::FloatLit(s) => write!(f, "FloatLit({})", s),
             | Tok::IntLit(s) => write!(f, "IntLit({})", s),
             | Tok::StrLit(s) => write!(f, "StrLit(\"{}\")", s.escape_debug()),

@@ -40,6 +40,7 @@ impl<'arena> GrammarContext<'arena> {
             | Term::Ctor(_)
             | Term::Match(_)
             | Term::CoMatch(_)
+            | Term::Pack(_)
             | Term::Lit(_) => RenderedTermClass::Term(TermPrecedence::Atom),
             | Term::Proj(_) => RenderedTermClass::Term(TermPrecedence::Projection),
             | Term::App(_) | Term::Dtor(_) => RenderedTermClass::Term(TermPrecedence::Application),

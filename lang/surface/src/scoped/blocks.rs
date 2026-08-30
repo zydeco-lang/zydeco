@@ -145,6 +145,13 @@ impl<'a> BlockCandidateCollector<'a> {
                     .flatten()
                     .collect()
             }
+            | Term::Pack(term) => {
+                let b::Pack { binder, definition, body } = &**term;
+                [self.pattern(*binder), self.term(*definition), self.term(*body)]
+                    .into_iter()
+                    .flatten()
+                    .collect()
+            }
             | Term::Do(term) => {
                 let b::Bind { binder, bindee, tail } = &**term;
                 [self.pattern(*binder), self.term(*bindee), self.term(*tail)]

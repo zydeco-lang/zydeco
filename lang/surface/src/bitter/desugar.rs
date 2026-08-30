@@ -246,6 +246,28 @@ impl ExistentialTelescope {
             })
         })
     }
+
+    /// Nest package layers over the payload, rejecting abstract binders.
+    fn quantify_pack(self, body: b::TermId, desugarer: &mut Desugarer) -> Result<b::TermId> {
+        let Self { parameters, source: telescope_source } = self;
+        parameters.into_iter().rev().try_fold(body, |body, parameter| {
+            let ExistentialParameter { annotations, form, source } = parameter;
+            let term = match form {
+                | ExistentialParameterForm::Abstract(binder) => {
+                    let span = binder.span(desugarer).clone().make(binder);
+                    return Err(DesugarError::PackParameterNotManifest(span));
+                }
+                | ExistentialParameterForm::Manifest { binder, definition } => {
+                    b::Pack { binder, definition, body }.into()
+                }
+            };
+            let term = Alloc::alloc(desugarer, term, telescope_source);
+            let term = annotations.into_iter().rev().fold(term, |term, meta| {
+                Alloc::alloc(desugarer, b::MetaT(meta, term).into(), source)
+            });
+            Ok(term)
+        })
+    }
 }
 
 impl CompilerPass for SourceUnitDesugarer<'_> {
@@ -640,6 +662,12 @@ impl Desugar for t::TermId {
                 // exists -> ann
                 let vtype = desugarer.vtype(self.into());
                 Alloc::alloc(desugarer, b::Ann { tm: exists, ty: vtype }.into(), self.into())
+            }
+            | Tm::Pack(term) => {
+                let t::Pack { parameters, body } = term;
+                let telescope = ExistentialTelescope::desugar(parameters, self.into(), desugarer)?;
+                let body = body.desugar(desugarer)?;
+                telescope.quantify_pack(body, desugarer)?
             }
             | Tm::Thunk(term) => {
                 let t::Thunk(body) = term;

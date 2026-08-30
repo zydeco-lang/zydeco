@@ -43,6 +43,8 @@ pub enum DesugarError {
     QuantifierParameterNotPattern(Sp<t::CoPatId>),
     #[error("A manifest `as` pattern is only valid as an existential parameter")]
     ManifestPatternOutsideExistential(Sp<t::PatId>),
+    #[error("A `pack` parameter must disclose its witness: `(X as A : K)`")]
+    PackParameterNotManifest(Sp<b::PatId>),
     #[error("The binding has both `!` and `fix` modifiers")]
     CompWhileFix(Sp<b::PatId>),
 }

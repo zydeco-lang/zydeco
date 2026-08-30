@@ -76,6 +76,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
             | Term::Pi(t) => t.pretty(f),
             | Term::Sigma(t) => t.pretty(f),
             | Term::ManifestExists(t) => t.pretty(f),
+            | Term::Pack(t) => t.pretty(f),
             | Term::Thunk(t) => t.pretty(f),
             | Term::Force(t) => t.pretty(f),
             | Term::Ret(t) => t.pretty(f),
@@ -320,6 +321,21 @@ impl<'a> Pretty<'a, Formatter<'a>> for ManifestExists {
             definition.pretty(f),
             RcDoc::text(") . "),
             body.pretty(f),
+        ])
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Pack {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let Pack { binder, definition, body } = self;
+        RcDoc::concat([
+            RcDoc::text("pack ("),
+            binder.pretty(f),
+            RcDoc::text(" as "),
+            definition.pretty(f),
+            RcDoc::text(") where "),
+            body.pretty(f),
+            RcDoc::text(" end"),
         ])
     }
 }

@@ -229,6 +229,46 @@ inside its payload annotation, then wraps that payload with the ordinary named p
 The compact punned spelling `exists (= X as A : K) . B` expands to `exists (#X = ((X as A) : K)) . B`;
 `exists` itself adds no field-punning rule.
 
+### Package Introduction
+
+The comma form introduces a package only in check mode, because an expected type must say
+which leading components are witnesses. Recovering the abstract body of an existential
+from its concrete payload alone would be abduction, so synthesis instead requires the
+witness bindings to appear in the term. `pack` is that introduction form:
+
+```zydeco
+pack (X as A : K) (Y as B) where c_1, c_2, ..., c_n end
+```
+
+The telescope reuses existential parameters, except that every binder must be manifest
+(`X as A`): an introduction discloses its witness, while abstract binders remain the
+type-level `exists` spelling. The classifier is optional and defaults to the kind
+synthesized by the definition. Named fields and puns behave exactly as in `exists`.
+The `where` body is one nonempty comma sequence at the tuple-element level,
+so annotations, named components, and a trailing comma are all available;
+a single component is the payload itself, and `where () end` packs the explicit `Unit`.
+
+Synthesis assigns the package its type directly:
+
+```text
+Γ ⊢ A : K                     Γ, X ↦ A : K ⊢ v ⇑ B
+─────────────────────────────────────────────────────  PACK-SYN
+Γ ⊢ pack (X as A : K) . v ⇑ exists (X as A : K) . B
+```
+
+The payload must synthesize as a value, and its type `B` becomes the existential body
+verbatim. The abstract binder therefore reaches the body only through the payload's own
+annotations; an unannotated payload such as `pack (X as Int64) where 42 end`
+synthesizes the degenerate but sound `exists (X as Int64 : VType) . Int64`.
+The manifest stays in the synthesized type, so a `pack`-produced value joins a manifest
+expected existential by the ordinary least-upper-bound operation.
+Checking against a type first synthesizes and then joins with the expectation.
+
+Both spellings elaborate to the same witness-prefixed value,
+so elimination, dynamics, and the backends cannot distinguish them.
+The comma form remains preferable when the package type is already known,
+while `pack` removes the annotation from the enclosing binding.
+
 Type patterns make one additional distinction visible.
 A named pattern `(#field = X) : (#field :: K)` binds `X : K` to the payload,
 whereas a plain pattern `Whole : (#field :: K)` binds the complete named type.

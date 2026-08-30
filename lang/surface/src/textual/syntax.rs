@@ -145,6 +145,16 @@ pub struct Exists {
     pub body: TermId,
 }
 
+/// `pack (X as A : K) ... where c_1, ..., c_n end`
+///
+/// The body is one `Paren` node over the comma-separated payload components,
+/// so a single component unwraps and multiple components form one tuple.
+#[derive(Clone, Debug)]
+pub struct Pack {
+    pub parameters: Vec<ExistentialParameter>,
+    pub body: TermId,
+}
+
 /// `let x = a in ...`
 #[derive(Clone, Debug)]
 pub struct GenLet {
@@ -241,6 +251,7 @@ pub enum Term {
     Arrow(ArrowU<TermId>),
     Sigma(Sigma),
     Exists(Exists),
+    Pack(Pack),
     Prod(ProdU<TermId>),
     Thunk(Thunk<TermId>),
     Force(Force<TermId>),

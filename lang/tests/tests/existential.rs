@@ -7,6 +7,10 @@ impl ExistentialCase {
         SourceCase::check(source)
     }
 
+    fn run(source: &str) -> Result<(), CaseError> {
+        SourceCase::run(source)
+    }
+
     fn assert_type_error(source: &str) {
         match Self::check(source) {
             | Err(error) if error.is_type_error() => {}
@@ -401,4 +405,173 @@ end
 "#,
     )
     .unwrap();
+}
+
+#[test]
+fn pack_synthesizes_a_manifest_existential_package() {
+    ExistentialCase::check(
+        r#"
+begin
+  let Transparent =
+    exists (X as Int64 : VType) . X
+  that
+  def consume : Thk (Transparent -> Ret Int64) = {
+    fn ((X, value) : Transparent) => ret value
+  } that
+
+  let packed = pack (X as Int64 : VType) where (42 : X) end in
+  { ! consume packed }
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn pack_infers_the_witness_classifier_from_the_definition() {
+    ExistentialCase::check(
+        r#"
+begin
+  let Transparent =
+    exists (X as Int64 : VType) . X
+  that
+  def consume : Thk (Transparent -> Ret Int64) = {
+    fn ((X, value) : Transparent) => ret value
+  } that
+
+  let packed = pack (X as Int64) where (42 : X) end in
+  { ! consume packed }
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn pack_takes_the_payload_type_verbatim() {
+    ExistentialCase::check(
+        r#"
+begin
+  let Degenerate =
+    exists (X as Int64 : VType) . Int64
+  that
+  def consume : Thk (Degenerate -> Ret Int64) = {
+    fn ((X, value) : Degenerate) => ret value
+  } that
+
+  let packed = pack (X as Int64 : VType) where 42 end in
+  { ! consume packed }
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn pack_supports_witness_telescopes() {
+    ExistentialCase::check(
+        r#"
+begin
+  let Mixed =
+    exists (X as Int64 : VType) .
+    exists (Y as Char : VType) .
+      X
+  that
+  def unpack : Thk (Mixed -> Ret Int64) = {
+    fn ((X, Y, value) : Mixed) => ret value
+  } that
+
+  let mixed = pack (X as Int64 : VType) (Y as Char : VType) where (7 : X), end in
+  { ! unpack mixed }
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn pack_composes_named_witness_fields() {
+    ExistentialCase::check(
+        r#"
+begin
+  let CounterLibrary =
+    exists (#Counter = ((Representation as Int64) : VType)) .
+      (#zero :: Representation)
+  that
+  def consume : Thk (CounterLibrary -> Ret Int64) = {
+    fn ((= Counter, = zero) : CounterLibrary) => ret zero
+  } that
+
+  let library =
+    pack (#Counter = ((Representation as Int64) : VType))
+    where #zero = (0 : Representation) end
+  in
+  { ! consume library }
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn pack_checks_against_an_expected_existential() {
+    ExistentialCase::check(
+        r#"
+begin
+  let Transparent =
+    exists (X as Int64 : VType) . X
+  that
+  def packed : Transparent = pack (X as Int64 : VType) where (42 : X) end that
+  def consume : Thk (Transparent -> Ret Int64) = {
+    fn ((X, value) : Transparent) => ret value
+  } that
+
+  { ! consume packed }
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn pack_elaborates_to_a_runtime_package() {
+    ExistentialCase::run(
+        r#"
+begin
+  let Box = exists (X as Int64 : VType) . X that
+  let unpack = fn ((X, value) : Box) => value that
+  let packed = pack (X as Int64 : VType) where (0 : X) end in
+  let result : Int64 = unpack packed in
+  ! exit result
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn rejects_an_abstract_pack_parameter() {
+    match ExistentialCase::check(
+        r#"
+begin
+  let packed = pack (X : VType) where (42 : X) end in
+  packed
+end
+"#,
+    ) {
+        | Err(_) => {}
+        | Ok(()) => panic!("expected an error, but the program was accepted"),
+    }
+}
+
+#[test]
+fn rejects_a_computation_payload() {
+    ExistentialCase::assert_type_error(
+        r#"
+begin
+  let packed = pack (X as Int64 : VType) where ret 42 end in
+  packed
+end
+"#,
+    );
 }

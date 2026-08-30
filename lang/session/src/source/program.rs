@@ -269,6 +269,14 @@ impl<'graph> TextualProgramBuilder<'graph> {
                 body: self.term(source, body)?,
             }
             .into(),
+            | t::Term::Pack(t::Pack { parameters, body }) => t::Pack {
+                parameters: parameters
+                    .into_iter()
+                    .map(|parameter| self.existential_parameter(source, parameter))
+                    .collect::<Result<Vec<_>, _>>()?,
+                body: self.term(source, body)?,
+            }
+            .into(),
             | t::Term::Prod(t::Prod(left, right)) => {
                 t::Prod(self.term(source, left)?, self.term(source, right)?).into()
             }

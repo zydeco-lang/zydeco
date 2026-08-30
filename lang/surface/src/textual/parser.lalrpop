@@ -41,6 +41,8 @@ extern {
         "forall" => Tok::Forall,
         "exists" => Tok::Exists,
         "sigma" => Tok::Sigma,
+        "pack" => Tok::Pack,
+        "where" => Tok::Where,
 
         "FloatLit" => Tok::FloatLit(<&'input str>),
         "IntLit" => Tok::IntLit(<&'input str>),
@@ -135,6 +137,8 @@ MetaId: String = {
     "forall" => "forall".into(),
     "exists" => "exists".into(),
     "sigma" => "sigma".into(),
+    "pack" => "pack".into(),
+    "where" => "where".into(),
 };
 
 VarName: VarName = <MixedId> => VarName(<>);
@@ -373,6 +377,17 @@ Term: Term = {
     "match" <scrut:TermId> <arms:(<Matcher>)*> "end" => Match {<>}.into(),
     // comatch
     "comatch" <arms:(<CoMatcher>)*> "end" => CoMatchParam {<>}.into(),
+    // package introduction; the `where` body is one nonempty comma sequence,
+    // kept as a `Paren` so payload components share tuple desugaring.
+    // Abstract parameters are rejected during desugaring with a pointed error.
+    "pack" <parameters:ExistentialParameter+> "where" <l:@L> <first:TermAnnId>
+        <rest:("," <TermAnnId>)*> <_trailing:","?> <r:@R> "end" => {
+        let mut components = Vec::new();
+        components.push(first);
+        components.extend(rest);
+        let body = parser.term(Span::new(l, r).make(Term::Paren(Paren(components))));
+        Pack { parameters, body }.into()
+    },
     <Literal> => <>.into(),
 
     // Named projection is a tight postfix value operator.

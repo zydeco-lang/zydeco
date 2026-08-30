@@ -8,7 +8,7 @@ use crate::{
             Alias, Ann, Appli, Block, BuiltinRole, BuiltinValueRole, CoPatId, ContextBind, DefId,
             DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists, Hole, IntegerLiteral,
             IntegerOperation, IntegerType, IntrinsicRole, Label, Literal, ManifestPattern, Meta,
-            MetaT, Named, Param, Paren, Parser, PatId, Pattern, Placement, Prod, Proj,
+            MetaT, Named, Pack, Param, Paren, Parser, PatId, Pattern, Placement, Prod, Proj,
             ProjectionPattern, SourceUnit, Term, TermId,
         },
     },
@@ -948,6 +948,60 @@ fn parses_interleaved_abstract_and_manifest_existential_parameters() {
         panic!("expected the telescope body to be a type variable")
     };
     assert_eq!(body.plain(), "X");
+}
+
+#[test]
+fn parses_pack_introduction_with_a_manifest_telescope() {
+    let source = "pack (X as Int64 : VType) (Y as Char) where (0 : X), 'a' : Y, end";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::Pack(Pack { parameters, body }) = &parser.arena.terms[&term] else {
+        panic!("expected a package introduction")
+    };
+    let [classified, inferred] = parameters.as_slice() else {
+        panic!("expected two manifest parameters")
+    };
+    let Pattern::Ann(Ann { tm: manifest, ty: kind }) = &parser.arena.pats[&classified.binder]
+    else {
+        panic!("expected the first parameter to carry its classifier")
+    };
+    assert!(matches!(parser.arena.pats[manifest], Pattern::Manifest(_)));
+    let Term::Var(kind) = &parser.arena.terms[kind] else { panic!("expected a classifier") };
+    let Pattern::Manifest(ManifestPattern { binder, .. }) = &parser.arena.pats[&inferred.binder]
+    else {
+        panic!("expected the second parameter to infer its classifier")
+    };
+    let Pattern::Var(inner) = &parser.arena.pats[binder] else {
+        panic!("expected the inferred parameter to bind a type variable")
+    };
+    let Term::Paren(Paren(components)) = &parser.arena.terms[body] else {
+        panic!("expected the payload to retain its comma sequence")
+    };
+    assert_eq!(components.len(), 2);
+
+    assert_eq!(kind.plain(), "VType");
+    assert_eq!(parser.arena.defs[inner].plain(), "Y");
+
+    let rendered = term.ugly(&Formatter::new(&parser.arena));
+    let mut roundtrip = Parser::new();
+    parser::SingleTermParser::new()
+        .parse(&rendered, &mut roundtrip, lexer::Lexer::new(&rendered))
+        .expect("rendered package introductions must reparse");
+}
+
+#[test]
+fn rejects_an_empty_pack_payload() {
+    let source = "pack (X as Int64 : VType) where end";
+    let mut parser = Parser::new();
+    assert!(
+        parser::SingleTermParser::new()
+            .parse(source, &mut parser, lexer::Lexer::new(source))
+            .is_err(),
+        "a package payload must list at least one component"
+    );
 }
 
 #[test]

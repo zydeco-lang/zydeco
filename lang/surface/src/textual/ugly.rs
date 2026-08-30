@@ -82,6 +82,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
             | Term::Sigma(t) => t.pretty(f),
             | Term::Prod(t) => t.pretty(f),
             | Term::Exists(t) => t.pretty(f),
+            | Term::Pack(t) => t.pretty(f),
             | Term::Thunk(t) => t.pretty(f),
             | Term::Force(t) => t.pretty(f),
             | Term::Ret(t) => t.pretty(f),
@@ -336,6 +337,23 @@ impl<'a> Pretty<'a, Formatter<'a>> for Exists {
             RcDoc::text(" "),
         );
         RcDoc::concat([RcDoc::text("exists "), parameters, RcDoc::text(" . "), body.pretty(f)])
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Pack {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let Pack { parameters, body } = self;
+        let parameters = RcDoc::intersperse(
+            parameters.iter().map(|parameter| parameter.pretty(f)),
+            RcDoc::text(" "),
+        );
+        RcDoc::concat([
+            RcDoc::text("pack "),
+            parameters,
+            RcDoc::text(" where "),
+            body.pretty(f),
+            RcDoc::text(" end"),
+        ])
     }
 }
 

@@ -182,6 +182,15 @@ impl DeepClone for b::TermId {
                 }
                 .into()
             }
+            | b::Term::Pack(term) => {
+                let b::Pack { binder, definition, body } = &**term;
+                b::Pack {
+                    binder: binder.deep_clone(desugarer),
+                    definition: definition.deep_clone(desugarer),
+                    body: body.deep_clone(desugarer),
+                }
+                .into()
+            }
             | b::Term::Thunk(term) => {
                 let b::Thunk(term) = term;
                 let term = term.deep_clone(desugarer);
