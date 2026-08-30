@@ -486,10 +486,11 @@ begin
     let ! panic (message : String) : OS =
       ! stdio_write_error_line message { fn _ => ! (process/exit) 1 }
     in
-    (
-      = Path,
-      = IoErrorKind,
-      = IoError,
+    pack
+        (= Path : VType) is Path
+        (= IoErrorKind : VType) is IoErrorKind
+        (= IoError : VType) is IoError
+    where
       #io = (
         = not_found,
         = permission_denied,
@@ -539,6 +540,6 @@ begin
         #exit = process/exit
       ),
       ()
-    )
+    end
   end
 end

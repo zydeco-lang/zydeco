@@ -270,7 +270,12 @@ existential body. Sealing then rewrites the witness's occurrences in `B` into th
 so the body stays dependent on the seal exactly where the payload speaks about the witness;
 what the payload leaves concrete — such as a literal's primitive type or an intrinsic the
 witness already normalizes to — stays concrete, and the emitted body is then simply
-witness-independent, which is sound. An unannotated payload such as
+witness-independent, which is sound. The rewrite catches a witness that elaborates to an
+abstraction of its own: opaque definitions such as data types, and the abstract witnesses
+a package opening introduces. A witness defined as a transparent type function has no such
+abstraction by the time the payload is elaborated, so sealing such a witness leaves the
+body concrete; the comma form, whose inversion checks the payload against the expected
+body under a skolem, remains the spelling for that case. An unannotated payload such as
 `pack (X : VType) is Int64 where 42 end` therefore synthesizes the degenerate but sound
 `exists (X : VType) . Int64`. The manifest form stays in the synthesized type, so a
 disclosed value joins a manifest expected existential by the ordinary least-upper-bound

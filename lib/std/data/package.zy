@@ -366,11 +366,12 @@ begin
       }
   that
 
-  (
-    = Bool,
-    = Option,
-    = Result,
-    = List,
+  pack
+      (= Bool : VType) is Bool
+      (= Option : VType -> VType) is Option
+      (= Result : VType -> VType -> VType) is Result
+      (= List : VType -> VType) is List
+  where
     #bool = (
       = true,
       = false,
@@ -423,6 +424,6 @@ begin
       = get
     ),
     ()
-  )
+  end
 end
 -- end module Data
