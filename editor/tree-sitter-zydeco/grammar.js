@@ -39,6 +39,7 @@ const KEYWORDS = [
   'sigma',
   'pack',
   'where',
+  'is',
 ];
 
 module.exports = grammar({
@@ -284,15 +285,24 @@ module.exports = grammar({
     ),
 
     // Package introduction; the payload is one nonempty comma sequence
-    // between `where` and `end`, sharing tuple item syntax.
+    // between `where` and `end`, sharing tuple item syntax. A parameter
+    // may seal its witness as atomic evidence after `is`.
     pack_expression: $ => seq(
       'pack',
-      repeat1(field('parameter', $.existential_parameter)),
+      repeat1(field('parameter', $.pack_parameter)),
       'where',
       field('component', $._term_item),
       repeat(seq(',', field('component', $._term_item))),
       optional(','),
       'end',
+    ),
+
+    pack_parameter: $ => seq(
+      field('parameter', $.existential_parameter),
+      optional(seq(
+        'is',
+        field('evidence', $._atomic_term),
+      )),
     ),
 
     lambda_expression: $ => prec.right(PREC.binding, seq(

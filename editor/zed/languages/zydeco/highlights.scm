@@ -82,6 +82,7 @@
   "sigma"
   "pack"
   "where"
+  "is"
 ] @keyword
 
 ; Operators and punctuation

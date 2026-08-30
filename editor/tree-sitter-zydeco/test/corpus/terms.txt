@@ -302,11 +302,12 @@ pack (Representation as Int64) where (42 : Representation) end
 
 (source_file
   body: (pack_expression
-    parameter: (existential_parameter
-      binder: (variable_pattern
-        name: (upper_identifier))
-      definition: (variable
-        name: (upper_identifier)))
+    parameter: (pack_parameter
+      parameter: (existential_parameter
+        binder: (variable_pattern
+          name: (upper_identifier))
+        definition: (variable
+          name: (upper_identifier))))
     component: (parenthesized_term
       (term_annotation
         term: (integer_literal)
@@ -331,19 +332,20 @@ int64_instance / dictionary
       binder: (variable_pattern
         name: (lower_identifier))
       value: (pack_expression
-        parameter: (existential_parameter
-          binder: (punned_pattern
-            name: (upper_identifier))
-          definition: (metadata_expression
-            metadata: (metadata_sugar
-              value: (meta_application
-                callee: (meta_identifier
-                  (lower_identifier))
-                arguments: (meta_arguments
-                  (meta_identifier
-                    (lower_identifier))))))
-          classifier: (variable
-            name: (upper_identifier)))
+        parameter: (pack_parameter
+          parameter: (existential_parameter
+            binder: (punned_pattern
+              name: (upper_identifier))
+            definition: (metadata_expression
+              metadata: (metadata_sugar
+                value: (meta_application
+                  callee: (meta_identifier
+                    (lower_identifier))
+                  arguments: (meta_arguments
+                    (meta_identifier
+                      (lower_identifier))))))
+            classifier: (variable
+              name: (upper_identifier))))
         component: (variable
           name: (lower_identifier))))
     placement: (placement)
@@ -351,3 +353,39 @@ int64_instance / dictionary
       value: (variable
         name: (lower_identifier))
       field: (lower_identifier))))
+
+==================
+Package introduction sealed evidence
+==================
+
+pack (B : VType) is Bool (#Counter = C : VType) is (List Bool) where 0, end
+
+---
+
+(source_file
+  body: (pack_expression
+    parameter: (pack_parameter
+      parameter: (existential_parameter
+        binder: (pattern_annotation
+          pattern: (variable_pattern
+            name: (upper_identifier))
+          type: (variable
+            name: (upper_identifier))))
+      evidence: (variable
+        name: (upper_identifier)))
+    parameter: (pack_parameter
+      parameter: (existential_parameter
+        binder: (named_pattern
+          name: (field_identifier)
+          pattern: (pattern_annotation
+            pattern: (variable_pattern
+              name: (upper_identifier))
+            type: (variable
+              name: (upper_identifier)))))
+      evidence: (parenthesized_term
+        (application_expression
+          function: (variable
+            name: (upper_identifier))
+          argument: (variable
+            name: (upper_identifier)))))
+    component: (integer_literal)))
