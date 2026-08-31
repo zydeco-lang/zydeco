@@ -115,7 +115,7 @@ begin
     that
 
     pack
-        (= StateExn : VType -> VType -> VType -> CType) is StateExn
+        (= StateExn as StateExn : VType -> VType -> VType -> CType)
     where
       = mo_state_exn,
       = state_ops,
@@ -124,8 +124,7 @@ begin
       = put,
       = raise,
       = catch,
-      = run_state_exn,
-      ()
+      = run_state_exn
     end
   end
 end

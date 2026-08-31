@@ -271,10 +271,15 @@ Four checker facts determine how far the modularization can fold, and each one i
 for the layout above.
 
 - A bare record literal has no principal type, so a package-producing source needs either a
-  whole-file annotation or a synthesizing final form. Sealed `pack` introductions synthesize
-  their existential type, so every standard-library package source ends in one and imports its
-  peers without a companion; `.zyi` annotations remain only for the numeric builders, whose
-  transparent parametric contracts do not end in a synthesizing pack.
+  whole-file annotation or a synthesizing final form. Every standard-library package source now
+  ends in a synthesizing `pack` introduction and imports its peers without a companion;
+  `.zyi` annotations remain only for the numeric builders, whose transparent parametric
+  contracts do not end in a pack. Within a synthesized telescope, disclosure follows the
+  payload: a witness the payload types apply, such as the control modules' `State` under
+  `Monad (State S)`, is disclosed with `as`, since a transparent type function has no
+  abstraction left for `is` to seal and the body would otherwise stay concrete while the
+  opening binds the seal; a generative data type the payload never applies, such as the
+  public package's `Bool`, seals with `is`.
 - A `def`-bound data type cannot cross a file boundary by disclosure, because an annotation can
   only name a definition through an import and only compiler intrinsics are canonical importable
   terms. Existential witnesses therefore remain the only cross-file naming device for library

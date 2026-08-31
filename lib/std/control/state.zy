@@ -82,7 +82,7 @@ begin
     that
 
     pack
-        (= State : VType -> VType -> CType) is State
+        (= State as State : VType -> VType -> CType)
         (= MonadState as MonadState : VType -> (VType -> CType) -> CType)
     where
       = mo_state,
@@ -91,8 +91,7 @@ begin
       = put,
       = modify,
       = run_state,
-      = eval_state,
-      ()
+      = eval_state
     end
   end
 end
