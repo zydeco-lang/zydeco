@@ -653,7 +653,7 @@ mod tests {
         );
 
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/std/data/body.type.zy")
+            .join("../../lib/std/data/package.type.zy")
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
