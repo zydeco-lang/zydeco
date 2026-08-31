@@ -29,7 +29,6 @@ im = { workspace = true }
 indexmap = { workspace = true }
 rustc-hash = { workspace = true }
 thiserror = { workspace = true }
-ariadne = { workspace = true }
 pretty = { workspace = true }
 
 [lib]

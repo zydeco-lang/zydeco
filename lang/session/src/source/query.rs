@@ -11,7 +11,7 @@ use std::{
 };
 use thiserror::Error;
 use zydeco_statics::{
-    CheckedSource, RejectedSource, TyckObservation, TyckReports,
+    CheckedSource, RejectedSource, TyckDiagnostics, TyckObservation,
     arena::StaticsArena,
     syntax::{Fillable, PackPi, TermAnnId, Type},
 };
@@ -26,7 +26,7 @@ use zydeco_utils::arena::ArenaAccess;
 #[derive(Debug)]
 pub enum AnalysisOutcome {
     Checked { root: TermAnnId },
-    Rejected { reports: TyckReports },
+    Rejected { diagnostics: TyckDiagnostics },
 }
 
 impl AnalysisOutcome {
@@ -37,10 +37,10 @@ impl AnalysisOutcome {
         }
     }
 
-    pub fn reports(&self) -> Option<&TyckReports> {
+    pub fn diagnostics(&self) -> Option<&TyckDiagnostics> {
         match self {
             | Self::Checked { .. } => None,
-            | Self::Rejected { reports } => Some(reports),
+            | Self::Rejected { diagnostics } => Some(diagnostics),
         }
     }
 }
@@ -384,16 +384,14 @@ impl CompilerSession {
         Ok(normalized_type_at(self, root, id))
     }
 
-    /// The type-check reports recorded for one root, computed on demand from
-    /// its analysis. Each report carries its primary source span so that
-    /// per-file consumers can filter it.
-    pub fn reports(
+    /// The type-check diagnostics recorded for one root, computed on demand.
+    pub fn diagnostics(
         &self, root: impl AsRef<Path>,
-    ) -> Result<Option<zydeco_statics::check::TyckReports>, AnalysisError> {
+    ) -> Result<Option<zydeco_statics::check::TyckDiagnostics>, AnalysisError> {
         let root = self
             .source_input(root.as_ref().to_path_buf())
             .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
-        Ok(reports_at(self, root))
+        Ok(diagnostics_at(self, root))
     }
 
     /// Coverage failures of one root, computed on demand from its analysis.
@@ -567,21 +565,22 @@ fn analyze_source(
         }) => (statics.clone_keyed_indexes(), AnalysisOutcome::Checked { root }, observations),
         | zydeco_statics::SourceCheckOutcome::Rejected(RejectedSource {
             statics,
-            reports,
+            diagnostics,
             observations,
-        }) => (statics.clone_keyed_indexes(), AnalysisOutcome::Rejected { reports }, observations),
+        }) => {
+            (statics.clone_keyed_indexes(), AnalysisOutcome::Rejected { diagnostics }, observations)
+        }
     };
     Ok(Arc::new(ProgramAnalysis { graph, spans, scoped, statics, outcome, observations }))
 }
 
-/// The type-check reports recorded for one analyzed root, computed on demand
-/// from its analysis. Each report carries its primary source span.
+/// The type-check diagnostics recorded for one analyzed root, computed on demand.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
-fn reports_at(
+fn diagnostics_at(
     db: &dyn SourceQueryDb, root: SourceInput,
-) -> Option<zydeco_statics::check::TyckReports> {
+) -> Option<zydeco_statics::check::TyckDiagnostics> {
     let analysis = analyze_source(db, root).ok()?;
-    analysis.outcome().reports().cloned()
+    analysis.outcome().diagnostics().cloned()
 }
 
 /// The normalized type recorded for a typed type node of one analyzed root.
@@ -870,7 +869,9 @@ mod tests {
         let analysis = session.analyze(&root).unwrap();
 
         assert!(analysis.outcome().root().is_none());
-        assert!(analysis.outcome().reports().is_some_and(|reports| !reports.reports.is_empty()));
+        assert!(
+            analysis.outcome().diagnostics().is_some_and(|diagnostics| !diagnostics.is_empty())
+        );
     }
 
     #[test]
@@ -948,7 +949,9 @@ end
         let session = CompilerSession::default();
 
         let analysis = session.analyze(&root).unwrap();
-        assert!(analysis.outcome().reports().is_some_and(|reports| !reports.reports.is_empty()));
+        assert!(
+            analysis.outcome().diagnostics().is_some_and(|diagnostics| !diagnostics.is_empty())
+        );
 
         let coverage = session.coverage(&root).unwrap();
         assert!(coverage.iter().any(|error| {

@@ -2625,7 +2625,6 @@ dependencies = [
 name = "zydeco-statics"
 version = "0.3.0"
 dependencies = [
- "ariadne",
  "auto_impl",
  "derive_more",
  "im",

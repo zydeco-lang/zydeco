@@ -4,8 +4,9 @@ use std::{
     sync::Arc,
 };
 use tower_lsp::lsp_types::{
-    Diagnostic, DiagnosticSeverity, DocumentSymbol, Hover, HoverContents, Location, MarkupContent,
-    MarkupKind, NumberOrString, Position, Range, SemanticToken, SymbolKind, Url,
+    Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DocumentSymbol, Hover,
+    HoverContents, Location, MarkupContent, MarkupKind, NumberOrString, Position, Range,
+    SemanticToken, SymbolKind, Url,
 };
 use zydeco_session::{CompilerSession, ProgramAnalysis};
 use zydeco_statics::{
@@ -247,23 +248,46 @@ impl ProjectState {
                 })
             })
             .collect::<Vec<_>>();
-        if let Some(reports) = self.analysis.outcome().reports() {
-            diagnostics.extend(
-                reports
-                    .spans
+        if let Some(type_diagnostics) = self.analysis.outcome().diagnostics() {
+            diagnostics.extend(type_diagnostics.iter().filter_map(|diagnostic| {
+                // LSP diagnostics require a real per-file range. An internal failure without a
+                // source anchor remains available to non-file frontends instead of being
+                // misrepresented at the beginning of the root document.
+                let primary = diagnostic.primary.as_ref()?;
+                let diagnostic_path = self.span_file(&primary.span)?;
+                if diagnostic_path != file_path {
+                    return None;
+                }
+                let range = self.span_range(&primary.span)?;
+                let related_information = diagnostic
+                    .related
                     .iter()
-                    .flatten()
-                    .filter(|(path, _, _)| Self::normalize_path(path.as_path()) == file_path)
-                    .filter_map(|(_, range, message)| {
-                        Some(Diagnostic {
-                            range: self.byte_range(&file_path, range.clone())?,
-                            severity: Some(DiagnosticSeverity::ERROR),
-                            source: Some("zydeco".to_owned()),
-                            message: message.clone(),
-                            ..Diagnostic::default()
+                    .filter_map(|related| {
+                        let path = self.span_file(&related.span)?;
+                        Some(DiagnosticRelatedInformation {
+                            location: Location {
+                                uri: Url::from_file_path(path).ok()?,
+                                range: self.span_range(&related.span)?,
+                            },
+                            message: related.message.clone(),
                         })
-                    }),
-            );
+                    })
+                    .collect::<Vec<_>>();
+                let message = match diagnostic.help.as_slice() {
+                    | [] => diagnostic.message.clone(),
+                    | help => format!("{}\n\nHelp: {}", diagnostic.message, help.join("\nHelp: ")),
+                };
+                Some(Diagnostic {
+                    range,
+                    severity: Some(DiagnosticSeverity::ERROR),
+                    code: Some(NumberOrString::String(diagnostic.code.to_string())),
+                    source: Some("zydeco".to_owned()),
+                    message,
+                    related_information: (!related_information.is_empty())
+                        .then_some(related_information),
+                    ..Diagnostic::default()
+                })
+            }));
         }
         diagnostics
     }
@@ -435,7 +459,10 @@ mod tests {
         semantic::SemanticHighlighter,
     };
     use std::{collections::HashMap, path::Path};
-    use tower_lsp::lsp_types::{HoverContents, Position, SemanticToken, SemanticTokensLegend, Url};
+    use tower_lsp::lsp_types::{
+        DiagnosticSeverity, HoverContents, NumberOrString, Position, Range, SemanticToken,
+        SemanticTokensLegend, Url,
+    };
     use zydeco_utils::span::{FileMap, LineCol};
 
     fn fenced_zydeco_sources(markdown: &str) -> Vec<&str> {
@@ -871,11 +898,40 @@ mod tests {
         let overrides = HashMap::from([(path.clone(), broken.clone())]);
         let (project, _session) = ProjectState::load(&path, &overrides).unwrap();
         let diagnostics = project.diagnostics(&path);
+        let diagnostic = diagnostics
+            .iter()
+            .find(|diagnostic| {
+                diagnostic.code == Some(NumberOrString::String("tyck.type-expected".to_owned()))
+            })
+            .expect("the invalid application should have a type diagnostic");
 
-        assert!(diagnostics.iter().any(|diagnostic| {
-            diagnostic.severity == Some(tower_lsp::lsp_types::DiagnosticSeverity::ERROR)
-                && diagnostic.source.as_deref() == Some("zydeco")
-        }));
+        assert_eq!(diagnostic.severity, Some(DiagnosticSeverity::ERROR));
+        assert_eq!(diagnostic.source.as_deref(), Some("zydeco"));
+        assert_eq!(diagnostic.range, Range::new(Position::new(13, 2), Position::new(13, 5)));
+        assert!(diagnostic.related_information.is_none());
+    }
+
+    #[test]
+    fn missing_annotation_diagnostics_use_the_innermost_source_span() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../lib/tests/fail/annotation.zy")
+            .canonicalize()
+            .unwrap();
+        let (project, _session) = ProjectState::load(&path, &HashMap::new()).unwrap();
+        let diagnostics = project.diagnostics(&path);
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("expected one focused diagnostic, got {diagnostics:?}")
+        };
+
+        assert_eq!(
+            diagnostic.code,
+            Some(NumberOrString::String("tyck.missing-annotation".to_owned()))
+        );
+        assert_eq!(diagnostic.range.start.line, 14);
+        assert_eq!(diagnostic.range.start.character, 8);
+        assert!(diagnostic.message.contains("constructor `+True`"));
+        assert!(diagnostic.message.contains("Help: add a type ascription"));
+        assert!(diagnostic.related_information.is_none());
     }
 
     #[test]

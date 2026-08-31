@@ -64,7 +64,13 @@ fn a_rejected_root_returns_a_failure_status_with_source_diagnostics() {
         Command::new(env!("CARGO_BIN_EXE_zydeco")).arg("check").arg(root).output().unwrap();
 
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("Missing annotation"));
+    let diagnostic = String::from_utf8_lossy(&output.stderr);
+    assert!(diagnostic.contains("tyck.missing-annotation"));
+    assert!(diagnostic.contains("Cannot infer the data type of constructor `+True`"));
+    assert!(diagnostic.contains("add a type ascription"));
+    assert!(!diagnostic.contains("when tycking"));
+    assert!(!diagnostic.contains("Error location:"));
+    assert!(diagnostic.lines().count() <= 12, "diagnostic was unexpectedly noisy: {diagnostic}");
 }
 
 #[test]

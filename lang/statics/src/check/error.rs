@@ -1,11 +1,8 @@
-//! Error messages in the type checker.
-//! Shows the error message, where to look at in the source code, and the stack trace.
+//! Source-directed type-checking diagnostics and internal checker traces.
 
 use crate::validate::CoverageError;
 use crate::*;
-use ariadne::{Label, Report, ReportKind};
-use std::ops::Range;
-use zydeco_utils::span::{PathDisplay, Span, internal_ariadne_span};
+use zydeco_utils::span::Span;
 
 pub use zydeco_utils::err::*;
 
@@ -88,6 +85,181 @@ pub enum TyckError {
     NotInlinableSeal(AbstId),
 }
 
+/// Stable source-facing category of a type-checking diagnostic.
+///
+/// The checker keeps the payload-rich [`TyckError`] internally. Frontends use
+/// this payload-free category as a diagnostic code.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum TyckDiagnosticCode {
+    MissingAnnotation,
+    MissingSeal,
+    MissingSolution,
+    UnconstrainedInference,
+    OccursCheck,
+    MissingStructure,
+    SortMismatch,
+    SignatureNotType,
+    KindMismatch,
+    TypeMismatch,
+    TypeExpected,
+    NamedLabelMismatch,
+    MissingNamedTypeField,
+    AmbiguousNamedTypeField,
+    MissingNamedField,
+    DuplicateNamedField,
+    PatternAliasRequiresValue,
+    RefutablePatternAlias,
+    RefutableFieldProjectionPattern,
+    UnknownDataConstructor,
+    UnknownCoDataDestructor,
+    CopatternStepMismatch,
+    OverlappingCopatternClauses,
+    MultiplePackPiCopatternClauses,
+    NonExhaustiveCopattern,
+    Coverage,
+    PackageWitnessesUnavailable,
+    PackageWitnessArityMismatch,
+    EscapingExistential,
+    InvalidBuiltinAttachment,
+    InvalidBuiltinSignature,
+    ConflictingBuiltinRole,
+    MissingBuiltinTypeRole,
+    AmbiguousBuiltinTypeRole,
+    IntegerLiteralOutOfRange,
+    FloatLiteralOutOfRange,
+    Expressivity,
+    NotInlinable,
+    NotInlinableSeal,
+}
+
+impl TyckDiagnosticCode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            | Self::MissingAnnotation => "tyck.missing-annotation",
+            | Self::MissingSeal => "tyck.missing-seal",
+            | Self::MissingSolution => "tyck.missing-solution",
+            | Self::UnconstrainedInference => "tyck.unconstrained-inference",
+            | Self::OccursCheck => "tyck.occurs-check",
+            | Self::MissingStructure => "tyck.missing-structure",
+            | Self::SortMismatch => "tyck.sort-mismatch",
+            | Self::SignatureNotType => "tyck.signature-not-type",
+            | Self::KindMismatch => "tyck.kind-mismatch",
+            | Self::TypeMismatch => "tyck.type-mismatch",
+            | Self::TypeExpected => "tyck.type-expected",
+            | Self::NamedLabelMismatch => "tyck.named-label-mismatch",
+            | Self::MissingNamedTypeField => "tyck.missing-named-type-field",
+            | Self::AmbiguousNamedTypeField => "tyck.ambiguous-named-type-field",
+            | Self::MissingNamedField => "tyck.missing-named-field",
+            | Self::DuplicateNamedField => "tyck.duplicate-named-field",
+            | Self::PatternAliasRequiresValue => "tyck.pattern-alias-requires-value",
+            | Self::RefutablePatternAlias => "tyck.refutable-pattern-alias",
+            | Self::RefutableFieldProjectionPattern => "tyck.refutable-field-projection-pattern",
+            | Self::UnknownDataConstructor => "tyck.unknown-data-constructor",
+            | Self::UnknownCoDataDestructor => "tyck.unknown-codata-destructor",
+            | Self::CopatternStepMismatch => "tyck.copattern-step-mismatch",
+            | Self::OverlappingCopatternClauses => "tyck.overlapping-copattern-clauses",
+            | Self::MultiplePackPiCopatternClauses => "tyck.multiple-pack-pi-copattern-clauses",
+            | Self::NonExhaustiveCopattern => "tyck.non-exhaustive-copattern",
+            | Self::Coverage => "tyck.coverage",
+            | Self::PackageWitnessesUnavailable => "tyck.package-witnesses-unavailable",
+            | Self::PackageWitnessArityMismatch => "tyck.package-witness-arity-mismatch",
+            | Self::EscapingExistential => "tyck.escaping-existential",
+            | Self::InvalidBuiltinAttachment => "tyck.invalid-builtin-attachment",
+            | Self::InvalidBuiltinSignature => "tyck.invalid-builtin-signature",
+            | Self::ConflictingBuiltinRole => "tyck.conflicting-builtin-role",
+            | Self::MissingBuiltinTypeRole => "tyck.missing-builtin-type-role",
+            | Self::AmbiguousBuiltinTypeRole => "tyck.ambiguous-builtin-type-role",
+            | Self::IntegerLiteralOutOfRange => "tyck.integer-literal-out-of-range",
+            | Self::FloatLiteralOutOfRange => "tyck.float-literal-out-of-range",
+            | Self::Expressivity => "tyck.expressivity",
+            | Self::NotInlinable => "tyck.not-inlinable",
+            | Self::NotInlinableSeal => "tyck.not-inlinable-seal",
+        }
+    }
+}
+
+impl std::fmt::Display for TyckDiagnosticCode {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+impl From<&TyckError> for TyckDiagnosticCode {
+    fn from(error: &TyckError) -> Self {
+        match error {
+            | TyckError::MissingAnnotation => Self::MissingAnnotation,
+            | TyckError::MissingSeal => Self::MissingSeal,
+            | TyckError::MissingSolution(_) => Self::MissingSolution,
+            | TyckError::UnconstrainedInference(_) => Self::UnconstrainedInference,
+            | TyckError::OccursCheck(_) => Self::OccursCheck,
+            | TyckError::MissingStructure(_) => Self::MissingStructure,
+            | TyckError::SortMismatch => Self::SortMismatch,
+            | TyckError::SignatureNotType => Self::SignatureNotType,
+            | TyckError::KindMismatch => Self::KindMismatch,
+            | TyckError::TypeMismatch { .. } => Self::TypeMismatch,
+            | TyckError::TypeExpected { .. } => Self::TypeExpected,
+            | TyckError::NamedLabelMismatch { .. } => Self::NamedLabelMismatch,
+            | TyckError::MissingNamedTypeField { .. } => Self::MissingNamedTypeField,
+            | TyckError::AmbiguousNamedTypeField { .. } => Self::AmbiguousNamedTypeField,
+            | TyckError::MissingNamedField { .. } => Self::MissingNamedField,
+            | TyckError::DuplicateNamedField { .. } => Self::DuplicateNamedField,
+            | TyckError::PatternAliasRequiresValue => Self::PatternAliasRequiresValue,
+            | TyckError::RefutablePatternAlias => Self::RefutablePatternAlias,
+            | TyckError::RefutableFieldProjectionPattern => Self::RefutableFieldProjectionPattern,
+            | TyckError::UnknownDataConstructor(_) => Self::UnknownDataConstructor,
+            | TyckError::UnknownCoDataDestructor(_) => Self::UnknownCoDataDestructor,
+            | TyckError::CopatternStepMismatch { .. } => Self::CopatternStepMismatch,
+            | TyckError::OverlappingCopatternClauses => Self::OverlappingCopatternClauses,
+            | TyckError::MultiplePackPiCopatternClauses => Self::MultiplePackPiCopatternClauses,
+            | TyckError::NonExhaustiveCopattern { .. } => Self::NonExhaustiveCopattern,
+            | TyckError::Coverage(_) => Self::Coverage,
+            | TyckError::PackageWitnessesUnavailable { .. } => Self::PackageWitnessesUnavailable,
+            | TyckError::PackageWitnessArityMismatch { .. } => Self::PackageWitnessArityMismatch,
+            | TyckError::EscapingExistential { .. } => Self::EscapingExistential,
+            | TyckError::InvalidBuiltinAttachment { .. } => Self::InvalidBuiltinAttachment,
+            | TyckError::InvalidBuiltinSignature(_) => Self::InvalidBuiltinSignature,
+            | TyckError::ConflictingBuiltinRole { .. } => Self::ConflictingBuiltinRole,
+            | TyckError::MissingBuiltinTypeRole { .. } => Self::MissingBuiltinTypeRole,
+            | TyckError::AmbiguousBuiltinTypeRole { .. } => Self::AmbiguousBuiltinTypeRole,
+            | TyckError::IntegerLiteralOutOfRange { .. } => Self::IntegerLiteralOutOfRange,
+            | TyckError::FloatLiteralOutOfRange { .. } => Self::FloatLiteralOutOfRange,
+            | TyckError::Expressivity(_) => Self::Expressivity,
+            | TyckError::NotInlinable(_) => Self::NotInlinable,
+            | TyckError::NotInlinableSeal(_) => Self::NotInlinableSeal,
+        }
+    }
+}
+
+/// One source label carried independently of any frontend renderer.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct TyckDiagnosticLabel {
+    pub span: Span,
+    pub message: String,
+}
+
+/// A presentation-neutral type-checking diagnostic.
+///
+/// The CLI and TUI render this with Ariadne, while the language server maps the
+/// same spans to LSP ranges. Parent checker tasks are deliberately absent:
+/// related labels represent semantic relationships rather than syntax nesting.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct TyckDiagnostic {
+    pub code: TyckDiagnosticCode,
+    pub message: String,
+    pub primary: Option<TyckDiagnosticLabel>,
+    pub related: Vec<TyckDiagnosticLabel>,
+    pub help: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+enum MissingAnnotationSubject {
+    Constructor(CtorName),
+    EmptyMatch,
+    CoMatch,
+    PatternHole,
+    Unspecified,
+}
+
 #[derive(Clone)]
 pub struct TyckErrorEntry {
     pub(crate) error: TyckError,
@@ -97,30 +269,14 @@ pub struct TyckErrorEntry {
 }
 
 impl<'a> Tycker<'a> {
-    /// Resolve a span through the merged program's source map.
-    fn ariadne_span(&self, span: &Span) -> (PathDisplay, Range<usize>) {
-        self.spans
-            .source_map()
-            .and_then(|map| map.ariadne_range(*span))
-            .unwrap_or_else(internal_ariadne_span)
+    fn statics_term_source_span(&self, term: TermId) -> Option<Span> {
+        self.statics.terms.source(&term).map(|term| *term.span(self))
     }
 
-    fn statics_term_ariadne_span(&self, term: TermId) -> Option<(PathDisplay, Range<usize>)> {
-        self.statics.terms.source(&term).map(|term| self.ariadne_span(term.span(self)))
-    }
-
-    fn statics_pat_ariadne_span(&self, pat: PatId) -> Option<(PathDisplay, Range<usize>)> {
-        self.statics.pats.source(&pat).map(|pat| self.ariadne_span(pat.span(self)))
-    }
-
-    fn type_ariadne_span(&self, ty: &TypeId) -> Option<(PathDisplay, Range<usize>)> {
-        self.statics_term_ariadne_span((*ty).into())
-    }
-
-    fn inference_site_ariadne_span(&self, site: InferenceSite) -> (PathDisplay, Range<usize>) {
+    fn inference_site_source_span(&self, site: InferenceSite) -> Span {
         match site {
-            | InferenceSite::Term(term) => self.ariadne_span(term.span(self)),
-            | InferenceSite::Pattern(pattern) => self.ariadne_span(pattern.span(self)),
+            | InferenceSite::Term(term) => *term.span(self),
+            | InferenceSite::Pattern(pattern) => *pattern.span(self),
         }
     }
 
@@ -446,40 +602,41 @@ impl<'a> Tycker<'a> {
         s
     }
 
-    /// Get the primary span for an error (where the error actually occurred).
-    pub(super) fn error_primary_span(
-        &self, error: &TyckError,
-    ) -> Option<(PathDisplay, Range<usize>)> {
+    /// Get the source span carried directly by an error payload.
+    fn error_source_span(&self, error: &TyckError) -> Option<Span> {
         match error {
-            | TyckError::TypeMismatch { expected: _, found } => {
-                // Use the found type's span as primary
-                self.type_ariadne_span(found)
-            }
-            | TyckError::TypeExpected { found, .. } => self.type_ariadne_span(found),
-            | TyckError::MissingNamedField { found, .. }
-            | TyckError::DuplicateNamedField { found, .. } => self.type_ariadne_span(found),
-            | TyckError::MissingStructure(ty) => self.type_ariadne_span(ty),
             | TyckError::PackageWitnessesUnavailable { package } => {
-                self.statics_term_ariadne_span((*package).into())
+                self.statics_term_source_span((*package).into())
             }
-            | TyckError::EscapingExistential { result, .. } => self.type_ariadne_span(result),
             | TyckError::MissingSolution(fills) | TyckError::UnconstrainedInference(fills) => {
-                fills.first().map(|fill| self.inference_site_ariadne_span(self.statics.fills[fill]))
+                fills.first().map(|fill| self.inference_site_source_span(self.statics.fills[fill]))
             }
             | TyckError::OccursCheck(fill) => {
-                Some(self.inference_site_ariadne_span(self.statics.fills[fill]))
+                Some(self.inference_site_source_span(self.statics.fills[fill]))
             }
-            | TyckError::NotInlinable(def) => Some(self.ariadne_span(def.span(self))),
+            | TyckError::NotInlinable(def) => Some(*def.span(self)),
             | TyckError::NotInlinableSeal(abst) => {
-                // AbstId doesn't have a direct span, but we can get it from the hint if available
                 use zydeco_utils::arena::ArenaAccess;
-                self.statics.abst_hints.get(abst).map(|hint| self.ariadne_span(hint.span(self)))
+                self.statics.abst_hints.get(abst).map(|hint| *hint.span(self))
             }
             | TyckError::Coverage(error) => {
-                self.statics_term_ariadne_span(error.computation().into())
+                self.statics_term_source_span(error.computation().into())
             }
             | _ => None,
         }
+    }
+
+    /// The innermost source term or pattern active when an error was raised.
+    fn task_source_span(&self, stack: &im::Vector<TyckTask>) -> Option<Span> {
+        stack.iter().rev().find_map(|task| match task {
+            | TyckTask::Pat(pattern, _) => Some(*pattern.span(self)),
+            | TyckTask::Term(term, _) => Some(*term.span(self)),
+            | TyckTask::Lub(_, _)
+            | TyckTask::SignatureGen(_)
+            | TyckTask::StructureGen(_)
+            | TyckTask::MonadicLiftPat(_)
+            | TyckTask::MonadicLiftTerm(_) => None,
+        })
     }
 
     /// Get the error message text.
@@ -611,169 +768,169 @@ impl<'a> Tycker<'a> {
         }
     }
 
-    /// Create an Ariadne report for this error entry.
-    pub fn error_entry_report(
-        &self, TyckErrorEntry { error, blame, stack }: TyckErrorEntry,
-    ) -> Report<'static, (PathDisplay, Range<usize>)> {
-        use ariadne::ColorGenerator;
-        let mut colors = ColorGenerator::new();
-        let primary_color = colors.next();
-
-        // Determine primary span (where the error occurred)
-        let primary_span = self
-            .error_primary_span(&error)
-            .or_else(|| {
-                // If no primary span in error, try to get from the last stack frame
-                stack.last().and_then(|task| match task {
-                    | TyckTask::Pat(pat, _) => Some(self.ariadne_span(pat.span(self))),
-                    | TyckTask::Term(term, _) => Some(self.ariadne_span(term.span(self))),
+    fn missing_annotation_subject(&self, stack: &im::Vector<TyckTask>) -> MissingAnnotationSubject {
+        stack
+            .iter()
+            .rev()
+            .find_map(|task| match task {
+                | TyckTask::Term(term, _) => match &self.scoped.terms[term] {
+                    | su::Term::Ctor(su::Ctor(name, _)) => {
+                        Some(MissingAnnotationSubject::Constructor(name.clone()))
+                    }
+                    | su::Term::Match(su::Match { arms, .. }) if arms.is_empty() => {
+                        Some(MissingAnnotationSubject::EmptyMatch)
+                    }
+                    | su::Term::CoMatchClauses(_) | su::Term::CoMatch(_) => {
+                        Some(MissingAnnotationSubject::CoMatch)
+                    }
                     | _ => None,
-                })
+                },
+                | TyckTask::Pat(pattern, _)
+                    if matches!(self.scoped.pats[pattern], su::Pattern::Hole(_)) =>
+                {
+                    Some(MissingAnnotationSubject::PatternHole)
+                }
+                | TyckTask::Pat(_, _)
+                | TyckTask::Lub(_, _)
+                | TyckTask::SignatureGen(_)
+                | TyckTask::StructureGen(_)
+                | TyckTask::MonadicLiftPat(_)
+                | TyckTask::MonadicLiftTerm(_) => None,
             })
-            .unwrap_or_else(|| (PathDisplay::from(std::path::PathBuf::from("<internal>")), 0..0));
+            .unwrap_or(MissingAnnotationSubject::Unspecified)
+    }
 
-        let error_msg = self.error_message(&error);
-        let mut report =
-            Report::build(ReportKind::Error, primary_span.clone()).with_message(&error_msg);
+    fn contextual_error_message(&self, error: &TyckError, stack: &im::Vector<TyckTask>) -> String {
+        match error {
+            | TyckError::MissingAnnotation => match self.missing_annotation_subject(stack) {
+                | MissingAnnotationSubject::Constructor(constructor) => {
+                    format!("Cannot infer the data type of constructor `+{constructor}`")
+                }
+                | MissingAnnotationSubject::EmptyMatch => {
+                    "Cannot infer the result type of an empty match".to_owned()
+                }
+                | MissingAnnotationSubject::CoMatch => {
+                    "Cannot infer the type of this comatch".to_owned()
+                }
+                | MissingAnnotationSubject::PatternHole => {
+                    "Cannot infer the type of this pattern hole".to_owned()
+                }
+                | MissingAnnotationSubject::Unspecified => self.error_message(error),
+            },
+            | _ => self.error_message(error),
+        }
+    }
 
-        // Add labels for the error itself if we have specific error spans
-        match &error {
-            | TyckError::TypeMismatch { expected, found } => {
-                let expected_span = self.type_ariadne_span(expected);
-                let found_span = self.type_ariadne_span(found);
-                if let Some(found_span) = found_span {
-                    report = report.with_label(
-                        Label::new(found_span)
-                            .with_message("found this type")
-                            .with_color(primary_color),
-                    );
+    fn primary_label_message(error: &TyckError) -> &'static str {
+        match error {
+            | TyckError::MissingAnnotation => "an annotation is required here",
+            | TyckError::MissingSeal => "a seal is required here",
+            | TyckError::MissingSolution(_) => "this hole needs a solution",
+            | TyckError::UnconstrainedInference(_) => "this pattern type remains unconstrained",
+            | TyckError::OccursCheck(_) => "the inference variable was introduced here",
+            | TyckError::TypeMismatch { .. } => "this term has the mismatched type",
+            | TyckError::TypeExpected { .. } => "this term has an incompatible type",
+            | TyckError::SignatureNotType => "this signature root is not a type",
+            | TyckError::KindMismatch => "this type has the wrong kind",
+            | TyckError::SortMismatch => "this term has the wrong sort",
+            | TyckError::Coverage(_) => "this match is not exhaustive",
+            | _ => "error occurs here",
+        }
+    }
+
+    fn diagnostic_help(&self, error: &TyckError, stack: &im::Vector<TyckTask>) -> Vec<String> {
+        match error {
+            | TyckError::MissingAnnotation => match self.missing_annotation_subject(stack) {
+                | MissingAnnotationSubject::Constructor(_) => vec![
+                    "add a type ascription to the constructor or otherwise provide an expected type"
+                        .to_owned(),
+                ],
+                | MissingAnnotationSubject::EmptyMatch => {
+                    vec!["add a result-type annotation to the empty match".to_owned()]
                 }
-                if let Some(expected_span) = expected_span {
-                    report = report.with_label(
-                        Label::new(expected_span)
-                            .with_message("expected this type")
-                            .with_color(colors.next()),
-                    );
+                | MissingAnnotationSubject::CoMatch => {
+                    vec!["add a computation-type annotation to the comatch".to_owned()]
                 }
+                | MissingAnnotationSubject::PatternHole => {
+                    vec!["add a type annotation to the pattern".to_owned()]
+                }
+                | MissingAnnotationSubject::Unspecified => {
+                    vec!["add an annotation that supplies the expected kind or type".to_owned()]
+                }
+            },
+            | TyckError::MissingSeal => {
+                vec!["seal the recursive type definition before it refers to itself".to_owned()]
             }
+            | TyckError::UnconstrainedInference(_) => {
+                vec!["add a type annotation to the unconstrained pattern".to_owned()]
+            }
+            | TyckError::SignatureNotType => {
+                vec!["make the `.zyi` root evaluate to a type".to_owned()]
+            }
+            | _ => Vec::new(),
+        }
+    }
+
+    /// Lower one checker failure to a presentation-neutral source diagnostic.
+    pub(crate) fn error_entry_diagnostic(
+        &self, TyckErrorEntry { error, blame: _, stack }: TyckErrorEntry,
+    ) -> TyckDiagnostic {
+        let error_span = self.error_source_span(&error).filter(|span| !span.is_dummy());
+        let task_span = self.task_source_span(&stack).filter(|span| !span.is_dummy());
+        let primary_span = match error {
+            // Inference and coverage errors carry source entities whose spans are more precise
+            // than their enclosing checking task. Ordinary type ids may be interned or
+            // normalized, so their representative source span is not a reliable blame site.
+            | TyckError::MissingSolution(_)
+            | TyckError::UnconstrainedInference(_)
+            | TyckError::OccursCheck(_)
+            | TyckError::Coverage(_) => error_span.or(task_span),
+            | _ => task_span.or(error_span),
+        };
+        let primary = primary_span.map(|span| TyckDiagnosticLabel {
+            span,
+            message: Self::primary_label_message(&error).to_owned(),
+        });
+        let mut related = Vec::new();
+        let mut add_related = |span: Option<Span>, message: &'static str| {
+            let Some(span) = span.filter(|span| !span.is_dummy()) else { return };
+            if primary.as_ref().is_some_and(|primary| primary.span == span)
+                || related.iter().any(|label: &TyckDiagnosticLabel| label.span == span)
+            {
+                return;
+            }
+            related.push(TyckDiagnosticLabel { span, message: message.to_owned() });
+        };
+        match &error {
             | TyckError::MissingSolution(fills) | TyckError::UnconstrainedInference(fills) => {
                 let message = if matches!(error, TyckError::MissingSolution(_)) {
-                    "hole needs a solution"
+                    "this hole also needs a solution"
                 } else {
-                    "pattern type remains unconstrained"
+                    "this pattern type also remains unconstrained"
                 };
-                for fill in fills.iter() {
-                    let site = self.statics.fills[fill];
-                    let site_span = self.inference_site_ariadne_span(site);
-                    report = report.with_label(
-                        Label::new(site_span).with_message(message).with_color(primary_color),
-                    );
-                }
-            }
-            | TyckError::OccursCheck(fill) => {
-                let site_span = self.inference_site_ariadne_span(self.statics.fills[fill]);
-                report = report.with_label(
-                    Label::new(site_span)
-                        .with_message("inference variable introduced here")
-                        .with_color(primary_color),
-                );
+                fills.iter().skip(1).for_each(|fill| {
+                    add_related(
+                        Some(self.inference_site_source_span(self.statics.fills[fill])),
+                        message,
+                    )
+                });
             }
             | TyckError::NotInlinableSeal(abst) => {
                 use zydeco_utils::arena::ArenaAccess;
-                if let Some(hint) = self.statics.abst_hints.get(abst) {
-                    let hint_span = self.ariadne_span(hint.span(self));
-                    report = report.with_label(
-                        Label::new(hint_span)
-                            .with_message("defined here")
-                            .with_color(colors.next()),
-                    );
-                }
+                add_related(
+                    self.statics.abst_hints.get(abst).map(|hint| *hint.span(self)),
+                    "sealed type defined here",
+                );
             }
-            | _ => {
-                // Add a label for the primary span if we have one
-                if primary_span.0.as_path() != &std::path::PathBuf::from("<internal>") {
-                    report = report.with_label(
-                        Label::new(primary_span.clone())
-                            .with_message("error occurred here")
-                            .with_color(primary_color),
-                    );
-                }
-            }
+            | _ => {}
         }
-
-        // Add stack trace as labels (context)
-        for task in stack.iter().rev() {
-            let task_label = match task {
-                | TyckTask::Pat(pat, _switch) => {
-                    let span = self.ariadne_span(pat.span(self));
-                    Some(Label::new(span).with_message("when tycking pattern"))
-                }
-                | TyckTask::Term(term, _switch) => {
-                    let span = self.ariadne_span(term.span(self));
-                    Some(Label::new(span).with_message("when tycking term"))
-                }
-                | TyckTask::Lub(lhs, _rhs) => {
-                    // AnnId can be Set, Kind, or Type - extract span if possible
-                    match lhs {
-                        | AnnId::Set => None,
-                        | AnnId::Kind(kd) => self.statics_term_ariadne_span((*kd).into()),
-                        | AnnId::Type(ty) => self.type_ariadne_span(ty),
-                    }
-                    .map(|span| Label::new(span).with_message("when computing least upper bound"))
-                }
-                | TyckTask::SignatureGen(ann) => {
-                    // AnnId can be Set, Kind, or Type - extract span if possible
-                    match ann {
-                        | AnnId::Set => None,
-                        | AnnId::Kind(kd) => self.statics_term_ariadne_span((*kd).into()),
-                        | AnnId::Type(ty) => self.type_ariadne_span(ty),
-                    }
-                    .map(|span| Label::new(span).with_message("when generating signature"))
-                }
-                | TyckTask::StructureGen(ann) => {
-                    // AnnId can be Set, Kind, or Type - extract span if possible
-                    match ann {
-                        | AnnId::Set => None,
-                        | AnnId::Kind(kd) => self.statics_term_ariadne_span((*kd).into()),
-                        | AnnId::Type(ty) => self.type_ariadne_span(ty),
-                    }
-                    .map(|span| Label::new(span).with_message("when generating structure"))
-                }
-                | TyckTask::MonadicLiftPat(pat) => match pat {
-                    | PatId::Kind(_) => None,
-                    | PatId::Type(_) => self.statics_pat_ariadne_span(*pat).map(|span| {
-                        Label::new(span)
-                            .with_message("when performing monadic lift of type pattern")
-                    }),
-                    | PatId::Value(_) => self.statics_pat_ariadne_span(*pat).map(|span| {
-                        Label::new(span)
-                            .with_message("when performing monadic lift of value pattern")
-                    }),
-                },
-                | TyckTask::MonadicLiftTerm(term) => match term {
-                    | TermId::Kind(_) => None,
-                    | TermId::Type(_) => self.statics_term_ariadne_span(*term).map(|span| {
-                        Label::new(span).with_message("when performing monadic lift of type")
-                    }),
-                    | TermId::Value(_) => self.statics_term_ariadne_span(*term).map(|span| {
-                        Label::new(span).with_message("when performing monadic lift of value")
-                    }),
-                    | TermId::Compu(_) => self.statics_term_ariadne_span(*term).map(|span| {
-                        Label::new(span).with_message("when performing monadic lift of computation")
-                    }),
-                },
-            };
-
-            if let Some(mut label) = task_label {
-                label = label.with_color(colors.next());
-                report = report.with_label(label);
-            }
+        TyckDiagnostic {
+            code: (&error).into(),
+            message: self.contextual_error_message(&error, &stack),
+            primary,
+            related,
+            help: self.diagnostic_help(&error, &stack),
         }
-
-        // Add note about blame location for debugging
-        report = report.with_note(format!("Error location: {}", blame));
-
-        report.finish()
     }
 }
 

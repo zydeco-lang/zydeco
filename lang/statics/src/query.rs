@@ -2357,11 +2357,11 @@ pub fn check_source<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> TyckOutp
         tycker.resolve_holes_and_collect();
         outcome = match root {
             | None => {
-                let reports = tycker.error_reports();
+                let diagnostics = tycker.error_diagnostics();
                 tycker.strip_checker_state();
                 SourceCheckOutcome::Rejected(RejectedSource {
                     statics: std::sync::Arc::new(tycker.statics),
-                    reports,
+                    diagnostics,
                     observations: tycker.observations,
                 })
             }
@@ -2375,11 +2375,11 @@ pub fn check_source<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> TyckOutp
                     })
                 }
                 | Err(KontFailure) => {
-                    let reports = tycker.error_reports();
+                    let diagnostics = tycker.error_diagnostics();
                     tycker.strip_checker_state();
                     SourceCheckOutcome::Rejected(RejectedSource {
                         statics: std::sync::Arc::new(tycker.statics),
-                        reports,
+                        diagnostics,
                         observations: tycker.observations,
                     })
                 }

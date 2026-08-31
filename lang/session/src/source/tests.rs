@@ -59,7 +59,7 @@ enum TestPipelineError {
 }
 
 impl ScopedProgram {
-    fn check(self) -> Result<SourceChecked, zydeco_statics::TyckReports> {
+    fn check(self) -> Result<SourceChecked, zydeco_statics::TyckDiagnostics> {
         let Self { spans, arena, prim, root } = self;
         let session = super::CompilerSession::default();
         let output = session.check_resolved(spans.clone(), prim, arena, root);
@@ -1032,10 +1032,10 @@ fn the_source_pipeline_reaches_statics_without_a_declaration_entry() {
         SourceGraph::load(root).unwrap().parse().unwrap().desugar().unwrap().resolve().unwrap();
 
     let _root_term = &scoped.arena.terms[&scoped.root];
-    let Err(reports) = scoped.check() else {
+    let Err(diagnostics) = scoped.check() else {
         panic!("an unclassified root hole must not count as a checked source term")
     };
-    assert!(!reports.spans.is_empty());
+    assert!(!diagnostics.is_empty());
 }
 
 #[test]
@@ -1118,7 +1118,16 @@ fn a_mismatched_companion_signature_rejects_the_implementation() {
     let analysis = CompilerSession::default().analyze(root).unwrap();
 
     assert!(analysis.outcome().root().is_none());
-    assert!(analysis.outcome().reports().is_some_and(|reports| !reports.spans.is_empty()));
+    let diagnostics = analysis.outcome().diagnostics().expect("implementation should be rejected");
+    let mismatch = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == zydeco_statics::TyckDiagnosticCode::TypeMismatch)
+        .expect("signature rejection should report a type mismatch");
+    assert_eq!(
+        mismatch.primary.as_ref().and_then(|label| span_file(analysis.spans(), &label.span)),
+        Some(std::ffi::OsString::from("library.zy"))
+    );
+    assert!(mismatch.related.is_empty());
 }
 
 #[test]
@@ -1130,7 +1139,7 @@ fn a_signature_root_must_itself_be_a_type() {
     let analysis = CompilerSession::default().analyze(root).unwrap();
 
     assert!(analysis.outcome().root().is_none());
-    assert!(analysis.outcome().reports().is_some_and(|reports| !reports.spans.is_empty()));
+    assert!(analysis.outcome().diagnostics().is_some_and(|diagnostics| !diagnostics.is_empty()));
 }
 
 #[test]
@@ -1165,7 +1174,7 @@ fn an_explicit_signature_import_still_rejects_a_non_type_root() {
     let analysis = CompilerSession::default().analyze(root).unwrap();
 
     assert!(analysis.outcome().root().is_none());
-    assert!(analysis.outcome().reports().is_some_and(|reports| !reports.spans.is_empty()));
+    assert!(analysis.outcome().diagnostics().is_some_and(|diagnostics| !diagnostics.is_empty()));
 }
 
 #[test]
@@ -1184,16 +1193,22 @@ fn the_declaration_free_unbound_fixture_fails_during_resolution() {
 
 #[test]
 fn the_declaration_free_annotation_fixture_fails_during_type_checking() {
-    let scoped = SourceGraph::load(repository_source("tests/fail/annotation.zy"))
-        .unwrap()
-        .parse()
-        .unwrap()
-        .desugar()
-        .unwrap()
-        .resolve()
-        .unwrap();
+    let root = repository_source("tests/fail/annotation.zy");
+    let analysis = CompilerSession::default().analyze(root).unwrap();
+    let diagnostics = analysis.outcome().diagnostics().expect("source should be rejected");
+    assert_eq!(diagnostics.len(), 1, "expected one focused diagnostic");
+    let diagnostic = diagnostics.iter().next().unwrap();
+    let primary = diagnostic.primary.as_ref().expect("diagnostic should have a source location");
+    let (file, range) = analysis
+        .spans()
+        .source_map()
+        .and_then(|map| map.range(primary.span))
+        .expect("diagnostic span should resolve");
 
-    assert!(scoped.check().is_err());
+    assert_eq!(diagnostic.code, zydeco_statics::TyckDiagnosticCode::MissingAnnotation);
+    assert_eq!(&file.source()[range], "+True()");
+    assert!(diagnostic.related.is_empty());
+    assert_eq!(diagnostic.help.len(), 1);
 }
 
 #[test]

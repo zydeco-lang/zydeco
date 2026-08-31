@@ -1,9 +1,9 @@
 use crate::CompileError;
 use ariadne::{Label, Report, ReportKind};
 use zydeco_session::{AnalysisError, ProgramAnalysis, SourceCaches, SourceGraph};
-use zydeco_statics::{TyckObservation, fmt as static_fmt, syntax as ss};
+use zydeco_statics::{TyckDiagnostic, TyckObservation, fmt as static_fmt, syntax as ss};
 use zydeco_syntax::{Pretty, SpanView, Ugly};
-use zydeco_utils::span::PathDisplay;
+use zydeco_utils::span::{PathDisplay, Span, internal_ariadne_span};
 
 /// Render source-aware failures at the CLI boundary.
 pub struct DiagnosticRenderer;
@@ -14,9 +14,10 @@ impl DiagnosticRenderer {
             | CompileError::Rejected(analysis) => {
                 Self::warnings(analysis);
                 Self::observations(analysis);
-                if let Some(reports) = analysis.outcome().reports() {
-                    reports.reports.iter().for_each(|report| {
-                        let _ = report.eprint(SourceCaches::analysis(analysis));
+                if let Some(diagnostics) = analysis.outcome().diagnostics() {
+                    let mut cache = SourceCaches::analysis(analysis);
+                    diagnostics.iter().for_each(|diagnostic| {
+                        let _ = Self::tyck_report(analysis, diagnostic).eprint(&mut cache);
                     });
                 }
             }
@@ -26,6 +27,43 @@ impl DiagnosticRenderer {
             }
             | _ => eprintln!("{error}"),
         }
+    }
+
+    fn tyck_report(
+        analysis: &ProgramAnalysis, diagnostic: &TyckDiagnostic,
+    ) -> Report<'static, (PathDisplay, std::ops::Range<usize>)> {
+        let resolve =
+            |span: Span| analysis.spans().source_map().and_then(|map| map.ariadne_range(span));
+        let primary_span = diagnostic
+            .primary
+            .as_ref()
+            .and_then(|primary| resolve(primary.span))
+            .unwrap_or_else(internal_ariadne_span);
+        let mut colors = ariadne::ColorGenerator::new();
+        let primary_color = colors.next();
+        let mut report = Report::build(ReportKind::Error, primary_span.clone())
+            .with_code(diagnostic.code)
+            .with_message(&diagnostic.message);
+        if let Some((primary, span)) = diagnostic
+            .primary
+            .as_ref()
+            .and_then(|primary| resolve(primary.span).map(|span| (primary, span)))
+        {
+            report = report.with_label(
+                Label::new(span).with_message(&primary.message).with_color(primary_color),
+            );
+        }
+        for related in &diagnostic.related {
+            if let Some(span) = resolve(related.span) {
+                report = report.with_label(
+                    Label::new(span).with_message(&related.message).with_color(colors.next()),
+                );
+            }
+        }
+        for help in &diagnostic.help {
+            report = report.with_help(help);
+        }
+        report.finish()
     }
 
     pub fn warnings(analysis: &ProgramAnalysis) {

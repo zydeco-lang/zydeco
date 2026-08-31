@@ -61,20 +61,24 @@ pub struct Tycker<'a> {
     pub(crate) observations: Vec<TyckObservation>,
 }
 
-/// Type-check reports with their primary spans, for per-file consumers.
-///
-/// The LSP publishes reports per file, so each report carries its primary
-/// source span and rendered message in a parallel vector.
+/// Immutable source diagnostics produced by one rejected check.
 #[derive(Clone, Debug)]
-pub struct TyckReports {
-    pub reports: std::sync::Arc<
-        Vec<ariadne::Report<'static, (zydeco_utils::span::PathDisplay, std::ops::Range<usize>)>>,
-    >,
-    /// The primary span and rendered message of each report, parallel to
-    /// [`Self::reports`]; `None` for reports without a source span.
-    pub spans: std::sync::Arc<
-        Vec<Option<(zydeco_utils::span::PathDisplay, std::ops::Range<usize>, String)>>,
-    >,
+pub struct TyckDiagnostics {
+    diagnostics: std::sync::Arc<[TyckDiagnostic]>,
+}
+
+impl TyckDiagnostics {
+    pub fn iter(&self) -> std::slice::Iter<'_, TyckDiagnostic> {
+        self.diagnostics.iter()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.diagnostics.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.diagnostics.len()
+    }
 }
 
 /// A source-directed observation produced during type checking.
@@ -101,7 +105,7 @@ pub struct CheckedSource {
 #[derive(Clone, Debug)]
 pub struct RejectedSource {
     pub statics: std::sync::Arc<StaticsArena>,
-    pub reports: TyckReports,
+    pub diagnostics: TyckDiagnostics,
     pub observations: Vec<TyckObservation>,
 }
 
@@ -114,10 +118,10 @@ pub enum SourceCheckOutcome {
 
 impl SourceCheckOutcome {
     /// Recover the conventional all-or-nothing source-checking result.
-    pub fn into_result(self) -> std::result::Result<CheckedSource, TyckReports> {
+    pub fn into_result(self) -> std::result::Result<CheckedSource, TyckDiagnostics> {
         match self {
             | Self::Checked(checked) => Ok(checked),
-            | Self::Rejected(RejectedSource { reports, .. }) => Err(reports),
+            | Self::Rejected(RejectedSource { diagnostics, .. }) => Err(diagnostics),
         }
     }
 
@@ -1553,7 +1557,9 @@ impl<'a> Tycker<'a> {
     }
 
     /// Consume the checker and retain the typed identity of a complete source term.
-    pub fn check_source(self, root: su::TermId) -> std::result::Result<CheckedSource, TyckReports> {
+    pub fn check_source(
+        self, root: su::TermId,
+    ) -> std::result::Result<CheckedSource, TyckDiagnostics> {
         self.check_source_outcome(root).into_result()
     }
 
@@ -1572,11 +1578,11 @@ impl<'a> Tycker<'a> {
                 })
             }
             | Err(KontFailure) => {
-                let reports = self.error_reports();
+                let diagnostics = self.error_diagnostics();
                 self.strip_checker_state();
                 SourceCheckOutcome::Rejected(RejectedSource {
                     statics: std::sync::Arc::new(self.statics),
-                    reports,
+                    diagnostics,
                     observations: self.observations,
                 })
             }
@@ -1660,30 +1666,18 @@ impl<'a> Tycker<'a> {
         self.statics.env_compu = Default::default();
     }
 
-    pub(crate) fn error_reports(&self) -> TyckReports {
+    pub(crate) fn error_diagnostics(&self) -> TyckDiagnostics {
         use std::collections::HashSet;
 
-        let mut seen_blame = HashSet::new();
-        let mut seen_coverage = HashSet::new();
-        let mut reports = Vec::new();
-        let mut spans = Vec::new();
-        for entry in self.errors.iter().filter(|entry| {
-            if matches!(entry.error, TyckError::Coverage(_)) {
-                let span = self
-                    .error_primary_span(&entry.error)
-                    .map(|(path, range)| (path, range.start, range.end));
-                seen_coverage.insert((span, self.error_message(&entry.error)))
-            } else {
-                seen_blame.insert((entry.blame.file(), entry.blame.line(), entry.blame.column()))
-            }
-        }) {
-            spans.push(
-                self.error_primary_span(&entry.error)
-                    .map(|(path, range)| (path, range, self.error_message(&entry.error))),
-            );
-            reports.push(self.error_entry_report(entry.clone()));
-        }
-        TyckReports { reports: std::sync::Arc::new(reports), spans: std::sync::Arc::new(spans) }
+        let mut seen = HashSet::new();
+        let diagnostics = self
+            .errors
+            .iter()
+            .cloned()
+            .map(|entry| self.error_entry_diagnostic(entry))
+            .filter(|diagnostic| seen.insert(diagnostic.clone()))
+            .collect::<Vec<_>>();
+        TyckDiagnostics { diagnostics: std::sync::Arc::from(diagnostics) }
     }
 
     /// Resolve all holes with solutions (including nested ones).
@@ -1806,7 +1800,7 @@ pub enum Switch<Ann> {
     Ana(Ann),
 }
 
-/// Task-stack entries used to enrich error reports.
+/// Internal checking trace used to select source-level diagnostic context.
 #[derive(Clone, Debug)]
 pub enum TyckTask {
     Pat(su::PatId, Switch<AnnId>),

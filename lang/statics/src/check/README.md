@@ -31,7 +31,8 @@ each observation path must cover its arguments and every residual codata type mu
 
 The top level is processed in SCC order (from the resolver’s dependency graph).
 Declarations are checked in either synthesis or analysis mode, and the checker keeps a task stack (`TyckTask`)
-to enrich error reports.
+as an internal trace. Structured user-facing diagnostics select the innermost relevant source task as their primary
+location and retain only semantically useful secondary locations, such as an expected type or sealed definition.
 
 Primitive definitions (e.g., `VType`, `CType`, `Thk`, `Ret`) are registered early
 so internal surface terms can be linked to their typed equivalents.

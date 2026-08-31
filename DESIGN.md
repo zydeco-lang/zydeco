@@ -370,9 +370,14 @@ in the [declaration-free REPL design](docs/proposals/repl.md).
 
 The session owns revisioned source inputs and immutable frontend analysis results shared
 by the CLI, TUI, and language server.
-Lowering schedules live with Stack IR and assembly, while the CLI owns diagnostic rendering,
-native tool invocation, runtime packaging, and process policy.
+Lowering schedules live with Stack IR and assembly, diagnostic frontends own presentation,
+and the CLI owns native tool invocation, runtime packaging, and process policy.
 This boundary keeps editor analysis independent of executable-building concerns.
+
+Type checking crosses this boundary through presentation-neutral diagnostics. Each diagnostic has a stable code,
+one primary source location, and optional semantic relationships or help; the checker task stack remains an internal
+trace rather than becoming a sequence of user-facing labels. The CLI and TUI render that structure with Ariadne,
+while the language server translates the same source spans to LSP ranges.
 
 Libraries use ordinary term abstractions and package types.
 Transparent definitions travel through products and manifest package signatures;
