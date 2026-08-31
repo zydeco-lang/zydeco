@@ -6,7 +6,7 @@
 use super::syntax::*;
 use super::variables::FreeVars;
 use std::collections::HashSet;
-use zydeco_statics::surface_syntax::ScopedArena;
+use zydeco_statics::{arena::StaticsArena, surface_syntax::ScopedArena};
 
 /// A lexical Stack IR tree whose stack joins occur exactly at value-coproduct branches.
 #[derive(Debug)]
@@ -76,13 +76,13 @@ struct BranchJoinValidator<'a> {
 impl<'a> BranchJoinValidator<'a> {
     fn validate(program: &'a StackirProgram) -> Result<(), BranchJoinError> {
         let mut validator = Self {
-            arena: &program.arena.inner,
+            arena: &program.arena().inner,
             compus: HashSet::new(),
             stacks: HashSet::new(),
             values: HashSet::new(),
             patterns: HashSet::new(),
         };
-        validator.compu(program.root, false)
+        validator.compu(program.root(), false)
     }
 
     fn compu(&mut self, id: CompuId, guarded: bool) -> Result<(), BranchJoinError> {
@@ -202,23 +202,23 @@ impl<'a> BranchJoinValidator<'a> {
 /// Check that the given stack IR arena is well-formed enough for debugging.
 ///
 /// This function panics if the root computation has free variables.
-pub fn check(program: &StackirProgram, scoped: &ScopedArena) {
-    check_closed_root(program, scoped);
+pub fn check(program: &StackirProgram, scoped: &ScopedArena, statics: &StaticsArena) {
+    check_closed_root(program, scoped, statics);
 }
 
 /// Ensure that the program root is closed (has no free variables).
-fn check_closed_root(program: &StackirProgram, scoped: &ScopedArena) {
-    let fv = program.root.free_vars(&program.arena);
+fn check_closed_root(program: &StackirProgram, scoped: &ScopedArena, statics: &StaticsArena) {
+    let fv = program.root().free_vars(program.arena());
     let fv_str = fv
         .iter()
         .map(|def| {
-            let name = &scoped.defs[def];
+            let name = program.arena().admin.def_name(scoped, statics, def);
             format!("{}{}", name.plain(), def.concise())
         })
         .collect::<Vec<_>>()
         .join(", ");
     if !fv.is_empty() {
-        panic!("stack IR root {:?} is not closed; free variables: {}", program.root, fv_str);
+        panic!("stack IR root {:?} is not closed; free variables: {}", program.root(), fv_str);
     }
 }
 
@@ -256,7 +256,7 @@ mod tests {
         let bindee = Bullet.build(&mut fixture.arena, None);
         let root = Let { binder: Bullet, bindee, tail: body }.build(&mut fixture.arena, None);
 
-        let program = StackirProgram { arena: fixture.arena, root };
+        let program = StackirProgram::new(fixture.arena, root);
         assert!(BranchJoinProgram::try_new(program).is_ok());
     }
 
@@ -264,7 +264,7 @@ mod tests {
     fn branch_join_rejects_an_unguarded_coproduct_match() {
         let mut fixture = Fixture::new();
         let root = fixture.coprod_match();
-        let program = StackirProgram { arena: fixture.arena, root };
+        let program = StackirProgram::new(fixture.arena, root);
 
         assert_eq!(
             BranchJoinProgram::try_new(program).unwrap_err(),
@@ -278,7 +278,7 @@ mod tests {
         let bindee = Bullet.build(&mut fixture.arena, None);
         let root =
             Let { binder: Bullet, bindee, tail: fixture.branch }.build(&mut fixture.arena, None);
-        let program = StackirProgram { arena: fixture.arena, root };
+        let program = StackirProgram::new(fixture.arena, root);
 
         assert_eq!(
             BranchJoinProgram::try_new(program).unwrap_err(),
@@ -294,7 +294,7 @@ mod tests {
             .build(&mut fixture.arena, None);
         let stack = Bullet.build(&mut fixture.arena, None);
         let root = SReturn { stack, value: pair }.build(&mut fixture.arena, None);
-        let program = StackirProgram { arena: fixture.arena, root };
+        let program = StackirProgram::new(fixture.arena, root);
 
         assert_eq!(
             BranchJoinProgram::try_new(program).unwrap_err(),

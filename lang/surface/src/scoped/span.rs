@@ -13,12 +13,21 @@ impl TextualBack for ScopedArena {
     }
 }
 
+impl TextualBack for Resolver<'_> {
+    type Id = EntityId;
+    type Entity = t::EntityId;
+
+    fn textual_back(&self, id: EntityId) -> Option<t::EntityId> {
+        self.origins.source(&id)
+    }
+}
+
 macro_rules! impl_span_view_resolver {
     ($($ty:ty)*) => {
         $(
             impl<'a> SpanView<'a, Resolver<'a>> for $ty {
                 fn span(&self, resolver: &'a Resolver<'a>) -> &'a Span {
-                    span_via_back(&resolver.spans, &resolver.bitter, *self)
+                    span_via_back(&resolver.spans, resolver, *self)
                 }
             }
         )*

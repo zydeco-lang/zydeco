@@ -98,7 +98,7 @@ impl CommandCompiler {
 /// Frozen backend input retaining the provenance needed by renderers and emitters.
 pub struct BackendProgram {
     pub spans: Arc<SpanArena>,
-    pub scoped: ScopedArena,
+    pub scoped: Arc<ScopedArena>,
     pub statics: Arc<StaticsArena>,
     pub sps_low: SpsLowProgram,
     /// Populated only when an assembly-derived target is requested.
@@ -108,14 +108,11 @@ pub struct BackendProgram {
 impl BackendProgram {
     pub fn lower(executable: ExecutableProgram) -> Result<Self, CompileError> {
         let ExecutableProgram { spans, scoped, statics, root, signature } = executable;
-        let mut lowering_scoped = ScopedArena::default();
-        lowering_scoped.defs = statics.scoped_definitions(&scoped);
-        let stackir =
-            BuiltinRootLowerer::new(&spans, &mut lowering_scoped, &statics, root, signature)
-                .run()
-                .map_err(CompileError::BuiltinLower)?;
-        let sps_low = SpsLowPipeline::new(&mut lowering_scoped).run(stackir);
-        Ok(Self { spans, scoped: lowering_scoped, statics, sps_low, assembly: OnceLock::new() })
+        let stackir = BuiltinRootLowerer::new(&spans, &scoped, &statics, root, signature)
+            .run()
+            .map_err(CompileError::BuiltinLower)?;
+        let sps_low = SpsLowPipeline::new(&scoped, &statics).run(stackir);
+        Ok(Self { spans, scoped, statics, sps_low, assembly: OnceLock::new() })
     }
 
     pub fn render_sps_low(&self) -> String {
@@ -130,7 +127,7 @@ impl BackendProgram {
     pub fn render_assembly(&self) -> String {
         use zydeco_assembly::fmt::*;
         let assembly = self.assembly();
-        let formatter = Formatter::new(&assembly.arena, None, None);
+        let formatter = Formatter::new(assembly.arena(), None, None);
         let mut output = String::new();
         assembly.pretty(&formatter).render_fmt(100, &mut output).unwrap();
         output
@@ -215,7 +212,7 @@ impl BackendProgram {
         use zydeco_assembly::syntax::{Atom, Instruction, Program};
 
         assembly
-            .arena
+            .arena()
             .programs
             .iter()
             .find_map(|(program, body)| {
@@ -230,7 +227,7 @@ impl BackendProgram {
                     ) => Some(*variable),
                     | _ => None,
                 }?;
-                (!assembly.arena.contexts[program].iter().any(|local| local == &variable))
+                (!assembly.arena().contexts[program].iter().any(|local| local == &variable))
                     .then_some((*program, variable))
             })
             .map_or(Ok(()), |(program, variable)| {

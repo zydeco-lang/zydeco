@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 use zydeco_surface::textual::{DocumentationSite, ImportSite, LiteralSite, syntax as t};
-use zydeco_utils::prelude::{ArenaDense, ArenaSchema};
+use zydeco_utils::prelude::{ArenaDense, ArenaSchema, FrozenArena};
 
 zydeco_utils::new_key_type! {
     pub struct SourceId;
@@ -32,8 +32,8 @@ pub struct SourceTemplate {
     pub source: String,
     /// File-local map decoding this template's spans for parse diagnostics.
     pub file: zydeco_utils::span::FileMap,
-    pub spans: t::SpanArena,
-    pub arena: t::TextArena,
+    pub spans: FrozenArena<t::SpanArena>,
+    pub arena: FrozenArena<t::TextArena>,
     pub unit: t::SourceUnit,
     pub documentation: Vec<DocumentationSite>,
     pub warnings: Vec<SourceWarning>,
@@ -122,8 +122,8 @@ pub struct SourceImport {
 #[derive(Clone, Debug)]
 pub struct SourceGraph {
     pub root: SourceId,
-    pub sources: ArenaDense<SourceGraphScope, SourceId>,
-    pub imports: ArenaDense<SourceGraphScope, SourceImportId>,
+    pub sources: FrozenArena<ArenaDense<SourceGraphScope, SourceId>>,
+    pub imports: FrozenArena<ArenaDense<SourceGraphScope, SourceImportId>>,
 }
 
 impl SourceGraph {

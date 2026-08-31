@@ -191,22 +191,21 @@ impl<'e> Emitter<'e> {
         spans: &'e SpanArena, scoped: &'e ScopedArena, statics: &'e StaticsArena,
         assembly: &'e AssemblyProgram, target_format: TargetFormat,
     ) -> Self {
-        let entry_parities = Self::compute_entry_parities(&assembly.arena, assembly.root);
-        let dynamic_entries = Self::compute_dynamic_entries(&assembly.arena);
+        let arena = assembly.arena();
+        let root = assembly.root();
+        let entry_parities = Self::compute_entry_parities(arena, root);
+        let dynamic_entries = Self::compute_dynamic_entries(arena);
         Self {
             spans,
             scoped,
             statics,
-            assembly: &assembly.arena,
-            root: assembly.root,
+            assembly: arena,
+            root,
             asm: AsmFile::default(),
             target_format,
             tables: Vec::new(),
             visited: HashSet::new(),
-            stack_parity: entry_parities
-                .get(&assembly.root)
-                .copied()
-                .unwrap_or(StackParity::Unknown),
+            stack_parity: entry_parities.get(&root).copied().unwrap_or(StackParity::Unknown),
             entry_parities,
             dynamic_entries,
         }
@@ -432,7 +431,6 @@ impl<'e> Emitter<'e> {
 }
 
 impl<'e> CompilerPass for Emitter<'e> {
-    type Arena = AsmFile;
     type Out = AsmFile;
     type Error = std::convert::Infallible;
     fn run(mut self) -> Result<Self::Out, Self::Error> {

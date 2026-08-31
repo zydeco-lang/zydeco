@@ -47,12 +47,10 @@ pub struct StackirInnerArena {
 }
 
 /// A complete Stack IR program with one computation at its top level.
-#[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
+#[derive(Debug)]
 pub struct StackirProgram {
-    #[as_ref]
-    #[as_mut]
-    pub arena: StackirArena,
-    pub root: CompuId,
+    arena: FrozenArena<StackirArena>,
+    root: CompuId,
 }
 
 /// Read-only source storage and empty target storage for a structural rebuild.
@@ -63,8 +61,21 @@ pub(crate) struct StackirRebuild {
 }
 
 impl StackirProgram {
+    pub fn new(arena: StackirArena, root: CompuId) -> Self {
+        Self { arena: FrozenArena::new(arena), root }
+    }
+
+    pub fn arena(&self) -> &StackirArena {
+        &self.arena
+    }
+
+    pub fn root(&self) -> CompuId {
+        self.root
+    }
+
     pub(crate) fn into_rebuild(self) -> StackirRebuild {
-        let Self { arena: StackirArena { mut admin, inner }, root } = self;
+        let Self { arena, root } = self;
+        let StackirArena { mut admin, inner } = arena.into_inner();
         let source_admin = AdminArena {
             pats: std::mem::take(&mut admin.pats),
             terms: std::mem::take(&mut admin.terms),

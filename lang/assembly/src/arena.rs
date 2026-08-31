@@ -47,8 +47,34 @@ pub struct AssemblyArena {
 
 /// A complete assembly program with one executable program root.
 pub struct AssemblyProgram {
+    arena: FrozenArena<AssemblyArena>,
+    root: ProgId,
+}
+
+/// Mutable assembly construction state, kept inside the lowering pipeline.
+pub(crate) struct AssemblyBuild {
     pub arena: AssemblyArena,
     pub root: ProgId,
+}
+
+impl AssemblyBuild {
+    pub(crate) fn finish(self) -> AssemblyProgram {
+        AssemblyProgram { arena: FrozenArena::new(self.arena), root: self.root }
+    }
+}
+
+impl AssemblyProgram {
+    pub fn arena(&self) -> &AssemblyArena {
+        &self.arena
+    }
+
+    pub fn root(&self) -> ProgId {
+        self.root
+    }
+
+    pub fn into_parts(self) -> (AssemblyArena, ProgId) {
+        (self.arena.into_inner(), self.root)
+    }
 }
 
 pub trait AssemblyArenaRefLike {

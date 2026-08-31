@@ -405,7 +405,9 @@ impl ArenaAccess<&TypeId, Fillable<Type>> for TypeArena {
     fn get(&self, id: &TypeId) -> Option<&Fillable<Type>> {
         self.nodes.get(id).map(|node| &node.value)
     }
+}
 
+impl ArenaAccessMut<&TypeId, Fillable<Type>> for TypeArena {
     fn get_mut(&mut self, id: &TypeId) -> Option<&mut Fillable<Type>> {
         self.nodes.get_mut(id).map(|node| &mut node.value)
     }
@@ -817,9 +819,9 @@ impl StaticsArena {
         self.generated_defs.get(id).unwrap_or_else(|| &scoped.defs[id])
     }
 
-    /// Clone the definition-name table needed by dynamic and backend lowering.
-    /// Other resolved syntax tables are source-only and stay shared.
-    pub fn scoped_definitions(
+    /// Clone the definition-name table owned by the linked dynamic program.
+    /// Backend IRs instead retain phase-local deltas over these shared arenas.
+    pub fn dynamic_definitions(
         &self, scoped: &su::ScopedArena,
     ) -> ArenaSparse<su::ScopedScope, DefId> {
         let mut definitions = scoped.defs.clone();

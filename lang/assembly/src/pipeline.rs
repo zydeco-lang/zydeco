@@ -23,7 +23,7 @@ impl<'a> LoweringPipeline<'a> {
     pub fn run(self) -> AssemblyProgram {
         let mut assembly = Lowerer::new(self.spans, self.scoped, self.statics, self.sps_low).run();
         match StackAnalyzer::new(&mut assembly).run() {
-            | Ok(_) => assembly,
+            | Ok(_) => assembly.finish(),
             | Err(never) => match never {},
         }
     }

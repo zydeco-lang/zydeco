@@ -1,5 +1,5 @@
 use crate::scoped::{syntax::*, *};
-use zydeco_utils::prelude::DepGraph;
+use zydeco_utils::prelude::{DepGraph, FrozenArena};
 
 /// Global name environment collected from top-level binders.
 #[derive(Clone, Debug, Default)]
@@ -45,7 +45,8 @@ impl Local {
 pub struct Resolver<'a> {
     pub(super) allocator: IdAllocator<ScopedScope>,
     pub spans: &'a SpanArena,
-    pub bitter: BitterArena,
+    pub bitter: FrozenArena<BitterArena>,
+    pub origins: TextualOrigins,
     pub prim_def: PrimDefs,
 
     // arenas
@@ -61,7 +62,7 @@ pub struct Resolver<'a> {
 /// Output of name resolution for one complete source term.
 pub struct ResolveSourceOut {
     pub prim: PrimDefs,
-    pub arena: ScopedArena,
+    pub arena: FrozenArena<ScopedArena>,
     pub root: TermId,
 }
 
@@ -71,7 +72,17 @@ struct ResolvedProgram {
 }
 
 impl<'a> Resolver<'a> {
-    pub fn new(spans: &'a SpanArena, bitter: BitterArena, _prim_term: PrimTerms) -> Self {
+    pub fn new(
+        spans: &'a SpanArena, bitter: FrozenArena<BitterArena>, _prim_term: PrimTerms,
+    ) -> Self {
+        let BitterArena { defs, pats: bitter_pats, terms: bitter_terms, origins } =
+            bitter.into_inner();
+        let bitter = FrozenArena::new(BitterArena {
+            defs,
+            pats: bitter_pats,
+            terms: bitter_terms,
+            origins: TextualOrigins::default(),
+        });
         let mut pats = ArenaIndexed::default();
         pats.reserve_ids(bitter.pats.iter().map(|(pattern, _)| pattern));
         // Context elaboration emits one term per SCC. Every SCC contains at
@@ -91,6 +102,7 @@ impl<'a> Resolver<'a> {
             allocator: IdAllocator::new(),
             spans,
             bitter,
+            origins,
             prim_def: PrimDefs::default(),
 
             defs: ArenaSparse::default(),
@@ -107,7 +119,7 @@ impl<'a> Resolver<'a> {
     pub fn run_source(mut self, root: TermId) -> Result<ResolveSourceOut> {
         root.resolve(&mut self, (Local::for_body(), &Global::default()))?;
         let ResolvedProgram { prim, arena } = self.finish()?;
-        Ok(ResolveSourceOut { prim, arena, root })
+        Ok(ResolveSourceOut { prim, arena: FrozenArena::new(arena), root })
     }
 
     fn finish(self) -> Result<ResolvedProgram> {
@@ -115,6 +127,7 @@ impl<'a> Resolver<'a> {
             allocator,
             spans: _,
             bitter,
+            origins,
             prim_def: prim,
 
             defs,
@@ -127,7 +140,7 @@ impl<'a> Resolver<'a> {
         } = self;
         let _ = allocator;
         assert!(block_deps.iter().next().is_none(), "every block dependency graph must be closed");
-        let BitterArena { defs: _, pats: _, terms: _, origins } = bitter;
+        let _ = bitter;
         Ok(ResolvedProgram {
             prim,
             arena: ScopedArena { defs, pats, terms, origins, users, blocks },

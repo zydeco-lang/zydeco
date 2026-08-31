@@ -5,7 +5,7 @@ use crate::{
 };
 use derive_more::{AsMut, AsRef};
 use zydeco_syntax::{BuiltinRole, IntrinsicRole, SpanView};
-use zydeco_utils::prelude::{Allocates, ArenaId, CompilerPass, IdAllocator};
+use zydeco_utils::prelude::{Allocates, ArenaId, CompilerPass, FrozenArena, IdAllocator};
 
 /// Desugar a textual node into bitter syntax using a shared `Desugarer`.
 pub trait Desugar {
@@ -62,7 +62,7 @@ impl<'a> SourceUnitDesugarer<'a> {
 
 /// Output of desugaring one complete source term.
 pub struct SourceDesugarOut {
-    pub arena: b::BitterArena,
+    pub arena: FrozenArena<b::BitterArena>,
     pub prim: b::PrimTerms,
     pub root: b::TermId,
 }
@@ -285,7 +285,6 @@ impl ExistentialTelescope {
 }
 
 impl CompilerPass for SourceUnitDesugarer<'_> {
-    type Arena = b::BitterArena;
     type Out = SourceDesugarOut;
     type Error = DesugarError;
 
@@ -293,7 +292,7 @@ impl CompilerPass for SourceUnitDesugarer<'_> {
         let SourceUnitDesugarer { mut desugarer, unit } = self;
         let root = unit.root.desugar(&mut desugarer)?;
         let Desugarer { bitter: arena, prim, .. } = desugarer;
-        Ok(SourceDesugarOut { arena, prim, root })
+        Ok(SourceDesugarOut { arena: FrozenArena::new(arena), prim, root })
     }
 }
 

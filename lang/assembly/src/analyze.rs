@@ -74,8 +74,8 @@ pub struct StackAnalysis<'a> {
 }
 
 impl<'a> StackAnalyzer<'a> {
-    pub fn new(program: &'a mut AssemblyProgram) -> Self {
-        let AssemblyProgram { arena, root } = program;
+    pub(crate) fn new(program: &'a mut AssemblyBuild) -> Self {
+        let AssemblyBuild { arena, root } = program;
         Self {
             arena,
             root: *root,
@@ -107,7 +107,6 @@ impl<'a> StackAnalyzer<'a> {
 }
 
 impl<'a> CompilerPass for StackAnalyzer<'a> {
-    type Arena = AssemblyArena;
     type Out = StackAnalysis<'a>;
     type Error = std::convert::Infallible;
     fn run(mut self) -> Result<Self::Out, Self::Error> {

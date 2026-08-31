@@ -2,6 +2,7 @@ use crate::source::{SourceGraph, SourceId, SourceKind, TextualProgramError};
 use std::collections::HashMap;
 use std::sync::Arc;
 use zydeco_surface::textual::syntax as t;
+use zydeco_utils::arena::FrozenArena;
 use zydeco_utils::span::{BytePos, FileSource, SourceMap, Span};
 
 /// The complete program in textual syntax, merged from one source graph.
@@ -10,8 +11,8 @@ use zydeco_utils::span::{BytePos, FileSource, SourceMap, Span};
 /// arena: imports become source boundaries, companion signatures become
 /// annotations, and `@[literal]` splices become string literals.
 pub struct TextualProgram {
-    pub spans: t::SpanArena,
-    pub arena: t::TextArena,
+    pub spans: FrozenArena<t::SpanArena>,
+    pub arena: FrozenArena<t::TextArena>,
     pub unit: t::SourceUnit,
 }
 
@@ -54,7 +55,11 @@ impl<'graph> TextualProgramBuilder<'graph> {
         let map = self.source_map();
         let (mut spans, arena) = self.parser.finish();
         spans.attach_map(Arc::new(map));
-        Ok(TextualProgram { spans, arena, unit: t::SourceUnit { root } })
+        Ok(TextualProgram {
+            spans: FrozenArena::new(spans),
+            arena: FrozenArena::new(arena),
+            unit: t::SourceUnit { root },
+        })
     }
 
     /// The address space of this program: one entry per file, in base order.

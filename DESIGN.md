@@ -482,6 +482,14 @@ while retaining one lexical occurrence per stored node, and assembly materialize
 The single-occurrence invariant is what later passes rely on: a value node consumed
 by exactly one pattern makes representation decisions such as unboxing local.
 
+Mutation is confined to the builder owned by the phase that creates an arena. A completed owned arena crosses the
+phase boundary through the transparent `FrozenArena` wrapper, which provides read access without `DerefMut` and adds
+no allocation or indirection. Long-lived session products use `Arc` for sharing and expose shared references at pass
+boundaries.
+When a later phase synthesizes metadata for identifiers inherited from an earlier phase, it keeps a phase-local delta
+and resolves through the earlier immutable layers on a miss. Stack IR definition names and resolver-generated textual
+origins follow this rule; lowering therefore does not clone or extend `ScopedArena`.
+
 ### Query-Based Analysis
 
 Type checking runs inside the session's salsa graph rather than as a free-standing pass.
@@ -611,6 +619,10 @@ Two separate type-level relations constrain IDs:
 - Associative side tables are deliberately not constrained by `ArenaSchema`: annotations,
   provenance, environments, caches, and relations legitimately associate one ID with many property types.
   They require callers to choose explicit `insert_new`, `replace_existing`, `upsert`, or set-like `ensure` semantics.
+- `ArenaAccess` is the read capability shared by construction and consumption. `ArenaAccessMut` adds indexed mutation
+  only for builders, while `FrozenArena<A>` carries an owned `A` across a phase boundary without exposing that
+  capability. Consuming a frozen value can recover its storage for a structural rebuild, after which the new phase
+  establishes its own frozen output boundary.
 - Issuers live on the operation that creates nodes: `Parser`, `Desugarer`, `Tycker`,
   assembly `Lowerer`, and stack analysis.
   Their output arenas do not retain the cursor.

@@ -1,20 +1,16 @@
 use super::syntax::*;
-use derive_more::{AsMut, AsRef};
 use thiserror::Error;
 use zydeco_utils::pass::CompilerPass;
 
-#[derive(AsRef, AsMut)]
 pub struct Interpreter {
-    #[as_ref]
-    #[as_mut]
-    pub arena: AssemblyArena,
-    pub root: ProgId,
+    arena: AssemblyArena,
+    root: ProgId,
     pub runtime: Runtime,
 }
 
 impl Interpreter {
     pub fn new(program: AssemblyProgram) -> Self {
-        let AssemblyProgram { arena, root } = program;
+        let (arena, root) = program.into_parts();
         Self { arena, root, runtime: Runtime::default() }
     }
 }
@@ -48,7 +44,6 @@ pub enum Error {
 }
 
 impl CompilerPass for Interpreter {
-    type Arena = AssemblyArena;
     type Out = Output;
     type Error = Error;
     fn run(mut self) -> Result<Self::Out, Self::Error> {

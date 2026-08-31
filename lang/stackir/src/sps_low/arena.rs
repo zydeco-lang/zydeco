@@ -2,11 +2,12 @@
 
 use super::syntax::*;
 use crate::{
-    arena::{AdminArena as HighAdminArena, StackirScope},
+    arena::{AdminArena as HighAdminArena, DefinitionNames, StackirScope},
     static_syntax as ss,
 };
 use derive_more::{AsMut, AsRef};
 use zydeco_derive::{AsMutSelf, AsRefSelf};
+use zydeco_surface::scoped::arena::ScopedScope;
 
 #[derive(Debug)]
 pub enum SpsLowScope {}
@@ -33,6 +34,9 @@ impl ArenaSchema<CompuId> for SpsLowScope {
 pub struct SpsLowAdminArena {
     node_allocator: IdAllocator<SpsLowScope>,
     def_allocator: IdAllocator<StackirScope>,
+    /// Names introduced by high and low Stack IR lowering. Source and typed-
+    /// elaboration names stay in their immutable phase arenas.
+    pub defs: ArenaSparse<ScopedScope, DefId>,
     pub builtins: BuiltinMap,
     pub pats: ArenaForth<ss::PatId, VPatId>,
     pub terms: ArenaForth<ss::TermId, TermId>,
@@ -43,6 +47,7 @@ impl SpsLowAdminArena {
         Self {
             node_allocator: IdAllocator::new(),
             def_allocator: IdAllocator::new(),
+            defs: ArenaSparse::default(),
             builtins: Builtin::all(),
             pats: ArenaForth::new(),
             terms: ArenaForth::new(),
@@ -50,10 +55,11 @@ impl SpsLowAdminArena {
     }
 
     pub(crate) fn from_high(admin: HighAdminArena) -> Self {
-        let HighAdminArena { allocator, builtins, pats: _, terms: _ } = admin;
+        let HighAdminArena { allocator, defs, builtins, pats: _, terms: _ } = admin;
         Self {
             node_allocator: IdAllocator::new(),
             def_allocator: allocator,
+            defs,
             builtins,
             pats: ArenaForth::new(),
             terms: ArenaForth::new(),
@@ -70,6 +76,16 @@ impl SpsLowAdminArena {
 
     pub(crate) fn fresh_def(&mut self) -> DefId {
         self.def_allocator.alloc()
+    }
+
+    pub(crate) fn insert_def(&mut self, id: DefId, name: VarName) {
+        self.defs.insert_new(id, name);
+    }
+}
+
+impl DefinitionNames for SpsLowAdminArena {
+    fn generated_defs(&self) -> &ArenaSparse<ScopedScope, DefId> {
+        &self.defs
     }
 }
 

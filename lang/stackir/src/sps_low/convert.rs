@@ -1,6 +1,7 @@
 //! Closure conversion from lexical high SPS to first-order SPSLow.
 
 use super::{arena::Construct as _, check::SpsLowProgram, syntax as low};
+use crate::arena::DefinitionNames as _;
 use crate::sps::{
     check::BranchJoinProgram,
     syntax as high,
@@ -8,7 +9,7 @@ use crate::sps::{
 };
 use derive_more::{AsMut, AsRef};
 use std::{collections::HashMap, convert::Infallible};
-use zydeco_statics::syntax as ss;
+use zydeco_statics::{arena::StaticsArena, syntax as ss};
 use zydeco_surface::scoped::arena::ScopedArena;
 use zydeco_syntax::VarName;
 use zydeco_utils::{context::Context, pass::CompilerPass};
@@ -35,13 +36,15 @@ pub struct SpsLowConverter<'a> {
     #[as_mut(low::SpsLowArena)]
     arena: low::SpsLowArena,
     root: high::CompuId,
-    #[as_mut(ScopedArena)]
-    scoped: &'a mut ScopedArena,
+    scoped: &'a ScopedArena,
+    statics: &'a StaticsArena,
     envs: Vec<RenameEnv>,
 }
 
 impl<'a> SpsLowConverter<'a> {
-    pub fn new(program: BranchJoinProgram, scoped: &'a mut ScopedArena) -> Self {
+    pub fn new(
+        program: BranchJoinProgram, scoped: &'a ScopedArena, statics: &'a StaticsArena,
+    ) -> Self {
         let high::StackirRebuild { source, target, root } = program.into_program().into_rebuild();
         let arena = low::SpsLowArena {
             admin: low::SpsLowAdminArena::from_high(target.admin),
@@ -52,6 +55,7 @@ impl<'a> SpsLowConverter<'a> {
             arena,
             root,
             scoped,
+            statics,
             envs: vec![RenameEnv { parent: None, bindings: HashMap::new() }],
         }
     }
@@ -87,16 +91,16 @@ impl<'a> SpsLowConverter<'a> {
 
     fn alloc_def(&mut self, name: VarName) -> high::DefId {
         let id = self.arena.admin.fresh_def();
-        self.scoped.insert_def(id, name);
+        self.arena.admin.insert_def(id, name);
         id
     }
 
     fn alloc_like(&mut self, original: high::DefId) -> high::DefId {
-        self.alloc_def(self.scoped.defs[&original].clone())
+        self.alloc_def(self.arena.admin.def_name(self.scoped, self.statics, &original).clone())
     }
 
     fn alloc_capture(&mut self, captured: high::DefId) -> high::DefId {
-        let VarName(name) = self.scoped.defs[&captured].clone();
+        let VarName(name) = self.arena.admin.def_name(self.scoped, self.statics, &captured).clone();
         self.alloc_def(VarName(format!("{name}#cap")))
     }
 
@@ -462,7 +466,6 @@ impl<'a> SpsLowConverter<'a> {
 }
 
 impl CompilerPass for SpsLowConverter<'_> {
-    type Arena = low::SpsLowArena;
     type Out = SpsLowProgram;
     type Error = Infallible;
 
@@ -488,7 +491,7 @@ mod tests {
 
         fn def(&mut self, name: &str) -> high::DefId {
             let def = self.arena.admin.fresh();
-            self.scoped.insert_def(def, VarName(name.into()));
+            self.arena.admin.insert_def(def, VarName(name.into()));
             def
         }
 
@@ -501,10 +504,9 @@ mod tests {
 
         fn convert(self, root: high::CompuId) -> SpsLowProgram {
             let program =
-                BranchJoinProgram::try_new(high::StackirProgram { arena: self.arena, root })
-                    .unwrap();
-            let mut scoped = self.scoped;
-            SpsLowConverter::new(program, &mut scoped).convert()
+                BranchJoinProgram::try_new(high::StackirProgram::new(self.arena, root)).unwrap();
+            let statics = StaticsArena::default();
+            SpsLowConverter::new(program, &self.scoped, &statics).convert()
         }
     }
 
@@ -525,6 +527,7 @@ mod tests {
 
         let program = fixture.convert(root);
         let arena = program.arena();
+        assert_eq!(arena.admin.defs[&captured].plain(), "captured");
         assert!(
             arena
                 .inner

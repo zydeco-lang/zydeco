@@ -1,6 +1,7 @@
 //! Pretty-printing for first-order SPS.
 
 use super::{check::SpsLowProgram, syntax::*};
+use crate::arena::DefinitionNames as _;
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::scoped::syntax::ScopedArena;
 
@@ -27,7 +28,8 @@ use pretty::RcDoc;
 
 impl<'a> Pretty<'a, Formatter<'a>> for DefId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        RcDoc::text(format!("{}{}", f.scoped.defs[self].plain(), self.concise()))
+        let name = f.admin.def_name(f.scoped, f.statics, self);
+        RcDoc::text(format!("{}{}", name.plain(), self.concise()))
     }
 }
 

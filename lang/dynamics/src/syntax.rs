@@ -8,7 +8,7 @@ use std::{
     rc::Rc,
 };
 use zydeco_statics::environment::Env;
-use zydeco_utils::prelude::{ArenaSchema, ArenaSparse};
+use zydeco_utils::prelude::{ArenaSchema, ArenaSparse, FrozenArena};
 
 /* ------------------------------- Identifier ------------------------------- */
 
@@ -89,8 +89,22 @@ impl ArenaSchema<DefId> for DynamicsScope {
 
 /// A linked runtime program with one computation at its top level.
 pub struct DynamicsProgram {
-    pub defs: ArenaSparse<DynamicsScope, DefId>,
-    pub root: RcCompu,
+    defs: FrozenArena<ArenaSparse<DynamicsScope, DefId>>,
+    root: RcCompu,
+}
+
+impl DynamicsProgram {
+    pub fn new(defs: ArenaSparse<DynamicsScope, DefId>, root: RcCompu) -> Self {
+        Self { defs: FrozenArena::new(defs), root }
+    }
+
+    pub fn defs(&self) -> &ArenaSparse<DynamicsScope, DefId> {
+        &self.defs
+    }
+
+    pub fn root(&self) -> &RcCompu {
+        &self.root
+    }
 }
 
 /* -------------------------------- Semantics ------------------------------- */

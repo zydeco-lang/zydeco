@@ -42,7 +42,7 @@ impl<'rt> Runtime<'rt> {
     }
     /// Evaluate the program's computation root.
     pub fn run(&mut self) -> ProgKont {
-        let root = self.program.root.clone();
+        let root = self.program.root().clone();
         root.as_ref().clone().eval(self)
     }
 

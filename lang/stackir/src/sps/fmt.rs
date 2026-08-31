@@ -30,7 +30,7 @@ use pretty::RcDoc;
 
 impl<'a> Pretty<'a, Formatter<'a>> for DefId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let name = &f.scoped.defs[self];
+        let name = f.admin.def_name(f.scoped, f.statics, self);
         let statics_fmt = zydeco_statics::fmt::Formatter::new(f.scoped, f.statics);
         RcDoc::text(format!("{}{}", name.ugly(&statics_fmt), self.concise()))
     }
@@ -379,7 +379,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for StackirProgram {
 
         doc = doc
             .append(RcDoc::text("[root]"))
-            .append(RcDoc::concat([RcDoc::line(), self.root.pretty(f)]).nest(f.indent))
+            .append(RcDoc::concat([RcDoc::line(), self.root().pretty(f)]).nest(f.indent))
             .append(RcDoc::line());
 
         doc

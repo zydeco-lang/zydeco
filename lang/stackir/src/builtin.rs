@@ -110,7 +110,7 @@ impl Builtin {
     /// pop parameters from stack (CBPV function), and finally wrap it with closure.
     pub fn make_operator<Arena>(&self, arena: &mut Arena) -> ValueId
     where
-        Arena: AsMut<StackirArena> + AsMut<ScopedArena>,
+        Arena: AsMut<StackirArena>,
     {
         let op = self.name.clone();
         // make fresh variables as operands
@@ -118,7 +118,7 @@ impl Builtin {
             .map(|i| {
                 let param = VarName::from(format!("param_{}", i));
                 let id = AsMut::<StackirArena>::as_mut(arena).admin.fresh();
-                AsMut::<ScopedArena>::as_mut(arena).insert_def(id, param);
+                AsMut::<StackirArena>::as_mut(arena).admin.insert_def(id, param);
                 id
             })
             .collect();
@@ -142,7 +142,7 @@ impl Builtin {
     /// Wrap a builtin function definition with closure.
     pub fn make_function<Arena>(&self, arena: &mut Arena) -> ValueId
     where
-        Arena: AsMut<StackirArena> + AsMut<ScopedArena>,
+        Arena: AsMut<StackirArena>,
     {
         let function = self.name.clone();
         let stack = Bullet.build(arena, None);

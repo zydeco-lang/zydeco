@@ -28,7 +28,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for AssemblyProgram {
         let mut doc = RcDoc::nil();
 
         // Print all symbols
-        for (sym_id, sym) in self.arena.symbols.iter() {
+        for (sym_id, sym) in self.arena().symbols.iter() {
             doc = doc
                 .append(RcDoc::text(format!("[sym:{}{}]", sym.name, sym_id.concise(),)))
                 .append(RcDoc::space())
@@ -40,7 +40,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for AssemblyProgram {
         }
 
         doc = doc.append(RcDoc::text("[root]"));
-        doc = doc.append(RcDoc::concat([RcDoc::line(), self.root.pretty(f)]).nest(f.indent));
+        doc = doc.append(RcDoc::concat([RcDoc::line(), self.root().pretty(f)]).nest(f.indent));
         doc = doc.append(RcDoc::line());
 
         doc

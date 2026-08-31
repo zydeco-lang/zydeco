@@ -81,8 +81,8 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn run(self) -> Result<WasmModule, EmitError> {
-        let plan = ModulePlan::new(&self.assembly.arena, self.assembly.root)?;
-        ModuleEncoder::new(&self.assembly.arena, plan).encode()
+        let plan = ModulePlan::new(self.assembly.arena(), self.assembly.root())?;
+        ModuleEncoder::new(self.assembly.arena(), plan).encode()
     }
 }
 

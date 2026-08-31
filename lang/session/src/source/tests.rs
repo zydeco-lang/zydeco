@@ -19,21 +19,21 @@ struct SourceDynamics {
 
 struct SourceStack {
     spans: Arc<zydeco_surface::textual::syntax::SpanArena>,
-    scoped: zydeco_surface::scoped::arena::ScopedArena,
+    scoped: Arc<zydeco_surface::scoped::arena::ScopedArena>,
     statics: Arc<zydeco_statics::arena::StaticsArena>,
     stackir: zydeco_stackir::BranchJoinProgram,
 }
 
 struct SourceSpsLow {
     spans: Arc<zydeco_surface::textual::syntax::SpanArena>,
-    scoped: zydeco_surface::scoped::arena::ScopedArena,
+    scoped: Arc<zydeco_surface::scoped::arena::ScopedArena>,
     statics: Arc<zydeco_statics::arena::StaticsArena>,
     sps_low: zydeco_stackir::SpsLowProgram,
 }
 
 struct SourceAssembly {
     spans: Arc<zydeco_surface::textual::syntax::SpanArena>,
-    scoped: zydeco_surface::scoped::arena::ScopedArena,
+    scoped: Arc<zydeco_surface::scoped::arena::ScopedArena>,
     statics: Arc<zydeco_statics::arena::StaticsArena>,
     sps_low: zydeco_stackir::SpsLowProgram,
     assembly: zydeco_assembly::syntax::AssemblyProgram,
@@ -62,7 +62,8 @@ impl ScopedProgram {
     fn check(self) -> Result<SourceChecked, zydeco_statics::TyckDiagnostics> {
         let Self { spans, arena, prim, root } = self;
         let session = super::CompilerSession::default();
-        let output = session.check_resolved(spans.clone(), prim, arena, root);
+        let spans = spans.into_inner();
+        let output = session.check_resolved(spans.clone(), prim, arena.into_inner(), root);
         let checked = output.outcome.into_result()?;
         Ok(SourceChecked {
             spans: Arc::new(spans),
@@ -121,18 +122,12 @@ impl SourceChecked {
             }));
         };
         let Self { spans, scoped, statics, root: _ } = self;
-        let mut lowering_scoped = zydeco_surface::scoped::arena::ScopedArena {
-            defs: statics.scoped_definitions(&scoped),
-            ..Default::default()
+        let stackir = match zydeco_stackir::RootLowerer::new(&spans, &scoped, &statics, root).run()
+        {
+            | Ok(stackir) => stackir,
+            | Err(never) => match never {},
         };
-        let stackir =
-            match zydeco_stackir::RootLowerer::new(&spans, &mut lowering_scoped, &statics, root)
-                .run()
-            {
-                | Ok(stackir) => stackir,
-                | Err(never) => match never {},
-            };
-        Ok(SourceStack { spans, scoped: lowering_scoped, statics, stackir })
+        Ok(SourceStack { spans, scoped, statics, stackir })
     }
 
     fn stackir_with_builtin(self) -> Result<SourceStack, TestPipelineError> {
@@ -149,27 +144,18 @@ impl SourceChecked {
             }));
         };
         let Self { spans, scoped, statics, root: _ } = self;
-        let mut lowering_scoped = zydeco_surface::scoped::arena::ScopedArena {
-            defs: statics.scoped_definitions(&scoped),
-            ..Default::default()
-        };
-        let stackir = zydeco_stackir::BuiltinRootLowerer::new(
-            &spans,
-            &mut lowering_scoped,
-            &statics,
-            root,
-            *signature,
-        )
-        .run()
-        .map_err(TestPipelineError::Stack)?;
-        Ok(SourceStack { spans, scoped: lowering_scoped, statics, stackir })
+        let stackir =
+            zydeco_stackir::BuiltinRootLowerer::new(&spans, &scoped, &statics, root, *signature)
+                .run()
+                .map_err(TestPipelineError::Stack)?;
+        Ok(SourceStack { spans, scoped, statics, stackir })
     }
 }
 
 impl SourceStack {
     fn convert(self) -> SourceSpsLow {
-        let Self { spans, mut scoped, statics, stackir } = self;
-        let sps_low = zydeco_stackir::SpsLowPipeline::new(&mut scoped).run(stackir);
+        let Self { spans, scoped, statics, stackir } = self;
+        let sps_low = zydeco_stackir::SpsLowPipeline::new(&scoped, &statics).run(stackir);
         SourceSpsLow { spans, scoped, statics, sps_low }
     }
 }
@@ -481,7 +467,7 @@ fn assert_source_io_program_reaches_zasm(
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert_eq!(String::from_utf8(output).unwrap(), expected_output);
-    assert!(assembly.arena.programs.get(&assembly.root).is_some());
+    assert!(assembly.arena().programs.get(&assembly.root()).is_some());
 }
 
 fn assert_source_program_exits_zero_and_reaches_zasm(relative: impl AsRef<Path>) {
@@ -495,7 +481,7 @@ fn assert_source_program_exits_zero_and_reaches_zasm(relative: impl AsRef<Path>)
         TestPipeline::zasm_from_checked(checked, crate::TestOutput::quiet()).unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
-    assert!(assembly.arena.programs.get(&assembly.root).is_some());
+    assert!(assembly.arena().programs.get(&assembly.root()).is_some());
 }
 
 fn assert_source_program_reaches_amd64(relative: impl AsRef<Path>) {
@@ -1359,10 +1345,10 @@ fn a_zero_dependency_source_program_lowers_directly_to_stack_ir() {
         .check()
         .unwrap();
 
-    let SourceStack { stackir, scoped, .. } = checked.stackir().unwrap();
+    let SourceStack { stackir, scoped, statics, .. } = checked.stackir().unwrap();
     let stackir = stackir.as_program();
-    assert!(stackir.arena.inner.compus.get(&stackir.root).is_some());
-    zydeco_stackir::sps::check::check(stackir, &scoped);
+    assert!(stackir.arena().inner.compus.get(&stackir.root()).is_some());
+    zydeco_stackir::sps::check::check(stackir, &scoped, &statics);
 }
 
 #[test]
@@ -1630,11 +1616,11 @@ fn stack_ir_constructs_and_applies_the_same_typed_builtin_package() {
         .check()
         .unwrap();
 
-    let SourceStack { stackir, scoped, .. } = checked.stackir_with_builtin().unwrap();
+    let SourceStack { stackir, scoped, statics, .. } = checked.stackir_with_builtin().unwrap();
 
     let stackir = stackir.as_program();
-    assert!(stackir.arena.inner.compus.get(&stackir.root).is_some());
-    zydeco_stackir::sps::check::check(stackir, &scoped);
+    assert!(stackir.arena().inner.compus.get(&stackir.root()).is_some());
+    zydeco_stackir::sps::check::check(stackir, &scoped, &statics);
 }
 
 #[test]
@@ -1645,7 +1631,7 @@ fn builtin_applied_stack_ir_reaches_analyzed_assembly() {
         TestPipeline::zasm(root, crate::TestOutput::quiet()).unwrap();
 
     assert!(sps_low.arena().inner.compus.get(&sps_low.root()).is_some());
-    assert!(assembly.arena.programs.get(&assembly.root).is_some());
+    assert!(assembly.arena().programs.get(&assembly.root()).is_some());
 }
 
 #[test]
@@ -1821,7 +1807,7 @@ fn foundational_argument_fold_preserves_sequence_without_constructing_list() {
         TestPipeline::zasm_from_checked(checked, crate::TestOutput::quiet()).unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
-    assert!(assembly.arena.programs.get(&assembly.root).is_some());
+    assert!(assembly.arena().programs.get(&assembly.root()).is_some());
 }
 
 #[test]
@@ -1853,7 +1839,7 @@ fn standard_library_reifies_foundational_comparisons_as_abstract_bool() {
         TestPipeline::zasm_from_checked(checked, crate::TestOutput::quiet()).unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
-    assert!(assembly.arena.programs.get(&assembly.root).is_some());
+    assert!(assembly.arena().programs.get(&assembly.root()).is_some());
 }
 
 #[test]
@@ -1868,7 +1854,7 @@ fn standard_library_reifies_foundational_splits_as_abstract_option() {
         TestPipeline::zasm_from_checked(checked, crate::TestOutput::quiet()).unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
-    assert!(assembly.arena.programs.get(&assembly.root).is_some());
+    assert!(assembly.arena().programs.get(&assembly.root()).is_some());
 }
 
 #[test]
@@ -1883,7 +1869,7 @@ fn standard_library_reifies_foundational_line_parsing_as_abstract_option() {
         TestPipeline::zasm_from_checked(checked, crate::TestOutput::quiet()).unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
-    assert!(assembly.arena.programs.get(&assembly.root).is_some());
+    assert!(assembly.arena().programs.get(&assembly.root()).is_some());
 }
 
 #[test]
@@ -1899,7 +1885,7 @@ fn standard_library_reifies_foundational_argument_fold_as_abstract_list() {
         TestPipeline::zasm_from_checked(checked, crate::TestOutput::quiet()).unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
-    assert!(assembly.arena.programs.get(&assembly.root).is_some());
+    assert!(assembly.arena().programs.get(&assembly.root()).is_some());
 }
 
 #[test]
@@ -2251,7 +2237,7 @@ fn choice_root_reaches_zasm_through_sps_low() {
         TestPipeline::zasm(repository_source("tests/exec/choice.zy"), crate::TestOutput::quiet())
             .unwrap();
 
-    assert!(assembly.arena.programs.get(&assembly.root).is_some());
+    assert!(assembly.arena().programs.get(&assembly.root()).is_some());
 }
 
 #[test]
@@ -2508,9 +2494,10 @@ fn checked_computation_roots_link_directly_to_dynamics() {
 
 #[test]
 fn checked_computation_roots_lower_directly_to_stack_ir() {
-    let SourceStack { stackir, scoped, .. } = checked_trivial_computation().stackir().unwrap();
+    let SourceStack { stackir, scoped, statics, .. } =
+        checked_trivial_computation().stackir().unwrap();
 
     let stackir = stackir.as_program();
-    assert!(stackir.arena.inner.compus.get(&stackir.root).is_some());
-    zydeco_stackir::sps::check::check(stackir, &scoped);
+    assert!(stackir.arena().inner.compus.get(&stackir.root()).is_some());
+    zydeco_stackir::sps::check::check(stackir, &scoped, &statics);
 }

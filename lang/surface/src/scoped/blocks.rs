@@ -344,11 +344,10 @@ impl Resolver<'_> {
         let id = self.allocator.alloc();
         self.terms.insert_new(id, term);
         let textual = self
-            .bitter
             .origins
             .source(&source.into())
             .expect("a source term must retain its textual origin");
-        self.bitter.origins.insert_new(textual, id.into());
+        self.origins.insert_new(textual, id.into());
         id
     }
 }

@@ -83,8 +83,9 @@ showed keyed indexes answer the actual demand.
   memoized check on demand. Consumers (CLI, REPL engine, cajun, integration tests) obtain
   the typed arena through the session; cajun's `ProjectState` is a live root consumer and
   holds its materialization for the project's lifetime.
-- `check_source` returns its arena behind an `Arc`. Read-only fact queries share it in O(1);
-  only consumers that mutate during lowering clone the arena out explicitly.
+- `check_source` returns its arena behind an `Arc`. Fact queries and lowerers share it in O(1);
+  later phases keep synthesized metadata in phase-local deltas instead of cloning or extending
+  the static and scoped arenas.
 - The three S-reading fact queries (`normalized_type_at`, `coverage_facts`,
   `term_annotation_at`) answer entirely from L: `normalized_type_at` reads the keyed
   `type_sites` and `term_norms` tables, so every editor fact survives arena-memo eviction.

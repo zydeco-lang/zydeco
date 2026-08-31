@@ -229,9 +229,62 @@ pub trait ArenaSchema<Id: ArenaId> {
     type Item;
 }
 
-pub trait ArenaAccess<Id, T>: Index<Id, Output = T> + IndexMut<Id, Output = T> {
+/// Read capability for arena storage.
+///
+/// Keeping this independent from [`ArenaAccessMut`] lets consumers describe
+/// immutable phase inputs without acquiring a write capability accidentally.
+pub trait ArenaAccess<Id, T>: Index<Id, Output = T> {
     fn get(&self, id: Id) -> Option<&T>;
+}
+
+/// Write capability for arena storage under construction.
+pub trait ArenaAccessMut<Id, T>: ArenaAccess<Id, T> + IndexMut<Id, Output = T> {
     fn get_mut(&mut self, id: Id) -> Option<&mut T>;
+}
+
+/* ----------------------------- FrozenArena ------------------------------ */
+
+/// An arena after its producing phase has finished.
+///
+/// `FrozenArena` is a transparent, allocation-free ownership boundary. It
+/// deliberately implements [`Deref`] but not `DerefMut`, so downstream phases
+/// can read the arena at the same cost as the underlying value without being
+/// able to update a completed phase product accidentally. A consuming
+/// transformation may recover ownership with [`FrozenArena::into_inner`] and
+/// establish a new frozen boundary for its own output.
+///
+/// ```compile_fail
+/// use zydeco_utils::arena::FrozenArena;
+///
+/// let mut arena = FrozenArena::new(Vec::<u32>::new());
+/// arena.push(1);
+/// ```
+#[repr(transparent)]
+#[derive(Clone, Debug, Default)]
+pub struct FrozenArena<A>(A);
+
+impl<A> FrozenArena<A> {
+    pub fn new(arena: A) -> Self {
+        Self(arena)
+    }
+
+    pub fn into_inner(self) -> A {
+        self.0
+    }
+}
+
+impl<A> AsRef<A> for FrozenArena<A> {
+    fn as_ref(&self) -> &A {
+        &self.0
+    }
+}
+
+impl<A> std::ops::Deref for FrozenArena<A> {
+    type Target = A;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 // pub trait ArenaBidirectional<'t, P, Q> {
@@ -611,6 +664,13 @@ mod impls {
         fn get(&self, id: &Id) -> Option<&Scope::Item> {
             self.index(*id).map(|idx| &self.arena[idx])
         }
+    }
+
+    impl<Scope, Id> ArenaAccessMut<&Id, Scope::Item> for ArenaDense<Scope, Id>
+    where
+        Id: ArenaId,
+        Scope: ArenaSchema<Id>,
+    {
         fn get_mut(&mut self, id: &Id) -> Option<&mut Scope::Item> {
             let idx = self.index(*id)?;
             Some(&mut self.arena[idx])
@@ -713,6 +773,13 @@ mod impls {
         fn get(&self, id: &Id) -> Option<&Scope::Item> {
             self.map.get(&id)
         }
+    }
+
+    impl<Scope, Id> ArenaAccessMut<&Id, Scope::Item> for ArenaSparse<Scope, Id>
+    where
+        Id: ArenaId,
+        Scope: ArenaSchema<Id>,
+    {
         fn get_mut(&mut self, id: &Id) -> Option<&mut Scope::Item> {
             self.map.get_mut(&id)
         }
@@ -941,7 +1008,13 @@ mod impls {
         fn get(&self, id: &Id) -> Option<&Scope::Item> {
             self.indexes.get(id).map(|index| &self.values[index.offset()])
         }
+    }
 
+    impl<Scope, Id> ArenaAccessMut<&Id, Scope::Item> for ArenaIndexed<Scope, Id>
+    where
+        Id: ArenaId,
+        Scope: ArenaSchema<Id>,
+    {
         fn get_mut(&mut self, id: &Id) -> Option<&mut Scope::Item> {
             let index = self.indexes.get(id)?.offset();
             self.values.get_mut(index)
@@ -1053,7 +1126,13 @@ mod impls {
         fn get(&self, id: &Id) -> Option<&Scope::Item> {
             self.pages.get(&id.key_space())?.get(id.raw().into_u32() as usize)?.as_ref()
         }
+    }
 
+    impl<Scope, Id> ArenaAccessMut<&Id, Scope::Item> for ArenaPaged<Scope, Id>
+    where
+        Id: ArenaId,
+        Scope: ArenaSchema<Id>,
+    {
         fn get_mut(&mut self, id: &Id) -> Option<&mut Scope::Item> {
             self.pages.get_mut(&id.key_space())?.get_mut(id.raw().into_u32() as usize)?.as_mut()
         }
@@ -1128,7 +1207,9 @@ mod impls {
         fn get(&self, id: &Id) -> Option<&T> {
             self.pages.get(&id.key_space())?.get(id.raw().into_u32() as usize)?.as_ref()
         }
+    }
 
+    impl<Id: ArenaId, T> ArenaAccessMut<&Id, T> for ArenaPagedAssoc<Id, T> {
         fn get_mut(&mut self, id: &Id) -> Option<&mut T> {
             self.pages.get_mut(&id.key_space())?.get_mut(id.raw().into_u32() as usize)?.as_mut()
         }
@@ -1249,6 +1330,12 @@ mod impls {
         fn get(&self, id: &Id) -> Option<&T> {
             self.map.get(&id)
         }
+    }
+
+    impl<Id, T> ArenaAccessMut<&Id, T> for ArenaAssoc<Id, T>
+    where
+        Id: Eq + Hash,
+    {
         fn get_mut(&mut self, id: &Id) -> Option<&mut T> {
             self.map.get_mut(&id)
         }
@@ -1862,6 +1949,20 @@ mod tests {
     }
     impl ArenaSchema<SparseId> for AlternateScope {
         type Item = usize;
+    }
+
+    #[test]
+    fn frozen_arena_is_a_zero_cost_read_only_boundary() {
+        use std::mem::{align_of, size_of};
+
+        assert_eq!(size_of::<FrozenArena<Vec<u32>>>(), size_of::<Vec<u32>>());
+        assert_eq!(align_of::<FrozenArena<Vec<u32>>>(), align_of::<Vec<u32>>());
+
+        let arena = FrozenArena::new(vec![1, 2]);
+        assert_eq!(arena.as_slice(), &[1, 2]);
+        let mut arena = arena.into_inner();
+        arena.push(3);
+        assert_eq!(arena, [1, 2, 3]);
     }
 
     #[test]

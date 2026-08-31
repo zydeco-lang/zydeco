@@ -10,7 +10,10 @@ use std::{
 use zydeco_surface::textual::{
     ImportSite, ImportTarget, Lexer, ParseError, SourceUnitParser, syntax as t,
 };
-use zydeco_utils::{prelude::ArenaDense, span::FileMap};
+use zydeco_utils::{
+    prelude::{ArenaDense, FrozenArena},
+    span::FileMap,
+};
 
 pub(crate) trait SourceProvider {
     fn load(&mut self, path: &Path) -> Result<Arc<SourceTemplate>, SourceLoadError>;
@@ -61,8 +64,8 @@ impl SourceTemplate {
             path,
             source,
             file,
-            spans,
-            arena,
+            spans: FrozenArena::new(spans),
+            arena: FrozenArena::new(arena),
             unit,
             documentation,
             warnings,
@@ -87,7 +90,11 @@ where
             }
             | error => error,
         })?;
-        let graph = SourceGraph { root, sources: self.sources, imports: self.imports };
+        let graph = SourceGraph {
+            root,
+            sources: FrozenArena::new(self.sources),
+            imports: FrozenArena::new(self.imports),
+        };
         graph.ensure_acyclic()?;
         Ok(graph)
     }

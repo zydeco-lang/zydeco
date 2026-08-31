@@ -98,19 +98,19 @@ impl RootLinker {
     /// Erase static structure and retain one computation as the dynamic root.
     pub fn run(self) -> DynamicsProgram {
         let Self { scoped, statics, root } = self;
-        let defs = statics.scoped_definitions(&scoped).rebind::<ds::DynamicsScope>();
+        let defs = statics.dynamic_definitions(&scoped).rebind::<ds::DynamicsScope>();
         let root = root.link(&statics);
-        DynamicsProgram { defs, root }
+        DynamicsProgram::new(defs, root)
     }
 }
 
 impl ValueRootLinker {
     pub fn run(self) -> DynamicsProgram {
         let Self { scoped, statics, root } = self;
-        let defs = statics.scoped_definitions(&scoped).rebind::<ds::DynamicsScope>();
+        let defs = statics.dynamic_definitions(&scoped).rebind::<ds::DynamicsScope>();
         let value = root.link(&statics);
         let root = Rc::new(ds::Computation::Ret(Return(value)));
-        DynamicsProgram { defs, root }
+        DynamicsProgram::new(defs, root)
     }
 }
 
@@ -119,17 +119,17 @@ impl BuiltinRootLinker {
         let Self { scoped, statics, root, signature } = self;
         let plan = BuiltinPackagePlan::for_executable(&statics, &signature)?;
         let package = BuiltinPackageLinker::link(plan.value)?;
-        let defs = statics.scoped_definitions(&scoped).rebind::<ds::DynamicsScope>();
+        let defs = statics.dynamic_definitions(&scoped).rebind::<ds::DynamicsScope>();
         let function = root.link(&statics);
         let root = Rc::new(ds::Computation::VApp(App(function, package)));
-        Ok(DynamicsProgram { defs, root })
+        Ok(DynamicsProgram::new(defs, root))
     }
 }
 
 impl BuiltinComputationRootLinker {
     pub fn run(self) -> Result<DynamicsProgram, BuiltinPackageError> {
         let Self { scoped, statics, root, signature } = self;
-        let defs = statics.scoped_definitions(&scoped).rebind::<ds::DynamicsScope>();
+        let defs = statics.dynamic_definitions(&scoped).rebind::<ds::DynamicsScope>();
         let (root, _) = std::iter::successors(Some(signature), |signature| {
             BuiltinPackageLinker::computation_signature(&statics, signature.codomain)
         })
@@ -147,14 +147,14 @@ impl BuiltinComputationRootLinker {
                 ))
             },
         )?;
-        Ok(DynamicsProgram { defs, root })
+        Ok(DynamicsProgram::new(defs, root))
     }
 }
 
 impl BuiltinValueRootLinker {
     pub fn run(self) -> Result<DynamicsProgram, BuiltinPackageError> {
         let Self { scoped, statics, root, signature } = self;
-        let defs = statics.scoped_definitions(&scoped).rebind::<ds::DynamicsScope>();
+        let defs = statics.dynamic_definitions(&scoped).rebind::<ds::DynamicsScope>();
         let (value, _) = std::iter::successors(Some(signature), |signature| {
             BuiltinPackageLinker::value_signature(&statics, signature.codomain)
         })
@@ -173,7 +173,7 @@ impl BuiltinValueRootLinker {
             },
         )?;
         let root = Rc::new(ds::Computation::Ret(Return(value)));
-        Ok(DynamicsProgram { defs, root })
+        Ok(DynamicsProgram::new(defs, root))
     }
 }
 

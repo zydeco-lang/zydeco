@@ -548,15 +548,21 @@ fn resolved_data<'db>(
     let program = graph.parse().map_err(|error| AnalysisError::TextualProgram { error })?;
     let bitter = program.desugar().map_err(|failure| AnalysisError::Desugar {
         error: Box::new(failure.error),
-        spans: Arc::new(failure.spans),
+        spans: Arc::new(failure.spans.into_inner()),
     })?;
     let ScopedProgram { spans, arena, prim, root } =
         bitter.resolve().map_err(|failure| AnalysisError::Resolve {
             error: failure.error,
             graph,
-            spans: std::sync::Arc::new(failure.spans),
+            spans: std::sync::Arc::new(failure.spans.into_inner()),
         })?;
-    Ok(zydeco_statics::query::ScopedData::new(db, Arc::new(spans), prim, Arc::new(arena), root))
+    Ok(zydeco_statics::query::ScopedData::new(
+        db,
+        Arc::new(spans.into_inner()),
+        prim,
+        Arc::new(arena.into_inner()),
+        root,
+    ))
 }
 
 /// Run the whole source pipeline for one root and return the memoized check

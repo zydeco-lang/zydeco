@@ -5,12 +5,12 @@
 //! - All computations and stacks are compiled into programs.
 
 use super::{
-    arena::{AssemblyArena, CxKont, Kont},
+    arena::{AssemblyArena, AssemblyBuild, CxKont, Kont},
     syntax::*,
 };
 use derive_more::{AsMut, AsRef};
 use std::collections::HashMap;
-use zydeco_stackir::{SpsLowProgram, sps_low::syntax as sk};
+use zydeco_stackir::{SpsLowProgram, arena::DefinitionNames as _, sps_low::syntax as sk};
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_utils::with::With;
@@ -66,7 +66,7 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    pub fn run(mut self) -> AssemblyProgram {
+    pub(crate) fn run(mut self) -> AssemblyBuild {
         // Lower all builtins
         for builtin in self.sps_low.admin.builtins.values() {
             let sk::Builtin { role, name, arity, sort } = builtin.clone();
@@ -78,7 +78,7 @@ impl<'a> Lowerer<'a> {
         let sps_low_root = self.root;
         let root = sps_low_root.lower(&mut self, Context::new());
         self.finish_pending();
-        AssemblyProgram { arena: self.arena, root }
+        AssemblyBuild { arena: self.arena, root }
     }
 
     fn finish_pending(&mut self) {
@@ -124,7 +124,7 @@ impl<'a> Lower<'a> for sk::VPatId {
             }
             | VPat::Var(def_id) => {
                 if let Some(&arity) = lo.unboxing.unboxed_vars.get(&def_id) {
-                    let name = lo.scoped.defs[&def_id].clone();
+                    let name = lo.sps_low.admin.def_name(lo.scoped, lo.statics, &def_id).clone();
                     let vars: Vec<VarId> = (0..arity)
                         .map(|index| {
                             VarName::from(format!("{}#unbox{}", name.plain(), index))
@@ -141,7 +141,7 @@ impl<'a> Lower<'a> for sk::VPatId {
                     kont(lo, cx)
                 } else {
                     // Pop the value from the stack into the variable
-                    let name = lo.scoped.defs[&def_id].clone();
+                    let name = lo.sps_low.admin.def_name(lo.scoped, lo.statics, &def_id).clone();
                     let var = name.build(lo, Some(def_id));
                     let incr = Box::new(move |cx: &Context| cx.clone() + [var]);
                     Pop(var).build(lo, With::new(cx, CxKont { incr, kont }))
@@ -238,7 +238,8 @@ impl<'a> Lower<'a> for sk::ValueId {
                 }
             }
             | Value::Block(sk::Block { label, body }) => {
-                let name = lo.scoped.defs[&label].plain().to_string();
+                let name =
+                    lo.sps_low.admin.def_name(lo.scoped, lo.statics, &label).plain().to_string();
                 let sym = Undefined.build(lo, (Some(name.clone()), Some(label)));
                 let body = body.lower(lo, Context::new());
                 lo.arena

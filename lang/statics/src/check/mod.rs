@@ -91,8 +91,9 @@ pub enum TyckObservation {
 /// The typed result of checking one complete source term.
 ///
 /// The arena is shared behind an [`Arc`] so that read-only consumers (editor
-/// facts) can read individual nodes without cloning hundreds of megabytes;
-/// consumers that mutate during lowering clone it out explicitly.
+/// facts and lowerers) can read individual nodes without cloning hundreds of
+/// megabytes. Later phases keep their synthesized metadata in phase-local
+/// deltas rather than extending this arena.
 #[derive(Clone, Debug)]
 pub struct CheckedSource {
     pub statics: std::sync::Arc<StaticsArena>,

@@ -104,8 +104,7 @@ pub struct Lowerer<'a> {
     #[as_mut]
     pub arena: StackirArena,
     pub spans: &'a SpanArena,
-    #[as_mut(ScopedArena)]
-    pub scoped: &'a mut ScopedArena,
+    pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
 }
 
@@ -133,9 +132,7 @@ struct BuiltinPackageLowering;
 
 impl<'a> Lowerer<'a> {
     /// Create a new lowerer with fresh stack arenas.
-    pub fn new(
-        spans: &'a SpanArena, scoped: &'a mut ScopedArena, statics: &'a StaticsArena,
-    ) -> Self {
+    pub fn new(spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena) -> Self {
         let arena = StackirArena::default();
         Self { arena, spans, scoped, statics }
     }
@@ -154,13 +151,13 @@ impl<'a> Lowerer<'a> {
 
     fn alloc_projection_def(&mut self) -> DefId {
         let def = self.arena.admin.fresh();
-        self.scoped.insert_def(def, VarName("__proj__".to_owned()));
+        self.arena.admin.insert_def(def, VarName("__proj__".to_owned()));
         def
     }
 
     fn alloc_pure_result(&mut self) -> DefId {
         let def = self.arena.admin.fresh();
-        self.scoped.insert_def(def, VarName("__pure_result__".to_owned()));
+        self.arena.admin.insert_def(def, VarName("__pure_result__".to_owned()));
         def
     }
 
@@ -187,7 +184,7 @@ impl<'a> Lowerer<'a> {
     }
 
     fn finish(self, root: CompuId) -> BranchJoinProgram {
-        BranchJoinProgram::try_new(StackirProgram { arena: self.arena, root })
+        BranchJoinProgram::try_new(StackirProgram::new(self.arena, root))
             .expect("stack-indexed lowering must construct branch-join SPS")
     }
 
@@ -209,8 +206,7 @@ impl<'a> Lowerer<'a> {
 
 impl<'a> RootLowerer<'a> {
     pub fn new(
-        spans: &'a SpanArena, scoped: &'a mut ScopedArena, statics: &'a StaticsArena,
-        root: ss::CompuId,
+        spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena, root: ss::CompuId,
     ) -> Self {
         Self { lowerer: Lowerer::new(spans, scoped, statics), root }
     }
@@ -218,7 +214,7 @@ impl<'a> RootLowerer<'a> {
 
 impl<'a> BuiltinRootLowerer<'a> {
     pub fn new(
-        spans: &'a SpanArena, scoped: &'a mut ScopedArena, statics: &'a StaticsArena,
+        spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena,
         root: ss::CompuId, signature: ss::PackPi,
     ) -> Self {
         Self { lowerer: Lowerer::new(spans, scoped, statics), root, signature }
@@ -251,7 +247,6 @@ impl BuiltinPackageLowering {
 }
 
 impl CompilerPass for RootLowerer<'_> {
-    type Arena = StackirArena;
     type Out = BranchJoinProgram;
     type Error = std::convert::Infallible;
 
@@ -264,7 +259,6 @@ impl CompilerPass for RootLowerer<'_> {
 }
 
 impl CompilerPass for BuiltinRootLowerer<'_> {
-    type Arena = StackirArena;
     type Out = BranchJoinProgram;
     type Error = BuiltinPackageLowerError;
 
@@ -561,12 +555,12 @@ mod tests {
         statics.values.insert_new(value, ss::Triv.into());
         statics.compus.insert_new(root, ss::Return(value).into());
         let spans = SpanArena::default();
-        let mut scoped = ScopedArena::default();
+        let scoped = ScopedArena::default();
 
-        let stackir = RootLowerer::new(&spans, &mut scoped, &statics, root).run().unwrap();
+        let stackir = RootLowerer::new(&spans, &scoped, &statics, root).run().unwrap();
         let stackir = stackir.as_program();
 
-        assert!(stackir.arena.inner.compus.get(&stackir.root).is_some());
-        super::super::check::check(stackir, &scoped);
+        assert!(stackir.arena().inner.compus.get(&stackir.root()).is_some());
+        super::super::check::check(stackir, &scoped, &statics);
     }
 }

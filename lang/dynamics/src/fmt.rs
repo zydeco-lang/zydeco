@@ -29,7 +29,7 @@ use pretty::RcDoc;
 
 impl<'a> Pretty<'a, Formatter<'a>> for DefId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let VarName(name) = &f.program.defs[self];
+        let VarName(name) = &f.program.defs()[self];
         RcDoc::text(format!("{}{}", name, self.concise()))
     }
 }

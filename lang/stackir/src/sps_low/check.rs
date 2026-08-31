@@ -7,7 +7,7 @@ use std::collections::HashSet;
 /// A lexical first-order SPS tree whose joins remain attached to coproduct branches.
 #[derive(Debug)]
 pub struct SpsLowProgram {
-    arena: SpsLowArena,
+    arena: FrozenArena<SpsLowArena>,
     root: CompuId,
 }
 
@@ -41,7 +41,7 @@ impl SpsLowProgram {
         if !variables.is_empty() {
             return Err(SpsLowError::OpenRoot { variables });
         }
-        Ok(Self { arena, root })
+        Ok(Self { arena: FrozenArena::new(arena), root })
     }
 
     pub fn arena(&self) -> &SpsLowArena {
@@ -53,7 +53,7 @@ impl SpsLowProgram {
     }
 
     pub fn into_parts(self) -> (SpsLowArena, CompuId) {
-        (self.arena, self.root)
+        (self.arena.into_inner(), self.root)
     }
 }
 

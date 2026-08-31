@@ -12,11 +12,12 @@ use zydeco_surface::{
     },
     textual::syntax as t,
 };
+use zydeco_utils::arena::FrozenArena;
 use zydeco_utils::pass::CompilerPass;
 
 pub(crate) struct BitterProgram {
-    pub spans: t::SpanArena,
-    pub arena: BitterArena,
+    pub spans: FrozenArena<t::SpanArena>,
+    pub arena: FrozenArena<BitterArena>,
     pub prim: PrimTerms,
     pub root: BitterTermId,
 }
@@ -25,12 +26,12 @@ pub(crate) struct BitterProgram {
 #[derive(Debug)]
 pub(crate) struct DesugarFailure {
     pub error: DesugarError,
-    pub spans: t::SpanArena,
+    pub spans: FrozenArena<t::SpanArena>,
 }
 
 pub(crate) struct ScopedProgram {
-    pub spans: t::SpanArena,
-    pub arena: ScopedArena,
+    pub spans: FrozenArena<t::SpanArena>,
+    pub arena: FrozenArena<ScopedArena>,
     pub prim: PrimDefs,
     pub root: ScopedTermId,
 }
@@ -52,7 +53,7 @@ impl TextualProgram {
 #[derive(Debug)]
 pub(crate) struct ResolveFailure {
     pub error: Box<ResolveError>,
-    pub spans: t::SpanArena,
+    pub spans: FrozenArena<t::SpanArena>,
 }
 
 impl BitterProgram {
