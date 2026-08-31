@@ -33,9 +33,13 @@ impl SourceTemplate {
         let mut parser = t::Parser::new();
         let unit = SourceUnitParser::new()
             .parse(&source, &mut parser, Lexer::new(&source))
-            .map_err(|error| SourceParseError::Parse {
-                path: path.clone(),
-                message: ParseError { error, file_map: &file }.to_string(),
+            .map_err(|error| {
+                let error = ParseError { error, file_map: &file };
+                SourceParseError::Parse {
+                    path: path.clone(),
+                    range: error.source_range(),
+                    message: error.to_string(),
+                }
             })?;
         let documentation = unit.documentation(&parser.arena, &parser.spans);
         let warnings =

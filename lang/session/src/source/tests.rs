@@ -768,6 +768,19 @@ fn source_graph_rejects_a_legacy_declaration_sequence() {
 }
 
 #[test]
+fn parser_failures_retain_the_rejected_token_range() {
+    let fixture = SourceFixture::new();
+    let source = "begin ?";
+    let root = fixture.write("main.zy", source);
+    let error = SourceGraph::load(root).unwrap_err();
+    let site = error.diagnostic_site().expect("parser error should retain its source site");
+
+    assert_eq!(site.path().file_name().unwrap(), "main.zy");
+    assert_eq!(site.range(), &(6..7));
+    assert_eq!(&source[site.range().clone()], "?");
+}
+
+#[test]
 fn source_graph_rejects_an_unknown_builtin_role() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "@[builtin(number)] _");

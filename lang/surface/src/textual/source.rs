@@ -191,6 +191,47 @@ pub enum LiteralDirectiveError {
     MissingText { term: TermId, span: Span },
 }
 
+impl ImportDirectiveError {
+    pub fn span(&self) -> Span {
+        match self {
+            | Self::TargetArity { span, .. }
+            | Self::UnsupportedTarget { span, .. }
+            | Self::EmptyPath { span, .. }
+            | Self::NonPositiveInput { span, .. }
+            | Self::PayloadNotHole { span, .. } => *span,
+        }
+    }
+}
+
+impl BuiltinDirectiveError {
+    pub fn span(&self) -> Span {
+        match self {
+            | Self::Invalid { span, .. }
+            | Self::UnsupportedExistentialPattern { span, .. }
+            | Self::TypeRoleOnTerm { span, .. }
+            | Self::ValueRoleOnExistentialPattern { span, .. } => *span,
+        }
+    }
+}
+
+impl IntrinsicDirectiveError {
+    pub fn span(&self) -> Span {
+        match self {
+            | Self::Invalid { span, .. } | Self::PayloadNotHole { span, .. } => *span,
+        }
+    }
+}
+
+impl LiteralDirectiveError {
+    pub fn span(&self) -> Span {
+        match self {
+            | Self::Invalid { span, .. }
+            | Self::PayloadNotHole { span, .. }
+            | Self::MissingText { span, .. } => *span,
+        }
+    }
+}
+
 impl SourceUnit {
     /// Collect every explicitly documented term in this source unit.
     ///

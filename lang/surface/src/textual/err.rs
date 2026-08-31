@@ -1,6 +1,6 @@
 use super::lexer::Tok;
 use ariadne::{Label, Report, ReportKind};
-use std::fmt::Display;
+use std::{fmt::Display, ops::Range};
 use zydeco_utils::span::{FileMap, PathDisplay};
 
 /// Wrapper around LALRPOP parse errors with file context.
@@ -10,6 +10,19 @@ pub struct ParseError<'input> {
 }
 
 impl ParseError<'_> {
+    /// File-relative byte range identified by the parser, if the error carries one.
+    pub fn source_range(&self) -> Option<Range<usize>> {
+        use lalrpop_util::ParseError::*;
+        match &self.error {
+            | User { .. } => None,
+            | InvalidToken { location } | UnrecognizedEof { location, .. } => {
+                Some(*location..*location)
+            }
+            | UnrecognizedToken { token: (start, _, end), .. }
+            | ExtraToken { token: (start, _, end) } => Some(*start..*end),
+        }
+    }
+
     /// Create an Ariadne report for this parse error.
     pub fn to_report(&self) -> Report<'static, (PathDisplay, std::ops::Range<usize>)> {
         use lalrpop_util::ParseError::*;

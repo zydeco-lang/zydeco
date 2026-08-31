@@ -330,7 +330,17 @@ fn stdio_server_synchronizes_documents_and_answers_navigation_requests() {
         }),
     );
     let diagnostics = server.notification("textDocument/publishDiagnostics");
-    assert_eq!(diagnostics["params"]["diagnostics"].as_array().unwrap().len(), 1);
+    let [diagnostic] = diagnostics["params"]["diagnostics"].as_array().unwrap().as_slice() else {
+        panic!("expected one parser diagnostic: {diagnostics}")
+    };
+    assert_eq!(diagnostic["source"], "zydeco");
+    assert_eq!(
+        diagnostic["range"],
+        json!({
+            "start": { "line": 0, "character": 6 },
+            "end": { "line": 0, "character": 7 },
+        })
+    );
     let semantic = server
         .request("textDocument/semanticTokens/full", json!({ "textDocument": { "uri": uri } }));
     let data = semantic["result"]["data"].as_array().unwrap();
@@ -341,6 +351,26 @@ fn stdio_server_synchronizes_documents_and_answers_navigation_requests() {
         .position(|kind| kind == "keyword")
         .unwrap();
     assert_eq!(data[0..5], [json!(0), json!(0), json!(5), json!(keyword), json!(0)]);
+
+    server.notify(
+        "textDocument/didChange",
+        json!({
+            "textDocument": { "uri": uri, "version": 4 },
+            "contentChanges": [{ "text": "begin\n  missing\nend\n" }],
+        }),
+    );
+    let diagnostics = server.notification("textDocument/publishDiagnostics");
+    let [diagnostic] = diagnostics["params"]["diagnostics"].as_array().unwrap().as_slice() else {
+        panic!("expected one resolution diagnostic: {diagnostics}")
+    };
+    assert_eq!(diagnostic["source"], "zydeco");
+    assert_eq!(
+        diagnostic["range"],
+        json!({
+            "start": { "line": 1, "character": 2 },
+            "end": { "line": 1, "character": 9 },
+        })
+    );
 
     server.finish();
 }

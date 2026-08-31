@@ -19,6 +19,15 @@ pub enum ResolveError {
 }
 
 impl ResolveError {
+    /// Primary source span of this resolution failure.
+    pub fn primary_span(&self) -> Span {
+        match self {
+            | Self::UnboundVar(variable) => variable.info,
+            | Self::DuplicateDefinition(_, duplicate) => duplicate.info,
+            | Self::UnenclosedThat(span) | Self::RecursiveParameter(span) => *span,
+        }
+    }
+
     /// Create an Ariadne report for this resolve error.
     ///
     /// `spans` is the merged program's span arena; its attached source map

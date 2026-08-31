@@ -21,6 +21,13 @@ pub(crate) struct BitterProgram {
     pub root: BitterTermId,
 }
 
+/// A desugaring failure together with the merged span arena needed to locate it.
+#[derive(Debug)]
+pub(crate) struct DesugarFailure {
+    pub error: DesugarError,
+    pub spans: t::SpanArena,
+}
+
 pub(crate) struct ScopedProgram {
     pub spans: t::SpanArena,
     pub arena: ScopedArena,
@@ -29,11 +36,14 @@ pub(crate) struct ScopedProgram {
 }
 
 impl TextualProgram {
-    pub(crate) fn desugar(self) -> Result<BitterProgram, DesugarError> {
+    pub(crate) fn desugar(self) -> Result<BitterProgram, DesugarFailure> {
         let TextualProgram { spans, arena: textual, unit } = self;
-        let SourceDesugarOut { arena, prim, root } =
-            SourceUnitDesugarer::new(&spans, &textual, unit).run()?;
-        Ok(BitterProgram { spans, arena, prim, root })
+        match SourceUnitDesugarer::new(&spans, &textual, unit).run() {
+            | Ok(SourceDesugarOut { arena, prim, root }) => {
+                Ok(BitterProgram { spans, arena, prim, root })
+            }
+            | Err(error) => Err(DesugarFailure { error, spans }),
+        }
     }
 }
 

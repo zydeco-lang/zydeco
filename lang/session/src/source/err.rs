@@ -3,6 +3,7 @@ use std::{
     error::Error,
     fmt::{Display, Formatter},
     io,
+    ops::Range,
     path::PathBuf,
     sync::Arc,
 };
@@ -10,15 +11,41 @@ use thiserror::Error;
 use zydeco_statics::syntax::TermAnnId;
 use zydeco_surface::textual::{
     BuiltinDirectiveError, ImportDirectiveError, IntrinsicDirectiveError, LiteralDirectiveError,
-    SourceNumber,
+    SourceNumber, syntax::SpanArena,
 };
 use zydeco_utils::span::Span;
+
+/// One compiler failure's primary location in file-relative byte coordinates.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SourceDiagnosticSite {
+    path: PathBuf,
+    range: Range<usize>,
+}
+
+impl SourceDiagnosticSite {
+    pub fn new(path: PathBuf, range: Range<usize>) -> Self {
+        Self { path, range }
+    }
+
+    pub fn from_span(spans: &SpanArena, span: Span) -> Option<Self> {
+        let (file, range) = spans.source_map()?.range(span)?;
+        Some(Self::new(file.path(), range))
+    }
+
+    pub fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+
+    pub fn range(&self) -> &Range<usize> {
+        &self.range
+    }
+}
 
 /// A deterministic source-template error suitable for memoized parsing.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum SourceParseError {
     #[error("cannot parse source `{}`: {message}", path.display())]
-    Parse { path: PathBuf, message: String },
+    Parse { path: PathBuf, range: Option<Range<usize>>, message: String },
     #[error("invalid source directive in `{}`: {error}", path.display())]
     Directive {
         path: PathBuf,
@@ -43,6 +70,19 @@ pub enum SourceParseError {
         #[source]
         error: Box<LiteralDirectiveError>,
     },
+}
+
+impl SourceParseError {
+    pub fn diagnostic_site(&self) -> Option<SourceDiagnosticSite> {
+        let (path, range) = match self {
+            | Self::Parse { path, range, .. } => (path, range.clone()?),
+            | Self::Directive { path, error } => (path, error.span().range()),
+            | Self::BuiltinDirective { path, error } => (path, error.span().range()),
+            | Self::IntrinsicDirective { path, error } => (path, error.span().range()),
+            | Self::LiteralDirective { path, error } => (path, error.span().range()),
+        };
+        Some(SourceDiagnosticSite::new(path.clone(), range))
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -85,12 +125,43 @@ pub enum SourceLoadError {
     Cycle(#[from] SourceCycle),
 }
 
+impl SourceLoadError {
+    pub fn diagnostic_site(&self) -> Option<SourceDiagnosticSite> {
+        match self {
+            | Self::RootPath { .. } | Self::Read { .. } => None,
+            | Self::ImportPath { importer, span, .. }
+            | Self::ImportInput { importer, span, .. } => {
+                Some(SourceDiagnosticSite::new(importer.clone(), span.range()))
+            }
+            | Self::Parse(error) => error.diagnostic_site(),
+            | Self::Cycle(cycle) => cycle.steps.first().map(|step| {
+                let path = match step.kind {
+                    | SourceDependencyKind::Import(_) => &step.dependent,
+                    | SourceDependencyKind::Signature => &step.dependency,
+                };
+                SourceDiagnosticSite::new(path.clone(), step.span.range())
+            }),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 pub enum TextualProgramError {
     #[error("source `{}` has no import edge for term {term:?}", path.display())]
-    MissingImport { path: PathBuf, term: zydeco_surface::textual::syntax::TermId },
+    MissingImport { path: PathBuf, term: zydeco_surface::textual::syntax::TermId, span: Span },
     #[error("source `{}` has no attached text block for literal term {term:?}", path.display())]
-    MissingLiteralText { path: PathBuf, term: zydeco_surface::textual::syntax::TermId },
+    MissingLiteralText { path: PathBuf, term: zydeco_surface::textual::syntax::TermId, span: Span },
+}
+
+impl TextualProgramError {
+    pub fn diagnostic_site(&self) -> SourceDiagnosticSite {
+        match self {
+            | Self::MissingImport { path, span, .. }
+            | Self::MissingLiteralText { path, span, .. } => {
+                SourceDiagnosticSite::new(path.clone(), span.range())
+            }
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

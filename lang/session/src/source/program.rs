@@ -389,7 +389,11 @@ impl<'graph> TextualProgramBuilder<'graph> {
             .iter()
             .find(|import| self.graph.imports[import].term == term)
             .copied()
-            .ok_or_else(|| TextualProgramError::MissingImport { path: file.path.clone(), term })?;
+            .ok_or_else(|| TextualProgramError::MissingImport {
+                path: file.path.clone(),
+                term,
+                span: file.spans[&term.into()],
+            })?;
         let imported = self.graph.imports[&import].imported;
         let body = self.source(imported)?;
         Ok(self.parser.term(self.span(source, term.into()).make(t::SourceBoundary(body).into())))
@@ -407,6 +411,7 @@ impl<'graph> TextualProgramBuilder<'graph> {
             .ok_or_else(|| TextualProgramError::MissingLiteralText {
                 path: file.path.clone(),
                 term,
+                span: file.spans[&term.into()],
             })?;
         let syntax = t::Term::Lit(t::Literal::String(text.into()));
         Ok(self.parser.term(self.span(source, term.into()).make(syntax)))

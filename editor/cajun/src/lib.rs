@@ -5,7 +5,7 @@ mod progress;
 mod semantic;
 mod type_links;
 
-use analysis::ProjectState;
+use analysis::{ProjectFailure, ProjectState};
 use format::{DocumentFormatter, FormattingOutcome};
 use hover::HoverLineWidth;
 use progress::{AnalysisProgressReporter, AnalysisProgressSession};
@@ -24,15 +24,14 @@ use tower_lsp::{
     Client, LanguageServer,
     jsonrpc::Result,
     lsp_types::{
-        Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
-        DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentFormattingParams,
-        DocumentSymbolParams, DocumentSymbolResponse, GotoDefinitionParams, GotoDefinitionResponse,
-        Hover, HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
-        InitializedParams, Location, MessageType, OneOf, Position, PositionEncodingKind, Range,
-        ReferenceParams, SemanticTokens, SemanticTokensFullOptions, SemanticTokensOptions,
-        SemanticTokensParams, SemanticTokensResult, ServerCapabilities, ServerInfo,
-        TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
-        TextDocumentSyncSaveOptions, TextEdit, Url,
+        DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
+        DidSaveTextDocumentParams, DocumentFormattingParams, DocumentSymbolParams,
+        DocumentSymbolResponse, GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverParams,
+        HoverProviderCapability, InitializeParams, InitializeResult, InitializedParams, Location,
+        MessageType, OneOf, PositionEncodingKind, ReferenceParams, SemanticTokens,
+        SemanticTokensFullOptions, SemanticTokensOptions, SemanticTokensParams,
+        SemanticTokensResult, ServerCapabilities, ServerInfo, TextDocumentSyncCapability,
+        TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, TextEdit, Url,
     },
 };
 use zydeco_session::CompilerSession;
@@ -125,7 +124,7 @@ struct CachedProject {
 
 enum RefreshOutcome {
     Updated(PathBuf),
-    Failed(String),
+    Failed(ProjectFailure),
     Superseded,
 }
 
@@ -166,7 +165,7 @@ impl Cajun {
     ) -> RefreshOutcome {
         let path = match Self::path(uri) {
             | Ok(path) => path,
-            | Err(error) => return RefreshOutcome::Failed(error),
+            | Err(error) => return RefreshOutcome::Failed(ProjectFailure::internal(error)),
         };
         let revision = {
             let session = self.session.lock().await;
@@ -200,7 +199,11 @@ impl Cajun {
             | Ok(analysis) => analysis,
             | Err(error) => {
                 return self
-                    .commit_analysis(path, revision, Err(format!("analysis task failed: {error}")))
+                    .commit_analysis(
+                        path,
+                        revision,
+                        Err(ProjectFailure::internal(format!("analysis task failed: {error}"))),
+                    )
                     .await;
             }
         };
@@ -214,7 +217,7 @@ impl Cajun {
 
     async fn commit_analysis(
         &self, path: PathBuf, revision: Option<DocumentRevision>,
-        result: std::result::Result<ProjectState, String>,
+        result: std::result::Result<ProjectState, ProjectFailure>,
     ) -> RefreshOutcome {
         let session = self.session.lock().await;
         if session.revision(&path) != revision {
@@ -250,13 +253,17 @@ impl Cajun {
                 .map(|cached| cached.project.diagnostics(&path))
                 .unwrap_or_default(),
             | RefreshOutcome::Superseded => Vec::new(),
-            | RefreshOutcome::Failed(message) => vec![Diagnostic {
-                range: Range::new(Position::new(0, 0), Position::new(0, 1)),
-                severity: Some(DiagnosticSeverity::ERROR),
-                source: Some("cajun".to_string()),
-                message,
-                ..Diagnostic::default()
-            }],
+            | RefreshOutcome::Failed(failure) => {
+                let path = Self::path(&uri).ok();
+                let source = match path.as_deref() {
+                    | Some(path) => {
+                        let overlay = self.session.lock().await.source(path);
+                        overlay.or_else(|| std::fs::read_to_string(path).ok())
+                    }
+                    | None => None,
+                };
+                vec![failure.diagnostic(path.as_deref(), source.as_deref())]
+            }
         };
         if let Some(progress) = progress {
             progress.finish().await;

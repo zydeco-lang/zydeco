@@ -1,7 +1,7 @@
 use super::loader::{SourceGraphLoader, SourceProvider};
 use crate::source::{
-    CheckedRootSort, ScopedProgram, SourceGraph, SourceLoadError, SourcePath, SourceTemplate,
-    TextualProgramError,
+    CheckedRootSort, ScopedProgram, SourceDiagnosticSite, SourceGraph, SourceLoadError, SourcePath,
+    SourceTemplate, TextualProgramError,
 };
 use dashmap::{DashMap, mapref::entry::Entry};
 use salsa::{Setter as _, Storage};
@@ -148,6 +148,8 @@ pub enum AnalysisError {
     Desugar {
         #[source]
         error: Box<DesugarError>,
+        /// The merged program's span arena, whose source map resolves the rejected construct.
+        spans: Arc<SpanArena>,
     },
     #[error("Resolution error: {error}")]
     Resolve {
@@ -157,6 +159,22 @@ pub enum AnalysisError {
         /// The merged program's span arena, whose source map resolves spans.
         spans: Arc<SpanArena>,
     },
+}
+
+impl AnalysisError {
+    /// Primary file and byte range associated with this compiler failure.
+    pub fn diagnostic_site(&self) -> Option<SourceDiagnosticSite> {
+        match self {
+            | Self::Source { error } => error.diagnostic_site(),
+            | Self::TextualProgram { error } => Some(error.diagnostic_site()),
+            | Self::Desugar { error, spans } => {
+                SourceDiagnosticSite::from_span(spans, error.span())
+            }
+            | Self::Resolve { error, spans, .. } => {
+                SourceDiagnosticSite::from_span(spans, error.primary_span())
+            }
+        }
+    }
 }
 
 #[salsa::input(debug)]
@@ -528,8 +546,10 @@ fn resolved_data<'db>(
 ) -> Result<zydeco_statics::query::ScopedData<'db>, AnalysisError> {
     let graph = source_graph(db, root).map_err(|error| AnalysisError::Source { error })?;
     let program = graph.parse().map_err(|error| AnalysisError::TextualProgram { error })?;
-    let bitter =
-        program.desugar().map_err(|error| AnalysisError::Desugar { error: Box::new(error) })?;
+    let bitter = program.desugar().map_err(|failure| AnalysisError::Desugar {
+        error: Box::new(failure.error),
+        spans: Arc::new(failure.spans),
+    })?;
     let ScopedProgram { spans, arena, prim, root } =
         bitter.resolve().map_err(|failure| AnalysisError::Resolve {
             error: failure.error,

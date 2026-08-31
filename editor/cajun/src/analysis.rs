@@ -8,7 +8,9 @@ use tower_lsp::lsp_types::{
     HoverContents, Location, MarkupContent, MarkupKind, NumberOrString, Position, Range,
     SemanticToken, SymbolKind, Url,
 };
-use zydeco_session::{CompilerSession, ProgramAnalysis};
+use zydeco_session::{
+    AnalysisError, CompilerSession, ProgramAnalysis, SourceDiagnosticSite, SourceLoadError,
+};
 use zydeco_statics::{
     arena::StaticsArena,
     fmt::{Formatter, SealedTypeEquation},
@@ -57,11 +59,81 @@ struct SymbolOccurrence {
     range: Range,
 }
 
+#[derive(Copy, Clone, Debug)]
+enum ProjectFailureOrigin {
+    Compiler,
+    Cajun,
+}
+
+impl ProjectFailureOrigin {
+    fn source(self) -> &'static str {
+        match self {
+            | Self::Compiler => "zydeco",
+            | Self::Cajun => "cajun",
+        }
+    }
+}
+
+/// A failed project refresh that retains compiler source provenance.
+#[derive(Debug)]
+pub(crate) struct ProjectFailure {
+    message: String,
+    site: Option<SourceDiagnosticSite>,
+    origin: ProjectFailureOrigin,
+}
+
+impl ProjectFailure {
+    fn compiler(message: impl Into<String>, site: Option<SourceDiagnosticSite>) -> Self {
+        Self { message: message.into(), site, origin: ProjectFailureOrigin::Compiler }
+    }
+
+    fn from_source_error(error: &SourceLoadError) -> Self {
+        Self::compiler(error.to_string(), error.diagnostic_site())
+    }
+
+    fn from_analysis_error(error: &AnalysisError) -> Self {
+        Self::compiler(error.to_string(), error.diagnostic_site())
+    }
+
+    pub(crate) fn internal(message: impl Into<String>) -> Self {
+        Self { message: message.into(), site: None, origin: ProjectFailureOrigin::Cajun }
+    }
+
+    fn range(&self, published_path: &Path, source: &str) -> Option<Range> {
+        let site = self.site.as_ref()?;
+        if ProjectState::normalize_path(site.path()) != ProjectState::normalize_path(published_path)
+        {
+            return None;
+        }
+        let file = FileMap::local(source, None);
+        Some(Range::new(
+            ProjectState::position(file.line_col_utf16(site.range().start)?),
+            ProjectState::position(file.line_col_utf16(site.range().end)?),
+        ))
+    }
+
+    pub(crate) fn diagnostic(
+        &self, published_path: Option<&Path>, source: Option<&str>,
+    ) -> Diagnostic {
+        let range = published_path
+            .zip(source)
+            .and_then(|(path, source)| self.range(path, source))
+            .unwrap_or_default();
+        Diagnostic {
+            range,
+            severity: Some(DiagnosticSeverity::ERROR),
+            source: Some(self.origin.source().to_owned()),
+            message: self.message.clone(),
+            ..Diagnostic::default()
+        }
+    }
+}
+
 impl ProjectState {
     #[cfg(test)]
     pub(crate) fn load(
         source_path: &Path, overrides: &HashMap<PathBuf, String>,
-    ) -> Result<(Self, CompilerSession), String> {
+    ) -> Result<(Self, CompilerSession), ProjectFailure> {
         Self::load_with_progress(source_path, overrides, |_| {})
     }
 
@@ -69,18 +141,22 @@ impl ProjectState {
     pub(crate) fn load_with_progress(
         source_path: &Path, overrides: &HashMap<PathBuf, String>,
         progress: impl FnMut(AnalysisProgress),
-    ) -> Result<(Self, CompilerSession), String> {
+    ) -> Result<(Self, CompilerSession), ProjectFailure> {
         let mut session = CompilerSession::default();
         overrides.iter().try_for_each(|(path, source)| {
-            session.set_overlay(path, source.clone()).map_err(|error| error.to_string())
+            session
+                .set_overlay(path, source.clone())
+                .map_err(|error| ProjectFailure::from_source_error(&error))
         })?;
         Self::load_from_session(source_path, &session, progress).map(|project| (project, session))
     }
 
     pub(crate) fn load_from_session(
         source_path: &Path, session: &CompilerSession, mut progress: impl FnMut(AnalysisProgress),
-    ) -> Result<Self, String> {
-        let graph = session.graph(source_path).map_err(|error| error.to_string())?;
+    ) -> Result<Self, ProjectFailure> {
+        let graph = session
+            .graph(source_path)
+            .map_err(|error| ProjectFailure::from_source_error(&error))?;
         let source_count = graph.sources.len();
         graph.sources.iter().enumerate().for_each(|(index, (_, source))| {
             progress(AnalysisProgress::Loading(SourceDiscovery {
@@ -92,8 +168,12 @@ impl ProjectState {
         progress(AnalysisProgress::Desugaring { source_count });
         progress(AnalysisProgress::Resolving { source_count });
         progress(AnalysisProgress::Tycking { source_count });
-        let analysis = session.analyze(source_path).map_err(|error| error.to_string())?;
-        let statics = session.materialize_arena(&analysis).map_err(|error| error.to_string())?;
+        let analysis = session
+            .analyze(source_path)
+            .map_err(|error| ProjectFailure::from_analysis_error(&error))?;
+        let statics = session
+            .materialize_arena(&analysis)
+            .map_err(|error| ProjectFailure::from_analysis_error(&error))?;
         let scoped = analysis.scoped();
         let file_maps = analysis
             .sources()
@@ -103,9 +183,12 @@ impl ProjectState {
             })
             .collect();
         let source_path = Self::normalize_path(source_path);
-        let source = analysis
-            .source(&source_path)
-            .ok_or_else(|| format!("the parsed program omitted `{}`", source_path.display()))?;
+        let source = analysis.source(&source_path).ok_or_else(|| {
+            ProjectFailure::internal(format!(
+                "the parsed program omitted `{}`",
+                source_path.display()
+            ))
+        })?;
         progress(AnalysisProgress::Highlighting { path: source_path.clone() });
         let tokens = SemanticHighlighter::compiler_refined(
             source,
@@ -452,7 +535,7 @@ impl ProjectState {
 
 #[cfg(test)]
 mod tests {
-    use super::ProjectState;
+    use super::{ProjectFailure, ProjectState};
     use crate::{
         hover::HoverLineWidth,
         progress::{AnalysisProgress, SourceDiscovery},
@@ -463,7 +546,21 @@ mod tests {
         DiagnosticSeverity, HoverContents, NumberOrString, Position, Range, SemanticToken,
         SemanticTokensLegend, Url,
     };
+    use zydeco_session::SourceDiagnosticSite;
     use zydeco_utils::span::{FileMap, LineCol};
+
+    #[test]
+    fn failed_analysis_ranges_are_measured_in_utf16() {
+        let path = Path::new("unicode-error.zy");
+        let failure = ProjectFailure::compiler(
+            "parse error",
+            Some(SourceDiagnosticSite::new(path.to_path_buf(), 5..6)),
+        );
+
+        let diagnostic = failure.diagnostic(Some(path), Some("😀 ?"));
+
+        assert_eq!(diagnostic.range, Range::new(Position::new(0, 3), Position::new(0, 4)));
+    }
 
     fn fenced_zydeco_sources(markdown: &str) -> Vec<&str> {
         markdown

@@ -378,6 +378,8 @@ Type checking crosses this boundary through presentation-neutral diagnostics. Ea
 one primary source location, and optional semantic relationships or help; the checker task stack remains an internal
 trace rather than becoming a sequence of user-facing labels. The CLI and TUI render that structure with Ariadne,
 while the language server translates the same source spans to LSP ranges.
+Failures in earlier phases retain their primary file and byte range through the session for the same reason.
+Editor integrations convert those byte ranges to the client’s position encoding only at the LSP boundary.
 
 Libraries use ordinary term abstractions and package types.
 Transparent definitions travel through products and manifest package signatures;
