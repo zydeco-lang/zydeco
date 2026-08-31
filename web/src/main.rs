@@ -1,5 +1,5 @@
+use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use web_sys::HtmlTextAreaElement;
-use yew::prelude::*;
 
 const EXAMPLE: &str = "
 let f = {
@@ -8,55 +8,56 @@ let f = {
 ! f 3
 ";
 
-#[function_component]
-fn ZydecoUI() -> Html {
-    let cur_buf: UseStateHandle<String> = use_state(|| String::from(EXAMPLE));
-    let display_text = use_state(|| String::from(""));
-    let text_update = {
-        let cur_buf_hdl = cur_buf.clone();
-        let display_hdl = display_text.clone();
-        Callback::from(move |evt: InputEvent| {
-            if let Some(text_area) = evt.target_dyn_into::<HtmlTextAreaElement>() {
-                cur_buf_hdl.set(text_area.value());
-                display_hdl.set(String::from(""))
-            }
-        })
-    };
+struct ZydecoUi;
 
-    let run = {
-        let cur_buf_hdl: UseStateHandle<String> = cur_buf;
-        let display_hdl = display_text.clone();
-        Callback::from(move |_: MouseEvent| match run(&cur_buf_hdl) {
-            | Ok(s) => display_hdl.set(s),
-            | Err(e) => display_hdl.set(format!("Error: {}", e)),
-        })
-    };
+impl ZydecoUi {
+    fn mount() -> Result<(), JsValue> {
+        let document = web_sys::window()
+            .and_then(|window| window.document())
+            .ok_or_else(|| JsValue::from_str("browser document is unavailable"))?;
+        let body =
+            document.body().ok_or_else(|| JsValue::from_str("browser document has no body"))?;
 
-    let cur_text: &str = display_text.as_ref();
-    html! {
-        <>
-            <h1>{"Zydeco Interpreter"}</h1>
-            <textarea oninput = {text_update}></textarea>
-            <button onclick = {run}>{"run"}</button>
-            <p>{ cur_text }</p>
-        </>
+        let heading = document.create_element("h1")?;
+        heading.set_text_content(Some("Zydeco Interpreter"));
+        body.append_child(&heading)?;
+
+        let textarea = document.create_element("textarea")?.dyn_into::<HtmlTextAreaElement>()?;
+        textarea.set_value(EXAMPLE);
+        body.append_child(&textarea)?;
+
+        let button = document.create_element("button")?;
+        button.set_text_content(Some("run"));
+        body.append_child(&button)?;
+
+        let output = document.create_element("p")?;
+        body.append_child(&output)?;
+
+        let on_click = Closure::<dyn FnMut(web_sys::MouseEvent)>::new(move |_| {
+            let message =
+                Self::run(&textarea.value()).unwrap_or_else(|error| format!("Error: {error}"));
+            output.set_text_content(Some(&message));
+        });
+        button.add_event_listener_with_callback("click", on_click.as_ref().unchecked_ref())?;
+        on_click.forget();
+        Ok(())
+    }
+
+    fn run(_input: &str) -> Result<String, String> {
+        // let p = ZydecoFile::parse_src(input, std::path::PathBuf::new())?;
+        // let p = ZydecoFile::elab(p)?;
+        // let ctx = ZydecoFile::tyck(p.clone())?;
+        // let p = ZydecoFile::lift(p, ctx.clone())?;
+        // let p = ZydecoFile::link(p.inner)?;
+        // let p = ZydecoFile::eval_os(p, &[]);
+        // let s = match p.entry {
+        //     | ds::ProgKont::Ret(v) => v.fmt(),
+        //     | ds::ProgKont::ExitCode(i) => format!("exit code: {}", i),
+        // };
+        Ok(String::new())
     }
 }
 
-fn run(_input: &str) -> Result<String, String> {
-    // let p = ZydecoFile::parse_src(input, std::path::PathBuf::new())?;
-    // let p = ZydecoFile::elab(p)?;
-    // let ctx = ZydecoFile::tyck(p.clone())?;
-    // let p = ZydecoFile::lift(p, ctx.clone())?;
-    // let p = ZydecoFile::link(p.inner)?;
-    // let p = ZydecoFile::eval_os(p, &[]);
-    // let s = match p.entry {
-    //     | ds::ProgKont::Ret(v) => v.fmt(),
-    //     | ds::ProgKont::ExitCode(i) => format!("exit code: {}", i),
-    // };
-    Ok(String::new())
-}
-
 fn main() {
-    yew::Renderer::<ZydecoUI>::new().render();
+    ZydecoUi::mount().expect("failed to mount the Zydeco web interface");
 }

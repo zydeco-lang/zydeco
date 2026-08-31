@@ -33,7 +33,7 @@ pub struct Parameter {
 pub struct Binding {
     pub id: BindingId,
     pub inner: BindingForm,
-    pub metas: im::Vector<Meta>,
+    pub metas: rpds::VectorSync<Meta>,
     pub(crate) source_order: usize,
 }
 
@@ -46,7 +46,7 @@ pub enum BindingForm {
 
 impl Binding {
     pub fn from_term(source: TermId, inner: BindingForm, source_order: usize) -> Self {
-        Self { id: source, inner, metas: im::Vector::new(), source_order }
+        Self { id: source, inner, metas: rpds::VectorSync::new_sync(), source_order }
     }
 
     pub fn source_order(&self) -> usize {

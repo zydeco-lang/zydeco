@@ -36,7 +36,7 @@ pub enum Value {
 pub struct Runtime {
     pub stack: Vec<Value>,
     pub heap: Vec<Value>,
-    pub context: im::HashMap<VarId, Value>,
+    pub context: rpds::HashTrieMapSync<VarId, Value>,
 }
 
 #[derive(Debug, Error)]
@@ -182,7 +182,7 @@ impl Eval for Instruction {
             }
             | Instruction::PopArg(Pop(var)) => {
                 let value = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
-                interp.runtime.context.insert(var, value);
+                interp.runtime.context.insert_mut(var, value);
                 Ok(())
             }
             | Instruction::PushTag(Push(tag)) => {
@@ -196,7 +196,7 @@ impl Eval for Instruction {
             }
             | Instruction::Clear(context) => {
                 for var in context {
-                    interp.runtime.context.remove(&var);
+                    interp.runtime.context.remove_mut(&var);
                 }
                 Ok(())
             }

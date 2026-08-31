@@ -472,7 +472,7 @@ impl TypeId {
                     let arms_ = arms
                         .iter()
                         .map(|(ctor, ty)| Ok((ctor.clone(), ty.subst_env(tycker, env)?)))
-                        .collect::<Result<im::Vector<_>>>()?;
+                        .collect::<Result<rpds::VectorSync<_>>>()?;
                     let unchanged = arms
                         .iter()
                         .zip(arms_.iter())
@@ -481,7 +481,7 @@ impl TypeId {
                         *self
                     } else {
                         let id_: DataId = tycker.fresh();
-                        tycker.statics.datas.insert_new(id_, Data::new(arms_));
+                        tycker.statics.datas.insert_new(id_, Data::new(arms_.iter().cloned()));
                         Alloc::alloc(tycker, id_, kd, env)
                     }
                 }
@@ -490,7 +490,7 @@ impl TypeId {
                     let arms_ = arms
                         .iter()
                         .map(|(dtor, ty)| Ok((dtor.clone(), ty.subst_env(tycker, env)?)))
-                        .collect::<Result<im::Vector<_>>>()?;
+                        .collect::<Result<rpds::VectorSync<_>>>()?;
                     let unchanged = arms
                         .iter()
                         .zip(arms_.iter())
@@ -499,7 +499,7 @@ impl TypeId {
                         *self
                     } else {
                         let id_: CoDataId = tycker.fresh();
-                        tycker.statics.codatas.insert_new(id_, CoData::new(arms_));
+                        tycker.statics.codatas.insert_new(id_, CoData::new(arms_.iter().cloned()));
                         Alloc::alloc(tycker, id_, kd, env)
                     }
                 }
@@ -757,12 +757,12 @@ impl TypeId {
                                 Ok((ctor, ty_))
                             }
                         })
-                        .collect::<Result<im::Vector<_>>>()?;
+                        .collect::<Result<rpds::VectorSync<_>>>()?;
                     if unchanged {
                         *self
                     } else {
                         let id_: DataId = tycker.fresh();
-                        tycker.statics.datas.insert_new(id_, Data::new(arms_));
+                        tycker.statics.datas.insert_new(id_, Data::new(arms_.iter().cloned()));
                         Alloc::alloc(tycker, id_, kd, &env)
                     }
                 }
@@ -780,12 +780,12 @@ impl TypeId {
                                 Ok((dtor, ty_))
                             }
                         })
-                        .collect::<Result<im::Vector<_>>>()?;
+                        .collect::<Result<rpds::VectorSync<_>>>()?;
                     if unchanged {
                         *self
                     } else {
                         let id_: CoDataId = tycker.fresh();
-                        tycker.statics.codatas.insert_new(id_, CoData::new(arms_));
+                        tycker.statics.codatas.insert_new(id_, CoData::new(arms_.iter().cloned()));
                         Alloc::alloc(tycker, id_, kd, &env)
                     }
                 }
@@ -1643,12 +1643,12 @@ impl TypeId {
                                 Ok((ctor, ty_))
                             }
                         })
-                        .collect::<Result<im::Vector<_>>>()?;
+                        .collect::<Result<rpds::VectorSync<_>>>()?;
                     if unchanged {
                         res
                     } else {
                         let data: DataId = tycker.fresh();
-                        tycker.statics.datas.insert_new(data, Data::new(arms_));
+                        tycker.statics.datas.insert_new(data, Data::new(arms_.iter().cloned()));
                         Alloc::alloc(tycker, data, tycker.statics.type_kind(res), &env)
                     }
                 }
@@ -1666,12 +1666,15 @@ impl TypeId {
                                 Ok((dtor, ty_))
                             }
                         })
-                        .collect::<Result<im::Vector<_>>>()?;
+                        .collect::<Result<rpds::VectorSync<_>>>()?;
                     if unchanged {
                         res
                     } else {
                         let codata: CoDataId = tycker.fresh();
-                        tycker.statics.codatas.insert_new(codata, CoData::new(arms_));
+                        tycker
+                            .statics
+                            .codatas
+                            .insert_new(codata, CoData::new(arms_.iter().cloned()));
                         Alloc::alloc(tycker, codata, tycker.statics.type_kind(res), &env)
                     }
                 }

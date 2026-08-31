@@ -34,7 +34,7 @@ impl MobileCandidate {
     ) -> Result<Binding> {
         let id = self.binding_id();
         let mut local = local.clone();
-        local.under.push_back(BindingSite { owner: block, id });
+        local.under.push_back_mut(BindingSite { owner: block, id });
         let inner = match self {
             | Self::Parameter { binder, .. } => {
                 let _ = binder.resolve(resolver, (local, global))?;
@@ -46,7 +46,7 @@ impl MobileCandidate {
                 BindingForm::Definition(Definition { binder: *binder, bindee: *bindee })
             }
         };
-        Ok(Binding { id, inner, metas: im::Vector::new(), source_order })
+        Ok(Binding { id, inner, metas: rpds::VectorSync::new_sync(), source_order })
     }
 }
 
@@ -216,44 +216,45 @@ impl BlockScope {
         resolver: &Resolver<'_>, block: TermId, candidates: &[MobileCandidate], mut local: Local,
     ) -> Result<Self> {
         let binders = candidates.iter().try_fold(
-            im::HashMap::<VarName, DefId>::new(),
+            rpds::HashTrieMapSync::<VarName, DefId>::new_sync(),
             |binders, candidate| {
-                candidate.binder().binders(&resolver.bitter).into_iter().try_fold(
+                candidate.binder().binders(&resolver.bitter).iter().try_fold(
                     binders,
                     |binders, (name, definition)| -> Result<_> {
-                        if let Some(previous) = binders.get(&name) {
+                        if let Some(previous) = binders.get(name) {
                             Err(ResolveError::DuplicateDefinition(
                                 previous.span(resolver).clone().make(name.clone()),
                                 definition.span(resolver).clone().make(name.clone()),
                             ))?
                         }
-                        Ok(binders.update(name, definition))
+                        Ok(binders.insert(name.clone(), *definition))
                     },
                 )
             },
         )?;
         let owner = block;
         local.boundary = Some(block);
-        local.under_map = local.under_map.union(
-            candidates
-                .iter()
-                .flat_map(|candidate| {
-                    let site = BindingSite { owner, id: candidate.binding_id() };
-                    candidate
-                        .binder()
-                        .binders(&resolver.bitter)
-                        .into_iter()
-                        .map(|(_, definition)| definition)
-                        .map(move |definition| (definition, site))
-                })
-                .collect(),
-        );
+        local.under_map = candidates
+            .iter()
+            .flat_map(|candidate| {
+                let site = BindingSite { owner, id: candidate.binding_id() };
+                candidate
+                    .binder()
+                    .binders(&resolver.bitter)
+                    .iter()
+                    .map(|(_, definition)| *definition)
+                    .map(move |definition| (definition, site))
+                    .collect::<Vec<_>>()
+            })
+            .fold(local.under_map, |under_map, (definition, site)| {
+                under_map.insert(definition, site)
+            });
         // Names contributed by this block shadow names inherited from its
-        // enclosing lexical scope. Use explicit updates because `im` may
-        // choose either map as the physical union base.
-        local.var_to_def = binders
-            .into_iter()
-            .fold(local.var_to_def, |scope, (name, definition)| scope.update(name, definition));
+        // enclosing lexical scope. Apply them individually so that precedence
+        // remains explicit.
+        local.var_to_def = binders.iter().fold(local.var_to_def, |scope, (name, definition)| {
+            scope.insert(name.clone(), *definition)
+        });
         Ok(Self { local })
     }
 }

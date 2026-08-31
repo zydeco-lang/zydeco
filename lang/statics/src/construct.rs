@@ -526,9 +526,9 @@ where
                 let ty_ = (f.clone())(ctor.clone(), ty).build(tycker, env);
                 (ctor, ty_)
             })
-            .collect::<im::Vector<_>>();
+            .collect::<rpds::VectorSync<_>>();
         let data: DataId = tycker.fresh();
-        tycker.statics.datas.insert_new(data, Data::new(arms_));
+        tycker.statics.datas.insert_new(data, Data::new(arms_.iter().cloned()));
         let kd = VType.build(tycker, env);
         Alloc::alloc(tycker, data, kd, env)
     }
@@ -598,9 +598,9 @@ where
                 let ty_ = (f.clone())(dtor.clone(), ty).build(tycker, env);
                 (dtor, ty_)
             })
-            .collect::<im::Vector<_>>();
+            .collect::<rpds::VectorSync<_>>();
         let coda: CoDataId = tycker.fresh();
-        tycker.statics.codatas.insert_new(coda, CoData::new(arms_));
+        tycker.statics.codatas.insert_new(coda, CoData::new(arms_.iter().cloned()));
         let kd = CType.build(tycker, env);
         Alloc::alloc(tycker, coda, kd, env)
     }

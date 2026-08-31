@@ -18,7 +18,7 @@ zydeco-stackir = { workspace = true }
 zydeco-surface = { workspace = true }
 zydeco-derive = { workspace = true }
 derive_more = { workspace = true, features = ["as_ref"] }
-im = { workspace = true }
+rpds = { workspace = true }
 pretty = { workspace = true }
 rustc-hash = { workspace = true }
 thiserror = { workspace = true }

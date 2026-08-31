@@ -1,13 +1,13 @@
 //! Environments used by the Zydeco type checker.
 
 use super::*;
-use derive_more::{Deref, DerefMut, From, Index, IndexMut, Into, IntoIterator};
+use derive_more::{Deref, DerefMut, From, Index, IndexMut, Into};
 use std::ops::{Add, AddAssign};
 use zydeco_utils::prelude::With;
 
 /// Environment mapping definitions to annotations or substitutions.
-#[derive(Clone, Debug, From, Into, Deref, DerefMut, Index, IndexMut, IntoIterator)]
-pub struct Env<T>(#[into_iterator(owned, ref, ref_mut)] im::HashMap<DefId, T>);
+#[derive(Clone, Debug, From, Into, Deref, DerefMut, Index, IndexMut)]
+pub struct Env<T>(rpds::HashTrieMapSync<DefId, T>);
 
 mod impls_env {
     use super::*;
@@ -19,9 +19,8 @@ mod impls_env {
     {
         type Output = Self;
         fn add(self, iter: Iter) -> Self {
-            let Env(mut defs) = self;
-            defs.extend(iter);
-            Self(defs)
+            let Env(defs) = self;
+            Self(iter.into_iter().fold(defs, |defs, (def, ann)| defs.insert(def, ann)))
         }
     }
     impl<Iter, T> AddAssign<Iter> for Env<T>
@@ -31,12 +30,20 @@ mod impls_env {
     {
         fn add_assign(&mut self, iter: Iter) {
             let Env(defs) = self;
-            defs.extend(iter);
+            *defs = iter.into_iter().fold(defs.clone(), |defs, (def, ann)| defs.insert(def, ann));
         }
     }
     impl<T> Env<T> {
         pub fn new() -> Self {
-            Self(im::HashMap::new())
+            Self(rpds::HashTrieMapSync::new_sync())
+        }
+
+        pub fn len(&self) -> usize {
+            self.0.size()
+        }
+
+        pub fn is_empty(&self) -> bool {
+            self.0.is_empty()
         }
     }
     impl<T> Default for Env<T> {
@@ -52,6 +59,24 @@ mod impls_env {
             Self(iter.into_iter().collect())
         }
     }
+
+    impl<T: Clone> IntoIterator for Env<T> {
+        type Item = (DefId, T);
+        type IntoIter = std::vec::IntoIter<Self::Item>;
+
+        fn into_iter(self) -> Self::IntoIter {
+            self.0.iter().map(|(def, ann)| (*def, ann.clone())).collect::<Vec<_>>().into_iter()
+        }
+    }
+
+    impl<'a, T> IntoIterator for &'a Env<T> {
+        type Item = (&'a DefId, &'a T);
+        type IntoIter = <&'a rpds::HashTrieMapSync<DefId, T> as IntoIterator>::IntoIter;
+
+        fn into_iter(self) -> Self::IntoIter {
+            (&self.0).into_iter()
+        }
+    }
 }
 
 /// Existential witnesses visible at a typing site.
@@ -59,7 +84,7 @@ mod impls_env {
 /// The set is persistent: extending or narrowing a scope produces a new value,
 /// so a typing environment also records the lexical scope in which it arose.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct SkolemScope(im::HashSet<AbstId>);
+pub struct SkolemScope(rpds::HashTrieSetSync<AbstId>);
 
 mod impls_skolem_scope {
     use super::*;
@@ -70,16 +95,11 @@ mod impls_skolem_scope {
         }
 
         pub fn with(&self, skolem: AbstId) -> Self {
-            let mut scope = self.clone();
-            scope.0.insert(skolem);
-            scope
+            Self(self.0.insert(skolem))
         }
 
         pub fn without<'a>(&self, skolems: impl IntoIterator<Item = &'a AbstId>) -> Self {
-            skolems.into_iter().fold(self.clone(), |mut scope, skolem| {
-                scope.0.remove(skolem);
-                scope
-            })
+            skolems.into_iter().fold(self.clone(), |scope, skolem| Self(scope.0.remove(skolem)))
         }
 
         pub fn intersection(&self, other: &Self) -> Self {
@@ -134,7 +154,7 @@ mod impls_ty_env {
                 || (self.defs.len() >= base.defs.len()
                     && base.defs.iter().all(|(def, ann)| self.defs.get(def) == Some(ann)));
             let preserves_skolems = self.skolems.0.ptr_eq(&base.skolems.0)
-                || (self.skolems.0.len() >= base.skolems.0.len()
+                || (self.skolems.0.size() >= base.skolems.0.size()
                     && base.skolems.0.iter().all(|skolem| self.skolems.contains(skolem)));
             preserves_definitions && preserves_skolems
         }
@@ -247,15 +267,15 @@ pub type TyEnvT<T> = With<TyEnv, T>;
 /// Substitution environment mapping defs to defs.
 pub type SubstEnv = Env<DefId>;
 /// Substitution environment for abstract types.
-pub type SubstAbstEnv = im::HashMap<AbstId, AbstId>;
+pub type SubstAbstEnv = rpds::HashTrieMapSync<AbstId, AbstId>;
 pub type SubstEnvT<T> = With<SubstEnv, T>;
 
 /// Structure environment used during algebra translation.
 #[derive(Clone, Default)]
 pub struct StrEnv {
     // Todo: remove this useless non-sense
-    pub def_map: im::HashMap<DefId, AbstId>,
-    pub absts: im::HashMap<AbstId, ValueId>,
+    pub def_map: rpds::HashTrieMapSync<DefId, AbstId>,
+    pub absts: rpds::HashTrieMapSync<AbstId, ValueId>,
 }
 
 mod impls_str_env {
@@ -315,7 +335,7 @@ impl PartialEq for TyEnv {
         }
         self.defs.len() == other.defs.len()
             && self.defs.iter().all(|(def, ann)| other.defs.get(def) == Some(ann))
-            && self.skolems.0.len() == other.skolems.0.len()
+            && self.skolems.0.size() == other.skolems.0.size()
             && self.skolems.0.iter().all(|skolem| other.skolems.contains(skolem))
     }
 }

@@ -48,12 +48,12 @@ pub struct Tycker<'a> {
     #[as_mut(StaticsArena)]
     pub statics: StaticsArena,
     /// call stack for debugging tycker and error tracking
-    pub tasks: im::Vector<TyckTask>,
+    pub tasks: rpds::VectorSync<TyckTask>,
     /// how many times each scoped entity has been checked; supplies the
     /// derivation occurrence so re-checked entities get distinct sites
     check_counts: ArenaAssoc<su::EntityId, u32>,
     /// meta stack
-    pub metas: im::Vector<su::Meta>,
+    pub metas: rpds::VectorSync<su::Meta>,
     /// Results of field-search materializations under the current inference state.
     field_materializations: DeferredEnvMaterializationCache,
     /// a writer monad for error handling
@@ -824,7 +824,7 @@ struct ExistentialProjectionOpening {
 struct DeferredTelescopeType {
     root: ss::TypeId,
     environment: Option<DeferredTelescopeEnvironment>,
-    abstracts: im::Vector<DeferredAbstractAssignment>,
+    abstracts: rpds::VectorSync<DeferredAbstractAssignment>,
 }
 
 #[derive(Clone)]
@@ -860,7 +860,7 @@ enum DeferredTelescopeView {
 
 impl DeferredTelescopeType {
     fn new(root: ss::TypeId) -> Self {
-        Self { root, environment: None, abstracts: im::Vector::new() }
+        Self { root, environment: None, abstracts: rpds::VectorSync::new_sync() }
     }
 
     fn with_environment(mut self, environment: &ss::TyEnv) -> Self {
@@ -870,7 +870,7 @@ impl DeferredTelescopeType {
     }
 
     fn with_abstract(mut self, witness: ss::AbstId, payload: ss::TypeId) -> Self {
-        self.abstracts.push_back(DeferredAbstractAssignment { witness, payload });
+        self.abstracts.push_back_mut(DeferredAbstractAssignment { witness, payload });
         self
     }
 
@@ -1447,9 +1447,9 @@ impl<'a> Tycker<'a> {
             scoped,
             source_contexts,
             statics,
-            tasks: im::Vector::new(),
+            tasks: rpds::VectorSync::new_sync(),
             check_counts: ArenaAssoc::default(),
-            metas: im::Vector::new(),
+            metas: rpds::VectorSync::new_sync(),
             field_materializations: DeferredEnvMaterializationCache::default(),
             errors: Vec::new(),
             observations: Vec::new(),
@@ -1632,7 +1632,7 @@ impl<'a> Tycker<'a> {
             self.errors.extend(coverage.into_iter().map(|error| TyckErrorEntry {
                 error: TyckError::Coverage(error),
                 blame,
-                stack: im::Vector::new(),
+                stack: rpds::VectorSync::new_sync(),
             }));
         }
         if !self.errors.is_empty() {
@@ -1738,7 +1738,7 @@ mod impl_tycker {
             &mut self, root: TyckTask, with: impl FnOnce(&mut Self) -> R,
         ) -> R {
             let stack = std::mem::take(&mut self.tasks);
-            self.tasks.push_back(root);
+            self.tasks.push_back_mut(root);
             let res = with(self);
             self.tasks = stack;
             res
@@ -2106,8 +2106,8 @@ impl BuiltinAttachment {
 /// Canonical existential identities assigned to package-pattern components.
 #[derive(Clone, Debug, Default)]
 struct PatternSkolems {
-    patterns: im::HashMap<su::PatId, ss::AbstId>,
-    witnesses: im::HashMap<ss::AbstId, ss::AbstId>,
+    patterns: rpds::HashTrieMapSync<su::PatId, ss::AbstId>,
+    witnesses: rpds::HashTrieMapSync<ss::AbstId, ss::AbstId>,
 }
 
 impl PatternSkolems {
@@ -2725,7 +2725,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
     fn tyck_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
         tycker.guarded(|tycker| {
             // administrative
-            tycker.tasks.push_back(TyckTask::Pat(self.inner, action.switch));
+            tycker.tasks.push_back_mut(TyckTask::Pat(self.inner, action.switch));
             let entity = su::EntityId::Pat(self.inner);
             let occurrence = tycker.check_counts.get(&entity).copied().unwrap_or(0);
             let _ = tycker.check_counts.upsert(entity, occurrence + 1);
@@ -4051,7 +4051,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
         let switch = action.switch;
         tycker.guarded(|tycker| {
             // administrative
-            tycker.tasks.push_back(TyckTask::Term(self.inner, switch));
+            tycker.tasks.push_back_mut(TyckTask::Term(self.inner, switch));
             let entity = su::EntityId::Term(self.inner);
             let occurrence = tycker.check_counts.get(&entity).copied().unwrap_or(0);
             let _ = tycker.check_counts.upsert(entity, occurrence + 1);
@@ -7209,7 +7209,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     MonEnv {
                         ty: ty_env,
                         subst: SubstEnv::new(),
-                        subst_abst: SubstAbstEnv::new(),
+                        subst_abst: SubstAbstEnv::new_sync(),
                         structure: StrEnv::new(),
                         basis,
                         monad_ty,
@@ -7263,18 +7263,18 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         Lub::lub_k(vtype, ann_kd, tycker)?
                     }
                 };
-                let mut arms_vec = im::Vector::new();
+                let mut arms_vec = rpds::VectorSync::new_sync();
                 for su::DataArm { name, param } in arms {
                     let param = self.mk(param).tyck_k(tycker, Action::ana(vtype.into()))?;
                     let TermAnnId::Type(ty, _kd) = param else {
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     };
-                    arms_vec.push_back((name, ty));
+                    arms_vec.push_back_mut((name, ty));
                 }
                 let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                 let arms_interned = crate::query::InternedDataArms::new(
                     tycker.db,
-                    arms_vec.into_iter().collect::<Vec<_>>(),
+                    arms_vec.iter().cloned().collect::<Vec<_>>(),
                 );
                 let kd_interned = crate::query::InternedKind::new(tycker.db, vtype);
                 let Some(outcome) = crate::query::data_syn_judgment(
@@ -7308,18 +7308,18 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         Lub::lub_k(ctype, ann_kd, tycker)?
                     }
                 };
-                let mut arms_vec = im::Vector::new();
+                let mut arms_vec = rpds::VectorSync::new_sync();
                 for su::CoDataArm { name, out } in arms {
                     let out = self.mk(out).tyck_k(tycker, Action::ana(ctype.into()))?;
                     let TermAnnId::Type(ty, _kd) = out else {
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     };
-                    arms_vec.push_back((name, ty));
+                    arms_vec.push_back_mut((name, ty));
                 }
                 let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                 let arms_interned = crate::query::InternedCoDataArms::new(
                     tycker.db,
-                    arms_vec.into_iter().collect::<Vec<_>>(),
+                    arms_vec.iter().cloned().collect::<Vec<_>>(),
                 );
                 let kd_interned = crate::query::InternedKind::new(tycker.db, ctype);
                 let Some(outcome) = crate::query::codata_syn_judgment(
@@ -8439,7 +8439,7 @@ mod source_boundary_tests {
         assert!(matches!(entry.error, TyckError::SortMismatch));
         assert_eq!(entry.stack.len(), 1);
         assert!(matches!(
-            entry.stack.front(),
+            entry.stack.first(),
             Some(TyckTask::Term(term, Switch::Ana(AnnId::Set))) if *term == hole
         ));
     }

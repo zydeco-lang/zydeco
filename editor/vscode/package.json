@@ -18,7 +18,7 @@
     "Programming Languages"
   ],
   "engines": {
-    "vscode": "^1.96.0"
+    "vscode": "^1.134.0"
   },
   "main": "./dist/extension.js",
   "contributes": {
@@ -78,14 +78,14 @@
     "publish": "vsce publish --no-dependencies"
   },
   "devDependencies": {
-    "@types/node": "^25.0.9",
-    "@types/vscode": "1.96.0",
-    "@vscode/vsce": "^3.7.1",
-    "esbuild": "^0.27.2",
-    "typescript": "^5.9.3"
+    "@types/node": "^26.4.0",
+    "@types/vscode": "1.134.0",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
   },
   "dependencies": {
-    "vscode-languageclient": "^9.0.1"
+    "vscode-languageclient": "^10.1.1"
   },
-  "packageManager": "pnpm@11.9.0"
+  "packageManager": "pnpm@11.24.0"
 }

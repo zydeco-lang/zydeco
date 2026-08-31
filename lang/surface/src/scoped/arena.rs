@@ -891,7 +891,7 @@ mod tests {
                 Binding {
                     id,
                     inner: BindingForm::Definition(Definition { binder, bindee }),
-                    metas: im::Vector::new(),
+                    metas: rpds::VectorSync::new_sync(),
                     source_order,
                 },
             );

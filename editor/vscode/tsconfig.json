@@ -1,10 +1,14 @@
 {
 	"compilerOptions": {
-		"module": "commonjs",
+		"module": "Node16",
 		"target": "es2019",
-		"moduleResolution": "node",
+		"moduleResolution": "Node16",
 		"lib": [
 			"ES2019"
+		],
+		"types": [
+			"node",
+			"vscode"
 		],
 		"outDir": "dist",
 		"rootDir": "src",

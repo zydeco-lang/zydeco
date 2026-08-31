@@ -2,7 +2,7 @@
   description = "Rust 2024 project with pinned toolchain";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     # Fenix gives pre-built official toolchains
     fenix.url = "github:nix-community/fenix";
   };
@@ -11,7 +11,7 @@
     let
       system = "x86_64-linux";
       pkgs   = import nixpkgs { inherit system; };
-      rust   = fenix.packages.${system}.stable.toolchain;   # Rust 1.85 (Edition 2024)
+      rust   = fenix.packages.${system}.stable.toolchain;   # Rust 1.98 (Edition 2024)
     in {
       packages.${system}.zydeco =
         pkgs.rustPlatform.buildRustPackage {

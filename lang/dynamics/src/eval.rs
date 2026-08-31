@@ -35,7 +35,7 @@ impl<'rt> Runtime<'rt> {
             output,
             args,
             host: crate::host::HostRuntime::new(),
-            stack: im::Vector::new(),
+            stack: rpds::VectorSync::new_sync(),
             env: Env::new(),
             program,
         }
@@ -44,6 +44,14 @@ impl<'rt> Runtime<'rt> {
     pub fn run(&mut self) -> ProgKont {
         let root = self.program.root.clone();
         root.as_ref().clone().eval(self)
+    }
+
+    fn pop_stack(&mut self) -> Option<SemCompu> {
+        let frame = self.stack.last().cloned();
+        if frame.is_some() {
+            debug_assert!(self.stack.drop_last_mut());
+        }
+        frame
     }
 }
 
@@ -198,7 +206,7 @@ impl<'rt> Eval<'rt> for Computation {
             | Computation::Hole(Hole) => {
                 panic!("Hole in computation")
             }
-            | Computation::VAbs(Abs(param, body)) => match runtime.stack.pop_back() {
+            | Computation::VAbs(Abs(param, body)) => match runtime.pop_stack() {
                 | Some(SemCompu::App(arg)) => {
                     let () =
                         Assign(param, arg).eval(runtime).expect("pattern match failed in function");
@@ -208,12 +216,12 @@ impl<'rt> Eval<'rt> for Computation {
             },
             | Computation::VApp(App(body, arg)) => {
                 let arg = arg.as_ref().clone().eval(runtime);
-                runtime.stack.push_back(SemCompu::App(arg));
+                runtime.stack.push_back_mut(SemCompu::App(arg));
                 Step::Step(body.as_ref().clone())
             }
             | Computation::Ret(Return(v)) => {
                 let v = v.as_ref().clone().eval(runtime);
-                match runtime.stack.pop_back() {
+                match runtime.pop_stack() {
                     | Some(SemCompu::Kont(comp, env, vpat)) => {
                         runtime.env = env;
                         let () =
@@ -236,7 +244,7 @@ impl<'rt> Eval<'rt> for Computation {
                 Step::Step(tail.as_ref().clone())
             }
             | Computation::Do(Bind { binder, bindee, tail }) => {
-                runtime.stack.push_back(SemCompu::Kont(tail, runtime.env.clone(), binder));
+                runtime.stack.push_back_mut(SemCompu::Kont(tail, runtime.env.clone(), binder));
                 Step::Step(bindee.as_ref().clone())
             }
             | Computation::Fix(Fix(vpat, body)) => {
@@ -260,7 +268,7 @@ impl<'rt> Eval<'rt> for Computation {
                 panic!("no matching arm")
             }
             | Computation::CoMatch(CoMatch { arms }) => {
-                let Some(SemCompu::Dtor(dtor)) = runtime.stack.pop_back() else {
+                let Some(SemCompu::Dtor(dtor)) = runtime.pop_stack() else {
                     panic!("Comatch on non-Dtor")
                 };
                 let CoMatcher { dtor: _, tail } =
@@ -268,13 +276,13 @@ impl<'rt> Eval<'rt> for Computation {
                 Step::Step(tail.as_ref().clone())
             }
             | Computation::Dtor(Dtor(body, dtor)) => {
-                runtime.stack.push_back(SemCompu::Dtor(dtor));
+                runtime.stack.push_back_mut(SemCompu::Dtor(dtor));
                 Step::Step(body.as_ref().clone())
             }
             | Computation::Prim(Prim { arity, role }) => {
                 let mut args = Vec::new();
                 for _ in 0..arity {
-                    let Some(SemCompu::App(arg)) = runtime.stack.pop_back() else {
+                    let Some(SemCompu::App(arg)) = runtime.pop_stack() else {
                         panic!("Prim on non-Dtor")
                     };
                     args.push(arg);

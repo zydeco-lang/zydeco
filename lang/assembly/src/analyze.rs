@@ -17,8 +17,18 @@ impl ArenaSchema<SlotId> for StackAnalysisScope {
 
 #[derive(Clone)]
 pub struct Layout {
-    pub control: im::Vector<SlotId>,
-    pub context: im::Vector<(VarId, Slot)>,
+    pub control: rpds::VectorSync<SlotId>,
+    pub context: rpds::VectorSync<(VarId, Slot)>,
+}
+
+impl Layout {
+    fn pop_control_id(&mut self) -> Option<SlotId> {
+        let slot = self.control.last().copied();
+        if slot.is_some() {
+            debug_assert!(self.control.drop_last_mut());
+        }
+        slot
+    }
 }
 
 #[derive(Clone)]
@@ -79,11 +89,11 @@ impl<'a> StackAnalyzer<'a> {
         let slot_id = self.allocator.alloc();
         self.slots.insert_new(slot_id, slot);
         self.inlined.insert_new(slot_id, false);
-        layout.control.push_back(slot_id);
+        layout.control.push_back_mut(slot_id);
         slot_id
     }
     pub fn pop_control(&mut self, layout: &mut Layout) -> Option<Slot> {
-        let slot_id = layout.control.pop_back();
+        let slot_id = layout.pop_control_id();
         slot_id.map(|slot_id| self.slots[&slot_id].clone())
     }
 
@@ -116,7 +126,7 @@ impl<'a> CompilerPass for StackAnalyzer<'a> {
                 .copied()
                 .map(|var| (var, Slot::Unknown))
                 .collect();
-            let layout = Layout { control: im::Vector::new(), context };
+            let layout = Layout { control: rpds::VectorSync::new_sync(), context };
             prog.stack_measure(&mut self, layout);
         }
         let context = self.arena.contexts[&self.root]
@@ -124,7 +134,7 @@ impl<'a> CompilerPass for StackAnalyzer<'a> {
             .copied()
             .map(|var| (var, Slot::Unknown))
             .collect();
-        let layout = Layout { control: im::Vector::new(), context };
+        let layout = Layout { control: rpds::VectorSync::new_sync(), context };
         self.root.stack_measure(&mut self, layout);
         for prog in symbol_programs {
             prog.stack_inline(&mut self);
@@ -144,7 +154,7 @@ impl<'a> StackMeasure<'a> for ProgId {
                 match program {
                     | Program::Terminator(terminator) => match terminator {
                         | Terminator::PopJump(PopJump) => {
-                            if let Some(slot_id) = layout.control.pop_back()
+                            if let Some(slot_id) = layout.pop_control_id()
                                 && matches!(
                                     si.slots[&slot_id],
                                     Slot::Sym(sym)
@@ -190,7 +200,7 @@ impl<'a> StackMeasure<'a> for ProgId {
                             });
                         }
                         | Instruction::AllocContext(Alloc(ContextMarker)) => {
-                            layout.context.clear();
+                            layout.context = rpds::VectorSync::new_sync();
                         }
                         | Instruction::PushArg(Push(atom)) => {
                             let slot = match atom {
@@ -207,7 +217,7 @@ impl<'a> StackMeasure<'a> for ProgId {
                         }
                         | Instruction::PopArg(Pop(var)) => {
                             let slot = si.pop_control(&mut layout).unwrap_or(Slot::Unknown);
-                            layout.context.push_back((var, slot));
+                            layout.context.push_back_mut((var, slot));
                         }
                         | Instruction::PushTag(Push(_)) => {
                             si.push_control(&mut layout, Slot::Unknown);
@@ -220,7 +230,12 @@ impl<'a> StackMeasure<'a> for ProgId {
                         }
                         | Instruction::Clear(context) => {
                             let context = std::collections::HashSet::<_>::from_iter(context);
-                            layout.context.retain(|(var, _)| !context.contains(var));
+                            layout.context = layout
+                                .context
+                                .iter()
+                                .filter(|(var, _)| !context.contains(var))
+                                .cloned()
+                                .collect();
                         }
                     },
                 }

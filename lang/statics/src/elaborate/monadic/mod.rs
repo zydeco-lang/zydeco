@@ -74,7 +74,7 @@ mod syntax_impl {
                 let (env, ty) = ty.mbuild(tycker, env)?;
 
                 // administrative
-                tycker.tasks.push_back(TyckTask::SignatureGen(ty.into()));
+                tycker.tasks.push_back_mut(TyckTask::SignatureGen(ty.into()));
                 signature_translation(tycker, env, ty)
             })
         }
@@ -91,7 +91,7 @@ mod syntax_impl {
                 let (env, ty) = ty.mbuild(tycker, env)?;
 
                 // administrative
-                tycker.tasks.push_back(TyckTask::StructureGen(ty.into()));
+                tycker.tasks.push_back_mut(TyckTask::StructureGen(ty.into()));
                 structure_translation(tycker, env, ty)
             })
         }
@@ -108,7 +108,7 @@ mod syntax_impl {
                 let (env, ty) = ty.mbuild(tycker, env)?;
 
                 // administrative
-                tycker.tasks.push_back(TyckTask::MonadicLiftPat(ty.into()));
+                tycker.tasks.push_back_mut(TyckTask::MonadicLiftPat(ty.into()));
                 type_pattern_translation(tycker, env, ty)
             })
         }
@@ -125,7 +125,7 @@ mod syntax_impl {
                 let (env, ty) = ty.mbuild(tycker, env)?;
 
                 // administrative
-                tycker.tasks.push_back(TyckTask::MonadicLiftTerm(ty.into()));
+                tycker.tasks.push_back_mut(TyckTask::MonadicLiftTerm(ty.into()));
                 type_translation(tycker, env, ty)
             })
         }
@@ -142,7 +142,7 @@ mod syntax_impl {
                 let (env, tm) = tm.mbuild(tycker, env)?;
 
                 // administrative
-                tycker.tasks.push_back(TyckTask::MonadicLiftPat(tm.into()));
+                tycker.tasks.push_back_mut(TyckTask::MonadicLiftPat(tm.into()));
                 value_pattern_translation(tycker, env, tm)
             })
         }
@@ -159,7 +159,7 @@ mod syntax_impl {
                 let (env, tm) = tm.mbuild(tycker, env)?;
 
                 // administrative
-                tycker.tasks.push_back(TyckTask::MonadicLiftTerm(tm.into()));
+                tycker.tasks.push_back_mut(TyckTask::MonadicLiftTerm(tm.into()));
                 value_translation(tycker, env, tm)
             })
         }
@@ -176,7 +176,7 @@ mod syntax_impl {
                 let (env, tm) = tm.mbuild(tycker, env)?;
 
                 // administrative
-                tycker.tasks.push_back(TyckTask::MonadicLiftTerm(tm.into()));
+                tycker.tasks.push_back_mut(TyckTask::MonadicLiftTerm(tm.into()));
                 computation_translation(tycker, env, tm)
             })
         }
@@ -223,9 +223,9 @@ mod syntax_impl {
             let (env, pattern) = cs::Pat(def, ty).mbuild(tycker, env)?;
             let structure = pattern.reify(tycker);
             let mut env = env;
-            env.structure.absts.insert(abst, structure);
+            env.structure.absts.insert_mut(abst, structure);
             if let Some(tvar) = tvar {
-                env.structure.def_map.insert(tvar, abst);
+                env.structure.def_map.insert_mut(tvar, abst);
             }
             Ok((env, pattern))
         }
@@ -251,7 +251,7 @@ mod syntax_impl {
             let (env, new) = new.mbuild(tycker, env)?;
             tycker.transfer_builtin_role(old, new)?;
             let mut env = env;
-            env.subst_abst.insert(old, new);
+            env.subst_abst.insert_mut(old, new);
             Ok((env, new))
         }
     }
@@ -1212,7 +1212,7 @@ fn package_pattern_translation(
                     tycker.transfer_builtin_role(source_skolem, pattern_abst)?;
                     tycker.statics.existential_skolems.ensure(pattern_abst);
                     env.ty = env.ty.with_skolem(pattern_abst);
-                    env.subst_abst.insert(source_skolem, pattern_abst);
+                    env.subst_abst.insert_mut(source_skolem, pattern_abst);
                     let (env_, abst_ty) = cs::Type(pattern_abst).mbuild(tycker, env)?;
                     env = env_;
                     (pattern_abst, abst_ty, PackagePatternStructure::Abstract)

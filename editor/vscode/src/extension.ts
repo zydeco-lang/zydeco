@@ -21,7 +21,7 @@ const INSTALL_REPOSITORY = "https://github.com/zydeco-lang/zydeco.git";
 let client: LanguageClient | undefined;
 
 export async function activate(context: ExtensionContext): Promise<void> {
-  const trace = window.createOutputChannel("Cajun LSP Trace");
+  const trace = window.createOutputChannel("Cajun LSP Trace", { log: true });
   context.subscriptions.push(trace);
 
   const command = await CajunExecutable.resolve();

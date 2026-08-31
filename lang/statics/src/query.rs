@@ -57,30 +57,35 @@ pub struct ScopedData<'db> {
     #[returns(ref)]
     pub scoped: std::sync::Arc<su::ScopedArena>,
     #[tracked]
+    #[returns(copy)]
     pub root: su::TermId,
 }
 
 /// An interned typed type node, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedType<'db> {
+    #[returns(clone)]
     pub id: ss::TypeId,
 }
 
 /// An interned typed kind node, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedKind<'db> {
+    #[returns(clone)]
     pub id: ss::KindId,
 }
 
 /// An interned scoped definition, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedDef<'db> {
+    #[returns(clone)]
     pub id: su::DefId,
 }
 
 /// An interned scoped term, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedTerm<'db> {
+    #[returns(clone)]
     pub id: su::TermId,
 }
 
@@ -127,6 +132,7 @@ impl IntrinsicKey {
 /// An interned intrinsic key, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedIntrinsic<'db> {
+    #[returns(clone)]
     pub key: IntrinsicKey,
 }
 
@@ -145,7 +151,7 @@ pub enum IntrinsicSingleton {
 /// The derived site is synthetic (not tied to any scoped term): the intrinsic
 /// belongs to the check, not to the term that first spells it. The key's
 /// discriminant separates the singletons so their identifiers never collide.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn intrinsic_singleton<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, key: InternedIntrinsic<'db>,
 ) -> IntrinsicSingleton {
@@ -231,7 +237,7 @@ pub enum LiteralSynOutcome {
 /// range check and the literal value are pure functions of the source literal.
 /// The checker materializes the returned value node with the caller's
 /// environment, exactly as in-context allocation did.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn literal_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>, occurrence: u32,
 ) -> Option<LiteralSynOutcome> {
@@ -285,7 +291,7 @@ pub fn literal_syn_judgment<'db>(
 
 /// The synthesized judgment of a hole term: the fill identifier standing for
 /// the missing node, derived at the term's site without touching the arena.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn term_hole_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>, occurrence: u32,
 ) -> Option<ss::FillId> {
@@ -311,7 +317,7 @@ pub struct TrivSynOutcome {
 /// Every `()` checks to the unit singleton type, so the judgment shares the
 /// query-owned intrinsic unit node instead of building a fresh one per site;
 /// the nodes are structurally identical and closed.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn triv_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>, occurrence: u32,
 ) -> Option<TrivSynOutcome> {
@@ -347,12 +353,13 @@ pub enum VarSynOutcome {
 /// An interned type annotation, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedAnn<'db> {
+    #[returns(clone)]
     pub id: ss::AnnId,
 }
 
 /// The synthesized judgment of a variable term, keyed on its merge-fold
 /// annotation cell.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn var_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, env: EnvData<'db>, term: InternedTerm<'db>,
     annotation: InternedAnn<'db>, occurrence: u32,
@@ -388,14 +395,18 @@ pub fn var_syn_judgment<'db>(
 /// themselves; this wrapper keys their queries on the site directly.
 #[salsa::interned]
 pub struct InternedSite<'db> {
+    #[returns(clone)]
     pub space: u64,
+    #[returns(clone)]
     pub raw: u32,
+    #[returns(clone)]
     pub occurrence: u32,
 }
 
 /// An interned scoped pattern, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedPat<'db> {
+    #[returns(clone)]
     pub id: su::PatId,
 }
 
@@ -409,7 +420,7 @@ pub struct PatTrivSynOutcome {
 }
 
 /// The synthesized judgment of a trivial pattern, mirroring the trivial term.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn pat_triv_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>, occurrence: u32,
 ) -> Option<PatTrivSynOutcome> {
@@ -430,6 +441,7 @@ pub fn pat_triv_syn_judgment<'db>(
 /// An interned term annotation, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedTermAnn<'db> {
+    #[returns(clone)]
     pub id: ss::TermAnnId,
 }
 
@@ -445,7 +457,7 @@ pub enum NamedSynOutcome {
 }
 
 /// The synthesized judgment of a named term.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn named_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     inner: InternedTermAnn<'db>, occurrence: u32,
@@ -491,7 +503,7 @@ pub enum LabelSynOutcome {
 }
 
 /// The synthesized judgment of a label term.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn label_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     inner: InternedTermAnn<'db>, occurrence: u32,
@@ -524,18 +536,21 @@ pub fn label_syn_judgment<'db>(
 /// An interned pattern annotation, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedPatAnn<'db> {
+    #[returns(clone)]
     pub id: ss::PatAnnId,
 }
 
 /// An interned value pattern identifier, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedVPat<'db> {
+    #[returns(clone)]
     pub id: ss::VPatId,
 }
 
 /// An interned value identifier, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedValue<'db> {
+    #[returns(clone)]
     pub id: ss::ValueId,
 }
 
@@ -551,7 +566,7 @@ pub enum PatNamedSynOutcome {
 }
 
 /// The synthesized judgment of a named pattern.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn pat_named_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>, inner: InternedPatAnn<'db>,
     occurrence: u32,
@@ -586,6 +601,7 @@ pub fn pat_named_syn_judgment<'db>(
 /// An interned list of term annotations, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedConsItems<'db> {
+    #[returns(clone)]
     pub items: Vec<ss::TermAnnId>,
 }
 
@@ -605,7 +621,7 @@ pub struct ConsSynOutcome {
 }
 
 /// The synthesized judgment of a consumed term.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn cons_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     items: InternedConsItems<'db>, tail: InternedTermAnn<'db>, occurrence: u32,
@@ -652,6 +668,7 @@ pub fn cons_syn_judgment<'db>(
 /// An interned list of pattern annotations, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedPatItems<'db> {
+    #[returns(clone)]
     pub items: Vec<ss::PatAnnId>,
 }
 
@@ -669,7 +686,7 @@ pub struct PatConsSynOutcome {
 }
 
 /// The synthesized judgment of a consumed pattern.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn pat_cons_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>,
     items: InternedPatItems<'db>, tail: InternedPatAnn<'db>, occurrence: u32,
@@ -726,7 +743,7 @@ pub struct ThunkSynOutcome {
 }
 
 /// The synthesized judgment of a thunk term.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn thunk_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     body: InternedTermAnn<'db>, occurrence: u32,
@@ -779,7 +796,7 @@ pub struct RetSynOutcome {
 }
 
 /// The synthesized judgment of a return term.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn ret_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     body: InternedTermAnn<'db>, occurrence: u32,
@@ -832,12 +849,14 @@ pub struct ForceSynOutcome {
 /// An interned force judgment input, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedForceInput<'db> {
+    #[returns(clone)]
     pub body: ss::ValueId,
+    #[returns(clone)]
     pub force_ty: ss::TypeId,
 }
 
 /// The synthesized judgment of a force term.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn force_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     input: InternedForceInput<'db>, occurrence: u32,
@@ -859,9 +878,13 @@ pub fn force_judgment<'db>(
 /// An interned bind judgment input, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedDoInput<'db> {
+    #[returns(clone)]
     pub binder: ss::VPatId,
+    #[returns(clone)]
     pub bindee: ss::CompuId,
+    #[returns(clone)]
     pub tail: ss::CompuId,
+    #[returns(clone)]
     pub ann: ss::TypeId,
 }
 
@@ -874,7 +897,7 @@ pub struct DoSynOutcome {
 }
 
 /// The synthesized judgment of a bind term.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn do_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     input: InternedDoInput<'db>, occurrence: u32,
@@ -907,7 +930,7 @@ pub enum LetSynOutcome {
 
 /// The synthesized judgment of a let term, keyed on its binder, bindee, and
 /// checked tail.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn let_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>, binder: InternedVPat<'db>,
     bindee: InternedValue<'db>, tail: InternedTermAnn<'db>, occurrence: u32,
@@ -960,11 +983,14 @@ pub enum AppKind {
 /// An interned application judgment input, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedAppInput<'db> {
+    #[returns(clone)]
     pub kind: AppKind,
     /// The annotation recorded on the application node.
+    #[returns(clone)]
     pub ann: ss::TypeId,
     /// The type reported by the judgment; usually the annotation, but the
     /// polymorphic computation application reports the substituted body type.
+    #[returns(clone)]
     pub reported: ss::TypeId,
 }
 
@@ -979,7 +1005,7 @@ pub enum AppSynOutcome {
 /// The synthesized judgment of an application term, keyed on the checked
 /// function and argument plus the result types the checker destructured from
 /// the function's arrow or forall.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn app_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     input: InternedAppInput<'db>, occurrence: u32,
@@ -995,7 +1021,7 @@ pub fn app_judgment<'db>(
 
 /// The application judgment keyed on an explicit allocation site, for
 /// auxiliary entities that allocate at the enclosing term's site.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn app_judgment_at<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, site: InternedSite<'db>,
     input: InternedAppInput<'db>,
@@ -1053,8 +1079,11 @@ fn derive_app_outcome<'db>(
 /// An interned fixpoint judgment input, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedFixInput<'db> {
+    #[returns(clone)]
     pub binder: ss::VPatId,
+    #[returns(clone)]
     pub body: ss::CompuId,
+    #[returns(clone)]
     pub ann: ss::TypeId,
 }
 
@@ -1067,7 +1096,7 @@ pub struct FixSynOutcome {
 }
 
 /// The synthesized judgment of a fixpoint term.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn fix_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     input: InternedFixInput<'db>, occurrence: u32,
@@ -1098,6 +1127,7 @@ pub enum HoleAnaKind {
 /// An interned hole analysis input, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedHoleAna<'db> {
+    #[returns(clone)]
     pub kind: HoleAnaKind,
 }
 
@@ -1116,7 +1146,7 @@ pub enum HoleAnaOutcome {
 /// `Fillable::Fill`, derived at the term's site. The checker keeps the
 /// resolution side effects (`fill_k`'s solution write, `fill_hints`, and the
 /// `fill_scopes` bookkeeping).
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn hole_ana_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     input: InternedHoleAna<'db>, occurrence: u32,
@@ -1151,7 +1181,7 @@ pub fn hole_ana_judgment<'db>(
 
 /// The synthesized judgment of a constructor pattern: it always fails with a
 /// missing annotation.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn pat_ctor_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>,
 ) -> Option<crate::check::TyckError> {
@@ -1163,7 +1193,7 @@ pub fn pat_ctor_syn_judgment<'db>(
 
 /// The synthesized judgment of an alias pattern: it always fails with a
 /// missing annotation.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn pat_alias_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>,
 ) -> Option<crate::check::TyckError> {
@@ -1188,8 +1218,11 @@ pub enum PiSynArm {
 /// An interned pi judgment input, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedPiSyn<'db> {
+    #[returns(clone)]
     pub arm: PiSynArm,
+    #[returns(clone)]
     pub tpat: ss::TPatId,
+    #[returns(clone)]
     pub abst: ss::AbstId,
 }
 
@@ -1204,7 +1237,7 @@ pub enum PiSynOutcome {
 
 /// The synthesized judgment of a pi term, keyed on the checked binder and
 /// body arm.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn pi_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>, input: InternedPiSyn<'db>,
     occurrence: u32,
@@ -1266,6 +1299,7 @@ pub enum SigmaSynArm {
 /// An interned sigma judgment input, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedSigmaSyn<'db> {
+    #[returns(clone)]
     pub arm: SigmaSynArm,
 }
 
@@ -1279,7 +1313,7 @@ pub enum SigmaSynOutcome {
 
 /// The synthesized judgment of a sigma term, keyed on the checked binder and
 /// body arm.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn sigma_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     input: InternedSigmaSyn<'db>, occurrence: u32,
@@ -1379,6 +1413,7 @@ pub enum AbsSynArm {
 /// An interned abstraction judgment input, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedAbsSyn<'db> {
+    #[returns(clone)]
     pub arm: AbsSynArm,
 }
 
@@ -1425,7 +1460,7 @@ pub enum AbsSynOutcome {
 
 /// The synthesized judgment of an abstraction term, keyed on the checked
 /// pattern and body arms.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn abs_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     input: InternedAbsSyn<'db>, occurrence: u32,
@@ -1569,6 +1604,7 @@ pub enum ManifestSynArm {
 /// An interned manifest-exists judgment input, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedManifestSyn<'db> {
+    #[returns(clone)]
     pub arm: ManifestSynArm,
 }
 
@@ -1582,7 +1618,7 @@ pub enum ManifestSynOutcome {
 
 /// The synthesized judgment of a manifest-exists term, keyed on the checked
 /// definition, binder, and body.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn manifest_exists_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     input: InternedManifestSyn<'db>, occurrence: u32,
@@ -1653,6 +1689,7 @@ pub enum PackSynArm {
 /// key.
 #[salsa::interned]
 pub struct InternedPackSyn<'db> {
+    #[returns(clone)]
     pub arm: PackSynArm,
 }
 
@@ -1666,7 +1703,7 @@ pub enum PackSynOutcome {
 
 /// The synthesized judgment of a `pack` term, keyed on the checked definition,
 /// binder, and payload.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn pack_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     input: InternedPackSyn<'db>, occurrence: u32,
@@ -1712,12 +1749,14 @@ pub fn pack_syn_judgment<'db>(
 /// An interned data-arms table, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedDataArms<'db> {
+    #[returns(clone)]
     pub arms: Vec<(ss::CtorName, ss::TypeId)>,
 }
 
 /// An interned codata-arms table, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedCoDataArms<'db> {
+    #[returns(clone)]
     pub arms: Vec<(ss::DtorName, ss::TypeId)>,
 }
 
@@ -1743,7 +1782,7 @@ pub struct CoDataSynOutcome {
 }
 
 /// The synthesized judgment of a data declaration, keyed on the checked arms.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn data_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     arms: InternedDataArms<'db>, kd: InternedKind<'db>, occurrence: u32,
@@ -1767,7 +1806,7 @@ pub fn data_syn_judgment<'db>(
 
 /// The synthesized judgment of a codata declaration, keyed on the checked
 /// arms.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn codata_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     arms: InternedCoDataArms<'db>, kd: InternedKind<'db>, occurrence: u32,
@@ -1792,8 +1831,11 @@ pub fn codata_syn_judgment<'db>(
 /// An interned match judgment input, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedMatchInput<'db> {
+    #[returns(clone)]
     pub scrut: ss::ValueId,
+    #[returns(clone)]
     pub arms: Vec<(ss::VPatId, ss::CompuId)>,
+    #[returns(clone)]
     pub ann: ss::TypeId,
 }
 
@@ -1807,7 +1849,7 @@ pub struct MatchSynOutcome {
 
 /// The synthesized judgment of a match term, keyed on the checked scrutinee
 /// and arms.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn match_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     input: InternedMatchInput<'db>, occurrence: u32,
@@ -1836,9 +1878,13 @@ pub fn match_syn_judgment<'db>(
 /// An interned constructor judgment input, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedCtorInput<'db> {
+    #[returns(clone)]
     pub name: ss::CtorName,
+    #[returns(clone)]
     pub arg: ss::ValueId,
+    #[returns(clone)]
     pub ann: ss::TypeId,
+    #[returns(clone)]
     pub data_id: ss::DataId,
 }
 
@@ -1852,7 +1898,7 @@ pub struct CtorSynOutcome {
 
 /// The synthesized judgment of a constructor term, keyed on the checked
 /// argument and the destructured data definition.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn ctor_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     input: InternedCtorInput<'db>, occurrence: u32,
@@ -1874,7 +1920,9 @@ pub fn ctor_syn_judgment<'db>(
 /// An interned comatch judgment input, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedCoMatchInput<'db> {
+    #[returns(clone)]
     pub arms: Vec<(ss::DtorName, ss::CompuId)>,
+    #[returns(clone)]
     pub ann: ss::TypeId,
 }
 
@@ -1887,7 +1935,7 @@ pub struct CoMatchSynOutcome {
 }
 
 /// The synthesized judgment of a comatch term, keyed on the checked arms.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn comatch_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     input: InternedCoMatchInput<'db>, occurrence: u32,
@@ -1915,8 +1963,11 @@ pub fn comatch_syn_judgment<'db>(
 /// An interned destructor judgment input, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedDtorInput<'db> {
+    #[returns(clone)]
     pub body: ss::CompuId,
+    #[returns(clone)]
     pub dtor: ss::DtorName,
+    #[returns(clone)]
     pub ann: ss::TypeId,
 }
 
@@ -1930,7 +1981,7 @@ pub struct DtorSynOutcome {
 }
 
 /// The synthesized judgment of a destructor term, keyed on the checked body.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn dtor_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     input: InternedDtorInput<'db>, occurrence: u32,
@@ -1952,9 +2003,13 @@ pub fn dtor_syn_judgment<'db>(
 /// An interned projection judgment input, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedProjInput<'db> {
+    #[returns(clone)]
     pub head: ss::ValueId,
+    #[returns(clone)]
     pub name: ss::FieldName,
+    #[returns(clone)]
     pub products: Vec<(ss::TypeId, usize)>,
+    #[returns(clone)]
     pub ann: ss::TypeId,
 }
 
@@ -1968,7 +2023,7 @@ pub struct ProjSynOutcome {
 
 /// The synthesized judgment of a projection term, keyed on the checked head
 /// and the resolved field.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn proj_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     input: InternedProjInput<'db>, occurrence: u32,
@@ -2004,9 +2059,13 @@ pub fn proj_syn_judgment<'db>(
 /// key.
 #[salsa::interned]
 pub struct InternedPatCtorInput<'db> {
+    #[returns(clone)]
     pub name: ss::CtorName,
+    #[returns(clone)]
     pub args: ss::VPatId,
+    #[returns(clone)]
     pub ann: ss::TypeId,
+    #[returns(clone)]
     pub data_id: ss::DataId,
 }
 
@@ -2021,7 +2080,7 @@ pub struct PatCtorOutcome {
 
 /// The synthesized judgment of a constructor pattern, keyed on the checked
 /// argument pattern and the destructured data definition.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn pat_ctor_ana_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>,
     input: InternedPatCtorInput<'db>, occurrence: u32,
@@ -2043,7 +2102,9 @@ pub fn pat_ctor_ana_judgment<'db>(
 /// An interned alias-pattern judgment input, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedPatAliasInput<'db> {
+    #[returns(clone)]
     pub patterns: Vec<ss::VPatId>,
+    #[returns(clone)]
     pub ann: ss::TypeId,
 }
 
@@ -2058,7 +2119,7 @@ pub struct PatAliasOutcome {
 
 /// The synthesized judgment of an alias pattern, keyed on the checked member
 /// patterns.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn pat_alias_ana_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>,
     input: InternedPatAliasInput<'db>, occurrence: u32,
@@ -2089,6 +2150,7 @@ pub enum PatNamedAnaArm {
 /// An interned named-pattern analysis input, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedPatNamedAna<'db> {
+    #[returns(clone)]
     pub arm: PatNamedAnaArm,
 }
 
@@ -2102,7 +2164,7 @@ pub enum PatNamedAnaOutcome {
 
 /// The synthesized judgment of a named pattern's analyzed arm, keyed on the
 /// checked inner pattern and the destructured expected label.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn pat_named_ana_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>,
     input: InternedPatNamedAna<'db>, occurrence: u32,
@@ -2138,7 +2200,7 @@ pub fn pat_named_ana_judgment<'db>(
 
 /// The synthesized judgment of a projection pattern: it always fails with a
 /// missing annotation.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn pat_project_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>,
 ) -> Option<crate::check::TyckError> {
@@ -2151,11 +2213,17 @@ pub fn pat_project_syn_judgment<'db>(
 /// An interned pack-pi introduction input, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedPackPiIntro<'db> {
+    #[returns(clone)]
     pub pattern: ss::VPatId,
+    #[returns(clone)]
     pub body: ss::CompuId,
+    #[returns(clone)]
     pub domain: ss::TypeId,
+    #[returns(clone)]
     pub first: ss::AbstId,
+    #[returns(clone)]
     pub rest: Vec<ss::AbstId>,
+    #[returns(clone)]
     pub codomain: ss::TypeId,
 }
 
@@ -2163,11 +2231,17 @@ pub struct InternedPackPiIntro<'db> {
 /// key.
 #[salsa::interned]
 pub struct InternedValuePackPiIntro<'db> {
+    #[returns(clone)]
     pub pattern: ss::VPatId,
+    #[returns(clone)]
     pub body: ss::ValueId,
+    #[returns(clone)]
     pub domain: ss::TypeId,
+    #[returns(clone)]
     pub first: ss::AbstId,
+    #[returns(clone)]
     pub rest: Vec<ss::AbstId>,
+    #[returns(clone)]
     pub codomain: ss::TypeId,
 }
 
@@ -2194,7 +2268,7 @@ pub struct ValuePackPiIntroOutcome {
 
 /// The synthesized judgment of a package-pi introduction, keyed on the
 /// checked pattern, body, and witness telescope.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn pack_pi_intro_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, site: InternedSite<'db>,
     input: InternedPackPiIntro<'db>,
@@ -2226,7 +2300,7 @@ pub fn pack_pi_intro_judgment<'db>(
 }
 
 /// The synthesized judgment of a value package-pi introduction.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn value_pack_pi_intro_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, site: InternedSite<'db>,
     input: InternedValuePackPiIntro<'db>,
@@ -2260,6 +2334,7 @@ pub fn value_pack_pi_intro_judgment<'db>(
 /// An interned binding index, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedBindingIndex<'db> {
+    #[returns(clone)]
     pub index: u32,
 }
 
@@ -2271,7 +2346,7 @@ pub struct InternedBindingIndex<'db> {
 /// query introduces the recursive identities before the equation checks run,
 /// mirroring the checker's fixpoint prelude. The seals and the environment
 /// threading stay checker-side.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn rec_group_abst_judgment_at<'db>(
     db: &'db dyn TyckDb, site: InternedSite<'db>, index: InternedBindingIndex<'db>,
 ) -> Option<(ss::AbstId, ss::TypeId, ss::TypeId)> {
@@ -2286,7 +2361,7 @@ pub fn rec_group_abst_judgment_at<'db>(
 
 /// The rejection of an intrinsic `Internal` term, carried as a query value so
 /// the checker routes decisions through queries and keeps the writer as a sink.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn internal_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>, env: EnvData<'db>,
 ) -> Option<crate::check::TyckError> {
@@ -2304,13 +2379,14 @@ pub fn internal_judgment<'db>(
 /// An interned hole-filling site, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedFill<'db> {
+    #[returns(clone)]
     pub id: ss::FillId,
 }
 
 /// Take the pending resolved program out of the slot and intern it as a
 /// tracked struct, inside the query graph where tracked-struct creation is
 /// legal.
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 pub fn intern_pending<'db>(db: &'db dyn TyckDb) -> ScopedData<'db> {
     let parts = db
         .pending_parts()
@@ -2346,7 +2422,7 @@ pub struct TyckOutput {
 // `lru = 1` keeps only the most recently used arena memo: the full typed arena of one
 // root is hundreds of megabytes, so the database forgets earlier roots whenever the
 // session triggers LRU eviction between analyses. Judgments stay memoized separately.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types), lru = 1)]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values), lru = 1)]
 pub fn check_source<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> TyckOutput {
     // One checker runs the whole pipeline within a single query. Splitting the
     // phases into separate salsa queries required deep-copying the full statics

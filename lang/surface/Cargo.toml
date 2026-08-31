@@ -15,7 +15,7 @@ regex = { workspace = true }
 logos = { workspace = true }
 lalrpop-util = { workspace = true }
 sequence_trie = { workspace = true }
-im = { workspace = true }
+rpds = { workspace = true }
 unindent = { workspace = true }
 thiserror = { workspace = true }
 ariadne = { workspace = true }

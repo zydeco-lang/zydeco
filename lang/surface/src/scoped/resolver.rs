@@ -5,9 +5,9 @@ use zydeco_utils::prelude::DepGraph;
 #[derive(Clone, Debug, Default)]
 pub struct Global {
     /// map from variable names to their definitions
-    pub(super) var_to_def: im::HashMap<VarName, DefId>,
+    pub(super) var_to_def: rpds::HashTrieMapSync<VarName, DefId>,
     /// map from definitions to their context bindings
-    pub(super) under_map: im::HashMap<DefId, BindingSite>,
+    pub(super) under_map: rpds::HashTrieMapSync<DefId, BindingSite>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -21,11 +21,11 @@ pub(super) struct BindingSite {
 pub struct Local {
     /// Context bindings whose dependencies are currently being collected,
     /// from outermost to innermost.
-    pub(super) under: im::Vector<BindingSite>,
+    pub(super) under: rpds::VectorSync<BindingSite>,
     /// map from variable names to their definitions
-    pub(super) var_to_def: im::HashMap<VarName, DefId>,
+    pub(super) var_to_def: rpds::HashTrieMapSync<VarName, DefId>,
     /// Context candidates associated with block-wide definitions.
-    pub(super) under_map: im::HashMap<DefId, BindingSite>,
+    pub(super) under_map: rpds::HashTrieMapSync<DefId, BindingSite>,
     /// The nearest block currently resolving its residual syntax.
     pub(super) boundary: Option<TermId>,
 }
@@ -33,9 +33,9 @@ pub struct Local {
 impl Local {
     fn for_body() -> Self {
         Self {
-            under: im::Vector::new(),
-            var_to_def: im::HashMap::new(),
-            under_map: im::HashMap::new(),
+            under: rpds::VectorSync::new_sync(),
+            var_to_def: rpds::HashTrieMapSync::new_sync(),
+            under_map: rpds::HashTrieMapSync::new_sync(),
             boundary: None,
         }
     }
@@ -202,7 +202,7 @@ impl Resolve for PatId {
             | Pattern::Triv(Triv) => local,
             | Pattern::Var(def) => {
                 let () = def.resolve(resolver, ())?;
-                local.var_to_def.insert(resolver.bitter.defs[def].clone(), *def);
+                local.var_to_def.insert_mut(resolver.bitter.defs[def].clone(), *def);
                 local
             }
             | Pattern::Named(pat) => {

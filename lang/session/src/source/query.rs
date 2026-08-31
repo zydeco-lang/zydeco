@@ -510,7 +510,7 @@ fn source_text(db: &dyn SourceQueryDb, input: SourceInput) -> Option<String> {
 
 // These results own all of their data and contain no database-tied references. The
 // non-Update escape hatch remains temporary until semantic fragments gain structural equality.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 fn parse_source(
     db: &dyn SourceQueryDb, input: SourceInput,
 ) -> Result<Arc<SourceTemplate>, Arc<SourceLoadError>> {
@@ -527,7 +527,7 @@ fn parse_source(
         .map_err(|error| Arc::new(SourceLoadError::Parse(error)))
 }
 
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 fn source_graph(
     db: &dyn SourceQueryDb, root: SourceInput,
 ) -> Result<Arc<SourceGraph>, Arc<SourceLoadError>> {
@@ -540,7 +540,7 @@ fn source_graph(
 /// The name-resolved program of one root, memoized so that every consumer of
 /// the root shares one [`ScopedData`] identity — and therefore one
 /// [`zydeco_statics::query::check_source`] memo entry.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 fn resolved_data<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput,
 ) -> Result<zydeco_statics::query::ScopedData<'db>, AnalysisError> {
@@ -570,7 +570,7 @@ fn rechecked(
     Ok((spans, zydeco_statics::query::check_source(db, data)))
 }
 
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 fn analyze_source(
     db: &dyn SourceQueryDb, root: SourceInput,
 ) -> Result<Arc<ProgramAnalysis>, AnalysisError> {
@@ -595,7 +595,7 @@ fn analyze_source(
 }
 
 /// The type-check diagnostics recorded for one analyzed root, computed on demand.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 fn diagnostics_at(
     db: &dyn SourceQueryDb, root: SourceInput,
 ) -> Option<zydeco_statics::check::TyckDiagnostics> {
@@ -607,7 +607,7 @@ fn diagnostics_at(
 ///
 /// Memoized per `(root, id)` and demand-driven: it reuses the memoized
 /// [`analyze_source`] instead of re-checking the root.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 fn normalized_type_at<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput, id: zydeco_statics::query::InternedType<'db>,
 ) -> Option<Type> {
@@ -617,7 +617,7 @@ fn normalized_type_at<'db>(
 }
 
 /// Coverage failures of one analyzed root, computed on demand.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 fn coverage_at(
     db: &dyn SourceQueryDb, root: SourceInput,
 ) -> Vec<zydeco_statics::validate::CoverageError> {
@@ -628,7 +628,7 @@ fn coverage_at(
 }
 
 /// The recorded solution of a hole-filling site, if the checker solved it.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 fn fill_solution_at<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput, fill: zydeco_statics::query::InternedFill<'db>,
 ) -> Option<zydeco_statics::syntax::AnnId> {
@@ -637,7 +637,7 @@ fn fill_solution_at<'db>(
 }
 
 /// The type annotation recorded for a scoped definition.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 fn annotation_of_def<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput, def: zydeco_statics::query::InternedDef<'db>,
 ) -> Option<zydeco_statics::syntax::AnnId> {
@@ -646,7 +646,7 @@ fn annotation_of_def<'db>(
 }
 
 /// The checked body of a type definition, if the definition introduces one.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 fn type_definition_of_def<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput, def: zydeco_statics::query::InternedDef<'db>,
 ) -> Option<zydeco_statics::syntax::TypeId> {
@@ -656,7 +656,7 @@ fn type_definition_of_def<'db>(
 
 /// The checked annotation of a scoped term: its sorted identity plus the
 /// annotation carried by that sort.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_update_types))]
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 fn term_annotation_at<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput, term: zydeco_statics::query::InternedTerm<'db>,
 ) -> Option<zydeco_statics::syntax::TermAnnId> {

@@ -264,7 +264,7 @@ enum MissingAnnotationSubject {
 pub struct TyckErrorEntry {
     pub(crate) error: TyckError,
     pub(crate) blame: &'static std::panic::Location<'static>,
-    pub(crate) stack: im::Vector<TyckTask>,
+    pub(crate) stack: rpds::VectorSync<TyckTask>,
     // Todo: dump related arena entries if needed
 }
 
@@ -627,7 +627,7 @@ impl<'a> Tycker<'a> {
     }
 
     /// The innermost source term or pattern active when an error was raised.
-    fn task_source_span(&self, stack: &im::Vector<TyckTask>) -> Option<Span> {
+    fn task_source_span(&self, stack: &rpds::VectorSync<TyckTask>) -> Option<Span> {
         stack.iter().rev().find_map(|task| match task {
             | TyckTask::Pat(pattern, _) => Some(*pattern.span(self)),
             | TyckTask::Term(term, _) => Some(*term.span(self)),
@@ -768,7 +768,9 @@ impl<'a> Tycker<'a> {
         }
     }
 
-    fn missing_annotation_subject(&self, stack: &im::Vector<TyckTask>) -> MissingAnnotationSubject {
+    fn missing_annotation_subject(
+        &self, stack: &rpds::VectorSync<TyckTask>,
+    ) -> MissingAnnotationSubject {
         stack
             .iter()
             .rev()
@@ -800,7 +802,9 @@ impl<'a> Tycker<'a> {
             .unwrap_or(MissingAnnotationSubject::Unspecified)
     }
 
-    fn contextual_error_message(&self, error: &TyckError, stack: &im::Vector<TyckTask>) -> String {
+    fn contextual_error_message(
+        &self, error: &TyckError, stack: &rpds::VectorSync<TyckTask>,
+    ) -> String {
         match error {
             | TyckError::MissingAnnotation => match self.missing_annotation_subject(stack) {
                 | MissingAnnotationSubject::Constructor(constructor) => {
@@ -838,7 +842,9 @@ impl<'a> Tycker<'a> {
         }
     }
 
-    fn diagnostic_help(&self, error: &TyckError, stack: &im::Vector<TyckTask>) -> Vec<String> {
+    fn diagnostic_help(
+        &self, error: &TyckError, stack: &rpds::VectorSync<TyckTask>,
+    ) -> Vec<String> {
         match error {
             | TyckError::MissingAnnotation => match self.missing_annotation_subject(stack) {
                 | MissingAnnotationSubject::Constructor(_) => vec![

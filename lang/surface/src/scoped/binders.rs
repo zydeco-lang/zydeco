@@ -3,12 +3,12 @@ use crate::scoped::syntax::*;
 /// Extract binder definitions introduced by a pattern.
 pub trait Binders {
     type Arena;
-    fn binders(&self, arena: &Self::Arena) -> im::HashMap<VarName, DefId>;
+    fn binders(&self, arena: &Self::Arena) -> rpds::HashTrieMapSync<VarName, DefId>;
 }
 
 impl Binders for PatId {
     type Arena = BitterArena;
-    fn binders(&self, arena: &Self::Arena) -> im::HashMap<VarName, DefId> {
+    fn binders(&self, arena: &Self::Arena) -> rpds::HashTrieMapSync<VarName, DefId> {
         let pat = &arena.pats[self];
         match pat {
             | Pattern::Ann(pat) => {
@@ -17,12 +17,12 @@ impl Binders for PatId {
             }
             | Pattern::Hole(pat) => {
                 let Hole = pat;
-                im::HashMap::new()
+                rpds::HashTrieMapSync::new_sync()
             }
-            | Pattern::Triv(Triv) => im::HashMap::new(),
+            | Pattern::Triv(Triv) => rpds::HashTrieMapSync::new_sync(),
             | Pattern::Var(pat) => {
                 let def = pat;
-                im::hashmap! { arena.defs[def].clone() => *def }
+                rpds::HashTrieMapSync::new_sync().insert(arena.defs[def].clone(), *def)
             }
             | Pattern::Named(pat) => {
                 let Named(_name, inner) = pat;
@@ -33,12 +33,20 @@ impl Binders for PatId {
                 args.binders(arena)
             }
             | Pattern::Project(ProjectionPattern(_, pattern)) => pattern.binders(arena),
-            | Pattern::Alias(Alias(pat)) => pat
-                .iter()
-                .fold(im::HashMap::new(), |binders, item| binders.union(item.binders(arena))),
-            | Pattern::Cons(pat) => pat
-                .iter()
-                .fold(im::HashMap::new(), |binders, item| binders.union(item.binders(arena))),
+            | Pattern::Alias(Alias(pat)) => {
+                pat.iter().fold(rpds::HashTrieMapSync::new_sync(), |binders, item| {
+                    item.binders(arena).iter().fold(binders, |binders, (name, definition)| {
+                        binders.insert(name.clone(), *definition)
+                    })
+                })
+            }
+            | Pattern::Cons(pat) => {
+                pat.iter().fold(rpds::HashTrieMapSync::new_sync(), |binders, item| {
+                    item.binders(arena).iter().fold(binders, |binders, (name, definition)| {
+                        binders.insert(name.clone(), *definition)
+                    })
+                })
+            }
         }
     }
 }

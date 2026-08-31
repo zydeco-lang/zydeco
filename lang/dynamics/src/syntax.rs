@@ -136,7 +136,7 @@ pub struct Runtime<'rt> {
     pub output: &'rt mut dyn Write,
     pub args: &'rt [String],
     pub(crate) host: HostRuntime,
-    pub stack: im::Vector<SemCompu>,
+    pub stack: rpds::VectorSync<SemCompu>,
     pub env: Env<SemValue>,
     pub program: DynamicsProgram,
 }

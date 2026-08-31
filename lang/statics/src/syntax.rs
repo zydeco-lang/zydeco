@@ -2,7 +2,7 @@ pub use zydeco_syntax::*;
 pub use zydeco_utils::span::{Sp, Span};
 
 use crate::surface_syntax as su;
-use derive_more::{From, IntoIterator};
+use derive_more::From;
 
 /* ------------------------------- Identifier ------------------------------- */
 
@@ -354,17 +354,15 @@ pub struct ManifestKind {
 }
 
 /// data | C_1 ty | ... end
-#[derive(Clone, Debug, IntoIterator)]
+#[derive(Clone, Debug)]
 pub struct Data {
-    #[into_iterator(owned, ref)]
-    arms: im::Vector<(CtorName, TypeId)>,
+    arms: rpds::VectorSync<(CtorName, TypeId)>,
 }
 
 /// `codata | .d_1 cp : ty | ... end`
-#[derive(Clone, Debug, IntoIterator)]
+#[derive(Clone, Debug)]
 pub struct CoData {
-    #[into_iterator(owned, ref)]
-    arms: im::Vector<(DtorName, TypeId)>,
+    arms: rpds::VectorSync<(DtorName, TypeId)>,
 }
 
 mod impls_structs {
@@ -436,6 +434,24 @@ mod impls_structs {
         }
     }
 
+    impl IntoIterator for Data {
+        type Item = (CtorName, TypeId);
+        type IntoIter = std::vec::IntoIter<Self::Item>;
+
+        fn into_iter(self) -> Self::IntoIter {
+            self.arms.iter().cloned().collect::<Vec<_>>().into_iter()
+        }
+    }
+
+    impl<'a> IntoIterator for &'a Data {
+        type Item = &'a (CtorName, TypeId);
+        type IntoIter = <&'a rpds::VectorSync<(CtorName, TypeId)> as IntoIterator>::IntoIter;
+
+        fn into_iter(self) -> Self::IntoIter {
+            (&self.arms).into_iter()
+        }
+    }
+
     impl CoData {
         pub fn new(arms: impl IntoIterator<Item = (DtorName, TypeId)>) -> Self {
             Self { arms: arms.into_iter().collect() }
@@ -452,6 +468,24 @@ mod impls_structs {
 
         pub fn is_empty(&self) -> bool {
             self.arms.is_empty()
+        }
+    }
+
+    impl IntoIterator for CoData {
+        type Item = (DtorName, TypeId);
+        type IntoIter = std::vec::IntoIter<Self::Item>;
+
+        fn into_iter(self) -> Self::IntoIter {
+            self.arms.iter().cloned().collect::<Vec<_>>().into_iter()
+        }
+    }
+
+    impl<'a> IntoIterator for &'a CoData {
+        type Item = &'a (DtorName, TypeId);
+        type IntoIter = <&'a rpds::VectorSync<(DtorName, TypeId)> as IntoIterator>::IntoIter;
+
+        fn into_iter(self) -> Self::IntoIter {
+            (&self.arms).into_iter()
         }
     }
 }
