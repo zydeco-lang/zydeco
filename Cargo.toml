@@ -118,6 +118,7 @@ opt-level = 2
 
 [profile.dev.package.zydeco-statics]
 opt-level = 1
+incremental = false
 
 [profile.dev.package.zydeco-surface]
 opt-level = 1
@@ -127,6 +128,7 @@ opt-level = 1
 # without changing the whole profile.
 [profile.test.package.zydeco-statics]
 opt-level = 1
+incremental = false
 
 [profile.test.package.zydeco-surface]
 opt-level = 1
