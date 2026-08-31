@@ -162,10 +162,12 @@ impl<'arena> TypeReferenceCollector<'arena> {
             }
             | Type::Proj(Proj(head, _)) => self.visit_type(*head),
             | Type::VArrow(ValueArrow(domain, codomain))
-            | Type::Arrow(Arrow(domain, codomain))
-            | Type::Prod(Prod(domain, codomain)) => {
+            | Type::Arrow(Arrow(domain, codomain)) => {
                 self.visit_type(*domain);
                 self.visit_type(*codomain);
+            }
+            | Type::Prod(Prod(components)) => {
+                components.iter().for_each(|component| self.visit_type(*component));
             }
             | Type::Forall(forall) => {
                 self.visit_type_binder(&forall.0);

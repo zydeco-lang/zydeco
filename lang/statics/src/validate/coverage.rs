@@ -270,11 +270,9 @@ impl MatrixPattern {
                 argument: Box::new(Self::from_typed(*argument, statics)),
             },
             | ValuePattern::Triv(_) => Self::Unit,
-            | ValuePattern::VCons(ConsN(items, tail)) => {
-                items.iter().rev().fold(Self::from_typed(*tail, statics), |tail, item| {
-                    Self::Product(vec![Self::from_typed(*item, statics), tail])
-                })
-            }
+            | ValuePattern::VCons(components) => Self::Product(
+                components.iter().map(|item| Self::from_typed(*item, statics)).collect(),
+            ),
             | ValuePattern::SCons(ConsN(_, tail)) => {
                 Self::Package(Box::new(Self::from_typed(*tail, statics)))
             }

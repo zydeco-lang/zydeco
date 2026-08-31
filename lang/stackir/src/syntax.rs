@@ -48,12 +48,12 @@ pub struct ProductLayout {
 /// A logical value cons together with its canonical physical product layout.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct VCons<T> {
-    pub items: ConsN<T, T>,
+    pub items: Vec<T>,
     pub layout: ProductLayout,
 }
 
 impl<T> VCons<T> {
-    pub fn new(items: ConsN<T, T>, layout: ProductLayout) -> Self {
+    pub fn new(items: Vec<T>, layout: ProductLayout) -> Self {
         assert!(layout.arity > 0);
         assert!(items.len() <= layout.arity);
         Self { items, layout }

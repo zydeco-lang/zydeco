@@ -448,7 +448,7 @@ AllocType! {
     ArrowU<TypeId>
     Forall
     PackPi
-    ProdU<TypeId>
+    Prod<TypeId>
     Exists
     ManifestKind
     DataId
@@ -494,26 +494,8 @@ AllocValuePattern! {
     Ctor<CtorName, VPatId>
     Alias<VPatId>
     Triv
-    ConsN<VPatId, VPatId>
+    Vec<VPatId>
     ConsN<StaticPatId, VPatId>
-}
-
-impl<Arena> Alloc<Arena, VPatId> for ConsN<TPatId, VPatId>
-where
-    Arena: StaticsAlloc,
-{
-    type Ann = TypeId;
-    type Env = TyEnv;
-
-    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> VPatId {
-        let ConsN(items, tail) = val;
-        Alloc::alloc(
-            arena,
-            ConsN(items.into_iter().map(StaticPatId::from).collect(), tail),
-            ann,
-            env,
-        )
-    }
 }
 
 /* ---------------------------------- Value --------------------------------- */
@@ -560,28 +542,10 @@ AllocValue! {
     Thunk<CompuId>
     Ctor<CtorName, ValueId>
     Triv
-    ConsN<ValueId, ValueId>
+    Vec<ValueId>
     ConsN<StaticTermId, ValueId>
     Proj<ValueId, ResolvedField>
     Literal
-}
-
-impl<Arena> Alloc<Arena, ValueId> for ConsN<TypeId, ValueId>
-where
-    Arena: StaticsAlloc,
-{
-    type Ann = TypeId;
-    type Env = TyEnv;
-
-    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> ValueId {
-        let ConsN(items, tail) = val;
-        Alloc::alloc(
-            arena,
-            ConsN(items.into_iter().map(StaticTermId::from).collect(), tail),
-            ann,
-            env,
-        )
-    }
 }
 
 /* ------------------------------- Computation ------------------------------ */

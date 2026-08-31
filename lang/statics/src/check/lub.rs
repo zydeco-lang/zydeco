@@ -494,15 +494,24 @@ impl Debruijn {
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                     std::panic::Location::caller(),
                 )?,
-                | (Type::Prod(Prod(la, lb)), Type::Prod(Prod(ra, rb))) => {
-                    let a = self.clone().lub(la, ra, tycker)?;
-                    let b = self.lub(lb, rb, tycker)?;
-                    if a == la && b == lb {
+                | (Type::Prod(Prod(lhs)), Type::Prod(Prod(rhs))) => {
+                    if lhs.len() != rhs.len() {
+                        tycker.err(
+                            TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                            std::panic::Location::caller(),
+                        )?
+                    }
+                    let components = lhs
+                        .iter()
+                        .zip(rhs.iter())
+                        .map(|(l, r)| self.clone().lub(*l, *r, tycker))
+                        .collect::<Result<Vec<_>>>()?;
+                    if components.iter().zip(lhs.iter()).all(|(l, r)| l == r) {
                         lhs_id
                     } else {
                         let kd = tycker.statics.type_kind(lhs_id);
 
-                        Alloc::alloc(tycker, Prod(a, b), kd, &env)
+                        Alloc::alloc(tycker, Prod(components), kd, &env)
                     }
                 }
                 | (Type::Prod(_), _) => tycker.err(

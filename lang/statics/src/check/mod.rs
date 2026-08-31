@@ -365,7 +365,7 @@ struct DeferredEnvIdentity {
 
 enum DeferredEnvTypeView {
     Label { name: FieldName, whole: DeferredEnvType, projected: DeferredEnvType },
-    Product { whole: DeferredEnvType, head: DeferredEnvType, tail: DeferredEnvType },
+    Product { whole: DeferredEnvType, components: Vec<DeferredEnvType> },
     Other(DeferredEnvType),
 }
 
@@ -435,10 +435,10 @@ impl DeferredEnvType {
                 let projected = self.descend(projected);
                 DeferredEnvTypeView::Label { name, whole: self, projected }
             }
-            | ss::Type::Prod(ss::Prod(head, tail)) => {
-                let head = self.descend(head);
-                let tail = self.descend(tail);
-                DeferredEnvTypeView::Product { whole: self, head, tail }
+            | ss::Type::Prod(ss::Prod(components)) => {
+                let components =
+                    components.into_iter().map(|component| self.descend(component)).collect();
+                DeferredEnvTypeView::Product { whole: self, components }
             }
             | _ => DeferredEnvTypeView::Other(self),
         }
@@ -513,19 +513,10 @@ impl DeferredValueFieldCandidate {
     fn materialized_product_components_k(
         tycker: &mut Tycker<'_>, product: ss::TypeId,
     ) -> ResultKont<Vec<ss::TypeId>> {
-        let mut next = Some(product);
-        std::iter::from_fn(|| {
-            let current = next.take()?;
-            match tycker.type_filled_k(&current) {
-                | Ok(ss::Type::Prod(ss::Prod(head, tail))) => {
-                    next = Some(tail);
-                    Some(Ok(head))
-                }
-                | Ok(_) => Some(Ok(current)),
-                | Err(KontFailure) => Some(Err(KontFailure)),
-            }
-        })
-        .collect()
+        match tycker.type_filled_k(&product)? {
+            | ss::Type::Prod(ss::Prod(components)) => Ok(components),
+            | _ => Ok(vec![product]),
+        }
     }
 }
 
@@ -631,22 +622,10 @@ impl FieldProjectionResolver {
     fn product_components_k(
         tycker: &mut Tycker<'_>, product: DeferredEnvType,
     ) -> ResultKont<Vec<DeferredEnvType>> {
-        let mut next = Some(product);
-        std::iter::from_fn(|| {
-            let current = next.take()?;
-            let view = match current.reveal_k(tycker) {
-                | Ok(view) => view,
-                | Err(KontFailure) => return Some(Err(KontFailure)),
-            };
-            match view {
-                | DeferredEnvTypeView::Product { head, tail, .. } => {
-                    next = Some(tail);
-                    Some(Ok(head))
-                }
-                | view => Some(Ok(view.into_whole())),
-            }
-        })
-        .collect()
+        match product.reveal_k(tycker)? {
+            | DeferredEnvTypeView::Product { components, .. } => Ok(components),
+            | view => Ok(vec![view.into_whole()]),
+        }
     }
 
     fn r#type(
@@ -748,10 +727,8 @@ impl FieldProjectionResolver {
                             }
                         })
                         .collect::<Vec<_>>();
-                    let patterns = ss::ConsN::from_vec(patterns)
-                        .expect("a product projection route has at least two components");
                     let annotation = if index == 0 { root } else { product };
-                    Alloc::alloc(tycker, patterns, annotation, env)
+                    Alloc::alloc(tycker, ss::ValuePattern::VCons(patterns), annotation, env)
                 }
             }
         })
@@ -1313,6 +1290,25 @@ impl ValuePatternShape {
 }
 
 impl Tycker<'_> {
+    /// The product over the components remaining after a prefix has been
+    /// consumed: no components is `Unit`, one component is itself, and
+    /// several rejoin as one product.
+    fn rest_product_k(
+        &mut self, components: &[ss::TypeId], env: &ss::TyEnv,
+    ) -> ResultKont<ss::TypeId> {
+        match components {
+            | [] => {
+                let vtype = ss::VType.build(self, env);
+                Ok(Alloc::alloc(self, ss::UnitTy, vtype, env))
+            }
+            | [only] => Ok(*only),
+            | components => {
+                let vtype = ss::VType.build(self, env);
+                Ok(Alloc::alloc(self, ss::Prod(components.to_vec()), vtype, env))
+            }
+        }
+    }
+
     fn pattern_has_payload_annotation(&self, pattern: su::PatId) -> bool {
         match self.scoped.pats[&pattern].clone() {
             | su::Pattern::Ann(_) => true,
@@ -2473,7 +2469,7 @@ impl PackPiPatternSkolems {
         match tycker.scoped.pats[&pattern].to_owned() {
             | su::Pattern::Ann(su::Ann { tm, .. }) => self.assignments_k(tycker, env, tm),
             | su::Pattern::Named(su::Named(_, inner)) => self.assignments_k(tycker, env, inner),
-            | su::Pattern::Cons(su::ConsN(items, _)) => {
+            | su::Pattern::Cons(items) => {
                 let witnesses = self.signature.witnesses.iter().copied().collect::<Vec<_>>();
                 PackPiPatternAssignments::new(&items, &witnesses, self.signature.domain)
                     .collect_k(tycker, env)
@@ -3255,7 +3251,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                 }
             },
             | Pat::Cons(pat) => {
-                let su::ConsN(items, tail) = pat;
+                let mut items = pat;
+                let tail = items
+                    .pop()
+                    .expect("a cons pattern carries at least two components");
                 match switch {
                     | Switch::Syn => {
                         let initial = (self.info.clone(), Vec::new(), Vec::new(), Vec::new());
@@ -3333,15 +3332,26 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                         let expected_view = expected;
                         match expected_view.reveal_or_refine_product_k(tycker, &self.info)? {
                             | ss::Type::Prod(_) => {
-                                let mut expected_item = expected_view;
+                                let ss::Prod(component_tys) =
+                                    expected_view.view_product_k(tycker, &self.info)?;
+                                if component_tys.len() != items.len() + 1 {
+                                    tycker.err_k(
+                                        TyckError::TypeExpected {
+                                            expected: "a product with matching components"
+                                                .to_string(),
+                                            found: expected_view,
+                                        },
+                                        std::panic::Location::caller(),
+                                    )?
+                                }
+                                let item_count = items.len();
                                 let mut pattern_env = self.info.clone();
                                 let mut opened = Vec::new();
-                                let mut output = Vec::with_capacity(items.len());
-                                let mut annotations = Vec::with_capacity(items.len());
-                                for item in items {
-                                    let ss::Prod(item_ty, next_ty) =
-                                        expected_item.view_product_k(tycker, &pattern_env)?;
-                                    expected_item = next_ty;
+                                let mut output = Vec::with_capacity(item_count);
+                                let mut annotations = Vec::with_capacity(item_count);
+                                for (item, item_ty) in
+                                    items.into_iter().zip(component_tys.iter().copied())
+                                {
                                     let checked = TyEnvT::new(pattern_env.clone(), item).tyck_k(
                                         tycker,
                                         PatternAction::ana(item_ty.into())
@@ -3358,9 +3368,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                     annotations.push(annotation);
                                 }
 
+                                let remaining =
+                                    tycker.rest_product_k(&component_tys[item_count..], &pattern_env)?;
                                 let checked = TyEnvT::new(pattern_env.clone(), tail).tyck_k(
                                     tycker,
-                                    PatternAction::ana(expected_item.into())
+                                    PatternAction::ana(remaining.into())
                                         .with_skolems(skolems.clone()),
                                 )?;
                                 let (tail, ann) = checked.try_as_value(
@@ -3601,15 +3613,16 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                     body
                                 } else {
                                     let body_view = body_ty;
-                                    let _ = body_view.view_product_k(tycker, &body_env)?;
+                                    let ss::Prod(body_component_tys) =
+                                        body_view.view_product_k(tycker, &body_env)?;
 
-                                    let mut expected_item = body_view;
                                     let mut output = Vec::with_capacity(body_items.len());
                                     let mut annotations = Vec::with_capacity(body_items.len());
-                                    for item in body_items.iter().copied() {
-                                        let ss::Prod(item_ty, next_ty) =
-                                            expected_item.view_product_k(tycker, &body_env)?;
-                                        expected_item = next_ty;
+                                    for (item, item_ty) in body_items
+                                        .iter()
+                                        .copied()
+                                        .zip(body_component_tys.iter().copied())
+                                    {
                                         let checked = TyEnvT::new(body_env.clone(), item).tyck_k(
                                             tycker,
                                             PatternAction::ana(item_ty.into())
@@ -3626,9 +3639,13 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                         annotations.push(annotation);
                                     }
 
+                                    let remaining = tycker.rest_product_k(
+                                        &body_component_tys[body_items.len()..],
+                                        &body_env,
+                                    )?;
                                     let checked = TyEnvT::new(body_env.clone(), tail).tyck_k(
                                         tycker,
-                                        PatternAction::ana(expected_item.into())
+                                        PatternAction::ana(remaining.into())
                                             .with_skolems(skolems.clone()),
                                     )?;
                                     let (tail, ann) = checked.try_as_value(
@@ -3639,16 +3656,22 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                     body_env = checked.info;
                                     opened.extend(checked.inner.opened);
                                     let vtype = ss::VType.build(tycker, &body_env);
-                                    let ann =
-                                        annotations.into_iter().rev().fold(ann, |ann, head| {
-                                            Alloc::alloc(
-                                                tycker,
-                                                ss::Prod(head, ann),
-                                                vtype,
-                                                &body_env,
-                                            )
-                                        });
-                                    Alloc::alloc(tycker, ss::ConsN(output, tail), ann, &body_env)
+                                    let mut component_tys = annotations;
+                                    component_tys.push(ann);
+                                    let ann = Alloc::alloc(
+                                        tycker,
+                                        ss::Prod(component_tys),
+                                        vtype,
+                                        &body_env,
+                                    );
+                                    let mut components = output;
+                                    components.push(tail);
+                                    Alloc::alloc(
+                                        tycker,
+                                        ss::ValuePattern::VCons(components),
+                                        ann,
+                                        &body_env,
+                                    )
                                 };
                                 let cons = Alloc::alloc(
                                     tycker,
@@ -4610,74 +4633,105 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 }
             },
             | Tm::Cons(term) => {
-                let su::ConsN(items, tail) = term;
+                let mut items = term;
+                let tail = items
+                    .pop()
+                    .expect("a cons term carries at least two components");
                 match switch {
                     | Switch::Syn => {
-                        let (output, annotations): (Vec<_>, Vec<_>) = items
+                        let mut components = items;
+                        components.push(tail);
+                        let outcomes = components
                             .into_iter()
-                            .map(|item| -> ResultKont<_> {
-                                match self.mk(item).tyck_k(tycker, Action::syn())? {
-                                    | TermAnnId::Value(item, item_ty) => Ok((item, item_ty)),
-                                    | TermAnnId::Type(_, _) => tycker.err_k(
-                                        TyckError::MissingAnnotation,
-                                        std::panic::Location::caller(),
-                                    ),
-                                    | TermAnnId::Hole(_)
-                                    | TermAnnId::Kind(_)
-                                    | TermAnnId::Compu(_, _) => tycker.err_k(
-                                        TyckError::SortMismatch,
-                                        std::panic::Location::caller(),
-                                    ),
-                                }
-                            })
-                            .collect::<ResultKont<Vec<_>>>()?
-                            .into_iter()
-                            .unzip();
-                        let checked = self.mk(tail).tyck_k(tycker, Action::syn())?;
-                        match checked {
-                            | TermAnnId::Value(_, _) => {}
-                            | TermAnnId::Type(_, _) => tycker.err_k(
-                                TyckError::MissingAnnotation,
+                            .map(|component| self.mk(component).tyck_k(tycker, Action::syn()))
+                            .collect::<ResultKont<Vec<_>>>()?;
+                        let typed = matches!(outcomes.first(), Some(TermAnnId::Type(_, _)));
+                        let mixed = outcomes.iter().any(|outcome| match outcome {
+                            | TermAnnId::Type(_, _) => !typed,
+                            | TermAnnId::Value(_, _) => typed,
+                            | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Compu(_, _) =>
+                                true,
+                        });
+                        if mixed {
+                            tycker.err_k(
+                                TyckError::SortMismatch,
                                 std::panic::Location::caller(),
-                            )?,
-                            | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Compu(_, _) => {
-                                tycker.err_k(
-                                    TyckError::SortMismatch,
-                                    std::panic::Location::caller(),
-                                )?
-                            }
-                        };
-                        let item_outcomes = output
-                            .iter()
-                            .zip(&annotations)
-                            .map(|(value, ty)| TermAnnId::Value(*value, *ty))
-                            .collect::<Vec<_>>();
-                        let term = crate::query::InternedTerm::new(tycker.db, self.inner);
-                        let items_interned =
-                            crate::query::InternedConsItems::new(tycker.db, item_outcomes);
-                        let tail_interned = crate::query::InternedTermAnn::new(tycker.db, checked);
-                        let Some(outcome) = crate::query::cons_syn_judgment(
-                            tycker.db,
-                            tycker.data,
-                            term,
-                            items_interned,
-                            tail_interned,
-                            tycker.site_occurrence(),
-                        ) else {
-                            unreachable!("consumed judgments are query-produced")
-                        };
-                        for (id, prod) in outcome.prods {
-                            tycker.statics.types_pre.insert_new(
-                                id,
-                                ss::Fillable::Done(prod),
-                                outcome.vtype,
-                            );
-                            tycker.store_env(id, &self.info);
+                            )?
                         }
-                        tycker.statics.values.insert_new(outcome.cons_id, outcome.cons);
-                        tycker.statics.annotations_value.insert_new(outcome.cons_id, outcome.ann);
-                        tycker.statics.env_value.insert_new(outcome.cons_id, self.info.clone());
-                        TermAnnId::Value(outcome.cons_id, outcome.ann)
+                        if typed {
+                            // An infix product type: one n-ary product over the
+                            // synthesized component types.
+                            let vtype = ss::VType.build(tycker, &self.info);
+                            let component_tys = outcomes
+                                .into_iter()
+                                .map(|outcome| match outcome {
+                                    | TermAnnId::Type(ty, kd) => {
+                                        Lub::lub_k(vtype, kd, tycker)?;
+                                        Ok(ty)
+                                    }
+                                    | _ => unreachable!("sorted outcomes are uniform"),
+                                })
+                                .collect::<ResultKont<Vec<_>>>()?;
+                            let prod =
+                                Alloc::alloc(tycker, ss::Prod(component_tys), vtype, &self.info);
+                            TermAnnId::Type(prod, vtype)
+                        } else {
+                            let (mut output, mut annotations): (Vec<_>, Vec<_>) = outcomes
+                                .into_iter()
+                                .map(|outcome| match outcome {
+                                    | TermAnnId::Value(item, item_ty) => Ok((item, item_ty)),
+                                    | _ => unreachable!("sorted outcomes are uniform"),
+                                })
+                                .collect::<ResultKont<Vec<_>>>()?
+                                .into_iter()
+                                .unzip();
+                            let tail = output.pop().expect(
+                                "a cons term carries at least two components",
+                            );
+                            let tail_ty = annotations.pop().expect(
+                                "a cons term carries at least two components",
+                            );
+                            let item_outcomes = output
+                                .iter()
+                                .zip(&annotations)
+                                .map(|(value, ty)| TermAnnId::Value(*value, *ty))
+                                .collect::<Vec<_>>();
+                            let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                            let items_interned =
+                                crate::query::InternedConsItems::new(tycker.db, item_outcomes);
+                            let tail_interned = crate::query::InternedTermAnn::new(
+                                tycker.db,
+                                TermAnnId::Value(tail, tail_ty),
+                            );
+                            let Some(outcome) = crate::query::cons_syn_judgment(
+                                tycker.db,
+                                tycker.data,
+                                term,
+                                items_interned,
+                                tail_interned,
+                                tycker.site_occurrence(),
+                            ) else {
+                                unreachable!("consumed judgments are query-produced")
+                            };
+                            for (id, prod) in outcome.prods {
+                                tycker.statics.types_pre.insert_new(
+                                    id,
+                                    ss::Fillable::Done(prod),
+                                    outcome.vtype,
+                                );
+                                tycker.store_env(id, &self.info);
+                            }
+                            tycker.statics.values.insert_new(outcome.cons_id, outcome.cons);
+                            tycker
+                                .statics
+                                .annotations_value
+                                .insert_new(outcome.cons_id, outcome.ann);
+                            tycker
+                                .statics
+                                .env_value
+                                .insert_new(outcome.cons_id, self.info.clone());
+                            TermAnnId::Value(outcome.cons_id, outcome.ann)
+                        }
                     }
                     | Switch::Ana(AnnId::Type(expected)) => {
                         let expected_view = expected;
@@ -4685,13 +4739,23 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             .reveal_or_refine_prepared_product_k(tycker, &self.info)?
                         {
                             | ss::Type::Prod(_) => {
-                                let mut expected_item = expected_view;
+                                let ss::Prod(component_tys) = expected_view
+                                    .view_prepared_product_k(tycker, &self.info)?;
+                                if component_tys.len() != items.len() + 1 {
+                                    tycker.err_k(
+                                        TyckError::TypeExpected {
+                                            expected: "a product with matching components"
+                                                .to_string(),
+                                            found: expected_view,
+                                        },
+                                        std::panic::Location::caller(),
+                                    )?
+                                }
+                                let item_count = items.len();
                                 let (output, annotations): (Vec<_>, Vec<_>) = items
                                     .into_iter()
-                                    .map(|item| -> ResultKont<_> {
-                                        let ss::Prod(item_ty, next_ty) = expected_item
-                                            .view_prepared_product_k(tycker, &self.info)?;
-                                        expected_item = next_ty;
+                                    .zip(component_tys.iter().copied())
+                                    .map(|(item, item_ty)| -> ResultKont<_> {
                                         let checked = self.mk(item).tyck_k(
                                             tycker,
                                             Action::ana_prepared(item_ty.into(), &self.info),
@@ -4708,7 +4772,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
 
                                 let checked = self.mk(tail).tyck_k(
                                     tycker,
-                                    Action::ana_prepared(expected_item.into(), &self.info),
+                                    Action::ana_prepared(
+                                        component_tys[item_count].into(),
+                                        &self.info,
+                                    ),
                                 )?;
                                 let (tail, ann) = checked.try_as_value(
                                     tycker,
@@ -4716,11 +4783,18 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     std::panic::Location::caller(),
                                 )?;
                                 let vtype = ss::VType.build(tycker, &self.info);
-                                let ann = annotations.into_iter().rev().fold(ann, |ann, head| {
-                                    Alloc::alloc(tycker, ss::Prod(head, ann), vtype, &self.info)
-                                });
-                                let cons =
-                                    Alloc::alloc(tycker, ss::ConsN(output, tail), ann, &self.info);
+                                let mut component_tys = annotations;
+                                component_tys.push(ann);
+                                let ann =
+                                    Alloc::alloc(tycker, ss::Prod(component_tys), vtype, &self.info);
+                                let mut components = output;
+                                components.push(tail);
+                                let cons = Alloc::alloc(
+                                    tycker,
+                                    ss::Value::VCons(components),
+                                    ann,
+                                    &self.info,
+                                );
                                 TermAnnId::Value(cons, ann)
                             }
                             | ss::Type::Exists(_) | ss::Type::ManifestKind(_) => {
@@ -4807,17 +4881,14 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         .0
                                 } else {
                                     let body_view = body_ty;
-                                    let _ =
-                                        body_view.view_prepared_product_k(tycker, &self.info)?;
+                                    let ss::Prod(body_component_tys) = body_view
+                                        .view_prepared_product_k(tycker, &self.info)?;
 
-                                    let mut expected_item = body_view;
                                     let (output, annotations): (Vec<_>, Vec<_>) = body_items
                                         .iter()
                                         .copied()
-                                        .map(|item| -> ResultKont<_> {
-                                            let ss::Prod(item_ty, next_ty) = expected_item
-                                                .view_prepared_product_k(tycker, &self.info)?;
-                                            expected_item = next_ty;
+                                        .zip(body_component_tys.iter().copied())
+                                        .map(|(item, item_ty)| -> ResultKont<_> {
                                             let checked = self.mk(item).tyck_k(
                                                 tycker,
                                                 Action::ana_prepared(item_ty.into(), &self.info),
@@ -4832,9 +4903,13 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         .into_iter()
                                         .unzip();
 
+                                    let remaining = tycker.rest_product_k(
+                                        &body_component_tys[body_items.len()..],
+                                        &self.info,
+                                    )?;
                                     let checked = self.mk(tail).tyck_k(
                                         tycker,
-                                        Action::ana_prepared(expected_item.into(), &self.info),
+                                        Action::ana_prepared(remaining.into(), &self.info),
                                     )?;
                                     let (tail, ann) = checked.try_as_value(
                                         tycker,
@@ -4842,16 +4917,22 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         std::panic::Location::caller(),
                                     )?;
                                     let vtype = ss::VType.build(tycker, &self.info);
-                                    let ann =
-                                        annotations.into_iter().rev().fold(ann, |ann, head| {
-                                            Alloc::alloc(
-                                                tycker,
-                                                ss::Prod(head, ann),
-                                                vtype,
-                                                &self.info,
-                                            )
-                                        });
-                                    Alloc::alloc(tycker, ss::ConsN(output, tail), ann, &self.info)
+                                    let mut component_tys = annotations;
+                                    component_tys.push(ann);
+                                    let ann = Alloc::alloc(
+                                        tycker,
+                                        ss::Prod(component_tys),
+                                        vtype,
+                                        &self.info,
+                                    );
+                                    let mut components = output;
+                                    components.push(tail);
+                                    Alloc::alloc(
+                                        tycker,
+                                        ss::Value::VCons(components),
+                                        ann,
+                                        &self.info,
+                                    )
                                 };
                                 let cons = Alloc::alloc(
                                     tycker,
@@ -4870,7 +4951,12 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             )?,
                         }
                     }
-                    | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
+                    | Switch::Ana(AnnId::Kind(kd)) => {
+                        let vtype = ss::VType.build(tycker, &self.info);
+                        Lub::lub_k(vtype, kd, tycker)?;
+                        self.tyck_k(tycker, Action::syn())?
+                    }
+                    | Switch::Ana(AnnId::Set) => {
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     }
                 }
@@ -8066,19 +8152,20 @@ mod source_boundary_tests {
             let environment =
                 TyEnv::from_iter([(source_def, target.into()), (target_def, unit.into())]);
 
-            let product = Alloc::alloc(tycker, ss::Prod(source, source), vtype, &empty);
+            let product = Alloc::alloc(tycker, ss::Prod(vec![source, source]), vtype, &empty);
             let prepared = product.subst_env_k(tycker, &environment).unwrap();
-            let ss::Prod(head, tail) =
+            let ss::Prod(components) =
                 prepared.view_prepared_product_k(tycker, &environment).unwrap();
-            assert_eq!((head, tail), (target, target));
+            assert_eq!(components.as_slice(), [target, target]);
 
-            let definition = Alloc::alloc(tycker, ss::Prod(source, unit), vtype, &empty);
+            let definition =
+                Alloc::alloc(tycker, ss::Prod(vec![source, unit]), vtype, &empty);
             let witness: ss::AbstId = Alloc::alloc(tycker, None::<ss::DefId>, vtype, &());
             tycker.record_seal(witness, definition);
             let sealed = Alloc::alloc(tycker, witness, vtype, &empty);
-            let ss::Prod(head, tail) =
+            let ss::Prod(components) =
                 sealed.view_prepared_product_k(tycker, &environment).unwrap();
-            assert_eq!((head, tail), (target, unit));
+            assert_eq!(components.as_slice(), [target, unit]);
             assert!(tycker.errors.is_empty());
         });
     }
@@ -8179,7 +8266,8 @@ mod source_boundary_tests {
             let second = anonymous_type_binder(tycker, vtype, &environment);
             let first_type = Alloc::alloc(tycker, first.witness, vtype, &environment);
             let second_type = Alloc::alloc(tycker, second.witness, vtype, &environment);
-            let body = Alloc::alloc(tycker, ss::Prod(first_type, second_type), vtype, &environment);
+            let body =
+                Alloc::alloc(tycker, ss::Prod(vec![first_type, second_type]), vtype, &environment);
             let inner = Alloc::alloc(
                 tycker,
                 ss::TypeAbstraction { binder: second, body },
@@ -8208,12 +8296,12 @@ mod source_boundary_tests {
             assert!(matches!(tycker.statics.normalized_at(partial), Some(ss::Type::App(_))));
 
             let saturated = partial.apply_type_argument_k(tycker, second_argument, vtype).unwrap();
-            let ss::Type::Prod(ss::Prod(found_first, found_second)) =
+            let ss::Type::Prod(ss::Prod(found_components)) =
                 tycker.type_filled_k(&saturated).unwrap().to_owned()
             else {
                 panic!("saturating the application should materialize its product body")
             };
-            assert_eq!((found_first, found_second), (first_argument, second_argument));
+            assert_eq!(found_components.as_slice(), [first_argument, second_argument]);
             assert!(tycker.errors.is_empty());
         });
     }

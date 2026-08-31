@@ -216,7 +216,14 @@ impl Resolve for PatId {
             | Pattern::Project(ProjectionPattern(_, pattern)) => {
                 pattern.resolve(resolver, (local, global))?
             }
-            | Pattern::Alias(Alias(pat)) | Pattern::Cons(pat) => {
+            | Pattern::Alias(Alias(pat)) => {
+                // Later items can depend on binders introduced by earlier items.
+                for item in pat {
+                    local = item.resolve(resolver, (local, global))?;
+                }
+                local
+            }
+            | Pattern::Cons(pat) => {
                 // Later items can depend on binders introduced by earlier items.
                 for item in pat {
                     local = item.resolve(resolver, (local, global))?;

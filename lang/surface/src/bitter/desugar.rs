@@ -368,16 +368,13 @@ impl Desugar for t::PatId {
             }
             | Pat::Paren(pat) => {
                 let t::Paren(pats) = pat;
-                let mut pats = pats.desugar(desugarer)?;
+                let pats = pats.desugar(desugarer)?;
                 match pats.len() {
                     | 0 => Alloc::alloc(desugarer, b::Triv.into(), self.into()),
                     // if there is only one pat like `(p)`, remove the redundant paren
                     | 1 => pats.into_iter().next().unwrap(),
                     // Multi-element parens are preserved as one n-ary cons.
-                    | _ => {
-                        let tail = pats.pop().unwrap();
-                        Alloc::alloc(desugarer, b::ConsN(pats, tail).into(), self.into())
-                    }
+                    | _ => Alloc::alloc(desugarer, b::Pattern::Cons(pats).into(), self.into()),
                 }
             }
         };
@@ -535,16 +532,13 @@ impl Desugar for t::TermId {
             }
             | Tm::Paren(term) => {
                 let t::Paren(terms) = term;
-                let mut terms = terms.desugar(desugarer)?;
+                let terms = terms.desugar(desugarer)?;
                 match terms.len() {
                     | 0 => Alloc::alloc(desugarer, b::Triv.into(), self.into()),
                     // if there is only one term like `(t)`, remove the redundant paren
                     | 1 => terms.into_iter().next().unwrap(),
                     // Multi-element parens are preserved as one n-ary cons.
-                    | _ => {
-                        let tail = terms.pop().unwrap();
-                        Alloc::alloc(desugarer, b::ConsN(terms, tail).into(), self.into())
-                    }
+                    | _ => Alloc::alloc(desugarer, b::Term::Cons(terms).into(), self.into()),
                 }
             }
             | Tm::Abs(term) => {
@@ -657,15 +651,14 @@ impl Desugar for t::TermId {
                 parameters.quantify(Quantifier::Sigma, body, desugarer)
             }
             | Tm::Prod(term) => {
-                let t::Prod(ty_l, ty_r) = term;
-                // ty_l -> ann = (hole: ty_l)
-                let ty_l = ty_l.desugar(desugarer)?;
-                let hole = Alloc::alloc(desugarer, b::Hole.into(), self.into());
-                let ann =
-                    Alloc::alloc(desugarer, b::Ann { tm: hole, ty: ty_l }.into(), self.into());
-                // ann & ty_r -> sigma
-                let ty_r = ty_r.desugar(desugarer)?;
-                Alloc::alloc(desugarer, b::Sigma(ann, ty_r).into(), self.into())
+                let t::Prod(components) = term;
+                // An infix product desugars to one flat n-ary cons over its
+                // components; nesting survives only through parentheses.
+                let components = components
+                    .into_iter()
+                    .map(|component| component.desugar(desugarer))
+                    .collect::<Result<Vec<_>>>()?;
+                Alloc::alloc(desugarer, b::Term::Cons(components).into(), self.into())
             }
             | Tm::Exists(term) => {
                 let TextualExistentialTelescope { parameters, body } =

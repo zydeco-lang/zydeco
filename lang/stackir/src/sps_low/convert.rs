@@ -134,20 +134,20 @@ impl<'a> SpsLowConverter<'a> {
 
     fn build_product_pattern(&mut self, items: Vec<low::VPatId>) -> low::VPatId {
         let arity = items.len();
-        match low::ConsN::from_vec(items) {
-            | Some(items) => low::VCons::new(items, low::ProductLayout { arity }).build(self, None),
-            | None => low::Triv.build(self, None),
+        if arity == 0 {
+            return low::Triv.build(self, None);
         }
+        low::VCons::new(items, low::ProductLayout { arity }).build(self, None)
     }
 
     fn build_product_value(
         &mut self, items: Vec<low::ValueId>, site: Option<ss::TermId>,
     ) -> low::ValueId {
         let arity = items.len();
-        match low::ConsN::from_vec(items) {
-            | Some(items) => low::VCons::new(items, low::ProductLayout { arity }).build(self, site),
-            | None => low::Triv.build(self, site),
+        if arity == 0 {
+            return low::Triv.build(self, site);
         }
+        low::VCons::new(items, low::ProductLayout { arity }).build(self, site)
     }
 
     fn translated_var(
@@ -213,13 +213,9 @@ impl<'a> SpsLowConverter<'a> {
             | high::ValuePattern::Triv(high::Triv) => {
                 PatternTranslation { pattern: low::Triv.build(self, site), bindings: Vec::new() }
             }
-            | high::ValuePattern::VCons(high::VCons {
-                items: high::ConsN(items, tail),
-                layout,
-            }) => {
+            | high::ValuePattern::VCons(high::VCons { items, layout }) => {
                 let (items, bindings): (Vec<_>, Vec<_>) = items
                     .into_iter()
-                    .chain([tail])
                     .map(|item| {
                         let PatternTranslation { pattern, bindings } = self.translate_pattern(item);
                         (pattern, bindings)
@@ -227,7 +223,7 @@ impl<'a> SpsLowConverter<'a> {
                     .unzip();
                 PatternTranslation {
                     pattern: low::VCons::new(
-                        low::ConsN::from_vec(items).expect("a product pattern is non-empty"),
+                        items,
                         layout,
                     )
                     .build(self, site),
@@ -250,10 +246,9 @@ impl<'a> SpsLowConverter<'a> {
                 low::Ctor(ctor, body).build(self, site)
             }
             | high::Value::Triv(high::Triv) => low::Triv.build(self, site),
-            | high::Value::VCons(high::VCons { items: high::ConsN(items, tail), layout }) => {
+            | high::Value::VCons(high::VCons { items, layout }) => {
                 let items = items.into_iter().map(|item| self.translate_value(item, env)).collect();
-                let tail = self.translate_value(tail, env);
-                low::VCons::new(low::ConsN(items, tail), layout).build(self, site)
+                low::VCons::new(items, layout).build(self, site)
             }
             | high::Value::Literal(literal) => literal.build(self, site),
             | high::Value::Complex(high::Complex { operator, operands }) => {

@@ -466,11 +466,9 @@ impl VPatId {
             | VPat::Alias(Alias(patterns)) => {
                 patterns.iter().next().expect("an alias pattern is non-empty").reify(tycker)
             }
-            | VPat::VCons(vpat) => {
-                let ConsN(items, tail) = vpat;
+            | VPat::VCons(items) => {
                 let items = items.into_iter().map(|item| item.reify(tycker)).collect();
-                let tail = tail.reify(tycker);
-                Alloc::alloc(tycker, ConsN(items, tail), ty, &env)
+                Alloc::alloc(tycker, ss::Value::VCons(items), ty, &env)
             }
             | VPat::SCons(vpat) => {
                 let ConsN(witnesses, body) = vpat;

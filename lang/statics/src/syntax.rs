@@ -482,7 +482,7 @@ pub enum Type {
     Arrow(ArrowU<TypeId>),
     Forall(Forall),
     PackPi(Box<PackPi>),
-    Prod(ProdU<TypeId>),
+    Prod(Prod<TypeId>),
     Exists(Box<Exists>),
     ManifestKind(ManifestKind),
     Data(DataId),
@@ -537,7 +537,7 @@ pub enum ValuePattern {
     Ctor(Ctor<CtorName, VPatId>),
     Alias(Alias<VPatId>),
     Triv(Triv),
-    VCons(ConsN<VPatId, VPatId>),
+    VCons(Vec<VPatId>),
     SCons(ConsN<StaticPatId, VPatId>),
 }
 
@@ -555,7 +555,7 @@ pub enum Value {
     Thunk(Thunk<CompuId>),
     Ctor(Ctor<CtorName, ValueId>),
     Triv(Triv),
-    VCons(ConsN<ValueId, ValueId>),
+    VCons(Vec<ValueId>),
     SCons(ConsN<StaticTermId, ValueId>),
     Proj(Proj<ValueId, ResolvedField>),
     Lit(Literal),

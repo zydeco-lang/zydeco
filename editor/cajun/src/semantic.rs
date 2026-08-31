@@ -450,7 +450,10 @@ impl<'arena> ParameterDefinitions<'arena> {
             | Pattern::Project(ProjectionPattern(_, inner)) => {
                 self.collect_pattern(inner, definitions);
             }
-            | Pattern::Alias(Alias(items)) | Pattern::Cons(items) => {
+            | Pattern::Alias(Alias(items)) => {
+                items.iter().for_each(|item| self.collect_pattern(item, definitions));
+            }
+            | Pattern::Cons(items) => {
                 items.iter().for_each(|item| self.collect_pattern(item, definitions));
             }
         }

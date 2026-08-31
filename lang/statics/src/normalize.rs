@@ -206,9 +206,11 @@ impl TypeSupportCollector {
                 | Type::Primitive(_)
                 | Type::OS(_) => {}
                 | Type::VArrow(ValueArrow(input, output))
-                | Type::Arrow(Arrow(input, output))
-                | Type::Prod(Prod(input, output)) => {
+                | Type::Arrow(Arrow(input, output)) => {
                     [input, output].into_iter().try_for_each(|ty| self.visit(ty, tycker))?;
+                }
+                | Type::Prod(Prod(components)) => {
+                    components.into_iter().try_for_each(|ty| self.visit(ty, tycker))?;
                 }
                 | Type::VForall(ValueForall(binder, body)) | Type::Forall(Forall(binder, body)) => {
                     let newly_bound = self.bound.insert(binder.witness);
@@ -425,13 +427,15 @@ impl TypeId {
                     }
                 }
                 | Type::Prod(prod) => {
-                    let Prod(ty1, ty2) = prod;
-                    let ty1_ = ty1.subst_env(tycker, env)?;
-                    let ty2_ = ty2.subst_env(tycker, env)?;
-                    if ty1 == ty1_ && ty2 == ty2_ {
+                    let Prod(components) = prod;
+                    let components_ = components
+                        .iter()
+                        .map(|ty| ty.subst_env(tycker, env))
+                        .collect::<Result<Vec<_>>>()?;
+                    if *components == components_ {
                         *self
                     } else {
-                        Alloc::alloc(tycker, Prod(ty1_, ty2_), kd, env)
+                        Alloc::alloc(tycker, Prod(components_), kd, env)
                     }
                 }
                 | Type::Exists(exists) => {
@@ -699,13 +703,15 @@ impl TypeId {
                     }
                 }
                 | Type::Prod(prod) => {
-                    let Prod(ty1, ty2) = prod;
-                    let ty1_ = ty1.subst_absts(tycker, assignments)?;
-                    let ty2_ = ty2.subst_absts(tycker, assignments)?;
-                    if ty1 == ty1_ && ty2 == ty2_ {
+                    let Prod(components) = prod;
+                    let components_ = components
+                        .iter()
+                        .map(|ty| ty.subst_absts(tycker, assignments))
+                        .collect::<Result<Vec<_>>>()?;
+                    if *components == components_ {
                         *self
                     } else {
-                        Alloc::alloc(tycker, Prod(ty1_, ty2_), kd, &env)
+                        Alloc::alloc(tycker, Prod(components_), kd, &env)
                     }
                 }
                 | Type::Exists(exists) => {
@@ -1137,9 +1143,9 @@ impl InferenceRefinement {
         let vtype = Alloc::alloc(tycker, VType, (), &());
         let head = Self::fresh_type(tycker, fill, vtype, env);
         let tail = Self::fresh_type(tycker, fill, vtype, env);
-        let shape = Alloc::alloc(tycker, Prod(head, tail), vtype, env);
+        let shape = Alloc::alloc(tycker, Prod(vec![head, tail]), vtype, env);
         fill.fill(tycker, shape.into())?;
-        Ok(Type::Prod(Prod(head, tail)))
+        Ok(Type::Prod(Prod(vec![head, tail])))
     }
 }
 
@@ -1233,7 +1239,7 @@ impl TypeId {
     #[track_caller]
     pub(crate) fn view_product_k(
         self, tycker: &mut Tycker<'_>, env: &TyEnv,
-    ) -> ResultKont<Prod<TypeId, TypeId>> {
+    ) -> ResultKont<Prod<TypeId>> {
         match self.reveal_or_refine_product_k(tycker, env)? {
             | Type::Prod(product) => Ok(product),
             | _ => tycker.err_k(
@@ -1249,7 +1255,7 @@ impl TypeId {
     #[track_caller]
     pub(crate) fn view_prepared_product_k(
         self, tycker: &mut Tycker<'_>, env: &TyEnv,
-    ) -> ResultKont<Prod<TypeId, TypeId>> {
+    ) -> ResultKont<Prod<TypeId>> {
         match self.reveal_or_refine_prepared_product_k(tycker, env)? {
             | Type::Prod(product) => Ok(product),
             | _ => tycker.err_k(
@@ -1578,13 +1584,20 @@ impl TypeId {
                     }
                 }
                 | Type::Prod(ty) => {
-                    let Prod(ty1, ty2) = ty;
-                    let ty1_ = resolver.resolve(ty1, tycker)?;
-                    let ty2_ = resolver.resolve(ty2, tycker)?;
-                    if ty1 == ty1_ && ty2 == ty2_ {
+                    let Prod(components) = ty;
+                    let components_ = components
+                        .iter()
+                        .map(|ty| resolver.resolve(*ty, tycker))
+                        .collect::<Result<Vec<_>>>()?;
+                    if *components == components_ {
                         res
                     } else {
-                        Alloc::alloc(tycker, Prod(ty1_, ty2_), tycker.statics.type_kind(res), &env)
+                        Alloc::alloc(
+                            tycker,
+                            Prod(components_),
+                            tycker.statics.type_kind(res),
+                            &env,
+                        )
                     }
                 }
                 | Type::Exists(ty) => {
@@ -2079,13 +2092,15 @@ impl TypeId {
                     }
                 }
                 | Type::Prod(prod) => {
-                    let Prod(ty1, ty2) = prod;
-                    let ty1_norm = ty1.filled_norm_id(tycker, norm)?;
-                    let ty2_norm = ty2.filled_norm_id(tycker, norm)?;
-                    if ty1_norm == ty1 && ty2_norm == ty2 && kd_norm == kd {
+                    let Prod(components) = prod;
+                    let components_norm = components
+                        .iter()
+                        .map(|ty| ty.filled_norm_id(tycker, norm))
+                        .collect::<Result<Vec<_>>>()?;
+                    if components_norm == *components && kd_norm == kd {
                         self
                     } else {
-                        Alloc::alloc(tycker, Prod(ty1_norm, ty2_norm), kd_norm, &env)
+                        Alloc::alloc(tycker, Prod(components_norm), kd_norm, &env)
                     }
                 }
                 | Type::Exists(exists) => {

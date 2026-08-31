@@ -118,7 +118,7 @@ fn abstract_substitution_sequences_shadow_bound_pack_pi_witnesses() {
         let (bound, bound_ty) = TestFixture::witness(tycker, ctype);
         let (free, free_ty) = TestFixture::witness(tycker, ctype);
         let (_, bound_replacement) = TestFixture::witness(tycker, ctype);
-        let codomain = Alloc::alloc(tycker, Prod(bound_ty, free_ty), ctype, &TyEnv::new());
+        let codomain = Alloc::alloc(tycker, Prod(vec![bound_ty, free_ty]), ctype, &TyEnv::new());
         let pack_pi = TestFixture::pack_pi(tycker, domain, bound, codomain, ctype);
         let assignments = [(free, bound_ty), (bound, bound_replacement)];
 
@@ -128,12 +128,11 @@ fn abstract_substitution_sequences_shadow_bound_pack_pi_witnesses() {
         let Ok(Type::PackPi(substituted)) = tycker.type_filled(&substituted) else {
             panic!("substitution changed the package-arrow shape")
         };
-        let Ok(Type::Prod(Prod(head, tail))) = tycker.type_filled(&substituted.codomain) else {
+        let Ok(Type::Prod(Prod(components))) = tycker.type_filled(&substituted.codomain) else {
             panic!("substitution changed the codomain product shape")
         };
 
-        assert_eq!(head, bound_ty);
-        assert_eq!(tail, bound_ty);
+        assert_eq!(components.as_slice(), [bound_ty, bound_ty]);
     });
 }
 

@@ -143,12 +143,7 @@ impl<'a> Lowerer<'a> {
     fn product_arity(&self, ty: ss::TypeId) -> usize {
         match self.statics.normalized_at(ty) {
             | Some(ss::Type::Unit(_)) => 0,
-            | Some(ss::Type::Prod(ss::Prod(_, tail))) => {
-                1 + match self.statics.normalized_at(*tail) {
-                    | Some(ss::Type::Prod(_)) => self.product_arity(*tail),
-                    | _ => 1,
-                }
-            }
+            | Some(ss::Type::Prod(ss::Prod(components))) => components.len(),
             | _ => unreachable!("VCons must have Unit or product type"),
         }
     }
@@ -206,8 +201,6 @@ impl<'a> Lowerer<'a> {
                 if index == position { selected.build(self, None) } else { Hole.build(self, None) }
             })
             .collect::<Vec<VPatId>>();
-        let fields =
-            ConsN::from_vec(fields).expect("a projected product must have at least one field");
         let binder = VCons::new(fields, layout).build(self, None);
         let projected = selected.build(self, site);
         (ValueBinding { binder, bindee: head, site }, projected)
@@ -247,13 +240,11 @@ impl BuiltinPackageLowering {
             }
             | BuiltinPackageValue::Product(product) => {
                 let values = product
-                    .into_values()
                     .into_iter()
                     .map(|value| Self::lower(value, lowerer))
                     .collect::<Result<Vec<_>, _>>()?;
                 let layout = ProductLayout { arity: values.len() };
-                let items = ConsN::from_vec(values).expect("a checked product plan is non-empty");
-                Ok(VCons::new(items, layout).build(lowerer, None))
+                Ok(VCons::new(values, layout).build(lowerer, None))
             }
         }
     }
@@ -323,11 +314,10 @@ impl Lower for ss::VPatId {
                 Alias(ConsN::from_vec(patterns).unwrap()).into()
             }
             | SSVPat::Triv(Triv) => Triv.into(),
-            | SSVPat::VCons(ss::ConsN(items, tail)) => {
+            | SSVPat::VCons(items) => {
                 let items = items.into_iter().map(|item| item.lower(lo, ())).collect();
-                let tail = tail.lower(lo, ());
                 let ty = lo.statics.annotations_vpat[self];
-                VCons::new(ConsN(items, tail), lo.product_layout(ty)).into()
+                VCons::new(items, lo.product_layout(ty)).into()
             }
             | SSVPat::SCons(ss::ConsN(_, body)) => {
                 let vpat = body.lower(lo, ());
@@ -400,10 +390,8 @@ impl Lower for ss::ValueId {
             | ss::Value::Triv(Triv) => ValuePlan::pure(Triv.build(lo, site)),
             | ss::Value::VCons(items) => {
                 let layout = lo.product_layout(lo.statics.annotations_value[self]);
-                let items = items.into_vec().lower(lo, ());
+                let items = items.lower(lo, ());
                 items.map(|items| {
-                    let items =
-                        ConsN::from_vec(items).expect("non-empty product value in stack IR");
                     VCons::new(items, layout).build(lo, site)
                 })
             }

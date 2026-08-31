@@ -290,7 +290,7 @@ mod tests {
     fn branch_join_rejects_implicit_arena_sharing() {
         let mut fixture = Fixture::new();
         let value = Triv.build(&mut fixture.arena, None);
-        let pair = VCons::new(ConsN(vec![value], value), ProductLayout { arity: 2 })
+        let pair = VCons::new(vec![value, value], ProductLayout { arity: 2 })
             .build(&mut fixture.arena, None);
         let stack = Bullet.build(&mut fixture.arena, None);
         let root = SReturn { stack, value: pair }.build(&mut fixture.arena, None);

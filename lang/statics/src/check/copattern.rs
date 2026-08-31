@@ -189,11 +189,22 @@ impl CopatternElaborator {
             (tail, tail_type)
         } else {
             let vtype = ss::VType.build(tycker, env);
-            let product_type = fields.iter().fold(tail_type, |tail_type, (_, value_type)| {
-                Alloc::alloc(tycker, ss::Prod(*value_type, tail_type), vtype, env)
-            });
-            let items = fields.into_iter().rev().map(|(value, _)| value).collect();
-            let tuple = Alloc::alloc(tycker, ss::ConsN(items, tail), product_type, env);
+            let product_type = Alloc::alloc(
+                tycker,
+                ss::Prod(
+                    fields
+                        .iter()
+                        .map(|(_, value_type)| *value_type)
+                        .chain(std::iter::once(tail_type))
+                        .collect(),
+                ),
+                vtype,
+                env,
+            );
+            let mut components =
+                fields.into_iter().rev().map(|(value, _)| value).collect::<Vec<_>>();
+            components.push(tail);
+            let tuple = Alloc::alloc(tycker, ss::Value::VCons(components), product_type, env);
             (tuple, product_type)
         }
     }
@@ -208,7 +219,9 @@ impl CopatternElaborator {
         if items.is_empty() {
             tail
         } else {
-            Alloc::alloc(tycker, ss::ConsN(items, tail), product_type, env)
+            let mut components = items;
+            components.push(tail);
+            Alloc::alloc(tycker, ss::ValuePattern::VCons(components), product_type, env)
         }
     }
 

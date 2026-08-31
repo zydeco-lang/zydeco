@@ -169,8 +169,7 @@ begin
         #append = bytes/append,
         #from_string = bytes/from_string,
         #to_string = bytes_to_string
-      ),
-      ()
+      )
     )
   end
 end

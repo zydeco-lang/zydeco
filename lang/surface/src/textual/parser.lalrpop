@@ -424,10 +424,12 @@ Term: Term = {
     // destructor
     <term:TermGen<Term>> <name:DtorName> => Dtor(<>).into(),
 
-    // Product associates to the right: A * B * C == A * (B * C).
-    #[precedence(level="3")] #[assoc(side="right")]
+    // Product is one flat infix node: A * B * C parses as a single
+    // three-component product, while an explicitly parenthesized
+    // component stays a distinct nested product.
+    #[precedence(level="3")] #[assoc(side="left")]
     // product
-    <ty_l:TermGen<Term>> "*" <ty_r:TermGen<Term>> => Prod(<>).into(),
+    <ty_l:TermGen<Term>> "*" <ty_r:TermGen<Term>> => parser.extend_product(ty_l, ty_r).into(),
 
     // Arrow associates to the right: A -> B -> C == A -> (B -> C).
     #[precedence(level="4")] #[assoc(side="right")]

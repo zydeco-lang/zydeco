@@ -93,16 +93,16 @@ end
 }
 
 #[test]
-fn treats_nary_and_nested_product_patterns_as_the_same_shape() {
+fn covers_flat_and_nested_product_patterns_at_matching_arities() {
     CoverageCase::check(&format!(
         r#"
 begin
   {BOOL_DECLARATION}
-  let Triple = data | +Triple : Bool * Bool * Bool end that
-  let value : Triple = +Triple(+True(), +False(), +True()) that
+  let Nested = data | +Nested : Bool * (Bool * Bool) end that
+  let value : Nested = +Nested(+True(), (+False(), +True())) that
   match value
-  | +Triple(+False(_), _, _) => ret ()
-  | +Triple(+True(_), (_, _)) => ret ()
+  | +Nested(+False(_), _) => ret ()
+  | +Nested(+True(_), (_, _)) => ret ()
   end
 end
 "#,

@@ -286,8 +286,12 @@ impl<'graph> TextualProgramBuilder<'graph> {
                 body: self.term(source, body)?,
             }
             .into(),
-            | t::Term::Prod(t::Prod(left, right)) => {
-                t::Prod(self.term(source, left)?, self.term(source, right)?).into()
+            | t::Term::Prod(t::Prod(components)) => {
+                let components = components
+                    .into_iter()
+                    .map(|component| self.term(source, component))
+                    .collect::<Result<Vec<_>, _>>()?;
+                t::Prod(components).into()
             }
             | t::Term::Thunk(t::Thunk(body)) => t::Thunk(self.term(source, body)?).into(),
             | t::Term::Force(t::Force(body)) => t::Force(self.term(source, body)?).into(),

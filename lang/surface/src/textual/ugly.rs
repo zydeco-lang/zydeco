@@ -319,13 +319,16 @@ impl<'a> Pretty<'a, Formatter<'a>> for Sigma {
     }
 }
 
-impl<'a, T> Pretty<'a, Formatter<'a>> for ProdU<T>
+impl<'a, T> Pretty<'a, Formatter<'a>> for Prod<T>
 where
     T: Pretty<'a, Formatter<'a>>,
 {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let Prod(t1, r2) = self;
-        RcDoc::concat([t1.pretty(f), RcDoc::text(" * "), r2.pretty(f)])
+        let Prod(components) = self;
+        RcDoc::intersperse(
+            components.iter().map(|component| component.pretty(f)),
+            RcDoc::text(" * "),
+        )
     }
 }
 

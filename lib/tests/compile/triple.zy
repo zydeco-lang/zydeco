@@ -8,15 +8,16 @@ begin
   let (/process) = system that
   def packed :
     exists (X : VType) (Y : VType) . X * Y * Int64 =
-      (Int64, Int64, 10, (20, 0))
+      (Int64, Int64, 10, 20, 0)
   that
 
   match packed
   | (Left, Right, x, y, status) =>
     let flat = (x, status, y) in
-    let (a, (code, c)) = flat in
+    let (a, code, c) = flat in
     let nested = (a, (code, c)) in
-    let (p, result, q) = nested in
+    let (p, pair) = nested in
+    let (result, q) = pair in
     ! (process/exit) result
   end
 end

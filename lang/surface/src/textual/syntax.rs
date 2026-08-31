@@ -260,7 +260,7 @@ pub enum Term {
     Sigma(Sigma),
     Exists(Exists),
     Pack(Pack),
-    Prod(ProdU<TermId>),
+    Prod(Prod<TermId>),
     Thunk(Thunk<TermId>),
     Force(Force<TermId>),
     Ret(Return<TermId>),
@@ -364,6 +364,20 @@ impl Parser {
         let id = self.alloc(term.info);
         self.arena.terms.insert_new(id, term.inner);
         id
+    }
+    /// Extend an infix product chain to the left: `A * B * C` builds one
+    /// flat product, while a parenthesized left operand stays a distinct
+    /// nested component because parentheses allocate their own node kind.
+    pub fn extend_product(&mut self, left: TermId, right: TermId) -> Prod<TermId> {
+        let components = match &self.arena.terms[&left] {
+            | Term::Prod(prod) => {
+                let mut components = prod.0.clone();
+                components.push(right);
+                components
+            }
+            | _ => vec![left, right],
+        };
+        Prod(components)
     }
     /// Record an arm marker. `first` owns comments before the arm, while
     /// `payload` supplies the layout boundary after its header.

@@ -34,7 +34,7 @@ fn direct_infinite_types_fail_the_occurs_check_without_committing() {
         );
         let hole = Alloc::alloc(tycker, fill, vtype, &env);
         let unit = Alloc::alloc(tycker, UnitTy, vtype, &env);
-        let recursive = Alloc::alloc(tycker, Prod(hole, unit), vtype, &env);
+        let recursive = Alloc::alloc(tycker, Prod(vec![hole, unit]), vtype, &env);
 
         assert!(fill.fill(tycker, recursive.into()).is_err());
         assert!(tycker.statics.solus.get(&fill).is_none());
@@ -61,7 +61,7 @@ fn indirect_infinite_types_fail_the_occurs_check_without_committing() {
         let first_hole = Alloc::alloc(tycker, first, vtype, &env);
         let second_hole: TypeId = Alloc::alloc(tycker, second, vtype, &env);
         let unit = Alloc::alloc(tycker, UnitTy, vtype, &env);
-        let recursive = Alloc::alloc(tycker, Prod(first_hole, unit), vtype, &env);
+        let recursive = Alloc::alloc(tycker, Prod(vec![first_hole, unit]), vtype, &env);
 
         assert!(first.fill(tycker, second_hole.into()).is_ok());
         assert!(second.fill(tycker, recursive.into()).is_err());

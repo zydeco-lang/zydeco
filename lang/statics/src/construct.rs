@@ -544,17 +544,15 @@ impl<'a> Construct<Tycker<'a>, TypeId> for UnitTy {
         ty
     }
 }
-impl<'a, S, T> Construct<Tycker<'a>, TypeId> for Prod<S, T>
+impl<'a, T> Construct<Tycker<'a>, TypeId> for Prod<T>
 where
-    S: Construct<Tycker<'a>, TypeId>,
     T: Construct<Tycker<'a>, TypeId>,
 {
     fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        let Prod(ty_1, ty_2) = self;
-        let ty_1 = ty_1.build(tycker, env);
-        let ty_2 = ty_2.build(tycker, env);
+        let Prod(components) = self;
+        let components = components.into_iter().map(|ty| ty.build(tycker, env)).collect();
         let vtype = VType.build(tycker, env);
-        Alloc::alloc(tycker, Prod(ty_1, ty_2), vtype, env)
+        Alloc::alloc(tycker, Prod(components), vtype, env)
     }
 }
 impl<'a, F, A, T> Construct<Tycker<'a>, TypeId> for cs::Exists<A, F>
@@ -826,8 +824,8 @@ where
         let a_ty = tycker.statics.annotations_value[&a];
         let b = b.build(tycker, env);
         let b_ty = tycker.statics.annotations_value[&b];
-        let ty = Prod(a_ty, b_ty).build(tycker, env);
-        Alloc::alloc(tycker, ConsN(vec![a], b), ty, env)
+        let ty = Prod(vec![a_ty, b_ty]).build(tycker, env);
+        Alloc::alloc(tycker, ss::Value::VCons(vec![a, b]), ty, env)
     }
 }
 impl<'a, S, T> Construct<Tycker<'a>, ValueId> for ConsN<S, T>
@@ -837,14 +835,18 @@ where
 {
     fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> ValueId {
         let ConsN(items, tail) = self;
-        let items = items.into_iter().map(|item| item.build(tycker, env)).collect::<Vec<_>>();
+        let mut components = items.into_iter().map(|item| item.build(tycker, env)).collect::<Vec<_>>();
         let tail = tail.build(tycker, env);
-        let mut ty = tycker.statics.annotations_value[&tail];
-        for head in items.iter().rev() {
-            let head_ty = tycker.statics.annotations_value[head];
-            ty = Prod(head_ty, ty).build(tycker, env);
-        }
-        Alloc::alloc(tycker, ConsN(items, tail), ty, env)
+        let ty = Prod(
+            components
+                .iter()
+                .chain(std::iter::once(&tail))
+                .map(|component| tycker.statics.annotations_value[component])
+                .collect(),
+        )
+        .build(tycker, env);
+        components.push(tail);
+        Alloc::alloc(tycker, ss::Value::VCons(components), ty, env)
     }
 }
 impl<'a, S, V, T> Construct<Tycker<'a>, ValueId> for cs::Ann<Cons<cs::Ty<S>, V>, T>
@@ -858,7 +860,7 @@ where
         let a = a.build(tycker, env);
         let b = b.build(tycker, env);
         let ty = ty.build(tycker, env);
-        Alloc::alloc(tycker, ConsN(vec![a], b), ty, env)
+        Alloc::alloc(tycker, ConsN(vec![a.into()], b), ty, env)
     }
 }
 impl<'a, C, V, T> Construct<Tycker<'a>, ValueId> for cs::Ann<cs::Ctor<C, V>, T>

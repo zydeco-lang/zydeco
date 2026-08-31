@@ -422,8 +422,7 @@ begin
       = head,
       = tail,
       = get
-    ),
-    ()
+    )
   end
 end
 -- end module Data

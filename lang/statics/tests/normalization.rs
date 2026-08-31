@@ -51,8 +51,8 @@ fn saturated_type_application_fuses_nested_abstractions() {
         let first_type = Alloc::alloc(tycker, first.witness, vtype, &env);
         let second_type = Alloc::alloc(tycker, second.witness, vtype, &env);
         let third_type = Alloc::alloc(tycker, third.witness, vtype, &env);
-        let tail = Alloc::alloc(tycker, Prod(second_type, third_type), vtype, &env);
-        let body = Alloc::alloc(tycker, Prod(first_type, tail), vtype, &env);
+        let tail = Alloc::alloc(tycker, Prod(vec![second_type, third_type]), vtype, &env);
+        let body = Alloc::alloc(tycker, Prod(vec![first_type, tail]), vtype, &env);
         let one_argument = Alloc::alloc(tycker, Arrow(vtype, vtype), (), &());
         let two_arguments = Alloc::alloc(tycker, Arrow(vtype, one_argument), (), &());
         let three_arguments = Alloc::alloc(tycker, Arrow(vtype, two_arguments), (), &());
@@ -91,18 +91,22 @@ fn saturated_type_application_fuses_nested_abstractions() {
         let Ok(normalized_type) = tycker.type_filled(&normalized) else {
             panic!("the saturated result should be filled")
         };
-        let Type::Prod(Prod(found_first, found_tail)) = normalized_type.to_owned() else {
+        let Type::Prod(Prod(found_components)) = normalized_type.to_owned() else {
             panic!("the saturated application should expose the result product")
         };
-        let Ok(tail_type) = tycker.type_filled(&found_tail) else {
+        let [found_first, found_tail] = found_components.as_slice() else {
+            panic!("the saturated application should expose two result components")
+        };
+        let Ok(tail_type) = tycker.type_filled(found_tail) else {
             panic!("the nested result should be filled")
         };
-        let Type::Prod(Prod(found_second, found_third)) = tail_type.to_owned() else {
+        let Type::Prod(Prod(found_tail_components)) = tail_type.to_owned() else {
             panic!("the saturated application should preserve the nested result product")
         };
+        assert_eq!(*found_first, first_argument);
         assert_eq!(
-            (found_first, found_second, found_third),
-            (first_argument, second_argument, third_argument)
+            found_tail_components.as_slice(),
+            [second_argument, third_argument]
         );
         assert_eq!(allocated, 2, "the result body should be rewritten only once");
     });

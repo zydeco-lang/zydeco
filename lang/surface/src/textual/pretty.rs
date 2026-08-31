@@ -203,7 +203,7 @@ impl ScopedForm {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 enum InfixOperator {
     Product,
     Arrow,
@@ -231,11 +231,38 @@ impl InfixOperator {
         }
     }
 
-    fn split(self, term: &Term) -> Option<(TermId, TermId)> {
-        match (self, term) {
-            | (Self::Product, Term::Prod(Prod(left, right)))
-            | (Self::Arrow, Term::Arrow(Arrow(left, right))) => Some((*left, *right)),
-            | _ => None,
+    /// One operand of an infix chain, with the operator node whose leading
+    /// comments annotate it. Binary chains carry their operator nodes; a flat
+    /// n-ary product has none between its components.
+    fn operands(self, arena: &TextArena, term: &Term) -> Option<Vec<(TermId, Option<TermId>)>> {
+        match self {
+            | Self::Product => match term {
+                | Term::Prod(Prod(components)) => Some(
+                    components.iter().map(|component| (*component, None)).collect(),
+                ),
+                | _ => None,
+            },
+            | Self::Arrow => {
+                let mut operands = Vec::new();
+                let mut current = match term {
+                    | Term::Arrow(Arrow(left, right)) => (*left, *right),
+                    | _ => return None,
+                };
+                operands.push((current.0, None));
+                loop {
+                    let (_, right) = current;
+                    match &arena.terms[&right] {
+                        | Term::Arrow(Arrow(inner_left, inner_right)) => {
+                            operands.push((*inner_left, Some(right)));
+                            current = (*inner_left, *inner_right);
+                        }
+                        | _ => {
+                            operands.push((right, None));
+                            return Some(operands);
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -766,35 +793,35 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn infix_chain(&self, root: TermId, operator: InfixOperator) -> RcDoc<'arena> {
+        let sites = operator
+            .operands(&self.arena, &self.arena.terms[&root])
+            .expect("infix chains start and continue with their selected operator");
+        let last = sites.len().saturating_sub(1);
         let mut operands = Vec::new();
         let mut boundaries = Vec::new();
-        let mut current = root;
 
-        loop {
-            let (left, right) = operator
-                .split(&self.arena.terms[&current])
-                .expect("infix chains start and continue with their selected operator");
-            let mut document = self.term_through(left, operator.left_precedence());
+        for (index, (operand, comment_site)) in sites.iter().copied().enumerate() {
+            // Products are flat n-ary nodes, so every operand prints tight
+            // enough to parenthesize a nested product; arrows stay
+            // right-associative and print their final operand loosely.
+            let precedence = if operator == InfixOperator::Product || index < last {
+                operator.left_precedence()
+            } else {
+                operator.right_precedence()
+            };
+            let mut document = self.term_through(operand, precedence);
             let mut starts_with_comment =
-                !self.arena.trivia.leading_comments(left.into()).is_empty();
-            if current != root {
-                starts_with_comment |=
-                    !self.arena.trivia.leading_comments(current.into()).is_empty();
-                document = self.with_leading_comments(current.into(), document);
+                !self.arena.trivia.leading_comments(operand.into()).is_empty();
+            if let Some(site) = comment_site {
+                starts_with_comment |= !self.arena.trivia.leading_comments(site.into()).is_empty();
+                document = self.with_leading_comments(site.into(), document);
             }
             operands.push(InfixOperand { document, starts_with_comment });
-            boundaries.push(BoundaryIntent::between(left, right).resolve(self.arena));
-
-            if operator.split(&self.arena.terms[&right]).is_some() {
-                current = right;
-                continue;
+            if index < last {
+                boundaries.push(
+                    BoundaryIntent::between(operand, sites[index + 1].0).resolve(self.arena),
+                );
             }
-
-            operands.push(InfixOperand {
-                document: self.term_through(right, operator.right_precedence()),
-                starts_with_comment: !self.arena.trivia.leading_comments(right.into()).is_empty(),
-            });
-            break;
         }
 
         let symbol = operator.symbol();
@@ -2431,7 +2458,7 @@ mod tests {
             ("(A -> B) -> C", "(A -> B) -> C\n"),
             ("A -> (B -> C)", "A -> B -> C\n"),
             ("(A * B) * C", "(A * B) * C\n"),
-            ("A * (B * C)", "A * B * C\n"),
+            ("A * (B * C)", "A * (B * C)\n"),
             ("! (value/field)", "! (value/field)\n"),
             ("f (value/field)", "f value/field\n"),
             ("f (g x)", "f (g x)\n"),

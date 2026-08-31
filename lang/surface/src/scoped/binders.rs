@@ -33,7 +33,10 @@ impl Binders for PatId {
                 args.binders(arena)
             }
             | Pattern::Project(ProjectionPattern(_, pattern)) => pattern.binders(arena),
-            | Pattern::Alias(Alias(pat)) | Pattern::Cons(pat) => pat
+            | Pattern::Alias(Alias(pat)) => pat
+                .iter()
+                .fold(im::HashMap::new(), |binders, item| binders.union(item.binders(arena))),
+            | Pattern::Cons(pat) => pat
                 .iter()
                 .fold(im::HashMap::new(), |binders, item| binders.union(item.binders(arena))),
         }

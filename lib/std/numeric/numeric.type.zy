@@ -9,5 +9,4 @@ begin
     (#additive :: Additive A)
   * (#multiplicative :: Multiplicative A)
   * (#order :: PartialOrder Bool A)
-  * Unit
 end

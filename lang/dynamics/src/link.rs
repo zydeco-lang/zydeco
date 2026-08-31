@@ -70,11 +70,9 @@ impl BuiltinPackageLinker {
             | BuiltinPackageValue::Operation(role) => Ok(BuiltinRuntime::package_value(role)),
             | BuiltinPackageValue::Product(product) => {
                 let values = product
-                    .into_values()
                     .into_iter()
                     .map(Self::link)
                     .collect::<Result<Vec<_>, _>>()?;
-                let values = ConsN::from_vec(values).expect("a checked product plan is non-empty");
                 Ok(Rc::new(ds::Value::VCons(values)))
             }
         }
@@ -203,10 +201,9 @@ impl Link for ss::VPatId {
                 Alias(ds::ConsN::from_vec(patterns).unwrap()).into()
             }
             | VPat::Triv(Triv) => Triv.into(),
-            | VPat::VCons(ss::ConsN(items, tail)) => {
+            | VPat::VCons(items) => {
                 let items = items.iter().map(|item| item.link(statics)).collect();
-                let tail = tail.link(statics);
-                ds::ConsN(items, tail).into()
+                ds::ValuePattern::VCons(items).into()
             }
             | VPat::SCons(ss::ConsN(_, body)) => {
                 let body = body.link(statics);
@@ -262,10 +259,9 @@ impl Link for ss::ValueId {
                 Ctor(ctor, body).into()
             }
             | Value::Triv(Triv) => Triv.into(),
-            | Value::VCons(ss::ConsN(items, tail)) => {
+            | Value::VCons(items) => {
                 let items = items.iter().map(|item| item.link(statics)).collect();
-                let tail = tail.link(statics);
-                ds::ConsN(items, tail).into()
+                ds::Value::VCons(items).into()
             }
             | Value::SCons(ss::ConsN(_, body)) => {
                 let body = body.link(statics);

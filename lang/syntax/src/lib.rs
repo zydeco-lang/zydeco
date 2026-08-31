@@ -79,12 +79,9 @@ pub struct Alias<T>(pub ConsN<T, T>);
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ProjectionPattern<Tag, Inner>(pub Tag, pub Inner);
 
-/// a * b shaped product
+/// an infix n-ary product: `a * b * c` is one product over its components
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Prod<S, T>(pub S, pub T);
-
-/// unary product that applies the same component
-pub type ProdU<T> = Prod<T, T>;
+pub struct Prod<T>(pub Vec<T>);
 
 /// sealed term which is abstract, only eq to itself during tyck
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

@@ -80,9 +80,8 @@ begin
               #le = operations/le,
               #gt = operations/gt,
               #ge = operations/ge
-            ),
-            ()
+            )
           ) in
-          (= operations, = dictionary, ())
+          (= operations, = dictionary)
   end
 end

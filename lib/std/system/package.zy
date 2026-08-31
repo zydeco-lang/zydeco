@@ -543,8 +543,7 @@ begin
         = halt,
         = panic,
         #exit = process/exit
-      ),
-      ()
+      )
     end
   end
 end

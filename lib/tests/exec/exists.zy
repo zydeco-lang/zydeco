@@ -26,7 +26,7 @@ begin
   that
   def packed :
     exists (X : VType) (Y : VType) . X * Y * Int64 =
-      (Int64, Char, 0, ('z', 0))
+      (Int64, Char, 0, 'z', 0)
   that
 
   match packed

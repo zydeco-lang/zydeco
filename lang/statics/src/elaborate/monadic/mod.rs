@@ -1026,10 +1026,10 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
         }
         | Type::Unit(UnitTy) => UnitTy.mbuild(tycker, env)?,
         | Type::Prod(ty) => {
-            let Prod(ty_1, ty_2) = ty;
-            let ty_1_ = cs::TypeLift { ty: ty_1 };
-            let ty_2_ = cs::TypeLift { ty: ty_2 };
-            Prod(ty_1_, ty_2_).mbuild(tycker, env)?
+            let Prod(components) = ty;
+            let components =
+                components.into_iter().map(|ty| cs::TypeLift { ty }).collect::<Vec<_>>();
+            Prod(components).mbuild(tycker, env)?
         }
         | Type::Exists(ty) => {
             let Exists { binder, mode, body } = *ty;
@@ -1046,7 +1046,7 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             let (env, structure) =
                 cs::Thk(cs::Signature { ty: structure_ty }).mbuild(tycker, env)?;
             let (env, body) = cs::TypeLift { ty: body }.mbuild(tycker, env)?;
-            let (env, body) = Prod(structure, body).mbuild(tycker, env)?;
+            let (env, body) = Prod(vec![structure, body]).mbuild(tycker, env)?;
             let (env, vtype) = VType.mbuild(tycker, env)?;
             let binder = TypeBinder { pattern, witness };
             let exists = Alloc::alloc(tycker, Exists { binder, mode, body }, vtype, &env.ty);
@@ -1257,11 +1257,16 @@ fn package_pattern_translation(
             } else {
                 translated_body_ty.subst_abst(tycker, (domain_abst, bound_ty))?
             };
-            let Type::Prod(Prod(structure_ty, translated_tail_ty)) =
+            let Type::Prod(Prod(translated_components)) =
                 tycker.type_filled(&translated_body_ty)?.to_owned()
             else {
                 unreachable!("translated existential body must contain its structure")
             };
+            let [structure_ty, translated_tail_ty, ..] = translated_components.as_slice() else {
+                unreachable!("translated existential body starts with its structure")
+            };
+            let structure_ty = *structure_ty;
+            let translated_tail_ty = *translated_tail_ty;
             if let Some(witness_var) = witness_var {
                 env.ty += [(witness_var, bound_ty.into())];
             }
@@ -1281,8 +1286,12 @@ fn package_pattern_translation(
                 body,
                 translated_tail_ty,
             )?;
-            let product =
-                Alloc::alloc(tycker, ConsN(vec![structure], body), translated_body_ty, &env.ty);
+            let product = Alloc::alloc(
+                tycker,
+                ss::ValuePattern::VCons(vec![structure, body]),
+                translated_body_ty,
+                &env.ty,
+            );
             let package = Alloc::alloc(
                 tycker,
                 ConsN(vec![StaticPatId::Type(witness)], product),
@@ -1322,19 +1331,26 @@ fn package_value_translation(
             let Some((_abst, translated_body_ty)) = translated_ty.destruct_exists(tycker) else {
                 unreachable!("translated type package field must remain existential")
             };
-            let Type::Prod(Prod(_structure_ty, translated_tail_ty)) =
+            let Type::Prod(Prod(translated_components)) =
                 tycker.type_filled(&translated_body_ty)?.to_owned()
             else {
                 unreachable!("translated existential body must contain its structure")
             };
+            let translated_tail_ty = *translated_components.last().expect(
+                "translated existential body starts with its structure and ends with its body",
+            );
 
             let (env, translated_witness) = cs::TypeLift { ty: witness }.mbuild(tycker, env)?;
             let (env, structure) = cs::Structure { ty: witness }.mbuild(tycker, env)?;
             let (env, structure) = Thunk(structure).mbuild(tycker, env)?;
             let (env, body) =
                 package_value_translation(tycker, env, remaining, body, translated_tail_ty)?;
-            let product =
-                Alloc::alloc(tycker, ConsN(vec![structure], body), translated_body_ty, &env.ty);
+            let product = Alloc::alloc(
+                tycker,
+                ss::Value::VCons(vec![structure, body]),
+                translated_body_ty,
+                &env.ty,
+            );
             let package = Alloc::alloc(
                 tycker,
                 ConsN(vec![StaticTermId::Type(translated_witness)], product),
@@ -1383,10 +1399,12 @@ fn value_pattern_translation(
             (env, pattern)
         }
         | VPat::Triv(Triv) => Triv.mbuild(tycker, env)?,
-        | VPat::VCons(vpat) => {
-            let ConsN(items, tail) = vpat;
-            let items = items.into_iter().map(|tm| cs::TermLift { tm }).collect();
-            let tail = cs::TermLift { tm: tail };
+        | VPat::VCons(components) => {
+            let mut items =
+                components.into_iter().map(|tm| cs::TermLift { tm }).collect::<Vec<_>>();
+            let tail = items
+                .pop()
+                .expect("a translated product pattern has at least two components");
             ConsN(items, tail).mbuild(tycker, env)?
         }
         | VPat::SCons(vpat) => {
@@ -1477,10 +1495,12 @@ fn value_translation(
             cs::Ann(cs::Ctor(ctor, body_), ty_).mbuild(tycker, env)?
         }
         | Value::Triv(Triv) => Triv.mbuild(tycker, env)?,
-        | Value::VCons(value) => {
-            let ConsN(items, tail) = value;
-            let items = items.into_iter().map(|tm| cs::TermLift { tm }).collect();
-            let tail = cs::TermLift { tm: tail };
+        | Value::VCons(components) => {
+            let mut items =
+                components.into_iter().map(|tm| cs::TermLift { tm }).collect::<Vec<_>>();
+            let tail = items
+                .pop()
+                .expect("a translated product value has at least two components");
             ConsN(items, tail).mbuild(tycker, env)?
         }
         | Value::SCons(value) => {

@@ -216,7 +216,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Triv {
     }
 }
 
-impl<'a, T> Pretty<'a, Formatter<'a>> for ConsN<T, T>
+impl<'a, T> Pretty<'a, Formatter<'a>> for Vec<T>
 where
     T: Pretty<'a, Formatter<'a>>,
 {

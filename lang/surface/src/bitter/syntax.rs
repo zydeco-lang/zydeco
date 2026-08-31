@@ -39,7 +39,7 @@ pub enum Pattern {
     Project(ProjectionPattern<FieldName, PatId>),
     Alias(Alias<PatId>),
     Triv(Triv),
-    Cons(ConsN<PatId, PatId>),
+    Cons(Vec<PatId>),
 }
 
 #[derive(From, Clone, Debug)]
@@ -213,7 +213,7 @@ pub enum Term<Ref> {
     Named(Named<FieldName, TermId>),
     Label(Label<FieldName, TermId>),
     Triv(Triv),
-    Cons(ConsN<TermId, TermId>),
+    Cons(Vec<TermId>),
     Abs(Abs<PatId, TermId>),
     App(App<TermId, TermId>),
     Fix(Fix<PatId, TermId>),

@@ -11,7 +11,6 @@ begin
     (String : VType) =
       (#operations :: FloatModule Bool Scalar String)
     * (#dictionary :: Numeric Bool Scalar)
-    * Unit
   in
   pi (_ : @(import("../builtin/core.zy"))) .
     forall

@@ -156,5 +156,4 @@ begin
     * (#option :: OptionModule Bool Option)
     * (#result :: ResultModule Bool Result)
     * (#list :: ListModule Bool Option List Int64)
-    * Unit
 end

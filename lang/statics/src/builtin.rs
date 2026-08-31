@@ -316,25 +316,12 @@ impl BuiltinOperationAbi {
     }
 }
 
-/// The runtime-relevant shape of one product in a checked Builtin package.
-#[derive(Clone, Debug)]
-pub struct BuiltinProductPlan {
-    pub items: Vec<BuiltinPackageValue>,
-    pub tail: Box<BuiltinPackageValue>,
-}
-
-impl BuiltinProductPlan {
-    pub fn into_values(self) -> Vec<BuiltinPackageValue> {
-        self.items.into_iter().chain(std::iter::once(*self.tail)).collect()
-    }
-}
-
 /// One runtime-relevant component of a checked Builtin package.
 #[derive(Clone, Debug)]
 pub enum BuiltinPackageValue {
     Unit,
     Operation(BuiltinValueRole),
-    Product(BuiltinProductPlan),
+    Product(Vec<BuiltinPackageValue>),
 }
 
 /// Backend-independent instructions for materializing the host Builtin package.
@@ -487,7 +474,9 @@ impl<'a> BuiltinSignatureValidator<'a> {
             match view {
                 | ss::Type::Exists(exists) => pending.push(exists.body),
                 | ss::Type::ManifestKind(ss::ManifestKind { body, .. }) => pending.push(body),
-                | ss::Type::Prod(Prod(head, tail)) => pending.extend([tail, head]),
+                | ss::Type::Prod(Prod(components)) => {
+                pending.extend(components.iter().rev().copied())
+            }
                 | ss::Type::Named(Named(_, inner)) => pending.push(inner),
                 | ss::Type::Label(zydeco_syntax::Label(_, inner)) => {
                     if let Some(role) = self.statics.builtin_roles.value(ty) {
@@ -727,13 +716,12 @@ impl BuiltinPackagePlanner<'_> {
         match self.type_view(ty)? {
             | ss::Type::Exists(exists) => self.value(exists.body),
             | ss::Type::ManifestKind(ss::ManifestKind { body, .. }) => self.value(body),
-            | ss::Type::Prod(Prod(head, tail)) => {
-                let head = self.value(head)?;
-                let (items, tail) = self.product_tail(tail)?;
-                Ok(BuiltinPackageValue::Product(BuiltinProductPlan {
-                    items: std::iter::once(head).chain(items).collect(),
-                    tail: Box::new(tail),
-                }))
+            | ss::Type::Prod(Prod(components)) => {
+                let components = components
+                    .into_iter()
+                    .map(|component| self.value(component))
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(BuiltinPackageValue::Product(components))
             }
             | ss::Type::Label(zydeco_syntax::Label(_, inner)) => {
                 match self.statics.builtin_roles.value(ty) {
@@ -756,18 +744,6 @@ impl BuiltinPackagePlanner<'_> {
         }
     }
 
-    fn product_tail(
-        &self, ty: ss::TypeId,
-    ) -> Result<(Vec<BuiltinPackageValue>, BuiltinPackageValue), BuiltinPackagePlanError> {
-        match self.type_view(ty)? {
-            | ss::Type::Prod(Prod(head, tail)) => {
-                let head = self.value(head)?;
-                let (items, tail) = self.product_tail(tail)?;
-                Ok((std::iter::once(head).chain(items).collect(), tail))
-            }
-            | _ => Ok((Vec::new(), self.value(ty)?)),
-        }
-    }
 
     fn validate_executable(&self, signature: &ss::PackPi) -> Result<(), BuiltinPackagePlanError> {
         let witnesses = signature

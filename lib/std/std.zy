@@ -100,8 +100,7 @@ begin
         = bool,
         = option,
         = result,
-        = list,
-        ()
+        = list
       ),
       (
         = numeric,
@@ -115,23 +114,19 @@ begin
         = uint32,
         = uint64,
         = float32,
-        = float64,
-        ()
+        = float64
       ),
       (
         = char,
         = string,
-        = bytes,
-        ()
+        = bytes
       ),
       (
         = io,
         = fs,
         = stdio,
-        = process,
-        ()
-      ),
-      ()
+        = process
+      )
     end
   end
 end

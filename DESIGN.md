@@ -50,17 +50,20 @@ grouping, and block delimiters.
 
 ## Products and Existential Packages
 
-Parenthesized comma sequences are preserved by the surface `Cons` variant using the shared n-ary `ConsN` syntax.
+Parenthesized comma sequences are preserved by the surface `Cons` variant over a flat component vector.
 The type checker interprets them as value products or existential packages from the expected type,
 and applies the same rules to patterns.
 `()` is the explicit `Triv` term or pattern and checks at `Unit`;
-a nonempty `ConsN<S, T>(Vec<S>, T)` stores an initial sequence and a distinguished final element.
-The ordinary binary `Cons<S, T>` remains available for compiler structures that are intrinsically pairs.
+a nonempty `Cons` stores its components in one vector with no distinguished final element,
+so nesting survives only through explicit parentheses.
 
-Product types remain binary. Stack IR derives a canonical physical arity from their right-associated `Prod` spine,
-so `A * (B * C)` is laid out as three contiguous fields while `(A * B) * C` stores the left product by pointer.
-Assembly pack and unpack instructions carry both physical arity and logical element count,
-allowing explicit nested grouping to use suffix pointers without changing the canonical layout.
+The infix product operator builds one flat n-ary node: `A * B * C` parses as a single
+three-component product, and an explicitly parenthesized component stays a distinct nested product.
+Products are therefore neither left- nor right-associative; `A * (B * C)` and `(A * B) * C`
+are genuinely different types from `A * B * C`.
+Stack IR derives its physical arity from the component count,
+so a flat product lays out its components contiguously while an explicitly nested component
+stores its own sub-product by pointer.
 Product layouts are always nonempty; `Triv` is carried separately through the backends.
 
 ### Named Components

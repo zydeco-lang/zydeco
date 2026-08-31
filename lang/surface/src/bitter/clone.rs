@@ -62,8 +62,8 @@ impl DeepClone for b::PatId {
                 b::Alias(b::ConsN::from_vec(patterns).unwrap()).into()
             }
             | b::Pattern::Cons(pat) => {
-                let b::ConsN(pats, tail) = pat;
-                b::ConsN(pats.deep_clone(desugarer), tail.deep_clone(desugarer)).into()
+                let pats = pat.iter().map(|pat| pat.deep_clone(desugarer)).collect();
+                b::Pattern::Cons(pats).into()
             }
         };
         Alloc::alloc(desugarer, pat, prev)
@@ -140,8 +140,8 @@ impl DeepClone for b::TermId {
             }
             | b::Term::Triv(_term) => b::Triv.into(),
             | b::Term::Cons(term) => {
-                let b::ConsN(terms, tail) = term;
-                b::ConsN(terms.deep_clone(desugarer), tail.deep_clone(desugarer)).into()
+                let terms = term.iter().map(|term| term.deep_clone(desugarer)).collect();
+                b::Term::Cons(terms).into()
             }
             | b::Term::Abs(term) => {
                 let b::Abs(params, tail) = term;

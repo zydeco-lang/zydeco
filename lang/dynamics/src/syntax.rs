@@ -31,7 +31,7 @@ pub enum ValuePattern {
     Ctor(Ctor<CtorName, RcVPat>),
     Alias(Alias<RcVPat>),
     Triv(Triv),
-    VCons(ConsN<RcVPat, RcVPat>),
+    VCons(Vec<RcVPat>),
 }
 
 /// Runtime values: variables, thunks, constructors, and literals.
@@ -45,7 +45,7 @@ pub enum Value {
     Thunk(Thunk<RcCompu>),
     Ctor(Ctor<CtorName, RcValue>),
     Triv(Triv),
-    VCons(ConsN<RcValue, RcValue>),
+    VCons(Vec<RcValue>),
     Proj(Proj<RcValue, usize>),
     Lit(Literal),
     SemValue(SemValue),
@@ -117,7 +117,7 @@ pub enum SemValue {
     Thunk(EnvThunk),
     Ctor(Ctor<CtorName, Box<SemValue>>),
     Triv(Triv),
-    VCons(ConsN<SemValue, Box<SemValue>>),
+    VCons(Vec<SemValue>),
     Literal(Literal),
     Host(HostValue),
 }

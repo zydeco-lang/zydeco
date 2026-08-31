@@ -309,7 +309,17 @@ impl LocalFoldScoped<()> for ContextCollector<'_> {
                 self.ctxs_pat_local.insert_new(pat, self.ctxs_pat_local[&inner].to_owned());
                 self.coctxs_pat_local.insert_new(pat, self.coctxs_pat_local[&inner].to_owned());
             }
-            | Pattern::Alias(Alias(inner)) | Pattern::Cons(inner) => {
+            | Pattern::Alias(Alias(inner)) => {
+                let local = inner
+                    .iter()
+                    .fold(Context::new(), |ctx, item| ctx + self.ctxs_pat_local[item].to_owned());
+                let colocal = inner.iter().fold(CoContext::new(), |ctx, item| {
+                    ctx + self.coctxs_pat_local[item].to_owned()
+                });
+                self.ctxs_pat_local.insert_new(pat, local);
+                self.coctxs_pat_local.insert_new(pat, colocal);
+            }
+            | Pattern::Cons(inner) => {
                 let local = inner
                     .iter()
                     .fold(Context::new(), |ctx, item| ctx + self.ctxs_pat_local[item].to_owned());
@@ -643,7 +653,12 @@ mod impl_obverse_local_post {
                 | Pattern::Project(ProjectionPattern(_, inner)) => {
                     inner.obverse_local_post(f, ctx);
                 }
-                | Pattern::Alias(Alias(inner)) | Pattern::Cons(inner) => {
+                | Pattern::Alias(Alias(inner)) => {
+                    for item in inner {
+                        item.obverse_local_post(f, ctx);
+                    }
+                }
+                | Pattern::Cons(inner) => {
                     for item in inner {
                         item.obverse_local_post(f, ctx);
                     }

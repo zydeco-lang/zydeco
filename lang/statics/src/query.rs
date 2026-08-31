@@ -610,7 +610,7 @@ pub fn cons_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, term: InternedTerm<'db>,
     items: InternedConsItems<'db>, tail: InternedTermAnn<'db>, occurrence: u32,
 ) -> Option<ConsSynOutcome> {
-    let su::Term::Cons(su::ConsN(_, _)) = data.scoped(db).terms.get(&term.id(db))? else {
+    let su::Term::Cons(_) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
     let ss::TermAnnId::Value(tail_value, tail_ty) = tail.id(db) else {
@@ -634,19 +634,19 @@ pub fn cons_syn_judgment<'db>(
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
     let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
-    let mut ann = tail_ty;
-    let mut prods = Vec::with_capacity(item_values.len());
-    for (idx, (_, head_ty)) in item_values.iter().rev().enumerate() {
-        let id: ss::TypeId = derived_id(key_space, idx as u32);
-        prods.push((id, ss::Type::Prod(ss::Prod(*head_ty, ann))));
-        ann = id;
+    let mut components = Vec::with_capacity(item_values.len() + 1);
+    let mut component_tys = Vec::with_capacity(item_values.len() + 1);
+    for (value, head_ty) in item_values {
+        components.push(value);
+        component_tys.push(head_ty);
     }
-    let cons_id: ss::ValueId = derived_id(key_space, item_values.len() as u32);
-    let cons = ss::Value::VCons(ss::ConsN(
-        item_values.into_iter().map(|(value, _)| value).collect(),
-        tail_value,
-    ));
-    Some(ConsSynOutcome { vtype, prods, cons_id, cons, ann })
+    components.push(tail_value);
+    component_tys.push(tail_ty);
+    let prod_id: ss::TypeId = derived_id(key_space, 0);
+    let prods = vec![(prod_id, ss::Type::Prod(ss::Prod(component_tys)))];
+    let cons_id: ss::ValueId = derived_id(key_space, 1);
+    let cons = ss::Value::VCons(components);
+    Some(ConsSynOutcome { vtype, prods, cons_id, cons, ann: prod_id })
 }
 
 /// An interned list of pattern annotations, for use as a salsa query key.
@@ -674,7 +674,7 @@ pub fn pat_cons_syn_judgment<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, pat: InternedPat<'db>,
     items: InternedPatItems<'db>, tail: InternedPatAnn<'db>, occurrence: u32,
 ) -> Option<PatConsSynOutcome> {
-    let su::Pattern::Cons(su::ConsN(_, _)) = data.scoped(db).pats.get(&pat.id(db))? else {
+    let su::Pattern::Cons(_) = data.scoped(db).pats.get(&pat.id(db))? else {
         return None;
     };
     let ss::PatAnnId::Value(tail_value, tail_ty) = tail.id(db) else {
@@ -698,19 +698,19 @@ pub fn pat_cons_syn_judgment<'db>(
     let site_space = pat.id(db).key_space().as_u64();
     let site_raw = pat.id(db).raw().into_u32();
     let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
-    let mut ann = tail_ty;
-    let mut prods = Vec::with_capacity(item_values.len());
-    for (idx, (_, head_ty)) in item_values.iter().rev().enumerate() {
-        let id: ss::TypeId = derived_id(key_space, idx as u32);
-        prods.push((id, ss::Type::Prod(ss::Prod(*head_ty, ann))));
-        ann = id;
+    let mut components = Vec::with_capacity(item_values.len() + 1);
+    let mut component_tys = Vec::with_capacity(item_values.len() + 1);
+    for (vpat, head_ty) in item_values {
+        components.push(vpat);
+        component_tys.push(head_ty);
     }
-    let pat_id: ss::VPatId = derived_id(key_space, item_values.len() as u32);
-    let pat = ss::ValuePattern::VCons(ss::ConsN(
-        item_values.into_iter().map(|(vpat, _)| vpat).collect(),
-        tail_value,
-    ));
-    Some(PatConsSynOutcome { vtype, prods, pat_id, pat, ann })
+    components.push(tail_value);
+    component_tys.push(tail_ty);
+    let prod_id: ss::TypeId = derived_id(key_space, 0);
+    let prods = vec![(prod_id, ss::Type::Prod(ss::Prod(component_tys)))];
+    let pat_id: ss::VPatId = derived_id(key_space, 1);
+    let pat = ss::ValuePattern::VCons(components);
+    Some(PatConsSynOutcome { vtype, prods, pat_id, pat, ann: prod_id })
 }
 
 /// The allocation tail of a thunk judgment, shared by both modes: the thunk
@@ -1309,7 +1309,7 @@ pub fn sigma_syn_judgment<'db>(
         }
         | SigmaSynArm::Prod { ty_1, ty_2 } => {
             let id: ss::TypeId = derived_id(key_space, 0);
-            Some(SigmaSynOutcome::Type { id, ty: ss::Type::Prod(ss::Prod(ty_1, ty_2)), kd: vtype })
+            Some(SigmaSynOutcome::Type { id, ty: ss::Type::Prod(ss::Prod(vec![ty_1, ty_2])), kd: vtype })
         }
         | SigmaSynArm::Expressivity => Some(SigmaSynOutcome::Error(
             crate::check::TyckError::Expressivity("abstract existential kinds are not supported"),

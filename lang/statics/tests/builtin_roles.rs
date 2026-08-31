@@ -107,7 +107,7 @@ fn one_package_signature_rejects_duplicate_operation_roles() {
             Alloc::alloc(tycker, Label(FieldName::from("first"), unit), vtype, &TyEnv::new());
         let second =
             Alloc::alloc(tycker, Label(FieldName::from("second"), unit), vtype, &TyEnv::new());
-        let operations = Alloc::alloc(tycker, Prod(first, second), vtype, &TyEnv::new());
+        let operations = Alloc::alloc(tycker, Prod(vec![first, second]), vtype, &TyEnv::new());
         let domain =
             Alloc::alloc(tycker, Label(FieldName::from("int"), operations), vtype, &TyEnv::new());
         tycker

@@ -376,14 +376,14 @@ mod tests {
         let mut arena = sk::SpsLowArena::default();
         let field_a: sk::ValueId = sk::Triv.build(&mut arena, None);
         let field_b: sk::ValueId = sk::Triv.build(&mut arena, None);
-        let items = sk::ConsN::from_vec(vec![field_a, field_b]).unwrap();
+        let items = vec![field_a, field_b];
         let layout = sk::ProductLayout { arity: 2 };
         let value: sk::ValueId = sk::VCons::new(items, layout).build(&mut arena, None);
 
         let pattern_a: sk::VPatId = sk::Hole.build(&mut arena, None);
         let pattern_b: sk::VPatId = sk::Hole.build(&mut arena, None);
-        let pattern_items = sk::ConsN::from_vec(vec![pattern_a, pattern_b]).unwrap();
-        let pattern: sk::VPatId = sk::VCons::new(pattern_items, layout).build(&mut arena, None);
+        let pattern: sk::VPatId =
+            sk::VCons::new(vec![pattern_a, pattern_b], layout).build(&mut arena, None);
 
         let stack: sk::StackId = sk::Bullet.build(&mut arena, None);
         let body: sk::CompuId = sk::SHole(stack).build(&mut arena, None);
@@ -401,7 +401,7 @@ mod tests {
         let mut arena = sk::SpsLowArena::default();
         let field_a: sk::ValueId = sk::Triv.build(&mut arena, None);
         let field_b: sk::ValueId = sk::Triv.build(&mut arena, None);
-        let items = sk::ConsN::from_vec(vec![field_a, field_b]).unwrap();
+        let items = vec![field_a, field_b];
         let layout = sk::ProductLayout { arity: 2 };
         let value: sk::ValueId = sk::VCons::new(items, layout).build(&mut arena, None);
 

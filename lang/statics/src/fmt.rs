@@ -468,20 +468,29 @@ impl<'a> Pretty<'a, Formatter<'a>> for Alias<VPatId> {
     }
 }
 
-impl<'a, S, T> Pretty<'a, Formatter<'a>> for Prod<S, T>
+impl<'a, T> Pretty<'a, Formatter<'a>> for Vec<T>
 where
-    S: Pretty<'a, Formatter<'a>>,
     T: Pretty<'a, Formatter<'a>>,
 {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let Prod(head, tail) = self;
         RcDoc::concat([
-            head.pretty(f),
-            RcDoc::space(),
-            RcDoc::text("*"),
-            RcDoc::space(),
-            tail.pretty(f),
+            RcDoc::text("("),
+            RcDoc::intersperse(self.iter().map(|item| item.pretty(f)), RcDoc::text(", ")),
+            RcDoc::text(")"),
         ])
+    }
+}
+
+impl<'a, T> Pretty<'a, Formatter<'a>> for Prod<T>
+where
+    T: Pretty<'a, Formatter<'a>>,
+{
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let Prod(components) = self;
+        RcDoc::intersperse(
+            components.iter().map(|component| component.pretty(f)),
+            RcDoc::concat([RcDoc::space(), RcDoc::text("*"), RcDoc::space()]),
+        )
     }
 }
 

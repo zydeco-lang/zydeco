@@ -5,6 +5,19 @@ pub use zydeco_syntax::{Pretty, Ugly};
 pub struct Formatter<'arena> {
     program: &'arena DynamicsProgram,
 }
+impl<'a, T> Pretty<'a, Formatter<'a>> for Vec<T>
+where
+    T: Pretty<'a, Formatter<'a>>,
+{
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::concat([
+            RcDoc::text("("),
+            RcDoc::intersperse(self.iter().map(|item| item.pretty(f)), RcDoc::text(", ")),
+            RcDoc::text(")"),
+        ])
+    }
+}
+
 impl<'arena> Formatter<'arena> {
     /// Create a formatter bound to the given dynamic program.
     pub fn new(program: &'arena DynamicsProgram) -> Self {

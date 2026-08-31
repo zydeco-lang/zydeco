@@ -1115,9 +1115,10 @@ fn parses_labeled_product_type() {
         .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
-    let Term::Prod(Prod(left, right)) = &parser.arena.terms[&term] else {
+    let Term::Prod(Prod(components)) = &parser.arena.terms[&term] else {
         panic!("expected a product type")
     };
+    let [left, right] = components.as_slice() else { panic!("expected two product components") };
     let Term::Paren(Paren(left_fields)) = &parser.arena.terms[left] else {
         panic!("expected a parenthesized left component")
     };
