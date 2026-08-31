@@ -237,9 +237,9 @@ impl InfixOperator {
     fn operands(self, arena: &TextArena, term: &Term) -> Option<Vec<(TermId, Option<TermId>)>> {
         match self {
             | Self::Product => match term {
-                | Term::Prod(Prod(components)) => Some(
-                    components.iter().map(|component| (*component, None)).collect(),
-                ),
+                | Term::Prod(Prod(components)) => {
+                    Some(components.iter().map(|component| (*component, None)).collect())
+                }
                 | _ => None,
             },
             | Self::Arrow => {
@@ -818,9 +818,8 @@ impl<'arena> PrettyFormatter<'arena> {
             }
             operands.push(InfixOperand { document, starts_with_comment });
             if index < last {
-                boundaries.push(
-                    BoundaryIntent::between(operand, sites[index + 1].0).resolve(self.arena),
-                );
+                boundaries
+                    .push(BoundaryIntent::between(operand, sites[index + 1].0).resolve(self.arena));
             }
         }
 

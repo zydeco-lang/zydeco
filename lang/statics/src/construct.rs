@@ -835,7 +835,8 @@ where
 {
     fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> ValueId {
         let ConsN(items, tail) = self;
-        let mut components = items.into_iter().map(|item| item.build(tycker, env)).collect::<Vec<_>>();
+        let mut components =
+            items.into_iter().map(|item| item.build(tycker, env)).collect::<Vec<_>>();
         let tail = tail.build(tycker, env);
         let ty = Prod(
             components

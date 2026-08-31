@@ -69,10 +69,7 @@ impl BuiltinPackageLinker {
             | BuiltinPackageValue::Unit => Ok(Rc::new(ds::Value::Triv(Triv))),
             | BuiltinPackageValue::Operation(role) => Ok(BuiltinRuntime::package_value(role)),
             | BuiltinPackageValue::Product(product) => {
-                let values = product
-                    .into_iter()
-                    .map(Self::link)
-                    .collect::<Result<Vec<_>, _>>()?;
+                let values = product.into_iter().map(Self::link).collect::<Result<Vec<_>, _>>()?;
                 Ok(Rc::new(ds::Value::VCons(values)))
             }
         }

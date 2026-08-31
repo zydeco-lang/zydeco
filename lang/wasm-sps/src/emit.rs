@@ -866,7 +866,7 @@ impl<'a> CaseEncoder<'a> {
                 self.function.instruction(&WasmInstruction::I64Const(RuntimeWord::index(0)?));
             }
             | sps::Value::VCons(sps::VCons { items, layout }) => {
-                self.emit_product(target, items.into_vec(), layout)?;
+                self.emit_product(target, items, layout)?;
             }
             | sps::Value::Literal(literal) => self.emit_literal(id, literal)?,
             | sps::Value::Complex(sps::Complex { operator, operands }) => {
@@ -1007,7 +1007,6 @@ impl<'a> CaseEncoder<'a> {
                 }
             }
             | ValuePattern::VCons(sps::VCons { items, layout }) => {
-                let items = items.into_vec();
                 let explicit = items.len();
                 for (index, pattern) in items.into_iter().enumerate() {
                     if index + 1 == explicit && explicit < layout.arity {

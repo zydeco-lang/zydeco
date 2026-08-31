@@ -104,10 +104,7 @@ fn saturated_type_application_fuses_nested_abstractions() {
             panic!("the saturated application should preserve the nested result product")
         };
         assert_eq!(*found_first, first_argument);
-        assert_eq!(
-            found_tail_components.as_slice(),
-            [second_argument, third_argument]
-        );
+        assert_eq!(found_tail_components.as_slice(), [second_argument, third_argument]);
         assert_eq!(allocated, 2, "the result body should be rewritten only once");
     });
 }

@@ -1309,7 +1309,11 @@ pub fn sigma_syn_judgment<'db>(
         }
         | SigmaSynArm::Prod { ty_1, ty_2 } => {
             let id: ss::TypeId = derived_id(key_space, 0);
-            Some(SigmaSynOutcome::Type { id, ty: ss::Type::Prod(ss::Prod(vec![ty_1, ty_2])), kd: vtype })
+            Some(SigmaSynOutcome::Type {
+                id,
+                ty: ss::Type::Prod(ss::Prod(vec![ty_1, ty_2])),
+                kd: vtype,
+            })
         }
         | SigmaSynArm::Expressivity => Some(SigmaSynOutcome::Error(
             crate::check::TyckError::Expressivity("abstract existential kinds are not supported"),

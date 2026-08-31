@@ -391,9 +391,7 @@ impl Lower for ss::ValueId {
             | ss::Value::VCons(items) => {
                 let layout = lo.product_layout(lo.statics.annotations_value[self]);
                 let items = items.lower(lo, ());
-                items.map(|items| {
-                    VCons::new(items, layout).build(lo, site)
-                })
+                items.map(|items| VCons::new(items, layout).build(lo, site))
             }
             | ss::Value::SCons(ss::ConsN(_witnesses, inner)) => {
                 // Type cons values are erased.

@@ -475,8 +475,8 @@ impl<'a> BuiltinSignatureValidator<'a> {
                 | ss::Type::Exists(exists) => pending.push(exists.body),
                 | ss::Type::ManifestKind(ss::ManifestKind { body, .. }) => pending.push(body),
                 | ss::Type::Prod(Prod(components)) => {
-                pending.extend(components.iter().rev().copied())
-            }
+                    pending.extend(components.iter().rev().copied())
+                }
                 | ss::Type::Named(Named(_, inner)) => pending.push(inner),
                 | ss::Type::Label(zydeco_syntax::Label(_, inner)) => {
                     if let Some(role) = self.statics.builtin_roles.value(ty) {
@@ -743,7 +743,6 @@ impl BuiltinPackagePlanner<'_> {
             | _ => Err(BuiltinPackagePlanError::UnsupportedSignatureType { ty }),
         }
     }
-
 
     fn validate_executable(&self, signature: &ss::PackPi) -> Result<(), BuiltinPackagePlanError> {
         let witnesses = signature

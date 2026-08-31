@@ -222,11 +222,7 @@ impl<'a> SpsLowConverter<'a> {
                     })
                     .unzip();
                 PatternTranslation {
-                    pattern: low::VCons::new(
-                        items,
-                        layout,
-                    )
-                    .build(self, site),
+                    pattern: low::VCons::new(items, layout).build(self, site),
                     bindings: bindings.into_iter().flatten().collect(),
                 }
             }

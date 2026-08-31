@@ -205,8 +205,7 @@ impl TypeSupportCollector {
                 | Type::Opaque(_)
                 | Type::Primitive(_)
                 | Type::OS(_) => {}
-                | Type::VArrow(ValueArrow(input, output))
-                | Type::Arrow(Arrow(input, output)) => {
+                | Type::VArrow(ValueArrow(input, output)) | Type::Arrow(Arrow(input, output)) => {
                     [input, output].into_iter().try_for_each(|ty| self.visit(ty, tycker))?;
                 }
                 | Type::Prod(Prod(components)) => {
@@ -1592,12 +1591,7 @@ impl TypeId {
                     if *components == components_ {
                         res
                     } else {
-                        Alloc::alloc(
-                            tycker,
-                            Prod(components_),
-                            tycker.statics.type_kind(res),
-                            &env,
-                        )
+                        Alloc::alloc(tycker, Prod(components_), tycker.statics.type_kind(res), &env)
                     }
                 }
                 | Type::Exists(ty) => {

@@ -161,8 +161,7 @@ impl<'arena> TypeReferenceCollector<'arena> {
                 self.visit_type(*inner)
             }
             | Type::Proj(Proj(head, _)) => self.visit_type(*head),
-            | Type::VArrow(ValueArrow(domain, codomain))
-            | Type::Arrow(Arrow(domain, codomain)) => {
+            | Type::VArrow(ValueArrow(domain, codomain)) | Type::Arrow(Arrow(domain, codomain)) => {
                 self.visit_type(*domain);
                 self.visit_type(*codomain);
             }

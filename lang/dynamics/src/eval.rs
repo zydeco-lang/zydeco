@@ -178,9 +178,10 @@ impl<'rt> Eval<'rt> for Value {
                 let SemValue::VCons(components) = head else {
                     panic!("type-checked product projection must project a product")
                 };
-                let projected = components.into_iter().nth(position).expect(
-                    "type-checked product projection must have a matching component",
-                );
+                let projected = components
+                    .into_iter()
+                    .nth(position)
+                    .expect("type-checked product projection must have a matching component");
                 Step::Done(projected)
             }
             | Value::Lit(lit) => Step::Done(lit.into()),

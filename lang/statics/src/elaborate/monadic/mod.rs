@@ -1402,9 +1402,8 @@ fn value_pattern_translation(
         | VPat::VCons(components) => {
             let mut items =
                 components.into_iter().map(|tm| cs::TermLift { tm }).collect::<Vec<_>>();
-            let tail = items
-                .pop()
-                .expect("a translated product pattern has at least two components");
+            let tail =
+                items.pop().expect("a translated product pattern has at least two components");
             ConsN(items, tail).mbuild(tycker, env)?
         }
         | VPat::SCons(vpat) => {
@@ -1498,9 +1497,7 @@ fn value_translation(
         | Value::VCons(components) => {
             let mut items =
                 components.into_iter().map(|tm| cs::TermLift { tm }).collect::<Vec<_>>();
-            let tail = items
-                .pop()
-                .expect("a translated product value has at least two components");
+            let tail = items.pop().expect("a translated product value has at least two components");
             ConsN(items, tail).mbuild(tycker, env)?
         }
         | Value::SCons(value) => {
