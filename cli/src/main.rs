@@ -79,7 +79,11 @@ impl Application {
     ) -> Result<std::sync::Arc<zydeco_session::ProgramAnalysis>, ApplicationError> {
         let analysis = self.compiler.analyze(path)?;
         DiagnosticRenderer::warnings(&analysis);
-        DiagnosticRenderer::observations(&analysis);
+        let program = self
+            .compiler
+            .checked_program(&analysis)
+            .expect("a checked CLI analysis has an owned program");
+        DiagnosticRenderer::observations(&analysis, &program.statics);
         Ok(analysis)
     }
 

@@ -85,3 +85,23 @@ fn an_unattached_text_block_emits_a_non_fatal_warning() {
     assert!(warning.contains("text block is not attached to an annotation"));
     assert!(warning.contains("this text block contributes no text"));
 }
+
+#[test]
+fn check_renders_debug_observations_from_the_materialized_program() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().join("debug.zy");
+    std::fs::write(&root, r#"@[debug("answer")] ret 1"#).unwrap();
+
+    let output =
+        Command::new(env!("CARGO_BIN_EXE_zydeco")).arg("check").arg(root).output().unwrap();
+
+    assert!(
+        output.status.success(),
+        "source check failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let observation = String::from_utf8_lossy(&output.stdout);
+    assert!(observation.contains(r#"[debug printing] "answer""#), "{observation}");
+    assert!(observation.contains("ret 1"), "{observation}");
+    assert!(observation.contains("Ret Int64"), "{observation}");
+}

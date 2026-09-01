@@ -1,7 +1,9 @@
 use crate::CompileError;
 use ariadne::{Label, Report, ReportKind};
 use zydeco_session::{AnalysisError, ProgramAnalysis, SourceCaches, SourceGraph};
-use zydeco_statics::{TyckDiagnostic, TyckObservation, fmt as static_fmt, syntax as ss};
+use zydeco_statics::{
+    TyckDiagnostic, TyckObservation, arena::StaticsArena, fmt as static_fmt, syntax as ss,
+};
 use zydeco_syntax::{Pretty, SpanView, Ugly};
 use zydeco_utils::span::{PathDisplay, Span, internal_ariadne_span};
 
@@ -13,7 +15,6 @@ impl DiagnosticRenderer {
         match error {
             | CompileError::Rejected(analysis) => {
                 Self::warnings(analysis);
-                Self::observations(analysis);
                 if let Some(diagnostics) = analysis.outcome().diagnostics() {
                     let mut cache = SourceCaches::analysis(analysis);
                     diagnostics.iter().for_each(|diagnostic| {
@@ -84,7 +85,7 @@ impl DiagnosticRenderer {
         });
     }
 
-    pub fn observations(analysis: &ProgramAnalysis) {
+    pub fn observations(analysis: &ProgramAnalysis, statics: &StaticsArena) {
         if analysis
             .observations()
             .iter()
@@ -112,10 +113,7 @@ impl DiagnosticRenderer {
                 let solution = solution.map_or_else(
                     || "???".to_owned(),
                     |solution| {
-                        solution.ugly(&static_fmt::Formatter::new(
-                            analysis.scoped(),
-                            analysis.statics(),
-                        ))
+                        solution.ugly(&static_fmt::Formatter::new(analysis.scoped(), statics))
                     },
                 );
                 println!("{site_text} @ {span} : {solution}");
@@ -123,7 +121,7 @@ impl DiagnosticRenderer {
             | TyckObservation::Debug { metadata, result } => {
                 print!("[debug printing] ");
                 metadata.arguments().iter().for_each(|argument| print!("{argument}"));
-                let formatter = static_fmt::Formatter::new(analysis.scoped(), analysis.statics());
+                let formatter = static_fmt::Formatter::new(analysis.scoped(), statics);
                 match result {
                     | ss::TermAnnId::Hole(fill) => println!(" (hole): {}", fill.concise()),
                     | ss::TermAnnId::Kind(kind) => {
