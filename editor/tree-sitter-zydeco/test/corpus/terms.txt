@@ -119,6 +119,27 @@ end
                 (lower_identifier)))))))))
 
 ==================
+Value parameters
+==================
+
+param val (value : Unit) in value
+
+---
+
+(source_file
+  body: (parameter_expression
+    value_function: (value_modifier)
+    binder: (parenthesized_pattern
+      (pattern_annotation
+        pattern: (variable_pattern
+          name: (lower_identifier))
+        type: (variable
+          name: (upper_identifier))))
+    placement: (placement)
+    body: (variable
+      name: (lower_identifier))))
+
+==================
 Value abstraction
 ==================
 

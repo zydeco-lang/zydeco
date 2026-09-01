@@ -504,8 +504,11 @@ Term: Term = {
         Bind {<>}.into()
     },
     // context-forming binders
+    "param" "val" <binder:PatternAnnId> <placement:Placement> <tail:TermGen<Term>> => {
+        Param { flavor: ParameterFlavor::Value, binder, placement, tail }.into()
+    },
     "param" <binder:PatternAnnId> <placement:Placement> <tail:TermGen<Term>> => {
-        Param {<>}.into()
+        Param { flavor: ParameterFlavor::Plain, binder, placement, tail }.into()
     },
     "let" <binding:GenBindTerm> <placement:Placement> <tail:TermGen<Term>> => {
         ContextBind {

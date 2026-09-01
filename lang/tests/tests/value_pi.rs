@@ -46,6 +46,38 @@ end
 }
 
 #[test]
+fn param_val_introduces_lexical_and_block_value_functions() {
+    ValuePiCase::run(
+        r#"
+begin
+  let lexical : val pi (value : Unit) . Unit =
+    param val (value : Unit) in value
+  that
+  let mobile : val pi (value : Unit) . Unit = begin
+    param val (value : Unit) that
+    value
+  end that
+  let first : Unit = () |> lexical that
+  let second : Unit = first |> mobile that
+  ! exit 0
+end
+"#,
+    );
+}
+
+#[test]
+fn plain_param_does_not_infer_a_value_function() {
+    ValuePiCase::assert_type_error(
+        r#"
+begin
+  let invalid = param (value : Unit) in value that
+  ! exit 0
+end
+"#,
+    );
+}
+
+#[test]
 fn value_functions_are_first_class_and_partially_applicable() {
     ValuePiCase::run(
         r#"

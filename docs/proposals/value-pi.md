@@ -8,8 +8,8 @@ This proposal adds a single dependent classifier for total value transformations
 val pi (A : VType) (value : A) . A
 ```
 
-Its introduction form is `val`, its ordinary binding sugar is `let val`, and its elimination forms are application
-and the pipeline operators `|>` and `<|`.
+Its direct introduction form is `val`, its block-form introduction is `param val`, its ordinary binding sugar is
+`let val`, and its elimination forms are application and the pipeline operators `|>` and `<|`.
 
 ```zydeco
 let val id (A : VType) (value : A) : A = value that
@@ -72,6 +72,25 @@ val (A : VType) (value : A) => value
 
 Parameters are curried from left to right. Type parameters erase during lowering; value parameters construct lexical
 closures. Runtime parameter patterns must be irrefutable because applying a value function is total.
+
+The corresponding block-form introduction is `param val`:
+
+```zydeco
+param val (value : A) in value
+```
+
+The lexical form above elaborates to `val (value : A) => value`. With `that`, the parameter contributes to the
+nearest enclosing `begin` context before that context is reconstructed as a value abstraction:
+
+```zydeco
+begin
+  param val (value : A) that
+  value
+end
+```
+
+The explicit `val` modifier is semantically significant. Plain `param` retains its existing role for type functions
+and computations; it does not infer a value-function abstraction from a value body.
 
 The declaration form is sugar for an ordinary non-recursive value binding:
 

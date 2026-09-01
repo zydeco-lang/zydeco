@@ -203,9 +203,10 @@ pub enum DefinitionMode {
     Nominal,
 }
 
-/// `param p in e` or `param p that e`.
+/// `param p in e`, `param val p in e`, or their block-mobile `that` forms.
 #[derive(Clone, Debug)]
 pub struct Param {
+    pub flavor: ParameterFlavor,
     pub binder: PatId,
     pub placement: Placement,
     pub tail: TermId,

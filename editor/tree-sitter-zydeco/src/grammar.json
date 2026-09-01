@@ -1352,6 +1352,22 @@
             "value": "param"
           },
           {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "FIELD",
+                "name": "value_function",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "value_modifier"
+                }
+              },
+              {
+                "type": "BLANK"
+              }
+            ]
+          },
+          {
             "type": "FIELD",
             "name": "binder",
             "content": {

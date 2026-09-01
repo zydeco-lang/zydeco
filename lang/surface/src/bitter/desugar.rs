@@ -749,16 +749,25 @@ impl Desugar for t::TermId {
                 Alloc::alloc(desugarer, b::Let { binder, bindee, tail }.into(), self.into())
             }
             | Tm::Param(term) => {
-                let t::Param { binder, placement, tail } = term;
+                let t::Param { flavor, binder, placement, tail } = term;
                 let binder = binder.desugar(desugarer)?;
                 let tail = tail.desugar(desugarer)?;
                 match placement {
-                    | t::Placement::In => {
-                        Alloc::alloc(desugarer, b::Abs(binder, tail).into(), self.into())
-                    }
-                    | t::Placement::That => {
-                        Alloc::alloc(desugarer, b::MobileParam { binder, tail }.into(), self.into())
-                    }
+                    | t::Placement::In => match flavor {
+                        | t::ParameterFlavor::Plain => {
+                            Alloc::alloc(desugarer, b::Abs(binder, tail).into(), self.into())
+                        }
+                        | t::ParameterFlavor::Value => Alloc::alloc(
+                            desugarer,
+                            b::Term::ValAbs(b::Abs(binder, tail)),
+                            self.into(),
+                        ),
+                    },
+                    | t::Placement::That => Alloc::alloc(
+                        desugarer,
+                        b::MobileParam { flavor, binder, tail }.into(),
+                        self.into(),
+                    ),
                 }
             }
             | Tm::Pipeline(t::Pipeline { direction: _, subject, function }) => {

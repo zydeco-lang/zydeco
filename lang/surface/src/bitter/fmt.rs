@@ -456,9 +456,13 @@ impl<'a> Pretty<'a, Formatter<'a>> for ViewPattern {
 
 impl<'a> Pretty<'a, Formatter<'a>> for MobileParam {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let MobileParam { binder, tail } = self;
+        let MobileParam { flavor, binder, tail } = self;
+        let prefix = match flavor {
+            | ParameterFlavor::Plain => "param ",
+            | ParameterFlavor::Value => "param val ",
+        };
         RcDoc::concat([
-            RcDoc::text("param "),
+            RcDoc::text(prefix),
             binder.pretty(f),
             RcDoc::text(" that "),
             tail.pretty(f),

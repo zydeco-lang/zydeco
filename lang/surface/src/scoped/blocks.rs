@@ -7,7 +7,7 @@ use zydeco_utils::prelude::{DepGraph, IdAllocator};
 /// One syntactic contribution discovered within a `begin` boundary.
 #[derive(Clone, Debug)]
 pub(super) enum MobileCandidate {
-    Parameter { source: TermId, binder: PatId },
+    Parameter { source: TermId, flavor: ParameterFlavor, binder: PatId },
     Definition { source: TermId, binder: PatId, bindee: TermId },
 }
 
@@ -30,9 +30,9 @@ impl MobileCandidate {
         let mut local = local.clone();
         local.under.push_back_mut(BindingSite { owner: block, id });
         let inner = match self {
-            | Self::Parameter { binder, .. } => {
+            | Self::Parameter { flavor, binder, .. } => {
                 let _ = binder.resolve(resolver, (local, global))?;
-                BindingForm::Parameter(Parameter { binder: *binder })
+                BindingForm::Parameter(Parameter { flavor: *flavor, binder: *binder })
             }
             | Self::Definition { binder, bindee, .. } => {
                 bindee.resolve(resolver, (local.clone(), global))?;
@@ -83,11 +83,15 @@ impl<'a> BlockCandidateCollector<'a> {
 
     fn term(&self, term: TermId) -> Vec<MobileCandidate> {
         match &self.arena.terms[&term] {
-            | Term::MobileParam(b::MobileParam { binder, tail }) => {
-                std::iter::once(MobileCandidate::Parameter { source: term, binder: *binder })
-                    .chain(self.pattern(*binder))
-                    .chain(self.term(*tail))
-                    .collect()
+            | Term::MobileParam(b::MobileParam { flavor, binder, tail }) => {
+                std::iter::once(MobileCandidate::Parameter {
+                    source: term,
+                    flavor: *flavor,
+                    binder: *binder,
+                })
+                .chain(self.pattern(*binder))
+                .chain(self.term(*tail))
+                .collect()
             }
             | Term::MobileBind(binding) => {
                 let b::MobileBind { binder, bindee, tail } = &**binding;
@@ -288,9 +292,10 @@ impl<'a> ContextElaboration<'a> {
                 | ContextNode::Acyclic(binding) => {
                     let source = binding.id;
                     let term = match binding.inner {
-                        | BindingForm::Parameter(Parameter { binder }) => {
-                            b::Abs(binder, tail).into()
-                        }
+                        | BindingForm::Parameter(Parameter { flavor, binder }) => match flavor {
+                            | ParameterFlavor::Plain => b::Abs(binder, tail).into(),
+                            | ParameterFlavor::Value => b::Term::ValAbs(b::Abs(binder, tail)),
+                        },
                         | BindingForm::Definition(Definition { binder, bindee }) => {
                             b::Let { binder, bindee, tail }.into()
                         }

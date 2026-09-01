@@ -102,6 +102,7 @@ The canonical outer shape is a `begin ... end` block. Inside it, three binding f
 context:
 
 - `param pattern in/that term` adds a parameter.
+- `param val pattern in/that term` adds a total value-function parameter.
 - `let pattern = term in/that term` adds a **transparent** binding.
 - `def pattern = term in/that term` adds a **sealed** binding.
 
@@ -568,9 +569,11 @@ The effect-related modules under `lib/std/control` are:
 | `exception.zy` | `Exception`, `MonadThrow`, `mo_exception`, `throw_ops`, `raise`, `handle_exception`, `try_exception` |
 | `state-exn.zy` | `StateExn`, `mo_state_exn`, `state_ops`, `throw_ops`, `get`, `put`, `raise`, `catch`, `run_state_exn` |
 
-A module source is a first-class value function from Builtin to an `exists`-wrapped package. Its `ValPi` classifier
-is inferred from the annotated, irrefutable parameter and the final `pack` introduction. Importing the source yields
-an ordinary value, so opening it requires neither a thunk nor a returned computation.
+A module source is a first-class value function from Builtin to an `exists`-wrapped package. A source may introduce
+that function directly with `val pattern => value`, or use `param val pattern in/that value` when block-form context
+construction is clearer. Its `ValPi` classifier is inferred from the annotated, irrefutable parameter and the final
+`pack` introduction. Importing the source yields an ordinary value, so opening it requires neither a thunk nor a
+returned computation.
 Open a module with a projection group:
 
 ```zydeco
@@ -742,6 +745,7 @@ V / field                      named projection
 
 begin term end                 mobile-binding block
 param P in/that term           parameter
+param val P in/that term       value-function parameter
 let P = term in/that term      transparent binding
 def P = term in/that term      sealed binding
 def ! P ... : B = term         thunk-pattern binding; use site is !P

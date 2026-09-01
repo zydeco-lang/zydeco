@@ -1715,6 +1715,16 @@
             "named": true
           }
         ]
+      },
+      "value_function": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "value_modifier",
+            "named": true
+          }
+        ]
       }
     }
   },

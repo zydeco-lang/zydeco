@@ -18,6 +18,10 @@
 (value_lambda_expression
   body: (_) @function.inside) @function.around
 
+(parameter_expression
+  value_function: (value_modifier)
+  body: (_) @function.inside) @function.around
+
 [
   (data_type)
   (codata_type)

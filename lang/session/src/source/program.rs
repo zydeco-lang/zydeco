@@ -322,7 +322,8 @@ impl<'graph> TextualProgramBuilder<'graph> {
                 tail: self.term(source, tail)?,
             }
             .into(),
-            | t::Term::Param(t::Param { binder, placement, tail }) => t::Param {
+            | t::Term::Param(t::Param { flavor, binder, placement, tail }) => t::Param {
+                flavor,
                 binder: self.pattern(source, binder)?,
                 placement,
                 tail: self.term(source, tail)?,

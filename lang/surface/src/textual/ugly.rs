@@ -494,9 +494,13 @@ impl<'a> Pretty<'a, Formatter<'a>> for Placement {
 
 impl<'a> Pretty<'a, Formatter<'a>> for Param {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let Param { binder, placement, tail } = self;
+        let Param { flavor, binder, placement, tail } = self;
+        let prefix = match flavor {
+            | ParameterFlavor::Plain => "param ",
+            | ParameterFlavor::Value => "param val ",
+        };
         RcDoc::concat([
-            RcDoc::text("param "),
+            RcDoc::text(prefix),
             binder.pretty(f),
             RcDoc::text(" "),
             placement.pretty(f),

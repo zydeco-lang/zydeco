@@ -235,8 +235,9 @@ impl DeepClone for b::TermId {
                 b::Let { binder, bindee, tail }.into()
             }
             | b::Term::MobileParam(term) => {
-                let b::MobileParam { binder, tail } = term;
+                let b::MobileParam { flavor, binder, tail } = term;
                 b::MobileParam {
+                    flavor: *flavor,
                     binder: binder.deep_clone(desugarer),
                     tail: tail.deep_clone(desugarer),
                 }

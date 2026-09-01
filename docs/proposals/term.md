@@ -69,6 +69,8 @@ e ::= ...
     | begin e end
     | param p in e
     | param p that e
+    | param val p in e
+    | param val p that e
     | let p = e in e
     | let p = e that e
     | def p = e in e
@@ -85,11 +87,14 @@ The block supplies a boundary, but each binding still needs to say how it relate
 Each binding combines two choices.
 The form says what enters the context: `param` adds a parameter, `let` adds a transparent binding
 that the type checker may unfold during equality checking, and `def` gives the source binder a stable identity.
+The `val` modifier on `param` records that block reconstruction must introduce a total value function;
+without it, the parameter retains the existing type-function or computation-abstraction discipline.
 The connective says where that binding is established.
 Keeping these choices separate allows the same kind of binding to be either lexical or block-wide.
 
 With `in`, the binding stays where it is written and its following term is its scope.
-Thus `param p in e` forms a local abstraction, while the `in` variants of `let`
+Thus `param p in e` forms a local type or computation abstraction, `param val p in e` forms a local value abstraction,
+and the `in` variants of `let`
 and `def` form transparent and nominal local bindings.
 These forms support the familiar left-to-right reading of lexical scope.
 They provide the baseline against which the mobility of `that` can be understood.

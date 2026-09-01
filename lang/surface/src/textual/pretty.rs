@@ -1463,10 +1463,13 @@ impl<'arena> PrettyFormatter<'arena> {
                     .append(self.placed_binding(term, binding, Placement::In))
                     .append(self.sequence_tail(binding.bindee.into(), *tail)),
             ),
-            | Term::Param(Param { binder, placement, tail }) => self.block_like(
+            | Term::Param(Param { flavor, binder, placement, tail }) => self.block_like(
                 self.prefixed(
                     term,
-                    "param",
+                    match flavor {
+                        | ParameterFlavor::Plain => "param",
+                        | ParameterFlavor::Value => "param val",
+                    },
                     BoundaryLayout::aligned(""),
                     LayoutFragment::entity((*binder).into(), self.annotated_pattern(*binder)),
                 )
@@ -2663,6 +2666,14 @@ mod tests {
             (
                 "param (A : VType) that param (B : VType) that body",
                 concat!("param A : VType that\n", "param B : VType that\n", "body\n"),
+            ),
+            (
+                "param val (A : VType) in param val (value : A) in value",
+                concat!("param val A : VType in\n", "param val value : A in\n", "value\n"),
+            ),
+            (
+                "param val (A : VType) that param val (value : A) that value",
+                concat!("param val A : VType that\n", "param val value : A that\n", "value\n",),
             ),
         ];
 

@@ -405,7 +405,7 @@ impl Resolve for TermId {
                 term.into()
             }
             | Term::MobileParam(term) => {
-                let MobileParam { binder: _, tail } = term;
+                let MobileParam { flavor: _, binder: _, tail } = term;
                 if local.boundary.is_none() {
                     Err(ResolveError::UnenclosedThat(*self.span(resolver)))?
                 }

@@ -5713,7 +5713,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     }
                                     | TermAnnId::Value(_, _) => tycker.err_k(
                                         TyckError::Expressivity(
-                                            "use `val` to introduce a pure value function",
+                                            "use `val` or block-form `param val` to introduce a pure value function",
                                         ),
                                         std::panic::Location::caller(),
                                     )?,
@@ -5749,7 +5749,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 match body_out_ann {
                                     | TermAnnId::Value(_, _) => tycker.err_k(
                                         TyckError::Expressivity(
-                                            "use `val` to introduce a pure value function",
+                                            "use `val` or block-form `param val` to introduce a pure value function",
                                         ),
                                         std::panic::Location::caller(),
                                     )?,
@@ -5914,7 +5914,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 let expected = match tycker.kind_filled_k(&kind)?.to_owned() {
                                     | ss::Kind::VType(_) => tycker.err_k(
                                         TyckError::Expressivity(
-                                            "use `val` to introduce a pure value function",
+                                            "use `val` or block-form `param val` to introduce a pure value function",
                                         ),
                                         std::panic::Location::caller(),
                                     )?,

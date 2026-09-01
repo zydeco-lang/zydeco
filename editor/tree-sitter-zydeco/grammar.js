@@ -364,6 +364,7 @@ module.exports = grammar({
 
     parameter_expression: $ => prec.right(PREC.binding, seq(
       'param',
+      optional(field('value_function', $.value_modifier)),
       field('binder', $._pattern_item),
       field('placement', $.placement),
       field('body', $._term),

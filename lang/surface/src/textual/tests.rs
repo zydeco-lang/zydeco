@@ -8,9 +8,9 @@ use crate::{
             Alias, Ann, Appli, BindingFlavor, Block, BuiltinRole, BuiltinValueRole, CoPatId,
             ContextBind, DefId, DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists, Hole,
             IntegerLiteral, IntegerOperation, IntegerType, IntrinsicRole, Label, Literal,
-            ManifestPattern, Meta, MetaT, Named, Pack, Param, Paren, Parser, PatId, Pattern,
-            Pipeline, PipelineDirection, Placement, Prod, Proj, ProjectionPattern, SourceUnit,
-            Term, TermId, ViewPattern,
+            ManifestPattern, Meta, MetaT, Named, Pack, Param, ParameterFlavor, Paren, Parser,
+            PatId, Pattern, Pipeline, PipelineDirection, Placement, Prod, Proj, ProjectionPattern,
+            SourceUnit, Term, TermId, ViewPattern,
         },
     },
 };
@@ -824,6 +824,28 @@ fn parses_value_pi_abstractions_and_bindings() {
     assert!(matches!(
         parser.arena.terms[tail],
         Term::Pipeline(Pipeline { direction: PipelineDirection::Forward, .. })
+    ));
+}
+
+#[test]
+fn parses_lexical_and_block_value_parameters() {
+    let mut parser = Parser::new();
+    let lexical_source = "param val (value : Int64) in value";
+    let lexical = parser::SingleTermParser::new()
+        .parse(lexical_source, &mut parser, lexer::Lexer::new(lexical_source))
+        .unwrap();
+    assert!(matches!(
+        parser.arena.terms[&lexical],
+        Term::Param(Param { flavor: ParameterFlavor::Value, placement: Placement::In, .. })
+    ));
+
+    let mobile_source = "param val (value : Int64) that value";
+    let mobile = parser::SingleTermParser::new()
+        .parse(mobile_source, &mut parser, lexer::Lexer::new(mobile_source))
+        .unwrap();
+    assert!(matches!(
+        parser.arena.terms[&mobile],
+        Term::Param(Param { flavor: ParameterFlavor::Value, placement: Placement::That, .. })
     ));
 }
 

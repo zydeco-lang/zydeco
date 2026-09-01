@@ -27,3 +27,10 @@ pub struct Appli<T>(pub Vec<T>);
 /// `(...)` as paren-shaped container
 #[derive(Clone, Debug)]
 pub struct Paren<T>(pub Vec<T>);
+
+/// The abstraction discipline selected by a `param` header.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum ParameterFlavor {
+    Plain,
+    Value,
+}

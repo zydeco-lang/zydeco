@@ -144,6 +144,7 @@ pub struct Block(pub TermId);
 /// A parameter contributed to the nearest enclosing block.
 #[derive(Clone, Debug)]
 pub struct MobileParam {
+    pub flavor: ParameterFlavor,
     pub binder: PatId,
     pub tail: TermId,
 }

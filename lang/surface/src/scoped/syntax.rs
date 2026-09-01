@@ -22,9 +22,10 @@ pub struct Definition {
     pub bindee: TermId,
 }
 
-/// A parameter contributed by `param ... that ...`.
+/// A parameter contributed by `param ... that ...` or `param val ... that ...`.
 #[derive(Clone, Debug)]
 pub struct Parameter {
+    pub flavor: ParameterFlavor,
     pub binder: PatId,
 }
 
