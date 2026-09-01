@@ -91,8 +91,16 @@ impl BuildOptions {
 
         let cargo_executable =
             self.build_dir.join("target").join(cargo_target).join("debug").join("main");
-        std::fs::copy(cargo_executable, &executable_path).map_err(NativeError::CopyExecutable)?;
+        Self::publish_executable(&cargo_executable, &executable_path)?;
         Ok(Executable { path: executable_path })
+    }
+
+    fn publish_executable(source: &Path, destination: &Path) -> Result<(), NativeError> {
+        // Keep executable writes inside child processes. Copying here would open the destination
+        // for writing in this multithreaded process, allowing another concurrent fork to inherit
+        // the descriptor briefly and make Linux reject an immediate exec with ETXTBSY.
+        std::fs::rename(source, destination).map_err(NativeError::PublishExecutable)?;
+        Ok(())
     }
 
     pub fn link_llvm(&self, artifact: &str, ir: &str) -> Result<Executable, NativeError> {
@@ -134,6 +142,28 @@ impl BuildOptions {
         let path = self.build_dir.join(format!("{artifact}.{}.wasm", backend.artifact_label()));
         std::fs::write(&path, module).map_err(NativeError::WriteBackendOutput)?;
         Ok(WasmArtifact { path })
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::BuildOptions;
+    use std::os::unix::fs::MetadataExt;
+
+    #[test]
+    fn publishes_an_executable_by_moving_its_inode() {
+        let directory = tempfile::tempdir().unwrap();
+        let source = directory.path().join("cargo-output");
+        let destination = directory.path().join("program.exe");
+        std::fs::write(&source, "new executable").unwrap();
+        std::fs::write(&destination, "old executable").unwrap();
+        let source_inode = source.metadata().unwrap().ino();
+
+        BuildOptions::publish_executable(&source, &destination).unwrap();
+
+        assert!(!source.exists());
+        assert_eq!(destination.metadata().unwrap().ino(), source_inode);
+        assert_eq!(std::fs::read_to_string(destination).unwrap(), "new executable");
     }
 }
 
@@ -246,8 +276,8 @@ pub enum NativeError {
     },
     #[error("{tool} exited with {status}:\n{stderr}")]
     ToolFailed { tool: NativeTool, status: ExitStatus, stderr: String },
-    #[error("cannot copy the linked executable: {0}")]
-    CopyExecutable(#[source] std::io::Error),
+    #[error("cannot publish the linked executable: {0}")]
+    PublishExecutable(#[source] std::io::Error),
     #[error("cannot run the executable: {0}")]
     RunExecutable(#[source] std::io::Error),
     #[error(
