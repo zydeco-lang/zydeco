@@ -4,7 +4,18 @@ use std::{
     io::{BufRead, BufReader, Read, Write},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
 };
-use tower_lsp::lsp_types::Url;
+use tower_lsp::lsp_types::{Position, Url};
+
+/// Locate a needle's UTF-16 line-and-column in a source string, so test
+/// positions survive source reformatting.
+fn source_position(source: &str, needle: &str) -> Position {
+    let byte = source.find(needle).unwrap_or_else(|| panic!("missing source text: {needle}"));
+    let before = &source[..byte];
+    let line = before.bytes().filter(|byte| *byte == b'\n').count() as u32;
+    let line_start = before.rfind('\n').map_or(0, |newline| newline + 1);
+    let character = source[line_start..byte].encode_utf16().count() as u32;
+    Position::new(line, character)
+}
 
 struct LspProcess {
     child: Child,
@@ -269,6 +280,7 @@ fn stdio_server_synchronizes_documents_and_answers_navigation_requests() {
     assert_eq!(capabilities["textDocumentSync"]["change"], 1);
     assert_eq!(capabilities["definitionProvider"], true);
     assert_eq!(capabilities["referencesProvider"], true);
+    assert_eq!(capabilities["renameProvider"], json!({ "prepareProvider": true }));
     assert_eq!(capabilities["hoverProvider"], true);
     assert_eq!(capabilities["documentSymbolProvider"], true);
     assert_eq!(capabilities["documentFormattingProvider"], true);
@@ -430,6 +442,98 @@ fn stdio_server_synchronizes_documents_and_answers_navigation_requests() {
             "start": { "line": 1, "character": 2 },
             "end": { "line": 1, "character": 9 },
         })
+    );
+
+    server.finish();
+}
+
+#[test]
+fn stdio_server_renames_resolved_symbols() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("main.zy");
+    let original = "begin\n  let answer = () that\n  answer\nend\n";
+    std::fs::write(&path, original).unwrap();
+    let uri = Url::from_file_path(&path).unwrap().to_string();
+    let mut server = LspProcess::start();
+
+    server.request(
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": Url::from_file_path(directory.path()).unwrap(),
+            "capabilities": {},
+        }),
+    );
+    server.notify("initialized", json!({}));
+    server.notify(
+        "textDocument/didOpen",
+        json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "zydeco",
+                "version": 1,
+                "text": original,
+            },
+        }),
+    );
+    server.notification("textDocument/publishDiagnostics");
+
+    let prepared = server.request(
+        "textDocument/prepareRename",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 2, "character": 4 },
+        }),
+    );
+    assert_eq!(
+        prepared["result"],
+        json!({
+            "range": {
+                "start": { "line": 2, "character": 2 },
+                "end": { "line": 2, "character": 8 },
+            },
+            "placeholder": "answer",
+        })
+    );
+    let unprepared = server.request(
+        "textDocument/prepareRename",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 1 },
+        }),
+    );
+    assert!(unprepared["result"].is_null());
+
+    let renamed = server.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 2, "character": 4 },
+            "newName": "result",
+        }),
+    );
+    let canonical = Url::from_file_path(path.canonicalize().unwrap()).unwrap().to_string();
+    let edits = renamed["result"]["changes"][canonical.as_str()].as_array().unwrap();
+    assert_eq!(edits.len(), 2);
+    assert!(
+        edits.iter().all(|edit| edit["newText"] == "result"),
+        "every occurrence should be rewritten: {edits:?}"
+    );
+    assert_eq!(edits[0]["range"]["start"], json!({ "line": 1, "character": 6 }));
+    assert_eq!(edits[1]["range"]["start"], json!({ "line": 2, "character": 2 }));
+
+    let refused = server.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 2, "character": 4 },
+            "newName": "let",
+        }),
+    );
+    assert_eq!(refused["error"]["code"], -32803);
+    assert!(
+        refused["error"]["message"].as_str().unwrap().contains("reserved"),
+        "the refusal should explain the reserved word: {refused}"
     );
 
     server.finish();
@@ -657,6 +761,7 @@ fn stdio_hover_uses_the_initialized_line_width() {
         .canonicalize()
         .unwrap();
     let source = std::fs::read_to_string(&path).unwrap();
+    let zip = source_position(&source, "zip (A : VType)");
     let uri = Url::from_file_path(&path).unwrap().to_string();
     let mut server = LspProcess::start();
 
@@ -690,7 +795,7 @@ fn stdio_hover_uses_the_initialized_line_width() {
         "textDocument/hover",
         json!({
             "textDocument": { "uri": uri },
-            "position": { "line": 116, "character": 8 },
+            "position": { "line": zip.line, "character": zip.character },
         }),
     );
     assert_eq!(hover["result"]["contents"]["kind"], "markdown");

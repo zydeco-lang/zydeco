@@ -3,6 +3,8 @@
 [Cajun](cajun) is Zydeco's Language Server Protocol implementation.
 It provides live syntax and name-resolution diagnostics, document symbols,
 and definition and reference lookup across imported source files.
+Renaming a resolved symbol rewrites its definition and every resolved use across the same files,
+preserving the name's lexical class and refusing words reserved by the grammar.
 Hovering over a resolved name shows its inferred kind or type, with source links for referenced type names.
 Cajun also provides semantic tokens whose name classes are refined by Zydeco's resolver and CBPV type checker.
 

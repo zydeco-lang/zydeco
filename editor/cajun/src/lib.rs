@@ -3,6 +3,7 @@ mod document_links;
 mod format;
 mod hover;
 mod progress;
+mod rename;
 mod semantic;
 mod type_links;
 
@@ -11,6 +12,7 @@ use document_links::ImportDocumentLinks;
 use format::{DocumentFormatter, FormattingOutcome};
 use hover::HoverLineWidth;
 use progress::{AnalysisProgressReporter, AnalysisProgressSession};
+use rename::RenameRejection;
 use semantic::SemanticHighlighter;
 use std::{
     collections::HashMap,
@@ -31,10 +33,11 @@ use tower_lsp::{
         DocumentLinkParams, DocumentSymbolParams, DocumentSymbolResponse, GotoDefinitionParams,
         GotoDefinitionResponse, Hover, HoverParams, HoverProviderCapability, InitializeParams,
         InitializeResult, InitializedParams, Location, MessageType, OneOf, PositionEncodingKind,
-        ReferenceParams, SemanticTokens, SemanticTokensFullOptions, SemanticTokensOptions,
-        SemanticTokensParams, SemanticTokensResult, ServerCapabilities, ServerInfo,
+        PrepareRenameResponse, ReferenceParams, RenameOptions, RenameParams, SemanticTokens,
+        SemanticTokensFullOptions, SemanticTokensOptions, SemanticTokensParams,
+        SemanticTokensResult, ServerCapabilities, ServerInfo, TextDocumentPositionParams,
         TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
-        TextDocumentSyncSaveOptions, TextEdit, Url, WorkDoneProgressOptions,
+        TextDocumentSyncSaveOptions, TextEdit, Url, WorkDoneProgressOptions, WorkspaceEdit,
     },
 };
 use zydeco_session::{CompilerSession, SourceGraph};
@@ -390,6 +393,10 @@ impl LanguageServer for Cajun {
                     work_done_progress_options: WorkDoneProgressOptions::default(),
                 }),
                 references_provider: Some(OneOf::Left(true)),
+                rename_provider: Some(OneOf::Right(RenameOptions {
+                    prepare_provider: Some(true),
+                    work_done_progress_options: WorkDoneProgressOptions::default(),
+                })),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 document_symbol_provider: Some(OneOf::Left(true)),
                 document_formatting_provider: Some(OneOf::Left(true)),
@@ -510,6 +517,42 @@ impl LanguageServer for Cajun {
         Ok(projects.get(&path).and_then(|cached| {
             cached.project.references(&path, target.position, include_declaration)
         }))
+    }
+
+    async fn prepare_rename(
+        &self, params: TextDocumentPositionParams,
+    ) -> Result<Option<PrepareRenameResponse>> {
+        if !ZydecoDocument::accepts(&params.text_document.uri) {
+            return Ok(None);
+        }
+        let path = match self.refresh(&params.text_document.uri).await {
+            | RefreshOutcome::Updated(path) => path,
+            | RefreshOutcome::Failed(_) | RefreshOutcome::Superseded => return Ok(None),
+        };
+        let projects = self.projects.read().await;
+        Ok(projects
+            .get(&path)
+            .and_then(|cached| cached.project.prepare_rename(&path, params.position)))
+    }
+
+    async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
+        let target = params.text_document_position;
+        if !ZydecoDocument::accepts(&target.text_document.uri) {
+            return Ok(None);
+        }
+        let path = match self.refresh(&target.text_document.uri).await {
+            | RefreshOutcome::Updated(path) => path,
+            | RefreshOutcome::Failed(_) | RefreshOutcome::Superseded => return Ok(None),
+        };
+        let projects = self.projects.read().await;
+        match projects
+            .get(&path)
+            .map(|cached| cached.project.rename(&path, target.position, &params.new_name))
+        {
+            | Some(Ok(edit)) => Ok(Some(edit)),
+            | Some(Err(rejection)) => Err(RenameRejection::into_error(rejection)),
+            | None => Ok(None),
+        }
     }
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {

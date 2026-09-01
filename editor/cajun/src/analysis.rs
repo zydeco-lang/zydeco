@@ -5,8 +5,8 @@ use std::{
 };
 use tower_lsp::lsp_types::{
     Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DocumentSymbol, Hover,
-    HoverContents, Location, MarkupContent, MarkupKind, NumberOrString, Position, Range,
-    SemanticToken, SymbolKind, Url,
+    HoverContents, Location, MarkupContent, MarkupKind, NumberOrString, Position,
+    PrepareRenameResponse, Range, SemanticToken, SymbolKind, Url, WorkspaceEdit,
 };
 use zydeco_session::{
     AnalysisError, CompilerSession, ProgramAnalysis, SourceDiagnosticSite, SourceLoadError,
@@ -33,6 +33,7 @@ use crate::{
         TypeDefinitionPreview,
     },
     progress::{AnalysisProgress, SourceDiscovery},
+    rename::{RenameRejection, Renamer},
     semantic::SemanticHighlighter,
     type_links::TypeReferenceCollector,
 };
@@ -228,6 +229,40 @@ impl ProjectState {
             .iter()
             .filter_map(|term| self.term_location(*term));
         Some(Self::ordered_locations(declaration.chain(uses).collect()))
+    }
+
+    /// Offer the identifier under the position for interactive renaming.
+    ///
+    /// Names introduced by data, codata, and comatch arms resolve during type
+    /// checking rather than name resolution, so they have no resolver-backed
+    /// occurrence set and are not offered.
+    pub(crate) fn prepare_rename(
+        &self, file_path: &Path, position: Position,
+    ) -> Option<PrepareRenameResponse> {
+        let occurrence = self.symbol_at(file_path, position)?;
+        self.definition_location(occurrence.definition)?;
+        let placeholder = self.scoped().defs[&occurrence.definition].0.clone();
+        Some(PrepareRenameResponse::RangeWithPlaceholder { range: occurrence.range, placeholder })
+    }
+
+    /// Rewrite the definition and every resolved use of the symbol under the
+    /// position, across all files of the analyzed import closure.
+    pub(crate) fn rename(
+        &self, file_path: &Path, position: Position, new_name: &str,
+    ) -> Result<WorkspaceEdit, RenameRejection> {
+        let occurrence = self.symbol_at(file_path, position).ok_or(RenameRejection::Unresolved)?;
+        let current = self.scoped().defs[&occurrence.definition].0.clone();
+        let renamer = Renamer::adopt(&current, new_name)?;
+        let declaration =
+            self.definition_location(occurrence.definition).ok_or(RenameRejection::Synthesized)?;
+        let uses = self
+            .scoped()
+            .users
+            .forth(&occurrence.definition)
+            .iter()
+            .filter_map(|term| self.term_location(*term));
+        let locations = Self::ordered_locations(std::iter::once(declaration).chain(uses).collect());
+        Ok(renamer.apply(locations))
     }
 
     pub(crate) fn hover(
@@ -539,12 +574,13 @@ mod tests {
     use crate::{
         hover::HoverLineWidth,
         progress::{AnalysisProgress, SourceDiscovery},
+        rename::{NameClass, RenameRejection},
         semantic::SemanticHighlighter,
     };
     use std::{collections::HashMap, path::Path};
     use tower_lsp::lsp_types::{
-        DiagnosticSeverity, HoverContents, NumberOrString, Position, Range, SemanticToken,
-        SemanticTokensLegend, Url,
+        DiagnosticSeverity, HoverContents, NumberOrString, Position, PrepareRenameResponse, Range,
+        SemanticToken, SemanticTokensLegend, Url,
     };
     use zydeco_session::SourceDiagnosticSite;
     use zydeco_utils::span::{FileMap, LineCol};
@@ -698,6 +734,119 @@ mod tests {
             panic!("type hover should use markup content")
         };
         assert_eq!(contents.value, "```zydeco\nanswer : Unit\n```");
+    }
+
+    #[test]
+    fn rename_rewrites_each_resolved_occurrence_across_imports() {
+        let directory = tempfile::tempdir().unwrap();
+        let library = directory.path().join("library.zy");
+        let root = directory.path().join("main.zy");
+        std::fs::write(&library, "begin\n  let answer = () that\n  (answer, answer)\nend\n")
+            .unwrap();
+        std::fs::write(&root, "@[import(\"library.zy\")] _\n").unwrap();
+        let (project, _session) = ProjectState::load(&root, &HashMap::new()).unwrap();
+
+        let from_binder = project.rename(&library, Position::new(1, 7), "result").unwrap();
+        let from_use = project.rename(&library, Position::new(2, 4), "result").unwrap();
+        assert_eq!(from_binder, from_use);
+
+        let changes = from_binder.changes.unwrap();
+        let library = library.canonicalize().unwrap();
+        assert_eq!(changes.len(), 1);
+        let edits = &changes[&Url::from_file_path(&library).unwrap()];
+        assert_eq!(edits.len(), 3);
+        assert!(edits.iter().all(|edit| edit.new_text == "result"));
+        assert_eq!(
+            edits.iter().map(|edit| edit.range.start).collect::<Vec<_>>(),
+            vec![Position::new(1, 6), Position::new(2, 3), Position::new(2, 11)]
+        );
+    }
+
+    #[test]
+    fn rename_preserves_name_classes_and_refuses_grammar_words() {
+        let directory = tempfile::tempdir().unwrap();
+        let library = directory.path().join("library.zy");
+        let root = directory.path().join("main.zy");
+        std::fs::write(&library, "begin\n  let answer = () that\n  (answer, answer)\nend\n")
+            .unwrap();
+        std::fs::write(&root, "@[import(\"library.zy\")] _\n").unwrap();
+        let (project, _session) = ProjectState::load(&root, &HashMap::new()).unwrap();
+
+        assert_eq!(
+            project.rename(&library, Position::new(1, 7), "Answer"),
+            Err(RenameRejection::Lexical {
+                proposed: "Answer".to_owned(),
+                class: NameClass::Lower
+            })
+        );
+        assert_eq!(
+            project.rename(&library, Position::new(1, 7), "let"),
+            Err(RenameRejection::Reserved { proposed: "let".to_owned() })
+        );
+        assert_eq!(project.rename(&library, Position::new(1, 7), ""), Err(RenameRejection::Empty));
+
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../lib/tests/builtin/recursive-data.zy")
+            .canonicalize()
+            .unwrap();
+        let (project, _session) = ProjectState::load(&path, &HashMap::new()).unwrap();
+        let edit = project.rename(&path, Position::new(1, 7), "Nat2").unwrap();
+        let edits = &edit.changes.unwrap()[&Url::from_file_path(&path).unwrap()];
+        assert_eq!(edits.len(), 5, "the definition plus four type uses: {edits:?}");
+        assert!(edits.iter().all(|edit| edit.new_text == "Nat2"));
+        assert_eq!(
+            project.rename(&path, Position::new(1, 7), "nat"),
+            Err(RenameRejection::Lexical { proposed: "nat".to_owned(), class: NameClass::Upper })
+        );
+    }
+
+    #[test]
+    fn prepare_rename_offers_the_identifier_and_placeholder() {
+        let directory = tempfile::tempdir().unwrap();
+        let library = directory.path().join("library.zy");
+        let root = directory.path().join("main.zy");
+        std::fs::write(&library, "begin\n  let answer = () that\n  (answer, answer)\nend\n")
+            .unwrap();
+        std::fs::write(&root, "@[import(\"library.zy\")] _\n").unwrap();
+        let (project, _session) = ProjectState::load(&root, &HashMap::new()).unwrap();
+
+        assert_eq!(
+            project.prepare_rename(&library, Position::new(2, 4)),
+            Some(PrepareRenameResponse::RangeWithPlaceholder {
+                range: Range::new(Position::new(2, 3), Position::new(2, 9)),
+                placeholder: "answer".to_owned(),
+            })
+        );
+        assert_eq!(project.prepare_rename(&library, Position::new(0, 1)), None);
+    }
+
+    #[test]
+    fn rename_refuses_unresolved_and_arm_introduced_names() {
+        let directory = tempfile::tempdir().unwrap();
+        let library = directory.path().join("library.zy");
+        let root = directory.path().join("main.zy");
+        std::fs::write(&library, "begin\n  let answer = () that\n  (answer, answer)\nend\n")
+            .unwrap();
+        std::fs::write(&root, "@[import(\"library.zy\")] _\n").unwrap();
+        let (project, _session) = ProjectState::load(&root, &HashMap::new()).unwrap();
+
+        assert_eq!(
+            project.rename(&library, Position::new(1, 15), "result"),
+            Err(RenameRejection::Unresolved)
+        );
+
+        // Constructor names resolve during type checking, not name resolution,
+        // so a data arm occurrence has no resolver-backed occurrence set yet.
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../lib/tests/builtin/recursive-data.zy")
+            .canonicalize()
+            .unwrap();
+        let (project, _session) = ProjectState::load(&path, &HashMap::new()).unwrap();
+        assert_eq!(
+            project.rename(&path, Position::new(27, 25), "Z2"),
+            Err(RenameRejection::Unresolved)
+        );
+        assert_eq!(project.prepare_rename(&path, Position::new(27, 25)), None);
     }
 
     #[test]

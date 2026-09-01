@@ -13,6 +13,7 @@ and server analysis.
 - document symbols;
 - clickable filesystem import paths;
 - definition and reference lookup across imported source files;
+- symbol rename across imported source files, preserving lexical name classes;
 - inferred kind and type information on hover, with links to type definitions;
 - compiler-aware semantic highlighting;
 - full synchronization of unsaved editor contents.
