@@ -14,7 +14,7 @@ use zydeco_session::{
 use zydeco_statics::{
     arena::StaticsArena,
     fmt::{Formatter, SealedTypeEquation},
-    syntax::AbstId,
+    syntax::{AbstId, AnnId, TermAnnId, TermId as TypedTermId},
 };
 use zydeco_surface::{
     scoped::arena::ScopedArena,
@@ -269,7 +269,14 @@ impl ProjectState {
         &self, session: &CompilerSession, file_path: &Path, position: Position,
         line_width: HoverLineWidth,
     ) -> Option<Hover> {
-        let occurrence = self.symbol_at(file_path, position)?;
+        self.symbol_at(file_path, position)
+            .and_then(|occurrence| self.symbol_hover(session, &occurrence, line_width))
+            .or_else(|| self.term_hover(file_path, position, line_width))
+    }
+
+    fn symbol_hover(
+        &self, session: &CompilerSession, occurrence: &SymbolOccurrence, line_width: HoverLineWidth,
+    ) -> Option<Hover> {
         let name = &self.scoped().defs[&occurrence.definition];
         let annotation =
             session.annotation_of_def(&self.root, occurrence.definition).ok().flatten()?;
@@ -313,6 +320,80 @@ impl ProjectState {
             }),
             range: Some(occurrence.range),
         })
+    }
+
+    /// The checked annotation of the innermost term enclosing the position.
+    ///
+    /// Compound terms carry no resolver-backed symbol of their own — projection
+    /// field names, applications, and literals all resolve during type checking
+    /// rather than name resolution — so this hover reports the annotation the
+    /// checker recorded for the term itself. Resolved symbols take precedence,
+    /// so hovering a variable or definition still reports the definition.
+    fn term_hover(
+        &self, file_path: &Path, position: Position, line_width: HoverLineWidth,
+    ) -> Option<Hover> {
+        let file_path = Self::normalize_path(file_path);
+        let offset = self.offset(&file_path, position)?;
+        let terms = self.scoped().terms.iter().filter_map(|(term, _)| {
+            let entity = self.scoped().origins.source(&term.into())?;
+            Some((term, &self.analysis.spans()[&entity]))
+        });
+        let (_, range, term) = terms
+            .filter_map(|(term, span)| {
+                self.containing_range(&file_path, offset, span)
+                    .map(|(length, range)| (length, range, term))
+            })
+            .min_by_key(|(length, _, _)| *length)?;
+        let (checked, annotation) = match self.statics().term_annotation(term)? {
+            | TermAnnId::Value(term, annotation) => {
+                (TypedTermId::Value(term), AnnId::Type(annotation))
+            }
+            | TermAnnId::Compu(term, annotation) => {
+                (TypedTermId::Compu(term), AnnId::Type(annotation))
+            }
+            | TermAnnId::Type(term, kind) => (TypedTermId::Type(term), AnnId::Kind(kind)),
+            | TermAnnId::Kind(_) | TermAnnId::Hole(_) => return None,
+        };
+        let formatter = Formatter::new(self.scoped(), self.statics());
+        let mut rendered = String::new();
+        checked.pretty(&formatter).render_fmt(line_width.columns(), &mut rendered).ok()?;
+        let label = Self::term_label(rendered, line_width);
+        let mut annotation_text = String::new();
+        annotation
+            .pretty(&formatter)
+            .render_fmt(
+                HoverSignature::annotation_width(&label, line_width, false),
+                &mut annotation_text,
+            )
+            .ok()?;
+        let references = TypeReferenceCollector::collect(self.statics(), annotation, None);
+        let definitions =
+            references.definitions().filter_map(|definition| self.type_definition_link(definition));
+        let sealed_types = references
+            .sealed_types()
+            .filter_map(|sealed| self.sealed_type_equation(sealed, &formatter, line_width));
+        let signature = HoverSignature::with_definitions(&label, &annotation_text, definitions)
+            .with_sealed_types(sealed_types)
+            .markdown();
+        Some(Hover {
+            contents: HoverContents::Markup(MarkupContent {
+                kind: MarkupKind::Markdown,
+                value: signature,
+            }),
+            range: Some(range),
+        })
+    }
+
+    /// The columns a term label leaves for the annotation it introduces.
+    const MIN_ANNOTATION_COLUMNS: usize = 20;
+
+    /// Label a hovered term by its rendered form, eliding to `…` when the
+    /// rendering spans lines or crowds out the annotation. The editor already
+    /// shows the hovered source, so the hover keeps only the type.
+    fn term_label(rendered: String, line_width: HoverLineWidth) -> String {
+        let budget = line_width.columns().saturating_sub(Self::MIN_ANNOTATION_COLUMNS + 3);
+        let fits = !rendered.contains('\n') && rendered.chars().count() <= budget;
+        if fits { rendered } else { "…".to_owned() }
     }
 
     pub(crate) fn document_symbols(&self, file_path: &Path) -> Vec<DocumentSymbol> {
@@ -436,22 +517,21 @@ impl ProjectState {
     fn containing_occurrence(
         &self, file_path: &Path, offset: usize, definition: DefId, span: &Span,
     ) -> Option<(usize, SymbolOccurrence)> {
-        let same_file = self.span_file(span) == Some(file_path.to_path_buf());
-        let range = self
-            .analysis
-            .spans()
-            .source_map()
-            .and_then(|map| map.range(*span))
-            .map(|(_, range)| range)?;
-        (same_file && range.start <= offset && offset < range.end)
-            .then(|| {
-                self.span_range(span).map(|hit| {
-                    (
-                        range.end.saturating_sub(range.start),
-                        SymbolOccurrence { definition, range: hit },
-                    )
-                })
-            })
+        self.containing_range(file_path, offset, span)
+            .map(|(length, range)| (length, SymbolOccurrence { definition, range }))
+    }
+
+    /// The LSP range of a span naming a token of `file_path` that contains the
+    /// byte `offset`, paired with its byte length so callers can prefer the
+    /// innermost enclosing entity.
+    fn containing_range(
+        &self, file_path: &Path, offset: usize, span: &Span,
+    ) -> Option<(usize, Range)> {
+        let (_, bytes) = self.analysis.spans().source_map().and_then(|map| map.range(*span))?;
+        (self.span_file(span) == Some(file_path.to_path_buf())
+            && bytes.start <= offset
+            && offset < bytes.end)
+            .then(|| self.span_range(span).map(|hit| (bytes.end.saturating_sub(bytes.start), hit)))
             .flatten()
     }
 
@@ -1096,6 +1176,138 @@ mod tests {
                 ),
                 definition = definition
             )
+        );
+    }
+
+    #[test]
+    fn term_hover_reports_the_projected_type_of_field_projections() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../lib/tests/exec/forall.zy")
+            .canonicalize()
+            .unwrap();
+        let source = std::fs::read_to_string(&path).unwrap();
+        let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
+
+        let field = project
+            .hover(&session, &path, source_position(&source, "/exit"), HoverLineWidth::default())
+            .unwrap();
+        let HoverContents::Markup(contents) = field.contents else {
+            panic!("projection hover should use markup content")
+        };
+        let sources = fenced_zydeco_sources(&contents.value);
+        let [signature] = sources.as_slice() else {
+            panic!("the projection hover should contain one Zydeco code fence:\n{}", contents.value)
+        };
+        // The effect witness of the builtin process module elaborates to an
+        // unnamed abstract type, so only the leading shape is stable.
+        assert!(
+            signature.starts_with("process/exit : (Thk Int64 -> ["),
+            "the projection hover should render the projected term with its type:\n{}",
+            contents.value
+        );
+        assert!(signature.ends_with("])"), "unexpected tail:\n{signature}");
+        assert_eq!(field.range.unwrap().start, source_position(&source, "process/exit"));
+
+        let head = project
+            .hover(
+                &session,
+                &path,
+                source_position(&source, "process/exit"),
+                HoverLineWidth::default(),
+            )
+            .unwrap();
+        let HoverContents::Markup(head_contents) = head.contents else {
+            panic!("symbol hover should use markup content")
+        };
+        assert!(
+            head_contents.value.starts_with("```zydeco\nprocess :"),
+            "the projected head should keep its symbol hover:\n{}",
+            head_contents.value
+        );
+    }
+
+    #[test]
+    fn term_hover_links_type_definitions_of_module_projections() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../lib/tests/exec/forall.zy")
+            .canonicalize()
+            .unwrap();
+        let source = std::fs::read_to_string(&path).unwrap();
+        let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
+
+        let module = project
+            .hover(&session, &path, source_position(&source, "/i64"), HoverLineWidth::default())
+            .unwrap();
+        let HoverContents::Markup(contents) = module.contents else {
+            panic!("projection hover should use markup content")
+        };
+        let representations = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../lib/std/builtin/representations.zy")
+            .canonicalize()
+            .unwrap();
+        let definition = definition_url(&representations, Position::new(6, 0));
+
+        assert_eq!(
+            contents.value,
+            format!(
+                concat!(
+                    "```zydeco\n",
+                    "representations/i64 : exists ((#Int64 = Int64) as Int64 : #Int64 :: VType) . Unit\n",
+                    "```\n\n",
+                    "Types:\n\n",
+                    "- [`Int64` ↗](<{definition}>)"
+                ),
+                definition = definition
+            )
+        );
+    }
+
+    #[test]
+    fn term_hover_reports_types_of_subexpressions_under_the_cursor() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../lib/tests/exec/forall.zy")
+            .canonicalize()
+            .unwrap();
+        let source = std::fs::read_to_string(&path).unwrap();
+        let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
+
+        let application = project
+            .hover(&session, &path, source_position(&source, " Int64 0"), HoverLineWidth::default())
+            .unwrap();
+        let HoverContents::Markup(contents) = application.contents else {
+            panic!("term hover should use markup content")
+        };
+        assert_eq!(
+            fenced_zydeco_sources(&contents.value),
+            vec!["(! id Int64) : Int64 -> (Ret Int64)"],
+            "hovering between the parts of an application should report the innermost term:\n{}",
+            contents.value
+        );
+        assert_eq!(application.range.unwrap().start, source_position(&source, "! id Int64"));
+
+        let literal = project
+            .hover(&session, &path, source_position(&source, "0;"), HoverLineWidth::default())
+            .unwrap();
+        let HoverContents::Markup(contents) = literal.contents else {
+            panic!("term hover should use markup content")
+        };
+        assert_eq!(
+            fenced_zydeco_sources(&contents.value),
+            vec!["0 : Int64"],
+            "hovering a literal should report its type:\n{}",
+            contents.value
+        );
+
+        let block = project
+            .hover(&session, &path, source_position(&source, "do x"), HoverLineWidth::default())
+            .unwrap();
+        let HoverContents::Markup(contents) = block.contents else {
+            panic!("term hover should use markup content")
+        };
+        assert!(
+            contents.value.starts_with("```zydeco\n… :"),
+            "a term whose rendering spans lines should collapse to its type:\n{}",
+            contents.value
         );
     }
 
