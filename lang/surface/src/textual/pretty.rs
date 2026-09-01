@@ -656,9 +656,9 @@ impl<'arena> PrettyFormatter<'arena> {
         }
     }
 
-    /// Separate a multiline binder head from the token that introduces its
-    /// scope, while retaining the compact single-line form when it fits.
-    fn scoped_join(
+    /// Separate a multiline head from its stage marker, while retaining the
+    /// compact single-line form when it fits.
+    fn separator_join(
         &self, head: LayoutFragment<'arena>, separator: &'static str, body: LayoutFragment<'arena>,
         continuation_indent: isize,
     ) -> LayoutFragment<'arena> {
@@ -765,6 +765,32 @@ impl<'arena> PrettyFormatter<'arena> {
             ),
         ));
         let document = self.flexible(inline, self.flexible(attached, aligned));
+        LayoutFragment { document, anchors }
+    }
+
+    /// Join an unannotated binding head to its definition.
+    ///
+    /// A one-line head keeps `=` beside it even when the bindee is multiline.
+    /// Once the head itself becomes multiline, `=` aligns with the binding and
+    /// the bindee starts one level below it.
+    fn untyped_definition_join(
+        &self, head: LayoutFragment<'arena>, bindee: LayoutFragment<'arena>,
+    ) -> LayoutFragment<'arena> {
+        let intent = BoundaryIntent::between(head.anchors.last, bindee.anchors.first);
+        let anchors = LayoutAnchors { first: head.anchors.first, last: bindee.anchors.last };
+        let body_layout = BoundaryLayout::hanging("", self.indent());
+        let probe = head.document.clone().append(RcDoc::text(" ="));
+        let inline = self.single_line(probe.clone()).append(self.layout_boundary(
+            intent,
+            body_layout.clone(),
+            bindee.document.clone(),
+        ));
+        let aligned = head
+            .document
+            .append(RcDoc::hardline())
+            .append(RcDoc::text("="))
+            .append(body_layout.place(self.expanded_placement(intent), bindee.document));
+        let document = self.select_after_multiline_probe(probe, inline, aligned);
         LayoutFragment { document, anchors }
     }
 
@@ -918,6 +944,40 @@ impl<'arena> PrettyFormatter<'arena> {
     /// can then select an expanded alternative without a separate fit pass.
     fn single_line(&self, document: RcDoc<'arena>) -> RcDoc<'arena> {
         document.append(RcDoc::fail().flat_alt(RcDoc::nil())).group()
+    }
+
+    /// Choose a continuation from the layout of a prefix alone.
+    ///
+    /// A regular union measures its first alternative together with every
+    /// document that follows it. That is normally desirable, but a stage
+    /// marker belongs to the preceding head: an overlong body must not move
+    /// the marker. Probe the prefix at its actual column and indentation to
+    /// commit that choice before rendering either continuation.
+    fn select_after_multiline_probe(
+        &self, probe: RcDoc<'arena>, single_line: RcDoc<'arena>, multiline: RcDoc<'arena>,
+    ) -> RcDoc<'arena> {
+        let line_width = self.options.line_width;
+        DOC_ALLOCATOR
+            .column(move |column| {
+                let probe = probe.clone();
+                let single_line = single_line.clone();
+                let multiline = multiline.clone();
+                DOC_ALLOCATOR
+                    .nesting(move |nesting| {
+                        let nesting = isize::try_from(nesting).unwrap_or(isize::MAX);
+                        let positioned =
+                            RcDoc::text(" ".repeat(column)).append(probe.clone().nest(nesting));
+                        let mut rendered = String::new();
+                        positioned.render_fmt(line_width, &mut rendered).unwrap();
+                        if rendered.contains('\n') {
+                            multiline.clone()
+                        } else {
+                            single_line.clone()
+                        }
+                    })
+                    .into_doc()
+            })
+            .into_doc()
     }
 
     fn separated_group_layout(
@@ -1399,7 +1459,7 @@ impl<'arena> PrettyFormatter<'arena> {
             | Term::ValAbs(_) => self.scoped_form(term, ScopedForm::ValueFunction),
             | Term::App(Appli(terms)) => self.application(terms),
             | Term::Fix(Fix(pattern, body)) => {
-                self.scoped_join(
+                self.separator_join(
                     LayoutFragment::entity(
                         (*pattern).into(),
                         self.prefixed(
@@ -1785,7 +1845,7 @@ impl<'arena> PrettyFormatter<'arena> {
             ),
             anchors: LayoutAnchors { first: first.into(), last: last.into() },
         };
-        self.scoped_join(
+        self.separator_join(
             head,
             form.marker(),
             self.term_through_fragment(body, form.body_precedence()),
@@ -1827,7 +1887,7 @@ impl<'arena> PrettyFormatter<'arena> {
             ),
             anchors: LayoutAnchors { first: first.binder.into(), last: last.binder.into() },
         };
-        self.scoped_join(head, ".", self.term_fragment(body), self.indent()).document
+        self.separator_join(head, ".", self.term_fragment(body), self.indent()).document
     }
 
     fn pack(&self, term: TermId, pack: &'arena Pack) -> RcDoc<'arena> {
@@ -2084,9 +2144,7 @@ impl<'arena> PrettyFormatter<'arena> {
                     self.definition_join(self.term_fragment(*ty), bindee, binding_nesting);
                 self.staged_join(head, assignment, StagedBoundary::BindingType).document
             }
-            | None => {
-                self.join(head, BoundaryLayout::hanging(" =", self.indent()), bindee).document
-            }
+            | None => self.untyped_definition_join(head, bindee).document,
         }
     }
 
@@ -3174,6 +3232,30 @@ mod tests {
     }
 
     #[test]
+    fn preserves_an_aligned_definition_separator_after_a_parameter_telescope() {
+        let source = concat!(
+            "begin\n",
+            "  let Algebra\n",
+            "    (M : VType -> CType) (R : CType)\n",
+            "  =\n",
+            "    forall (A : VType) .\n",
+            "         Thk (M A)\n",
+            "      -> Thk (A -> R)\n",
+            "      -> R\n",
+            "  in\n",
+            "  Algebra\n",
+            "end\n",
+        );
+        let parsed = ParsedSource::new(source);
+        let formatted = parsed.render(LayoutIntentions::Preserve);
+
+        assert_eq!(formatted, source);
+        let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+        assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+    }
+
+    #[test]
     fn aligns_binding_separators_after_multiline_parameters_and_types() {
         let cases = [
             (
@@ -3230,6 +3312,18 @@ mod tests {
             .with_line_width(38)
             .with_layout_intentions(LayoutIntentions::Ignore);
         let cases = [
+            (
+                "let f (first : FirstClassifier) (second : SecondClassifier) = value in f",
+                concat!(
+                    "let f\n",
+                    "  (first : FirstClassifier)\n",
+                    "  (second : SecondClassifier)\n",
+                    "=\n",
+                    "  value\n",
+                    "in\n",
+                    "f\n",
+                ),
+            ),
             (
                 "let f (first : FirstClassifier) (second : SecondClassifier) : Result = value in f",
                 concat!(
