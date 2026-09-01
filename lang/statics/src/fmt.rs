@@ -24,6 +24,50 @@ impl<'arena> Formatter<'arena> {
     }
 }
 
+/// A type node that stands without parentheses in an application argument.
+fn is_type_atom(f: &Formatter<'_>, ty: &TypeId) -> bool {
+    match f.statics.types_pre.get(ty) {
+        | Some(Fillable::Done(
+            Type::Var(_)
+            | Type::Abst(_)
+            | Type::Proj(_)
+            | Type::Named(_)
+            | Type::Thk(_)
+            | Type::Ret(_)
+            | Type::Unit(_)
+            | Type::Opaque(_)
+            | Type::Primitive(_)
+            | Type::OS(_),
+        ))
+        | Some(Fillable::Fill(_))
+        | None => true,
+        | Some(Fillable::Done(_)) => false,
+    }
+}
+
+/// A type node that also binds tighter than arrows and products, so it stands
+/// without parentheses in a domain or component position.
+fn is_type_tight(f: &Formatter<'_>, ty: &TypeId) -> bool {
+    match f.statics.types_pre.get(ty) {
+        | Some(Fillable::Done(Type::App(_))) => true,
+        | _ => is_type_atom(f, ty),
+    }
+}
+
+/// Render a type in an operand position, parenthesized when its node cannot
+/// stand there unparenthesized.
+fn atom_type<'a>(f: &'a Formatter<'a>, ty: &TypeId) -> RcDoc<'a> {
+    if is_type_atom(f, ty) { ty.pretty(f) } else { paren_type(f, ty) }
+}
+
+fn tight_type<'a>(f: &'a Formatter<'a>, ty: &TypeId) -> RcDoc<'a> {
+    if is_type_tight(f, ty) { ty.pretty(f) } else { paren_type(f, ty) }
+}
+
+fn paren_type<'a>(f: &'a Formatter<'a>, ty: &TypeId) -> RcDoc<'a> {
+    RcDoc::concat([RcDoc::text("("), ty.pretty(f), RcDoc::text(")")]).group()
+}
+
 /// A source-facing equation that reveals the representation behind one
 /// lexically sealed abstract type.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -92,7 +136,10 @@ impl<'a> Pretty<'a, Formatter<'a>> for TypeId {
                 | Type::Var(def) => def.pretty(f),
                 | Type::Abst(abst) => abst.pretty(f),
                 | Type::Abs(ty) => ty.pretty(f),
-                | Type::App(ty) => ty.pretty(f),
+                | Type::App(App(func, arg)) => RcDoc::concat([
+                    tight_type(f, func),
+                    RcDoc::concat([RcDoc::line(), atom_type(f, arg)]).group().nest(f.indent),
+                ]),
                 | Type::Named(ty) => ty.pretty(f),
                 | Type::Label(ty) => ty.pretty(f),
                 | Type::Proj(ty) => ty.pretty(f),
@@ -103,10 +150,19 @@ impl<'a> Pretty<'a, Formatter<'a>> for TypeId {
                 | Type::Primitive(PrimitiveTy(primitive)) => RcDoc::text(primitive.type_name()),
                 | Type::OS(OSTy) => RcDoc::text("OS"),
                 | Type::ValPi(ty) => ty.pretty(f),
-                | Type::Arrow(ty) => ty.pretty(f),
+                | Type::Arrow(Arrow(func, arg)) => RcDoc::concat([
+                    tight_type(f, func),
+                    RcDoc::space(),
+                    RcDoc::text("->"),
+                    RcDoc::space(),
+                    arg.pretty(f),
+                ]),
                 | Type::Forall(ty) => ty.pretty(f),
                 | Type::PackPi(ty) => ty.pretty(f),
-                | Type::Prod(ty) => ty.pretty(f),
+                | Type::Prod(Prod(components)) => RcDoc::intersperse(
+                    components.iter().map(|component| tight_type(f, component)),
+                    RcDoc::concat([RcDoc::space(), RcDoc::text("*"), RcDoc::space()]),
+                ),
                 | Type::Exists(ty) => ty.pretty(f),
                 | Type::ManifestKind(ty) => ty.pretty(f),
                 | Type::Data(ty) => ty.pretty(f),

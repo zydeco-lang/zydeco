@@ -1194,18 +1194,25 @@ mod tests {
         let HoverContents::Markup(contents) = field.contents else {
             panic!("projection hover should use markup content")
         };
-        let sources = fenced_zydeco_sources(&contents.value);
-        let [signature] = sources.as_slice() else {
-            panic!("the projection hover should contain one Zydeco code fence:\n{}", contents.value)
-        };
-        // The effect witness of the builtin process module elaborates to an
-        // unnamed abstract type, so only the leading shape is stable.
-        assert!(
-            signature.starts_with("process/exit : (Thk Int64 -> ["),
-            "the projection hover should render the projected term with its type:\n{}",
-            contents.value
+        let builtin = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../lib/std/builtin.zy")
+            .canonicalize()
+            .unwrap();
+        let definition = definition_url(&builtin, Position::new(13, 0));
+
+        assert_eq!(
+            contents.value,
+            format!(
+                concat!(
+                    "```zydeco\n",
+                    "process/exit : Thk (Int64 -> SystemOS)\n",
+                    "```\n\n",
+                    "Types:\n\n",
+                    "- [`SystemOS` ↗](<{definition}>)"
+                ),
+                definition = definition
+            )
         );
-        assert!(signature.ends_with("])"), "unexpected tail:\n{signature}");
         assert_eq!(field.range.unwrap().start, source_position(&source, "process/exit"));
 
         let head = project
@@ -1279,7 +1286,7 @@ mod tests {
         };
         assert_eq!(
             fenced_zydeco_sources(&contents.value),
-            vec!["(! id Int64) : Int64 -> (Ret Int64)"],
+            vec!["(! id Int64) : Int64 -> Ret Int64"],
             "hovering between the parts of an application should report the innermost term:\n{}",
             contents.value
         );
@@ -1299,7 +1306,7 @@ mod tests {
         );
 
         let block = project
-            .hover(&session, &path, source_position(&source, "do x"), HoverLineWidth::default())
+            .hover(&session, &path, source_position(&source, "end"), HoverLineWidth::default())
             .unwrap();
         let HoverContents::Markup(contents) = block.contents else {
             panic!("term hover should use markup content")

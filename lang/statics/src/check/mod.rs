@@ -1027,7 +1027,10 @@ impl ExistentialProjectionPattern {
                                     Lub::lub_k(canonical_kind, payload_kind, tycker)?;
                                     skolem
                                 }
-                                | None => Alloc::alloc(tycker, None, payload_kind, &()),
+                                | None => {
+                                    let (definition, _) = binder.pattern.try_destruct_def(tycker);
+                                    Alloc::alloc(tycker, definition, payload_kind, &())
+                                }
                             };
                             tycker.transfer_builtin_role_k(binder.witness, skolem)?;
                             tycker.statics.existential_skolems.ensure(skolem);
@@ -2297,7 +2300,8 @@ impl PackageSignature {
             (env.clone(), self.codomain, Vec::new()),
             |(env, codomain, mut opened), canonical| -> ResultKont<_> {
                 let kind = tycker.statics.annotations_abst[canonical];
-                let fresh = Alloc::alloc(tycker, None, kind, &());
+                let name = tycker.statics.abst_hints.get(canonical).copied();
+                let fresh = Alloc::alloc(tycker, name, kind, &());
                 tycker.transfer_builtin_role_k(*canonical, fresh)?;
                 tycker.statics.existential_skolems.ensure(fresh);
                 let env = env.with_skolem(fresh);
