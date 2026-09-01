@@ -4,7 +4,7 @@ struct ExistentialCase;
 
 impl ExistentialCase {
     fn check(source: &str) -> Result<(), CaseError> {
-        SourceCase::check(source)
+        SourceCase::check_value(source)
     }
 
     fn run(source: &str) -> Result<(), CaseError> {
@@ -539,7 +539,7 @@ fn pack_elaborates_to_a_runtime_package() {
         r#"
 begin
   let Box = exists (X as Int64 : VType) . X that
-  let unpack = fn ((X, value) : Box) => value that
+  let val unpack ((X, value) : Box) : X = value that
   let packed = pack (X as Int64 : VType) where (0 : X) end in
   let result : Int64 = unpack packed in
   ! exit result

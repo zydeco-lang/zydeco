@@ -4,7 +4,7 @@ struct QuantifierCase;
 
 impl QuantifierCase {
     fn check(source: &str) {
-        SourceCase::check(source).unwrap();
+        SourceCase::check_value(source).unwrap();
     }
 }
 

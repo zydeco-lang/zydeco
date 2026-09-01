@@ -1,12 +1,12 @@
 -- module Builtin
+--| Value Type and Computation Type
+--| Thunk Type and Return Type
+--| Primitive Base Types
+val (
+  (/core; /representations; /numeric; /system) :
+  @(import("../../std/builtin.zy"))
+) =>
 begin
-  --| Value Type and Computation Type
-  --| Thunk Type and Return Type
-  --| Primitive Base Types
-  param (
-    (/core; /representations; /numeric; /system) :
-    @(import("../../std/builtin.zy"))
-  ) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (= Int64, int64) = numeric/int64 that
   let (/String) = representations/string that

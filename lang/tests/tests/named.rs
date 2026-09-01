@@ -4,11 +4,11 @@ struct NamedCase;
 
 impl NamedCase {
     fn check(source: &str) -> Result<(), CaseError> {
-        SourceCase::check(source)
+        SourceCase::check_value(source)
     }
 
     fn check_monadic(source: &str) -> Result<(), CaseError> {
-        SourceCase::check_monadic(source)
+        SourceCase::check_monadic_value(source)
     }
 
     fn assert_type_error(source: &str) {

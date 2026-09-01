@@ -184,10 +184,18 @@ pub mod utils {
             })
         }
 
+        pub fn check_value(source: &str) -> Result<(), CaseError> {
+            Self::check(&format!("ret ({source})"))
+        }
+
         pub fn check_monadic(source: &str) -> Result<(), CaseError> {
             Self::with_source(SourceCasePrelude::Monadic, source, |path| {
                 CommandCompiler::default().analyze(path).map(|_| ()).map_err(CaseError::Compile)
             })
+        }
+
+        pub fn check_monadic_value(source: &str) -> Result<(), CaseError> {
+            Self::check_monadic(&format!("ret ({source})"))
         }
 
         pub fn check_with_import(source: &str, imported: &str) -> Result<(), CaseError> {

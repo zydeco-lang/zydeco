@@ -25,7 +25,8 @@ pub(crate) enum EvaluationOutcome {
 }
 
 pub(crate) struct InstalledInput {
-    wrapper: PathBuf,
+    direct_wrapper: PathBuf,
+    returned_wrapper: PathBuf,
 }
 
 pub(crate) struct ReplEngine {
@@ -48,9 +49,11 @@ impl ReplEngine {
         let input = number.overlay_path(&self.directory);
         self.session.set_overlay(&input, source)?;
 
-        let root = self.directory.join(format!(".zydeco-repl-root-{}", number.get()));
+        let direct_root = self.directory.join(format!(".zydeco-repl-root-{}", number.get()));
+        let returned_root =
+            self.directory.join(format!(".zydeco-repl-value-root-{}", number.get()));
         let builtin = format!("{:?}", self.builtin.to_string_lossy());
-        let wrapper = format!(
+        let direct_wrapper = format!(
             concat!(
                 "param ((/core = _) : @[import({})] _)\n",
                 "in\n",
@@ -60,22 +63,44 @@ impl ReplEngine {
             Self::INPUT_OBSERVATION,
             number.get(),
         );
-        self.session.set_overlay(&root, wrapper)?;
-        Ok(InstalledInput { wrapper: root })
+        let returned_wrapper = format!(
+            concat!(
+                "param ((/core = _) : @[import({})] _)\n",
+                "in\n",
+                "ret (@[debug(\"{}\")] @[import({})] _)\n",
+            ),
+            builtin,
+            Self::INPUT_OBSERVATION,
+            number.get(),
+        );
+        self.session.set_overlay(&direct_root, direct_wrapper)?;
+        self.session.set_overlay(&returned_root, returned_wrapper)?;
+        Ok(InstalledInput { direct_wrapper: direct_root, returned_wrapper: returned_root })
     }
 
     pub(crate) fn evaluate(
         &self, input: &InstalledInput, mode: ExpressionMode,
     ) -> EvaluationOutcome {
-        let analysis = match self.session.analyze(&input.wrapper) {
+        let direct_analysis = match self.session.analyze(&input.direct_wrapper) {
             | Ok(analysis) => analysis,
             | Err(error) => {
                 return EvaluationOutcome::Error(DiagnosticText::analysis_error(&error));
             }
         };
-        if matches!(analysis.outcome(), AnalysisOutcome::Rejected { .. }) {
-            return EvaluationOutcome::TypeRejected(DiagnosticText::rejected(&analysis));
-        }
+        let analysis = if matches!(direct_analysis.outcome(), AnalysisOutcome::Checked { .. }) {
+            direct_analysis
+        } else {
+            let returned_analysis = match self.session.analyze(&input.returned_wrapper) {
+                | Ok(analysis) => analysis,
+                | Err(error) => {
+                    return EvaluationOutcome::Error(DiagnosticText::analysis_error(&error));
+                }
+            };
+            if matches!(returned_analysis.outcome(), AnalysisOutcome::Rejected { .. }) {
+                return EvaluationOutcome::TypeRejected(DiagnosticText::rejected(&direct_analysis));
+            }
+            returned_analysis
+        };
 
         let program = self
             .session
