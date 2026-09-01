@@ -1,4 +1,5 @@
 mod analysis;
+mod document_links;
 mod format;
 mod hover;
 mod progress;
@@ -6,6 +7,7 @@ mod semantic;
 mod type_links;
 
 use analysis::{ProjectFailure, ProjectState};
+use document_links::ImportDocumentLinks;
 use format::{DocumentFormatter, FormattingOutcome};
 use hover::HoverLineWidth;
 use progress::{AnalysisProgressReporter, AnalysisProgressSession};
@@ -25,16 +27,17 @@ use tower_lsp::{
     jsonrpc::Result,
     lsp_types::{
         DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-        DidSaveTextDocumentParams, DocumentFormattingParams, DocumentSymbolParams,
-        DocumentSymbolResponse, GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverParams,
-        HoverProviderCapability, InitializeParams, InitializeResult, InitializedParams, Location,
-        MessageType, OneOf, PositionEncodingKind, ReferenceParams, SemanticTokens,
-        SemanticTokensFullOptions, SemanticTokensOptions, SemanticTokensParams,
-        SemanticTokensResult, ServerCapabilities, ServerInfo, TextDocumentSyncCapability,
-        TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, TextEdit, Url,
+        DidSaveTextDocumentParams, DocumentFormattingParams, DocumentLink, DocumentLinkOptions,
+        DocumentLinkParams, DocumentSymbolParams, DocumentSymbolResponse, GotoDefinitionParams,
+        GotoDefinitionResponse, Hover, HoverParams, HoverProviderCapability, InitializeParams,
+        InitializeResult, InitializedParams, Location, MessageType, OneOf, PositionEncodingKind,
+        ReferenceParams, SemanticTokens, SemanticTokensFullOptions, SemanticTokensOptions,
+        SemanticTokensParams, SemanticTokensResult, ServerCapabilities, ServerInfo,
+        TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
+        TextDocumentSyncSaveOptions, TextEdit, Url, WorkDoneProgressOptions,
     },
 };
-use zydeco_session::CompilerSession;
+use zydeco_session::{CompilerSession, SourceGraph};
 
 struct ZydecoDocument;
 
@@ -158,6 +161,27 @@ impl Cajun {
 
     async fn refresh(&self, uri: &Url) -> RefreshOutcome {
         self.refresh_with_progress(uri, AnalysisProgressReporter::default()).await
+    }
+
+    async fn source_graph(&self, uri: &Url) -> Option<(PathBuf, Arc<SourceGraph>)> {
+        let path = Self::path(uri).ok()?;
+        let (revision, snapshot) = {
+            let session = self.session.lock().await;
+            (session.revision(&path), session.compiler.snapshot())
+        };
+        let graph_path = path.clone();
+        let graph = tokio::task::spawn_blocking(move || {
+            AnalysisTask::run(move || snapshot.graph(&graph_path))
+        })
+        .await
+        .ok()?;
+        let AnalysisTask::Completed(Ok(graph)) = graph else {
+            return None;
+        };
+        if self.session.lock().await.revision(&path) != revision {
+            return None;
+        }
+        Some((path, graph))
     }
 
     async fn refresh_with_progress(
@@ -361,6 +385,10 @@ impl LanguageServer for Cajun {
                     },
                 )),
                 definition_provider: Some(OneOf::Left(true)),
+                document_link_provider: Some(DocumentLinkOptions {
+                    resolve_provider: Some(false),
+                    work_done_progress_options: WorkDoneProgressOptions::default(),
+                }),
                 references_provider: Some(OneOf::Left(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 document_symbol_provider: Some(OneOf::Left(true)),
@@ -455,6 +483,17 @@ impl LanguageServer for Cajun {
             .get(&path)
             .and_then(|cached| cached.project.definition(&path, target.position));
         Ok(location.map(GotoDefinitionResponse::Scalar))
+    }
+
+    async fn document_link(&self, params: DocumentLinkParams) -> Result<Option<Vec<DocumentLink>>> {
+        let uri = params.text_document.uri;
+        if !ZydecoDocument::accepts(&uri) {
+            return Ok(None);
+        }
+        let Some((path, graph)) = self.source_graph(&uri).await else {
+            return Ok(None);
+        };
+        Ok(Some(ImportDocumentLinks::new(&graph).for_file(&path)))
     }
 
     async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {

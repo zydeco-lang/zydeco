@@ -118,7 +118,8 @@ cargo test-all
 ## Editor Support
 
 The `cajun` binary is Zydeco's Language Server Protocol implementation.
-It provides live syntax and name-resolution diagnostics, document symbols, and go to definition across imported files:
+It provides live syntax and name-resolution diagnostics, document symbols, clickable filesystem imports,
+and go to definition across imported files:
 
 ```bash
 cargo install --path editor/cajun

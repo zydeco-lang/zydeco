@@ -187,6 +187,66 @@ fn stdio_server_invalidates_semantic_tokens_during_reanalysis_and_requests_refre
 }
 
 #[test]
+fn stdio_server_exposes_import_document_links_after_resolution_errors() {
+    let directory = tempfile::tempdir().unwrap();
+    let library = directory.path().join("library.zy");
+    let root = directory.path().join("main.zy");
+    let source = "(@[import(\"library.zy\")] _, missing)\n";
+    std::fs::write(&library, "()\n").unwrap();
+    std::fs::write(&root, source).unwrap();
+    let uri = Url::from_file_path(&root).unwrap().to_string();
+    let target = Url::from_file_path(library.canonicalize().unwrap()).unwrap().to_string();
+    let mut server = LspProcess::start();
+
+    let initialize = server.request(
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": Url::from_file_path(directory.path()).unwrap(),
+            "capabilities": {},
+        }),
+    );
+    assert_eq!(
+        initialize["result"]["capabilities"]["documentLinkProvider"],
+        json!({ "resolveProvider": false })
+    );
+    server.notify("initialized", json!({}));
+    server.notify(
+        "textDocument/didOpen",
+        json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "zydeco",
+                "version": 1,
+                "text": source,
+            },
+        }),
+    );
+    let diagnostics = server.notification("textDocument/publishDiagnostics");
+    assert_eq!(diagnostics["params"]["diagnostics"][0]["source"], "zydeco");
+
+    let response =
+        server.request("textDocument/documentLink", json!({ "textDocument": { "uri": uri } }));
+    let [link] = response["result"].as_array().unwrap().as_slice() else {
+        panic!("expected one import document link: {response}")
+    };
+    let start = source.find("library.zy").unwrap();
+    let end = start + "library.zy".len();
+    assert_eq!(
+        link["range"],
+        json!({
+            "start": { "line": 0, "character": start },
+            "end": { "line": 0, "character": end },
+        })
+    );
+    assert_eq!(link["target"], target);
+    assert!(link.get("tooltip").is_none());
+    assert!(link.get("data").is_none());
+
+    server.finish();
+}
+
+#[test]
 fn stdio_server_synchronizes_documents_and_answers_navigation_requests() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("main.zy");

@@ -5,9 +5,9 @@ and starts the [Cajun language server](https://github.com/zydeco-lang/zydeco/tre
 A `.zyi` file is the optional companion type annotation beside a `.zy` implementation;
 it holds one ordinary Zydeco term whose root must be a type, so it shares the language's
 highlighting, queries, and server analysis.
-It provides live syntax and name-resolution diagnostics, document symbols, definition and reference lookup
-across imported files, inferred kind and type information on hover with links to type definitions,
-and compiler-aware semantic highlighting.
+It provides live syntax and name-resolution diagnostics, document symbols, clickable filesystem import paths,
+definition and reference lookup across imported files, inferred kind and type information on hover with links
+to type definitions, and compiler-aware semantic highlighting.
 
 The extension activates its Tree-sitter grammar from the repository revision pinned in `extension.toml`
 and applies the Zed query files under `languages/zydeco` for highlighting, brackets, indentation, and outlines.

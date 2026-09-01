@@ -11,6 +11,7 @@ and server analysis.
 
 - live syntax and name-resolution diagnostics;
 - document symbols;
+- clickable filesystem import paths;
 - definition and reference lookup across imported source files;
 - inferred kind and type information on hover, with links to type definitions;
 - compiler-aware semantic highlighting;
