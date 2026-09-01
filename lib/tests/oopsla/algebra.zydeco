@@ -6,11 +6,11 @@
 --     Thk (M A) -> Thk (A -> R) -> R
 -- end
 let monadic_basis = @(import("../../std/control/monad.zy")) in
-val (
-  (/core; /representations; /system; builtin) :
-  @(import("../../std/builtin.zy"))
-) =>
 begin
+  param val (
+    (/core; /representations; /system; builtin) :
+    @(import("../../std/builtin.zy"))
+  ) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (/String) = representations/string that
   let (/OS; /stdio; /process) = system that

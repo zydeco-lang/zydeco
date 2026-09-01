@@ -89,6 +89,10 @@ begin
 end
 ```
 
+This is the preferred spelling when the value-function body is a `begin ... end` block: the block remains the
+visible context boundary, and its value parameters participate in the same dependency ordering as its definitions.
+Direct `val P => V` remains the concise spelling for a non-block value body.
+
 The explicit `val` modifier is semantically significant. Plain `param` retains its existing role for type functions
 and computations; it does not infer a value-function abstraction from a value body.
 

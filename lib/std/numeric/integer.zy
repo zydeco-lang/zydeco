@@ -1,16 +1,14 @@
-val
-  (Bool : @(intrinsic(vtype)))
-  (Scalar : @(intrinsic(vtype)))
-  (String : @(intrinsic(vtype)))
-  (
+begin
+  param val (Bool : @(intrinsic(vtype))) that
+  param val (Scalar : @(intrinsic(vtype))) that
+  param val (String : @(intrinsic(vtype))) that
+  param val (
     (core : @(import("../builtin/core.zy"))),
     (bool : (@(import("../data/bool.type.zy"))) Bool),
     (primitive : (@(import("primitive-integer.type.zy"))) Scalar String),
     (zero : Scalar),
     (one : Scalar)
-  )
-=>
-  begin
+  ) that
     let (/VType; /CType; /Thk; /Ret; /Unit) = core in
     let Numeric = @(import("numeric.type.zy")) in
     let IntegerModule = @(import("integer.type.zy")) in

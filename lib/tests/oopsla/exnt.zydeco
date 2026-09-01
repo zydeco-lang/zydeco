@@ -4,11 +4,11 @@
 --| The reader can compare the implementation to the manually implemented implementation.
 --|
 --| Check `exnkt.zydeco` for the implementation of `ExnK`, which is the church encoded version of `Exn`.
-val (
-  (/core; builtin) :
-  @(import("../../std/builtin.zy"))
-) =>
-  begin
+begin
+  param val (
+    (/core; builtin) :
+    @(import("../../std/builtin.zy"))
+  ) that
   let monadic_basis = @(import("../../std/control/monad.zy")) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (= Monad, = Algebra, ()) =

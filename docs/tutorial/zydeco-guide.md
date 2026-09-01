@@ -569,9 +569,9 @@ The effect-related modules under `lib/std/control` are:
 | `exception.zy` | `Exception`, `MonadThrow`, `mo_exception`, `throw_ops`, `raise`, `handle_exception`, `try_exception` |
 | `state-exn.zy` | `StateExn`, `mo_state_exn`, `state_ops`, `throw_ops`, `get`, `put`, `raise`, `catch`, `run_state_exn` |
 
-A module source is a first-class value function from Builtin to an `exists`-wrapped package. A source may introduce
-that function directly with `val pattern => value`, or use `param val pattern in/that value` when block-form context
-construction is clearer. Its `ValPi` classifier is inferred from the annotated, irrefutable parameter and the final
+A module source is a first-class value function from Builtin to an `exists`-wrapped package. When its implementation
+is a `begin ... end` block, put `param val pattern that` inside that block; use direct `val pattern => value` for a
+compact non-block body. Its `ValPi` classifier is inferred from the annotated, irrefutable parameter and the final
 `pack` introduction. Importing the source yields an ordinary value, so opening it requires neither a thunk nor a
 returned computation.
 Open a module with a projection group:

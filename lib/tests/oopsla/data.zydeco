@@ -1,9 +1,9 @@
 -- module Identity
-val (
-  (/core; /representations; /numeric; /text; /system) :
-  @(import("../../std/builtin.zy"))
-) =>
 begin
+  param val (
+    (/core; /representations; /numeric; /text; /system) :
+    @(import("../../std/builtin.zy"))
+  ) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (= Int64, int64) = numeric/int64 that
   let (/Char) = representations/char that

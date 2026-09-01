@@ -1,14 +1,14 @@
-val (
-  (
-    /core;
-    /representations;
-    /numeric;
-    /system = (/Reader; /Writer; /OS);
-    builtin
-  )
-  : @(import("builtin.zy"))
-) =>
-  begin
+begin
+  param val (
+    (
+      /core;
+      /representations;
+      /numeric;
+      /system = (/Reader; /Writer; /OS);
+      builtin
+    )
+    : @(import("builtin.zy"))
+  ) that
   let make_data = @(import("data/package.zy")) that
   let make_text = @(import("text/package.zy")) that
   let make_system = @(import("system/package.zy")) that

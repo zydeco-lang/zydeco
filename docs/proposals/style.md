@@ -49,8 +49,8 @@ let pair = (left, right) in
 ret pair
 ```
 
-When the file itself is a parameterized term, such as a type family or a package constructor,
-write its parameters as leading `param` binders instead of naming a wrapper function and returning it:
+When the file itself is a parameterized term, write its parameters as leading `param` or `param val` binders,
+according to the result judgment, instead of naming a wrapper function and returning it. For a type family:
 
 ```zydeco
 param Bool : VType in
@@ -61,6 +61,21 @@ exists (= Int64 as @(intrinsic(i64)) : VType) .
 The importing file binds the result under whatever name it chooses,
 so a wrapper name that is only returned once adds no information.
 Keep an ordinary `let` when the body references the binding more than once.
+
+When a value function's implementation is itself a block, make the block the outer term and contribute its
+parameters with `param val`:
+
+```zydeco
+begin
+  param val (builtin : Builtin) that
+  let Api = ... that
+  pack (Api : VType) where ... end
+end
+```
+
+This form keeps imports, parameters, definitions, and the resulting package in one context-forming block.
+Prefer it to wrapping the whole block in `val (builtin : Builtin) => begin ... end`.
+Use direct `val P => V` when the body is a compact value expression and does not need a block.
 
 The final term of a block determines what leaves the block.
 A library usually ends in a package; an executable ends in its main computation.
