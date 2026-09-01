@@ -68,6 +68,24 @@ fn paren_type<'a>(f: &'a Formatter<'a>, ty: &TypeId) -> RcDoc<'a> {
     RcDoc::concat([RcDoc::text("("), ty.pretty(f), RcDoc::text(")")]).group()
 }
 
+/// Print an existential binder pattern in its source spelling, dropping the
+/// field labels that witness tracking wraps around package components.
+fn witness_pattern<'a>(f: &'a Formatter<'a>, pattern: &TPatId) -> RcDoc<'a> {
+    match f.statics.tpats.get(pattern) {
+        | Some(TypePattern::Named(Named(_, inner))) => witness_pattern(f, inner),
+        | _ => pattern.pretty(f),
+    }
+}
+
+/// Print an existential binder kind in its source spelling, dropping the
+/// component label that qualifies the kind of a projected witness.
+fn witness_kind<'a>(f: &'a Formatter<'a>, kind: KindId) -> RcDoc<'a> {
+    match f.statics.kinds_pre.get(&kind) {
+        | Some(Fillable::Done(Kind::Label(Label(_, inner)))) => inner.pretty(f),
+        | _ => kind.pretty(f),
+    }
+}
+
 /// A source-facing equation that reveals the representation behind one
 /// lexically sealed abstract type.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -829,18 +847,27 @@ impl<'a> Pretty<'a, Formatter<'a>> for PackPi {
 impl<'a> Pretty<'a, Formatter<'a>> for Exists {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let binder = match self.mode {
-            | ExistsMode::Abstract => self.binder.pretty(f),
+            | ExistsMode::Abstract => RcDoc::concat([
+                RcDoc::text("("),
+                witness_pattern(f, &self.binder.pattern),
+                RcDoc::text(" :"),
+                RcDoc::space(),
+                witness_kind(f, f.statics.annotations_tpat[&self.binder.pattern]),
+                RcDoc::text(")"),
+            ]),
             | ExistsMode::Manifest(definition) => {
                 let kind = f.statics.annotations_tpat[&self.binder.pattern];
                 RcDoc::concat([
                     RcDoc::text("("),
-                    self.binder.pattern.pretty(f),
+                    RcDoc::text("="),
+                    RcDoc::space(),
+                    witness_pattern(f, &self.binder.pattern),
                     RcDoc::text(" as"),
                     RcDoc::space(),
                     definition.pretty(f),
                     RcDoc::text(" :"),
                     RcDoc::space(),
-                    kind.pretty(f),
+                    witness_kind(f, kind),
                     RcDoc::text(")"),
                 ])
             }

@@ -1259,7 +1259,7 @@ mod tests {
             format!(
                 concat!(
                     "```zydeco\n",
-                    "representations/i64 : exists ((#Int64 = Int64) as Int64 : #Int64 :: VType) . Unit\n",
+                    "representations/i64 : exists (= Int64 as Int64 : VType) . Unit\n",
                     "```\n\n",
                     "Types:\n\n",
                     "- [`Int64` ↗](<{definition}>)"
