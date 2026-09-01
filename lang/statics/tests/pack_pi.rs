@@ -32,12 +32,19 @@ impl TestFixture {
         )
     }
 
-    fn value_pack_pi(
+    fn val_pi(
         tycker: &mut Tycker<'_>, domain: TypeId, witness: AbstId, codomain: TypeId, vtype: KindId,
     ) -> TypeId {
         Alloc::alloc(
             tycker,
-            ValuePackPi { domain, witnesses: PackTelescope::singleton(witness), codomain },
+            ValPi {
+                binder: ValPiBinder::Value(ValueParameter {
+                    domain,
+                    witnesses: Some(PackTelescope::singleton(witness)),
+                    witness_projection: PackageWitnessProjection::Package { abstracts: 1 },
+                }),
+                codomain,
+            },
             vtype,
             &TyEnv::new(),
         )
@@ -137,20 +144,37 @@ fn abstract_substitution_sequences_shadow_bound_pack_pi_witnesses() {
 }
 
 #[test]
-fn value_pack_pi_binds_and_alpha_renames_its_opened_witness() {
+fn val_pi_binds_and_alpha_renames_its_opened_witness() {
     TestFixture::run(|tycker| {
         let (vtype, _) = TestFixture::kinds(tycker);
         let domain = TestFixture::package_domain(tycker, vtype, vtype);
         let (lhs_witness, lhs_codomain) = TestFixture::witness(tycker, vtype);
         let (rhs_witness, rhs_codomain) = TestFixture::witness(tycker, vtype);
-        let lhs = TestFixture::value_pack_pi(tycker, domain, lhs_witness, lhs_codomain, vtype);
-        let rhs = TestFixture::value_pack_pi(tycker, domain, rhs_witness, rhs_codomain, vtype);
+        let lhs = TestFixture::val_pi(tycker, domain, lhs_witness, lhs_codomain, vtype);
+        let rhs = TestFixture::val_pi(tycker, domain, rhs_witness, rhs_codomain, vtype);
+        let outer = SkolemScope::default();
 
-        assert!(lhs.constrain_to_scope(tycker, &SkolemScope::default()).is_ok());
-        assert!(lhs_codomain.constrain_to_scope(tycker, &SkolemScope::default()).is_err());
+        assert!(lhs.constrain_to_scope(tycker, &outer).is_ok());
+        assert!(lhs_codomain.constrain_to_scope(tycker, &outer).is_err());
         let Ok(joined) = lhs.lub(rhs, tycker) else {
-            panic!("alpha-equivalent pure package arrows did not unify")
+            panic!("alpha-equivalent ValPi package binders did not unify")
         };
         assert_eq!(joined, lhs);
+    });
+}
+
+#[test]
+fn abstract_substitution_stops_at_val_pi_witnesses() {
+    TestFixture::run(|tycker| {
+        let (vtype, _) = TestFixture::kinds(tycker);
+        let domain = TestFixture::package_domain(tycker, vtype, vtype);
+        let (bound, codomain) = TestFixture::witness(tycker, vtype);
+        let (_, replacement) = TestFixture::witness(tycker, vtype);
+        let val_pi = TestFixture::val_pi(tycker, domain, bound, codomain, vtype);
+
+        let Ok(substituted) = val_pi.subst_abst(tycker, (bound, replacement)) else {
+            panic!("substitution through ValPi failed")
+        };
+        assert_eq!(substituted, val_pi);
     });
 }

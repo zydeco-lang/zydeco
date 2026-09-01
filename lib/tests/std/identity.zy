@@ -7,7 +7,7 @@ begin
   let (/Ret) = core that
   let (/Int64) = representations/i64 that
 
-  let (/prelude; /process) = make_std builtin in
+  let (/prelude; /process) = builtin |> make_std in
   let (= Thunk, = U, = F, ()) = prelude in
   let ! first : F Int64 = ret 0 in
   do first <- ! first;

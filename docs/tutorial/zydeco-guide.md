@@ -480,7 +480,7 @@ The translation needs the names `Monad` and `Algebra` in lexical scope. The usua
 ```zydeco
 let monadic_basis = @(import("../std/control/monad.zy")) that
 ...
-let (= Monad, = Algebra, ()) = monadic_basis builtin in
+let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
 ```
 
 A minimal block:
@@ -568,11 +568,9 @@ The effect-related modules under `lib/std/control` are:
 | `exception.zy` | `Exception`, `MonadThrow`, `mo_exception`, `throw_ops`, `raise`, `handle_exception`, `try_exception` |
 | `state-exn.zy` | `StateExn`, `mo_state_exn`, `state_ops`, `throw_ops`, `get`, `put`, `raise`, `catch`, `run_state_exn` |
 
-A module source is a package-dependent function from Builtin to an `exists`-wrapped package.
-A public library can be a pair of files: the `.zy` file is the implementation, and the
-`.zyi` file is the pure package-type interface. Interface files import intrinsic kinds and
-types directly and use `pi`/`exists` to state the signature the implementation must match;
-a source ending in a `pack` introduction instead synthesizes its package type and needs no interface file.
+A module source is a first-class value function from Builtin to an `exists`-wrapped package. Its `ValPi` classifier
+is inferred from the annotated, irrefutable parameter and the final `pack` introduction. Importing the source yields
+an ordinary value, so opening it requires neither a thunk nor a returned computation.
 Open a module with a projection group:
 
 ```zydeco
@@ -586,7 +584,7 @@ let (
   = raise,
   = handle_exception,
   = try_exception
-) = exception_basis builtin in
+) = builtin |> exception_basis in
 ```
 
 Abstract carriers (`State`, `Exception`, `StateExn`) cannot be pattern-matched or directly

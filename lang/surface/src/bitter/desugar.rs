@@ -70,6 +70,7 @@ pub struct SourceDesugarOut {
 #[derive(Copy, Clone)]
 enum Quantifier {
     Pi,
+    ValPi,
     Sigma,
 }
 
@@ -100,6 +101,7 @@ impl ParameterTelescope {
         self.parameters.into_iter().rev().fold(body, |body, parameter| {
             let term = match quantifier {
                 | Quantifier::Pi => b::Pi(parameter, body).into(),
+                | Quantifier::ValPi => b::ValPi(parameter, body).into(),
                 | Quantifier::Sigma => b::Sigma(parameter, body).into(),
             };
             Alloc::alloc(desugarer, term, self.source)
@@ -357,6 +359,11 @@ impl Desugar for t::PatId {
                 let pattern = pattern.desugar(desugarer)?;
                 Alloc::alloc(desugarer, b::ProjectionPattern(field, pattern).into(), self.into())
             }
+            | Pat::View(t::ViewPattern { function, pattern }) => {
+                let function = function.desugar(desugarer)?;
+                let pattern = pattern.desugar(desugarer)?;
+                Alloc::alloc(desugarer, b::ViewPattern { function, pattern }.into(), self.into())
+            }
             | Pat::Alias(t::Alias(patterns)) => {
                 let patterns = patterns
                     .into_iter()
@@ -373,7 +380,7 @@ impl Desugar for t::PatId {
                     // if there is only one pat like `(p)`, remove the redundant paren
                     | 1 => pats.into_iter().next().unwrap(),
                     // Multi-element parens are preserved as one n-ary cons.
-                    | _ => Alloc::alloc(desugarer, b::Pattern::Cons(pats).into(), self.into()),
+                    | _ => Alloc::alloc(desugarer, b::Pattern::Cons(pats), self.into()),
                 }
             }
         };
@@ -537,7 +544,7 @@ impl Desugar for t::TermId {
                     // if there is only one term like `(t)`, remove the redundant paren
                     | 1 => terms.into_iter().next().unwrap(),
                     // Multi-element parens are preserved as one n-ary cons.
-                    | _ => Alloc::alloc(desugarer, b::Term::Cons(terms).into(), self.into()),
+                    | _ => Alloc::alloc(desugarer, b::Term::Cons(terms), self.into()),
                 }
             }
             | Tm::Abs(term) => {
@@ -577,6 +584,25 @@ impl Desugar for t::TermId {
                 } else {
                     tail
                 }
+            }
+            | Tm::ValAbs(term) => {
+                let t::Abs(params, tail) = term;
+                let parameter_origin = params;
+                let b::Appli(params) = params.desugar(desugarer)?;
+                let mut tail = tail.desugar(desugarer)?;
+                for param in params.into_iter().rev() {
+                    let b::CoPatternItem::Pat(pattern) = param else {
+                        return Err(DesugarError::ValueParameterNotPattern(
+                            parameter_origin.span(desugarer.spans).clone().make(parameter_origin),
+                        ));
+                    };
+                    tail = Alloc::alloc(
+                        desugarer,
+                        b::Term::ValAbs(b::Abs(pattern, tail)),
+                        self.into(),
+                    );
+                }
+                tail
             }
             | Tm::App(term) => {
                 let t::Appli(terms) = term;
@@ -626,6 +652,12 @@ impl Desugar for t::TermId {
                 let body = ty.desugar(desugarer)?;
                 parameters.quantify(Quantifier::Pi, body, desugarer)
             }
+            | Tm::ValPi(term) => {
+                let t::ValPi(params, ty) = term;
+                let parameters = ParameterTelescope::desugar(params, self.into(), desugarer)?;
+                let body = ty.desugar(desugarer)?;
+                parameters.quantify(Quantifier::ValPi, body, desugarer)
+            }
             | Tm::Arrow(term) => {
                 let t::Arrow(ty_in, ty_out) = term;
                 // ty_in -> ann = (hole: ty_in)
@@ -657,7 +689,7 @@ impl Desugar for t::TermId {
                     .into_iter()
                     .map(|component| component.desugar(desugarer))
                     .collect::<Result<Vec<_>>>()?;
-                Alloc::alloc(desugarer, b::Term::Cons(components).into(), self.into())
+                Alloc::alloc(desugarer, b::Term::Cons(components), self.into())
             }
             | Tm::Exists(term) => {
                 let TextualExistentialTelescope { parameters, body } =
@@ -728,6 +760,11 @@ impl Desugar for t::TermId {
                         Alloc::alloc(desugarer, b::MobileParam { binder, tail }.into(), self.into())
                     }
                 }
+            }
+            | Tm::Pipeline(t::Pipeline { direction: _, subject, function }) => {
+                let subject = subject.desugar(desugarer)?;
+                let function = function.desugar(desugarer)?;
+                Alloc::alloc(desugarer, b::App(function, subject).into(), self.into())
             }
             | Tm::ContextBind(term) => {
                 let t::ContextBind { mode, binding, placement, tail } = term;
@@ -808,14 +845,15 @@ impl Desugar for t::TermId {
 impl Desugar for t::GenBind<t::TermId> {
     type Out = (b::PatId, b::TermId);
     fn desugar(self, desugarer: &mut Desugarer) -> Result<Self::Out> {
-        let t::GenBind { fix, comp, binder, params, ty, bindee } = self;
+        let t::GenBind { flavor, binder, params, ty, bindee } = self;
+        let parameter_origin = params;
         let prev = bindee.into();
         // binder
         let binder = binder.desugar(desugarer)?;
         let bindee = bindee.desugar(desugarer)?;
         // ty -> ann
         let annotation_is_explicit = ty.is_some();
-        let annotation_follows_sugar = annotation_is_explicit || fix || comp;
+        let annotation_follows_sugar = annotation_is_explicit || flavor != t::BindingFlavor::Plain;
         let ty = match ty {
             | Some(ty) => Some(ty.desugar(desugarer)?),
             | None => None,
@@ -836,13 +874,35 @@ impl Desugar for t::GenBind<t::TermId> {
             for param in params.into_iter().rev() {
                 match param {
                     | b::CoPatternItem::Pat(pat) => {
-                        binding = Alloc::alloc(desugarer, b::Abs(pat, binding).into(), prev);
+                        let abstraction = match flavor {
+                            | t::BindingFlavor::Value => b::Term::ValAbs(b::Abs(pat, binding)),
+                            | t::BindingFlavor::Plain
+                            | t::BindingFlavor::Computation
+                            | t::BindingFlavor::Recursive => b::Term::Abs(b::Abs(pat, binding)),
+                        };
+                        binding = Alloc::alloc(desugarer, abstraction, prev);
                         if annotation_follows_sugar {
                             let tpat = pat.deep_clone(desugarer);
-                            ann = Alloc::alloc(desugarer, b::Pi(tpat, ann).into(), prev);
+                            let classifier = match flavor {
+                                | t::BindingFlavor::Value => b::ValPi(tpat, ann).into(),
+                                | t::BindingFlavor::Plain
+                                | t::BindingFlavor::Computation
+                                | t::BindingFlavor::Recursive => b::Pi(tpat, ann).into(),
+                            };
+                            ann = Alloc::alloc(desugarer, classifier, prev);
                         }
                     }
                     | b::CoPatternItem::Dtor(dtor) => {
+                        if flavor == t::BindingFlavor::Value {
+                            let parameter_origin = parameter_origin
+                                .expect("parsed value bindings have a parameter telescope");
+                            return Err(DesugarError::ValueParameterNotPattern(
+                                parameter_origin
+                                    .span(desugarer.spans)
+                                    .clone()
+                                    .make(parameter_origin),
+                            ));
+                        }
                         binding = Alloc::alloc(
                             desugarer,
                             b::CoMatch { arms: vec![b::CoMatcher { dtor, tail: binding }] }.into(),
@@ -854,16 +914,12 @@ impl Desugar for t::GenBind<t::TermId> {
             }
         };
         // fix?
-        if fix {
-            if comp {
-                let span = binder.span(desugarer);
-                Err(DesugarError::CompWhileFix(span.make(binder)))?
-            }
+        if flavor == t::BindingFlavor::Recursive {
             let binder = binder.deep_clone(desugarer);
             binding = Alloc::alloc(desugarer, b::Fix(binder, binding).into(), prev);
         }
         // add thunk?
-        if fix || comp {
+        if matches!(flavor, t::BindingFlavor::Recursive | t::BindingFlavor::Computation) {
             binding = Alloc::alloc(desugarer, b::Thunk(binding).into(), prev);
             if annotation_follows_sugar {
                 let thunk = desugarer.thunk(prev);

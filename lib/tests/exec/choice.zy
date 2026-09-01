@@ -26,7 +26,7 @@ begin
     end
   that
 
-  let (/bool; /string; /stdio; /process) = make_std builtin in
+  let (/bool; /string; /stdio; /process) = builtin |> make_std in
   def beep : Choice (Thk OS -> OS) = +L(
     {
       fn k => ! (stdio/write_line) "0" { fn _ => ! k }

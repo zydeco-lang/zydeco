@@ -244,7 +244,13 @@ impl<'a> CoverageChecker<'a> {
 #[derive(Clone, Debug)]
 enum MatrixPattern {
     Wildcard,
-    Constructor { data: DataId, name: CtorName, argument: Box<MatrixPattern> },
+    /// A refutable view pattern contributes no structural coverage fact.
+    Opaque,
+    Constructor {
+        data: DataId,
+        name: CtorName,
+        argument: Box<MatrixPattern>,
+    },
     Unit,
     Product(Vec<MatrixPattern>),
     Named(FieldName, Box<MatrixPattern>),
@@ -276,12 +282,16 @@ impl MatrixPattern {
             | ValuePattern::SCons(ConsN(_, tail)) => {
                 Self::Package(Box::new(Self::from_typed(*tail, statics)))
             }
+            | ValuePattern::View(view) => {
+                let nested = Self::from_typed(view.pattern, statics);
+                if matches!(nested, Self::Wildcard) { Self::Wildcard } else { Self::Opaque }
+            }
         }
     }
 
     fn head_space(&self) -> Option<HeadSpace> {
         match self {
-            | Self::Wildcard => None,
+            | Self::Wildcard | Self::Opaque => None,
             | Self::Constructor { data, .. } => Some(HeadSpace::Data(*data)),
             | Self::Unit => Some(HeadSpace::Unit),
             | Self::Product(items) => Some(HeadSpace::Product(items.len())),

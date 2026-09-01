@@ -9,10 +9,12 @@
 const PREC = {
   binding: 1,
   quantifier: 2,
-  arrow: 3,
-  product: 4,
-  application: 5,
-  projection: 6,
+  pipeline_backward: 3,
+  pipeline_forward: 4,
+  arrow: 5,
+  product: 6,
+  application: 7,
+  projection: 8,
 };
 
 const KEYWORDS = [
@@ -25,6 +27,7 @@ const KEYWORDS = [
   'define',
   'let',
   'param',
+  'val',
   'in',
   'that',
   'do',
@@ -73,14 +76,18 @@ module.exports = grammar({
       $._atomic_term,
       $.projection_expression,
       $.application_expression,
+      $.forward_pipeline_expression,
+      $.backward_pipeline_expression,
       $.destructor_expression,
       $.product_type,
       $.function_type,
       $.pi_type,
+      $.value_pi_type,
       $.forall_type,
       $.sigma_type,
       $.existential_type,
       $.lambda_expression,
+      $.value_lambda_expression,
       $.fix_expression,
       $.do_expression,
       $.parameter_expression,
@@ -229,6 +236,18 @@ module.exports = grammar({
       field('destructor', $.destructor_identifier),
     )),
 
+    forward_pipeline_expression: $ => prec.left(PREC.pipeline_forward, seq(
+      field('subject', $._term),
+      '|>',
+      field('function', $._term),
+    )),
+
+    backward_pipeline_expression: $ => prec.right(PREC.pipeline_backward, seq(
+      field('function', $._term),
+      '<|',
+      field('subject', $._term),
+    )),
+
     product_type: $ => prec.right(PREC.product, seq(
       field('left', $._term),
       '*',
@@ -242,6 +261,14 @@ module.exports = grammar({
     )),
 
     pi_type: $ => prec.right(PREC.quantifier, seq(
+      'pi',
+      field('parameters', $.copattern),
+      '.',
+      field('body', $._term),
+    )),
+
+    value_pi_type: $ => prec.right(PREC.quantifier, seq(
+      'val',
       'pi',
       field('parameters', $.copattern),
       '.',
@@ -312,6 +339,13 @@ module.exports = grammar({
       field('body', $._term),
     )),
 
+    value_lambda_expression: $ => prec.right(PREC.binding, seq(
+      'val',
+      field('parameters', $.copattern),
+      '=>',
+      field('body', $._term),
+    )),
+
     fix_expression: $ => prec.right(PREC.binding, seq(
       'fix',
       field('binder', $._pattern),
@@ -343,6 +377,7 @@ module.exports = grammar({
     )),
 
     general_binding: $ => seq(
+      optional(field('value_function', $.value_modifier)),
       optional(field('computation', $.computation_modifier)),
       optional(field('recursive', $.recursion_modifier)),
       field('binder', $._pattern),
@@ -360,6 +395,8 @@ module.exports = grammar({
     placement: _ => choice('in', 'that'),
 
     computation_modifier: _ => '!',
+
+    value_modifier: _ => 'val',
 
     recursion_modifier: _ => 'fix',
 
@@ -441,6 +478,7 @@ module.exports = grammar({
       $.manifest_pattern,
       $.alias_pattern,
       $.parenthesized_pattern,
+      $.view_pattern,
     ),
 
     _pattern_item: $ => choice(
@@ -478,6 +516,17 @@ module.exports = grammar({
       )),
       ')',
     ),
+
+    view_pattern: $ => prec.right(seq(
+      field('function', $._variable_name),
+      optional(seq(
+        '[',
+        commaSep1(field('argument', $._term)),
+        ']',
+      )),
+      '~>',
+      field('pattern', $._pattern),
+    )),
 
     parenthesized_pattern: $ => seq(
       '(',
@@ -594,4 +643,14 @@ module.exports = grammar({
  */
 function commaSep(rule) {
   return optional(seq(rule, repeat(seq(',', rule)), optional(',')));
+}
+
+/**
+ * Parse a nonempty comma-separated sequence with an optional trailing comma.
+ *
+ * @param {RuleOrLiteral} rule
+ * @returns {SeqRule}
+ */
+function commaSep1(rule) {
+  return seq(rule, repeat(seq(',', rule)), optional(','));
 }

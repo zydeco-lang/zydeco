@@ -150,7 +150,9 @@ enum StagedBoundary {
 #[derive(Copy, Clone)]
 enum ScopedForm {
     Function,
+    ValueFunction,
     Pi,
+    ValPi,
     Forall,
     Sigma,
 }
@@ -172,7 +174,9 @@ impl ScopedForm {
     fn keyword(self) -> &'static str {
         match self {
             | Self::Function => "fn",
+            | Self::ValueFunction => "val",
             | Self::Pi => "pi",
+            | Self::ValPi => "val pi",
             | Self::Forall => "forall",
             | Self::Sigma => "sigma",
         }
@@ -180,22 +184,24 @@ impl ScopedForm {
 
     fn marker(self) -> &'static str {
         match self {
-            | Self::Function => "=>",
-            | Self::Pi | Self::Forall | Self::Sigma => ".",
+            | Self::Function | Self::ValueFunction => "=>",
+            | Self::Pi | Self::ValPi | Self::Forall | Self::Sigma => ".",
         }
     }
 
     fn body_precedence(self) -> TermPrecedence {
         match self {
-            | Self::Function => TermPrecedence::Binder,
-            | Self::Pi | Self::Forall | Self::Sigma => TermPrecedence::Quantifier,
+            | Self::Function | Self::ValueFunction => TermPrecedence::Binder,
+            | Self::Pi | Self::ValPi | Self::Forall | Self::Sigma => TermPrecedence::Quantifier,
         }
     }
 
     fn split(self, term: &Term) -> Option<(CoPatId, TermId)> {
         match (self, term) {
             | (Self::Function, Term::Abs(Abs(parameter, body)))
+            | (Self::ValueFunction, Term::ValAbs(Abs(parameter, body)))
             | (Self::Pi, Term::Pi(Pi(parameter, body)))
+            | (Self::ValPi, Term::ValPi(ValPi(parameter, body)))
             | (Self::Forall, Term::Forall(Forall(parameter, body)))
             | (Self::Sigma, Term::Sigma(Sigma(parameter, body))) => Some((*parameter, *body)),
             | _ => None,
@@ -794,7 +800,7 @@ impl<'arena> PrettyFormatter<'arena> {
 
     fn infix_chain(&self, root: TermId, operator: InfixOperator) -> RcDoc<'arena> {
         let sites = operator
-            .operands(&self.arena, &self.arena.terms[&root])
+            .operands(self.arena, &self.arena.terms[&root])
             .expect("infix chains start and continue with their selected operator");
         let last = sites.len().saturating_sub(1);
         let mut operands = Vec::new();
@@ -1117,6 +1123,33 @@ impl<'arena> PrettyFormatter<'arena> {
         self.pattern_with_requirement(pattern, PatternRequirement::Pattern)
     }
 
+    fn view_pattern_head_parts(&self, view: TermId) -> (TermId, Vec<TermId>) {
+        let Term::App(Appli(terms)) = &self.arena.terms[&view] else {
+            return (view, Vec::new());
+        };
+        let Some((function, arguments)) = terms.split_first() else {
+            return (view, Vec::new());
+        };
+        let (head, prefix) = self.view_pattern_head_parts(*function);
+        (head, prefix.into_iter().chain(arguments.iter().copied()).collect())
+    }
+
+    fn view_pattern_head(&self, view: TermId) -> RcDoc<'arena> {
+        let (head, arguments) = self.view_pattern_head_parts(view);
+        let head = self.term_through(head, TermPrecedence::Application);
+        if arguments.is_empty() {
+            head
+        } else {
+            head.append(self.delimited(
+                Some(view.into()),
+                "[",
+                arguments.into_iter().map(|argument| self.term_fragment(argument)).collect(),
+                ",",
+                "]",
+            ))
+        }
+    }
+
     fn annotated_pattern(&self, pattern: PatId) -> RcDoc<'arena> {
         self.pattern_with_requirement(pattern, PatternRequirement::Annotated)
     }
@@ -1148,6 +1181,10 @@ impl<'arena> PrettyFormatter<'arena> {
             | Pattern::Project(ProjectionPattern(field, inner)) => {
                 self.projection_pattern(pattern, field, *inner)
             }
+            | Pattern::View(ViewPattern { function, pattern: inner }) => self
+                .view_pattern_head(*function)
+                .append(RcDoc::text(" ~> "))
+                .append(self.pattern(*inner)),
             | Pattern::Alias(Alias(patterns)) => self.delimited(
                 Some(pattern.into()),
                 "(",
@@ -1359,6 +1396,7 @@ impl<'arena> PrettyFormatter<'arena> {
                 ),
             },
             | Term::Abs(_) => self.scoped_form(term, ScopedForm::Function),
+            | Term::ValAbs(_) => self.scoped_form(term, ScopedForm::ValueFunction),
             | Term::App(Appli(terms)) => self.application(terms),
             | Term::Fix(Fix(pattern, body)) => {
                 self.scoped_join(
@@ -1378,6 +1416,7 @@ impl<'arena> PrettyFormatter<'arena> {
                 .document
             }
             | Term::Pi(_) => self.scoped_form(term, ScopedForm::Pi),
+            | Term::ValPi(_) => self.scoped_form(term, ScopedForm::ValPi),
             | Term::Forall(_) => self.scoped_form(term, ScopedForm::Forall),
             | Term::Arrow(_) => self.infix_chain(term, InfixOperator::Arrow),
             | Term::Sigma(_) => self.scoped_form(term, ScopedForm::Sigma),
@@ -1435,6 +1474,16 @@ impl<'arena> PrettyFormatter<'arena> {
                 .append(self.placement(*placement))
                 .append(self.sequence_tail((*binder).into(), *tail)),
             ),
+            | Term::Pipeline(Pipeline { direction, subject, function }) => match direction {
+                | PipelineDirection::Forward => self
+                    .term_through(*subject, TermPrecedence::ForwardCut)
+                    .append(RcDoc::text(" |> "))
+                    .append(self.term_through(*function, TermPrecedence::Application)),
+                | PipelineDirection::Backward => self
+                    .term_through(*function, TermPrecedence::Application)
+                    .append(RcDoc::text(" <| "))
+                    .append(self.term_through(*subject, TermPrecedence::BackwardCut)),
+            },
             | Term::ContextBind(ContextBind { mode, binding, placement, tail }) => {
                 let keyword = match mode {
                     | DefinitionMode::Transparent => "let",
@@ -1988,11 +2037,14 @@ impl<'arena> PrettyFormatter<'arena> {
         &self, enclosing: TermId, binding: &GenBind<TermId>, placement: Placement,
         binding_nesting: isize,
     ) -> RcDoc<'arena> {
-        let GenBind { fix, comp, binder, params, ty, bindee } = binding;
-        let modifiers = [(*comp).then_some("!"), (*fix).then_some("fix")]
-            .into_iter()
-            .flatten()
-            .map(RcDoc::text);
+        let GenBind { flavor, binder, params, ty, bindee } = binding;
+        let modifier = match flavor {
+            | BindingFlavor::Plain => None,
+            | BindingFlavor::Value => Some("val"),
+            | BindingFlavor::Computation => Some("!"),
+            | BindingFlavor::Recursive => Some("fix"),
+        };
+        let modifiers = modifier.into_iter().map(RcDoc::text);
         let head = RcDoc::intersperse(
             modifiers.chain(std::iter::once(self.pattern(*binder))),
             RcDoc::space(),

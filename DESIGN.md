@@ -342,6 +342,8 @@ Signature files participate in the same dependency graph, may use ordinary impor
 and may themselves be checked or imported when a type expression is needed.
 They introduce no declaration language, namespace, or runtime module representation.
 Companion discovery applies to reusable `.zy` sources only; `.zydeco` program roots remain unpaired.
+Value-function sources participate in this mechanism without special treatment: their companions may state a
+`val pi` classifier, just as a computation-function companion may state a computation arrow.
 
 A companion is an annotation boundary, rather than the only place where its type may be written.
 Ordinary `.zy` sources whose roots are type terms remain independently importable,
@@ -381,9 +383,11 @@ while the language server translates the same source spans to LSP ranges.
 Failures in earlier phases retain their primary file and byte range through the session for the same reason.
 Editor integrations convert those byte ranges to the client’s position encoding only at the LSP boundary.
 
-Libraries use ordinary term abstractions and package types.
+Libraries use first-class value functions, ordinary computation abstractions, and package types.
 Transparent definitions travel through products and manifest package signatures;
-abstract types travel through existential packages and package-dependent arrows.
+abstract types travel through existential packages and computation package-dependent arrows.
+A value function has a `ValPi` classifier. When its parameter opens an existential package,
+the classifier retains the opened witness telescope and the structural route by which application recovers it.
 The language therefore needs no module, namespace, visibility, or qualified-name sort
 to compose the current whole-program sources.
 Separate compilation and external package discovery remain future work and should elaborate
@@ -404,21 +408,22 @@ before checking their equations.
 This division keeps dependency analysis in the scoped language while reusing the established CBPV rules
 for type functions, polymorphic computations, value functions, and local definitions.
 
-The body sort also determines the classifier synthesized for an abstraction.
-A type-pattern abstraction with a value body has a pure universal type; a value-pattern abstraction
-with a value body has an ordinary pure arrow, or a pure package-dependent arrow
-when the boundary pattern opens existential witnesses used by the result.
-The corresponding type arguments and package witnesses are retained by statics and erased before evaluation.
-Consequently, `param`, `let`, `def`, and `begin ... end` can assemble a type
-or value package directly whenever their residual term is pure.
-Computation-producing packages continue to use the CBPV forms required by their effects.
+`val P => V` introduces a total value function and `val pi P . A` classifies it. Type parameters erase;
+runtime parameters form lexical closures and must be irrefutable. `let val` is ordinary non-recursive binding sugar.
+Juxtaposition eliminates a value function, while `value |> function` and `function <| value` are directional
+spellings of the same value-level cut. Because these functions are values, they may be captured, stored, selected,
+and passed to other value functions. The separate pattern form `function ~> pattern` applies the same cut before
+matching; only the nested pattern contributes bindings and refutability.
+The mechanisms and their dependency are specified separately in
+[First-Class Value Functions with `ValPi`](docs/proposals/value-pi.md) and
+[Value Views](docs/proposals/value-views.md).
 
-The standard-library topics and their aggregate package use this pure boundary.
+The standard-library topics and their aggregate package use this value-function boundary.
 Importing `data/package.zy`, `text/package.zy`, `system/package.zy`, `numeric/package.zy`,
-or `std.zy` yields a value-level package function; clients apply it and open its result with `let`.
+or `std.zy` yields an ordinary value function; clients cut a Builtin package through it and open the resulting value.
 Builtin and the standard-package root are composition boundaries;
-each topic keeps one `.zyi` companion beside its implementation, a `body.type.zy` record-shape constructor,
-and — where it owns abstract witnesses — a `package.type.zy` existential wrapper beneath `lib/std`.
+each topic keeps reusable `*.type.zy` record-shape constructors and — where it owns abstract witnesses —
+an existential package wrapper beneath `lib/std`.
 The operations exported inside those packages retain their computation types.
 
 The launcher-supplied Builtin contract is structurally divided into `core`,
@@ -440,7 +445,7 @@ without exposing either backend's storage layout.
 ## Relative Monads and Monadic Blocks
 
 Relative monads are defined as codata in the standard library (see `lib/std/control/monad.zy`).
-The module is a pure package-dependent function from Builtin to the `Monad` and `Algebra` type package,
+The module exports a value function from Builtin to the `Monad` and `Algebra` type package,
 so importing and opening it requires neither a thunk nor a returned computation.
 Zydeco also implements *monadic blocks*, a generalized do-notation selected by the `@[monadic]` metadata annotation.
 The annotation may attach to any term.

@@ -7,7 +7,7 @@ begin
   let (/Ret) = core that
   let (/Int64) = representations/i64 that
 
-  let (/bool; /int64; /process) = make_std builtin in
+  let (/bool; /int64; /process) = builtin |> make_std in
   let fix fact (i : Int64) : Ret Int64 =
     -- extern def add : Thk (Int64 -> Int64 -> Ret Int64) end
     do zero? <- ! (int64/eq) i 0;

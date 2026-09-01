@@ -8,7 +8,7 @@ begin
   let (/Int64) = representations/i64 that
   let (/String) = representations/string that
 
-  let (/List; /list; /int64; /string; /stdio; /process) = make_std builtin in
+  let (/List; /list; /int64; /string; /stdio; /process) = builtin |> make_std in
   def fix foldl (xs : List String) (i : Int64) : Ret Int64 =
     ! (list/case)
       String

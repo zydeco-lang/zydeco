@@ -13,7 +13,7 @@ begin
   let char = text/char that
   let string = text/string that
   let (/OS; /stdio; /process) = system that
-  let (= Monad, = Algebra, ()) = monadic_basis builtin in
+  let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
   begin
     let Ret = F that
     def Bool =

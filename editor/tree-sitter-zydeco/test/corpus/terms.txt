@@ -24,6 +24,153 @@ A * B -> F x .observe / field
       field: (lower_identifier))))
 
 ==================
+Value functions, pipelines, and view patterns
+==================
+
+begin
+  let imported = @(import("view.zy")) that
+  let val keep (A : VType) (value : A) : A = value that
+  let keep[Unit] ~> recovered = () that
+  let forward = recovered |> keep Unit that
+  let backward = keep Unit <| forward in backward
+end
+
+---
+
+(source_file
+  (block_expression
+    (context_binding
+      (binding_kind)
+      (general_binding
+        (variable_pattern
+          (lower_identifier))
+        (metadata_expression
+          (metadata_sugar
+            (meta_application
+              (meta_identifier
+                (lower_identifier))
+              (meta_arguments
+                (string_literal))))))
+      (placement)
+      (context_binding
+        (binding_kind)
+        (general_binding
+          (value_modifier)
+          (variable_pattern
+            (lower_identifier))
+          (copattern
+            (parenthesized_pattern
+              (pattern_annotation
+                (variable_pattern
+                  (upper_identifier))
+                (variable
+                  (upper_identifier))))
+            (parenthesized_pattern
+              (pattern_annotation
+                (variable_pattern
+                  (lower_identifier))
+                (variable
+                  (upper_identifier)))))
+          (variable
+            (upper_identifier))
+          (variable
+            (lower_identifier)))
+        (placement)
+        (context_binding
+          (binding_kind)
+          (general_binding
+            (view_pattern
+              (lower_identifier)
+              (variable
+                (upper_identifier))
+              (variable_pattern
+                (lower_identifier)))
+            (parenthesized_term))
+          (placement)
+          (context_binding
+            (binding_kind)
+            (general_binding
+              (variable_pattern
+                (lower_identifier))
+              (forward_pipeline_expression
+                (variable
+                  (lower_identifier))
+                (application_expression
+                  (variable
+                    (lower_identifier))
+                  (variable
+                    (upper_identifier)))))
+            (placement)
+            (context_binding
+              (binding_kind)
+              (general_binding
+                (variable_pattern
+                  (lower_identifier))
+                (backward_pipeline_expression
+                  (application_expression
+                    (variable
+                      (lower_identifier))
+                    (variable
+                      (upper_identifier)))
+                  (variable
+                    (lower_identifier))))
+              (placement)
+              (variable
+                (lower_identifier)))))))))
+
+==================
+Value abstraction
+==================
+
+val (A : VType) (value : A) => value
+
+---
+
+(source_file
+  (value_lambda_expression
+    (copattern
+      (parenthesized_pattern
+        (pattern_annotation
+          (variable_pattern
+            (upper_identifier))
+          (variable
+            (upper_identifier))))
+      (parenthesized_pattern
+        (pattern_annotation
+          (variable_pattern
+            (lower_identifier))
+          (variable
+            (upper_identifier)))))
+    (variable
+      (lower_identifier))))
+
+==================
+Value Pi
+==================
+
+val pi (A : VType) (value : A) . A
+
+---
+
+(source_file
+  (value_pi_type
+    (copattern
+      (parenthesized_pattern
+        (pattern_annotation
+          (variable_pattern
+            (upper_identifier))
+          (variable
+            (upper_identifier))))
+      (parenthesized_pattern
+        (pattern_annotation
+          (variable_pattern
+            (lower_identifier))
+          (variable
+            (upper_identifier)))))
+    (variable
+      (upper_identifier))))
+
+==================
 Definitions, binders, and matching
 ==================
 

@@ -28,7 +28,7 @@ begin
       end
   that
 
-  let (/bool; /int64; /stdio; /process) = make_std builtin in
+  let (/bool; /int64; /stdio; /process) = builtin |> make_std in
   -- List~ is actually coinductive type
   def fix loop : Ret (List~ Int64) =
     ret +Cons(0, loop)

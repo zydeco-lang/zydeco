@@ -5,11 +5,12 @@ use crate::{
         arena::TextualScope,
         fmt::Formatter,
         syntax::{
-            Alias, Ann, Appli, Block, BuiltinRole, BuiltinValueRole, CoPatId, ContextBind, DefId,
-            DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists, Hole, IntegerLiteral,
-            IntegerOperation, IntegerType, IntrinsicRole, Label, Literal, ManifestPattern, Meta,
-            MetaT, Named, Pack, Param, Paren, Parser, PatId, Pattern, Placement, Prod, Proj,
-            ProjectionPattern, SourceUnit, Term, TermId,
+            Alias, Ann, Appli, BindingFlavor, Block, BuiltinRole, BuiltinValueRole, CoPatId,
+            ContextBind, DefId, DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists, Hole,
+            IntegerLiteral, IntegerOperation, IntegerType, IntrinsicRole, Label, Literal,
+            ManifestPattern, Meta, MetaT, Named, Pack, Param, Paren, Parser, PatId, Pattern,
+            Pipeline, PipelineDirection, Placement, Prod, Proj, ProjectionPattern, SourceUnit,
+            Term, TermId, ViewPattern,
         },
     },
 };
@@ -792,6 +793,82 @@ fn parses_uniform_term_composition_forms() {
             ..
         })
     ));
+}
+
+#[test]
+fn parses_value_pi_abstractions_and_bindings() {
+    let pi_source = "val pi (A : VType) (value : A) . A";
+    let mut parser = Parser::new();
+    let pi = parser::SingleTermParser::new()
+        .parse(pi_source, &mut parser, lexer::Lexer::new(pi_source))
+        .unwrap();
+    assert!(matches!(parser.arena.terms[&pi], Term::ValPi(_)));
+
+    let abstraction_source = "val (A : VType) (value : A) => value";
+    let abstraction = parser::SingleTermParser::new()
+        .parse(abstraction_source, &mut parser, lexer::Lexer::new(abstraction_source))
+        .unwrap();
+    assert!(matches!(parser.arena.terms[&abstraction], Term::ValAbs(_)));
+
+    let local_source = "let val identity (value : Int64) : Int64 = value that 1 |> identity";
+    let mut parser = Parser::new();
+    let local = parser::SingleTermParser::new()
+        .parse(local_source, &mut parser, lexer::Lexer::new(local_source))
+        .unwrap();
+    let Term::ContextBind(ContextBind { binding, placement: Placement::That, tail, .. }) =
+        &parser.arena.terms[&local]
+    else {
+        panic!("expected a mobile value-function binding")
+    };
+    assert_eq!(binding.flavor, BindingFlavor::Value);
+    assert!(matches!(
+        parser.arena.terms[tail],
+        Term::Pipeline(Pipeline { direction: PipelineDirection::Forward, .. })
+    ));
+}
+
+#[test]
+fn parses_both_pipeline_spellings_and_view_patterns() {
+    let mut parser = Parser::new();
+    let forward = "pair |> first Int64 String";
+    let forward = parser::SingleTermParser::new()
+        .parse(forward, &mut parser, lexer::Lexer::new(forward))
+        .unwrap();
+    assert!(matches!(
+        parser.arena.terms[&forward],
+        Term::Pipeline(Pipeline { direction: PipelineDirection::Forward, .. })
+    ));
+
+    let backward = "first Int64 String <| pair";
+    let backward = parser::SingleTermParser::new()
+        .parse(backward, &mut parser, lexer::Lexer::new(backward))
+        .unwrap();
+    assert!(matches!(
+        parser.arena.terms[&backward],
+        Term::Pipeline(Pipeline { direction: PipelineDirection::Backward, .. })
+    ));
+
+    let pattern_source = "let first[Int64, String] ~> selected = pair in selected";
+    let pattern_term = parser::SingleTermParser::new()
+        .parse(pattern_source, &mut parser, lexer::Lexer::new(pattern_source))
+        .unwrap();
+    let Term::ContextBind(ContextBind { binding, .. }) = &parser.arena.terms[&pattern_term] else {
+        panic!("expected a binding with a view pattern")
+    };
+    let Pattern::View(ViewPattern { function, .. }) = &parser.arena.pats[&binding.binder] else {
+        panic!("expected a view pattern")
+    };
+    let Term::App(Appli(head)) = &parser.arena.terms[function] else {
+        panic!("expected an instantiated view head")
+    };
+    assert_eq!(head.len(), 3);
+
+    let rendered = pattern_term.ugly(&Formatter::new(&parser.arena));
+    assert_eq!(rendered, pattern_source);
+    let mut roundtrip = Parser::new();
+    parser::SingleTermParser::new()
+        .parse(&rendered, &mut roundtrip, lexer::Lexer::new(&rendered))
+        .unwrap();
 }
 
 #[test]

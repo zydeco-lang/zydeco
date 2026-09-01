@@ -442,9 +442,7 @@ AllocType! {
     OpaqueTy
     PrimitiveTy
     OSTy
-    ValueArrow
-    ValueForall
-    ValuePackPi
+    ValPi
     ArrowU<TypeId>
     Forall
     PackPi
@@ -496,6 +494,7 @@ AllocValuePattern! {
     Triv
     Vec<VPatId>
     ConsN<StaticPatId, VPatId>
+    Box<ViewPattern>
 }
 
 /* ---------------------------------- Value --------------------------------- */
@@ -535,10 +534,8 @@ AllocValue! {
     DefId
     Named<FieldName, ValueId>
     Let<VPatId, ValueId, ValueId>
-    Abs<VPatId, ValueId>
-    App<ValueId, ValueId>
-    Abs<TPatId, ValueId>
-    App<ValueId, TypeId>
+    Abs<ValBinder, ValueId>
+    App<ValueId, ValArgument>
     Thunk<CompuId>
     Ctor<CtorName, ValueId>
     Triv

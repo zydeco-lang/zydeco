@@ -6,7 +6,7 @@ begin
   ) that
   let (/OS) = system that
 
-  let (/bool; /process) = make_std builtin in
+  let (/bool; /process) = builtin |> make_std in
   do result <- ! (bool/not) bool/false;
   ! (bool/if)
     OS

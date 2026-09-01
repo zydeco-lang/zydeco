@@ -7,7 +7,7 @@ begin
   let (/Ret) = core that
   let (/Int64) = representations/i64 that
 
-  let (/Bool; /bool; /option; /list; /int64; /process) = make_std builtin in
+  let (/Bool; /bool; /option; /list; /int64; /process) = builtin |> make_std in
   let ! status (condition : Bool) : Ret Int64 = ! (bool/if)
     (Ret Int64)
     condition

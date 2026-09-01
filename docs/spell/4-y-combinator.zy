@@ -39,7 +39,7 @@ begin
 
   -- The standard-library term is an ordinary dependency. Opening its result
   -- establishes abstract Boolean, option, and list types in the lexical tail.
-  let (/bool; /int64; /string; /stdio; /process) = make_std builtin in
+  let (/bool; /int64; /string; /stdio; /process) = builtin |> make_std in
   begin
     def factorial_step : Thk (
          Thk (Int64 -> Ret Int64)

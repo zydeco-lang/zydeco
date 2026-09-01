@@ -34,7 +34,7 @@ e2e_sources!({
     host_return => "tests/compile/host-return.zy",
     host_runtime => "tests/compile/host-runtime.zy",
     string_literal => "tests/compile/string-literal.zy",
-    pure_functions => "tests/compile/pure-functions.zy",
+    value_views => "tests/compile/value-views.zy",
     numeric_widths => "tests/builtin/numeric-widths.zy",
     tagged_values => "tests/compile/tagged-values.zy",
 });

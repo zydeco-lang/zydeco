@@ -242,9 +242,7 @@ impl TypeId {
             | Type::Opaque(_)
             | Type::Primitive(_)
             | Type::OS(_)
-            | Type::VArrow(_)
-            | Type::VForall(_)
-            | Type::VPackPi(_)
+            | Type::ValPi(_)
             | Type::Arrow(_)
             | Type::Forall(_)
             | Type::PackPi(_)
@@ -312,26 +310,12 @@ impl TypeId {
             | _ => None,
         }
     }
-    pub fn destruct_value_forall_binder(
-        &self, tycker: &mut Tycker,
-    ) -> Option<(TypeBinder, TypeId)> {
-        match tycker.type_filled(self).ok()?.to_owned() {
-            | Type::VForall(ValueForall(binder, ty)) => Some((binder, ty)),
-            | _ => None,
-        }
-    }
     pub fn destruct_forall(&self, tycker: &mut Tycker) -> Option<(AbstId, TypeId)> {
         self.destruct_forall_binder(tycker).map(|(binder, ty)| (binder.witness, ty))
     }
     pub fn destruct_pack_pi(&self, tycker: &mut Tycker) -> Option<PackPi> {
         match tycker.type_filled(self).ok()?.to_owned() {
             | Type::PackPi(pack_pi) => Some(*pack_pi),
-            | _ => None,
-        }
-    }
-    pub fn destruct_value_pack_pi(&self, tycker: &mut Tycker) -> Option<ValuePackPi> {
-        match tycker.type_filled(self).ok()?.to_owned() {
-            | Type::VPackPi(pack_pi) => Some(*pack_pi),
             | _ => None,
         }
     }
@@ -415,14 +399,16 @@ impl VPatId {
             | VPat::Triv(_) => (None, ty),
             | VPat::VCons(_) => (None, ty),
             | VPat::SCons(_) => (None, ty),
+            | VPat::View(_) => (None, ty),
         }
     }
 
     /// Return the number of existential witnesses opened at the boundary of
     /// this pattern.
     ///
-    /// Named wrappers are transparent, but witnesses opened inside products
-    /// or constructors are not part of the package boundary.
+    /// Named wrappers are transparent. Products concatenate the witness
+    /// boundaries of their components in source order, matching the order in
+    /// which product-pattern checking opens their skolems.
     pub fn package_witness_arity(&self, tycker: &Tycker<'_>) -> Option<usize> {
         let mut pattern = *self;
         loop {
@@ -434,11 +420,18 @@ impl VPatId {
                         .iter()
                         .find_map(|pattern| pattern.package_witness_arity(tycker));
                 }
+                | ValuePattern::VCons(patterns) => {
+                    let arity = patterns
+                        .iter()
+                        .filter_map(|pattern| pattern.package_witness_arity(tycker))
+                        .sum();
+                    return (arity > 0).then_some(arity);
+                }
                 | ValuePattern::Hole(_)
                 | ValuePattern::Var(_)
                 | ValuePattern::Ctor(_)
-                | ValuePattern::Triv(_)
-                | ValuePattern::VCons(_) => return None,
+                | ValuePattern::Triv(_) => return None,
+                | ValuePattern::View(_) => return None,
             }
         }
     }
@@ -477,6 +470,9 @@ impl VPatId {
                 let body = body.reify(tycker);
                 Alloc::alloc(tycker, ConsN(witnesses, body), ty, &env)
             }
+            | VPat::View(_) => {
+                unreachable!("a view pattern cannot be reified as its input value")
+            }
         }
     }
 }
@@ -503,15 +499,49 @@ impl ValueId {
                 | Value::Named(Named(_, inner)) => value = inner,
                 | Value::Let(Let { tail, .. }) => value = tail,
                 | Value::SCons(ConsN(witnesses, _)) => return Some(witnesses),
+                | Value::VCons(values) => {
+                    let witnesses = values
+                        .iter()
+                        .filter_map(|value| value.package_witnesses(tycker))
+                        .flatten()
+                        .collect::<Vec<_>>();
+                    return (!witnesses.is_empty()).then_some(witnesses);
+                }
                 | Value::Hole(_)
-                | Value::VAbs(_)
-                | Value::VApp(_)
-                | Value::TAbs(_)
-                | Value::TApp(_)
+                | Value::ValAbs(_)
+                | Value::ValApp(_)
                 | Value::Thunk(_)
                 | Value::Ctor(_)
                 | Value::Triv(_)
-                | Value::VCons(_)
+                | Value::Proj(_)
+                | Value::Lit(_) => return None,
+            }
+        }
+    }
+
+    /// Recover the physical components of a product value while following
+    /// immutable aliases and transparent wrappers.
+    pub(crate) fn product_components(&self, tycker: &Tycker<'_>) -> Option<Vec<ValueId>> {
+        let mut value = *self;
+        let mut visited = std::collections::HashSet::new();
+        loop {
+            if !visited.insert(value) {
+                return None;
+            }
+            match tycker.statics.values[&value].to_owned() {
+                | Value::Var(definition) => {
+                    value = *tycker.statics.value_aliases.get(&definition)?;
+                }
+                | Value::Named(Named(_, inner)) => value = inner,
+                | Value::Let(Let { tail, .. }) => value = tail,
+                | Value::VCons(values) => return Some(values),
+                | Value::Hole(_)
+                | Value::ValAbs(_)
+                | Value::ValApp(_)
+                | Value::Thunk(_)
+                | Value::Ctor(_)
+                | Value::Triv(_)
+                | Value::SCons(_)
                 | Value::Proj(_)
                 | Value::Lit(_) => return None,
             }

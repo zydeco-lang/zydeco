@@ -37,9 +37,17 @@ pub enum Pattern {
     Named(Named<FieldName, PatId>),
     Ctor(Ctor<CtorName, PatId>),
     Project(ProjectionPattern<FieldName, PatId>),
+    View(ViewPattern),
     Alias(Alias<PatId>),
     Triv(Triv),
     Cons(Vec<PatId>),
+}
+
+/// A view head precomposed with an ordinary pattern.
+#[derive(Clone, Debug)]
+pub struct ViewPattern {
+    pub function: TermId,
+    pub pattern: PatId,
 }
 
 #[derive(From, Clone, Debug)]
@@ -76,6 +84,10 @@ impl CoPatternSpine {
 /// One binder of a desugared `pi` telescope.
 #[derive(Clone, Debug)]
 pub struct Pi(pub PatId, pub TermId);
+
+/// One binder of a desugared `val pi` telescope.
+#[derive(Clone, Debug)]
+pub struct ValPi(pub PatId, pub TermId);
 
 /// One binder of a desugared `sigma` telescope.
 #[derive(Clone, Debug)]
@@ -215,9 +227,12 @@ pub enum Term<Ref> {
     Triv(Triv),
     Cons(Vec<TermId>),
     Abs(Abs<PatId, TermId>),
+    #[from(ignore)]
+    ValAbs(Abs<PatId, TermId>),
     App(App<TermId, TermId>),
     Fix(Fix<PatId, TermId>),
     Pi(Pi),
+    ValPi(ValPi),
     // Arrow(Arrow),
     // Forall(Forall),
     Sigma(Sigma),

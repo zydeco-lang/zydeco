@@ -284,8 +284,9 @@ binary : pi ((OS, api) : Core). OS
 The package pattern binds the opaque `OS` witness directly, and the binary's result type refers to that witness.
 This dependency is represented in the statics language by `PackPi`, a computation-valued package-dependent arrow
 whose codomain may mention abstract types bound by its parameter pattern.
-A value-valued library uses the corresponding `ValuePackPi`; its application instantiates the same witness telescope
-without introducing a computation.
+A value-valued library instead has a `ValPi` classifier. Its value parameter retains the same witness telescope,
+and applying the function instantiates that telescope while remaining entirely in the value judgment.
+The function is an ordinary first-class value: it may be imported, stored, captured, and composed.
 The package value carries a stable witness identity wherever it is used.
 At launch, the compiler instantiates `Core`, passes the package to the binary,
 and executes the resulting computation while the witness remains in scope.
@@ -294,7 +295,7 @@ The launcher supplies its concrete implementation.
 
 The library account therefore follows directly from block elaboration:
 nominal binders provide stable abstract identities, existential packages collect them into interfaces,
-and the two package-dependent arrows keep those identities in scope across value and computation calls.
+and computation `PackPi` or value `ValPi` keeps those identities in scope across the corresponding cut.
 
 ## 5. Consequences and Open Work
 
@@ -321,5 +322,5 @@ Uniform term composition extends Zydeco's expression-oriented design to binding 
 `in` gives a binder a lexical home. `that` assigns it to the surrounding block.
 The programmer may place a definition near the syntax that motivates it,
 while dependency analysis recovers the telescope required by the type system.
-At larger scales, the same mechanism turns a source unit into a closed term and expresses libraries
-through ordinary abstraction, application, and existential packaging.
+At larger scales, the same mechanism turns a source unit into a closed artifact and expresses libraries
+through computation abstraction, first-class value functions and their cuts, and existential packaging.

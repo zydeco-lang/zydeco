@@ -309,6 +309,13 @@ impl LocalFoldScoped<()> for ContextCollector<'_> {
                 self.ctxs_pat_local.insert_new(pat, self.ctxs_pat_local[&inner].to_owned());
                 self.coctxs_pat_local.insert_new(pat, self.coctxs_pat_local[&inner].to_owned());
             }
+            | Pattern::View(ViewPattern { function, pattern }) => {
+                let local = self.ctxs_pat_local[&pattern].to_owned();
+                let colocal = self.coctxs_pat_local[&pattern].to_owned()
+                    + self.coctxs_term_local[&function].to_owned();
+                self.ctxs_pat_local.insert_new(pat, local);
+                self.coctxs_pat_local.insert_new(pat, colocal);
+            }
             | Pattern::Alias(Alias(inner)) => {
                 let local = inner
                     .iter()
@@ -394,7 +401,7 @@ impl LocalFoldScoped<()> for ContextCollector<'_> {
                 });
                 self.coctxs_term_local.insert_new(term, colocal);
             }
-            | Term::Abs(inner) => {
+            | Term::Abs(inner) | Term::ValAbs(inner) => {
                 let Abs(pat, body) = inner;
                 let co_body = self.coctxs_term_local[&body].to_owned();
                 let cx_pat = self.ctxs_pat_local[&pat].to_owned();
@@ -416,6 +423,13 @@ impl LocalFoldScoped<()> for ContextCollector<'_> {
             }
             | Term::Pi(inner) => {
                 let Pi(pat, body) = inner;
+                let co_body = self.coctxs_term_local[&body].to_owned();
+                let cx_pat = self.ctxs_pat_local[&pat].to_owned();
+                let co_pat = self.coctxs_pat_local[&pat].to_owned();
+                self.coctxs_term_local.insert_new(term, co_body - cx_pat + co_pat);
+            }
+            | Term::ValPi(inner) => {
+                let ValPi(pat, body) = inner;
                 let co_body = self.coctxs_term_local[&body].to_owned();
                 let cx_pat = self.ctxs_pat_local[&pat].to_owned();
                 let co_pat = self.coctxs_pat_local[&pat].to_owned();
@@ -653,6 +667,10 @@ mod impl_obverse_local_post {
                 | Pattern::Project(ProjectionPattern(_, inner)) => {
                     inner.obverse_local_post(f, ctx);
                 }
+                | Pattern::View(ViewPattern { function, pattern }) => {
+                    function.obverse_local_post(f, ctx);
+                    pattern.obverse_local_post(f, ctx);
+                }
                 | Pattern::Alias(Alias(inner)) => {
                     for item in inner {
                         item.obverse_local_post(f, ctx);
@@ -718,7 +736,7 @@ mod impl_obverse_local_post {
                         item.obverse_local_post(f, ctx);
                     }
                 }
-                | Term::Abs(inner) => {
+                | Term::Abs(inner) | Term::ValAbs(inner) => {
                     let Abs(pat, body) = inner;
                     pat.obverse_local_post(f, ctx);
                     body.obverse_local_post(f, ctx);
@@ -735,6 +753,11 @@ mod impl_obverse_local_post {
                 }
                 | Term::Pi(inner) => {
                     let Pi(pat, body) = inner;
+                    pat.obverse_local_post(f, ctx);
+                    body.obverse_local_post(f, ctx);
+                }
+                | Term::ValPi(inner) => {
+                    let ValPi(pat, body) = inner;
                     pat.obverse_local_post(f, ctx);
                     body.obverse_local_post(f, ctx);
                 }

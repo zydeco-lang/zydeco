@@ -18,12 +18,6 @@ impl MobileCandidate {
         }
     }
 
-    fn binder(&self) -> PatId {
-        match self {
-            | Self::Parameter { binder, .. } | Self::Definition { binder, .. } => *binder,
-        }
-    }
-
     fn binding_id(&self) -> BindingId {
         self.source()
     }
@@ -74,6 +68,9 @@ impl<'a> BlockCandidateCollector<'a> {
                 self.pattern(*inner)
             }
             | b::Pattern::Project(b::ProjectionPattern(_, inner)) => self.pattern(*inner),
+            | b::Pattern::View(b::ViewPattern { function, pattern }) => {
+                [self.term(*function), self.pattern(*pattern)].into_iter().flatten().collect()
+            }
             | b::Pattern::Alias(b::Alias(patterns)) => {
                 patterns.iter().flat_map(|pattern| self.pattern(*pattern)).collect()
             }
@@ -133,8 +130,10 @@ impl<'a> BlockCandidateCollector<'a> {
             | Term::Proj(b::Proj(inner, _)) => self.term(*inner),
             | Term::Cons(items) => items.iter().flat_map(|item| self.term(*item)).collect(),
             | Term::Abs(b::Abs(pattern, body))
+            | Term::ValAbs(b::Abs(pattern, body))
             | Term::Fix(b::Fix(pattern, body))
             | Term::Pi(b::Pi(pattern, body))
+            | Term::ValPi(b::ValPi(pattern, body))
             | Term::Sigma(b::Sigma(pattern, body)) => {
                 [self.pattern(*pattern), self.term(*body)].into_iter().flatten().collect()
             }
@@ -217,19 +216,25 @@ impl BlockScope {
     ) -> Result<Self> {
         let binders = candidates.iter().try_fold(
             rpds::HashTrieMapSync::<VarName, DefId>::new_sync(),
-            |binders, candidate| {
-                candidate.binder().binders(&resolver.bitter).iter().try_fold(
-                    binders,
-                    |binders, (name, definition)| -> Result<_> {
-                        if let Some(previous) = binders.get(name) {
-                            Err(ResolveError::DuplicateDefinition(
-                                previous.span(resolver).clone().make(name.clone()),
-                                definition.span(resolver).clone().make(name.clone()),
-                            ))?
-                        }
-                        Ok(binders.insert(name.clone(), *definition))
-                    },
-                )
+            |binders, candidate| -> Result<_> {
+                match candidate {
+                    | MobileCandidate::Parameter { binder, .. }
+                    | MobileCandidate::Definition { binder, .. } => {
+                        let binders = binder.binders(&resolver.bitter).iter().try_fold(
+                            binders,
+                            |binders, (name, definition)| -> Result<_> {
+                                if let Some(previous) = binders.get(name) {
+                                    Err(ResolveError::DuplicateDefinition(
+                                        previous.span(resolver).clone().make(name.clone()),
+                                        definition.span(resolver).clone().make(name.clone()),
+                                    ))?
+                                }
+                                Ok(binders.insert(name.clone(), *definition))
+                            },
+                        )?;
+                        Ok(binders)
+                    }
+                }
             },
         )?;
         let owner = block;
@@ -238,11 +243,16 @@ impl BlockScope {
             .iter()
             .flat_map(|candidate| {
                 let site = BindingSite { owner, id: candidate.binding_id() };
-                candidate
-                    .binder()
-                    .binders(&resolver.bitter)
-                    .iter()
-                    .map(|(_, definition)| *definition)
+                let definitions = match candidate {
+                    | MobileCandidate::Parameter { binder, .. }
+                    | MobileCandidate::Definition { binder, .. } => binder
+                        .binders(&resolver.bitter)
+                        .iter()
+                        .map(|(_, definition)| *definition)
+                        .collect::<Vec<_>>(),
+                };
+                definitions
+                    .into_iter()
                     .map(move |definition| (definition, site))
                     .collect::<Vec<_>>()
             })

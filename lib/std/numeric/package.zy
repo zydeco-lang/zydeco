@@ -1,19 +1,20 @@
-begin
-  let make_integer = @(import("integer.zy")) that
-  let make_float = @(import("float.zy")) that
-
-  begin
-    param (
+val (
+  (
+    (
       (/core; /representations; /numeric) :
       @(import("../builtin.zy"))
-    ) in
-    let (/VType; /CType; /Thk; /Ret; /Unit) = core in
-    let (/String) = representations/string in
-    param
+    ),
     (
       (/Bool; /bool) :
       @(import("../data/package.type.zy"))
-    ) in
+    )
+  )
+) =>
+  begin
+    let make_integer = @(import("integer.zy")) that
+    let make_float = @(import("float.zy")) that
+    let (/VType; /CType; /Thk; /Ret; /Unit) = core in
+    let (/String) = representations/string in
     let (= Int8, int8) = numeric/int8 in
     let (= Int16, int16) = numeric/int16 in
     let (= Int32, int32) = numeric/int32 in
@@ -25,7 +26,7 @@ begin
     let (= Float32, float32) = numeric/float32 in
     let (= Float64, float64) = numeric/float64 in
     let (/operations = int8_module; /dictionary = int8_dictionary) =
-      make_integer core Bool Int8 String bool int8 0 1
+      (core, bool, int8, 0, 1) |> make_integer Bool Int8 String
     in
     let int8_instance =
       pack (= Int8 as @(intrinsic(i8)) : VType)
@@ -34,7 +35,7 @@ begin
       end
     in
     let (/operations = int16_module; /dictionary = int16_dictionary) =
-      make_integer core Bool Int16 String bool int16 0 1
+      (core, bool, int16, 0, 1) |> make_integer Bool Int16 String
     in
     let int16_instance =
       pack (= Int16 as @(intrinsic(i16)) : VType)
@@ -43,7 +44,7 @@ begin
       end
     in
     let (/operations = int32_module; /dictionary = int32_dictionary) =
-      make_integer core Bool Int32 String bool int32 0 1
+      (core, bool, int32, 0, 1) |> make_integer Bool Int32 String
     in
     let int32_instance =
       pack (= Int32 as @(intrinsic(i32)) : VType)
@@ -52,7 +53,7 @@ begin
       end
     in
     let (/operations = int64_module; /dictionary = int64_dictionary) =
-      make_integer core Bool Int64 String bool int64 0 1
+      (core, bool, int64, 0, 1) |> make_integer Bool Int64 String
     in
     let int64_instance =
       pack (= Int64 as @(intrinsic(i64)) : VType)
@@ -61,7 +62,7 @@ begin
       end
     in
     let (/operations = uint8_module; /dictionary = uint8_dictionary) =
-      make_integer core Bool UInt8 String bool uint8 0 1
+      (core, bool, uint8, 0, 1) |> make_integer Bool UInt8 String
     in
     let uint8_instance =
       pack (= UInt8 as @(intrinsic(u8)) : VType)
@@ -70,7 +71,7 @@ begin
       end
     in
     let (/operations = uint16_module; /dictionary = uint16_dictionary) =
-      make_integer core Bool UInt16 String bool uint16 0 1
+      (core, bool, uint16, 0, 1) |> make_integer Bool UInt16 String
     in
     let uint16_instance =
       pack (= UInt16 as @(intrinsic(u16)) : VType)
@@ -79,7 +80,7 @@ begin
       end
     in
     let (/operations = uint32_module; /dictionary = uint32_dictionary) =
-      make_integer core Bool UInt32 String bool uint32 0 1
+      (core, bool, uint32, 0, 1) |> make_integer Bool UInt32 String
     in
     let uint32_instance =
       pack (= UInt32 as @(intrinsic(u32)) : VType)
@@ -88,7 +89,7 @@ begin
       end
     in
     let (/operations = uint64_module; /dictionary = uint64_dictionary) =
-      make_integer core Bool UInt64 String bool uint64 0 1
+      (core, bool, uint64, 0, 1) |> make_integer Bool UInt64 String
     in
     let uint64_instance =
       pack (= UInt64 as @(intrinsic(u64)) : VType)
@@ -97,7 +98,7 @@ begin
       end
     in
     let (/operations = float32_module; /dictionary = float32_dictionary) =
-      make_float core Bool Float32 String bool float32 0.0 1.0
+      (core, bool, float32, 0.0, 1.0) |> make_float Bool Float32 String
     in
     let float32_instance =
       pack (= Float32 as @(intrinsic(f32)) : VType)
@@ -106,7 +107,7 @@ begin
       end
     in
     let (/operations = float64_module; /dictionary = float64_dictionary) =
-      make_float core Bool Float64 String bool float64 0.0 1.0
+      (core, bool, float64, 0.0, 1.0) |> make_float Bool Float64 String
     in
     let float64_instance =
       pack (= Float64 as @(intrinsic(f64)) : VType)
@@ -150,6 +151,5 @@ begin
       #float32 = float32_module,
       #float64 = float64_module
     )
-  end
 end
 -- end module Numeric

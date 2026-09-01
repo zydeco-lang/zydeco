@@ -9,7 +9,7 @@ begin
   let (/String) = representations/string that
   let (/OS) = system that
 
-  let (/Option; /IoError; /option; /result; /string; /stdio; /process) = make_std builtin in
+  let (/Option; /IoError; /option; /result; /string; /stdio; /process) = builtin |> make_std in
   let ! read_int (continuation : Thk (Option Int64 -> OS)) : OS = ! (stdio/read_line) {
     fn read =>
       ! (result/fold)

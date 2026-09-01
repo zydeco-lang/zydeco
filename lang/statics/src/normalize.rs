@@ -205,13 +205,43 @@ impl TypeSupportCollector {
                 | Type::Opaque(_)
                 | Type::Primitive(_)
                 | Type::OS(_) => {}
-                | Type::VArrow(ValueArrow(input, output)) | Type::Arrow(Arrow(input, output)) => {
+                | Type::ValPi(pi) => {
+                    let ValPi { binder, codomain } = *pi;
+                    match binder {
+                        | ValPiBinder::Type(binder) => {
+                            let newly_bound = self.bound.insert(binder.witness);
+                            let result = self.visit(codomain, tycker);
+                            if newly_bound {
+                                self.bound.remove(&binder.witness);
+                            }
+                            result?;
+                        }
+                        | ValPiBinder::Value(parameter) => {
+                            self.visit(parameter.domain, tycker)?;
+                            match parameter.witnesses {
+                                | None => self.visit(codomain, tycker)?,
+                                | Some(witnesses) => {
+                                    let outer_bound = self.bound.clone();
+                                    let outer_pack_scope = self.pack_scope.clone();
+                                    self.bound.extend(witnesses.iter().copied());
+                                    self.pack_scope =
+                                        self.pack_scope.union(&witnesses.iter().copied().collect());
+                                    let result = self.visit(codomain, tycker);
+                                    self.bound = outer_bound;
+                                    self.pack_scope = outer_pack_scope;
+                                    result?;
+                                }
+                            }
+                        }
+                    }
+                }
+                | Type::Arrow(Arrow(input, output)) => {
                     [input, output].into_iter().try_for_each(|ty| self.visit(ty, tycker))?;
                 }
                 | Type::Prod(Prod(components)) => {
                     components.into_iter().try_for_each(|ty| self.visit(ty, tycker))?;
                 }
-                | Type::VForall(ValueForall(binder, body)) | Type::Forall(Forall(binder, body)) => {
+                | Type::Forall(Forall(binder, body)) => {
                     let newly_bound = self.bound.insert(binder.witness);
                     let result = self.visit(body, tycker);
                     if newly_bound {
@@ -232,18 +262,6 @@ impl TypeSupportCollector {
                     result?;
                 }
                 | Type::ManifestKind(ManifestKind { body, .. }) => self.visit(body, tycker)?,
-                | Type::VPackPi(pack_pi) => {
-                    let ValuePackPi { domain, witnesses, codomain } = *pack_pi;
-                    self.visit(domain, tycker)?;
-                    let outer_bound = self.bound.clone();
-                    let outer_pack_scope = self.pack_scope.clone();
-                    self.bound.extend(witnesses.iter().copied());
-                    self.pack_scope = self.pack_scope.union(&witnesses.iter().copied().collect());
-                    let result = self.visit(codomain, tycker);
-                    self.bound = outer_bound;
-                    self.pack_scope = outer_pack_scope;
-                    result?;
-                }
                 | Type::PackPi(pack_pi) => {
                     let PackPi { domain, witnesses, codomain } = *pack_pi;
                     self.visit(domain, tycker)?;
@@ -362,6 +380,30 @@ impl TypeId {
                 | Type::Opaque(_)
                 | Type::Primitive(_)
                 | Type::OS(_) => *self,
+                | Type::ValPi(pi) => {
+                    let ValPi { binder, codomain } = *pi;
+                    let (binder, domain_changed) = match binder {
+                        | ValPiBinder::Type(binder) => (ValPiBinder::Type(binder), false),
+                        | ValPiBinder::Value(parameter) => {
+                            let domain = parameter.domain.subst_env(tycker, env)?;
+                            let changed = domain != parameter.domain;
+                            (
+                                ValPiBinder::Value(ValueParameter {
+                                    domain,
+                                    witnesses: parameter.witnesses,
+                                    witness_projection: parameter.witness_projection,
+                                }),
+                                changed,
+                            )
+                        }
+                    };
+                    let codomain_ = codomain.subst_env(tycker, env)?;
+                    if !domain_changed && codomain == codomain_ {
+                        *self
+                    } else {
+                        Alloc::alloc(tycker, ValPi { binder, codomain: codomain_ }, kd, env)
+                    }
+                }
                 | Type::Arrow(arr) => {
                     let Arrow(ty1, ty2) = arr;
                     let ty1_ = ty1.subst_env(tycker, env)?;
@@ -370,39 +412,6 @@ impl TypeId {
                         *self
                     } else {
                         Alloc::alloc(tycker, Arrow(ty1_, ty2_), kd, env)
-                    }
-                }
-                | Type::VArrow(ValueArrow(ty1, ty2)) => {
-                    let ty1_ = ty1.subst_env(tycker, env)?;
-                    let ty2_ = ty2.subst_env(tycker, env)?;
-                    if ty1 == ty1_ && ty2 == ty2_ {
-                        *self
-                    } else {
-                        Alloc::alloc(tycker, ValueArrow(ty1_, ty2_), kd, env)
-                    }
-                }
-                | Type::VForall(forall) => {
-                    let ValueForall(tpat, ty) = forall;
-                    let ty_ = ty.subst_env(tycker, env)?;
-                    if ty == ty_ {
-                        *self
-                    } else {
-                        Alloc::alloc(tycker, ValueForall(tpat, ty_), kd, env)
-                    }
-                }
-                | Type::VPackPi(pack_pi) => {
-                    let ValuePackPi { domain, witnesses, codomain } = *pack_pi;
-                    let domain_ = domain.subst_env(tycker, env)?;
-                    let codomain_ = codomain.subst_env(tycker, env)?;
-                    if domain == domain_ && codomain == codomain_ {
-                        *self
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            ValuePackPi { domain: domain_, witnesses, codomain: codomain_ },
-                            kd,
-                            env,
-                        )
                     }
                 }
                 | Type::Forall(forall) => {
@@ -624,6 +633,44 @@ impl TypeId {
                 | Type::Opaque(_)
                 | Type::Primitive(_)
                 | Type::OS(_) => *self,
+                | Type::ValPi(pi) => {
+                    let ValPi { binder, codomain } = *pi;
+                    let (binder, domain_changed, bound) = match binder {
+                        | ValPiBinder::Type(binder) => {
+                            let witness = binder.witness;
+                            (ValPiBinder::Type(binder), false, vec![witness])
+                        }
+                        | ValPiBinder::Value(parameter) => {
+                            let domain = parameter.domain.subst_absts(tycker, assignments)?;
+                            let changed = domain != parameter.domain;
+                            let bound = parameter
+                                .witnesses
+                                .as_ref()
+                                .map(|witnesses| witnesses.iter().copied().collect())
+                                .unwrap_or_default();
+                            (
+                                ValPiBinder::Value(ValueParameter {
+                                    domain,
+                                    witnesses: parameter.witnesses,
+                                    witness_projection: parameter.witness_projection,
+                                }),
+                                changed,
+                                bound,
+                            )
+                        }
+                    };
+                    let codomain_assignments = assignments
+                        .iter()
+                        .filter(|(witness, _)| !bound.contains(witness))
+                        .copied()
+                        .collect::<Vec<_>>();
+                    let codomain_ = codomain.subst_absts(tycker, &codomain_assignments)?;
+                    if !domain_changed && codomain == codomain_ {
+                        *self
+                    } else {
+                        Alloc::alloc(tycker, ValPi { binder, codomain: codomain_ }, kd, &env)
+                    }
+                }
                 | Type::Arrow(arr) => {
                     let Arrow(ty1, ty2) = arr;
                     let ty1_ = ty1.subst_absts(tycker, assignments)?;
@@ -632,44 +679,6 @@ impl TypeId {
                         *self
                     } else {
                         Alloc::alloc(tycker, Arrow(ty1_, ty2_), kd, &env)
-                    }
-                }
-                | Type::VArrow(ValueArrow(ty1, ty2)) => {
-                    let ty1_ = ty1.subst_absts(tycker, assignments)?;
-                    let ty2_ = ty2.subst_absts(tycker, assignments)?;
-                    if ty1 == ty1_ && ty2 == ty2_ {
-                        *self
-                    } else {
-                        Alloc::alloc(tycker, ValueArrow(ty1_, ty2_), kd, &env)
-                    }
-                }
-                | Type::VForall(forall) => {
-                    let ValueForall(tpat, ty) = forall;
-                    let ty_ = ty.subst_absts(tycker, assignments)?;
-                    if ty == ty_ {
-                        *self
-                    } else {
-                        Alloc::alloc(tycker, ValueForall(tpat, ty_), kd, &env)
-                    }
-                }
-                | Type::VPackPi(pack_pi) => {
-                    let ValuePackPi { domain, witnesses, codomain } = *pack_pi;
-                    let domain_ = domain.subst_absts(tycker, assignments)?;
-                    let codomain_assignments = assignments
-                        .iter()
-                        .filter(|(witness, _)| !witnesses.contains(witness))
-                        .copied()
-                        .collect::<Vec<_>>();
-                    let codomain_ = codomain.subst_absts(tycker, &codomain_assignments)?;
-                    if domain == domain_ && codomain == codomain_ {
-                        *self
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            ValuePackPi { domain: domain_, witnesses, codomain: codomain_ },
-                            kd,
-                            &env,
-                        )
                     }
                 }
                 | Type::Forall(forall) => {
@@ -839,12 +848,10 @@ impl TypeId {
             | Type::Opaque(_)
             | Type::Primitive(_)
             | Type::OS(_) => self,
-            | Type::VArrow(_)
-            | Type::VForall(_)
-            | Type::VPackPi(_)
             | Type::Arrow(_)
             | Type::Forall(_)
             | Type::PackPi(_)
+            | Type::ValPi(_)
             | Type::Prod(_)
             | Type::Exists(_)
             | Type::ManifestKind(_) => self,
@@ -1001,9 +1008,7 @@ impl TypeId {
                 | Type::Opaque(_)
                 | Type::Primitive(_)
                 | Type::OS(_)
-                | Type::VArrow(_)
-                | Type::VForall(_)
-                | Type::VPackPi(_)
+                | Type::ValPi(_)
                 | Type::Arrow(_)
                 | Type::Forall(_)
                 | Type::PackPi(_)
@@ -1129,15 +1134,6 @@ impl InferenceRefinement {
         Ok(Type::Arrow(Arrow(domain, codomain)))
     }
 
-    fn value_arrow(tycker: &mut Tycker<'_>, fill: FillId, env: &TyEnv) -> Result<Type> {
-        let vtype = Alloc::alloc(tycker, VType, (), &());
-        let domain = Self::fresh_type(tycker, fill, vtype, env);
-        let codomain = Self::fresh_type(tycker, fill, vtype, env);
-        let shape = Alloc::alloc(tycker, ValueArrow(domain, codomain), vtype, env);
-        fill.fill(tycker, shape.into())?;
-        Ok(Type::VArrow(ValueArrow(domain, codomain)))
-    }
-
     fn product(tycker: &mut Tycker<'_>, fill: FillId, env: &TyEnv) -> Result<Type> {
         let vtype = Alloc::alloc(tycker, VType, (), &());
         let head = Self::fresh_type(tycker, fill, vtype, env);
@@ -1149,24 +1145,6 @@ impl InferenceRefinement {
 }
 
 impl TypeId {
-    /// Reveal a solved value type, refining an unresolved metavariable to a
-    /// pure value arrow when value application requires that shape.
-    #[track_caller]
-    pub(crate) fn reveal_or_refine_value_arrow_k(
-        self, tycker: &mut Tycker<'_>, env: &TyEnv,
-    ) -> ResultKont<Type> {
-        let result = (|| {
-            let vtype = Alloc::alloc(tycker, VType, (), &());
-            let kind = tycker.statics.type_kind(self);
-            Lub::lub(kind, vtype, tycker)?;
-            match InferenceRefinement::unresolved_type_fill(tycker, self)? {
-                | Some(fill) => InferenceRefinement::value_arrow(tycker, fill, env),
-                | None => tycker.type_filled(&self),
-            }
-        })();
-        tycker.err_p_to_k(result)
-    }
-
     /// Reveal a solved computation type, refining an unresolved metavariable to
     /// a value-to-computation arrow when application requires that shape.
     #[track_caller]
@@ -1498,6 +1476,35 @@ impl TypeId {
                 | Type::Opaque(_)
                 | Type::Primitive(_)
                 | Type::OS(_) => res,
+                | Type::ValPi(pi) => {
+                    let ValPi { binder, codomain } = *pi;
+                    let (binder, domain_changed) = match binder {
+                        | ValPiBinder::Type(binder) => (ValPiBinder::Type(binder), false),
+                        | ValPiBinder::Value(parameter) => {
+                            let domain = resolver.resolve(parameter.domain, tycker)?;
+                            let changed = domain != parameter.domain;
+                            (
+                                ValPiBinder::Value(ValueParameter {
+                                    domain,
+                                    witnesses: parameter.witnesses,
+                                    witness_projection: parameter.witness_projection,
+                                }),
+                                changed,
+                            )
+                        }
+                    };
+                    let codomain_ = resolver.resolve(codomain, tycker)?;
+                    if !domain_changed && codomain == codomain_ {
+                        res
+                    } else {
+                        Alloc::alloc(
+                            tycker,
+                            ValPi { binder, codomain: codomain_ },
+                            tycker.statics.type_kind(res),
+                            &env,
+                        )
+                    }
+                }
                 | Type::Arrow(ty) => {
                     let Arrow(ty1, ty2) = ty;
                     let ty1_ = resolver.resolve(ty1, tycker)?;
@@ -1506,50 +1513,6 @@ impl TypeId {
                         res
                     } else {
                         Alloc::alloc(tycker, Arrow(ty1_, ty2_), tycker.statics.type_kind(res), &env)
-                    }
-                }
-                | Type::VArrow(ValueArrow(ty1, ty2)) => {
-                    let ty1_ = resolver.resolve(ty1, tycker)?;
-                    let ty2_ = resolver.resolve(ty2, tycker)?;
-                    if ty1 == ty1_ && ty2 == ty2_ {
-                        res
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            ValueArrow(ty1_, ty2_),
-                            tycker.statics.type_kind(res),
-                            &env,
-                        )
-                    }
-                }
-                | Type::VForall(ty) => {
-                    let ValueForall(tpat, ty) = ty;
-                    let tpat_ = tpat;
-                    let ty_ = resolver.resolve(ty, tycker)?;
-                    if ty == ty_ {
-                        res
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            ValueForall(tpat_, ty_),
-                            tycker.statics.type_kind(res),
-                            &env,
-                        )
-                    }
-                }
-                | Type::VPackPi(pack_pi) => {
-                    let ValuePackPi { domain, witnesses, codomain } = *pack_pi;
-                    let domain_ = resolver.resolve(domain, tycker)?;
-                    let codomain_ = resolver.resolve(codomain, tycker)?;
-                    if domain == domain_ && codomain == codomain_ {
-                        res
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            ValuePackPi { domain: domain_, witnesses, codomain: codomain_ },
-                            tycker.statics.type_kind(res),
-                            &env,
-                        )
                     }
                 }
                 | Type::Forall(ty) => {
@@ -2021,6 +1984,35 @@ impl TypeId {
                         Alloc::alloc(tycker, OSTy, kd_norm, &env)
                     }
                 }
+                | Type::ValPi(pi) => {
+                    let ValPi { binder, codomain } = *pi;
+                    let (binder, domain_changed) = match binder {
+                        | ValPiBinder::Type(binder) => (ValPiBinder::Type(binder), false),
+                        | ValPiBinder::Value(parameter) => {
+                            let domain = parameter.domain.filled_norm_id(tycker, norm)?;
+                            let changed = domain != parameter.domain;
+                            (
+                                ValPiBinder::Value(ValueParameter {
+                                    domain,
+                                    witnesses: parameter.witnesses,
+                                    witness_projection: parameter.witness_projection,
+                                }),
+                                changed,
+                            )
+                        }
+                    };
+                    let codomain_norm = codomain.filled_norm_id(tycker, norm)?;
+                    if !domain_changed && codomain_norm == codomain && kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(
+                            tycker,
+                            ValPi { binder, codomain: codomain_norm },
+                            kd_norm,
+                            &env,
+                        )
+                    }
+                }
                 | Type::Arrow(arr) => {
                     let Arrow(ty1, ty2) = arr;
                     let ty1_norm = ty1.filled_norm_id(tycker, norm)?;
@@ -2029,39 +2021,6 @@ impl TypeId {
                         self
                     } else {
                         Alloc::alloc(tycker, Arrow(ty1_norm, ty2_norm), kd_norm, &env)
-                    }
-                }
-                | Type::VArrow(ValueArrow(ty1, ty2)) => {
-                    let ty1_norm = ty1.filled_norm_id(tycker, norm)?;
-                    let ty2_norm = ty2.filled_norm_id(tycker, norm)?;
-                    if ty1_norm == ty1 && ty2_norm == ty2 && kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(tycker, ValueArrow(ty1_norm, ty2_norm), kd_norm, &env)
-                    }
-                }
-                | Type::VForall(forall) => {
-                    let ValueForall(abst, body) = forall;
-                    let body_norm = body.filled_norm_id(tycker, norm)?;
-                    if body_norm == body && kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(tycker, ValueForall(abst, body_norm), kd_norm, &env)
-                    }
-                }
-                | Type::VPackPi(pack_pi) => {
-                    let ValuePackPi { domain, witnesses, codomain } = *pack_pi;
-                    let domain_norm = domain.filled_norm_id(tycker, norm)?;
-                    let codomain_norm = codomain.filled_norm_id(tycker, norm)?;
-                    if domain_norm == domain && codomain_norm == codomain && kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            ValuePackPi { domain: domain_norm, witnesses, codomain: codomain_norm },
-                            kd_norm,
-                            &env,
-                        )
                     }
                 }
                 | Type::Forall(forall) => {

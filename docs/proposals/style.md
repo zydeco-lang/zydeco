@@ -87,7 +87,7 @@ where a caller writes `! apply A B function value`, the definition writes `def !
 A plain binding pattern corresponds to a use site that consumes the name without forcing it,
 such as passing a package value directly.
 The thunk-pattern spelling expands to `def apply ... : Thk (Ret B) = { ... }`;
-the parameters wrap the body in the appropriate type-level, polymorphic, or value abstractions.
+the parameters wrap the body in the appropriate type-level abstraction or computation abstraction over values.
 Genbind keeps the source at the level at which the operation is normally read.
 
 The binding keyword controls transparency.
@@ -243,7 +243,7 @@ param (
 ) in
 let (/VType; /Thk) = core in
 let (/String) = representations/string in
-let (/int64; /process) = make_std builtin in
+let (/int64; /process) = builtin |> make_std in
 ...
 ```
 

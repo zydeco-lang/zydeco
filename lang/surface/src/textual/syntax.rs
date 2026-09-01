@@ -71,8 +71,16 @@ pub enum Pattern {
     Named(Named<FieldName, PatId>),
     Ctor(Ctor<CtorName, PatId>),
     Project(ProjectionPattern<FieldName, PatId>),
+    View(ViewPattern),
     Alias(Alias<PatId>),
     Paren(Paren<PatId>),
+}
+
+/// `function ~> pattern`.
+#[derive(Clone, Debug)]
+pub struct ViewPattern {
+    pub function: TermId,
+    pub pattern: PatId,
 }
 
 /// A type binder whose definition is disclosed by an enclosing existential.
@@ -98,10 +106,8 @@ pub enum CoPattern {
 /// general binding structure
 #[derive(Clone, Debug)]
 pub struct GenBind<Bindee> {
-    /// Whether this binding uses `fix`.
-    pub fix: bool,
-    /// Whether this binding is a computation binding (`!`).
-    pub comp: bool,
+    /// How the binding sugar constructs its classifier and bindee.
+    pub flavor: BindingFlavor,
     /// Binder pattern.
     pub binder: PatId,
     /// Optional parameter list (curried).
@@ -112,9 +118,21 @@ pub struct GenBind<Bindee> {
     pub bindee: Bindee,
 }
 
+/// The elaboration discipline selected by a binding header.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum BindingFlavor {
+    Plain,
+    Value,
+    Computation,
+    Recursive,
+}
+
 /// `pi (x : A) (y : B) . C`
 #[derive(Clone, Debug)]
 pub struct Pi(pub CoPatId, pub TermId);
+/// `val pi (x : A) (y : B) . C`
+#[derive(Clone, Debug)]
+pub struct ValPi(pub CoPatId, pub TermId);
 /// `forall (x : A) (y : B) . C`
 #[derive(Clone, Debug)]
 pub struct Forall(pub CoPatId, pub TermId);
@@ -193,6 +211,20 @@ pub struct Param {
     pub tail: TermId,
 }
 
+/// A value-function application retaining its selected surface direction.
+#[derive(Clone, Debug)]
+pub struct Pipeline {
+    pub direction: PipelineDirection,
+    pub subject: TermId,
+    pub function: TermId,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum PipelineDirection {
+    Forward,
+    Backward,
+}
+
 /// `let p = e ...` or `def p = e ...`.
 #[derive(Clone, Debug)]
 pub struct ContextBind {
@@ -252,9 +284,12 @@ pub enum Term {
     Label(Label<FieldName, TermId>),
     Paren(Paren<TermId>),
     Abs(Abs<CoPatId, TermId>),
+    #[from(ignore)]
+    ValAbs(Abs<CoPatId, TermId>),
     App(Appli<TermId>),
     Fix(Fix<PatId, TermId>),
     Pi(Pi),
+    ValPi(ValPi),
     Forall(Forall),
     Arrow(ArrowU<TermId>),
     Sigma(Sigma),
@@ -267,6 +302,7 @@ pub enum Term {
     Do(Bind<PatId, TermId, TermId>),
     Let(GenLet),
     Param(Param),
+    Pipeline(Pipeline),
     ContextBind(ContextBind),
     Block(Block),
     Data(Data),

@@ -1,4 +1,14 @@
-begin
+val (
+  (
+    /core;
+    /representations;
+    /numeric;
+    /system = (/Reader; /Writer; /OS);
+    builtin
+  )
+  : @(import("builtin.zy"))
+) =>
+  begin
   let make_data = @(import("data/package.zy")) that
   let make_text = @(import("text/package.zy")) that
   let make_system = @(import("system/package.zy")) that
@@ -10,17 +20,6 @@ begin
   let PartialOrder = @(import("numeric/partial-order.type.zy")) in
   let Numeric = @(import("numeric/numeric.type.zy")) in
 
-  begin
-    param (
-      (
-        /core;
-        /representations;
-        /numeric;
-        /system = (/Reader; /Writer; /OS);
-        builtin
-      )
-      : @(import("builtin.zy"))
-    ) in
     let (/VType; /CType; /Thk; /Ret; /Unit) = core in
     let (= Int8, int8) = numeric/int8 in
     let (= Int16, int16) = numeric/int16 in
@@ -36,11 +35,11 @@ begin
     let (/String) = representations/string in
     let (/Bytes) = representations/bytes in
     let (/Bool; /Option; /Result; /List; /bool; /option; /result; /list; base) =
-      make_data builtin
+      builtin |> make_data
     in
-    let (/char; /string; /bytes; text) = make_text builtin base in
+    let (/char; /string; /bytes; text) = (builtin, base) |> make_text in
     let (/Path; /IoErrorKind; /IoError; /io; /fs; /stdio; /process; system) =
-      make_system builtin base
+      (builtin, base) |> make_system
     in
     let (
       /numeric;
@@ -57,7 +56,7 @@ begin
       /float64;
       numeric_modules
     ) =
-      make_numeric builtin base
+      (builtin, base) |> make_numeric
     in
     let prelude : Prelude = (
       #Thunk = Thk,
@@ -128,6 +127,5 @@ begin
         = process
       )
     end
-  end
 end
 -- end module Std

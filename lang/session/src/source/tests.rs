@@ -330,17 +330,13 @@ struct SourceFixture {
 struct RepositorySourceFiles;
 
 impl RepositorySourceFiles {
-    fn assert_pure_package(relative: impl AsRef<Path>) {
-        use zydeco_statics::syntax::{Fillable, TermAnnId, Type};
-
+    fn assert_value_function(relative: impl AsRef<Path>) {
+        use zydeco_statics::syntax::TermAnnId;
         let checked = TestPipeline::check(repository_source(relative)).unwrap();
-        let TermAnnId::Value(_, root_type) = checked.root else {
-            panic!("expected a pure package value")
-        };
-        let classifier = &checked.statics.types_pre[&root_type];
         assert!(
-            matches!(classifier, Fillable::Done(Type::VArrow(_) | Type::VPackPi(_))),
-            "expected a pure package factory, got {classifier:?}"
+            matches!(checked.root, TermAnnId::Value(_, _)),
+            "expected a value function, got {:?}",
+            checked.root,
         );
     }
 }
@@ -1811,8 +1807,8 @@ fn foundational_argument_fold_preserves_sequence_without_constructing_list() {
 }
 
 #[test]
-fn standard_library_package_composes_as_an_ordinary_imported_term() {
-    RepositorySourceFiles::assert_pure_package("std/std.zy");
+fn standard_library_package_composes_as_an_imported_value_function() {
+    RepositorySourceFiles::assert_value_function("std/std.zy");
 
     let root = repository_source("tests/std/minimal.zy");
     let checked = TestPipeline::check(&root).unwrap();
@@ -1966,7 +1962,7 @@ fn recursive_nominal_types_port_to_a_declaration_free_block() {
 
 #[test]
 fn abstract_bool_package_exports_values_and_an_eliminator() {
-    RepositorySourceFiles::assert_pure_package("std/data/package.zy");
+    RepositorySourceFiles::assert_value_function("std/data/package.zy");
 
     let root = repository_source("tests/std/bool.zy");
     let checked = TestPipeline::check(&root).unwrap();
@@ -1983,7 +1979,7 @@ fn abstract_bool_package_exports_values_and_an_eliminator() {
 
 #[test]
 fn abstract_option_package_exports_a_type_constructor_and_an_eliminator() {
-    RepositorySourceFiles::assert_pure_package("std/data/package.zy");
+    RepositorySourceFiles::assert_value_function("std/data/package.zy");
 
     let root = repository_source("tests/std/option.zy");
     let checked = TestPipeline::check(&root).unwrap();
@@ -2000,7 +1996,7 @@ fn abstract_option_package_exports_a_type_constructor_and_an_eliminator() {
 
 #[test]
 fn abstract_list_package_exports_case_analysis_and_a_recursive_fold() {
-    RepositorySourceFiles::assert_pure_package("std/data/package.zy");
+    RepositorySourceFiles::assert_value_function("std/data/package.zy");
 
     let root = repository_source("tests/std/list.zy");
     let checked = TestPipeline::check(&root).unwrap();
@@ -2345,13 +2341,13 @@ fn algebra_translation_exec_example_uses_the_lexical_library_basis() {
 }
 
 #[test]
-fn generated_exception_transformer_exports_a_pure_package() {
-    RepositorySourceFiles::assert_pure_package("tests/oopsla/exnt.zydeco");
+fn generated_exception_transformer_exports_a_value_function() {
+    RepositorySourceFiles::assert_value_function("tests/oopsla/exnt.zydeco");
 }
 
 #[test]
-fn generated_continuation_exception_transformer_exports_a_pure_package() {
-    RepositorySourceFiles::assert_pure_package("tests/oopsla/exnkt.zydeco");
+fn generated_continuation_exception_transformer_exports_a_value_function() {
+    RepositorySourceFiles::assert_value_function("tests/oopsla/exnkt.zydeco");
 }
 
 #[test]

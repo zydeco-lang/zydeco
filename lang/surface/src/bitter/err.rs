@@ -41,14 +41,14 @@ pub enum DesugarError {
     IntrinsicPayloadNotHole(Sp<t::TermId>),
     #[error("A quantified type parameter must be a pattern")]
     QuantifierParameterNotPattern(Sp<t::CoPatId>),
+    #[error("A value-function parameter must be a pattern")]
+    ValueParameterNotPattern(Sp<t::CoPatId>),
     #[error("A manifest `as` pattern is only valid as an existential parameter")]
     ManifestPatternOutsideExistential(Sp<t::PatId>),
     #[error("A `pack` parameter needs evidence: `(X : K) is W` or `(X as W : K)`")]
     PackParameterNeedsEvidence(Sp<b::PatId>),
     #[error("A manifest `pack` parameter carries its evidence in `as`")]
     PackParameterRedundantEvidence(Sp<b::PatId>),
-    #[error("The binding has both `!` and `fix` modifiers")]
-    CompWhileFix(Sp<b::PatId>),
 }
 
 impl DesugarError {
@@ -64,10 +64,10 @@ impl DesugarError {
             | Self::BuiltinValueRoleOnExistentialPattern { pattern, .. }
             | Self::UnsupportedExistentialPatternMeta(pattern)
             | Self::ManifestPatternOutsideExistential(pattern) => pattern.info,
-            | Self::QuantifierParameterNotPattern(copattern) => copattern.info,
+            | Self::QuantifierParameterNotPattern(copattern)
+            | Self::ValueParameterNotPattern(copattern) => copattern.info,
             | Self::PackParameterNeedsEvidence(pattern)
-            | Self::PackParameterRedundantEvidence(pattern)
-            | Self::CompWhileFix(pattern) => pattern.info,
+            | Self::PackParameterRedundantEvidence(pattern) => pattern.info,
         }
     }
 }

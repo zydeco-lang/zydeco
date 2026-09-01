@@ -139,6 +139,11 @@ impl<'graph> TextualProgramBuilder<'graph> {
             | t::Pattern::Project(t::ProjectionPattern(field, inner)) => {
                 t::ProjectionPattern(field, self.pattern(source, inner)?).into()
             }
+            | t::Pattern::View(t::ViewPattern { function, pattern }) => t::ViewPattern {
+                function: self.term(source, function)?,
+                pattern: self.pattern(source, pattern)?,
+            }
+            .into(),
             | t::Pattern::Alias(t::Alias(patterns)) => {
                 let patterns = patterns
                     .into_iter()
@@ -195,10 +200,9 @@ impl<'graph> TextualProgramBuilder<'graph> {
     fn binding(
         &mut self, source: SourceId, binding: t::GenBind<t::TermId>,
     ) -> Result<t::GenBind<t::TermId>, TextualProgramError> {
-        let t::GenBind { fix, comp, binder, params, ty, bindee } = binding;
+        let t::GenBind { flavor, binder, params, ty, bindee } = binding;
         Ok(t::GenBind {
-            fix,
-            comp,
+            flavor,
             binder: self.pattern(source, binder)?,
             params: params.map(|params| self.copattern(source, params)).transpose()?,
             ty: ty.map(|ty| self.term(source, ty)).transpose()?,
@@ -253,6 +257,9 @@ impl<'graph> TextualProgramBuilder<'graph> {
             | t::Term::Abs(t::Abs(pattern, body)) => {
                 t::Abs(self.copattern(source, pattern)?, self.term(source, body)?).into()
             }
+            | t::Term::ValAbs(t::Abs(pattern, body)) => {
+                t::Term::ValAbs(t::Abs(self.copattern(source, pattern)?, self.term(source, body)?))
+            }
             | t::Term::App(t::Appli(terms)) => t::Appli(
                 terms
                     .into_iter()
@@ -265,6 +272,9 @@ impl<'graph> TextualProgramBuilder<'graph> {
             }
             | t::Term::Pi(t::Pi(pattern, body)) => {
                 t::Pi(self.copattern(source, pattern)?, self.term(source, body)?).into()
+            }
+            | t::Term::ValPi(t::ValPi(pattern, body)) => {
+                t::ValPi(self.copattern(source, pattern)?, self.term(source, body)?).into()
             }
             | t::Term::Forall(t::Forall(pattern, body)) => {
                 t::Forall(self.copattern(source, pattern)?, self.term(source, body)?).into()
@@ -316,6 +326,12 @@ impl<'graph> TextualProgramBuilder<'graph> {
                 binder: self.pattern(source, binder)?,
                 placement,
                 tail: self.term(source, tail)?,
+            }
+            .into(),
+            | t::Term::Pipeline(t::Pipeline { direction, subject, function }) => t::Pipeline {
+                direction,
+                subject: self.term(source, subject)?,
+                function: self.term(source, function)?,
             }
             .into(),
             | t::Term::ContextBind(t::ContextBind { mode, binding, placement, tail }) => {

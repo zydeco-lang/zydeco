@@ -7,7 +7,7 @@ begin
   let (/String) = representations/string that
   let (/OS) = system that
 
-  let (/bool; /list; /string; /process) = make_std builtin in
+  let (/bool; /list; /string; /process) = builtin |> make_std in
   ! (process/arg_list) {
     fn arguments =>
       ! (list/case)

@@ -6,3 +6,11 @@
         name: (_) @name))) @item
   (#match? @_kind "^(def|define)$")
 )
+
+(
+  (context_binding
+    binding: (general_binding
+      value_function: (value_modifier)
+      binder: (variable_pattern
+        name: (_) @name))) @item
+)

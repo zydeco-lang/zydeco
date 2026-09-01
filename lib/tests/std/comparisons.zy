@@ -7,7 +7,7 @@ begin
   let (/Ret) = core that
   let (/Int64) = representations/i64 that
 
-  let (/bool; /int64; /string; /process) = make_std builtin in
+  let (/bool; /int64; /string; /process) = builtin |> make_std in
   do equal <- ! (int64/eq) 3 3;
   do equal_status <- ! (bool/if)
     (Ret Int64)

@@ -9,7 +9,7 @@ begin
   let (/String) = representations/string that
   let (/OS) = system that
 
-  let (/Bool; /Option; /bool; /option; /int64; /string; /stdio; /process) = make_std builtin in
+  let (/Bool; /Option; /bool; /option; /int64; /string; /stdio; /process) = builtin |> make_std in
   begin
     let Cmp (A : VType) = Thk (A -> A -> Ret Bool) that
     --| AvlTree

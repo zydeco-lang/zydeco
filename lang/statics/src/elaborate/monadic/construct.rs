@@ -836,7 +836,7 @@ where
         arg.mbuild(tycker, env)
     }
 }
-// computation value abstraction
+// computation abstraction over a value parameter
 impl<P, F, T> MonConstruct<CompuId> for Abs<P, F>
 where
     P: MonConstruct<VPatId>,
@@ -915,7 +915,7 @@ where
         Ok((env, alloc))
     }
 }
-// computation value application
+// computation application to a value argument
 impl<S, T> MonConstruct<CompuId> for App<S, T>
 where
     S: MonConstruct<CompuId>,

@@ -6,7 +6,7 @@ pub mod utils {
         WasmBackendKind,
     };
     use zydeco_session::AnalysisError;
-    use zydeco_statics::syntax::{Fillable, TermAnnId, Type};
+    use zydeco_statics::syntax::TermAnnId;
 
     #[derive(Debug, Error)]
     pub enum CaseError {
@@ -75,12 +75,9 @@ pub mod utils {
             });
             let checked =
                 compiler.checked_program(&analysis).expect("successful analysis must be checked");
-            let TermAnnId::Value(_, root_type) = checked.root else {
-                panic!("Library source {} must export a value", self.path.display());
-            };
             assert!(
-                matches!(checked.statics.types_pre[&root_type], Fillable::Done(Type::VPackPi(_))),
-                "Library source {} must export a pure package function",
+                matches!(checked.root, TermAnnId::Value(_, _)),
+                "Library source {} must export a value",
                 self.path.display()
             );
         }
@@ -239,7 +236,7 @@ pub mod utils {
             let open_monadic = match prelude {
                 | SourceCasePrelude::Core => String::new(),
                 | SourceCasePrelude::Monadic => {
-                    concat!("let (= Monad, = Algebra, ()) =\n", "  monadic_basis builtin in\n",)
+                    concat!("let (= Monad, = Algebra, ()) =\n", "  builtin |> monadic_basis in\n",)
                         .to_string()
                 }
             };

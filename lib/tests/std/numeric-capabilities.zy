@@ -9,7 +9,7 @@ begin
   let (/Float64) = representations/f64 that
   let (/OS) = system that
 
-  let (/Bool; /Numeric; /numeric; /primitives; /bool; /process) = make_std builtin in
+  let (/Bool; /Numeric; /numeric; /primitives; /bool; /process) = builtin |> make_std in
   let ! multiply_add_equal (A : VType)
     (dictionary : Numeric Bool A)
     (left : A)

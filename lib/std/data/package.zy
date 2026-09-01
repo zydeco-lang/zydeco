@@ -1,7 +1,7 @@
-param (
+val (
   (/core; /numeric) :
   @(import("../builtin.zy"))
-) in
+) =>
 let (/VType; /CType; /Thk; /Ret; /Unit) = core in
 let (= Int64, int64) = numeric/int64 in
 begin

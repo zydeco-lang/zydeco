@@ -9,7 +9,7 @@ begin
   let (= Int64, int64) = numeric/int64 that
   let (/stdio; /process) = system that
   let (= Monad, = Algebra, ()) =
-    monadic_basis builtin
+    builtin |> monadic_basis
   in
   begin
 

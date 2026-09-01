@@ -14,7 +14,7 @@ begin
     /Bool; /Result; /Path; /IoError;
     /bool; /option; /result = results; /list;
     /int64; /string; /bytes; /io; /fs; /stdio; /process
-  ) = make_std builtin in
+  ) = builtin |> make_std in
   let ! expect_ok (A : VType)
     (result : Result A IoError)
     (continuation : Thk (A -> OS))

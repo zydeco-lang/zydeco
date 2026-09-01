@@ -11,7 +11,7 @@ begin
     @(import("../../std/builtin.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret) = core that
-  let (= Monad, = Algebra, ()) = monadic_basis builtin in
+  let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
   begin
 
     let Top =

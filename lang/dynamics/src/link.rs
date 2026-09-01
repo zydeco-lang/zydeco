@@ -44,14 +44,6 @@ pub struct BuiltinComputationRootLinker {
     pub signature: ss::PackPi,
 }
 
-/// Apply host Builtin packages until a pure package-dependent value reaches its result.
-pub struct BuiltinValueRootLinker {
-    pub scoped: Arc<ScopedArena>,
-    pub statics: Arc<StaticsArena>,
-    pub root: ss::ValueId,
-    pub signature: ss::ValuePackPi,
-}
-
 #[derive(Clone, Debug, Error)]
 pub enum BuiltinPackageError {
     #[error(transparent)]
@@ -78,13 +70,6 @@ impl BuiltinPackageLinker {
     fn computation_signature(statics: &StaticsArena, ty: ss::TypeId) -> Option<ss::PackPi> {
         match Self::type_view(statics, ty) {
             | Some(ss::Type::PackPi(signature)) => Some(signature.as_ref().clone()),
-            | _ => None,
-        }
-    }
-
-    fn value_signature(statics: &StaticsArena, ty: ss::TypeId) -> Option<ss::ValuePackPi> {
-        match Self::type_view(statics, ty) {
-            | Some(ss::Type::VPackPi(signature)) => Some(signature.as_ref().clone()),
             | _ => None,
         }
     }
@@ -151,32 +136,6 @@ impl BuiltinComputationRootLinker {
     }
 }
 
-impl BuiltinValueRootLinker {
-    pub fn run(self) -> Result<DynamicsProgram, BuiltinPackageError> {
-        let Self { scoped, statics, root, signature } = self;
-        let defs = statics.dynamic_definitions(&scoped).rebind::<ds::DynamicsScope>();
-        let (value, _) = std::iter::successors(Some(signature), |signature| {
-            BuiltinPackageLinker::value_signature(&statics, signature.codomain)
-        })
-        .try_fold(
-            (root.link(&statics), HashSet::new()),
-            |(function, mut seen), signature| {
-                if !seen.insert(signature.codomain) {
-                    return Err(BuiltinPackageError::RecursiveContract { ty: signature.codomain });
-                }
-                let plan = BuiltinPackagePlan::for_value(&statics, &signature)?;
-                let package = BuiltinPackageLinker::link(plan.value)?;
-                Ok::<_, BuiltinPackageError>((
-                    Rc::new(ds::Value::VApp(App(function, package))),
-                    seen,
-                ))
-            },
-        )?;
-        let root = Rc::new(ds::Computation::Ret(Return(value)));
-        Ok(DynamicsProgram::new(defs, root))
-    }
-}
-
 impl Link for ss::VPatId {
     type Arena<'a> = &'a StaticsArena;
     type Out = ds::RcVPat;
@@ -200,12 +159,16 @@ impl Link for ss::VPatId {
             | VPat::Triv(Triv) => Triv.into(),
             | VPat::VCons(items) => {
                 let items = items.iter().map(|item| item.link(statics)).collect();
-                ds::ValuePattern::VCons(items).into()
+                ds::ValuePattern::VCons(items)
             }
             | VPat::SCons(ss::ConsN(_, body)) => {
                 let body = body.link(statics);
                 body.as_ref().to_owned()
             }
+            | VPat::View(view) => ds::ValuePattern::View(ds::ViewPattern {
+                function: view.function.link(statics),
+                pattern: view.pattern.link(statics),
+            }),
         };
         Rc::new(vpat)
     }
@@ -228,23 +191,23 @@ impl Link for ss::ValueId {
                 let tail = tail.link(statics);
                 Let { binder, bindee, tail }.into()
             }
-            | Value::VAbs(Abs(binder, body)) => {
+            | Value::ValAbs(Abs(ss::ValBinder::Type(_), body)) => {
+                let body = body.link(statics);
+                body.as_ref().to_owned()
+            }
+            | Value::ValAbs(Abs(ss::ValBinder::Value(binder), body)) => {
                 let binder = binder.link(statics);
                 let body = body.link(statics);
-                Abs(binder, body).into()
+                ds::Value::ValAbs(Abs(binder, body))
             }
-            | Value::VApp(App(function, argument)) => {
+            | Value::ValApp(App(function, ss::ValArgument::Type(_))) => {
+                let function = function.link(statics);
+                function.as_ref().to_owned()
+            }
+            | Value::ValApp(App(function, ss::ValArgument::Value(argument))) => {
                 let function = function.link(statics);
                 let argument = argument.link(statics);
-                App(function, argument).into()
-            }
-            | Value::TAbs(Abs(_, body)) => {
-                let body = body.link(statics);
-                body.as_ref().to_owned()
-            }
-            | Value::TApp(App(body, _)) => {
-                let body = body.link(statics);
-                body.as_ref().to_owned()
+                ds::Value::ValApp(App(function, argument))
             }
             | Value::Thunk(Thunk(body)) => {
                 let body = body.link(statics);
@@ -258,7 +221,7 @@ impl Link for ss::ValueId {
             | Value::Triv(Triv) => Triv.into(),
             | Value::VCons(items) => {
                 let items = items.iter().map(|item| item.link(statics)).collect();
-                ds::Value::VCons(items).into()
+                ds::Value::VCons(items)
             }
             | Value::SCons(ss::ConsN(_, body)) => {
                 let body = body.link(statics);

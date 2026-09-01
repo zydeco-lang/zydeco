@@ -57,13 +57,18 @@ impl DeepClone for b::PatId {
             | b::Pattern::Project(b::ProjectionPattern(field, pattern)) => {
                 b::ProjectionPattern(field.clone(), pattern.deep_clone(desugarer)).into()
             }
+            | b::Pattern::View(b::ViewPattern { function, pattern }) => b::ViewPattern {
+                function: function.deep_clone(desugarer),
+                pattern: pattern.deep_clone(desugarer),
+            }
+            .into(),
             | b::Pattern::Alias(b::Alias(patterns)) => {
                 let patterns = patterns.iter().map(|pat| pat.deep_clone(desugarer)).collect();
                 b::Alias(b::ConsN::from_vec(patterns).unwrap()).into()
             }
             | b::Pattern::Cons(pat) => {
                 let pats = pat.iter().map(|pat| pat.deep_clone(desugarer)).collect();
-                b::Pattern::Cons(pats).into()
+                b::Pattern::Cons(pats)
             }
         };
         Alloc::alloc(desugarer, pat, prev)
@@ -141,13 +146,17 @@ impl DeepClone for b::TermId {
             | b::Term::Triv(_term) => b::Triv.into(),
             | b::Term::Cons(term) => {
                 let terms = term.iter().map(|term| term.deep_clone(desugarer)).collect();
-                b::Term::Cons(terms).into()
+                b::Term::Cons(terms)
             }
             | b::Term::Abs(term) => {
                 let b::Abs(params, tail) = term;
                 let params = params.deep_clone(desugarer);
                 let tail = tail.deep_clone(desugarer);
                 b::Abs(params, tail).into()
+            }
+            | b::Term::ValAbs(term) => {
+                let b::Abs(parameter, body) = term;
+                b::Term::ValAbs(b::Abs(parameter.deep_clone(desugarer), body.deep_clone(desugarer)))
             }
             | b::Term::App(term) => {
                 let b::App(a, b) = term;
@@ -166,6 +175,10 @@ impl DeepClone for b::TermId {
                 let params = params.deep_clone(desugarer);
                 let ty = ty.deep_clone(desugarer);
                 b::Pi(params, ty).into()
+            }
+            | b::Term::ValPi(term) => {
+                let b::ValPi(parameter, body) = term;
+                b::ValPi(parameter.deep_clone(desugarer), body.deep_clone(desugarer)).into()
             }
             | b::Term::Sigma(term) => {
                 let b::Sigma(params, ty) = term;

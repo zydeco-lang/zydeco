@@ -8,7 +8,7 @@ begin
   let (/Int64) = representations/i64 that
   let (/String) = representations/string that
 
-  let (/option; /int64; /string; /process) = make_std builtin in
+  let (/option; /int64; /string; /process) = builtin |> make_std in
   do present <- ! (string/split_once) "left:right" ':';
   do present_status <- ! (option/fold)
     (String * String)

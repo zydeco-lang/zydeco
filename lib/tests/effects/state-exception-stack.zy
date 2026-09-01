@@ -12,9 +12,9 @@ begin
   let (/String) = representations/string that
   let (= Int64, int64) = numeric/int64 that
   let (/OS; /stdio; /process) = system that
-  let (= Monad, = Algebra, ()) = monadic_basis builtin in
-  let (/MonadState) = state_basis builtin in
-  let (/MonadThrow) = exception_basis builtin in
+  let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
+  let (/MonadState) = builtin |> state_basis in
+  let (/MonadThrow) = builtin |> exception_basis in
   let (
     = StateExn,
     = mo_state_exn,
@@ -25,7 +25,7 @@ begin
     = raise,
     = catch,
     = run_state_exn
-  ) = state_exn_basis builtin in
+  ) = builtin |> state_exn_basis in
   begin
 
     -- The user-facing capability signature. Every field is written with `Ret`;

@@ -7,7 +7,7 @@ begin
   let (/Ret) = core that
   let (/Int64) = representations/i64 that
 
-  let (/OS; /bool; /int64; /process) = make_std builtin in
+  let (/OS; /bool; /int64; /process) = builtin |> make_std in
   let Row =
       Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64
     * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64

@@ -974,8 +974,7 @@ pub fn let_judgment<'db>(
 /// argument were checked as.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum AppKind {
-    ValueValue { function: ss::ValueId, argument: ss::ValueId },
-    ValueType { function: ss::ValueId, argument: ss::TypeId },
+    Value { function: ss::ValueId, argument: ss::ValArgument },
     CompuValue { function: ss::CompuId, argument: ss::ValueId },
     CompuType { function: ss::CompuId, argument: ss::TypeId },
 }
@@ -1037,20 +1036,11 @@ fn derive_app_outcome<'db>(
     db: &'db dyn TyckDb, key_space: KeySpaceId, input: InternedAppInput<'db>,
 ) -> Option<AppSynOutcome> {
     match input.kind(db) {
-        | AppKind::ValueValue { function, argument } => {
+        | AppKind::Value { function, argument } => {
             let id: ss::ValueId = derived_id(key_space, 0);
             Some(AppSynOutcome::Value {
                 id,
-                value: ss::Value::VApp(ss::App(function, argument)),
-                ann: input.ann(db),
-                reported: input.reported(db),
-            })
-        }
-        | AppKind::ValueType { function, argument } => {
-            let id: ss::ValueId = derived_id(key_space, 0);
-            Some(AppSynOutcome::Value {
-                id,
-                value: ss::Value::TApp(ss::App(function, argument)),
+                value: ss::Value::ValApp(ss::App(function, argument)),
                 ann: input.ann(db),
                 reported: input.reported(db),
             })
@@ -1208,7 +1198,6 @@ pub fn pat_alias_syn_judgment<'db>(
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum PiSynArm {
     KindArrow { kd_1: ss::KindId, kd_2: ss::KindId },
-    ValueForall { ty_2: ss::TypeId, kd_2: ss::KindId },
     Forall { ty_2: ss::TypeId, kd_2: ss::KindId },
     KindMismatch,
     MissingAnnotation,
@@ -1226,8 +1215,8 @@ pub struct InternedPiSyn<'db> {
     pub abst: ss::AbstId,
 }
 
-/// The allocation tail of a pi judgment: the kind arrow, the value forall, or
-/// the computation forall node; the rejections surface as errors.
+/// The allocation tail of a pi judgment: either a kind arrow or a universal
+/// type node; the rejections surface as errors.
 #[derive(Clone, Debug)]
 pub enum PiSynOutcome {
     Kind { id: ss::KindId, kind: ss::Kind },
@@ -1252,17 +1241,6 @@ pub fn pi_syn_judgment<'db>(
         | PiSynArm::KindArrow { kd_1, kd_2 } => {
             let id: ss::KindId = derived_id(key_space, 0);
             Some(PiSynOutcome::Kind { id, kind: ss::Kind::Arrow(ss::Arrow(kd_1, kd_2)) })
-        }
-        | PiSynArm::ValueForall { ty_2, kd_2 } => {
-            let id: ss::TypeId = derived_id(key_space, 0);
-            Some(PiSynOutcome::Type {
-                id,
-                ty: ss::Type::VForall(ss::ValueForall(
-                    ss::TypeBinder { pattern: input.tpat(db), witness: input.abst(db) },
-                    ty_2,
-                )),
-                kd: kd_2,
-            })
         }
         | PiSynArm::Forall { ty_2, kd_2 } => {
             let id: ss::TypeId = derived_id(key_space, 0);
@@ -1372,26 +1350,6 @@ pub enum AbsSynArm {
         compu: ss::CompuId,
         body_ty: ss::TypeId,
     },
-    PolymorphicValue {
-        tpat: ss::TPatId,
-        abst: ss::AbstId,
-        value: ss::ValueId,
-        body_ty: ss::TypeId,
-    },
-    ValueArrow {
-        vpat: ss::VPatId,
-        ty: ss::TypeId,
-        value: ss::ValueId,
-        body_ty: ss::TypeId,
-    },
-    ValuePackPi {
-        vpat: ss::VPatId,
-        domain: ss::TypeId,
-        first: ss::AbstId,
-        rest: Vec<ss::AbstId>,
-        codomain: ss::TypeId,
-        value: ss::ValueId,
-    },
     CompuArrow {
         vpat: ss::VPatId,
         ty: ss::TypeId,
@@ -1434,20 +1392,6 @@ pub enum AbsSynOutcome {
         abs_id: ss::CompuId,
         abs: ss::Computation,
     },
-    TAbsValue {
-        ann_id: ss::TypeId,
-        ann: ss::Type,
-        kd: ss::KindId,
-        abs_id: ss::ValueId,
-        abs: ss::Value,
-    },
-    VAbsValue {
-        ann_id: ss::TypeId,
-        ann: ss::Type,
-        kd: ss::KindId,
-        abs_id: ss::ValueId,
-        abs: ss::Value,
-    },
     VAbsCompu {
         ann_id: ss::TypeId,
         ann: ss::Type,
@@ -1471,13 +1415,6 @@ pub fn abs_syn_judgment<'db>(
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
     let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
-    let vtype = |db: &dyn TyckDb, data: ScopedData<'_>| {
-        let key = InternedIntrinsic::new(db, IntrinsicKey::VType);
-        let IntrinsicSingleton::Kind { id, .. } = intrinsic_singleton(db, data, key) else {
-            unreachable!("the vtype singleton is kind-producing")
-        };
-        id
-    };
     let ctype = |db: &dyn TyckDb, data: ScopedData<'_>| {
         let key = InternedIntrinsic::new(db, IntrinsicKey::CType);
         let IntrinsicSingleton::Kind { id, .. } = intrinsic_singleton(db, data, key) else {
@@ -1511,47 +1448,6 @@ pub fn abs_syn_judgment<'db>(
                 kd: ctype(db, data),
                 abs_id,
                 abs: ss::Computation::TAbs(ss::Abs(tpat, compu)),
-            })
-        }
-        | AbsSynArm::PolymorphicValue { tpat, abst, value, body_ty } => {
-            let ann_id: ss::TypeId = derived_id(key_space, 0);
-            let abs_id: ss::ValueId = derived_id(key_space, 1);
-            Some(AbsSynOutcome::TAbsValue {
-                ann_id,
-                ann: ss::Type::VForall(ss::ValueForall(
-                    ss::TypeBinder { pattern: tpat, witness: abst },
-                    body_ty,
-                )),
-                kd: vtype(db, data),
-                abs_id,
-                abs: ss::Value::TAbs(ss::Abs(tpat, value)),
-            })
-        }
-        | AbsSynArm::ValueArrow { vpat, ty, value, body_ty } => {
-            let ann_id: ss::TypeId = derived_id(key_space, 0);
-            let abs_id: ss::ValueId = derived_id(key_space, 1);
-            Some(AbsSynOutcome::VAbsValue {
-                ann_id,
-                ann: ss::Type::VArrow(ss::ValueArrow(ty, body_ty)),
-                kd: vtype(db, data),
-                abs_id,
-                abs: ss::Value::VAbs(ss::Abs(vpat, value)),
-            })
-        }
-        | AbsSynArm::ValuePackPi { vpat, domain, first, rest, codomain, value } => {
-            let ann_id: ss::TypeId = derived_id(key_space, 0);
-            let abs_id: ss::ValueId = derived_id(key_space, 1);
-            Some(AbsSynOutcome::VAbsValue {
-                ann_id,
-                ann: ss::ValuePackPi {
-                    domain,
-                    witnesses: ss::PackTelescope::new(first, rest),
-                    codomain,
-                }
-                .into(),
-                kd: vtype(db, data),
-                abs_id,
-                abs: ss::Value::VAbs(ss::Abs(vpat, value)),
             })
         }
         | AbsSynArm::CompuArrow { vpat, ty, compu, body_ty } => {
@@ -2227,24 +2123,6 @@ pub struct InternedPackPiIntro<'db> {
     pub codomain: ss::TypeId,
 }
 
-/// An interned value pack-pi introduction input, for use as a salsa query
-/// key.
-#[salsa::interned]
-pub struct InternedValuePackPiIntro<'db> {
-    #[returns(clone)]
-    pub pattern: ss::VPatId,
-    #[returns(clone)]
-    pub body: ss::ValueId,
-    #[returns(clone)]
-    pub domain: ss::TypeId,
-    #[returns(clone)]
-    pub first: ss::AbstId,
-    #[returns(clone)]
-    pub rest: Vec<ss::AbstId>,
-    #[returns(clone)]
-    pub codomain: ss::TypeId,
-}
-
 /// The allocation tail of a package-pi introduction: the pack-pi signature
 /// and the abstraction node.
 #[derive(Clone, Debug)]
@@ -2254,16 +2132,6 @@ pub struct PackPiIntroOutcome {
     pub kd: ss::KindId,
     pub abs_id: ss::CompuId,
     pub abs: ss::Computation,
-}
-
-/// The allocation tail of a value package-pi introduction.
-#[derive(Clone, Debug)]
-pub struct ValuePackPiIntroOutcome {
-    pub sig_id: ss::TypeId,
-    pub sig: ss::Type,
-    pub kd: ss::KindId,
-    pub abs_id: ss::ValueId,
-    pub abs: ss::Value,
 }
 
 /// The synthesized judgment of a package-pi introduction, keyed on the
@@ -2296,38 +2164,6 @@ pub fn pack_pi_intro_judgment<'db>(
         kd: ctype,
         abs_id,
         abs: ss::Computation::VAbs(ss::Abs(input.pattern(db), input.body(db))),
-    })
-}
-
-/// The synthesized judgment of a value package-pi introduction.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
-pub fn value_pack_pi_intro_judgment<'db>(
-    db: &'db dyn TyckDb, data: ScopedData<'db>, site: InternedSite<'db>,
-    input: InternedValuePackPiIntro<'db>,
-) -> Option<ValuePackPiIntroOutcome> {
-    let _ = data;
-    let vtype = {
-        let key = InternedIntrinsic::new(db, IntrinsicKey::VType);
-        let IntrinsicSingleton::Kind { id, .. } = intrinsic_singleton(db, data, key) else {
-            unreachable!("the vtype singleton is kind-producing")
-        };
-        id
-    };
-    let key_space =
-        KeySpaceId::derive(QUERY_DERIVATION_TAG, site.space(db), site.raw(db), site.occurrence(db));
-    let sig_id: ss::TypeId = derived_id(key_space, 0);
-    let abs_id: ss::ValueId = derived_id(key_space, 1);
-    Some(ValuePackPiIntroOutcome {
-        sig_id,
-        sig: ss::ValuePackPi {
-            domain: input.domain(db),
-            witnesses: ss::PackTelescope::new(input.first(db), input.rest(db).iter().copied()),
-            codomain: input.codomain(db),
-        }
-        .into(),
-        kd: vtype,
-        abs_id,
-        abs: ss::Value::VAbs(ss::Abs(input.pattern(db), input.body(db))),
     })
 }
 

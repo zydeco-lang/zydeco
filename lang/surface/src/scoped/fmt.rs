@@ -10,6 +10,31 @@ impl<'arena> Formatter<'arena> {
     pub fn new(arena: &'arena ScopedArena) -> Self {
         Formatter { arena }
     }
+
+    fn view_pattern_head_parts(&self, view: TermId) -> (TermId, Vec<TermId>) {
+        let Term::App(App(function, argument)) = &self.arena.terms[&view] else {
+            return (view, Vec::new());
+        };
+        let (head, prefix) = self.view_pattern_head_parts(*function);
+        (head, prefix.into_iter().chain([*argument]).collect())
+    }
+
+    fn view_pattern_head(&'arena self, view: TermId) -> RcDoc<'arena> {
+        let (head, arguments) = self.view_pattern_head_parts(view);
+        if arguments.is_empty() {
+            head.pretty(self)
+        } else {
+            RcDoc::concat([
+                head.pretty(self),
+                RcDoc::text("["),
+                RcDoc::intersperse(
+                    arguments.into_iter().map(|argument| argument.pretty(self)),
+                    RcDoc::text(", "),
+                ),
+                RcDoc::text("]"),
+            ])
+        }
+    }
 }
 
 use pretty::RcDoc;
@@ -31,6 +56,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for PatId {
             | Pattern::Named(p) => p.pretty(f),
             | Pattern::Ctor(p) => p.pretty(f),
             | Pattern::Project(p) => p.pretty(f),
+            | Pattern::View(p) => p.pretty(f),
             | Pattern::Alias(p) => p.pretty(f),
             | Pattern::Triv(p) => p.pretty(f),
             | Pattern::Cons(p) => p.pretty(f),
@@ -73,9 +99,16 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
             | Term::Triv(t) => t.pretty(f),
             | Term::Cons(t) => t.pretty(f),
             | Term::Abs(t) => t.pretty(f),
+            | Term::ValAbs(Abs(pattern, body)) => RcDoc::concat([
+                RcDoc::text("val "),
+                pattern.pretty(f),
+                RcDoc::text(" => "),
+                body.pretty(f),
+            ]),
             | Term::App(t) => t.pretty(f),
             | Term::Fix(t) => t.pretty(f),
             | Term::Pi(t) => t.pretty(f),
+            | Term::ValPi(t) => t.pretty(f),
             | Term::Sigma(t) => t.pretty(f),
             | Term::ManifestExists(t) => t.pretty(f),
             | Term::Pack(t) => t.pretty(f),
@@ -307,6 +340,18 @@ impl<'a> Pretty<'a, Formatter<'a>> for Pi {
     }
 }
 
+impl<'a> Pretty<'a, Formatter<'a>> for ValPi {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let ValPi(pattern, body) = self;
+        RcDoc::concat([
+            RcDoc::text("val pi "),
+            pattern.pretty(f),
+            RcDoc::text(" . "),
+            body.pretty(f),
+        ])
+    }
+}
+
 impl<'a> Pretty<'a, Formatter<'a>> for Sigma {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Sigma(p, t) = self;
@@ -414,6 +459,13 @@ impl<'a> Pretty<'a, Formatter<'a>> for Let<PatId, TermId, TermId> {
             RcDoc::text(" in "),
             tail.pretty(f),
         ])
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for ViewPattern {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let ViewPattern { function, pattern } = self;
+        RcDoc::concat([f.view_pattern_head(*function), RcDoc::text(" ~> "), pattern.pretty(f)])
     }
 }
 

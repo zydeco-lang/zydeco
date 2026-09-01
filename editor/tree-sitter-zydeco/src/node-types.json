@@ -48,6 +48,10 @@
       {
         "type": "variable_pattern",
         "named": true
+      },
+      {
+        "type": "view_pattern",
+        "named": true
       }
     ]
   },
@@ -61,6 +65,10 @@
       },
       {
         "type": "application_expression",
+        "named": true
+      },
+      {
+        "type": "backward_pipeline_expression",
         "named": true
       },
       {
@@ -113,6 +121,10 @@
       },
       {
         "type": "force_expression",
+        "named": true
+      },
+      {
+        "type": "forward_pipeline_expression",
         "named": true
       },
       {
@@ -169,6 +181,14 @@
       },
       {
         "type": "thunk_expression",
+        "named": true
+      },
+      {
+        "type": "value_lambda_expression",
+        "named": true
+      },
+      {
+        "type": "value_pi_type",
         "named": true
       },
       {
@@ -284,6 +304,32 @@
         ]
       },
       "function": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_term",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "backward_pipeline_expression",
+    "named": true,
+    "fields": {
+      "function": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_term",
+            "named": true
+          }
+        ]
+      },
+      "subject": {
         "multiple": false,
         "required": true,
         "types": [
@@ -951,6 +997,32 @@
     }
   },
   {
+    "type": "forward_pipeline_expression",
+    "named": true,
+    "fields": {
+      "function": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_term",
+            "named": true
+          }
+        ]
+      },
+      "subject": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_term",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "function_type",
     "named": true,
     "fields": {
@@ -1036,6 +1108,16 @@
         "types": [
           {
             "type": "_term",
+            "named": true
+          }
+        ]
+      },
+      "value_function": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "value_modifier",
             "named": true
           }
         ]
@@ -2118,6 +2200,63 @@
     }
   },
   {
+    "type": "value_lambda_expression",
+    "named": true,
+    "fields": {
+      "body": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_term",
+            "named": true
+          }
+        ]
+      },
+      "parameters": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "copattern",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "value_modifier",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "value_pi_type",
+    "named": true,
+    "fields": {
+      "body": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_term",
+            "named": true
+          }
+        ]
+      },
+      "parameters": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "copattern",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "variable",
     "named": true,
     "fields": {
@@ -2151,6 +2290,46 @@
           },
           {
             "type": "upper_identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "view_pattern",
+    "named": true,
+    "fields": {
+      "argument": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "_term",
+            "named": true
+          }
+        ]
+      },
+      "function": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "lower_identifier",
+            "named": true
+          },
+          {
+            "type": "upper_identifier",
+            "named": true
+          }
+        ]
+      },
+      "pattern": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_pattern",
             "named": true
           }
         ]
@@ -2203,6 +2382,10 @@
   },
   {
     "type": "<-",
+    "named": false
+  },
+  {
+    "type": "<|",
     "named": false
   },
   {
@@ -2377,6 +2560,10 @@
     "named": true
   },
   {
+    "type": "val",
+    "named": false
+  },
+  {
     "type": "where",
     "named": false
   },
@@ -2389,7 +2576,15 @@
     "named": false
   },
   {
+    "type": "|>",
+    "named": false
+  },
+  {
     "type": "}",
+    "named": false
+  },
+  {
+    "type": "~>",
     "named": false
   }
 ]

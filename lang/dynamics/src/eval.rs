@@ -127,6 +127,13 @@ impl<'rt> Eval<'rt> for Assign<RcVPat, SemValue> {
                 | SemValue::Literal(_)
                 | SemValue::Host(_) => unreachable!(),
             },
+            | VPat::View(ViewPattern { function, pattern }) => {
+                let argument = std::rc::Rc::new(Value::SemValue(sem));
+                let transformed = Value::ValApp(App(function.clone(), argument)).eval(runtime);
+                if Assign(pattern.clone(), transformed).eval(runtime).is_err() {
+                    return Step::Done(Err(()));
+                }
+            }
         }
         Step::Done(Ok(()))
     }
@@ -151,19 +158,19 @@ impl<'rt> Eval<'rt> for Value {
                 runtime.env = outer;
                 Step::Done(value)
             }
-            | Value::VAbs(Abs(binder, body)) => {
+            | Value::ValAbs(Abs(binder, body)) => {
                 Step::Done(EnvValueClosure { binder, body, env: runtime.env.clone() }.into())
             }
-            | Value::VApp(App(function, argument)) => {
+            | Value::ValApp(App(function, argument)) => {
                 let function = function.as_ref().clone().eval(runtime);
                 let argument = argument.as_ref().clone().eval(runtime);
                 let SemValue::Closure(EnvValueClosure { binder, body, env }) = function else {
-                    panic!("Value application on non-closure")
+                    panic!("value application on non-closure")
                 };
                 let outer = std::mem::replace(&mut runtime.env, env);
                 Assign(binder, argument)
                     .eval(runtime)
-                    .expect("pattern match failed in pure function");
+                    .expect("pattern match failed in value function");
                 let value = body.as_ref().clone().eval(runtime);
                 runtime.env = outer;
                 Step::Done(value)

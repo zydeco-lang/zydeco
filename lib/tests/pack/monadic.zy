@@ -7,7 +7,7 @@ begin
   let (/VType; /Ret; /Unit) = core that
   let (/Int64) = representations/i64 that
   let (/process) = system that
-  let (= Monad, = Algebra, ()) = monadic_basis builtin in
+  let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
   begin
 
     let Mixed = exists (Leading as Unit : VType) (X : VType) .

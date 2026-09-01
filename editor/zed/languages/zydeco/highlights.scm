@@ -33,6 +33,9 @@
     name: (_) @function)
   parameters: (copattern))
 
+(view_pattern
+  function: (_) @function)
+
 [
   (named_term
     name: (_) @property)
@@ -68,6 +71,7 @@
   "define"
   "let"
   "param"
+  "val"
   "in"
   "that"
   "do"
@@ -95,6 +99,9 @@
   "/"
   "::"
   "<-"
+  "~>"
+  "|>"
+  "<|"
   "="
 ] @operator
 

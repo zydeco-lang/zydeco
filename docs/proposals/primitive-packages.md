@@ -31,10 +31,10 @@ let (/VType; /CType; /Thk; /Ret; /Unit) = core in
 
 `VType` and `CType` also occur as leading manifest kind components of the complete host contract. The current
 checker needs those universes while checking the rest of the dependent package. `core` is the consumer-facing
-view; the leading components are an implementation requirement of the provider telescope.
+projection; the leading components are an implementation requirement of the provider telescope.
 
 `Thk`, `Ret`, and `Unit` are compiler intrinsics with applicative identities. `core` gives consumers their primary
-package view. Independently checkable Builtin leaves may repeat the intrinsic spellings in their own contracts;
+package boundary. Independently checkable Builtin leaves may repeat the intrinsic spellings in their own contracts;
 each spelling resolves to the same compiler-canonical identity.
 
 ## Fixed representations
@@ -171,6 +171,6 @@ it to another library:
 
 ```zydeco
 param ((/core; /system; builtin) : @[import("builtin.zy")] _) in
-let std = make_std builtin in
+let std = builtin |> make_std in
 ...
 ```

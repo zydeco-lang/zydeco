@@ -4,15 +4,15 @@
 --| The reader can compare the implementation to the manually implemented implementation.
 --|
 --| Check `exnkt.zydeco` for the implementation of `ExnK`, which is the church encoded version of `Exn`.
-begin
+val (
+  (/core; builtin) :
+  @(import("../../std/builtin.zy"))
+) =>
+  begin
   let monadic_basis = @(import("../../std/control/monad.zy")) that
-  param (
-    (/core; builtin) :
-    @(import("../../std/builtin.zy"))
-  ) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (= Monad, = Algebra, ()) =
-    monadic_basis builtin
+    builtin |> monadic_basis
   in
   begin
 
@@ -127,15 +127,9 @@ begin
     --| be used for all relative monads.
     def ! mt_exn (E : VType) : MonadTrans (ExnT E) =
       let ! mt' (M : VType -> CType) (mo : Thk (Monad M)) =
-        -- The @[debug(...)] macro can be used to print the terms and their types
-        -- during compilation.
-        -- Readers can utilize this feature to observe the generated code,
-        -- and verify that the algebra translation is correct.
-        @[debug("generated and applied")]
         (
           @[monadic] (
             fn (E : VType) =>
-              @[debug("original")]
               let ! mo_exn (E : VType) : Monad (Exn E) =
                 comatch
                 | .return A a => ret +Right(a)

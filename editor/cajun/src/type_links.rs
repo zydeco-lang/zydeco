@@ -3,7 +3,7 @@ use zydeco_statics::{
     arena::StaticsArena,
     syntax::{
         AbstId, AnnId, CoDataId, DataId, ExistsMode, Fillable, KPatId, Kind, KindId, KindPattern,
-        TPatId, Type, TypeAbstraction, TypeBinder, TypeId, TypePattern, ValueArrow,
+        TPatId, Type, TypeAbstraction, TypeBinder, TypeId, TypePattern, ValPiBinder,
     },
 };
 use zydeco_surface::scoped::syntax::DefId;
@@ -161,7 +161,7 @@ impl<'arena> TypeReferenceCollector<'arena> {
                 self.visit_type(*inner)
             }
             | Type::Proj(Proj(head, _)) => self.visit_type(*head),
-            | Type::VArrow(ValueArrow(domain, codomain)) | Type::Arrow(Arrow(domain, codomain)) => {
+            | Type::Arrow(Arrow(domain, codomain)) => {
                 self.visit_type(*domain);
                 self.visit_type(*codomain);
             }
@@ -172,19 +172,24 @@ impl<'arena> TypeReferenceCollector<'arena> {
                 self.visit_type_binder(&forall.0);
                 self.visit_type(forall.1);
             }
-            | Type::VForall(forall) => {
-                self.visit_type_binder(&forall.0);
-                self.visit_type(forall.1);
-            }
             | Type::PackPi(pack_pi) => {
                 pack_pi.witnesses.iter().for_each(|witness| self.visit_abstract(*witness));
                 self.visit_type(pack_pi.domain);
                 self.visit_type(pack_pi.codomain);
             }
-            | Type::VPackPi(pack_pi) => {
-                pack_pi.witnesses.iter().for_each(|witness| self.visit_abstract(*witness));
-                self.visit_type(pack_pi.domain);
-                self.visit_type(pack_pi.codomain);
+            | Type::ValPi(val_pi) => {
+                match &val_pi.binder {
+                    | ValPiBinder::Type(binder) => self.visit_type_binder(binder),
+                    | ValPiBinder::Value(parameter) => {
+                        self.visit_type(parameter.domain);
+                        parameter
+                            .witnesses
+                            .iter()
+                            .flat_map(|witnesses| witnesses.iter())
+                            .for_each(|witness| self.visit_abstract(*witness));
+                    }
+                }
+                self.visit_type(val_pi.codomain);
             }
             | Type::Exists(exists) => {
                 self.visit_type_binder(&exists.binder);

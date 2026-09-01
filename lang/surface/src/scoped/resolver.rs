@@ -229,6 +229,10 @@ impl Resolve for PatId {
             | Pattern::Project(ProjectionPattern(_, pattern)) => {
                 pattern.resolve(resolver, (local, global))?
             }
+            | Pattern::View(ViewPattern { function, pattern }) => {
+                function.resolve(resolver, (local.clone(), global))?;
+                pattern.resolve(resolver, (local, global))?
+            }
             | Pattern::Alias(Alias(pat)) => {
                 // Later items can depend on binders introduced by earlier items.
                 for item in pat {
@@ -321,6 +325,12 @@ impl Resolve for TermId {
                 let () = body.resolve(resolver, (local, global))?;
                 term.into()
             }
+            | Term::ValAbs(term) => {
+                let Abs(pattern, body) = &term;
+                local = pattern.resolve(resolver, (local.clone(), global))?;
+                let () = body.resolve(resolver, (local, global))?;
+                Term::ValAbs(term)
+            }
             | Term::App(term) => {
                 let App(a, b) = &term;
                 let () = a.resolve(resolver, (local.clone(), global))?;
@@ -338,6 +348,12 @@ impl Resolve for TermId {
                 local = copat.resolve(resolver, (local.clone(), global))?;
                 let () = body.resolve(resolver, (local, global))?;
                 term.into()
+            }
+            | Term::ValPi(term) => {
+                let ValPi(pattern, body) = &term;
+                local = pattern.resolve(resolver, (local.clone(), global))?;
+                let () = body.resolve(resolver, (local, global))?;
+                Term::ValPi(term)
             }
             | Term::Sigma(term) => {
                 let Sigma(copat, body) = &term;

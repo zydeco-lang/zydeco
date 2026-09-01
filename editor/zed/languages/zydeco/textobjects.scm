@@ -6,6 +6,14 @@
   (#match? @_kind "^(def|define)$")
 )
 
+(context_binding
+  binding: (general_binding
+    value_function: (value_modifier)
+    value: (_) @function.inside)) @function.around
+
+(value_lambda_expression
+  body: (_) @function.inside) @function.around
+
 [
   (data_type)
   (codata_type)

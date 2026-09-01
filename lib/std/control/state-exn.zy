@@ -1,16 +1,16 @@
 -- A combined State + Exception stack, built from the two effect interfaces.
-param (
+val (
   (/core; builtin) :
   @(import("../builtin.zy"))
-) in
+) =>
 let (/VType; /CType; /Thk; /Ret; /Unit) = core in
 begin
   let monadic_basis = @(import("monad.zy")) that
   let state_basis = @(import("state.zy")) that
   let exception_basis = @(import("exception.zy")) that
-  let (= Monad, = Algebra, ()) = monadic_basis builtin in
-  let (/MonadState) = state_basis builtin in
-  let (/MonadThrow) = exception_basis builtin in
+  let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
+  let (/MonadState) = builtin |> state_basis in
+  let (/MonadThrow) = builtin |> exception_basis in
   begin
     def Either (E : VType) (A : VType) =
       data

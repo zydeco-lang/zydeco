@@ -404,12 +404,6 @@ impl<'a> BuiltinSignatureValidator<'a> {
         self.validate_parts(signature.domain, &signature.witnesses)
     }
 
-    pub fn validate_value(
-        mut self, signature: &ss::ValuePackPi,
-    ) -> Result<(), BuiltinSignatureError> {
-        self.validate_parts(signature.domain, &signature.witnesses)
-    }
-
     fn validate_parts(
         &mut self, domain: ss::TypeId, witnesses: &ss::PackTelescope,
     ) -> Result<(), BuiltinSignatureError> {
@@ -691,13 +685,6 @@ impl BuiltinPackagePlan {
         statics: &StaticsArena, signature: &ss::PackPi,
     ) -> Result<Self, BuiltinPackagePlanError> {
         BuiltinSignatureValidator::new(statics).validate(signature)?;
-        Ok(Self { value: BuiltinPackagePlanner { statics }.value(signature.domain)? })
-    }
-
-    pub fn for_value(
-        statics: &StaticsArena, signature: &ss::ValuePackPi,
-    ) -> Result<Self, BuiltinPackagePlanError> {
-        BuiltinSignatureValidator::new(statics).validate_value(signature)?;
         Ok(Self { value: BuiltinPackagePlanner { statics }.value(signature.domain)? })
     }
 

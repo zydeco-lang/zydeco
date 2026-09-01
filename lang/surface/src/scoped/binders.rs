@@ -33,6 +33,7 @@ impl Binders for PatId {
                 args.binders(arena)
             }
             | Pattern::Project(ProjectionPattern(_, pattern)) => pattern.binders(arena),
+            | Pattern::View(ViewPattern { function: _, pattern }) => pattern.binders(arena),
             | Pattern::Alias(Alias(pat)) => {
                 pat.iter().fold(rpds::HashTrieMapSync::new_sync(), |binders, item| {
                     item.binders(arena).iter().fold(binders, |binders, (name, definition)| {

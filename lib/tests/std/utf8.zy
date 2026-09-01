@@ -9,7 +9,7 @@ begin
   let (/Char) = representations/char that
   let (/String) = representations/string that
 
-  let (/Bool; /bool; /option; /int64; /char; /string; /process) = make_std builtin in
+  let (/Bool; /bool; /option; /int64; /char; /string; /process) = builtin |> make_std in
   let ! status (condition : Bool) : Ret Int64 = ! (bool/if)
     (Ret Int64)
     condition

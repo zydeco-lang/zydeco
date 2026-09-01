@@ -8,7 +8,7 @@ begin
   let (/Int64) = representations/i64 that
   let (/OS) = system that
 
-  let (/list; /int64; /process) = make_std builtin in
+  let (/list; /int64; /process) = builtin |> make_std in
   do empty <- ! (list/nil) Int64;
   do one <- ! (list/cons) Int64 1 empty;
   do values <- ! (list/cons) Int64 2 one;

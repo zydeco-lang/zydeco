@@ -4,7 +4,6 @@ begin
   let Numeric = @(import("numeric.type.zy")) in
   let IntegerModule = @(import("integer.type.zy")) in
   let PrimitiveIntegerModule = @(import("primitive-integer.type.zy")) in
-  let Unit = @(intrinsic(unit)) in
   let Package
     (Bool : VType)
     (Scalar : VType)
@@ -12,15 +11,16 @@ begin
       (#operations :: IntegerModule Bool Scalar String)
     * (#dictionary :: Numeric Bool Scalar)
   in
-  pi (_ : @(import("../builtin/core.zy"))) .
-    forall
-      (Bool : VType)
-      (Scalar : VType)
-      (String : VType)
-    .
-         BoolModule Bool
-      -> PrimitiveIntegerModule Scalar String
-      -> Scalar
-      -> Scalar
-      -> Package Bool Scalar String
+  val pi
+    (Bool : VType)
+    (Scalar : VType)
+    (String : VType)
+    (
+      (_ : @(import("../builtin/core.zy"))),
+      (_ : BoolModule Bool),
+      (_ : PrimitiveIntegerModule Scalar String),
+      (_ : Scalar),
+      (_ : Scalar)
+    )
+  . Package Bool Scalar String
 end

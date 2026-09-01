@@ -1,272 +1,119 @@
-# Value Functions as Value-Level Cut
+# Value Views
 
 ## Abstract
 
-This proposal replaces first-class pure value functions with statically named value transformations.
-A value function does not inhabit a source function type. It names a derivation of the value judgment
+A value view is a pattern that observes a value through a total value function before matching it. If `f` has
+classifier `val pi (_ : A) . B` and `p` is a pattern for `B`, then `f ~> p` is a pattern for `A`.
+
+```zydeco
+let val first ((left, _) : A * B) : A = left that
+let first ~> selected = pair in
+...
+```
+
+The construct is an active pattern in a deliberately narrow sense: it precomposes an existing pattern with a
+first-class, effect-free map. It does not introduce a declaration class or a namespace. Value functions and their
+classifiers are supplied by the separate [ValPi proposal](value-pi.md); this proposal adds only their use in
+patterns.
+
+## Pattern Formation
+
+The surface extension is
 
 ```text
-x : A ⊢ᵥ W : B
+p ::= ... | f ~> p
 ```
 
-and is eliminated by value-level cut. The term `V |> w`, equivalently `w <| V`, substitutes the value `V`
-for the subject of `w`. The pattern `w ~> p` performs the same cut and matches `p` against its result.
-Thus pipelines and view patterns are not two unrelated conveniences: they are the direct and contravariant
-actions of one non-first-class transformation.
-
-This account places the feature in the equational theory of CBPV complex values rather than in a pure function
-calculus. It explains why value functions need neither a runtime function object nor an internal function type,
-and why pipeline fusion is cut elimination.
-
-## Surface Language
-
-A definition has optional static parameters and one runtime subject:
+where `f` ranges semantically over checked value terms. The current surface grammar accepts a value variable followed
+by optional bracketed type arguments; this keeps erased application visibly separate from the nested pattern. The
+operator associates to the right, so
 
 ```zydeco
-view first (A : VType) (B : VType)
-  ((left, _) : A * B)
-: A =
-  left
-that
-```
-
-The transformation has three use forms:
-
-```zydeco
-let selected = pair |> first Int64 String in
-...
-
-let selected = first Int64 String <| pair in
-...
-
-let first Int64 String ~> selected = pair in
-...
-```
-
-Their grammar is deliberately asymmetric:
-
-```text
-V ::= ...
-    | V |> view-head
-    | view-head <| V
-
-p ::= ...
-    | view-head ~> p
-
-view-head ::= view-name static-argument*
-```
-
-The open side of a pipeline accepts an ordinary value, while the other side must resolve statically to a complete
-view head. A bare view name, partial view application, or `value |> runtime_function` is rejected. Ordinary
-computation functions retain their existing CBPV syntax.
-
-`|>` associates to the left; `<|` and `~>` associate to the right. Consequently,
-
-```zydeco
-input |> first_view |> second_view
-second_view <| first_view <| input
 let first_view ~> second_view ~> result = input in ...
 ```
 
-all apply `first_view` before `second_view`. Mixed pipeline directions require parentheses.
+applies `first_view`, then `second_view`, and finally matches `result`. Naming a computed function before the pattern
+still permits dynamic selection and lexical capture without making the pattern grammar ambiguous.
 
-## Static Account
-
-View identities inhabit a static context `Ξ`, separate from the ordinary value context `Γ`.
-A simplified signature is
+The typing rule is ordinary value-function elimination followed by pattern checking:
 
 ```text
-Ξ(w) = ∀δ. A ⇒ᵥ B
+Delta; Gamma |-v f : val pi (_ : A) . B
+Delta; Gamma |-p p <= B -| Gamma'
+------------------------------------------------ VIEW
+Delta; Gamma |-p f ~> p <= A -| Gamma'
 ```
 
-where `⇒ᵥ` is metalanguage notation for a named value derivation, not a source classifier.
-There is no source type `View A B`.
+Only the nested pattern contributes binders. The function expression is checked in the lexical environment at the
+pattern site, so a view may be selected dynamically or may close over ambient values. Its application remains
+total because `ValPi` introduction admits only value terms.
 
-For a definition with an irrefutable subject pattern `P : A`, checking proceeds as follows:
-
-```text
-Δ ⊢ P ⇐ A ⊣ Γ_P
-Ξ; Δ; Γ_P ⊢ᵥ W : B
-irrefutable(P)     free-runtime(W) ⊆ dom(Γ_P)
-acyclic(w, dependencies(W))
---------------------------------------------------------- VIEW-DEF
-Ξ, w : ∀δ. (P : A) ⇒ᵥ B
-```
-
-The body must be a value derivation. It may construct products, constructors, existential packages, literals,
-and thunks, and it may cut other views. It may not force a thunk, run a computation, recur, or capture an ambient
-runtime value. Static parameters and static dependencies remain available.
-
-The capture restriction is stronger than CBPV itself requires. With ambient context `Γ`, the definition would
-denote a morphism `⟦Γ⟧ × ⟦A⟧ → ⟦B⟧`. Requiring capture freedom ensures that the advertised domain `A`
-is the complete runtime dependency of the transformation. A required ambient value must therefore be included in
-the subject, usually as a product or package field.
-
-Both pipeline spellings use one typing rule:
-
-```text
-Ξ(w) = ∀δ. A ⇒ᵥ B
-Δ ⊢ S : δ
-Ξ; Δ; Γ ⊢ᵥ V : A[S/δ]
------------------------------------------------- VIEW-CUT
-Ξ; Δ; Γ ⊢ᵥ V |> w S : B[S/δ]
-Ξ; Δ; Γ ⊢ᵥ w S <| V : B[S/δ]
-```
-
-The rule refers directly to `w` in `Ξ`; it never synthesizes a value for the view head.
-Both forms elaborate to `ViewCut(ViewId, S, V)`.
-
-A view pattern checks its nested pattern against the result classifier:
-
-```text
-Ξ(w) = ∀δ. A ⇒ᵥ B
-Δ ⊢ S : δ
-Ξ; Δ; Γ ⊢ p ⇐ B[S/δ] ⊣ Γ'
------------------------------------------------- VIEW-PAT
-Ξ; Δ; Γ ⊢ w S ~> p ⇐ A[S/δ] ⊣ Γ'
-```
-
-Only `p` contributes binders to the caller. Existential subjects may open witnesses on which `B` depends;
-the view signature records that telescope without introducing a first-class dependent arrow.
-
-## Complex Values and Equational Theory
-
-The central equation expands a view cut into a complex-value binding. If `w` is defined by subject pattern `P`
-and body `W`, then, after instantiating static arguments,
-
-```text
-V |> w  ≡  w <| V  ≡  let P = V in W
-```
-
-Here `≡` denotes source equality, not a Zydeco operator. The right-hand side remains in the value judgment because
-`P` is irrefutable and `W` is a value. For a variable subject, the equation is ordinary substitution:
-
-```text
-let x = V in W  ≡  W[V/x]
-```
-
-Zydeco already represents this administrative form as `Value::Let`. Value functions give selected value
-derivations stable names; pipelines cut those derivations without introducing value closures.
-
-The required equational theory is the corresponding fragment of the complex-value theory:
-
-```text
-let x = V in x                              ≡ V
-let x = V in W                              ≡ W        if x is not free in W
-let y = (let x = V in W) in U               ≡ let x = V in let y = W in U
-```
-
-The last equation is understood up to alpha-renaming. The second law is sound because value formation is total and
-effect-free and because allocation identity is not source-observable. These laws supply identity, dead-cut
-elimination, and associativity. A definition
+The initial rule requires a single runtime value binder. A polymorphic function must be instantiated before it is
+used as a view:
 
 ```zydeco
-view composed (x : A) : C = x |> first |> second that
+let val first (A : VType) (B : VType) ((left, _) : A * B) : A = left that
+let first[Int64, String] ~> selected = pair in
+...
 ```
 
-therefore satisfies
+Square brackets are pattern syntax for erased type application. They make the boundary between static arguments and
+the nested pattern explicit; the term-level spelling remains ordinary value application.
+
+## Meaning
+
+A view pattern is defined by expansion through a fresh intermediate value:
 
 ```text
-V |> composed  ≡  V |> first |> second
+let f ~> p = V in N  ==  let p = (V |> f) in N
 ```
 
-without reifying a composite function. Categorically, a value judgment denotes a morphism in the CBPV value
-category:
-
-```text
-⟦V⟧       : ⟦Γ⟧ → ⟦A⟧
-⟦w⟧       : ⟦A⟧ → ⟦B⟧
-⟦V |> w⟧  = ⟦w⟧ ∘ ⟦V⟧
-```
-
-Composition is available in the category even when its hom-sets are not internalized as value objects.
-This is the semantic content of non-first-classness.
-
-The pattern equation is induced by the same cut:
-
-```text
-let w ~> p = V in N  ≡  let p = (V |> w) in N
-```
-
+Here `==` is a source-language equation and `|>` is the value-function application syntax from the ValPi proposal.
 Equivalently, if a pattern denotes a partial binding map, then
 
 ```text
-match_(w ~> p) = match_p ∘ F_w
+match_(f ~> p) = match_p o F_f
 ```
 
-where `F_w : Value(A) → Value(B)` is the total map denoted by `w`. Thus `w ~> p` is the pullback of `p`
-along `F_w`. In particular, for a fresh `result`, term and pattern use are coherent:
+where `F_f : Value(A) -> Value(B)` is the total map denoted by `f`. The view therefore changes how a value is
+presented to a pattern; it does not change the effect theory or add a second notion of function.
+
+For a fresh variable `result`, term and pattern uses agree:
 
 ```text
-V |> w  ≡  let w ~> result = V in result
+V |> f  ==  let f ~> result = V in result
 ```
 
-Nested view patterns consequently agree with the corresponding pipeline chain. Refutability belongs to the
-result pattern:
+This equation is the central coherence condition. It ensures that a value function has one meaning whether its
+result is retained as a term or immediately decomposed by a pattern.
+
+## Refutability and Coverage
+
+Refutability belongs to the result pattern:
 
 ```text
-irrefutable(w ~> p) iff irrefutable(p)
+irrefutable(f ~> p) iff irrefutable(p)
 ```
 
-There is no source equation comparing two view identities because views are not terms. Distinct `ViewId`s may
-denote extensionally equal maps while remaining nominally distinct for resolution, coverage, and separate
-compilation. The equational theory compares their cuts, not the static names themselves.
+Applying `f` cannot fail, diverge, or perform effects. A partial observation must expose failure in its result type,
+for example by returning `Option B`, and the nested pattern may then choose which result to accept.
 
-## The CBPV Boundary
+Coverage is necessarily conservative for arbitrary first-class functions. Arms that use the same syntactic function
+and the same static arguments may be analysed as patterns over its codomain. Exhaustiveness over that codomain implies
+exhaustiveness over the domain, although the converse need not hold when the function is not surjective. Arms with
+unrelated or dynamically selected functions require an ordinary exhaustive fallback.
 
-In ordinary CBPV, a function type `A -> B` is a computation type. An effectful value-to-value operation has the
-shape `A -> F B`, and its abstraction must be thunked to become a first-class value. The current Zydeco `VArrow`
-instead internalizes a value-to-value map as a positive type and evaluates it through `EnvValueClosure`.
-This proposal removes that additional function space.
+## Implementation Boundary
 
-A view occupies a different position. It is admissible precisely when its body is derivable in the value judgment.
-Constructing a thunk is allowed; forcing one is not. Rearranging or constructing represented data is allowed;
-performing I/O, invoking a recursive computation, or dynamically selecting an operation is not. Higher-order and
-effectful behavior continues to use ordinary computation functions.
+The elaborated pattern stores a checked value expression and its nested pattern. Matching evaluates the function
+application with the same closure semantics as `|>` and continues with the result. There is no `ViewId`, static view
+signature, view declaration, view dependency graph, or separate resolver namespace.
 
-Pure branching is not fundamentally excluded by this account. A richer complex-value calculus may admit exhaustive,
-terminating case analysis into values. The initial proposal nevertheless requires an irrefutable input and no
-value-level case expression. Branching active views should be added only together with such a rule and its
-equational theory. Partial recognition remains explicit by returning `Option B` or another sum; matching failure is
-not a hidden effect of applying the view.
+An implementation may share a transformed result between adjacent arms after proving that their function expressions
+are equivalent and pure. Such sharing is an optimisation, not part of name resolution or the source semantics.
 
-## Compilation
+## Open Questions
 
-The initial compiler should elaborate a definition to a typed, target-independent plan and inline that plan at each
-`ViewCut` and view-pattern site. Acyclicity makes expansion terminate; capture freedom supplies every runtime input.
-Complex-value associativity then becomes the formal justification for fusing a pipeline and eliminating intermediate
-aggregates. The result of a cut remains an ordinary first-class value and is materialized when it escapes. The view
-identity itself never occupies a runtime slot and never creates an environment closure.
-
-Coverage remains conservative. Arms sharing the same `ViewId` and static arguments may be checked as result patterns
-over `B`, and the transformed result may be shared. Exhaustiveness over `B` implies exhaustiveness over `A`, although
-the converse need not hold when `F_w` is not surjective. Arms using unrelated views require an ordinary exhaustive
-fallback.
-
-## Transition
-
-The implementation should replace the pure value-function path directly:
-
-```text
-VArrow, VForall, VPackPi
-Value::VAbs, Value::VApp
-EnvValueClosure
-```
-
-Their responsibilities move to `ViewSignature`, static parameter and witness telescopes, typed view plans, and
-`ViewCut`. Computation `Arrow`, `Forall`, `PackPi`, abstraction, and application remain unchanged. Package-producing
-pure functions migrate to views; consumers choose a pipeline when the result is retained and `~>` when it is
-immediately decomposed. Higher-order pure-value programs have no view translation and must use computation
-functions when dynamic function choice is essential.
-
-The unresolved extensions are branching complex values, the concrete syntax for exported root views, and whether
-measurements justify shared first-order view blocks after the inlining implementation. None requires a source view
-type or a compatibility layer for first-class pure value functions.
-
-## References
-
-- Paul Blain Levy.
-  [Call-by-push-value: Decomposing call-by-value and call-by-name](https://www.cs.bham.ac.uk/~pbl/papers/hosc05.pdf).
-- Paul Blain Levy.
-  [Call-by-push-value: A functional/imperative synthesis](https://www.cs.bham.ac.uk/~pbl/papers/thesisqmwphd.pdf),
-  Chapter 4: Complex Values.
+The implementation restricts a view head to a variable plus explicit type arguments. Whether to admit arbitrary value
+terms remains a pattern-syntax question, not a reason to return to second-class declarations. A later pattern
+elaborator could also expose a typed equivalence key for safe sharing across arms.

@@ -39,6 +39,8 @@ pub enum Tok<'input> {
     Let,
     #[token("param")]
     Param,
+    #[token("val")]
+    Val,
     #[token("in")]
     In,
     #[token("that")]
@@ -117,6 +119,12 @@ pub enum Tok<'input> {
     TermArrow,
     #[token("->")]
     TypeArrow,
+    #[token("~>")]
+    ViewArrow,
+    #[token("|>")]
+    PipeForward,
+    #[token("<|")]
+    PipeBackward,
     #[token("<-")]
     Assign,
     #[token("_")]
@@ -209,6 +217,7 @@ impl<'source> LexicalTokens<'source> {
             | Tok::Define
             | Tok::Let
             | Tok::Param
+            | Tok::Val
             | Tok::In
             | Tok::That
             | Tok::Do
@@ -245,6 +254,9 @@ impl<'source> LexicalTokens<'source> {
             | Tok::Dot
             | Tok::TermArrow
             | Tok::TypeArrow
+            | Tok::ViewArrow
+            | Tok::PipeForward
+            | Tok::PipeBackward
             | Tok::Assign
             | Tok::CommentClose => Kind::Operator,
             | Tok::Hole => Kind::Hole,
@@ -319,6 +331,7 @@ impl Display for Tok<'_> {
             | Tok::Define => write!(f, "define"),
             | Tok::Let => write!(f, "let"),
             | Tok::Param => write!(f, "param"),
+            | Tok::Val => write!(f, "val"),
             | Tok::In => write!(f, "in"),
             | Tok::That => write!(f, "that"),
             | Tok::Do => write!(f, "do"),
@@ -357,6 +370,9 @@ impl Display for Tok<'_> {
             | Tok::Dot => write!(f, "."),
             | Tok::TermArrow => write!(f, "=>"),
             | Tok::TypeArrow => write!(f, "->"),
+            | Tok::ViewArrow => write!(f, "~>"),
+            | Tok::PipeForward => write!(f, "|>"),
+            | Tok::PipeBackward => write!(f, "<|"),
             | Tok::Assign => write!(f, "<-"),
             | Tok::Hole => write!(f, "_"),
             | Tok::At => write!(f, "@"),

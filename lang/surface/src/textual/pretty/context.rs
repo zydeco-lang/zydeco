@@ -46,11 +46,18 @@ impl<'arena> GrammarContext<'arena> {
             | Term::App(_) | Term::Dtor(_) => RenderedTermClass::Term(TermPrecedence::Application),
             | Term::Prod(_) => RenderedTermClass::Term(TermPrecedence::Product),
             | Term::Arrow(_) => RenderedTermClass::Term(TermPrecedence::Arrow),
-            | Term::Pi(_) | Term::Forall(_) | Term::Sigma(_) | Term::Exists(_) => {
+            | Term::Pipeline(Pipeline { direction: PipelineDirection::Forward, .. }) => {
+                RenderedTermClass::Term(TermPrecedence::ForwardCut)
+            }
+            | Term::Pipeline(Pipeline { direction: PipelineDirection::Backward, .. }) => {
+                RenderedTermClass::Term(TermPrecedence::BackwardCut)
+            }
+            | Term::Pi(_) | Term::ValPi(_) | Term::Forall(_) | Term::Sigma(_) | Term::Exists(_) => {
                 RenderedTermClass::Term(TermPrecedence::Quantifier)
             }
             | Term::Meta(_)
             | Term::Abs(_)
+            | Term::ValAbs(_)
             | Term::Fix(_)
             | Term::Do(_)
             | Term::Let(_)
@@ -70,6 +77,7 @@ impl<'arena> GrammarContext<'arena> {
             | Pattern::Hole(_)
             | Pattern::Var(_)
             | Pattern::Ctor(_)
+            | Pattern::View(_)
             | Pattern::Alias(_)
             | Pattern::Paren(_) => RenderedPatternClass::Pattern,
         }
@@ -85,6 +93,8 @@ pub(super) enum TermPrecedence {
     Application,
     Product,
     Arrow,
+    ForwardCut,
+    BackwardCut,
     Quantifier,
     Binder,
 }

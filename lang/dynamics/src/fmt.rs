@@ -51,6 +51,11 @@ impl<'a> Pretty<'a, Formatter<'a>> for ValuePattern {
             ]),
             | VPat::Triv(Triv) => RcDoc::text("()"),
             | VPat::VCons(vpat) => vpat.pretty(f),
+            | VPat::View(view) => RcDoc::concat([
+                view.function.pretty(f),
+                RcDoc::text(" ~> "),
+                view.pattern.pretty(f),
+            ]),
         }
     }
 }
@@ -68,13 +73,13 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
                 RcDoc::text(" in "),
                 tail.pretty(f),
             ]),
-            | Value::VAbs(Abs(param, body)) => RcDoc::concat([
-                RcDoc::text("fn "),
+            | Value::ValAbs(Abs(param, body)) => RcDoc::concat([
+                RcDoc::text("val "),
                 param.pretty(f),
                 RcDoc::text(" => "),
                 body.pretty(f),
             ]),
-            | Value::VApp(App(function, argument)) => RcDoc::concat([
+            | Value::ValApp(App(function, argument)) => RcDoc::concat([
                 RcDoc::text("("),
                 function.pretty(f),
                 RcDoc::text(" "),
@@ -182,7 +187,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for SemValue {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         match self {
             | SemValue::Closure(v) => {
-                RcDoc::concat([RcDoc::text("<pure "), v.body.pretty(f), RcDoc::text(">")])
+                RcDoc::concat([RcDoc::text("<val "), v.body.pretty(f), RcDoc::text(">")])
             }
             | SemValue::Thunk(v) => {
                 RcDoc::concat([RcDoc::text("{ "), v.pretty(f), RcDoc::text(" }")])

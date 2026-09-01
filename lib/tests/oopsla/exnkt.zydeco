@@ -4,15 +4,15 @@
 --| for `ExnK`, which is the church encoded version of the `Exn` monad.
 --|
 --| Check `exnt.zydeco` for detailed explanation.
-begin
+val (
+  (/core; builtin) :
+  @(import("../../std/builtin.zy"))
+) =>
+  begin
   let monadic_basis = @(import("../../std/control/monad.zy")) that
-  param (
-    (/core; builtin) :
-    @(import("../../std/builtin.zy"))
-  ) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (= Monad, = Algebra, ()) =
-    monadic_basis builtin
+    builtin |> monadic_basis
   in
   begin
 
@@ -120,11 +120,9 @@ begin
     --| Automatically generated implementation of the monad transformer for `ExnKT`
     def ! mt_exnk (E : VType) : MonadTrans (ExnKT E) =
       let ! mt' (M : VType -> CType) (mo : Thk (Monad M)) =
-        @[debug("generated and applied")]
         (
           @[monadic] (
             fn (E : VType) =>
-              @[debug("original")]
               let ! mo_exnk (E : VType) : Monad (ExnK E) =
                 comatch
                 | .return A a => fn R ke ka =>

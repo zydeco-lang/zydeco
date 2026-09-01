@@ -38,6 +38,26 @@ struct ValuePlan<T> {
     value: T,
 }
 
+/// A source-pattern decision whose view transformations have not yet been
+/// expanded into structural Stack IR bindings and matches.
+#[derive(Clone)]
+enum MatchPlan {
+    Fail,
+    Tail(ss::CompuId),
+    Pattern {
+        scrutinee: DefId,
+        pattern: ss::VPatId,
+        success: Box<MatchPlan>,
+        failure: Box<MatchPlan>,
+    },
+    Apply {
+        binder: DefId,
+        function: ss::ValueId,
+        argument: DefId,
+        tail: Box<MatchPlan>,
+    },
+}
+
 impl<T> ValuePlan<T> {
     fn pure(value: T) -> Self {
         Self { steps: Vec::new(), value }
@@ -69,16 +89,6 @@ impl<T> ValuePlan<T> {
 }
 
 impl ValuePlan<ValueId> {
-    fn scoped(self, binder: VPatId, tail: Self, site: Option<ss::TermId>) -> Self {
-        let Self { steps, value: bindee } = self;
-        let Self { steps: tail_steps, value } = tail;
-        let binding = ValueBinding { binder, bindee, site };
-        ValuePlan {
-            steps: steps.into_iter().chain([ValueStep::Bind(binding)]).chain(tail_steps).collect(),
-            value,
-        }
-    }
-
     fn lower_into(
         self, lo: &mut Lowerer, kont: impl FnOnce(ValueId, &mut Lowerer) -> CompuId,
     ) -> CompuId {
@@ -150,15 +160,279 @@ impl<'a> Lowerer<'a> {
     }
 
     fn alloc_projection_def(&mut self) -> DefId {
+        self.alloc_admin_def("__proj__")
+    }
+
+    fn alloc_admin_def(&mut self, role: &str) -> DefId {
         let def = self.arena.admin.fresh();
-        self.arena.admin.insert_def(def, VarName("__proj__".to_owned()));
+        self.arena.admin.insert_def(def, VarName(role.to_owned()));
         def
     }
 
-    fn alloc_pure_result(&mut self) -> DefId {
-        let def = self.arena.admin.fresh();
-        self.arena.admin.insert_def(def, VarName("__pure_result__".to_owned()));
-        def
+    fn pattern_contains_view(&self, pattern: ss::VPatId) -> bool {
+        match &self.statics.vpats[&pattern] {
+            | ss::ValuePattern::View(_) => true,
+            | ss::ValuePattern::Named(Named(_, pattern))
+            | ss::ValuePattern::Ctor(Ctor(_, pattern))
+            | ss::ValuePattern::SCons(ss::ConsN(_, pattern)) => {
+                self.pattern_contains_view(*pattern)
+            }
+            | ss::ValuePattern::Alias(Alias(patterns)) => {
+                patterns.iter().any(|pattern| self.pattern_contains_view(*pattern))
+            }
+            | ss::ValuePattern::VCons(patterns) => {
+                patterns.iter().any(|pattern| self.pattern_contains_view(*pattern))
+            }
+            | ss::ValuePattern::Hole(_) | ss::ValuePattern::Var(_) | ss::ValuePattern::Triv(_) => {
+                false
+            }
+        }
+    }
+
+    /// Expand a view-bearing pattern used by a complex-value `let` into the
+    /// ordered structural bindings that implement its value-level cuts.
+    fn lower_value_pattern_bindings(
+        &mut self, pattern: ss::VPatId, bindee: ValueId, site: Option<ss::TermId>,
+    ) -> Vec<ValueStep> {
+        if !self.pattern_contains_view(pattern) {
+            return vec![ValueStep::Bind(ValueBinding {
+                binder: pattern.lower(self, ()),
+                bindee,
+                site,
+            })];
+        }
+
+        match self.statics.vpats[&pattern].clone() {
+            | ss::ValuePattern::Named(Named(_, inner))
+            | ss::ValuePattern::SCons(ss::ConsN(_, inner)) => {
+                self.lower_value_pattern_bindings(inner, bindee, site)
+            }
+            | ss::ValuePattern::View(view) => {
+                let ss::ViewPattern { function, pattern } = *view;
+                let ValuePlan { steps, value: function } = function.lower(self, ());
+                let result = self.alloc_admin_def("__view_result__");
+                let binder = result.build(self, None);
+                let application =
+                    ValueStep::Apply(ValueApplication { binder, function, argument: bindee, site });
+                let result = result.build(self, site);
+                let nested = self.lower_value_pattern_bindings(pattern, result, site);
+                steps.into_iter().chain([application]).chain(nested).collect()
+            }
+            | ss::ValuePattern::Alias(Alias(patterns)) => {
+                let whole = self.alloc_admin_def("__view_alias__");
+                let whole_pattern = whole.build(self, None);
+                let binding = ValueStep::Bind(ValueBinding { binder: whole_pattern, bindee, site });
+                std::iter::once(binding)
+                    .chain(patterns.into_iter().flat_map(|pattern| {
+                        let bindee = whole.build(self, site);
+                        self.lower_value_pattern_bindings(pattern, bindee, site)
+                    }))
+                    .collect()
+            }
+            | ss::ValuePattern::VCons(patterns) => {
+                let layout = self.product_layout(self.statics.annotations_vpat[&pattern]);
+                let components = patterns
+                    .iter()
+                    .map(|_| self.alloc_admin_def("__view_component__"))
+                    .collect::<Vec<_>>();
+                let fields = components.iter().map(|definition| definition.build(self, None));
+                let binder = VCons::new(fields.collect(), layout).build(self, None);
+                let binding = ValueStep::Bind(ValueBinding { binder, bindee, site });
+                std::iter::once(binding)
+                    .chain(patterns.into_iter().zip(components).flat_map(
+                        |(pattern, definition)| {
+                            let bindee = definition.build(self, site);
+                            self.lower_value_pattern_bindings(pattern, bindee, site)
+                        },
+                    ))
+                    .collect()
+            }
+            | ss::ValuePattern::Ctor(Ctor(name, inner)) => {
+                let payload = self.alloc_admin_def("__view_payload__");
+                let payload_pattern = payload.build(self, None);
+                let data = self.statics.data_pat_hints[&pattern];
+                let index = self.statics.datas[&data]
+                    .iter()
+                    .position(|(candidate, _)| candidate == &name)
+                    .expect("constructor tag not found");
+                let binder = Ctor(CtorIdx { idx: index, name }, payload_pattern).build(self, None);
+                let binding = ValueStep::Bind(ValueBinding { binder, bindee, site });
+                let bindee = payload.build(self, site);
+                std::iter::once(binding)
+                    .chain(self.lower_value_pattern_bindings(inner, bindee, site))
+                    .collect()
+            }
+            | ss::ValuePattern::Hole(_) | ss::ValuePattern::Var(_) | ss::ValuePattern::Triv(_) => {
+                unreachable!("a view-free pattern is lowered by the structural fast path")
+            }
+        }
+    }
+
+    fn match_plan(&self, scrutinee: DefId, arms: &[Matcher<ss::VPatId, ss::CompuId>]) -> MatchPlan {
+        arms.iter().rev().fold(MatchPlan::Fail, |failure, arm| MatchPlan::Pattern {
+            scrutinee,
+            pattern: arm.binder,
+            success: Box::new(MatchPlan::Tail(arm.tail)),
+            failure: Box::new(failure),
+        })
+    }
+
+    fn lower_match_plan(
+        &mut self, plan: MatchPlan, stack: StackId, site: Option<ss::TermId>,
+    ) -> CompuId {
+        match plan {
+            | MatchPlan::Fail => SHole(stack).build(self, site),
+            | MatchPlan::Tail(tail) => tail.lower(self, stack),
+            | MatchPlan::Apply { binder, function, argument, tail } => {
+                let function = function.lower(self, ());
+                let function_value = function.value;
+                let argument = argument.build(self, site);
+                let result_pattern = binder.build(self, None);
+                let result = binder.build(self, site);
+                function
+                    .with_application(
+                        ValueApplication {
+                            binder: result_pattern,
+                            function: function_value,
+                            argument,
+                            site,
+                        },
+                        result,
+                    )
+                    .lower_into(self, move |_, lowerer| {
+                        lowerer.lower_match_plan(*tail, stack, site)
+                    })
+            }
+            | MatchPlan::Pattern { scrutinee, pattern, success, failure } => {
+                match self.statics.vpats[&pattern].clone() {
+                    | ss::ValuePattern::Hole(_) | ss::ValuePattern::Triv(_) => {
+                        self.lower_match_plan(*success, stack, site)
+                    }
+                    | ss::ValuePattern::Var(definition) => {
+                        let bindee: ValueId = scrutinee.build(self, site);
+                        let binder: VPatId = definition.build(self, None);
+                        let tail = self.lower_match_plan(*success, stack, site);
+                        Let { binder, bindee, tail }.build(self, site)
+                    }
+                    | ss::ValuePattern::Named(Named(_, inner))
+                    | ss::ValuePattern::SCons(ss::ConsN(_, inner)) => self.lower_match_plan(
+                        MatchPlan::Pattern { scrutinee, pattern: inner, success, failure },
+                        stack,
+                        site,
+                    ),
+                    | ss::ValuePattern::Alias(Alias(patterns)) => {
+                        let success =
+                            patterns.into_iter().rev().fold(*success, |success, pattern| {
+                                MatchPlan::Pattern {
+                                    scrutinee,
+                                    pattern,
+                                    success: Box::new(success),
+                                    failure: failure.clone(),
+                                }
+                            });
+                        self.lower_match_plan(success, stack, site)
+                    }
+                    | ss::ValuePattern::VCons(patterns) => {
+                        let layout = self.product_layout(self.statics.annotations_vpat[&pattern]);
+                        let components = patterns
+                            .iter()
+                            .map(|_| self.alloc_admin_def("__match_component__"))
+                            .collect::<Vec<_>>();
+                        let fields =
+                            components.iter().map(|definition| definition.build(self, None));
+                        let binder = VCons::new(fields.collect(), layout).build(self, None);
+                        let body_plan = patterns
+                            .into_iter()
+                            .zip(components.iter().copied())
+                            .rev()
+                            .fold(*success, |success, (pattern, component)| MatchPlan::Pattern {
+                                scrutinee: component,
+                                pattern,
+                                success: Box::new(success),
+                                failure: failure.clone(),
+                            });
+                        let body = self.lower_match_plan(body_plan, stack, site);
+                        let scrut = scrutinee.build(self, site);
+                        SProductMatch { scrut, binder, body }.build(self, site)
+                    }
+                    | ss::ValuePattern::Ctor(Ctor(name, argument)) => {
+                        let data = self.statics.data_pat_hints[&pattern];
+                        let constructors = self.statics.datas[&data].clone();
+                        let arms = constructors
+                            .iter()
+                            .enumerate()
+                            .map(|(index, (candidate, _))| {
+                                let branch_stack = Bullet.build(self, site);
+                                if candidate == &name {
+                                    let payload = self.alloc_admin_def("__match_payload__");
+                                    let payload_pattern = payload.build(self, None);
+                                    let binder = Ctor(
+                                        CtorIdx { idx: index, name: candidate.clone() },
+                                        payload_pattern,
+                                    )
+                                    .build(self, None);
+                                    let tail = self.lower_match_plan(
+                                        MatchPlan::Pattern {
+                                            scrutinee: payload,
+                                            pattern: argument,
+                                            success: success.clone(),
+                                            failure: failure.clone(),
+                                        },
+                                        branch_stack,
+                                        site,
+                                    );
+                                    Matcher { binder, tail }
+                                } else {
+                                    let payload = Hole.build(self, None);
+                                    let binder = Ctor(
+                                        CtorIdx { idx: index, name: candidate.clone() },
+                                        payload,
+                                    )
+                                    .build(self, None);
+                                    let tail = self.lower_match_plan(
+                                        (*failure).clone(),
+                                        branch_stack,
+                                        site,
+                                    );
+                                    Matcher { binder, tail }
+                                }
+                            })
+                            .collect();
+                        let scrut = scrutinee.build(self, site);
+                        let body = SCoprodMatch { scrut, arms }.build(self, site);
+                        Let { binder: Bullet, bindee: stack, tail: body }.build(self, site)
+                    }
+                    | ss::ValuePattern::View(view) => {
+                        let ss::ViewPattern { function, pattern } = *view;
+                        let output = self.alloc_admin_def("__view_result__");
+                        let nested = MatchPlan::Pattern {
+                            scrutinee: output,
+                            pattern,
+                            success,
+                            failure: failure.clone(),
+                        };
+                        let transformed = MatchPlan::Apply {
+                            binder: output,
+                            function,
+                            argument: scrutinee,
+                            tail: Box::new(nested),
+                        };
+                        self.lower_match_plan(transformed, stack, site)
+                    }
+                }
+            }
+        }
+    }
+
+    fn lower_view_match(
+        &mut self, scrut: ValueId, arms: &[Matcher<ss::VPatId, ss::CompuId>], stack: StackId,
+        site: Option<ss::TermId>,
+    ) -> CompuId {
+        let scrutinee = self.alloc_admin_def("__view_scrutinee__");
+        let binder = scrutinee.build(self, None);
+        let plan = self.match_plan(scrutinee, arms);
+        let tail = self.lower_match_plan(plan, stack, site);
+        Let { binder, bindee: scrut, tail }.build(self, site)
     }
 
     fn is_coprod_pattern(&self, pattern: ss::VPatId) -> bool {
@@ -169,6 +443,7 @@ impl<'a> Lowerer<'a> {
                 patterns.iter().any(|pattern| self.is_coprod_pattern(*pattern))
             }
             | ss::ValuePattern::SCons(ss::ConsN(_, pattern)) => self.is_coprod_pattern(*pattern),
+            | ss::ValuePattern::View(view) => self.is_coprod_pattern(view.pattern),
             | ss::ValuePattern::Hole(_)
             | ss::ValuePattern::Var(_)
             | ss::ValuePattern::Triv(_)
@@ -317,6 +592,9 @@ impl Lower for ss::VPatId {
                 let vpat = body.lower(lo, ());
                 lo.arena.inner.vpats[&vpat].clone()
             }
+            | SSVPat::View(_) => {
+                unreachable!("view patterns must be expanded before structural Stack IR lowering")
+            }
         };
         // Create new VPatId in stack arena and store the mapping
         stack_vpat.build(lo, Some(ss_pat_id))
@@ -335,12 +613,16 @@ impl Lower for ss::ValueId {
             | ss::Value::Var(def) => ValuePlan::pure(def.build(lo, site)),
             | ss::Value::Named(Named(_, inner)) => inner.lower(lo, ()),
             | ss::Value::Let(Let { binder, bindee, tail }) => {
-                let binder = binder.lower(lo, ());
                 let bindee = bindee.lower(lo, ());
                 let tail = tail.lower(lo, ());
-                bindee.scoped(binder, tail, site)
+                let bindings = lo.lower_value_pattern_bindings(binder, bindee.value, site);
+                ValuePlan {
+                    steps: bindee.steps.into_iter().chain(bindings).chain(tail.steps).collect(),
+                    value: tail.value,
+                }
             }
-            | ss::Value::VAbs(Abs(param, body)) => {
+            | ss::Value::ValAbs(Abs(ss::ValBinder::Type(_), body)) => body.lower(lo, ()),
+            | ss::Value::ValAbs(Abs(ss::ValBinder::Value(param), body)) => {
                 let param = param.lower(lo, ());
                 let body = body.lower(lo, ());
                 let body = body.lower_into(lo, |value, lo| {
@@ -352,21 +634,20 @@ impl Lower for ss::ValueId {
                     Let { binder: Cons(param, Bullet), bindee: stack, tail: body }.build(lo, site);
                 ValuePlan::pure(Closure { stack: Bullet, body }.build(lo, site))
             }
-            | ss::Value::VApp(App(function, argument)) => {
+            | ss::Value::ValApp(App(function, ss::ValArgument::Type(_))) => function.lower(lo, ()),
+            | ss::Value::ValApp(App(function, ss::ValArgument::Value(argument))) => {
                 let function = function.lower(lo, ());
                 let argument = argument.lower(lo, ());
                 let values = ValuePlan::sequence([function, argument]);
                 let [function, argument] = values.value.as_slice() else { unreachable!() };
                 let function = *function;
                 let argument = *argument;
-                let result = lo.alloc_pure_result();
+                let result = lo.alloc_admin_def("__value_result__");
                 let binder = result.build(lo, None);
                 let value = result.build(lo, site);
                 values
                     .with_application(ValueApplication { binder, function, argument, site }, value)
             }
-            | ss::Value::TAbs(Abs(_param, body)) => body.lower(lo, ()),
-            | ss::Value::TApp(App(body, _arg)) => body.lower(lo, ()),
             | ss::Value::Thunk(Thunk(body)) => {
                 let stack = Bullet.build(lo, site);
                 let body = body.lower(lo, stack);
@@ -424,9 +705,21 @@ impl Lower for ss::CompuId {
         match compu {
             | Compu::Hole(Hole) => SHole(stack).build(lo, site),
             | Compu::VAbs(Abs(param, body)) => {
-                let param_vpat = param.lower(lo, ());
                 let body_stack = Bullet.build(lo, site);
-                let body_compu = body.lower(lo, body_stack);
+                let (param_vpat, body_compu) = if lo.pattern_contains_view(param) {
+                    let argument = lo.alloc_admin_def("__view_argument__");
+                    let param_vpat = argument.build(lo, None);
+                    let plan = MatchPlan::Pattern {
+                        scrutinee: argument,
+                        pattern: param,
+                        success: Box::new(MatchPlan::Tail(body)),
+                        failure: Box::new(MatchPlan::Fail),
+                    };
+                    let body_compu = lo.lower_match_plan(plan, body_stack, site);
+                    (param_vpat, body_compu)
+                } else {
+                    (param.lower(lo, ()), body.lower(lo, body_stack))
+                };
                 Let { binder: Cons(param_vpat, Bullet), bindee: stack, tail: body_compu }
                     .build(lo, site)
             }
@@ -469,24 +762,52 @@ impl Lower for ss::CompuId {
                 body.lower_into(lo, move |value, lo| SReturn { stack, value }.build(lo, site))
             }
             | Compu::Do(Bind { binder, bindee, tail }) => {
-                let binder_vpat = binder.lower(lo, ());
-                let tail_compu = tail.lower(lo, stack);
+                let (binder_vpat, tail_compu) = if lo.pattern_contains_view(binder) {
+                    let returned = lo.alloc_admin_def("__view_returned__");
+                    let binder_vpat = returned.build(lo, None);
+                    let plan = MatchPlan::Pattern {
+                        scrutinee: returned,
+                        pattern: binder,
+                        success: Box::new(MatchPlan::Tail(tail)),
+                        failure: Box::new(MatchPlan::Fail),
+                    };
+                    let tail_compu = lo.lower_match_plan(plan, stack, site);
+                    (binder_vpat, tail_compu)
+                } else {
+                    (binder.lower(lo, ()), tail.lower(lo, stack))
+                };
                 let kont_stack_id = Kont { binder: binder_vpat, body: tail_compu }.build(lo, site);
                 bindee.lower(lo, kont_stack_id)
             }
             | Compu::Let(Let { binder, bindee, tail }) => {
-                let binder_vpat = binder.lower(lo, ());
                 let bindee = bindee.lower(lo, ());
                 bindee.lower_into(lo, move |bindee, lo| {
-                    let tail_compu = tail.lower(lo, stack);
-                    Let { binder: binder_vpat, bindee, tail: tail_compu }.build(lo, site)
+                    if lo.pattern_contains_view(binder) {
+                        let scrutinee = lo.alloc_admin_def("__view_let__");
+                        let binder_vpat = scrutinee.build(lo, None);
+                        let plan = MatchPlan::Pattern {
+                            scrutinee,
+                            pattern: binder,
+                            success: Box::new(MatchPlan::Tail(tail)),
+                            failure: Box::new(MatchPlan::Fail),
+                        };
+                        let tail_compu = lo.lower_match_plan(plan, stack, site);
+                        Let { binder: binder_vpat, bindee, tail: tail_compu }.build(lo, site)
+                    } else {
+                        let binder_vpat = binder.lower(lo, ());
+                        let tail_compu = tail.lower(lo, stack);
+                        Let { binder: binder_vpat, bindee, tail: tail_compu }.build(lo, site)
+                    }
                 })
             }
             | Compu::Match(Match { scrut, arms }) => {
-                let is_coprod = lo.is_coprod_match(&arms);
+                let has_view = arms.iter().any(|arm| lo.pattern_contains_view(arm.binder));
+                let is_coprod = !has_view && lo.is_coprod_match(&arms);
                 let scrut = scrut.lower(lo, ());
                 scrut.lower_into(lo, move |scrut, lo| {
-                    if is_coprod {
+                    if has_view {
+                        lo.lower_view_match(scrut, &arms, stack, site)
+                    } else if is_coprod {
                         let lowered_arms = arms
                             .iter()
                             .map(|Matcher { binder, tail }| {

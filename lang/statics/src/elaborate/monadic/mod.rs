@@ -591,7 +591,8 @@ impl PackPiPatternTranslation {
             | ValuePattern::Ctor(_)
             | ValuePattern::Alias(_)
             | ValuePattern::Triv(_)
-            | ValuePattern::VCons(_) => tycker.err(
+            | ValuePattern::VCons(_)
+            | ValuePattern::View(_) => tycker.err(
                 TyckError::PackageWitnessArityMismatch { expected: self.layout.len(), found: 0 },
                 std::panic::Location::caller(),
             ),
@@ -770,9 +771,7 @@ fn structure_translation(
         | Type::Label(_)
         | Type::Unit(UnitTy)
         | Type::Primitive(_)
-        | Type::VArrow(_)
-        | Type::VForall(_)
-        | Type::VPackPi(_)
+        | Type::ValPi(_)
         | Type::Prod(_)
         | Type::Exists(_)
         | Type::ManifestKind(_)
@@ -1066,33 +1065,36 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
         | Type::CoData(coda) => {
             cs::CoData(coda, |_dtor, ty| cs::TypeLift { ty }).mbuild(tycker, env)?
         }
-        | Type::VArrow(ValueArrow(ty_1, ty_2)) => {
-            let (env, ty_1) = cs::TypeLift { ty: ty_1 }.mbuild(tycker, env)?;
-            let (env, ty_2) = cs::TypeLift { ty: ty_2 }.mbuild(tycker, env)?;
-            let (env, vtype) = VType.mbuild(tycker, env)?;
-            let arrow = Alloc::alloc(tycker, ValueArrow(ty_1, ty_2), vtype, &env.ty);
-            (env, arrow)
-        }
-        | Type::VForall(ty) => {
-            let ValueForall(binder, ty) = ty;
-            let (env, pattern) = type_pattern_translation(tycker, env, binder.pattern)?;
-            let witness = env.subst_abst.get(&binder.witness).copied().unwrap_or(binder.witness);
-            let (env, body) = cs::TypeLift { ty }.mbuild(tycker, env)?;
-            let (env, vtype) = VType.mbuild(tycker, env)?;
-            let binder = TypeBinder { pattern, witness };
-            let forall = Alloc::alloc(tycker, ValueForall(binder, body), vtype, &env.ty);
-            (env, forall)
-        }
-        | Type::VPackPi(pack_pi) => {
-            let ValuePackPi { domain, witnesses, codomain } = *pack_pi;
-            let (env, domain) = cs::TypeLift { ty: domain }.mbuild(tycker, env)?;
-            let witnesses =
-                witnesses.map(|witness| env.subst_abst.get(&witness).copied().unwrap_or(witness));
+        | Type::ValPi(pi) => {
+            let ValPi { binder, codomain } = *pi;
+            let (env, binder) = match binder {
+                | ValPiBinder::Type(binder) => {
+                    let (env, pattern) = type_pattern_translation(tycker, env, binder.pattern)?;
+                    let witness =
+                        env.subst_abst.get(&binder.witness).copied().unwrap_or(binder.witness);
+                    (env, ValPiBinder::Type(TypeBinder { pattern, witness }))
+                }
+                | ValPiBinder::Value(parameter) => {
+                    let (env, domain) =
+                        cs::TypeLift { ty: parameter.domain }.mbuild(tycker, env)?;
+                    let witnesses = parameter.witnesses.map(|witnesses| {
+                        witnesses
+                            .map(|witness| env.subst_abst.get(&witness).copied().unwrap_or(witness))
+                    });
+                    (
+                        env,
+                        ValPiBinder::Value(ValueParameter {
+                            domain,
+                            witnesses,
+                            witness_projection: parameter.witness_projection,
+                        }),
+                    )
+                }
+            };
             let (env, codomain) = cs::TypeLift { ty: codomain }.mbuild(tycker, env)?;
             let (env, vtype) = VType.mbuild(tycker, env)?;
-            let alloc =
-                Alloc::alloc(tycker, ValuePackPi { domain, witnesses, codomain }, vtype, &env.ty);
-            (env, alloc)
+            let classifier = Alloc::alloc(tycker, ValPi { binder, codomain }, vtype, &env.ty);
+            (env, classifier)
         }
         | Type::Arrow(ty) => {
             let Arrow(ty_1, ty_2) = ty;
@@ -1410,6 +1412,14 @@ fn value_pattern_translation(
             let ConsN(witnesses, body) = vpat;
             package_pattern_translation(tycker, env, &witnesses, None, body, ty_)?
         }
+        | VPat::View(view) => {
+            let ss::ViewPattern { function, pattern } = *view;
+            let (env, function) = value_translation(tycker, env, function)?;
+            let (env, pattern) = value_pattern_translation(tycker, env, pattern)?;
+            let view = ss::ViewPattern { function, pattern };
+            let pattern = Alloc::alloc(tycker, Box::new(view), ty_, &env.ty);
+            (env, pattern)
+        }
     };
     Ok((env, vpat_))
 }
@@ -1459,27 +1469,33 @@ fn value_translation(
             }
             .mbuild(tycker, env)?
         }
-        | Value::VAbs(Abs(binder, body)) => {
-            let (env, binder) = value_pattern_translation(tycker, env, binder)?;
+        | Value::ValAbs(Abs(binder, body)) => {
+            let (env, binder) = match binder {
+                | ValBinder::Type(pattern) => {
+                    let (env, pattern) = type_pattern_translation(tycker, env, pattern)?;
+                    (env, ValBinder::Type(pattern))
+                }
+                | ValBinder::Value(pattern) => {
+                    let (env, pattern) = value_pattern_translation(tycker, env, pattern)?;
+                    (env, ValBinder::Value(pattern))
+                }
+            };
             let (env, body) = value_translation(tycker, env, body)?;
             let abstraction = Alloc::alloc(tycker, Abs(binder, body), ty_, &env.ty);
             (env, abstraction)
         }
-        | Value::VApp(App(function, argument)) => {
+        | Value::ValApp(App(function, argument)) => {
             let (env, function) = value_translation(tycker, env, function)?;
-            let (env, argument) = value_translation(tycker, env, argument)?;
-            let application = Alloc::alloc(tycker, App(function, argument), ty_, &env.ty);
-            (env, application)
-        }
-        | Value::TAbs(Abs(pattern, body)) => {
-            let (env, pattern) = type_pattern_translation(tycker, env, pattern)?;
-            let (env, body) = value_translation(tycker, env, body)?;
-            let abstraction = Alloc::alloc(tycker, Abs(pattern, body), ty_, &env.ty);
-            (env, abstraction)
-        }
-        | Value::TApp(App(function, argument)) => {
-            let (env, function) = value_translation(tycker, env, function)?;
-            let (env, argument) = cs::TypeLift { ty: argument }.mbuild(tycker, env)?;
+            let (env, argument) = match argument {
+                | ValArgument::Type(argument) => {
+                    let (env, argument) = cs::TypeLift { ty: argument }.mbuild(tycker, env)?;
+                    (env, ValArgument::Type(argument))
+                }
+                | ValArgument::Value(argument) => {
+                    let (env, argument) = value_translation(tycker, env, argument)?;
+                    (env, ValArgument::Value(argument))
+                }
+            };
             let application = Alloc::alloc(tycker, App(function, argument), ty_, &env.ty);
             (env, application)
         }

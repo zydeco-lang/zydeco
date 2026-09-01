@@ -908,7 +908,7 @@ where
         arg.build(tycker, env)
     }
 }
-/// computation value abstraction
+/// computation abstraction over a value parameter
 impl<'a, P, F, T> Construct<Tycker<'a>, CompuId> for Abs<P, F>
 where
     P: Construct<Tycker<'a>, VPatId>,
@@ -967,7 +967,7 @@ where
         Alloc::alloc(tycker, Abs(tpat, body), ty, env)
     }
 }
-// computation value application
+// computation application to a value argument
 impl<'a, S, T> Construct<Tycker<'a>, CompuId> for App<S, T>
 where
     S: Construct<Tycker<'a>, CompuId>,

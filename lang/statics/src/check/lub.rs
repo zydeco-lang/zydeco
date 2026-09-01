@@ -333,84 +333,76 @@ impl Debruijn {
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                     std::panic::Location::caller(),
                 )?,
-                | (Type::VArrow(ValueArrow(la, lb)), Type::VArrow(ValueArrow(ra, rb))) => {
-                    let a = self.clone().lub(la, ra, tycker)?;
-                    let b = self.lub(lb, rb, tycker)?;
-                    if a == la && b == lb {
-                        lhs_id
-                    } else {
-                        let kd = tycker.statics.type_kind(lhs_id);
-                        Alloc::alloc(tycker, ValueArrow(a, b), kd, &env)
-                    }
-                }
-                | (Type::VArrow(_), _) => tycker.err(
-                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                    std::panic::Location::caller(),
-                )?,
-                | (
-                    Type::VForall(ValueForall(lbind, lbody)),
-                    Type::VForall(ValueForall(rbind, rbody)),
-                ) => {
-                    let _domain =
-                        Lub::lub(lbind.domain_kind(tycker), rbind.domain_kind(tycker), tycker)?;
-                    let _payload =
-                        Lub::lub(lbind.payload_kind(tycker), rbind.payload_kind(tycker), tycker)?;
-                    let body = self
-                        .insert(Some(lbind.witness), Some(rbind.witness))
-                        .lub(lbody, rbody, tycker)?;
-                    if body == lbody {
-                        lhs_id
-                    } else {
-                        let kd = tycker.statics.type_kind(lhs_id);
-                        Alloc::alloc(tycker, ValueForall(lbind, body), kd, &env)
-                    }
-                }
-                | (Type::VForall(_), _) => tycker.err(
-                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                    std::panic::Location::caller(),
-                )?,
-                | (Type::VPackPi(lhs), Type::VPackPi(rhs)) => {
-                    let ValuePackPi {
-                        domain: lhs_domain,
-                        witnesses: lhs_witnesses,
-                        codomain: lhs_codomain,
-                    } = *lhs;
-                    let ValuePackPi {
-                        domain: rhs_domain,
-                        witnesses: rhs_witnesses,
-                        codomain: rhs_codomain,
-                    } = *rhs;
-                    if lhs_witnesses.len() != rhs_witnesses.len() {
-                        tycker.err(
+                | (Type::ValPi(lhs), Type::ValPi(rhs)) => {
+                    let ValPi { binder: lhs_binder, codomain: lhs_codomain } = *lhs;
+                    let ValPi { binder: rhs_binder, codomain: rhs_codomain } = *rhs;
+                    let (binder, codomain, binder_unchanged) = match (lhs_binder, rhs_binder) {
+                        | (ValPiBinder::Type(lhs), ValPiBinder::Type(rhs)) => {
+                            let _domain =
+                                Lub::lub(lhs.domain_kind(tycker), rhs.domain_kind(tycker), tycker)?;
+                            let _payload = Lub::lub(
+                                lhs.payload_kind(tycker),
+                                rhs.payload_kind(tycker),
+                                tycker,
+                            )?;
+                            let codomain = self.insert(Some(lhs.witness), Some(rhs.witness)).lub(
+                                lhs_codomain,
+                                rhs_codomain,
+                                tycker,
+                            )?;
+                            (ValPiBinder::Type(lhs), codomain, true)
+                        }
+                        | (ValPiBinder::Value(lhs), ValPiBinder::Value(rhs)) => {
+                            if lhs.witness_projection != rhs.witness_projection {
+                                tycker.err(
+                                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                                    std::panic::Location::caller(),
+                                )?
+                            }
+                            let domain = self.clone().lub(lhs.domain, rhs.domain, tycker)?;
+                            let body_context = match (&lhs.witnesses, &rhs.witnesses) {
+                                | (None, None) => self,
+                                | (Some(lhs), Some(rhs)) if lhs.len() == rhs.len() => lhs
+                                    .iter()
+                                    .copied()
+                                    .zip(rhs.iter().copied())
+                                    .try_fold(self, |context, (lhs, rhs)| -> Result<_> {
+                                        let lhs_kind = tycker.statics.annotations_abst[&lhs];
+                                        let rhs_kind = tycker.statics.annotations_abst[&rhs];
+                                        let _ = Lub::lub(lhs_kind, rhs_kind, tycker)?;
+                                        Ok(context.insert(Some(lhs), Some(rhs)))
+                                    })?,
+                                | _ => tycker.err(
+                                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                                    std::panic::Location::caller(),
+                                )?,
+                            };
+                            let codomain = body_context.lub(lhs_codomain, rhs_codomain, tycker)?;
+                            let unchanged = domain == lhs.domain;
+                            (
+                                ValPiBinder::Value(ValueParameter {
+                                    domain,
+                                    witnesses: lhs.witnesses,
+                                    witness_projection: lhs.witness_projection,
+                                }),
+                                codomain,
+                                unchanged,
+                            )
+                        }
+                        | (ValPiBinder::Type(_), ValPiBinder::Value(_))
+                        | (ValPiBinder::Value(_), ValPiBinder::Type(_)) => tycker.err(
                             TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                             std::panic::Location::caller(),
-                        )?
-                    }
-                    let domain = self.clone().lub(lhs_domain, rhs_domain, tycker)?;
-                    let body_context = lhs_witnesses
-                        .iter()
-                        .copied()
-                        .zip(rhs_witnesses.iter().copied())
-                        .try_fold(self, |context, (lhs, rhs)| -> Result<_> {
-                            let lhs_kind = tycker.statics.annotations_abst[&lhs];
-                            let rhs_kind = tycker.statics.annotations_abst[&rhs];
-                            let _ = Lub::lub(lhs_kind, rhs_kind, tycker)?;
-                            Ok(context.insert(Some(lhs), Some(rhs)))
-                        })?;
-                    let codomain = body_context.lub(lhs_codomain, rhs_codomain, tycker)?;
-                    if domain == lhs_domain && codomain == lhs_codomain {
+                        )?,
+                    };
+                    if binder_unchanged && codomain == lhs_codomain {
                         lhs_id
                     } else {
-                        let kd = tycker.statics.type_kind(lhs_id);
-                        Alloc::alloc(
-                            tycker,
-                            ValuePackPi { domain, witnesses: lhs_witnesses, codomain },
-                            kd,
-                            &env,
-                        )
+                        let kind = tycker.statics.type_kind(lhs_id);
+                        Alloc::alloc(tycker, ValPi { binder, codomain }, kind, &env)
                     }
                 }
-                | (Type::VPackPi(_), _) => tycker.err(
+                | (Type::ValPi(_), _) => tycker.err(
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                     std::panic::Location::caller(),
                 )?,

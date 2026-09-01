@@ -262,10 +262,6 @@ pub struct PrimitiveTy(pub zydeco_syntax::PrimitiveType);
 #[derive(Clone, Debug)]
 pub struct OSTy;
 
-/// A pure function from one value type to another.
-#[derive(Clone, Debug)]
-pub struct ValueArrow(pub TypeId, pub TypeId);
-
 /// A type-level binder retains both its checked pattern and the abstract
 /// payload used in the body.
 ///
@@ -284,10 +280,6 @@ pub struct TypeAbstraction {
     pub binder: TypeBinder,
     pub body: TypeId,
 }
-
-/// A value-level universal type `forall^v (X : K) . A`.
-#[derive(Clone, Debug)]
-pub struct ValueForall(pub TypeBinder, pub TypeId);
 
 /// A computation-level universal type `forall (X : K) . B`.
 #[derive(Clone, Debug)]
@@ -315,14 +307,38 @@ pub struct PackPi {
     pub codomain: TypeId,
 }
 
-/// A package-dependent pure value arrow.
-///
-/// `witnesses` are abstract type identities obtained by opening `domain`.
-/// They are bound in `codomain`, but not in `domain`.
+/// One runtime binder of a total value function.
 #[derive(Clone, Debug)]
-pub struct ValuePackPi {
+pub struct ValueParameter {
     pub domain: TypeId,
-    pub witnesses: PackTelescope,
+    pub witnesses: Option<PackTelescope>,
+    pub witness_projection: PackageWitnessProjection,
+}
+
+/// The structural route from a value-function argument to package witnesses
+/// opened by its binder pattern.
+///
+/// A product route preserves source order. Package leaves record the number
+/// of abstract identities contributed by that package; manifest entries in
+/// its physical witness prefix are recovered together with them.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PackageWitnessProjection {
+    Ignore,
+    Package { abstracts: usize },
+    Product(Vec<PackageWitnessProjection>),
+}
+
+/// One erased or runtime binder in a value-function classifier.
+#[derive(Clone, Debug)]
+pub enum ValPiBinder {
+    Type(TypeBinder),
+    Value(ValueParameter),
+}
+
+/// A dependent classifier for total value transformations.
+#[derive(Clone, Debug)]
+pub struct ValPi {
+    pub binder: ValPiBinder,
     pub codomain: TypeId,
 }
 
@@ -510,9 +526,7 @@ pub enum Type {
     Opaque(OpaqueTy),
     Primitive(PrimitiveTy),
     OS(OSTy),
-    VArrow(ValueArrow),
-    VForall(ValueForall),
-    VPackPi(Box<ValuePackPi>),
+    ValPi(Box<ValPi>),
     Arrow(ArrowU<TypeId>),
     Forall(Forall),
     PackPi(Box<PackPi>),
@@ -529,9 +543,9 @@ mod impls_types {
 
     impl Type {}
 
-    impl From<ValuePackPi> for Type {
-        fn from(value: ValuePackPi) -> Self {
-            Self::VPackPi(Box::new(value))
+    impl From<ValPi> for Type {
+        fn from(value: ValPi) -> Self {
+            Self::ValPi(Box::new(value))
         }
     }
 
@@ -573,6 +587,28 @@ pub enum ValuePattern {
     Triv(Triv),
     VCons(Vec<VPatId>),
     SCons(ConsN<StaticPatId, VPatId>),
+    View(Box<ViewPattern>),
+}
+
+/// Runtime plan for precomposing a pattern with a total value function.
+#[derive(Clone, Debug)]
+pub struct ViewPattern {
+    pub function: ValueId,
+    pub pattern: VPatId,
+}
+
+/// One binder introduced by a first-class value abstraction.
+#[derive(Clone, Debug)]
+pub enum ValBinder {
+    Type(TPatId),
+    Value(VPatId),
+}
+
+/// One erased or runtime argument supplied to a value function.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum ValArgument {
+    Type(TypeId),
+    Value(ValueId),
 }
 
 #[derive(From, Clone, Debug)]
@@ -582,10 +618,8 @@ pub enum Value {
     Named(Named<FieldName, ValueId>),
     /// Administrative scoped binding used when a source block produces a value.
     Let(Let<VPatId, ValueId, ValueId>),
-    VAbs(Abs<VPatId, ValueId>),
-    VApp(App<ValueId, ValueId>),
-    TAbs(Abs<TPatId, ValueId>),
-    TApp(App<ValueId, TypeId>),
+    ValAbs(Abs<ValBinder, ValueId>),
+    ValApp(App<ValueId, ValArgument>),
     Thunk(Thunk<CompuId>),
     Ctor(Ctor<CtorName, ValueId>),
     Triv(Triv),

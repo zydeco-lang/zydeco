@@ -1,7 +1,7 @@
-param (
+val (
   (/core; builtin) :
   @(import("../builtin.zy"))
-) in
+) =>
 let (/VType; /CType; /Thk; /Unit) = core in
 begin
   -- Shared Monad and algebra type constructors.

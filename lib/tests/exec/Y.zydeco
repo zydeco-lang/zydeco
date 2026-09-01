@@ -27,7 +27,7 @@ begin
     ret { ! prim .y prim }
   that
 
-  let (/bool; /int64; /string; /stdio; /process) = make_std builtin in
+  let (/bool; /int64; /string; /stdio; /process) = builtin |> make_std in
   -- good old factorial
   def ! fact (f : Thk (Int64 -> Ret Int64)) (n : Int64) : Ret Int64 =
     do is_zero <- ! (int64/eq) n 0;

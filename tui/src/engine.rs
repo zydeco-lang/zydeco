@@ -2,8 +2,8 @@ use crate::{diagnostics::DiagnosticText, submission::ExpressionMode};
 use std::{collections::HashSet, path::PathBuf};
 use thiserror::Error;
 use zydeco_dynamics::{
-    BuiltinComputationRootLinker, BuiltinPackageError, BuiltinValueRootLinker, ProgKont,
-    RootLinker, Runtime, ValueRootLinker, fmt::Formatter as DynamicFormatter,
+    BuiltinComputationRootLinker, BuiltinPackageError, ProgKont, RootLinker, Runtime,
+    ValueRootLinker, fmt::Formatter as DynamicFormatter,
 };
 use zydeco_session::{
     AnalysisOutcome, CheckedProgram, CompilerSession, ProgramAnalysis, SourceLoadError,
@@ -12,7 +12,7 @@ use zydeco_statics::{
     TyckObservation,
     arena::StaticsArena,
     fmt::{self as static_fmt, Formatter as StaticFormatter},
-    syntax::{Fillable, PackPi, TermAnnId, Type, TypeId, ValuePackPi},
+    syntax::{Fillable, PackPi, TermAnnId, Type, TypeId},
 };
 use zydeco_surface::textual::SourceNumber;
 use zydeco_syntax::{App, BuiltinRole, BuiltinTypeRole, Meta, Pretty, Ugly};
@@ -111,9 +111,7 @@ impl ReplEngine {
         program: CheckedProgram, root: TermAnnId, forced: bool,
     ) -> Result<String, String> {
         let classifier = match root {
-            | TermAnnId::Value(_, ty) => {
-                Some(Self::pretty_in(&program, Self::value_result_type(&program.statics, ty)))
-            }
+            | TermAnnId::Value(_, ty) => Some(Self::pretty_in(&program, ty)),
             | TermAnnId::Compu(_, ty) => {
                 match Self::evaluation_plan(&program.statics, ty, forced) {
                     | ComputationEvaluationPlan::Return(payload) => {
@@ -152,20 +150,9 @@ impl ReplEngine {
         program: CheckedProgram,
     ) -> Result<zydeco_dynamics::syntax::DynamicsProgram, ReplLinkError> {
         match program.root {
-            | TermAnnId::Value(root, ty) => match Self::value_plan(&program.statics, ty) {
-                | ValuePlan::Builtin(signature) => BuiltinValueRootLinker {
-                    scoped: program.scoped,
-                    statics: program.statics,
-                    root,
-                    signature,
-                }
-                .run()
-                .map_err(ReplLinkError::from),
-                | ValuePlan::Plain => {
-                    Ok(ValueRootLinker { scoped: program.scoped, statics: program.statics, root }
-                        .run())
-                }
-            },
+            | TermAnnId::Value(root, _) => {
+                Ok(ValueRootLinker { scoped: program.scoped, statics: program.statics, root }.run())
+            }
             | TermAnnId::Compu(root, ty) => match Self::computation_plan(&program.statics, ty) {
                 | ComputationPlan::Return(_) | ComputationPlan::Executable => {
                     Ok(RootLinker { scoped: program.scoped, statics: program.statics, root }.run())
@@ -225,13 +212,6 @@ impl ReplEngine {
         }
     }
 
-    fn value_plan(statics: &StaticsArena, ty: TypeId) -> ValuePlan {
-        match Self::type_view(statics, ty) {
-            | Some(Type::VPackPi(signature)) => ValuePlan::Builtin(signature.as_ref().clone()),
-            | _ => ValuePlan::Plain,
-        }
-    }
-
     fn evaluation_plan(
         statics: &StaticsArena, ty: TypeId, allow_host: bool,
     ) -> ComputationEvaluationPlan {
@@ -259,18 +239,6 @@ impl ReplEngine {
                 }
             }
         }
-    }
-
-    fn value_result_type(statics: &StaticsArena, ty: TypeId) -> TypeId {
-        let mut current = ty;
-        let mut visited = HashSet::new();
-        while visited.insert(current) {
-            match Self::value_plan(statics, current) {
-                | ValuePlan::Builtin(signature) => current = signature.codomain,
-                | ValuePlan::Plain => return current,
-            }
-        }
-        current
     }
 
     fn type_view(statics: &StaticsArena, ty: TypeId) -> Option<&Type> {
@@ -369,11 +337,6 @@ enum ComputationPlan {
     Builtin(PackPi),
     Executable,
     Unsupported,
-}
-
-enum ValuePlan {
-    Builtin(ValuePackPi),
-    Plain,
 }
 
 enum ComputationEvaluationPlan {

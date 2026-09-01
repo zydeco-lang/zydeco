@@ -32,6 +32,9 @@ impl SyntacticallyUsed for su::PatId {
                 pat.syntactically_used(tycker)
             }
             | Pat::Project(su::ProjectionPattern(_, pattern)) => pattern.syntactically_used(tycker),
+            | Pat::View(su::ViewPattern { function: _, pattern }) => {
+                pattern.syntactically_used(tycker)
+            }
             | Pat::Alias(su::Alias(patterns)) => {
                 patterns.into_iter().any(|pattern| pattern.syntactically_used(tycker))
             }
@@ -83,6 +86,7 @@ impl SyntacticallyUsed for ss::VPatId {
                 //       so indeed not syntactically used
                 body.syntactically_used(tycker)
             }
+            | Pat::View(view) => view.pattern.syntactically_used(tycker),
         }
     }
 }
@@ -125,6 +129,7 @@ impl SyntacticallyAnnotated for su::TermId {
                 Some(ty)
             }
             | Tm::Abs(_)
+            | Tm::ValAbs(_)
             | Tm::Var(_)
             | Tm::Named(_)
             | Tm::Label(_)
@@ -134,6 +139,7 @@ impl SyntacticallyAnnotated for su::TermId {
             | Tm::App(_)
             | Tm::Fix(_)
             | Tm::Pi(_)
+            | Tm::ValPi(_)
             | Tm::Sigma(_)
             | Tm::ManifestExists(_)
             | Tm::Pack(_)
@@ -192,9 +198,11 @@ impl SyntacticallySealed for su::TermId {
             | Tm::Triv(_)
             | Tm::Cons(_)
             | Tm::Abs(_)
+            | Tm::ValAbs(_)
             | Tm::App(_)
             | Tm::Fix(_)
             | Tm::Pi(_)
+            | Tm::ValPi(_)
             | Tm::Sigma(_)
             | Tm::ManifestExists(_)
             | Tm::Pack(_)

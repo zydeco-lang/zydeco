@@ -82,7 +82,7 @@
         },
         {
           "name": "storage.modifier.zydeco",
-          "match": "\\b(as|fn|fix|pack|is)\\b"
+          "match": "\\b(as|fn|val|fix|pack|is)\\b"
         },
         {
           "name": "keyword.declaration.zydeco",
@@ -128,7 +128,7 @@
     },
     "operators": {
       "name": "keyword.operator.zydeco",
-      "match": "::|=>|->|<-|[!/:=|+*]"
+      "match": "~>|\\|>|<\\||::|=>|->|<-|[!/:=|+*]"
     }
   }
 }

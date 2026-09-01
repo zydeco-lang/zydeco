@@ -9,7 +9,7 @@ begin
   let (/Float64) = representations/f64 that
   let (/OS) = system that
 
-  let (/bool; /float64; /int64; /string; /process) = make_std builtin in
+  let (/bool; /float64; /int64; /string; /process) = builtin |> make_std in
   do sum <- ! (float64/add) 1.25 2.75;
   do difference <- ! (float64/sub) sum 1.5;
   do product <- ! (float64/mul) difference 4.0;

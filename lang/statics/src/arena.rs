@@ -623,6 +623,8 @@ pub struct StaticsIndexes {
     pub value_aliases: ArenaAssoc<DefId, ValueId>,
     /// package witnesses retained by whole-value aliases in selective package patterns
     pub package_aliases: ArenaAssoc<DefId, Vec<StaticTermId>>,
+    /// abstract witness arity contributed by each package-pattern boundary
+    pub package_pattern_opened_arity: ArenaAssoc<VPatId, usize>,
     /// checked bodies of type definitions available to static inspection
     pub type_definitions: ArenaAssoc<DefId, TypeId>,
     /// arena for inlinable definitions, typically global (necessity modality) definitions

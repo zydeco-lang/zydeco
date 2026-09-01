@@ -1,12 +1,12 @@
 -- The Exception effect, packaged as a pure library over the Builtin signature.
-param (
+val (
   (/core; builtin) :
   @(import("../builtin.zy"))
-) in
+) =>
 let (/VType; /CType; /Thk; /Ret; /Unit) = core in
 begin
   let monadic_basis = @(import("monad.zy")) that
-  let (= Monad, = Algebra, ()) = monadic_basis builtin in
+  let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
   begin
     def Either (E : VType) (A : VType) =
       data

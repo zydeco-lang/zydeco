@@ -29,6 +29,7 @@ extern {
         "define" => Tok::Define,
         "let" => Tok::Let,
         "param" => Tok::Param,
+        "val" => Tok::Val,
         "in" => Tok::In,
         "that" => Tok::That,
         "do" => Tok::Do,
@@ -69,6 +70,9 @@ extern {
         "." => Tok::Dot,
         "=>" => Tok::TermArrow,
         "->" => Tok::TypeArrow,
+        "~>" => Tok::ViewArrow,
+        "|>" => Tok::PipeForward,
+        "<|" => Tok::PipeBackward,
         "<-" => Tok::Assign,
         "_" => Tok::Hole,
         "@" => Tok::At,
@@ -126,6 +130,7 @@ MetaId: String = {
     "define" => "define".into(),
     "let" => "let".into(),
     "param" => "param".into(),
+    "val" => "val".into(),
     "in" => "in".into(),
     "that" => "that".into(),
     "do" => "do".into(),
@@ -214,7 +219,21 @@ PatternAnn: Pattern = {
 
 #[inline]
 PatId: PatId = <PatternGen<Pattern>>;
+ViewPatternHead: TermId = {
+    <l:@L> <name:VarName> <r:@R> => parser.term(Span::new(l, r).make(Term::Var(name))),
+    <l:@L> <name:VarName> "[" <first:TermId> <rest:("," <TermId>)*>
+        <_trailing:","?> "]" <r:@R> => {
+        let span = Span::new(l, r);
+        let head = parser.term(span.make(Term::Var(name)));
+        let terms = std::iter::once(head)
+            .chain(std::iter::once(first))
+            .chain(rest)
+            .collect();
+        parser.term(span.make(Term::App(Appli(terms))))
+    },
+};
 Pattern: Pattern = {
+    <function:ViewPatternHead> "~>" <pattern:PatId> => ViewPattern { function, pattern }.into(),
     <Hole> => <>.into(),
     <DefId> => <>.into(),
     <ctor:CtorName> <pat:PatId> => Ctor(<>).into(),
@@ -291,14 +310,21 @@ PackEvidence: TermId = {
 
 TermGen<T>: TermId = <Sp<T>> => parser.term(<>);
 
-// Bindings may have optional `!`/`fix` modifiers, parameters, and annotations.
+// Binding headers select one elaboration discipline before their ordinary
+// binder, parameters, and result annotation.
 GenBind<T>: GenBind<T> = {
-    <comp:"!"?> <fix:"fix"?> <binder:PatId> <params:CoPatId?>
-    <ty:(":" <TermId>)?> <bindee:T> => GenBind {
-        fix: fix.is_some(),
-        comp: comp.is_some(),
-        binder, params, ty, bindee,
-    }
+    "val" <binder:PatId> <params:CoPatId> <ty:(":" <TermId>)?> <bindee:T> => GenBind {
+        flavor: BindingFlavor::Value, binder, params: Some(params), ty, bindee,
+    },
+    "!" <binder:PatId> <params:CoPatId?> <ty:(":" <TermId>)?> <bindee:T> => GenBind {
+        flavor: BindingFlavor::Computation, binder, params, ty, bindee,
+    },
+    "fix" <binder:PatId> <params:CoPatId?> <ty:(":" <TermId>)?> <bindee:T> => GenBind {
+        flavor: BindingFlavor::Recursive, binder, params, ty, bindee,
+    },
+    <binder:PatId> <params:CoPatId?> <ty:(":" <TermId>)?> <bindee:T> => GenBind {
+        flavor: BindingFlavor::Plain, binder, params, ty, bindee,
+    },
 };
 GenBindTerm: GenBind<TermId> = GenBind<("=" <TermId>)>;
 GenBindNull: GenBind<()> = GenBind<()>;
@@ -373,8 +399,8 @@ Term: Term = {
 
     // Precedence summary (tightest -> loosest):
     // level 0 (atom) < level 1 (proj) < level 2 (app/dtor) < level 3 (*)
-    // < level 4 (->) < level 5 (pi/forall/sigma/exists)
-    // < level 6 (binders/blocks).
+    // < level 4 (->) < levels 5-6 (value-level cuts)
+    // < level 7 (pi/forall/sigma/exists) < level 8 (binders/blocks).
 
     #[precedence(level="0")]
     // parentheses
@@ -436,10 +462,26 @@ Term: Term = {
     // arrow
     <ty_in:TermGen<Term>> "->" <ty_out:TermGen<Term>> => Arrow(<>).into(),
 
+    // Directional value-function application.
+    #[precedence(level="5")] #[assoc(side="left")]
+    <subject:TermGen<Term>> "|>" <function:TermGen<Term>> => Pipeline {
+        direction: PipelineDirection::Forward,
+        subject,
+        function,
+    }.into(),
+    #[precedence(level="6")] #[assoc(side="right")]
+    <function:TermGen<Term>> "<|" <subject:TermGen<Term>> => Pipeline {
+        direction: PipelineDirection::Backward,
+        subject,
+        function,
+    }.into(),
+
     // Quantifiers/types bind looser than arrows/products, tighter than binders.
-    #[precedence(level="5")]
+    #[precedence(level="7")]
     // pi
     "pi" <params:CoPatId> "." <term:TermGen<Term>> => Pi(<>).into(),
+    // value pi
+    "val" "pi" <params:CoPatId> "." <term:TermGen<Term>> => ValPi(<>).into(),
     // forall
     "forall" <params:CoPatId> "." <ty:TermGen<Term>> => Forall(<>).into(),
     // sigma
@@ -450,9 +492,11 @@ Term: Term = {
     },
 
     // Bindings are loosest to capture the largest possible tail.
-    #[precedence(level="6")]
+    #[precedence(level="8")]
     // abstraction
     "fn" <params:CoPatId> "=>" <term:TermGen<Term>> => Abs(<>).into(),
+    // total value abstraction
+    "val" <params:CoPatId> "=>" <term:TermGen<Term>> => Term::ValAbs(Abs(<>)),
     // fixed point
     "fix" <binder:PatId> "=>" <term:TermGen<Term>> => Fix(<>).into(),
     // bind
@@ -494,7 +538,9 @@ pub SingleTerm: TermId = <term:TermId> => {
     term
 };
 
-pub SourceUnit: SourceUnit = <root:TermId> => {
-    parser.capture_source_information(input);
-    SourceUnit { root }
+pub SourceUnit: SourceUnit = {
+    <root:TermId> => {
+        parser.capture_source_information(input);
+        SourceUnit { root }
+    },
 };

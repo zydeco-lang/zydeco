@@ -1,14 +1,21 @@
-begin
+val
+  (Bool : @(intrinsic(vtype)))
+  (Scalar : @(intrinsic(vtype)))
+  (String : @(intrinsic(vtype)))
+  (
+    (core : @(import("../builtin/core.zy"))),
+    (bool : (@(import("../data/bool.type.zy"))) Bool),
+    (primitive : (@(import("primitive-float.type.zy"))) Scalar String),
+    (zero : Scalar),
+    (one : Scalar)
+  )
+=>
   begin
-    param core : @(import("../builtin/core.zy")) in
     let (/VType; /CType; /Thk; /Ret; /Unit) = core in
     let Numeric = @(import("numeric.type.zy")) in
     let FloatModule = @(import("float.type.zy")) in
-    fn (Bool : VType) (Scalar : VType) (String : VType) bool primitive =>
-      fn zero =>
-        let zero : Scalar = zero in
-        fn one =>
-          let one : Scalar = one in
+    let zero : Scalar = zero in
+    let one : Scalar = one in
           let ! compare
             (
               predicate : Thk (
@@ -83,5 +90,4 @@ begin
             )
           ) in
           (= operations, = dictionary)
-  end
 end

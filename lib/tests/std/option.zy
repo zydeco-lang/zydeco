@@ -7,7 +7,7 @@ begin
   let (/Int64) = representations/i64 that
   let (/OS) = system that
 
-  let (/option; /process) = make_std builtin in
+  let (/option; /process) = builtin |> make_std in
   do value <- ! (option/some) Int64 0;
   ! (option/fold)
     Int64

@@ -32,7 +32,7 @@ fn alpha_equivalent_forall_types_unify() {
 }
 
 #[test]
-fn alpha_equivalent_value_forall_types_unify() {
+fn alpha_equivalent_val_pi_type_binders_unify() {
     TestFixture::run(|tycker| {
         let (vtype, _) = TestFixture::kinds(tycker);
         let env = TyEnv::new();
@@ -40,11 +40,21 @@ fn alpha_equivalent_value_forall_types_unify() {
         let (rhs_binder, rhs_body) = TestFixture::abst(tycker, vtype);
         let lhs_binder = TypeBinder::with_witness(tycker, lhs_binder, &env);
         let rhs_binder = TypeBinder::with_witness(tycker, rhs_binder, &env);
-        let lhs = Alloc::alloc(tycker, ValueForall(lhs_binder, lhs_body), vtype, &env);
-        let rhs = Alloc::alloc(tycker, ValueForall(rhs_binder, rhs_body), vtype, &env);
+        let lhs = Alloc::alloc(
+            tycker,
+            ValPi { binder: ValPiBinder::Type(lhs_binder), codomain: lhs_body },
+            vtype,
+            &env,
+        );
+        let rhs = Alloc::alloc(
+            tycker,
+            ValPi { binder: ValPiBinder::Type(rhs_binder), codomain: rhs_body },
+            vtype,
+            &env,
+        );
 
         let Ok(joined) = lhs.lub(rhs, tycker) else {
-            panic!("alpha-equivalent pure universal types did not unify")
+            panic!("alpha-equivalent ValPi type binders did not unify")
         };
         assert_eq!(joined, lhs);
     });

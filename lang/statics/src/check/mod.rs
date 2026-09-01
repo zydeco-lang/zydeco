@@ -799,6 +799,10 @@ impl ExistentialProjectionSlot {
         }
     }
 
+    fn opens_abstract(&self) -> bool {
+        matches!(self, Self::Type { skolem: Some(_), .. })
+    }
+
     fn set_pattern(&mut self, pattern: ss::StaticPatId) {
         match (self, pattern) {
             | (Self::Kind { pattern, .. }, ss::StaticPatId::Kind(selected)) => *pattern = selected,
@@ -1233,12 +1237,19 @@ impl ExistentialProjectionPattern {
                 Alloc::alloc(tycker, ss::Alias(patterns), opening.body, &opening.env)
             }
         };
+        let boundary_opened = opening.slots.iter().filter(|slot| slot.opens_abstract()).count();
         let package_terms: Vec<ss::StaticTermId> =
             opening.slots.iter().map(ExistentialProjectionSlot::term).collect();
         let static_patterns: Vec<ss::StaticPatId> =
             opening.slots.iter().map(ExistentialProjectionSlot::pattern).collect();
         let package_pattern =
             Alloc::alloc(tycker, ss::ConsN(static_patterns, body_pattern), opening.expected, env);
+        if boundary_opened > 0 {
+            tycker
+                .statics
+                .package_pattern_opened_arity
+                .insert_new(package_pattern, boundary_opened);
+        }
         for definition in package_aliases {
             let _ = tycker.statics.package_aliases.upsert(definition, package_terms.clone());
         }
@@ -1266,7 +1277,8 @@ impl ExistentialProjectionPattern {
             | ss::ValuePattern::Alias(_)
             | ss::ValuePattern::Triv(_)
             | ss::ValuePattern::VCons(_)
-            | ss::ValuePattern::SCons(_) => None,
+            | ss::ValuePattern::SCons(_)
+            | ss::ValuePattern::View(_) => None,
         }
     }
 }
@@ -1290,6 +1302,7 @@ impl ValuePatternShape {
                 patterns.iter().all(|pattern| Self::is_irrefutable(tycker, *pattern))
             }
             | ss::ValuePattern::SCons(ss::ConsN(_, body)) => Self::is_irrefutable(tycker, *body),
+            | ss::ValuePattern::View(view) => Self::is_irrefutable(tycker, view.pattern),
         }
     }
 }
@@ -1323,6 +1336,9 @@ impl Tycker<'_> {
             }
             | su::Pattern::Alias(su::Alias(patterns)) => {
                 patterns.iter().any(|pattern| self.pattern_has_payload_annotation(*pattern))
+            }
+            | su::Pattern::View(su::ViewPattern { pattern, .. }) => {
+                self.pattern_has_payload_annotation(pattern)
             }
             | su::Pattern::Hole(_)
             | su::Pattern::Var(_)
@@ -1422,6 +1438,59 @@ impl CheckedPatternExt for CheckedPattern {
             )?
         }
         Ok(Some(ss::PackTelescope::new(*first, rest.iter().copied())))
+    }
+}
+
+/// Reify the package-opening structure of a checked value pattern without
+/// retaining source binders in its classifier.
+struct PackageWitnessProjectionBuilder;
+
+impl PackageWitnessProjectionBuilder {
+    fn build(pattern: ss::VPatId, tycker: &Tycker<'_>) -> ss::PackageWitnessProjection {
+        match tycker.statics.vpats[&pattern].to_owned() {
+            | ss::ValuePattern::Named(ss::Named(_, inner)) => Self::build(inner, tycker),
+            | ss::ValuePattern::Alias(ss::Alias(patterns)) => patterns
+                .iter()
+                .map(|pattern| Self::build(*pattern, tycker))
+                .find(|projection| !matches!(projection, ss::PackageWitnessProjection::Ignore))
+                .unwrap_or(ss::PackageWitnessProjection::Ignore),
+            | ss::ValuePattern::VCons(patterns) => {
+                let projections = patterns
+                    .iter()
+                    .map(|pattern| Self::build(*pattern, tycker))
+                    .collect::<Vec<_>>();
+                if projections
+                    .iter()
+                    .all(|projection| matches!(projection, ss::PackageWitnessProjection::Ignore))
+                {
+                    ss::PackageWitnessProjection::Ignore
+                } else {
+                    ss::PackageWitnessProjection::Product(projections)
+                }
+            }
+            | ss::ValuePattern::SCons(_) => tycker
+                .statics
+                .package_pattern_opened_arity
+                .get(&pattern)
+                .copied()
+                .map(|abstracts| ss::PackageWitnessProjection::Package { abstracts })
+                .unwrap_or(ss::PackageWitnessProjection::Ignore),
+            | ss::ValuePattern::Hole(_)
+            | ss::ValuePattern::Var(_)
+            | ss::ValuePattern::Ctor(_)
+            | ss::ValuePattern::Triv(_)
+            | ss::ValuePattern::View(_) => ss::PackageWitnessProjection::Ignore,
+        }
+    }
+
+    fn abstract_arity(projection: &ss::PackageWitnessProjection) -> usize {
+        match projection {
+            | ss::PackageWitnessProjection::Ignore => 0,
+            | ss::PackageWitnessProjection::Package { abstracts } => *abstracts,
+            | ss::PackageWitnessProjection::Product(projections) => {
+                projections.iter().map(Self::abstract_arity).sum()
+            }
+        }
     }
 }
 
@@ -2129,6 +2198,16 @@ impl PatternSkolems {
     fn get_witness(&self, witness: &ss::AbstId) -> Option<ss::AbstId> {
         self.witnesses.get(witness).copied()
     }
+
+    fn merge(mut self, other: Self) -> Self {
+        other.patterns.iter().for_each(|(pattern, witness)| {
+            self.patterns.insert_mut(*pattern, *witness);
+        });
+        other.witnesses.iter().for_each(|(source, canonical)| {
+            self.witnesses.insert_mut(*source, *canonical);
+        });
+        self
+    }
 }
 
 /// Pattern-checking mode together with any canonical package witnesses.
@@ -2160,8 +2239,14 @@ impl PatternAction {
 pub struct Assign<Br, Be>(pub Br, pub Be);
 pub struct FixPoint<T>(pub T);
 
-/// Formation input for a pure or computational function type with an
-/// elaborated value-pattern domain.
+/// Formation input for a computation function type with an elaborated
+/// value-pattern domain.
+struct ComputationPiFormation {
+    binder: CheckedPattern,
+    codomain: su::TermId,
+}
+
+/// Formation input for a total value-function classifier.
 struct ValuePiFormation {
     binder: CheckedPattern,
     codomain: su::TermId,
@@ -2173,8 +2258,21 @@ struct PackPiInstantiation {
     witnesses: Vec<ss::StaticTermId>,
 }
 
-/// The common static information carried by pure and computational
-/// package-dependent arrows.
+/// Instantiate package witnesses selected from a structured value-function
+/// argument rather than assuming that the whole argument is one package.
+struct ValuePiInstantiation {
+    signature: PackageSignature,
+    projection: ss::PackageWitnessProjection,
+    argument: ss::ValueId,
+}
+
+struct ProjectedPackageArgument {
+    domain: ss::TypeId,
+    witnesses: Vec<ss::StaticTermId>,
+    abstracts: usize,
+}
+
+/// The static information carried by a package-dependent computation arrow.
 #[derive(Clone)]
 struct PackageSignature {
     domain: ss::TypeId,
@@ -2189,10 +2287,26 @@ impl From<ss::PackPi> for PackageSignature {
     }
 }
 
-impl From<ss::ValuePackPi> for PackageSignature {
-    fn from(signature: ss::ValuePackPi) -> Self {
-        let ss::ValuePackPi { domain, witnesses, codomain } = signature;
-        Self { domain, witnesses, codomain }
+impl PackageSignature {
+    /// Open a value function's package witnesses as fresh skolems while
+    /// checking the result pattern of a view pattern.
+    fn open_codomain_k(
+        &self, tycker: &mut Tycker<'_>, env: &ss::TyEnv,
+    ) -> ResultKont<(ss::TyEnv, ss::TypeId, Vec<ss::AbstId>)> {
+        self.witnesses.iter().try_fold(
+            (env.clone(), self.codomain, Vec::new()),
+            |(env, codomain, mut opened), canonical| -> ResultKont<_> {
+                let kind = tycker.statics.annotations_abst[canonical];
+                let fresh = Alloc::alloc(tycker, None, kind, &());
+                tycker.transfer_builtin_role_k(*canonical, fresh)?;
+                tycker.statics.existential_skolems.ensure(fresh);
+                let env = env.with_skolem(fresh);
+                let payload = Alloc::alloc(tycker, fresh, kind, &env);
+                let codomain = codomain.subst_abst_k(tycker, (*canonical, payload))?;
+                opened.push(fresh);
+                Ok((env, codomain, opened))
+            },
+        )
     }
 }
 
@@ -2299,18 +2413,12 @@ impl<'a> PackPiInstantiationState<'a> {
     }
 }
 
-/// Check a value abstraction against a package-dependent arrow.
+/// Check a computation abstraction over a package value against a
+/// package-dependent computation arrow.
 struct PackPiIntroduction {
     binder: su::PatId,
     body: su::TermId,
     signature: ss::PackPi,
-}
-
-/// Check a value abstraction against a pure package-dependent arrow.
-struct ValuePackPiIntroduction {
-    binder: su::PatId,
-    body: su::TermId,
-    signature: ss::ValuePackPi,
 }
 
 /// Associate a package pattern's leading type components with a `PackPi`
@@ -2318,6 +2426,14 @@ struct ValuePackPiIntroduction {
 struct PackPiPatternSkolems {
     pattern: su::PatId,
     signature: PackageSignature,
+}
+
+/// Associate package openings inside a structured value-function parameter
+/// with the canonical witnesses stored by its `ValPi` classifier.
+struct ValuePiPatternSkolems {
+    pattern: su::PatId,
+    signature: PackageSignature,
+    projection: ss::PackageWitnessProjection,
 }
 
 /// Associate each abstract witness in a package domain with the canonical
@@ -2470,6 +2586,7 @@ impl PackPiPatternSkolems {
                     .collect_k(tycker, env)
             }
             | su::Pattern::Project(_) => Ok(Vec::new()),
+            | su::Pattern::View(_) => Ok(Vec::new()),
             | su::Pattern::Alias(su::Alias(patterns))
                 if ExistentialProjectionPattern::members(tycker, patterns.iter().copied())
                     .is_some() =>
@@ -2498,14 +2615,6 @@ struct PackPiElimination {
     signature: ss::PackPi,
 }
 
-/// Apply a pure package-dependent function to a package with manifest
-/// witnesses.
-struct ValuePackPiElimination {
-    function: ss::ValueId,
-    argument: su::TermId,
-    signature: ss::ValuePackPi,
-}
-
 impl<'a> Tyck<'a> for TyEnvT<PackPiPatternSkolems> {
     type Out = PatternSkolems;
     type Action = ();
@@ -2516,6 +2625,116 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiPatternSkolems> {
         let witnesses = PackPiWitnessSkolems::new(&canonical, self.inner.signature.domain)
             .collect_k(tycker, &self.info)?;
         Ok(PatternSkolems::new(patterns, witnesses))
+    }
+}
+
+impl ValuePiPatternSkolems {
+    fn collect_projection_k(
+        tycker: &mut Tycker<'_>, env: &ss::TyEnv, pattern: su::PatId, domain: ss::TypeId,
+        projection: &ss::PackageWitnessProjection, canonical: &[ss::AbstId], codomain: ss::TypeId,
+    ) -> ResultKont<(PatternSkolems, usize)> {
+        match tycker.scoped.pats[&pattern].to_owned() {
+            | su::Pattern::Ann(su::Ann { tm, .. }) | su::Pattern::Named(su::Named(_, tm)) => {
+                return Self::collect_projection_k(
+                    tycker, env, tm, domain, projection, canonical, codomain,
+                );
+            }
+            | _ => {}
+        }
+
+        match projection {
+            | ss::PackageWitnessProjection::Ignore => Ok((PatternSkolems::default(), 0)),
+            | ss::PackageWitnessProjection::Package { abstracts } => {
+                if *abstracts == 0 || *abstracts > canonical.len() {
+                    return tycker.err_k(
+                        TyckError::PackageWitnessArityMismatch {
+                            expected: canonical.len(),
+                            found: *abstracts,
+                        },
+                        std::panic::Location::caller(),
+                    );
+                }
+                let selected = &canonical[..*abstracts];
+                let (&first, rest) = selected.split_first().expect("a package route is nonempty");
+                let witnesses = ss::PackTelescope::new(first, rest.iter().copied());
+                let signature = PackageSignature { domain, witnesses, codomain };
+                let helper = PackPiPatternSkolems { pattern, signature: signature.clone() };
+                let patterns = helper.assignments_k(tycker, env, pattern)?;
+                let witnesses =
+                    PackPiWitnessSkolems::new(selected, domain).collect_k(tycker, env)?;
+                Ok((PatternSkolems::new(patterns, witnesses), *abstracts))
+            }
+            | ss::PackageWitnessProjection::Product(projections) => {
+                let su::Pattern::Cons(patterns) = tycker.scoped.pats[&pattern].to_owned() else {
+                    return tycker.err_k(
+                        TyckError::PackageWitnessArityMismatch {
+                            expected: projections.len(),
+                            found: 0,
+                        },
+                        std::panic::Location::caller(),
+                    );
+                };
+                let domain_view = domain.unroll_k(tycker)?.subst_env_k(tycker, env)?;
+                let ss::Type::Prod(ss::Prod(domains)) =
+                    tycker.type_filled_k(&domain_view)?.to_owned()
+                else {
+                    return tycker.err_k(
+                        TyckError::TypeExpected {
+                            expected: "a product carrying package witnesses".to_string(),
+                            found: domain_view,
+                        },
+                        std::panic::Location::caller(),
+                    );
+                };
+                if projections.len() != domains.len() || domains.len() != patterns.len() {
+                    return tycker.err_k(
+                        TyckError::PackageWitnessArityMismatch {
+                            expected: projections.len(),
+                            found: patterns.len(),
+                        },
+                        std::panic::Location::caller(),
+                    );
+                }
+                projections.iter().zip(domains).zip(patterns).try_fold(
+                    (PatternSkolems::default(), 0usize),
+                    |(skolems, consumed), ((projection, domain), pattern)| {
+                        let remaining = canonical.get(consumed..).unwrap_or_default();
+                        let (component, component_consumed) = Self::collect_projection_k(
+                            tycker, env, pattern, domain, projection, remaining, codomain,
+                        )?;
+                        Ok((skolems.merge(component), consumed + component_consumed))
+                    },
+                )
+            }
+        }
+    }
+}
+
+impl<'a> Tyck<'a> for TyEnvT<ValuePiPatternSkolems> {
+    type Out = PatternSkolems;
+    type Action = ();
+
+    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<Self::Out> {
+        let canonical = self.inner.signature.witnesses.iter().copied().collect::<Vec<_>>();
+        let (skolems, consumed) = ValuePiPatternSkolems::collect_projection_k(
+            tycker,
+            &self.info,
+            self.inner.pattern,
+            self.inner.signature.domain,
+            &self.inner.projection,
+            &canonical,
+            self.inner.signature.codomain,
+        )?;
+        if consumed != canonical.len() {
+            tycker.err_k(
+                TyckError::PackageWitnessArityMismatch {
+                    expected: canonical.len(),
+                    found: consumed,
+                },
+                std::panic::Location::caller(),
+            )?
+        }
+        Ok(skolems)
     }
 }
 
@@ -3073,6 +3292,73 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                     tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                 }
             },
+            | Pat::View(su::ViewPattern { function, pattern }) => {
+                let function = self.mk(function).tyck_k(tycker, Action::syn())?;
+                let (function, function_ty) = function.try_as_value(
+                    tycker,
+                    TyckError::SortMismatch,
+                    std::panic::Location::caller(),
+                )?;
+                let function_kind = tycker.statics.type_kind(function_ty);
+                let function_ty = function_ty.normalize_k(tycker, function_kind)?;
+                let function_view =
+                    function_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
+                let ss::Type::ValPi(pi) = tycker.type_filled_k(&function_view)?.to_owned() else {
+                    tycker.err_k(
+                        TyckError::TypeExpected {
+                            expected: "a value function with a runtime parameter".to_string(),
+                            found: function_view,
+                        },
+                        std::panic::Location::caller(),
+                    )?
+                };
+                let ss::ValPi { binder, codomain } = *pi;
+                let ss::ValPiBinder::Value(parameter) = binder else {
+                    tycker.err_k(
+                        TyckError::TypeExpected {
+                            expected: "a value function with a runtime parameter".to_string(),
+                            found: function_view,
+                        },
+                        std::panic::Location::caller(),
+                    )?
+                };
+                let domain = match switch {
+                    | Switch::Syn => parameter.domain,
+                    | Switch::Ana(AnnId::Type(expected)) => {
+                        Lub::lub_k(parameter.domain, expected, tycker)?
+                    }
+                    | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
+                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                    }
+                };
+                let (pattern_env, codomain, mut opened) = match parameter.witnesses {
+                    | None => (self.info.clone(), codomain, Vec::new()),
+                    | Some(witnesses) => {
+                        PackageSignature { domain: parameter.domain, witnesses, codomain }
+                            .open_codomain_k(tycker, &self.info)?
+                    }
+                };
+                let nested = TyEnvT::new(pattern_env, pattern).tyck_k(
+                    tycker,
+                    PatternAction::ana(codomain.into()).with_skolems(skolems.clone()),
+                )?;
+                let (pattern, _) = nested.annotation.try_as_value(
+                    tycker,
+                    TyckError::SortMismatch,
+                    std::panic::Location::caller(),
+                )?;
+                opened.extend(nested.inner.opened.iter().copied());
+                let view_pattern = Alloc::alloc(
+                    tycker,
+                    Box::new(ss::ViewPattern { function, pattern }),
+                    domain,
+                    &self.info,
+                );
+                TyEnvT::new(
+                    nested.info,
+                    PatternCheck::with_opened(PatAnnId::Value(view_pattern, domain), opened),
+                )
+            }
             | Pat::Ctor(pat) => match switch {
                 | Switch::Syn => {
                     let pat = crate::query::InternedPat::new(tycker.db, self.inner);
@@ -3431,6 +3717,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                 let mut body_index = items.len();
                                 let mut static_patterns: Vec<ss::StaticPatId> = Vec::new();
                                 let mut opened = Vec::new();
+                                let mut boundary_opened = 0usize;
                                 for (index, item) in items.iter().copied().enumerate() {
                                     match body_ty.with_environment(&body_env).reveal_k(tycker)? {
                                         | DeferredTelescopeView::ManifestKind {
@@ -3537,6 +3824,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                                         abstract_ty,
                                                     );
                                                     opened.push(skolem);
+                                                    boundary_opened += 1;
                                                 }
                                                 | DeferredTelescopeExistsMode::Manifest(
                                                     definition,
@@ -3672,6 +3960,12 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                     expected,
                                     &self.info,
                                 );
+                                if boundary_opened > 0 {
+                                    tycker
+                                        .statics
+                                        .package_pattern_opened_arity
+                                        .insert_new(cons, boundary_opened);
+                                }
                                 TyEnvT::new(
                                     body_env,
                                     PatternCheck::with_opened(
@@ -3757,8 +4051,110 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiFormation> {
     type Out = TermAnnId;
     type Action = Action<AnnId>;
 
-    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
+    fn tyck_inner_k(
+        &self, tycker: &mut Tycker<'a>, Action { switch, .. }: Self::Action,
+    ) -> ResultKont<Self::Out> {
         let ValuePiFormation { binder, codomain } = &self.inner;
+        let vtype = ss::VType.build(tycker, &self.info);
+        match switch {
+            | Switch::Syn => {}
+            | Switch::Ana(AnnId::Kind(expected)) => {
+                Lub::lub_k(vtype, expected, tycker)?;
+            }
+            | Switch::Ana(AnnId::Set | AnnId::Type(_)) => {
+                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+            }
+        }
+
+        let pi = match binder.inner.annotation {
+            | PatAnnId::Kind(_) => tycker.err_k(
+                TyckError::Expressivity("kind quantification is not supported"),
+                std::panic::Location::caller(),
+            )?,
+            | PatAnnId::Type(pattern, _) => {
+                let witness = Alloc::alloc(tycker, pattern, (), &());
+                let payload_kind = tycker.statics.annotations_abst[&witness];
+                let payload = Alloc::alloc(tycker, witness, payload_kind, &self.info);
+                let argument = pattern.introduce_payload(tycker, payload);
+                let argument = tycker.err_p_to_k(argument)?;
+                let body_env = TyEnvT::new(binder.info.clone(), Assign(pattern, argument))
+                    .tyck_k(tycker, ())?
+                    .info;
+                let codomain =
+                    TyEnvT::new(body_env, *codomain).tyck_k(tycker, Action::ana(vtype.into()))?;
+                let (codomain, _) = codomain.try_as_type(
+                    tycker,
+                    TyckError::SortMismatch,
+                    std::panic::Location::caller(),
+                )?;
+                ss::ValPi {
+                    binder: ss::ValPiBinder::Type(ss::TypeBinder { pattern, witness }),
+                    codomain,
+                }
+            }
+            | PatAnnId::Value(pattern, domain) => {
+                if !ValuePatternShape::is_irrefutable(tycker, pattern) {
+                    tycker.err_k(
+                        TyckError::Expressivity(
+                            "value-function parameters must be irrefutable patterns",
+                        ),
+                        std::panic::Location::caller(),
+                    )?
+                }
+                let domain_kind = tycker.statics.type_kind(domain);
+                Lub::lub_k(vtype, domain_kind, tycker)?;
+                let codomain = TyEnvT::new(binder.info.clone(), *codomain)
+                    .tyck_k(tycker, Action::ana(vtype.into()))?;
+                let (codomain, _) = codomain.try_as_type(
+                    tycker,
+                    TyckError::SortMismatch,
+                    std::panic::Location::caller(),
+                )?;
+                let witnesses = binder.package_telescope_k(tycker)?;
+                let witness_projection = PackageWitnessProjectionBuilder::build(pattern, tycker);
+                let projected_arity =
+                    PackageWitnessProjectionBuilder::abstract_arity(&witness_projection);
+                let witness_arity = witnesses.as_ref().map_or(0, ss::PackTelescope::len);
+                if projected_arity != witness_arity {
+                    tycker.err_k(
+                        TyckError::PackageWitnessArityMismatch {
+                            expected: witness_arity,
+                            found: projected_arity,
+                        },
+                        std::panic::Location::caller(),
+                    )?
+                }
+                if witnesses.is_none() {
+                    binder.close_scope_k(tycker, codomain)?;
+                }
+                if let Some(witnesses) = &witnesses {
+                    tycker.validate_builtin_signature_k(&ss::PackPi {
+                        domain,
+                        witnesses: witnesses.clone(),
+                        codomain,
+                    })?;
+                }
+                ss::ValPi {
+                    binder: ss::ValPiBinder::Value(ss::ValueParameter {
+                        domain,
+                        witnesses,
+                        witness_projection,
+                    }),
+                    codomain,
+                }
+            }
+        };
+        let pi = Alloc::alloc(tycker, pi, vtype, &self.info);
+        Ok(TermAnnId::Type(pi, vtype))
+    }
+}
+
+impl<'a> Tyck<'a> for TyEnvT<ComputationPiFormation> {
+    type Out = TermAnnId;
+    type Action = Action<AnnId>;
+
+    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
+        let ComputationPiFormation { binder, codomain } = &self.inner;
         let (pattern, domain) =
             binder.try_as_value(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
         if pattern.syntactically_used(tycker) {
@@ -3779,26 +4175,12 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiFormation> {
             std::panic::Location::caller(),
         )?;
         let pi = match tycker.kind_filled_k(&codomain_kind)?.to_owned() {
-            | ss::Kind::VType(_) => match binder.package_telescope_k(tycker)? {
-                | None => {
-                    binder.close_scope_k(tycker, codomain)?;
-                    Alloc::alloc(
-                        tycker,
-                        ss::ValueArrow(domain, codomain),
-                        codomain_kind,
-                        &self.info,
-                    )
-                }
-                | Some(witnesses) => {
-                    let signature = ss::ValuePackPi { domain, witnesses, codomain };
-                    tycker.validate_builtin_signature_k(&ss::PackPi {
-                        domain: signature.domain,
-                        witnesses: signature.witnesses.clone(),
-                        codomain: signature.codomain,
-                    })?;
-                    Alloc::alloc(tycker, signature, codomain_kind, &self.info)
-                }
-            },
+            | ss::Kind::VType(_) => tycker.err_k(
+                TyckError::Expressivity(
+                    "value-returning computation arrows are not supported; use `val pi`",
+                ),
+                std::panic::Location::caller(),
+            )?,
             | ss::Kind::CType(_) => match binder.package_telescope_k(tycker)? {
                 | None => {
                     binder.close_scope_k(tycker, codomain)?;
@@ -3827,6 +4209,129 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiInstantiation> {
         let canonical = signature.witnesses.iter().copied().collect::<Vec<_>>();
         PackPiInstantiationState::new(signature, &canonical, witnesses)
             .instantiate_k(tycker, &self.info)
+    }
+}
+
+impl ValuePiInstantiation {
+    fn projected_arguments_k(
+        env: &ss::TyEnv, tycker: &mut Tycker<'_>, projection: &ss::PackageWitnessProjection,
+        domain: ss::TypeId, argument: ss::ValueId,
+    ) -> ResultKont<Vec<ProjectedPackageArgument>> {
+        match projection {
+            | ss::PackageWitnessProjection::Ignore => Ok(Vec::new()),
+            | ss::PackageWitnessProjection::Package { abstracts } => {
+                let Some(witnesses) = argument.package_witnesses(tycker) else {
+                    tycker.err_k(
+                        TyckError::PackageWitnessesUnavailable { package: argument },
+                        std::panic::Location::caller(),
+                    )?
+                };
+                Ok(vec![ProjectedPackageArgument { domain, witnesses, abstracts: *abstracts }])
+            }
+            | ss::PackageWitnessProjection::Product(projections) => {
+                let domain_view = domain.unroll_k(tycker)?.subst_env_k(tycker, env)?;
+                let ss::Type::Prod(ss::Prod(domains)) =
+                    tycker.type_filled_k(&domain_view)?.to_owned()
+                else {
+                    tycker.err_k(
+                        TyckError::TypeExpected {
+                            expected: "a product carrying package witnesses".to_string(),
+                            found: domain_view,
+                        },
+                        std::panic::Location::caller(),
+                    )?
+                };
+                let Some(arguments) = argument.product_components(tycker) else {
+                    tycker.err_k(
+                        TyckError::PackageWitnessesUnavailable { package: argument },
+                        std::panic::Location::caller(),
+                    )?
+                };
+                if projections.len() != domains.len() || domains.len() != arguments.len() {
+                    tycker.err_k(
+                        TyckError::PackageWitnessArityMismatch {
+                            expected: projections.len(),
+                            found: arguments.len(),
+                        },
+                        std::panic::Location::caller(),
+                    )?
+                }
+                projections.iter().zip(domains).zip(arguments).try_fold(
+                    Vec::new(),
+                    |mut projected, ((projection, domain), argument)| {
+                        projected.extend(Self::projected_arguments_k(
+                            env, tycker, projection, domain, argument,
+                        )?);
+                        Ok(projected)
+                    },
+                )
+            }
+        }
+    }
+}
+
+impl<'a> Tyck<'a> for TyEnvT<ValuePiInstantiation> {
+    type Out = ss::TypeId;
+    type Action = ();
+
+    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<Self::Out> {
+        let ValuePiInstantiation { signature, projection, argument } = &self.inner;
+        let canonical = signature.witnesses.iter().copied().collect::<Vec<_>>();
+        let projected = ValuePiInstantiation::projected_arguments_k(
+            &self.info,
+            tycker,
+            projection,
+            signature.domain,
+            *argument,
+        )?;
+        let (codomain, consumed) = projected.into_iter().try_fold(
+            (signature.codomain, 0usize),
+            |(codomain, consumed), projected| -> ResultKont<_> {
+                let remaining = canonical.get(consumed..).unwrap_or_default();
+                let Some((first, tail)) = remaining.split_first() else {
+                    return tycker.err_k(
+                        TyckError::PackageWitnessArityMismatch {
+                            expected: canonical.len(),
+                            found: consumed + projected.abstracts,
+                        },
+                        std::panic::Location::caller(),
+                    );
+                };
+                if projected.abstracts > remaining.len() {
+                    return tycker.err_k(
+                        TyckError::PackageWitnessArityMismatch {
+                            expected: canonical.len(),
+                            found: consumed + projected.abstracts,
+                        },
+                        std::panic::Location::caller(),
+                    );
+                }
+                let selected_tail = tail
+                    .iter()
+                    .take(projected.abstracts.saturating_sub(1))
+                    .copied()
+                    .collect::<Vec<_>>();
+                let witnesses = ss::PackTelescope::new(*first, selected_tail);
+                let segment = PackageSignature { domain: projected.domain, witnesses, codomain };
+                let codomain = PackPiInstantiationState::new(
+                    &segment,
+                    &remaining[..projected.abstracts],
+                    &projected.witnesses,
+                )
+                .instantiate_k(tycker, &self.info)?;
+                Ok((codomain, consumed + projected.abstracts))
+            },
+        )?;
+        if consumed != canonical.len() {
+            tycker.err_k(
+                TyckError::PackageWitnessArityMismatch {
+                    expected: canonical.len(),
+                    found: consumed,
+                },
+                std::panic::Location::caller(),
+            )?
+        }
+        Ok(codomain)
     }
 }
 
@@ -3888,64 +4393,6 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiIntroduction> {
     }
 }
 
-impl<'a> Tyck<'a> for TyEnvT<ValuePackPiIntroduction> {
-    type Out = TermAnnId;
-    type Action = ();
-
-    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<Self::Out> {
-        let ValuePackPiIntroduction { binder, body, signature } = &self.inner;
-        let skolems = self
-            .mk(PackPiPatternSkolems { pattern: *binder, signature: signature.clone().into() })
-            .tyck_k(tycker, ())?;
-        let binder = self
-            .mk(*binder)
-            .tyck_k(tycker, PatternAction::ana(signature.domain.into()).with_skolems(skolems))?;
-        let (pattern, domain) =
-            binder.try_as_value(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
-        Lub::lub_k(signature.domain, domain, tycker)?;
-
-        let Some(witnesses) = binder.package_telescope_k(tycker)? else {
-            tycker.err_k(
-                TyckError::PackageWitnessArityMismatch {
-                    expected: signature.witnesses.len(),
-                    found: 0,
-                },
-                std::panic::Location::caller(),
-            )?
-        };
-        let body = TyEnvT::new(binder.info.clone(), *body)
-            .tyck_k(tycker, Action::ana(signature.codomain.into()))?;
-        let (body, codomain) =
-            body.try_as_value(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
-
-        let mut iter = witnesses.iter();
-        let first = *iter.next().expect("a package telescope opens at least one witness");
-        let rest = iter.copied().collect::<Vec<_>>();
-        let input = crate::query::InternedValuePackPiIntro::new(
-            tycker.db, pattern, body, domain, first, rest, codomain,
-        );
-        let Some(outcome) = crate::query::value_pack_pi_intro_judgment(
-            tycker.db,
-            tycker.data,
-            tycker.query_site(),
-            input,
-        ) else {
-            unreachable!("value pack-pi introduction judgments are query-produced")
-        };
-        tycker.statics.types_pre.insert_new(
-            outcome.sig_id,
-            ss::Fillable::Done(outcome.sig),
-            outcome.kd,
-        );
-        tycker.store_env(outcome.sig_id, &self.info);
-        outcome.sig_id.constrain_to_scope_k(tycker, self.info.skolem_scope())?;
-        tycker.statics.values.insert_new(outcome.abs_id, outcome.abs);
-        tycker.statics.annotations_value.insert_new(outcome.abs_id, outcome.sig_id);
-        tycker.statics.env_value.insert_new(outcome.abs_id, self.info.clone());
-        Ok(TermAnnId::Value(outcome.abs_id, outcome.sig_id))
-    }
-}
-
 impl<'a> Tyck<'a> for TyEnvT<PackPiElimination> {
     type Out = TermAnnId;
     type Action = Action<AnnId>;
@@ -3992,55 +4439,6 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiElimination> {
         tycker.statics.annotations_compu.insert_new(id, ann);
         tycker.statics.env_compu.insert_new(id, self.info.clone());
         Ok(TermAnnId::Compu(id, reported))
-    }
-}
-
-impl<'a> Tyck<'a> for TyEnvT<ValuePackPiElimination> {
-    type Out = TermAnnId;
-    type Action = Action<AnnId>;
-
-    fn tyck_inner_k(
-        &self, tycker: &mut Tycker<'a>, Action { switch, .. }: Self::Action,
-    ) -> ResultKont<Self::Out> {
-        let ValuePackPiElimination { function, argument, signature } = &self.inner;
-        let argument = self.mk(*argument).tyck_k(tycker, Action::ana(signature.domain.into()))?;
-        let (argument, _) = argument.try_as_value(
-            tycker,
-            TyckError::SortMismatch,
-            std::panic::Location::caller(),
-        )?;
-        let Some(witnesses) = argument.package_witnesses(tycker) else {
-            tycker.err_k(
-                TyckError::PackageWitnessesUnavailable { package: argument },
-                std::panic::Location::caller(),
-            )?
-        };
-        let codomain = self
-            .mk(PackPiInstantiation { signature: signature.clone().into(), witnesses })
-            .tyck_k(tycker, ())?;
-        codomain.constrain_to_scope_k(tycker, self.info.skolem_scope())?;
-        let codomain = match switch {
-            | Switch::Syn => codomain,
-            | Switch::Ana(AnnId::Type(expected)) => Lub::lub_k(codomain, expected, tycker)?,
-            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
-                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-            }
-        };
-        let input = crate::query::InternedAppInput::new(
-            tycker.db,
-            crate::query::AppKind::ValueValue { function: *function, argument },
-            codomain,
-            codomain,
-        );
-        let Some(crate::query::AppSynOutcome::Value { id, value, ann, reported }) =
-            crate::query::app_judgment_at(tycker.db, tycker.data, tycker.query_site(), input)
-        else {
-            unreachable!("value pack-pi elimination judgments are query-produced")
-        };
-        tycker.statics.values.insert_new(id, value);
-        tycker.statics.annotations_value.insert_new(id, ann);
-        tycker.statics.env_value.insert_new(id, self.info.clone());
-        Ok(TermAnnId::Value(id, reported))
     }
 }
 
@@ -4950,6 +5348,240 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     }
                 }
             }
+            | Tm::ValAbs(term) => {
+                let su::Abs(source_binder, source_body) = term;
+                match switch {
+                    | Switch::Syn => {
+                        let binder = self.mk(source_binder).tyck_k(tycker, PatternAction::syn())?;
+                        let vtype = ss::VType.build(tycker, &self.info);
+                        let (binder_node, body, classifier) = match binder.inner.annotation {
+                            | PatAnnId::Kind(_) => tycker.err_k(
+                                TyckError::Expressivity(
+                                    "kind parameters are not supported by value functions",
+                                ),
+                                std::panic::Location::caller(),
+                            )?,
+                            | PatAnnId::Type(pattern, _) => {
+                                let witness = Alloc::alloc(tycker, pattern, (), &());
+                                let payload_kind = tycker.statics.annotations_abst[&witness];
+                                let payload =
+                                    Alloc::alloc(tycker, witness, payload_kind, &self.info);
+                                let argument = pattern.introduce_payload(tycker, payload);
+                                let argument = tycker.err_p_to_k(argument)?;
+                                let body_env =
+                                    TyEnvT::new(binder.info.clone(), Assign(pattern, argument))
+                                        .tyck_k(tycker, ())?
+                                        .info;
+                                let body = TyEnvT::new(body_env, source_body)
+                                    .tyck_k(tycker, Action::syn())?;
+                                let (body, codomain) = body.try_as_value(
+                                    tycker,
+                                    TyckError::SortMismatch,
+                                    std::panic::Location::caller(),
+                                )?;
+                                let classifier = ss::ValPi {
+                                    binder: ss::ValPiBinder::Type(ss::TypeBinder {
+                                        pattern,
+                                        witness,
+                                    }),
+                                    codomain,
+                                };
+                                (ss::ValBinder::Type(pattern), body, classifier)
+                            }
+                            | PatAnnId::Value(pattern, domain) => {
+                                if !ValuePatternShape::is_irrefutable(tycker, pattern) {
+                                    tycker.err_k(
+                                        TyckError::Expressivity(
+                                            "value-function parameters must be irrefutable patterns",
+                                        ),
+                                        std::panic::Location::caller(),
+                                    )?
+                                }
+                                let domain_kind = tycker.statics.type_kind(domain);
+                                Lub::lub_k(vtype, domain_kind, tycker)?;
+                                let body = TyEnvT::new(binder.info.clone(), source_body)
+                                    .tyck_k(tycker, Action::syn())?;
+                                let (body, codomain) = body.try_as_value(
+                                    tycker,
+                                    TyckError::SortMismatch,
+                                    std::panic::Location::caller(),
+                                )?;
+                                let witnesses = binder.package_telescope_k(tycker)?;
+                                let witness_projection =
+                                    PackageWitnessProjectionBuilder::build(pattern, tycker);
+                                let projected_arity =
+                                    PackageWitnessProjectionBuilder::abstract_arity(
+                                        &witness_projection,
+                                    );
+                                let witness_arity =
+                                    witnesses.as_ref().map_or(0, ss::PackTelescope::len);
+                                if projected_arity != witness_arity {
+                                    tycker.err_k(
+                                        TyckError::PackageWitnessArityMismatch {
+                                            expected: witness_arity,
+                                            found: projected_arity,
+                                        },
+                                        std::panic::Location::caller(),
+                                    )?
+                                }
+                                if witnesses.is_none() {
+                                    binder.close_scope_k(tycker, codomain)?;
+                                }
+                                if let Some(witnesses) = &witnesses {
+                                    tycker.validate_builtin_signature_k(&ss::PackPi {
+                                        domain,
+                                        witnesses: witnesses.clone(),
+                                        codomain,
+                                    })?;
+                                }
+                                let classifier = ss::ValPi {
+                                    binder: ss::ValPiBinder::Value(ss::ValueParameter {
+                                        domain,
+                                        witnesses,
+                                        witness_projection,
+                                    }),
+                                    codomain,
+                                };
+                                (ss::ValBinder::Value(pattern), body, classifier)
+                            }
+                        };
+                        let classifier = Alloc::alloc(tycker, classifier, vtype, &self.info);
+                        let value = Alloc::alloc(
+                            tycker,
+                            ss::Abs(binder_node, body),
+                            classifier,
+                            &self.info,
+                        );
+                        TermAnnId::Value(value, classifier)
+                    }
+                    | Switch::Ana(AnnId::Type(expected)) => {
+                        let vtype = ss::VType.build(tycker, &self.info);
+                        let expected_kind = tycker.statics.type_kind(expected);
+                        Lub::lub_k(vtype, expected_kind, tycker)?;
+                        let view = expected.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
+                        let ss::Type::ValPi(pi) = tycker.type_filled_k(&view)?.to_owned() else {
+                            tycker.err_k(
+                                TyckError::TypeExpected {
+                                    expected: "a value-function classifier".to_string(),
+                                    found: view,
+                                },
+                                std::panic::Location::caller(),
+                            )?
+                        };
+                        let ss::ValPi { binder: expected_binder, codomain } = *pi;
+                        let (binder, body) = match expected_binder {
+                            | ss::ValPiBinder::Type(expected_binder) => {
+                                let domain_kind = expected_binder.domain_kind(tycker);
+                                let binder = self
+                                    .mk(source_binder)
+                                    .tyck_k(tycker, PatternAction::ana(domain_kind.into()))?;
+                                let (pattern, _) = binder.try_as_type(
+                                    tycker,
+                                    TyckError::SortMismatch,
+                                    std::panic::Location::caller(),
+                                )?;
+                                let payload_kind = expected_binder.payload_kind(tycker);
+                                let payload = Alloc::alloc(
+                                    tycker,
+                                    expected_binder.witness,
+                                    payload_kind,
+                                    &self.info,
+                                );
+                                let argument =
+                                    expected_binder.pattern.introduce_payload(tycker, payload);
+                                let argument = tycker.err_p_to_k(argument)?;
+                                let body_env = TyEnvT::new(binder.info, Assign(pattern, argument))
+                                    .tyck_k(tycker, ())?
+                                    .info;
+                                let body = TyEnvT::new(body_env, source_body).tyck_k(
+                                    tycker,
+                                    Action::ana_prepared(codomain.into(), &self.info),
+                                )?;
+                                let (body, _) = body.try_as_value(
+                                    tycker,
+                                    TyckError::SortMismatch,
+                                    std::panic::Location::caller(),
+                                )?;
+                                (ss::ValBinder::Type(pattern), body)
+                            }
+                            | ss::ValPiBinder::Value(parameter) => {
+                                let skolems = match &parameter.witnesses {
+                                    | Some(witnesses) => self
+                                        .mk(ValuePiPatternSkolems {
+                                            pattern: source_binder,
+                                            signature: PackageSignature {
+                                                domain: parameter.domain,
+                                                witnesses: witnesses.clone(),
+                                                codomain,
+                                            },
+                                            projection: parameter.witness_projection.clone(),
+                                        })
+                                        .tyck_k(tycker, ())?,
+                                    | None => PatternSkolems::default(),
+                                };
+                                let binder = self.mk(source_binder).tyck_k(
+                                    tycker,
+                                    PatternAction::ana(parameter.domain.into())
+                                        .with_skolems(skolems),
+                                )?;
+                                let (pattern, domain) = binder.try_as_value(
+                                    tycker,
+                                    TyckError::SortMismatch,
+                                    std::panic::Location::caller(),
+                                )?;
+                                Lub::lub_k(parameter.domain, domain, tycker)?;
+                                if !ValuePatternShape::is_irrefutable(tycker, pattern) {
+                                    tycker.err_k(
+                                        TyckError::Expressivity(
+                                            "value-function parameters must be irrefutable patterns",
+                                        ),
+                                        std::panic::Location::caller(),
+                                    )?
+                                }
+                                let actual_witnesses = binder.package_telescope_k(tycker)?;
+                                let actual_projection =
+                                    PackageWitnessProjectionBuilder::build(pattern, tycker);
+                                match (&parameter.witnesses, &actual_witnesses) {
+                                    | (None, None) => binder.close_scope_k(tycker, codomain)?,
+                                    | (Some(expected), Some(actual))
+                                        if expected.len() == actual.len() => {}
+                                    | (expected, actual) => tycker.err_k(
+                                        TyckError::PackageWitnessArityMismatch {
+                                            expected: expected.as_ref().map_or(0, |w| w.len()),
+                                            found: actual.as_ref().map_or(0, |w| w.len()),
+                                        },
+                                        std::panic::Location::caller(),
+                                    )?,
+                                }
+                                if parameter.witness_projection != actual_projection {
+                                    tycker.err_k(
+                                        TyckError::Expressivity(
+                                            "value-function package witness projection does not match its classifier",
+                                        ),
+                                        std::panic::Location::caller(),
+                                    )?
+                                }
+                                let body = TyEnvT::new(binder.info, source_body).tyck_k(
+                                    tycker,
+                                    Action::ana_prepared(codomain.into(), &self.info),
+                                )?;
+                                let (body, _) = body.try_as_value(
+                                    tycker,
+                                    TyckError::SortMismatch,
+                                    std::panic::Location::caller(),
+                                )?;
+                                (ss::ValBinder::Value(pattern), body)
+                            }
+                        };
+                        let value =
+                            Alloc::alloc(tycker, ss::Abs(binder, body), expected, &self.info);
+                        TermAnnId::Value(value, expected)
+                    }
+                    | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
+                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                    }
+                }
+            }
             | Tm::Abs(term) => {
                 let su::Abs(pat, body) = term;
                 match switch {
@@ -5079,50 +5711,12 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                             .insert_new(abs_id, self.info.clone());
                                         TermAnnId::Compu(abs_id, ann_id)
                                     }
-                                    | TermAnnId::Value(value, body_ty) => {
-                                        let term =
-                                            crate::query::InternedTerm::new(tycker.db, self.inner);
-                                        let input = crate::query::InternedAbsSyn::new(
-                                            tycker.db,
-                                            crate::query::AbsSynArm::PolymorphicValue {
-                                                tpat,
-                                                abst,
-                                                value,
-                                                body_ty,
-                                            },
-                                        );
-                                        let Some(crate::query::AbsSynOutcome::TAbsValue {
-                                            ann_id,
-                                            ann,
-                                            kd,
-                                            abs_id,
-                                            abs,
-                                        }) = crate::query::abs_syn_judgment(
-                                            tycker.db,
-                                            tycker.data,
-                                            term,
-                                            input,
-                                            tycker.site_occurrence(),
-                                        )
-                                        else {
-                                            unreachable!(
-                                                "the polymorphic value arm of abstraction judgments is query-produced"
-                                            )
-                                        };
-                                        tycker.statics.types_pre.insert_new(
-                                            ann_id,
-                                            ss::Fillable::Done(ann),
-                                            kd,
-                                        );
-                                        tycker.store_env(ann_id, &self.info);
-                                        tycker.statics.values.insert_new(abs_id, abs);
-                                        tycker.statics.annotations_value.insert_new(abs_id, ann_id);
-                                        tycker
-                                            .statics
-                                            .env_value
-                                            .insert_new(abs_id, self.info.clone());
-                                        TermAnnId::Value(abs_id, ann_id)
-                                    }
+                                    | TermAnnId::Value(_, _) => tycker.err_k(
+                                        TyckError::Expressivity(
+                                            "use `val` to introduce a pure value function",
+                                        ),
+                                        std::panic::Location::caller(),
+                                    )?,
                                     | TermAnnId::Hole(_) | TermAnnId::Kind(_) => {
                                         let term =
                                             crate::query::InternedTerm::new(tycker.db, self.inner);
@@ -5153,89 +5747,12 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 let body_out_ann = TyEnvT::new(pat_out_ann.info.clone(), body)
                                     .tyck_k(tycker, Action::syn())?;
                                 match body_out_ann {
-                                    | TermAnnId::Value(value, body_ty) => {
-                                        let arm = match pat_out_ann.package_telescope_k(tycker)? {
-                                            | None => {
-                                                pat_out_ann.close_scope_k(tycker, body_ty)?;
-                                                crate::query::AbsSynArm::ValueArrow {
-                                                    vpat,
-                                                    ty,
-                                                    value,
-                                                    body_ty,
-                                                }
-                                            }
-                                            | Some(witnesses) => {
-                                                let pack_pi = ss::ValuePackPi {
-                                                    domain: ty,
-                                                    witnesses,
-                                                    codomain: body_ty,
-                                                };
-                                                tycker.validate_builtin_signature_k(
-                                                    &ss::PackPi {
-                                                        domain: pack_pi.domain,
-                                                        witnesses: pack_pi.witnesses.clone(),
-                                                        codomain: pack_pi.codomain,
-                                                    },
-                                                )?;
-                                                let mut iter = pack_pi.witnesses.iter();
-                                                let first = *iter.next().expect("a package telescope opens at least one witness");
-                                                let rest = iter.copied().collect::<Vec<_>>();
-                                                crate::query::AbsSynArm::ValuePackPi {
-                                                    vpat,
-                                                    domain: ty,
-                                                    first,
-                                                    rest,
-                                                    codomain: body_ty,
-                                                    value,
-                                                }
-                                            }
-                                        };
-                                        let term =
-                                            crate::query::InternedTerm::new(tycker.db, self.inner);
-                                        let input =
-                                            crate::query::InternedAbsSyn::new(tycker.db, arm);
-                                        let Some(crate::query::AbsSynOutcome::VAbsValue {
-                                            ann_id,
-                                            ann,
-                                            kd,
-                                            abs_id,
-                                            abs,
-                                        }) = crate::query::abs_syn_judgment(
-                                            tycker.db,
-                                            tycker.data,
-                                            term,
-                                            input,
-                                            tycker.site_occurrence(),
-                                        )
-                                        else {
-                                            unreachable!(
-                                                "the value arrow arm of abstraction judgments is query-produced"
-                                            )
-                                        };
-                                        let is_pack_pi = matches!(
-                                            &ann,
-                                            ss::Type::VPackPi(_) | ss::Type::PackPi(_)
-                                        );
-                                        tycker.statics.types_pre.insert_new(
-                                            ann_id,
-                                            ss::Fillable::Done(ann),
-                                            kd,
-                                        );
-                                        tycker.store_env(ann_id, &self.info);
-                                        if is_pack_pi {
-                                            ann_id.constrain_to_scope_k(
-                                                tycker,
-                                                self.info.skolem_scope(),
-                                            )?;
-                                        }
-                                        tycker.statics.values.insert_new(abs_id, abs);
-                                        tycker.statics.annotations_value.insert_new(abs_id, ann_id);
-                                        tycker
-                                            .statics
-                                            .env_value
-                                            .insert_new(abs_id, self.info.clone());
-                                        TermAnnId::Value(abs_id, ann_id)
-                                    }
+                                    | TermAnnId::Value(_, _) => tycker.err_k(
+                                        TyckError::Expressivity(
+                                            "use `val` to introduce a pure value function",
+                                        ),
+                                        std::panic::Location::caller(),
+                                    )?,
                                     | TermAnnId::Compu(compu, body_ty) => {
                                         let arm = match pat_out_ann.package_telescope_k(tycker)? {
                                             | None => {
@@ -5289,10 +5806,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                                 "the computation arrow arm of abstraction judgments is query-produced"
                                             )
                                         };
-                                        let is_pack_pi = matches!(
-                                            &ann,
-                                            ss::Type::VPackPi(_) | ss::Type::PackPi(_)
-                                        );
+                                        let is_pack_pi = matches!(&ann, ss::Type::PackPi(_));
                                         tycker.statics.types_pre.insert_new(
                                             ann_id,
                                             ss::Fillable::Done(ann),
@@ -5398,9 +5912,12 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 // could be either a term function or a type-polymorphic term function
                                 let kind = tycker.statics.type_kind(ty);
                                 let expected = match tycker.kind_filled_k(&kind)?.to_owned() {
-                                    | ss::Kind::VType(_) => ty
-                                        .normalize_k(tycker, kind)?
-                                        .reveal_or_refine_value_arrow_k(tycker, &self.info)?,
+                                    | ss::Kind::VType(_) => tycker.err_k(
+                                        TyckError::Expressivity(
+                                            "use `val` to introduce a pure value function",
+                                        ),
+                                        std::panic::Location::caller(),
+                                    )?,
                                     | ss::Kind::CType(_) => tycker.type_filled_k(&ty)?.to_owned(),
                                     | ss::Kind::Arrow(_) | ss::Kind::Label(_) => tycker.err_k(
                                         TyckError::KindMismatch,
@@ -5408,101 +5925,6 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     )?,
                                 };
                                 match expected {
-                                    | ss::Type::VArrow(ss::ValueArrow(ty_1, ty_2)) => {
-                                        let binder_elaboration = self
-                                            .mk(pat)
-                                            .tyck_k(tycker, PatternAction::ana(ty_1.into()))?;
-                                        let (binder, binder_ty) = binder_elaboration.try_as_value(
-                                            tycker,
-                                            TyckError::SortMismatch,
-                                            std::panic::Location::caller(),
-                                        )?;
-                                        let body_out_ann =
-                                            TyEnvT::new(binder_elaboration.info.clone(), body)
-                                                .tyck_k(
-                                                    tycker,
-                                                    Action::ana_prepared(ty_2.into(), &self.info),
-                                                )?;
-                                        let (body_out, body_ty) = body_out_ann.try_as_value(
-                                            tycker,
-                                            TyckError::SortMismatch,
-                                            std::panic::Location::caller(),
-                                        )?;
-                                        binder_elaboration.close_scope_k(tycker, body_ty)?;
-                                        let vtype = ss::VType.build(tycker, &self.info);
-                                        let ann = Alloc::alloc(
-                                            tycker,
-                                            ss::ValueArrow(binder_ty, body_ty),
-                                            vtype,
-                                            &self.info,
-                                        );
-                                        let abs: ss::ValueId = Alloc::alloc(
-                                            tycker,
-                                            ss::Abs(binder, body_out),
-                                            ann,
-                                            &self.info,
-                                        );
-                                        TermAnnId::Value(abs, ann)
-                                    }
-                                    | ss::Type::VPackPi(signature) => self
-                                        .mk(ValuePackPiIntroduction {
-                                            binder: pat,
-                                            body,
-                                            signature: *signature,
-                                        })
-                                        .tyck_k(tycker, ())?,
-                                    | ss::Type::VForall(ty) => {
-                                        let ss::ValueForall(source_binder, ty_body) = ty;
-                                        let domain_kind = source_binder.domain_kind(tycker);
-                                        let binder = self.mk(pat).tyck_k(
-                                            tycker,
-                                            PatternAction::ana(domain_kind.into()),
-                                        )?;
-                                        let (binder, _binder_kd) = binder.try_as_type(
-                                            tycker,
-                                            TyckError::SortMismatch,
-                                            std::panic::Location::caller(),
-                                        )?;
-                                        let payload_kind = source_binder.payload_kind(tycker);
-                                        let abst_ty = Alloc::alloc(
-                                            tycker,
-                                            source_binder.witness,
-                                            payload_kind,
-                                            &self.info,
-                                        );
-                                        let full_argument = source_binder
-                                            .pattern
-                                            .introduce_payload(tycker, abst_ty);
-                                        let full_argument = tycker.err_p_to_k(full_argument)?;
-                                        let env = self
-                                            .mk(Assign(binder, full_argument))
-                                            .tyck_k(tycker, ())?
-                                            .info;
-                                        let body_out_ann = TyEnvT { info: env, inner: body }
-                                            .tyck_k(
-                                                tycker,
-                                                Action::ana_prepared(ty_body.into(), &self.info),
-                                            )?;
-                                        let (body_out, body_ty) = body_out_ann.try_as_value(
-                                            tycker,
-                                            TyckError::SortMismatch,
-                                            std::panic::Location::caller(),
-                                        )?;
-                                        let vtype = ss::VType.build(tycker, &self.info);
-                                        let ann = Alloc::alloc(
-                                            tycker,
-                                            ss::ValueForall(source_binder, body_ty),
-                                            vtype,
-                                            &self.info,
-                                        );
-                                        let abs: ss::ValueId = Alloc::alloc(
-                                            tycker,
-                                            ss::Abs(binder, body_out),
-                                            ann,
-                                            &self.info,
-                                        );
-                                        TermAnnId::Value(abs, ann)
-                                    }
                                     | ss::Type::Arrow(ty) => {
                                         // a term-term function
                                         let ss::Arrow(ty_1, ty_2) = ty;
@@ -5655,130 +6077,95 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         let body_ty_norm = f_ty.apply_type_argument_k(tycker, a_ty, kd_out)?;
                         TermAnnId::Type(body_ty_norm, kd_out)
                     }
-                    | TermAnnId::Value(f_out, f_ty) => {
-                        let f_kd = tycker.statics.type_kind(f_ty);
-                        let f_ty = f_ty.normalize_k(tycker, f_kd)?;
-                        match f_ty.reveal_or_refine_value_arrow_k(tycker, &self.info)? {
-                            | ss::Type::VForall(ss::ValueForall(binder, ty_body)) => {
-                                let domain_kind = binder.domain_kind(tycker);
-                                let a_out_ann =
-                                    self.mk(a).tyck_k(tycker, Action::ana(domain_kind.into()))?;
-                                let (a_ty, _a_kd) = a_out_ann.try_as_type(
-                                    tycker,
-                                    TyckError::SortMismatch,
-                                    std::panic::Location::caller(),
-                                )?;
-                                let payload = binder.pattern.bind_argument_k(tycker, a_ty)?;
-                                let body_ty =
-                                    ty_body.subst_abst_k(tycker, (binder.witness, payload))?;
-                                let ty_out = match switch {
-                                    | Switch::Syn => body_ty,
-                                    | Switch::Ana(AnnId::Type(expected)) => {
-                                        Lub::lub_k(body_ty, expected, tycker)?
-                                    }
-                                    | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err_k(
-                                        TyckError::SortMismatch,
-                                        std::panic::Location::caller(),
-                                    )?,
-                                };
-                                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
-                                let input = crate::query::InternedAppInput::new(
-                                    tycker.db,
-                                    crate::query::AppKind::ValueType {
-                                        function: f_out,
-                                        argument: a_ty,
-                                    },
-                                    ty_out,
-                                    ty_out,
-                                );
-                                let Some(crate::query::AppSynOutcome::Value {
-                                    id,
-                                    value,
-                                    ann,
-                                    reported,
-                                }) = crate::query::app_judgment(
-                                    tycker.db,
-                                    tycker.data,
-                                    term,
-                                    input,
-                                    tycker.site_occurrence(),
-                                )
-                                else {
-                                    unreachable!("value-type applications are query-produced")
-                                };
-                                tycker.statics.values.insert_new(id, value);
-                                tycker.statics.annotations_value.insert_new(id, ann);
-                                tycker.statics.env_value.insert_new(id, self.info.clone());
-                                TermAnnId::Value(id, reported)
-                            }
-                            | ss::Type::VPackPi(signature) => self
-                                .mk(ValuePackPiElimination {
-                                    function: f_out,
-                                    argument: a,
-                                    signature: *signature,
-                                })
-                                .tyck_k(
-                                    tycker,
-                                    Action::forward(switch, prepared_environment.as_ref()),
-                                )?,
-                            | ss::Type::VArrow(ss::ValueArrow(ty_arg, ty_out)) => {
-                                let a_out_ann =
-                                    self.mk(a).tyck_k(tycker, Action::ana(ty_arg.into()))?;
-                                let (a_out, _a_ty) = a_out_ann.try_as_value(
-                                    tycker,
-                                    TyckError::SortMismatch,
-                                    std::panic::Location::caller(),
-                                )?;
-                                let ty_out = match switch {
-                                    | Switch::Syn => ty_out,
-                                    | Switch::Ana(AnnId::Type(ty_ana)) => {
-                                        Lub::lub_k(ty_out, ty_ana, tycker)?
-                                    }
-                                    | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err_k(
-                                        TyckError::SortMismatch,
-                                        std::panic::Location::caller(),
-                                    )?,
-                                };
-                                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
-                                let input = crate::query::InternedAppInput::new(
-                                    tycker.db,
-                                    crate::query::AppKind::ValueValue {
-                                        function: f_out,
-                                        argument: a_out,
-                                    },
-                                    ty_out,
-                                    ty_out,
-                                );
-                                let Some(crate::query::AppSynOutcome::Value {
-                                    id,
-                                    value,
-                                    ann,
-                                    reported,
-                                }) = crate::query::app_judgment(
-                                    tycker.db,
-                                    tycker.data,
-                                    term,
-                                    input,
-                                    tycker.site_occurrence(),
-                                )
-                                else {
-                                    unreachable!("value applications are query-produced")
-                                };
-                                tycker.statics.values.insert_new(id, value);
-                                tycker.statics.annotations_value.insert_new(id, ann);
-                                tycker.statics.env_value.insert_new(id, self.info.clone());
-                                TermAnnId::Value(id, reported)
-                            }
-                            | _ => tycker.err_k(
+                    | TermAnnId::Value(function, function_ty) => {
+                        let function_kind = tycker.statics.type_kind(function_ty);
+                        let function_ty = function_ty.normalize_k(tycker, function_kind)?;
+                        let function_view =
+                            function_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
+                        let ss::Type::ValPi(pi) = tycker.type_filled_k(&function_view)?.to_owned()
+                        else {
+                            tycker.err_k(
                                 TyckError::TypeExpected {
-                                    expected: "a pure value arrow, package-dependent arrow, or \
-                                               universal"
-                                        .to_string(),
-                                    found: f_ty,
+                                    expected: "a value-function classifier".to_string(),
+                                    found: function_view,
                                 },
                                 std::panic::Location::caller(),
-                            )?,
-                        }
+                            )?
+                        };
+                        let ss::ValPi { binder, codomain } = *pi;
+                        let (argument, result) = match binder {
+                            | ss::ValPiBinder::Type(binder) => {
+                                let argument = self.mk(a).tyck_k(
+                                    tycker,
+                                    Action::ana(binder.domain_kind(tycker).into()),
+                                )?;
+                                let (argument, _) = argument.try_as_type(
+                                    tycker,
+                                    TyckError::SortMismatch,
+                                    std::panic::Location::caller(),
+                                )?;
+                                let payload = binder.pattern.bind_argument_k(tycker, argument)?;
+                                let result =
+                                    codomain.subst_abst_k(tycker, (binder.witness, payload))?;
+                                (ss::ValArgument::Type(argument), result)
+                            }
+                            | ss::ValPiBinder::Value(parameter) => {
+                                let argument = self
+                                    .mk(a)
+                                    .tyck_k(tycker, Action::ana(parameter.domain.into()))?;
+                                let (argument, _) = argument.try_as_value(
+                                    tycker,
+                                    TyckError::SortMismatch,
+                                    std::panic::Location::caller(),
+                                )?;
+                                let result = match parameter.witnesses {
+                                    | None => codomain,
+                                    | Some(witnesses) => self
+                                        .mk(ValuePiInstantiation {
+                                            signature: PackageSignature {
+                                                domain: parameter.domain,
+                                                witnesses,
+                                                codomain,
+                                            },
+                                            projection: parameter.witness_projection,
+                                            argument,
+                                        })
+                                        .tyck_k(tycker, ())?,
+                                };
+                                (ss::ValArgument::Value(argument), result)
+                            }
+                        };
+                        result.constrain_to_scope_k(tycker, self.info.skolem_scope())?;
+                        let result = match switch {
+                            | Switch::Syn => result,
+                            | Switch::Ana(AnnId::Type(expected)) => {
+                                Lub::lub_k(result, expected, tycker)?
+                            }
+                            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker
+                                .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
+                        };
+                        let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                        let input = crate::query::InternedAppInput::new(
+                            tycker.db,
+                            crate::query::AppKind::Value { function, argument },
+                            result,
+                            result,
+                        );
+                        let Some(crate::query::AppSynOutcome::Value { id, value, ann, reported }) =
+                            crate::query::app_judgment(
+                                tycker.db,
+                                tycker.data,
+                                term,
+                                input,
+                                tycker.site_occurrence(),
+                            )
+                        else {
+                            unreachable!("value applications are query-produced")
+                        };
+                        tycker.statics.values.insert_new(id, value);
+                        tycker.statics.annotations_value.insert_new(id, ann);
+                        tycker.statics.env_value.insert_new(id, self.info.clone());
+                        TermAnnId::Value(id, reported)
                     }
                     | TermAnnId::Compu(f_out, f_ty) => {
                         let f_kd = tycker.statics.type_kind(f_ty);
@@ -5975,6 +6362,12 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());
                 TermAnnId::Compu(outcome.id, outcome.ann)
             }
+            | Tm::ValPi(term) => {
+                let su::ValPi(binder, codomain) = term;
+                let binder = self.mk(binder).tyck_k(tycker, PatternAction::syn())?;
+                self.mk(ValuePiFormation { binder, codomain })
+                    .tyck_k(tycker, Action::forward(switch, prepared_environment.as_ref()))?
+            }
             | Tm::Pi(term) => {
                 let su::Pi(binder, body) = term;
                 match switch {
@@ -6038,9 +6431,12 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     }
                                     | TermAnnId::Type(ty_2, kd_2) => {
                                         let arm = match tycker.kind_filled_k(&kd_2)?.to_owned() {
-                                            | ss::Kind::VType(_) => {
-                                                crate::query::PiSynArm::ValueForall { ty_2, kd_2 }
-                                            }
+                                            | ss::Kind::VType(_) => tycker.err_k(
+                                                TyckError::Expressivity(
+                                                    "value-level universal types use `val pi`",
+                                                ),
+                                                std::panic::Location::caller(),
+                                            )?,
                                             | ss::Kind::CType(_) => {
                                                 crate::query::PiSynArm::Forall { ty_2, kd_2 }
                                             }
@@ -6133,164 +6529,124 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 }
                             }
                             | PatAnnId::Value(_, _) => self
-                                .mk(ValuePiFormation { binder: binder_out_ann, codomain: body })
+                                .mk(ComputationPiFormation {
+                                    binder: binder_out_ann,
+                                    codomain: body,
+                                })
                                 .tyck_k(tycker, Action::syn())?,
                         }
                     }
-                    | Switch::Ana(ana) => match ana {
-                        | AnnId::Set => {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                        }
-                        | AnnId::Kind(kd) => {
-                            match tycker.kind_filled_k(&kd)?.to_owned() {
-                                | ss::Kind::VType(_) => {
-                                    let binder_out_ann =
-                                        self.mk(binder).tyck_k(tycker, PatternAction::syn())?;
-                                    match binder_out_ann.annotation {
-                                        | PatAnnId::Value(_, _) => {
-                                            let vtype = ss::VType.build(tycker, &self.info);
-                                            self.mk(ValuePiFormation {
-                                                binder: binder_out_ann,
-                                                codomain: body,
-                                            })
-                                            .tyck_k(tycker, Action::ana(vtype.into()))?
-                                        }
-                                        | PatAnnId::Type(tpat, _kd_1) => {
-                                            let vtype = ss::VType.build(tycker, &self.info);
-                                            let abst = Alloc::alloc(tycker, tpat, (), &());
-                                            let subst_vec = {
-                                                let mut subst_vec = Vec::new();
-                                                if let (Some(def), kd) =
-                                                    tpat.try_destruct_def(tycker)
-                                                {
-                                                    let ty_abst =
-                                                        Alloc::alloc(tycker, abst, kd, &self.info);
-                                                    subst_vec.push((def, ty_abst.into()));
-                                                }
-                                                subst_vec
-                                            };
-                                            let ty_2 = self
-                                                .mk_add(subst_vec, body)
-                                                .tyck_k(tycker, Action::ana(vtype.into()))?;
-                                            let (ty_2, _vtype) = ty_2.try_as_type(
-                                                tycker,
-                                                TyckError::SortMismatch,
-                                                std::panic::Location::caller(),
-                                            )?;
-                                            let binder =
-                                                ss::TypeBinder { pattern: tpat, witness: abst };
-                                            let forall = Alloc::alloc(
-                                                tycker,
-                                                ss::ValueForall(binder, ty_2),
-                                                vtype,
-                                                &self.info,
-                                            );
-                                            TermAnnId::Type(forall, vtype)
-                                        }
-                                        | PatAnnId::Kind(_) => tycker.err_k(
-                                            TyckError::Expressivity(
-                                                "kind quantification is not supported",
-                                            ),
-                                            std::panic::Location::caller(),
-                                        )?,
-                                    }
-                                }
-                                | ss::Kind::CType(ss::CType) => {
-                                    // could be forall or type arrow
-                                    // synthesize the binder
-                                    let binder_out_ann =
-                                        self.mk(binder).tyck_k(tycker, PatternAction::syn())?;
-                                    match binder_out_ann.annotation {
-                                        | PatAnnId::Kind(_) => tycker.err_k(
-                                            TyckError::Expressivity(
-                                                "kind quantification is not supported",
-                                            ),
-                                            std::panic::Location::caller(),
-                                        )?,
-                                        | PatAnnId::Type(tpat, _kd_1) => {
-                                            // forall
-                                            let ctype = ss::CType.build(tycker, &self.info);
-                                            let abst = Alloc::alloc(tycker, tpat, (), &());
-                                            let subst_vec = {
-                                                let mut subst_vec = Vec::new();
-                                                if let (Some(def), kd) =
-                                                    tpat.try_destruct_def(tycker)
-                                                {
-                                                    let ty_abst =
-                                                        Alloc::alloc(tycker, abst, kd, &self.info);
-                                                    subst_vec.push((def, ty_abst.into()));
-                                                }
-                                                subst_vec
-                                            };
-                                            let ty_2 = self
-                                                .mk_add(subst_vec, body)
-                                                .tyck_k(tycker, Action::ana(ctype.into()))?;
-                                            let (ty_2, _ctype) = ty_2.try_as_type(
-                                                tycker,
-                                                TyckError::SortMismatch,
-                                                std::panic::Location::caller(),
-                                            )?;
-                                            let binder =
-                                                ss::TypeBinder { pattern: tpat, witness: abst };
-                                            let forall = Alloc::alloc(
-                                                tycker,
-                                                ss::Forall(binder, ty_2),
-                                                ctype,
-                                                &self.info,
-                                            );
-                                            TermAnnId::Type(forall, ctype)
-                                        }
-                                        | PatAnnId::Value(_, _) => {
-                                            let ctype = ss::CType.build(tycker, &self.info);
-                                            self.mk(ValuePiFormation {
-                                                binder: binder_out_ann,
-                                                codomain: body,
-                                            })
-                                            .tyck_k(tycker, Action::ana(ctype.into()))?
-                                        }
-                                    }
-                                }
-                                | ss::Kind::Arrow(kd_arr) => {
-                                    // kind arrow
-                                    let ss::Arrow(kd_1, kd_2) = kd_arr;
-                                    // ana binder with kd_1
-                                    let binder_out_ann = self
-                                        .mk(binder)
-                                        .tyck_k(tycker, PatternAction::ana(kd_1.into()))?;
-                                    let (tpat, kd_1) = binder_out_ann.try_as_type(
-                                        tycker,
-                                        TyckError::SortMismatch,
+                    | Switch::Ana(ana) => {
+                        match ana {
+                            | AnnId::Set => tycker
+                                .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
+                            | AnnId::Kind(kd) => {
+                                match tycker.kind_filled_k(&kd)?.to_owned() {
+                                    | ss::Kind::VType(_) => tycker.err_k(
+                                        TyckError::Expressivity(
+                                            "use `val pi` to classify a value function",
+                                        ),
                                         std::panic::Location::caller(),
-                                    )?;
-                                    if tpat.syntactically_used(tycker) {
-                                        tycker.err_k(
-                                            TyckError::Expressivity(
-                                                "dependent kinds are not supported yet",
-                                            ),
-                                            std::panic::Location::caller(),
-                                        )?
+                                    )?,
+                                    | ss::Kind::CType(ss::CType) => {
+                                        // could be forall or type arrow
+                                        // synthesize the binder
+                                        let binder_out_ann =
+                                            self.mk(binder).tyck_k(tycker, PatternAction::syn())?;
+                                        match binder_out_ann.annotation {
+                                            | PatAnnId::Kind(_) => tycker.err_k(
+                                                TyckError::Expressivity(
+                                                    "kind quantification is not supported",
+                                                ),
+                                                std::panic::Location::caller(),
+                                            )?,
+                                            | PatAnnId::Type(tpat, _kd_1) => {
+                                                // forall
+                                                let ctype = ss::CType.build(tycker, &self.info);
+                                                let abst = Alloc::alloc(tycker, tpat, (), &());
+                                                let subst_vec = {
+                                                    let mut subst_vec = Vec::new();
+                                                    if let (Some(def), kd) =
+                                                        tpat.try_destruct_def(tycker)
+                                                    {
+                                                        let ty_abst = Alloc::alloc(
+                                                            tycker, abst, kd, &self.info,
+                                                        );
+                                                        subst_vec.push((def, ty_abst.into()));
+                                                    }
+                                                    subst_vec
+                                                };
+                                                let ty_2 = self
+                                                    .mk_add(subst_vec, body)
+                                                    .tyck_k(tycker, Action::ana(ctype.into()))?;
+                                                let (ty_2, _ctype) = ty_2.try_as_type(
+                                                    tycker,
+                                                    TyckError::SortMismatch,
+                                                    std::panic::Location::caller(),
+                                                )?;
+                                                let binder =
+                                                    ss::TypeBinder { pattern: tpat, witness: abst };
+                                                let forall = Alloc::alloc(
+                                                    tycker,
+                                                    ss::Forall(binder, ty_2),
+                                                    ctype,
+                                                    &self.info,
+                                                );
+                                                TermAnnId::Type(forall, ctype)
+                                            }
+                                            | PatAnnId::Value(_, _) => {
+                                                let ctype = ss::CType.build(tycker, &self.info);
+                                                self.mk(ComputationPiFormation {
+                                                    binder: binder_out_ann,
+                                                    codomain: body,
+                                                })
+                                                .tyck_k(tycker, Action::ana(ctype.into()))?
+                                            }
+                                        }
                                     }
-                                    // ana body with kd_2
-                                    let body =
-                                        self.mk(body).tyck_k(tycker, Action::ana(kd_2.into()))?;
-                                    let kd_2 = body.try_as_kind(
-                                        tycker,
-                                        TyckError::SortMismatch,
+                                    | ss::Kind::Arrow(kd_arr) => {
+                                        // kind arrow
+                                        let ss::Arrow(kd_1, kd_2) = kd_arr;
+                                        // ana binder with kd_1
+                                        let binder_out_ann = self
+                                            .mk(binder)
+                                            .tyck_k(tycker, PatternAction::ana(kd_1.into()))?;
+                                        let (tpat, kd_1) = binder_out_ann.try_as_type(
+                                            tycker,
+                                            TyckError::SortMismatch,
+                                            std::panic::Location::caller(),
+                                        )?;
+                                        if tpat.syntactically_used(tycker) {
+                                            tycker.err_k(
+                                                TyckError::Expressivity(
+                                                    "dependent kinds are not supported yet",
+                                                ),
+                                                std::panic::Location::caller(),
+                                            )?
+                                        }
+                                        // ana body with kd_2
+                                        let body = self
+                                            .mk(body)
+                                            .tyck_k(tycker, Action::ana(kd_2.into()))?;
+                                        let kd_2 = body.try_as_kind(
+                                            tycker,
+                                            TyckError::SortMismatch,
+                                            std::panic::Location::caller(),
+                                        )?;
+                                        let arr =
+                                            Alloc::alloc(tycker, ss::Arrow(kd_1, kd_2), (), &());
+                                        TermAnnId::Kind(arr)
+                                    }
+                                    | ss::Kind::Label(_) => tycker.err_k(
+                                        TyckError::KindMismatch,
                                         std::panic::Location::caller(),
-                                    )?;
-                                    let arr = Alloc::alloc(tycker, ss::Arrow(kd_1, kd_2), (), &());
-                                    TermAnnId::Kind(arr)
+                                    )?,
                                 }
-                                | ss::Kind::Label(_) => tycker.err_k(
-                                    TyckError::KindMismatch,
-                                    std::panic::Location::caller(),
-                                )?,
                             }
+                            | AnnId::Type(_) => tycker
+                                .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
                         }
-                        | AnnId::Type(_) => {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                        }
-                    },
+                    }
                 }
             }
             | Tm::Sigma(term) => {

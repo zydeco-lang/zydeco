@@ -10,6 +10,34 @@ impl<'arena> Formatter<'arena> {
     pub fn new(arena: &'arena TextArena) -> Self {
         Formatter { arena }
     }
+
+    fn view_pattern_head_parts(&self, view: TermId) -> (TermId, Vec<TermId>) {
+        let Term::App(Appli(terms)) = &self.arena.terms[&view] else {
+            return (view, Vec::new());
+        };
+        let Some((function, arguments)) = terms.split_first() else {
+            return (view, Vec::new());
+        };
+        let (head, prefix) = self.view_pattern_head_parts(*function);
+        (head, prefix.into_iter().chain(arguments.iter().copied()).collect())
+    }
+
+    fn view_pattern_head(&'arena self, view: TermId) -> RcDoc<'arena> {
+        let (head, arguments) = self.view_pattern_head_parts(view);
+        if arguments.is_empty() {
+            head.pretty(self)
+        } else {
+            RcDoc::concat([
+                head.pretty(self),
+                RcDoc::text("["),
+                RcDoc::intersperse(
+                    arguments.into_iter().map(|argument| argument.pretty(self)),
+                    RcDoc::text(", "),
+                ),
+                RcDoc::text("]"),
+            ])
+        }
+    }
 }
 
 use pretty::RcDoc;
@@ -32,6 +60,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for PatId {
             | Pattern::Named(p) => p.pretty(f),
             | Pattern::Ctor(p) => p.pretty(f),
             | Pattern::Project(p) => p.pretty(f),
+            | Pattern::View(p) => p.pretty(f),
             | Pattern::Alias(p) => p.pretty(f),
             | Pattern::Paren(p) => p.pretty(f),
         }
@@ -74,9 +103,16 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
             | Term::Label(t) => t.pretty(f),
             | Term::Paren(t) => t.pretty(f),
             | Term::Abs(t) => t.pretty(f),
+            | Term::ValAbs(Abs(pattern, body)) => RcDoc::concat([
+                RcDoc::text("val "),
+                pattern.pretty(f),
+                RcDoc::text(" => "),
+                body.pretty(f),
+            ]),
             | Term::App(t) => t.pretty(f),
             | Term::Fix(t) => t.pretty(f),
             | Term::Pi(t) => t.pretty(f),
+            | Term::ValPi(t) => t.pretty(f),
             | Term::Arrow(t) => t.pretty(f),
             | Term::Forall(t) => t.pretty(f),
             | Term::Sigma(t) => t.pretty(f),
@@ -89,6 +125,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
             | Term::Do(t) => t.pretty(f),
             | Term::Let(t) => t.pretty(f),
             | Term::Param(t) => t.pretty(f),
+            | Term::Pipeline(t) => t.pretty(f),
             | Term::ContextBind(t) => t.pretty(f),
             | Term::Block(t) => t.pretty(f),
             | Term::Data(t) => t.pretty(f),
@@ -295,6 +332,13 @@ impl<'a> Pretty<'a, Formatter<'a>> for Pi {
     }
 }
 
+impl<'a> Pretty<'a, Formatter<'a>> for ValPi {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let ValPi(p, t) = self;
+        RcDoc::concat([RcDoc::text("val pi "), p.pretty(f), RcDoc::text(" . "), t.pretty(f)])
+    }
+}
+
 impl<'a, T> Pretty<'a, Formatter<'a>> for ArrowU<T>
 where
     T: Pretty<'a, Formatter<'a>>,
@@ -462,6 +506,27 @@ impl<'a> Pretty<'a, Formatter<'a>> for Param {
     }
 }
 
+impl<'a> Pretty<'a, Formatter<'a>> for ViewPattern {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let ViewPattern { function, pattern } = self;
+        RcDoc::concat([f.view_pattern_head(*function), RcDoc::text(" ~> "), pattern.pretty(f)])
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Pipeline {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let Pipeline { direction, subject, function } = self;
+        match direction {
+            | PipelineDirection::Forward => {
+                RcDoc::concat([subject.pretty(f), RcDoc::text(" |> "), function.pretty(f)])
+            }
+            | PipelineDirection::Backward => {
+                RcDoc::concat([function.pretty(f), RcDoc::text(" <| "), subject.pretty(f)])
+            }
+        }
+    }
+}
+
 impl<'a> Pretty<'a, Formatter<'a>> for ContextBind {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let ContextBind { mode, binding, placement, tail } = self;
@@ -490,14 +555,13 @@ impl<'a> Pretty<'a, Formatter<'a>> for Block {
 
 impl<'a> Pretty<'a, Formatter<'a>> for GenBind<TermId> {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let GenBind { fix, comp, binder, params, ty, bindee } = self;
-        let mut doc = RcDoc::nil();
-        if *fix {
-            doc = doc.append(RcDoc::text("fix "));
-        }
-        if *comp {
-            doc = doc.append(RcDoc::text("! "));
-        }
+        let GenBind { flavor, binder, params, ty, bindee } = self;
+        let mut doc = match flavor {
+            | BindingFlavor::Plain => RcDoc::nil(),
+            | BindingFlavor::Value => RcDoc::text("val "),
+            | BindingFlavor::Computation => RcDoc::text("! "),
+            | BindingFlavor::Recursive => RcDoc::text("fix "),
+        };
         doc = doc.append(binder.pretty(f));
         if let Some(params) = params {
             doc = doc.append(RcDoc::text(" ")).append(params.pretty(f));
@@ -511,14 +575,13 @@ impl<'a> Pretty<'a, Formatter<'a>> for GenBind<TermId> {
 
 impl<'a> Pretty<'a, Formatter<'a>> for GenBind<Option<TermId>> {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let GenBind { fix, comp, binder, params, ty, bindee } = self;
-        let mut doc = RcDoc::nil();
-        if *fix {
-            doc = doc.append(RcDoc::text("fix "));
-        }
-        if *comp {
-            doc = doc.append(RcDoc::text("! "));
-        }
+        let GenBind { flavor, binder, params, ty, bindee } = self;
+        let mut doc = match flavor {
+            | BindingFlavor::Plain => RcDoc::nil(),
+            | BindingFlavor::Value => RcDoc::text("val "),
+            | BindingFlavor::Computation => RcDoc::text("! "),
+            | BindingFlavor::Recursive => RcDoc::text("fix "),
+        };
         doc = doc.append(binder.pretty(f));
         if let Some(params) = params {
             doc = doc.append(RcDoc::text(" ")).append(params.pretty(f));

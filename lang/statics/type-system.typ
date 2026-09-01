@@ -42,11 +42,11 @@ The metavariable $N$ ranges over unsorted terms.
   [Kind], [$K$], [$::=$], [$"VType" | "CType" | K_1 arrow.r K_2 | ell :: K$],
   [Type], [$S$], [$::=$], [$X | alpha | "fn" Q arrow.r S | S_1 space S_2
     | (ell = S) | (ell :: S) | S slash ell$],
-  [], [], [$|$], [$"Thk" | "Ret" | "Unit" | H_rho | A_1 arrow.r A_2 | A arrow.r B$],
-  [], [], [$|$], [$"forall"^"v"_(alpha) (Q : K) . A
-    | "forall"_(alpha) (Q : K) . B$],
-  [], [], [$|$], [$Pi^("pkg,v")_(alpha_1 dots.h.c alpha_n)(A_1\; A_2)
-    | Pi^"pkg"_(alpha_1 dots.h.c alpha_n)(A\; B)$],
+  [], [], [$|$], [$"Thk" | "Ret" | "Unit" | H_rho | A arrow.r B$],
+  [], [], [$|$], [$"val pi"_(alpha)(Q : K) . A
+    | "val pi"_(overline(alpha))(P : A_1) . A_2$],
+  [], [], [$|$], [$"forall"_(alpha) (Q : K) . B$],
+  [], [], [$|$], [$Pi^"pkg"_(alpha_1 dots.h.c alpha_n)(A\; B)$],
   [], [], [$|$], [$A_1 times A_2 | "exists"_(alpha) (Q : K) . A$],
   [], [], [$|$], [$"exists"_(alpha) (Q " as " S : K) . A
     | "exists" (R " as " K : "Set") . A$],
@@ -56,13 +56,13 @@ The metavariable $N$ ranges over unsorted terms.
   [Type pattern], [$Q$], [$::=$], [$#text("_") | X | (ell = Q)$],
   [Static pattern], [$U$], [$::=$], [$R | Q$],
   [Value pattern], [$P$], [$::=$], [$#text("_") | x | (ell = P) | c space P | ()
-    | (P_1, P_2) | (U, P)$],
+    | (P_1, P_2) | (U, P) | V space "~>" space P$],
   [Static witness], [$W$], [$::=$], [$K | S$],
 
   [Value], [$V$], [$::=$], [$x | (ell = V) | {M} | c space V | () | (V_1, V_2)
     | (W, V) | V slash ell | "lit"$],
-  [], [], [$|$], [$"fn" P arrow.r V | V_1 space V_2 | "fn" Q arrow.r V | V space S$],
-  [], [], [$|$], [$"let" P = V_1 " in " V_2$],
+  [], [], [$|$], [$"val" space Q arrow.r V | "val" space P arrow.r V | V space S | V_1 space V_2$],
+  [], [], [$|$], [$V_1 |> V_2 | V_1 <| V_2 | "let" P = V_1 " in " V_2$],
 
   [Computation], [$M$], [$::=$], [$"fn" P arrow.r M | M space V | "fn" Q arrow.r M | M space S$],
   [], [], [$|$], [$"fix" P arrow.r M | !V | "ret" V | P <- M_1 \; M_2
@@ -110,7 +110,7 @@ $
     tack.l Gamma_1 \; Delta union Omega \
   #text("least upper bound") & Gamma tack.r J_1 #lub J_2 = J_3 \
   #text("equality / unification") & Gamma tack.r J_1 equiv J_2 \
-  #text("shape view") & Gamma tack.r S_1 arrow.b.double S_2
+  #text("shape exposure") & Gamma tack.r S_1 arrow.b.double S_2
 $
 
 The pattern judgment returns the bindings in $Gamma_1$ and the freshly opened skolems $Omega$. Kinds synthesize
@@ -135,11 +135,14 @@ The operation $op("lead")(A)$ returns the maximal leading prefix of manifest-kin
 $op("abs")(op("lead")(A))$ returns, in order, only the abstract existential payload kinds.
 Manifest fields do not contribute package-dependent witnesses.
 
-The partial operation $op("wits")_A(V)$ recovers the static witnesses retained by a package constructor, immutable
-alias, named wrapper, or administrative value `let`. $op("inst")_A(B, overline(W))$ traverses $op("lead")(A)$: it checks
-manifest witnesses, extracts named payloads with $"elim"$, and substitutes the abstract payloads into $B$.
+Checking an irrefutable value-function parameter computes a structural route $rho = op("route")_A(P)$.
+The route selects exactly the package components opened by $P$, including openings nested beneath products.
+The partial operation $op("wits")_(rho,A)(V)$ follows that route through a package constructor, immutable alias,
+named wrapper, or administrative value `let`. $op("inst")_(rho,A)(B, V)$ checks manifest witnesses and substitutes
+the selected abstract payloads into $B$. Retaining $rho$ prevents unrelated existential witnesses in a composite
+argument from being confused with those disclosed by the parameter.
 
-== Least upper bounds, equality, views, and conversion
+== Least upper bounds, equality, shape exposure, and conversion
 
 $
   ("fn" Q arrow.r S) space W &arrow.r.long S[op("elim")_Q(W) slash X] \
@@ -160,13 +163,13 @@ $
   exists J_3 . Gamma tack.r J_1 #lub J_2 = J_3
 $
 
-The shape view additionally unfolds a seal only while exposing a constructor needed by a shape-directed rule:
+Shape exposure additionally unfolds a seal only while exposing a constructor needed by a shape-directed rule:
 
 $
   frac(
     alpha tilde.equiv S_1 : K in Gamma quad Gamma tack.r S_1 arrow.b.double S_2,
     Gamma tack.r alpha arrow.b.double S_2,
-  ) quad #text(size: 6.5pt)[VIEW-SEAL]
+  ) quad #text(size: 6.5pt)[EXPOSE-SEAL]
 $
 
 $alpha tilde.equiv S$ is not a general equality.
@@ -284,20 +287,41 @@ $
 
 $
   frac(
-    Gamma \; Delta tack.r A_1 arrow.l.double "VType"
-    quad Gamma \; Delta tack.r A_2 arrow.l.double "VType",
-    Gamma \; Delta tack.r A_1 arrow.r A_2 arrow.r.double "VType",
-  ) quad #text(size: 6.5pt)[T-VARROW]
-  quad
-  frac(
     Gamma \; Delta tack.r A arrow.l.double "VType"
     quad Gamma \; Delta tack.r B arrow.l.double "CType",
     Gamma \; Delta tack.r A arrow.r B arrow.r.double "CType",
   ) quad #text(size: 6.5pt)[T-ARROW]
 $
 
-The codomain sort disambiguates pure value arrows from computation arrows.
-The checked syntax retains distinct constructors for the two cases.
+Every source arrow is a CBPV computation type. Total value functions have their own positive classifier, `ValPi`.
+
+$
+  frac(
+    Gamma \; Delta tack.r K arrow.l.double "Set"
+    quad Gamma \, Q : K \; Delta tack.r A arrow.l.double "VType",
+    Gamma \; Delta tack.r "val pi"_(alpha)(Q : K) . A arrow.r.double "VType",
+  ) quad #text(size: 6.5pt)[T-VAL-PI-TYPE]
+$
+
+Here the type-pattern binder introduces $alpha : op("pay")_Q$ and binds $Q$ to
+$op("intro")_Q(alpha)$ in the codomain, exactly as the type binder of `forall` does.
+
+$
+  frac(
+    #pad(bottom: 3pt, stack(
+      spacing: 11pt,
+      $Gamma \; Delta tack.r P arrow.l.double A_1
+        tack.l Gamma_1 \; Delta union overline(alpha)$,
+      $op("irrefutable")(P)
+        quad Gamma_1 \; Delta union overline(alpha) tack.r A_2 arrow.l.double "VType"$,
+    )),
+    Gamma \; Delta tack.r "val pi"_(overline(alpha))(P : A_1) . A_2
+      arrow.r.double "VType",
+  ) quad #text(size: 6.5pt)[T-VAL-PI-VALUE]
+$
+
+The runtime names bound by $P$ cannot occur in a type, but abstract existential identities opened by $P$ may occur
+in $A_2$. The checked classifier stores both $overline(alpha)$ and $op("route")_(A_1)(P)$.
 
 $
   frac(
@@ -308,14 +332,6 @@ $
 $
 
 == Quantifiers and packages
-
-$
-  frac(
-    Gamma \; Delta tack.r K arrow.l.double "Set"
-    quad Gamma \, Q : K \; Delta tack.r A arrow.l.double "VType",
-    Gamma \; Delta tack.r "forall"^"v"_(alpha) (Q : K) . A arrow.r.double "VType",
-  ) quad #text(size: 6.5pt)[T-VFORALL]
-$
 
 $
   frac(
@@ -369,24 +385,9 @@ $
   quad #text(size: 6.5pt)[T-PACK-PI]
 $
 
-$
-  frac(
-    #pad(bottom: 3pt, stack(
-      spacing: 11pt,
-      $Gamma \; Delta tack.r A_1 arrow.l.double "VType"
-        quad op("abs")(op("lead")(A_1)) = (K_1, dots.h.c, K_n) quad n > 0
-        quad alpha_i #text(" fresh")$,
-      $Gamma \, (alpha_i : K_i)_(i=1)^n \; Delta union {alpha_i}_(i=1)^n
-        tack.r A_2 arrow.l.double "VType"$,
-    )),
-    Gamma \; Delta tack.r Pi^("pkg,v")_(alpha_1 dots.h.c alpha_n)(A_1\; A_2)
-      arrow.r.double "VType",
-  )
-  quad #text(size: 6.5pt)[T-VPACK-PI]
-$
-
-In both package-dependent arrows, the witness telescope binds only the codomain. The implementation admits only
-witnesses from the leading static prefix of the domain.
+The package-dependent computation arrow binds its witness telescope only in the codomain. The implementation admits
+only witnesses from the leading static prefix of the domain. A value-binder `ValPi` retains the analogous telescope
+inside the source classifier and may select multiple package components through its structural route.
 
 == Data and codata
 
@@ -478,6 +479,30 @@ $
 Pattern holes, constructors, and tuples require an expected classifier. At inference sites, an explicit pattern
 annotation supplies it; `()` and named wrappers of synthesizing patterns are the other implemented synthesis cases.
 
+== View patterns
+
+$
+  frac(
+    #pad(bottom: 3pt, stack(
+      spacing: 11pt,
+      $Gamma \; Delta tack.r V arrow.r.double
+        "val pi"_(overline(alpha))(P_f : A) . B$,
+      $overline(beta) #text(" fresh")
+        quad Gamma \, overline(beta) \; Delta union overline(beta)
+          tack.r P arrow.l.double B[overline(beta slash alpha)]
+          tack.l Gamma_1 \; Delta union overline(beta) union Omega$,
+    )),
+    Gamma \; Delta tack.r V space "~>" space P arrow.l.double A
+      tack.l Gamma_1 \; Delta union overline(beta) union Omega,
+  )
+  quad #text(size: 6.5pt)[P-VIEW]
+$
+
+Only the nested pattern contributes source binders. Its refutability is also the refutability of the whole view
+pattern. The function must already be instantiated to a runtime value binder; type arguments in surface view heads
+elaborate to ordinary erased `ValPi` applications before this rule. At runtime, matching applies the checked value
+function and continues with its result. Matching may fail only after that transformed result reaches $P$.
+
 == Package patterns
 
 In the following rules, $Q_1$ is the binder stored in the package type, $Q_2$ is the consumer's type pattern,
@@ -563,48 +588,75 @@ $
   ) quad #text(size: 6.5pt)[V-THUNK]
 $
 
-== Pure value functions
+== Value functions and value-level cut
+
+`ValPi` has one introduction form with two checked binder variants. A type binder is erased after substituting its
+argument; a value binder produces a lexical closure. Runtime parameter patterns are irrefutable, so application is
+total. Unlike the former static declaration scheme, the body is checked in the whole lexical $Gamma$ and may capture
+ambient values.
 
 $
   frac(
-    Gamma \; Delta tack.r P arrow.l.double A_1 tack.l Gamma_1 \; Delta union Omega
-    quad Gamma_1 \; Delta union Omega tack.r V arrow.l.double A_2
-    quad Omega = emptyset,
-    Gamma \; Delta tack.r "fn" P arrow.r V arrow.l.double A_1 arrow.r A_2,
-  ) quad #text(size: 6.5pt)[V-ABS]
-$
-
-$
-  frac(
-    Gamma \; Delta tack.r V_1 arrow.r.double A_1 arrow.r A_2
-    quad Gamma \; Delta tack.r V_2 arrow.l.double A_1,
-    Gamma \; Delta tack.r V_1 space V_2 arrow.r.double A_2,
-  ) quad #text(size: 6.5pt)[V-APP]
-$
-
-== Pure type abstraction and application
-
-$
-  frac(
-    Gamma \; Delta tack.r Q_2 arrow.l.double op("dom")_(Q_1) tack.l Gamma_1 \; Delta
-    quad Gamma_2 = Gamma_1[Q_2 := op("intro")_(Q_1)(alpha)]
-    quad Gamma_2 \; Delta tack.r V arrow.l.double A,
-    Gamma \; Delta tack.r "fn" Q_2 arrow.r V arrow.l.double
-      "forall"^"v"_(alpha)(Q_1 : op("dom")_(Q_1)).A,
-  ) quad #text(size: 6.5pt)[V-TABS]
+    #pad(bottom: 3pt, stack(
+      spacing: 11pt,
+      $Gamma \; Delta tack.r Q_2 arrow.l.double op("dom")_(Q_1)
+        tack.l Gamma_1 \; Delta$,
+      $Gamma_1[Q_2 := op("intro")_(Q_1)(alpha)] \; Delta
+        tack.r V arrow.l.double A$,
+    )),
+    Gamma \; Delta tack.r "val" space Q_2 arrow.r V arrow.l.double
+      "val pi"_(alpha)(Q_1 : op("dom")_(Q_1)) . A,
+  ) quad #text(size: 6.5pt)[V-VAL-ABS-TYPE]
 $
 
 $
   frac(
-    Gamma \; Delta tack.r V arrow.r.double "forall"^"v"_(alpha)(Q : K).A
-    quad Gamma \; Delta tack.r W arrow.l.double op("dom")_Q
-    quad S = op("elim")_Q(W),
-    Gamma \; Delta tack.r V space W arrow.r.double A[S slash alpha],
-  ) quad #text(size: 6.5pt)[V-TAPP]
+    #pad(bottom: 3pt, stack(
+      spacing: 11pt,
+      $Gamma \; Delta tack.r P_2 arrow.l.double A
+        tack.l Gamma_1 \; Delta union overline(beta)
+        quad op("irrefutable")(P_2)$,
+      $Gamma_1 \; Delta union overline(beta)
+        tack.r V arrow.l.double B[overline(beta slash alpha)]$,
+    )),
+    Gamma \; Delta tack.r "val" space P_2 arrow.r V arrow.l.double
+      "val pi"_(overline(alpha))(P_1 : A) . B,
+  ) quad #text(size: 6.5pt)[V-VAL-ABS-VALUE]
 $
 
-Type abstraction and application are erased before dynamics. Their surface syntax is shared with computation
-polymorphism; the body sort determines which universal is formed.
+The analyzed value binder also checks that $op("route")_A(P_2)$ agrees with the route stored by the classifier.
+Synthesis performs the same steps with the parameter's explicit annotation and the synthesized type of $V$.
+`let val f P : A = V that` desugars to an ordinary non-recursive binding of a `val` abstraction whose residual
+codomain is annotated by $A$.
+
+$
+  frac(
+    Gamma \; Delta tack.r V_1 arrow.r.double "val pi"_(alpha)(Q : K) . A
+    quad Gamma \; Delta tack.r S arrow.l.double K,
+    Gamma \; Delta tack.r V_1 space S arrow.r.double
+      A[op("intro")_Q(S) slash alpha],
+  ) quad #text(size: 6.5pt)[V-VAL-APP-TYPE]
+$
+
+$
+  frac(
+    #pad(bottom: 3pt, stack(
+      spacing: 11pt,
+      $Gamma \; Delta tack.r V_1 arrow.r.double
+        "val pi"_(overline(alpha))(P : A) . B
+        quad rho = op("route")_A(P)$,
+      $Gamma \; Delta tack.r V_2 arrow.l.double A
+        quad B_1 = op("inst")_(rho,A)(B, V_2)$,
+    )),
+    Gamma \; Delta tack.r V_1 space V_2 arrow.r.double B_1,
+  ) quad #text(size: 6.5pt)[V-VAL-APP-VALUE]
+$
+
+Pipelines are directional syntax for V-VAL-APP-VALUE:
+$V_2 |> V_1 equiv V_1 space V_2 equiv V_1 <| V_2$.
+Beta reduction exposes the underlying complex-value cut,
+$V_2 |> ("val" space P arrow.r V) equiv "let" space P = V_2 space "in" space V$.
+Type applications obey the corresponding substitution law modulo erasure.
 
 $
   frac(
@@ -661,33 +713,10 @@ $
   ) quad #text(size: 6.5pt)[V-PACK-KIND]
 $
 
-Static witnesses are retained for package-dependent application and erased before dynamics.
-
-== Pure package-dependent functions
-
-$
-  frac(
-    Gamma \; Delta tack.r P arrow.l.double^"canon" A_1
-      tack.l Gamma_1 \; Delta union {alpha_1, dots.h.c, alpha_n}
-    quad Gamma_1 \; Delta union {alpha_1, dots.h.c, alpha_n} tack.r V arrow.l.double A_2,
-    Gamma \; Delta tack.r "fn" P arrow.r V arrow.l.double
-      Pi^("pkg,v")_(alpha_1 dots.h.c alpha_n)(A_1\;A_2),
-  ) quad #text(size: 6.5pt)[V-PACKPI-ABS]
-$
-
-$
-  frac(
-    Gamma \; Delta tack.r V_1 arrow.r.double Pi^("pkg,v")_(overline(alpha))(A_1\;A_2)
-    quad Gamma \; Delta tack.r V_2 arrow.l.double A_1
-    quad op("wits")_(A_1)(V_2) = overline(W)
-    quad A_3 = op("inst")_(A_1)(A_2, overline(W))
-    quad op("fsk")(A_3) subset.eq Delta,
-    Gamma \; Delta tack.r V_1 space V_2 arrow.r.double A_3,
-  ) quad #text(size: 6.5pt)[V-PACKPI-APP]
-$
-
-The package-dependent value arrow binds only the leading abstract type witnesses opened by its value pattern.
-It does not make value variables available to types.
+Static witnesses are retained for `ValPi` cut and package-dependent computation application, then erased before
+dynamics. A value-function parameter binds only the abstract type witnesses opened by its pattern; it does not make
+runtime value variables available to types. Its structural route recovers those same witnesses, and no others,
+from the runtime argument's checked memory representation.
 
 = Computations
 
@@ -1014,7 +1043,7 @@ $
 $
 
 `Monad` and `Algebra` are lexical type constructors. The structural algebra translation produces $M_2$ and $B_2$;
-the displayed `forall` and value arrow are the exact wrapper emitted by the checker.
+the displayed `forall` and computation arrow are the exact wrapper emitted by the checker.
 
 #pagebreak()
 
@@ -1022,7 +1051,7 @@ the displayed `forall` and value arrow are the exact wrapper emitted by the chec
 
 Local inference is monomorphic and region-scoped. An unannotated value-pattern binder receives a fresh flexible
 value-type metavariable. Body uses and call sites constrain it through $#lub$; shape-directed eliminations may refine
-it to a pure arrow, computation arrow, thunk, return, or product. Closing a block or source interface rejects every
+it to a computation arrow, thunk, return, or product. Closing a block or source interface rejects every
 metavariable that remains unconstrained. Constructor ownership, existential/package structure, recursive boundaries,
 polymorphism, and generalization remain annotation-directed.
 
@@ -1121,28 +1150,7 @@ $
 
 The synthesizing fragment contains only variables, unit, named patterns, and ordinary products.
 
-== Functions and call sites
-
-$
-  frac(
-    Gamma \; Delta tack.r P arrow.r.double A_1 tack.l Gamma_1 \; Delta
-    quad Gamma_1 \; Delta tack.r V arrow.r.double A_2,
-    Gamma \; Delta tack.r "fn" P arrow.r V arrow.r.double A_1 arrow.r A_2,
-  ) quad #text(size: 6.5pt)[V-INF-ABS]
-$
-
-$
-  frac(
-    #pad(bottom: 2pt, stack(
-      spacing: 9pt,
-      $Gamma \; Delta tack.r V_1 arrow.r.double A_1
-        quad Gamma tack.r A_1 arrow.b.double A_2 arrow.r A_3$,
-      $Gamma \; Delta tack.r V_2 arrow.r.double A_4
-        quad Gamma tack.r A_2 #lub A_4 = A_5$,
-    )),
-    Gamma \; Delta tack.r V_1 space V_2 arrow.r.double A_3,
-  ) quad #text(size: 6.5pt)[V-INF-APP]
-$
+== Computation functions and call sites
 
 $
   frac(
@@ -1165,28 +1173,15 @@ $
   ) quad #text(size: 6.5pt)[C-INF-APP]
 $
 
-Within either body, V-VAR and CONV constrain the inferred domain through the same $#lub$ relation. V-APP and C-APP
-remain the fallbacks when an argument checks but does not synthesize.
+Within the body, V-VAR and CONV constrain the inferred domain through the same $#lub$ relation. C-APP remains the
+fallback when an argument checks but does not synthesize. Value application first synthesizes a `ValPi`, then checks
+the next argument against its type or value binder; `|>` and `<|` use exactly that application judgment.
 
 == Structural refinement
 
 A REFINE rule applies only to an unresolved flexible metavariable. Every fresh component inherits its scope,
 closing level, and origins. A shape-directed premise first synthesizes $S_1$ and then requests
 $Gamma tack.r S_1 arrow.b.double S_2$ before destructuring $S_2$.
-
-$
-  frac(
-    #pad(bottom: 2pt, stack(
-      spacing: 9pt,
-      $?A_1 : "VType" #text(" flexible")
-        quad ?A_2 : "VType" #text(" fresh")
-        quad ?A_3 : "VType" #text(" fresh")$,
-      $Gamma tack.r ?A_1 #lub (?A_2 arrow.r ?A_3)
-        = ?A_2 arrow.r ?A_3$,
-    )),
-    Gamma tack.r ?A_1 arrow.b.double ?A_2 arrow.r ?A_3,
-  ) quad #text(size: 6.5pt)[REFINE-VARROW]
-$
 
 $
   frac(
@@ -1258,5 +1253,5 @@ $
 Solving is undefined on conflicting constraints. A nonempty pending set is an unconstrained-inference error reported
 from its recorded origins. This short-term system does not generalize at INF-CLOSE.
 
-For example, `fn x -> !x` synthesizes $"Thk" space ?B arrow.r ?B$ after refinement. A compatible local call may
+For example, `fn x => !x` synthesizes $"Thk" space ?B arrow.r ?B$ after refinement. A compatible local call may
 solve $?B$ before INF-CLOSE; otherwise the boundary requires an annotation.

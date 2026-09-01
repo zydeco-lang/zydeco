@@ -1,20 +1,22 @@
-begin
-  begin
-    param (
+val (
+  (
+    (
       (/core; /representations; /numeric; /text; builtin) :
       @(import("../builtin.zy"))
-    ) in
+    ),
+    (
+      (/Bool; /Option; /List; /bool; /option; /list) :
+      @(import("../data/package.type.zy"))
+    )
+  )
+) =>
+  begin
     let (/VType; /CType; /Thk; /Ret; /Unit) = core in
     let (/Char) = representations/char in
     let (/String) = representations/string in
     let (/Bytes) = representations/bytes in
     let (= Int64, int64) = numeric/int64 in
     let (/char; /string; /bytes) = text in
-    param
-    (
-      (/Bool; /Option; /List; /bool; /option; /list) :
-      @(import("../data/package.type.zy"))
-    ) in
     let ! compare (A : VType)
       (
         predicate : Thk (
@@ -171,5 +173,4 @@ begin
         #to_string = bytes_to_string
       )
     )
-  end
 end

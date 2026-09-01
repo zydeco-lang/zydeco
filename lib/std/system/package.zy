@@ -1,25 +1,28 @@
-begin
-  param (
+val (
+  (
     (
-      /core;
-      /representations;
-      /numeric;
-      /text;
-      /system = (/Reader; /Writer; /OS; /io; /fs; /stdio; /args; /random; /process);
-      builtin
+      (
+        /core;
+        /representations;
+        /numeric;
+        /text;
+        /system = (/Reader; /Writer; /OS; /io; /fs; /stdio; /args; /random; /process);
+        builtin
+      )
+      : @(import("../builtin.zy"))
+    ),
+    (
+      (/Bool; /Option; /Result; /List; /bool; /option; /result; /list) :
+      @(import("../data/package.type.zy"))
     )
-    : @(import("../builtin.zy"))
-  ) in
+  )
+) =>
+  begin
   let (/VType; /CType; /Thk; /Ret; /Unit) = core in
   let (= Int64, int64) = numeric/int64 in
   let (/String) = representations/string in
   let (/Bytes) = representations/bytes in
   let (/bytes) = text in
-  param
-  (
-    (/Bool; /Option; /Result; /List; /bool; /option; /result; /list) :
-    @(import("../data/package.type.zy"))
-  ) in
   begin
     def IoErrorKind =
       data
@@ -545,5 +548,5 @@ begin
         #exit = process/exit
       )
     end
-  end
+end
 end

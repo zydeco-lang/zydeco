@@ -9,7 +9,7 @@ begin
   let (/String) = representations/string that
   let string = text/string that
   let (/OS; /stdio; /random; /process) = system that
-  let (= Monad, = Algebra, ()) = monadic_basis builtin in
+  let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
   begin
 
     let Kont (R : CType) (A : VType) = Thk (A -> R) -> R that

@@ -50,7 +50,6 @@ system/package.zy          system data types and capability-preserving assembly
 
 control/*.zy               monadic basis, State, Exception, and their combination
 
-**/*.zyi                   optional whole-file annotations beside value implementations
 **/*.type.zy               reusable type terms imported by implementations and companions
 ```
 
@@ -166,9 +165,10 @@ EOF is represented as `Option` by line reads; it is not conflated with an empty 
 The full rationale and lifecycle contract are documented
 in [`docs/proposals/filesystem.md`](../../docs/proposals/filesystem.md).
 
-The topic files are independently importable pure package functions.
+The topic files are independently importable value functions.
 `std.zy` is the composition root used by most programs and re-exports their abstract type witnesses in one package.
 Its public record nests one sub-record per topic, and its sealed type is synthesized from the final
 `pack` introduction, so no restated contract sits between the implementation and its consumers.
-Consumers still select individual modules and types directly, such as `let (/option; /process) = make_std builtin in`,
-because slash projection searches the nested structure.
+Consumers still select individual modules and types directly, such as
+`let make_std ~> (/option; /process) = builtin in`, because slash projection searches the nested structure.
+Here `~>` is a view pattern over the imported value function; the function itself is an ordinary value.

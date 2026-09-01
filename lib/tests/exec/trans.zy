@@ -6,7 +6,7 @@ begin
   ) that
   let (/VType; /CType; /Thk; /Unit) = core that
   let (/process) = system that
-  let (= Monad, = Algebra, ()) = monadic_basis builtin in
+  let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
   begin
 
     def Option (A : VType) =
