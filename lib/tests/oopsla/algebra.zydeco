@@ -7,10 +7,7 @@
 -- end
 let monadic_basis = @(import("../../std/control/monad.zy")) in
 begin
-  param val (
-    (/core; /representations; /system; builtin) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param val (/core; /representations; /system; builtin) : @(import("../../std/builtin.zy")) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (/String) = representations/string that
   let (/OS; /stdio; /process) = system that
@@ -134,8 +131,7 @@ begin
         fn A m ka =>
           let fix loop
             (
-              ka :
-              Thk (A -> FnVar V R)
+              ka : Thk (A -> FnVar V R)
             )
           : FnVar V R =
               comatch

@@ -55,8 +55,7 @@ impl ReplEngine {
         let builtin = format!("{:?}", self.builtin.to_string_lossy());
         let direct_wrapper = format!(
             concat!(
-                "param ((/core = _) : @[import({})] _)\n",
-                "in\n",
+                "param (/core = _) : @[import({})] _ in\n",
                 "@[debug(\"{}\")] @[import({})] _\n",
             ),
             builtin,
@@ -65,8 +64,7 @@ impl ReplEngine {
         );
         let returned_wrapper = format!(
             concat!(
-                "param ((/core = _) : @[import({})] _)\n",
-                "in\n",
+                "param (/core = _) : @[import({})] _ in\n",
                 "ret (@[debug(\"{}\")] @[import({})] _)\n",
             ),
             builtin,

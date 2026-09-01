@@ -613,10 +613,7 @@ The easiest program we can write is a term that accepts the Builtin package and 
 
 `lib/playground/main.zydeco`
 ```zydeco
-param (
-  (/system) :
-  @[import("../std/builtin.zy")] _
-) in
+param (/system) : @[import("../std/builtin.zy")] _ in
   let (/process) = system in
   ! (process/exit) 42
 ```

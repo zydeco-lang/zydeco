@@ -18,10 +18,7 @@ begin
     | +S(_) => ret +True()
     end
   that
-  param (
-    (/core; /system) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/core; /system) : @(import("../../std/builtin.zy")) that
   let (/VType; /Ret; /Unit) = core that
   let (/process) = system that
 

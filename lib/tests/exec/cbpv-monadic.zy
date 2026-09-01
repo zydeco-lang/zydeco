@@ -2,10 +2,8 @@ begin
   let U = Thk that
   let F = Ret that
   let monadic_basis = @(import("../../std/control/monad.zy")) that
-  param (
-    (/core; /representations; /numeric; /text; /system; builtin) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/core; /representations; /numeric; /text; /system; builtin) :
+  @(import("../../std/builtin.zy")) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (= Int64, int64) = numeric/int64 that
   let (/Char) = representations/char that

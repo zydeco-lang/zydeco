@@ -929,10 +929,7 @@ mod tests {
         let builtin = library.join("builtin.zy").canonicalize().unwrap();
         let source = format!(
             r#"let Builtin = @[import("{builtin}")] _ in
-param (
-  (/core; /representations; /numeric; /system; builtin) :
-  Builtin
-) in
+param (/core; /representations; /numeric; /system; builtin) : Builtin in
 let (/VType; /CType; /Thk; /Ret; /Unit) = core in
 let (/Int8) = representations/i8 in
 let (/Int16) = representations/i16 in

@@ -140,10 +140,7 @@ A Zydeco program is one complete term in one source file.
 Source dependencies are ordinary term imports written at their use sites:
 
 ```zydeco
-param (
-  (/system) :
-  @[import("../std/builtin.zy")] _
-) in
+param (/system) : @[import("../std/builtin.zy")] _ in
   let (/process) = system in
   ! (process/exit) 42
 ```

@@ -1,9 +1,6 @@
 begin
   let monadic_basis = @(import("../../std/control/monad.zy")) that
-  param (
-    (/core; /system; builtin) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/core; /system; builtin) : @(import("../../std/builtin.zy")) that
   let (/VType; /CType; /Thk) = core that
   let (/process) = system that
   let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
@@ -23,8 +20,7 @@ begin
     that
     def ! mfree
       (
-        H :
-        CType -> VType
+        H : CType -> VType
       )
     : Monad (Free H) =
         comatch

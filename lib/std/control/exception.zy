@@ -1,8 +1,7 @@
 -- The Exception effect, packaged as a pure library over the Builtin signature.
 val
   (
-    (/core; builtin) :
-    @(import("../builtin.zy"))
+    (/core; builtin) : @(import("../builtin.zy"))
   )
 =>
   let (/VType; /CType; /Thk; /Ret; /Unit) = core in

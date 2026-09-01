@@ -1,8 +1,5 @@
 begin
-  param (
-    (/core; /system) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/core; /system) : @(import("../../std/builtin.zy")) that
   let (/VType; /CType; /Thk) = core that
   let (/OS; /process) = system that
 

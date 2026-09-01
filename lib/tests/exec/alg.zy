@@ -1,9 +1,6 @@
 begin
   let monadic_basis = @(import("../../std/control/monad.zy")) that
-  param (
-    (/core; /representations; /system; builtin) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/core; /representations; /system; builtin) : @(import("../../std/builtin.zy")) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (/Int64) = representations/i64 that
   let (/process) = system that
@@ -19,8 +16,7 @@ begin
 
     def ! alg_arrow
       (
-        M :
-        VType -> CType
+        M : VType -> CType
       )
       (A : VType)
       (B : CType)
@@ -32,8 +28,7 @@ begin
     that
     def ! alg_with
       (
-        M :
-        VType -> CType
+        M : VType -> CType
       )
       (B1 : CType)
       (alg1 : Thk (Algebra M B1))
@@ -51,20 +46,17 @@ begin
     that
     def ! alg_ret
       (
-        M :
-        VType -> CType
+        M : VType -> CType
       )
       (mo : Thk (Monad M))
       (A : VType)
     : Algebra M (M A) = fn X m f => ! mo .bind X A m f that
     def ! alg_forall_ctype
       (
-        M :
-        VType -> CType
+        M : VType -> CType
       )
       (
-        S :
-        CType -> CType
+        S : CType -> CType
       )
       (
         algS : Thk (
@@ -84,12 +76,10 @@ begin
       } that
     def ! alg_forall_ctype_constructor
       (
-        M :
-        VType -> CType
+        M : VType -> CType
       )
       (
-        S :
-        (
+        S : (
              (CType -> CType)
           -> CType
         )
@@ -98,8 +88,7 @@ begin
         algS : Thk (
           forall
             (
-              F :
-              CType -> CType
+              F : CType -> CType
             )
           .
                Thk (
@@ -113,8 +102,7 @@ begin
     : Algebra M (
         forall
           (
-            F :
-            CType -> CType
+            F : CType -> CType
           )
         .
              Thk (

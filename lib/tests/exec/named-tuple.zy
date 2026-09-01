@@ -1,10 +1,7 @@
 -- Flat products may freely mix named and unnamed components. Projection skips
 -- unnamed components but preserves their physical positions.
 begin
-  param (
-    (/numeric; /system) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/numeric; /system) : @(import("../../std/builtin.zy")) that
   let (= Int64, int64) = numeric/int64 that
   let (/process) = system that
 

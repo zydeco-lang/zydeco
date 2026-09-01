@@ -1,7 +1,4 @@
-param (
-  (/numeric; /system) :
-  @(import("../../std/builtin.zy"))
-) in
+param (/numeric; /system) : @(import("../../std/builtin.zy")) in
 let (= Int64, int64) = numeric/int64 in
 let (/OS; /process) = system in
 ! (int64/eq)

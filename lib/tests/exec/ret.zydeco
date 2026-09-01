@@ -1,10 +1,7 @@
 -- An example that uses forall and type aliases to prove that
 -- `Ret' A` and the `Ret A` primitive are isomorphic to each other.
 begin
-  param (
-    (/core; /representations; /system) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/core; /representations; /system) : @(import("../../std/builtin.zy")) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (/Int64) = representations/i64 that
   let (/OS; /process) = system that

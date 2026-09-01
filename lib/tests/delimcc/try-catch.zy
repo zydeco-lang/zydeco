@@ -1,9 +1,6 @@
 begin
   let monadic_basis = @(import("../../std/control/monad.zy")) that
-  param (
-    (/core; /numeric; /system; builtin) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/core; /numeric; /system; builtin) : @(import("../../std/builtin.zy")) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (= Int64, int64) = numeric/int64 that
   let (/OS; /process) = system that
@@ -21,8 +18,7 @@ begin
     that
     def ! reset
       (
-        M :
-        VType -> CType
+        M : VType -> CType
       )
       (monad : Thk (Monad M))
       (A : VType)
@@ -33,8 +29,7 @@ begin
     that
     def ! shift
       (
-        M :
-        VType -> CType
+        M : VType -> CType
       )
       (monad : Thk (Monad M))
       (A : VType)
@@ -54,8 +49,7 @@ begin
     that
     def ! attempt
       (
-        M :
-        VType -> CType
+        M : VType -> CType
       )
       (monad : Thk (Monad M))
       (A : VType)
@@ -79,8 +73,7 @@ begin
     that
     def ! throw
       (
-        M :
-        VType -> CType
+        M : VType -> CType
       )
       (monad : Thk (Monad M))
       (A : VType)

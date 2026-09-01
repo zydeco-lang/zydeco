@@ -15,10 +15,7 @@ begin
   -- Builtin package: the host types and operations that the launcher supplies.
   -- `that` lets this parameter move within the current block according to the
   -- dependency graph, so later definitions may use its fields.
-  param (
-    (/core; /representations; /system) :
-    @(import("../../lib/std/builtin.zy"))
-  ) that
+  param (/core; /representations; /system) : @(import("../../lib/std/builtin.zy")) that
   let (/VType; /Thk; /Ret) = core that
   let (/Int64) = representations/i64 that
   let (/String) = representations/string that

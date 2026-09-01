@@ -5,10 +5,7 @@
 -- action completes. This is continuation-passing style at the source level.
 
 begin
-  param (
-    (/core; /representations; /system) :
-    @(import("../../lib/std/builtin.zy"))
-  ) that
+  param (/core; /representations; /system) : @(import("../../lib/std/builtin.zy")) that
   let (/VType; /Thk; /Unit) = core that
   let (/String) = representations/string that
   let (/OS; /stdio; /process) = system that
@@ -36,8 +33,7 @@ begin
     -> OS
   ) = {
     fix (
-      print_list :
-      Thk (
+      print_list : Thk (
            List String
         -> Thk OS
         -> OS

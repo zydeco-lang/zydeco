@@ -1,10 +1,7 @@
 -- Function Types and the abort example
 -- Funciton Type
 begin
-  param (
-    (/core; /representations; /system) :
-    @(import("../std/builtin.zy"))
-  ) that
+  param (/core; /representations; /system) : @(import("../std/builtin.zy")) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (/Int64) = representations/i64 that
   let (/process) = system that

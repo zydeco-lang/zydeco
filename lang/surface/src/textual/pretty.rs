@@ -141,7 +141,7 @@ struct BoundaryLayout<'arena> {
     broken_indent: isize,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 enum StagedBoundary {
     Annotation,
     BindingType,
@@ -680,29 +680,34 @@ impl<'arena> PrettyFormatter<'arena> {
         self.single_line_or(joined, broken)
     }
 
-    /// Put a separator before the right-hand constituent when the left-hand
-    /// constituent is multiline, keeping the right-hand constituent on the
-    /// separator's line whenever it still fits.
+    /// Join two stages through their marker.
     ///
-    /// A joined boundary keeps the continuation at the separator's level so
-    /// its own layout families measure from there; only a broken boundary
-    /// hangs the continuation one level below.
+    /// An annotation marker belongs to the final line of its left-hand
+    /// constituent, even when that constituent is multiline. A source break
+    /// after the marker does not force the classifier onto another line;
+    /// width still may. Binding classifiers retain their aligned separator
+    /// tier because the preceding binding head is not one annotated pattern.
     fn staged_join(
         &self, left: LayoutFragment<'arena>, right: LayoutFragment<'arena>,
         boundary: StagedBoundary,
     ) -> LayoutFragment<'arena> {
         let separator = boundary.marker();
-        let (inline_layout, aligned_layout) = match boundary {
-            | StagedBoundary::Annotation => {
-                (BoundaryLayout::aligned(""), BoundaryLayout::nested("", self.indent()))
-            }
-            | StagedBoundary::BindingType => (
-                BoundaryLayout::hanging("", self.indent()),
-                BoundaryLayout::nested("", self.indent()),
-            ),
-        };
         let intent = BoundaryIntent::between(left.anchors.last, right.anchors.first);
         let anchors = LayoutAnchors { first: left.anchors.first, last: right.anchors.last };
+        if boundary == StagedBoundary::Annotation {
+            let document =
+                left.document.append(RcDoc::space()).append(RcDoc::text(separator)).append(
+                    self.layout_boundary(
+                        intent.blank_line_only(),
+                        BoundaryLayout::aligned(""),
+                        right.document,
+                    ),
+                );
+            return LayoutFragment { document, anchors };
+        }
+
+        let inline_layout = BoundaryLayout::hanging("", self.indent());
+        let aligned_layout = BoundaryLayout::nested("", self.indent());
         let inline_head =
             left.document.clone().append(RcDoc::space()).append(RcDoc::text(separator));
         let inline = self.single_line(inline_head).append(self.layout_boundary(
@@ -1214,6 +1219,22 @@ impl<'arena> PrettyFormatter<'arena> {
         self.pattern_with_requirement(pattern, PatternRequirement::Annotated)
     }
 
+    /// A parameter keyword already marks the complete binder extent, so a
+    /// singleton parenthesized pattern contributes no structure. Elide it
+    /// even when its source layout was multiline; structural tuple and alias
+    /// delimiters remain because they contain multiple components.
+    fn parameter_pattern(&self, pattern: PatId) -> RcDoc<'arena> {
+        if self.options.parentheses == Parentheses::Minimal
+            && let Pattern::Paren(Paren(patterns)) = &self.arena.pats[&pattern]
+            && let [inner] = patterns.as_slice()
+            && self.grammar.accepts_pattern(PatternRequirement::Annotated, *inner)
+        {
+            self.with_leading_comments(pattern.into(), self.parameter_pattern(*inner))
+        } else {
+            self.annotated_pattern(pattern)
+        }
+    }
+
     fn pattern_with_requirement(
         &self, pattern: PatId, requirement: PatternRequirement,
     ) -> RcDoc<'arena> {
@@ -1531,7 +1552,7 @@ impl<'arena> PrettyFormatter<'arena> {
                         | ParameterFlavor::Value => "param val",
                     },
                     BoundaryLayout::aligned(""),
-                    LayoutFragment::entity((*binder).into(), self.annotated_pattern(*binder)),
+                    LayoutFragment::entity((*binder).into(), self.parameter_pattern(*binder)),
                 )
                 .append(RcDoc::text(" "))
                 .append(self.placement(*placement))
@@ -3504,7 +3525,7 @@ mod tests {
     }
 
     #[test]
-    fn preserves_fitting_groups_inside_multiline_layout() {
+    fn canonicalizes_multiline_parameter_annotations() {
         let source = concat!(
             "begin\n",
             "  param (\n",
@@ -3517,15 +3538,35 @@ mod tests {
         let parsed = ParsedSource::new(source);
         let formatted = parsed.render_with_options(PrettyOptions::default());
 
-        assert_eq!(formatted, source);
+        assert_eq!(
+            formatted,
+            concat!(
+                "begin\n",
+                "  param (\n",
+                "    /VType;\n",
+                "    /CType;\n",
+                "    /Thk;\n",
+                "    /Ret;\n",
+                "    /Unit;\n",
+                "    /Int64;\n",
+                "    /String;\n",
+                "    /OS;\n",
+                "    /int64;\n",
+                "    /string;\n",
+                "    /stdio;\n",
+                "    /process\n",
+                "  ) : @(import(\"package.zy\")) that\n",
+                "  _\n",
+                "end\n",
+            )
+        );
         let reparsed = ParsedSource::new(&formatted);
         assert_eq!(formatted, reparsed.render_with_options(PrettyOptions::default()));
         assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
 
         let narrow = parsed.render_with_options(PrettyOptions::default().with_line_width(90));
-        assert_ne!(narrow, source);
         assert!(narrow.lines().all(|line| line.len() <= 90));
-        assert!(narrow.contains("/stdio;\n      /process"), "{narrow}");
+        assert!(narrow.contains("/stdio;\n    /process\n  ) : @(import"), "{narrow}");
         let reparsed = ParsedSource::new(&narrow);
         assert_eq!(
             narrow,
@@ -3549,7 +3590,7 @@ mod tests {
         let formatted = parsed.render_with_options(PrettyOptions::default());
 
         assert!(formatted.lines().all(|line| line.len() <= 100), "{formatted}");
-        assert!(formatted.contains("/OS\n    )\n    : @(import"), "{formatted}");
+        assert!(formatted.contains("/OS\n  ) : @(import"), "{formatted}");
         let reparsed = ParsedSource::new(&formatted);
         assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
         assert_eq!(formatted, reparsed.render_with_options(PrettyOptions::default()));
@@ -3665,10 +3706,9 @@ mod tests {
                 "let x = (a *\nb) in x",
                 concat!("let x = (\n", "    a\n", "  * b\n", ") in\n", "x\n"),
             ),
-            (
-                "param (x :\nLongTypeName) that\nx",
-                concat!("param (\n", "  x :\n", "  LongTypeName\n", ") that\n", "x\n",),
-            ),
+            // A parameter keyword already owns its binder extent, so source
+            // breaks do not retain a redundant singleton wrapper.
+            ("param (x :\nLongTypeName) that\nx", "param x : LongTypeName that\nx\n"),
             ("let x = (\n  a\n) in x", concat!("let x = (\n", "  a\n", ") in\n", "x\n")),
             // A single-line group still elides, and an application's wrapper
             // remains redundant even for multiline arguments.

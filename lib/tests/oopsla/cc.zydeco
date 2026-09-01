@@ -2,10 +2,7 @@
 
 --| Funciton Type (A -> B)
 begin
-  param (
-    (/core; /numeric; /system) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/core; /numeric; /system) : @(import("../../std/builtin.zy")) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (= Int64, int64) = numeric/int64 that
   let (/process) = system that
@@ -41,8 +38,7 @@ begin
   def ! sum_and_mult : FnVar Int64 (FnOpt Int64 (Ret Int64)) =
     (
       fix (
-        loop :
-        Thk (Int64 -> FnVar Int64 (FnOpt Int64 (Ret Int64)))
+        loop : Thk (Int64 -> FnVar Int64 (FnOpt Int64 (Ret Int64)))
       )
       =>
         fn sum =>

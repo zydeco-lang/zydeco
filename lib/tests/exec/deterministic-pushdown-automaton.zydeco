@@ -1,8 +1,5 @@
 begin
-  param (
-    (/core; /representations; /text; /system) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/core; /representations; /text; /system) : @(import("../../std/builtin.zy")) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (/String) = representations/string that
   let string = text/string that

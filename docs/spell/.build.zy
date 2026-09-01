@@ -1,8 +1,5 @@
 begin
-  param (
-    (/core; /representations; /numeric; /text; /system) :
-    @(import("../../lib/std/builtin.zy"))
-  ) that
+  param (/core; /representations; /numeric; /text; /system) : @(import("../../lib/std/builtin.zy")) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (= Int64, int64) = numeric/int64 that
   let (/String) = representations/string that
@@ -112,8 +109,7 @@ begin
     -> OS
   ) = {
     fix (
-      loop :
-      Thk (
+      loop : Thk (
            String
         -> Bool
         -> OS

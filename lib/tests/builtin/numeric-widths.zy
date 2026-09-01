@@ -1,8 +1,5 @@
 begin
-  param (
-    (/numeric; /text; /system) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/numeric; /text; /system) : @(import("../../std/builtin.zy")) that
   let (= Int8, int8) = numeric/int8 that
   let (= Int16, int16) = numeric/int16 that
   let (= Int32, int32) = numeric/int32 that

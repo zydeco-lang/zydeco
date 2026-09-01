@@ -1,10 +1,7 @@
 -- Explicit product nesting remains significant, while directly nested Named
 -- wrappers support chained patterns and projections.
 begin
-  param (
-    (/numeric; /system) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/numeric; /system) : @(import("../../std/builtin.zy")) that
   let (= Int64, int64) = numeric/int64 that
   let (/process) = system that
 

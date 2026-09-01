@@ -2,10 +2,7 @@
 -- parameter and result types may contain names, and a thunked arrow may occupy
 -- a named tuple component.
 begin
-  param (
-    (/core; /numeric; /system) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/core; /numeric; /system) : @(import("../../std/builtin.zy")) that
   let (/Thk; /Ret) = core that
   let (= Int64, int64) = numeric/int64 that
   let (/process) = system that

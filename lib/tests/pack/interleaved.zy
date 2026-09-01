@@ -1,8 +1,5 @@
 begin
-  param (
-    (/core; /representations; /numeric; /system) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/core; /representations; /numeric; /system) : @(import("../../std/builtin.zy")) that
   let (/VType; /Ret; /Unit) = core that
   let (= Int64, int64) = numeric/int64 that
   let (/Char) = representations/char that
@@ -26,8 +23,7 @@ begin
         AliasY,
         _,
         _
-      )
-      : Interleaved
+      ) : Interleaved
     )
   .
     Ret (
@@ -44,8 +40,7 @@ begin
         AliasY,
         x,
         y
-      )
-      : Interleaved
+      ) : Interleaved
     )
   =>
     ret (

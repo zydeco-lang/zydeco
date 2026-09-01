@@ -5,10 +5,7 @@
 --|
 --| Check `exnkt.zydeco` for the implementation of `ExnK`, which is the church encoded version of `Exn`.
 begin
-  param val (
-    (/core; builtin) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param val (/core; builtin) : @(import("../../std/builtin.zy")) that
   let monadic_basis = @(import("../../std/control/monad.zy")) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (= Monad, = Algebra, ()) =
@@ -146,8 +143,7 @@ begin
               | .lift A m =>
                 do a <- ! m;
                 ! mo_exn E .return A a
-              end
-            : forall (E : VType) . MonadTransInner (Exn E)
+              end : forall (E : VType) . MonadTransInner (Exn E)
           )
         )
           -- The following is what MonadTransInner gets expanded to

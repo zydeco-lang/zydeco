@@ -251,10 +251,7 @@ pub mod utils {
 
             format!(
                 r#"let Builtin = @[import("{builtin}")] _ in
-{monadic}param (
-  (/core; /representations; /numeric; /system; builtin) :
-  Builtin
-) in
+{monadic}param (/core; /representations; /numeric; /system; builtin) : Builtin in
 let (/VType; /CType; /Thk; /Ret; /Unit) = core in
 let (/Int8) = representations/i8 in
 let (/Int16) = representations/i16 in

@@ -12,10 +12,7 @@ A consumer can open one package and select only the type identities and module v
 ```zydeco
 begin
   let make_std = @[import("../../std/std.zy")] _ that
-  param (
-    (/core; /representations; /system; builtin) :
-    @[import("../../std/builtin.zy")] _
-  ) in
+  param (/core; /representations; /system; builtin) : @[import("../../std/builtin.zy")] _ in
   let (/VType; /Thk) = core in
   let (/String) = representations/string in
   let (/OS) = system in
@@ -96,10 +93,7 @@ This is the important case for Builtin, because a source can state its capabilit
 without copying the complete host ABI:
 
 ```zydeco
-param (
-  (/representations; /system; builtin) :
-  @[import("builtin.zy")] _
-) in
+param (/representations; /system; builtin) : @[import("builtin.zy")] _ in
 let (/Bytes) = representations/bytes in
 let (/Reader; /io) = system in
 ...
@@ -330,7 +324,7 @@ The resulting convention stays within Zydeco's uniform term language:
 ```zydeco
 let (/TypeField; /module_value) = package in body
 
-param ((/TypeField; /module_value; whole) : Package) in body
+param (/TypeField; /module_value; whole) : Package in body
 ```
 
 A module remains a value, a type field remains an existential component, and an import remains metadata on a hole.

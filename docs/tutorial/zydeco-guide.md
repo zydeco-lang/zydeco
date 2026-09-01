@@ -44,10 +44,7 @@ A tiny executable:
 
 ```zydeco
 begin
-  param (
-    (/core; /representations; /numeric; /system; builtin) :
-    @(import("../std/builtin.zy"))
-  ) that
+  param (/core; /representations; /numeric; /system; builtin) : @(import("../std/builtin.zy")) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (/String) = representations/string that
   let (= Int64, int64) = numeric/int64 that
@@ -118,10 +115,7 @@ skeleton can put an import, then a `param`, and then open its fields with `that`
 
 ```zydeco
 begin
-  param (
-    (/core; /representations; /numeric; /system; builtin) :
-    @(import("../std/builtin.zy"))
-  ) that
+  param (/core; /representations; /numeric; /system; builtin) : @(import("../std/builtin.zy")) that
   let (/VType; /Thk) = core that
   let (/OS; /process) = system that
 
@@ -286,10 +280,7 @@ through named classifiers and product components. Missing and ambiguous fields a
 To open a package without naming every field, use a projection-pattern group:
 
 ```zydeco
-param (
-  (/core; /representations; /numeric; /system; builtin) :
-  @(import("../std/builtin.zy"))
-) in
+param (/core; /representations; /numeric; /system; builtin) : @(import("../std/builtin.zy")) in
 let (/VType; /Thk; /Ret) = core in
 ...
 ```

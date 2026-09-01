@@ -1,8 +1,5 @@
 begin
-  param (
-    (/numeric; /text; /system) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/numeric; /text; /system) : @(import("../../std/builtin.zy")) that
   let (= Int64, int64) = numeric/int64 that
   let string = text/string that
   let (/OS; /process) = system that

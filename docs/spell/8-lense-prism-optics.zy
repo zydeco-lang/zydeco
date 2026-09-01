@@ -5,10 +5,7 @@
 -- interprets the same lens as an observation.
 
 begin
-  param (
-    (/core; /system) :
-    @(import("../../lib/std/builtin.zy"))
-  ) that
+  param (/core; /system) : @(import("../../lib/std/builtin.zy")) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (/process) = system that
 

@@ -18,10 +18,7 @@ The instructions are located in [lib/tests/oopsla/README.md](lib/tests/oopsla/RE
 Create a file `hello-world.zy` in the repository root:
 
 ```zydeco
-param (
-  (/system) :
-  @[import("lib/std/builtin.zy")] _
-) in
+param (/system) : @[import("lib/std/builtin.zy")] _ in
   let (/stdio; /process) = system in
   ! (stdio/write_line) "hello, world!" { ! (process/exit) 0 }
 ```

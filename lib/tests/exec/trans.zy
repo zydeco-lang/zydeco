@@ -1,9 +1,6 @@
 begin
   let monadic_basis = @(import("../../std/control/monad.zy")) that
-  param (
-    (/core; /system; builtin) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/core; /system; builtin) : @(import("../../std/builtin.zy")) that
   let (/VType; /CType; /Thk; /Unit) = core that
   let (/process) = system that
   let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
@@ -54,8 +51,7 @@ begin
 
     def ! reader_t_monad (R : VType)
       (
-        M :
-        VType -> CType
+        M : VType -> CType
       )
       (mo : Thk (Monad M))
     : Monad (ReaderT R M) =
@@ -88,8 +84,7 @@ begin
     -- basically ignoring the reader input
     def ! option_t_monad
       (
-        M :
-        VType -> CType
+        M : VType -> CType
       )
       (mo : Thk (Monad M))
     : Monad (OptionT M) =
@@ -137,8 +132,7 @@ begin
     that
     def ! koption_t_monad
       (
-        M :
-        VType -> CType
+        M : VType -> CType
       )
       (monadM : Thk (Monad M))
     : Monad (KOptionT M) =

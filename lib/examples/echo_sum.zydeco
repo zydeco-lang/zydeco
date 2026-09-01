@@ -4,10 +4,7 @@
 -- Then it loops.
 -- If the input is not a number, the program exits.
 begin
-  param (
-    (/core; /numeric; /system) :
-    @(import("../std/builtin.zy"))
-  ) that
+  param (/core; /numeric; /system) : @(import("../std/builtin.zy")) that
   let (/Thk) = core that
   let (= Int64, int64) = numeric/int64 that
   let (/OS; /stdio; /process) = system that

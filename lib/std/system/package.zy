@@ -1,22 +1,15 @@
 begin
   param val (
     (
-      (
-        (
-          /core;
-          /representations;
-          /numeric;
-          /text;
-          /system = (/Reader; /Writer; /OS; /io; /fs; /stdio; /args; /random; /process);
-          builtin
-        )
-        : @(import("../builtin.zy"))
-      ),
-      (
-        (/Bool; /Option; /Result; /List; /bool; /option; /result; /list) :
-        @(import("../data/package.type.zy"))
-      )
-    )
+      /core;
+      /representations;
+      /numeric;
+      /text;
+      /system = (/Reader; /Writer; /OS; /io; /fs; /stdio; /args; /random; /process);
+      builtin
+    ) : @(import("../builtin.zy")),
+    (/Bool; /Option; /Result; /List; /bool; /option; /result; /list) :
+    @(import("../data/package.type.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core in
   let (= Int64, int64) = numeric/int64 in

@@ -1,8 +1,5 @@
 begin
-  param (
-    (/representations; /system) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/representations; /system) : @(import("../../std/builtin.zy")) that
   let (/Int64) = representations/i64 that
   let (/OS; /stdio; /process) = system that
 

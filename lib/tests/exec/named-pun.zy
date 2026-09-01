@@ -1,10 +1,7 @@
 -- `= field` expands to `field = field` without introducing a downstream
 -- syntax form. The inferred payload is resolved according to its context.
 begin
-  param (
-    (/core; /numeric; /system) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/core; /numeric; /system) : @(import("../../std/builtin.zy")) that
   let (/VType) = core that
   let (= Int64, int64) = numeric/int64 that
   let (/process) = system that

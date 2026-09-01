@@ -5,10 +5,7 @@ begin
     Result
   end that
   let IdentityResult = TypeIdentity Int64 that
-  param (
-    (/core; /numeric; /system) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/core; /numeric; /system) : @(import("../../std/builtin.zy")) that
   let (/VType) = core that
   let (= Int64, int64) = numeric/int64 that
   let (/OS; /process) = system that

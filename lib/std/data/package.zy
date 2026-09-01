@@ -1,7 +1,6 @@
 val
   (
-    (/core; /numeric) :
-    @(import("../builtin.zy"))
+    (/core; /numeric) : @(import("../builtin.zy"))
   )
 =>
   let (/VType; /CType; /Thk; /Ret; /Unit) = core in

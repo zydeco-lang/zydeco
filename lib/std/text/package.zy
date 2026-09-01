@@ -1,15 +1,7 @@
 begin
   param val (
-    (
-      (
-        (/core; /representations; /numeric; /text; builtin) :
-        @(import("../builtin.zy"))
-      ),
-      (
-        (/Bool; /Option; /List; /bool; /option; /list) :
-        @(import("../data/package.type.zy"))
-      )
-    )
+    (/core; /representations; /numeric; /text; builtin) : @(import("../builtin.zy")),
+    (/Bool; /Option; /List; /bool; /option; /list) : @(import("../data/package.type.zy"))
   ) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core in
   let (/Char) = representations/char in

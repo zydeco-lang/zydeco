@@ -144,10 +144,7 @@ not an extra source-level capability.
 A pure integer consumer needs only three groups:
 
 ```zydeco
-param (
-  (/core; /numeric) :
-  @[import("builtin.zy")] _
-) in
+param (/core; /numeric) : @[import("builtin.zy")] _ in
 let (/Ret) = core in
 let (= Int64, int64) = numeric/int64 in
 ...
@@ -156,10 +153,7 @@ let (= Int64, int64) = numeric/int64 in
 An executable can select system services without opening unrelated numeric or text operations:
 
 ```zydeco
-param (
-  (/core; /representations; /system) :
-  @[import("builtin.zy")] _
-) in
+param (/core; /representations; /system) : @[import("builtin.zy")] _ in
 let (/Thk) = core in
 let (/String) = representations/string in
 let (/OS; /stdio; /process) = system in
@@ -170,7 +164,7 @@ The complete package remains available through an ordinary whole-value alias whe
 it to another library:
 
 ```zydeco
-param ((/core; /system; builtin) : @[import("builtin.zy")] _) in
+param (/core; /system; builtin) : @[import("builtin.zy")] _ in
 let std = builtin |> make_std in
 ...
 ```

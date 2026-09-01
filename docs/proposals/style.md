@@ -18,10 +18,7 @@ before producing a computation or package:
 ```zydeco
 begin
   let make_std = @[import("../std/std.zy")] _ that
-  param (
-    (/core; /representations; /system; builtin) :
-    @[import("../std/builtin.zy")] _
-  ) that
+  param (/core; /representations; /system; builtin) : @[import("../std/builtin.zy")] _ that
   let (/VType; /Thk) = core that
   let (/String) = representations/string that
   let (/OS) = system that
@@ -137,6 +134,9 @@ that
 Give exported components, type parameters, and informative patterns explicit annotations.
 Expected-type inference keeps small local bindings concise.
 The useful annotation is the one that states a boundary a reader would otherwise have to reconstruct.
+Keep the annotation on its pattern's final line. When the pattern expands across lines,
+attach `: classifier` to its closing delimiter; a source break alone does not justify a singleton wrapper
+or force the classifier onto another line.
 
 ## Showing the CBPV Boundary
 
@@ -252,10 +252,7 @@ At a package boundary, use one projection-pattern group to open the existential 
 and bind only the public types and module values the consumer needs:
 
 ```zydeco
-param (
-  (/core; /representations; builtin) :
-  @[import("../std/builtin.zy")] _
-) in
+param (/core; /representations; builtin) : @[import("../std/builtin.zy")] _ in
 let (/VType; /Thk) = core in
 let (/String) = representations/string in
 let (/int64; /process) = builtin |> make_std in

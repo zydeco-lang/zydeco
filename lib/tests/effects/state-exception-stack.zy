@@ -4,10 +4,7 @@ begin
   let state_basis = @(import("../../std/control/state.zy")) that
   let exception_basis = @(import("../../std/control/exception.zy")) that
   let state_exn_basis = @(import("../../std/control/state-exn.zy")) that
-  param (
-    (/core; /representations; /numeric; /system; builtin) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/core; /representations; /numeric; /system; builtin) : @(import("../../std/builtin.zy")) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (/String) = representations/string that
   let (= Int64, int64) = numeric/int64 that

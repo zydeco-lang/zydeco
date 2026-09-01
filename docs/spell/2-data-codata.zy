@@ -6,10 +6,7 @@
 -- select one observation.
 
 begin
-  param (
-    (/core; /representations; /numeric; /text; /system) :
-    @(import("../../lib/std/builtin.zy"))
-  ) that
+  param (/core; /representations; /numeric; /text; /system) : @(import("../../lib/std/builtin.zy")) that
   let (/VType; /CType; /Thk; /Ret; /Unit) = core that
   let (/String) = representations/string that
   let (= Int64, int64) = numeric/int64 that
@@ -99,8 +96,7 @@ begin
     -> Ret Int64
   ) = {
     fix (
-      fold_left :
-      Thk (
+      fold_left : Thk (
            Thk (Int64 -> Int64 -> Ret Int64)
         -> Int64
         -> List Int64
@@ -123,8 +119,7 @@ begin
     -> Ret Int64
   ) = {
     fix (
-      fold_right :
-      Thk (
+      fold_right : Thk (
            Thk (Int64 -> Thk (Ret Int64) -> Ret Int64)
         -> Thk (Ret Int64)
         -> Thk (LazyList Int64)

@@ -6,10 +6,7 @@
 -- and make it an explicit parameter of this term.
 
 begin
-  param (
-    (/core) :
-    @(import("../../lib/std/builtin.zy"))
-  ) that
+  param (/core) : @(import("../../lib/std/builtin.zy")) that
   let (/VType; /Thk; /Ret; /Unit) = core that
   def Option (A : VType) =
     data
@@ -40,10 +37,7 @@ begin
           forall (A : VType) . Ref A -> A -> Ret Unit
         )
       ) that
-  param (
-    (Ref, references) :
-    ReferenceLibrary
-  ) that
+  param (Ref, references) : ReferenceLibrary that
 
   def call_by_need : Thk (
     forall (A : VType) .

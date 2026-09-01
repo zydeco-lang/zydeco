@@ -1,8 +1,7 @@
 -- A combined State + Exception stack, built from the two effect interfaces.
 val
   (
-    (/core; builtin) :
-    @(import("../builtin.zy"))
+    (/core; builtin) : @(import("../builtin.zy"))
   )
 =>
   let (/VType; /CType; /Thk; /Ret; /Unit) = core in

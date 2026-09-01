@@ -5,10 +5,7 @@
 -- methods, while a comatch supplies their implementations.
 
 begin
-  param (
-    (/core; /representations; /numeric; /system) :
-    @(import("../../lib/std/builtin.zy"))
-  ) that
+  param (/core; /representations; /numeric; /system) : @(import("../../lib/std/builtin.zy")) that
   let (/CType; /Thk; /Ret) = core that
   let (/String) = representations/string that
   let (= Int64, int64) = numeric/int64 that

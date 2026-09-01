@@ -1,9 +1,6 @@
 begin
   let monadic_basis = @(import("../../std/control/monad.zy")) that
-  param (
-    (/core; /numeric; /system; builtin) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/core; /numeric; /system; builtin) : @(import("../../std/builtin.zy")) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (= Int64, int64) = numeric/int64 that
   let (/stdio; /process) = system that

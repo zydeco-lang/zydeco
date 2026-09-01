@@ -1,8 +1,5 @@
 begin
-  param (
-    (/core; /system) :
-    @(import("../../std/builtin.zy"))
-  ) that
+  param (/core; /system) : @(import("../../std/builtin.zy")) that
   let (/VType; /Thk; /Ret; /Unit) = core that
   let (/process) = system that
 
@@ -48,8 +45,7 @@ begin
       | +False() => ret +False()
       end
     | +False() => ret +False()
-    end
-    : Ret Bool
+    end : Ret Bool
   );
   match b
   | +True() => ! (process/exit) 0

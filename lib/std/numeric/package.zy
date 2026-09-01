@@ -1,15 +1,7 @@
 begin
   param val (
-    (
-      (
-        (/core; /representations; /numeric) :
-        @(import("../builtin.zy"))
-      ),
-      (
-        (/Bool; /bool) :
-        @(import("../data/package.type.zy"))
-      )
-    )
+    (/core; /representations; /numeric) : @(import("../builtin.zy")),
+    (/Bool; /bool) : @(import("../data/package.type.zy"))
   ) that
   let make_integer = @(import("integer.zy")) that
   let make_float = @(import("float.zy")) that
