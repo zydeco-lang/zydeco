@@ -145,6 +145,64 @@ val (A : VType) (value : A) => value
       (lower_identifier))))
 
 ==================
+Pipeline and view associativity
+==================
+
+begin
+  let forward = input |> first |> second that
+  let backward = second <| first <| input that
+  let first ~> second ~> result = input in
+  result
+end
+
+---
+
+(source_file
+  (block_expression
+    (context_binding
+      (binding_kind)
+      (general_binding
+        (variable_pattern
+          (lower_identifier))
+        (forward_pipeline_expression
+          (forward_pipeline_expression
+            (variable
+              (lower_identifier))
+            (variable
+              (lower_identifier)))
+          (variable
+            (lower_identifier))))
+      (placement)
+      (context_binding
+        (binding_kind)
+        (general_binding
+          (variable_pattern
+            (lower_identifier))
+          (backward_pipeline_expression
+            (variable
+              (lower_identifier))
+            (backward_pipeline_expression
+              (variable
+                (lower_identifier))
+              (variable
+                (lower_identifier)))))
+        (placement)
+        (context_binding
+          (binding_kind)
+          (general_binding
+            (view_pattern
+              (lower_identifier)
+              (view_pattern
+                (lower_identifier)
+                (variable_pattern
+                  (lower_identifier))))
+            (variable
+              (lower_identifier)))
+          (placement)
+          (variable
+            (lower_identifier)))))))
+
+==================
 Value Pi
 ==================
 
@@ -175,7 +233,7 @@ Definitions, binders, and matching
 ==================
 
 begin
-  def ! fix map (A : VType) (xs : List A) : Ret (List A) =
+  def fix map (A : VType) (xs : List A) : Ret (List A) =
     match xs
     | +Nil () => ret +Nil ()
     | +Cons (x, tail) =>
@@ -193,7 +251,6 @@ end
     body: (context_binding
       kind: (binding_kind)
       binding: (general_binding
-        computation: (computation_modifier)
         recursive: (recursion_modifier)
         binder: (variable_pattern
           name: (lower_identifier))

@@ -984,6 +984,44 @@ mod tests {
     }
 
     #[test]
+    fn semantic_tokens_mark_value_pi_and_value_abstraction_binders_as_parameters() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../lib/tests/compile/value-views.zy")
+            .canonicalize()
+            .unwrap();
+        let source = concat!(
+            "begin\n",
+            "  param (\n",
+            "    (/core; /system) :\n",
+            "    @(import(\"../../std/builtin.zy\"))\n",
+            "  ) that\n",
+            "  let (/VType) = core that\n",
+            "  let (/process) = system that\n",
+            "  let identity : val pi (A : VType) (value : A) . A =\n",
+            "    val (B : VType) (item : B) => item\n",
+            "  that\n",
+            "  ! (process/exit) 0\n",
+            "end\n",
+        );
+        let overrides = HashMap::from([(path.clone(), source.to_owned())]);
+        let (project, _session) = ProjectState::load(&path, &overrides).unwrap();
+        let encoded = project.semantic_tokens(&path).unwrap();
+        let decoded = SemanticTokenDecoder::new(source).decode(&encoded);
+        let has = |text: &str, token_type: &str, modifier: &str| {
+            decoded.iter().any(|token| {
+                token.text == text
+                    && token.token_type == token_type
+                    && token.modifiers.iter().any(|found| found == modifier)
+            })
+        };
+
+        assert!(has("A", "typeParameter", "valueType"));
+        assert!(has("value", "parameter", "value"));
+        assert!(has("B", "typeParameter", "valueType"));
+        assert!(has("item", "parameter", "value"));
+    }
+
+    #[test]
     fn type_errors_surface_as_error_diagnostics() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../lib/tests/exec/forall.zy")

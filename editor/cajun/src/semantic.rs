@@ -13,7 +13,7 @@ use zydeco_statics::{
 use zydeco_surface::{
     scoped::{
         arena::ScopedArena,
-        syntax::{DefId, PatId, Pattern, Pi, Sigma, Term},
+        syntax::{DefId, PatId, Pattern, Pi, Sigma, Term, ValPi},
     },
     textual::{LexicalTokenKind, LexicalTokens, syntax::SpanArena},
 };
@@ -428,7 +428,9 @@ impl<'arena> ParameterDefinitions<'arena> {
             .iter()
             .filter_map(|(_, term)| match term {
                 | Term::Abs(Abs(pattern, _))
+                | Term::ValAbs(Abs(pattern, _))
                 | Term::Pi(Pi(pattern, _))
+                | Term::ValPi(ValPi(pattern, _))
                 | Term::Sigma(Sigma(pattern, _)) => Some(pattern),
                 | Term::ManifestExists(term) => Some(&term.binder),
                 | Term::Pack(term) => Some(&term.binder),

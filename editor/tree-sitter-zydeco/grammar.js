@@ -376,18 +376,21 @@ module.exports = grammar({
       field('body', $._term),
     )),
 
-    general_binding: $ => seq(
-      optional(field('value_function', $.value_modifier)),
-      optional(field('computation', $.computation_modifier)),
-      optional(field('recursive', $.recursion_modifier)),
-      field('binder', $._pattern),
-      optional(field('parameters', $.copattern)),
-      optional(seq(
-        ':',
-        field('classifier', $._term),
-      )),
-      '=',
-      field('value', $._term),
+    // Binding flavors are alternatives, not freely composable modifiers.
+    // Value-function sugar requires a nonempty parameter telescope, matching
+    // the compiler grammar; the other flavors retain optional parameters.
+    general_binding: $ => choice(
+      seq(
+        field('value_function', $.value_modifier),
+        generalBindingTail($, field('parameters', $.copattern)),
+      ),
+      seq(
+        optional(choice(
+          field('computation', $.computation_modifier),
+          field('recursive', $.recursion_modifier),
+        )),
+        generalBindingTail($, optional(field('parameters', $.copattern))),
+      ),
     ),
 
     binding_kind: _ => choice('let', 'def', 'define'),
@@ -653,4 +656,24 @@ function commaSep(rule) {
  */
 function commaSep1(rule) {
   return seq(rule, repeat(seq(',', rule)), optional(','));
+}
+
+/**
+ * Parse the portion shared by every general binding flavor.
+ *
+ * @param {GrammarSymbols<any>} $
+ * @param {RuleOrLiteral} parameters
+ * @returns {SeqRule}
+ */
+function generalBindingTail($, parameters) {
+  return seq(
+    field('binder', $._pattern),
+    parameters,
+    optional(seq(
+      ':',
+      field('classifier', $._term),
+    )),
+    '=',
+    field('value', $._term),
+  );
 }
