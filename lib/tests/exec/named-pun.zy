@@ -33,10 +33,16 @@ begin
   let (
     = pun_x : Int64,
     = pun_y : Int64
-  ) = pun_pair in
+  )
+  =
+    pun_pair
+  in
   let (
     #outer = = pun_inner : Int64
-  ) = wrapped in
+  )
+  =
+    wrapped
+  in
   do value_check <- ! (int64/sub) pun_value 4;
   do upper_value_check <- ! (int64/sub) PunValue 5;
   do upper_projection_check <- ! (int64/sub) upper_slot/PunValue 5;

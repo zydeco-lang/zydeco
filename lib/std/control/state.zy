@@ -1,98 +1,100 @@
 -- The State effect, packaged as a pure library over the Builtin signature.
-val (
-  (/core; builtin) :
-  @(import("../builtin.zy"))
-) =>
-let (/VType; /CType; /Thk; /Ret; /Unit) = core in
-begin
-  let monadic_basis = @(import("monad.zy")) that
-  let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
+val
+  (
+    (/core; builtin) :
+    @(import("../builtin.zy"))
+  )
+=>
+  let (/VType; /CType; /Thk; /Ret; /Unit) = core in
   begin
-    -- The operations of the State effect, relative to an ambient monad M.
-    let MonadState = @(import("state.type.zy")) that
+    let monadic_basis = @(import("monad.zy")) that
+    let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
+    begin
+      -- The operations of the State effect, relative to an ambient monad M.
+      let MonadState = @(import("state.type.zy")) that
 
-    -- The canonical State relative monad: thread S through Ret and return
-    -- both the answer and the final state.
-    let State (S : VType) (A : VType) = S -> Ret (A * S) that
+      -- The canonical State relative monad: thread S through Ret and return
+      -- both the answer and the final state.
+      let State (S : VType) (A : VType) = S -> Ret (A * S) that
 
-    def ! mo_state (S : VType) : Monad (State S) =
-      comatch
-      | .return A a =>
-        fn s =>
-          ret (a, s)
-      | .bind A A' m f =>
-        fn s =>
-          do (a, s') <- ! m s;
-          ! f a s'
-      end
-    that
+      def ! mo_state (S : VType) : Monad (State S) =
+        comatch
+        | .return A a =>
+          fn s =>
+            ret (a, s)
+        | .bind A A' m f =>
+          fn s =>
+            do (a, s') <- ! m s;
+            ! f a s'
+        end
+      that
 
-    def ! state (S : VType) : MonadState S (State S) =
-      comatch
-      | .get =>
+      def ! state (S : VType) : MonadState S (State S) =
+        comatch
+        | .get =>
+          fn s =>
+            ret (s, s)
+        | .put s' =>
+          fn _ =>
+            ret ((), s')
+        end
+      that
+
+      -- Haskell-style operations for the concrete State monad. They keep
+      -- client code from projecting the dictionary when it does not need to be
+      -- polymorphic in the ambient monad.
+      def ! get (S : VType) : State S S =
         fn s =>
           ret (s, s)
-      | .put s' =>
+      that
+
+      def ! put (S : VType) (s' : S) : State S Unit =
         fn _ =>
           ret ((), s')
+      that
+
+      def ! modify (S : VType) (f : Thk (S -> Ret S)) : State S Unit =
+        ! mo_state S .bind S Unit { ! get S } {
+          fn s =>
+            do s' <- ! f s;
+            ! put S s'
+        }
+      that
+
+      -- Runners expose the final state to an arbitrary computation continuation,
+      -- so the module remains independent of OS.
+      def ! run_state (S : VType)
+        (A : VType)
+        (B : CType)
+        (initial : S)
+        (m : Thk (State S A))
+        (k : Thk (S -> A -> B))
+      : B =
+          do (a, s') <- ! m initial;
+          ! k s' a
+      that
+
+      def ! eval_state (S : VType)
+        (A : VType)
+        (initial : S)
+        (m : Thk (State S A))
+      : Ret A =
+          do (a, _) <- ! m initial;
+          ret a
+      that
+
+      pack
+          (= State as State : VType -> VType -> CType)
+          (= MonadState as MonadState : VType -> (VType -> CType) -> CType)
+      where
+        = mo_state,
+        = state,
+        = get,
+        = put,
+        = modify,
+        = run_state,
+        = eval_state
       end
-    that
-
-    -- Haskell-style operations for the concrete State monad. They keep
-    -- client code from projecting the dictionary when it does not need to be
-    -- polymorphic in the ambient monad.
-    def ! get (S : VType) : State S S =
-      fn s =>
-        ret (s, s)
-    that
-
-    def ! put (S : VType) (s' : S) : State S Unit =
-      fn _ =>
-        ret ((), s')
-    that
-
-    def ! modify (S : VType) (f : Thk (S -> Ret S)) : State S Unit =
-      ! mo_state S .bind S Unit { ! get S } {
-        fn s =>
-          do s' <- ! f s;
-          ! put S s'
-      }
-    that
-
-    -- Runners expose the final state to an arbitrary computation continuation,
-    -- so the module remains independent of OS.
-    def ! run_state (S : VType)
-      (A : VType)
-      (B : CType)
-      (initial : S)
-      (m : Thk (State S A))
-      (k : Thk (S -> A -> B))
-    : B =
-        do (a, s') <- ! m initial;
-        ! k s' a
-    that
-
-    def ! eval_state (S : VType)
-      (A : VType)
-      (initial : S)
-      (m : Thk (State S A))
-    : Ret A =
-        do (a, _) <- ! m initial;
-        ret a
-    that
-
-    pack
-        (= State as State : VType -> VType -> CType)
-        (= MonadState as MonadState : VType -> (VType -> CType) -> CType)
-    where
-      = mo_state,
-      = state,
-      = get,
-      = put,
-      = modify,
-      = run_state,
-      = eval_state
     end
   end
-end
 -- end module State

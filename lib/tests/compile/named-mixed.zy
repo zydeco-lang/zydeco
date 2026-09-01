@@ -86,7 +86,10 @@ begin
     = first : Int64,
     middle : Int64,
     = third : Int64
-  ) = flat_mixed in
+  )
+  =
+    flat_mixed
+  in
   do flat_checksum <- ! checksum3 first middle third;
   do flat_check <- ! (int64/sub) flat_checksum 321;
 
@@ -96,7 +99,10 @@ begin
     first_field : (#first :: Int64),
     opaque_middle : Int64,
     third_field : (#third :: Int64)
-  ) = flat_mixed in
+  )
+  =
+    flat_mixed
+  in
   let ((#first = opaque_first) : (#first :: Int64)) = first_field in
   let (#third = opaque_third : Int64) = third_field in
   do opaque_checksum <- ! checksum3 opaque_first opaque_middle opaque_third;
@@ -105,7 +111,10 @@ begin
   let (
     (= left : Int64, center : Int64),
     = right : Int64
-  ) = nested_mixed in
+  )
+  =
+    nested_mixed
+  in
   do nested_checksum <- ! checksum3 left center right;
   do nested_check <- ! (int64/sub) nested_checksum 654;
 
@@ -121,24 +130,36 @@ begin
     let (
       = apply : Thk (FunctionInput -> Ret FunctionOutput),
       function_marker : Int64
-    ) = function_box in
+    )
+    =
+      function_box
+    in
     do transformed <- ! apply (#lhs = 10 : Int64, 11 : Int64);
     let (
       echoed : Int64,
       = result : Int64
-    ) = transformed in
+    )
+    =
+      transformed
+    in
     do function_checksum <- ! checksum3 echoed result 0;
     do function_check <- ! (int64/sub) function_checksum 220;
 
     let (
       gauge_marker : Int64,
       #gauge = active_gauge : Thk Gauge
-    ) = gauge_box in
+    )
+    =
+      gauge_box
+    in
     do observation <- ! active_gauge .read;
     let (
       = reading : Int64,
       drift : Int64
-    ) = observation in
+    )
+    =
+      observation
+    in
     do gauge_checksum <- ! checksum3 reading drift 0;
     do gauge_check <- ! (int64/sub) gauge_checksum 142;
 

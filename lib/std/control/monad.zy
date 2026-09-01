@@ -1,18 +1,20 @@
-val (
-  (/core; builtin) :
-  @(import("../builtin.zy"))
-) =>
-let (/VType; /CType; /Thk; /Unit) = core in
-begin
-  -- Shared Monad and algebra type constructors.
-  let Monad = @(import("monad.type.zy")) that
-  let Algebra = @(import("algebra.type.zy")) that
+val
+  (
+    (/core; builtin) :
+    @(import("../builtin.zy"))
+  )
+=>
+  let (/VType; /CType; /Thk; /Unit) = core in
+  begin
+    -- Shared Monad and algebra type constructors.
+    let Monad = @(import("monad.type.zy")) that
+    let Algebra = @(import("algebra.type.zy")) that
 
-  pack
-      (= Monad as Monad : (VType -> CType) -> CType)
-      (= Algebra as Algebra : (VType -> CType) -> CType -> CType)
-  where
-    ()
+    pack
+        (= Monad as Monad : (VType -> CType) -> CType)
+        (= Algebra as Algebra : (VType -> CType) -> CType -> CType)
+    where
+      ()
+    end
   end
-end
 -- end module Monad

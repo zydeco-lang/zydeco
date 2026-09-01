@@ -25,12 +25,18 @@ begin
   let (
     = apply : Thk (Arguments -> Ret FunctionResult),
     marker : Int64
-  ) = function_box in
+  )
+  =
+    function_box
+  in
   do result <- ! apply (#lhs = 10 : Int64, 11 : Int64);
   let (
     echoed : Int64,
     = sum : Int64
-  ) = result in
+  )
+  =
+    result
+  in
   do echoed_check <- ! (int64/sub) echoed 10;
   do sum_check <- ! (int64/sub) sum 21;
   do total <- ! (int64/add) marker echoed_check;

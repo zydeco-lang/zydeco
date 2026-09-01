@@ -20,7 +20,10 @@ begin
     = raise,
     = handle_exception,
     = try_exception
-  ) = builtin |> exception_basis in
+  )
+  =
+    builtin |> exception_basis
+  in
   let (
     = State,
     = MonadState,
@@ -31,7 +34,10 @@ begin
     = modify,
     = run_state,
     = eval_state
-  ) = builtin |> state_basis in
+  )
+  =
+    builtin |> state_basis
+  in
   begin
 
     -- A monadic block whose only effect operation is `raise`. The exception

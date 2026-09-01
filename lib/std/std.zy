@@ -20,112 +20,113 @@ begin
   let PartialOrder = @(import("numeric/partial-order.type.zy")) in
   let Numeric = @(import("numeric/numeric.type.zy")) in
 
-    let (/VType; /CType; /Thk; /Ret; /Unit) = core in
-    let (= Int8, int8) = numeric/int8 in
-    let (= Int16, int16) = numeric/int16 in
-    let (= Int32, int32) = numeric/int32 in
-    let (= Int64, int64) = numeric/int64 in
-    let (= UInt8, uint8) = numeric/uint8 in
-    let (= UInt16, uint16) = numeric/uint16 in
-    let (= UInt32, uint32) = numeric/uint32 in
-    let (= UInt64, uint64) = numeric/uint64 in
-    let (= Float32, float32) = numeric/float32 in
-    let (= Float64, float64) = numeric/float64 in
-    let (/Char) = representations/char in
-    let (/String) = representations/string in
-    let (/Bytes) = representations/bytes in
-    let (/Bool; /Option; /Result; /List; /bool; /option; /result; /list; base) =
-      builtin |> make_data
-    in
-    let (/char; /string; /bytes; text) = (builtin, base) |> make_text in
-    let (/Path; /IoErrorKind; /IoError; /io; /fs; /stdio; /process; system) =
-      (builtin, base) |> make_system
-    in
-    let (
-      /numeric;
-      /primitives;
-      /int8;
-      /int16;
-      /int32;
-      /int64;
-      /uint8;
-      /uint16;
-      /uint32;
-      /uint64;
-      /float32;
-      /float64;
-      numeric_modules
-    ) =
-      (builtin, base) |> make_numeric
-    in
-    let prelude : Prelude = (
-      #Thunk = Thk,
-      #U = Thk,
-      #F = Ret,
-      ()
-    ) in
-    pack
-        (= Bool : VType) is Bool
-        (= Option : VType -> VType) is Option
-        (= Result : VType -> VType -> VType) is Result
-        (= List : VType -> VType) is List
-        (= Int8 as Int8 : VType)
-        (= Int16 as Int16 : VType)
-        (= Int32 as Int32 : VType)
-        (= Int64 as Int64 : VType)
-        (= UInt8 as UInt8 : VType)
-        (= UInt16 as UInt16 : VType)
-        (= UInt32 as UInt32 : VType)
-        (= UInt64 as UInt64 : VType)
-        (= Float32 as Float32 : VType)
-        (= Float64 as Float64 : VType)
-        (= Char as Char : VType)
-        (= String as String : VType)
-        (= Bytes as Bytes : VType)
-        (= Reader as Reader : VType)
-        (= Writer as Writer : VType)
-        (= Path : VType) is Path
-        (= IoErrorKind : VType) is IoErrorKind
-        (= IoError : VType) is IoError
-        (= OS as OS : CType)
-        (= Additive as Additive : VType -> VType)
-        (= Multiplicative as Multiplicative : VType -> VType)
-        (= PartialEquality as PartialEquality : VType -> VType -> VType)
-        (= PartialOrder as PartialOrder : VType -> VType -> VType)
-        (= Numeric as Numeric : VType -> VType -> VType)
-    where
-      = prelude,
-      (
-        = bool,
-        = option,
-        = result,
-        = list
-      ),
-      (
-        = numeric,
-        = primitives,
-        = int8,
-        = int16,
-        = int32,
-        = int64,
-        = uint8,
-        = uint16,
-        = uint32,
-        = uint64,
-        = float32,
-        = float64
-      ),
-      (
-        = char,
-        = string,
-        = bytes
-      ),
-      (
-        = io,
-        = fs,
-        = stdio,
-        = process
-      )
-    end
+  let (/VType; /CType; /Thk; /Ret; /Unit) = core in
+  let (= Int8, int8) = numeric/int8 in
+  let (= Int16, int16) = numeric/int16 in
+  let (= Int32, int32) = numeric/int32 in
+  let (= Int64, int64) = numeric/int64 in
+  let (= UInt8, uint8) = numeric/uint8 in
+  let (= UInt16, uint16) = numeric/uint16 in
+  let (= UInt32, uint32) = numeric/uint32 in
+  let (= UInt64, uint64) = numeric/uint64 in
+  let (= Float32, float32) = numeric/float32 in
+  let (= Float64, float64) = numeric/float64 in
+  let (/Char) = representations/char in
+  let (/String) = representations/string in
+  let (/Bytes) = representations/bytes in
+  let (/Bool; /Option; /Result; /List; /bool; /option; /result; /list; base) =
+    builtin |> make_data
+  in
+  let (/char; /string; /bytes; text) = (builtin, base) |> make_text in
+  let (/Path; /IoErrorKind; /IoError; /io; /fs; /stdio; /process; system) =
+    (builtin, base) |> make_system
+  in
+  let (
+    /numeric;
+    /primitives;
+    /int8;
+    /int16;
+    /int32;
+    /int64;
+    /uint8;
+    /uint16;
+    /uint32;
+    /uint64;
+    /float32;
+    /float64;
+    numeric_modules
+  )
+  =
+    (builtin, base) |> make_numeric
+  in
+  let prelude : Prelude = (
+    #Thunk = Thk,
+    #U = Thk,
+    #F = Ret,
+    ()
+  ) in
+  pack
+      (= Bool : VType) is Bool
+      (= Option : VType -> VType) is Option
+      (= Result : VType -> VType -> VType) is Result
+      (= List : VType -> VType) is List
+      (= Int8 as Int8 : VType)
+      (= Int16 as Int16 : VType)
+      (= Int32 as Int32 : VType)
+      (= Int64 as Int64 : VType)
+      (= UInt8 as UInt8 : VType)
+      (= UInt16 as UInt16 : VType)
+      (= UInt32 as UInt32 : VType)
+      (= UInt64 as UInt64 : VType)
+      (= Float32 as Float32 : VType)
+      (= Float64 as Float64 : VType)
+      (= Char as Char : VType)
+      (= String as String : VType)
+      (= Bytes as Bytes : VType)
+      (= Reader as Reader : VType)
+      (= Writer as Writer : VType)
+      (= Path : VType) is Path
+      (= IoErrorKind : VType) is IoErrorKind
+      (= IoError : VType) is IoError
+      (= OS as OS : CType)
+      (= Additive as Additive : VType -> VType)
+      (= Multiplicative as Multiplicative : VType -> VType)
+      (= PartialEquality as PartialEquality : VType -> VType -> VType)
+      (= PartialOrder as PartialOrder : VType -> VType -> VType)
+      (= Numeric as Numeric : VType -> VType -> VType)
+  where
+    = prelude,
+    (
+      = bool,
+      = option,
+      = result,
+      = list
+    ),
+    (
+      = numeric,
+      = primitives,
+      = int8,
+      = int16,
+      = int32,
+      = int64,
+      = uint8,
+      = uint16,
+      = uint32,
+      = uint64,
+      = float32,
+      = float64
+    ),
+    (
+      = char,
+      = string,
+      = bytes
+    ),
+    (
+      = io,
+      = fs,
+      = stdio,
+      = process
+    )
+  end
 end
 -- end module Std

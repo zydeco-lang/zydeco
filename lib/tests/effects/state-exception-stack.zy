@@ -25,7 +25,10 @@ begin
     = raise,
     = catch,
     = run_state_exn
-  ) = builtin |> state_exn_basis in
+  )
+  =
+    builtin |> state_exn_basis
+  in
   begin
 
     -- The user-facing capability signature. Every field is written with `Ret`;

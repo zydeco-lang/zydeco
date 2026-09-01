@@ -30,12 +30,18 @@ begin
   let (
     marker : Int64,
     #gauge = active_gauge : Thk Gauge
-  ) = gauge_box in
+  )
+  =
+    gauge_box
+  in
   do observation <- ! active_gauge .read;
   let (
     = reading : Int64,
     drift : Int64
-  ) = observation in
+  )
+  =
+    observation
+  in
   do reading_check <- ! (int64/sub) reading 12;
   do drift_check <- ! (int64/sub) drift 13;
   do shifted <- ! active_gauge .shift (#delta = 14 : Int64);

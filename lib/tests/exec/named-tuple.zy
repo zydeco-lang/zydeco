@@ -21,7 +21,10 @@ begin
     = left : Int64,
     middle : Int64,
     = right : Int64
-  ) = mixed in
+  )
+  =
+    mixed
+  in
   do tens <- ! (int64/mul) middle 10;
   do hundreds <- ! (int64/mul) right 100;
   do low <- ! (int64/add) left tens;

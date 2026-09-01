@@ -31,29 +31,47 @@ begin
   let (
     inner : Inner,
     = z : Int64
-  ) = nested in
+  )
+  =
+    nested
+  in
   let (
     = x : Int64,
     y : Int64
-  ) = inner in
+  )
+  =
+    inner
+  in
   let (
     #outer = #inner = wrapped_value : Int64
-  ) = wrapped in
+  )
+  =
+    wrapped
+  in
   let (
     /x = projected_x : Int64;
     /z = projected_z : Int64;
     projected_nested
-  ) = nested in
+  )
+  =
+    nested
+  in
   let (
     /inner = projected_inner : Int64;
     /outer = /inner = chained_projected_inner : Int64;
     projected_wrapped
-  ) = wrapped in
+  )
+  =
+    wrapped
+  in
   let (/left = /x = left_x : Int64; /right = /x = right_x : Int64) = ambiguous in
   let (
     /punned : Int64;
     punnable_whole
-  ) = punnable in
+  )
+  =
+    punnable
+  in
   do tens <- ! (int64/mul) y 10;
   do hundreds <- ! (int64/mul) z 100;
   do low <- ! (int64/add) x tens;
