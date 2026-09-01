@@ -841,12 +841,11 @@ mod tests {
             .join("../../lib/tests/builtin/recursive-data.zy")
             .canonicalize()
             .unwrap();
+        let source = std::fs::read_to_string(&path).unwrap();
         let (project, _session) = ProjectState::load(&path, &HashMap::new()).unwrap();
-        assert_eq!(
-            project.rename(&path, Position::new(27, 25), "Z2"),
-            Err(RenameRejection::Unresolved)
-        );
-        assert_eq!(project.prepare_rename(&path, Position::new(27, 25)), None);
+        let constructor = source_position(&source, "Z();");
+        assert_eq!(project.rename(&path, constructor, "Z2"), Err(RenameRejection::Unresolved));
+        assert_eq!(project.prepare_rename(&path, constructor), None);
     }
 
     #[test]
@@ -1191,7 +1190,14 @@ mod tests {
 
         assert_eq!(diagnostic.severity, Some(DiagnosticSeverity::ERROR));
         assert_eq!(diagnostic.source.as_deref(), Some("zydeco"));
-        assert_eq!(diagnostic.range, Range::new(Position::new(13, 2), Position::new(13, 5)));
+        let application = source_position(&broken, "x x");
+        assert_eq!(
+            diagnostic.range,
+            Range::new(
+                application,
+                Position::new(application.line, application.character + "x x".len() as u32),
+            )
+        );
         assert!(diagnostic.related_information.is_none());
     }
 
@@ -1201,6 +1207,7 @@ mod tests {
             .join("../../lib/tests/fail/annotation.zy")
             .canonicalize()
             .unwrap();
+        let source = std::fs::read_to_string(&path).unwrap();
         let (project, _session) = ProjectState::load(&path, &HashMap::new()).unwrap();
         let diagnostics = project.diagnostics(&path);
         let [diagnostic] = diagnostics.as_slice() else {
@@ -1211,8 +1218,7 @@ mod tests {
             diagnostic.code,
             Some(NumberOrString::String("tyck.missing-annotation".to_owned()))
         );
-        assert_eq!(diagnostic.range.start.line, 14);
-        assert_eq!(diagnostic.range.start.character, 8);
+        assert_eq!(diagnostic.range.start, source_position(&source, "+True()\n"));
         assert!(diagnostic.message.contains("constructor `+True`"));
         assert!(diagnostic.message.contains("Help: add a type ascription"));
         assert!(diagnostic.related_information.is_none());
