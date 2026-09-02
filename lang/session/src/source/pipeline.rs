@@ -25,7 +25,7 @@ pub(crate) struct BitterProgram {
 /// A desugaring failure together with the merged span arena needed to locate it.
 #[derive(Debug)]
 pub(crate) struct DesugarFailure {
-    pub error: DesugarError,
+    pub error: Box<DesugarError>,
     pub spans: FrozenArena<t::SpanArena>,
 }
 
@@ -43,7 +43,7 @@ impl TextualProgram {
             | Ok(SourceDesugarOut { arena, prim, root }) => {
                 Ok(BitterProgram { spans, arena, prim, root })
             }
-            | Err(error) => Err(DesugarFailure { error, spans }),
+            | Err(error) => Err(DesugarFailure { error: Box::new(error), spans }),
         }
     }
 }

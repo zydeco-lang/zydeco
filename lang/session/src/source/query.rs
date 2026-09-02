@@ -547,7 +547,7 @@ fn resolved_data<'db>(
     let graph = source_graph(db, root).map_err(|error| AnalysisError::Source { error })?;
     let program = graph.parse().map_err(|error| AnalysisError::TextualProgram { error })?;
     let bitter = program.desugar().map_err(|failure| AnalysisError::Desugar {
-        error: Box::new(failure.error),
+        error: failure.error,
         spans: Arc::new(failure.spans.into_inner()),
     })?;
     let ScopedProgram { spans, arena, prim, root } =
