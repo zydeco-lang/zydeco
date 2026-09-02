@@ -129,9 +129,20 @@ If the same recovery discards source tokens too, its diagnostic is retained at t
 The synthetic marker never appears among the discarded source tokens reported to callers.
 
 LALRPOP's `expected` lists contain diagnostic terminal names. They may be useful evidence while prototyping, but
-Cajun must not parse those strings. The surface parser converts them into a typed `SyntaxExpectation` before exposing
-them. A token or syntax-form catalog owns spellings and descriptions used by completion. The LALRPOP external-token
-table remains an integration boundary and should have conformance tests rather than becoming a third runtime catalog.
+Cajun must not parse those strings. The surface parser converts them into typed `TokenKind` values before exposing
+them. These payload-free kinds are derived from the lexer's `Tok` declaration, so an expected identifier needs no
+invented source text and no separately maintained terminal inventory.
+
+`TokenMetadata` reads fixed spellings directly from Logos's `#[token(...)]` attributes. A token with several aliases
+selects one registered spelling explicitly: both `def` and `define` lex as `Define`, whose canonical spelling remains
+`define`. Variable lexical categories have no fixed source spelling. Their grammar names default to the variant name,
+with explicit overrides for existing labels such as `LowerId`. Trivia and malformed lexical tokens are marked as
+excluded from parser expectations; the synthetic `Completion` and `Invalid` terminals stay private to the parser.
+
+The same generated metadata supplies fixed-token formatting and the parser's terminal-name conversion.
+The LALRPOP external-token table remains explicit grammar integration: conformance tests compare both terminal names
+and their mapped lexer variants. This preserves the grammar as the syntax specification while avoiding an additional
+runtime catalog. Unknown settings, ambiguous canonical spellings, and conflicting terminal names fail macro expansion.
 
 ### Strict and recovering modes
 

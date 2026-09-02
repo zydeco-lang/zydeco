@@ -1,4 +1,4 @@
-use super::{DiagnosticToken, ParseFailure, ParseIssueKind, SyntaxExpectation};
+use super::{DiagnosticToken, ParseFailure, ParseIssueKind, TokenKind};
 use ariadne::{Label, Report, ReportKind};
 use std::{fmt::Display, ops::Range};
 use zydeco_utils::span::{FileMap, PathDisplay};
@@ -156,12 +156,12 @@ impl Display for ParseError<'_> {
 }
 
 struct ParseErrorNote<'expected> {
-    expected: &'expected [SyntaxExpectation],
+    expected: &'expected [TokenKind],
     issue_count: usize,
 }
 
 impl<'expected> ParseErrorNote<'expected> {
-    fn new(expected: &'expected [SyntaxExpectation], issue_count: usize) -> Self {
+    fn new(expected: &'expected [TokenKind], issue_count: usize) -> Self {
         Self { expected, issue_count }
     }
 
@@ -187,7 +187,7 @@ impl Display for ParseIssueCount {
     }
 }
 
-fn fmt_expected(expected: &[SyntaxExpectation]) -> String {
+fn fmt_expected(expected: &[TokenKind]) -> String {
     let mut res = String::new();
     if !expected.is_empty() {
         res += "; ";

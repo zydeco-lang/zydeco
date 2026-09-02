@@ -11,8 +11,13 @@ readme = { workspace = true }
 description = "derive macros for zydeco"
 
 [dependencies]
+proc-macro2 = { workspace = true }
 syn = { workspace = true }
 quote = { workspace = true }
+
+[dev-dependencies]
+logos = { workspace = true }
+strum = { workspace = true }
 
 [lib]
 doctest = false

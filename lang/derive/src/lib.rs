@@ -6,6 +6,24 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{DeriveInput, parse_macro_input};
 
+mod token_metadata;
+
+/// Derive payload-free token kinds and metadata from Logos token declarations.
+///
+/// `#[token_metadata(kind = TokenKind)]` names the generated companion enum.
+/// Variants may select a registered `canonical = "spelling"`, override their
+/// `parser = "terminal name"`, or `skip` parser expectations. Multiple fixed
+/// spellings require an explicit canonical choice. The consumer needs `strum`
+/// for the generated kind's `VariantArray` implementation.
+#[proc_macro_derive(TokenMetadata, attributes(token_metadata))]
+pub fn derive_token_metadata(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    token_metadata::TokenMetadata::parse(&input)
+        .map(|metadata| metadata.expand())
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
+}
+
 #[proc_macro_derive(AsRefSelf)]
 pub fn derive_as_ref_self(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);

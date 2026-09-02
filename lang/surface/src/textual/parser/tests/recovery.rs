@@ -170,12 +170,7 @@ impl ParserContract {
                     "completion exposes an abandoned node"
                 );
             }
-            assert!(
-                completion
-                    .expected
-                    .iter()
-                    .all(|expected| SyntaxExpectation::ALL.contains(expected))
-            );
+            assert!(completion.expected.iter().all(|expected| expected.parser_name().is_some()));
         }
     }
 

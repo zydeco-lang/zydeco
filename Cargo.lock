@@ -2513,7 +2513,10 @@ dependencies = [
 name = "zydeco-derive"
 version = "0.3.0"
 dependencies = [
+ "logos",
+ "proc-macro2",
  "quote",
+ "strum",
  "syn 3.0.4",
 ]
 

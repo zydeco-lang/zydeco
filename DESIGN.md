@@ -370,6 +370,9 @@ Sharing is static: an imported computation is still evaluated at every dynamic o
 
 `textual::parser` provides strict and recovering entry points over one LALRPOP grammar, with the generated
 implementation kept in its private `generated` module.
+The lexer's `Tok` declaration also supplies the derived `TokenKind` used by parser expectations.
+Fixed spellings come from Logos attributes, shared by token formatting and diagnostics; conformance tests check the
+grammar's explicit token mapping against the derived names and variants.
 Strict parsing requires a root with no issues; editor recovery retains partial syntax and typed diagnostics.
 Term and pattern atom recovery rules carry handles to the ordinary allocation rules, which record exact hole IDs.
 Completion requests borrow their source snapshot and expose a hole only if it is reachable from the returned root.

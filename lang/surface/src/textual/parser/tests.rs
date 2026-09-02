@@ -3,6 +3,7 @@
 mod recovery;
 
 use super::*;
+use strum::VariantArray;
 
 struct RejectionAssertions;
 
@@ -23,7 +24,7 @@ impl RejectionAssertions {
 }
 
 #[test]
-fn expectation_catalog_covers_every_public_grammar_terminal() {
+fn token_metadata_agrees_with_the_grammar_terminal_names_and_variants() {
     let grammar = include_str!("grammar.lalrpop");
     let mappings = grammar
         .split_once("enum ParserToken<'input> {")
@@ -33,15 +34,47 @@ fn expectation_catalog_covers_every_public_grammar_terminal() {
         .unwrap()
         .0
         .lines()
-        .filter_map(|line| line.trim().strip_prefix('"')?.split_once("\" =>").map(|(name, _)| name))
-        .filter(|name| !matches!(*name, "Completion" | "Invalid"))
+        .filter_map(|line| line.trim().strip_prefix('"'))
+        .filter_map(|line| {
+            let (name, mapping) = line.split_once("\" =>").expect("one terminal mapping per line");
+            if matches!(name, "Completion" | "Invalid") {
+                return None;
+            }
+            let variant = mapping
+                .trim()
+                .strip_prefix("ParserToken::Lexical(Tok::")
+                .expect("public terminals must map to lexer tokens")
+                .split(['(', ')'])
+                .next()
+                .unwrap();
+            Some((name.to_owned(), variant.to_owned()))
+        })
         .collect::<std::collections::BTreeSet<_>>();
-    let catalog = SyntaxExpectation::ALL
+    let catalog = TokenKind::VARIANTS
         .iter()
-        .map(|expectation| expectation.parser_name())
+        .filter_map(|kind| kind.parser_name().map(|name| (name.to_owned(), format!("{kind:?}"))))
         .collect::<std::collections::BTreeSet<_>>();
-
     assert_eq!(catalog, mappings);
+}
+
+#[test]
+fn grammar_expectations_use_token_kinds_and_exclude_internal_terminals() {
+    TokenKind::VARIANTS.iter().copied().for_each(|kind| {
+        if let Some(name) = kind.parser_name() {
+            assert_eq!(TokenKind::from_lalrpop(vec![name.to_owned()]), [kind]);
+            assert_eq!(TokenKind::from_lalrpop(vec![format!("{name:?}")]), [kind]);
+        } else {
+            assert!(TokenKind::from_parser_name(&format!("{kind:?}")).is_none());
+            assert!(TokenKind::from_parser_name(&kind.to_string()).is_none());
+        }
+    });
+    let names =
+        ["Completion", "\"Completion\"", "Invalid", "\"Invalid\"", "\"let\"", "\"LowerId\""];
+    assert_eq!(
+        TokenKind::from_lalrpop(names.map(str::to_owned).into()),
+        [TokenKind::Let, TokenKind::LowerIdent]
+    );
+    assert!(TokenKind::from_parser_name("not a grammar terminal").is_none());
 }
 
 #[test]
@@ -108,9 +141,12 @@ fn recovering_source_creates_a_typed_term_completion_hole() {
     assert!(parsed.issues.is_empty());
     let completion = parsed.completion.expect("the completion site should be retained");
     assert_eq!(completion.replacement, offset..offset);
-    assert!(completion.expected.iter().all(|expectation| {
-        expectation.source_spelling().is_some() || !expectation.parser_name().is_empty()
-    }));
+    assert!(
+        completion
+            .expected
+            .iter()
+            .all(|expectation| { expectation.parser_name().is_some_and(|name| !name.is_empty()) })
+    );
     let CompletionHole { entity: ParsedHole::Term(term) } =
         completion.hole.expect("the cursor should occupy a term hole")
     else {
@@ -157,10 +193,10 @@ fn completion_replaces_the_whole_identifier_prefix() {
 #[test]
 fn completion_exposes_fixed_term_delimiters_as_typed_expectations() {
     [
-        ("let value = body ", SyntaxExpectation::In),
-        ("let value = body ", SyntaxExpectation::That),
-        ("fn argument ", SyntaxExpectation::TermArrow),
-        ("begin value ", SyntaxExpectation::End),
+        ("let value = body ", TokenKind::In),
+        ("let value = body ", TokenKind::That),
+        ("fn argument ", TokenKind::TermArrow),
+        ("begin value ", TokenKind::End),
     ]
     .into_iter()
     .for_each(|(source, expected)| {
@@ -342,7 +378,7 @@ fn completion_does_not_hide_source_tokens_discarded_during_marker_recovery() {
     }));
     assert!(parsed.issues[0].recovery.is_some());
     let completion = parsed.completion.expect("completion facts should survive the source error");
-    assert!(completion.expected.contains(&SyntaxExpectation::LowerIdentifier));
+    assert!(completion.expected.contains(&TokenKind::LowerIdent));
 }
 
 #[test]

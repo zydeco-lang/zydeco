@@ -1,6 +1,6 @@
 use super::{
     LexicalTokenKind, LexicalTokens,
-    lexer::{Lexer, LexicalError, Tok},
+    lexer::{Lexer, LexicalError, Tok, TokenKind},
     syntax::{
         EntityId, FloatLiteral, Hole, IntegerLiteral, Parser, PatId, Pattern, SourceUnit, Sp, Term,
         TermId,
@@ -138,139 +138,20 @@ pub struct DroppedToken {
     pub token: DiagnosticToken,
 }
 
-macro_rules! source_spelling {
-    ($parser_name:literal) => {
-        None
-    };
-    ($parser_name:literal, source) => {
-        Some($parser_name)
-    };
-}
-
-macro_rules! syntax_expectation_catalog {
-    ($($variant:ident => $parser_name:literal $(, $source:ident)?;)+) => {
-        /// One typed terminal that the surface grammar can expect at a cursor.
-        #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-        pub enum SyntaxExpectation {
-            $($variant,)+
-        }
-
-        impl SyntaxExpectation {
-            /// Every grammar terminal exposed to completion consumers.
-            pub const ALL: &'static [Self] = &[$(Self::$variant,)+];
-
-            fn from_lalrpop_name(name: &str) -> Option<Self> {
-                let name = name
-                    .strip_prefix('"')
-                    .and_then(|name| name.strip_suffix('"'))
-                    .unwrap_or(name);
-                match name {
-                    $($parser_name => Some(Self::$variant),)+
-                    _ => None,
-                }
-            }
-
-            /// Canonical source spelling for fixed terminals.
-            ///
-            /// Identifier and literal categories return `None` because they do not
-            /// have one source spelling.
-            pub const fn source_spelling(self) -> Option<&'static str> {
-                match self {
-                    $(Self::$variant => source_spelling!($parser_name $(, $source)?),)+
-                }
-            }
-
-            /// Stable grammar-facing name used in diagnostics and conformance tests.
-            pub const fn parser_name(self) -> &'static str {
-                match self {
-                    $(Self::$variant => $parser_name,)+
-                }
-            }
-        }
-    };
-}
-
-syntax_expectation_catalog! {
-    UpperIdentifier => "UpperId";
-    LowerIdentifier => "LowerId";
-    FieldIdentifier => "FieldId";
-    ConstructorIdentifier => "CtorId";
-    DestructorIdentifier => "DtorId";
-    End => "end", source;
-    Begin => "begin", source;
-    Data => "data", source;
-    Codata => "codata", source;
-    As => "as", source;
-    Define => "define", source;
-    Let => "let", source;
-    Param => "param", source;
-    Val => "val", source;
-    In => "in", source;
-    That => "that", source;
-    Do => "do", source;
-    Ret => "ret", source;
-    Fn => "fn", source;
-    Pi => "pi", source;
-    Fix => "fix", source;
-    Match => "match", source;
-    Comatch => "comatch", source;
-    Forall => "forall", source;
-    Exists => "exists", source;
-    Sigma => "sigma", source;
-    Pack => "pack", source;
-    Where => "where", source;
-    Is => "is", source;
-    FloatLiteral => "FloatLit";
-    IntegerLiteral => "IntLit";
-    StringLiteral => "StrLit";
-    CharacterLiteral => "CharLit";
-    ParenthesisOpen => "(", source;
-    ParenthesisClose => ")", source;
-    BracketOpen => "[", source;
-    BracketClose => "]", source;
-    BraceOpen => "{", source;
-    BraceClose => "}", source;
-    Comma => ",", source;
-    Colon => ":", source;
-    DoubleColon => "::", source;
-    Equals => "=", source;
-    Semicolon => ";", source;
-    Force => "!", source;
-    Slash => "/", source;
-    Branch => "|", source;
-    Plus => "+", source;
-    Star => "*", source;
-    Dot => ".", source;
-    TermArrow => "=>", source;
-    TypeArrow => "->", source;
-    ViewArrow => "~>", source;
-    PipeForward => "|>", source;
-    PipeBackward => "<|", source;
-    Assign => "<-", source;
-    Hole => "_", source;
-    Attribute => "@", source;
-}
-
-impl Display for SyntaxExpectation {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(self.parser_name())
-    }
-}
-
 /// Completion information recovered at one editor cursor.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CompletionSite {
     pub replacement: Range<usize>,
     pub hole: Option<CompletionHole>,
-    pub expected: Vec<SyntaxExpectation>,
+    pub expected: Vec<TokenKind>,
 }
 
 /// Structured kind of one strict or recovered parse issue.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ParseIssueKind {
     InvalidToken,
-    UnrecognizedEof { expected: Vec<SyntaxExpectation> },
-    UnrecognizedToken { token: DiagnosticToken, expected: Vec<SyntaxExpectation> },
+    UnrecognizedEof { expected: Vec<TokenKind> },
+    UnrecognizedToken { token: DiagnosticToken, expected: Vec<TokenKind> },
     ExtraToken { token: DiagnosticToken },
     Literal { error: LiteralError },
 }
@@ -286,7 +167,7 @@ pub struct ParseIssue {
 }
 
 impl ParseIssue {
-    pub fn expected(&self) -> &[SyntaxExpectation] {
+    pub fn expected(&self) -> &[TokenKind] {
         match &self.kind {
             | ParseIssueKind::UnrecognizedEof { expected }
             | ParseIssueKind::UnrecognizedToken { expected, .. } => expected,
@@ -315,15 +196,13 @@ impl ParseIssue {
             }
             | LalrpopParseError::UnrecognizedEof { location, expected } => (
                 Some(location..location),
-                ParseIssueKind::UnrecognizedEof {
-                    expected: SyntaxExpectation::from_lalrpop(expected),
-                },
+                ParseIssueKind::UnrecognizedEof { expected: TokenKind::from_lalrpop(expected) },
             ),
             | LalrpopParseError::UnrecognizedToken { token: (start, token, end), expected } => (
                 Some(start..end),
                 ParseIssueKind::UnrecognizedToken {
                     token: token.diagnostic(),
-                    expected: SyntaxExpectation::from_lalrpop(expected),
+                    expected: TokenKind::from_lalrpop(expected),
                 },
             ),
             | LalrpopParseError::ExtraToken { token: (start, token, end) } => {
@@ -360,15 +239,17 @@ impl ParseIssue {
     }
 }
 
-impl SyntaxExpectation {
+impl TokenKind {
     fn from_lalrpop(names: Vec<String>) -> Vec<Self> {
         names
             .into_iter()
             .filter_map(|name| {
-                if matches!(name.trim_matches('"'), "Completion" | "Invalid") {
+                let name =
+                    name.strip_prefix('"').and_then(|name| name.strip_suffix('"')).unwrap_or(&name);
+                if matches!(name, "Completion" | "Invalid") {
                     return None;
                 }
-                let expectation = Self::from_lalrpop_name(&name);
+                let expectation = Self::from_parser_name(name);
                 debug_assert!(expectation.is_some(), "uncatalogued LALRPOP terminal {name}");
                 expectation
             })

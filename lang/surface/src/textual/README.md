@@ -42,6 +42,9 @@ but it does not perform desugaring or name resolution.
 - `lexer` uses `logos` to tokenize the input. One shared token stream defines comment and literal boundaries for
   parsing, source tooling, and completion. The parser-facing `Lexer` skips trivia and returns malformed lexemes as
   source-located `LexicalError` values; a stray `-/` or unfinished block comment never silently ends the stream.
+  `TokenMetadata` derives payload-free `TokenKind` values, fixed spellings, and grammar labels from `Tok` and its
+  Logos attributes. Explicit metadata selects canonical aliases and excludes trivia and malformed tokens from
+  parser expectations. Fixed-token formatting reuses these spellings.
 - `parser` exposes strict and recovering entry points over one LALRPOP grammar, `parser/grammar.lalrpop`.
   Its private `parser::generated` implementation consumes tokens and builds the textual AST by calling into the
   arena-allocating `Parser`.
@@ -60,7 +63,7 @@ but it does not perform desugaring or name resolution.
   No span lookup identifies a recovery hole. A later recovery can pop an already allocated node, so a
   `CompletionHole` is exposed only when it is reachable from the returned root. Ordinary issue-to-hole links record
   allocation history and can refer to abandoned nodes; they do not establish usable completion context.
-- `CompletionSite` reports the full replacement range and typed `SyntaxExpectation` values when the cursor instead
+- `CompletionSite` reports the full replacement range and typed `TokenKind` values when the cursor instead
   occupies a fixed grammar position such as `in`, `that`, `=>`, or `end`. Raw LALRPOP terminal strings are converted
   at the parser boundary and are not part of the public tooling contract.
 - The parser adapter turns lexical errors into a grammar-known `Invalid` terminal, allowing LALRPOP's existing
