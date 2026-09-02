@@ -92,6 +92,12 @@ than the bridge.
 - Intrinsic spellings print as canonical primitive names (`Int64`) where source writes the
   attribute form (`@(intrinsic(i64))`). Harmless in hovers, but a reparse round-trip would
   not be faithful.
+- Quantifier heads print as one unbreakable run: `forall (A : VType) (B : VType) .` offers the
+  renderer no boundary, and nested quantifiers print as separate `forall ... . forall ... .`
+  scopes rather than one folded telescope. The parameter-telescope family — one binder per
+  row, with adjacent same-form scopes folded — is unimplemented, so a long binder list
+  exceeds any width budget; cajun's column-budget fixtures are calibrated around this
+  (32 columns for the doubly quantified `zip`).
 - Hover labels for terms still print elaborated structure — applications keep their internal
   parentheses — so only type operands are source-shaped so far.
 - Whether some diagnostics would communicate better with source-shaped types has not been
