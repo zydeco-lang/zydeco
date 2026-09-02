@@ -1,5 +1,5 @@
 use tower_lsp::lsp_types::{Position, Range, TextEdit};
-use zydeco_surface::textual::{Lexer, SourceUnitParser, fmt::PrettyFormatter, syntax::Parser};
+use zydeco_surface::textual::{StrictParser, fmt::PrettyFormatter, syntax::Parser};
 use zydeco_utils::span::{FileMap, LineCol};
 
 /// One complete outcome of a whole-document formatting request.
@@ -35,7 +35,7 @@ pub(crate) struct DocumentFormatter;
 impl DocumentFormatter {
     pub(crate) fn format(&self, source: &str) -> FormattingOutcome {
         let mut parser = Parser::new();
-        let unit = match SourceUnitParser::new().parse(source, &mut parser, Lexer::new(source)) {
+        let unit = match StrictParser::source(source, &mut parser) {
             | Ok(unit) => unit,
             | Err(_) => return FormattingOutcome::Skipped(FormattingSkip::InvalidSyntax),
         };

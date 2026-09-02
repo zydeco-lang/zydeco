@@ -24,13 +24,15 @@ pub mod textual {
     /// Logos-based lexer and token definitions.
     pub mod lexer;
     pub use lexer::*;
-    #[allow(clippy::all)]
-    /// LALRPOP-generated parser wrappers.
-    pub mod parser {
+    #[allow(clippy::all, unused_imports)]
+    /// LALRPOP-generated parser implementation behind the strict/recovering API.
+    mod parser {
         lalrpop_util::lalrpop_mod!(parser_impl, "/textual/parser.rs");
-        pub use parser_impl::*;
+        pub(crate) use parser_impl::*;
     }
-    pub use parser::*;
+    /// Strict and recovering textual parser entry points.
+    pub mod parse;
+    pub use parse::*;
     /// Literal escape expansion helpers.
     pub mod escape;
     /// Parse error formatting.

@@ -1,11 +1,12 @@
 use crate::textual::{
-    syntax::*, lexer::*, escape::self,
+    syntax::*, lexer::*, escape::self, parse::{ParserToken, RecoveryAccumulator},
 };
 
 // LALRPOP grammar for the textual surface syntax.
-grammar<'input, 'arena>(
+grammar<'input, 'arena, 'recovery>(
     input: &'input str,
     parser: &'arena mut Parser,
+    recovery: &'recovery mut RecoveryAccumulator<'input>,
 );
 
 //* --------------------------------- Tokens --------------------------------- */
@@ -14,68 +15,69 @@ extern {
     type Location = usize;
 
     // Token mapping must stay in sync with `textual::lexer::Tok`.
-    enum Tok<'input> {
-        "UpperId" => Tok::UpperIdent(<&'input str>),
-        "LowerId" => Tok::LowerIdent(<&'input str>),
-        "FieldId" => Tok::FieldIdent(<&'input str>),
-        "CtorId" => Tok::CtorIdent(<&'input str>),
-        "DtorId" => Tok::DtorIdent(<&'input str>),
+    enum ParserToken<'input> {
+        "UpperId" => ParserToken::Lexical(Tok::UpperIdent(<&'input str>)),
+        "LowerId" => ParserToken::Lexical(Tok::LowerIdent(<&'input str>)),
+        "FieldId" => ParserToken::Lexical(Tok::FieldIdent(<&'input str>)),
+        "CtorId" => ParserToken::Lexical(Tok::CtorIdent(<&'input str>)),
+        "DtorId" => ParserToken::Lexical(Tok::DtorIdent(<&'input str>)),
 
-        "end" => Tok::End,
-        "begin" => Tok::Begin,
-        "data" => Tok::Data,
-        "codata" => Tok::Codata,
-        "as" => Tok::As,
-        "define" => Tok::Define,
-        "let" => Tok::Let,
-        "param" => Tok::Param,
-        "val" => Tok::Val,
-        "in" => Tok::In,
-        "that" => Tok::That,
-        "do" => Tok::Do,
-        "ret" => Tok::Ret,
-        "fn" => Tok::Fn,
-        "pi" => Tok::Pi,
-        "fix" => Tok::Fix,
-        "match" => Tok::Match,
-        "comatch" => Tok::Comatch,
-        "forall" => Tok::Forall,
-        "exists" => Tok::Exists,
-        "sigma" => Tok::Sigma,
-        "pack" => Tok::Pack,
-        "where" => Tok::Where,
-        "is" => Tok::Is,
+        "end" => ParserToken::Lexical(Tok::End),
+        "begin" => ParserToken::Lexical(Tok::Begin),
+        "data" => ParserToken::Lexical(Tok::Data),
+        "codata" => ParserToken::Lexical(Tok::Codata),
+        "as" => ParserToken::Lexical(Tok::As),
+        "define" => ParserToken::Lexical(Tok::Define),
+        "let" => ParserToken::Lexical(Tok::Let),
+        "param" => ParserToken::Lexical(Tok::Param),
+        "val" => ParserToken::Lexical(Tok::Val),
+        "in" => ParserToken::Lexical(Tok::In),
+        "that" => ParserToken::Lexical(Tok::That),
+        "do" => ParserToken::Lexical(Tok::Do),
+        "ret" => ParserToken::Lexical(Tok::Ret),
+        "fn" => ParserToken::Lexical(Tok::Fn),
+        "pi" => ParserToken::Lexical(Tok::Pi),
+        "fix" => ParserToken::Lexical(Tok::Fix),
+        "match" => ParserToken::Lexical(Tok::Match),
+        "comatch" => ParserToken::Lexical(Tok::Comatch),
+        "forall" => ParserToken::Lexical(Tok::Forall),
+        "exists" => ParserToken::Lexical(Tok::Exists),
+        "sigma" => ParserToken::Lexical(Tok::Sigma),
+        "pack" => ParserToken::Lexical(Tok::Pack),
+        "where" => ParserToken::Lexical(Tok::Where),
+        "is" => ParserToken::Lexical(Tok::Is),
 
-        "FloatLit" => Tok::FloatLit(<&'input str>),
-        "IntLit" => Tok::IntLit(<&'input str>),
-        "StrLit" => Tok::StrLit(<&'input str>),
-        "CharLit" => Tok::CharLit(<&'input str>),
+        "FloatLit" => ParserToken::Lexical(Tok::FloatLit(<&'input str>)),
+        "IntLit" => ParserToken::Lexical(Tok::IntLit(<&'input str>)),
+        "StrLit" => ParserToken::Lexical(Tok::StrLit(<&'input str>)),
+        "CharLit" => ParserToken::Lexical(Tok::CharLit(<&'input str>)),
 
-        "(" => Tok::ParenOpen,
-        ")" => Tok::ParenClose,
-        "[" => Tok::BracketOpen,
-        "]" => Tok::BracketClose,
-        "{" => Tok::BraceOpen,
-        "}" => Tok::BraceClose,
-        "," => Tok::Comma,
-        ":" => Tok::Colon,
-        "::" => Tok::ColonColon,
-        "=" => Tok::Equals,
-        ";" => Tok::Semicolon,
-        "!" => Tok::Force,
-        "/" => Tok::Slash,
-        "|" => Tok::Branch,
-        "+" => Tok::Plus,
-        "*" => Tok::Star,
-        "." => Tok::Dot,
-        "=>" => Tok::TermArrow,
-        "->" => Tok::TypeArrow,
-        "~>" => Tok::ViewArrow,
-        "|>" => Tok::PipeForward,
-        "<|" => Tok::PipeBackward,
-        "<-" => Tok::Assign,
-        "_" => Tok::Hole,
-        "@" => Tok::At,
+        "(" => ParserToken::Lexical(Tok::ParenOpen),
+        ")" => ParserToken::Lexical(Tok::ParenClose),
+        "[" => ParserToken::Lexical(Tok::BracketOpen),
+        "]" => ParserToken::Lexical(Tok::BracketClose),
+        "{" => ParserToken::Lexical(Tok::BraceOpen),
+        "}" => ParserToken::Lexical(Tok::BraceClose),
+        "," => ParserToken::Lexical(Tok::Comma),
+        ":" => ParserToken::Lexical(Tok::Colon),
+        "::" => ParserToken::Lexical(Tok::ColonColon),
+        "=" => ParserToken::Lexical(Tok::Equals),
+        ";" => ParserToken::Lexical(Tok::Semicolon),
+        "!" => ParserToken::Lexical(Tok::Force),
+        "/" => ParserToken::Lexical(Tok::Slash),
+        "|" => ParserToken::Lexical(Tok::Branch),
+        "+" => ParserToken::Lexical(Tok::Plus),
+        "*" => ParserToken::Lexical(Tok::Star),
+        "." => ParserToken::Lexical(Tok::Dot),
+        "=>" => ParserToken::Lexical(Tok::TermArrow),
+        "->" => ParserToken::Lexical(Tok::TypeArrow),
+        "~>" => ParserToken::Lexical(Tok::ViewArrow),
+        "|>" => ParserToken::Lexical(Tok::PipeForward),
+        "<|" => ParserToken::Lexical(Tok::PipeBackward),
+        "<-" => ParserToken::Lexical(Tok::Assign),
+        "_" => ParserToken::Lexical(Tok::Hole),
+        "@" => ParserToken::Lexical(Tok::At),
+        "Completion" => ParserToken::Completion,
     }
 }
 
@@ -237,6 +239,7 @@ ViewPatternHead: TermId = {
     },
 };
 Pattern: Pattern = {
+    <l:@L> <error:!> <r:@R> => recovery.pattern(l..r, error),
     <function:ViewPatternHead> "~>" <pattern:PatId> => ViewPattern { function, pattern }.into(),
     <Hole> => <>.into(),
     <DefId> => <>.into(),
@@ -408,6 +411,8 @@ Term: Term = {
     // < levels 6-7 (value-level cuts)
     // < level 8 (pi/forall/sigma/exists) < level 9 (binders/blocks).
 
+    #[precedence(level="0")]
+    <l:@L> <error:!> <r:@R> => recovery.term(l..r, error),
     #[precedence(level="0")]
     // parentheses
     <Paren<TermAnnId>> => <>.into(),

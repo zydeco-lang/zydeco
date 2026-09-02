@@ -2486,7 +2486,7 @@ impl<'a> Pretty<'a, PrettyFormatter<'a>> for TermId {
 mod tests {
     use super::*;
     use crate::bitter::{SourceUnitDesugarer, fmt::Formatter as BitterFormatter};
-    use crate::textual::{Lexer, LexicalTokenKind, LexicalTokens, SourceUnitParser};
+    use crate::textual::{LexicalTokenKind, LexicalTokens, StrictParser};
     use zydeco_syntax::Ugly;
     use zydeco_utils::pass::CompilerPass;
 
@@ -2521,8 +2521,7 @@ mod tests {
 
         fn named(source: &str, name: &str) -> Self {
             let mut parser = Parser::new();
-            let unit = SourceUnitParser::new()
-                .parse(source, &mut parser, Lexer::new(source))
+            let unit = StrictParser::source(source, &mut parser)
                 .unwrap_or_else(|error| panic!("failed to parse {name}: {error:?}\n{source}"));
             Self { unit, parser, source: source.to_owned() }
         }
@@ -2874,12 +2873,9 @@ mod tests {
         let first = concat!("begin\n", "  let a = 1 in\n", "\n", "\n", "  a\n", "end");
         let second = concat!("begin\n", "  let b =\n", "    value\n", "  in\n", "  b\n", "end");
         let mut parser = Parser::new();
-        SourceUnitParser::new()
-            .parse(first, &mut parser, Lexer::new(first))
-            .expect("the first source should parse");
-        let second_unit = SourceUnitParser::new()
-            .parse(second, &mut parser, Lexer::new(second))
-            .expect("the second source should parse");
+        StrictParser::source(first, &mut parser).expect("the first source should parse");
+        let second_unit =
+            StrictParser::source(second, &mut parser).expect("the second source should parse");
 
         let formatted = PrettyFormatter::with_options(
             &parser.arena,

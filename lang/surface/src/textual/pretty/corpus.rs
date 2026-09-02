@@ -3,7 +3,7 @@
 use super::{PrettyFormatter, PrettyOptions};
 use crate::{
     bitter::{SourceUnitDesugarer, fmt::Formatter as BitterFormatter},
-    textual::{Lexer, LexicalTokenKind, LexicalTokens, SourceUnitParser, syntax::*},
+    textual::{LexicalTokenKind, LexicalTokens, StrictParser, syntax::*},
 };
 use std::{
     collections::BTreeSet,
@@ -45,8 +45,7 @@ struct ParsedSource {
 impl ParsedSource {
     fn new(source: &str, name: &str) -> Self {
         let mut parser = Parser::new();
-        let unit = SourceUnitParser::new()
-            .parse(source, &mut parser, Lexer::new(source))
+        let unit = StrictParser::source(source, &mut parser)
             .unwrap_or_else(|error| panic!("failed to parse {name}: {error:?}"));
         Self { unit, parser, source: source.to_owned() }
     }

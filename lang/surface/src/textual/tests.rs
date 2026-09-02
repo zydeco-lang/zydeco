@@ -39,33 +39,24 @@ fn textual_entities_retain_their_category_tags() {
 fn parsing_1() {
     let source = "!(!1)";
     let mut parser = Parser::new();
-    let _ = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let _ = StrictParser::term(source, &mut parser).unwrap();
 }
 #[test]
 fn parsing_2() {
     let source = "{ let x = 1 in ! exit x }";
     let mut parser = Parser::new();
-    let _ = parser::SourceUnitParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let _ = StrictParser::source(source, &mut parser).unwrap();
 }
 
 #[test]
 fn rejects_retired_do_tilde_syntax() {
     let retired = "do~ first; second";
     let mut parser = Parser::new();
-    assert!(
-        parser::SingleTermParser::new()
-            .parse(retired, &mut parser, lexer::Lexer::new(retired))
-            .is_err()
-    );
+    assert!(StrictParser::term(retired, &mut parser).is_err());
 
     let explicit = "first { second }";
     let mut parser = Parser::new();
-    parser::SingleTermParser::new()
-        .parse(explicit, &mut parser, lexer::Lexer::new(explicit))
+    StrictParser::term(explicit, &mut parser)
         .expect("explicit continuation application must remain available");
 }
 
@@ -74,9 +65,7 @@ fn rejects_retired_monadic_block_syntax() {
     let source = "monadic ret () end";
     let mut parser = Parser::new();
     assert!(
-        parser::SingleTermParser::new()
-            .parse(source, &mut parser, lexer::Lexer::new(source))
-            .is_err(),
+        StrictParser::term(source, &mut parser).is_err(),
         "the delimited monadic keyword form must remain retired"
     );
 }
@@ -87,8 +76,7 @@ fn monadic_metadata_lowers_arbitrary_terms_to_monadic_blocks() {
         .into_iter()
         .for_each(|(source, expects_block_body)| {
             let mut parser = Parser::new();
-            let unit = parser::SourceUnitParser::new()
-                .parse(source, &mut parser, lexer::Lexer::new(source))
+            let unit = StrictParser::source(source, &mut parser)
                 .unwrap_or_else(|error| panic!("expected `{source}` to parse: {error}"));
             let output = SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit)
                 .run()
@@ -110,9 +98,7 @@ fn monadic_metadata_lowers_arbitrary_terms_to_monadic_blocks() {
 fn monadic_metadata_rejects_arguments() {
     let source = "@[monadic(extra)] ret ()";
     let mut parser = Parser::new();
-    let unit = parser::SourceUnitParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let unit = StrictParser::source(source, &mut parser).unwrap();
     let error = match SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit).run() {
         | Ok(_) => panic!("monadic metadata must not accept arguments"),
         | Err(error) => error,
@@ -132,9 +118,7 @@ fn monadic_metadata_rejects_arguments() {
 fn metadata_payload_errors_highlight_the_payload() {
     let source = "@[intrinsic(unit)] Unit";
     let mut parser = Parser::new();
-    let unit = parser::SourceUnitParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let unit = StrictParser::source(source, &mut parser).unwrap();
     let error = match SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit).run() {
         | Ok(_) => panic!("intrinsic metadata must reject a non-hole payload"),
         | Err(error) => error,
@@ -148,15 +132,12 @@ fn metadata_payload_errors_highlight_the_payload() {
 fn monadic_metadata_extent_survives_bitter_formatting() {
     let source = "(@[monadic] fn value => ret value) argument";
     let mut parser = Parser::new();
-    let unit = parser::SourceUnitParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let unit = StrictParser::source(source, &mut parser).unwrap();
     let output = SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit).run().unwrap();
     let rendered = output.root.ugly(&BitterFormatter::new(&output.arena));
 
     let mut reparsed = Parser::new();
-    let unit = parser::SourceUnitParser::new()
-        .parse(&rendered, &mut reparsed, lexer::Lexer::new(&rendered))
+    let unit = StrictParser::source(&rendered, &mut reparsed)
         .unwrap_or_else(|error| panic!("expected `{rendered}` to reparse: {error}"));
     let output = SourceUnitDesugarer::new(&reparsed.spans, &reparsed.arena, unit).run().unwrap();
     let bitter::Term::App(bitter::App(function, _)) = output.arena.terms[&output.root] else {
@@ -170,8 +151,7 @@ fn monadic_metadata_extent_survives_bitter_formatting() {
 fn retired_monadic_keywords_are_available_as_identifiers() {
     let source = "let monadic = 1 in let monadically = monadic in monadically";
     let mut parser = Parser::new();
-    parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
+    StrictParser::term(source, &mut parser)
         .expect("retired monadic keywords must lex as ordinary identifiers");
 }
 
@@ -180,9 +160,7 @@ fn parses_decimal_and_scientific_float_literals() {
     [("1.25", 1.25), ("-2.5e1", -25.0), ("1e3", 1000.0)].into_iter().for_each(
         |(source, expected)| {
             let mut parser = Parser::new();
-            let term = parser::SingleTermParser::new()
-                .parse(source, &mut parser, lexer::Lexer::new(source))
-                .unwrap();
+            let term = StrictParser::term(source, &mut parser).unwrap();
             let Term::Lit(Literal::Float(value)) = parser.arena.terms[&term] else {
                 panic!("expected `{source}` to parse as a float literal")
             };
@@ -192,9 +170,7 @@ fn parses_decimal_and_scientific_float_literals() {
 
     let source = "1";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
     assert!(matches!(
         parser.arena.terms[&term],
         Term::Lit(Literal::Integer(IntegerLiteral::Unresolved(1)))
@@ -214,8 +190,7 @@ fn separates_term_body_arrows_from_type_arrows() {
     .into_iter()
     .for_each(|source| {
         let mut parser = Parser::new();
-        parser::SingleTermParser::new()
-            .parse(source, &mut parser, lexer::Lexer::new(source))
+        StrictParser::term(source, &mut parser)
             .unwrap_or_else(|error| panic!("expected `{source}` to parse: {error}"));
     });
 
@@ -231,9 +206,7 @@ fn separates_term_body_arrows_from_type_arrows() {
     .for_each(|source| {
         let mut parser = Parser::new();
         assert!(
-            parser::SingleTermParser::new()
-                .parse(source, &mut parser, lexer::Lexer::new(source))
-                .is_err(),
+            StrictParser::term(source, &mut parser).is_err(),
             "expected `{source}` to be rejected"
         );
     });
@@ -243,9 +216,7 @@ fn separates_term_body_arrows_from_type_arrows() {
 fn metadata_preserves_identifiers_strings_integers_and_applications() {
     let source = r#"@[debug(name,"value",1,nested("path"))] _"#;
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Meta(MetaTerm(meta, payload)) = &parser.arena.terms[&term] else {
         panic!("expected a metadata term")
@@ -301,9 +272,7 @@ fn metadata_preserves_identifiers_strings_integers_and_applications() {
 fn parenthesized_metadata_defaults_its_payload_to_a_hole() {
     let source = r#"@(debug(name,"value",1,nested("path")))"#;
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Meta(MetaTerm(meta, payload)) = &parser.arena.terms[&term] else {
         panic!("expected a metadata term")
@@ -318,16 +287,12 @@ fn parenthesized_metadata_defaults_its_payload_to_a_hole() {
     let rendered = term.ugly(&Formatter::new(&parser.arena));
     assert_eq!(rendered, source);
     let mut roundtrip = Parser::new();
-    parser::SingleTermParser::new()
-        .parse(&rendered, &mut roundtrip, lexer::Lexer::new(&rendered))
-        .unwrap();
+    StrictParser::term(&rendered, &mut roundtrip).unwrap();
 
     // `@(meta)` and `@[meta] _` are indistinguishable once parsed.
     let bracketed = r#"@[debug(name,"value",1,nested("path"))] _"#;
     let mut bracketed_parser = Parser::new();
-    let bracketed_term = parser::SingleTermParser::new()
-        .parse(bracketed, &mut bracketed_parser, lexer::Lexer::new(bracketed))
-        .unwrap();
+    let bracketed_term = StrictParser::term(bracketed, &mut bracketed_parser).unwrap();
     assert_eq!(
         term.ugly(&Formatter::new(&parser.arena)),
         bracketed_term.ugly(&Formatter::new(&bracketed_parser.arena)),
@@ -338,12 +303,7 @@ fn parenthesized_metadata_defaults_its_payload_to_a_hole() {
 fn parenthesized_metadata_rejects_an_empty_annotation() {
     let source = "@()";
     let mut parser = Parser::new();
-    assert!(
-        parser::SingleTermParser::new()
-            .parse(source, &mut parser, lexer::Lexer::new(source))
-            .is_err(),
-        "expected `{source}` to be rejected"
-    );
+    assert!(StrictParser::term(source, &mut parser).is_err(), "expected `{source}` to be rejected");
 }
 
 #[test]
@@ -361,9 +321,7 @@ fn source_unit_collects_documentation_for_arbitrary_annotated_terms() {
         "end\n",
     );
     let mut parser = Parser::new();
-    let unit = parser::SourceUnitParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let unit = StrictParser::source(source, &mut parser).unwrap();
 
     let documentation = unit.documentation(&parser.arena, &parser.spans);
     let [package, example] = documentation.as_slice() else {
@@ -397,9 +355,7 @@ fn documentation_annotation_does_not_reach_across_a_blank_or_ordinary_comment() 
     ["--| Detached\n\n@[doc] _", "--| Detached\n-- barrier\n@[doc] _"].into_iter().for_each(
         |source| {
             let mut parser = Parser::new();
-            let unit = parser::SourceUnitParser::new()
-                .parse(source, &mut parser, lexer::Lexer::new(source))
-                .unwrap();
+            let unit = StrictParser::source(source, &mut parser).unwrap();
             let documentation = unit.documentation(&parser.arena, &parser.spans);
             let [site] = documentation.as_slice() else {
                 panic!("the annotation must include its term even without attached prose")
@@ -415,9 +371,7 @@ fn documentation_annotation_does_not_reach_across_a_blank_or_ordinary_comment() 
 fn text_blocks_without_an_annotation_remain_unattached() {
     let source = "--| Informational only\n_";
     let mut parser = Parser::new();
-    let unit = parser::SourceUnitParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let unit = StrictParser::source(source, &mut parser).unwrap();
 
     assert!(unit.documentation(&parser.arena, &parser.spans).is_empty());
 }
@@ -441,9 +395,7 @@ fn warns_for_every_text_block_without_an_effective_attachment() {
         "--| Trailing documentation\n",
     );
     let mut parser = Parser::new();
-    let unit = parser::SourceUnitParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let unit = StrictParser::source(source, &mut parser).unwrap();
 
     let comments = unit
         .unattached_text(&parser.arena)
@@ -466,9 +418,7 @@ fn warns_for_every_text_block_without_an_effective_attachment() {
 fn documentation_annotation_accepts_an_explicit_empty_argument_list() {
     let source = "--| Empty argument list\n@[doc()] _";
     let mut parser = Parser::new();
-    let unit = parser::SourceUnitParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let unit = StrictParser::source(source, &mut parser).unwrap();
 
     let documentation = unit.documentation(&parser.arena, &parser.spans);
     let [site] = documentation.as_slice() else { panic!("expected one documentation attachment") };
@@ -480,9 +430,7 @@ fn documentation_annotation_accepts_an_explicit_empty_argument_list() {
 fn source_unit_decodes_literal_splices_with_attached_text() {
     let source = "--| First line\n--| Second line\n@[literal] _";
     let mut parser = Parser::new();
-    let unit = parser::SourceUnitParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let unit = StrictParser::source(source, &mut parser).unwrap();
 
     let literals = unit.literals(&parser.arena, &parser.spans).unwrap();
     let [site] = literals.as_slice() else { panic!("expected exactly one literal splice") };
@@ -498,9 +446,7 @@ fn source_unit_decodes_literal_splices_with_attached_text() {
 fn source_unit_rejects_literal_splices_without_an_attached_text_block() {
     let source = "@[literal] _";
     let mut parser = Parser::new();
-    let unit = parser::SourceUnitParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let unit = StrictParser::source(source, &mut parser).unwrap();
 
     assert!(matches!(
         unit.literals(&parser.arena, &parser.spans),
@@ -512,9 +458,7 @@ fn source_unit_rejects_literal_splices_without_an_attached_text_block() {
 fn source_unit_rejects_literal_on_a_non_hole_term() {
     let source = "--| Text\n@[literal] 1";
     let mut parser = Parser::new();
-    let unit = parser::SourceUnitParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let unit = StrictParser::source(source, &mut parser).unwrap();
 
     assert!(matches!(
         unit.literals(&parser.arena, &parser.spans),
@@ -526,9 +470,7 @@ fn source_unit_rejects_literal_on_a_non_hole_term() {
 fn source_unit_rejects_literal_metadata_arguments() {
     let source = "--| Text\n@[literal(extra)] _";
     let mut parser = Parser::new();
-    let unit = parser::SourceUnitParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let unit = StrictParser::source(source, &mut parser).unwrap();
 
     assert!(matches!(
         unit.literals(&parser.arena, &parser.spans),
@@ -545,9 +487,7 @@ fn source_unit_decodes_relative_and_absolute_imports() {
         r#"(@(import("../library.zy")), @(import("/opt/zydeco/core.zy")))"#,
     ] {
         let mut parser = Parser::new();
-        let unit = parser::SourceUnitParser::new()
-            .parse(source, &mut parser, lexer::Lexer::new(source))
-            .unwrap();
+        let unit = StrictParser::source(source, &mut parser).unwrap();
 
         let imports = unit.imports(&parser.arena, &parser.spans).unwrap();
         let targets = imports.iter().map(|site| &site.directive.target).collect::<Vec<_>>();
@@ -567,9 +507,7 @@ fn source_unit_decodes_relative_and_absolute_imports() {
 fn source_unit_decodes_a_numbered_input_import() {
     let source = "@[import(7)] _";
     let mut parser = Parser::new();
-    let unit = parser::SourceUnitParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let unit = StrictParser::source(source, &mut parser).unwrap();
 
     let imports = unit.imports(&parser.arena, &parser.spans).unwrap();
     let [site] = imports.as_slice() else { panic!("expected one import") };
@@ -601,9 +539,7 @@ fn source_unit_rejects_import_without_one_supported_target() {
 
     cases.into_iter().for_each(|(source, expected, highlighted)| {
         let mut parser = Parser::new();
-        let unit = parser::SourceUnitParser::new()
-            .parse(source, &mut parser, lexer::Lexer::new(source))
-            .unwrap();
+        let unit = StrictParser::source(source, &mut parser).unwrap();
         let error = unit.imports(&parser.arena, &parser.spans).unwrap_err();
 
         assert_eq!(&source[error.span().range()], highlighted);
@@ -630,9 +566,7 @@ fn source_unit_rejects_import_without_one_supported_target() {
 fn source_unit_rejects_import_on_a_non_hole_term() {
     let source = r#"@[import("library.zy")] value"#;
     let mut parser = Parser::new();
-    let unit = parser::SourceUnitParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let unit = StrictParser::source(source, &mut parser).unwrap();
 
     let error = unit.imports(&parser.arena, &parser.spans).unwrap_err();
     assert!(matches!(&error, ImportDirectiveError::PayloadNotHole { .. }));
@@ -643,9 +577,7 @@ fn source_unit_rejects_import_on_a_non_hole_term() {
 fn source_unit_decodes_builtin_operation_roles_on_terms() {
     let source = "@[builtin(int64_add)] _";
     let mut parser = Parser::new();
-    let unit = parser::SourceUnitParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let unit = StrictParser::source(source, &mut parser).unwrap();
 
     let builtins = unit.builtins(&parser.arena, &parser.spans).unwrap();
     let [site] = builtins.as_slice() else { panic!("expected one Builtin role") };
@@ -683,9 +615,7 @@ fn source_unit_decodes_typed_intrinsic_splices() {
         // spellings decode to the same splice with an implicit hole payload.
         for source in [format!("@(intrinsic({name}))"), format!("@[intrinsic({name})] _")] {
             let mut parser = Parser::new();
-            let unit = parser::SourceUnitParser::new()
-                .parse(&source, &mut parser, lexer::Lexer::new(&source))
-                .unwrap();
+            let unit = StrictParser::source(&source, &mut parser).unwrap();
 
             let intrinsics = unit.intrinsics(&parser.arena, &parser.spans).unwrap();
             let [site] = intrinsics.as_slice() else {
@@ -726,9 +656,7 @@ fn source_unit_rejects_ambiguous_or_malformed_intrinsic_splices() {
 
     cases.into_iter().for_each(|(source, expected)| {
         let mut parser = Parser::new();
-        let unit = parser::SourceUnitParser::new()
-            .parse(source, &mut parser, lexer::Lexer::new(source))
-            .unwrap();
+        let unit = StrictParser::source(source, &mut parser).unwrap();
         let error = unit.intrinsics(&parser.arena, &parser.spans).unwrap_err();
 
         match (error, expected) {
@@ -781,9 +709,7 @@ fn source_unit_rejects_malformed_builtin_roles() {
 
     cases.into_iter().for_each(|(source, expected)| {
         let mut parser = Parser::new();
-        let unit = parser::SourceUnitParser::new()
-            .parse(source, &mut parser, lexer::Lexer::new(source))
-            .unwrap();
+        let unit = StrictParser::source(source, &mut parser).unwrap();
         let error = unit.builtins(&parser.arena, &parser.spans).unwrap_err();
 
         let BuiltinDirectiveError::Invalid { source, .. } = error else {
@@ -805,9 +731,7 @@ fn source_unit_rejects_malformed_builtin_roles() {
 fn source_unit_wraps_exactly_one_complete_term() {
     let source = "begin let value = 1 that value end";
     let mut parser = Parser::new();
-    let SourceUnit { root } = parser::SourceUnitParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let SourceUnit { root } = StrictParser::source(source, &mut parser).unwrap();
 
     assert!(matches!(parser.arena.terms[&root], Term::Block(_)));
 }
@@ -816,9 +740,7 @@ fn source_unit_wraps_exactly_one_complete_term() {
 fn parses_uniform_term_composition_forms() {
     let source = "begin let answer = seed that param seed that ret answer end";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Block(Block(body)) = &parser.arena.terms[&term] else {
         panic!("expected a context-forming block")
@@ -839,9 +761,7 @@ fn parses_uniform_term_composition_forms() {
     assert!(matches!(parser.arena.terms[tail], Term::Ret(_)));
 
     let nominal = "def Hidden = Int64 in Hidden";
-    let nominal = parser::SingleTermParser::new()
-        .parse(nominal, &mut parser, lexer::Lexer::new(nominal))
-        .unwrap();
+    let nominal = StrictParser::term(nominal, &mut parser).unwrap();
     assert!(matches!(
         parser.arena.terms[&nominal],
         Term::ContextBind(ContextBind {
@@ -856,22 +776,16 @@ fn parses_uniform_term_composition_forms() {
 fn parses_value_pi_abstractions_and_bindings() {
     let pi_source = "val pi (A : VType) (value : A) . A";
     let mut parser = Parser::new();
-    let pi = parser::SingleTermParser::new()
-        .parse(pi_source, &mut parser, lexer::Lexer::new(pi_source))
-        .unwrap();
+    let pi = StrictParser::term(pi_source, &mut parser).unwrap();
     assert!(matches!(parser.arena.terms[&pi], Term::ValPi(_)));
 
     let abstraction_source = "val (A : VType) (value : A) => value";
-    let abstraction = parser::SingleTermParser::new()
-        .parse(abstraction_source, &mut parser, lexer::Lexer::new(abstraction_source))
-        .unwrap();
+    let abstraction = StrictParser::term(abstraction_source, &mut parser).unwrap();
     assert!(matches!(parser.arena.terms[&abstraction], Term::ValAbs(_)));
 
     let local_source = "let val identity (value : Int64) : Int64 = value that 1 |> identity";
     let mut parser = Parser::new();
-    let local = parser::SingleTermParser::new()
-        .parse(local_source, &mut parser, lexer::Lexer::new(local_source))
-        .unwrap();
+    let local = StrictParser::term(local_source, &mut parser).unwrap();
     let Term::ContextBind(ContextBind { binding, placement: Placement::That, tail, .. }) =
         &parser.arena.terms[&local]
     else {
@@ -888,18 +802,14 @@ fn parses_value_pi_abstractions_and_bindings() {
 fn parses_lexical_and_block_value_parameters() {
     let mut parser = Parser::new();
     let lexical_source = "param val (value : Int64) in value";
-    let lexical = parser::SingleTermParser::new()
-        .parse(lexical_source, &mut parser, lexer::Lexer::new(lexical_source))
-        .unwrap();
+    let lexical = StrictParser::term(lexical_source, &mut parser).unwrap();
     assert!(matches!(
         parser.arena.terms[&lexical],
         Term::Param(Param { flavor: ParameterFlavor::Value, placement: Placement::In, .. })
     ));
 
     let mobile_source = "param val (value : Int64) that value";
-    let mobile = parser::SingleTermParser::new()
-        .parse(mobile_source, &mut parser, lexer::Lexer::new(mobile_source))
-        .unwrap();
+    let mobile = StrictParser::term(mobile_source, &mut parser).unwrap();
     assert!(matches!(
         parser.arena.terms[&mobile],
         Term::Param(Param { flavor: ParameterFlavor::Value, placement: Placement::That, .. })
@@ -910,27 +820,21 @@ fn parses_lexical_and_block_value_parameters() {
 fn parses_both_pipeline_spellings_and_view_patterns() {
     let mut parser = Parser::new();
     let forward = "pair |> first Int64 String";
-    let forward = parser::SingleTermParser::new()
-        .parse(forward, &mut parser, lexer::Lexer::new(forward))
-        .unwrap();
+    let forward = StrictParser::term(forward, &mut parser).unwrap();
     assert!(matches!(
         parser.arena.terms[&forward],
         Term::Pipeline(Pipeline { direction: PipelineDirection::Forward, .. })
     ));
 
     let backward = "first Int64 String <| pair";
-    let backward = parser::SingleTermParser::new()
-        .parse(backward, &mut parser, lexer::Lexer::new(backward))
-        .unwrap();
+    let backward = StrictParser::term(backward, &mut parser).unwrap();
     assert!(matches!(
         parser.arena.terms[&backward],
         Term::Pipeline(Pipeline { direction: PipelineDirection::Backward, .. })
     ));
 
     let pattern_source = "let first[Int64, String] ~> selected = pair in selected";
-    let pattern_term = parser::SingleTermParser::new()
-        .parse(pattern_source, &mut parser, lexer::Lexer::new(pattern_source))
-        .unwrap();
+    let pattern_term = StrictParser::term(pattern_source, &mut parser).unwrap();
     let Term::ContextBind(ContextBind { binding, .. }) = &parser.arena.terms[&pattern_term] else {
         panic!("expected a binding with a view pattern")
     };
@@ -945,18 +849,14 @@ fn parses_both_pipeline_spellings_and_view_patterns() {
     let rendered = pattern_term.ugly(&Formatter::new(&parser.arena));
     assert_eq!(rendered, pattern_source);
     let mut roundtrip = Parser::new();
-    parser::SingleTermParser::new()
-        .parse(&rendered, &mut roundtrip, lexer::Lexer::new(&rendered))
-        .unwrap();
+    StrictParser::term(&rendered, &mut roundtrip).unwrap();
 }
 
 #[test]
 fn parses_manifest_existential_with_a_punned_field_binder() {
     let source = "exists (= Counter as Int64 : VType) . Counter";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Exists(Exists { parameters, body }) = &parser.arena.terms[&term] else {
         panic!("expected a manifest existential")
@@ -993,18 +893,14 @@ fn parses_manifest_existential_with_a_punned_field_binder() {
     let rendered = term.ugly(&Formatter::new(&parser.arena));
     assert_eq!(rendered, "exists (#Counter = ((Counter as Int64) : VType)) . Counter");
     let mut roundtrip = Parser::new();
-    parser::SingleTermParser::new()
-        .parse(&rendered, &mut roundtrip, lexer::Lexer::new(&rendered))
-        .unwrap();
+    StrictParser::term(&rendered, &mut roundtrip).unwrap();
 }
 
 #[test]
 fn parses_manifest_existential_inside_an_explicit_named_pattern() {
     let source = "exists (#Counter = ((Representation as Int64) : VType)) . Representation";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Exists(Exists { parameters, .. }) = &parser.arena.terms[&term] else {
         panic!("expected a manifest existential")
@@ -1044,9 +940,7 @@ fn parses_manifest_existential_inside_an_explicit_named_pattern() {
 fn parses_manifest_existential_with_an_inferred_classifier() {
     let source = "exists (VType as @[intrinsic(vtype)] _) . VType";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Exists(Exists { parameters, body }) = &parser.arena.terms[&term] else {
         panic!("expected a manifest existential")
@@ -1089,9 +983,7 @@ fn parses_manifest_existential_with_an_inferred_classifier() {
 fn parses_interleaved_abstract_and_manifest_existential_parameters() {
     let source = "exists (X : VType) (Y as X : VType) (value : Y) . X";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Exists(Exists { parameters, body }) = &parser.arena.terms[&term] else {
         panic!("expected an existential telescope")
@@ -1115,9 +1007,7 @@ fn parses_interleaved_abstract_and_manifest_existential_parameters() {
 fn parses_pack_introduction_with_a_manifest_telescope() {
     let source = "pack (X as Int64 : VType) (Y as Char) where (0 : X), 'a' : Y, end";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Pack(Pack { parameters, body }) = &parser.arena.terms[&term] else {
         panic!("expected a package introduction")
@@ -1151,8 +1041,7 @@ fn parses_pack_introduction_with_a_manifest_telescope() {
 
     let rendered = term.ugly(&Formatter::new(&parser.arena));
     let mut roundtrip = Parser::new();
-    parser::SingleTermParser::new()
-        .parse(&rendered, &mut roundtrip, lexer::Lexer::new(&rendered))
+    StrictParser::term(&rendered, &mut roundtrip)
         .expect("rendered package introductions must reparse");
 }
 
@@ -1161,9 +1050,7 @@ fn rejects_an_empty_pack_payload() {
     let source = "pack (X as Int64 : VType) where end";
     let mut parser = Parser::new();
     assert!(
-        parser::SingleTermParser::new()
-            .parse(source, &mut parser, lexer::Lexer::new(source))
-            .is_err(),
+        StrictParser::term(source, &mut parser).is_err(),
         "a package payload must list at least one component"
     );
 }
@@ -1172,9 +1059,7 @@ fn rejects_an_empty_pack_payload() {
 fn parses_pack_introduction_with_sealed_evidence() {
     let source = "pack (= Bool : VType) is Bool (#Flag = Flag) is (List Bool) where 0 end";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Pack(Pack { parameters, .. }) = &parser.arena.terms[&term] else {
         panic!("expected a package introduction")
@@ -1200,18 +1085,14 @@ fn parses_pack_introduction_with_sealed_evidence() {
 
     let rendered = term.ugly(&Formatter::new(&parser.arena));
     let mut roundtrip = Parser::new();
-    parser::SingleTermParser::new()
-        .parse(&rendered, &mut roundtrip, lexer::Lexer::new(&rendered))
-        .expect("rendered sealed parameters must reparse");
+    StrictParser::term(&rendered, &mut roundtrip).expect("rendered sealed parameters must reparse");
 }
 
 #[test]
 fn parses_named_term_fields() {
     let source = "(#x = 1, #y = 2)";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
         panic!("expected a parenthesized named tuple")
@@ -1242,9 +1123,7 @@ fn parses_named_term_fields() {
 fn parses_comma_separated_named_terms_without_early_sorting() {
     let source = "(#x = Int64, #y = String)";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
         panic!("expected a parenthesized named type")
@@ -1272,9 +1151,7 @@ fn parses_comma_separated_named_terms_without_early_sorting() {
 fn parses_labeled_product_type() {
     let source = "(#x :: Int64) * (#y :: String)";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Prod(Prod(components)) = &parser.arena.terms[&term] else {
         panic!("expected a product type")
@@ -1312,9 +1189,7 @@ fn parses_labeled_product_type() {
 fn parses_chained_labels_right_associatively() {
     let source = "(#outer :: #inner :: Int64)";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
         panic!("expected a parenthesized labeled term")
@@ -1337,9 +1212,7 @@ fn parses_chained_labels_right_associatively() {
 fn annotation_binds_inside_a_named_classifier() {
     let source = "(#field :: A : K)";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
         panic!("expected a parenthesized labeled term")
@@ -1365,9 +1238,7 @@ fn annotation_binds_inside_a_named_classifier() {
 fn parses_mixed_named_and_labeled_terms_right_associatively() {
     let source = "(#outer = #inner :: Int64)";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
         panic!("expected a parenthesized named term")
@@ -1390,9 +1261,7 @@ fn parses_mixed_named_and_labeled_terms_right_associatively() {
 fn parentheses_classify_the_whole_named_introduction() {
     let source = "((#field = value) : (#field :: classifier))";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Paren(Paren(annotations)) = &parser.arena.terms[&term] else {
         panic!("expected a parenthesized annotation")
@@ -1434,9 +1303,7 @@ fn parentheses_classify_the_whole_named_introduction() {
 fn parses_named_term_payload_annotation() {
     let source = "(#name = 1 : _)";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
         panic!("expected a parenthesized named tuple")
@@ -1461,9 +1328,7 @@ fn parses_named_term_payload_annotation() {
 fn parses_punned_named_terms_and_payload_annotations() {
     let source = "(= left, middle, = right : Int64)";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
         panic!("expected a parenthesized mixed tuple")
@@ -1504,9 +1369,7 @@ fn parses_punned_named_terms_and_payload_annotations() {
 fn field_names_and_puns_accept_uppercase_variable_names() {
     let source = "(#Explicit = payload, = Inferred)";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
         panic!("expected a parenthesized named tuple")
@@ -1535,8 +1398,7 @@ fn field_names_and_puns_accept_uppercase_variable_names() {
 fn rejects_punning_a_non_variable_term() {
     let source = "(= 1)";
     let mut parser = Parser::new();
-    let parsed =
-        parser::SingleTermParser::new().parse(source, &mut parser, lexer::Lexer::new(source));
+    let parsed = StrictParser::term(source, &mut parser);
 
     assert!(parsed.is_err());
 }
@@ -1545,9 +1407,7 @@ fn rejects_punning_a_non_variable_term() {
 fn parses_chained_named_terms() {
     let source = "(#outer = #inner = 1)";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
         panic!("expected a parenthesized named tuple")
@@ -1572,9 +1432,7 @@ fn parses_chained_named_terms() {
 fn parses_named_pattern_fields() {
     let source = "(#x = left, #y = right)";
     let mut parser = Parser::new();
-    let pattern = parser::SinglePatternParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let pattern = StrictParser::pattern(source, &mut parser).unwrap();
 
     let Pattern::Paren(Paren(fields)) = &parser.arena.pats[&pattern] else {
         panic!("expected a parenthesized named tuple pattern")
@@ -1602,9 +1460,7 @@ fn parses_named_pattern_fields() {
 fn parses_semicolon_pattern_aliases_in_source_order() {
     let source = "(whole; first; second)";
     let mut parser = Parser::new();
-    let pattern = parser::SinglePatternParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let pattern = StrictParser::pattern(source, &mut parser).unwrap();
 
     let Pattern::Alias(Alias(patterns)) = &parser.arena.pats[&pattern] else {
         panic!("expected a pattern alias")
@@ -1626,9 +1482,7 @@ fn parses_semicolon_pattern_aliases_in_source_order() {
 fn parses_field_projection_patterns_as_alias_members() {
     let source = "(/x = left; /y = right; whole)";
     let mut parser = Parser::new();
-    let pattern = parser::SinglePatternParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let pattern = StrictParser::pattern(source, &mut parser).unwrap();
 
     let Pattern::Alias(Alias(patterns)) = &parser.arena.pats[&pattern] else {
         panic!("expected a pattern alias")
@@ -1658,9 +1512,7 @@ fn parses_field_projection_patterns_as_alias_members() {
 fn parses_punned_field_projection_patterns_and_payload_annotations() {
     let source = "(/left : Int64; /Right; whole)";
     let mut parser = Parser::new();
-    let pattern = parser::SinglePatternParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let pattern = StrictParser::pattern(source, &mut parser).unwrap();
 
     let Pattern::Alias(Alias(patterns)) = &parser.arena.pats[&pattern] else {
         panic!("expected a pattern alias")
@@ -1695,9 +1547,7 @@ fn parses_punned_field_projection_patterns_and_payload_annotations() {
 fn parses_chained_field_projection_patterns_right_associatively() {
     let source = "(/outer = /inner = payload)";
     let mut parser = Parser::new();
-    let pattern = parser::SinglePatternParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let pattern = StrictParser::pattern(source, &mut parser).unwrap();
 
     let Pattern::Paren(Paren(patterns)) = &parser.arena.pats[&pattern] else {
         panic!("expected a parenthesized projection pattern")
@@ -1719,9 +1569,7 @@ fn parses_chained_field_projection_patterns_right_associatively() {
 fn parses_named_pattern_payload_annotation() {
     let source = "(#name = payload : _)";
     let mut parser = Parser::new();
-    let pattern = parser::SinglePatternParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let pattern = StrictParser::pattern(source, &mut parser).unwrap();
 
     let Pattern::Paren(Paren(fields)) = &parser.arena.pats[&pattern] else {
         panic!("expected a parenthesized named tuple pattern")
@@ -1746,9 +1594,7 @@ fn parses_named_pattern_payload_annotation() {
 fn parses_punned_named_patterns_and_payload_annotations() {
     let source = "(= left : Int64, middle, = right)";
     let mut parser = Parser::new();
-    let pattern = parser::SinglePatternParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let pattern = StrictParser::pattern(source, &mut parser).unwrap();
 
     let Pattern::Paren(Paren(fields)) = &parser.arena.pats[&pattern] else {
         panic!("expected a parenthesized mixed tuple pattern")
@@ -1789,9 +1635,7 @@ fn parses_punned_named_patterns_and_payload_annotations() {
 fn parses_chained_named_patterns() {
     let source = "(#outer = #inner = payload)";
     let mut parser = Parser::new();
-    let pattern = parser::SinglePatternParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let pattern = StrictParser::pattern(source, &mut parser).unwrap();
 
     let Pattern::Paren(Paren(fields)) = &parser.arena.pats[&pattern] else {
         panic!("expected a parenthesized named tuple pattern")
@@ -1816,9 +1660,7 @@ fn parses_chained_named_patterns() {
 fn parses_chained_named_projection() {
     let source = "rectangle/top_left/x";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Proj(Proj(inner, x)) = &parser.arena.terms[&term] else {
         panic!("expected an outer named projection")
@@ -1839,9 +1681,7 @@ fn parses_chained_named_projection() {
 fn named_projection_binds_tighter_than_application() {
     let source = "service/inspect rectangle/top_left";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::App(Appli(items)) = &parser.arena.terms[&term] else {
         panic!("expected an application")
@@ -1870,9 +1710,7 @@ fn named_projection_binds_tighter_than_application() {
 fn named_projection_binds_tighter_than_undelimited_prefix_forms() {
     let force_source = "! package/action argument";
     let mut force_parser = Parser::new();
-    let force = parser::SingleTermParser::new()
-        .parse(force_source, &mut force_parser, lexer::Lexer::new(force_source))
-        .unwrap();
+    let force = StrictParser::term(force_source, &mut force_parser).unwrap();
 
     let Term::App(Appli(force_application)) = &force_parser.arena.terms[&force] else {
         panic!("expected forcing to bind tighter than application")
@@ -1892,9 +1730,7 @@ fn named_projection_binds_tighter_than_undelimited_prefix_forms() {
 
     let return_source = "ret package/value";
     let mut return_parser = Parser::new();
-    let returned = parser::SingleTermParser::new()
-        .parse(return_source, &mut return_parser, lexer::Lexer::new(return_source))
-        .unwrap();
+    let returned = StrictParser::term(return_source, &mut return_parser).unwrap();
 
     let Term::Ret(Return(projected)) = &return_parser.arena.terms[&returned] else {
         panic!("expected a return")
@@ -1907,9 +1743,7 @@ fn named_projection_binds_tighter_than_undelimited_prefix_forms() {
 
     let constructor_source = "+Some package/value";
     let mut constructor_parser = Parser::new();
-    let constructed = parser::SingleTermParser::new()
-        .parse(constructor_source, &mut constructor_parser, lexer::Lexer::new(constructor_source))
-        .unwrap();
+    let constructed = StrictParser::term(constructor_source, &mut constructor_parser).unwrap();
 
     let Term::Ctor(Ctor(name, projected)) = &constructor_parser.arena.terms[&constructed] else {
         panic!("expected a constructor")
@@ -1926,9 +1760,7 @@ fn named_projection_binds_tighter_than_undelimited_prefix_forms() {
 fn parses_chained_dot_elimination() {
     let source = "rectangle .top_left .x";
     let mut parser = Parser::new();
-    let term = parser::SingleTermParser::new()
-        .parse(source, &mut parser, lexer::Lexer::new(source))
-        .unwrap();
+    let term = StrictParser::term(source, &mut parser).unwrap();
 
     let Term::Dtor(Dtor(inner, x)) = &parser.arena.terms[&term] else {
         panic!("expected an outer dot elimination")

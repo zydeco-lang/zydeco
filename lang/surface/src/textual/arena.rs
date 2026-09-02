@@ -117,6 +117,14 @@ mod impl_span_arena {
                 },
             )
         }
+        /// Number of textual entities currently carrying spans.
+        pub fn len(&self) -> usize {
+            self.spans.len()
+        }
+        /// Whether no textual entity currently carries a span.
+        pub fn is_empty(&self) -> bool {
+            self.spans.is_empty()
+        }
         /// Attach the source map that decodes the stored spans' address space.
         ///
         /// Template-local arenas keep `None`: their spans are file-relative and
