@@ -29,11 +29,11 @@ begin
           | .number => ret current
           | .increment amount =>
             do previous <- ! this .number;
-            do next <- ! (int64/add) previous amount;
+            do next <- ! int64/add previous amount;
             ! make_counter next
           | .format =>
             do value <- ! this .number;
-            ! (int64/to_string) value
+            ! int64/to_string value
           end
   } that
 
@@ -41,9 +41,9 @@ begin
     ! make_counter 42
   } in
   do rendered <- ! counter_42 .format;
-  ! (stdio/write_line) rendered {
+  ! stdio/write_line rendered {
     do zero <- ! counter_42 .increment -42 .number;
-    ! (process/exit) zero
+    ! process/exit zero
   }
 end
 

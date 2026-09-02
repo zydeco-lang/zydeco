@@ -17,7 +17,7 @@ begin
     #Counter = Int64,
     #zero = 0,
     #increment = {
-      fn (value : Int64) => ! (int64/add) value 1
+      fn (value : Int64) => ! int64/add value 1
     }
   ) that
   def ! use_counter ((= Counter, = zero, = increment) : CounterLibrary) : Ret Int64 =
@@ -25,6 +25,6 @@ begin
   that
 
   do value <- ! use_counter counter;
-  do status <- ! (int64/sub) value 1;
-  ! (process/exit) status
+  do status <- ! int64/sub value 1;
+  ! process/exit status
 end

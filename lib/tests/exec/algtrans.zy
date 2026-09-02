@@ -38,7 +38,7 @@ begin
     def ! alg-exn-os (E : VType) : Algebra (Exn E) OS = fn X m f =>
       do a? <- ! m;
       match a?
-      | +Left(e) => ! (process/exit) 1
+      | +Left(e) => ! process/exit 1
       | +Right(a) => ! f a
       end that
     -- test algebra generation for ret and bind
@@ -216,16 +216,16 @@ begin
     -- ! _mo-prim-id~'
     do returned <- ! mo-return String { ! mo-exn String };
     match returned
-    | +Left(_) => ! (process/exit) 1
-    | +Right(returned) => ! (int64/eq)
+    | +Left(_) => ! process/exit 1
+    | +Right(returned) => ! int64/eq
       OS
       returned
       1
       {
         do thunked <- ! mo-thunk String { ! mo-exn String };
         match thunked
-        | +Left(_) => ! (process/exit) 1
-        | +Right(thunked) => ! (int64/eq)
+        | +Left(_) => ! process/exit 1
+        | +Right(thunked) => ! int64/eq
           OS
           thunked
           1
@@ -234,8 +234,8 @@ begin
               ! mo-exn String
             };
             match argument
-            | +Left(_) => ! (process/exit) 1
-            | +Right(argument) => ! (int64/eq)
+            | +Left(_) => ! process/exit 1
+            | +Right(argument) => ! int64/eq
               OS
               argument
               1
@@ -247,8 +247,8 @@ begin
                   top
                   0;
                 match quantified
-                | +Left(_) => ! (process/exit) 1
-                | +Right(quantified) => ! (int64/eq)
+                | +Left(_) => ! process/exit 1
+                | +Right(quantified) => ! int64/eq
                   OS
                   quantified
                   0
@@ -259,18 +259,18 @@ begin
                       { ! mo-exn String }
                       OS
                       { ! alg-exn-os String }
-                      { ! (process/exit) 0 }
+                      { ! process/exit 0 }
                   }
-                  { ! (process/exit) 1 }
+                  { ! process/exit 1 }
                 end
               }
-              { ! (process/exit) 1 }
+              { ! process/exit 1 }
             end
           }
-          { ! (process/exit) 1 }
+          { ! process/exit 1 }
         end
       }
-      { ! (process/exit) 1 }
+      { ! process/exit 1 }
     end
   end
 end

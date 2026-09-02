@@ -98,7 +98,7 @@ begin
       fn s =>
         match s
         | +State(c, o) =>
-          do c' <- ! (int64/add) c 1;
+          do c' <- ! int64/add c 1;
           ret +Cons(
             +State(c', o),
             +Right({ ! kret v })
@@ -109,7 +109,7 @@ begin
       fn s =>
         match s
         | +State(c, o) =>
-          do o' <- ! (string/append) o str;
+          do o' <- ! string/append o str;
           ret +Cons(
             +State(c, o'),
             +Right({ ! kret v })
@@ -150,7 +150,7 @@ begin
         end
       end
     that
-    def ! str_eq (left : String) (right : String) : Ret Bool = ! (string/eq)
+    def ! str_eq (left : String) (right : String) : Ret Bool = ! string/eq
       (Ret Bool)
       left
       right
@@ -235,18 +235,18 @@ begin
     match sv?
     | +Cons(s, v?) =>
       match v?
-      | +Left(_) => ! (process/exit) 1
+      | +Left(_) => ! process/exit 1
       | +Right(k) => ! k OS {
         fn v =>
           match v
           | +Bool(b) =>
             match b
-            | +True() => ! (stdio/write_line) "\\^o^/" {
-              ! (process/exit) 0
+            | +True() => ! stdio/write_line "\\^o^/" {
+              ! process/exit 0
             }
-            | +False() => ! (process/exit) 1
+            | +False() => ! process/exit 1
             end
-          | +Lam(_, _, _) => ! (process/exit) 1
+          | +Lam(_, _, _) => ! process/exit 1
           end
       }
       end

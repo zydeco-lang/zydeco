@@ -6,5 +6,5 @@ begin
   def ! id (A : VType) (a : A) : Ret A = ret a that
 
   do x <- ! id Int64 0;
-  ! (process/exit) x
+  ! process/exit x
 end

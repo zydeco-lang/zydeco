@@ -14,36 +14,36 @@ begin
     (offset : A)
     (expected : A)
   : Ret Bool =
-      do product <- ! (dictionary/multiplicative/mul) left right;
-      do total <- ! (dictionary/additive/add) product offset;
-      ! (dictionary/order/equality/eq) total expected
+      do product <- ! dictionary/multiplicative/mul left right;
+      do total <- ! dictionary/additive/add product offset;
+      ! dictionary/order/equality/eq total expected
   in
   let ! strictly_less (A : VType)
     (dictionary : Numeric Bool A)
     (left : A)
     (right : A)
-  : Ret Bool = ! (dictionary/order/lt) left right in
+  : Ret Bool = ! dictionary/order/lt left right in
 
   let (#Int64 = IntScalar, int_dictionary) = numeric/int64_instance in
-  do primitive_total <- ! (primitives/i64/add) 40 2;
-  do primitive_ok <- ! (int_dictionary/order/equality/eq) primitive_total 42;
+  do primitive_total <- ! primitives/i64/add 40 2;
+  do primitive_ok <- ! int_dictionary/order/equality/eq primitive_total 42;
   do int_arithmetic <- ! multiply_add_equal
     IntScalar int_dictionary 6 7 0 42;
   do int_order <- ! strictly_less IntScalar int_dictionary 41 42;
-  do int_operations_ok <- ! (bool/and) int_arithmetic int_order;
-  do int_ok <- ! (bool/and) primitive_ok int_operations_ok;
+  do int_operations_ok <- ! bool/and int_arithmetic int_order;
+  do int_ok <- ! bool/and primitive_ok int_operations_ok;
 
   let (#Float64 = FloatScalar, float_dictionary) = numeric/float64_instance in
   do float_arithmetic <- ! multiply_add_equal
     FloatScalar float_dictionary 1.5 2.0 0.5 3.5;
   do float_order <- ! strictly_less
     FloatScalar float_dictionary 3.5 4.0;
-  do float_ok <- ! (bool/and) float_arithmetic float_order;
+  do float_ok <- ! bool/and float_arithmetic float_order;
 
-  do success <- ! (bool/and) int_ok float_ok;
-  ! (bool/if)
+  do success <- ! bool/and int_ok float_ok;
+  ! bool/if
     OS
     success
-    { ! (process/exit) 0 }
-    { ! (process/exit) 1 }
+    { ! process/exit 0 }
+    { ! process/exit 1 }
 end

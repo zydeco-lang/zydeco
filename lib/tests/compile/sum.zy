@@ -3,19 +3,19 @@ begin
   let (/Ret) = core that
   let (= Int64, int64) = numeric/int64 that
   let (/process) = system that
-  def fix sum (i : Int64) (acc : Int64) : Ret Int64 = ! (int64/eq)
+  def fix sum (i : Int64) (acc : Int64) : Ret Int64 = ! int64/eq
     (Ret Int64)
     i
     0
     { ret acc }
     {
       -- do i <- ret i;
-      do i' <- ! (int64/sub) i 1;
-      do acc' <- ! (int64/add) i acc;
+      do i' <- ! int64/sub i 1;
+      do acc' <- ! int64/add i acc;
       ! sum i' acc'
     } that
 
   do z <- ! sum 10 0;
-  do r <- ! (int64/sub) z 55;
-  ! (process/exit) r
+  do r <- ! int64/sub z 55;
+  ! process/exit r
 end

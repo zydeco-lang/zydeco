@@ -6,17 +6,17 @@ begin
   let (/OS) = system that
 
   let (/list; /int64; /process) = builtin |> make_std in
-  do empty <- ! (list/nil) Int64;
-  do one <- ! (list/cons) Int64 1 empty;
-  do values <- ! (list/cons) Int64 2 one;
-  ! (list/case)
+  do empty <- ! list/nil Int64;
+  do one <- ! list/cons Int64 1 empty;
+  do values <- ! list/cons Int64 2 one;
+  ! list/case
     Int64
     OS
     values
-    { ! (process/exit) 1 }
+    { ! process/exit 1 }
     {
       fn head tail =>
-        do total <- ! (list/fold)
+        do total <- ! list/fold
           Int64
           (Ret Int64)
           tail
@@ -24,9 +24,9 @@ begin
           {
             fn value rest =>
               do subtotal <- ! rest;
-              ! (int64/add) value subtotal
+              ! int64/add value subtotal
           };
-        do status <- ! (int64/sub) total 3;
-        ! (process/exit) status
+        do status <- ! int64/sub total 3;
+        ! process/exit status
     }
 end

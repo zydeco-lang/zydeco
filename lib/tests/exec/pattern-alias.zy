@@ -12,15 +12,15 @@ begin
     fn ((left : Int64, right : Int64); whole; copy) =>
       let (whole_left : Int64, whole_right : Int64) = whole in
       let (copy_left : Int64, copy_right : Int64) = copy in
-      do direct <- ! (int64/add) left right;
-      do through_whole <- ! (int64/add) whole_left whole_right;
-      do through_copy <- ! (int64/add) copy_left copy_right;
-      do whole_delta <- ! (int64/sub) direct through_whole;
-      do copy_delta <- ! (int64/sub) direct through_copy;
-      do total <- ! (int64/add) whole_delta copy_delta;
+      do direct <- ! int64/add left right;
+      do through_whole <- ! int64/add whole_left whole_right;
+      do through_copy <- ! int64/add copy_left copy_right;
+      do whole_delta <- ! int64/sub direct through_whole;
+      do copy_delta <- ! int64/sub direct through_copy;
+      do total <- ! int64/add whole_delta copy_delta;
       ret total
   } that
 
   do result <- ! compare_aliases pair;
-  ! (process/exit) result
+  ! process/exit result
 end

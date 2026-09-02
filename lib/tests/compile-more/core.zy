@@ -123,13 +123,13 @@ begin
   -- pub extern def mod : Thk(Int64 -> Int64 -> Ret Int64) end
 
   def ! int_eq (x : Int64) (y : Int64) : Ret Bool =
-    ! (int64/eq) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! int64/eq (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! int_lt (x : Int64) (y : Int64) : Ret Bool =
-    ! (int64/lt) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! int64/lt (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! int_gt (x : Int64) (y : Int64) : Ret Bool =
-    ! (int64/gt) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! int64/gt (Ret Bool) x y { ret +True() } { ret +False() }
   that
   -- end module Arith
 
@@ -157,17 +157,17 @@ begin
   -- end module String
 
   -- module OS
-  def ! read_line_as_int (k : Thk (Option Int64 -> OS)) : OS = ! (stdio/read_int)
+  def ! read_line_as_int (k : Thk (Option Int64 -> OS)) : OS = ! stdio/read_int
     { ! k +None() }
     {
       fn i => ! k +Some(i)
     } that
-  def halt : Thk OS = { ! (process/exit) 0 } that
+  def halt : Thk OS = { ! process/exit 0 } that
 
   def panic : Thk (String -> OS) = {
     fn (msg : String) =>
       -- do msg <- ! str_append "Program panicked with message: " msg;
-      ! (stdio/write_line) msg { ! (process/exit) 1 }
+      ! stdio/write_line msg { ! process/exit 1 }
   } that
 
   -- pub def write_line : Thk(String -> Thk OS -> OS) = {

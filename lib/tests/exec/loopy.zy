@@ -23,5 +23,5 @@ begin
   that
   def ! m : OS = ! fix' OS { fn loop => ! loop } that
 
-  ! (process/exit) 0
+  ! process/exit 0
 end

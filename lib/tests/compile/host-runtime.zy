@@ -7,91 +7,91 @@ begin
   let string = text/string that
   let (/OS; /args; /process) = system that
 
-  do twelve <- ! (int64/to_string) 12;
-  do combined <- ! (string/append) twelve twelve;
-  do length <- ! (string/length) combined;
-  do parsed <- ! (string/parse_int)
+  do twelve <- ! int64/to_string 12;
+  do combined <- ! string/append twelve twelve;
+  do length <- ! string/length combined;
+  do parsed <- ! string/parse_int
     (Ret Int64)
     combined
     { ret 0 }
     { fn integer => ret integer };
-  do first <- ! (string/get)
+  do first <- ! string/get
     (Ret Char)
     combined
     0
     { ret ' ' }
     { fn character => ret character };
-  do first_code <- ! (char/codepoint) first;
-  do first_string <- ! (char/to_string) first;
-  do one_string <- ! (int64/to_string) 1;
-  do negative <- ! (int64/to_string) -1;
-  do dash <- ! (string/get)
+  do first_code <- ! char/codepoint first;
+  do first_string <- ! char/to_string first;
+  do one_string <- ! int64/to_string 1;
+  do negative <- ! int64/to_string -1;
+  do dash <- ! string/get
     (Ret Char)
     negative
     0
     { ret ' ' }
     { fn character => ret character };
-  do fold_status <- ! (args/fold)
+  do fold_status <- ! args/fold
     (Ret Int64)
     { ret 0 }
     {
       fn argument remaining => ret 1
     };
-  do length_status <- ! (int64/sub) length 4;
-  do parsed_status <- ! (int64/sub) parsed 1212;
-  do first_status <- ! (int64/sub) first_code 49;
-  do status <- ! (int64/add) length_status parsed_status;
-  do status <- ! (int64/add) status first_status;
-  do status <- ! (int64/add) status fold_status;
-  ! (string/eq)
+  do length_status <- ! int64/sub length 4;
+  do parsed_status <- ! int64/sub parsed 1212;
+  do first_status <- ! int64/sub first_code 49;
+  do status <- ! int64/add length_status parsed_status;
+  do status <- ! int64/add status first_status;
+  do status <- ! int64/add status fold_status;
+  ! string/eq
     OS
     first_string
     one_string
     {
-      ! (string/split_once)
+      ! string/split_once
         OS
         negative
         dash
-        { ! (process/exit) 1 }
+        { ! process/exit 1 }
         {
           fn prefix suffix =>
-            do prefix_length <- ! (string/length) prefix;
-            ! (int64/eq)
+            do prefix_length <- ! string/length prefix;
+            ! int64/eq
               OS
               prefix_length
               0
               {
-                ! (string/eq)
+                ! string/eq
                   OS
                   suffix
                   one_string
                   {
-                    ! (string/split_at)
+                    ! string/split_at
                       OS
                       combined
                       2
-                      { ! (process/exit) 1 }
+                      { ! process/exit 1 }
                       {
                         fn left right =>
-                          ! (string/eq)
+                          ! string/eq
                             OS
                             left
                             twelve
                             {
-                              ! (string/eq)
+                              ! string/eq
                                 OS
                                 right
                                 twelve
-                                { ! (process/exit) status }
-                                { ! (process/exit) 1 }
+                                { ! process/exit status }
+                                { ! process/exit 1 }
                             }
-                            { ! (process/exit) 1 }
+                            { ! process/exit 1 }
                       }
                   }
-                  { ! (process/exit) 1 }
+                  { ! process/exit 1 }
               }
-              { ! (process/exit) 1 }
+              { ! process/exit 1 }
         }
     }
-    { ! (process/exit) 1 }
+    { ! process/exit 1 }
 end

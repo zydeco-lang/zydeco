@@ -24,5 +24,5 @@ begin
 
   do x <- ! add +S(+S(+Z())) +S(+Z());
   do y <- ! add' x +S(+S(+S(+Z())));
-  ! (process/exit) 0
+  ! process/exit 0
 end

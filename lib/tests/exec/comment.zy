@@ -3,6 +3,6 @@ begin
   param (/system) : @(import("../../std/builtin.zy")) that
   let (/process) = system that
 
-  ! (process/exit) -- 1
+  ! process/exit -- 1
   0
 end

@@ -300,7 +300,7 @@ val
       }
     that
     def ! length (A : VType) (list : List A) : Ret Int64 = ! fold_left A Int64 list 0 {
-      fn count _ => ! (int64/add) count 1
+      fn count _ => ! int64/add count 1
     } that
     def ! is_empty (A : VType) (values : List A) : Ret Bool = ! case
       A
@@ -360,7 +360,7 @@ val
                   zero
                   { ! some A first }
                   {
-                    do previous <- ! (int64/sub) index 1;
+                    do previous <- ! int64/sub index 1;
                     ! get A rest previous
                   }
             }

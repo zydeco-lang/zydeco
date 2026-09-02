@@ -5,19 +5,19 @@ begin
   let string = text/string that
   let (/OS; /args; /process) = system that
 
-  do length <- ! (args/fold)
+  do length <- ! args/fold
     (Ret Int64)
     { ret 0 }
     {
       fn argument remaining =>
         do suffix_length <- ! remaining;
-        do argument_length <- ! (string/length) argument;
-        ! (int64/add) argument_length suffix_length
+        do argument_length <- ! string/length argument;
+        ! int64/add argument_length suffix_length
     };
-  ! (int64/eq)
+  ! int64/eq
     OS
     length
     9
-    { ! (process/exit) 0 }
-    { ! (process/exit) 1 }
+    { ! process/exit 0 }
+    { ! process/exit 1 }
 end

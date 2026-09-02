@@ -4,7 +4,7 @@ begin
   let (/OS; /stdio) = system that
 
   fix (loop : Thk OS) =>
-    ! (stdio/read_line) {
-      fn line => ! (stdio/write_line) line loop
+    ! stdio/read_line {
+      fn line => ! stdio/write_line line loop
     }
 end

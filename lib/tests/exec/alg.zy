@@ -127,6 +127,6 @@ begin
       {
         fn x => ret x
       };
-    ! (process/exit) x
+    ! process/exit x
   end
 end

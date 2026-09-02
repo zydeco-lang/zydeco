@@ -18,5 +18,5 @@ begin
   that
 
   do x <- ! abort 0 .app 1 .app 2 .app 3 .return;
-  ! (process/exit) x
+  ! process/exit x
 end

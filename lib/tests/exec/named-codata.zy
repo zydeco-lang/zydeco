@@ -39,15 +39,15 @@ begin
   =
     observation
   in
-  do reading_check <- ! (int64/sub) reading 12;
-  do drift_check <- ! (int64/sub) drift 13;
+  do reading_check <- ! int64/sub reading 12;
+  do drift_check <- ! int64/sub drift 13;
   do shifted <- ! active_gauge .shift (#delta = 14 : Int64);
   let (#reading = shifted_reading : Int64) = shifted in
-  do shifted_pattern_check <- ! (int64/sub) shifted_reading 14;
-  do shifted_projection_check <- ! (int64/sub) shifted/reading 14;
-  do total <- ! (int64/add) marker reading_check;
-  do total <- ! (int64/add) total drift_check;
-  do total <- ! (int64/add) total shifted_pattern_check;
-  do total <- ! (int64/add) total shifted_projection_check;
-  ! (process/exit) total
+  do shifted_pattern_check <- ! int64/sub shifted_reading 14;
+  do shifted_projection_check <- ! int64/sub shifted/reading 14;
+  do total <- ! int64/add marker reading_check;
+  do total <- ! int64/add total drift_check;
+  do total <- ! int64/add total shifted_pattern_check;
+  do total <- ! int64/add total shifted_projection_check;
+  ! process/exit total
 end

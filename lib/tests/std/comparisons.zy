@@ -5,32 +5,32 @@ begin
   let (/Int64) = representations/i64 that
 
   let (/bool; /int64; /string; /process) = builtin |> make_std in
-  do equal <- ! (int64/eq) 3 3;
-  do equal_status <- ! (bool/if)
+  do equal <- ! int64/eq 3 3;
+  do equal_status <- ! bool/if
     (Ret Int64)
     equal
     { ret 0 }
     { ret 1 };
-  do less <- ! (int64/lt) 2 3;
-  do less_status <- ! (bool/if)
+  do less <- ! int64/lt 2 3;
+  do less_status <- ! bool/if
     (Ret Int64)
     less
     { ret 0 }
     { ret 1 };
-  do greater <- ! (int64/gt) 3 2;
-  do greater_status <- ! (bool/if)
+  do greater <- ! int64/gt 3 2;
+  do greater_status <- ! bool/if
     (Ret Int64)
     greater
     { ret 0 }
     { ret 1 };
-  do string_equal <- ! (string/eq) "zydeco" "zydeco";
-  do string_status <- ! (bool/if)
+  do string_equal <- ! string/eq "zydeco" "zydeco";
+  do string_status <- ! bool/if
     (Ret Int64)
     string_equal
     { ret 0 }
     { ret 1 };
-  do first <- ! (int64/add) equal_status less_status;
-  do second <- ! (int64/add) greater_status string_status;
-  do status <- ! (int64/add) first second;
-  ! (process/exit) status
+  do first <- ! int64/add equal_status less_status;
+  do second <- ! int64/add greater_status string_status;
+  do status <- ! int64/add first second;
+  ! process/exit status
 end

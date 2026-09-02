@@ -15,6 +15,6 @@ begin
     let nested = (a, (code, c)) in
     let (p, pair) = nested in
     let (result, q) = pair in
-    ! (process/exit) result
+    ! process/exit result
   end
 end

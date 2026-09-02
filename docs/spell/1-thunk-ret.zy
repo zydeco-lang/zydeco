@@ -26,7 +26,7 @@ begin
   def lazy_add_one_zero : Thk (Ret Int64) = {
     do x <- ! lazy_one;
     do y <- ret zero;
-    ! (int64/add) x y
+    ! int64/add x y
   } that
 
   -- `do x <- computation; tail` eliminates `Ret A`, binding the returned value
@@ -40,14 +40,14 @@ begin
   ) = {
     fn suspended =>
       do value <- ! suspended;
-      ! (int64/sub) value 1
+      ! int64/sub value 1
   } that
 
   -- The dependency order differs from the presentation order without changing
   -- lexical meaning: all four definitions are candidates within this block.
   -- The final computation forces them and returns an `OS` result.
   do result <- ! decrement lazy_add_one_zero;
-  ! (process/exit) result
+  ! process/exit result
 end
 
 -- `Thk` and `Ret` are core CBPV constructors bound by opening the Builtin

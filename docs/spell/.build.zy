@@ -29,7 +29,7 @@ begin
     Int64 -> Int64 -> Ret Bool
   ) = {
     fn left right =>
-      ! (int64/eq)
+      ! int64/eq
         (Ret Bool)
         left
         right
@@ -40,7 +40,7 @@ begin
     Int64 -> Int64 -> Ret Bool
   ) = {
     fn left right =>
-      ! (int64/lt)
+      ! int64/lt
         (Ret Bool)
         left
         right
@@ -51,7 +51,7 @@ begin
     String -> String -> Ret Bool
   ) = {
     fn left right =>
-      ! (string/eq)
+      ! string/eq
         (Ret Bool)
         left
         right
@@ -65,7 +65,7 @@ begin
     -> Ret (String * Bool)
   ) = {
     fn line =>
-      do length <- ! (string/length) line;
+      do length <- ! string/length line;
       do too_short <- ! int_less length 3;
       ! branch
         (Ret (String * Bool))
@@ -79,7 +79,7 @@ begin
             { ret (line, +False()) }
         }
         {
-          ! (string/split_at)
+          ! string/split_at
             (Ret (String * Bool))
             line
             3
@@ -99,7 +99,7 @@ begin
     String -> Ret Bool
   ) = {
     fn text =>
-      do length <- ! (string/length) text;
+      do length <- ! string/length text;
       ! int_equal length 0
   } that
 
@@ -117,16 +117,16 @@ begin
     )
     =>
       fn remaining in_code =>
-        ! (string/split_once)
+        ! string/split_once
           OS
           remaining
           '\n'
           {
             match in_code
-            | +True() => ! (stdio/write) "\n```\n" {
-              ! (process/exit) 0
+            | +True() => ! stdio/write "\n```\n" {
+              ! process/exit 0
             }
-            | +False() => ! (process/exit) 0
+            | +False() => ! process/exit 0
             end
           }
           {
@@ -140,7 +140,7 @@ begin
                   OS
                   empty
                   {
-                    ! (stdio/write) "\n\n" {
+                    ! stdio/write "\n\n" {
                       ! loop rest in_code
                     }
                   }
@@ -149,15 +149,15 @@ begin
                       OS
                       comment
                       {
-                        ! (stdio/write) content {
-                          ! (stdio/write) " " {
+                        ! stdio/write content {
+                          ! stdio/write " " {
                             ! loop rest in_code
                           }
                         }
                       }
                       {
-                        ! (stdio/write) "\n```zydeco\n" {
-                          ! (stdio/write) content {
+                        ! stdio/write "\n```zydeco\n" {
+                          ! stdio/write content {
                             ! loop rest +True()
                           }
                         }
@@ -167,7 +167,7 @@ begin
                   OS
                   empty
                   {
-                    ! (stdio/write) "\n" {
+                    ! stdio/write "\n" {
                       ! loop rest in_code
                     }
                   }
@@ -176,17 +176,17 @@ begin
                       OS
                       comment
                       {
-                        ! (stdio/write) "\n```\n\n" {
-                          ! (stdio/write) content {
-                            ! (stdio/write) " " {
+                        ! stdio/write "\n```\n\n" {
+                          ! stdio/write content {
+                            ! stdio/write " " {
                               ! loop rest +False()
                             }
                           }
                         }
                       }
                       {
-                        ! (stdio/write) "\n" {
-                          ! (stdio/write) content {
+                        ! stdio/write "\n" {
+                          ! stdio/write content {
                             ! loop rest in_code
                           }
                         }
@@ -197,7 +197,7 @@ begin
           }
   } that
 
-  ! (stdio/read_all) {
+  ! stdio/read_all {
     fn file => ! loop file +False()
   }
 end

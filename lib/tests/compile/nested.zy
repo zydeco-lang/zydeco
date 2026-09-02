@@ -6,9 +6,9 @@ begin
   do x <- ret 40;
   do y <- ret 30;
   do z <-
-    do a <- ! (int64/add) x y;
-    do b <- ! (int64/add) a 10;
+    do a <- ! int64/add x y;
+    do b <- ! int64/add a 10;
     ret b;
-  do r <- ! (int64/sub) z 80;
-  ! (process/exit) r
+  do r <- ! int64/sub z 80;
+  ! process/exit r
 end

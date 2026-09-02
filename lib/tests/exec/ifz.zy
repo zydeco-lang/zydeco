@@ -48,7 +48,7 @@ begin
     end : Ret Bool
   );
   match b
-  | +True() => ! (process/exit) 0
-  | +False() => ! (process/exit) 1
+  | +True() => ! process/exit 0
+  | +False() => ! process/exit 1
   end
 end

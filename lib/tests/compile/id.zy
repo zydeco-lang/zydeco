@@ -9,5 +9,5 @@ begin
   do y <- ! id Int64 x;
   do z <- ! id Int64 y;
   do r <- ! id Int64 z;
-  ! (process/exit) r
+  ! process/exit r
 end

@@ -59,6 +59,6 @@ begin
   ) that
 
   do (value, _) <- ! reveal packed;
-  do status <- ! (int64/sub) value 40;
-  ! (process/exit) status
+  do status <- ! int64/sub value 40;
+  ! process/exit status
 end

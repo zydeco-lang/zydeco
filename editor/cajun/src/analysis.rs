@@ -1372,7 +1372,7 @@ mod tests {
             "  let identity : val pi (A : VType) (value : A) . A =\n",
             "    val (B : VType) (item : B) => item\n",
             "  that\n",
-            "  ! (process/exit) 0\n",
+            "  ! process/exit 0\n",
             "end\n",
         );
         let overrides = HashMap::from([(path.clone(), source.to_owned())]);
@@ -1400,7 +1400,7 @@ mod tests {
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
-        let broken = source.replace("! id~ OS { ! (process/exit) x }", "x x");
+        let broken = source.replace("! id~ OS { ! process/exit x }", "x x");
         assert_ne!(source, broken);
         let overrides = HashMap::from([(path.clone(), broken.clone())]);
         let (project, _session) = ProjectState::load(&path, &overrides).unwrap();
@@ -1455,7 +1455,7 @@ mod tests {
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
-        let broken = source.replace("! id~ OS { ! (process/exit) x }", "x x");
+        let broken = source.replace("! id~ OS { ! process/exit x }", "x x");
         assert_ne!(source, broken);
         let overrides = HashMap::from([(path.clone(), broken.clone())]);
         let (project, _session) = ProjectState::load(&path, &overrides).unwrap();

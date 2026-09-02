@@ -2,5 +2,5 @@ begin
   param (/system) : @(import("../../std/builtin.zy")) that
   let (/process) = system that
 
-  ! (process/exit) x
+  ! process/exit x
 end

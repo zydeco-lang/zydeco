@@ -7,37 +7,37 @@ begin
   let (/OS) = system that
 
   let (/bool; /float64; /int64; /string; /process) = builtin |> make_std in
-  do sum <- ! (float64/add) 1.25 2.75;
-  do difference <- ! (float64/sub) sum 1.5;
-  do product <- ! (float64/mul) difference 4.0;
-  do quotient <- ! (float64/div) product 2.0;
-  do negative <- ! (float64/negate) quotient;
-  do arithmetic_ok <- ! (float64/eq) negative -5.0;
+  do sum <- ! float64/add 1.25 2.75;
+  do difference <- ! float64/sub sum 1.5;
+  do product <- ! float64/mul difference 4.0;
+  do quotient <- ! float64/div product 2.0;
+  do negative <- ! float64/negate quotient;
+  do arithmetic_ok <- ! float64/eq negative -5.0;
 
-  do not_equal <- ! (float64/ne) 1.0 2.0;
-  do less <- ! (float64/lt) 1.0 2.0;
-  do less_or_equal <- ! (float64/le) 2.0 2.0;
-  do greater <- ! (float64/gt) 2.0 1.0;
-  do greater_or_equal <- ! (float64/ge) 2.0 2.0;
-  do comparisons_a <- ! (bool/and) not_equal less;
-  do comparisons_b <- ! (bool/and) less_or_equal greater;
-  do comparisons_c <- ! (bool/and) comparisons_a comparisons_b;
-  do comparisons_ok <- ! (bool/and) comparisons_c greater_or_equal;
+  do not_equal <- ! float64/ne 1.0 2.0;
+  do less <- ! float64/lt 1.0 2.0;
+  do less_or_equal <- ! float64/le 2.0 2.0;
+  do greater <- ! float64/gt 2.0 1.0;
+  do greater_or_equal <- ! float64/ge 2.0 2.0;
+  do comparisons_a <- ! bool/and not_equal less;
+  do comparisons_b <- ! bool/and less_or_equal greater;
+  do comparisons_c <- ! bool/and comparisons_a comparisons_b;
+  do comparisons_ok <- ! bool/and comparisons_c greater_or_equal;
 
-  do nan <- ! (float64/div) 0.0 0.0;
-  do nan_le <- ! (float64/le) nan nan;
-  do nan_not_ordered <- ! (bool/not) nan_le;
-  do nan_ne <- ! (float64/ne) nan nan;
-  do nan_ordering_ok <- ! (bool/and) nan_not_ordered nan_ne;
-  do rendered <- ! (float64/to_string) 12.5;
-  do rendering_ok <- ! (string/eq) rendered "12.5";
+  do nan <- ! float64/div 0.0 0.0;
+  do nan_le <- ! float64/le nan nan;
+  do nan_not_ordered <- ! bool/not nan_le;
+  do nan_ne <- ! float64/ne nan nan;
+  do nan_ordering_ok <- ! bool/and nan_not_ordered nan_ne;
+  do rendered <- ! float64/to_string 12.5;
+  do rendering_ok <- ! string/eq rendered "12.5";
 
-  do first <- ! (bool/and) arithmetic_ok comparisons_ok;
-  do second <- ! (bool/and) nan_ordering_ok rendering_ok;
-  do success <- ! (bool/and) first second;
-  ! (bool/if)
+  do first <- ! bool/and arithmetic_ok comparisons_ok;
+  do second <- ! bool/and nan_ordering_ok rendering_ok;
+  do success <- ! bool/and first second;
+  ! bool/if
     OS
     success
-    { ! (process/exit) 0 }
-    { ! (process/exit) 1 }
+    { ! process/exit 0 }
+    { ! process/exit 1 }
 end

@@ -18,5 +18,5 @@ let char = text/char in
 let string = text/string in
 let bytes = text/bytes in
 let (/Reader; /Writer; /OS; /io; /fs; /stdio; /args; /random; /process) = system in
-do zero <- ! (int64/add) 0 0;
-! (process/exit) zero
+do zero <- ! int64/add 0 0;
+! process/exit zero

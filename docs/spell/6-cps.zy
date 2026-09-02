@@ -43,14 +43,14 @@ begin
       fn remaining continuation =>
         match remaining
         | +Nil() => ! continuation
-        | +Cons(head, tail) => ! (stdio/write_line) head {
+        | +Cons(head, tail) => ! stdio/write_line head {
           ! print_list tail continuation
         }
         end
   } that
 
   ! print_list values {
-    ! (process/exit) 0
+    ! process/exit 0
   }
 end
 

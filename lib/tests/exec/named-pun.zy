@@ -40,16 +40,16 @@ begin
   =
     wrapped
   in
-  do value_check <- ! (int64/sub) pun_value 4;
-  do upper_value_check <- ! (int64/sub) PunValue 5;
-  do upper_projection_check <- ! (int64/sub) upper_slot/PunValue 5;
-  do x_check <- ! (int64/sub) pun_x 10;
-  do y_check <- ! (int64/sub) pun_y 11;
-  do inner_check <- ! (int64/sub) pun_inner 12;
-  do total <- ! (int64/add) value_check x_check;
-  do total <- ! (int64/add) total upper_value_check;
-  do total <- ! (int64/add) total upper_projection_check;
-  do total <- ! (int64/add) total y_check;
-  do total <- ! (int64/add) total inner_check;
-  ! (process/exit) total
+  do value_check <- ! int64/sub pun_value 4;
+  do upper_value_check <- ! int64/sub PunValue 5;
+  do upper_projection_check <- ! int64/sub upper_slot/PunValue 5;
+  do x_check <- ! int64/sub pun_x 10;
+  do y_check <- ! int64/sub pun_y 11;
+  do inner_check <- ! int64/sub pun_inner 12;
+  do total <- ! int64/add value_check x_check;
+  do total <- ! int64/add total upper_value_check;
+  do total <- ! int64/add total upper_projection_check;
+  do total <- ! int64/add total y_check;
+  do total <- ! int64/add total inner_check;
+  ! process/exit total
 end

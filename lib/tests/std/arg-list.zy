@@ -5,21 +5,21 @@ begin
   let (/OS) = system that
 
   let (/bool; /list; /string; /process) = builtin |> make_std in
-  ! (process/arg_list) {
+  ! process/arg_list {
     fn arguments =>
-      ! (list/case)
+      ! list/case
         String
         OS
         arguments
-        { ! (process/exit) 1 }
+        { ! process/exit 1 }
         {
           fn first remaining =>
-            do first_matches <- ! (string/eq) first "alpha";
-            ! (bool/if)
+            do first_matches <- ! string/eq first "alpha";
+            ! bool/if
               OS
               first_matches
-              { ! (process/exit) 0 }
-              { ! (process/exit) 1 }
+              { ! process/exit 0 }
+              { ! process/exit 1 }
         }
   }
 end

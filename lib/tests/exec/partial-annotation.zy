@@ -11,5 +11,5 @@ begin
   that
 
   let k : Kont _ OS = +Done(1) in
-  ! (process/exit) 0
+  ! process/exit 0
 end

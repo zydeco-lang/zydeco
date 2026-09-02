@@ -10,5 +10,5 @@ begin
   do first <- ! first;
   let ! second : Ret Int64 = ret first in
   do status <- ! second;
-  ! (process/exit) status
+  ! process/exit status
 end

@@ -28,5 +28,5 @@ begin
   that
 
   do x <- ! fn_opt_int .zero;
-  ! (process/exit) x
+  ! process/exit x
 end

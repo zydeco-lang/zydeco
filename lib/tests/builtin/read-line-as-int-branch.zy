@@ -1,20 +1,20 @@
 param (/numeric; /system) : @(import("../../std/builtin.zy")) in
 let (= Int64, int64) = numeric/int64 in
 let (/OS; /stdio; /process) = system in
-! (stdio/read_int)
-  { ! (process/exit) 1 }
+! stdio/read_int
+  { ! process/exit 1 }
   {
     fn integer =>
-      ! (int64/eq)
+      ! int64/eq
         OS
         integer
         42
         {
-          ! (stdio/read_int)
-            { ! (process/exit) 0 }
+          ! stdio/read_int
+            { ! process/exit 0 }
             {
-              fn unexpected => ! (process/exit) 1
+              fn unexpected => ! process/exit 1
             }
         }
-        { ! (process/exit) 1 }
+        { ! process/exit 1 }
   }

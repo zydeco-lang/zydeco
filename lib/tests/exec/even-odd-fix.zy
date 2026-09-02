@@ -31,7 +31,7 @@ begin
 
   do b <- ! odd +S(+S(+S(+Z())));
   match b
-  | +True() => ! (process/exit) 0
-  | +False() => ! (process/exit) 1
+  | +True() => ! process/exit 0
+  | +False() => ! process/exit 1
   end
 end

@@ -26,12 +26,12 @@ begin
   let (/bool; /string; /stdio; /process) = builtin |> make_std in
   def beep : Choice (Thk OS -> OS) = +L(
     {
-      fn k => ! (stdio/write_line) "0" { fn _ => ! k }
+      fn k => ! stdio/write_line "0" { fn _ => ! k }
     }
   ) in
   def boop : Choice (Thk OS -> OS) = +R(
     {
-      fn k => ! (stdio/write_line) "1" { fn _ => ! k }
+      fn k => ! stdio/write_line "1" { fn _ => ! k }
     }
   ) in
   def tree : Tree String = +Fork(
@@ -43,20 +43,20 @@ begin
     match t
     | +Final(res) =>
       match p
-      | +Nil() => ! (stdio/write_line) res {
+      | +Nil() => ! stdio/write_line res {
         fn _ =>
-          do correct <- ! (string/eq) res "o";
-          ! (bool/if)
+          do correct <- ! string/eq res "o";
+          ! bool/if
             OS
             correct
-            { ! (process/exit) 0 }
-            { ! (process/exit) 1 }
+            { ! process/exit 0 }
+            { ! process/exit 1 }
       }
-      | +Cons(_, _) => ! (process/exit) 2
+      | +Cons(_, _) => ! process/exit 2
       end
     | +Fork(tl, tr) =>
       match p
-      | +Nil() => ! (process/exit) 3
+      | +Nil() => ! process/exit 3
       | +Cons(c, p') =>
         match c
         | +L(k) => ! k { ! walk tl p' }

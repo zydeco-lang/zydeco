@@ -3,11 +3,11 @@ begin
   let (/Int64) = representations/i64 that
   let (/OS; /stdio; /process) = system that
 
-  ! (stdio/read_line) {
+  ! stdio/read_line {
     fn line =>
       let ! f (z : Int64) : OS =
         let line = line in
-        ! (process/exit) z
+        ! process/exit z
       in
       ! f 0
   }

@@ -5,7 +5,7 @@ begin
   let (/Int64) = representations/i64 that
 
   let (/Bool; /bool; /option; /list; /int64; /process) = builtin |> make_std in
-  let ! status (condition : Bool) : Ret Int64 = ! (bool/if)
+  let ! status (condition : Bool) : Ret Int64 = ! bool/if
     (Ret Int64)
     condition
     { ret 0 }
@@ -13,75 +13,75 @@ begin
       ret 1
     } in
 
-  do empty <- ! (list/nil) Int64;
-  do one <- ! (list/singleton) Int64 3;
-  do two <- ! (list/cons) Int64 2 one;
-  do three <- ! (list/cons) Int64 1 two;
-  do joined <- ! (list/append) Int64 three empty;
-  do mapped <- ! (list/map)
+  do empty <- ! list/nil Int64;
+  do one <- ! list/singleton Int64 3;
+  do two <- ! list/cons Int64 2 one;
+  do three <- ! list/cons Int64 1 two;
+  do joined <- ! list/append Int64 three empty;
+  do mapped <- ! list/map
     Int64
     Int64
     joined
-    { fn value => ! (int64/increment) value };
-  do reversed <- ! (list/reverse) Int64 mapped;
+    { fn value => ! int64/increment value };
+  do reversed <- ! list/reverse Int64 mapped;
 
-  do length <- ! (list/length) Int64 reversed;
-  do length_ok <- ! (int64/eq) length 3;
+  do length <- ! list/length Int64 reversed;
+  do length_ok <- ! int64/eq length 3;
   do length_status <- ! status length_ok;
 
-  do middle <- ! (list/get) Int64 reversed 1;
-  do middle_status <- ! (option/fold)
+  do middle <- ! list/get Int64 reversed 1;
+  do middle_status <- ! option/fold
     Int64
     (Ret Int64)
     middle
     { ret 1 }
     {
       fn value =>
-        do correct <- ! (int64/eq) value 3;
+        do correct <- ! int64/eq value 3;
         ! status correct
     };
 
-  do head <- ! (list/head) Int64 reversed;
-  do head_status <- ! (option/fold)
+  do head <- ! list/head Int64 reversed;
+  do head_status <- ! option/fold
     Int64
     (Ret Int64)
     head
     { ret 1 }
     {
       fn value =>
-        do correct <- ! (int64/eq) value 4;
+        do correct <- ! int64/eq value 4;
         ! status correct
     };
 
-  do negative <- ! (list/get) Int64 reversed -1;
-  do negative_ok <- ! (option/is_none) Int64 negative;
+  do negative <- ! list/get Int64 reversed -1;
+  do negative_ok <- ! option/is_none Int64 negative;
   do negative_status <- ! status negative_ok;
 
-  do present <- ! (option/some) Int64 2;
-  do transformed <- ! (option/map)
+  do present <- ! option/some Int64 2;
+  do transformed <- ! option/map
     Int64
     Int64
     present
-    { fn value => ! (int64/increment) value };
-  do transformed_value <- ! (option/unwrap_or) Int64 transformed 0;
-  do transformed_ok <- ! (int64/eq) transformed_value 3;
+    { fn value => ! int64/increment value };
+  do transformed_value <- ! option/unwrap_or Int64 transformed 0;
+  do transformed_ok <- ! int64/eq transformed_value 3;
   do transformed_status <- ! status transformed_ok;
 
-  do exclusive <- ! (bool/xor) bool/true bool/false;
+  do exclusive <- ! bool/xor bool/true bool/false;
   do exclusive_status <- ! status exclusive;
 
-  do minimum <- ! (int64/min) -3 4;
-  do maximum <- ! (int64/max) -3 4;
-  do minimum_ok <- ! (int64/eq) minimum -3;
-  do maximum_ok <- ! (int64/eq) maximum 4;
-  do extrema_ok <- ! (bool/and) minimum_ok maximum_ok;
+  do minimum <- ! int64/min -3 4;
+  do maximum <- ! int64/max -3 4;
+  do minimum_ok <- ! int64/eq minimum -3;
+  do maximum_ok <- ! int64/eq maximum 4;
+  do extrema_ok <- ! bool/and minimum_ok maximum_ok;
   do extrema_status <- ! status extrema_ok;
 
-  do first <- ! (int64/add) length_status middle_status;
-  do second <- ! (int64/add) head_status negative_status;
-  do third <- ! (int64/add) transformed_status exclusive_status;
-  do first_half <- ! (int64/add) first second;
-  do second_half <- ! (int64/add) third extrema_status;
-  do result <- ! (int64/add) first_half second_half;
-  ! (process/exit) result
+  do first <- ! int64/add length_status middle_status;
+  do second <- ! int64/add head_status negative_status;
+  do third <- ! int64/add transformed_status exclusive_status;
+  do first_half <- ! int64/add first second;
+  do second_half <- ! int64/add third extrema_status;
+  do result <- ! int64/add first_half second_half;
+  ! process/exit result
 end

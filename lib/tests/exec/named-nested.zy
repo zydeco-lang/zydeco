@@ -69,40 +69,40 @@ begin
   =
     punnable
   in
-  do tens <- ! (int64/mul) y 10;
-  do hundreds <- ! (int64/mul) z 100;
-  do low <- ! (int64/add) x tens;
-  do checksum <- ! (int64/add) low hundreds;
-  do layout_check <- ! (int64/sub) checksum 765;
-  do nested_projection_check <- ! (int64/sub) nested/x 5;
-  do outer_projection_check <- ! (int64/sub) nested/z 7;
-  do recursive_label_projection_check <- ! (int64/sub) wrapped/inner 8;
-  do chained_projection_check <- ! (int64/sub) wrapped/outer/inner 8;
-  do chained_pattern_check <- ! (int64/sub) wrapped_value 8;
-  do x_pattern_check <- ! (int64/sub) projected_x 5;
-  do z_pattern_check <- ! (int64/sub) projected_z 7;
-  do nested_alias_check <- ! (int64/sub) projected_nested/x 5;
-  do inner_pattern_check <- ! (int64/sub) projected_inner 8;
-  do chained_projection_pattern_check <- ! (int64/sub) chained_projected_inner 8;
-  do wrapped_alias_check <- ! (int64/sub) projected_wrapped/inner 8;
-  do disambiguated_left_check <- ! (int64/sub) left_x 9;
-  do disambiguated_right_check <- ! (int64/sub) right_x 10;
-  do punned_projection_pattern_check <- ! (int64/sub) punned 11;
-  do punned_alias_check <- ! (int64/sub) punnable_whole/punned 11;
-  do total <- ! (int64/add) layout_check nested_projection_check;
-  do total <- ! (int64/add) total outer_projection_check;
-  do total <- ! (int64/add) total recursive_label_projection_check;
-  do total <- ! (int64/add) total chained_projection_check;
-  do total <- ! (int64/add) total chained_pattern_check;
-  do total <- ! (int64/add) total x_pattern_check;
-  do total <- ! (int64/add) total z_pattern_check;
-  do total <- ! (int64/add) total nested_alias_check;
-  do total <- ! (int64/add) total inner_pattern_check;
-  do total <- ! (int64/add) total chained_projection_pattern_check;
-  do total <- ! (int64/add) total wrapped_alias_check;
-  do total <- ! (int64/add) total disambiguated_left_check;
-  do total <- ! (int64/add) total disambiguated_right_check;
-  do total <- ! (int64/add) total punned_projection_pattern_check;
-  do total <- ! (int64/add) total punned_alias_check;
-  ! (process/exit) total
+  do tens <- ! int64/mul y 10;
+  do hundreds <- ! int64/mul z 100;
+  do low <- ! int64/add x tens;
+  do checksum <- ! int64/add low hundreds;
+  do layout_check <- ! int64/sub checksum 765;
+  do nested_projection_check <- ! int64/sub nested/x 5;
+  do outer_projection_check <- ! int64/sub nested/z 7;
+  do recursive_label_projection_check <- ! int64/sub wrapped/inner 8;
+  do chained_projection_check <- ! int64/sub wrapped/outer/inner 8;
+  do chained_pattern_check <- ! int64/sub wrapped_value 8;
+  do x_pattern_check <- ! int64/sub projected_x 5;
+  do z_pattern_check <- ! int64/sub projected_z 7;
+  do nested_alias_check <- ! int64/sub projected_nested/x 5;
+  do inner_pattern_check <- ! int64/sub projected_inner 8;
+  do chained_projection_pattern_check <- ! int64/sub chained_projected_inner 8;
+  do wrapped_alias_check <- ! int64/sub projected_wrapped/inner 8;
+  do disambiguated_left_check <- ! int64/sub left_x 9;
+  do disambiguated_right_check <- ! int64/sub right_x 10;
+  do punned_projection_pattern_check <- ! int64/sub punned 11;
+  do punned_alias_check <- ! int64/sub punnable_whole/punned 11;
+  do total <- ! int64/add layout_check nested_projection_check;
+  do total <- ! int64/add total outer_projection_check;
+  do total <- ! int64/add total recursive_label_projection_check;
+  do total <- ! int64/add total chained_projection_check;
+  do total <- ! int64/add total chained_pattern_check;
+  do total <- ! int64/add total x_pattern_check;
+  do total <- ! int64/add total z_pattern_check;
+  do total <- ! int64/add total nested_alias_check;
+  do total <- ! int64/add total inner_pattern_check;
+  do total <- ! int64/add total chained_projection_pattern_check;
+  do total <- ! int64/add total wrapped_alias_check;
+  do total <- ! int64/add total disambiguated_left_check;
+  do total <- ! int64/add total disambiguated_right_check;
+  do total <- ! int64/add total punned_projection_pattern_check;
+  do total <- ! int64/add total punned_alias_check;
+  ! process/exit total
 end

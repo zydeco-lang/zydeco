@@ -47,7 +47,7 @@ begin
   def fix printl (xs : List String) (kont : Thk OS) : OS =
     match xs
     | +Nil() => ! kont
-    | +Cons(x, xs) => ! (stdio/write_line) x { ! printl xs kont }
+    | +Cons(x, xs) => ! stdio/write_line x { ! printl xs kont }
     end
   that
   def ! printv : Variadic String (Thk OS -> OS) = ! r String (Thk OS -> OS) printl that
@@ -62,6 +62,6 @@ begin
         String
         (Thk OS -> OS)
         { ! l String (Thk OS -> OS) printv } .more "hello" .more "world" .done
-        { ! (process/exit) 0 }
+        { ! process/exit 0 }
     }
 end

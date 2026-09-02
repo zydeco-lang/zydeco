@@ -20,11 +20,11 @@ begin
   let (inner, #outer = _) = nested in
   let pair = (triple/first, triple/last) in
   let (first, last) = pair in
-  do total <- ! (int64/add) first triple/middle;
-  do total <- ! (int64/add) total last;
-  do total <- ! (int64/add) total inner/inner_y;
-  do total <- ! (int64/add) total direct/code;
-  do total <- ! (int64/add) total first_global;
-  do total <- ! (int64/add) total status_field/status;
-  ! (process/exit) total
+  do total <- ! int64/add first triple/middle;
+  do total <- ! int64/add total last;
+  do total <- ! int64/add total inner/inner_y;
+  do total <- ! int64/add total direct/code;
+  do total <- ! int64/add total first_global;
+  do total <- ! int64/add total status_field/status;
+  ! process/exit total
 end

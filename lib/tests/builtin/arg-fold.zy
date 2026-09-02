@@ -5,18 +5,18 @@ begin
   let string = text/string that
   let (/OS; /args; /process) = system that
 
-  do joined <- ! (args/fold)
+  do joined <- ! args/fold
     (Ret String)
     { ret "" }
     {
       fn argument remaining =>
         do suffix <- ! remaining;
-        ! (string/append) argument suffix
+        ! string/append argument suffix
     };
-  ! (string/eq)
+  ! string/eq
     OS
     joined
     "alphabeta"
-    { ! (process/exit) 0 }
-    { ! (process/exit) 1 }
+    { ! process/exit 0 }
+    { ! process/exit 1 }
 end

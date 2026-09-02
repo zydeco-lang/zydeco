@@ -90,7 +90,7 @@ begin
       }
       -- fn _ => ret 0
       {
-        fn x => ! (int64/sub) x 42
+        fn x => ! int64/sub x 42
       };
     do j <- ! attempt Ret mret Int64 Int64
       {
@@ -98,20 +98,20 @@ begin
         fn _ => ret 0
       }
       {
-        fn x => ! (int64/sub) x 42
+        fn x => ! int64/sub x 42
       };
-    ! (int64/eq)
+    ! int64/eq
       OS
       i
       0
       {
-        ! (int64/eq)
+        ! int64/eq
           OS
           j
           0
-          { ! (process/exit) 0 }
-          { ! (process/exit) 2 }
+          { ! process/exit 0 }
+          { ! process/exit 2 }
       }
-      { ! (process/exit) 1 }
+      { ! process/exit 1 }
   end
 end

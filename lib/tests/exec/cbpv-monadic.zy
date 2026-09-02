@@ -26,7 +26,7 @@ begin
       | +Some : A
       end
     that
-    def ! str_get_or_space (text : String) (index : Int64) : Ret Char = ! (string/get)
+    def ! str_get_or_space (text : String) (index : Int64) : Ret Char = ! string/get
       (Ret Char)
       text
       index
@@ -56,7 +56,7 @@ begin
       do condition <- ! condition;
       ! if B condition consequent alternative
     that
-    def ! int_eq (left : Int64) (right : Int64) : Ret Bool = ! (int64/eq)
+    def ! int_eq (left : Int64) (right : Int64) : Ret Bool = ! int64/eq
       (Ret Bool)
       left
       right
@@ -64,7 +64,7 @@ begin
       {
         ret +False()
       } that
-    def ! int_lt (left : Int64) (right : Int64) : Ret Bool = ! (int64/lt)
+    def ! int_lt (left : Int64) (right : Int64) : Ret Bool = ! int64/lt
       (Ret Bool)
       left
       right
@@ -72,7 +72,7 @@ begin
       {
         ret +False()
       } that
-    def ! int_le (left : Int64) (right : Int64) : Ret Bool = ! (int64/gt)
+    def ! int_le (left : Int64) (right : Int64) : Ret Bool = ! int64/gt
       (Ret Bool)
       left
       right
@@ -80,7 +80,7 @@ begin
       {
         ret +True()
       } that
-    def ! str_eq (left : String) (right : String) : Ret Bool = ! (string/eq)
+    def ! str_eq (left : String) (right : String) : Ret Bool = ! string/eq
       (Ret Bool)
       left
       right
@@ -89,8 +89,8 @@ begin
         ret +False()
       } that
     def ! char_eq (left : Char) (right : Char) : Ret Bool =
-      do left <- ! (char/codepoint) left;
-      do right <- ! (char/codepoint) right;
+      do left <- ! char/codepoint left;
+      do right <- ! char/codepoint right;
       ! int_eq left right
     that
     def ! bool_eq (left : Bool) (right : Bool) : Ret Bool =
@@ -136,8 +136,8 @@ begin
           ! foldl A R remaining function result
         end
     that
-    def ! panic (message : String) : OS = ! (stdio/write_line) message {
-      ! (process/exit) 1
+    def ! panic (message : String) : OS = ! stdio/write_line message {
+      ! process/exit 1
     } that
 
     -- A monad structure that supports fail
@@ -268,7 +268,7 @@ begin
       comatch
       | .print s =>
         comatch
-        | .run ka _ => ! (stdio/write_line) s {
+        | .run ka _ => ! stdio/write_line s {
           ! ka () }
         end
       end
@@ -334,72 +334,72 @@ begin
       comatch
       | .value sv kont =>
         match sv
-        | +Var(x) => ! (stdio/write) x kont
-        | +Bool(b) => ! if OS b { ! (stdio/write) "true" kont } { ! (stdio/write) "false" kont }
+        | +Var(x) => ! stdio/write x kont
+        | +Bool(b) => ! if OS b { ! stdio/write "true" kont } { ! stdio/write "false" kont }
         | +Int64(i) =>
-          do i <- ! (int64/to_string) i;
-          ! (stdio/write) i kont
+          do i <- ! int64/to_string i;
+          ! stdio/write i kont
         | +Thunk(sc) =>
           -- Continuation sequencing is written explicitly as `<comp1> { <comp2> }`.
-          ! (stdio/write) "{ " {
+          ! stdio/write "{ " {
             ! print-scbpv .compu sc {
-              ! (stdio/write) " }" {
+              ! stdio/write " }" {
                 ! kont }
             }
           }
         end
       | .compu sc kont =>
         match sc
-        | +Lam(x, sc) => ! (stdio/write) "fn " {
-          ! (stdio/write) x {
-            ! (stdio/write) " -> " {
+        | +Lam(x, sc) => ! stdio/write "fn " {
+          ! stdio/write x {
+            ! stdio/write " -> " {
               ! print-scbpv .compu sc {
                 ! kont }
             }
           }
         }
-        | +App(sc, sv) => ! (stdio/write) "(" {
+        | +App(sc, sv) => ! stdio/write "(" {
           ! print-scbpv .compu sc {
-            ! (stdio/write) " " {
+            ! stdio/write " " {
               ! print-scbpv .value sv {
-                ! (stdio/write) ")" {
+                ! stdio/write ")" {
                   ! kont }
               }
             }
           }
         }
-        | +Ret(sv) => ! (stdio/write) "ret " {
+        | +Ret(sv) => ! stdio/write "ret " {
           ! print-scbpv .value sv {
             ! kont }
         }
         | +Bind(sc1, x, sc2) =>
-          do m <- ! (string/append) "bind " x;
-          do m <- ! (string/append) m " <- ";
-          ! (stdio/write) m {
+          do m <- ! string/append "bind " x;
+          do m <- ! string/append m " <- ";
+          ! stdio/write m {
             ! print-scbpv .compu sc1 {
-              ! (stdio/write) "; " {
+              ! stdio/write "; " {
                 ! print-scbpv .compu sc2 {
                   ! kont }
               }
             }
           }
-        | +Force(sv) => ! (stdio/write) "! " {
+        | +Force(sv) => ! stdio/write "! " {
           ! print-scbpv .value sv {
             ! kont }
         }
-        | +Rec(x, sc) => ! (stdio/write) "fix " {
-          ! (stdio/write) x {
-            ! (stdio/write) " -> " {
+        | +Rec(x, sc) => ! stdio/write "fix " {
+          ! stdio/write x {
+            ! stdio/write " -> " {
               ! print-scbpv .compu sc {
                 ! kont }
             }
           }
         }
-        | +If(sv, sc1, sc2) => ! (stdio/write) "if " {
+        | +If(sv, sc1, sc2) => ! stdio/write "if " {
           ! print-scbpv .value sv {
-            ! (stdio/write) " then " {
+            ! stdio/write " then " {
               ! print-scbpv .compu sc1 {
-                ! (stdio/write) " else " {
+                ! stdio/write " else " {
                   ! print-scbpv .compu sc2 {
                     ! kont }
                 }
@@ -407,9 +407,9 @@ begin
             }
           }
         }
-        | +Env(sc) => ! (stdio/write) "env[" {
+        | +Env(sc) => ! stdio/write "env[" {
           ! print-scbpv .compu sc {
-            ! (stdio/write) "]" {
+            ! stdio/write "]" {
               ! kont }
           }
         }
@@ -429,18 +429,18 @@ begin
       comatch
       | .value v kont =>
         match v
-        | +Bool(b) => ! if OS b { ! (stdio/write) "true" kont } { ! (stdio/write) "false" kont }
+        | +Bool(b) => ! if OS b { ! stdio/write "true" kont } { ! stdio/write "false" kont }
         | +Int64(i) =>
-          do i <- ! (int64/to_string) i;
-          ! (stdio/write) i kont
-        | +Thunk(c) => ! (stdio/write) "{ " {
+          do i <- ! int64/to_string i;
+          ! stdio/write i kont
+        | +Thunk(c) => ! stdio/write "{ " {
           ! print-cbpv .compu c {
-            ! (stdio/write) " }" {
+            ! stdio/write " }" {
               ! kont }
           }
         }
         end
-      | .compu c kont => ! (stdio/write) "<compu>" kont
+      | .compu c kont => ! stdio/write "<compu>" kont
       end
     that
     def ! print-value : Value -> U OS -> OS = ! print-cbpv .value that
@@ -476,17 +476,17 @@ begin
           end
         end
       | .extend x v => ! envo +Extend(x, v, env)
-      | .print k => ! (stdio/write_line) "[" {
+      | .print k => ! stdio/write_line "[" {
         (
           fix (p : U (EnvT -> OS)) =>
             fn env =>
               match env
-              | +Empty() => ! (stdio/write_line) "]" k
-              | +Extend(x, v, env') => ! (stdio/write) "  " {
-                ! (stdio/write) x {
-                  ! (stdio/write) " = " {
+              | +Empty() => ! stdio/write_line "]" k
+              | +Extend(x, v, env') => ! stdio/write "  " {
+                ! stdio/write x {
+                  ! stdio/write " = " {
                     ! print-value v {
-                      ! (stdio/write_line) "," {
+                      ! stdio/write_line "," {
                         ! p env' }
                     }
                   }
@@ -517,7 +517,7 @@ begin
 
     def ! traceo (items : List TraceItem) : TraceO =
       comatch
-      | .print kont => ! (stdio/write_line) "[" {
+      | .print kont => ! stdio/write_line "[" {
         do kont <-
           ! foldl TraceItem (U OS) items {
             fn item kont =>
@@ -525,18 +525,18 @@ begin
                 match item
                 | +App(v) =>
                   -- | +App(_sv, v) =>
-                  ! (stdio/write) "  app " {
+                  ! stdio/write "  app " {
                     ! print-value v {
-                      ! (stdio/write_line) "," {
+                      ! stdio/write_line "," {
                         ! kont }
                     }
                   }
                 -- | +Bind(_k) =>
-                | +Bind(x, sc, _k) => ! (stdio/write) "  bind " {
-                  ! (stdio/write) x {
-                    ! (stdio/write) ". " {
+                | +Bind(x, sc, _k) => ! stdio/write "  bind " {
+                  ! stdio/write x {
+                    ! stdio/write ". " {
                       ! print-scompu sc {
-                        ! (stdio/write_line) "," {
+                        ! stdio/write_line "," {
                           ! kont }
                       }
                     }
@@ -545,7 +545,7 @@ begin
                 end
               }
           } {
-            ! (stdio/write_line) "]" kont };
+            ! stdio/write_line "]" kont };
         ! kont
       }
       end
@@ -607,8 +607,8 @@ begin
     def ! mp-cnt (A : VType) (cnt : Int64) (m : U (Parser A)) : Parser A =
       comatch
       | .run s i =>
-        do len <- ! (string/length) s;
-        do i' <- ! (int64/add) i cnt;
+        do len <- ! string/length s;
+        do i' <- ! int64/add i cnt;
         ! if~ (MExnOS (Pair A Int64)) { ! int_le i' len } {
           ! m .run s i
         } {
@@ -623,41 +623,41 @@ begin
         do c' <- ! str_get_or_space s i;
         ! char_eq c' c
       } {
-        do i' <- ! (int64/add) i 1;
+        do i' <- ! int64/add i 1;
         ! mexn .return (Pair Char Int64) +Cons(c, i')
       } {
-        do msg <- ! (char/to_string) c;
-        do msg <- ! (string/append) "missing `" msg;
-        do msg <- ! (string/append) msg "`";
+        do msg <- ! char/to_string c;
+        do msg <- ! string/append "missing `" msg;
+        do msg <- ! string/append msg "`";
         ! mexn-err .fail (Pair Char Int64) +ParseError(i, msg)
       }
       end
     } that
 
     def ! p_word (w : String) : Parser String =
-      do len <- ! (string/length) w;
+      do len <- ! string/length w;
       ! mp-cnt String len {
         comatch
         | .run s i =>
           let fix word_match (j : Int64) = ! if~ (Ret Bool) { ! int_eq j len } {
             ret +True()
           } {
-            do l <- ! (int64/add) i j;
+            do l <- ! int64/add i j;
             do c1 <- ! str_get_or_space s l;
             do c2 <- ! str_get_or_space w j;
             ! if~ (Ret Bool) { ! char_eq c1 c2 } {
-              do j' <- ! (int64/add) j 1;
+              do j' <- ! int64/add j 1;
               ! word_match j'
             } {
               ret +False()
             }
           } in
           ! if~ (MExnOS (Pair String Int64)) { ! word_match 0 } {
-            do i' <- ! (int64/add) i len;
+            do i' <- ! int64/add i len;
             ! mexn .return (Pair String Int64) +Cons(w, i')
           } {
-            do msg <- ! (string/append) "word `" w;
-            do msg <- ! (string/append) msg "` mismatch";
+            do msg <- ! string/append "word `" w;
+            do msg <- ! string/append msg "` mismatch";
             ! mexn-err .fail (Pair String Int64) +ParseError(i, msg)
           }
         end
@@ -666,7 +666,7 @@ begin
 
     def ! p_var : Parser String =
       let ! p_vc (c : Char) : Ret (Option Char) =
-        do ascii <- ! (char/codepoint) c;
+        do ascii <- ! char/codepoint c;
         let ! digit = ! and~ { ! int_lt 47 ascii } { ! int_lt ascii 58 } in
         let ! cap = ! and~ { ! int_lt 64 ascii } { ! int_lt ascii 91 } in
         let ! sml = ! and~ { ! int_lt 96 ascii } { ! int_lt ascii 123 } in
@@ -680,10 +680,10 @@ begin
         let fix var (v : String) (i : Int64) =
           do c <- ! str_get_or_space s i;
           do c? <- ! p_vc c;
-          do i' <- ! (int64/add) i 1;
+          do i' <- ! int64/add i 1;
           match c?
           | +None() => ! if~ (MExnOS (Pair String Int64)) {
-            do len <- ! (string/length) v;
+            do len <- ! string/length v;
             ! int_eq len 0
           } {
             ! mexn-err .fail (Pair String Int64) +ParseError(i, "variable of length 0")
@@ -691,8 +691,8 @@ begin
             ! mexn .return (Pair String Int64) +Cons(v, i)
           }
           | +Some(c) =>
-            do c <- ! (char/to_string) c;
-            do v <- ! (string/append) v c;
+            do c <- ! char/to_string c;
+            do v <- ! string/append v c;
             ! var v i'
           end
         in
@@ -899,7 +899,7 @@ begin
         fn sci =>
           match sci
           | +Cons(sc, i) => ! if~ (MExnOS SCompu) {
-            do len <- ! (string/length) s;
+            do len <- ! string/length s;
             ! int_eq i len
           } {
             ! mexn .return SCompu sc
@@ -991,16 +991,16 @@ begin
             | .os =>
               let ! mp : MExnOS Unit =
                 comatch
-                | .run ka _ => ! (stdio/write_line) "[[DEBUG]]" {
-                  ! (stdio/write) "[env]: " {
+                | .run ka _ => ! stdio/write_line "[[DEBUG]]" {
+                  ! stdio/write "[env]: " {
                     ! env .print {
-                      ! (stdio/write) "[term]: " {
+                      ! stdio/write "[term]: " {
                         ! print-scompu sc {
-                          ! (stdio/write_line) "" {
-                            ! (stdio/write) "[stack]: " {
+                          ! stdio/write_line "" {
+                            ! stdio/write "[stack]: " {
                               ! traceo items .print {
-                                ! (stdio/write) "Continue? " {
-                                  ! (stdio/read_line) {
+                                ! stdio/write "Continue? " {
+                                  ! stdio/read_line {
                                     fn _ => ! ka ()
                                   }
                                 }
@@ -1041,7 +1041,7 @@ begin
         ! panic "expected bool value"
       in
       let ! expect-int64-panic = ! panic "expected int64 value" in
-      let ! correct = ! (stdio/write_line) "\\^o^/" k in
+      let ! correct = ! stdio/write_line "\\^o^/" k in
       match v1
       | +Bool(b1) =>
         match v2
@@ -1052,9 +1052,9 @@ begin
           | +False() =>
             do b1 <- ! bool_to_str b1;
             do b2 <- ! bool_to_str b2;
-            do msg <- ! (string/append) b1 " != ";
-            do msg <- ! (string/append) msg b2;
-            do msg <- ! (string/append) "wrong bool value: " msg;
+            do msg <- ! string/append b1 " != ";
+            do msg <- ! string/append msg b2;
+            do msg <- ! string/append "wrong bool value: " msg;
             ! panic msg
           end
         | +Int64(_) => ! expect-bool-panic
@@ -1068,11 +1068,11 @@ begin
           match eq?
           | +True() => ! correct
           | +False() =>
-            do i1 <- ! (int64/to_string) i1;
-            do i2 <- ! (int64/to_string) i2;
-            do msg <- ! (string/append) i1 " != ";
-            do msg <- ! (string/append) msg i2;
-            do msg <- ! (string/append) "wrong int64 value: " msg;
+            do i1 <- ! int64/to_string i1;
+            do i2 <- ! int64/to_string i2;
+            do msg <- ! string/append i1 " != ";
+            do msg <- ! string/append msg i2;
+            do msg <- ! string/append "wrong int64 value: " msg;
             ! panic msg
           end
         | +Thunk(_) => ! expect-int64-panic
@@ -1084,9 +1084,9 @@ begin
     def ! report (e : Exception) : OS =
       match e
       | +ParseError(loc, msg) =>
-        do loc <- ! (int64/to_string) loc;
-        do loc <- ! (string/append) loc ": ";
-        do msg <- ! (string/append) loc msg;
+        do loc <- ! int64/to_string loc;
+        do loc <- ! string/append loc ": ";
+        do msg <- ! string/append loc msg;
         ! panic msg
       | +FreeVariable() => ! panic "free variable"
       | +TypeError() => ! panic "type error"
@@ -1129,7 +1129,7 @@ begin
           {
             ! int64-op {
               fn i1 i2 =>
-                do i <- ! (int64/add) i1 i2;
+                do i <- ! int64/add i1 i2;
                 ret +Int64(i)
             }
           }
@@ -1140,7 +1140,7 @@ begin
             {
               ! int64-op {
                 fn i1 i2 =>
-                  do i <- ! (int64/mul) i1 i2;
+                  do i <- ! int64/mul i1 i2;
                   ret +Int64(i)
               }
             }
@@ -1243,7 +1243,7 @@ begin
                     --     ))
                     --   )
                     -- )))), +Int64(1)), +Int64(6)) +Int64(720);
-                    ! (process/exit) 0
+                    ! process/exit 0
                   }
               }
           }

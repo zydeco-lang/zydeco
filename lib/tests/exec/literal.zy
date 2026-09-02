@@ -10,5 +10,5 @@ begin
     --| second line
     @(literal)
   in
-  ! (stdio/write_line) message { ! (process/exit) 0 }
+  ! stdio/write_line message { ! process/exit 0 }
 end

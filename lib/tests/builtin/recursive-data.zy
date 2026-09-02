@@ -25,7 +25,7 @@ begin
   do one <- ! successor +Z();
   do result <- ! is_nonzero one;
   match result
-  | +False(_) => ! (process/exit) 1
-  | +True(_) => ! (process/exit) 0
+  | +False(_) => ! process/exit 1
+  | +True(_) => ! process/exit 0
   end
 end

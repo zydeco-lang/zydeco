@@ -19,8 +19,8 @@ begin
   let backward : Int64 = keep Int64 <| forward that
   let keep[Int64] ~> via_pattern = backward that
   match via_pattern
-  | other ~> +Tagged(_) => ! (process/exit) 1
-  | tag ~> +Tagged(status) => ! (process/exit) status
-  | _ => ! (process/exit) 1
+  | other ~> +Tagged(_) => ! process/exit 1
+  | tag ~> +Tagged(status) => ! process/exit status
+  | _ => ! process/exit 1
   end
 end

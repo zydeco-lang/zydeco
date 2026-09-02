@@ -1,5 +1,5 @@
 param (/numeric; /system) : @(import("../../std/builtin.zy")) in
 let (= Int64, int64) = numeric/int64 in
 let (/process) = system in
-do status <- ! (int64/add) 1 2;
-! (process/exit) status
+do status <- ! int64/add 1 2;
+! process/exit status

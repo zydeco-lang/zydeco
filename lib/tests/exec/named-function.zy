@@ -11,7 +11,7 @@ begin
   let FunctionResult = Int64 * (#sum :: Int64) that
   let FunctionBox = (#apply :: Thk (Arguments -> Ret FunctionResult)) * Int64 that
   def ! combine ((= lhs : Int64, rhs : Int64) : Arguments) : Ret FunctionResult =
-    do sum <- ! (int64/add) lhs rhs;
+    do sum <- ! int64/add lhs rhs;
     ret (lhs, = sum : Int64)
   that
   def function_box : FunctionBox = (
@@ -34,9 +34,9 @@ begin
   =
     result
   in
-  do echoed_check <- ! (int64/sub) echoed 10;
-  do sum_check <- ! (int64/sub) sum 21;
-  do total <- ! (int64/add) marker echoed_check;
-  do total <- ! (int64/add) total sum_check;
-  ! (process/exit) total
+  do echoed_check <- ! int64/sub echoed 10;
+  do sum_check <- ! int64/sub sum 21;
+  do total <- ! int64/add marker echoed_check;
+  do total <- ! int64/add total sum_check;
+  ! process/exit total
 end

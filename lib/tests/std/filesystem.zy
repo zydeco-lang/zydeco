@@ -18,74 +18,74 @@ begin
   let ! expect_ok (A : VType)
     (result : Result A IoError)
     (continuation : Thk (A -> OS))
-  : OS = ! (results/fold)
+  : OS = ! results/fold
       A
       IoError
       OS
       result
       continuation
-      { fn _ => ! (process/exit) 1 }
+      { fn _ => ! process/exit 1 }
   in
-  let ! require (condition : Bool) (continuation : Thk OS) : OS = ! (bool/if)
+  let ! require (condition : Bool) (continuation : Thk OS) : OS = ! bool/if
     OS
     condition
     continuation
     {
-      ! (process/exit) 2
+      ! process/exit 2
     } in
-  let ! verify_stdio : OS = ! (stdio/write) "" {
-    fn written => ! expect_ok Unit written { fn _ => ! (process/exit) 0 }
+  let ! verify_stdio : OS = ! stdio/write "" {
+    fn written => ! expect_ok Unit written { fn _ => ! process/exit 0 }
   } in
   let ! verify_missing (path_string : String) : OS =
-    do missing_string <- ! (string/append) path_string ".missing";
-    do missing_path <- ! (fs/path) missing_string;
-    ! (fs/read_bytes) missing_path {
+    do missing_string <- ! string/append path_string ".missing";
+    do missing_path <- ! fs/path missing_string;
+    ! fs/read_bytes missing_path {
       fn result =>
-        ! (results/fold)
+        ! results/fold
           Bytes
           IoError
           OS
           result
-          { fn _ => ! (process/exit) 3 }
+          { fn _ => ! process/exit 3 }
           {
             fn error =>
-              do kind <- ! (io/error_kind) error;
-              do correct <- ! (io/kind_eq) kind io/not_found;
+              do kind <- ! io/error_kind error;
+              do correct <- ! io/kind_eq kind io/not_found;
               ! require correct { ! verify_stdio }
           }
     }
   in
   let ! verify_invalid_utf8 (path_string : String) : OS =
-    do invalid_string <- ! (string/append) path_string ".invalid";
-    do invalid_path <- ! (fs/path) invalid_string;
-    ! (fs/read_text) invalid_path {
+    do invalid_string <- ! string/append path_string ".invalid";
+    do invalid_path <- ! fs/path invalid_string;
+    ! fs/read_text invalid_path {
       fn result =>
-        ! (results/fold)
+        ! results/fold
           String
           IoError
           OS
           result
-          { fn _ => ! (process/exit) 6 }
+          { fn _ => ! process/exit 6 }
           {
             fn error =>
-              do kind <- ! (io/error_kind) error;
-              do correct <- ! (io/kind_eq) kind io/invalid_data;
+              do kind <- ! io/error_kind error;
+              do correct <- ! io/kind_eq kind io/invalid_data;
               ! require correct { ! verify_missing path_string }
           }
     }
   in
-  let ! verify_contents (path : Path) (path_string : String) : OS = ! (fs/read_text) path {
+  let ! verify_contents (path : Path) (path_string : String) : OS = ! fs/read_text path {
     fn read =>
       ! expect_ok String read {
         fn contents =>
-          do text_correct <- ! (string/eq) contents "hé🙂!";
+          do text_correct <- ! string/eq contents "hé🙂!";
           ! require text_correct {
-            ! (fs/read_bytes) path {
+            ! fs/read_bytes path {
               fn read_bytes =>
                 ! expect_ok Bytes read_bytes {
                   fn contents =>
-                    do length <- ! (bytes/length) contents;
-                    do length_correct <- ! (int64/eq) length 8;
+                    do length <- ! bytes/length contents;
+                    do length_correct <- ! int64/eq length 8;
                     ! require length_correct { ! verify_invalid_utf8 path_string }
                 }
             }
@@ -95,32 +95,32 @@ begin
   let ! verify_closed (path : Path)
     (path_string : String)
     (writer : Writer)
-  : OS = ! (io/close_writer) writer {
+  : OS = ! io/close_writer writer {
       fn closed_again =>
-        ! (results/fold)
+        ! results/fold
           Unit
           IoError
           OS
           closed_again
-          { fn _ => ! (process/exit) 4 }
+          { fn _ => ! process/exit 4 }
           {
             fn error =>
-              do kind <- ! (io/error_kind) error;
-              do correct <- ! (io/kind_eq) kind io/closed;
+              do kind <- ! io/error_kind error;
+              do correct <- ! io/kind_eq kind io/closed;
               ! require correct { ! verify_contents path path_string }
           }
     }
   in
-  let ! append_marker (path : Path) (path_string : String) : OS = ! (fs/append_writer) path {
+  let ! append_marker (path : Path) (path_string : String) : OS = ! fs/append_writer path {
     fn opened =>
       ! expect_ok Writer opened {
         fn writer =>
-          do marker <- ! (bytes/from_string) "!";
-          ! (io/write_all) writer marker {
+          do marker <- ! bytes/from_string "!";
+          ! io/write_all writer marker {
             fn written =>
               ! expect_ok Unit written {
                 fn _ =>
-                  ! (io/close_writer) writer {
+                  ! io/close_writer writer {
                     fn closed =>
                       ! expect_ok Unit closed {
                         fn _ => ! verify_closed path path_string writer
@@ -131,8 +131,8 @@ begin
       }
   } in
   let ! exercise (path_string : String) : OS =
-    do path <- ! (fs/path) path_string;
-    ! (fs/write_text) path "hé🙂" {
+    do path <- ! fs/path path_string;
+    ! fs/write_text path "hé🙂" {
       fn written =>
         ! expect_ok Unit written {
           fn _ => ! append_marker path path_string
@@ -140,14 +140,14 @@ begin
     }
   in
 
-  ! (process/arg_list) {
+  ! process/arg_list {
     fn arguments =>
-      do first <- ! (list/head) String arguments;
-      ! (option/fold)
+      do first <- ! list/head String arguments;
+      ! option/fold
         String
         OS
         first
-        { ! (process/exit) 5 }
+        { ! process/exit 5 }
         { fn path => ! exercise path }
   }
 end

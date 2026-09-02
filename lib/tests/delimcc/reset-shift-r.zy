@@ -52,22 +52,22 @@ begin
           ! shift' Int64 Int64 {
             fn cont =>
               do y <- ! cont 4;
-              do res <- ! (int64/add) 17 y;
+              do res <- ! int64/add 17 y;
               ! mkont (Ret Int64) .return Int64 res
           }
         }
         {
           fn x =>
-            do res <- ! (int64/mul) 2 x;
+            do res <- ! int64/mul 2 x;
             ! mkont (Ret Int64) .return Int64 res
         }
     } that
 
     do x <- ! ex;
-    do s <- ! (int64/to_string) x;
-    ! (stdio/write_line) s {
-      do zero <- ! (int64/sub) x 25;
-      ! (process/exit) zero
+    do s <- ! int64/to_string x;
+    ! stdio/write_line s {
+      do zero <- ! int64/sub x 25;
+      ! process/exit zero
     }
   end
 end

@@ -123,7 +123,7 @@ mod tests {
 
         assert_eq!(
             edit.new_text,
-            "@[format(layout(ignore))] ! (bool/if) (Ret Int64) greater { ret left } { ret right }\n"
+            "@[format(layout(ignore))] ! bool/if (Ret Int64) greater { ret left } { ret right }\n"
         );
     }
 

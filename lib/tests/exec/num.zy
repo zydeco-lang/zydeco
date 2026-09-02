@@ -14,7 +14,7 @@ begin
   do x <- (fn x => ret 1 : Bool -> Ret Int64) +True();
   do y <- (fn x => ret +True() : Int64 -> Ret Bool) 123;
   do z <- (fn x => ret +True() : Int64 -> Ret Bool) -123;
-  do x <- ! (int64/mul) x -1;
-  do x <- ! (int64/add) 1 x;
-  ! (process/exit) x
+  do x <- ! int64/mul x -1;
+  do x <- ! int64/add 1 x;
+  ! process/exit x
 end

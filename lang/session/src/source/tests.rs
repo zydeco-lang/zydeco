@@ -410,8 +410,8 @@ begin
       (#process ::
         @[builtin(exit)] (#exit :: (@[intrinsic(thk)] _) (Int64 -> OS)))
   ) in
-    do sum <- ! (int64/add) 1 2;
-    ! (process/exit) sum
+    do sum <- ! int64/add 1 2;
+    ! process/exit sum
 end
 "#
 }
@@ -1555,7 +1555,7 @@ begin
       (#process :: @[builtin(exit)]
         (#exit :: (@[intrinsic(thk)] _) (Int64 -> OS)))
   ) in
-    ! (stdio/write_int) 7 { ! (process/exit) 0 }
+    ! stdio/write_int 7 { ! process/exit 0 }
 end
 "#,
     );
@@ -1586,8 +1586,8 @@ begin
       (#int64 :: @[builtin(int64_add)] (#add :: Thk (Int64 -> Int64 -> Ret Int64))) *
       (#process :: @[builtin(exit)] (#exit :: Thk (Int64 -> OS)))
   ) in
-    do sum <- ! (int64/add) 1 2;
-    ! (process/exit) sum
+    do sum <- ! int64/add 1 2;
+    ! process/exit sum
 end
 "#,
     );

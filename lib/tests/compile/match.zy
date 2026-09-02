@@ -11,7 +11,7 @@ begin
 
   let x : Bool = +False() in
   match x
-  | +True(_) => ! (process/exit) 10
-  | +False(_) => ! (process/exit) 0
+  | +True(_) => ! process/exit 10
+  | +False(_) => ! process/exit 0
   end
 end

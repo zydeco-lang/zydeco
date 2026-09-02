@@ -44,15 +44,15 @@ begin
       -> Ret Int64
     ) = {
       fn recursive number =>
-        do is_zero <- ! (int64/eq) number 0;
-        ! (bool/if)
+        do is_zero <- ! int64/eq number 0;
+        ! bool/if
           (Ret Int64)
           is_zero
           { ret 1 }
           {
-            do predecessor <- ! (int64/sub) number 1;
+            do predecessor <- ! int64/sub number 1;
             do rest <- ! recursive predecessor;
-            ! (int64/mul) number rest
+            ! int64/mul number rest
           }
     } that
     def check : Thk (
@@ -64,20 +64,20 @@ begin
     ) = {
       fn factorial input expected continuation =>
         do actual <- ! factorial input;
-        do correct <- ! (int64/eq) actual expected;
-        ! (bool/if)
+        do correct <- ! int64/eq actual expected;
+        ! bool/if
           OS
           correct
           { ! continuation }
-          { ! (process/exit) 1 }
+          { ! process/exit 1 }
     } that
 
     do factorial <-
       ! fixed_point (Int64 -> Ret Int64) factorial_step;
     ! check factorial 5 120 {
       ! check factorial 10 3628800 {
-        ! (stdio/write_line) "factorial results are correct" {
-          fn _ => ! (process/exit) 0
+        ! stdio/write_line "factorial results are correct" {
+          fn _ => ! process/exit 0
         }
       }
     }

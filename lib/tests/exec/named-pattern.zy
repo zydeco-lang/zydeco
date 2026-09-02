@@ -46,16 +46,16 @@ begin
   =
     pattern_target
   in
-  do direct_left_check <- ! (int64/sub) direct_left 1;
-  do direct_middle_check <- ! (int64/sub) direct_middle 2;
-  do direct_right_check <- ! (int64/sub) direct_right 3;
-  do opaque_left_check <- ! (int64/sub) opaque_left 1;
-  do opaque_middle_check <- ! (int64/sub) opaque_middle 2;
-  do opaque_right_check <- ! (int64/sub) opaque_right 3;
-  do total <- ! (int64/add) direct_left_check direct_middle_check;
-  do total <- ! (int64/add) total direct_right_check;
-  do total <- ! (int64/add) total opaque_left_check;
-  do total <- ! (int64/add) total opaque_middle_check;
-  do total <- ! (int64/add) total opaque_right_check;
-  ! (process/exit) total
+  do direct_left_check <- ! int64/sub direct_left 1;
+  do direct_middle_check <- ! int64/sub direct_middle 2;
+  do direct_right_check <- ! int64/sub direct_right 3;
+  do opaque_left_check <- ! int64/sub opaque_left 1;
+  do opaque_middle_check <- ! int64/sub opaque_middle 2;
+  do opaque_right_check <- ! int64/sub opaque_right 3;
+  do total <- ! int64/add direct_left_check direct_middle_check;
+  do total <- ! int64/add total direct_right_check;
+  do total <- ! int64/add total opaque_left_check;
+  do total <- ! int64/add total opaque_middle_check;
+  do total <- ! int64/add total opaque_right_check;
+  ! process/exit total
 end

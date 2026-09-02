@@ -11,5 +11,5 @@ begin
   def ! one : Int64 -> Ret Int64 = ! const Int64 Int64 0 that
 
   do x <- ! one 20;
-  ! (process/exit) x
+  ! process/exit x
 end

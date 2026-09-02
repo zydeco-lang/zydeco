@@ -638,7 +638,7 @@ fn stdio_server_follows_source_format_annotations() {
     assert_eq!(edits.len(), 1);
     assert_eq!(
         edits[0]["newText"],
-        "@[format(layout(ignore))] ! (bool/if) (Ret Int64) greater { ret left } { ret right }\n"
+        "@[format(layout(ignore))] ! bool/if (Ret Int64) greater { ret left } { ret right }\n"
     );
 
     server.finish();

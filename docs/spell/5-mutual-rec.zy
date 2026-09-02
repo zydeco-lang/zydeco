@@ -63,11 +63,11 @@ begin
       | +True() =>
         match expected
         | +True() => ! continuation
-        | +False() => ! (process/exit) 1
+        | +False() => ! process/exit 1
         end
       | +False() =>
         match expected
-        | +True() => ! (process/exit) 1
+        | +True() => ! process/exit 1
         | +False() => ! continuation
         end
       end
@@ -82,7 +82,7 @@ begin
     ! assert_equal odd_three +True() {
       ! assert_equal even_one +False() {
         ! assert_equal odd_two +False() {
-          ! (process/exit) 0
+          ! process/exit 0
         }
       }
     }

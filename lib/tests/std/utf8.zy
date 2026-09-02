@@ -7,7 +7,7 @@ begin
   let (/String) = representations/string that
 
   let (/Bool; /bool; /option; /int64; /char; /string; /process) = builtin |> make_std in
-  let ! status (condition : Bool) : Ret Int64 = ! (bool/if)
+  let ! status (condition : Bool) : Ret Int64 = ! bool/if
     (Ret Int64)
     condition
     { ret 0 }
@@ -15,91 +15,91 @@ begin
       ret 1
     } in
 
-  do scalar_length <- ! (string/length) "éλ🙂";
-  do scalar_length_ok <- ! (int64/eq) scalar_length 3;
+  do scalar_length <- ! string/length "éλ🙂";
+  do scalar_length_ok <- ! int64/eq scalar_length 3;
   do scalar_length_status <- ! status scalar_length_ok;
 
-  do byte_length <- ! (string/byte_length) "éλ🙂";
-  do byte_length_ok <- ! (int64/eq) byte_length 8;
+  do byte_length <- ! string/byte_length "éλ🙂";
+  do byte_length_ok <- ! int64/eq byte_length 8;
   do byte_length_status <- ! status byte_length_ok;
 
-  do middle <- ! (string/get) "éλ🙂" 1;
-  do middle_status <- ! (option/fold)
+  do middle <- ! string/get "éλ🙂" 1;
+  do middle_status <- ! option/fold
     Char
     (Ret Int64)
     middle
     { ret 1 }
     {
       fn character =>
-        do codepoint <- ! (char/codepoint) character;
-        do correct <- ! (int64/eq) codepoint 955;
+        do codepoint <- ! char/codepoint character;
+        do correct <- ! int64/eq codepoint 955;
         ! status correct
     };
 
-  do missing <- ! (string/get) "éλ🙂" 3;
-  do missing_ok <- ! (option/is_none) Char missing;
+  do missing <- ! string/get "éλ🙂" 3;
+  do missing_ok <- ! option/is_none Char missing;
   do missing_status <- ! status missing_ok;
 
-  do split <- ! (string/split_at) "éλ🙂" 2;
-  do split_status <- ! (option/fold)
+  do split <- ! string/split_at "éλ🙂" 2;
+  do split_status <- ! option/fold
     (String * String)
     (Ret Int64)
     split
     { ret 1 }
     {
       fn (left, right) =>
-        do left_ok <- ! (string/eq) left "éλ";
-        do right_ok <- ! (string/eq) right "🙂";
-        do correct <- ! (bool/and) left_ok right_ok;
+        do left_ok <- ! string/eq left "éλ";
+        do right_ok <- ! string/eq right "🙂";
+        do correct <- ! bool/and left_ok right_ok;
         ! status correct
     };
 
-  do characters <- ! (string/to_chars) "hé🙂";
-  do rebuilt <- ! (string/from_chars) characters;
-  do roundtrip_ok <- ! (string/eq) rebuilt "hé🙂";
+  do characters <- ! string/to_chars "hé🙂";
+  do rebuilt <- ! string/from_chars characters;
+  do roundtrip_ok <- ! string/eq rebuilt "hé🙂";
   do roundtrip_status <- ! status roundtrip_ok;
 
-  do parsed <- ! (string/parse_int) "-42";
-  do parsed_status <- ! (option/fold)
+  do parsed <- ! string/parse_int "-42";
+  do parsed_status <- ! option/fold
     Int64
     (Ret Int64)
     parsed
     { ret 1 }
     {
       fn integer =>
-        do correct <- ! (int64/eq) integer -42;
+        do correct <- ! int64/eq integer -42;
         ! status correct
     };
 
-  do invalid_integer <- ! (string/parse_int) "forty-two";
-  do invalid_integer_ok <- ! (option/is_none) Int64 invalid_integer;
+  do invalid_integer <- ! string/parse_int "forty-two";
+  do invalid_integer_ok <- ! option/is_none Int64 invalid_integer;
   do invalid_integer_status <- ! status invalid_integer_ok;
 
-  do smile <- ! (char/from_codepoint) 128578;
-  do smile_status <- ! (option/fold)
+  do smile <- ! char/from_codepoint 128578;
+  do smile_status <- ! option/fold
     Char
     (Ret Int64)
     smile
     { ret 1 }
     {
       fn character =>
-        do rendered <- ! (char/to_string) character;
-        do correct <- ! (string/eq) rendered "🙂";
+        do rendered <- ! char/to_string character;
+        do correct <- ! string/eq rendered "🙂";
         ! status correct
     };
 
-  do surrogate <- ! (char/from_codepoint) 55296;
-  do surrogate_ok <- ! (option/is_none) Char surrogate;
+  do surrogate <- ! char/from_codepoint 55296;
+  do surrogate_ok <- ! option/is_none Char surrogate;
   do surrogate_status <- ! status surrogate_ok;
 
-  do first <- ! (int64/add) scalar_length_status byte_length_status;
-  do second <- ! (int64/add) middle_status missing_status;
-  do third <- ! (int64/add) split_status roundtrip_status;
-  do fourth <- ! (int64/add) parsed_status invalid_integer_status;
-  do fifth <- ! (int64/add) smile_status surrogate_status;
-  do first_half <- ! (int64/add) first second;
-  do second_half <- ! (int64/add) third fourth;
-  do almost <- ! (int64/add) first_half second_half;
-  do result <- ! (int64/add) almost fifth;
-  ! (process/exit) result
+  do first <- ! int64/add scalar_length_status byte_length_status;
+  do second <- ! int64/add middle_status missing_status;
+  do third <- ! int64/add split_status roundtrip_status;
+  do fourth <- ! int64/add parsed_status invalid_integer_status;
+  do fifth <- ! int64/add smile_status surrogate_status;
+  do first_half <- ! int64/add first second;
+  do second_half <- ! int64/add third fourth;
+  do almost <- ! int64/add first_half second_half;
+  do result <- ! int64/add almost fifth;
+  ! process/exit result
 end

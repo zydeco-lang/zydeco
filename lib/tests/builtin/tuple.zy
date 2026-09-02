@@ -4,5 +4,5 @@ begin
   let pair = (10, 0) that
   let (_, status) = pair that
 
-  ! (process/exit) status
+  ! process/exit status
 end

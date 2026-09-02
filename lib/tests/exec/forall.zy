@@ -8,5 +8,5 @@ begin
   def ! id~ (B : CType) (b : Thk B) : B = ! b that
 
   do x <- ! id Int64 0;
-  ! id~ OS { ! (process/exit) x }
+  ! id~ OS { ! process/exit x }
 end

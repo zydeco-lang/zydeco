@@ -12,7 +12,7 @@ begin
     | +False : Unit
     end
   that
-  def ! int_lt (x : Int64) (y : Int64) : Ret Bool = ! (int64/lt)
+  def ! int_lt (x : Int64) (y : Int64) : Ret Bool = ! int64/lt
     (Ret Bool)
     x
     y
@@ -20,11 +20,11 @@ begin
     {
       ret +False()
     } that
-  def ! write_int_line (x : Int64) (b : U OS) : OS = ! (stdio/write_int) x {
-    ! (stdio/write_line) "" b
+  def ! write_int_line (x : Int64) (b : U OS) : OS = ! stdio/write_int x {
+    ! stdio/write_line "" b
   } that
-  def ! panic (msg : String) : OS = ! (stdio/write_line) msg {
-    ! (process/exit) 1
+  def ! panic (msg : String) : OS = ! stdio/write_line msg {
+    ! process/exit 1
   } that
 
   def LList' (A : VType) : VType =
@@ -35,7 +35,7 @@ begin
   that
 
   def fix iota : Int64 -> F (LList' Int64) = fn (i : Int64) =>
-    do i+1 <- ! (int64/add) i 1;
+    do i+1 <- ! int64/add i 1;
     ret +Cons(
       i,
       { ! iota i+1 }

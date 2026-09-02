@@ -22,14 +22,14 @@ begin
   =
     mixed
   in
-  do tens <- ! (int64/mul) middle 10;
-  do hundreds <- ! (int64/mul) right 100;
-  do low <- ! (int64/add) left tens;
-  do checksum <- ! (int64/add) low hundreds;
-  do layout_check <- ! (int64/sub) checksum 432;
-  do left_projection_check <- ! (int64/sub) mixed/left 2;
-  do right_projection_check <- ! (int64/sub) mixed/right 4;
-  do total <- ! (int64/add) layout_check left_projection_check;
-  do total <- ! (int64/add) total right_projection_check;
-  ! (process/exit) total
+  do tens <- ! int64/mul middle 10;
+  do hundreds <- ! int64/mul right 100;
+  do low <- ! int64/add left tens;
+  do checksum <- ! int64/add low hundreds;
+  do layout_check <- ! int64/sub checksum 432;
+  do left_projection_check <- ! int64/sub mixed/left 2;
+  do right_projection_check <- ! int64/sub mixed/right 4;
+  do total <- ! int64/add layout_check left_projection_check;
+  do total <- ! int64/add total right_projection_check;
+  ! process/exit total
 end

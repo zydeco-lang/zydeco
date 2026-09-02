@@ -11,8 +11,8 @@ begin
 
   (
     comatch
-    | .left => ! (process/exit) 10
-    | .right i => ! (process/exit) i
+    | .left => ! process/exit 10
+    | .right i => ! process/exit i
     end : Choice
   ) .right 0
 end

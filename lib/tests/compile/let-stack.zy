@@ -3,5 +3,5 @@ let (/process) = system in
 let x = 0 in
 (
   let y = 42 in
-  ! (process/exit)
+  ! process/exit
 ) x

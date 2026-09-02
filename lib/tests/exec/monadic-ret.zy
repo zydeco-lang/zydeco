@@ -19,6 +19,6 @@ begin
     end that
 
     do _ <- ! translated Ret { ! ret_monad };
-    ! (process/exit) 0
+    ! process/exit 0
   end
 end

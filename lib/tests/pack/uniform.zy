@@ -49,8 +49,8 @@ begin
     param value : Int64 in
     def expected : Int64 = 42 in
     let answer = value in
-    do status <- ! (int64/sub) answer expected;
-    ! (process/exit) status
+    do status <- ! int64/sub answer expected;
+    ! process/exit status
   that
   def ! run = begin
     let answer : Number = seed that
@@ -59,8 +59,8 @@ begin
     let Number = A that
     param A : VType that
     def Opaque : VType = Int64 that
-    do status <- ! (int64/sub) expected 42;
-    ! (process/exit) status
+    do status <- ! int64/sub expected 42;
+    ! process/exit status
   end that
 
   ! run IdentityResult 42

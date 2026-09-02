@@ -7,7 +7,8 @@ begin
   let Package
     (Bool : VType)
     (Scalar : VType)
-    (String : VType) =
+    (String : VType)
+  =
       (#operations :: IntegerModule Bool Scalar String)
     * (#dictionary :: Numeric Bool Scalar)
   in
@@ -16,11 +17,12 @@ begin
     (Scalar : VType)
     (String : VType)
     (
-      (_ : @(import("../builtin/core.zy"))),
-      (_ : BoolModule Bool),
-      (_ : PrimitiveIntegerModule Scalar String),
-      (_ : Scalar),
-      (_ : Scalar)
+      _ : @(import("../builtin/core.zy")),
+      _ : BoolModule Bool,
+      _ : PrimitiveIntegerModule Scalar String,
+      _ : Scalar,
+      _ : Scalar
     )
-  . Package Bool Scalar String
+  .
+    Package Bool Scalar String
 end

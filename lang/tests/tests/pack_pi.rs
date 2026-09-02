@@ -285,7 +285,7 @@ begin
       let (/Bytes = SelectedBytes) = representations/bytes in
       let bytes = text/bytes in
       let Selected : SelectedVType = SelectedBytes in
-      ! (bytes/empty)
+      ! bytes/empty
   } that
 
   selective
@@ -436,7 +436,7 @@ begin
   } that
 
   do value <- ! translated Ret { ! mo_ret } .unbox (Int64, triv, 41);
-  do status <- ! (api/int64/sub) value 41;
+  do status <- ! api/int64/sub value 41;
   ! exit status
 end
 "#,
@@ -485,7 +485,7 @@ begin
     { ! ret_algebra (Ret Int64) },
     { ret 41 },
   );
-  do status <- ! (api/int64/sub) value 41;
+  do status <- ! api/int64/sub value 41;
   ! exit status
 end
 "#,
@@ -605,7 +605,7 @@ begin
   } that
 
   do value <- ! translated Ret { ! mo_ret } .unbox (Int64, triv, 41);
-  do status <- ! (api/int64/sub) value 41;
+  do status <- ! api/int64/sub value 41;
   ! exit status
 end
 "#,
@@ -675,7 +675,7 @@ begin
     41,
     (Unit, triv, ()),
   );
-  do status <- ! (api/int64/sub) value 41;
+  do status <- ! api/int64/sub value 41;
   ! exit status
 end
 "#,
@@ -705,7 +705,7 @@ begin
   } that
 
   do value <- ! translated Ret { ! mo_ret } (Int64, triv, 41);
-  do status <- ! (api/int64/sub) value 41;
+  do status <- ! api/int64/sub value 41;
   ! exit status
 end
 "#,

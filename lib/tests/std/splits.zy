@@ -6,8 +6,8 @@ begin
   let (/String) = representations/string that
 
   let (/option; /int64; /string; /process) = builtin |> make_std in
-  do present <- ! (string/split_once) "left:right" ':';
-  do present_status <- ! (option/fold)
+  do present <- ! string/split_once "left:right" ':';
+  do present_status <- ! option/fold
     (String * String)
     (Ret Int64)
     present
@@ -15,8 +15,8 @@ begin
     {
       fn pair => ret 0
     };
-  do absent <- ! (string/split_at) "short" 99;
-  do absent_status <- ! (option/fold)
+  do absent <- ! string/split_at "short" 99;
+  do absent_status <- ! option/fold
     (String * String)
     (Ret Int64)
     absent
@@ -24,6 +24,6 @@ begin
     {
       fn pair => ret 1
     };
-  do status <- ! (int64/add) present_status absent_status;
-  ! (process/exit) status
+  do status <- ! int64/add present_status absent_status;
+  ! process/exit status
 end

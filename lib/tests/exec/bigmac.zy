@@ -47,5 +47,5 @@ begin
   do a <- ret a;
   do a <- ret a;
   do a <- ret a;
-  ! (process/exit) a
+  ! process/exit a
 end

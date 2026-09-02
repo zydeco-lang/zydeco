@@ -4,19 +4,19 @@ begin
   let string = text/string that
   let (/OS; /process) = system that
 
-  do unicode_length <- ! (string/length) "λx";
-  do joined <- ! (string/append) "uniform " "terms";
-  ! (int64/eq)
+  do unicode_length <- ! string/length "λx";
+  do joined <- ! string/append "uniform " "terms";
+  ! int64/eq
     OS
     unicode_length
     2
     {
-      ! (string/eq)
+      ! string/eq
         OS
         joined
         "uniform terms"
-        { ! (process/exit) 0 }
-        { ! (process/exit) 2 }
+        { ! process/exit 0 }
+        { ! process/exit 2 }
     }
-    { ! (process/exit) 1 }
+    { ! process/exit 1 }
 end

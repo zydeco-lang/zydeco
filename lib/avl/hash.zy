@@ -34,8 +34,8 @@ begin
       end
     that
     def ! int_max (left : Int64) (right : Int64) : Ret Int64 =
-      do greater <- ! (int64/gt) left right;
-      ! (bool/if)
+      do greater <- ! int64/gt left right;
+      ! bool/if
         (Ret Int64)
         greater
         { ret left }
@@ -48,7 +48,7 @@ begin
         do left_height <- ! height A left;
         do right_height <- ! height A right;
         do child_height <- ! int_max left_height right_height;
-        do new_height <- ! (int64/add) child_height 1;
+        do new_height <- ! int64/add child_height 1;
         ret +Node(= left, = value, #tree_height = new_height, = right)
       end
     that
@@ -58,7 +58,7 @@ begin
       | +Node(/left; /right) =>
         do left_height <- ! height A left;
         do right_height <- ! height A right;
-        ! (int64/sub) left_height right_height
+        ! int64/sub left_height right_height
       end
     that
     def ! left (A : VType) (tree : Avl A) : Ret (Avl A) =
@@ -75,16 +75,16 @@ begin
     that
     def fix min_element (A : VType) (tree : Avl A) (comparison : Cmp A) : Ret (Option A) =
       match tree
-      | +Leaf() => ! (option/none) A
+      | +Leaf() => ! option/none A
       | +Node(/left; /value) =>
         do minimum <- ! min_element A left comparison;
-        ! (option/fold)
+        ! option/fold
           A
           (Ret (Option A))
           minimum
-          { ! (option/some) A value }
+          { ! option/some A value }
           {
-            fn found => ! (option/some) A found
+            fn found => ! option/some A found
           }
       end
     that
@@ -147,14 +147,14 @@ begin
       | +Leaf() => ret +Leaf()
       | +Node(/left; /value; /right) =>
         do factor <- ! balance_factor A tree;
-        do left_heavy <- ! (int64/gt) factor 1;
-        ! (bool/if)
+        do left_heavy <- ! int64/gt factor 1;
+        ! bool/if
           (Ret (Avl A))
           left_heavy
           {
             do left_factor <- ! balance_factor A left;
-            do double_rotation <- ! (int64/lt) left_factor 0;
-            ! (bool/if)
+            do double_rotation <- ! int64/lt left_factor 0;
+            ! bool/if
               (Ret (Avl A))
               double_rotation
               {
@@ -165,14 +165,14 @@ begin
               { ! rotate_right A tree }
           }
           {
-            do right_heavy <- ! (int64/lt) factor -1;
-            ! (bool/if)
+            do right_heavy <- ! int64/lt factor -1;
+            ! bool/if
               (Ret (Avl A))
               right_heavy
               {
                 do right_factor <- ! balance_factor A right;
-                do double_rotation <- ! (int64/gt) right_factor 0;
-                ! (bool/if)
+                do double_rotation <- ! int64/gt right_factor 0;
+                ! bool/if
                   (Ret (Avl A))
                   double_rotation
                   {
@@ -191,7 +191,7 @@ begin
       | +Leaf() => ! singleton A item
       | +Node(/left; /value; /tree_height; /right) =>
         do goes_left <- ! comparison item value;
-        ! (bool/if)
+        ! bool/if
           (Ret (Avl A))
           goes_left
           {
@@ -220,16 +220,16 @@ begin
       Option A
     ) =
       match tree
-      | +Leaf() => ! (option/none) A
+      | +Leaf() => ! option/none A
       | +Node(/left; /value; /right) =>
         do found <- ! equal item value;
-        ! (bool/if)
+        ! bool/if
           (Ret (Option A))
           found
-          { ! (option/some) A value }
+          { ! option/some A value }
           {
             do goes_left <- ! less item value;
-            ! (bool/if)
+            ! bool/if
               (Ret (Option A))
               goes_left
               { ! search A item left equal less }
@@ -244,13 +244,13 @@ begin
       | +Leaf() => ret tree
       | +Node(/left; /value; /tree_height; /right) =>
         do found <- ! equal item value;
-        ! (bool/if)
+        ! bool/if
           (Ret (Avl A))
           found
           { ret +Node(= left, #value = item, = tree_height, = right) }
           {
             do goes_left <- ! less item value;
-            ! (bool/if)
+            ! bool/if
               (Ret (Avl A))
               goes_left
               {
@@ -271,7 +271,7 @@ begin
       | +Leaf() => ret tree
       | +Node(/left; /value; /tree_height; /right) =>
         do found <- ! equal item value;
-        ! (bool/if)
+        ! bool/if
           (Ret (Avl A))
           found
           {
@@ -282,7 +282,7 @@ begin
               | +Leaf() => ret left
               | +Node(_) =>
                 do minimum <- ! min_element A right less;
-                ! (option/fold)
+                ! option/fold
                   A
                   (Ret (Avl A))
                   minimum
@@ -303,7 +303,7 @@ begin
           }
           {
             do goes_left <- ! less item value;
-            ! (bool/if)
+            ! bool/if
               (Ret (Avl A))
               goes_left
               {
@@ -333,23 +333,23 @@ begin
       match first
       | +Leaf() =>
         match second
-        | +Leaf() => ret (bool/true)
-        | +Node(_) => ret (bool/false)
+        | +Leaf() => ret bool/true
+        | +Node(_) => ret bool/false
         end
       | +Node(/left = first_left; /value = first_value; /right = first_right) =>
         match second
-        | +Leaf() => ret (bool/false)
+        | +Leaf() => ret bool/false
         | +Node(/left = second_left; /value = second_value; /right = second_right) =>
           do values_equal <- ! item_equal first_value second_value;
-          ! (bool/if)
+          ! bool/if
             (Ret Bool)
             values_equal
             {
               do left_equal <- ! equal A first_left second_left item_equal;
               do right_equal <- ! equal A first_right second_right item_equal;
-              ! (bool/and) left_equal right_equal
+              ! bool/and left_equal right_equal
             }
-            { ret (bool/false) }
+            { ret bool/false }
         end
       end
     that
@@ -362,10 +362,10 @@ begin
         | +Leaf() => ! continuation
         | +Node(/left; /value; /tree_height; /right) =>
           do rendered_value <- ! format value;
-          do with_label <- ! (string/append) rendered_value " h:";
-          do rendered_height <- ! (int64/to_string) tree_height;
-          do line <- ! (string/append) with_label rendered_height;
-          ! (stdio/write_line) line {
+          do with_label <- ! string/append rendered_value " h:";
+          do rendered_height <- ! int64/to_string tree_height;
+          do line <- ! string/append with_label rendered_height;
+          ! stdio/write_line line {
             fn _ =>
               ! pre_traversal A left format {
                 ! pre_traversal A right format continuation
@@ -418,7 +418,7 @@ begin
                 | (second_key, second_value) =>
                   do values_equal <- ! value_equal first_value second_value;
                   do keys_equal <- ! search_key_equal first_key second_key;
-                  ! (bool/and) values_equal keys_equal
+                  ! bool/and values_equal keys_equal
                 end
               end
           }
@@ -440,15 +440,15 @@ begin
       match hash
       | +Hash(/body; /insert_less; /search_equal) =>
         do result <- ! search (K * V) (key, default) body search_equal insert_less;
-        ! (option/fold)
+        ! option/fold
           (K * V)
           (Ret (Option V))
           result
-          { ! (option/none) V }
+          { ! option/none V }
           {
             fn pair =>
               match pair
-              | (_, value) => ! (option/some) V value
+              | (_, value) => ! option/some V value
               end
           }
       end
@@ -518,27 +518,27 @@ begin
     do hashes_equal <- ! hash_equal Int64 String hash expected;
     do first <- ! hash_search Int64 String 1 "default" hash;
     do second <- ! hash_search Int64 String 1 "default" hash;
-    ! (option/fold)
+    ! option/fold
       String
       OS
       first
-      { ! (process/exit) 1 }
+      { ! process/exit 1 }
       {
         fn first_value =>
-          ! (option/fold)
+          ! option/fold
             String
             OS
             second
-            { ! (process/exit) 1 }
+            { ! process/exit 1 }
             {
               fn second_value =>
-                do values_equal <- ! (string/eq) first_value second_value;
-                do result <- ! (bool/and) hashes_equal values_equal;
-                ! (bool/if)
+                do values_equal <- ! string/eq first_value second_value;
+                do result <- ! bool/and hashes_equal values_equal;
+                ! bool/if
                   OS
                   result
-                  { ! (process/exit) 0 }
-                  { ! (process/exit) 1 }
+                  { ! process/exit 0 }
+                  { ! process/exit 1 }
             }
       }
   end

@@ -26,8 +26,8 @@ begin
       (Ret Bool)
       left
       right
-      { ret (bool/true) }
-      { ret (bool/false) }
+      { ret bool/true }
+      { ret bool/false }
   in
   let operations : FloatModule Bool Scalar String = (
     #add = primitive/add,
@@ -40,7 +40,7 @@ begin
     #ne = {
       fn left right =>
         do equal <- ! compare primitive/eq left right;
-        ! (bool/not) equal
+        ! bool/not equal
     },
     #lt = {
       fn left right => ! compare primitive/lt left right
@@ -49,7 +49,7 @@ begin
       fn left right =>
         do less <- ! compare primitive/lt left right;
         do equal <- ! compare primitive/eq left right;
-        ! (bool/or) less equal
+        ! bool/or less equal
     },
     #gt = {
       fn left right => ! compare primitive/gt left right
@@ -58,10 +58,10 @@ begin
       fn left right =>
         do greater <- ! compare primitive/gt left right;
         do equal <- ! compare primitive/eq left right;
-        ! (bool/or) greater equal
+        ! bool/or greater equal
     },
     #negate = {
-      fn value => ! (primitive/sub) zero value
+      fn value => ! primitive/sub zero value
     },
     #to_string = primitive/to_string
   ) in

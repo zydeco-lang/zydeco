@@ -4,7 +4,7 @@ begin
   let (/Int64 = _) = representations/i64 that
 
   let (/int64; /process) = builtin |> make_std in
-  do one <- ! (int64/increment) 0;
-  do status <- ! (int64/sub) one 1;
-  ! (process/exit) status
+  do one <- ! int64/increment 0;
+  do status <- ! int64/sub one 1;
+  ! process/exit status
 end

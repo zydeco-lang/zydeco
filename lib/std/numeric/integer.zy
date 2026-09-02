@@ -26,8 +26,8 @@ begin
       (Ret Bool)
       left
       right
-      { ret (bool/true) }
-      { ret (bool/false) }
+      { ret bool/true }
+      { ret bool/false }
   in
   let operations : IntegerModule Bool Scalar String = (
     #add = primitive/add,
@@ -41,7 +41,7 @@ begin
     #ne = {
       fn left right =>
         do equal <- ! compare primitive/eq left right;
-        ! (bool/not) equal
+        ! bool/not equal
     },
     #lt = {
       fn left right => ! compare primitive/lt left right
@@ -49,7 +49,7 @@ begin
     #le = {
       fn left right =>
         do greater <- ! compare primitive/gt left right;
-        ! (bool/not) greater
+        ! bool/not greater
     },
     #gt = {
       fn left right => ! compare primitive/gt left right
@@ -57,26 +57,26 @@ begin
     #ge = {
       fn left right =>
         do less <- ! compare primitive/lt left right;
-        ! (bool/not) less
+        ! bool/not less
     },
     #increment = {
-      fn value => ! (primitive/add) value one
+      fn value => ! primitive/add value one
     },
     #decrement = {
-      fn value => ! (primitive/sub) value one
+      fn value => ! primitive/sub value one
     },
     #negate = {
-      fn value => ! (primitive/sub) zero value
+      fn value => ! primitive/sub zero value
     },
     #min = {
       fn left right =>
         do less <- ! compare primitive/lt left right;
-        ! (bool/if) (Ret Scalar) less { ret left } { ret right }
+        ! bool/if (Ret Scalar) less { ret left } { ret right }
     },
     #max = {
       fn left right =>
         do greater <- ! compare primitive/gt left right;
-        ! (bool/if) (Ret Scalar) greater { ret left } { ret right }
+        ! bool/if (Ret Scalar) greater { ret left } { ret right }
     },
     #to_string = primitive/to_string
   ) in

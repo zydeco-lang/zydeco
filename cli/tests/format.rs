@@ -71,7 +71,7 @@ fn fmt_check_is_silent_and_succeeds_for_formatted_files() {
 fn fmt_format_annotations_control_break_retention() {
     let directory = tempfile::tempdir().unwrap();
     let joined =
-        "@[format(layout(ignore))] ! (bool/if) (Ret Int64) greater { ret left } { ret right }\n";
+        "@[format(layout(ignore))] ! bool/if (Ret Int64) greater { ret left } { ret right }\n";
     let wrapped = concat!(
         "@[format(layout(ignore))] ! (bool/if)\n",
         "  (Ret Int64)\n",
@@ -139,7 +139,7 @@ fn fmt_format_annotations_scope_width_and_indentation() {
         fs::read_to_string(narrow).unwrap(),
         concat!(
             "@[format(width(24))]\n",
-            "! (bool/if) (Ret Int64)\n",
+            "! bool/if (Ret Int64)\n",
             "  greater { ret left } {\n",
             "  ret right\n",
             "}\n",

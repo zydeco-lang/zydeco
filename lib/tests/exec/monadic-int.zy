@@ -21,11 +21,11 @@ begin
     end that
 
     do value <- ! translated Ret { ! ret_monad };
-    ! (int64/eq)
+    ! int64/eq
       OS
       value
       1
-      { ! (process/exit) 0 }
-      { ! (process/exit) 1 }
+      { ! process/exit 0 }
+      { ! process/exit 1 }
   end
 end

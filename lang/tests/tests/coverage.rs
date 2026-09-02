@@ -405,7 +405,7 @@ begin
     | .open +False(_) A => ret ()
     | .open +True(_) A => ret ()
     end : Poly) .open +True() Unit;
-  ! (api/exit) 0
+  ! api/exit 0
 end
 "#,
     ));
@@ -428,7 +428,7 @@ begin
     (comatch
     | .unbox ((A, value) : Box) => ret value
     end : Service) .unbox (Int64, 0);
-  ! (api/exit) status
+  ! api/exit status
 end
 "#,
     );
@@ -485,7 +485,7 @@ begin
     | .route +Second(_) .left => ret 1
     | .route +Second(_) .right => ret 1
     end : Router) .route +First(0) .right;
-  ! (api/exit) status
+  ! api/exit status
 end
 "#,
     );

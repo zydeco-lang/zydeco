@@ -4,10 +4,10 @@ begin
   let (/OS) = system that
 
   let (/bool; /process) = builtin |> make_std in
-  do result <- ! (bool/not) bool/false;
-  ! (bool/if)
+  do result <- ! bool/not bool/false;
+  ! bool/if
     OS
     result
-    { ! (process/exit) 0 }
-    { ! (process/exit) 1 }
+    { ! process/exit 0 }
+    { ! process/exit 1 }
 end

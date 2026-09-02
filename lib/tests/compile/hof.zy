@@ -6,5 +6,5 @@ begin
   def ! apply (A : VType) (B : CType) (f : Thk (A -> B)) (x : A) : B = ! f x that
 
   do x <- ! apply Int64 (Ret Int64) { fn x => ret x } 0;
-  ! (process/exit) x
+  ! process/exit x
 end

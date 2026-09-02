@@ -7,7 +7,7 @@ begin
   let (/process) = builtin |> make_std in
   begin
     let Num = Int64 that
-    def ! done (x : Num) : OS = ! (process/exit) x that
+    def ! done (x : Num) : OS = ! process/exit x that
 
     ! done 0
   end

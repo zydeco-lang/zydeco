@@ -170,7 +170,7 @@ begin
   ) = {
     fn left right =>
       do right <- ! right;
-      ! (int64/add) left right
+      ! int64/add left right
   } that
   def check_result : Thk (
        Int64
@@ -180,15 +180,15 @@ begin
     -> OS
   ) = {
     fn expected actual label continuation =>
-      ! (int64/eq)
+      ! int64/eq
         OS
         expected
         actual
         { ! continuation }
         {
-          do message <- ! (string/append) label " is not correct";
-          ! (stdio/write_line) message {
-            ! (process/exit) 1
+          do message <- ! string/append label " is not correct";
+          ! stdio/write_line message {
+            ! process/exit 1
           }
         }
   } that
@@ -199,8 +199,8 @@ begin
   do lazy_actual <- ! fold_right_exercise add_lazy { ret 0 } lazy_values;
   ! check_result strict_expected strict_actual "fold_left exercise" {
     ! check_result lazy_expected lazy_actual "fold_right exercise" {
-      ! (stdio/write_line) "all tests passed" {
-        ! (process/exit) 0
+      ! stdio/write_line "all tests passed" {
+        ! process/exit 0
       }
     }
   }

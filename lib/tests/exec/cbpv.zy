@@ -122,7 +122,7 @@ begin
         end
       | .print s =>
         comatch
-        | .run ka _ => ! (stdio/write_line) s {
+        | .run ka _ => ! stdio/write_line s {
           ! ka ()
         }
         end
@@ -142,7 +142,7 @@ begin
         end
       end
     that
-    def ! str_eq (left : String) (right : String) : Ret Bool = ! (string/eq)
+    def ! str_eq (left : String) (right : String) : Ret Bool = ! string/eq
       (Ret Bool)
       left
       right
@@ -264,22 +264,22 @@ begin
     let ! env : EnvO = ! envo +Empty() in
     let ! report (e : Exception) : OS =
       match e
-      | +TypeError() => ! (process/exit) 1
-      | +FreeVariable() => ! (process/exit) 1
+      | +TypeError() => ! process/exit 1
+      | +FreeVariable() => ! process/exit 1
       end
     in
     let ! value-eq (v1 : Value) (v2 : Value) (k : Thk OS) : OS =
       let ! bool-value-panic =
-        ! (process/exit) 1
+        ! process/exit 1
       in
-      let ! thunk-panic = ! (process/exit) 1 in
+      let ! thunk-panic = ! process/exit 1 in
       match v1
       | +Bool(b1) =>
         match v2
         | +Bool(b2) =>
           do eq? <- ! bool_eq b1 b2;
           match eq?
-          | +True() => ! (stdio/write_line) "\\^o^/" k
+          | +True() => ! stdio/write_line "\\^o^/" k
           | +False() => ! bool-value-panic
           end
         | +Thunk(_) => ! thunk-panic
@@ -318,7 +318,7 @@ begin
     let ans2 : Value = +Bool(+True()) in
     ! demo term1 ans1 {
       ! demo term2 ans2 {
-        ! (process/exit) 0
+        ! process/exit 0
       }
     }
   end

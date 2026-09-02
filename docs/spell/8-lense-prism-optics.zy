@@ -75,7 +75,7 @@ begin
         source .constant
   } that
 
-  ! (process/exit) 0
+  ! process/exit 0
 end
 
 -- A complete optics library would package these representations and their

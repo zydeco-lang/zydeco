@@ -43,7 +43,7 @@ begin
   let FunctionOutput = Int64 * (#result :: Int64) that
   let FunctionBox = (#apply :: Thk (FunctionInput -> Ret FunctionOutput)) * Int64 that
   def ! transform ((= lhs : Int64, rhs : Int64) : FunctionInput) : Ret FunctionOutput =
-    do result <- ! (int64/add) lhs rhs;
+    do result <- ! int64/add lhs rhs;
     ret (lhs, = result)
   that
   def function_box : FunctionBox = (
@@ -73,10 +73,10 @@ begin
 
   -- Positional weighting makes an accidental field permutation visible.
   def ! checksum3 (a : Int64) (b : Int64) (c : Int64) : Ret Int64 =
-    do tens <- ! (int64/mul) b 10;
-    do hundreds <- ! (int64/mul) c 100;
-    do low <- ! (int64/add) a tens;
-    ! (int64/add) low hundreds
+    do tens <- ! int64/mul b 10;
+    do hundreds <- ! int64/mul c 100;
+    do low <- ! int64/add a tens;
+    ! int64/add low hundreds
   that
 
   let (
@@ -88,7 +88,7 @@ begin
     flat_mixed
   in
   do flat_checksum <- ! checksum3 first middle third;
-  do flat_check <- ! (int64/sub) flat_checksum 321;
+  do flat_check <- ! int64/sub flat_checksum 321;
 
   -- A variable pattern may bind a named component opaquely. It can then be
   -- opened by either a whole-pattern annotation or a payload annotation.
@@ -103,7 +103,7 @@ begin
   let ((#first = opaque_first) : (#first :: Int64)) = first_field in
   let (#third = opaque_third : Int64) = third_field in
   do opaque_checksum <- ! checksum3 opaque_first opaque_middle opaque_third;
-  do opaque_check <- ! (int64/sub) opaque_checksum 321;
+  do opaque_check <- ! int64/sub opaque_checksum 321;
 
   let (
     (= left : Int64, center : Int64),
@@ -113,7 +113,7 @@ begin
     nested_mixed
   in
   do nested_checksum <- ! checksum3 left center right;
-  do nested_check <- ! (int64/sub) nested_checksum 654;
+  do nested_check <- ! int64/sub nested_checksum 654;
 
   match packet
   | +Packet(
@@ -122,7 +122,7 @@ begin
     = payload : Int64
   ) =>
     do packet_checksum <- ! checksum3 kind body payload;
-    do packet_check <- ! (int64/sub) packet_checksum 987;
+    do packet_check <- ! int64/sub packet_checksum 987;
 
     let (
       = apply : Thk (FunctionInput -> Ret FunctionOutput),
@@ -140,7 +140,7 @@ begin
       transformed
     in
     do function_checksum <- ! checksum3 echoed result 0;
-    do function_check <- ! (int64/sub) function_checksum 220;
+    do function_check <- ! int64/sub function_checksum 220;
 
     let (
       gauge_marker : Int64,
@@ -158,23 +158,23 @@ begin
       observation
     in
     do gauge_checksum <- ! checksum3 reading drift 0;
-    do gauge_check <- ! (int64/sub) gauge_checksum 142;
+    do gauge_check <- ! int64/sub gauge_checksum 142;
 
     do shifted <- ! active_gauge .shift (#delta = 14 : Int64);
     let (#reading = shifted_reading : Int64) = shifted in
-    do shift_pattern_check <- ! (int64/sub) shifted_reading 14;
-    do shift_projection_check <- ! (int64/sub) shifted/reading 14;
+    do shift_pattern_check <- ! int64/sub shifted_reading 14;
+    do shift_projection_check <- ! int64/sub shifted/reading 14;
 
-    do total <- ! (int64/add) flat_check nested_check;
-    do total <- ! (int64/add) total opaque_check;
-    do total <- ! (int64/add) total packet_check;
-    do total <- ! (int64/add) total function_marker;
-    do total <- ! (int64/add) total function_check;
-    do total <- ! (int64/add) total gauge_marker;
-    do total <- ! (int64/add) total gauge_check;
-    do total <- ! (int64/add) total shift_pattern_check;
-    do total <- ! (int64/add) total shift_projection_check;
-    ! (process/exit) total
-  | +Empty() => ! (process/exit) 1
+    do total <- ! int64/add flat_check nested_check;
+    do total <- ! int64/add total opaque_check;
+    do total <- ! int64/add total packet_check;
+    do total <- ! int64/add total function_marker;
+    do total <- ! int64/add total function_check;
+    do total <- ! int64/add total gauge_marker;
+    do total <- ! int64/add total gauge_check;
+    do total <- ! int64/add total shift_pattern_check;
+    do total <- ! int64/add total shift_projection_check;
+    ! process/exit total
+  | +Empty() => ! process/exit 1
   end
 end

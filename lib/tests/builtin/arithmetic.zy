@@ -3,10 +3,10 @@ begin
   let (= Int64, int64) = numeric/int64 that
   let (/process) = system that
 
-  do quotient <- ! (int64/div) -7 3;
-  do remainder <- ! (int64/mod) -7 3;
-  do quotient_error <- ! (int64/sub) quotient -2;
-  do remainder_error <- ! (int64/sub) remainder -1;
-  do status <- ! (int64/add) quotient_error remainder_error;
-  ! (process/exit) status
+  do quotient <- ! int64/div -7 3;
+  do remainder <- ! int64/mod -7 3;
+  do quotient_error <- ! int64/sub quotient -2;
+  do remainder_error <- ! int64/sub remainder -1;
+  do status <- ! int64/add quotient_error remainder_error;
+  ! process/exit status
 end

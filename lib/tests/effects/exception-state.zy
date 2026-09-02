@@ -51,7 +51,7 @@ begin
     -- source signatures; the algebra translation replaces `Ret` with the
     -- ambient monad, so the concrete arguments are State operations.
     def ! add_state (x : Int64) (y : Int64) : State Int64 Int64 =
-      do z <- ! (int64/add) x y;
+      do z <- ! int64/add x y;
       ! mo_state Int64 .return Int64 z
     that
 
@@ -81,7 +81,7 @@ begin
         fn answer =>
           ! mo_state Int64 .bind Unit Int64 {
             ! modify Int64 {
-              fn n => ! (int64/add) n 1
+              fn n => ! int64/add n 1
             }
           } {
             fn _ => ! mo_state Int64 .return Int64 answer
@@ -115,28 +115,28 @@ begin
     in
 
     def ! check_int (actual : Int64) (expected : Int64) (k : Thk OS) : OS =
-      ! (int64/eq) OS actual expected k {
-        ! (process/exit) 1
+      ! int64/eq OS actual expected k {
+        ! process/exit 1
       }
     that
 
     do direct <- ! caught_direct;
     do monadic <- ! caught_monadic;
-    ! (stdio/write_int) direct {
-      ! (stdio/write) " " {
-        ! (stdio/write_int) monadic {
-          ! (stdio/write) "\n" {
+    ! stdio/write_int direct {
+      ! stdio/write " " {
+        ! stdio/write_int monadic {
+          ! stdio/write "\n" {
             ! check_int direct -3 {
               ! check_int monadic -2 {
                 ! run_state Int64 Int64 OS 40 { ! state_run_with_modify } {
                   fn final_state answer =>
-                    ! (stdio/write_int) answer {
-                      ! (stdio/write) " " {
-                        ! (stdio/write_int) final_state {
-                          ! (stdio/write) "\n" {
+                    ! stdio/write_int answer {
+                      ! stdio/write " " {
+                        ! stdio/write_int final_state {
+                          ! stdio/write "\n" {
                             ! check_int answer 41 {
                               ! check_int final_state 42 {
-                                ! (process/exit) 0
+                                ! process/exit 0
                               }
                             }
                           }

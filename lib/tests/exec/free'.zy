@@ -69,21 +69,21 @@ begin
       ! fail error that
     def ! flip : Free Handlers Bool = fn .run R .eff print fail flip => ! flip () that
     def ! print-os (string : String) (k : Thk (Bool -> OS)) : OS =
-      ! (stdio/write_line) string { ! k +True() }
+      ! stdio/write_line string { ! k +True() }
     that
     def ! print-str (text : String) (k : Thk (Bool -> Ret String)) : Ret String =
       do suffix <- ! k +True();
-      ! (string/append) text suffix
+      ! string/append text suffix
     that
     def ! fail-os (error : Err) (continuation : Thk (Empty -> OS)) : OS =
       match error
-      | +Msg(message) => ! (stdio/write_line) message { ! (process/exit) 1 }
+      | +Msg(message) => ! stdio/write_line message { ! process/exit 1 }
       end
     that
-    def ! flip-os (unit : Unit) (continuation : Thk (Bool -> OS)) : OS = ! (random/generate) {
+    def ! flip-os (unit : Unit) (continuation : Thk (Bool -> OS)) : OS = ! random/generate {
       fn random =>
-        do remainder <- ! (int64/mod) random 2;
-        ! (int64/eq)
+        do remainder <- ! int64/mod random 2;
+        ! int64/eq
           OS
           remainder
           0
@@ -117,7 +117,7 @@ begin
             }
       } in
     ! m .run OS .eff print-os fail-os flip-os {
-      fn _ => ! (process/exit) 0
+      fn _ => ! process/exit 0
     }
   end
 end

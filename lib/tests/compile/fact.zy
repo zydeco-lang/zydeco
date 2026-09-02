@@ -7,19 +7,19 @@ begin
   let (/bool; /int64; /process) = builtin |> make_std in
   let fix fact (i : Int64) : Ret Int64 =
     -- extern def add : Thk (Int64 -> Int64 -> Ret Int64) end
-    do zero? <- ! (int64/eq) i 0;
-    ! (bool/if)
+    do zero? <- ! int64/eq i 0;
+    ! bool/if
       (Ret Int64)
       zero?
       { ret 1 }
       {
         -- do i <- ret i;
-        do i' <- ! (int64/sub) i 1;
+        do i' <- ! int64/sub i 1;
         do acc <- ! fact i';
-        ! (int64/mul) i acc
+        ! int64/mul i acc
       }
   in
   do x <- ! fact 10;
-  do r <- ! (int64/sub) x 3628800;
-  ! (process/exit) r
+  do r <- ! int64/sub x 3628800;
+  ! process/exit r
 end

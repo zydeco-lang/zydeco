@@ -3,7 +3,7 @@ begin
   let (/Ret) = core that
   let (= Int64, int64) = numeric/int64 that
   let (/process) = system that
-  def ! f (x : Int64) : Ret Int64 = ! (int64/eq)
+  def ! f (x : Int64) : Ret Int64 = ! int64/eq
     (Ret Int64)
     x
     0
@@ -13,5 +13,5 @@ begin
     } that
 
   do z <- ! f 0;
-  ! (process/exit) z
+  ! process/exit z
 end

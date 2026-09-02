@@ -9,5 +9,5 @@ begin
 
   let v : Unit = () in
   do x <- ! unit_to_str v;
-  ! (stdio/write_line) x { ! (process/exit) 0 }
+  ! stdio/write_line x { ! process/exit 0 }
 end
