@@ -81,6 +81,10 @@ impl CoPatternSpine {
 
 /* ---------------------------------- Term ---------------------------------- */
 
+/// An operand whose synthesized classifier replaces it during elaboration.
+#[derive(Clone, Debug)]
+pub struct TypeOf(pub TermId);
+
 /// One binder of a desugared `pi` telescope.
 #[derive(Clone, Debug)]
 pub struct Pi(pub PatId, pub TermId);
@@ -215,6 +219,7 @@ pub struct CoMatchClauses {
 #[derive(From, Clone, Debug)]
 pub enum Term<Ref> {
     Meta(Box<MetaT<TermId>>),
+    TypeOf(TypeOf),
     SourceBoundary(SourceBoundary<TermId>),
     SignatureBoundary(SignatureBoundary<TermId>),
     Internal(Internal),

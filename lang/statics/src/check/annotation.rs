@@ -35,6 +35,20 @@ impl PatAnnId {
 }
 
 impl TermAnnId {
+    /// Promote an already synthesized classifier to an ordinary static term.
+    pub(super) fn classifier_k(self, tycker: &mut Tycker<'_>) -> ResultKont<Self> {
+        match self {
+            | Self::Type(_, kind) => Ok(Self::Kind(kind)),
+            | Self::Value(_, ty) | Self::Compu(_, ty) => {
+                Ok(Self::Type(ty, tycker.statics.type_kind(ty)))
+            }
+            | Self::Kind(_) => tycker.err_k(TyckError::TypeOfKind, std::panic::Location::caller()),
+            | Self::Hole(_) => {
+                tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())
+            }
+        }
+    }
+
     pub fn try_as_kind(
         self, tycker: &mut Tycker<'_>, error: TyckError,
         blame: &'static std::panic::Location<'static>,

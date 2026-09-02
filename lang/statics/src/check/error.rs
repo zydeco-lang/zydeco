@@ -52,6 +52,7 @@ pub enum TyckError {
     MissingStructure(TypeId),
     SortMismatch,
     SignatureNotType,
+    TypeOfKind,
     KindMismatch,
     TypeMismatch { expected: TypeId, found: TypeId },
     TypeExpected { expected: String, found: TypeId },
@@ -102,6 +103,7 @@ pub enum TyckDiagnosticCode {
     MissingStructure,
     SortMismatch,
     SignatureNotType,
+    TypeOfKind,
     KindMismatch,
     TypeMismatch,
     TypeExpected,
@@ -149,6 +151,7 @@ impl TyckDiagnosticCode {
             | Self::MissingStructure => "tyck.missing-structure",
             | Self::SortMismatch => "tyck.sort-mismatch",
             | Self::SignatureNotType => "tyck.signature-not-type",
+            | Self::TypeOfKind => "tyck.typeof-kind",
             | Self::KindMismatch => "tyck.kind-mismatch",
             | Self::TypeMismatch => "tyck.type-mismatch",
             | Self::TypeExpected => "tyck.type-expected",
@@ -204,6 +207,7 @@ impl From<&TyckError> for TyckDiagnosticCode {
             | TyckError::MissingStructure(_) => Self::MissingStructure,
             | TyckError::SortMismatch => Self::SortMismatch,
             | TyckError::SignatureNotType => Self::SignatureNotType,
+            | TyckError::TypeOfKind => Self::TypeOfKind,
             | TyckError::KindMismatch => Self::KindMismatch,
             | TyckError::TypeMismatch { .. } => Self::TypeMismatch,
             | TyckError::TypeExpected { .. } => Self::TypeExpected,
@@ -269,6 +273,7 @@ enum MissingAnnotationSubject {
     EmptyMatch,
     CoMatch,
     PatternHole,
+    TypeOfOperand,
     Unspecified,
 }
 
@@ -333,6 +338,9 @@ impl<'a> Tycker<'a> {
             }
             | TyckError::SortMismatch => "Sort mismatch".to_string(),
             | TyckError::SignatureNotType => "A `.zyi` signature root must be a type".to_string(),
+            | TyckError::TypeOfKind => {
+                "`typeof` cannot produce `Set`, the classifier of kinds".to_owned()
+            }
             | TyckError::KindMismatch => "Kind mismatch".to_string(),
             | TyckError::TypeMismatch { expected, found } => {
                 format!(
@@ -676,6 +684,9 @@ impl<'a> Tycker<'a> {
             | TyckError::MissingStructure(_) => "Missing structure for type".to_string(),
             | TyckError::SortMismatch => "Sort mismatch".to_string(),
             | TyckError::SignatureNotType => "A `.zyi` signature root must be a type".to_string(),
+            | TyckError::TypeOfKind => {
+                "`typeof` cannot produce `Set`, the classifier of kinds".to_owned()
+            }
             | TyckError::KindMismatch => "Kind mismatch".to_string(),
             | TyckError::TypeMismatch { expected, found } => {
                 format!(
@@ -813,6 +824,7 @@ impl<'a> Tycker<'a> {
                     | su::Term::CoMatchClauses(_) | su::Term::CoMatch(_) => {
                         Some(MissingAnnotationSubject::CoMatch)
                     }
+                    | su::Term::TypeOf(_) => Some(MissingAnnotationSubject::TypeOfOperand),
                     | _ => None,
                 },
                 | TyckTask::Pat(pattern, _)
@@ -847,6 +859,9 @@ impl<'a> Tycker<'a> {
                 | MissingAnnotationSubject::PatternHole => {
                     "Cannot infer the type of this pattern hole".to_owned()
                 }
+                | MissingAnnotationSubject::TypeOfOperand => {
+                    "Cannot infer the classifier of this `typeof` operand".to_owned()
+                }
                 | MissingAnnotationSubject::Unspecified => self.error_message(error),
             },
             | _ => self.error_message(error),
@@ -863,6 +878,7 @@ impl<'a> Tycker<'a> {
             | TyckError::TypeMismatch { .. } => "this term has the mismatched type",
             | TyckError::TypeExpected { .. } => "this term has an incompatible type",
             | TyckError::SignatureNotType => "this signature root is not a type",
+            | TyckError::TypeOfKind => "Set is not a source term",
             | TyckError::KindMismatch => "this type has the wrong kind",
             | TyckError::SortMismatch => "this term has the wrong sort",
             | TyckError::Coverage(_) => "this match is not exhaustive",
@@ -888,6 +904,12 @@ impl<'a> Tycker<'a> {
                 | MissingAnnotationSubject::PatternHole => {
                     vec!["add a type annotation to the pattern".to_owned()]
                 }
+                | MissingAnnotationSubject::TypeOfOperand => {
+                    vec![
+                        "supply an expression or annotate the operand inside `@[typeof]`"
+                            .to_owned(),
+                    ]
+                }
                 | MissingAnnotationSubject::Unspecified => {
                     vec!["add an annotation that supplies the expected kind or type".to_owned()]
                 }
@@ -900,6 +922,9 @@ impl<'a> Tycker<'a> {
             }
             | TyckError::SignatureNotType => {
                 vec!["make the `.zyi` root evaluate to a type".to_owned()]
+            }
+            | TyckError::TypeOfKind => {
+                vec!["apply `@[typeof]` to a value, computation, or type".to_owned()]
             }
             | _ => Vec::new(),
         }

@@ -266,6 +266,10 @@ impl Resolve for TermId {
                 let () = inner.resolve(resolver, (local, global))?;
                 term.into()
             }
+            | Term::TypeOf(TypeOf(operand)) => {
+                operand.resolve(resolver, (local, global))?;
+                TypeOf(operand).into()
+            }
             | Term::SourceBoundary(term) => {
                 let SourceBoundary(inner) = term;
                 if resolver.terms.get(&inner).is_none() {

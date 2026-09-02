@@ -113,6 +113,7 @@ impl<'a> BlockCandidateCollector<'a> {
                 let b::MetaT(_, inner) = &**term;
                 self.term(*inner)
             }
+            | Term::TypeOf(b::TypeOf(inner))
             | Term::Sealed(b::Sealed(inner))
             | Term::Thunk(b::Thunk(inner))
             | Term::Force(b::Force(inner))

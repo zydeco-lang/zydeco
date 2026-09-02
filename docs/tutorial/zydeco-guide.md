@@ -184,7 +184,8 @@ computation type. A package or other VType value therefore uses plain `let` or `
 
 ## 3. Kinds, types, and type-level terms
 
-Kinds classify type-level terms. The base kinds are `VType` and `CType`; `Set` classifies kinds.
+Kinds classify type-level terms. The base kinds are `VType` and `CType`; `Set` classifies kinds in the
+metatheory and has no source term spelling.
 `VType -> VType -> CType` is the kind of a binary carrier such as `State` or `Exception`.
 
 Type-level abstraction and application use ordinary term syntax:
@@ -222,6 +223,32 @@ A literal with no expected type defaults to `Int64` (integer) or `Float64` (deci
 no implicit numeric conversions; a literal must fit the expected fixed-width type. Integer
 arithmetic wraps within the selected width, and floating-point arithmetic follows IEEE 754 at
 the selected width.
+
+### Reusing an expression's type
+
+`@[typeof] expression` gives the expression's type without running it. Applied to a type, it gives its kind:
+
+```zydeco
+@[typeof] 1                   -- Int64
+@[typeof] ret 1               -- Ret Int64
+@[typeof] { ret 1 }           -- Thk (Ret Int64)
+@[typeof] Int64               -- VType
+```
+
+The result is an ordinary static term, so it can name a signature or appear in an annotation:
+
+```zydeco
+begin
+  let identity = { fn (value : Int64) => ret value } that
+  let Signature = @[typeof] identity that
+  let replacement : Signature = { fn (value : Int64) => ret value } that
+  ! replacement 0
+end
+```
+
+The operand must still type-check. Use `@[typeof] (1 : Int8)` to select `Int8`; without that operand
+annotation, the literal defaults to `Int64`. Queries preserve abstract types and ordinary inference boundaries.
+They cannot extract `Set` from a kind, or infer a classifier from the bare hole in `@(typeof)`.
 
 ### Quantifiers and package boundaries
 
@@ -718,7 +745,7 @@ The three traps here are the same three syntax rules from earlier sections:
 -- comments                    -- line
 /- block -/                    block
 
-VType  CType  Set              kinds
+VType  CType                   base kinds; Set is meta-level only
 Thk B   Ret A   A -> B         core CBPV type constructors
 Unit    A * B   data            value type constructors
 codata                          computation type constructor
@@ -748,6 +775,7 @@ let P = term in/that term      transparent binding
 def P = term in/that term      sealed binding
 def ! P ... : B = term         thunk-pattern binding; use site is !P
 @[monadic] term                algebra translation
+@[typeof] term                 extract a type or kind without execution
 @(import("path"))              import sugar
 ```
 

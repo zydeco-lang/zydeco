@@ -354,6 +354,10 @@ impl LocalFoldScoped<()> for ContextCollector<'_> {
                 let co_term = self.coctxs_term_local[&inner].to_owned();
                 self.coctxs_term_local.insert_new(term, co_term);
             }
+            | Term::TypeOf(TypeOf(operand)) => {
+                let co_operand = self.coctxs_term_local[&operand].to_owned();
+                self.coctxs_term_local.insert_new(term, co_operand);
+            }
             | Term::SourceBoundary(inner) => {
                 let SourceBoundary(inner) = inner;
                 let co_inner = self.coctxs_term_local[&inner].to_owned();
@@ -703,6 +707,7 @@ mod impl_obverse_local_post {
                     let MetaT(_meta, term) = *inner;
                     term.obverse_local_post(f, ctx);
                 }
+                | Term::TypeOf(TypeOf(operand)) => operand.obverse_local_post(f, ctx),
                 | Term::SourceBoundary(inner) => {
                     let SourceBoundary(inner) = inner;
                     inner.obverse_local_post(f, ctx);

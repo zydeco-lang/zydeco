@@ -1,0 +1,19 @@
+param (/core; /system) : @(import("../../std/builtin.zy")) in
+let (/VType; /Thk; /Ret) = core in
+let (/OS; /process) = system in
+let Int64 = @(intrinsic(i64)) in
+begin
+  let Exit = @[typeof] ! process/exit 73 that
+  let Loop = @[typeof] fix (loop : Thk (Ret Int64)) => ! loop that
+  let choose = {
+    fn (value : Int64) =>
+      let Result = @[typeof] ret value in
+      let deliver : Thk Result = { ret value } in
+      ! deliver
+  } that
+  let finish : Thk Exit = { ! process/exit 0 } that
+  let halted : Thk OS = finish that
+  let unused : Thk Loop = { ret 0 } that
+  do status <- ! choose 0;
+  ! process/exit status
+end

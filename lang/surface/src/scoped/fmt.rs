@@ -87,6 +87,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
         let term = &f.arena.terms[self];
         match term {
             | Term::Meta(t) => t.pretty(f),
+            | Term::TypeOf(TypeOf(operand)) => {
+                RcDoc::concat([RcDoc::text("(@[typeof] "), operand.pretty(f), RcDoc::text(")")])
+            }
             | Term::SourceBoundary(SourceBoundary(t)) => t.pretty(f),
             | Term::SignatureBoundary(SignatureBoundary(t)) => t.pretty(f),
             | Term::Internal(t) => t.pretty(f),

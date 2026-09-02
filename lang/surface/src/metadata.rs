@@ -34,6 +34,7 @@ pub enum MetadataKind {
     Builtin,
     Ffi,
     Monadic,
+    TypeOf,
     Format,
     Debug,
 }
@@ -57,6 +58,7 @@ impl MetadataKind {
             | Self::Builtin => "Assign a compiler-defined Builtin package role.",
             | Self::Ffi => "Declare a native foreign-function target.",
             | Self::Monadic => "Translate an expression using the lexical monadic basis.",
+            | Self::TypeOf => "Extract an expression's type or kind without running it.",
             | Self::Format => "Override source formatting policy for an expression.",
             | Self::Debug => "Record a checked term as a compiler observation.",
         };
@@ -66,7 +68,7 @@ impl MetadataKind {
                 "source",
                 MetadataValue::Source,
             )]),
-            | Self::Literal | Self::Monadic => MetadataArguments::None,
+            | Self::Literal | Self::Monadic | Self::TypeOf => MetadataArguments::None,
             | Self::Intrinsic => MetadataArguments::Positional(vec![MetadataParameter::new(
                 "role",
                 MetadataValue::Identifier(
@@ -478,6 +480,23 @@ impl SpecializeMeta for MonadicMeta {
 pub enum MonadicMetaError {
     #[error("monadic does not accept arguments, but found {found}")]
     Arguments { found: usize },
+}
+
+/// Extract the classifier of an expression during type checking.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TypeOfMeta;
+
+impl SpecializeMeta for TypeOfMeta {
+    type Error = MetadataValidationError;
+
+    fn name() -> &'static str {
+        MetadataKind::TypeOf.name()
+    }
+
+    fn from_arguments(arguments: &[Meta]) -> Result<Self, Self::Error> {
+        MetadataKind::TypeOf.definition().validate_arguments(arguments)?;
+        Ok(Self)
+    }
 }
 
 /// The typed meaning of a `@[literal]` annotation.
@@ -902,6 +921,7 @@ mod catalog_tests {
         assert_eq!(names.len(), definitions.len());
         assert_eq!(DocMeta::name(), MetadataKind::Doc.name());
         assert_eq!(MonadicMeta::name(), MetadataKind::Monadic.name());
+        assert_eq!(TypeOfMeta::name(), "typeof");
         assert_eq!(LiteralMeta::name(), MetadataKind::Literal.name());
         assert_eq!(IntrinsicMeta::name(), MetadataKind::Intrinsic.name());
         assert_eq!(BuiltinMeta::name(), MetadataKind::Builtin.name());

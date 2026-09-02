@@ -84,6 +84,9 @@ impl DeepClone for b::TermId {
                 let term = term.deep_clone(desugarer);
                 b::MetaT(meta.clone(), term).into()
             }
+            | b::Term::TypeOf(b::TypeOf(operand)) => {
+                b::TypeOf(operand.deep_clone(desugarer)).into()
+            }
             | b::Term::SourceBoundary(term) => {
                 let b::SourceBoundary(term) = term;
                 b::SourceBoundary(term.deep_clone(desugarer)).into()

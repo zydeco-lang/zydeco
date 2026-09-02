@@ -789,7 +789,7 @@ pub fn thunk_judgment<'db>(
 pub struct RetSynOutcome {
     pub ret_ty_id: ss::TypeId,
     pub ret_ty: ss::Type,
-    pub vtype: ss::KindId,
+    pub ctype: ss::KindId,
     pub ret_id: ss::CompuId,
     pub ret: ss::Computation,
 }
@@ -814,10 +814,10 @@ pub fn ret_judgment<'db>(
         };
         id
     };
-    let vtype = {
-        let key = InternedIntrinsic::new(db, IntrinsicKey::VType);
+    let ctype = {
+        let key = InternedIntrinsic::new(db, IntrinsicKey::CType);
         let IntrinsicSingleton::Kind { id, .. } = intrinsic_singleton(db, data, key) else {
-            unreachable!("the vtype singleton is kind-producing")
+            unreachable!("the ctype singleton is kind-producing")
         };
         id
     };
@@ -829,7 +829,7 @@ pub fn ret_judgment<'db>(
     Some(RetSynOutcome {
         ret_ty_id,
         ret_ty: ss::Type::App(ss::App(ret, body_ty)),
-        vtype,
+        ctype,
         ret_id,
         ret: ss::Computation::Ret(ss::Return(body_out)),
     })

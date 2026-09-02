@@ -1,5 +1,7 @@
 use super::syntax as b;
-use crate::metadata::{BuiltinMetaError, FfiMetaError, IntrinsicMetaError, MonadicMetaError};
+use crate::metadata::{
+    BuiltinMetaError, FfiMetaError, IntrinsicMetaError, MetadataValidationError, MonadicMetaError,
+};
 use crate::textual::syntax as t;
 use thiserror::Error;
 use zydeco_syntax::{BuiltinTypeRole, BuiltinValueRole};
@@ -37,6 +39,12 @@ pub enum DesugarError {
         #[source]
         source: MonadicMetaError,
     },
+    #[error("Invalid typeof annotation: {source}")]
+    InvalidTypeOfMeta {
+        term: Sp<t::TermId>,
+        #[source]
+        source: MetadataValidationError,
+    },
     #[error("Intrinsic annotation must annotate a hole expression")]
     IntrinsicPayloadNotHole(Sp<t::TermId>),
     #[error("Invalid ffi annotation: {source}")]
@@ -67,6 +75,7 @@ impl DesugarError {
             | Self::BuiltinTypeRoleOnTerm { term, .. }
             | Self::InvalidIntrinsicMeta { term, .. }
             | Self::InvalidMonadicMeta { term, .. }
+            | Self::InvalidTypeOfMeta { term, .. }
             | Self::InvalidFfiMeta { term, .. }
             | Self::IntrinsicPayloadNotHole(term)
             | Self::FfiPayloadNotHole(term) => term.info,

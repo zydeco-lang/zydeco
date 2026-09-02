@@ -74,7 +74,7 @@ The metavariable $N$ ranges over unsorted terms.
   [], [], [$|$], [$"let" Q = S " in " N | "let" Q = "seal" S " in " N$],
   [], [], [$|$], [$"rec" {Q_i : K_i = "seal" S_i}_(i in I) \; N
     | "block"(N) | "boundary"(N)$],
-  [], [], [$|$], [$#text("@[monadic]") space M$],
+  [], [], [$|$], [$#text("@[monadic]") space M | #text("@[typeof]") space N$],
 )
 ]
 ]
@@ -217,7 +217,8 @@ $
   ) quad #text(size: 6.5pt)[K-LABEL]
 $
 
-Kind arrows are nondependent. A surface `pi` whose body is a kind is accepted only when its binder is unused.
+Kind arrows are nondependent in the checked core. A surface `pi` may inspect its type binder through
+`@[typeof]`; elaboration of the body must still produce an ordinary kind containing no type terms.
 
 == Variables, type functions, and names
 
@@ -320,8 +321,9 @@ $
   ) quad #text(size: 6.5pt)[T-VAL-PI-VALUE]
 $
 
-The runtime names bound by $P$ cannot occur in a type, but abstract existential identities opened by $P$ may occur
-in $A_2$. The checked classifier stores both $overline(alpha)$ and $op("route")_(A_1)(P)$.
+The runtime names bound by $P$ cannot occur in a checked type, but may occur in erased source queries such as
+`@[typeof]`. Abstract existential identities opened by $P$ may occur in $A_2$.
+The checked classifier stores both $overline(alpha)$ and $op("route")_(A_1)(P)$.
 
 $
   frac(
@@ -330,6 +332,10 @@ $
     Gamma \; Delta tack.r A_1 times A_2 arrow.r.double "VType",
   ) quad #text(size: 6.5pt)[T-PROD]
 $
+
+A value-binder surface `sigma` elaborates its body in the pattern's context, then produces an ordinary product.
+Any existential witnesses opened by that pattern must be absent from the component type when its scope closes.
+Erased uses of runtime names are permitted; the resulting product has no runtime dependency or witness telescope.
 
 == Quantifiers and packages
 
@@ -1014,8 +1020,34 @@ $
   ) quad #text(size: 6.5pt)[ADMIN]
 $
 
-Metadata and residual wrappers preserve the same judgment. Name resolution orders block bindings into nested
+Ordinary metadata and residual wrappers preserve the same judgment. Name resolution orders block bindings into nested
 abstractions, lets, and REC-TYPE groups before these rules apply.
+
+== Classifier extraction
+
+$
+  frac(
+    Gamma \; Delta tack.r N arrow.r.double S
+    quad Gamma \; Delta tack.r S arrow.r.double K,
+    Gamma \; Delta tack.r #text("@[typeof]") space N arrow.r.double K,
+  ) quad #text(size: 6.5pt)[TYPEOF-TERM]
+$
+
+$
+  frac(
+    Gamma \; Delta tack.r N arrow.r.double K,
+    Gamma \; Delta tack.r #text("@[typeof]") space N arrow.r.double "Set",
+  ) quad #text(size: 6.5pt)[TYPEOF-TYPE]
+$
+
+TYPEOF-TERM elaborates to $S$ itself; TYPEOF-TYPE elaborates to $K$ itself. These are classifier lookups on
+one synthesized operand, preserving the existing semantic identities. An expected classifier is compared with
+the result after synthesis. `Set` is only a meta-level classifier, so there is no rule extracting it as a term
+from a kind. An unclassified hole is also rejected.
+
+The operand contributes no runtime term, but its static errors and source dependencies remain relevant.
+Extraction introduces no inference boundary and retains the usual free-skolem condition. Surface references
+inside the operand therefore do not by themselves imply a dependency in the resulting core type or kind.
 
 == Monadic blocks
 

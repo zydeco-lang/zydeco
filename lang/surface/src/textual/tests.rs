@@ -2,7 +2,10 @@ pub(super) mod corpus;
 
 use crate::{
     bitter::{SourceUnitDesugarer, fmt::Formatter as BitterFormatter, syntax as bitter},
-    metadata::{BuiltinMetaError, IntrinsicMeta, IntrinsicMetaError, MonadicMetaError},
+    metadata::{
+        BuiltinMetaError, IntrinsicMeta, IntrinsicMetaError, MetadataValidationError,
+        MonadicMetaError,
+    },
     textual::{
         arena::TextualScope,
         fmt::Formatter,
@@ -114,6 +117,57 @@ fn monadic_metadata_rejects_arguments() {
         }
     ));
     assert_eq!(&source[error.span().range()], "monadic(extra)");
+}
+
+#[test]
+fn typeof_metadata_preserves_its_operand_in_a_distinct_elaboration_form() {
+    ["@[typeof] ret 1", "@[typeof()] ret 1"].into_iter().for_each(|source| {
+        let mut parser = Parser::new();
+        let unit = StrictParser::source(source, &mut parser).unwrap();
+        let output = SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit).run().unwrap();
+        let bitter::Term::TypeOf(bitter::TypeOf(operand)) = output.arena.terms[&output.root] else {
+            panic!("typeof must lower to a classifier query")
+        };
+        let bitter::Term::Ann(bitter::Ann { tm, .. }) = output.arena.terms[&operand] else {
+            panic!("return synthesis must retain its desugared annotation")
+        };
+        assert!(matches!(output.arena.terms[&tm], bitter::Term::Ret(_)));
+    });
+}
+
+#[test]
+fn typeof_metadata_rejects_arguments_at_the_annotation_span() {
+    let source = "@[typeof(extra)] ret 1";
+    let mut parser = Parser::new();
+    let unit = StrictParser::source(source, &mut parser).unwrap();
+    let error = match SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit).run() {
+        | Ok(_) => panic!("typeof metadata must not accept arguments"),
+        | Err(error) => error,
+    };
+    assert!(matches!(
+        &error,
+        crate::bitter::DesugarError::InvalidTypeOfMeta {
+            source: MetadataValidationError::Arity { expected: 0, found: 1, .. },
+            ..
+        }
+    ));
+    assert_eq!(&source[error.span().range()], "typeof(extra)");
+}
+
+#[test]
+fn typeof_metadata_extent_survives_bitter_formatting() {
+    let source = "(@[typeof] fn value => ret value) argument";
+    let mut parser = Parser::new();
+    let unit = StrictParser::source(source, &mut parser).unwrap();
+    let output = SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit).run().unwrap();
+    let formatted = output.root.ugly(&BitterFormatter::new(&output.arena));
+    let mut reparsed = Parser::new();
+    let unit = StrictParser::source(&formatted, &mut reparsed).unwrap();
+    let output = SourceUnitDesugarer::new(&reparsed.spans, &reparsed.arena, unit).run().unwrap();
+    let bitter::Term::App(bitter::App(function, _)) = output.arena.terms[&output.root] else {
+        panic!("the application must remain outside typeof")
+    };
+    assert!(matches!(output.arena.terms[&function], bitter::Term::TypeOf(_)));
 }
 
 #[test]

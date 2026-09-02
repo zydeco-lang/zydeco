@@ -350,6 +350,23 @@ Named types, named kinds, and static projections are also compile-time-only and 
 Selective package patterns use the existing existential `SCons` plus value-pattern aliases,
 so they likewise add no runtime module representation.
 
+### Classifier Extraction
+
+`@[typeof] e` synthesizes `e` and elaborates to its existing classifier. A value or computation produces its type;
+a type produces its kind. Kinds cannot be queried because their classifier, `Set`, has no source term form.
+The operand receives no expected classifier from the query's context, and the result preserves the original
+semantic identities, including nominal seals, existential witnesses, and unresolved local inference variables.
+The query creates no inference boundary and never runs its operand, although ordinary static errors and source
+dependencies still apply.
+
+Classifier queries use the same checked-term repository as source providers and monadic elaboration.
+Their distinct desugared node prevents annotation and seal discovery from treating the operand as the query's
+result. A value may occur inside a query in a type-forming binder: for example,
+`pi (value : Int64) . (@[typeof] ret value)` elaborates to `Int64 -> Ret Int64`.
+Dependency restrictions apply to the resulting sorted core, with the existing witness-scope checks, rather than
+to the occurrence of a name in surface syntax. The [classifier extraction proposal](docs/proposals/typeof.md)
+records the inference, erasure, and import rules and their acceptance and rejection cases.
+
 ### Source Terms and Imports
 
 Every Zydeco source file contains exactly one complete term. A file contributes no surrounding context:

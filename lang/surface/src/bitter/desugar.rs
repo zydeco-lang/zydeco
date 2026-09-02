@@ -1,6 +1,6 @@
 use crate::{
     bitter::{syntax as b, *},
-    metadata::{BuiltinMeta, FfiMeta, IntrinsicMeta, MonadicMeta},
+    metadata::{BuiltinMeta, FfiMeta, IntrinsicMeta, MonadicMeta, TypeOfMeta},
     textual::syntax as t,
 };
 use derive_more::{AsMut, AsRef};
@@ -454,6 +454,21 @@ impl Desugar for t::TermId {
                 let annotation_site = metadata.span(desugarer.spans).clone().make(self);
                 let payload_site = term.span(desugarer.spans).clone().make(self);
                 let meta = desugarer.textual.semantic_meta(metadata);
+                match meta.specialize::<TypeOfMeta>() {
+                    | Ok(Some(TypeOfMeta)) => {
+                        let operand = term.desugar(desugarer)?;
+                        let term = Alloc::alloc(desugarer, b::TypeOf(operand).into(), self.into());
+                        desugarer.terms.insert(self, term);
+                        return Ok(term);
+                    }
+                    | Ok(None) => {}
+                    | Err(source) => {
+                        return Err(DesugarError::InvalidTypeOfMeta {
+                            term: annotation_site,
+                            source,
+                        });
+                    }
+                }
                 match meta.specialize::<IntrinsicMeta>() {
                     | Ok(Some(meta)) => {
                         if !matches!(desugarer.lookup_term(term), Tm::Hole(_)) {

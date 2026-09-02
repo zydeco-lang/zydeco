@@ -20,7 +20,7 @@ mod annotation;
 /// Least-upper-bound operations for kinds and types.
 pub mod lub;
 pub use lub::*;
-/// Syntactic checks for annotations, seals, and usage.
+/// Syntactic checks for annotations and seals.
 pub mod syntactic;
 pub use syntactic::*;
 /// Debug dump helpers used by diagnostics.
@@ -53,7 +53,7 @@ pub struct Tycker<'a> {
     /// derivation occurrence so re-checked entities get distinct sites
     check_counts: ArenaAssoc<su::EntityId, u32>,
     /// Resolved terms selected for canonical synthesis, including imported
-    /// providers and monadic blocks.
+    /// providers, classifier queries, and monadic blocks.
     checked_terms: CheckedTermRepository,
     /// meta stack
     pub metas: rpds::VectorSync<su::Meta>,
@@ -164,8 +164,8 @@ struct InferenceRegion {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct CheckedTerm(TermAnnId);
 
-/// The one checked root retained for a resolved term. The environment records
-/// the term's lexical context so later references can verify its stability.
+/// The one checked root retained for a resolved term. Later references may
+/// extend this context, but must preserve its existing bindings and witnesses.
 #[derive(Clone, Debug)]
 struct CheckedTermEntry {
     environment: TyEnv,
@@ -218,9 +218,9 @@ impl CheckedTerm {
 impl CheckedTermRepository {
     fn get(&self, term: su::TermId, environment: &TyEnv) -> Option<CheckedTerm> {
         let entry = self.entries.get(&term)?;
-        assert_eq!(
-            &entry.environment, environment,
-            "one resolved term was requested in distinct typing contexts"
+        assert!(
+            environment.is_extension_of(&entry.environment),
+            "one resolved term was requested outside its original typing context"
         );
         Some(entry.checked)
     }
@@ -239,9 +239,9 @@ impl CheckedTermRepository {
             }
             | Entry::Occupied(entry) => {
                 let canonical = entry.get();
-                assert_eq!(
-                    canonical.environment, environment,
-                    "one resolved term was requested in distinct typing contexts"
+                assert!(
+                    environment.is_extension_of(&canonical.environment),
+                    "one resolved term was requested outside its original typing context"
                 );
                 assert_eq!(
                     canonical.checked, checked,
@@ -4455,19 +4455,15 @@ impl<'a> Tyck<'a> for TyEnvT<ComputationPiFormation> {
 
     fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
         let ComputationPiFormation { binder, codomain } = &self.inner;
-        let (pattern, domain) =
+        let (_, domain) =
             binder.try_as_value(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
-        if pattern.syntactically_used(tycker) {
-            tycker.err_k(
-                TyckError::Expressivity("dependent types are not supported yet"),
-                std::panic::Location::caller(),
-            )?
-        }
 
         let domain_kind = tycker.statics.type_kind(domain);
         let vtype = ss::VType.build(tycker, &self.info);
         Lub::lub_k(vtype, domain_kind, tycker)?;
 
+        // Elaboration may inspect a value through `typeof`. Only the resulting
+        // static type participates in the arrow; it cannot retain value terms.
         let codomain = TyEnvT::new(binder.info.clone(), *codomain).tyck_k(tycker, action)?;
         let (codomain, codomain_kind) = codomain.try_as_type(
             tycker,
@@ -4820,6 +4816,18 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
 
         use su::Term as Tm;
         let out_ann = match tycker.scoped.terms[&self.inner].to_owned() {
+            | Tm::TypeOf(su::TypeOf(operand)) => {
+                let environment = self.info.clone();
+                let checked = tycker.synthesize_once_k(self.inner, &environment, |tycker| {
+                    let operand = self.mk(operand).tyck_k(tycker, Action::syn())?;
+                    let classifier = operand.classifier_k(tycker)?;
+                    if let TermAnnId::Type(ty, _) = classifier {
+                        ty.constrain_to_scope_k(tycker, environment.skolem_scope())?;
+                    }
+                    Ok(classifier)
+                })?;
+                checked.reconcile_k(tycker, switch)?
+            }
             | Tm::Meta(term) => {
                 let su::MetaT(meta, term) = *term;
                 let res = self
@@ -6706,15 +6714,6 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     self.mk_add(subst_vec, body).tyck_k(tycker, Action::syn())?;
                                 match body {
                                     | TermAnnId::Kind(kd_2) => {
-                                        // kind arrow; no tpat should be used
-                                        if tpat.syntactically_used(tycker) {
-                                            tycker.err_k(
-                                                TyckError::Expressivity(
-                                                    "dependent kinds are not supported yet",
-                                                ),
-                                                std::panic::Location::caller(),
-                                            )?
-                                        }
                                         let term =
                                             crate::query::InternedTerm::new(tycker.db, self.inner);
                                         let input = crate::query::InternedPiSyn::new(
@@ -6924,19 +6923,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         let binder_out_ann = self
                                             .mk(binder)
                                             .tyck_k(tycker, PatternAction::ana(kd_1.into()))?;
-                                        let (tpat, kd_1) = binder_out_ann.try_as_type(
+                                        let (_, kd_1) = binder_out_ann.try_as_type(
                                             tycker,
                                             TyckError::SortMismatch,
                                             std::panic::Location::caller(),
                                         )?;
-                                        if tpat.syntactically_used(tycker) {
-                                            tycker.err_k(
-                                                TyckError::Expressivity(
-                                                    "dependent kinds are not supported yet",
-                                                ),
-                                                std::panic::Location::caller(),
-                                            )?
-                                        }
                                         // ana body with kd_2
                                         let body = self
                                             .mk(body)
@@ -7034,26 +7025,19 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 tycker.store_env(id, &self.info);
                                 TermAnnId::Type(id, kd)
                             }
-                            | PatAnnId::Value(vpat, ty_1) => {
-                                // prod; vpat should not be used
-                                if vpat.syntactically_used(tycker) {
-                                    tycker.err_k(
-                                        TyckError::Expressivity(
-                                            "dependent types are not supported yet",
-                                        ),
-                                        std::panic::Location::caller(),
-                                    )?
-                                }
+                            | PatAnnId::Value(_, ty_1) => {
                                 // ty should be of vtype
                                 let kd_1 = tycker.statics.type_kind(ty_1);
                                 let vtype = ss::VType.build(tycker, &self.info);
                                 Lub::lub_k(vtype, kd_1, tycker)?;
-                                let ty_2 = self.mk(body).tyck_k(tycker, Action::syn())?;
+                                let ty_2 = TyEnvT::new(binder_out_ann.info.clone(), body)
+                                    .tyck_k(tycker, Action::syn())?;
                                 let (ty_2, kd_2) = ty_2.try_as_type(
                                     tycker,
                                     TyckError::SortMismatch,
                                     std::panic::Location::caller(),
                                 )?;
+                                binder_out_ann.close_scope_k(tycker, ty_2)?;
                                 // kd_2 should be of vtype
                                 Lub::lub_k(vtype, kd_2, tycker)?;
                                 let term = crate::query::InternedTerm::new(tycker.db, self.inner);
@@ -7559,7 +7543,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 tycker.statics.types_pre.insert_new(
                     outcome.ret_ty_id,
                     ss::Fillable::Done(outcome.ret_ty),
-                    outcome.vtype,
+                    outcome.ctype,
                 );
                 tycker.store_env(outcome.ret_ty_id, &self.info);
                 tycker.statics.compus.insert_new(outcome.ret_id, outcome.ret);
@@ -9123,6 +9107,34 @@ mod source_boundary_tests {
                 assert_eq!(Some(checked.root()), tycker.statics.term_annotation(provider),);
                 assert_eq!(tycker.check_counts.get(&su::EntityId::Term(provider)), Some(&1),);
                 assert_eq!(tycker.checked_terms.entries.len(), 1);
+                assert!(tycker.errors.is_empty());
+            },
+        );
+    }
+
+    #[test]
+    fn classifier_queries_reuse_the_operand_after_context_extension() {
+        with_tycker(
+            |allocator, scoped| {
+                let operand = allocator.alloc();
+                scoped.terms.insert_new(operand, su::Triv.into());
+                let query = allocator.alloc();
+                scoped.terms.insert_new(query, su::TypeOf(operand).into());
+                let definition: su::DefId = allocator.alloc();
+                (query, (query, operand, definition))
+            },
+            |tycker, (query, operand, definition)| {
+                InternalTerm::fill_intrinsics(tycker);
+                let original =
+                    TyEnvT::new(TyEnv::new(), query).tyck_k(tycker, Action::syn()).unwrap();
+                let TermAnnId::Type(ty, _) = original else {
+                    panic!("typeof unit must produce a type")
+                };
+                let environment = TyEnv::new() + [(definition, AnnId::Type(ty))];
+                let repeated =
+                    TyEnvT::new(environment, query).tyck_k(tycker, Action::syn()).unwrap();
+                assert_eq!(original, repeated);
+                assert_eq!(tycker.check_counts.get(&su::EntityId::Term(operand)), Some(&1));
                 assert!(tycker.errors.is_empty());
             },
         );

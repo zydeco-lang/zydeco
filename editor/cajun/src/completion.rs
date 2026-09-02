@@ -484,6 +484,18 @@ mod tests {
     }
 
     #[test]
+    fn typeof_completes_as_an_argument_free_annotation() {
+        let items = CompletionFixture::new("@[ty|] 1").items().unwrap();
+        let [item] = items.as_slice() else { panic!("expected one filtered completion") };
+        assert_eq!(item.label, "typeof");
+        let Some(CompletionTextEdit::Edit(edit)) = &item.text_edit else {
+            panic!("completion should carry an explicit replacement")
+        };
+        assert_eq!(edit.new_text, "typeof");
+        assert!(CompletionFixture::new("@[typeof(|)] 1").items().is_none());
+    }
+
+    #[test]
     fn positional_call_completions_follow_the_metadata_shape() {
         assert_eq!(CompletionFixture::new("@[ffi(c, |)] _").labels().unwrap(), vec!["library"],);
         assert_eq!(
