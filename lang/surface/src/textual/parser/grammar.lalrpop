@@ -1,5 +1,6 @@
 use crate::textual::{
-    syntax::*, lexer::*, escape::self, parse::{ParserToken, RecoveryAccumulator},
+    syntax::*, lexer::*, escape::self,
+    parser::{LiteralFailure, LiteralParser, ParsedNode, ParserToken, RecoveryAccumulator},
 };
 
 // LALRPOP grammar for the textual surface syntax.
@@ -13,6 +14,7 @@ grammar<'input, 'arena, 'recovery>(
 
 extern {
     type Location = usize;
+    type Error = LiteralFailure;
 
     // Token mapping must stay in sync with `textual::lexer::Tok`.
     enum ParserToken<'input> {
@@ -78,6 +80,9 @@ extern {
         "_" => ParserToken::Lexical(Tok::Hole),
         "@" => ParserToken::Lexical(Tok::At),
         "Completion" => ParserToken::Completion,
+        // A known terminal with no successful production: LALRPOP can recover
+        // from lexical errors using the same two `!` alternatives as syntax errors.
+        "Invalid" => ParserToken::Invalid(<LexicalError>),
     }
 }
 
@@ -101,8 +106,12 @@ SepByDelim<Start, Sep, T, End>: Vec<T> = {
 
 //* -------------------------------- Terminals ------------------------------- */
 
-Integer: IntegerLiteral = <"IntLit"> => IntegerLiteral::new(<>.parse().unwrap());
-Float: FloatLiteral = <"FloatLit"> => <>.parse::<f64>().unwrap().into();
+Integer: IntegerLiteral = <start:@L> <value:"IntLit"> <end:@R> =>? {
+    Ok(LiteralParser { range: start..end }.integer(value)?)
+};
+Float: FloatLiteral = <start:@L> <value:"FloatLit"> <end:@R> =>? {
+    Ok(LiteralParser { range: start..end }.float(value)?)
+};
 String: String = <s:"StrLit"> => {
     escape::apply_string_escapes(&s[1..s.len()-1])
 };
@@ -180,24 +189,26 @@ MetaAnnotationInner: MetaId = "@" "[" <Meta> "]" => <>;
 Meta: MetaId = <Sp<MetaNode>> => parser.meta(<>);
 MetaNode: MetaNode = {
     <value:String> => MetaNode::String(value),
-    <value:"IntLit"> => MetaNode::Integer(<>.parse().unwrap()),
+    <start:@L> <value:"IntLit"> <end:@R> =>? {
+        Ok(MetaNode::Integer(LiteralParser { range: start..end }.metadata_integer(value)?))
+    },
     <name:MetaName> => MetaNode::Ident(name),
     <callee:MetaName> <args:SepByDelim<"(", ",", <Meta>, ")">> => MetaNode::Apply { callee, args },
 };
 
 //* --------------------------------- Pattern -------------------------------- */
 
-PatternGen<P>: PatId = <Sp<P>> => parser.pat(<>);
+PatternGen<P>: PatId = <Sp<P>> => recovery.alloc_pattern(parser, <>);
 
 #[inline]
 PatternAnnId: PatId = <PatternGen<PatternAnn>>;
 
-PatternAnn: Pattern = {
+PatternAnn: ParsedNode<Pattern> = {
     #[precedence(level="0")]
     <Pattern>,
 
     #[precedence(level="1")] #[assoc(side="none")]
-    <Ann<PatternGen<PatternAnn>, TermId>> => <>.into(),
+    <Ann<PatternGen<PatternAnn>, TermId>> => ParsedNode::Syntax(<>.into()),
 
     #[precedence(level="2")] #[assoc(side="right")]
     "=" <l:@L> <field:Sp<FieldName>> <ty:(":" <TermId>)?> <r:@R> => {
@@ -205,21 +216,21 @@ PatternAnn: Pattern = {
             info: Span::new(l, r),
             inner: ty,
         });
-        parser.pun_pattern(field, ty)
+        ParsedNode::Syntax(parser.pun_pattern(field, ty))
     },
     #[precedence(level="2")] #[assoc(side="right")]
-    <name:MarkedFieldName> "=" <inner:PatternGen<PatternAnn>> => Named(name, inner).into(),
+    <name:MarkedFieldName> "=" <inner:PatternGen<PatternAnn>> => ParsedNode::Syntax(Named(name, inner).into()),
     #[precedence(level="2")] #[assoc(side="right")]
     "/" <l:@L> <field:Sp<FieldName>> <ty:(":" <TermId>)?> <r:@R> => {
         let ty = ty.map(|ty| Sp {
             info: Span::new(l, r),
             inner: ty,
         });
-        parser.pun_projection_pattern(field, ty)
+        ParsedNode::Syntax(parser.pun_projection_pattern(field, ty))
     },
     #[precedence(level="2")] #[assoc(side="right")]
     "/" <name:FieldName> "=" <inner:PatternGen<PatternAnn>> => {
-        ProjectionPattern(name, inner).into()
+        ParsedNode::Syntax(ProjectionPattern(name, inner).into())
     },
 };
 
@@ -238,14 +249,14 @@ ViewPatternHead: TermId = {
         parser.term(span.make(Term::App(Appli(terms))))
     },
 };
-Pattern: Pattern = {
-    <l:@L> <error:!> <r:@R> => recovery.pattern(l..r, error),
-    <function:ViewPatternHead> "~>" <pattern:PatId> => ViewPattern { function, pattern }.into(),
-    <Hole> => <>.into(),
-    <DefId> => <>.into(),
-    <ctor:CtorName> <pat:PatId> => Ctor(<>).into(),
+Pattern: ParsedNode<Pattern> = {
+    <l:@L> <error:!> <r:@R> => recovery.recover(l..r, error),
+    <function:ViewPatternHead> "~>" <pattern:PatId> => ParsedNode::Syntax(ViewPattern { function, pattern }.into()),
+    <Hole> => ParsedNode::Syntax(<>.into()),
+    <DefId> => ParsedNode::Syntax(<>.into()),
+    <ctor:CtorName> <pat:PatId> => ParsedNode::Syntax(Ctor(<>).into()),
     "(" <binder:PatternAnnId> "as" <definition:TermId> ")" => {
-        ManifestPattern { binder, definition }.into()
+        ParsedNode::Syntax(ManifestPattern { binder, definition }.into())
     },
     "(" <first:PatternAnnId> ";" <second:PatternAnnId>
         <rest:(";" <PatternAnnId>)*> ")" => {
@@ -253,9 +264,9 @@ Pattern: Pattern = {
             .chain(std::iter::once(second))
             .chain(rest)
             .collect::<Vec<_>>();
-        Alias(ConsN::from_vec(patterns).unwrap()).into()
+        ParsedNode::Syntax(Alias(ConsN::from_vec(patterns).unwrap()).into())
     },
-    <Paren<PatternAnnId>> => <>.into(),
+    <Paren<PatternAnnId>> => ParsedNode::Syntax(<>.into()),
 };
 
 pub SinglePattern: PatId = <pattern:PatId> => {
@@ -315,7 +326,7 @@ PackEvidence: TermId = {
 
 //* ---------------------------------- Term ---------------------------------- */
 
-TermGen<T>: TermId = <Sp<T>> => parser.term(<>);
+TermGen<T>: TermId = <Sp<T>> => recovery.alloc_term(parser, <>);
 
 // Binding headers select one elaboration discipline before their ordinary
 // binder, parameters, and result annotation.
@@ -374,12 +385,12 @@ CoMatcher: CoMatcherParam = {
 
 #[inline]
 TermAnnId: TermId = <TermGen<TermAnn>>;
-TermAnn: Term = {
+TermAnn: ParsedNode<Term> = {
     #[precedence(level="0")]
     <Term>,
 
     #[precedence(level="1")] #[assoc(side="none")]
-    <Ann<TermGen<TermAnn>, TermId>> => <>.into(),
+    <Ann<TermGen<TermAnn>, TermId>> => ParsedNode::Syntax(<>.into()),
 
     // A name labels one inner term. Named product types compose parenthesized
     // labels with `*`; comma remains ordinary tuple syntax.
@@ -389,17 +400,17 @@ TermAnn: Term = {
             info: Span::new(l, r),
             inner: ty,
         });
-        parser.pun_term(field, ty)
+        ParsedNode::Syntax(parser.pun_term(field, ty))
     },
     #[precedence(level="2")] #[assoc(side="right")]
-    <name:MarkedFieldName> "=" <inner:TermGen<TermAnn>> => Named(name, inner).into(),
+    <name:MarkedFieldName> "=" <inner:TermGen<TermAnn>> => ParsedNode::Syntax(Named(name, inner).into()),
     #[precedence(level="2")] #[assoc(side="right")]
-    <name:MarkedFieldName> "::" <inner:TermGen<TermAnn>> => Label(name, inner).into(),
+    <name:MarkedFieldName> "::" <inner:TermGen<TermAnn>> => ParsedNode::Syntax(Label(name, inner).into()),
 };
 
 #[inline]
 TermId: TermId = <TermGen<Term>>;
-Term: Term = {
+Term: ParsedNode<Term> = {
     // LALRPOP nominal semantics subtlety:
     // Indirect references (TermId) are full term references;
     // Direct ones (TermGen<Term>) participate in precedence rewriting and
@@ -412,26 +423,26 @@ Term: Term = {
     // < level 8 (pi/forall/sigma/exists) < level 9 (binders/blocks).
 
     #[precedence(level="0")]
-    <l:@L> <error:!> <r:@R> => recovery.term(l..r, error),
+    <l:@L> <error:!> <r:@R> => recovery.recover(l..r, error),
     #[precedence(level="0")]
     // parentheses
-    <Paren<TermAnnId>> => <>.into(),
+    <Paren<TermAnnId>> => ParsedNode::Syntax(<>.into()),
     // hole and variable
-    <Hole> => <>.into(),
-    <VarName> => <>.into(),
+    <Hole> => ParsedNode::Syntax(<>.into()),
+    <VarName> => ParsedNode::Syntax(<>.into()),
     // thunk
-    "{" <TermId> "}" => Thunk(<>).into(),
+    "{" <TermId> "}" => ParsedNode::Syntax(Thunk(<>).into()),
     // context-forming block
-    "begin" <TermAnnId> "end" => Block(<>).into(),
+    "begin" <TermAnnId> "end" => ParsedNode::Syntax(Block(<>).into()),
     // abstraction (alternative syntax)
-    "comatch" <params:CoPatId> "=>" <term:TermId> "end" => Abs(<>).into(),
+    "comatch" <params:CoPatId> "=>" <term:TermId> "end" => ParsedNode::Syntax(Abs(<>).into()),
     // structural types
-    "data" <Data> "end" => <>.into(),
-    "codata" <CoData> "end" => <>.into(),
+    "data" <Data> "end" => ParsedNode::Syntax(<>.into()),
+    "codata" <CoData> "end" => ParsedNode::Syntax(<>.into()),
     // match
-    "match" <scrut:TermId> <arms:(<Matcher>)*> "end" => Match {<>}.into(),
+    "match" <scrut:TermId> <arms:(<Matcher>)*> "end" => ParsedNode::Syntax(Match {<>}.into()),
     // comatch
-    "comatch" <arms:(<CoMatcher>)*> "end" => CoMatchParam {<>}.into(),
+    "comatch" <arms:(<CoMatcher>)*> "end" => ParsedNode::Syntax(CoMatchParam {<>}.into()),
     // package introduction; the `where` body is one nonempty comma sequence,
     // kept as a `Paren` so payload components share tuple desugaring.
     // Abstract parameters are rejected during desugaring with a pointed error.
@@ -441,113 +452,113 @@ Term: Term = {
         components.push(first);
         components.extend(rest);
         let body = parser.term(Span::new(l, r).make(Term::Paren(Paren(components))));
-        Pack { parameters, body }.into()
+        ParsedNode::Syntax(Pack { parameters, body }.into())
     },
-    <Literal> => <>.into(),
+    <Literal> => ParsedNode::Syntax(<>.into()),
 
     // Named projection is a tight postfix value operator.
     #[precedence(level="1")] #[assoc(side="left")]
-    <term:TermGen<Term>> "/" <name:FieldName> => Proj(<>).into(),
+    <term:TermGen<Term>> "/" <name:FieldName> => ParsedNode::Syntax(Proj(<>).into()),
 
     // Undelimited prefix forms consume projections but stop before
     // computation application and destruction.
     #[precedence(level="2")] #[assoc(side="right")]
-    "!" <TermGen<Term>> => Force(<>).into(),
+    "!" <TermGen<Term>> => ParsedNode::Syntax(Force(<>).into()),
     #[precedence(level="2")] #[assoc(side="right")]
-    "ret" <TermGen<Term>> => Return(<>).into(),
+    "ret" <TermGen<Term>> => ParsedNode::Syntax(Return(<>).into()),
     #[precedence(level="2")] #[assoc(side="right")]
-    <name:CtorName> <args:TermGen<Term>> => Ctor(<>).into(),
+    <name:CtorName> <args:TermGen<Term>> => ParsedNode::Syntax(Ctor(<>).into()),
 
     // Application and computation destruction bind tighter than type operators.
     #[precedence(level="3")] #[assoc(side="left")]
     // application
-    <term:TermGen<Term>> <arg:TermGen<Term>> => Appli(vec![<>]).into(),
+    <term:TermGen<Term>> <arg:TermGen<Term>> => ParsedNode::Syntax(Appli(vec![<>]).into()),
     // destructor
-    <term:TermGen<Term>> <name:DtorName> => Dtor(<>).into(),
+    <term:TermGen<Term>> <name:DtorName> => ParsedNode::Syntax(Dtor(<>).into()),
 
     // Product is one flat infix node: A * B * C parses as a single
     // three-component product, while an explicitly parenthesized
     // component stays a distinct nested product.
     #[precedence(level="4")] #[assoc(side="left")]
     // product
-    <ty_l:TermGen<Term>> "*" <ty_r:TermGen<Term>> => parser.extend_product(ty_l, ty_r).into(),
+    <ty_l:TermGen<Term>> "*" <ty_r:TermGen<Term>> => ParsedNode::Syntax(parser.extend_product(ty_l, ty_r).into()),
 
     // Arrow associates to the right: A -> B -> C == A -> (B -> C).
     #[precedence(level="5")] #[assoc(side="right")]
     // arrow
-    <ty_in:TermGen<Term>> "->" <ty_out:TermGen<Term>> => Arrow(<>).into(),
+    <ty_in:TermGen<Term>> "->" <ty_out:TermGen<Term>> => ParsedNode::Syntax(Arrow(<>).into()),
 
     // Directional value-function application.
     #[precedence(level="6")] #[assoc(side="left")]
-    <subject:TermGen<Term>> "|>" <function:TermGen<Term>> => Pipeline {
+    <subject:TermGen<Term>> "|>" <function:TermGen<Term>> => ParsedNode::Syntax(Pipeline {
         direction: PipelineDirection::Forward,
         subject,
         function,
-    }.into(),
+    }.into()),
     #[precedence(level="7")] #[assoc(side="right")]
-    <function:TermGen<Term>> "<|" <subject:TermGen<Term>> => Pipeline {
+    <function:TermGen<Term>> "<|" <subject:TermGen<Term>> => ParsedNode::Syntax(Pipeline {
         direction: PipelineDirection::Backward,
         subject,
         function,
-    }.into(),
+    }.into()),
 
     // Quantifiers/types bind looser than arrows/products, tighter than binders.
     #[precedence(level="8")]
     // pi
-    "pi" <params:CoPatId> "." <term:TermGen<Term>> => Pi(<>).into(),
+    "pi" <params:CoPatId> "." <term:TermGen<Term>> => ParsedNode::Syntax(Pi(<>).into()),
     // value pi
-    "val" "pi" <params:CoPatId> "." <term:TermGen<Term>> => ValPi(<>).into(),
+    "val" "pi" <params:CoPatId> "." <term:TermGen<Term>> => ParsedNode::Syntax(ValPi(<>).into()),
     // forall
-    "forall" <params:CoPatId> "." <ty:TermGen<Term>> => Forall(<>).into(),
+    "forall" <params:CoPatId> "." <ty:TermGen<Term>> => ParsedNode::Syntax(Forall(<>).into()),
     // sigma
-    "sigma" <params:CoPatId> "." <ty:TermGen<Term>> => Sigma(<>).into(),
+    "sigma" <params:CoPatId> "." <ty:TermGen<Term>> => ParsedNode::Syntax(Sigma(<>).into()),
     // exists
     "exists" <parameters:ExistentialParameter+> "." <body:TermId> => {
-        Exists { parameters, body }.into()
+        ParsedNode::Syntax(Exists { parameters, body }.into())
     },
 
     // Bindings are loosest to capture the largest possible tail.
     #[precedence(level="9")]
     // abstraction
-    "fn" <params:CoPatId> "=>" <term:TermGen<Term>> => Abs(<>).into(),
+    "fn" <params:CoPatId> "=>" <term:TermGen<Term>> => ParsedNode::Syntax(Abs(<>).into()),
     // total value abstraction
-    "val" <params:CoPatId> "=>" <term:TermGen<Term>> => Term::ValAbs(Abs(<>)),
+    "val" <params:CoPatId> "=>" <term:TermGen<Term>> => ParsedNode::Syntax(Term::ValAbs(Abs(<>))),
     // fixed point
-    "fix" <binder:PatId> "=>" <term:TermGen<Term>> => Fix(<>).into(),
+    "fix" <binder:PatId> "=>" <term:TermGen<Term>> => ParsedNode::Syntax(Fix(<>).into()),
     // bind
     "do" <binder:PatId> "<-" <bindee:TermGen<Term>> ";" <tail:TermGen<Term>> => {
-        Bind {<>}.into()
+        ParsedNode::Syntax(Bind {<>}.into())
     },
     // context-forming binders
     "param" "val" <binder:PatternAnnId> <placement:Placement> <tail:TermGen<Term>> => {
-        Param { flavor: ParameterFlavor::Value, binder, placement, tail }.into()
+        ParsedNode::Syntax(Param { flavor: ParameterFlavor::Value, binder, placement, tail }.into())
     },
     "param" <binder:PatternAnnId> <placement:Placement> <tail:TermGen<Term>> => {
-        Param { flavor: ParameterFlavor::Plain, binder, placement, tail }.into()
+        ParsedNode::Syntax(Param { flavor: ParameterFlavor::Plain, binder, placement, tail }.into())
     },
     "let" <binding:GenBindTerm> <placement:Placement> <tail:TermGen<Term>> => {
-        ContextBind {
+        ParsedNode::Syntax(ContextBind {
             mode: DefinitionMode::Transparent,
             binding,
             placement,
             tail,
-        }.into()
+        }.into())
     },
     "define" <binding:GenBindTerm> <placement:Placement> <tail:TermGen<Term>> => {
-        ContextBind {
+        ParsedNode::Syntax(ContextBind {
             mode: DefinitionMode::Nominal,
             binding,
             placement,
             tail,
-        }.into()
+        }.into())
     },
     // meta annotated term
-    <MetaTerm<TermGen<Term>>> => <>.into(),
+    <MetaTerm<TermGen<Term>>> => ParsedNode::Syntax(<>.into()),
     // meta annotation sugar: `@(meta)` is `@[meta] _` with an implicit hole payload
     <start:@L> "@" "(" <meta:Meta> ")" <end:@R> => {
         let span = Span::new(start, end);
         let payload = parser.term(span.make(Term::Hole(Hole)));
-        MetaTerm(meta, payload).into()
+        ParsedNode::Syntax(MetaTerm(meta, payload).into())
     },
 };
 

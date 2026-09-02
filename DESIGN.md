@@ -368,6 +368,15 @@ resolved and checked once under its own empty context; every import occurrence i
 A source boundary prevents free names and mobile block bindings from crossing between the two terms.
 Sharing is static: an imported computation is still evaluated at every dynamic occurrence.
 
+`textual::parser` provides strict and recovering entry points over one LALRPOP grammar, with the generated
+implementation kept in its private `generated` module.
+Strict parsing requires a root with no issues; editor recovery retains partial syntax and typed diagnostics.
+Term and pattern atom recovery rules carry handles to the ordinary allocation rules, which record exact hole IDs.
+Completion requests borrow their source snapshot and expose a hole only if it is reachable from the returned root.
+The shared lexer retains malformed input as grammar-known error tokens, while typed fallible literal actions return
+fatal diagnostics. The [completion proposal](docs/proposals/completion.md#trust-boundary-and-recovery-contracts)
+describes the integration contracts and their regression tests.
+
 The textual arena gives every nested metadata value its own ID and span. Source diagnostics can therefore point
 to the invalid import target, number, or payload rather than the complete annotation. Before desugaring continues,
 the metadata tree is converted to the span-free structural representation shared by the later compiler phases.

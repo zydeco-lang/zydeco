@@ -85,7 +85,7 @@ impl<'arena> GrammarContext<'arena> {
 }
 
 /// Precedence levels of the `Term` nonterminal, ordered from tightest to
-/// loosest. These mirror the levels documented in `parser.lalrpop`.
+/// loosest. These mirror the levels documented in `parser/grammar.lalrpop`.
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub(super) enum TermPrecedence {
     Atom,

@@ -145,6 +145,43 @@ The parser should expose two explicit outcomes over the same grammar:
 The generated LALRPOP parser should sit behind this surface API. Callers should not be able to accidentally ignore
 recovery issues and treat a recovered source as a valid program.
 
+### Trust boundary and recovery contracts
+
+The implementation keeps `parser/grammar.lalrpop` as the single syntax specification and its generated parser as the
+reference implementation. Both modes run that parser; strict mode accepts only a returned root with no issues.
+Recovery policy lives in the two `!` productions and LALRPOP's runtime. There is no handwritten parser,
+synchronization algorithm, repair-search engine, or separate proof system to maintain.
+
+The surrounding Rust code establishes smaller integration contracts. A grammar semantic value carries either
+ordinary syntax or an opaque recovery handle. The enclosing allocation rule records the exact `PatId` or `TermId`
+against that handle. An authored hole at the same span, a previous parse's allocation, and a second zero-width hole
+therefore cannot be mistaken for the same recovery event. An abandoned semantic value can have no allocated hole;
+an allocated node can also outlive its parser stack entry. Completion exposes an allocated hole only when it remains
+reachable from the returned root. Ordinary recovery issues can retain links to abandoned allocations for diagnostics.
+
+`RecoveringParser::new(source)` borrows a source snapshot, and `RecoveringParser::at(source, offset)` additionally
+validates and binds a completion cursor. Parsing then takes only `&mut Parser`, never a second source argument.
+The cursor's bounds, UTF-8 boundary, and replacement range consequently belong to the actual input being parsed.
+One lexical stream supplies comment and quoted-literal boundaries to the parser and Cajun, including the EOF cursor
+of an unfinished token. Byte ranges are retained as byte ranges; layout lookup uses character boundaries.
+
+Lexical failures become a grammar-known `Invalid` terminal with a typed `LexicalError` payload. Like `Completion`,
+it has no successful production and is excluded from public expectations. This lets LALRPOP recover using its
+existing points instead of treating a lexer error as an early return or an apparent EOF. Diagnostics retain typed
+invalid tokens even when they are discarded alongside the completion marker.
+
+Numeric conversions use LALRPOP's fallible actions. Metadata integers remain signed 64-bit values, while ordinary
+integer literals remain arbitrary precision. A failed conversion returns a source-located `LiteralError`, keeps any
+earlier recovery issues, and returns no syntax root. Fallible-action errors are fatal in LALRPOP; they do not run `!`.
+Supporting a recoverable invalid metadata value would require an explicit representation and grammar decision,
+so the current implementation reports the error rather than inventing a successful value.
+
+These contracts are regression-tested against the reference parser. They do not claim formally verified parsing,
+minimal edits, or maximal context retention. LALRPOP may pop consumed stack entries as well as discard unread tokens;
+its `dropped_tokens` list describes the latter, not every source fragment replaced during recovery.
+
+### Recovery-point policy
+
 Recovery begins at term and pattern atoms. Those points already allow a malformed item inside a delimited list to
 recover without swallowing a following complete binding, so list and arm boundaries should gain their own points
 only when a concrete edit sequence shows that the atomic points are insufficient. Adding `!` to many productions
@@ -360,6 +397,18 @@ match or comatch arms. Generated arms reuse syntax-form snippets and the ordinar
 
 ## Verification
 
+Parser integration checks share the formatter's repository corpus and an arena-independent syntax projection.
+For valid sources, strict and recovering modes must agree on reachable node tags, edges, rendered values, and entity
+spans, with no recovery issues. Rejected sources are paired with valid repairs; representative recovery and completion
+fixtures must match the strict parse of the explicit repair, ignoring the positions changed by that repair.
+
+Deterministic tests delete or replace each token in representative programs and parse every UTF-8-safe typing prefix.
+All three entry points check rejection consistency, repeatable recovery shapes, valid ranges, typed hole identities,
+and root reachability for completion. Dedicated regressions cover equal-span holes, abandoned allocations, lexical
+errors before and after valid input, unfinished comments and literals, metadata integer overflow, and Unicode layout
+capture. These checks exercise the integration around LALRPOP; acceptance agreement is not an independent proof of
+the generated parser's correctness. They run with `cargo test -p zydeco-surface textual::parser --lib`.
+
 Each layer needs tests at the phase that owns its facts:
 
 - textual tests cover UTF-8 and UTF-16 cursor conversion, mid-token replacement, comments, strings, completion-token
@@ -380,10 +429,8 @@ or patterns and parse them with the strict parser.
 
 LALRPOP recovery chooses how many tokens to discard based on available recovery points. The Phase 0 tests show that
 the term and pattern atom points preserve a following complete binding when an inner list item is malformed. New edit
-sequences may still justify a list or arm boundary. If recovery cannot remain predictable, the fallback is not an
-editor-side parser: the surface crate should instead implement a completion probe that replaces a bounded source
-region with a typed hole and strictly parses the repaired source. Both approaches preserve the same downstream scope
-and type APIs described here.
+sequences may still justify a list or arm boundary. Each change should start with a retained-context regression and
+remain in the grammar; the current design does not add a separate recovery or repair-search implementation.
 
 Expected-token diagnostics are also lower-level than useful syntax forms. The parser may initially expose only term,
 pattern, delimiter, and fixed-keyword expectations, then introduce richer `SyntaxForm` identities as snippet support

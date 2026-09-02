@@ -1,7 +1,7 @@
 # Tree-sitter Zydeco
 
 This directory contains Zydeco's editor-oriented Tree-sitter grammar.
-The compiler's `lang/surface/src/textual/parser.lalrpop` and `lexer.rs` remain authoritative
+The compiler's `lang/surface/src/textual/parser/grammar.lalrpop` and `lexer.rs` remain authoritative
 for accepted programs and semantic construction.
 This grammar deliberately accepts an empty file and unterminated block comments so its syntax tree remains useful
 while editing.

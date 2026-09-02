@@ -1,13 +1,16 @@
-use logos::{Logos, SpannedIter};
+use logos::Logos;
 use std::{
     fmt::{Debug, Display},
     ops::Range,
 };
+use thiserror::Error;
+use zydeco_utils::span::{Sp, Span};
 
 /// Tokens produced by the surface lexer.
 #[derive(Logos, Clone, Debug, PartialEq)]
-#[logos(skip r"[ \t\n\f]+")]
+#[logos(skip r"[ \t\r\n\f]+")]
 #[logos(subpattern ident = r"[a-zA-Z0-9_]|'|\?|\+|\*|-|=|~")]
+#[logos(subpattern string_char = r#"[^"\\]|\\."#)]
 pub enum Tok<'input> {
     #[regex(r"[A-Z](?&ident)*")]
     UpperIdent(&'input str),
@@ -76,10 +79,14 @@ pub enum Tok<'input> {
     FloatLit(&'input str),
     #[regex(r"[\+-]?[0-9]+")]
     IntLit(&'input str),
-    #[regex(r#""[^"\\]*(?:\\.[^"\\]*)*""#)]
+    #[regex(r#""(?&string_char)*""#)]
     StrLit(&'input str),
-    #[regex(r#"'([ -~]|\\[nrt'|(\\)])'"#)]
+    #[regex(r#""(?&string_char)*\\?"#)]
+    UnterminatedString(&'input str),
+    #[regex(r#"'([ -~]|\\[nrt'|(\\)])'"#, priority = 3)]
     CharLit(&'input str),
+    #[regex(r"'[^'\n\r]*'?", priority = 1)]
+    MalformedChar(&'input str),
 
     #[token("(")]
     ParenOpen,
@@ -144,6 +151,103 @@ pub enum Tok<'input> {
     Unknown(&'input str),
 }
 
+/// Malformed source emitted as a token to the parser's ordinary recovery machinery.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Error)]
+pub enum LexicalError {
+    #[error("unrecognized source token")]
+    UnrecognizedToken,
+    #[error("block comment closing delimiter without an opening delimiter")]
+    UnexpectedCommentClose,
+    #[error("unterminated block comment")]
+    UnterminatedBlockComment,
+    #[error("unterminated string literal")]
+    UnterminatedString,
+    #[error("unterminated character literal")]
+    UnterminatedCharacter,
+    #[error("invalid character literal")]
+    InvalidCharacter,
+}
+
+enum SourceToken<'source> {
+    Syntax(Tok<'source>),
+    Trivia { kind: LexicalTokenKind, open_ended: bool },
+    Invalid(LexicalError),
+}
+
+/// Shared lexical boundaries for parsing, highlighting, and completion cursors.
+struct SourceTokens<'source> {
+    inner: logos::Lexer<'source, Tok<'source>>,
+}
+
+impl<'source> SourceTokens<'source> {
+    fn new(source: &'source str) -> Self {
+        Self { inner: Tok::lexer(source) }
+    }
+
+    fn block_comment(&mut self) -> SourceToken<'source> {
+        let remaining = self.inner.remainder().as_bytes();
+        let mut depth = 1;
+        let mut offset = 0;
+        while offset + 1 < remaining.len() {
+            match &remaining[offset..offset + 2] {
+                | b"/-" => {
+                    depth += 1;
+                    offset += 2;
+                }
+                | b"-/" => {
+                    depth -= 1;
+                    offset += 2;
+                    if depth == 0 {
+                        // ASCII delimiters end on UTF-8 boundaries, even in a Unicode comment.
+                        self.inner.bump(offset);
+                        return SourceToken::Trivia {
+                            kind: LexicalTokenKind::Comment,
+                            open_ended: false,
+                        };
+                    }
+                }
+                | _ => offset += 1,
+            }
+        }
+        self.inner.bump(remaining.len());
+        SourceToken::Invalid(LexicalError::UnterminatedBlockComment)
+    }
+}
+
+impl<'source> Iterator for SourceTokens<'source> {
+    type Item = (Range<usize>, SourceToken<'source>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let token = match self.inner.next()? {
+            | Ok(Tok::CommentOpen) => self.block_comment(),
+            | Ok(Tok::CommentClose) => SourceToken::Invalid(LexicalError::UnexpectedCommentClose),
+            | Ok(Tok::TextLine(text)) => SourceToken::Trivia {
+                kind: LexicalTokenKind::TextBlock,
+                open_ended: !text.ends_with('\n'),
+            },
+            | Ok(Tok::CommentLine(text)) => SourceToken::Trivia {
+                kind: LexicalTokenKind::Comment,
+                open_ended: !text.ends_with('\n'),
+            },
+            | Ok(Tok::UnterminatedString(_)) => {
+                SourceToken::Invalid(LexicalError::UnterminatedString)
+            }
+            | Ok(Tok::MalformedChar(text)) => {
+                SourceToken::Invalid(if text.len() > 1 && text.ends_with('\'') {
+                    LexicalError::InvalidCharacter
+                } else {
+                    LexicalError::UnterminatedCharacter
+                })
+            }
+            | Ok(Tok::Unknown(_)) | Err(()) => {
+                SourceToken::Invalid(LexicalError::UnrecognizedToken)
+            }
+            | Ok(token) => SourceToken::Syntax(token),
+        };
+        Some((self.inner.span(), token))
+    }
+}
+
 /// The lexical role of a source token, independent of a particular editor
 /// protocol or theme.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -169,11 +273,18 @@ pub enum LexicalTokenKind {
 pub struct LexicalToken {
     pub range: Range<usize>,
     pub kind: LexicalTokenKind,
+    open_ended: bool,
 }
 
 impl LexicalToken {
-    fn new(range: Range<usize>, kind: LexicalTokenKind) -> Self {
-        Self { range, kind }
+    /// Whether an insertion cursor is inside a comment or quoted literal.
+    /// An unfinished token also owns the cursor at its end, including EOF.
+    pub fn is_opaque_at(&self, offset: usize) -> bool {
+        matches!(
+            self.kind,
+            LexicalTokenKind::Comment | LexicalTokenKind::TextBlock | LexicalTokenKind::String
+        ) && self.range.start < offset
+            && (offset < self.range.end || (self.open_ended && offset == self.range.end))
     }
 }
 
@@ -184,21 +295,13 @@ impl LexicalToken {
 /// later compiler phases may refine identifier tokens without having to
 /// reproduce lexical recovery themselves.
 pub struct LexicalTokens<'source> {
-    inner: SpannedIter<'source, Tok<'source>>,
-    source_len: usize,
-    comment_start: Option<usize>,
-    comment_depth: usize,
+    inner: SourceTokens<'source>,
 }
 
 impl<'source> LexicalTokens<'source> {
     /// Observe all highlightable tokens in a source string.
     pub fn new(source: &'source str) -> Self {
-        Self {
-            inner: Tok::lexer(source).spanned(),
-            source_len: source.len(),
-            comment_start: None,
-            comment_depth: 0,
-        }
+        Self { inner: SourceTokens::new(source) }
     }
 
     fn classify(tok: &Tok<'_>) -> Option<LexicalTokenKind> {
@@ -234,7 +337,10 @@ impl<'source> LexicalTokens<'source> {
             | Tok::Where
             | Tok::Is => Kind::Keyword,
             | Tok::FloatLit(_) | Tok::IntLit(_) => Kind::Number,
-            | Tok::StrLit(_) | Tok::CharLit(_) => Kind::String,
+            | Tok::StrLit(_)
+            | Tok::CharLit(_)
+            | Tok::UnterminatedString(_)
+            | Tok::MalformedChar(_) => Kind::String,
             | Tok::ParenOpen
             | Tok::ParenClose
             | Tok::BracketOpen
@@ -273,44 +379,25 @@ impl Iterator for LexicalTokens<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            let Some((token, range)) = self.inner.next() else {
-                return self.comment_start.take().map(|start| {
-                    LexicalToken::new(start..self.source_len, LexicalTokenKind::Comment)
-                });
-            };
-            let Ok(token) = token else {
-                continue;
-            };
-
-            if self.comment_depth > 0 {
-                match token {
-                    | Tok::CommentOpen => self.comment_depth += 1,
-                    | Tok::CommentClose => {
-                        self.comment_depth -= 1;
-                        if self.comment_depth == 0 {
-                            let start = self
-                                .comment_start
-                                .take()
-                                .expect("a nested comment has an opening range");
-                            return Some(LexicalToken::new(
-                                start..range.end,
-                                LexicalTokenKind::Comment,
-                            ));
-                        }
-                    }
-                    | _ => {}
+            let (range, token) = self.inner.next()?;
+            let (kind, open_ended) = match token {
+                | SourceToken::Syntax(token) => match Self::classify(&token) {
+                    | Some(kind) => (kind, false),
+                    | None => continue,
+                },
+                | SourceToken::Trivia { kind, open_ended } => (kind, open_ended),
+                | SourceToken::Invalid(LexicalError::UnterminatedBlockComment) => {
+                    (LexicalTokenKind::Comment, true)
                 }
-                continue;
-            }
-
-            if matches!(token, Tok::CommentOpen) {
-                self.comment_start = Some(range.start);
-                self.comment_depth = 1;
-                continue;
-            }
-            if let Some(kind) = Self::classify(&token) {
-                return Some(LexicalToken::new(range, kind));
-            }
+                | SourceToken::Invalid(
+                    LexicalError::UnterminatedString | LexicalError::UnterminatedCharacter,
+                ) => (LexicalTokenKind::String, true),
+                | SourceToken::Invalid(LexicalError::InvalidCharacter) => {
+                    (LexicalTokenKind::String, false)
+                }
+                | SourceToken::Invalid(_) => continue,
+            };
+            return Some(LexicalToken { range, kind, open_ended });
         }
     }
 }
@@ -350,7 +437,11 @@ impl Display for Tok<'_> {
             | Tok::FloatLit(s) => write!(f, "FloatLit({})", s),
             | Tok::IntLit(s) => write!(f, "IntLit({})", s),
             | Tok::StrLit(s) => write!(f, "StrLit(\"{}\")", s.escape_debug()),
+            | Tok::UnterminatedString(s) => {
+                write!(f, "UnterminatedString(\"{}\")", s.escape_debug())
+            }
             | Tok::CharLit(s) => write!(f, "CharLit(\'{}\')", s.escape_debug()),
+            | Tok::MalformedChar(s) => write!(f, "MalformedChar(\"{}\")", s.escape_debug()),
             | Tok::ParenOpen => write!(f, "("),
             | Tok::ParenClose => write!(f, ")"),
             | Tok::BracketOpen => write!(f, "["),
@@ -385,40 +476,31 @@ impl Display for Tok<'_> {
     }
 }
 
-/// Streaming lexer that skips comments and nested block comments.
+/// Streaming lexer that skips trivia and retains malformed source as typed errors.
+/// An error consumes its range; subsequent calls continue after that range.
 pub struct Lexer<'source> {
-    inner: SpannedIter<'source, Tok<'source>>,
-    comment_depth: usize,
+    inner: SourceTokens<'source>,
 }
 
 impl<'source> Lexer<'source> {
     /// Create a new lexer for a source string.
     pub fn new(source: &'source str) -> Self {
-        Self { inner: Tok::lexer(source).spanned(), comment_depth: 0 }
+        Self { inner: SourceTokens::new(source) }
     }
 }
 
 impl<'source> Iterator for Lexer<'source> {
-    type Item = (usize, Tok<'source>, usize);
+    type Item = Result<(usize, Tok<'source>, usize), Sp<LexicalError>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            match self.inner.next() {
-                | Some((Ok(Tok::TextLine(_)), _)) => continue,
-                | Some((Ok(Tok::CommentLine(_)), _)) => continue,
-                | Some((Ok(Tok::CommentOpen), _)) => {
-                    self.comment_depth += 1;
-                    continue;
+            let (range, token) = self.inner.next()?;
+            match token {
+                | SourceToken::Trivia { .. } => continue,
+                | SourceToken::Syntax(token) => return Some(Ok((range.start, token, range.end))),
+                | SourceToken::Invalid(error) => {
+                    return Some(Err(Span::new(range.start, range.end).make(error)));
                 }
-                | Some((Ok(Tok::CommentClose), _)) => {
-                    if self.comment_depth == 0 {
-                        break None;
-                    }
-                    self.comment_depth -= 1;
-                }
-                | Some((Ok(_tok), _)) if self.comment_depth > 0 => continue,
-                | Some((Ok(tok), range)) => break Some((range.start, tok, range.end)),
-                | _ => break None,
             }
         }
     }
@@ -426,7 +508,7 @@ impl<'source> Iterator for Lexer<'source> {
 
 #[cfg(test)]
 mod tooling_tests {
-    use super::{LexicalToken, LexicalTokenKind, LexicalTokens};
+    use super::{Lexer, LexicalError, LexicalToken, LexicalTokenKind, LexicalTokens, Tok};
 
     struct LexicalFixture<'source> {
         source: &'source str,
@@ -463,6 +545,56 @@ mod tooling_tests {
             assert_eq!(tokens.len(), 1);
             assert_eq!(tokens[0].kind, LexicalTokenKind::Comment);
             assert_eq!(fixture.text(&tokens[0]), source);
+        });
+    }
+
+    #[test]
+    fn nested_comments_share_boundaries_and_do_not_lex_their_contents_as_code() {
+        let comment = "/- 🦀 \"unclosed string -- line /- nested -/ tail -/";
+        let source = format!("first {comment} second");
+        let parsed = Lexer::new(&source).collect::<Result<Vec<_>, _>>().unwrap();
+        assert!(matches!(
+            parsed.as_slice(),
+            [(_, Tok::LowerIdent("first"), _), (_, Tok::LowerIdent("second"), _)]
+        ));
+        let comments = LexicalTokens::new(&source)
+            .filter(|token| token.kind == LexicalTokenKind::Comment)
+            .collect::<Vec<_>>();
+        assert_eq!(comments.len(), 1);
+        assert_eq!(&source[comments[0].range.clone()], comment);
+
+        let unfinished = "/- 🦀 /- inner -/";
+        let error = Lexer::new(unfinished).next().unwrap().unwrap_err();
+        assert_eq!(error.inner, LexicalError::UnterminatedBlockComment);
+        assert_eq!(error.info.range(), 0..unfinished.len());
+        assert!(LexicalTokens::new(unfinished).next().unwrap().is_opaque_at(unfinished.len()));
+    }
+
+    #[test]
+    fn lexical_errors_consume_their_ranges_and_continue_to_later_tokens() {
+        let source = "first -/ 🦀 second";
+        let mut lexer = Lexer::new(source);
+        assert!(matches!(lexer.next(), Some(Ok((0, Tok::LowerIdent("first"), 5)))));
+        let close = lexer.next().unwrap().unwrap_err();
+        assert_eq!(close.inner, LexicalError::UnexpectedCommentClose);
+        assert_eq!(close.info.range(), 6..8);
+        let unknown = lexer.next().unwrap().unwrap_err();
+        assert_eq!(unknown.inner, LexicalError::UnrecognizedToken);
+        assert_eq!(&source[unknown.info.range()], "🦀");
+        assert!(matches!(lexer.next(), Some(Ok((_, Tok::LowerIdent("second"), _)))));
+        assert!(lexer.next().is_none());
+        assert!(lexer.next().is_none());
+    }
+
+    #[test]
+    fn lexer_accepts_crlf_and_complete_escaped_literals() {
+        ["first\r\nsecond", r#""a\"b""#, r"'\n'", r"'\''", r"'\\'", "'''", "'a'", "value'"]
+            .into_iter()
+            .for_each(|source| {
+                assert!(Lexer::new(source).collect::<Result<Vec<_>, _>>().is_ok(), "{source:?}");
+            });
+        ["\"unfinished\\", "'\\", "''", "'ab'"].into_iter().for_each(|source| {
+            assert!(Lexer::new(source).collect::<Result<Vec<_>, _>>().is_err(), "{source:?}");
         });
     }
 }

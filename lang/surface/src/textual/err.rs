@@ -1,4 +1,4 @@
-use super::{ParseFailure, ParseIssueKind, SyntaxExpectation};
+use super::{DiagnosticToken, ParseFailure, ParseIssueKind, SyntaxExpectation};
 use ariadne::{Label, Report, ReportKind};
 use std::{fmt::Display, ops::Range};
 use zydeco_utils::span::{FileMap, PathDisplay};
@@ -24,19 +24,15 @@ impl ParseError<'_> {
         let note = ParseErrorNote::new(issue.expected(), error.issue_count());
 
         match &issue.kind {
-            | ParseIssueKind::User { message } if issue.range.is_none() => Report::build(
-                ReportKind::Error,
-                (PathDisplay::from(std::path::PathBuf::from("<internal>")), 0..0),
-            )
-            .with_message("Parse error")
-            .with_note(message)
-            .finish(),
-            | ParseIssueKind::User { message } => {
+            | ParseIssueKind::Literal { .. }
+            | ParseIssueKind::UnrecognizedToken { token: DiagnosticToken::Invalid(_), .. }
+            | ParseIssueKind::ExtraToken { token: DiagnosticToken::Invalid(_) } => {
                 let mut report =
                     Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
                         .with_message("Parse error")
                         .with_label(
-                            Label::new((file_path.clone(), range.clone())).with_message(message),
+                            Label::new((file_path.clone(), range.clone()))
+                                .with_message(issue.to_string()),
                         );
                 if let Some(note) = note.render() {
                     report = report.with_note(note);
@@ -113,7 +109,16 @@ impl Display for ParseError<'_> {
         let issue = error.primary();
         let range = issue.range.clone().unwrap_or(0..0);
         match &issue.kind {
-            | ParseIssueKind::User { message } => formatter.write_str(message)?,
+            | ParseIssueKind::Literal { .. }
+            | ParseIssueKind::UnrecognizedToken { token: DiagnosticToken::Invalid(_), .. }
+            | ParseIssueKind::ExtraToken { token: DiagnosticToken::Invalid(_) } => write!(
+                formatter,
+                "{issue} at {}:{} - {}{}",
+                info.path().display(),
+                info.line_col(range.start),
+                info.line_col(range.end),
+                fmt_expected(issue.expected()),
+            )?,
             | ParseIssueKind::InvalidToken => write!(
                 formatter,
                 "Invalid token at {}:{}",

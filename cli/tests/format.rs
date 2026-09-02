@@ -173,21 +173,34 @@ fn fmt_format_verbatim_preserves_long_payload() {
 fn fmt_rejects_invalid_syntax_without_overwriting_it() {
     let directory = tempfile::tempdir().unwrap();
     let source = directory.path().join("invalid.zy");
-    ["let value =", "let value = in value", "fn => body", "let first = (,) in first"]
-        .into_iter()
-        .for_each(|invalid| {
-            [false, true].into_iter().for_each(|check| {
-                fs::write(&source, invalid).unwrap();
-                let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
-                    .arg("fmt")
-                    .args(check.then_some("--check"))
-                    .arg(&source)
-                    .output()
-                    .unwrap();
+    [
+        "let value =",
+        "let value = in value",
+        "fn => body",
+        "let first = (,) in first",
+        "value -/ tail",
+        "value /- unfinished",
+        "\"unfinished",
+        "'ab'",
+        "@[tag(9223372036854775808)] value",
+        "let value = 🦀 in value",
+    ]
+    .into_iter()
+    .for_each(|invalid| {
+        [false, true].into_iter().for_each(|check| {
+            fs::write(&source, invalid).unwrap();
+            let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
+                .arg("fmt")
+                .args(check.then_some("--check"))
+                .arg(&source)
+                .output()
+                .unwrap();
 
-                assert!(!output.status.success(), "source: {invalid:?}, check: {check}");
-                assert!(String::from_utf8_lossy(&output.stderr).contains("cannot format source"));
-                assert_eq!(fs::read_to_string(&source).unwrap(), invalid);
-            });
+            assert!(!output.status.success(), "source: {invalid:?}, check: {check}");
+            let diagnostic = String::from_utf8_lossy(&output.stderr);
+            assert!(diagnostic.contains("cannot format source"), "{invalid:?}: {diagnostic}");
+            assert!(!diagnostic.contains("panicked"), "{invalid:?}: {diagnostic}");
+            assert_eq!(fs::read_to_string(&source).unwrap(), invalid);
         });
+    });
 }

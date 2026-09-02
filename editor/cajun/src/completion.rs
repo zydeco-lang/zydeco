@@ -7,7 +7,7 @@ use zydeco_surface::{
     metadata::{
         MetadataArguments, MetadataCatalog, MetadataDefinition, MetadataParameter, MetadataValue,
     },
-    textual::{Lexer, Tok},
+    textual::{Lexer, LexicalTokens, Tok},
 };
 use zydeco_utils::span::{FileMap, LineCol};
 
@@ -262,13 +262,18 @@ struct MetadataCursor {
 impl MetadataCursor {
     fn at(source: &str, offset: usize) -> Option<Self> {
         let prefix_source = source.get(..offset)?;
-        if OpaqueSource::contains_cursor(prefix_source) {
+        if LexicalTokens::new(source).any(|token| token.is_opaque_at(offset)) {
             return None;
         }
 
         let mut active = None;
         let mut pending_at = false;
-        for (start, token, end) in Lexer::new(prefix_source) {
+        for token in Lexer::new(prefix_source) {
+            let Ok((start, token, end)) = token else {
+                active = None;
+                pending_at = false;
+                continue;
+            };
             if pending_at {
                 let close = match token {
                     | Tok::BracketOpen => Some(AnnotationClose::Bracket),
@@ -391,88 +396,8 @@ impl MetadataCursor {
     }
 
     fn identifier_end(source: &str, start: usize) -> Option<usize> {
-        let (token_start, token, token_end) = Lexer::new(source.get(start..)?).next()?;
+        let (token_start, token, token_end) = Lexer::new(source.get(start..)?).next()?.ok()?;
         (token_start == 0 && Self::is_name(&token)).then_some(start + token_end)
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum OpaqueSource {
-    Normal,
-    String { escaped: bool },
-    LineComment,
-    BlockComment { depth: usize },
-}
-
-impl OpaqueSource {
-    fn contains_cursor(source: &str) -> bool {
-        let bytes = source.as_bytes();
-        let mut state = Self::Normal;
-        let mut index = 0;
-        while index < bytes.len() {
-            state = match state {
-                | Self::Normal => match (bytes[index], bytes.get(index + 1).copied()) {
-                    | (b'"', _) => Self::String { escaped: false },
-                    | (b'\'', _) => {
-                        if let Some(end) = Self::character_end(bytes, index) {
-                            index = end;
-                        }
-                        Self::Normal
-                    }
-                    | (b'-', Some(b'-')) => {
-                        index += 1;
-                        Self::LineComment
-                    }
-                    | (b'/', Some(b'-')) => {
-                        index += 1;
-                        Self::BlockComment { depth: 1 }
-                    }
-                    | _ => Self::Normal,
-                },
-                | Self::String { escaped: true } => Self::String { escaped: false },
-                | Self::String { escaped: false } => match bytes[index] {
-                    | b'\\' => Self::String { escaped: true },
-                    | b'"' => Self::Normal,
-                    | _ => Self::String { escaped: false },
-                },
-                | Self::LineComment => {
-                    if bytes[index] == b'\n' {
-                        Self::Normal
-                    } else {
-                        Self::LineComment
-                    }
-                }
-                | Self::BlockComment { depth } => {
-                    match (bytes[index], bytes.get(index + 1).copied()) {
-                        | (b'/', Some(b'-')) => {
-                            index += 1;
-                            Self::BlockComment { depth: depth + 1 }
-                        }
-                        | (b'-', Some(b'/')) if depth == 1 => {
-                            index += 1;
-                            Self::Normal
-                        }
-                        | (b'-', Some(b'/')) => {
-                            index += 1;
-                            Self::BlockComment { depth: depth - 1 }
-                        }
-                        | _ => Self::BlockComment { depth },
-                    }
-                }
-            };
-            index += 1;
-        }
-        state != Self::Normal
-    }
-
-    fn character_end(bytes: &[u8], start: usize) -> Option<usize> {
-        let payload = start.checked_add(1)?;
-        let end = if bytes.get(payload) == Some(&b'\\') {
-            payload.checked_add(2)?
-        } else {
-            payload.checked_add(1)?
-        };
-        (bytes.get(end) == Some(&b'\'')).then_some(end)
     }
 }
 
@@ -574,5 +499,14 @@ mod tests {
         assert!(CompletionFixture::new("@[builtin(\"bui|\")] _").items().is_none());
         assert!(CompletionFixture::new("@[builtin( -- bui|").items().is_none());
         assert!(CompletionFixture::new("bui|").items().is_none());
+    }
+
+    #[test]
+    fn completion_uses_shared_lexical_boundaries_after_errors_and_comments() {
+        assert!(CompletionFixture::new("-/ @[bui|").items().is_some());
+        assert!(CompletionFixture::new("/- \" -- /- nested -/ -/ @[bui|").items().is_some());
+        assert!(CompletionFixture::new("@[builtin(\"unfinished|").items().is_none());
+        assert!(CompletionFixture::new("@[builtin( /- nested /- inner -/|").items().is_none());
+        assert!(CompletionFixture::new("@[builtin( -- comment\n reader|)] _").items().is_some());
     }
 }

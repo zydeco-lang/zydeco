@@ -532,7 +532,10 @@ impl Parser {
         let layouts = entities
             .iter()
             .map(|entity| {
-                let occupied_end = entity.end().saturating_sub(1).max(entity.start());
+                // A recovered node can end immediately after an unrecognized Unicode
+                // character. Its last occupied byte is not necessarily a character boundary.
+                let occupied_end =
+                    source.floor_char_boundary(entity.end().saturating_sub(1)).max(entity.start());
                 let first = file_map.line_col(entity.start()).line as usize;
                 let last = file_map.line_col(occupied_end).line as usize;
                 let presentation_start =

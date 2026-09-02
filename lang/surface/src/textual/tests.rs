@@ -1,3 +1,5 @@
+pub(super) mod corpus;
+
 use crate::{
     bitter::{SourceUnitDesugarer, fmt::Formatter as BitterFormatter, syntax as bitter},
     metadata::{BuiltinMetaError, IntrinsicMeta, IntrinsicMetaError, MonadicMetaError},

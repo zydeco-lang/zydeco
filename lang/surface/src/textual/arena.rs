@@ -1,6 +1,6 @@
 use super::syntax::*;
 use super::{SurfaceIntentions, SurfaceTrivia};
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 /* ---------------------------------- Arena --------------------------------- */
 
@@ -44,6 +44,138 @@ pub struct TextArena {
 }
 
 impl TextArena {
+    /// Direct AST edges, in stable structural order, excluding trivia and allocation bookkeeping.
+    /// Keep the exhaustive cases here so reachability has one structural definition.
+    pub(crate) fn children(&self, entity: EntityId) -> Vec<EntityId> {
+        match entity {
+            | EntityId::Def(_) => Vec::new(),
+            | EntityId::Meta(meta) => {
+                self.metas[&meta].arguments().iter().copied().map(Into::into).collect()
+            }
+            | EntityId::CoPat(copat) => match &self.copats[&copat] {
+                | CoPattern::Pat(pattern) => vec![(*pattern).into()],
+                | CoPattern::Dtor(_) => Vec::new(),
+                | CoPattern::App(Appli(patterns)) => {
+                    patterns.iter().copied().map(Into::into).collect()
+                }
+            },
+            | EntityId::Pat(pattern) => match &self.pats[&pattern] {
+                | Pattern::Hole(_) => Vec::new(),
+                | Pattern::Var(definition) => vec![(*definition).into()],
+                | Pattern::Ann(Ann { tm, ty }) => vec![(*tm).into(), (*ty).into()],
+                | Pattern::Manifest(ManifestPattern { binder, definition }) => {
+                    vec![(*binder).into(), (*definition).into()]
+                }
+                | Pattern::Named(Named(_, inner))
+                | Pattern::Ctor(Ctor(_, inner))
+                | Pattern::Project(ProjectionPattern(_, inner)) => vec![(*inner).into()],
+                | Pattern::View(ViewPattern { function, pattern }) => {
+                    vec![(*function).into(), (*pattern).into()]
+                }
+                | Pattern::Alias(Alias(ConsN(patterns, last))) => {
+                    patterns.iter().chain(std::iter::once(last)).copied().map(Into::into).collect()
+                }
+                | Pattern::Paren(Paren(patterns)) => {
+                    patterns.iter().copied().map(Into::into).collect()
+                }
+            },
+            | EntityId::Term(term) => match &self.terms[&term] {
+                | Term::Hole(_) | Term::Var(_) | Term::Lit(_) => Vec::new(),
+                | Term::Meta(MetaTerm(meta, inner)) => vec![(*meta).into(), (*inner).into()],
+                | Term::SourceBoundary(SourceBoundary(inner))
+                | Term::SignatureBoundary(SignatureBoundary(inner))
+                | Term::Named(Named(_, inner))
+                | Term::Label(Label(_, inner))
+                | Term::Thunk(Thunk(inner))
+                | Term::Force(Force(inner))
+                | Term::Ret(Return(inner))
+                | Term::Block(Block(inner))
+                | Term::Ctor(Ctor(_, inner))
+                | Term::Dtor(Dtor(inner, _))
+                | Term::Proj(Proj(inner, _)) => vec![(*inner).into()],
+                | Term::Ann(Ann { tm, ty }) => vec![(*tm).into(), (*ty).into()],
+                | Term::Arrow(Arrow(left, right)) => vec![(*left).into(), (*right).into()],
+                | Term::Paren(Paren(terms)) | Term::App(Appli(terms)) | Term::Prod(Prod(terms)) => {
+                    terms.iter().copied().map(Into::into).collect()
+                }
+                | Term::Abs(Abs(params, body))
+                | Term::ValAbs(Abs(params, body))
+                | Term::Pi(Pi(params, body))
+                | Term::ValPi(ValPi(params, body))
+                | Term::Forall(Forall(params, body))
+                | Term::Sigma(Sigma(params, body)) => vec![(*params).into(), (*body).into()],
+                | Term::Fix(Fix(binder, body)) => vec![(*binder).into(), (*body).into()],
+                | Term::Exists(Exists { parameters, body }) => parameters
+                    .iter()
+                    .flat_map(Self::parameter_children)
+                    .chain(std::iter::once((*body).into()))
+                    .collect(),
+                | Term::Pack(Pack { parameters, body }) => parameters
+                    .iter()
+                    .flat_map(|parameter| {
+                        Self::parameter_children(&parameter.parameter)
+                            .chain(parameter.evidence.map(Into::into))
+                    })
+                    .chain(std::iter::once((*body).into()))
+                    .collect(),
+                | Term::Do(Bind { binder, bindee, tail }) => {
+                    vec![(*binder).into(), (*bindee).into(), (*tail).into()]
+                }
+                | Term::Let(GenLet { binding, tail })
+                | Term::ContextBind(ContextBind { binding, tail, .. }) => {
+                    Self::binding_children(binding).chain(std::iter::once((*tail).into())).collect()
+                }
+                | Term::Param(Param { binder, tail, .. }) => vec![(*binder).into(), (*tail).into()],
+                | Term::Pipeline(Pipeline { subject, function, .. }) => {
+                    vec![(*subject).into(), (*function).into()]
+                }
+                | Term::Data(Data { arms }) => arms.iter().map(|arm| arm.param.into()).collect(),
+                | Term::CoData(CoData { arms }) => arms
+                    .iter()
+                    .flat_map(|arm| arm.params.map(Into::into).into_iter().chain([arm.out.into()]))
+                    .collect(),
+                | Term::Match(Match { scrut, arms }) => std::iter::once((*scrut).into())
+                    .chain(arms.iter().flat_map(|arm| [arm.binder.into(), arm.tail.into()]))
+                    .collect(),
+                | Term::CoMatch(CoMatchParam { arms }) => {
+                    arms.iter().flat_map(|arm| [arm.params.into(), arm.tail.into()]).collect()
+                }
+            },
+        }
+    }
+
+    fn parameter_children(parameter: &ExistentialParameter) -> impl Iterator<Item = EntityId> + '_ {
+        parameter
+            .annotations
+            .iter()
+            .map(|annotation| annotation.inner.into())
+            .chain(std::iter::once(parameter.binder.into()))
+    }
+
+    fn binding_children(binding: &GenBind<TermId>) -> impl Iterator<Item = EntityId> {
+        [
+            Some(binding.binder.into()),
+            binding.params.map(Into::into),
+            binding.ty.map(Into::into),
+            Some(binding.bindee.into()),
+        ]
+        .into_iter()
+        .flatten()
+    }
+
+    /// Allocations can outlive a popped parser stack entry. Only nodes reachable
+    /// from the returned root belong to that parse tree.
+    pub(crate) fn reachable_from(&self, root: EntityId) -> HashSet<EntityId> {
+        let mut reached = HashSet::new();
+        let mut pending = vec![root];
+        while let Some(entity) = pending.pop() {
+            if reached.insert(entity) {
+                pending.extend(self.children(entity));
+            }
+        }
+        reached
+    }
+
     /// Lower one parsed metadata tree to the span-free representation shared
     /// by the later compiler phases and metadata decoders.
     pub fn semantic_meta(&self, meta: MetaId) -> zydeco_syntax::Meta {
