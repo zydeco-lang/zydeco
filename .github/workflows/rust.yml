@@ -14,7 +14,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  fmt:
 
     runs-on: ubuntu-latest
 
@@ -22,7 +22,30 @@ jobs:
     - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@stable
       with:
-        components: clippy, rustfmt
+        components: rustfmt
+    - name: Check format
+      run: cargo fmt -- --check
+
+  lint:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        components: clippy
+    - uses: Swatinem/rust-cache@v2
+    - name: Lint
+      run: cargo clippy-all -- -D warnings
+
+  test:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
     - uses: actions/setup-node@v4
       with:
         node-version: 24
@@ -31,12 +54,6 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y nasm binutils
-    - name: Check format
-      run: cargo fmt -- --check
-    - name: Lint
-      run: cargo clippy-all -- -D warnings
-    - name: Build
-      run: cargo build-all --verbose
     - name: Run Tests
       run: cargo test-all --verbose
     - name: Run Doc Tests
