@@ -12,13 +12,13 @@ begin
   (
     fix (loop : Thk (Int64 -> OS)) =>
       fn sum =>
-        ! (stdio/read_int)
-          { ! (process/exit) 0 }
+        ! stdio/read_int
+          { ! process/exit 0 }
           {
             fn i =>
-              do sum <- ! (int64/add) i sum;
-              ! (stdio/write_int) sum {
-                ! (stdio/write_line) " = sum" {
+              do sum <- ! int64/add i sum;
+              ! stdio/write_int sum {
+                ! stdio/write_line " = sum" {
                   ! loop sum
                 }
               }

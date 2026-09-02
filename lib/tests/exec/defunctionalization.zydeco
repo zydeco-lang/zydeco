@@ -31,7 +31,7 @@ begin
     | +Nil() => ret 0
     | +Cons(x, xs) =>
       do n <- ! sumBad xs;
-      ! (int64/add) n x
+      ! int64/add n x
     end
   that
   -- This is a bad algorithm because it uses stack space linear in the
@@ -48,7 +48,7 @@ begin
     comatch
     | .done => ret n
     | .addN x =>
-      do n' <- ! (int64/add) n x;
+      do n' <- ! int64/add n x;
       ! retSummer n'
     end
   that
@@ -87,7 +87,7 @@ begin
       comatch
       | .done => ! sumBetter xs .addN x .done
       | .addN y =>
-        do xPlusy <- ! (int64/add) x y;
+        do xPlusy <- ! int64/add x y;
         ! sumBetter xs .addN xPlusy
       end
     end
@@ -114,7 +114,7 @@ begin
         | +Cons(x, xs) =>
           comatch
           | .add n =>
-            do n' <- ! (int64/add) x n;
+            do n' <- ! int64/add x n;
             ! sumBest xs .add n'
           end
         end
@@ -124,6 +124,6 @@ begin
   that
 
   do n <- ! sum +Cons(5, +Cons(13, +Nil()));
-  do s <- ! (int64/to_string) n;
-  ! (stdio/write_line) s { ! (process/exit) 0 }
+  do s <- ! int64/to_string n;
+  ! stdio/write_line s { ! process/exit 0 }
 end

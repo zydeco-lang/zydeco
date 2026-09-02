@@ -127,22 +127,22 @@ begin
 
   -- module Arith
   def ! int_eq (x : Int64) (y : Int64) : Ret Bool =
-    ! (int64/eq) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! int64/eq (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! int_lt (x : Int64) (y : Int64) : Ret Bool =
-    ! (int64/lt) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! int64/lt (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! int_gt (x : Int64) (y : Int64) : Ret Bool =
-    ! (int64/gt) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! int64/gt (Ret Bool) x y { ret +True() } { ret +False() }
   that
   -- end module Arith
 
   -- module String
   def ! str_eq (x : String) (y : String) : Ret Bool =
-    ! (string/eq) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! string/eq (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! str_get_or_space (text : String) (index : Int64) : Ret Char =
-    ! (string/get)
+    ! string/get
       (Ret Char)
       text
       index
@@ -165,22 +165,22 @@ begin
 
   -- module OS
   def ! read_line_as_int (k : Thk (Option Int64 -> OS)) : OS =
-    ! (stdio/read_int)
+    ! stdio/read_int
       { ! k +None() }
       { fn i => ! k +Some(i) }
   that
-  def halt : Thk OS = { ! (process/exit) 0 } that
+  def halt : Thk OS = { ! process/exit 0 } that
 
   def panic : Thk (String -> OS) = {
     fn (msg : String) =>
-      do msg <- ! (string/append) "Program panicked with message: " msg;
-      ! (stdio/write_line) msg { ! (process/exit) 1 }
+      do msg <- ! string/append "Program panicked with message: " msg;
+      ! stdio/write_line msg { ! process/exit 1 }
   } that
 
   def write_int_line : Thk (Int64 -> Thk OS -> OS) = {
     fn (i : Int64) (k : Thk OS) =>
-      do s <- ! (int64/to_string) i;
-      ! (stdio/write_line) s k
+      do s <- ! int64/to_string i;
+      ! stdio/write_line s k
   } that
   -- end module OS
 

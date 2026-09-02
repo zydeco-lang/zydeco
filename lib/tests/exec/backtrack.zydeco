@@ -49,7 +49,7 @@ begin
     that
     -- | .run : forall (R: CType) . U (U R -> A -> R) -> U R -> R
     def ! int_eq (left : Int64) (right : Int64) : Ret Bool =
-      ! (int64/eq)
+      ! int64/eq
         (Ret Bool)
         left
         right
@@ -126,7 +126,7 @@ begin
                 fn y =>
                   ! mlist .bind Unit (Pair Int64 Int64)
                     {
-                      do r <- ! (int64/add) x y;
+                      do r <- ! int64/add x y;
                       do b <- ! int_eq r 5;
                       ! guard b
                     }
@@ -146,10 +146,10 @@ begin
       | +Cons(p, ps) =>
         match p
         | +Cons(x, y) =>
-          ! (stdio/write_int) x {
-            ! (stdio/write) " + " {
-              ! (stdio/write_int) y {
-                ! (stdio/write_line) "" {
+          ! stdio/write_int x {
+            ! stdio/write " + " {
+              ! stdio/write_int y {
+                ! stdio/write_line "" {
                   ! print ps kont
                 }
               }
@@ -158,6 +158,6 @@ begin
         end
       end
     in
-    ! print ps { ! (process/exit) 0 }
+    ! print ps { ! process/exit 0 }
   end
 end

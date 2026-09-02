@@ -127,7 +127,7 @@ begin
           }
       | .kont =>
         fn A' ka =>
-          do i' <- ! (int64/add) i 1;
+          do i' <- ! int64/add i 1;
           ! count_kont E A' i' {
             fn i =>
               ! fi i .kont A' ka
@@ -182,11 +182,11 @@ begin
         ! rhs triv triv i
     };
     -- Continuation sequencing is written as an explicit thunk argument.
-    ! (stdio/write_int) a {
-      ! (stdio/write) " != " {
-        ! (stdio/write_int) b {
-          ! (stdio/write) "\n" {
-            ! (process/exit) 0
+    ! stdio/write_int a {
+      ! stdio/write " != " {
+        ! stdio/write_int b {
+          ! stdio/write "\n" {
+            ! process/exit 0
           }
         }
       }

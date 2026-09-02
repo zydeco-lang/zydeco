@@ -7,23 +7,23 @@ begin
 
   let (/List; /list; /int64; /string; /stdio; /process) = builtin |> make_std in
   def fix foldl (xs : List String) (i : Int64) : Ret Int64 =
-    ! (list/case)
+    ! list/case
       String
       (Ret Int64)
       xs
       { ret i }
       {
         fn s xs =>
-          do i' <- ! (string/length) s;
-          do i' <- ! (int64/add) i i';
+          do i' <- ! string/length s;
+          do i' <- ! int64/add i i';
           ! foldl xs i'
       }
   in
-  do nil <- ! (list/nil) String;
-  do ys <- ! (list/cons) String "y" nil;
-  do empty_and_ys <- ! (list/cons) String "" ys;
-  do xs <- ! (list/cons) String "abc" empty_and_ys;
+  do nil <- ! list/nil String;
+  do ys <- ! list/cons String "y" nil;
+  do empty_and_ys <- ! list/cons String "" ys;
+  do xs <- ! list/cons String "abc" empty_and_ys;
   do l <- ! foldl xs 0;
-  do s <- ! (int64/to_string) l;
-  ! (stdio/write_line) s { fn _ => ! (process/exit) 0 }
+  do s <- ! int64/to_string l;
+  ! stdio/write_line s { fn _ => ! process/exit 0 }
 end

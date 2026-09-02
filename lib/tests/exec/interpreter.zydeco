@@ -76,7 +76,7 @@ begin
     match g
     | +Empty() => ret +Err()
     | +Cons(y, v, g) =>
-      ! (string/eq)
+      ! string/eq
         (Ret (Answer SemVal))
         x
         y
@@ -165,9 +165,9 @@ begin
     )
     +Empty() .bind;
   match x
-  | +Err(_) => ! (process/exit) 1
+  | +Err(_) => ! process/exit 1
   | +Ok(sv) =>
     do s <- ! sem_val_to_str sv;
-    ! (stdio/write_line) s { ! (process/exit) 0 }
+    ! stdio/write_line s { ! process/exit 0 }
   end
 end

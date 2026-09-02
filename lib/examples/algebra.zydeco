@@ -69,8 +69,8 @@ begin
     that
 
     def ! panic (msg : String) : OS =
-      ! (stdio/write_line) msg {
-        ! (process/exit) 1
+      ! stdio/write_line msg {
+        ! process/exit 1
       }
     that
 
@@ -222,8 +222,8 @@ begin
     that
     -- add_of errors if the sum >= 256 (8-bit overflow)
     def ! add_of (i : Int64) (sum : Int64) : ExnDe String Int64 =
-      do sum <- ! (int64/add) i sum;
-      ! (int64/lt)
+      do sum <- ! int64/add i sum;
+      ! int64/lt
         (ExnDe String Int64)
         sum
         256
@@ -234,14 +234,14 @@ begin
     (
       fix (loop : Thk (Int64 -> OS)) =>
         fn sum =>
-          ! (stdio/read_int)
-            { ! (process/exit) 0 }
+          ! stdio/read_int
+            { ! process/exit 0 }
             {
               fn i =>
                 ! alg_exn Int64 { ! add_of i sum } {
                   fn sum =>
-                    ! (stdio/write_int) sum {
-                      ! (stdio/write_line) " = sum" {
+                    ! stdio/write_int sum {
+                      ! stdio/write_line " = sum" {
                         ! loop sum
                       }
                     }

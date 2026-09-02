@@ -49,28 +49,28 @@ begin
       | +Nil() => ! k
       | +Cons(a, l) =>
         ! write a {
-          ! (stdio/write) "," {
+          ! stdio/write "," {
             ! write_list_aux l k
           }
         }
       end
     in
-    ! (stdio/write) "[" {
+    ! stdio/write "[" {
       ! write_list_aux l {
-        ! (stdio/write) "]" k
+        ! stdio/write "]" k
       }
     }
   that
   def fix write_tree (A : VType) (write : Thk (A -> Thk OS -> OS)) (t : Tree A) (k : Thk OS) : OS =
     match t
     | +Leaf() =>
-      ! (stdio/write) "()" k
+      ! stdio/write "()" k
     | +Node(l, a, r) =>
-      ! (stdio/write) "(" {
+      ! stdio/write "(" {
         ! write_tree A write l {
           ! write a {
             ! write_tree A write r {
-              ! (stdio/write) ")" k
+              ! stdio/write ")" k
             }
           }
         }
@@ -80,14 +80,14 @@ begin
 
   do t1 <- ! trace Int64 t0 +Nil();
   ! write_tree Int64 stdio/write_int t0 {
-    ! (stdio/write_line) "" {
+    ! stdio/write_line "" {
       ! write_tree
         (List Int64)
         { ! write_list Int64 stdio/write_int }
         t1
         {
-          ! (stdio/write_line) "" {
-            ! (process/exit) 0
+          ! stdio/write_line "" {
+            ! process/exit 0
           }
         }
     }

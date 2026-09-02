@@ -45,11 +45,11 @@ begin
           comatch
           -- the following line is the same as `| .more => fn i => ...`
           | .more i =>
-            do j <- ! (int64/add) sum i;
+            do j <- ! int64/add sum i;
             ! loop j
           | .done =>
             comatch
-            | .some i => ! (int64/mul) sum i
+            | .some i => ! int64/mul sum i
             | .none => ret sum
             end
           end
@@ -64,11 +64,11 @@ begin
     let fix loop (sum : Int64) : FnVar Int64 (FnOpt Int64 (Ret Int64)) =
       comatch
       | .more i =>
-        do j <- ! (int64/add) sum i;
+        do j <- ! int64/add sum i;
         ! loop j
       | .done =>
         comatch
-        | .some i => ! (int64/mul) sum i
+        | .some i => ! int64/mul sum i
         | .none => ret sum
         end
       end
@@ -79,6 +79,6 @@ begin
   -- calculate (1 + 2 + 3) * 4
   do r <- ! sum_and_mult .more 1 .more 2 .more 3 .done .some 4;
   -- subtract 24 from the result to get exit code 0
-  do e <- ! (int64/sub) r 24;
-  ! (process/exit) e
+  do e <- ! int64/sub r 24;
+  ! process/exit e
 end

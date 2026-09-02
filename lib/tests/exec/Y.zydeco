@@ -27,42 +27,42 @@ begin
   let (/bool; /int64; /string; /stdio; /process) = builtin |> make_std in
   -- good old factorial
   def ! fact (f : Thk (Int64 -> Ret Int64)) (n : Int64) : Ret Int64 =
-    do is_zero <- ! (int64/eq) n 0;
-    ! (bool/if)
+    do is_zero <- ! int64/eq n 0;
+    ! bool/if
       (Ret Int64)
       is_zero
       { ret 1 }
       {
-        do n-1 <- ! (int64/sub) n 1;
+        do n-1 <- ! int64/sub n 1;
         do rest <- ! f n-1;
-        ! (int64/mul) n rest
+        ! int64/mul n rest
       }
   in
   do fact <- ! fix' (Int64 -> Ret Int64) fact;
   -- tests
   def ! demo (input : Int64) (expected : Int64) (t : Thk OS) : OS =
     do x <- ! fact input;
-    do correct <- ! (int64/eq) x expected;
-    ! (bool/if)
+    do correct <- ! int64/eq x expected;
+    ! bool/if
       OS
       correct
       { ! t }
       {
-        do input <- ! (int64/to_string) input;
-        do expected <- ! (int64/to_string) expected;
-        do got <- ! (int64/to_string) x;
-        do msg <- ! (string/append) "f " input;
-        do msg <- ! (string/append) msg " = ";
-        do msg <- ! (string/append) msg expected;
-        do msg <- ! (string/append) msg ", got ";
-        do msg <- ! (string/append) msg got;
-        ! (stdio/write_line) msg { fn _ => ! (process/exit) 1 }
+        do input <- ! int64/to_string input;
+        do expected <- ! int64/to_string expected;
+        do got <- ! int64/to_string x;
+        do msg <- ! string/append "f " input;
+        do msg <- ! string/append msg " = ";
+        do msg <- ! string/append msg expected;
+        do msg <- ! string/append msg ", got ";
+        do msg <- ! string/append msg got;
+        ! stdio/write_line msg { fn _ => ! process/exit 1 }
       }
   in
 
   ! demo 5 120 {
     ! demo 10 3628800 {
-      ! (process/exit) 0
+      ! process/exit 0
     }
   }
 end

@@ -67,7 +67,12 @@ cargo build --bin=zydeco --release
 Format the codebase:
 ```sh
 cargo fmt --all
+git ls-files -z '*.zy' '*.zyi' '*.zydeco' | xargs -0 cargo run --quiet --bin zydeco -- fmt
 ```
+`cargo fmt` does not format Zydeco embedded in Rust string literals, and `zydeco fmt` only processes
+explicitly supplied source files. After a repository-wide Zydeco formatting pass, run the affected Rust tests
+to catch and update embedded source fixtures and expected output snapshots.
+
 Lint the codebase:
 ```sh
 cargo clippy-all

@@ -32,7 +32,7 @@ begin
   in
   -- Since it's coinductive, here's iota
   def fix iota (i : Int64) : Ret (List~ Int64) =
-    do i+1 <- ! (int64/add) i 1;
+    do i+1 <- ! int64/add i 1;
     ret +Cons(i, { ! iota i+1 })
   in
 
@@ -44,17 +44,17 @@ begin
       { ! iota 0 }
       {
         fn x b =>
-          do next? <- ! (int64/lt) x 10;
-          ! (bool/if)
+          do next? <- ! int64/lt x 10;
+          ! bool/if
             OS
             next?
             {
-              do rendered <- ! (int64/to_string) x;
-              ! (stdio/write_line) rendered { fn _ => ! b }
+              do rendered <- ! int64/to_string x;
+              ! stdio/write_line rendered { fn _ => ! b }
             }
-            { ! (process/exit) 0 }
+            { ! process/exit 0 }
       }
-      { ! (process/exit) 1 }
+      { ! process/exit 1 }
   in
 
   ! loopy

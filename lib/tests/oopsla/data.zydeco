@@ -24,19 +24,19 @@ begin
     end
   that
   def ! int_eq (x : Int64) (y : Int64) : Ret Bool =
-    ! (int64/eq) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! int64/eq (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! int_lt (x : Int64) (y : Int64) : Ret Bool =
-    ! (int64/lt) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! int64/lt (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! int_gt (x : Int64) (y : Int64) : Ret Bool =
-    ! (int64/gt) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! int64/gt (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! str_eq (x : String) (y : String) : Ret Bool =
-    ! (string/eq) (Ret Bool) x y { ret +True() } { ret +False() }
+    ! string/eq (Ret Bool) x y { ret +True() } { ret +False() }
   that
   def ! str_get_or_space (text : String) (index : Int64) : Ret Char =
-    ! (string/get)
+    ! string/get
       (Ret Char)
       text
       index
@@ -210,7 +210,7 @@ begin
     match xs
     | +Nil() => ret +None()
     | +Cons(hd, tl) =>
-      do minus1 <- ! (int64/sub) index 1;
+      do minus1 <- ! int64/sub index 1;
       ! if~ (F (Option A)) { ! int_eq 0 index } { ret +Some(hd) } {
         ! get_rec A tl minus1
       }
@@ -313,7 +313,7 @@ begin
             { ! int_lt n 1 }
             { ! nil A }
             {
-              do n <- ! (int64/sub) n 1;
+              do n <- ! int64/sub n 1;
               ! cons A x { ! take_xs n }
             }
       }
@@ -391,11 +391,11 @@ begin
   def fix print_list (A : VType) (fmt : U (A -> F String)) (xs : U (LList A)) (next : U OS) : OS =
     do xs' <- ! xs .run;
     match xs'
-    | +Nil() => ! (stdio/write) "\n" next
+    | +Nil() => ! stdio/write "\n" next
     | +Cons(x, tl) =>
       do s <- ! fmt x;
-      do st <- ! (string/append) s " ";
-      ! (stdio/write) st { ! print_list A fmt tl next }
+      do st <- ! string/append s " ";
+      ! stdio/write st { ! print_list A fmt tl next }
     end
   that
 
@@ -403,7 +403,7 @@ begin
     ! foldr A (F Int64) xs { ret 0 } {
       fn x b =>
         do b' <- ! b;
-        ! (int64/add) b' 1
+        ! int64/add b' 1
     }
   that
 
@@ -424,7 +424,7 @@ begin
           match c
           | +True() => ret +Some(+Cons(x, 0))
           | +False() =>
-            do i <- ! (int64/add) 1 i;
+            do i <- ! int64/add 1 i;
             ret +Some(+Cons(m', i))
           end
         end
@@ -446,7 +446,7 @@ begin
           do c <- ! cmp x m';
           match c
           | +True() =>
-            do i <- ! (int64/add) 1 i;
+            do i <- ! int64/add 1 i;
             ret +Some(+Cons(m', i))
           | +False() => ret +Some(+Cons(x, 0))
           end
@@ -466,7 +466,7 @@ begin
     ! if~ (LList A) { ! int_eq 0 n } {
       ! nil A
     } {
-      do n1 <- ! (int64/sub) n 1;
+      do n1 <- ! int64/sub n 1;
       ! cons A x { ! repeat A x n1 }
     }
   that
@@ -475,7 +475,7 @@ begin
     ! if~ (LList Int64) { ! int_eq left right } {
       ! nil Int64
     } {
-      do n1 <- ! (int64/add) left 1;
+      do n1 <- ! int64/add left 1;
       ! cons Int64 left { ! range n1 right }
     }
   that
@@ -523,7 +523,7 @@ begin
   that
 
   def ! str_to_list (s : String) : LList Char =
-    do sz <- ! (string/length) s;
+    do sz <- ! string/length s;
     let indexes = { ! range 0 sz } in
     ! foldr Int64 (LList Char) indexes { ! nil Char } {
       fn i acc =>
@@ -559,7 +559,7 @@ begin
 
   -- module String
   def ! str_split_once (str : String) (sep : Char) : Ret (Option (Pair String String)) =
-    ! (string/split_once)
+    ! string/split_once
       (Ret (Option (Pair String String)))
       str
       sep
@@ -567,7 +567,7 @@ begin
       { fn s1 s2 => ret +Some(+Cons(s1, s2)) }
   that
   def ! str_split_at (str : String) (index : Int64) : Ret (Option (Pair String String)) =
-    ! (string/split_at)
+    ! string/split_at
       (Ret (Option (Pair String String)))
       str
       index
@@ -577,8 +577,8 @@ begin
 
   def char_eq : Thunk (Char -> Char -> Ret Bool) = {
     fn (c : Char) (c' : Char) =>
-      do c <- ! (char/to_string) c;
-      do c' <- ! (char/to_string) c';
+      do c <- ! char/to_string c;
+      do c' <- ! char/to_string c';
       ! str_eq c c'
   } that
 
@@ -603,10 +603,10 @@ begin
     do cond <- ! int_lt left right;
     ! if (F String) cond {
       do c <- ! str_get_or_space str left;
-      do c' <- ! (char/to_string) c;
-      do left' <- ! (int64/add) left 1;
+      do c' <- ! char/to_string c;
+      do left' <- ! int64/add left 1;
       do s <- ! str_slice str left' right;
-      do s <- ! (string/append) c' s;
+      do s <- ! string/append c' s;
       ret s
     } {
       ret ""

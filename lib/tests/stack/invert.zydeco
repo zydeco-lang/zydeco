@@ -93,13 +93,13 @@ begin
   def fix write_tree (t : Tree Int64) (k : Thk OS) : OS =
     match t
     | +Leaf() =>
-      ! (stdio/write) "()" k
+      ! stdio/write "()" k
     | +Node(l, a, r) =>
-      ! (stdio/write) "(" {
+      ! stdio/write "(" {
         ! write_tree l {
-          ! (stdio/write_int) a {
+          ! stdio/write_int a {
             ! write_tree r {
-              ! (stdio/write) ")" k
+              ! stdio/write ")" k
             }
           }
         }
@@ -111,14 +111,14 @@ begin
   do t2 <- ! invert' Int64 t0;
   do t3 <- ! invert'' Int64 t0;
   ! write_tree t0 {
-    ! (stdio/write_line) "" {
+    ! stdio/write_line "" {
       ! write_tree t1 {
-        ! (stdio/write_line) "" {
+        ! stdio/write_line "" {
           ! write_tree t2 {
-            ! (stdio/write_line) "" {
+            ! stdio/write_line "" {
               ! write_tree t3 {
-                ! (stdio/write_line) "" {
-                  ! (process/exit) 0
+                ! stdio/write_line "" {
+                  ! process/exit 0
                 }
               }
             }

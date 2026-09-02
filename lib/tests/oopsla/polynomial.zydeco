@@ -6,14 +6,14 @@ begin
 
   def ! poly (x : Int64) : Ret Int64 =
     -- f(x) = x^2 + x + 10
-    do s <- ! (int64/mul) x x;
-    do y <- ! (int64/add) x 10;
-    ! (int64/add) s y
+    do s <- ! int64/mul x x;
+    do y <- ! int64/add x 10;
+    ! int64/add s y
   that
 
   -- the exit code should be 0 for the test to pass
   do r <- ! poly 10;
   -- since f(10) = 120, we minus the result by 120 to get 0
-  do e <- ! (int64/sub) r 120;
-  ! (process/exit) e
+  do e <- ! int64/sub r 120;
+  ! process/exit e
 end

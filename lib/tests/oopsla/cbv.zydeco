@@ -64,7 +64,7 @@ begin
   that
 
   def ! str_eq (left : String) (right : String) : Ret Bool =
-    ! (string/eq)
+    ! string/eq
       (Ret Bool)
       left
       right
@@ -72,8 +72,8 @@ begin
       { ret +False() }
   that
   def ! panic (msg : String) : OS =
-    ! (stdio/write_line) msg {
-      ! (process/exit) 1
+    ! stdio/write_line msg {
+      ! process/exit 1
     }
   that
   def fix lookup (x : String) (g : Env) : Ret Answer =
@@ -198,8 +198,8 @@ begin
   | +Err(_) => ! panic "ERROR"
   | +Ok(v) =>
     do s <- ! value_to_str v;
-    ! (stdio/write_line) s {
-      ! (process/exit) 0
+    ! stdio/write_line s {
+      ! process/exit 0
     }
   end
 end

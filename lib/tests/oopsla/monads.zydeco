@@ -153,10 +153,10 @@ begin
       comatch
       | .read =>
         fn .run ka =>
-          ! (stdio/read_line) ka
+          ! stdio/read_line ka
       | .write s =>
         fn .run ku =>
-          ! (stdio/write_line) s {
+          ! stdio/write_line s {
             ! ku ()
           }
       end
@@ -164,7 +164,7 @@ begin
 
     ! io .write "Hello, world!" .run {
       fn _ =>
-        ! (process/exit) 0
+        ! process/exit 0
     }
   end
 end
