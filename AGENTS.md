@@ -37,6 +37,11 @@ Do not retain deprecated APIs, adapters, dual representations, migration parsers
 or other compatibility layers unless the user explicitly requests a compatibility boundary.
 When compatibility is required, make its scope and intended removal condition explicit.
 
+### Test acceptance and rejection
+
+Include negative tests alongside positive cases, checking the intended error and relevant failure invariants.
+Pair rejected inputs with valid counterparts, and retain bug reproducers as regression tests.
+
 ## Adding a Dependency
 
 All Rust dependencies are managed in the top-level `Cargo.toml` file, under `[workspace.dependencies]`.
