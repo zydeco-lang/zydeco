@@ -4,6 +4,7 @@ use crate::{
     textual::syntax as t,
 };
 use derive_more::{AsMut, AsRef};
+use std::collections::HashMap;
 use zydeco_syntax::{BuiltinRole, IntrinsicRole, SpanView};
 use zydeco_utils::prelude::{Allocates, ArenaId, CompilerPass, FrozenArena, IdAllocator};
 
@@ -23,6 +24,8 @@ pub struct Desugarer<'a> {
     #[as_mut(b::BitterArena)]
     pub bitter: b::BitterArena,
     pub prim: b::PrimTerms,
+    /// Desugared roots already materialized from the textual term DAG.
+    terms: HashMap<t::TermId, b::TermId>,
 }
 
 /// A desugaring pass whose input is one complete source term.
@@ -42,6 +45,7 @@ impl<'a> Desugarer<'a> {
             textual,
             bitter: b::BitterArena::default(),
             prim: b::PrimTerms::default(),
+            terms: HashMap::new(),
         }
     }
 
@@ -435,6 +439,9 @@ impl Desugar for t::CoPatId {
 impl Desugar for t::TermId {
     type Out = b::TermId;
     fn desugar(self, desugarer: &mut Desugarer) -> Result<Self::Out> {
+        if let Some(term) = desugarer.terms.get(&self) {
+            return Ok(*term);
+        }
         let id = self;
         let term = desugarer.lookup_term(id);
         use t::Term as Tm;
@@ -448,7 +455,9 @@ impl Desugar for t::TermId {
                                 self.span(desugarer.spans).clone().make(self),
                             ));
                         }
-                        return Ok(desugarer.intrinsic(meta.role, self.into()));
+                        let term = desugarer.intrinsic(meta.role, self.into());
+                        desugarer.terms.insert(self, term);
+                        return Ok(term);
                     }
                     | Ok(None) => {}
                     | Err(source) => {
@@ -504,11 +513,10 @@ impl Desugar for t::TermId {
                                 self.into(),
                             ),
                         };
-                        return Ok(Alloc::alloc(
-                            desugarer,
-                            b::MoBlock { body, basis }.into(),
-                            self.into(),
-                        ));
+                        let term =
+                            Alloc::alloc(desugarer, b::MoBlock { body, basis }.into(), self.into());
+                        desugarer.terms.insert(self, term);
+                        return Ok(term);
                     }
                     | Ok(None) => {}
                     | Err(source) => {
@@ -863,6 +871,7 @@ impl Desugar for t::TermId {
             }
             | Tm::Lit(term) => Alloc::alloc(desugarer, term.into(), self.into()),
         };
+        desugarer.terms.insert(self, res);
         Ok(res)
     }
 }

@@ -40,7 +40,9 @@ so internal surface terms can be linked to their typed equivalents.
 ## Monadic blocks and algebra translation
 
 Monadic blocks are elaborated during type checking via the algebra translation implemented in `monadic`.
-This translation uses a monadic construction API and specialized environments to lift terms into a user-supplied monad.
+The payload is synthesized once into a shared checked-term handle. The translation consumes that handle through a
+monadic construction API and specialized environments, and every later reference to the resolved block reuses its
+one translated root.
 
 ## Neighboring statics modules
 

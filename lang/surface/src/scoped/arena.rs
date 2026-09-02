@@ -270,6 +270,9 @@ impl LocalFoldScoped<()> for ContextCollector<'_> {
 
     /// Updates [`Self::ctxs_pat_local`] and [`Self::coctxs_pat_local`].
     fn action_pat(&mut self, pat: PatId, _ctx: &()) {
+        if self.ctxs_pat_local.get(&pat).is_some() {
+            return;
+        }
         let item = self.pat(&pat);
         match item {
             | Pattern::Ann(inner) => {
@@ -341,6 +344,9 @@ impl LocalFoldScoped<()> for ContextCollector<'_> {
 
     /// Updates [`Self::coctxs_term_local`].
     fn action_term(&mut self, term: TermId, _ctx: &()) {
+        if self.coctxs_term_local.get(&term).is_some() {
+            return;
+        }
         let item = self.term(&term);
         match item {
             | Term::Meta(inner) => {

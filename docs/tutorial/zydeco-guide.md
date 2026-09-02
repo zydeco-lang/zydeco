@@ -59,7 +59,8 @@ end
 Notes:
 
 - `@(import("path"))` is sugar for `@[import("path")] _`. Both forms mean
-  “splice a fresh copy of the imported source term here.”
+  “refer to the independently checked source term here.” Repeated imports share the compiler term,
+  but evaluate it at each dynamic occurrence.
 - Relative import paths are resolved from the file that contains the import; the snippets
   below use paths appropriate for files under `lib/tests/`.
 - `stdio/write_line` is a thunked `String -> Thk OS -> OS` function. The final argument of an

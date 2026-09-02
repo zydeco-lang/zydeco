@@ -52,6 +52,9 @@ pub struct Tycker<'a> {
     /// how many times each scoped entity has been checked; supplies the
     /// derivation occurrence so re-checked entities get distinct sites
     check_counts: ArenaAssoc<su::EntityId, u32>,
+    /// Resolved terms selected for canonical synthesis, including imported
+    /// providers and monadic blocks.
+    checked_terms: CheckedTermRepository,
     /// meta stack
     pub metas: rpds::VectorSync<su::Meta>,
     /// Results of field-search materializations under the current inference state.
@@ -155,6 +158,99 @@ pub type CheckedPattern = TyEnvT<PatternCheck>;
 /// Flexible pattern metavariables owned by one local inference boundary.
 struct InferenceRegion {
     inherited: std::collections::HashSet<FillId>,
+}
+
+/// One immutable handle to an already synthesized typed term.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct CheckedTerm(TermAnnId);
+
+/// The one checked root retained for a resolved term. The environment records
+/// the term's lexical context so later references can verify its stability.
+#[derive(Clone, Debug)]
+struct CheckedTermEntry {
+    environment: TyEnv,
+    checked: CheckedTerm,
+}
+
+/// Checker-global repository of typed term roots.
+#[derive(Default)]
+struct CheckedTermRepository {
+    entries: std::collections::HashMap<su::TermId, CheckedTermEntry>,
+}
+
+impl CheckedTerm {
+    fn root(self) -> TermAnnId {
+        self.0
+    }
+
+    #[track_caller]
+    fn require_complete_k(self, tycker: &mut Tycker<'_>, error: TyckError) -> ResultKont<Self> {
+        match self.0 {
+            | TermAnnId::Hole(_) => tycker.err_k(error, std::panic::Location::caller()),
+            | TermAnnId::Kind(_)
+            | TermAnnId::Type(_, _)
+            | TermAnnId::Value(_, _)
+            | TermAnnId::Compu(_, _) => Ok(self),
+        }
+    }
+
+    /// Compare a use-site expectation with the term's canonical synthesized
+    /// classifier without changing the shared checked term.
+    #[track_caller]
+    fn reconcile_k(self, tycker: &mut Tycker<'_>, switch: Switch<AnnId>) -> ResultKont<TermAnnId> {
+        let expected = match switch {
+            | Switch::Syn => return Ok(self.0),
+            | Switch::Ana(expected) => expected,
+        };
+        let synthesized = match self.0 {
+            | TermAnnId::Kind(_) => AnnId::Set,
+            | TermAnnId::Type(_, kind) => AnnId::Kind(kind),
+            | TermAnnId::Value(_, ty) | TermAnnId::Compu(_, ty) => AnnId::Type(ty),
+            | TermAnnId::Hole(_) => {
+                return tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller());
+            }
+        };
+        Lub::lub_k(synthesized, expected, tycker)?;
+        Ok(self.0)
+    }
+}
+
+impl CheckedTermRepository {
+    fn get(&self, term: su::TermId, environment: &TyEnv) -> Option<CheckedTerm> {
+        let entry = self.entries.get(&term)?;
+        assert_eq!(
+            &entry.environment, environment,
+            "one resolved term was requested in distinct typing contexts"
+        );
+        Some(entry.checked)
+    }
+
+    /// Retain the canonical result after synthesis. A nested elaborator may
+    /// have completed the same request while the outer synthesis was running;
+    /// in that case both paths must have produced the same arena root.
+    fn retain(
+        &mut self, term: su::TermId, environment: TyEnv, checked: CheckedTerm,
+    ) -> CheckedTerm {
+        use std::collections::hash_map::Entry;
+        match self.entries.entry(term) {
+            | Entry::Vacant(entry) => {
+                entry.insert(CheckedTermEntry { environment, checked });
+                checked
+            }
+            | Entry::Occupied(entry) => {
+                let canonical = entry.get();
+                assert_eq!(
+                    canonical.environment, environment,
+                    "one resolved term was requested in distinct typing contexts"
+                );
+                assert_eq!(
+                    canonical.checked, checked,
+                    "one resolved term produced distinct checked roots"
+                );
+                canonical.checked
+            }
+        }
+    }
 }
 
 impl InferenceRegion {
@@ -1397,6 +1493,118 @@ impl<'a> MonadicBasisElaboration<'a> {
     }
 }
 
+/// Type-check a monadic payload once and hand its immutable checked handle to
+/// the algebra translation.
+struct MonadicBlockElaboration<'a> {
+    syntax: &'a su::MoBlock,
+    environment: &'a TyEnv,
+}
+
+impl<'a> MonadicBlockElaboration<'a> {
+    fn new(syntax: &'a su::MoBlock, environment: &'a TyEnv) -> Self {
+        Self { syntax, environment }
+    }
+
+    fn check_k(&self, tycker: &mut Tycker<'_>) -> ResultKont<TermAnnId> {
+        let basis =
+            MonadicBasisElaboration::new(&self.syntax.basis, self.environment).check_k(tycker)?;
+        let body_environment = TyEnv::monadic_new(tycker, self.environment);
+        let body = tycker.synthesize_once_k(self.syntax.body, &body_environment, |tycker| {
+            TyEnvT { info: body_environment.clone(), inner: self.syntax.body }
+                .tyck_k(tycker, Action::syn())
+        })?;
+        AlgebraicTranslation::new(body, body_environment, basis, self.environment).build_k(tycker)
+    }
+}
+
+/// Algebra translation from one checked computation root to its monad-polymorphic
+/// checked computation. The input handle is shared; only the translated output
+/// is newly materialized.
+struct AlgebraicTranslation<'a> {
+    body: CheckedTerm,
+    body_environment: TyEnv,
+    basis: MonadicTypeBasis,
+    environment: &'a TyEnv,
+}
+
+impl<'a> AlgebraicTranslation<'a> {
+    fn new(
+        body: CheckedTerm, body_environment: TyEnv, basis: MonadicTypeBasis, environment: &'a TyEnv,
+    ) -> Self {
+        Self { body, body_environment, basis, environment }
+    }
+
+    fn build_k(self, tycker: &mut Tycker<'_>) -> ResultKont<TermAnnId> {
+        let Self { body, body_environment, basis, environment } = self;
+        let (body, _body_ty) = body.root().try_as_compu(
+            tycker,
+            TyckError::SortMismatch,
+            std::panic::Location::caller(),
+        )?;
+
+        let monad_ty_kd: ss::KindId = ss::Arrow(ss::VType, ss::CType).build(tycker, environment);
+        let monad_ty_var =
+            Alloc::alloc(tycker, ss::VarName("M".to_string()), monad_ty_kd.into(), &());
+        let abst: ss::AbstId = Alloc::alloc(tycker, monad_ty_var, monad_ty_kd, &());
+        let monad_ty = cs::Type(cs::Ann(abst, monad_ty_kd)).build(tycker, environment);
+        let ctype = ss::CType.build(tycker, environment);
+        let monad_application =
+            Alloc::alloc(tycker, ss::App(basis.monad, monad_ty), ctype, environment);
+        let monad_impl_ty = cs::Thk(cs::Type(monad_application)).build(tycker, environment);
+        let monad_impl_var =
+            Alloc::alloc(tycker, ss::VarName("mo".to_string()), monad_impl_ty.into(), &());
+        let monad_impl = cs::Value(monad_impl_var).build(tycker, environment);
+
+        use crate::environment::*;
+        let (_menv, body_lift) = cs::TermLift { tm: body }.mbuild_k(
+            tycker,
+            MonEnv {
+                ty: body_environment,
+                subst: SubstEnv::new(),
+                subst_abst: SubstAbstEnv::new_sync(),
+                structure: StrEnv::new(),
+                basis,
+                monad_ty,
+                monad_impl,
+            },
+        )?;
+        let body_lift_ty = cs::TypeOf(body_lift).build(tycker, environment);
+
+        // <monad_impl_to_body_lift> = fn (mo: Thk (Monad M)) => Lift(body)
+        let monad_impl_vpat: ss::VPatId =
+            Alloc::alloc(tycker, monad_impl_var, monad_impl_ty, environment);
+        let monad_impl_to_body_lift_ty =
+            Alloc::alloc(tycker, ss::Arrow(monad_impl_ty, body_lift_ty), ctype, environment);
+        let monad_impl_to_body_lift = Alloc::alloc(
+            tycker,
+            ss::Abs(monad_impl_vpat, body_lift),
+            monad_impl_to_body_lift_ty,
+            environment,
+        );
+
+        // fn (M : VType -> CType) => <monad_impl_to_body_lift>
+        let monad_ty_tpat: ss::TPatId =
+            Alloc::alloc(tycker, monad_ty_var, monad_ty_kd, environment);
+        let res_body_ty = Alloc::alloc(
+            tycker,
+            ss::Forall(
+                ss::TypeBinder { pattern: monad_ty_tpat, witness: abst },
+                monad_impl_to_body_lift_ty,
+            ),
+            ctype,
+            environment,
+        );
+        let res_body = Alloc::alloc(
+            tycker,
+            ss::Abs(monad_ty_tpat, monad_impl_to_body_lift),
+            res_body_ty,
+            environment,
+        );
+
+        Ok(TermAnnId::Compu(res_body, res_body_ty))
+    }
+}
+
 trait CheckedPatternExt {
     fn with_annotation(self, annotation: PatAnnId) -> Self;
     fn close_scope_k(&self, tycker: &mut Tycker<'_>, result: ss::TypeId) -> ResultKont<()>;
@@ -1523,6 +1731,7 @@ impl<'a> Tycker<'a> {
             statics,
             tasks: rpds::VectorSync::new_sync(),
             check_counts: ArenaAssoc::default(),
+            checked_terms: CheckedTermRepository::default(),
             metas: rpds::VectorSync::new_sync(),
             field_materializations: DeferredEnvMaterializationCache::default(),
             errors: Vec::new(),
@@ -1533,6 +1742,19 @@ impl<'a> Tycker<'a> {
 
     pub(crate) fn invalidate_field_materializations(&mut self) {
         self.field_materializations.clear();
+    }
+
+    /// Synthesize one resolved term in its lexical context, retaining the
+    /// resulting typed root for every later reference to that term.
+    fn synthesize_once_k(
+        &mut self, term: su::TermId, environment: &TyEnv,
+        synthesize: impl FnOnce(&mut Self) -> ResultKont<TermAnnId>,
+    ) -> ResultKont<CheckedTerm> {
+        if let Some(checked) = self.checked_terms.get(term, environment) {
+            return Ok(checked);
+        }
+        let checked = CheckedTerm(synthesize(self)?);
+        Ok(self.checked_terms.retain(term, environment.clone(), checked))
     }
 
     fn record_seal(&mut self, witness: ss::AbstId, definition: ss::TypeId) {
@@ -1838,11 +2060,8 @@ mod impl_tycker {
         /// imported source, without inheriting administrative frames from the
         /// importing term.
         #[inline]
-        pub(crate) fn source_guarded<R>(
-            &mut self, root: TyckTask, with: impl FnOnce(&mut Self) -> R,
-        ) -> R {
+        pub(crate) fn source_guarded<R>(&mut self, with: impl FnOnce(&mut Self) -> R) -> R {
             let stack = std::mem::take(&mut self.tasks);
-            self.tasks.push_back_mut(root);
             let res = with(self);
             self.tasks = stack;
             res
@@ -4630,34 +4849,41 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 res
             }
             | Tm::SourceBoundary(su::SourceBoundary(term)) => {
-                tycker.source_guarded(TyckTask::Term(term, switch), |tycker| {
-                    let inference = InferenceRegion::enter(tycker);
-                    let checked = self.mk(term).tyck_inner_k(
-                        tycker,
-                        Action::forward(switch, prepared_environment.as_ref()),
-                    )?;
-                    inference.close_k(tycker)?;
-                    Ok(checked)
-                })?
+                let environment = TyEnv::new();
+                let checked = tycker.source_guarded(|tycker| {
+                    let checked = tycker.synthesize_once_k(term, &environment, |tycker| {
+                        let inference = InferenceRegion::enter(tycker);
+                        let checked =
+                            TyEnvT::new(environment.clone(), term).tyck_k(tycker, Action::syn())?;
+                        inference.close_k(tycker)?;
+                        Ok(checked)
+                    })?;
+                    tycker.tasks.push_back_mut(TyckTask::Term(term, Switch::Syn));
+                    checked.require_complete_k(tycker, TyckError::MissingAnnotation)
+                })?;
+                checked.reconcile_k(tycker, switch)?
             }
             | Tm::SignatureBoundary(su::SignatureBoundary(term)) => {
-                tycker.source_guarded(TyckTask::Term(term, switch), |tycker| {
-                    let inference = InferenceRegion::enter(tycker);
-                    let checked = self.mk(term).tyck_inner_k(
-                        tycker,
-                        Action::forward(switch, prepared_environment.as_ref()),
-                    )?;
-                    let checked = match checked {
-                        | TermAnnId::Type(_, _) => checked,
+                let environment = TyEnv::new();
+                let checked = tycker.source_guarded(|tycker| {
+                    let checked = tycker.synthesize_once_k(term, &environment, |tycker| {
+                        let inference = InferenceRegion::enter(tycker);
+                        let checked =
+                            TyEnvT::new(environment.clone(), term).tyck_k(tycker, Action::syn())?;
+                        inference.close_k(tycker)?;
+                        Ok(checked)
+                    })?;
+                    tycker.tasks.push_back_mut(TyckTask::Term(term, Switch::Syn));
+                    match checked.root() {
+                        | TermAnnId::Type(_, _) => Ok(checked),
                         | TermAnnId::Hole(_)
                         | TermAnnId::Kind(_)
                         | TermAnnId::Value(_, _)
                         | TermAnnId::Compu(_, _) => tycker
                             .err_k(TyckError::SignatureNotType, std::panic::Location::caller())?,
-                    };
-                    inference.close_k(tycker)?;
-                    Ok(checked)
-                })?
+                    }
+                })?;
+                checked.reconcile_k(tycker, switch)?
             }
             | Tm::Internal(internal) => {
                 InternalTerm(internal, self.inner).tyck_k(tycker, &self.info, switch)?
@@ -7623,81 +7849,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     .tyck_k(tycker, Action::forward(switch, prepared_environment.as_ref()))?
             }
             | Tm::MoBlock(term) => {
-                let su::MoBlock { body, basis: lexical_basis } = *term;
-                let basis =
-                    MonadicBasisElaboration::new(&lexical_basis, &self.info).check_k(tycker)?;
-
-                // tyck the body with an (almost) empty env
-                let ty_env = TyEnv::monadic_new(tycker, &self.info);
-                let body_out_ann = TyEnvT { info: ty_env.to_owned(), inner: body }
-                    .tyck_k(tycker, Action::syn())?;
-                let (body, _body_ty) = body_out_ann.try_as_compu(
-                    tycker,
-                    TyckError::SortMismatch,
-                    std::panic::Location::caller(),
-                )?;
-
-                let monad_ty_kd: ss::KindId =
-                    ss::Arrow(ss::VType, ss::CType).build(tycker, &self.info);
-                let monad_ty_var =
-                    Alloc::alloc(tycker, ss::VarName("M".to_string()), monad_ty_kd.into(), &());
-                let abst: ss::AbstId = Alloc::alloc(tycker, monad_ty_var, monad_ty_kd, &());
-                let monad_ty = cs::Type(cs::Ann(abst, monad_ty_kd)).build(tycker, &self.info);
-                let ctype = ss::CType.build(tycker, &self.info);
-                let monad_application =
-                    Alloc::alloc(tycker, ss::App(basis.monad, monad_ty), ctype, &self.info);
-                let monad_impl_ty = cs::Thk(cs::Type(monad_application)).build(tycker, &self.info);
-                let monad_impl_var =
-                    Alloc::alloc(tycker, ss::VarName("mo".to_string()), monad_impl_ty.into(), &());
-                let monad_impl = cs::Value(monad_impl_var).build(tycker, &self.info);
-
-                use crate::environment::*;
-                let (_menv, body_lift) = cs::TermLift { tm: body }.mbuild_k(
-                    tycker,
-                    MonEnv {
-                        ty: ty_env,
-                        subst: SubstEnv::new(),
-                        subst_abst: SubstAbstEnv::new_sync(),
-                        structure: StrEnv::new(),
-                        basis,
-                        monad_ty,
-                        monad_impl,
-                    },
-                )?;
-                let body_lift_ty = cs::TypeOf(body_lift).build(tycker, &self.info);
-
-                // <monad_impl_to_body_lift> = fn (mo: Thk (Monad M)) => Lift(body)
-                let monad_impl_vpat: ss::VPatId =
-                    Alloc::alloc(tycker, monad_impl_var, monad_impl_ty, &self.info);
-                let monad_impl_to_body_lift_ty =
-                    Alloc::alloc(tycker, ss::Arrow(monad_impl_ty, body_lift_ty), ctype, &self.info);
-                let monad_impl_to_body_lift = Alloc::alloc(
-                    tycker,
-                    ss::Abs(monad_impl_vpat, body_lift),
-                    monad_impl_to_body_lift_ty,
-                    &self.info,
-                );
-
-                // fn (M : VType -> CType) => <monad_impl_to_body_lift>
-                let monad_ty_tpat: ss::TPatId =
-                    Alloc::alloc(tycker, monad_ty_var, monad_ty_kd, &self.info);
-                let res_body_ty = Alloc::alloc(
-                    tycker,
-                    ss::Forall(
-                        ss::TypeBinder { pattern: monad_ty_tpat, witness: abst },
-                        monad_impl_to_body_lift_ty,
-                    ),
-                    ctype,
-                    &self.info,
-                );
-                let res_body = Alloc::alloc(
-                    tycker,
-                    ss::Abs(monad_ty_tpat, monad_impl_to_body_lift),
-                    res_body_ty,
-                    &self.info,
-                );
-
-                TermAnnId::Compu(res_body, res_body_ty)
+                let environment = self.info.clone();
+                let checked = tycker.synthesize_once_k(self.inner, &environment, |tycker| {
+                    MonadicBlockElaboration::new(&term, &environment).check_k(tycker)
+                })?;
+                checked.reconcile_k(tycker, switch)?
             }
             | Tm::Data(term) => {
                 let su::Data { arms } = term;
@@ -8339,8 +8495,12 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
         };
 
         if let Some(out) = out_ann.as_term() {
-            // maintain back mapping
-            tycker.statics.terms.record(self.inner, out);
+            // Maintain one canonical back mapping for the materialized term.
+            // Import boundaries are reference sites, so they retain their own
+            // facts below without replacing the provider's source location.
+            if !matches!(tycker.scoped.terms[&self.inner], Tm::SourceBoundary(_)) {
+                tycker.statics.terms.record(self.inner, out);
+            }
             // record the final annotation for editor facts; fixpoint re-checks
             // overwrite the earlier occurrence's entry
             tycker.statics.record_term_annotation(self.inner, out_ann);
@@ -8831,7 +8991,7 @@ mod source_boundary_tests {
     }
 
     #[test]
-    fn expected_kinds_flow_through_source_boundaries() {
+    fn expected_kinds_do_not_elaborate_imported_sources() {
         let mut allocator = IdAllocator::<su::ScopedScope>::new();
         let hole = allocator.alloc();
         let boundary = allocator.alloc();
@@ -8852,11 +9012,16 @@ mod source_boundary_tests {
         let mut tycker = Tycker::new(&db, data, &spans, &prim, &scoped);
         let env = TyEnv::default();
         let expected = Alloc::alloc(&mut tycker, ss::VType, (), &());
-        let checked =
-            TyEnvT::new(env, boundary).tyck_k(&mut tycker, Action::ana(expected.into())).unwrap();
+        let checked = TyEnvT::new(env, boundary).tyck_k(&mut tycker, Action::ana(expected.into()));
 
-        assert!(matches!(checked, TermAnnId::Type(_, kind) if kind == expected));
-        assert!(tycker.errors.is_empty());
+        assert!(checked.is_err());
+        let [entry] = tycker.errors.as_slice() else { panic!("expected one type-checking error") };
+        assert!(matches!(entry.error, TyckError::MissingAnnotation));
+        assert_eq!(entry.stack.len(), 1);
+        assert!(matches!(
+            entry.stack.first(),
+            Some(TyckTask::Term(term, Switch::Syn)) if *term == hole
+        ));
     }
 
     #[test]
@@ -8884,11 +9049,86 @@ mod source_boundary_tests {
 
         assert!(result.is_err());
         let [entry] = tycker.errors.as_slice() else { panic!("expected one type-checking error") };
-        assert!(matches!(entry.error, TyckError::SortMismatch));
+        assert!(matches!(entry.error, TyckError::MissingAnnotation));
         assert_eq!(entry.stack.len(), 1);
         assert!(matches!(
             entry.stack.first(),
-            Some(TyckTask::Term(term, Switch::Ana(AnnId::Set))) if *term == hole
+            Some(TyckTask::Term(term, Switch::Syn)) if *term == hole
         ));
+    }
+
+    #[test]
+    fn repeated_source_boundaries_check_and_materialize_the_provider_once() {
+        with_tycker(
+            |allocator, scoped| {
+                let provider = allocator.alloc();
+                let first = allocator.alloc();
+                let second = allocator.alloc();
+                let root = allocator.alloc();
+                scoped.terms.insert_new(provider, su::Triv.into());
+                scoped.terms.insert_new(first, su::SourceBoundary(provider).into());
+                scoped.terms.insert_new(second, su::SourceBoundary(provider).into());
+                scoped.terms.insert_new(root, su::Term::Cons(vec![first, second]));
+                (root, (provider, first, second))
+            },
+            |tycker, (provider, first, second)| {
+                InternalTerm::fill_intrinsics(tycker);
+                let root = tycker.data.root(tycker.db);
+
+                let checked =
+                    TyEnvT::new(TyEnv::new(), root).tyck_k(tycker, Action::syn()).unwrap();
+
+                assert!(matches!(checked, TermAnnId::Value(_, _)));
+                assert_eq!(tycker.check_counts.get(&su::EntityId::Term(provider)), Some(&1),);
+                assert_eq!(
+                    tycker.statics.term_annotation(first),
+                    tycker.statics.term_annotation(second)
+                );
+                assert_eq!(
+                    tycker.statics.term_annotation(first),
+                    tycker.statics.term_annotation(provider),
+                );
+                let typed_provider = tycker
+                    .statics
+                    .term_annotation(provider)
+                    .and_then(TermAnnId::as_term)
+                    .expect("the provider has a typed root");
+                assert_eq!(tycker.statics.terms.source(&typed_provider), Some(provider));
+                assert_eq!(tycker.checked_terms.entries.len(), 1);
+                assert!(tycker.checked_terms.entries.contains_key(&provider));
+                assert!(tycker.errors.is_empty());
+            },
+        );
+    }
+
+    #[test]
+    fn nested_checked_term_synthesis_retains_the_term_specific_result() {
+        with_tycker(
+            |allocator, scoped| {
+                let provider = allocator.alloc();
+                scoped.terms.insert_new(provider, su::Triv.into());
+                (provider, provider)
+            },
+            |tycker, provider| {
+                InternalTerm::fill_intrinsics(tycker);
+                let environment = TyEnv::new();
+
+                let checked = tycker
+                    .synthesize_once_k(provider, &environment, |tycker| {
+                        let checked =
+                            tycker.synthesize_once_k(provider, &environment, |tycker| {
+                                TyEnvT::new(environment.clone(), provider)
+                                    .tyck_k(tycker, Action::syn())
+                            })?;
+                        Ok(checked.root())
+                    })
+                    .unwrap();
+
+                assert_eq!(Some(checked.root()), tycker.statics.term_annotation(provider),);
+                assert_eq!(tycker.check_counts.get(&su::EntityId::Term(provider)), Some(&1),);
+                assert_eq!(tycker.checked_terms.entries.len(), 1);
+                assert!(tycker.errors.is_empty());
+            },
+        );
     }
 }

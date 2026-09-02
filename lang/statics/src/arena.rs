@@ -413,11 +413,11 @@ impl ArenaAccessMut<&TypeId, Fillable<Type>> for TypeArena {
     }
 }
 
-/// One source occurrence representative for each typed node.
+/// One materializing source representative for each typed node.
 ///
 /// Diagnostics and source-span queries only need one source location. Rechecks
-/// replace the representative, and transparent source wrappers that share a
-/// typed node collapse to the most recently checked wrapper.
+/// of a materializing term replace the representative; reference-only wrappers
+/// such as import boundaries leave the provider's location intact.
 #[derive(Clone, Debug)]
 pub struct SourceProvenance<Source, Typed> {
     latest_by_category:

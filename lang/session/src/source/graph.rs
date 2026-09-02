@@ -25,7 +25,7 @@ impl ArenaSchema<SourceImportId> for SourceGraphScope {
     type Item = SourceImport;
 }
 
-/// Parsed contents shared by every fresh occurrence of one canonical source file.
+/// Parsed contents shared by every reference to one canonical source file.
 #[derive(Clone, Debug)]
 pub struct SourceTemplate {
     pub path: PathBuf,

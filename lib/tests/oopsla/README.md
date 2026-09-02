@@ -594,7 +594,7 @@ end
 ```
 
 The driver first loads the import DAG, diagnoses cycles at their import sites,
-and then substitutes a fresh copy of each imported term at each occurrence.
+and then makes each import occurrence refer to the provider's one independently checked term.
 The resulting whole program is one term; no project manifest or declaration named `main` determines its meaning.
 
 

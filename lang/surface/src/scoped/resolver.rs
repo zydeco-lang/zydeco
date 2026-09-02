@@ -1,5 +1,5 @@
 use crate::scoped::{syntax::*, *};
-use zydeco_utils::prelude::{DepGraph, FrozenArena};
+use zydeco_utils::prelude::{ArenaAccess, DepGraph, FrozenArena};
 
 /// Global name environment collected from top-level binders.
 #[derive(Clone, Debug, Default)]
@@ -268,14 +268,18 @@ impl Resolve for TermId {
             }
             | Term::SourceBoundary(term) => {
                 let SourceBoundary(inner) = term;
-                let global = Global::default();
-                let () = inner.resolve(resolver, (Local::for_body(), &global))?;
+                if resolver.terms.get(&inner).is_none() {
+                    let global = Global::default();
+                    let () = inner.resolve(resolver, (Local::for_body(), &global))?;
+                }
                 SourceBoundary(inner).into()
             }
             | Term::SignatureBoundary(term) => {
                 let SignatureBoundary(inner) = term;
-                let global = Global::default();
-                let () = inner.resolve(resolver, (Local::for_body(), &global))?;
+                if resolver.terms.get(&inner).is_none() {
+                    let global = Global::default();
+                    let () = inner.resolve(resolver, (Local::for_body(), &global))?;
+                }
                 SignatureBoundary(inner).into()
             }
             | Term::Internal(internal) => internal.into(),

@@ -858,7 +858,7 @@ fn builtin_operation_roles_remain_specializable_through_name_resolution() {
 }
 
 #[test]
-fn program_assembly_freshens_each_import_occurrence() {
+fn program_assembly_shares_one_source_root_across_import_occurrences() {
     use zydeco_surface::textual::syntax::{Abs, CoPattern, Paren, Pattern, SourceBoundary, Term};
 
     let fixture = SourceFixture::new();
@@ -870,7 +870,7 @@ fn program_assembly_freshens_each_import_occurrence() {
     let Term::Paren(Paren(imports)) = &program.arena.terms[&program.unit.root] else {
         panic!("expected a pair of imports")
     };
-    let definitions = imports
+    let functions_and_definitions = imports
         .iter()
         .map(|import| {
             let Term::SourceBoundary(SourceBoundary(function)) = &program.arena.terms[import]
@@ -886,13 +886,51 @@ fn program_assembly_freshens_each_import_occurrence() {
             let Pattern::Var(definition) = program.arena.pats[&pattern] else {
                 panic!("expected a variable parameter")
             };
-            definition
+            (*function, definition)
         })
         .collect::<Vec<_>>();
 
-    assert_eq!(definitions.len(), 2);
-    assert_ne!(definitions[0], definitions[1]);
-    assert_eq!(program.arena.defs[&definitions[0]], program.arena.defs[&definitions[1]]);
+    assert_eq!(functions_and_definitions.len(), 2);
+    assert_eq!(functions_and_definitions[0], functions_and_definitions[1]);
+}
+
+#[test]
+fn repeated_imports_share_one_resolved_and_checked_term() {
+    use zydeco_surface::scoped::syntax::{SourceBoundary, Term};
+
+    let fixture = SourceFixture::new();
+    fixture.write("library.zy", "1");
+    let root =
+        fixture.write("main.zy", r#"(@[import("library.zy")] _, @[import("library.zy")] _)"#);
+
+    let checked = TestPipeline::check(root).unwrap();
+    let typed_root = checked.root.as_term().expect("expected a checked product value");
+    let source_root = checked
+        .statics
+        .terms
+        .source(&typed_root)
+        .expect("the checked product retains its source root");
+    let Term::Cons(imports) = &checked.scoped.terms[&source_root] else {
+        panic!("expected a resolved product of imports")
+    };
+    let providers = imports
+        .iter()
+        .map(|import| match checked.scoped.terms[import] {
+            | Term::SourceBoundary(SourceBoundary(provider)) => provider,
+            | _ => panic!("expected a source boundary"),
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(providers.len(), 2);
+    assert_eq!(providers[0], providers[1]);
+    assert_eq!(
+        checked.statics.term_annotation(imports[0]),
+        checked.statics.term_annotation(imports[1]),
+    );
+    assert_eq!(
+        checked.statics.term_annotation(imports[0]),
+        checked.statics.term_annotation(providers[0]),
+    );
 }
 
 #[test]

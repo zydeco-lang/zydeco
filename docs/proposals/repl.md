@@ -36,10 +36,10 @@ In a complete term, the annotation attaches to the hole that receives the import
 Quotation deliberately keeps its existing meaning: `@[import("1")] _` asks for a file whose path is `1`.
 
 This is a source import, rather than a reference to a cached runtime result.
-The source graph clones the imported term freshly at every occurrence and places a source boundary around the clone.
+The source graph keeps one checked term for the imported input and places a source boundary on every reference to it.
 Names and block-local bindings therefore cannot leak from one submission into another.
 Importing an effectful expression also preserves ordinary program semantics because the expression is evaluated
-where it is spliced.
+at every import occurrence.
 
 `SourceNumber` enforces the positive-number rule, while `ImportTarget` distinguishes an interactive input
 from a filesystem path before source loading begins.
@@ -153,7 +153,7 @@ The current design is governed by a few durable invariants:
 
 - A number in committed history identifies one immutable source string for the lifetime of the session.
 - Numeric and quoted import targets remain different typed cases.
-- Importing history performs a fresh, hygienic source splice rather than sharing a runtime object.
+- Importing history refers to one hygienically bounded checked term, rather than a cached runtime result.
 - Recognized REPL commands are root metadata; unknown metadata remains ordinary source syntax.
 - The wrapper establishes Builtin roles from the canonical contract without flattening its package namespace
   or altering a self-contained program.

@@ -363,10 +363,10 @@ compared with that result, but it does not participate in elaborating the import
 Imports are typed metadata on holes, such as `@[import("library.zy")] _`.
 Parenthesized metadata `@(meta)` abbreviates the bracket form whose payload is a hole,
 so `@(import("library.zy"))` names the same import. A compiler session discovers the file dependency graph,
-orders providers before their consumers, and substitutes a fresh, capture-avoiding copy of the independently
-checked provider term at each import occurrence. Parsed source templates are memoized, while each substituted
-occurrence remains fresh. A source boundary prevents free names and mobile block bindings from crossing
-between the two terms.
+orders providers before their consumers, and materializes each provider as one shared term node. The provider is
+resolved and checked once under its own empty context; every import occurrence is an edge to that checked root.
+A source boundary prevents free names and mobile block bindings from crossing between the two terms.
+Sharing is static: an imported computation is still evaluated at every dynamic occurrence.
 
 An implementation source `foo.zy` may have an adjacent companion `foo.zyi`. The companion contains one ordinary
 type term and must itself synthesize a type. Source assembly treats the pair as the annotated term
@@ -382,7 +382,7 @@ Interactive sessions reuse that source model instead of maintaining a mutable de
 The Ratatui REPL stores every submitted term as a session overlay with a nonzero input identity,
 displayed as `[1]`, `[2]`, and so on.
 The annotation `@[import(1)] _` resolves the unquoted integer to that overlay
-and performs the same fresh, hygienic term splice as a file import.
+and refers to the same shared, hygienically bounded term as a file import.
 A quoted target such as `@[import("1")] _` still means a filesystem path,
 so source numbers and paths remain distinct in the parsed `ImportTarget` type.
 A type checking rejection keeps the current number reserved and the editor intact.
@@ -483,6 +483,9 @@ in `lang/statics/src/elaborate/monadic/mod.rs` and invoked from `lang/statics/sr
 
 Each annotated term resolves `Monad` and `Algebra` as ordinary types at its lexical site.
 The checker verifies their expected higher kinds and records the selected constructors in the translation environment.
+It synthesizes the payload into the checker-wide checked-term repository, then algebra translation consumes that
+immutable handle. Each resolved monadic block retains one payload and one translated root; a use-site expectation is
+compared with the canonical synthesized classifier afterward.
 Global types and terms used by the annotated payload are then reinterpreted under this lexically selected monad.
 The translation's preliminary typing environment retains lexical type bindings,
 including existential witnesses and transparent aliases, while term bindings still require the global,

@@ -27,8 +27,8 @@ begin
 end
 ```
 
-An import is metadata on a hole. Each occurrence receives a fresh copy of the imported term,
-so binding the result once gives every later use the same lexical identity.
+An import is metadata on a hole. Every occurrence refers to the same independently checked source term;
+binding the result remains useful when the program should evaluate the imported term once and reuse its value.
 Place imports and parameters near the beginning of the file, followed by foundational types, operations,
 and finally the term that the file provides.
 

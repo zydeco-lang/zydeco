@@ -20,7 +20,7 @@ use zydeco_surface::textual::SourceNumber;
 const HELP: &str = concat!(
     "Every numbered input is one complete, declaration-free source term.\n",
     "\n",
-    "@[import(1)] _       splice input [1] as a fresh hygienic term\n",
+    "@[import(1)] _       refer to input [1] as a shared hygienic term\n",
     "@[type] expression   classify without evaluating\n",
     "@[run] expression    require immediate evaluation\n",
     "@[help] _            show this help\n",

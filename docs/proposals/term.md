@@ -215,11 +215,11 @@ An import is metadata on a hole:
 @[import("library.zy")] _
 ```
 
-The spelling `@(import("library.zy"))` abbreviates the same term. Source assembly replaces the hole with a fresh,
-capture-avoiding copy of the independently checked source term. A source boundary prevents free names and mobile
-bindings from crossing between the two terms. Each occurrence is fresh; sharing requires binding one imported copy
-and using that binding more than once.
+The spelling `@(import("library.zy"))` abbreviates the same term. Source assembly makes the hole refer to the one
+independently checked source root. A source boundary prevents free names and mobile bindings from crossing between
+the two terms. Repeated imports share that root, including its bound and nominal identities.
 
 This operation is ordinary term substitution. Its stability claim concerns well-typed, scope-respecting
-substitutions: substitution preserves typing and freshens bound identities where necessary. It does not make
-duplicated computations execute once or make nominal definitions from distinct copies identical.
+substitutions: substitution preserves typing, while the compiler may represent repeated occurrences by edges to one
+immutable term. Static sharing does not make an imported computation execute once; evaluation still occurs at each
+dynamic occurrence.

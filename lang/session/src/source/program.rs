@@ -5,11 +5,12 @@ use zydeco_surface::textual::syntax as t;
 use zydeco_utils::arena::FrozenArena;
 use zydeco_utils::span::{BytePos, FileSource, SourceMap, Span};
 
-/// The complete program in textual syntax, merged from one source graph.
+/// The complete program in textual syntax, assembled as one source-term DAG.
 ///
-/// `SourceGraph::parse` clones every reachable template into one fresh
-/// arena: imports become source boundaries, companion signatures become
-/// annotations, and `@[literal]` splices become string literals.
+/// `SourceGraph::parse` copies every reachable template into the program arena
+/// once. Imports become source-boundary edges to the shared source root,
+/// companion signatures become annotations, and `@[literal]` splices become
+/// string literals.
 pub struct TextualProgram {
     pub spans: FrozenArena<t::SpanArena>,
     pub arena: FrozenArena<t::TextArena>,
@@ -27,11 +28,18 @@ struct TextualProgramBuilder<'graph> {
     parser: t::Parser,
     /// Global base of each file's span range, assigned in provider order.
     bases: HashMap<SourceId, BytePos>,
+    /// Final root of every source already copied into the program DAG.
+    roots: HashMap<SourceId, t::TermId>,
 }
 
 impl<'graph> TextualProgramBuilder<'graph> {
     fn new(graph: &'graph SourceGraph) -> Self {
-        Self { graph, parser: t::Parser::new(), bases: Self::assign_bases(graph) }
+        Self {
+            graph,
+            parser: t::Parser::new(),
+            bases: Self::assign_bases(graph),
+            roots: HashMap::new(),
+        }
     }
 
     /// Give every reachable file a disjoint global offset range, starting
@@ -82,6 +90,9 @@ impl<'graph> TextualProgramBuilder<'graph> {
     }
 
     fn source(&mut self, source: SourceId) -> Result<t::TermId, TextualProgramError> {
+        if let Some(root) = self.roots.get(&source) {
+            return Ok(*root);
+        }
         let file = &self.graph.sources[&source];
         let root = file.unit.root;
         let kind = file.kind();
@@ -93,14 +104,19 @@ impl<'graph> TextualProgramBuilder<'graph> {
                 .term(self.span(source, root.into()).make(t::SignatureBoundary(body).into())),
             | SourceKind::Implementation | SourceKind::Program => body,
         };
-        let Some(signature) = signature else {
-            return Ok(body);
+        let root = match signature {
+            | None => body,
+            | Some(signature) => {
+                let ty = self.source(signature)?;
+                let signature_root = self.graph.sources[&signature].unit.root;
+                self.parser.term(
+                    self.span(signature, signature_root.into())
+                        .make(t::Ann { tm: body, ty }.into()),
+                )
+            }
         };
-        let ty = self.source(signature)?;
-        let signature_root = self.graph.sources[&signature].unit.root;
-        Ok(self
-            .parser
-            .term(self.span(signature, signature_root.into()).make(t::Ann { tm: body, ty }.into())))
+        self.roots.insert(source, root);
+        Ok(root)
     }
 
     fn span(&self, source: SourceId, entity: t::EntityId) -> Span {
