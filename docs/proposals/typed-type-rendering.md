@@ -46,7 +46,10 @@ Three printers coexist, with different owners and obligations:
 ## Chosen Invariants
 
 The statics formatter is the renderer for typed data, and it renders in source form wherever
-a source spelling exists:
+a source spelling exists. Its layout follows the meta-rules that `formatting.md` states for every
+printer of Zydeco syntax, instantiated at `layout(ignore)` because elaborated entities carry no
+retained intentions or trivia; width alone decides where a permitted boundary breaks.
+The source-form decisions are:
 
 - Operands are parenthesized by precedence class: atoms stand bare, applications bind
   tighter than arrows and products, and only compound operands are wrapped, so

@@ -7,6 +7,8 @@ Retained source information may constrain its presentation only at an explicit g
 The *pretty printer* performs the arena-to-document transformation in `textual`.
 The *formatter* is the complete parse, print, and replace workflow exposed by `zydeco fmt` and Cajun.
 Both frontends use the ordinary parser and the same printer.
+The layout meta-rules developed here govern every printer that gives Zydeco syntax a canonical layout;
+the Layout Meta-Rules section states each printer's instantiation.
 
 ## Terminology
 
@@ -51,6 +53,17 @@ whose tail aligns with the binding, or an arm block, whose arms align with the k
 A delimited region instead hugs the line it lands on: the opener stays put,
 the contents nest one level inside, and the closer returns to the opener's line.
 A singleton group therefore keeps its delimiters whenever its contents span more than one line.
+
+The meta-rules are laws about rendered documents rather than about the textual arena, so they govern
+every printer that gives Zydeco syntax a canonical layout, and each printer instantiates the same
+boundary discipline at its own policy. The surface printer developed in this document is the full
+instance: its boundaries consult retained intentions, carry trivia, and honor `@[format(...)]` directives.
+The statics formatter is the `layout(ignore)` instance. Elaborated entities have no source node, so no
+boundary is backed by a span, no trivia attach, and width alone decides where a permitted boundary
+breaks; operand grouping stays minimal, chosen by precedence class. Its spelling policy and the decision
+to keep grammar classes per-representation are recorded in `typed-type-rendering.md`.
+What the printers share is the boundary discipline itself. The scoped formatter is a debug renderer,
+and the dynamics printers render linked IR; neither defines canonical source layout.
 
 ## Retained Source Information
 
