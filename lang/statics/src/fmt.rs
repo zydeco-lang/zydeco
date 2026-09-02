@@ -1,4 +1,9 @@
 //! Formatters for scoped and statics entities in the type checker.
+//!
+//! Gap discipline follows the layout meta-rules of `docs/proposals/formatting.md`:
+//! a gap the canonical families declare as a boundary renders as `RcDoc::line()`
+//! inside a group, so the width can break it, while `RcDoc::space()` is reserved
+//! for gaps the meta-rules pin as canonical spacing, which never break.
 
 use super::syntax::*;
 use crate::arena::StaticsArena;
@@ -149,7 +154,21 @@ impl<'a> Pretty<'a, Formatter<'a>> for KindId {
             | Fillable::Done(kind) => match kind {
                 | Kind::VType(VType) => RcDoc::text("VType"),
                 | Kind::CType(CType) => RcDoc::text("CType"),
-                | Kind::Arrow(kd) => kd.pretty(f),
+                | Kind::Arrow(kd) => {
+                    // Kind arrows associate to the right and print as one
+                    // chain, mirroring type arrows.
+                    let Arrow(func, arg) = kd;
+                    let mut operands = vec![func.pretty(f)];
+                    let mut tail = *arg;
+                    while let Some(Fillable::Done(Kind::Arrow(Arrow(domain, codomain)))) =
+                        f.statics.kinds_pre.get(&tail)
+                    {
+                        operands.push(domain.pretty(f));
+                        tail = *codomain;
+                    }
+                    operands.push(tail.pretty(f));
+                    infix_chain(f, operands, "->")
+                }
                 | Kind::Label(kd) => kd.pretty(f),
             },
         }
@@ -496,23 +515,6 @@ where
     }
 }
 
-impl<'a, S, T> Pretty<'a, Formatter<'a>> for Arrow<S, T>
-where
-    S: Pretty<'a, Formatter<'a>>,
-    T: Pretty<'a, Formatter<'a>>,
-{
-    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let Arrow(func, arg) = self;
-        RcDoc::concat([
-            func.pretty(f),
-            RcDoc::space(),
-            RcDoc::text("->"),
-            RcDoc::space(),
-            arg.pretty(f),
-        ])
-    }
-}
-
 impl<'a, T> Pretty<'a, Formatter<'a>> for Named<FieldName, T>
 where
     T: Pretty<'a, Formatter<'a>>,
@@ -592,19 +594,6 @@ where
             RcDoc::intersperse(self.iter().map(|item| item.pretty(f)), RcDoc::text(", ")),
             RcDoc::text(")"),
         ])
-    }
-}
-
-impl<'a, T> Pretty<'a, Formatter<'a>> for Prod<T>
-where
-    T: Pretty<'a, Formatter<'a>>,
-{
-    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let Prod(components) = self;
-        RcDoc::intersperse(
-            components.iter().map(|component| component.pretty(f)),
-            RcDoc::concat([RcDoc::space(), RcDoc::text("*"), RcDoc::space()]),
-        )
     }
 }
 
@@ -871,7 +860,8 @@ impl<'a> Pretty<'a, Formatter<'a>> for PackPi {
             RcDoc::text("pack-pi"),
             RcDoc::space(),
             RcDoc::text("(["),
-            RcDoc::intersperse(witnesses, RcDoc::text(", ")),
+            RcDoc::intersperse(witnesses, RcDoc::concat([RcDoc::text(","), RcDoc::line()]))
+                .nest(f.indent),
             RcDoc::text("] :"),
             RcDoc::space(),
             self.domain.pretty(f),
@@ -1003,15 +993,29 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{DerivedAllocator, StaticsAlloc};
+    use crate::{Alloc, DerivedAllocator, StaticsAlloc};
+    use zydeco_surface::bitter::arena::BitterScope;
     use zydeco_surface::scoped::arena::ScopedArena;
-    use zydeco_syntax::{IntegerType, PrimitiveType};
+    use zydeco_syntax::{IntegerType, PrimitiveType, VarName};
+    use zydeco_utils::prelude::IdAllocator;
 
     /// A minimal arena that allocates the types the printer renders.
-    #[derive(Default)]
     struct FormatterFixture {
         allocator: DerivedAllocator,
         statics: StaticsArena,
+        defs: IdAllocator<BitterScope>,
+        scoped: ScopedArena,
+    }
+
+    impl Default for FormatterFixture {
+        fn default() -> Self {
+            Self {
+                allocator: DerivedAllocator::new(),
+                statics: StaticsArena::default(),
+                defs: IdAllocator::new(),
+                scoped: ScopedArena::default(),
+            }
+        }
     }
 
     impl AsMut<DerivedAllocator> for FormatterFixture {
@@ -1046,15 +1050,88 @@ mod tests {
             self.alloc_type_pre(Fillable::Done(Type::Prod(Prod(components))), kind)
         }
 
+        fn cctype(&mut self) -> KindId {
+            self.alloc_kind_pre(Fillable::Done(Kind::CType(CType)))
+        }
+
+        fn kind_arrow(&mut self, domain: KindId, codomain: KindId) -> KindId {
+            self.alloc_kind_pre(Fillable::Done(Kind::Arrow(Arrow(domain, codomain))))
+        }
+
+        fn named_witness(&mut self, name: &str) -> AbstId {
+            let definition = self.defs.alloc();
+            self.scoped.insert_def(definition, VarName(name.to_owned()));
+            let kind = self.vtype();
+            let abst = Alloc::alloc(self, None::<DefId>, kind, &());
+            self.statics.abst_hints.insert_new(abst, definition);
+            abst
+        }
+
+        fn pack_pi(&mut self, witnesses: &[AbstId], domain: TypeId, codomain: TypeId) -> TypeId {
+            let kind = self.vtype();
+            let mut witnesses = witnesses.iter().copied();
+            let telescope = PackTelescope::new(
+                witnesses.next().expect("a pack-pi opens at least one witness"),
+                witnesses,
+            );
+            self.alloc_type_pre(
+                Fillable::Done(Type::PackPi(Box::new(PackPi {
+                    domain,
+                    witnesses: telescope,
+                    codomain,
+                }))),
+                kind,
+            )
+        }
+
         fn render(&self, ty: TypeId, width: usize) -> String {
-            let scoped = ScopedArena::default();
-            let formatter = Formatter::new(&scoped, &self.statics);
+            let formatter = Formatter::new(&self.scoped, &self.statics);
             let mut output = String::new();
             ty.pretty(&formatter)
                 .render_fmt(width, &mut output)
                 .expect("rendering a formatter document cannot fail");
             output
         }
+
+        fn render_kind(&self, kind: KindId, width: usize) -> String {
+            let formatter = Formatter::new(&self.scoped, &self.statics);
+            let mut output = String::new();
+            kind.pretty(&formatter)
+                .render_fmt(width, &mut output)
+                .expect("rendering a formatter document cannot fail");
+            output
+        }
+    }
+
+    #[test]
+    fn kind_chains_break_like_type_chains() {
+        let mut fixture = FormatterFixture::default();
+        let vtype = fixture.vtype();
+        let ctype = fixture.cctype();
+        let codomain = fixture.kind_arrow(ctype, vtype);
+        let chain = fixture.kind_arrow(vtype, codomain);
+
+        assert_eq!(fixture.render_kind(chain, 100), "VType -> CType -> VType");
+        assert_eq!(fixture.render_kind(chain, 10), "VType\n-> CType\n-> VType");
+    }
+
+    #[test]
+    fn pack_pi_witness_lists_break_at_commas() {
+        let mut fixture = FormatterFixture::default();
+        let int = fixture.primitive(PrimitiveType::Integer(IntegerType::Int64));
+        let character = fixture.primitive(PrimitiveType::Char);
+        let left = fixture.named_witness("SystemOS");
+        let right = fixture.named_witness("SystemReader");
+        let pack_pi = fixture.pack_pi(&[left, right], int, character);
+
+        assert_eq!(
+            fixture.render(pack_pi, 100),
+            "pack-pi ([SystemOS, SystemReader] : Int64) . Char"
+        );
+        assert_eq!(
+            fixture.render(pack_pi, 36),
+            "pack-pi ([SystemOS,\n  SystemReader] : Int64) . Char"
+        );
     }
 
     #[test]
