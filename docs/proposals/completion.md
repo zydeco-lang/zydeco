@@ -124,7 +124,9 @@ The normal lexer never emits a completion token. A tooling iterator wraps the or
 active token when appropriate, and inserts one zero-width completion marker at the cursor. The marker is deliberately
 not an authored `_` token and is not accepted as an ordinary grammar terminal. A term or pattern recovery point turns
 it into a typed hole when that category is admissible; otherwise the parser records fixed expectations such as `in`,
-`=>`, or `end` at the marker. The deliberate marker issue is then removed from ordinary syntax diagnostics.
+`=>`, or `end` at the marker. A marker-only issue is then removed from ordinary syntax diagnostics.
+If the same recovery discards source tokens too, its diagnostic is retained at the first discarded source token.
+The synthetic marker never appears among the discarded source tokens reported to callers.
 
 LALRPOP's `expected` lists contain diagnostic terminal names. They may be useful evidence while prototyping, but
 Cajun must not parse those strings. The surface parser converts them into a typed `SyntaxExpectation` before exposing

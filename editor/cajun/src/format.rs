@@ -138,9 +138,20 @@ mod tests {
     fn skips_invalid_documents() {
         let formatter = DocumentFormatter;
 
-        assert_eq!(
-            formatter.format("begin ?"),
-            FormattingOutcome::Skipped(FormattingSkip::InvalidSyntax)
-        );
+        [
+            "begin ?",
+            "let value =",
+            "let value = in value",
+            "fn => body",
+            "let first = (,) in first",
+        ]
+        .into_iter()
+        .for_each(|source| {
+            assert_eq!(
+                formatter.format(source),
+                FormattingOutcome::Skipped(FormattingSkip::InvalidSyntax),
+                "source: {source:?}"
+            );
+        });
     }
 }

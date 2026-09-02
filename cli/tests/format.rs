@@ -173,13 +173,21 @@ fn fmt_format_verbatim_preserves_long_payload() {
 fn fmt_rejects_invalid_syntax_without_overwriting_it() {
     let directory = tempfile::tempdir().unwrap();
     let source = directory.path().join("invalid.zy");
-    let invalid = "let value =";
-    fs::write(&source, invalid).unwrap();
+    ["let value =", "let value = in value", "fn => body", "let first = (,) in first"]
+        .into_iter()
+        .for_each(|invalid| {
+            [false, true].into_iter().for_each(|check| {
+                fs::write(&source, invalid).unwrap();
+                let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
+                    .arg("fmt")
+                    .args(check.then_some("--check"))
+                    .arg(&source)
+                    .output()
+                    .unwrap();
 
-    let output =
-        Command::new(env!("CARGO_BIN_EXE_zydeco")).arg("fmt").arg(&source).output().unwrap();
-
-    assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("cannot format source"));
-    assert_eq!(fs::read_to_string(source).unwrap(), invalid);
+                assert!(!output.status.success(), "source: {invalid:?}, check: {check}");
+                assert!(String::from_utf8_lossy(&output.stderr).contains("cannot format source"));
+                assert_eq!(fs::read_to_string(&source).unwrap(), invalid);
+            });
+        });
 }

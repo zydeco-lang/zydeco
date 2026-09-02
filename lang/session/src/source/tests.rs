@@ -750,6 +750,24 @@ fn source_graph_rejects_a_legacy_declaration_sequence() {
 }
 
 #[test]
+fn source_graph_rejects_sources_that_only_parse_with_recovery() {
+    ["let value = in value", "fn => body", "let first = (,) in first"].into_iter().for_each(
+        |source| {
+            let fixture = SourceFixture::new();
+            let root = fixture.write("main.zy", source);
+
+            assert!(
+                matches!(
+                    SourceGraph::load(root),
+                    Err(SourceLoadError::Parse(SourceParseError::Parse { .. }))
+                ),
+                "source: {source:?}"
+            );
+        },
+    );
+}
+
+#[test]
 fn parser_failures_retain_the_rejected_token_range() {
     let fixture = SourceFixture::new();
     let source = "begin ?";

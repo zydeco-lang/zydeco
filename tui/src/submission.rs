@@ -165,4 +165,24 @@ mod tests {
     fn an_open_block_requests_another_line() {
         assert!(matches!(SubmissionParser::parse("begin\n"), SubmissionState::Incomplete));
     }
+
+    #[test]
+    fn recovered_syntax_is_invalid_instead_of_a_complete_submission() {
+        ["let value = in value", "fn => body", "let first = (,) in first"].into_iter().for_each(
+            |source| {
+                assert!(
+                    matches!(SubmissionParser::parse(source), SubmissionState::Invalid),
+                    "source: {source:?}"
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn a_real_error_before_eof_does_not_request_another_line() {
+        assert!(matches!(
+            SubmissionParser::parse("let first = in let second ="),
+            SubmissionState::Invalid
+        ));
+    }
 }

@@ -261,9 +261,30 @@ impl ParseIssue {
         };
         let dropped_tokens = dropped_tokens
             .into_iter()
-            .map(|(start, token, end)| DroppedToken { range: start..end, token: token.to_string() })
+            .filter_map(|(start, token, end)| match token {
+                | ParserToken::Lexical(token) => {
+                    Some(DroppedToken { range: start..end, token: token.to_string() })
+                }
+                | ParserToken::Completion => None,
+            })
             .collect();
         Self { range: range.or(fallback), kind, dropped_tokens, recovery, completion_marker }
+    }
+
+    fn into_source_issue(mut self) -> Option<Self> {
+        if self.completion_marker {
+            // A marker-only error is expected. If recovery also discarded source tokens,
+            // retain the diagnostic at the first such token after extracting completion facts.
+            let first = self.dropped_tokens.first()?;
+            self.range = Some(first.range.clone());
+            match &mut self.kind {
+                | ParseIssueKind::UnrecognizedToken { token, .. }
+                | ParseIssueKind::ExtraToken { token } => *token = first.token.clone(),
+                | _ => unreachable!("a completion marker must originate in a token issue"),
+            }
+            self.completion_marker = false;
+        }
+        Some(self)
     }
 }
 
@@ -542,7 +563,7 @@ impl RecoveringParser {
                 });
             CompletionSite { replacement: cursor.replacement(), hole, expected }
         });
-        issues.retain(|issue| !issue.completion_marker);
+        let issues = issues.into_iter().filter_map(ParseIssue::into_source_issue).collect();
         RecoveringParse { syntax: parsed_root, issues, completion }
     }
 }
@@ -690,6 +711,24 @@ impl<'source> RecoveryAccumulator<'source> {
 mod tests {
     use super::*;
 
+    struct RejectionAssertions;
+
+    impl RejectionAssertions {
+        fn same_issues(failure: &ParseFailure, recovered: &[ParseIssue]) {
+            assert_eq!(failure.issue_count(), recovered.len());
+            failure.issues().zip(recovered).for_each(|(strict, recovered)| {
+                assert_eq!(strict.range, recovered.range);
+                assert_eq!(strict.kind, recovered.kind);
+                assert_eq!(strict.dropped_tokens, recovered.dropped_tokens);
+                // Entity IDs belong to separate arenas; only their hole categories should agree.
+                assert_eq!(
+                    strict.recovery.map(|hole| std::mem::discriminant(&hole.entity)),
+                    recovered.recovery.map(|hole| std::mem::discriminant(&hole.entity))
+                );
+            });
+        }
+    }
+
     #[test]
     fn expectation_catalog_covers_every_public_grammar_terminal() {
         let grammar = include_str!("parser.lalrpop");
@@ -727,16 +766,34 @@ mod tests {
 
     #[test]
     fn completion_cursor_rejects_opaque_source() {
-        let source = "-- hidden\n\"string\"";
+        [
+            ("-- hidden\nvalue", 4),
+            ("--| documentation\nvalue", 5),
+            ("/- outer /- inner -/ comment -/ value", 13),
+            ("/- unfinished comment", 5),
+            ("\"string\"", 3),
+            ("'a'", 1),
+        ]
+        .into_iter()
+        .for_each(|(source, offset)| {
+            assert_eq!(
+                CompletionCursor::at(source, offset),
+                Err(CompletionCursorError::OpaqueSource { offset }),
+                "source: {source:?}"
+            );
+        });
+    }
 
-        assert!(matches!(
-            CompletionCursor::at(source, 4),
-            Err(CompletionCursorError::OpaqueSource { .. })
-        ));
-        assert!(matches!(
-            CompletionCursor::at(source, source.find("ring").unwrap()),
-            Err(CompletionCursorError::OpaqueSource { .. })
-        ));
+    #[test]
+    fn completion_cursor_rejects_offsets_beyond_the_source() {
+        [("", 1), ("value", 6), ("é", 3), ("value", usize::MAX)].into_iter().for_each(
+            |(source, offset)| {
+                assert_eq!(
+                    CompletionCursor::at(source, offset),
+                    Err(CompletionCursorError::OutOfBounds { offset, source_len: source.len() })
+                );
+            },
+        );
     }
 
     #[test]
@@ -848,6 +905,181 @@ mod tests {
 
         let mut strict = Parser::new();
         assert!(StrictParser::source(source, &mut strict).is_err());
+    }
+
+    #[test]
+    fn strict_source_and_term_reject_syntax_accepted_only_through_recovery() {
+        [
+            ("let value = in value", "let value = 1 in value"),
+            ("fn => body", "fn argument => body"),
+            ("let first = (,) in first", "let first = (1,) in first"),
+            ("begin end", "begin value end"),
+            ("let value = 1 in", "let value = 1 in value"),
+        ]
+        .into_iter()
+        .for_each(|(source, repaired)| {
+            let recovered_source = RecoveringParser::new().source(source, &mut Parser::new());
+            let recovered_term = RecoveringParser::new().term(source, &mut Parser::new());
+            assert!(recovered_source.syntax.is_some(), "source: {source:?}");
+            assert!(recovered_term.syntax.is_some(), "source: {source:?}");
+            assert!(!recovered_source.issues.is_empty(), "source: {source:?}");
+            assert!(recovered_source.issues.iter().all(|issue| issue.recovery.is_some()));
+
+            let source_failure = StrictParser::source(source, &mut Parser::new())
+                .expect_err("a recovered source must not pass strict parsing");
+            let term_failure = StrictParser::term(source, &mut Parser::new())
+                .expect_err("a recovered term must not pass strict parsing");
+            RejectionAssertions::same_issues(&source_failure, &recovered_source.issues);
+            RejectionAssertions::same_issues(&term_failure, &recovered_term.issues);
+
+            assert!(
+                StrictParser::source(repaired, &mut Parser::new()).is_ok(),
+                "repair: {repaired:?}"
+            );
+            assert!(
+                StrictParser::term(repaired, &mut Parser::new()).is_ok(),
+                "repair: {repaired:?}"
+            );
+        });
+    }
+
+    #[test]
+    fn strict_pattern_rejects_syntax_accepted_only_through_recovery() {
+        [("", "_"), ("(,)", "(value,)"), ("+Some", "+Some value")].into_iter().for_each(
+            |(source, repaired)| {
+                let recovered = RecoveringParser::new().pattern(source, &mut Parser::new());
+                assert!(recovered.syntax.is_some(), "source: {source:?}");
+                assert!(!recovered.issues.is_empty(), "source: {source:?}");
+                assert!(recovered.issues.iter().all(|issue| matches!(
+                    issue.recovery,
+                    Some(RecoveryHole { entity: ParsedHole::Pattern(_) })
+                )));
+
+                let failure = StrictParser::pattern(source, &mut Parser::new())
+                    .expect_err("a recovered pattern must not pass strict parsing");
+                RejectionAssertions::same_issues(&failure, &recovered.issues);
+                assert!(
+                    StrictParser::pattern(repaired, &mut Parser::new()).is_ok(),
+                    "repair: {repaired:?}"
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn strict_parsing_rejects_mismatched_delimiters_and_trailing_tokens() {
+        ["(value]", "{value)", "begin value }", "value end", "value => other", "@[format(] value"]
+            .into_iter()
+            .for_each(|source| {
+                let failure = StrictParser::source(source, &mut Parser::new())
+                    .expect_err("malformed syntax must fail strict parsing");
+
+                assert!(!failure.is_unrecognized_eof(), "source: {source:?}");
+                assert!(
+                    failure.issues().all(|issue| {
+                        issue.range.as_ref().is_some_and(|range| {
+                            range.start <= range.end && source.get(range.clone()).is_some()
+                        })
+                    }),
+                    "source: {source:?}"
+                );
+            });
+    }
+
+    #[test]
+    fn unknown_tokens_are_fatal_even_after_a_valid_term() {
+        ["?", "value ?", "let value = ? in value"].into_iter().for_each(|source| {
+            let recovered = RecoveringParser::new().source(source, &mut Parser::new());
+            assert!(recovered.syntax.is_none(), "source: {source:?}");
+            assert_eq!(recovered.issues.len(), 1);
+            assert!(matches!(
+                &recovered.issues[0].kind,
+                ParseIssueKind::UnrecognizedToken { token, .. }
+                    if token == &Tok::Unknown("?").to_string()
+            ));
+            let offset = source.find('?').unwrap();
+            assert_eq!(recovered.issues[0].range, Some(offset..offset + 1));
+            assert!(recovered.issues[0].recovery.is_none());
+            assert!(recovered.completion.is_none());
+            assert!(StrictParser::source(source, &mut Parser::new()).is_err());
+        });
+    }
+
+    #[test]
+    fn a_real_error_followed_by_eof_is_not_just_incomplete_input() {
+        let source = "let first = in let second =";
+        let failure = StrictParser::source(source, &mut Parser::new()).unwrap_err();
+
+        assert!(!failure.is_unrecognized_eof());
+        assert_eq!(failure.issue_count(), 2);
+        assert!(matches!(
+            &failure.primary().kind,
+            ParseIssueKind::UnrecognizedToken { token, .. } if token == "in"
+        ));
+        assert!(failure.issues().last().unwrap().is_unrecognized_eof());
+    }
+
+    #[test]
+    fn completion_keeps_real_errors_before_and_after_the_cursor() {
+        let source = "let first = in let second =  in let third = in third";
+        let offset = source.find(" in let third").unwrap();
+        let parsed =
+            RecoveringParser::at(source, offset).unwrap().source(source, &mut Parser::new());
+
+        assert!(parsed.syntax.is_some());
+        assert_eq!(parsed.issues.len(), 2);
+        let ranges = parsed.issues.iter().map(|issue| issue.range.clone()).collect::<Vec<_>>();
+        let first = source.find("in let second").unwrap();
+        let third = source.find("in third").unwrap();
+        assert_eq!(ranges, [Some(first..first + 2), Some(third..third + 2)]);
+        let hole = parsed.completion.unwrap().hole.expect("the cursor should have its own hole");
+        assert!(parsed.issues.iter().all(|issue| {
+            issue.recovery.is_some_and(|recovery| recovery.entity != hole.entity)
+        }));
+    }
+
+    #[test]
+    fn completion_does_not_hide_source_tokens_discarded_during_marker_recovery() {
+        let source = "let value =  , in value";
+        let offset = source.find(" ,").unwrap();
+        let parsed =
+            RecoveringParser::at(source, offset).unwrap().source(source, &mut Parser::new());
+        let comma = source.find(',').unwrap();
+
+        assert!(parsed.syntax.is_some());
+        assert_eq!(parsed.issues.len(), 1);
+        assert_eq!(parsed.issues[0].range, Some(comma..comma + 1));
+        assert!(matches!(
+            &parsed.issues[0].kind,
+            ParseIssueKind::UnrecognizedToken { token, .. } if token == ","
+        ));
+        assert!(
+            parsed.issues[0]
+                .dropped_tokens
+                .iter()
+                .any(|token| { token.range == (comma..comma + 1) && token.token == "," })
+        );
+        assert!(parsed.issues[0].recovery.is_some());
+        let completion =
+            parsed.completion.expect("completion facts should survive the source error");
+        assert!(completion.expected.contains(&SyntaxExpectation::LowerIdentifier));
+    }
+
+    #[test]
+    fn ordinary_recovery_does_not_expose_a_discarded_completion_marker_as_source() {
+        let source = "let value = ,  in value";
+        let offset = source.find(" in value").unwrap();
+        let parsed =
+            RecoveringParser::at(source, offset).unwrap().source(source, &mut Parser::new());
+        let comma = source.find(',').unwrap();
+
+        assert!(parsed.syntax.is_some());
+        assert_eq!(parsed.issues.len(), 1);
+        assert_eq!(parsed.issues[0].range, Some(comma..comma + 1));
+        assert_eq!(
+            parsed.issues[0].dropped_tokens,
+            [DroppedToken { range: comma..comma + 1, token: ",".to_owned() }]
+        );
     }
 
     #[test]
