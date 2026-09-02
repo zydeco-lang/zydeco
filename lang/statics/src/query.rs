@@ -119,9 +119,8 @@ impl IntrinsicKey {
             | Self::Ret => 3,
             | Self::Unit => 4,
             | Self::Primitive(primitive) => {
-                5 + zydeco_syntax::PrimitiveType::ALL
-                    .iter()
-                    .position(|candidate| *candidate == primitive)
+                5 + zydeco_syntax::PrimitiveType::all()
+                    .position(|candidate| candidate == primitive)
                     .expect("every primitive participates in the intrinsic singletons")
                     as u32
             }

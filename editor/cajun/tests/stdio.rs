@@ -258,6 +258,74 @@ fn stdio_server_exposes_import_document_links_after_resolution_errors() {
 }
 
 #[test]
+fn stdio_server_completes_incomplete_metadata_with_snippets() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("main.zy");
+    let source = "@[intr";
+    std::fs::write(&path, source).unwrap();
+    let uri = Url::from_file_path(&path).unwrap().to_string();
+    let mut server = LspProcess::start();
+
+    let initialize = server.request(
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": Url::from_file_path(directory.path()).unwrap(),
+            "capabilities": {
+                "textDocument": {
+                    "completion": {
+                        "completionItem": { "snippetSupport": true }
+                    }
+                }
+            },
+        }),
+    );
+    assert_eq!(
+        initialize["result"]["capabilities"]["completionProvider"],
+        json!({
+            "resolveProvider": false,
+            "triggerCharacters": ["[", "(", ","],
+        })
+    );
+    server.notify("initialized", json!({}));
+    server.notify(
+        "textDocument/didOpen",
+        json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "zydeco",
+                "version": 1,
+                "text": source,
+            },
+        }),
+    );
+    server.notification("textDocument/publishDiagnostics");
+
+    let response = server.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": source.encode_utf16().count() },
+        }),
+    );
+    let [item] = response["result"].as_array().unwrap().as_slice() else {
+        panic!("expected one filtered metadata completion: {response}")
+    };
+    assert_eq!(item["label"], "intrinsic");
+    assert_eq!(item["insertTextFormat"], 2);
+    assert_eq!(item["textEdit"]["newText"], "intrinsic(${1:role})");
+    assert_eq!(
+        item["textEdit"]["range"],
+        json!({
+            "start": { "line": 0, "character": 2 },
+            "end": { "line": 0, "character": 6 },
+        })
+    );
+
+    server.finish();
+}
+
+#[test]
 fn stdio_server_synchronizes_documents_and_answers_navigation_requests() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("main.zy");

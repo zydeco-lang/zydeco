@@ -21,6 +21,7 @@ thiserror = { workspace = true }
 ariadne = { workspace = true }
 pretty = { workspace = true }
 auto_impl = { workspace = true }
+strum = { workspace = true }
 zydeco-utils = { workspace = true }
 zydeco-derive = { workspace = true }
 zydeco-syntax = { workspace = true }

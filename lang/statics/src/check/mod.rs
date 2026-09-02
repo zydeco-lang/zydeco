@@ -8,7 +8,7 @@ use {
     },
     crate::surface_syntax::{PrimDefs, ScopedArena, SpanArena, TermContexts},
     crate::validate::CoverageChecker,
-    zydeco_surface::metadata::{BuiltinMeta, FfiMeta},
+    zydeco_surface::metadata::{BuiltinMeta, FfiMeta, MetadataKind},
     zydeco_utils::prelude::ArenaAccess,
 };
 
@@ -2229,11 +2229,7 @@ impl InternalTerm {
             crate::query::IntrinsicKey::Ret,
             crate::query::IntrinsicKey::Unit,
         ];
-        keys.extend(
-            PrimitiveType::ALL
-                .iter()
-                .map(|primitive| crate::query::IntrinsicKey::Primitive(*primitive)),
-        );
+        keys.extend(PrimitiveType::all().map(crate::query::IntrinsicKey::Primitive));
         for key in keys {
             let interned = crate::query::InternedIntrinsic::new(tycker.db, key);
             let singleton = crate::query::intrinsic_singleton(tycker.db, tycker.data, interned);
@@ -4841,7 +4837,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 {
                     ForeignAttachment::new(meta.target, res, term).register_k(tycker)?;
                 }
-                if meta.is("debug") {
+                if meta.is(MetadataKind::Debug.name()) {
                     tycker
                         .observations
                         .push(TyckObservation::Debug { metadata: meta, result: res });

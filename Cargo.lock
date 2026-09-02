@@ -2614,6 +2614,7 @@ dependencies = [
  "regex",
  "rpds",
  "sequence_trie",
+ "strum",
  "thiserror",
  "unindent",
  "zydeco-derive",
@@ -2628,6 +2629,7 @@ dependencies = [
  "derive_more",
  "impl-tools",
  "pretty",
+ "strum",
  "zydeco-derive",
  "zydeco-utils",
 ]

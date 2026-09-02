@@ -1,5 +1,7 @@
 use crate::source::{SourceFile, SourceGraph, SourceId};
 use std::path::Path;
+#[cfg(test)]
+use zydeco_surface::metadata::MetadataKind;
 use zydeco_surface::textual::{DocumentationSite, syntax as t};
 
 /// One documentation attachment together with the source arena needed to
@@ -97,7 +99,8 @@ mod tests {
         assert_eq!(import_doc.term_source(), "@[import(\"provider.zy\")] _");
         assert!(matches!(
             import_doc.term(),
-            Term::Meta(MetaTerm(meta, _)) if import_doc.file.arena.metas[meta].is("import")
+            Term::Meta(MetaTerm(meta, _))
+                if import_doc.file.arena.metas[meta].is(MetadataKind::Import.name())
         ));
 
         assert_eq!(

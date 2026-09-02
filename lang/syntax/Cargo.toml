@@ -16,6 +16,7 @@ zydeco-utils = { workspace = true }
 derive_more = { workspace = true, features = ["from"] }
 impl-tools = { workspace = true }
 pretty = { workspace = true }
+strum = { workspace = true }
 
 [lib]
 doctest = false

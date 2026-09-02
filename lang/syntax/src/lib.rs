@@ -9,6 +9,7 @@ pub use text::*;
 
 mod impls;
 use derive_more::From;
+use strum::{IntoEnumIterator, VariantArray as _};
 
 /* --------------------------------- Binder --------------------------------- */
 
@@ -90,36 +91,45 @@ pub struct Sealed<T>(pub T);
 /* ---------------------------------- Meta ---------------------------------- */
 
 /// Compiler-defined identities for the intrinsic CBPV structure.
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    strum::EnumDiscriminants,
+    strum::EnumIter,
+)]
+#[strum_discriminants(derive(strum::IntoStaticStr))]
+#[strum_discriminants(strum(serialize_all = "lowercase"))]
+#[strum_discriminants(vis(pub(crate)))]
 pub enum IntrinsicRole {
     VType,
     CType,
     Thk,
     Ret,
     Unit,
+    #[strum(disabled)]
     Primitive(PrimitiveType),
 }
 
 impl IntrinsicRole {
+    /// Every source-spellable intrinsic role, in completion order.
+    pub fn all() -> impl Iterator<Item = Self> {
+        Self::iter().chain(PrimitiveType::all().map(Self::Primitive))
+    }
+
     pub fn from_source_name(name: &str) -> Option<Self> {
-        match name {
-            | "vtype" => Some(Self::VType),
-            | "ctype" => Some(Self::CType),
-            | "thk" => Some(Self::Thk),
-            | "ret" => Some(Self::Ret),
-            | "unit" => Some(Self::Unit),
-            | name => PrimitiveType::from_intrinsic_name(name).map(Self::Primitive),
-        }
+        Self::all().find(|role| role.source_name() == name)
     }
 
     pub fn source_name(self) -> &'static str {
         match self {
-            | Self::VType => "vtype",
-            | Self::CType => "ctype",
-            | Self::Thk => "thk",
-            | Self::Ret => "ret",
-            | Self::Unit => "unit",
             | Self::Primitive(primitive) => primitive.intrinsic_name(),
+            | role => IntrinsicRoleDiscriminants::from(role).into(),
         }
     }
 }
@@ -132,7 +142,20 @@ impl std::fmt::Display for IntrinsicRole {
 
 /// Compiler-defined roles for host-provided abstract types in the Builtin
 /// package signature.
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    strum::EnumString,
+    strum::IntoStaticStr,
+    strum::VariantArray,
+)]
+#[strum(serialize_all = "lowercase")]
 pub enum BuiltinTypeRole {
     Reader,
     Writer,
@@ -147,20 +170,11 @@ pub enum BuiltinTypeUniverse {
 
 impl BuiltinTypeRole {
     pub fn from_source_name(name: &str) -> Option<Self> {
-        match name {
-            | "reader" => Some(Self::Reader),
-            | "writer" => Some(Self::Writer),
-            | "os" => Some(Self::OS),
-            | _ => None,
-        }
+        name.parse().ok()
     }
 
     pub fn source_name(self) -> &'static str {
-        match self {
-            | Self::Reader => "reader",
-            | Self::Writer => "writer",
-            | Self::OS => "os",
-        }
+        self.into()
     }
 
     pub fn universe(self) -> BuiltinTypeUniverse {
@@ -178,7 +192,19 @@ impl std::fmt::Display for BuiltinTypeRole {
 }
 
 /// The concrete representation selected for an integer literal or operation.
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    strum::IntoStaticStr,
+    strum::VariantArray,
+)]
+#[strum(serialize_all = "lowercase")]
 pub enum IntegerType {
     Int8,
     Int16,
@@ -191,28 +217,8 @@ pub enum IntegerType {
 }
 
 impl IntegerType {
-    pub const ALL: [Self; 8] = [
-        Self::Int8,
-        Self::Int16,
-        Self::Int32,
-        Self::Int64,
-        Self::UInt8,
-        Self::UInt16,
-        Self::UInt32,
-        Self::UInt64,
-    ];
-
     pub fn source_name(self) -> &'static str {
-        match self {
-            | Self::Int8 => "int8",
-            | Self::Int16 => "int16",
-            | Self::Int32 => "int32",
-            | Self::Int64 => "int64",
-            | Self::UInt8 => "uint8",
-            | Self::UInt16 => "uint16",
-            | Self::UInt32 => "uint32",
-            | Self::UInt64 => "uint64",
-        }
+        self.into()
     }
 
     pub fn type_name(self) -> &'static str {
@@ -241,7 +247,20 @@ impl std::fmt::Display for IntegerType {
 
 /// The concrete IEEE-754 representation selected for a floating-point literal
 /// or operation.
-#[derive(Copy, Clone, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Default,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    strum::IntoStaticStr,
+    strum::VariantArray,
+)]
+#[strum(serialize_all = "lowercase")]
 pub enum FloatType {
     Float32,
     #[default]
@@ -249,13 +268,8 @@ pub enum FloatType {
 }
 
 impl FloatType {
-    pub const ALL: [Self; 2] = [Self::Float32, Self::Float64];
-
     pub fn source_name(self) -> &'static str {
-        match self {
-            | Self::Float32 => "float32",
-            | Self::Float64 => "float64",
-        }
+        self.into()
     }
 
     pub fn type_name(self) -> &'static str {
@@ -278,9 +292,25 @@ impl std::fmt::Display for FloatType {
 /// independently assembled packages share exact Rust-compatible scalar and
 /// buffer representations without placing every type in one generative
 /// existential telescope.
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    strum::EnumDiscriminants,
+    strum::EnumIter,
+)]
+#[strum_discriminants(derive(strum::IntoStaticStr))]
+#[strum_discriminants(strum(serialize_all = "lowercase"))]
+#[strum_discriminants(vis(pub(crate)))]
 pub enum PrimitiveType {
+    #[strum(disabled)]
     Integer(IntegerType),
+    #[strum(disabled)]
     Float(FloatType),
     Char,
     String,
@@ -288,39 +318,17 @@ pub enum PrimitiveType {
 }
 
 impl PrimitiveType {
-    pub const ALL: [Self; 13] = [
-        Self::Integer(IntegerType::Int8),
-        Self::Integer(IntegerType::Int16),
-        Self::Integer(IntegerType::Int32),
-        Self::Integer(IntegerType::Int64),
-        Self::Integer(IntegerType::UInt8),
-        Self::Integer(IntegerType::UInt16),
-        Self::Integer(IntegerType::UInt32),
-        Self::Integer(IntegerType::UInt64),
-        Self::Float(FloatType::Float32),
-        Self::Float(FloatType::Float64),
-        Self::Char,
-        Self::String,
-        Self::Bytes,
-    ];
+    pub fn all() -> impl Iterator<Item = Self> {
+        IntegerType::VARIANTS
+            .iter()
+            .copied()
+            .map(Self::Integer)
+            .chain(FloatType::VARIANTS.iter().copied().map(Self::Float))
+            .chain(Self::iter())
+    }
 
     pub fn from_intrinsic_name(name: &str) -> Option<Self> {
-        Some(match name {
-            | "i8" => Self::Integer(IntegerType::Int8),
-            | "i16" => Self::Integer(IntegerType::Int16),
-            | "i32" => Self::Integer(IntegerType::Int32),
-            | "i64" => Self::Integer(IntegerType::Int64),
-            | "u8" => Self::Integer(IntegerType::UInt8),
-            | "u16" => Self::Integer(IntegerType::UInt16),
-            | "u32" => Self::Integer(IntegerType::UInt32),
-            | "u64" => Self::Integer(IntegerType::UInt64),
-            | "f32" => Self::Float(FloatType::Float32),
-            | "f64" => Self::Float(FloatType::Float64),
-            | "char" => Self::Char,
-            | "string" => Self::String,
-            | "bytes" => Self::Bytes,
-            | _ => return None,
-        })
+        Self::all().find(|primitive| primitive.intrinsic_name() == name)
     }
 
     pub fn intrinsic_name(self) -> &'static str {
@@ -335,9 +343,7 @@ impl PrimitiveType {
             | Self::Integer(IntegerType::UInt64) => "u64",
             | Self::Float(FloatType::Float32) => "f32",
             | Self::Float(FloatType::Float64) => "f64",
-            | Self::Char => "char",
-            | Self::String => "string",
-            | Self::Bytes => "bytes",
+            | primitive => PrimitiveTypeDiscriminants::from(primitive).into(),
         }
     }
 
@@ -358,7 +364,20 @@ impl std::fmt::Display for PrimitiveType {
     }
 }
 
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    strum::EnumString,
+    strum::IntoStaticStr,
+    strum::VariantArray,
+)]
+#[strum(serialize_all = "snake_case")]
 pub enum IntegerOperation {
     Add,
     Sub,
@@ -372,34 +391,12 @@ pub enum IntegerOperation {
 }
 
 impl IntegerOperation {
-    pub const ALL: [Self; 9] = [
-        Self::Add,
-        Self::Sub,
-        Self::Mul,
-        Self::Div,
-        Self::Mod,
-        Self::Eq,
-        Self::Lt,
-        Self::Gt,
-        Self::ToString,
-    ];
-
     pub fn source_name(self) -> &'static str {
-        match self {
-            | Self::Add => "add",
-            | Self::Sub => "sub",
-            | Self::Mul => "mul",
-            | Self::Div => "div",
-            | Self::Mod => "mod",
-            | Self::Eq => "eq",
-            | Self::Lt => "lt",
-            | Self::Gt => "gt",
-            | Self::ToString => "to_string",
-        }
+        self.into()
     }
 
     pub fn from_source_name(name: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|operation| operation.source_name() == name)
+        name.parse().ok()
     }
 
     pub fn arity(self) -> usize {
@@ -415,7 +412,20 @@ impl IntegerOperation {
     }
 }
 
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    strum::EnumString,
+    strum::IntoStaticStr,
+    strum::VariantArray,
+)]
+#[strum(serialize_all = "snake_case")]
 pub enum FloatOperation {
     Add,
     Sub,
@@ -428,24 +438,12 @@ pub enum FloatOperation {
 }
 
 impl FloatOperation {
-    pub const ALL: [Self; 8] =
-        [Self::Add, Self::Sub, Self::Mul, Self::Div, Self::Eq, Self::Lt, Self::Gt, Self::ToString];
-
     pub fn source_name(self) -> &'static str {
-        match self {
-            | Self::Add => "add",
-            | Self::Sub => "sub",
-            | Self::Mul => "mul",
-            | Self::Div => "div",
-            | Self::Eq => "eq",
-            | Self::Lt => "lt",
-            | Self::Gt => "gt",
-            | Self::ToString => "to_string",
-        }
+        self.into()
     }
 
     pub fn from_source_name(name: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|operation| operation.source_name() == name)
+        name.parse().ok()
     }
 
     pub fn arity(self) -> usize {
@@ -463,9 +461,25 @@ impl FloatOperation {
 
 /// Compiler-defined roles that may be assigned to host-provided value entries
 /// in the Builtin package signature.
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    strum::EnumDiscriminants,
+    strum::EnumIter,
+)]
+#[strum_discriminants(derive(strum::IntoStaticStr))]
+#[strum_discriminants(strum(serialize_all = "snake_case"))]
+#[strum_discriminants(vis(pub(crate)))]
 pub enum BuiltinValueRole {
+    #[strum(disabled)]
     Integer(IntegerType, IntegerOperation),
+    #[strum(disabled)]
     Float(FloatType, FloatOperation),
     StrScalarLength,
     StrByteLength,
@@ -508,63 +522,27 @@ pub enum BuiltinValueRole {
 }
 
 impl BuiltinValueRole {
-    const NON_NUMERIC: &'static [Self] = &[
-        Self::StrScalarLength,
-        Self::StrByteLength,
-        Self::StrAppend,
-        Self::StrSplitOnce,
-        Self::StrSplitAt,
-        Self::StrEq,
-        Self::StrGet,
-        Self::CharToStr,
-        Self::CharCodepoint,
-        Self::CharFromCodepoint,
-        Self::StrParseInt,
-        Self::BytesEmpty,
-        Self::BytesLength,
-        Self::BytesAppend,
-        Self::BytesFromStr,
-        Self::BytesToStr,
-        Self::Stdin,
-        Self::Stdout,
-        Self::Stderr,
-        Self::IoRead,
-        Self::IoReadLine,
-        Self::IoReadAll,
-        Self::IoWriteAll,
-        Self::IoFlush,
-        Self::IoCloseReader,
-        Self::IoCloseWriter,
-        Self::FsOpenReader,
-        Self::FsCreateWriter,
-        Self::FsAppendWriter,
-        Self::WriteStr,
-        Self::WriteInt,
-        Self::WriteLine,
-        Self::ReadLine,
-        Self::ReadLineAsInt,
-        Self::ReadTillEof,
-        Self::ArgList,
-        Self::RandomInt,
-        Self::Exit,
-    ];
-
     pub fn all() -> impl Iterator<Item = Self> {
-        IntegerType::ALL
-            .into_iter()
+        IntegerType::VARIANTS
+            .iter()
+            .copied()
             .flat_map(|integer| {
-                IntegerOperation::ALL
-                    .into_iter()
+                IntegerOperation::VARIANTS
+                    .iter()
+                    .copied()
                     .map(move |operation| Self::Integer(integer, operation))
             })
-            .chain(FloatType::ALL.into_iter().flat_map(|float| {
-                FloatOperation::ALL.into_iter().map(move |operation| Self::Float(float, operation))
+            .chain(FloatType::VARIANTS.iter().copied().flat_map(|float| {
+                FloatOperation::VARIANTS
+                    .iter()
+                    .copied()
+                    .map(move |operation| Self::Float(float, operation))
             }))
-            .chain(Self::NON_NUMERIC.iter().copied())
+            .chain(Self::iter())
     }
 
     pub fn from_source_name(name: &str) -> Option<Self> {
-        let numeric = IntegerType::ALL.into_iter().find_map(|integer| {
+        let numeric = IntegerType::VARIANTS.iter().copied().find_map(|integer| {
             name.strip_prefix(integer.source_name())
                 .and_then(|suffix| suffix.strip_prefix('_'))
                 .and_then(IntegerOperation::from_source_name)
@@ -573,7 +551,7 @@ impl BuiltinValueRole {
         if numeric.is_some() {
             return numeric;
         }
-        let numeric = FloatType::ALL.into_iter().find_map(|float| {
+        let numeric = FloatType::VARIANTS.iter().copied().find_map(|float| {
             name.strip_prefix(float.source_name())
                 .and_then(|suffix| suffix.strip_prefix('_'))
                 .and_then(FloatOperation::from_source_name)
@@ -582,47 +560,10 @@ impl BuiltinValueRole {
         if numeric.is_some() {
             return numeric;
         }
-        match name {
-            | "str_scalar_length" => Some(Self::StrScalarLength),
-            | "str_byte_length" => Some(Self::StrByteLength),
-            | "str_append" => Some(Self::StrAppend),
-            | "str_split_once" => Some(Self::StrSplitOnce),
-            | "str_split_at" => Some(Self::StrSplitAt),
-            | "str_eq" => Some(Self::StrEq),
-            | "str_get" => Some(Self::StrGet),
-            | "char_to_str" => Some(Self::CharToStr),
-            | "char_codepoint" => Some(Self::CharCodepoint),
-            | "char_from_codepoint" => Some(Self::CharFromCodepoint),
-            | "str_parse_int" => Some(Self::StrParseInt),
-            | "bytes_empty" => Some(Self::BytesEmpty),
-            | "bytes_length" => Some(Self::BytesLength),
-            | "bytes_append" => Some(Self::BytesAppend),
-            | "bytes_from_str" => Some(Self::BytesFromStr),
-            | "bytes_to_str" => Some(Self::BytesToStr),
-            | "stdin" => Some(Self::Stdin),
-            | "stdout" => Some(Self::Stdout),
-            | "stderr" => Some(Self::Stderr),
-            | "io_read" => Some(Self::IoRead),
-            | "io_read_line" => Some(Self::IoReadLine),
-            | "io_read_all" => Some(Self::IoReadAll),
-            | "io_write_all" => Some(Self::IoWriteAll),
-            | "io_flush" => Some(Self::IoFlush),
-            | "io_close_reader" => Some(Self::IoCloseReader),
-            | "io_close_writer" => Some(Self::IoCloseWriter),
-            | "fs_open_reader" => Some(Self::FsOpenReader),
-            | "fs_create_writer" => Some(Self::FsCreateWriter),
-            | "fs_append_writer" => Some(Self::FsAppendWriter),
-            | "write_str" => Some(Self::WriteStr),
-            | "write_int" => Some(Self::WriteInt),
-            | "write_line" => Some(Self::WriteLine),
-            | "read_line" => Some(Self::ReadLine),
-            | "read_line_as_int" => Some(Self::ReadLineAsInt),
-            | "read_till_eof" => Some(Self::ReadTillEof),
-            | "arg_list" => Some(Self::ArgList),
-            | "random_int" => Some(Self::RandomInt),
-            | "exit" => Some(Self::Exit),
-            | _ => None,
-        }
+        Self::iter().find(|role| {
+            let source_name: &'static str = BuiltinValueRoleDiscriminants::from(*role).into();
+            source_name == name
+        })
     }
 
     pub fn source_name(self) -> String {
@@ -633,51 +574,10 @@ impl BuiltinValueRole {
             | Self::Float(float, operation) => {
                 format!("{}_{}", float.source_name(), operation.source_name())
             }
-            | role => role.non_numeric_source_name().to_owned(),
-        }
-    }
-
-    fn non_numeric_source_name(self) -> &'static str {
-        match self {
-            | Self::Integer(_, _) | Self::Float(_, _) => unreachable!(),
-            | Self::StrScalarLength => "str_scalar_length",
-            | Self::StrByteLength => "str_byte_length",
-            | Self::StrAppend => "str_append",
-            | Self::StrSplitOnce => "str_split_once",
-            | Self::StrSplitAt => "str_split_at",
-            | Self::StrEq => "str_eq",
-            | Self::StrGet => "str_get",
-            | Self::CharToStr => "char_to_str",
-            | Self::CharCodepoint => "char_codepoint",
-            | Self::CharFromCodepoint => "char_from_codepoint",
-            | Self::StrParseInt => "str_parse_int",
-            | Self::BytesEmpty => "bytes_empty",
-            | Self::BytesLength => "bytes_length",
-            | Self::BytesAppend => "bytes_append",
-            | Self::BytesFromStr => "bytes_from_str",
-            | Self::BytesToStr => "bytes_to_str",
-            | Self::Stdin => "stdin",
-            | Self::Stdout => "stdout",
-            | Self::Stderr => "stderr",
-            | Self::IoRead => "io_read",
-            | Self::IoReadLine => "io_read_line",
-            | Self::IoReadAll => "io_read_all",
-            | Self::IoWriteAll => "io_write_all",
-            | Self::IoFlush => "io_flush",
-            | Self::IoCloseReader => "io_close_reader",
-            | Self::IoCloseWriter => "io_close_writer",
-            | Self::FsOpenReader => "fs_open_reader",
-            | Self::FsCreateWriter => "fs_create_writer",
-            | Self::FsAppendWriter => "fs_append_writer",
-            | Self::WriteStr => "write_str",
-            | Self::WriteInt => "write_int",
-            | Self::WriteLine => "write_line",
-            | Self::ReadLine => "read_line",
-            | Self::ReadLineAsInt => "read_line_as_int",
-            | Self::ReadTillEof => "read_till_eof",
-            | Self::ArgList => "arg_list",
-            | Self::RandomInt => "random_int",
-            | Self::Exit => "exit",
+            | role => {
+                let source_name: &'static str = BuiltinValueRoleDiscriminants::from(role).into();
+                source_name.to_owned()
+            }
         }
     }
 
@@ -762,6 +662,15 @@ pub enum BuiltinRole {
 }
 
 impl BuiltinRole {
+    /// Every source-spellable Builtin package role, in completion order.
+    pub fn all() -> impl Iterator<Item = Self> {
+        BuiltinTypeRole::VARIANTS
+            .iter()
+            .copied()
+            .map(Self::Type)
+            .chain(BuiltinValueRole::all().map(Self::Value))
+    }
+
     pub fn from_source_name(name: &str) -> Option<Self> {
         BuiltinTypeRole::from_source_name(name)
             .map(Self::Type)
@@ -785,16 +694,37 @@ impl std::fmt::Display for BuiltinRole {
 /* ---------------------------------- FFI ----------------------------------- */
 
 /// Calling convention used by one foreign import.
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    strum::EnumString,
+    strum::IntoStaticStr,
+    strum::VariantArray,
+)]
+#[strum(serialize_all = "lowercase")]
 pub enum ForeignAbi {
     C,
 }
 
+impl ForeignAbi {
+    pub fn from_source_name(name: &str) -> Option<Self> {
+        name.parse().ok()
+    }
+
+    pub fn source_name(self) -> &'static str {
+        self.into()
+    }
+}
+
 impl std::fmt::Display for ForeignAbi {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            | Self::C => f.write_str("c"),
-        }
+        f.write_str(self.source_name())
     }
 }
 
@@ -900,8 +830,9 @@ pub enum Meta {
 /// arguments. Implementors choose a callee name and validate its arguments
 /// without adding concrete annotation variants to [`Meta`].
 pub trait SpecializeMeta: Sized {
-    const NAME: &'static str;
     type Error;
+
+    fn name() -> &'static str;
 
     fn from_arguments(arguments: &[Meta]) -> Result<Self, Self::Error>;
 }
@@ -966,7 +897,7 @@ impl Meta {
     where
         S: SpecializeMeta,
     {
-        if self.is(S::NAME) { S::from_arguments(self.arguments()).map(Some) } else { Ok(None) }
+        if self.is(S::name()) { S::from_arguments(self.arguments()).map(Some) } else { Ok(None) }
     }
 }
 

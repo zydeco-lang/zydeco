@@ -31,28 +31,73 @@ impl Default for IndentWidth {
 }
 
 /// Whether parsed line-breaking choices should influence pretty printing.
-#[derive(Copy, Clone, Debug, Default, Eq, Hash, PartialEq)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Default,
+    Eq,
+    Hash,
+    PartialEq,
+    strum::EnumString,
+    strum::IntoStaticStr,
+    strum::VariantArray,
+)]
+#[strum(serialize_all = "snake_case")]
 pub enum LayoutIntentions {
-    /// Let document width determine every optional break.
-    Ignore,
-    /// Preserve only blank lines; document width decides every single break.
-    BlankLinesOnly,
     /// Preserve multiline layout at parsed entity boundaries when possible.
     #[default]
     Preserve,
+    /// Preserve only blank lines; document width decides every single break.
+    #[strum(serialize = "blank_lines")]
+    BlankLinesOnly,
+    /// Let document width determine every optional break.
+    Ignore,
+}
+
+impl LayoutIntentions {
+    pub fn source_name(self) -> &'static str {
+        self.into()
+    }
+
+    pub fn from_source_name(name: &str) -> Option<Self> {
+        name.parse().ok()
+    }
 }
 
 /// How singleton grouping parentheses should be treated.
-#[derive(Copy, Clone, Debug, Default, Eq, Hash, PartialEq)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Default,
+    Eq,
+    Hash,
+    PartialEq,
+    strum::EnumString,
+    strum::IntoStaticStr,
+    strum::VariantArray,
+)]
+#[strum(serialize_all = "lowercase")]
 pub enum Parentheses {
-    /// Retain every parsed singleton grouping node.
-    Preserve,
     /// Remove a grouping node exactly when the surrounding grammar position
     /// accepts its child without the group. When line-layout intentions are
     /// preserved, a multiline group remains as an indentation boundary unless
     /// the enclosed layout family already owns that grouping choice.
     #[default]
     Minimal,
+    /// Retain every parsed singleton grouping node.
+    Preserve,
+}
+
+impl Parentheses {
+    pub fn source_name(self) -> &'static str {
+        self.into()
+    }
+
+    pub fn from_source_name(name: &str) -> Option<Self> {
+        name.parse().ok()
+    }
 }
 
 /// Independent policy choices used by the textual pretty printer.

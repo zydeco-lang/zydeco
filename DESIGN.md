@@ -372,6 +372,14 @@ The textual arena gives every nested metadata value its own ID and span. Source 
 to the invalid import target, number, or payload rather than the complete annotation. Before desugaring continues,
 the metadata tree is converted to the span-free structural representation shared by the later compiler phases.
 
+Compiler-recognized annotations are enumerated once by `MetadataKind`. `MetadataCatalog` projects each kind into a
+typed argument tree whose identifier choices come directly from semantic enums such as `IntrinsicRole`,
+`BuiltinRole`, and `LayoutIntentions`. Cajun traverses that tree to produce incomplete-source completions; it owns
+only cursor recovery and LSP conversion, so adding an annotation or closed option domain does not require a second
+editor definition. Fieldless domains derive their ordered variant slice and source spelling with `strum`; domains
+with payload variants compose the derived unit-variant iterator with the payload type's derived domain. Unrecognized
+metadata remains structurally valid and receives no compiler-defined suggestions.
+
 An implementation source `foo.zy` may have an adjacent companion `foo.zyi`. The companion contains one ordinary
 type term and must itself synthesize a type. Source assembly treats the pair as the annotated term
 `(contents-of-foo.zy : contents-of-foo.zyi)`. Companion files participate in the same dependency graph,

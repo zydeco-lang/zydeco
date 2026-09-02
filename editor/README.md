@@ -7,6 +7,10 @@ Renaming a resolved symbol rewrites its definition and every resolved use across
 preserving the name's lexical class and refusing words reserved by the grammar.
 Hovering over a resolved name shows its inferred kind or type, with source links for referenced type names.
 Cajun also provides semantic tokens whose name classes are refined by Zydeco's resolver and CBPV type checker.
+Inside `@[...]` and `@(...)`, Cajun completes compiler-recognized metadata names, nested options, and closed
+identifier domains such as intrinsic roles and formatting policies. These suggestions come from the surface
+language's metadata catalog, which is also used by the metadata decoders; Cajun does not maintain an editor-only
+list of annotations or option spellings. Completion remains available while the annotation is incomplete.
 
 Editor integrations live in:
 

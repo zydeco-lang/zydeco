@@ -1,6 +1,7 @@
 use crate::source::{SourceGraph, SourceId, SourceKind, TextualProgramError};
 use std::collections::HashMap;
 use std::sync::Arc;
+use zydeco_surface::metadata::MetadataKind;
 use zydeco_surface::textual::syntax as t;
 use zydeco_utils::arena::FrozenArena;
 use zydeco_utils::span::{BytePos, FileSource, SourceMap, Span};
@@ -254,12 +255,12 @@ impl<'graph> TextualProgramBuilder<'graph> {
         let file = &self.graph.sources[&source];
         let syntax = file.arena.terms[&term].clone();
         if let t::Term::Meta(t::MetaTerm(meta, _)) = &syntax
-            && file.arena.metas[meta].is("import")
+            && file.arena.metas[meta].is(MetadataKind::Import.name())
         {
             return self.import(source, term);
         }
         if let t::Term::Meta(t::MetaTerm(meta, _)) = &syntax
-            && file.arena.metas[meta].is("literal")
+            && file.arena.metas[meta].is(MetadataKind::Literal.name())
         {
             return self.literal(source, term);
         }

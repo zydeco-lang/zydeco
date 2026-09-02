@@ -1,7 +1,7 @@
 use super::syntax::*;
 use crate::metadata::{
     BuiltinMeta, BuiltinMetaError, DocMeta, IntrinsicMeta, IntrinsicMetaError, LiteralMeta,
-    LiteralMetaError,
+    LiteralMetaError, MetadataKind, MetadataValidationError,
 };
 use std::{
     collections::HashSet,
@@ -436,38 +436,51 @@ impl ImportSite {
         term: TermId, meta: MetaId, payload: TermId, arena: &TextArena, spans: &SpanArena,
     ) -> Option<Result<Self, ImportDirectiveError>> {
         let metadata = &arena.metas[&meta];
-        metadata.is("import").then(|| {
+        metadata.is(MetadataKind::Import.name()).then(|| {
             let annotation_span = spans[&EntityId::Term(term)];
             let meta_span = spans[&EntityId::Meta(meta)];
-            let target = match metadata.arguments() {
-                | [argument] if matches!(&arena.metas[argument], MetaNode::String(path) if path.is_empty()) => {
-                    let span = spans[&EntityId::Meta(*argument)];
-                    return Err(ImportDirectiveError::EmptyPath { term, span });
-                }
-                | [argument] if matches!(&arena.metas[argument], MetaNode::String(_)) => {
-                    let MetaNode::String(path) = &arena.metas[argument] else { unreachable!() };
-                    ImportTarget::Path(PathBuf::from(path))
-                }
-                | [argument] if matches!(&arena.metas[argument], MetaNode::Integer(_)) => {
-                    let MetaNode::Integer(number) = &arena.metas[argument] else { unreachable!() };
-                    ImportTarget::Input(u64::try_from(*number)
-                        .ok()
-                        .and_then(SourceNumber::new)
-                        .ok_or_else(|| ImportDirectiveError::NonPositiveInput {
-                            term,
-                            span: spans[&EntityId::Meta(*argument)],
-                        })?)
-                }
-                | [argument] => {
-                    let span = spans[&EntityId::Meta(*argument)];
-                    return Err(ImportDirectiveError::UnsupportedTarget { term, span });
-                }
-                | arguments => {
-                    return Err(ImportDirectiveError::TargetArity {
-                        term,
-                        span: meta_span,
-                        found: arguments.len(),
-                    });
+            let semantic = arena.semantic_meta(meta);
+            if let Err(error) =
+                MetadataKind::Import.definition().validate_arguments(semantic.arguments())
+            {
+                return Err(match error {
+                    | MetadataValidationError::Arity { found, .. } => {
+                        ImportDirectiveError::TargetArity { term, span: meta_span, found }
+                    }
+                    | MetadataValidationError::ExpectedSource { .. } => {
+                        let [argument] = metadata.arguments() else {
+                            unreachable!("source validation reports arity separately")
+                        };
+                        let span = spans[&EntityId::Meta(*argument)];
+                        match &arena.metas[argument] {
+                            | MetaNode::String(path) if path.is_empty() => {
+                                ImportDirectiveError::EmptyPath { term, span }
+                            }
+                            | MetaNode::Integer(_) => {
+                                ImportDirectiveError::NonPositiveInput { term, span }
+                            }
+                            | MetaNode::Ident(_) | MetaNode::String(_) | MetaNode::Apply { .. } => {
+                                ImportDirectiveError::UnsupportedTarget { term, span }
+                            }
+                        }
+                    }
+                    | _ => unreachable!("import has one source argument"),
+                });
+            }
+            let [argument] = metadata.arguments() else {
+                unreachable!("the import metadata contract validates one source")
+            };
+            let target = match &arena.metas[argument] {
+                | MetaNode::String(path) => ImportTarget::Path(PathBuf::from(path)),
+                | MetaNode::Integer(number) => ImportTarget::Input(
+                    SourceNumber::new(
+                        u64::try_from(*number)
+                            .expect("the import metadata contract validates a positive input"),
+                    )
+                    .expect("the import metadata contract validates a nonzero input"),
+                ),
+                | MetaNode::Ident(_) | MetaNode::Apply { .. } => {
+                    unreachable!("the import metadata contract validates a source")
                 }
             };
             if !matches!(arena.terms[&payload], Term::Hole(Hole)) {

@@ -1,4 +1,5 @@
 mod analysis;
+mod completion;
 mod document_links;
 mod format;
 mod hover;
@@ -8,6 +9,7 @@ mod semantic;
 mod type_links;
 
 use analysis::{ProjectFailure, ProjectState};
+use completion::MetadataCompleter;
 use document_links::ImportDocumentLinks;
 use format::{DocumentFormatter, FormattingOutcome};
 use hover::HoverLineWidth;
@@ -28,11 +30,12 @@ use tower_lsp::{
     Client, LanguageServer,
     jsonrpc::Result,
     lsp_types::{
-        DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-        DidSaveTextDocumentParams, DocumentFormattingParams, DocumentLink, DocumentLinkOptions,
-        DocumentLinkParams, DocumentSymbolParams, DocumentSymbolResponse, GotoDefinitionParams,
-        GotoDefinitionResponse, Hover, HoverParams, HoverProviderCapability, InitializeParams,
-        InitializeResult, InitializedParams, Location, MessageType, OneOf, PositionEncodingKind,
+        CompletionOptions, CompletionParams, CompletionResponse, DidChangeTextDocumentParams,
+        DidCloseTextDocumentParams, DidOpenTextDocumentParams, DidSaveTextDocumentParams,
+        DocumentFormattingParams, DocumentLink, DocumentLinkOptions, DocumentLinkParams,
+        DocumentSymbolParams, DocumentSymbolResponse, GotoDefinitionParams, GotoDefinitionResponse,
+        Hover, HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
+        InitializedParams, Location, MessageType, OneOf, PositionEncodingKind,
         PrepareRenameResponse, ReferenceParams, RenameOptions, RenameParams, SemanticTokens,
         SemanticTokensFullOptions, SemanticTokensOptions, SemanticTokensParams,
         SemanticTokensResult, ServerCapabilities, ServerInfo, TextDocumentPositionParams,
@@ -145,6 +148,7 @@ pub struct Cajun {
     projects: RwLock<HashMap<PathBuf, CachedProject>>,
     work_done_progress: AtomicBool,
     semantic_tokens_refresh: AtomicBool,
+    completion_snippets: AtomicBool,
     hover_line_width: AtomicUsize,
     next_progress_sequence: AtomicU64,
 }
@@ -157,6 +161,7 @@ impl Cajun {
             projects: RwLock::new(HashMap::new()),
             work_done_progress: AtomicBool::new(false),
             semantic_tokens_refresh: AtomicBool::new(false),
+            completion_snippets: AtomicBool::new(false),
             hover_line_width: AtomicUsize::new(HoverLineWidth::DEFAULT.columns()),
             next_progress_sequence: AtomicU64::new(1),
         }
@@ -368,8 +373,17 @@ impl LanguageServer for Cajun {
             .and_then(|workspace| workspace.semantic_tokens.as_ref())
             .and_then(|semantic_tokens| semantic_tokens.refresh_support)
             .unwrap_or(false);
+        let completion_snippets = params
+            .capabilities
+            .text_document
+            .as_ref()
+            .and_then(|document| document.completion.as_ref())
+            .and_then(|completion| completion.completion_item.as_ref())
+            .and_then(|item| item.snippet_support)
+            .unwrap_or(false);
         self.work_done_progress.store(work_done_progress, Ordering::Relaxed);
         self.semantic_tokens_refresh.store(semantic_tokens_refresh, Ordering::Relaxed);
+        self.completion_snippets.store(completion_snippets, Ordering::Relaxed);
         self.hover_line_width.store(hover_line_width.columns(), Ordering::Relaxed);
         Ok(InitializeResult {
             server_info: Some(ServerInfo {
@@ -398,6 +412,11 @@ impl LanguageServer for Cajun {
                     work_done_progress_options: WorkDoneProgressOptions::default(),
                 })),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
+                completion_provider: Some(CompletionOptions {
+                    resolve_provider: Some(false),
+                    trigger_characters: Some(vec!["[".to_owned(), "(".to_owned(), ",".to_owned()]),
+                    ..CompletionOptions::default()
+                }),
                 document_symbol_provider: Some(OneOf::Left(true)),
                 document_formatting_provider: Some(OneOf::Left(true)),
                 semantic_tokens_provider: Some(
@@ -570,6 +589,22 @@ impl LanguageServer for Cajun {
         Ok(projects.get(&path).and_then(|cached| {
             cached.project.hover(&session.compiler, &path, target.position, line_width)
         }))
+    }
+
+    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        let target = params.text_document_position;
+        if !ZydecoDocument::accepts(&target.text_document.uri) {
+            return Ok(None);
+        }
+        let path = match Self::path(&target.text_document.uri) {
+            | Ok(path) => path,
+            | Err(_) => return Ok(None),
+        };
+        let Some(source) = self.document_source(&path).await else {
+            return Ok(None);
+        };
+        let snippets = self.completion_snippets.load(Ordering::Relaxed);
+        Ok(MetadataCompleter::new(snippets).complete(&source, target.position))
     }
 
     async fn document_symbol(
