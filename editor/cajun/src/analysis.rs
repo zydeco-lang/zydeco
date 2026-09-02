@@ -543,9 +543,7 @@ impl ProjectState {
     fn type_definition_link(&self, definition: DefId) -> Option<TypeDefinitionLink> {
         let name = self.scoped().defs.get(&definition)?.0.clone();
         let location = self.definition_location(definition)?;
-        let mut target = location.uri;
-        target.set_fragment(Some(&format!("L{}", location.range.start.line + 1)));
-        Some(TypeDefinitionLink { name, target })
+        Some(TypeDefinitionLink::new(name, location.uri, location.range.start))
     }
 
     fn sealed_type_equation(
@@ -697,7 +695,11 @@ mod tests {
 
     fn definition_url(path: &Path, position: Position) -> Url {
         let mut definition = Url::from_file_path(path).unwrap();
-        definition.set_fragment(Some(&format!("L{}", position.line + 1)));
+        definition.set_fragment(Some(&format!(
+            "L{},{}",
+            position.line + 1,
+            position.character + 1
+        )));
         definition
     }
 
@@ -962,7 +964,7 @@ mod tests {
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
-        let definition = definition_url(&path, source_position(&source, "forall (A : VType)"));
+        let definition = definition_url(&path, source_position(&source, "A : VType) . A -> OS"));
 
         assert_eq!(
             contents.value,
@@ -979,7 +981,7 @@ mod tests {
         let source = std::fs::read_to_string(&path).unwrap();
         let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
         let option = source_position(&source, "Option (A : VType)");
-        let parameter = definition_url(&path, option);
+        let parameter = definition_url(&path, source_position(&source, "A : VType) ="));
 
         let short = project.hover(&session, &path, option, HoverLineWidth::default()).unwrap();
         let HoverContents::Markup(short) = short.contents else {
@@ -1147,14 +1149,14 @@ mod tests {
             .canonicalize()
             .unwrap();
         let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
+        let source = std::fs::read_to_string(&path).unwrap();
         let hover = project
             .hover(&session, &path, Position::new(13, 19), HoverLineWidth::default())
             .unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
-        let mut definition = Url::from_file_path(&path).unwrap();
-        definition.set_fragment(Some("L2"));
+        let definition = definition_url(&path, source_position(&source, "Nat : VType"));
 
         assert_eq!(
             contents.value,
@@ -1198,7 +1200,8 @@ mod tests {
             .join("../../lib/std/builtin.zy")
             .canonicalize()
             .unwrap();
-        let definition = definition_url(&builtin, Position::new(13, 0));
+        let builtin_source = std::fs::read_to_string(&builtin).unwrap();
+        let definition = definition_url(&builtin, source_position(&builtin_source, "SystemOS :"));
 
         assert_eq!(
             contents.value,
@@ -1252,7 +1255,9 @@ mod tests {
             .join("../../lib/std/builtin/representations.zy")
             .canonicalize()
             .unwrap();
-        let definition = definition_url(&representations, Position::new(6, 0));
+        let representations_source = std::fs::read_to_string(&representations).unwrap();
+        let definition =
+            definition_url(&representations, source_position(&representations_source, "Int64 as"));
 
         assert_eq!(
             contents.value,

@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
-use tower_lsp::lsp_types::Url;
+use tower_lsp::lsp_types::{Position, Url};
 
 #[derive(Default, Deserialize)]
 struct CajunInitializationOptions {
@@ -51,8 +51,22 @@ impl Default for HoverLineWidth {
 
 #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub(crate) struct TypeDefinitionLink {
-    pub(crate) name: String,
-    pub(crate) target: Url,
+    name: String,
+    target: Url,
+}
+
+impl TypeDefinitionLink {
+    /// A link whose target places the editor cursor at `position`.
+    ///
+    /// The fragment carries both coordinates: editors read `#L{line},{column}`
+    /// as a 1-based cursor placement and fall back to the first column when the
+    /// column part is missing, so a line-only fragment would land at the start
+    /// of the line instead of on the definition's name.
+    pub(crate) fn new(name: String, target: Url, position: Position) -> Self {
+        let mut target = target;
+        target.set_fragment(Some(&format!("L{},{}", position.line + 1, position.character + 1)));
+        Self { name, target }
+    }
 }
 
 #[derive(Default)]
@@ -265,20 +279,20 @@ mod tests {
         HoverLineWidth, HoverSignature, SealedTypeEquationPreview, TypeDefinitionLink,
         TypeDefinitionPreview,
     };
-    use tower_lsp::lsp_types::Url;
+    use tower_lsp::lsp_types::{Position, Url};
 
     #[test]
     fn referenced_types_follow_the_signature_once() {
-        let target = Url::parse("file:///types.zy#L1").unwrap();
-        let signature = HoverSignature::with_definitions(
-            "id",
-            "A -> A",
-            [TypeDefinitionLink { name: "A".to_owned(), target: target.clone() }],
+        let link = TypeDefinitionLink::new(
+            "A".to_owned(),
+            Url::parse("file:///types.zy").unwrap(),
+            Position::new(0, 0),
         );
+        let signature = HoverSignature::with_definitions("id", "A -> A", [link]);
 
         assert_eq!(
             signature.markdown(),
-            format!("```zydeco\nid : A -> A\n```\n\nTypes:\n\n- [`A` ↗](<{target}>)")
+            "```zydeco\nid : A -> A\n```\n\nTypes:\n\n- [`A` ↗](<file:///types.zy#L1,1>)"
         );
     }
 
@@ -288,14 +302,16 @@ mod tests {
             "value",
             "A",
             [
-                TypeDefinitionLink {
-                    name: "A".to_owned(),
-                    target: Url::parse("file:///types.zy#L1").unwrap(),
-                },
-                TypeDefinitionLink {
-                    name: "A".to_owned(),
-                    target: Url::parse("file:///types.zy#L2").unwrap(),
-                },
+                TypeDefinitionLink::new(
+                    "A".to_owned(),
+                    Url::parse("file:///types.zy").unwrap(),
+                    Position::new(0, 0),
+                ),
+                TypeDefinitionLink::new(
+                    "A".to_owned(),
+                    Url::parse("file:///types.zy").unwrap(),
+                    Position::new(1, 0),
+                ),
             ],
         );
 
