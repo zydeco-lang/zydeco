@@ -165,6 +165,21 @@ cargo doc --package zydeco-statics --no-deps
 
 The HTML output is written to `target/doc/`.
 
+## Cut a Release
+
+Releases are published from version tags. Bump `version` in the workspace `Cargo.toml`
+so the tag and the crate version agree, commit, then push a tag:
+
+```sh
+git tag v0.3.0
+git push origin v0.3.0
+```
+
+The `Release` workflow generates the notes for the tagged range with git-cliff
+(configured in `cliff.toml`) and creates the GitHub release. Notes group commits by
+the prefixes of the commit message convention, including the legacy `fix`, `chore`,
+`revert`, and `doc` prefixes, so keep prefixes accurate when committing.
+
 ## Pre-commit hooks
 
 Optional hooks run `cargo fmt -- --check` and `cargo check-all` before each commit.

@@ -1,0 +1,37 @@
+# git-cliff configuration: generate release notes grouped by commit prefix.
+# Prefixes follow the repository commit convention in AGENTS.md
+# (feat, incr, docs, vibe, sisy, test, repo), plus legacy prefixes
+# still present in history (fix, chore, revert, doc).
+# Docs: https://git-cliff.org/docs/configuration
+
+[changelog]
+header = ""
+body = """
+{% for group, commits in commits | group_by(attribute="group") %}\
+### {{ group }}
+
+{% for commit in commits %}\
+- {{ commit.message | upper_first }}
+{% endfor %}\
+{% endfor %}\
+"""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+commit_parsers = [
+  { message = "^feat", group = "Features" },
+  { message = "^incr", group = "Improvements" },
+  { message = "^fix", group = "Bug fixes" },
+  { message = "^doc", group = "Documentation" },
+  { message = "^vibe", group = "Experiments" },
+  { message = "^sisy", group = "Internal changes" },
+  { message = "^test", group = "Tests" },
+  { message = "^repo", group = "Repository maintenance" },
+  { message = "^chore", group = "Repository maintenance" },
+  { message = "^revert", group = "Reverts" },
+]
+filter_commits = true
+tag_pattern = "v[0-9].*"
