@@ -778,7 +778,7 @@ fn stdio_hover_uses_the_initialized_line_width() {
             "rootUri": Url::from_file_path(path.parent().unwrap()).unwrap(),
             "capabilities": {},
             "initializationOptions": {
-                "hover": { "lineWidth": 30 }
+                "hover": { "lineWidth": 32 }
             }
         }),
     );
@@ -819,7 +819,7 @@ fn stdio_hover_uses_the_initialized_line_width() {
         fenced_sources
             .iter()
             .flat_map(|source| source.lines())
-            .all(|line| line.chars().count() <= 30),
+            .all(|line| line.chars().count() <= 32),
         "hover should honor the initialized line width:\n{markdown}"
     );
 

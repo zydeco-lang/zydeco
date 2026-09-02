@@ -64,8 +64,17 @@ fn tight_type<'a>(f: &'a Formatter<'a>, ty: &TypeId) -> RcDoc<'a> {
     if is_type_tight(f, ty) { ty.pretty(f) } else { paren_type(f, ty) }
 }
 
+/// Render a parenthesized type as a delimited region: the opener hugs the
+/// current line, the contents nest one level inside, and the closer returns
+/// to the region's own indentation when the region spans lines.
 fn paren_type<'a>(f: &'a Formatter<'a>, ty: &TypeId) -> RcDoc<'a> {
-    RcDoc::concat([RcDoc::text("("), ty.pretty(f), RcDoc::text(")")]).group()
+    RcDoc::concat([
+        RcDoc::text("("),
+        RcDoc::concat([RcDoc::line_(), ty.pretty(f)]).nest(f.indent).group(),
+        RcDoc::line_(),
+        RcDoc::text(")"),
+    ])
+    .group()
 }
 
 /// Render one flattened chain of an infix type operator.
@@ -1081,6 +1090,32 @@ mod tests {
         let product = fixture.product(vec![int, string, int]);
 
         assert_eq!(fixture.render(product, 15), "Int64\n* String\n* Int64");
+    }
+
+    #[test]
+    fn overflowing_regions_nest_contents_and_return_their_closer() {
+        let mut fixture = FormatterFixture::default();
+        let int = fixture.primitive(PrimitiveType::Integer(IntegerType::Int64));
+        let string = fixture.primitive(PrimitiveType::String);
+        let codomain = fixture.arrow(string, int);
+        let chain = fixture.arrow(int, codomain);
+        let product = fixture.product(vec![chain, int]);
+
+        assert_eq!(
+            fixture.render(product, 21),
+            "(\n    Int64\n    -> String\n    -> Int64\n  )\n* Int64"
+        );
+    }
+
+    #[test]
+    fn fitting_regions_stay_intact_when_their_chain_breaks() {
+        let mut fixture = FormatterFixture::default();
+        let int = fixture.primitive(PrimitiveType::Integer(IntegerType::Int64));
+        let string = fixture.primitive(PrimitiveType::String);
+        let product = fixture.product(vec![int, string]);
+        let arrow = fixture.arrow(product, int);
+
+        assert_eq!(fixture.render(arrow, 16), "(Int64 * String)\n-> Int64");
     }
 
     #[test]

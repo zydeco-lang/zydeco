@@ -1037,7 +1037,7 @@ mod tests {
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
         let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
-        let line_width = HoverLineWidth::new(30).unwrap();
+        let line_width = HoverLineWidth::new(32).unwrap();
         let hover = project
             .hover(&session, &path, source_position(&source, "zip (A : VType)"), line_width)
             .unwrap();
