@@ -1,6 +1,6 @@
 use super::super::{
     lexer::{LexicalToken, LexicalTokenKind, LexicalTokens},
-    syntax::EntityId,
+    syntax::{EntityId, MetaId},
 };
 use std::{cmp::Reverse, collections::BTreeMap, ops::Range, sync::Arc};
 
@@ -194,6 +194,7 @@ impl SpannedEntity {
             | EntityId::Pat(_) => 1,
             | EntityId::CoPat(_) => 2,
             | EntityId::Term(_) => 3,
+            | EntityId::Meta(_) => 4,
         }
     }
 
@@ -209,6 +210,7 @@ impl SpannedEntity {
 pub(crate) struct CommentCapture {
     pub(super) leading: Vec<(EntityId, LeadingComment)>,
     pub(super) before_arms: Vec<(EntityId, LeadingComment)>,
+    pub(super) before_metadata: Vec<(EntityId, LeadingComment)>,
     pub(super) trailing: Vec<(EntityId, TrailingComment)>,
     pub(super) layout_exclusions: Vec<Range<usize>>,
 }
@@ -272,7 +274,13 @@ impl CommentCapture {
         let layout_exclusions =
             comment_ranges.chain(leading_ranges).chain(trailing_ranges).collect();
 
-        Self { leading, before_arms: Vec::new(), trailing, layout_exclusions }
+        Self {
+            leading,
+            before_arms: Vec::new(),
+            before_metadata: Vec::new(),
+            trailing,
+            layout_exclusions,
+        }
     }
 
     /// Move comments written before an arm marker from the arm's first entity
@@ -290,6 +298,23 @@ impl CommentCapture {
         self
     }
 
+    /// Keep comments written before an annotation's `@` outside its brackets.
+    /// Comments after the prefix remain leading trivia of the metadata value.
+    pub(crate) fn with_metadata_prefixes(
+        mut self, prefixes: impl IntoIterator<Item = (MetaId, usize)>,
+    ) -> Self {
+        let prefixes = prefixes
+            .into_iter()
+            .map(|(metadata, start)| (EntityId::Meta(metadata), start))
+            .collect::<BTreeMap<_, _>>();
+        let (before_metadata, leading) = self.leading.into_iter().partition(|(entity, comment)| {
+            prefixes.get(entity).is_some_and(|prefix| comment.comment().range().start < *prefix)
+        });
+        self.leading = leading;
+        self.before_metadata = before_metadata;
+        self
+    }
+
     /// Byte ranges whose vertical whitespace is already represented by the
     /// captured comment separations.
     pub(crate) fn layout_exclusions(&self) -> &[Range<usize>] {
@@ -302,6 +327,7 @@ impl CommentCapture {
         self.leading
             .iter()
             .chain(self.before_arms.iter())
+            .chain(self.before_metadata.iter())
             .filter(|(anchor, _)| *anchor == entity)
             .map(|(_, comment)| comment.comment().range().start)
             .min()

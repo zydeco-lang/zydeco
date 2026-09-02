@@ -11,6 +11,7 @@ pub enum TextualScope {}
 impl Allocates<DefId> for TextualScope {}
 impl Allocates<PatId> for TextualScope {}
 impl Allocates<CoPatId> for TextualScope {}
+impl Allocates<MetaId> for TextualScope {}
 impl Allocates<TermId> for TextualScope {}
 
 impl ArenaSchema<DefId> for TextualScope {
@@ -22,6 +23,9 @@ impl ArenaSchema<PatId> for TextualScope {
 impl ArenaSchema<CoPatId> for TextualScope {
     type Item = CoPattern;
 }
+impl ArenaSchema<MetaId> for TextualScope {
+    type Item = MetaNode;
+}
 impl ArenaSchema<TermId> for TextualScope {
     type Item = Term;
 }
@@ -31,11 +35,28 @@ pub struct TextArena {
     pub defs: ArenaSparse<TextualScope, DefId>,
     pub pats: ArenaSparse<TextualScope, PatId>,
     pub copats: ArenaSparse<TextualScope, CoPatId>,
+    pub metas: ArenaSparse<TextualScope, MetaId>,
     pub terms: ArenaSparse<TextualScope, TermId>,
     /// Author-selected layout that does not change canonical syntax.
     pub intentions: SurfaceIntentions,
     /// Source content retained without adding syntax variants.
     pub trivia: SurfaceTrivia,
+}
+
+impl TextArena {
+    /// Lower one parsed metadata tree to the span-free representation shared
+    /// by the later compiler phases and metadata decoders.
+    pub fn semantic_meta(&self, meta: MetaId) -> zydeco_syntax::Meta {
+        match &self.metas[&meta] {
+            | MetaNode::Ident(name) => zydeco_syntax::Meta::ident(name),
+            | MetaNode::String(value) => zydeco_syntax::Meta::string(value),
+            | MetaNode::Integer(value) => zydeco_syntax::Meta::integer(*value),
+            | MetaNode::Apply { callee, args } => zydeco_syntax::Meta::apply(
+                callee,
+                args.iter().map(|argument| self.semantic_meta(*argument)),
+            ),
+        }
+    }
 }
 
 /// Dense span storage for the entities issued by one textual parser.
@@ -140,18 +161,22 @@ mod impl_span_arena {
             let definition: DefId = allocator.alloc();
             let pattern: PatId = allocator.alloc();
             let copattern: CoPatId = allocator.alloc();
+            let metadata: MetaId = allocator.alloc();
             let term: TermId = allocator.alloc();
-            let expected = [definition.into(), pattern.into(), copattern.into(), term.into()];
+            let expected =
+                [definition.into(), pattern.into(), copattern.into(), metadata.into(), term.into()];
             let mut spans = SpanArena::new();
 
             spans.insert_new(definition, Span::new(0, 1));
             spans.insert_new(pattern, Span::new(1, 2));
             spans.insert_new(copattern, Span::new(2, 3));
-            spans.insert_new(term, Span::new(3, 4));
+            spans.insert_new(metadata, Span::new(3, 4));
+            spans.insert_new(term, Span::new(4, 5));
 
             assert_eq!(size_of::<EntityCategory>(), 1);
             assert_eq!(spans.iter().map(|(entity, _)| entity).collect::<Vec<_>>(), expected);
-            assert_eq!(spans[&EntityId::Term(term)].range(), 3..4);
+            assert_eq!(spans[&EntityId::Meta(metadata)].range(), 3..4);
+            assert_eq!(spans[&EntityId::Term(term)].range(), 4..5);
 
             spans.replace(pattern, Span::new(10, 20));
             assert_eq!(spans[&EntityId::Pat(pattern)].range(), 10..20);

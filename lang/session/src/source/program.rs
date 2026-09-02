@@ -129,6 +129,20 @@ impl<'graph> TextualProgramBuilder<'graph> {
         self.parser.def(self.span(source, definition.into()).make(name))
     }
 
+    fn metadata(&mut self, source: SourceId, metadata: t::MetaId) -> t::MetaId {
+        let syntax = self.graph.sources[&source].arena.metas[&metadata].clone();
+        let syntax = match syntax {
+            | t::MetaNode::Ident(name) => t::MetaNode::Ident(name),
+            | t::MetaNode::String(value) => t::MetaNode::String(value),
+            | t::MetaNode::Integer(value) => t::MetaNode::Integer(value),
+            | t::MetaNode::Apply { callee, args } => t::MetaNode::Apply {
+                callee,
+                args: args.into_iter().map(|argument| self.metadata(source, argument)).collect(),
+            },
+        };
+        self.parser.meta(self.span(source, metadata.into()).make(syntax))
+    }
+
     fn pattern(
         &mut self, source: SourceId, pattern: t::PatId,
     ) -> Result<t::PatId, TextualProgramError> {
@@ -200,6 +214,14 @@ impl<'graph> TextualProgramBuilder<'graph> {
         &mut self, source: SourceId, parameter: t::ExistentialParameter,
     ) -> Result<t::ExistentialParameter, TextualProgramError> {
         let t::ExistentialParameter { annotations, binder } = parameter;
+        let annotations = annotations
+            .into_iter()
+            .map(|annotation| {
+                let info = annotation.info.rebase(self.bases[&source]);
+                let inner = self.metadata(source, annotation.inner);
+                t::Sp { info, inner }
+            })
+            .collect();
         let binder = self.pattern(source, binder)?;
         Ok(t::ExistentialParameter { annotations, binder })
     }
@@ -231,20 +253,20 @@ impl<'graph> TextualProgramBuilder<'graph> {
     ) -> Result<t::TermId, TextualProgramError> {
         let file = &self.graph.sources[&source];
         let syntax = file.arena.terms[&term].clone();
-        if let t::Term::Meta(t::MetaT(meta, _)) = &syntax
-            && meta.is("import")
+        if let t::Term::Meta(t::MetaTerm(meta, _)) = &syntax
+            && file.arena.metas[meta].is("import")
         {
             return self.import(source, term);
         }
-        if let t::Term::Meta(t::MetaT(meta, _)) = &syntax
-            && meta.is("literal")
+        if let t::Term::Meta(t::MetaTerm(meta, _)) = &syntax
+            && file.arena.metas[meta].is("literal")
         {
             return self.literal(source, term);
         }
 
         let syntax = match syntax {
-            | t::Term::Meta(t::MetaT(meta, inner)) => {
-                t::MetaT(meta, self.term(source, inner)?).into()
+            | t::Term::Meta(t::MetaTerm(meta, inner)) => {
+                t::MetaTerm(self.metadata(source, meta), self.term(source, inner)?).into()
             }
             | t::Term::SourceBoundary(t::SourceBoundary(inner)) => {
                 t::SourceBoundary(self.term(source, inner)?).into()

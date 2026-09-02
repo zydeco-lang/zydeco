@@ -50,7 +50,7 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
-    use zydeco_surface::textual::syntax::{Hole, Meta, MetaT, Term};
+    use zydeco_surface::textual::syntax::{Hole, Meta, MetaTerm, Term};
 
     #[test]
     fn source_graph_collects_documented_terms_across_imports() {
@@ -95,7 +95,10 @@ mod tests {
             "Imported provider"
         );
         assert_eq!(import_doc.term_source(), "@[import(\"provider.zy\")] _");
-        assert!(matches!(import_doc.term(), Term::Meta(MetaT(meta, _)) if meta.is("import")));
+        assert!(matches!(
+            import_doc.term(),
+            Term::Meta(MetaTerm(meta, _)) if import_doc.file.arena.metas[meta].is("import")
+        ));
 
         assert_eq!(
             literal_doc.site.directive.comment.as_ref().unwrap().text.as_ref(),

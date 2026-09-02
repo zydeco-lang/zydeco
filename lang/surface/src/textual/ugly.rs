@@ -82,7 +82,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let term = &f.arena.terms[self];
         match term {
-            | Term::Meta(MetaT(meta, payload)) => {
+            | Term::Meta(MetaTerm(meta, payload)) => {
                 if matches!(&f.arena.terms[payload], Term::Hole(_)) {
                     RcDoc::concat([RcDoc::text("@("), meta.pretty(f), RcDoc::text(")")])
                 } else {
@@ -140,9 +140,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
     }
 }
 
-impl<'a> Pretty<'a, Formatter<'a>> for Meta {
-    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
-        RcDoc::text(self.to_string())
+impl<'a> Pretty<'a, Formatter<'a>> for MetaId {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::text(f.arena.semantic_meta(*self).to_string())
     }
 }
 

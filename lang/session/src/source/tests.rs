@@ -812,8 +812,9 @@ fn program_assembly_consumes_import_directives_and_preserves_a_source_boundary()
     assert!(program.arena.terms.iter().all(|(_, term)| {
         !matches!(
             term,
-            zydeco_surface::textual::syntax::Term::Meta(zydeco_syntax::MetaT(meta, _))
-                if meta.is("import")
+            zydeco_surface::textual::syntax::Term::Meta(
+                zydeco_surface::textual::syntax::MetaTerm(meta, _),
+            ) if program.arena.metas[meta].is("import")
         )
     }));
 }
@@ -955,6 +956,41 @@ fn program_assembly_retains_importer_and_provider_spans() {
         span_file(&program.spans, &program.spans[&provider.into()]),
         Some(std::ffi::OsString::from("library.zy"))
     );
+}
+
+#[test]
+fn program_assembly_rebases_every_nested_metadata_span() {
+    use zydeco_surface::textual::syntax::{EntityId, MetaNode, MetaTerm, Term};
+
+    let fixture = SourceFixture::new();
+    let source = r#"@[package(name("root"),nested("value"))] _"#;
+    let root = fixture.write("main.zy", source);
+    let program = SourceGraph::load(root).unwrap().parse().unwrap();
+    let Term::Meta(MetaTerm(metadata, _)) = &program.arena.terms[&program.unit.root] else {
+        panic!("expected metadata to remain in the assembled program")
+    };
+    let MetaNode::Apply { args, .. } = &program.arena.metas[metadata] else {
+        panic!("expected package metadata")
+    };
+    let [name, nested] = args.as_slice() else { panic!("expected two package fields") };
+    let MetaNode::Apply { args, .. } = &program.arena.metas[nested] else {
+        panic!("expected nested metadata")
+    };
+    let [value] = args.as_slice() else { panic!("expected one nested value") };
+
+    [
+        (*metadata, r#"package(name("root"),nested("value"))"#),
+        (*name, r#"name("root")"#),
+        (*nested, r#"nested("value")"#),
+        (*value, r#""value""#),
+    ]
+    .into_iter()
+    .for_each(|(metadata, expected)| {
+        let span = program.spans[&EntityId::Meta(metadata)];
+        let (file, range) = program.spans.source_map().unwrap().range(span).unwrap();
+        assert_eq!(file.path().file_name(), Some(std::ffi::OsStr::new("main.zy")));
+        assert_eq!(&file.source()[range], expected);
+    });
 }
 
 #[test]

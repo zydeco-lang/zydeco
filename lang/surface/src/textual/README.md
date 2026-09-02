@@ -14,13 +14,15 @@ but it does not perform desugaring or name resolution.
 
 ## Data model
 
-- `TextArena` stores parsed definitions, patterns, copatterns, and terms keyed by `DefId`, `PatId`,
-  `CoPatId`, and `TermId`.
+- `TextArena` stores parsed definitions, patterns, copatterns, metadata, and terms keyed by `DefId`, `PatId`,
+  `CoPatId`, `MetaId`, and `TermId`.
 - `EntityId` is a tagged enum over those categories; it is not an unchecked shared raw index.
 - `SourceUnit` identifies the single complete term in one source file.
   It decodes typed metadata directives attached to holes, collects `@[doc]` attachments for arbitrary terms,
   and validates `@[literal]` splices without assigning them a presentation.
-- Parsed `Meta` values remain structural across the syntax arenas.
+- Parsed metadata is an arena-backed tree of `MetaNode` values. Every nested value has a `MetaId`,
+  so it participates in span lookup, source-layout retention, and comment attachment like other textual syntax.
+  The textual-to-bitter boundary lowers the tree to the span-free `Meta` representation used by later phases.
   Concrete interpretations live in `zydeco_surface::metadata`, implement `SpecializeMeta`,
   and are requested explicitly by the phases that consume them.
 - `SpanArena` stores `Span` values for every textual entity so later phases can report precise locations;
@@ -44,8 +46,9 @@ but it does not perform desugaring or name resolution.
 
 ## Spans and lookup helpers
 
-`span` implements `SpanView` for textual IDs and provides helpers on `SpanArena` for cursor/region lookup
-and for ordering entities by precision.
+`span` implements `SpanView` for textual IDs, including each nested `MetaId`, and provides helpers on `SpanArena`
+for cursor/region lookup and for ordering entities by precision. Directive diagnostics can therefore select an
+invalid metadata argument or payload instead of highlighting the whole annotation.
 
 ## Errors and formatting
 
@@ -76,6 +79,10 @@ to any annotation.
 Parenthesized metadata is sugar for the bracket form with a hole payload: `@(meta)` parses as `@[meta] _`.
 The pretty printer renders a metadata annotation in its parenthesized form whenever its payload is a hole,
 so `@[intrinsic(i64)] _` and `@(intrinsic(i64))` are indistinguishable and both format as `@(intrinsic(i64))`.
+Metadata applications use the same compact-or-expanded delimiter layout as term groups. Their layout is decided
+from the metadata itself, so a long following payload cannot expand a short annotation; nested calls, retained
+source rows, and comments between arguments remain independently structured. A comment before an annotation's
+`@` remains outside its brackets, while a comment after the opening bracket remains inside the metadata wrapper.
 
 The pretty printer treats concise puns as canonical syntax rather than author intent.
 Named terms, named patterns, and projection patterns

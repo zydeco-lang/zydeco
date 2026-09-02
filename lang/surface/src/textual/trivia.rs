@@ -19,6 +19,7 @@ use zydeco_utils::arena::{ArenaAccess, ArenaAssoc};
 pub struct SurfaceTrivia {
     leading_comments: ArenaAssoc<EntityId, Vec<LeadingComment>>,
     before_arm_comments: ArenaAssoc<EntityId, Vec<LeadingComment>>,
+    before_metadata_comments: ArenaAssoc<EntityId, Vec<LeadingComment>>,
     trailing_comments: ArenaAssoc<EntityId, Vec<TrailingComment>>,
 }
 
@@ -31,6 +32,11 @@ impl SurfaceTrivia {
     /// Comments printed before an arm whose first syntax entity has this ID.
     pub fn before_arm_comments(&self, entity: EntityId) -> &[LeadingComment] {
         self.before_arm_comments.get(&entity).map(Vec::as_slice).unwrap_or_default()
+    }
+
+    /// Comments printed before an annotation whose metadata has this ID.
+    pub fn before_metadata_comments(&self, entity: EntityId) -> &[LeadingComment] {
+        self.before_metadata_comments.get(&entity).map(Vec::as_slice).unwrap_or_default()
     }
 
     /// Comments printed after a complete root entity.
@@ -60,6 +66,12 @@ impl SurfaceTrivia {
                     .filter_map(|comment| comment.comment().as_text()),
             )
             .chain(
+                self.before_metadata_comments
+                    .iter()
+                    .flat_map(|(_, comments)| comments)
+                    .filter_map(|comment| comment.comment().as_text()),
+            )
+            .chain(
                 self.trailing_comments
                     .iter()
                     .flat_map(|(_, comments)| comments)
@@ -68,12 +80,15 @@ impl SurfaceTrivia {
     }
 
     pub(crate) fn record_comments(&mut self, capture: CommentCapture) {
-        let CommentCapture { leading, before_arms, trailing, .. } = capture;
+        let CommentCapture { leading, before_arms, before_metadata, trailing, .. } = capture;
         leading.into_iter().for_each(|(entity, comment)| {
             self.leading_comments.entry(entity).or_default().push(comment);
         });
         before_arms.into_iter().for_each(|(entity, comment)| {
             self.before_arm_comments.entry(entity).or_default().push(comment);
+        });
+        before_metadata.into_iter().for_each(|(entity, comment)| {
+            self.before_metadata_comments.entry(entity).or_default().push(comment);
         });
         trailing.into_iter().for_each(|(entity, comment)| {
             self.trailing_comments.entry(entity).or_default().push(comment);

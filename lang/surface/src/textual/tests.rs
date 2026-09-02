@@ -8,9 +8,9 @@ use crate::{
             Alias, Ann, Appli, BindingFlavor, Block, BuiltinRole, BuiltinValueRole, CoPatId,
             ContextBind, Ctor, DefId, DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists,
             Force, Hole, IntegerLiteral, IntegerOperation, IntegerType, IntrinsicRole, Label,
-            Literal, ManifestPattern, Meta, MetaT, Named, Pack, Param, ParameterFlavor, Paren,
-            Parser, PatId, Pattern, Pipeline, PipelineDirection, Placement, Prod, Proj,
-            ProjectionPattern, Return, SourceUnit, Term, TermId, ViewPattern,
+            Literal, ManifestPattern, Meta, MetaId, MetaNode, MetaTerm, Named, Pack, Param,
+            ParameterFlavor, Paren, Parser, PatId, Pattern, Pipeline, PipelineDirection, Placement,
+            Prod, Proj, ProjectionPattern, Return, SourceUnit, Term, TermId, ViewPattern,
         },
     },
 };
@@ -25,11 +25,13 @@ fn textual_entities_retain_their_category_tags() {
     let def: DefId = allocator.alloc();
     let pat: PatId = allocator.alloc();
     let copat: CoPatId = allocator.alloc();
+    let meta: MetaId = allocator.alloc();
     let term: TermId = allocator.alloc();
 
     assert!(matches!(EntityId::from(def), EntityId::Def(id) if id == def));
     assert!(matches!(EntityId::from(pat), EntityId::Pat(id) if id == pat));
     assert!(matches!(EntityId::from(copat), EntityId::CoPat(id) if id == copat));
+    assert!(matches!(EntityId::from(meta), EntityId::Meta(id) if id == meta));
     assert!(matches!(EntityId::from(term), EntityId::Term(id) if id == term));
 }
 
@@ -117,12 +119,29 @@ fn monadic_metadata_rejects_arguments() {
     };
 
     assert!(matches!(
-        error,
+        &error,
         crate::bitter::DesugarError::InvalidMonadicMeta {
             source: MonadicMetaError::Arguments { found: 1 },
             ..
         }
     ));
+    assert_eq!(&source[error.span().range()], "monadic(extra)");
+}
+
+#[test]
+fn metadata_payload_errors_highlight_the_payload() {
+    let source = "@[intrinsic(unit)] Unit";
+    let mut parser = Parser::new();
+    let unit = parser::SourceUnitParser::new()
+        .parse(source, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+    let error = match SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit).run() {
+        | Ok(_) => panic!("intrinsic metadata must reject a non-hole payload"),
+        | Err(error) => error,
+    };
+
+    assert!(matches!(&error, crate::bitter::DesugarError::IntrinsicPayloadNotHole(_)));
+    assert_eq!(&source[error.span().range()], "Unit");
 }
 
 #[test]
@@ -228,23 +247,54 @@ fn metadata_preserves_identifiers_strings_integers_and_applications() {
         .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
-    let Term::Meta(MetaT(meta, payload)) = &parser.arena.terms[&term] else {
+    let Term::Meta(MetaTerm(meta, payload)) = &parser.arena.terms[&term] else {
         panic!("expected a metadata term")
     };
-    let Meta::Apply { callee, args } = meta else { panic!("expected applied metadata") };
+    let MetaNode::Apply { callee, args } = &parser.arena.metas[meta] else {
+        panic!("expected applied metadata")
+    };
+    let [name, value, integer, nested] = args.as_slice() else {
+        panic!("expected four metadata arguments")
+    };
+    let MetaNode::Apply { args: nested_args, .. } = &parser.arena.metas[nested] else {
+        panic!("expected a nested metadata application")
+    };
+    let [path] = nested_args.as_slice() else { panic!("expected one nested argument") };
 
     assert_eq!(callee, "debug");
     assert_eq!(
-        args,
-        &[
-            Meta::ident("name"),
-            Meta::string("value"),
-            Meta::integer(1),
-            Meta::apply("nested", [Meta::string("path")]),
-        ]
+        parser.arena.semantic_meta(*meta),
+        Meta::apply(
+            "debug",
+            [
+                Meta::ident("name"),
+                Meta::string("value"),
+                Meta::integer(1),
+                Meta::apply("nested", [Meta::string("path")]),
+            ],
+        ),
     );
     assert!(matches!(parser.arena.terms[payload], Term::Hole(Hole)));
-    assert_eq!(meta.to_string(), r#"debug(name,"value",1,nested("path"))"#);
+    assert_eq!(
+        parser.arena.semantic_meta(*meta).to_string(),
+        r#"debug(name,"value",1,nested("path"))"#,
+    );
+
+    [
+        (*meta, r#"debug(name,"value",1,nested("path"))"#),
+        (*name, "name"),
+        (*value, r#""value""#),
+        (*integer, "1"),
+        (*nested, r#"nested("path")"#),
+        (*path, r#""path""#),
+    ]
+    .into_iter()
+    .for_each(|(metadata, expected)| {
+        let range = parser.spans[&EntityId::Meta(metadata)].range();
+        assert_eq!(&source[range], expected);
+    });
+    let path_cursor = source.find("path").unwrap();
+    assert_eq!(parser.spans.lookup_cursor(path_cursor).first(), Some(&EntityId::Meta(*path)));
 }
 
 #[test]
@@ -255,10 +305,13 @@ fn parenthesized_metadata_defaults_its_payload_to_a_hole() {
         .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
-    let Term::Meta(MetaT(meta, payload)) = &parser.arena.terms[&term] else {
+    let Term::Meta(MetaTerm(meta, payload)) = &parser.arena.terms[&term] else {
         panic!("expected a metadata term")
     };
-    assert_eq!(meta.to_string(), r#"debug(name,"value",1,nested("path"))"#);
+    assert_eq!(
+        parser.arena.semantic_meta(*meta).to_string(),
+        r#"debug(name,"value",1,nested("path"))"#,
+    );
     assert!(matches!(parser.arena.terms[payload], Term::Hole(Hole)));
 
     // The sugar renders in its parenthesized form and reparses.
@@ -534,21 +587,26 @@ fn source_unit_rejects_import_without_one_supported_target() {
     }
 
     let cases = [
-        ("@[import] _", ExpectedImportError::TargetArity(0)),
-        ("@[import(path)] _", ExpectedImportError::UnsupportedTarget),
-        (r#"@[import("one.zy","two.zy")] _"#, ExpectedImportError::TargetArity(2)),
-        (r#"@[import("")] _"#, ExpectedImportError::EmptyPath),
-        ("@[import(0)] _", ExpectedImportError::NonPositiveInput),
-        ("@[import(-1)] _", ExpectedImportError::NonPositiveInput),
+        ("@[import] _", ExpectedImportError::TargetArity(0), "import"),
+        ("@[import(path)] _", ExpectedImportError::UnsupportedTarget, "path"),
+        (
+            r#"@[import("one.zy","two.zy")] _"#,
+            ExpectedImportError::TargetArity(2),
+            r#"import("one.zy","two.zy")"#,
+        ),
+        (r#"@[import("")] _"#, ExpectedImportError::EmptyPath, "\"\""),
+        ("@[import(0)] _", ExpectedImportError::NonPositiveInput, "0"),
+        ("@[import(-1)] _", ExpectedImportError::NonPositiveInput, "-1"),
     ];
 
-    cases.into_iter().for_each(|(source, expected)| {
+    cases.into_iter().for_each(|(source, expected, highlighted)| {
         let mut parser = Parser::new();
         let unit = parser::SourceUnitParser::new()
             .parse(source, &mut parser, lexer::Lexer::new(source))
             .unwrap();
         let error = unit.imports(&parser.arena, &parser.spans).unwrap_err();
 
+        assert_eq!(&source[error.span().range()], highlighted);
         match (error, expected) {
             | (
                 ImportDirectiveError::TargetArity { found, .. },
@@ -576,10 +634,9 @@ fn source_unit_rejects_import_on_a_non_hole_term() {
         .parse(source, &mut parser, lexer::Lexer::new(source))
         .unwrap();
 
-    assert!(matches!(
-        unit.imports(&parser.arena, &parser.spans),
-        Err(ImportDirectiveError::PayloadNotHole { .. })
-    ));
+    let error = unit.imports(&parser.arena, &parser.spans).unwrap_err();
+    assert!(matches!(&error, ImportDirectiveError::PayloadNotHole { .. }));
+    assert_eq!(&source[error.span().range()], "value");
 }
 
 #[test]
@@ -1005,7 +1062,7 @@ fn parses_manifest_existential_with_an_inferred_classifier() {
     let Pattern::Var(binder) = &parser.arena.pats[binder] else {
         panic!("expected an ordinary kind-variable binder")
     };
-    let Term::Meta(MetaT(meta, payload)) = &parser.arena.terms[definition] else {
+    let Term::Meta(MetaTerm(meta, payload)) = &parser.arena.terms[definition] else {
         panic!("expected the intrinsic definition to retain its metadata")
     };
     let Term::Hole(_) = parser.arena.terms[payload] else {
@@ -1017,7 +1074,12 @@ fn parses_manifest_existential_with_an_inferred_classifier() {
 
     assert_eq!(parser.arena.defs[binder].plain(), "VType");
     assert_eq!(
-        meta.specialize::<IntrinsicMeta>().unwrap().map(|meta| meta.role),
+        parser
+            .arena
+            .semantic_meta(*meta)
+            .specialize::<IntrinsicMeta>()
+            .unwrap()
+            .map(|meta| meta.role),
         Some(IntrinsicRole::VType)
     );
     assert_eq!(body.plain(), "VType");

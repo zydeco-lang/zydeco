@@ -244,8 +244,8 @@ impl SourceUnit {
             .terms
             .iter()
             .filter_map(|(term, syntax)| match syntax {
-                | Term::Meta(MetaT(meta, payload)) => {
-                    DocumentationSite::decode(*term, meta, *payload, arena, spans)
+                | Term::Meta(MetaTerm(meta, payload)) => {
+                    DocumentationSite::decode(*term, *meta, *payload, arena, spans)
                 }
                 | _ => None,
             })
@@ -255,7 +255,8 @@ impl SourceUnit {
     }
 
     /// Whether this metadata annotation consumes an attached `--|` text block.
-    fn consumes_attached_text(meta: &Meta) -> bool {
+    fn consumes_attached_text(meta: MetaId, arena: &TextArena) -> bool {
+        let meta = arena.semantic_meta(meta);
         meta.specialize::<DocMeta>().is_ok_and(|option| option.is_some())
             || meta.specialize::<LiteralMeta>().is_ok_and(|option| option.is_some())
     }
@@ -267,7 +268,7 @@ impl SourceUnit {
             .terms
             .iter()
             .filter_map(|(term, syntax)| match syntax {
-                | Term::Meta(MetaT(meta, _)) if Self::consumes_attached_text(meta) => {
+                | Term::Meta(MetaTerm(meta, _)) if Self::consumes_attached_text(*meta, arena) => {
                     arena.trivia.attached_text((*term).into()).map(|text| text.range.clone())
                 }
                 | _ => None,
@@ -295,8 +296,8 @@ impl SourceUnit {
             .terms
             .iter()
             .filter_map(|(term, syntax)| match syntax {
-                | Term::Meta(MetaT(meta, payload)) => {
-                    LiteralSite::decode(*term, meta, *payload, arena, spans)
+                | Term::Meta(MetaTerm(meta, payload)) => {
+                    LiteralSite::decode(*term, *meta, *payload, arena, spans)
                 }
                 | _ => None,
             })
@@ -317,8 +318,8 @@ impl SourceUnit {
             .terms
             .iter()
             .filter_map(|(term, syntax)| match syntax {
-                | Term::Meta(MetaT(meta, payload)) => {
-                    ImportSite::decode(*term, meta, *payload, arena, spans)
+                | Term::Meta(MetaTerm(meta, payload)) => {
+                    ImportSite::decode(*term, *meta, *payload, arena, spans)
                 }
                 | _ => None,
             })
@@ -336,8 +337,8 @@ impl SourceUnit {
             .terms
             .iter()
             .filter_map(|(term, syntax)| match syntax {
-                | Term::Meta(MetaT(meta, payload)) => {
-                    BuiltinSite::decode_term(*term, meta, *payload, spans)
+                | Term::Meta(MetaTerm(meta, payload)) => {
+                    BuiltinSite::decode_term(*term, *meta, *payload, arena, spans)
                 }
                 | _ => None,
             })
@@ -350,7 +351,12 @@ impl SourceUnit {
                     .iter()
                     .flat_map(|parameter| {
                         parameter.annotations.iter().map(|annotation| {
-                            BuiltinSite::decode_existential_pattern(parameter.binder(), annotation)
+                            BuiltinSite::decode_existential_pattern(
+                                parameter.binder(),
+                                annotation,
+                                arena,
+                                spans,
+                            )
                         })
                     })
                     .collect::<Vec<_>>(),
@@ -371,8 +377,8 @@ impl SourceUnit {
             .terms
             .iter()
             .filter_map(|(term, syntax)| match syntax {
-                | Term::Meta(MetaT(meta, payload)) => {
-                    IntrinsicSite::decode(*term, meta, *payload, arena, spans)
+                | Term::Meta(MetaTerm(meta, payload)) => {
+                    IntrinsicSite::decode(*term, *meta, *payload, arena, spans)
                 }
                 | _ => None,
             })
@@ -384,8 +390,9 @@ impl SourceUnit {
 
 impl DocumentationSite {
     fn decode(
-        term: TermId, meta: &Meta, payload: TermId, arena: &TextArena, spans: &SpanArena,
+        term: TermId, meta: MetaId, payload: TermId, arena: &TextArena, spans: &SpanArena,
     ) -> Option<Self> {
+        let meta = arena.semantic_meta(meta);
         let meta = meta
             .specialize::<DocMeta>()
             .expect("documentation metadata specialization is infallible")?;
@@ -397,9 +404,10 @@ impl DocumentationSite {
 
 impl LiteralSite {
     fn decode(
-        term: TermId, meta: &Meta, payload: TermId, arena: &TextArena, spans: &SpanArena,
+        term: TermId, meta: MetaId, payload: TermId, arena: &TextArena, spans: &SpanArena,
     ) -> Option<Result<Self, LiteralDirectiveError>> {
-        match meta.specialize::<LiteralMeta>() {
+        let semantic = arena.semantic_meta(meta);
+        match semantic.specialize::<LiteralMeta>() {
             | Ok(Some(_)) => {
                 let span = spans[&EntityId::Term(term)];
                 Some(if matches!(arena.terms[&payload], Term::Hole(Hole)) {
@@ -410,12 +418,13 @@ impl LiteralSite {
                         | None => Err(LiteralDirectiveError::MissingText { term, span }),
                     }
                 } else {
+                    let span = spans[&EntityId::Term(payload)];
                     Err(LiteralDirectiveError::PayloadNotHole { term, span })
                 })
             }
             | Ok(None) => None,
             | Err(source) => {
-                let span = spans[&EntityId::Term(term)];
+                let span = spans[&EntityId::Meta(meta)];
                 Some(Err(LiteralDirectiveError::Invalid { term, span, source }))
             }
         }
@@ -424,46 +433,59 @@ impl LiteralSite {
 
 impl ImportSite {
     fn decode(
-        term: TermId, meta: &Meta, payload: TermId, arena: &TextArena, spans: &SpanArena,
+        term: TermId, meta: MetaId, payload: TermId, arena: &TextArena, spans: &SpanArena,
     ) -> Option<Result<Self, ImportDirectiveError>> {
-        meta.is("import").then(|| {
-            let span = spans[&EntityId::Term(term)];
-            let target = match meta.arguments() {
-                | [Meta::String(path)] if path.is_empty() => {
+        let metadata = &arena.metas[&meta];
+        metadata.is("import").then(|| {
+            let annotation_span = spans[&EntityId::Term(term)];
+            let meta_span = spans[&EntityId::Meta(meta)];
+            let target = match metadata.arguments() {
+                | [argument] if matches!(&arena.metas[argument], MetaNode::String(path) if path.is_empty()) => {
+                    let span = spans[&EntityId::Meta(*argument)];
                     return Err(ImportDirectiveError::EmptyPath { term, span });
                 }
-                | [Meta::String(path)] => ImportTarget::Path(PathBuf::from(path)),
-                | [Meta::Integer(number)] => ImportTarget::Input(
-                    u64::try_from(*number)
+                | [argument] if matches!(&arena.metas[argument], MetaNode::String(_)) => {
+                    let MetaNode::String(path) = &arena.metas[argument] else { unreachable!() };
+                    ImportTarget::Path(PathBuf::from(path))
+                }
+                | [argument] if matches!(&arena.metas[argument], MetaNode::Integer(_)) => {
+                    let MetaNode::Integer(number) = &arena.metas[argument] else { unreachable!() };
+                    ImportTarget::Input(u64::try_from(*number)
                         .ok()
                         .and_then(SourceNumber::new)
-                        .ok_or(ImportDirectiveError::NonPositiveInput { term, span })?,
-                ),
-                | [_] => {
+                        .ok_or_else(|| ImportDirectiveError::NonPositiveInput {
+                            term,
+                            span: spans[&EntityId::Meta(*argument)],
+                        })?)
+                }
+                | [argument] => {
+                    let span = spans[&EntityId::Meta(*argument)];
                     return Err(ImportDirectiveError::UnsupportedTarget { term, span });
                 }
                 | arguments => {
                     return Err(ImportDirectiveError::TargetArity {
                         term,
-                        span,
+                        span: meta_span,
                         found: arguments.len(),
                     });
                 }
             };
             if !matches!(arena.terms[&payload], Term::Hole(Hole)) {
+                let span = spans[&EntityId::Term(payload)];
                 return Err(ImportDirectiveError::PayloadNotHole { term, span });
             }
-            Ok(Self { term, directive: ImportDirective { target, span } })
+            Ok(Self { term, directive: ImportDirective { target, span: annotation_span } })
         })
     }
 }
 
 impl BuiltinSite {
     fn decode_term(
-        term: TermId, meta: &Meta, payload: TermId, spans: &SpanArena,
+        term: TermId, meta: MetaId, payload: TermId, arena: &TextArena, spans: &SpanArena,
     ) -> Option<Result<Self, BuiltinDirectiveError>> {
         let location = BuiltinLocation::Term { annotation: term, payload };
-        match meta.specialize::<BuiltinMeta>() {
+        let semantic = arena.semantic_meta(meta);
+        match semantic.specialize::<BuiltinMeta>() {
             | Ok(Some(BuiltinMeta { role: BuiltinRole::Value(role) })) => {
                 let span = spans[&EntityId::Term(term)];
                 Some(Ok(Self {
@@ -477,7 +499,7 @@ impl BuiltinSite {
             }
             | Ok(None) => None,
             | Err(source) => {
-                let span = spans[&EntityId::Term(term)];
+                let span = spans[&EntityId::Meta(meta)];
                 Some(Err(BuiltinDirectiveError::Invalid {
                     location,
                     span,
@@ -488,10 +510,11 @@ impl BuiltinSite {
     }
 
     fn decode_existential_pattern(
-        pattern: PatId, annotation: &Sp<Meta>,
+        pattern: PatId, annotation: &Sp<MetaId>, arena: &TextArena, spans: &SpanArena,
     ) -> Result<Self, BuiltinDirectiveError> {
         let location = BuiltinLocation::ExistentialPattern { pattern };
-        match annotation.inner.specialize::<BuiltinMeta>() {
+        let semantic = arena.semantic_meta(annotation.inner);
+        match semantic.specialize::<BuiltinMeta>() {
             | Ok(Some(BuiltinMeta { role: BuiltinRole::Type(role) })) => Ok(Self {
                 location,
                 directive: BuiltinDirective {
@@ -512,7 +535,7 @@ impl BuiltinSite {
             }),
             | Err(source) => Err(BuiltinDirectiveError::Invalid {
                 location,
-                span: annotation.info,
+                span: spans[&EntityId::Meta(annotation.inner)],
                 source: Box::new(source),
             }),
         }
@@ -521,9 +544,10 @@ impl BuiltinSite {
 
 impl IntrinsicSite {
     fn decode(
-        term: TermId, meta: &Meta, payload: TermId, arena: &TextArena, spans: &SpanArena,
+        term: TermId, meta: MetaId, payload: TermId, arena: &TextArena, spans: &SpanArena,
     ) -> Option<Result<Self, IntrinsicDirectiveError>> {
-        match meta.specialize::<IntrinsicMeta>() {
+        let semantic = arena.semantic_meta(meta);
+        match semantic.specialize::<IntrinsicMeta>() {
             | Ok(Some(meta)) => {
                 let span = spans[&EntityId::Term(term)];
                 Some(if matches!(arena.terms[&payload], Term::Hole(Hole)) {
@@ -533,12 +557,13 @@ impl IntrinsicSite {
                         directive: IntrinsicDirective { role: meta.role, span },
                     })
                 } else {
+                    let span = spans[&EntityId::Term(payload)];
                     Err(IntrinsicDirectiveError::PayloadNotHole { term, span })
                 })
             }
             | Ok(None) => None,
             | Err(source) => {
-                let span = spans[&EntityId::Term(term)];
+                let span = spans[&EntityId::Meta(meta)];
                 Some(Err(IntrinsicDirectiveError::Invalid { term, span, source }))
             }
         }

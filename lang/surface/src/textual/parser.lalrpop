@@ -120,7 +120,7 @@ MixedId: String = { <"UpperId"> => <>.into(), <"LowerId"> => <>.into(), };
 
 // Metadata occupies its own namespace, so language keywords remain useful as
 // closed role names inside an annotation.
-MetaId: String = {
+MetaName: String = {
     <MixedId>,
     "end" => "end".into(),
     "begin" => "begin".into(),
@@ -169,14 +169,18 @@ Hole: Hole = "_" => Hole;
 
 //* ---------------------------------- Meta ---------------------------------- */
 
-MetaT<T>: MetaT<T> = "@" "[" <Meta> "]" <T> => MetaT(<>);
-MetaAnnotation: Sp<Meta> = <Sp<MetaAnnotationInner>>;
-MetaAnnotationInner: Meta = "@" "[" <Meta> "]" => <>;
-Meta: Meta = {
-    <value:String> => Meta::string(value),
-    <value:"IntLit"> => Meta::integer(<>.parse().unwrap()),
-    <name:MetaId> => Meta::ident(name),
-    <callee:MetaId> <args:SepByDelim<"(", ",", <Meta>, ")">> => Meta::apply(callee, args),
+MetaTerm<T>: MetaTerm<T> = "@" "[" <Meta> "]" <T> => MetaTerm(<>);
+MetaAnnotation: Sp<MetaId> = <start:@L> <inner:MetaAnnotationInner> <end:@R> => {
+    parser.metadata_prefix(inner, start);
+    Span::new(start, end).make(inner)
+};
+MetaAnnotationInner: MetaId = "@" "[" <Meta> "]" => <>;
+Meta: MetaId = <Sp<MetaNode>> => parser.meta(<>);
+MetaNode: MetaNode = {
+    <value:String> => MetaNode::String(value),
+    <value:"IntLit"> => MetaNode::Integer(<>.parse().unwrap()),
+    <name:MetaName> => MetaNode::Ident(name),
+    <callee:MetaName> <args:SepByDelim<"(", ",", <Meta>, ")">> => MetaNode::Apply { callee, args },
 };
 
 //* --------------------------------- Pattern -------------------------------- */
@@ -533,12 +537,12 @@ Term: Term = {
         }.into()
     },
     // meta annotated term
-    <MetaT<TermGen<Term>>> => <>.into(),
+    <MetaTerm<TermGen<Term>>> => <>.into(),
     // meta annotation sugar: `@(meta)` is `@[meta] _` with an implicit hole payload
     <start:@L> "@" "(" <meta:Meta> ")" <end:@R> => {
         let span = Span::new(start, end);
         let payload = parser.term(span.make(Term::Hole(Hole)));
-        MetaT(meta, payload).into()
+        MetaTerm(meta, payload).into()
     },
 };
 

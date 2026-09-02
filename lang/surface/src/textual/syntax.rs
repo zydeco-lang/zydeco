@@ -15,6 +15,7 @@ zydeco_utils::new_key_type! {
     pub struct DefId;
     pub struct PatId;
     pub struct CoPatId;
+    pub struct MetaId;
     pub struct TermId;
 }
 
@@ -24,6 +25,7 @@ pub enum EntityId {
     Def(DefId),
     Pat(PatId),
     CoPat(CoPatId),
+    Meta(MetaId),
     Term(TermId),
 }
 
@@ -35,6 +37,7 @@ pub(crate) enum EntityCategory {
     Definition,
     Pattern,
     CoPattern,
+    Metadata,
     Term,
 }
 
@@ -44,6 +47,7 @@ impl EntityId {
             | Self::Def(id) => (EntityCategory::Definition, id.key_space(), id.raw()),
             | Self::Pat(id) => (EntityCategory::Pattern, id.key_space(), id.raw()),
             | Self::CoPat(id) => (EntityCategory::CoPattern, id.key_space(), id.raw()),
+            | Self::Meta(id) => (EntityCategory::Metadata, id.key_space(), id.raw()),
             | Self::Term(id) => (EntityCategory::Term, id.key_space(), id.raw()),
         }
     }
@@ -55,10 +59,50 @@ impl EntityCategory {
             | Self::Definition => EntityId::Def(restore_id(key_space, raw)),
             | Self::Pattern => EntityId::Pat(restore_id(key_space, raw)),
             | Self::CoPattern => EntityId::CoPat(restore_id(key_space, raw)),
+            | Self::Metadata => EntityId::Meta(restore_id(key_space, raw)),
             | Self::Term => EntityId::Term(restore_id(key_space, raw)),
         }
     }
 }
+
+/* -------------------------------- Metadata -------------------------------- */
+
+/// One parsed metadata value.
+///
+/// Textual metadata refers to nested values by ID so every value has its own
+/// source span and trivia anchor. Desugaring converts this representation to
+/// the span-free [`zydeco_syntax::Meta`] used by later compiler phases.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MetaNode {
+    Ident(String),
+    String(String),
+    Integer(i64),
+    Apply { callee: String, args: Vec<MetaId> },
+}
+
+impl MetaNode {
+    pub fn callee(&self) -> Option<&str> {
+        match self {
+            | Self::Ident(name) | Self::Apply { callee: name, .. } => Some(name),
+            | Self::String(_) | Self::Integer(_) => None,
+        }
+    }
+
+    pub fn arguments(&self) -> &[MetaId] {
+        match self {
+            | Self::Apply { args, .. } => args,
+            | Self::Ident(_) | Self::String(_) | Self::Integer(_) => &[],
+        }
+    }
+
+    pub fn is(&self, name: &str) -> bool {
+        self.callee() == Some(name)
+    }
+}
+
+/// A metadata annotation paired with its payload.
+#[derive(Clone, Debug)]
+pub struct MetaTerm<T>(pub MetaId, pub T);
 
 /* --------------------------------- Pattern -------------------------------- */
 
@@ -144,7 +188,7 @@ pub struct Sigma(pub CoPatId, pub TermId);
 #[derive(Clone, Debug)]
 pub struct ExistentialParameter {
     /// Metadata attached to this parameter's pattern.
-    pub annotations: Vec<Sp<Meta>>,
+    pub annotations: Vec<Sp<MetaId>>,
     /// The complete binder pattern. A manifest parameter contains one
     /// `Pattern::Manifest` beneath its ordinary named and annotation wrappers.
     pub binder: PatId,
@@ -275,7 +319,7 @@ pub struct CoMatcherParam {
 
 #[derive(From, Clone, Debug)]
 pub enum Term {
-    Meta(MetaT<TermId>),
+    Meta(MetaTerm<TermId>),
     SourceBoundary(SourceBoundary<TermId>),
     SignatureBoundary(SignatureBoundary<TermId>),
     Ann(Ann<TermId, TermId>),
@@ -339,10 +383,17 @@ struct ExistentialPrefix {
     start: usize,
 }
 
+#[derive(Copy, Clone)]
+struct MetadataPrefix {
+    metadata: MetaId,
+    start: usize,
+}
+
 pub struct Parser {
     allocator: IdAllocator<TextualScope>,
     arm_prefixes: Vec<ArmPrefix>,
     existential_prefixes: Vec<ExistentialPrefix>,
+    metadata_prefixes: Vec<MetadataPrefix>,
     pub spans: SpanArena,
     pub arena: TextArena,
 }
@@ -360,6 +411,7 @@ impl Parser {
             allocator: IdAllocator::new(),
             arm_prefixes: Vec::new(),
             existential_prefixes: Vec::new(),
+            metadata_prefixes: Vec::new(),
             spans: SpanArena::new(),
             arena: TextArena::default(),
         }
@@ -396,6 +448,12 @@ impl Parser {
         self.arena.copats.insert_new(id, copat.inner);
         id
     }
+    /// Allocate a metadata node and record its span.
+    pub fn meta(&mut self, meta: Sp<MetaNode>) -> MetaId {
+        let id = self.alloc(meta.info);
+        self.arena.metas.insert_new(id, meta.inner);
+        id
+    }
     /// Allocate a term node and record its span.
     pub fn term(&mut self, term: Sp<Term>) -> TermId {
         let id = self.alloc(term.info);
@@ -428,6 +486,10 @@ impl Parser {
     pub fn existential_prefix(&mut self, parameter: PatId, start: usize) {
         self.existential_prefixes.push(ExistentialPrefix { parameter, start });
     }
+    /// Record the `@` that prefixes standalone metadata attached to a pattern.
+    pub fn metadata_prefix(&mut self, metadata: MetaId, start: usize) {
+        self.metadata_prefixes.push(MetadataPrefix { metadata, start });
+    }
     /// Retain source presentation after one public parser entry point succeeds.
     ///
     /// Existing spans let printers reuse selected layout decisions without
@@ -456,8 +518,17 @@ impl Parser {
             .copied()
             .filter(|prefix| self.arena.intentions.line_extent(prefix.parameter.into()).is_none())
             .collect::<Vec<_>>();
+        let metadata_prefixes = self
+            .metadata_prefixes
+            .iter()
+            .copied()
+            .filter(|prefix| self.arena.intentions.line_extent(prefix.metadata.into()).is_none())
+            .collect::<Vec<_>>();
         let comments = CommentCapture::new(source, &entities)
-            .with_arm_prefixes(arm_prefixes.iter().map(|prefix| (prefix.first, prefix.start)));
+            .with_arm_prefixes(arm_prefixes.iter().map(|prefix| (prefix.first, prefix.start)))
+            .with_metadata_prefixes(
+                metadata_prefixes.iter().map(|prefix| (prefix.metadata, prefix.start)),
+            );
         let layouts = entities
             .iter()
             .map(|entity| {

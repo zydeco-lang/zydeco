@@ -63,6 +63,7 @@ impl<'arena> LayoutFragment<'arena> {
 /// `compact` joins every boundary owned by the layer. `retained` keeps the
 /// source rows, provided each row still fits. `expanded` breaks every boundary
 /// in the layer while leaving child layouts independent.
+#[derive(Clone)]
 struct GroupLayout<'arena> {
     compact: RcDoc<'arena>,
     retained: RcDoc<'arena>,
@@ -431,6 +432,12 @@ impl<'arena> PrettyFormatter<'arena> {
 
     fn with_before_arm_comments(&self, entity: EntityId, document: RcDoc<'arena>) -> RcDoc<'arena> {
         self.with_comments(self.arena.trivia.before_arm_comments(entity), document)
+    }
+
+    fn with_before_metadata_comments(
+        &self, entity: EntityId, document: RcDoc<'arena>,
+    ) -> RcDoc<'arena> {
+        self.with_comments(self.arena.trivia.before_metadata_comments(entity), document)
     }
 
     fn with_comments(
@@ -1104,6 +1111,16 @@ impl<'arena> PrettyFormatter<'arena> {
         if items.is_empty() {
             return RcDoc::text(open).append(RcDoc::text(close));
         }
+        self.select_group_layout(
+            self.delimited_group_layout(entity, open, items, separator, close, spacing),
+        )
+    }
+
+    fn delimited_group_layout(
+        &self, entity: Option<EntityId>, open: &'static str, items: Vec<LayoutFragment<'arena>>,
+        separator: &'static str, close: &'static str, spacing: DelimiterSpacing,
+    ) -> GroupLayout<'arena> {
+        debug_assert!(!items.is_empty());
         let anchors = LayoutAnchors {
             first: items.first().expect("delimited items are nonempty").anchors.first,
             last: items.last().expect("delimited items are nonempty").anchors.last,
@@ -1135,14 +1152,14 @@ impl<'arena> PrettyFormatter<'arena> {
         let expanded = RcDoc::text(open)
             .append(contents_layout.place(self.expanded_placement(after_open), expanded_items))
             .append(close_layout.place(self.expanded_placement(before_close), RcDoc::text(close)));
-        self.select_group_layout(GroupLayout {
+        GroupLayout {
             compact,
             retained,
             expanded,
             retains_break: items_retain_break
                 || retained_after_open != BoundaryPlacement::Joined
                 || retained_before_close != BoundaryPlacement::Joined,
-        })
+        }
     }
 
     fn annotation(
@@ -1401,28 +1418,31 @@ impl<'arena> PrettyFormatter<'arena> {
             return self.with_leading_comments(term.into(), document);
         }
         let document = match &self.arena.terms[&term] {
-            | Term::Meta(MetaT(meta, inner)) => match meta.specialize::<FormatMeta>() {
-                | Ok(Some(directive)) => self.format_annotated(term, meta, *inner, directive),
-                | Ok(None) | Err(_) => match &self.arena.terms[inner] {
-                    // A commentless hole payload collapses into the parenthesized sugar.
-                    // A commented hole keeps the bracket form so its comments survive.
-                    | Term::Hole(_)
-                        if self.arena.trivia.leading_comments((*inner).into()).is_empty()
-                            && self.arena.trivia.trailing_comments((*inner).into()).is_empty() =>
-                    {
-                        RcDoc::text("@(")
-                            .append(RcDoc::text(meta.to_string()))
-                            .append(RcDoc::text(")"))
-                    }
-                    | _ => RcDoc::text("@[").append(RcDoc::text(meta.to_string())).append(
-                        self.fragment_boundary(
+            | Term::Meta(MetaTerm(meta, inner)) => {
+                let semantic = self.arena.semantic_meta(*meta);
+                match semantic.specialize::<FormatMeta>() {
+                    | Ok(Some(directive)) => self.format_annotated(term, *meta, *inner, directive),
+                    | Ok(None) | Err(_) => match &self.arena.terms[inner] {
+                        // A commentless hole payload collapses into the parenthesized sugar.
+                        // A commented hole keeps the bracket form so its comments survive.
+                        | Term::Hole(_)
+                            if self.arena.trivia.leading_comments((*inner).into()).is_empty()
+                                && self
+                                    .arena
+                                    .trivia
+                                    .trailing_comments((*inner).into())
+                                    .is_empty() =>
+                        {
+                            self.metadata_wrapper("@(", ")", *meta)
+                        }
+                        | _ => self.annotation_prefix(*meta).append(self.fragment_boundary(
                             BoundaryIntent::after_start(term, *inner),
-                            BoundaryLayout::aligned("]"),
+                            BoundaryLayout::aligned(""),
                             self.term_through_fragment(*inner, TermPrecedence::Binder),
-                        ),
-                    ),
-                },
-            },
+                        )),
+                    },
+                }
+            }
             | Term::SourceBoundary(_) | Term::SignatureBoundary(_) => {
                 unreachable!("source boundaries return before rendering")
             }
@@ -1616,7 +1636,7 @@ impl<'arena> PrettyFormatter<'arena> {
     /// payload at its own width and embeds the result, because the document
     /// renderer applies one width to the whole document.
     fn format_annotated(
-        &self, term: TermId, meta: &'arena Meta, inner: TermId, directive: FormatMeta,
+        &self, term: TermId, meta: MetaId, inner: TermId, directive: FormatMeta,
     ) -> RcDoc<'arena> {
         if directive.verbatim
             && let Some(document) = self.format_verbatim(term, meta, inner)
@@ -1651,9 +1671,7 @@ impl<'arena> PrettyFormatter<'arena> {
     /// so comments or line breaks written there survive exactly. If the
     /// original source is unavailable, the caller falls back to normal
     /// formatting.
-    fn format_verbatim(
-        &self, term: TermId, meta: &'arena Meta, inner: TermId,
-    ) -> Option<RcDoc<'arena>> {
+    fn format_verbatim(&self, term: TermId, meta: MetaId, inner: TermId) -> Option<RcDoc<'arena>> {
         let source = self.source?;
         let outer_start = self.spans[&EntityId::Term(term)].lo();
         let inner = self.spans[&EntityId::Term(inner)].range();
@@ -1671,8 +1689,64 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     /// The complete `@[...]` text of one annotation.
-    fn annotation_prefix(&self, meta: &Meta) -> RcDoc<'arena> {
-        RcDoc::text("@[").append(RcDoc::text(meta.to_string())).append(RcDoc::text("]"))
+    fn annotation_prefix(&self, meta: MetaId) -> RcDoc<'arena> {
+        let document = self.metadata_wrapper("@[", "]", meta);
+        self.with_before_metadata_comments(meta.into(), document)
+    }
+
+    fn metadata_wrapper(
+        &self, open: &'static str, close: &'static str, meta: MetaId,
+    ) -> RcDoc<'arena> {
+        let metadata = self.metadata(meta);
+        if self.arena.trivia.leading_comments(meta.into()).is_empty() {
+            RcDoc::text(open).append(metadata).append(RcDoc::text(close))
+        } else {
+            RcDoc::text(open)
+                .append(RcDoc::hardline().append(metadata).nest(self.indent()))
+                .append(RcDoc::hardline())
+                .append(RcDoc::text(close))
+        }
+    }
+
+    fn metadata(&self, meta: MetaId) -> RcDoc<'arena> {
+        let document = match &self.arena.metas[&meta] {
+            | MetaNode::Ident(name) => RcDoc::text(name.clone()),
+            | MetaNode::String(value) => RcDoc::text(format!("{value:?}")),
+            | MetaNode::Integer(value) => RcDoc::as_string(value),
+            | MetaNode::Apply { callee, args } => self.metadata_application(meta, callee, args),
+        };
+        self.with_leading_comments(meta.into(), document)
+    }
+
+    fn metadata_fragment(&self, meta: MetaId) -> LayoutFragment<'arena> {
+        LayoutFragment::entity(meta.into(), self.metadata(meta))
+    }
+
+    /// Choose an application's layout from the metadata itself. Without this
+    /// local probe, an unrelated long payload following `@[...]` can force a
+    /// short metadata call to expand.
+    fn metadata_application(
+        &self, meta: MetaId, callee: &'arena str, args: &'arena [MetaId],
+    ) -> RcDoc<'arena> {
+        let head = RcDoc::text(callee);
+        if args.is_empty() {
+            return head.append(RcDoc::text("()"));
+        }
+        let layout = self.delimited_group_layout(
+            Some(meta.into()),
+            "(",
+            args.iter().map(|argument| self.metadata_fragment(*argument)).collect(),
+            ",",
+            ")",
+            DelimiterSpacing::Tight,
+        );
+        let selected = self.select_group_layout(layout.clone());
+        let probe = head.clone().append(selected.clone());
+        self.select_after_multiline_probe(
+            probe,
+            head.clone().append(layout.compact),
+            head.append(selected),
+        )
     }
 
     /// Place a pre-rendered multiline payload below its annotation, keeping
@@ -1939,11 +2013,8 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn existential_parameter(&self, parameter: &ExistentialParameter) -> LayoutFragment<'arena> {
-        let annotations = parameter.annotations.iter().map(|annotation| {
-            RcDoc::text("@[")
-                .append(RcDoc::text(annotation.inner.to_string()))
-                .append(RcDoc::text("]"))
-        });
+        let annotations =
+            parameter.annotations.iter().map(|annotation| self.annotation_prefix(annotation.inner));
         let binder = self
             .manifest_parameter_view(parameter.binder)
             .map(|view| self.manifest_parameter(view, parameter.binder))
@@ -4752,6 +4823,110 @@ mod tests {
 
         let reparsed = ParsedSource::new(&formatted);
         assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+    }
+
+    #[test]
+    fn metadata_applications_expand_at_their_own_width_boundary() {
+        let source = r#"@[package(name("zydeco"),version("0.3.0"),license("MIT"))] _"#;
+        let parsed = ParsedSource::new(source);
+
+        let wide = parsed.render_with_options(
+            PrettyOptions::default()
+                .with_line_width(120)
+                .with_layout_intentions(LayoutIntentions::Ignore),
+        );
+        assert_eq!(wide, "@(package(name(\"zydeco\"), version(\"0.3.0\"), license(\"MIT\")))\n",);
+
+        let narrow = parsed.render_with_options(
+            PrettyOptions::default()
+                .with_line_width(32)
+                .with_layout_intentions(LayoutIntentions::Ignore),
+        );
+        assert_eq!(
+            narrow,
+            concat!(
+                "@(package(\n",
+                "  name(\"zydeco\"),\n",
+                "  version(\"0.3.0\"),\n",
+                "  license(\"MIT\")\n",
+                "))\n",
+            ),
+        );
+
+        let reparsed = ParsedSource::new(&narrow);
+        assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        assert_eq!(
+            narrow,
+            reparsed.render_with_options(
+                PrettyOptions::default()
+                    .with_line_width(32)
+                    .with_layout_intentions(LayoutIntentions::Ignore),
+            ),
+        );
+    }
+
+    #[test]
+    fn metadata_preserves_authored_rows_and_internal_comments() {
+        let source = concat!(
+            "@[package(name(\"zydeco\"),\n",
+            "-- Explain the selected version.\n",
+            "version(\"0.3.0\"))] _",
+        );
+        let parsed = ParsedSource::new(source);
+        let formatted = parsed.render(LayoutIntentions::Preserve);
+
+        assert_eq!(
+            formatted,
+            concat!(
+                "@(package(\n",
+                "  name(\"zydeco\"),\n",
+                "  -- Explain the selected version.\n",
+                "  version(\"0.3.0\")\n",
+                "))\n",
+            ),
+        );
+        assert_eq!(RetainedComments::collect(source), RetainedComments::collect(&formatted));
+
+        let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+    }
+
+    #[test]
+    fn metadata_comments_stay_on_their_side_of_the_annotation_prefix() {
+        let before_source = concat!(
+            "exists\n",
+            "-- Describe the host reader.\n",
+            "@[builtin(reader)] (Reader : VType) . Reader",
+        );
+        let before = ParsedSource::new(before_source);
+        let before_formatted = before.render(LayoutIntentions::Preserve);
+        let comment = before_formatted.find("-- Describe").unwrap();
+        let annotation = before_formatted.find("@[builtin").unwrap();
+
+        assert!(comment < annotation, "{before_formatted}");
+        assert_eq!(
+            RetainedComments::collect(before_source),
+            RetainedComments::collect(&before_formatted),
+        );
+        let reparsed = ParsedSource::new(&before_formatted);
+        assert_eq!(before.desugared_shape(), reparsed.desugared_shape());
+        assert_eq!(before_formatted, reparsed.render(LayoutIntentions::Preserve));
+
+        let inside_source = concat!("@[\n", "-- Explain the metadata.\n", "package(name)] value");
+        let inside = ParsedSource::new(inside_source);
+        let inside_formatted = inside.render(LayoutIntentions::Preserve);
+        assert_eq!(
+            inside_formatted,
+            concat!("@[\n", "  -- Explain the metadata.\n", "  package(name)\n", "]\n", "value\n",),
+        );
+        assert_eq!(
+            RetainedComments::collect(inside_source),
+            RetainedComments::collect(&inside_formatted),
+        );
+        let reparsed = ParsedSource::new(&inside_formatted);
+        assert_eq!(inside.desugared_shape(), reparsed.desugared_shape());
+        assert_eq!(inside_formatted, reparsed.render(LayoutIntentions::Preserve));
     }
 
     #[test]

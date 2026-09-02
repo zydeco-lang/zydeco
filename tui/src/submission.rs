@@ -2,7 +2,7 @@ use lalrpop_util::ParseError as LalrpopError;
 use thiserror::Error;
 use zydeco_surface::textual::{
     Lexer, SourceUnitParser,
-    syntax::{Hole, Meta, MetaT, Parser, Term},
+    syntax::{Hole, MetaNode, MetaTerm, Parser, Term},
 };
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -51,9 +51,10 @@ impl SubmissionParser {
     fn decode(
         root: zydeco_surface::textual::syntax::TermId, parser: &Parser,
     ) -> Result<Submission, CommandError> {
-        let Term::Meta(MetaT(meta, payload)) = &parser.arena.terms[&root] else {
+        let Term::Meta(MetaTerm(meta, payload)) = &parser.arena.terms[&root] else {
             return Ok(Submission::Expression(ExpressionMode::Evaluate));
         };
+        let meta = &parser.arena.metas[meta];
         let Some(command) = ReplCommandName::from_meta(meta) else {
             return Ok(Submission::Expression(ExpressionMode::Evaluate));
         };
@@ -97,7 +98,7 @@ pub(crate) enum ReplCommandName {
 }
 
 impl ReplCommandName {
-    fn from_meta(meta: &Meta) -> Option<Self> {
+    fn from_meta(meta: &MetaNode) -> Option<Self> {
         match meta.callee()? {
             | "help" => Some(Self::Help),
             | "quit" => Some(Self::Quit),

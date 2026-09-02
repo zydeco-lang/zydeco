@@ -251,6 +251,12 @@ by field and the innermost directive wins.
 A malformed `format` annotation is inert: the printer renders it as ordinary metadata and applies no options,
 leaving the misspelled directive visible in the output.
 
+Metadata calls are structured delimiter groups rather than opaque rendered strings. A fitting call stays compact;
+an overflowing call expands its immediate argument list, while nested calls make their own width decisions.
+This choice is local to the annotation, so the length of its following payload cannot force short metadata to wrap.
+Under `Preserve`, argument rows authored on separate lines remain separate, and comments anchored to nested metadata
+arguments remain in the group.
+
 Structural options (indentation, layout intentions, parenthesis treatment) shape the payload document directly.
 A width change instead pre-renders the payload at its own width and embeds the result below the annotation,
 because the document renderer applies one width to the whole document.

@@ -28,6 +28,7 @@ impl_span_view! {
     DefId
     PatId
     CoPatId
+    MetaId
     TermId
 }
 
@@ -40,6 +41,7 @@ mod impl_span_arena {
         Pattern,
         CoPattern,
         Term,
+        Metadata,
     }
 
     impl SpanArena {
@@ -86,6 +88,7 @@ mod impl_span_arena {
                 | EntityId::Def(_) => Category::Definition,
                 | EntityId::Pat(_) => Category::Pattern,
                 | EntityId::CoPat(_) => Category::CoPattern,
+                | EntityId::Meta(_) => Category::Metadata,
                 | EntityId::Term(_) => Category::Term,
             }
         }

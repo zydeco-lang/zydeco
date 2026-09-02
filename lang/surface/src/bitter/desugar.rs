@@ -174,24 +174,27 @@ impl ExistentialParameter {
         let t::ExistentialParameter { annotations, binder: pattern } = parameter;
         let source = pattern.into();
         let form = ExistentialParameterForm::desugar(pattern, desugarer)?;
-        let annotation_site = pattern.span(desugarer.spans).clone().make(pattern);
         let annotations = annotations
             .into_iter()
-            .map(|annotation| match annotation.inner.specialize::<BuiltinMeta>() {
-                | Ok(Some(BuiltinMeta { role: BuiltinRole::Type(_) })) => Ok(annotation.inner),
-                | Ok(Some(BuiltinMeta { role: BuiltinRole::Value(role) })) => {
-                    Err(DesugarError::BuiltinValueRoleOnExistentialPattern {
+            .map(|annotation| {
+                let annotation_site = annotation.inner.span(desugarer.spans).clone().make(pattern);
+                let meta = desugarer.textual.semantic_meta(annotation.inner);
+                match meta.specialize::<BuiltinMeta>() {
+                    | Ok(Some(BuiltinMeta { role: BuiltinRole::Type(_) })) => Ok(meta),
+                    | Ok(Some(BuiltinMeta { role: BuiltinRole::Value(role) })) => {
+                        Err(DesugarError::BuiltinValueRoleOnExistentialPattern {
+                            pattern: annotation_site.clone(),
+                            role,
+                        })
+                    }
+                    | Ok(None) => Err(DesugarError::UnsupportedExistentialPatternMeta(
+                        annotation_site.clone(),
+                    )),
+                    | Err(source) => Err(DesugarError::InvalidBuiltinPatternMeta {
                         pattern: annotation_site.clone(),
-                        role,
-                    })
+                        source,
+                    }),
                 }
-                | Ok(None) => {
-                    Err(DesugarError::UnsupportedExistentialPatternMeta(annotation_site.clone()))
-                }
-                | Err(source) => Err(DesugarError::InvalidBuiltinPatternMeta {
-                    pattern: annotation_site.clone(),
-                    source,
-                }),
             })
             .collect::<Result<Vec<_>>>()?;
         Ok(Self { annotations, form, source })
@@ -447,13 +450,14 @@ impl Desugar for t::TermId {
         use t::Term as Tm;
         let res = match term {
             | Tm::Meta(term) => {
-                let t::MetaT(meta, term) = term;
+                let t::MetaTerm(metadata, term) = term;
+                let annotation_site = metadata.span(desugarer.spans).clone().make(self);
+                let payload_site = term.span(desugarer.spans).clone().make(self);
+                let meta = desugarer.textual.semantic_meta(metadata);
                 match meta.specialize::<IntrinsicMeta>() {
                     | Ok(Some(meta)) => {
                         if !matches!(desugarer.lookup_term(term), Tm::Hole(_)) {
-                            return Err(DesugarError::IntrinsicPayloadNotHole(
-                                self.span(desugarer.spans).clone().make(self),
-                            ));
+                            return Err(DesugarError::IntrinsicPayloadNotHole(payload_site));
                         }
                         let term = desugarer.intrinsic(meta.role, self.into());
                         desugarer.terms.insert(self, term);
@@ -462,7 +466,7 @@ impl Desugar for t::TermId {
                     | Ok(None) => {}
                     | Err(source) => {
                         return Err(DesugarError::InvalidIntrinsicMeta {
-                            term: self.span(desugarer.spans).clone().make(self),
+                            term: annotation_site,
                             source,
                         });
                     }
@@ -471,13 +475,13 @@ impl Desugar for t::TermId {
                     | Ok(Some(BuiltinMeta { role: BuiltinRole::Value(_) })) | Ok(None) => {}
                     | Ok(Some(BuiltinMeta { role: BuiltinRole::Type(role) })) => {
                         return Err(DesugarError::BuiltinTypeRoleOnTerm {
-                            term: self.span(desugarer.spans).clone().make(self),
+                            term: annotation_site,
                             role,
                         });
                     }
                     | Err(source) => {
                         return Err(DesugarError::InvalidBuiltinMeta {
-                            term: self.span(desugarer.spans).clone().make(self),
+                            term: annotation_site,
                             source,
                         });
                     }
@@ -485,17 +489,12 @@ impl Desugar for t::TermId {
                 match meta.specialize::<FfiMeta>() {
                     | Ok(Some(_)) => {
                         if !matches!(desugarer.lookup_term(term), Tm::Hole(_)) {
-                            return Err(DesugarError::FfiPayloadNotHole(
-                                self.span(desugarer.spans).clone().make(self),
-                            ));
+                            return Err(DesugarError::FfiPayloadNotHole(payload_site));
                         }
                     }
                     | Ok(None) => {}
                     | Err(source) => {
-                        return Err(DesugarError::InvalidFfiMeta {
-                            term: self.span(desugarer.spans).clone().make(self),
-                            source,
-                        });
+                        return Err(DesugarError::InvalidFfiMeta { term: annotation_site, source });
                     }
                 }
                 match meta.specialize::<MonadicMeta>() {
@@ -521,7 +520,7 @@ impl Desugar for t::TermId {
                     | Ok(None) => {}
                     | Err(source) => {
                         return Err(DesugarError::InvalidMonadicMeta {
-                            term: self.span(desugarer.spans).clone().make(self),
+                            term: annotation_site,
                             source,
                         });
                     }
