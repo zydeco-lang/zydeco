@@ -19,7 +19,34 @@ The core types include:
 
 The main program is required to have type `OS`.
 
-### Numeric representations
+### Computation Types as Stack Protocols
+
+A value type classifies inert data; a computation type classifies a continuation stack. Read `M : B` as
+saying that `M` can consume a stack with protocol `B`, not that it produces a value of type `B`. `Ret A`
+expects a return continuation accepting an `A`; `A -> B` expects an `A` argument above a residual `B` stack;
+codata describes alternatives of observable frames.
+
+Stack shape is a typed control protocol, not a physical layout: native code may use the machine stack,
+while WebAssembly may use explicit frames and a trampoline. `Thk B` is suspended code compatible with a
+`B` stack, not the stack itself.
+
+`OS` is the root protocol. An `OS`-typed computation consumes the process stack prepared by the operating
+system and adapted by the launcher and runtime. It has no ordinary source-level return: it transfers control
+to another `OS` computation, terminates, aborts, or diverges. Here, *consume* describes control flow, not
+linearity or destructive stack mutation.
+
+The host interface illustrates the resulting control convention:
+
+```text
+write : Thk (String -> Thk OS -> OS)
+exit  : Thk (Int64 -> OS)
+```
+
+`write` receives an explicit `Thk OS` successor, whereas `exit` terminates. The successor is suspended code,
+not automatically a captured machine stack. An FFI must therefore return an `A` for `Ret A`, but select a
+successor or terminate for `OS`.
+
+### Numeric Representations
 
 Zydeco exposes fixed-width numeric types whose runtime domains match Rust's primitive representations:
 `Int8`, `Int16`, `Int32`, and `Int64` use `i8`, `i16`, `i32`, and `i64`; `UInt8`, `UInt16`, `UInt32`,
