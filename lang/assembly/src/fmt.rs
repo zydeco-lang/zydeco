@@ -315,7 +315,17 @@ impl<'a> Pretty<'a, Formatter<'a>> for Literal {
 
 impl<'a> Pretty<'a, Formatter<'a>> for Extern {
     fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
-        RcDoc::text(format!("<extern:{}/{}:{:?}>", self.name, self.arity, self.mode))
+        match self {
+            | Self::Host { name, arity, mode, .. } => {
+                RcDoc::text(format!("<extern:{name}/{arity}:{mode:?}>"))
+            }
+            | Self::Foreign(import) => RcDoc::text(format!(
+                "<ffi:{}:{}/{}>",
+                import.target.abi,
+                import.target.symbol,
+                import.signature.parameters.len()
+            )),
+        }
     }
 }
 

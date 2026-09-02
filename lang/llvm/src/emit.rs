@@ -192,11 +192,13 @@ impl<'e> Emitter<'e> {
         self.add_declaration("declare i64 @zydeco_alloc(i64)".to_string());
 
         // Declare user externs
-        for sa::Extern { name, arity, .. } in self.assembly.externs.iter() {
-            let label = format!("zydeco_{}", name);
-            let args = (1..=*arity).map(|_| "i64").collect::<Vec<_>>().join(", ");
-            let decl = format!("declare i64 @{}({})", label, args);
-            self.add_declaration(decl);
+        for external in self.assembly.externs.iter() {
+            if let sa::Extern::Host { name, arity, .. } = external {
+                let label = format!("zydeco_{name}");
+                let args = (1..=*arity).map(|_| "i64").collect::<Vec<_>>().join(", ");
+                let decl = format!("declare i64 @{label}({args})");
+                self.add_declaration(decl);
+            }
         }
 
         // Create entry function
@@ -303,14 +305,16 @@ impl<'a> Emit<'a> for Terminator {
                 let _tag = em.emit_pop();
                 let _ = arms;
             }
-            | Terminator::Extern(sa::Extern { name, arity, .. }) => {
-                let _func_name = format!("zydeco_{}", name);
-                let mut args = Vec::new();
-                for _ in 0..*arity {
-                    args.push(em.emit_pop());
+            | Terminator::Extern(external) => {
+                if let sa::Extern::Host { name, arity, .. } = external {
+                    let _func_name = format!("zydeco_{name}");
+                    let mut args = Vec::new();
+                    for _ in 0..*arity {
+                        args.push(em.emit_pop());
+                    }
+                    args.reverse();
+                    let _args_str = args.join(", ");
                 }
-                args.reverse();
-                let _args_str = args.join(", ");
             }
             | Terminator::Abort(sa::Abort) => {}
         }

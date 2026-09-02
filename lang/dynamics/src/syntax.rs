@@ -68,6 +68,12 @@ pub struct Prim {
     pub role: BuiltinValueRole,
 }
 
+/// A checked foreign import together with its source-level argument count.
+#[derive(Clone, Debug)]
+pub struct ForeignPrim {
+    pub import: ForeignImport,
+}
+
 /// Computations in the dynamic language.
 #[derive(From, Clone, Debug)]
 pub enum Computation {
@@ -83,6 +89,7 @@ pub enum Computation {
     CoMatch(CoMatch<DtorName, RcCompu>),
     Dtor(Dtor<RcCompu, DtorName>),
     Prim(Prim),
+    Foreign(ForeignPrim),
 }
 
 /* ---------------------------------- Arena --------------------------------- */
@@ -158,6 +165,7 @@ pub struct Runtime<'rt> {
     pub output: &'rt mut dyn Write,
     pub args: &'rt [String],
     pub(crate) host: HostRuntime,
+    pub(crate) foreign: crate::foreign::ForeignRuntime,
     pub stack: rpds::VectorSync<SemCompu>,
     pub env: Env<SemValue>,
     pub program: DynamicsProgram,
@@ -169,4 +177,12 @@ pub enum ProgKont {
     Dry,
     Ret(SemValue),
     ExitCode(i32),
+    Error(RuntimeError),
+}
+
+/// Recoverable failures raised by runtime-managed boundaries.
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum RuntimeError {
+    #[error(transparent)]
+    Foreign(#[from] crate::foreign::ForeignRuntimeError),
 }

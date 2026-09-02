@@ -782,6 +782,110 @@ impl std::fmt::Display for BuiltinRole {
     }
 }
 
+/* ---------------------------------- FFI ----------------------------------- */
+
+/// Calling convention used by one foreign import.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ForeignAbi {
+    C,
+}
+
+impl std::fmt::Display for ForeignAbi {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            | Self::C => f.write_str("c"),
+        }
+    }
+}
+
+/// A platform linker name, as used by `-l<name>`.
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ForeignLibraryName(String);
+
+impl ForeignLibraryName {
+    pub fn parse(name: impl Into<String>) -> Option<Self> {
+        let name = name.into();
+        let mut bytes = name.bytes();
+        let first = bytes.next()?;
+        ((first.is_ascii_alphanumeric() || first == b'_')
+            && bytes.all(|byte| {
+                byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.' | b'+')
+            }))
+        .then_some(Self(name))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for ForeignLibraryName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// An unmangled C external symbol.
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ForeignSymbolName(String);
+
+impl ForeignSymbolName {
+    pub fn parse(name: impl Into<String>) -> Option<Self> {
+        let name = name.into();
+        let mut bytes = name.bytes();
+        let first = bytes.next()?;
+        ((first.is_ascii_alphabetic() || first == b'_')
+            && bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_'))
+        .then_some(Self(name))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for ForeignSymbolName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Link-time identity of a foreign function, before its Zydeco classifier is interpreted.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct ForeignTarget {
+    pub abi: ForeignAbi,
+    pub library: ForeignLibraryName,
+    pub symbol: ForeignSymbolName,
+}
+
+/// One source-level parameter whose C representation is known to the compiler.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+pub enum ForeignParameter {
+    /// Borrow an immutable `Bytes` value as `const void *` plus `size_t` for the duration of a call.
+    BorrowedBytes,
+    UInt64,
+}
+
+/// One source-level foreign result whose C representation is known to the compiler.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+pub enum ForeignResult {
+    UInt64,
+}
+
+/// The marshalling protocol derived from a checked CBPV classifier.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct ForeignSignature {
+    pub parameters: Vec<ForeignParameter>,
+    pub result: ForeignResult,
+}
+
+/// A validated foreign target paired with its source-to-C marshalling protocol.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct ForeignImport {
+    pub target: ForeignTarget,
+    pub signature: ForeignSignature,
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum Meta {
     Ident(String),

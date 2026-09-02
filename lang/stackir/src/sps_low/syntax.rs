@@ -3,7 +3,7 @@
 pub use super::arena::*;
 pub use crate::{
     builtin::*,
-    syntax::{Bullet, CtorIdx, DefId, DtorIdx, ProductLayout, VCons},
+    syntax::{Bullet, CtorIdx, DefId, DtorIdx, ExternalFunction, ProductLayout, VCons},
 };
 pub use zydeco_syntax::*;
 pub use zydeco_utils::arena::*;
@@ -159,7 +159,7 @@ pub struct OpenContinuation {
 
 #[derive(Clone, Debug)]
 pub struct ExternCall {
-    pub function: String,
+    pub function: ExternalFunction,
     pub stack: StackId,
 }
 

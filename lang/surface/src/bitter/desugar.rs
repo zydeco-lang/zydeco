@@ -1,6 +1,6 @@
 use crate::{
     bitter::{syntax as b, *},
-    metadata::{BuiltinMeta, IntrinsicMeta, MonadicMeta},
+    metadata::{BuiltinMeta, FfiMeta, IntrinsicMeta, MonadicMeta},
     textual::syntax as t,
 };
 use derive_more::{AsMut, AsRef};
@@ -468,6 +468,22 @@ impl Desugar for t::TermId {
                     }
                     | Err(source) => {
                         return Err(DesugarError::InvalidBuiltinMeta {
+                            term: self.span(desugarer.spans).clone().make(self),
+                            source,
+                        });
+                    }
+                }
+                match meta.specialize::<FfiMeta>() {
+                    | Ok(Some(_)) => {
+                        if !matches!(desugarer.lookup_term(term), Tm::Hole(_)) {
+                            return Err(DesugarError::FfiPayloadNotHole(
+                                self.span(desugarer.spans).clone().make(self),
+                            ));
+                        }
+                    }
+                    | Ok(None) => {}
+                    | Err(source) => {
+                        return Err(DesugarError::InvalidFfiMeta {
                             term: self.span(desugarer.spans).clone().make(self),
                             source,
                         });

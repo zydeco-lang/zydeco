@@ -2,7 +2,7 @@ use super::{check::BranchJoinProgram, syntax::*};
 use derive_more::{AsMut, AsRef};
 use zydeco_statics::{BuiltinPackagePlan, BuiltinPackageValue, arena::StaticsArena, syntax as ss};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
-use zydeco_utils::pass::CompilerPass;
+use zydeco_utils::{pass::CompilerPass, prelude::ArenaAccess};
 
 /// Lower typed syntax nodes into stack IR.
 trait Lower {
@@ -606,6 +606,13 @@ impl Lower for ss::ValueId {
     type Out = ValuePlan<ValueId>;
 
     fn lower(&self, lo: &mut Lowerer, (): Self::Kont) -> Self::Out {
+        if let Some(import) = lo.statics.foreign_imports.get(self).cloned() {
+            let site = Some(ss::TermId::Value(*self));
+            let stack = Bullet.build(lo, site);
+            let body =
+                ExternCall { function: ExternalFunction::Foreign(import), stack }.build(lo, site);
+            return ValuePlan::pure(Closure { stack: Bullet, body }.build(lo, site));
+        }
         let value = lo.statics.values[self].clone();
         let site = Some(ss::TermId::Value(*self));
         match value {

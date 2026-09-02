@@ -265,11 +265,15 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                 ])
             }
             | Computation::ExternCall(ExternCall { function, stack }) => {
-                let arity = f.admin.builtins[function].arity;
-                RcDoc::concat([
-                    RcDoc::text(format!("<extern:{function}/{arity}> ")),
-                    stack.pretty(f),
-                ])
+                let (name, arity) = match function {
+                    | ExternalFunction::Host(function) => {
+                        (function.as_str(), f.admin.builtins[function].arity)
+                    }
+                    | ExternalFunction::Foreign(import) => {
+                        (import.target.symbol.as_str(), import.signature.parameters.len())
+                    }
+                };
+                RcDoc::concat([RcDoc::text(format!("<extern:{name}/{arity}> ")), stack.pretty(f)])
             }
         }
     }

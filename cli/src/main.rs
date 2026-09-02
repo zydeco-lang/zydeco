@@ -100,6 +100,7 @@ impl Application {
         match CommandCompiler::interpret_program(executable, arguments, dry)? {
             | ProgKont::Dry => Ok(0),
             | ProgKont::ExitCode(code) => Ok(code),
+            | ProgKont::Error(_) => unreachable!("runtime errors are promoted to CompileError"),
             | ProgKont::Ret(_) => unreachable!("an executable source root must return `OS`"),
         }
     }
@@ -147,7 +148,8 @@ impl Application {
             | BuildTarget::Exe => {
                 let artifact = Self::artifact_name(path)?;
                 let assembly = backend.emit_amd64(options.operating_system);
-                let executable = options.link_amd64(&artifact, &assembly)?;
+                let foreign_libraries = backend.foreign_libraries();
+                let executable = options.link_amd64(&artifact, &assembly, &foreign_libraries)?;
                 if execute {
                     return Ok(executable.run(&[])?.code().unwrap_or(0));
                 }

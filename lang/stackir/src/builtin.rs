@@ -144,7 +144,7 @@ impl Builtin {
     where
         Arena: AsMut<StackirArena>,
     {
-        let function = self.name.clone();
+        let function = ExternalFunction::Host(self.name.clone());
         let stack = Bullet.build(arena, None);
         let body = ExternCall { function, stack }.build(arena, None);
         Closure { stack: Bullet, body }.build(arena, None)

@@ -11,6 +11,9 @@ pub use syntax::{ProgKont, Runtime};
 pub mod host;
 /// Registry for runtime builtin primitives.
 pub mod builtin;
+/// Checked foreign calls and the interpreter's dynamic-library runtime.
+pub mod foreign;
+pub use foreign::ForeignRuntimeError;
 /// Implementations of runtime builtin primitives.
 mod impls;
 /// Linking from statics syntax to dynamic runtime syntax.

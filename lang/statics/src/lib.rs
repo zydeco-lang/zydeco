@@ -25,6 +25,10 @@ pub use arena::*;
 pub mod builtin;
 pub use builtin::*;
 
+/// Static validation and marshalling plans for foreign imports.
+pub mod foreign;
+pub use foreign::*;
+
 /// Typed arena allocation helpers.
 pub mod alloc;
 pub use alloc::*;

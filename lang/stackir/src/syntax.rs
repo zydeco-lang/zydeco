@@ -166,9 +166,15 @@ pub struct SCoMatch<Sc, Br, Tail> {
 
 #[derive(Clone, Debug)]
 pub struct ExternCall {
-    /// External function name; can be found in builtins map
-    pub function: String,
+    pub function: ExternalFunction,
     pub stack: StackId,
+}
+
+/// A call through either the Zydeco host ABI or a source-declared foreign ABI.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub enum ExternalFunction {
+    Host(String),
+    Foreign(ForeignImport),
 }
 
 #[derive(From, Clone, Debug)]

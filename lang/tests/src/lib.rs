@@ -131,7 +131,8 @@ pub mod utils {
             );
             let backend = CommandCompiler::default().lower(&self.path)?;
             let assembly = backend.emit_amd64(operating_system);
-            let executable = options.link_amd64("test", &assembly)?;
+            let foreign_libraries = backend.foreign_libraries();
+            let executable = options.link_amd64("test", &assembly, &foreign_libraries)?;
             let status = executable.run(&self.arguments)?;
             if status.success() { Ok(()) } else { Err(CaseError::NativeExit(status)) }
         }

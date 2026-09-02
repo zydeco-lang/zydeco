@@ -71,7 +71,7 @@ impl<'a> Lowerer<'a> {
         for builtin in self.sps_low.admin.builtins.values() {
             let sk::Builtin { role, name, arity, sort } = builtin.clone();
             if let Some(mode) = ExternMode::for_builtin(sort) {
-                self.arena.externs.push(Extern { role, name, arity, mode });
+                self.arena.externs.push(Extern::Host { role, name, arity, mode });
             }
         }
 
@@ -659,20 +659,21 @@ impl<'a> Lower<'a> for sk::CompuId {
                     ),
                 ),
             | Compu::ExternCall(sk::ExternCall { function, stack }) => {
-                let builtin = &lo.sps_low.admin.builtins[&function];
-                let role = builtin.role;
-                let arity = builtin.arity;
-                let mode =
-                    ExternMode::for_builtin(builtin.sort.clone()).expect("operator used as extern");
-                stack.lower(
-                    lo,
-                    With::new(
-                        cx,
-                        Box::new(move |lo, cx| {
-                            Extern { role, name: function, arity, mode }.build(lo, cx)
-                        }),
-                    ),
-                )
+                let external = match function {
+                    | sk::ExternalFunction::Host(function) => {
+                        let builtin = &lo.sps_low.admin.builtins[&function];
+                        let role = builtin.role;
+                        let arity = builtin.arity;
+                        let mode = ExternMode::for_builtin(builtin.sort.clone())
+                            .expect("operator used as extern");
+                        Extern::Host { role, name: function, arity, mode }
+                    }
+                    | sk::ExternalFunction::Foreign(import) => Extern::Foreign(import),
+                };
+                if !lo.arena.externs.contains(&external) {
+                    lo.arena.externs.push(external.clone());
+                }
+                stack.lower(lo, With::new(cx, Box::new(move |lo, cx| external.build(lo, cx))))
             }
         }
     }

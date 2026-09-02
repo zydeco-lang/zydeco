@@ -35,6 +35,7 @@ impl<'rt> Runtime<'rt> {
             output,
             args,
             host: crate::host::HostRuntime::new(),
+            foreign: crate::foreign::ForeignRuntime::new(),
             stack: rpds::VectorSync::new_sync(),
             env: Env::new(),
             program,
@@ -304,6 +305,18 @@ impl<'rt> Eval<'rt> for Computation {
                 ) {
                     | Ok(e) => Step::Step(e),
                     | Err(exit_code) => Step::Done(ProgKont::ExitCode(exit_code)),
+                }
+            }
+            | Computation::Foreign(ForeignPrim { import }) => {
+                let arguments = (0..import.signature.parameters.len())
+                    .map(|_| match runtime.pop_stack() {
+                        | Some(SemCompu::App(argument)) => argument,
+                        | _ => panic!("foreign call argument not at stack top"),
+                    })
+                    .collect();
+                match runtime.foreign.invoke(&import, arguments) {
+                    | Ok(computation) => Step::Step(computation),
+                    | Err(error) => Step::Done(ProgKont::Error(error.into())),
                 }
             }
         }

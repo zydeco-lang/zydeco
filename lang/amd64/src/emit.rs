@@ -428,6 +428,63 @@ impl<'e> Emitter<'e> {
         ]);
         self.shift_stack_parity(1);
     }
+
+    fn foreign_symbol(&self, symbol: &ForeignSymbolName) -> String {
+        match self.target_format {
+            | TargetFormat::Elf => symbol.to_string(),
+            | TargetFormat::MachO => format!("_{symbol}"),
+        }
+    }
+
+    fn emit_foreign_call(&mut self, id: ProgId, import: &ForeignImport) {
+        assert_eq!(import.target.abi, ForeignAbi::C);
+        assert_eq!(
+            import.signature.parameters.as_slice(),
+            [ForeignParameter::BorrowedBytes, ForeignParameter::UInt64]
+        );
+        assert_eq!(import.signature.result, ForeignResult::UInt64);
+
+        self.asm.text.extend([
+            Instr::Comment(format!(
+                "ffi: {} from -l{}",
+                import.target.symbol, import.target.library
+            )),
+            Instr::Pop(Loc::Reg(Reg::R12)),
+            Instr::Pop(Loc::Reg(Reg::R13)),
+            Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::R12))),
+        ]);
+        self.shift_stack_parity(-2);
+        self.emit_aligned_call(JmpArgs::Label("zydeco_ffi_borrow_bytes".to_string()));
+        self.asm.text.extend([
+            Instr::Mov(MovArgs::ToReg(Reg::R12, Arg64::Reg(Reg::Rax))),
+            Instr::Mov(MovArgs::ToReg(Reg::R14, Arg64::Reg(Reg::Rdx))),
+            Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::R13))),
+        ]);
+        self.emit_aligned_call(JmpArgs::Label("zydeco_ffi_decode_u64".to_string()));
+        self.asm.text.extend([
+            Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::R12))),
+            Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::R14))),
+            Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(Reg::Rax))),
+        ]);
+        self.emit_aligned_call(JmpArgs::Label(self.foreign_symbol(&import.target.symbol)));
+        self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::R12, Arg64::Reg(Reg::Rax))));
+
+        let context_words = self.assembly.contexts[&id].iter().len();
+        self.emit_alloc_call(1, AllocationKind::Opaque, context_words);
+        self.asm.text.extend([
+            Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::R12))),
+            Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rax))),
+        ]);
+        self.emit_aligned_call(JmpArgs::Label("zydeco_ffi_encode_u64".to_string()));
+        self.asm.text.extend([
+            Instr::Mov(MovArgs::ToReg(Reg::Rcx, Arg64::Reg(Reg::Rax))),
+            Instr::Pop(Loc::Reg(Reg::Rax)),
+            Instr::Push(Arg32::Reg(Reg::Rcx)),
+            Instr::Jmp(JmpArgs::Reg(Reg::Rax)),
+        ]);
+        self.shift_stack_parity(-1);
+        self.shift_stack_parity(1);
+    }
 }
 
 impl<'e> CompilerPass for Emitter<'e> {
@@ -451,11 +508,18 @@ impl<'e> CompilerPass for Emitter<'e> {
             Instr::Extern("zydeco_arg_fold_resume".to_string()),
             // construct an owned host string from static UTF-8 bytes
             Instr::Extern("zydeco_string_literal".to_string()),
+            // source-to-C marshalling helpers
+            Instr::Extern("zydeco_ffi_borrow_bytes".to_string()),
+            Instr::Extern("zydeco_ffi_decode_u64".to_string()),
+            Instr::Extern("zydeco_ffi_encode_u64".to_string()),
         ]);
 
         // Emit the externs
-        for sa::Extern { name, .. } in self.assembly.externs.iter() {
-            let label = format!("zydeco_{}", name);
+        for external in self.assembly.externs.iter() {
+            let label = match external {
+                | sa::Extern::Host { name, .. } => format!("zydeco_{name}"),
+                | sa::Extern::Foreign(import) => self.foreign_symbol(&import.target.symbol),
+            };
             self.asm.text.push(Instr::Extern(label));
         }
 
@@ -731,7 +795,7 @@ impl<'a> Emit<'a> for Terminator {
                     }
                 }
             }
-            | Terminator::Extern(sa::Extern { role, name, arity, mode }) => {
+            | Terminator::Extern(sa::Extern::Host { role, name, arity, mode }) => {
                 em.asm.text.push(Instr::Comment(format!("extern: {}/{}", name, arity)));
 
                 let zydeco_extern_name = format!("zydeco_{}", name);
@@ -801,6 +865,9 @@ impl<'a> Emit<'a> for Terminator {
                         ]);
                     }
                 }
+            }
+            | Terminator::Extern(sa::Extern::Foreign(import)) => {
+                em.emit_foreign_call(id, import);
             }
             | Terminator::Abort(sa::Abort) => {
                 em.asm.text.push(Instr::Comment("abort".to_string()));

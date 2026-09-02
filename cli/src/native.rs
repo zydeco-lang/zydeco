@@ -46,7 +46,10 @@ impl BuildOptions {
             })
     }
 
-    pub fn link_amd64(&self, artifact: &str, assembly: &str) -> Result<Executable, NativeError> {
+    pub fn link_amd64(
+        &self, artifact: &str, assembly: &str,
+        foreign_libraries: &[zydeco_syntax::ForeignLibraryName],
+    ) -> Result<Executable, NativeError> {
         if self.architecture != TargetArchitecture::X86_64 {
             return Err(NativeError::UnsupportedAmd64Architecture(self.architecture));
         }
@@ -79,6 +82,14 @@ impl BuildOptions {
         cargo
             .env("ZYDECO_STATIC_LIB", &library)
             .env("ZYDECO_LIB_DIR", ".")
+            .env(
+                "ZYDECO_DYNAMIC_LIBS",
+                foreign_libraries
+                    .iter()
+                    .map(zydeco_syntax::ForeignLibraryName::as_str)
+                    .collect::<Vec<_>>()
+                    .join(","),
+            )
             .arg("build")
             .arg("--manifest-path")
             .arg(self.build_dir.join("Cargo.toml"))

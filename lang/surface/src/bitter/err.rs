@@ -1,5 +1,5 @@
 use super::syntax as b;
-use crate::metadata::{BuiltinMetaError, IntrinsicMetaError, MonadicMetaError};
+use crate::metadata::{BuiltinMetaError, FfiMetaError, IntrinsicMetaError, MonadicMetaError};
 use crate::textual::syntax as t;
 use thiserror::Error;
 use zydeco_syntax::{BuiltinTypeRole, BuiltinValueRole};
@@ -39,6 +39,14 @@ pub enum DesugarError {
     },
     #[error("Intrinsic annotation must annotate a hole expression")]
     IntrinsicPayloadNotHole(Sp<t::TermId>),
+    #[error("Invalid ffi annotation: {source}")]
+    InvalidFfiMeta {
+        term: Sp<t::TermId>,
+        #[source]
+        source: FfiMetaError,
+    },
+    #[error("An ffi annotation must provide the implementation of a hole expression")]
+    FfiPayloadNotHole(Sp<t::TermId>),
     #[error("A quantified type parameter must be a pattern")]
     QuantifierParameterNotPattern(Sp<t::CoPatId>),
     #[error("A value-function parameter must be a pattern")]
@@ -59,7 +67,9 @@ impl DesugarError {
             | Self::BuiltinTypeRoleOnTerm { term, .. }
             | Self::InvalidIntrinsicMeta { term, .. }
             | Self::InvalidMonadicMeta { term, .. }
-            | Self::IntrinsicPayloadNotHole(term) => term.info,
+            | Self::InvalidFfiMeta { term, .. }
+            | Self::IntrinsicPayloadNotHole(term)
+            | Self::FfiPayloadNotHole(term) => term.info,
             | Self::InvalidBuiltinPatternMeta { pattern, .. }
             | Self::BuiltinValueRoleOnExistentialPattern { pattern, .. }
             | Self::UnsupportedExistentialPatternMeta(pattern)

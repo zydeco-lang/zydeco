@@ -100,6 +100,8 @@ pub enum EmitError {
     MissingHostImport(String),
     #[error("duplicate ZASM extern `{0}`")]
     DuplicateExtern(String),
+    #[error("WebAssembly abstract-machine backend cannot import native foreign symbol `{0}`")]
+    UnsupportedForeignImport(String),
     #[error("unresolved integer literal reached WebAssembly emission")]
     UnresolvedInteger,
     #[error(
@@ -289,13 +291,31 @@ impl ModulePlan {
             })
             .collect::<Result<HashMap<_, _>, EmitError>>()?;
 
-        let mut externs = assembly.externs.iter().collect::<Vec<_>>();
-        externs.sort_by(|left, right| left.name.cmp(&right.name));
-        if let Some(duplicate) = externs
-            .windows(2)
-            .find(|pair| pair[0].name == pair[1].name)
-            .map(|pair| pair[0].name.clone())
-        {
+        if let Some(symbol) = assembly.externs.iter().find_map(|external| match external {
+            | zasm::Extern::Foreign(import) => Some(import.target.symbol.to_string()),
+            | zasm::Extern::Host { .. } => None,
+        }) {
+            return Err(EmitError::UnsupportedForeignImport(symbol));
+        }
+        let mut externs = assembly
+            .externs
+            .iter()
+            .filter(|external| matches!(external, zasm::Extern::Host { .. }))
+            .collect::<Vec<_>>();
+        externs.sort_by(|left, right| match (left, right) {
+            | (zasm::Extern::Host { name: left, .. }, zasm::Extern::Host { name: right, .. }) => {
+                left.cmp(right)
+            }
+            | _ => unreachable!("foreign imports were rejected above"),
+        });
+        if let Some(duplicate) = externs.windows(2).find_map(|pair| match (pair[0], pair[1]) {
+            | (zasm::Extern::Host { name: left, .. }, zasm::Extern::Host { name: right, .. })
+                if left == right =>
+            {
+                Some(left.clone())
+            }
+            | _ => None,
+        }) {
             return Err(EmitError::DuplicateExtern(duplicate));
         }
 
@@ -305,13 +325,16 @@ impl ModulePlan {
             .into_iter()
             .enumerate()
             .map(|(index, external)| {
+                let zasm::Extern::Host { role, name, arity, mode } = external else {
+                    unreachable!("foreign imports were rejected above")
+                };
                 let index = Limits::u32(index, "host import count")?;
                 Ok(HostImport {
                     function: first_host_function + index,
-                    name: external.name.clone(),
-                    arity: external.arity,
-                    mode: external.mode,
-                    spare: SpareBox::for_role(external.role),
+                    name: name.clone(),
+                    arity: *arity,
+                    mode: *mode,
+                    spare: SpareBox::for_role(*role),
                 })
             })
             .collect::<Result<Vec<_>, EmitError>>()?;
@@ -825,16 +848,20 @@ impl<'a> CaseEncoder<'a> {
     }
 
     fn emit_extern(&mut self, external: &zasm::Extern) -> Result<(), EmitError> {
-        let function = self.plan.host_function(&external.name)?;
-        for index in 0..external.arity {
+        let zasm::Extern::Host { role, name, arity, mode } = external else {
+            let zasm::Extern::Foreign(import) = external else { unreachable!() };
+            return Err(EmitError::UnsupportedForeignImport(import.target.symbol.to_string()));
+        };
+        let function = self.plan.host_function(name)?;
+        for index in 0..*arity {
             self.pop_to(FIRST_ARGUMENT_LOCAL + Limits::u32(index, "host argument count")?);
         }
-        for index in 0..external.arity {
+        for index in 0..*arity {
             self.function.instruction(&WasmInstruction::LocalGet(
                 FIRST_ARGUMENT_LOCAL + Limits::u32(index, "host argument count")?,
             ));
         }
-        if let Some(spare) = SpareBox::for_role(external.role) {
+        if let Some(spare) = SpareBox::for_role(*role) {
             match spare {
                 | SpareBox::Opaque => {
                     self.function.instruction(&WasmInstruction::I32Const(1));
@@ -846,7 +873,7 @@ impl<'a> CaseEncoder<'a> {
             }
         }
         self.function.instruction(&WasmInstruction::Call(function));
-        match external.mode {
+        match mode {
             | ExternMode::Returning => {
                 self.function.instruction(&WasmInstruction::LocalSet(RESULT_LOCAL));
                 self.function.instruction(&WasmInstruction::Call(self.plan.pop_function()));

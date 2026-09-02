@@ -242,6 +242,14 @@ impl HostBytes {
     }
 }
 
+/// Borrowed view passed across the C ABI for the duration of one foreign call.
+#[derive(Clone, Copy)]
+#[repr(C)]
+struct ForeignBytes {
+    pointer: *const u8,
+    length: usize,
+}
+
 const STDIN_HANDLE: Word = 0;
 const STDOUT_HANDLE: Word = 0;
 const STDERR_HANDLE: Word = 1;
@@ -581,6 +589,22 @@ extern "sysv64" fn zydeco_alloc_opaque(
     size_words: usize, stack_start: *mut Word, environment: *mut Word, environment_words: usize,
 ) -> *mut u8 {
     ManagedHeap::allocate(size_words, BlockTag::Opaque, stack_start, environment, environment_words)
+}
+
+#[unsafe(export_name = "\x01zydeco_ffi_borrow_bytes")]
+extern "sysv64" fn zydeco_ffi_borrow_bytes(bytes: Word) -> ForeignBytes {
+    let bytes = unsafe { HostBytes::borrow(bytes) };
+    ForeignBytes { pointer: bytes.as_ptr(), length: bytes.len() }
+}
+
+#[unsafe(export_name = "\x01zydeco_ffi_decode_u64")]
+extern "sysv64" fn zydeco_ffi_decode_u64(value: Word) -> u64 {
+    <u64 as RuntimeInteger>::decode(value)
+}
+
+#[unsafe(export_name = "\x01zydeco_ffi_encode_u64")]
+extern "sysv64" fn zydeco_ffi_encode_u64(value: u64, spare: *mut Word) -> Word {
+    <u64 as RuntimeInteger>::encode(value, spare)
 }
 
 unsafe extern "sysv64" {

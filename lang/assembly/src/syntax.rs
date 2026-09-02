@@ -171,15 +171,13 @@ pub struct Intrinsic {
     pub arity: usize,
 }
 
-#[derive(Clone, Debug)]
-pub struct Extern {
-    pub role: BuiltinValueRole,
-    pub name: String,
-    pub arity: usize,
-    pub mode: ExternMode,
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Extern {
+    Host { role: BuiltinValueRole, name: String, arity: usize, mode: ExternMode },
+    Foreign(ForeignImport),
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExternMode {
     Returning,
     Control,

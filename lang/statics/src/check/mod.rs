@@ -8,7 +8,7 @@ use {
     },
     crate::surface_syntax::{PrimDefs, ScopedArena, SpanArena, TermContexts},
     crate::validate::CoverageChecker,
-    zydeco_surface::metadata::BuiltinMeta,
+    zydeco_surface::metadata::{BuiltinMeta, FfiMeta},
     zydeco_utils::prelude::ArenaAccess,
 };
 
@@ -59,6 +59,7 @@ pub struct Tycker<'a> {
     /// a writer monad for error handling
     pub errors: Vec<TyckErrorEntry>,
     pub(crate) observations: Vec<TyckObservation>,
+    pending_foreign_imports: Vec<PendingForeignImport>,
 }
 
 /// Immutable source diagnostics produced by one rejected check.
@@ -1526,6 +1527,7 @@ impl<'a> Tycker<'a> {
             field_materializations: DeferredEnvMaterializationCache::default(),
             errors: Vec::new(),
             observations: Vec::new(),
+            pending_foreign_imports: Vec::new(),
         }
     }
 
@@ -1694,6 +1696,7 @@ impl<'a> Tycker<'a> {
             for id in type_ids {
                 normalizer.normalize_type_k(id, self)?;
             }
+            self.validate_foreign_imports();
             // Retain one normalized classifier per distinct top annotation so
             // editor facts can answer without the occurrence payload.
             self.statics.retain_normalized_annotations();
@@ -1712,6 +1715,34 @@ impl<'a> Tycker<'a> {
             Err(KontFailure)?
         }
         Ok(())
+    }
+
+    fn validate_foreign_imports(&mut self) {
+        let pending = std::mem::take(&mut self.pending_foreign_imports);
+        for PendingForeignImport { value, classifier, target, blame, stack } in pending {
+            match ForeignClassifier::new(&self.statics).validate(target, classifier) {
+                | Ok(import) => {
+                    if let Some(existing) =
+                        self.statics.foreign_imports.insert_or_get(value, import.clone())
+                        && existing != import
+                    {
+                        self.errors.push(TyckErrorEntry {
+                            error: TyckError::ConflictingForeignImport {
+                                existing: existing.target,
+                                found: import.target,
+                            },
+                            blame,
+                            stack,
+                        });
+                    }
+                }
+                | Err(error) => self.errors.push(TyckErrorEntry {
+                    error: TyckError::InvalidForeignClassifier(error),
+                    blame,
+                    stack,
+                }),
+            }
+        }
     }
 
     /// Intern one typing environment into the arena's environment cache and
@@ -1914,6 +1945,22 @@ impl<Ann> Action<Ann> {
 struct BuiltinAttachment {
     role: ss::BuiltinRole,
     term: TermAnnId,
+}
+
+/// One foreign target awaiting interpretation of its normalized classifier.
+struct PendingForeignImport {
+    value: ss::ValueId,
+    classifier: ss::TypeId,
+    target: ss::ForeignTarget,
+    blame: &'static std::panic::Location<'static>,
+    stack: rpds::VectorSync<TyckTask>,
+}
+
+/// Validate and record the static attachment point of one foreign implementation.
+struct ForeignAttachment {
+    target: ss::ForeignTarget,
+    term: TermAnnId,
+    implementation: su::TermId,
 }
 
 /// Resolve one compiler-generated host type against the abstract Builtin
@@ -2173,6 +2220,40 @@ impl BuiltinAttachment {
             );
         }
         Ok((exists.binder.witness, exists.binder.payload_kind(tycker)))
+    }
+}
+
+impl ForeignAttachment {
+    fn new(target: ss::ForeignTarget, term: TermAnnId, implementation: su::TermId) -> Self {
+        Self { target, term, implementation }
+    }
+
+    #[track_caller]
+    fn register_k(self, tycker: &mut Tycker<'_>) -> ResultKont<()> {
+        let TermAnnId::Value(value, classifier) = self.term else {
+            return tycker
+                .err_k(TyckError::InvalidForeignAttachment, std::panic::Location::caller());
+        };
+        tycker.pending_foreign_imports.push(PendingForeignImport {
+            value,
+            classifier,
+            target: self.target,
+            blame: std::panic::Location::caller(),
+            stack: tycker.tasks.clone(),
+        });
+        tycker
+            .statics
+            .fills
+            .iter()
+            .filter_map(|(fill, site)| {
+                (*site == ss::InferenceSite::Term(self.implementation)).then_some(*fill)
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .for_each(|fill| {
+                tycker.statics.fill_hints.remove(&fill);
+            });
+        Ok(())
     }
 }
 
@@ -4534,6 +4615,12 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     .expect("builtin metadata is validated during desugaring")
                 {
                     BuiltinAttachment::new(meta.role, res).register_k(tycker, &self.info)?;
+                }
+                if let Some(meta) = meta
+                    .specialize::<FfiMeta>()
+                    .expect("ffi metadata is validated during desugaring")
+                {
+                    ForeignAttachment::new(meta.target, res, term).register_k(tycker)?;
                 }
                 if meta.is("debug") {
                     tycker

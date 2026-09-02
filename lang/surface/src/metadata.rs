@@ -1,6 +1,9 @@
 use std::convert::Infallible;
 use thiserror::Error;
-use zydeco_syntax::{BuiltinRole, IntrinsicRole, Meta, SpecializeMeta};
+use zydeco_syntax::{
+    BuiltinRole, ForeignAbi, ForeignLibraryName, ForeignSymbolName, ForeignTarget, IntrinsicRole,
+    Meta, SpecializeMeta,
+};
 
 use crate::textual::fmt::{IndentWidth, LayoutIntentions, Parentheses};
 
@@ -129,6 +132,70 @@ pub enum BuiltinMetaError {
     RoleNotIdentifier,
     #[error("unknown builtin role `{0}`")]
     UnknownRole(String),
+}
+
+/// A decoded `ffi(c, library("..."), symbol("..."))` annotation.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct FfiMeta {
+    pub target: ForeignTarget,
+}
+
+impl FfiMeta {
+    fn string_option(argument: &Meta, expected: &'static str) -> Result<String, FfiMetaError> {
+        match argument {
+            | Meta::Apply { callee, args } if callee == expected => match args.as_slice() {
+                | [Meta::String(value)] => Ok(value.clone()),
+                | [_] => Err(FfiMetaError::OptionNotString { option: expected }),
+                | arguments => {
+                    Err(FfiMetaError::OptionArity { option: expected, found: arguments.len() })
+                }
+            },
+            | _ => Err(FfiMetaError::ExpectedOption { option: expected }),
+        }
+    }
+}
+
+impl SpecializeMeta for FfiMeta {
+    const NAME: &'static str = "ffi";
+    type Error = FfiMetaError;
+
+    fn from_arguments(arguments: &[Meta]) -> Result<Self, Self::Error> {
+        let [abi, library, symbol] = arguments else {
+            return Err(FfiMetaError::Arity { found: arguments.len() });
+        };
+        let abi = match abi {
+            | Meta::Ident(abi) if abi == "c" => ForeignAbi::C,
+            | Meta::Ident(abi) => return Err(FfiMetaError::UnknownAbi(abi.clone())),
+            | _ => return Err(FfiMetaError::AbiNotIdentifier),
+        };
+        let library = Self::string_option(library, "library")?;
+        let library = ForeignLibraryName::parse(library.clone())
+            .ok_or(FfiMetaError::InvalidLibrary(library))?;
+        let symbol = Self::string_option(symbol, "symbol")?;
+        let symbol =
+            ForeignSymbolName::parse(symbol.clone()).ok_or(FfiMetaError::InvalidSymbol(symbol))?;
+        Ok(Self { target: ForeignTarget { abi, library, symbol } })
+    }
+}
+
+#[derive(Clone, Debug, Error, Hash, PartialEq, Eq)]
+pub enum FfiMetaError {
+    #[error("ffi expects an ABI, library, and symbol, but found {found} arguments")]
+    Arity { found: usize },
+    #[error("ffi ABI must be an identifier")]
+    AbiNotIdentifier,
+    #[error("unknown ffi ABI `{0}`")]
+    UnknownAbi(String),
+    #[error("ffi expects `{option}(\"...\")` in this position")]
+    ExpectedOption { option: &'static str },
+    #[error("ffi option `{option}` expects one argument, but found {found}")]
+    OptionArity { option: &'static str, found: usize },
+    #[error("ffi option `{option}` expects a string")]
+    OptionNotString { option: &'static str },
+    #[error("invalid foreign library name `{0}`")]
+    InvalidLibrary(String),
+    #[error("invalid C symbol name `{0}`")]
+    InvalidSymbol(String),
 }
 
 /// A decoded `format(...)` directive controlling how the pretty printer
@@ -282,4 +349,38 @@ pub enum FormatMetaError {
     UnknownLayout(String),
     #[error("unknown parenthesis policy `{0}`; expected minimal or preserve")]
     UnknownParentheses(String),
+}
+
+#[cfg(test)]
+mod ffi_tests {
+    use super::*;
+
+    fn annotation(library: &str, symbol: &str) -> Vec<Meta> {
+        vec![
+            Meta::ident("c"),
+            Meta::apply("library", [Meta::string(library)]),
+            Meta::apply("symbol", [Meta::string(symbol)]),
+        ]
+    }
+
+    #[test]
+    fn ffi_metadata_decodes_a_valid_c_target() {
+        let meta = FfiMeta::from_arguments(&annotation("xxhash", "XXH64")).unwrap();
+
+        assert_eq!(meta.target.abi, ForeignAbi::C);
+        assert_eq!(meta.target.library.as_str(), "xxhash");
+        assert_eq!(meta.target.symbol.as_str(), "XXH64");
+    }
+
+    #[test]
+    fn ffi_metadata_rejects_linker_and_assembly_injection() {
+        assert!(matches!(
+            FfiMeta::from_arguments(&annotation("xxhash\ninvalid", "XXH64")),
+            Err(FfiMetaError::InvalidLibrary(_))
+        ));
+        assert!(matches!(
+            FfiMeta::from_arguments(&annotation("xxhash", "XXH64; call injected")),
+            Err(FfiMetaError::InvalidSymbol(_))
+        ));
+    }
 }

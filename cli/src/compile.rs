@@ -69,7 +69,10 @@ impl CommandCompiler {
         .map_err(CompileError::BuiltinLink)?;
         let mut input = std::io::stdin().lock();
         let mut output = std::io::stdout();
-        Ok(Runtime::new(&mut input, &mut output, arguments, dynamics).run())
+        match Runtime::new(&mut input, &mut output, arguments, dynamics).run() {
+            | ProgKont::Error(error) => Err(CompileError::Runtime(error)),
+            | result => Ok(result),
+        }
     }
 
     pub fn test(&self, path: &Path, arguments: &[String]) -> Result<(), CompileError> {
@@ -86,6 +89,7 @@ impl CommandCompiler {
         let mut output = std::io::sink();
         match Runtime::new(&mut input, &mut output, arguments, dynamics).run() {
             | ProgKont::ExitCode(0) => Ok(()),
+            | ProgKont::Error(error) => Err(CompileError::Runtime(error)),
             | result => Err(CompileError::TestFailure(result)),
         }
     }
@@ -138,6 +142,7 @@ impl BackendProgram {
         let assembly = assembly
             .into_inner()
             .unwrap_or_else(|| LoweringPipeline::new(&spans, &scoped, &statics, &sps_low).run());
+        Self::validate_no_foreign_imports(&assembly, "ZASM interpreter")?;
         match zydeco_assembly::interp::Interpreter::new(assembly)
             .run()
             .map_err(CompileError::AssemblyInterpreter)?
@@ -161,10 +166,27 @@ impl BackendProgram {
         }
     }
 
+    pub fn foreign_libraries(&self) -> Vec<zydeco_syntax::ForeignLibraryName> {
+        self.assembly()
+            .arena()
+            .externs
+            .iter()
+            .filter_map(|external| match external {
+                | zydeco_assembly::syntax::Extern::Foreign(import) => {
+                    Some(import.target.library.clone())
+                }
+                | zydeco_assembly::syntax::Extern::Host { .. } => None,
+            })
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect()
+    }
+
     pub fn emit_llvm(
         &self, architecture: TargetArchitecture, operating_system: TargetOs,
     ) -> Result<String, CompileError> {
         let assembly = self.assembly();
+        Self::validate_no_foreign_imports(assembly, "LLVM")?;
         Self::validate_llvm_locals(assembly)?;
         let target = match (architecture, operating_system) {
             | (TargetArchitecture::X86_64, TargetOs::Linux) => {
@@ -234,6 +256,24 @@ impl BackendProgram {
                 Err(CompileError::LlvmUnsupportedLocal { program, variable })
             })
     }
+
+    fn validate_no_foreign_imports(
+        assembly: &AssemblyProgram, backend: &'static str,
+    ) -> Result<(), CompileError> {
+        assembly
+            .arena()
+            .externs
+            .iter()
+            .find_map(|external| match external {
+                | zydeco_assembly::syntax::Extern::Foreign(import) => {
+                    Some(import.target.symbol.clone())
+                }
+                | zydeco_assembly::syntax::Extern::Host { .. } => None,
+            })
+            .map_or(Ok(()), |symbol| {
+                Err(CompileError::ForeignImportUnsupported { backend, symbol })
+            })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -264,6 +304,8 @@ pub enum CompileError {
     #[error(transparent)]
     BuiltinLower(BuiltinPackageLowerError),
     #[error(transparent)]
+    Runtime(zydeco_dynamics::syntax::RuntimeError),
+    #[error(transparent)]
     AssemblyInterpreter(zydeco_assembly::interp::Error),
     #[error(transparent)]
     WasmAm(zydeco_wasm_am::EmitError),
@@ -276,4 +318,6 @@ pub enum CompileError {
         program: zydeco_assembly::syntax::ProgId,
         variable: zydeco_assembly::syntax::VarId,
     },
+    #[error("{backend} backend cannot import native foreign symbol `{symbol}`")]
+    ForeignImportUnsupported { backend: &'static str, symbol: zydeco_syntax::ForeignSymbolName },
 }

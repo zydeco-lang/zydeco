@@ -92,6 +92,8 @@ pub enum EmitError {
     MissingHostImport(String),
     #[error("SPS WebAssembly backend found an operator `{0}` in function position")]
     OperatorCalledAsFunction(String),
+    #[error("SPS WebAssembly backend cannot import native foreign symbol `{0}`")]
+    UnsupportedForeignImport(String),
     #[error("unresolved integer literal reached SPS WebAssembly emission")]
     UnresolvedInteger,
     #[error("unsupported SPS intrinsic `{name}/{arity}` in the WebAssembly backend")]
@@ -785,7 +787,16 @@ impl<'a> CaseEncoder<'a> {
                     id = body;
                 }
                 | Computation::ExternCall(sps::ExternCall { function, stack }) => {
-                    self.emit_extern(&function, stack)?;
+                    match function {
+                        | sps::ExternalFunction::Host(function) => {
+                            self.emit_extern(&function, stack)?
+                        }
+                        | sps::ExternalFunction::Foreign(import) => {
+                            return Err(EmitError::UnsupportedForeignImport(
+                                import.target.symbol.to_string(),
+                            ));
+                        }
+                    }
                     break;
                 }
             }

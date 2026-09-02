@@ -1,0 +1,10 @@
+begin
+  param val (/core; /representations) : @(import("../std/builtin.zy")) that
+  let (/Thk; /Ret) = core that
+  let (/UInt64) = representations/u64 that
+  let (/Bytes) = representations/bytes in
+
+  (
+    @(ffi(c,library("xxhash"),symbol("XXH64"))) : Thk (Bytes -> UInt64 -> Ret UInt64)
+  )
+end

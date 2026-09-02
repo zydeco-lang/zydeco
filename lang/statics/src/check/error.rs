@@ -76,6 +76,9 @@ pub enum TyckError {
     InvalidBuiltinAttachment { role: BuiltinRole, expected: &'static str },
     InvalidBuiltinSignature(BuiltinSignatureError),
     ConflictingBuiltinRole { existing: BuiltinRole, found: BuiltinRole },
+    InvalidForeignAttachment,
+    InvalidForeignClassifier(ForeignClassifierError),
+    ConflictingForeignImport { existing: ForeignTarget, found: ForeignTarget },
     MissingBuiltinTypeRole { role: BuiltinTypeRole },
     AmbiguousBuiltinTypeRole { role: BuiltinTypeRole, witnesses: Vec<AbstId> },
     IntegerLiteralOutOfRange { value: i128, integer_type: IntegerType },
@@ -123,6 +126,9 @@ pub enum TyckDiagnosticCode {
     InvalidBuiltinAttachment,
     InvalidBuiltinSignature,
     ConflictingBuiltinRole,
+    InvalidForeignAttachment,
+    InvalidForeignClassifier,
+    ConflictingForeignImport,
     MissingBuiltinTypeRole,
     AmbiguousBuiltinTypeRole,
     IntegerLiteralOutOfRange,
@@ -167,6 +173,9 @@ impl TyckDiagnosticCode {
             | Self::InvalidBuiltinAttachment => "tyck.invalid-builtin-attachment",
             | Self::InvalidBuiltinSignature => "tyck.invalid-builtin-signature",
             | Self::ConflictingBuiltinRole => "tyck.conflicting-builtin-role",
+            | Self::InvalidForeignAttachment => "tyck.invalid-foreign-attachment",
+            | Self::InvalidForeignClassifier => "tyck.invalid-foreign-classifier",
+            | Self::ConflictingForeignImport => "tyck.conflicting-foreign-import",
             | Self::MissingBuiltinTypeRole => "tyck.missing-builtin-type-role",
             | Self::AmbiguousBuiltinTypeRole => "tyck.ambiguous-builtin-type-role",
             | Self::IntegerLiteralOutOfRange => "tyck.integer-literal-out-of-range",
@@ -219,6 +228,9 @@ impl From<&TyckError> for TyckDiagnosticCode {
             | TyckError::InvalidBuiltinAttachment { .. } => Self::InvalidBuiltinAttachment,
             | TyckError::InvalidBuiltinSignature(_) => Self::InvalidBuiltinSignature,
             | TyckError::ConflictingBuiltinRole { .. } => Self::ConflictingBuiltinRole,
+            | TyckError::InvalidForeignAttachment => Self::InvalidForeignAttachment,
+            | TyckError::InvalidForeignClassifier(_) => Self::InvalidForeignClassifier,
+            | TyckError::ConflictingForeignImport { .. } => Self::ConflictingForeignImport,
             | TyckError::MissingBuiltinTypeRole { .. } => Self::MissingBuiltinTypeRole,
             | TyckError::AmbiguousBuiltinTypeRole { .. } => Self::AmbiguousBuiltinTypeRole,
             | TyckError::IntegerLiteralOutOfRange { .. } => Self::IntegerLiteralOutOfRange,
@@ -426,6 +438,14 @@ impl<'a> Tycker<'a> {
                     "Conflicting Builtin roles on one package entry: `{existing}` and `{found}`"
                 )
             }
+            | TyckError::InvalidForeignAttachment => {
+                "An ffi annotation must implement a value classified by `Thk (...)`".to_string()
+            }
+            | TyckError::InvalidForeignClassifier(error) => error.to_string(),
+            | TyckError::ConflictingForeignImport { existing, found } => format!(
+                "Conflicting foreign implementations `{}` and `{}`",
+                existing.symbol, found.symbol
+            ),
             | TyckError::MissingBuiltinTypeRole { role } => {
                 format!("Builtin type role `{}` is unavailable in this scope", role.source_name())
             }
@@ -747,6 +767,14 @@ impl<'a> Tycker<'a> {
             | TyckError::InvalidBuiltinSignature(error) => error.to_string(),
             | TyckError::ConflictingBuiltinRole { existing, found } => format!(
                 "Conflicting Builtin roles on one package entry: `{existing}` and `{found}`"
+            ),
+            | TyckError::InvalidForeignAttachment => {
+                "An ffi annotation must implement a value classified by `Thk (...)`".to_string()
+            }
+            | TyckError::InvalidForeignClassifier(error) => error.to_string(),
+            | TyckError::ConflictingForeignImport { existing, found } => format!(
+                "Conflicting foreign implementations `{}` and `{}`",
+                existing.symbol, found.symbol
             ),
             | TyckError::MissingBuiltinTypeRole { role } => {
                 format!("Builtin type role `{}` is unavailable", role.source_name())

@@ -6,6 +6,7 @@ use zydeco_statics::{
     surface_syntax::ScopedArena,
 };
 use zydeco_syntax::*;
+use zydeco_utils::prelude::ArenaAccess;
 
 /// Trait for translating statics syntax nodes into dynamic syntax nodes.
 pub trait Link {
@@ -179,6 +180,10 @@ impl Link for ss::ValueId {
     type Out = ds::RcValue;
 
     fn link(&self, statics: Self::Arena<'_>) -> Self::Out {
+        if let Some(import) = statics.foreign_imports.get(self).cloned() {
+            let primitive = ds::Computation::Foreign(ds::ForeignPrim { import });
+            return Rc::new(ds::Value::Thunk(Thunk(Rc::new(primitive))));
+        }
         let value = &statics.values[self];
         use ss::Value;
         let value = match value {
