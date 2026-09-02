@@ -59,7 +59,7 @@ the workspace-registered dependencies in their own `Cargo.toml`.
 
 - `README.md`: top-level usage and quick start.
 - `DESIGN.md`: language model, translation pipeline, and limitations.
-- `CONTRIBUTE.md`: build/test workflows and contribution notes.
+- `CONTRIBUTING.md`: build/test workflows and contribution notes.
 - `lib/tests/oopsla/README.md`: artifact overview and detailed examples.
 
 ## Common Workflows
@@ -125,7 +125,7 @@ Each phase generally includes `syntax`, `arena`, `err`, `fmt`, and `span` module
 
 ## Notes for Changes
 
-- Prefer updating `DESIGN.md` or `CONTRIBUTE.md` when modifying architecture or workflows.
+- Prefer updating `DESIGN.md` or `CONTRIBUTING.md` when modifying architecture or workflows.
 - Put exploratory design notes in `docs/ideas/`. Explain the motivating problem, relevant constraints,
   alternatives, and the principles by which a later decision should be judged.
 - Put stable design proposals in `docs/proposals/`. Explain the motivating problem, relevant constraints,

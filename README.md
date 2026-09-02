@@ -11,7 +11,15 @@ The instructions are located in [lib/tests/oopsla/README.md](lib/tests/oopsla/RE
 ## Documentation
 
 - [DESIGN.md](DESIGN.md): language model and implementation architecture
-- [CONTRIBUTE.md](CONTRIBUTE.md): build, test, and development workflows
+- [CONTRIBUTING.md](CONTRIBUTING.md): build, test, and development workflows
+
+## Installation
+
+Install the `zydeco` executable from a checkout of this repository:
+
+```bash
+cargo install --path cli
+```
 
 ## Running Zydeco
 
