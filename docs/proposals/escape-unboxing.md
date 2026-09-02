@@ -32,7 +32,7 @@ and
 
 ```zydeco
 do x <- ! { fn (x : Int64) => ret x } 0;
-! (process/exit) x
+! process/exit x
 ```
 
 In both cases the value is constructed and immediately projected or forced.

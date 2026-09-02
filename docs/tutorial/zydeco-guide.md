@@ -50,8 +50,8 @@ begin
   let (= Int64, int64) = numeric/int64 that
   let (/OS; /stdio; /process) = system that
 
-  ! (stdio/write_line) "hello" {
-    ! (process/exit) 0
+  ! stdio/write_line "hello" {
+    ! process/exit 0
   }
 end
 ```
@@ -292,20 +292,23 @@ Type-level named projection uses the same slash: if `T : (#field :: K)`, then `T
 A manifest named type such as `(#field = A)/field` reduces to `A`; an abstract named type keeps
 the projection explicit until it is instantiated.
 
-### Why projection parentheses matter
+### Projection and prefix precedence
 
-`!` binds tighter than `/`. Therefore:
-
-```zydeco
-! cap/get      ≡ (! cap) / get      -- type error: cap is not a thunk
-! (cap/get)    ≡ force the getter   -- what you usually want
-```
-
-The same rule applies to any projected thunk:
+Projection binds tighter than the undelimited prefixes `!` and `ret`, which bind tighter than
+application. Therefore:
 
 ```zydeco
-! (stdio/write_line) "hello" { continuation }
+! cap/get argument  ≡ (! (cap/get)) argument
+ret cap/initial     ≡ ret (cap/initial)
 ```
+
+Parentheses express the converse grouping when the result of a prefix form is projected:
+
+```zydeco
+(! thunk)/field
+```
+
+Constructor introduction, described next, occupies the same prefix level.
 
 ---
 
@@ -323,6 +326,8 @@ that
 ```
 
 A constructor takes one payload; a nullary constructor takes `Unit` and is used as `+True()`.
+Projection binds into an unparenthesized constructor payload, so `+Some package/value` means
+`+Some(package/value)`; use `(+Some(value))/field` to project from the constructed value.
 `match` eliminates data:
 
 ```zydeco
@@ -399,11 +404,11 @@ The second pattern binds both the type `Int64` and the operations package `int64
 operations are:
 
 ```zydeco
-! (int64/add) left right            -- Ret Int64
-! (int64/eq) (Ret Bool) left right
+! int64/add left right              -- Ret Int64
+! int64/eq (Ret Bool) left right
   { ret +True() } { ret +False() }  -- branch by result type
-! (stdio/write_line) text { next }  -- String -> Thk OS -> OS
-! (process/exit) 0                  -- OS
+! stdio/write_line text { next }    -- String -> Thk OS -> OS
+! process/exit 0                    -- OS
 ```
 
 `lib/std/std.zy` is a larger facade over builtin plus the standard data modules (`Bool`,
@@ -619,17 +624,17 @@ The user program depends on this package, not on any concrete module:
 def ! user_program (S : VType) (E : VType) =
   @[monadic] begin
     fn (cap : StateExnCapability S E) (one : S) (msg : E) =>
-      do n <- ! (cap/get);
-      do recovered <- ! (cap/catch) S
+      do n <- ! cap/get;
+      do recovered <- ! cap/catch S
         {
-          do _ <- ! (cap/raise) S msg;
+          do _ <- ! cap/raise S msg;
           ret n
         }
         {
-          fn _ => do m <- ! (cap/get); ret m
+          fn _ => do m <- ! cap/get; ret m
         };
-      do n' <- ! (cap/add) recovered one;
-      do _ <- ! (cap/put) n';
+      do n' <- ! cap/add recovered one;
+      do _ <- ! cap/put n';
       ret n'
   end
 that
@@ -669,7 +674,8 @@ The complete working example is
 
 The three traps here are the same three syntax rules from earlier sections:
 
-1. Project under force with parentheses: `! (cap/get)`.
+1. Projection binds inside force: `! cap/get` forces the selected thunk, while `(! cap)/get`
+   projects from the result of forcing `cap`.
 2. Bind the package with plain `let`, because it is a value.
 3. Pass the package directly; do not wrap it in `{ ! ... }` because it is not a thunk.
 
@@ -678,8 +684,8 @@ The three traps here are the same three syntax rules from earlier sections:
 ## 11. Pitfall checklist
 
 1. **Root type** — a runnable program must end in `OS`.
-2. **`!` precedence** — `! f x` parses as `(! f) x`. Write `! (record/field)` to force a
-   projected thunk.
+2. **Prefix precedence** — projection binds inside `!`, `ret`, and constructor introduction,
+   while application remains outside: `! record/field x` parses as `(! (record/field)) x`.
 3. **`do` only eliminates `Ret`** — an `OS`, a function, or an arbitrary `M A` computation is
    not directly bindable. Sequence `OS` actions by passing continuations; sequence a relative
    monad with `bind` or a monadic block.

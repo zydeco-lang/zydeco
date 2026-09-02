@@ -78,8 +78,8 @@ its carrier under that carrier's public name and contains only operations for th
 
 ```zydeco
 let (= Int64, int64) = numeric/int64 in
-do sum <- ! (int64/add) left right;
-! (int64/lt) Result sum limit when_true when_false
+do sum <- ! int64/add left right;
+! int64/lt Result sum limit when_true when_false
 ```
 
 A concrete manifest label lets any consumer bind the disclosed type under its established name, which is the

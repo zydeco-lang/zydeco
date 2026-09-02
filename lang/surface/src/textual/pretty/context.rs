@@ -32,17 +32,17 @@ impl<'arena> GrammarContext<'arena> {
             | Term::Var(_)
             | Term::Paren(_)
             | Term::Thunk(_)
-            | Term::Force(_)
-            | Term::Ret(_)
             | Term::Block(_)
             | Term::Data(_)
             | Term::CoData(_)
-            | Term::Ctor(_)
             | Term::Match(_)
             | Term::CoMatch(_)
             | Term::Pack(_)
             | Term::Lit(_) => RenderedTermClass::Term(TermPrecedence::Atom),
             | Term::Proj(_) => RenderedTermClass::Term(TermPrecedence::Projection),
+            | Term::Force(_) | Term::Ret(_) | Term::Ctor(_) => {
+                RenderedTermClass::Term(TermPrecedence::Prefix)
+            }
             | Term::App(_) | Term::Dtor(_) => RenderedTermClass::Term(TermPrecedence::Application),
             | Term::Prod(_) => RenderedTermClass::Term(TermPrecedence::Product),
             | Term::Arrow(_) => RenderedTermClass::Term(TermPrecedence::Arrow),
@@ -90,6 +90,7 @@ impl<'arena> GrammarContext<'arena> {
 pub(super) enum TermPrecedence {
     Atom,
     Projection,
+    Prefix,
     Application,
     Product,
     Arrow,

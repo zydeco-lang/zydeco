@@ -6,11 +6,11 @@ use crate::{
         fmt::Formatter,
         syntax::{
             Alias, Ann, Appli, BindingFlavor, Block, BuiltinRole, BuiltinValueRole, CoPatId,
-            ContextBind, DefId, DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists, Hole,
-            IntegerLiteral, IntegerOperation, IntegerType, IntrinsicRole, Label, Literal,
-            ManifestPattern, Meta, MetaT, Named, Pack, Param, ParameterFlavor, Paren, Parser,
-            PatId, Pattern, Pipeline, PipelineDirection, Placement, Prod, Proj, ProjectionPattern,
-            SourceUnit, Term, TermId, ViewPattern,
+            ContextBind, Ctor, DefId, DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists,
+            Force, Hole, IntegerLiteral, IntegerOperation, IntegerType, IntrinsicRole, Label,
+            Literal, ManifestPattern, Meta, MetaT, Named, Pack, Param, ParameterFlavor, Paren,
+            Parser, PatId, Pattern, Pipeline, PipelineDirection, Placement, Prod, Proj,
+            ProjectionPattern, Return, SourceUnit, Term, TermId, ViewPattern,
         },
     },
 };
@@ -1802,6 +1802,62 @@ fn named_projection_binds_tighter_than_application() {
     assert_eq!(function_field.plain(), "inspect");
     assert_eq!(receiver.plain(), "rectangle");
     assert_eq!(field.plain(), "top_left");
+}
+
+#[test]
+fn named_projection_binds_tighter_than_undelimited_prefix_forms() {
+    let force_source = "! package/action argument";
+    let mut force_parser = Parser::new();
+    let force = parser::SingleTermParser::new()
+        .parse(force_source, &mut force_parser, lexer::Lexer::new(force_source))
+        .unwrap();
+
+    let Term::App(Appli(force_application)) = &force_parser.arena.terms[&force] else {
+        panic!("expected forcing to bind tighter than application")
+    };
+    let [function, argument] = force_application.as_slice() else {
+        panic!("expected a binary application")
+    };
+    let Term::Force(Force(projected)) = &force_parser.arena.terms[function] else {
+        panic!("expected the projected operation to be forced")
+    };
+    let Term::Proj(Proj(receiver, field)) = &force_parser.arena.terms[projected] else {
+        panic!("expected force to consume a projection")
+    };
+    assert!(matches!(force_parser.arena.terms[receiver], Term::Var(_)));
+    assert_eq!(field.plain(), "action");
+    assert!(matches!(force_parser.arena.terms[argument], Term::Var(_)));
+
+    let return_source = "ret package/value";
+    let mut return_parser = Parser::new();
+    let returned = parser::SingleTermParser::new()
+        .parse(return_source, &mut return_parser, lexer::Lexer::new(return_source))
+        .unwrap();
+
+    let Term::Ret(Return(projected)) = &return_parser.arena.terms[&returned] else {
+        panic!("expected a return")
+    };
+    let Term::Proj(Proj(receiver, field)) = &return_parser.arena.terms[projected] else {
+        panic!("expected return to consume a projection")
+    };
+    assert!(matches!(return_parser.arena.terms[receiver], Term::Var(_)));
+    assert_eq!(field.plain(), "value");
+
+    let constructor_source = "+Some package/value";
+    let mut constructor_parser = Parser::new();
+    let constructed = parser::SingleTermParser::new()
+        .parse(constructor_source, &mut constructor_parser, lexer::Lexer::new(constructor_source))
+        .unwrap();
+
+    let Term::Ctor(Ctor(name, projected)) = &constructor_parser.arena.terms[&constructed] else {
+        panic!("expected a constructor")
+    };
+    let Term::Proj(Proj(receiver, field)) = &constructor_parser.arena.terms[projected] else {
+        panic!("expected constructor introduction to consume a projection")
+    };
+    assert_eq!(name.0, "+Some");
+    assert!(matches!(constructor_parser.arena.terms[receiver], Term::Var(_)));
+    assert_eq!(field.plain(), "value");
 }
 
 #[test]

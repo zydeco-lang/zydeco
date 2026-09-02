@@ -195,7 +195,12 @@ Its receiver undergoes ordinary lexical or global name resolution,
 while field labels are checked statically rather than resolved as variables.
 Slash is reserved exclusively for named projection; dot remains exclusively the elimination syntax
 for computation destructors, preserving the value/computation distinction.
-Slash binds tighter than application, so `f value/field` means `f (value/field)`.
+Slash binds tighter than the undelimited prefix forms `!`, `ret`, and constructor introduction,
+which in turn bind tighter than application and computation destruction. Consequently,
+`! package/action argument` means `(! (package/action)) argument`, `ret package/value` returns the selected value,
+and `+Some package/value` constructs `+Some(package/value)`. Parentheses express the converse grouping,
+as in `(! thunk)/field`. Application arguments also retain tight projections, so `f value/field` means
+`f (value/field)`.
 
 At the annotation layer, `:` binds more tightly than named-component `=` and `::`.
 The two named-component operators share one precedence level and associate to the right:

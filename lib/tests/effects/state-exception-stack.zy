@@ -47,32 +47,31 @@ begin
       end
     that
 
-    -- The user writes this once. Projection under force must be parenthesized:
-    -- `! (cap/get)` forces the selected thunk, while `! cap/get` means
-    -- `(! cap) / get`.
+    -- Projection binds tighter than force, so `! cap/get` forces the selected thunk.
+    -- Projecting from the result of a force instead requires `(! cap)/get`.
     def ! user_program (S : VType) (E : VType) =
       @[monadic] begin
         fn (cap : StateExnCapability S E) (one : S) (msg : E) =>
-          do n <- ! (cap/get);
-          do recovered <- ! (cap/catch) S
+          do n <- ! cap/get;
+          do recovered <- ! cap/catch S
             {
-              do _ <- ! (cap/raise) S msg;
+              do _ <- ! cap/raise S msg;
               ret n
             }
             {
               fn _ =>
-                do m <- ! (cap/get);
+                do m <- ! cap/get;
                 ret m
             };
-          do n' <- ! (cap/add) recovered one;
-          do _ <- ! (cap/put) n';
+          do n' <- ! cap/add recovered one;
+          do _ <- ! cap/put n';
           ret n'
       end
     that
 
     -- A State-specific operation lifted into the concrete stack.
     def ! add_state_exn (x : Int64) (y : Int64) : StateExn Int64 String Int64 =
-      do z <- ! (int64/add) x y;
+      do z <- ! int64/add x y;
       ! mo_state_exn Int64 String .return Int64 z
     that
 
@@ -116,24 +115,24 @@ begin
     ! run_state_exn Int64 String Int64 OS 7 { ! production }
       {
         fn msg =>
-          ! (stdio/write_line) msg {
-            ! (process/exit) 1
+          ! stdio/write_line msg {
+            ! process/exit 1
           }
       }
       {
         fn final_state answer =>
-          ! (stdio/write_int) answer {
-            ! (stdio/write) " " {
-              ! (stdio/write_int) final_state {
-                ! (stdio/write) "\n" {
-                  ! (int64/eq) OS answer 8 {
-                    ! (int64/eq) OS final_state 8 {
-                      ! (process/exit) 0
+          ! stdio/write_int answer {
+            ! stdio/write " " {
+              ! stdio/write_int final_state {
+                ! stdio/write "\n" {
+                  ! int64/eq OS answer 8 {
+                    ! int64/eq OS final_state 8 {
+                      ! process/exit 0
                     } {
-                      ! (process/exit) 2
+                      ! process/exit 2
                     }
                   } {
-                    ! (process/exit) 3
+                    ! process/exit 3
                   }
                 }
               }

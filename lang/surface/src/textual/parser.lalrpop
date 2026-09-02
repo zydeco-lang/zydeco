@@ -395,12 +395,14 @@ TermId: TermId = <TermGen<Term>>;
 Term: Term = {
     // LALRPOP nominal semantics subtlety:
     // Indirect references (TermId) are full term references;
-    // Direct ones (TermGen<Term>) are only atomic (precedence -= 1) terms.
+    // Direct ones (TermGen<Term>) participate in precedence rewriting and
+    // accept only the terms admitted at that occurrence's precedence.
 
     // Precedence summary (tightest -> loosest):
-    // level 0 (atom) < level 1 (proj) < level 2 (app/dtor) < level 3 (*)
-    // < level 4 (->) < levels 5-6 (value-level cuts)
-    // < level 7 (pi/forall/sigma/exists) < level 8 (binders/blocks).
+    // level 0 (atom) < level 1 (proj) < level 2 (!/ret/ctor)
+    // < level 3 (app/dtor) < level 4 (*) < level 5 (->)
+    // < levels 6-7 (value-level cuts)
+    // < level 8 (pi/forall/sigma/exists) < level 9 (binders/blocks).
 
     #[precedence(level="0")]
     // parentheses
@@ -408,11 +410,8 @@ Term: Term = {
     // hole and variable
     <Hole> => <>.into(),
     <VarName> => <>.into(),
-    // thunk & force
+    // thunk
     "{" <TermId> "}" => Thunk(<>).into(),
-    "!" <TermGen<Term>> => Force(<>).into(),
-    // ret
-    "ret" <TermGen<Term>> => Return(<>).into(),
     // context-forming block
     "begin" <TermAnnId> "end" => Block(<>).into(),
     // abstraction (alternative syntax)
@@ -420,8 +419,6 @@ Term: Term = {
     // structural types
     "data" <Data> "end" => <>.into(),
     "codata" <CoData> "end" => <>.into(),
-    // constructor
-    <name:CtorName> <args:TermGen<Term>> => Ctor(<>).into(),
     // match
     "match" <scrut:TermId> <arms:(<Matcher>)*> "end" => Match {<>}.into(),
     // comatch
@@ -443,8 +440,17 @@ Term: Term = {
     #[precedence(level="1")] #[assoc(side="left")]
     <term:TermGen<Term>> "/" <name:FieldName> => Proj(<>).into(),
 
+    // Undelimited prefix forms consume projections but stop before
+    // computation application and destruction.
+    #[precedence(level="2")] #[assoc(side="right")]
+    "!" <TermGen<Term>> => Force(<>).into(),
+    #[precedence(level="2")] #[assoc(side="right")]
+    "ret" <TermGen<Term>> => Return(<>).into(),
+    #[precedence(level="2")] #[assoc(side="right")]
+    <name:CtorName> <args:TermGen<Term>> => Ctor(<>).into(),
+
     // Application and computation destruction bind tighter than type operators.
-    #[precedence(level="2")] #[assoc(side="left")]
+    #[precedence(level="3")] #[assoc(side="left")]
     // application
     <term:TermGen<Term>> <arg:TermGen<Term>> => Appli(vec![<>]).into(),
     // destructor
@@ -453,23 +459,23 @@ Term: Term = {
     // Product is one flat infix node: A * B * C parses as a single
     // three-component product, while an explicitly parenthesized
     // component stays a distinct nested product.
-    #[precedence(level="3")] #[assoc(side="left")]
+    #[precedence(level="4")] #[assoc(side="left")]
     // product
     <ty_l:TermGen<Term>> "*" <ty_r:TermGen<Term>> => parser.extend_product(ty_l, ty_r).into(),
 
     // Arrow associates to the right: A -> B -> C == A -> (B -> C).
-    #[precedence(level="4")] #[assoc(side="right")]
+    #[precedence(level="5")] #[assoc(side="right")]
     // arrow
     <ty_in:TermGen<Term>> "->" <ty_out:TermGen<Term>> => Arrow(<>).into(),
 
     // Directional value-function application.
-    #[precedence(level="5")] #[assoc(side="left")]
+    #[precedence(level="6")] #[assoc(side="left")]
     <subject:TermGen<Term>> "|>" <function:TermGen<Term>> => Pipeline {
         direction: PipelineDirection::Forward,
         subject,
         function,
     }.into(),
-    #[precedence(level="6")] #[assoc(side="right")]
+    #[precedence(level="7")] #[assoc(side="right")]
     <function:TermGen<Term>> "<|" <subject:TermGen<Term>> => Pipeline {
         direction: PipelineDirection::Backward,
         subject,
@@ -477,7 +483,7 @@ Term: Term = {
     }.into(),
 
     // Quantifiers/types bind looser than arrows/products, tighter than binders.
-    #[precedence(level="7")]
+    #[precedence(level="8")]
     // pi
     "pi" <params:CoPatId> "." <term:TermGen<Term>> => Pi(<>).into(),
     // value pi
@@ -492,7 +498,7 @@ Term: Term = {
     },
 
     // Bindings are loosest to capture the largest possible tail.
-    #[precedence(level="8")]
+    #[precedence(level="9")]
     // abstraction
     "fn" <params:CoPatId> "=>" <term:TermGen<Term>> => Abs(<>).into(),
     // total value abstraction

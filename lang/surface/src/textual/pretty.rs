@@ -1516,13 +1516,13 @@ impl<'arena> PrettyFormatter<'arena> {
                 term,
                 "!",
                 BoundaryLayout::hanging("", self.indent()),
-                self.term_through_fragment(*body, TermPrecedence::Atom),
+                self.term_through_fragment(*body, TermPrecedence::Prefix),
             ),
             | Term::Ret(Return(body)) => self.prefixed(
                 term,
                 "ret",
                 BoundaryLayout::hanging("", self.indent()),
-                self.term_through_fragment(*body, TermPrecedence::Atom),
+                self.term_through_fragment(*body, TermPrecedence::Prefix),
             ),
             | Term::Do(Bind { binder, bindee, tail }) => self.block_like(
                 self.prefixed(
@@ -1711,9 +1711,7 @@ impl<'arena> PrettyFormatter<'arena> {
             .separated(
                 std::iter::once(first_argument)
                     .chain(arguments)
-                    .map(|argument| {
-                        self.term_through_fragment(*argument, TermPrecedence::Projection)
-                    })
+                    .map(|argument| self.term_through_fragment(*argument, TermPrecedence::Prefix))
                     .collect(),
                 BoundaryLayout::hanging("", self.indent()),
             )
@@ -2592,8 +2590,14 @@ mod tests {
             ("A -> (B -> C)", "A -> B -> C\n"),
             ("(A * B) * C", "(A * B) * C\n"),
             ("A * (B * C)", "A * (B * C)\n"),
-            ("! (value/field)", "! (value/field)\n"),
+            ("! (value/field)", "! value/field\n"),
+            ("ret (value/field)", "ret value/field\n"),
+            ("+Some value/field", "+Some(value/field)\n"),
+            ("(! value)/field", "(! value)/field\n"),
+            ("(ret value)/field", "(ret value)/field\n"),
+            ("(+Some(value))/field", "(+Some(value))/field\n"),
             ("f (value/field)", "f value/field\n"),
+            ("f (! value/field)", "f ! value/field\n"),
             ("f (g x)", "f (g x)\n"),
             ("(f x)/field", "(f x)/field\n"),
             ("((#field = field))", "(= field)\n"),
@@ -4286,12 +4290,12 @@ mod tests {
             // A hand-wrapped application rejoins when its compact form fits.
             (
                 "! (bool/if)\n  (Ret Int64)\n  greater\n  { ret left }\n  { ret right }",
-                "! (bool/if) (Ret Int64) greater { ret left } { ret right }\n",
+                "! bool/if (Ret Int64) greater { ret left } { ret right }\n",
             ),
             // A blank line still partitions the argument rows and survives.
             (
                 "! (bool/if)\n  (Ret Int64)\n\n  greater\n  { ret left }\n  { ret right }",
-                "! (bool/if) (Ret Int64)\n\n  greater { ret left } { ret right }\n",
+                "! bool/if (Ret Int64)\n\n  greater { ret left } { ret right }\n",
             ),
             // A single infix break rejoins; a blank line keeps the hanging form.
             ("A *\nB", "A * B\n"),
@@ -4331,7 +4335,7 @@ mod tests {
                     "  { ret left }\n",
                     "  { ret right }\n",
                 ),
-                "@[format(layout(ignore))] ! (bool/if) (Ret Int64) greater { ret left } { ret right }\n",
+                "@[format(layout(ignore))] ! bool/if (Ret Int64) greater { ret left } { ret right }\n",
             ),
             (
                 concat!(
@@ -4343,7 +4347,7 @@ mod tests {
                     "  { ret right }\n",
                 ),
                 concat!(
-                    "@[format(layout(blank_lines))] ! (bool/if) (Ret Int64)\n",
+                    "@[format(layout(blank_lines))] ! bool/if (Ret Int64)\n",
                     "\n",
                     "  greater { ret left } { ret right }\n",
                 ),
@@ -4396,7 +4400,7 @@ mod tests {
                 "@[format(width(24))] ! (bool/if) (Ret Int64) greater { ret left } { ret right }\n",
                 concat!(
                     "@[format(width(24))]\n",
-                    "! (bool/if) (Ret Int64)\n",
+                    "! bool/if (Ret Int64)\n",
                     "  greater { ret left } {\n",
                     "  ret right\n",
                     "}\n",
@@ -4413,7 +4417,7 @@ mod tests {
                 ),
                 concat!(
                     "@[format(width(20))]\n",
-                    "! (bool/if)\n",
+                    "! bool/if\n",
                     "\n",
                     "  (Ret Int64)\n",
                     "  greater\n",
@@ -4448,7 +4452,7 @@ mod tests {
         let expected = concat!(
             "@[format(width(24))]\n",
             "@[format(layout(ignore))]\n",
-            "! (bool/if) (Ret Int64)\n",
+            "! bool/if (Ret Int64)\n",
             "  greater { ret left } {\n",
             "  ret right\n",
             "}\n",
@@ -4477,8 +4481,9 @@ mod tests {
             "  { ret b }\n",
         );
         let expected = concat!(
-            "@[format(layout(ignore))] ! (bool/if) (Ret Int64) greater { ret left } { ret right } * ! (other/if)\n",
-            "  (Ret Int64) other { ret a } { ret b }\n",
+            "@[format(layout(ignore))] ! bool/if (Ret Int64) greater { ret left } { ret right } * ! other/if (\n",
+            "  Ret Int64\n",
+            ") other { ret a } { ret b }\n",
         );
         let parsed = ParsedSource::new(source);
         let formatted = parsed.render_with_options(PrettyOptions::default());

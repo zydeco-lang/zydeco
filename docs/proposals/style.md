@@ -166,12 +166,15 @@ Use `match` to eliminate data values and `comatch` to construct a codata computa
 with one arm per visible constructor or destructor case.
 
 A named projection uses `/`, while a computation destructor uses `.`.
-Parentheses make a projected operation pleasant to scan at a forcing site:
+Projection binds tighter than the undelimited prefixes `!`, `ret`, and constructor introduction,
+so a projected operation needs no parentheses at a forcing site:
 
 ```zydeco
-! (int/eq) left right
+! int/eq left right
 ! monad .bind A B computation function
 ```
+
+Parenthesize the prefix expression when projecting from its result, as in `(! thunk)/field`.
 
 New code uses `Thk` and `Ret`, the names supplied by the builtin package.
 `Thunk`, `U`, and `F` remain available through the standard prelude for sources that use the earlier vocabulary.

@@ -112,11 +112,11 @@ After selection, ordinary term projection keeps module operations qualified:
 
 ```zydeco
 def ! load (path : FilePath) : OS =
-  ! (filesystem/read_text) path {
+  ! filesystem/read_text path {
     fn result => ...
   }
 in
-! (process/exit) 0
+! process/exit 0
 ```
 
 Type fields conventionally use `UpperCamel` and module values use `lower_snake_case`,
@@ -242,9 +242,9 @@ For example, a minimal integer program needs no complete public telescope:
 
 ```zydeco
 let (/int64; /process) = builtin |> make_std in
-do one <- ! (int64/increment) 0;
-do status <- ! (int64/sub) one 1;
-! (process/exit) status
+do one <- ! int64/increment 0;
+do status <- ! int64/sub one 1;
+! process/exit status
 ```
 
 A filesystem consumer can select more capabilities while retaining the same shape:
