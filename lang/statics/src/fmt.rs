@@ -68,6 +68,28 @@ fn paren_type<'a>(f: &'a Formatter<'a>, ty: &TypeId) -> RcDoc<'a> {
     RcDoc::concat([RcDoc::text("("), ty.pretty(f), RcDoc::text(")")]).group()
 }
 
+/// Render one flattened chain of an infix type operator.
+///
+/// Following the textual infix-chain family, operators take a space on each
+/// side when the chain fits, and lead the continuation lines without recursive
+/// indentation when it does not: an operand's internal breaks align under the
+/// operand, one operator width past the boundary.
+fn infix_chain<'a>(f: &'a Formatter<'a>, operands: Vec<RcDoc<'a>>, symbol: &'a str) -> RcDoc<'a> {
+    let symbol_width = isize::try_from(symbol.len()).unwrap_or(isize::MAX);
+    let hanging = f.indent.max(symbol_width.saturating_add(1));
+    let mut operands = operands.into_iter();
+    let chain = operands.next().expect("an infix chain has a leading operand").nest(hanging);
+    operands
+        .fold(chain, |chain, operand| {
+            chain
+                .append(RcDoc::line())
+                .append(RcDoc::text(symbol))
+                .append(RcDoc::space())
+                .append(operand.nest(hanging))
+        })
+        .group()
+}
+
 /// Print an existential binder pattern in its source spelling, dropping the
 /// field labels that witness tracking wraps around package components.
 fn witness_pattern<'a>(f: &'a Formatter<'a>, pattern: &TPatId) -> RcDoc<'a> {
@@ -168,18 +190,27 @@ impl<'a> Pretty<'a, Formatter<'a>> for TypeId {
                 | Type::Primitive(PrimitiveTy(primitive)) => RcDoc::text(primitive.type_name()),
                 | Type::OS(OSTy) => RcDoc::text("OS"),
                 | Type::ValPi(ty) => ty.pretty(f),
-                | Type::Arrow(Arrow(func, arg)) => RcDoc::concat([
-                    tight_type(f, func),
-                    RcDoc::space(),
-                    RcDoc::text("->"),
-                    RcDoc::space(),
-                    arg.pretty(f),
-                ]),
+                | Type::Arrow(Arrow(func, arg)) => {
+                    // Arrows associate to the right; printing the whole spine as
+                    // one chain lets the renderer decide every `->` boundary as a
+                    // single grammatical group.
+                    let mut operands = vec![tight_type(f, func)];
+                    let mut tail = *arg;
+                    while let Some(Fillable::Done(Type::Arrow(Arrow(domain, codomain)))) =
+                        f.statics.types_pre.get(&tail)
+                    {
+                        operands.push(tight_type(f, domain));
+                        tail = *codomain;
+                    }
+                    operands.push(tail.pretty(f));
+                    infix_chain(f, operands, "->")
+                }
                 | Type::Forall(ty) => ty.pretty(f),
                 | Type::PackPi(ty) => ty.pretty(f),
-                | Type::Prod(Prod(components)) => RcDoc::intersperse(
-                    components.iter().map(|component| tight_type(f, component)),
-                    RcDoc::concat([RcDoc::space(), RcDoc::text("*"), RcDoc::space()]),
+                | Type::Prod(Prod(components)) => infix_chain(
+                    f,
+                    components.iter().map(|component| tight_type(f, component)).collect(),
+                    "*",
                 ),
                 | Type::Exists(ty) => ty.pretty(f),
                 | Type::ManifestKind(ty) => ty.pretty(f),
@@ -957,5 +988,113 @@ where
             RcDoc::line(),
             RcDoc::text("end"),
         ])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{DerivedAllocator, StaticsAlloc};
+    use zydeco_surface::scoped::arena::ScopedArena;
+    use zydeco_syntax::{IntegerType, PrimitiveType};
+
+    /// A minimal arena that allocates the types the printer renders.
+    #[derive(Default)]
+    struct FormatterFixture {
+        allocator: DerivedAllocator,
+        statics: StaticsArena,
+    }
+
+    impl AsMut<DerivedAllocator> for FormatterFixture {
+        fn as_mut(&mut self) -> &mut DerivedAllocator {
+            &mut self.allocator
+        }
+    }
+
+    impl AsMut<StaticsArena> for FormatterFixture {
+        fn as_mut(&mut self) -> &mut StaticsArena {
+            &mut self.statics
+        }
+    }
+
+    impl FormatterFixture {
+        fn vtype(&mut self) -> KindId {
+            self.alloc_kind_pre(Fillable::Done(Kind::VType(VType)))
+        }
+
+        fn primitive(&mut self, primitive: PrimitiveType) -> TypeId {
+            let kind = self.vtype();
+            self.alloc_type_pre(Fillable::Done(Type::Primitive(PrimitiveTy(primitive))), kind)
+        }
+
+        fn arrow(&mut self, domain: TypeId, codomain: TypeId) -> TypeId {
+            let kind = self.vtype();
+            self.alloc_type_pre(Fillable::Done(Type::Arrow(Arrow(domain, codomain))), kind)
+        }
+
+        fn product(&mut self, components: Vec<TypeId>) -> TypeId {
+            let kind = self.vtype();
+            self.alloc_type_pre(Fillable::Done(Type::Prod(Prod(components))), kind)
+        }
+
+        fn render(&self, ty: TypeId, width: usize) -> String {
+            let scoped = ScopedArena::default();
+            let formatter = Formatter::new(&scoped, &self.statics);
+            let mut output = String::new();
+            ty.pretty(&formatter)
+                .render_fmt(width, &mut output)
+                .expect("rendering a formatter document cannot fail");
+            output
+        }
+    }
+
+    #[test]
+    fn infix_chains_stay_compact_when_they_fit() {
+        let mut fixture = FormatterFixture::default();
+        let int = fixture.primitive(PrimitiveType::Integer(IntegerType::Int64));
+        let string = fixture.primitive(PrimitiveType::String);
+        let codomain = fixture.arrow(string, int);
+        let chain = fixture.arrow(int, codomain);
+
+        assert_eq!(fixture.render(chain, 100), "Int64 -> String -> Int64");
+
+        let product = fixture.product(vec![int, string]);
+        assert_eq!(fixture.render(product, 100), "Int64 * String");
+    }
+
+    #[test]
+    fn overflowing_arrow_chains_lead_continuations_with_operators() {
+        let mut fixture = FormatterFixture::default();
+        let int = fixture.primitive(PrimitiveType::Integer(IntegerType::Int64));
+        let string = fixture.primitive(PrimitiveType::String);
+        let codomain = fixture.arrow(string, int);
+        let chain = fixture.arrow(int, codomain);
+
+        assert_eq!(fixture.render(chain, 15), "Int64\n-> String\n-> Int64");
+    }
+
+    #[test]
+    fn overflowing_product_chains_lead_continuations_with_operators() {
+        let mut fixture = FormatterFixture::default();
+        let int = fixture.primitive(PrimitiveType::Integer(IntegerType::Int64));
+        let string = fixture.primitive(PrimitiveType::String);
+        let product = fixture.product(vec![int, string, int]);
+
+        assert_eq!(fixture.render(product, 15), "Int64\n* String\n* Int64");
+    }
+
+    #[test]
+    fn nested_chains_parenthesize_compactly() {
+        let mut fixture = FormatterFixture::default();
+        let int = fixture.primitive(PrimitiveType::Integer(IntegerType::Int64));
+        let string = fixture.primitive(PrimitiveType::String);
+        let product = fixture.product(vec![int, string]);
+        let arrow = fixture.arrow(int, string);
+
+        let product_domain = fixture.arrow(product, int);
+        assert_eq!(fixture.render(product_domain, 100), "(Int64 * String) -> Int64");
+
+        let arrow_component = fixture.product(vec![arrow, int]);
+        assert_eq!(fixture.render(arrow_component, 100), "(Int64 -> String) * Int64");
     }
 }
