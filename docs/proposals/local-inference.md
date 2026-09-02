@@ -1,20 +1,11 @@
 # Local Type Inference
 
-## Motivation
-
 Zydeco's checker is bidirectional: every binder carries an annotation, and every pattern is
-checked against an expected type. That discipline gives predictable errors and a simple
-elaboration core, but it taxes the smallest bindings. A helper that forwards one argument,
-a tuple pattern that merely names components, or a thunk whose type is fully determined by
-its body all demand annotations that state what the surrounding check already knows.
+checked against an expected type. Local inference contributes flexible metavariables and constraints
+within a deliberate term boundary. Every metavariable introduced by that boundary must be resolved
+before the boundary closes, and annotation-directed forms retain their ordinary meaning.
 
-Local inference removes that tax without changing the elaboration architecture. The
-bidirectional checker remains the engine; inference contributes fresh flexible
-metavariables and constraints, then requires every metavariable to be resolved at a
-deliberate boundary. Nothing is inferred across an exported interface, and no
-annotation-directed form changes meaning.
-
-## Delivered Rules
+## Rules
 
 - **Binder default.** A bare unannotated pattern variable in a synthesizing binder position
   defaults to a value pattern: it creates a fresh flexible metavariable `?A : VType`, records
@@ -23,9 +14,11 @@ annotation-directed form changes meaning.
 - **Constraint lifetime.** Body uses and compatible call sites constrain `?A` through the
   least-upper-bound operation. While the defining block is checked, the inferred domain
   retains `?A`; at the closing boundary — a block, an imported source, or the root source —
-  every metavariable must be solved, deliberately generalized, or rejected as unconstrained.
-  Inference is order-independent within each boundary, so exported interfaces cannot depend
-  on later downstream uses.
+  every metavariable must be solved or rejected as unconstrained. Inference is order-independent
+  within each boundary.
+- **Source closure.** A source root is synthesized in its own inference region after its imports
+  and optional companion annotation have been assembled. An expected classifier at an import site
+  is compared with the synthesized result; it cannot constrain metavariables inside the source.
 - **Pattern synthesis.** Variables, unit, named patterns, and ordinary tuples synthesize.
   Constructors, package patterns, existential openings, and other patterns whose ownership or
   telescope cannot be recovered unambiguously remain checked against an expected type.
@@ -41,18 +34,4 @@ annotation-directed form changes meaning.
   partial fill; conflicts report the binder site together with the body or call sites that
   supplied the incompatible constraints.
 
-The formal model lives in `lang/statics/type-system.typ`, which adds the prospective rules to
-the implementation-derived CBPV calculus; the Rust checker implements its local, monomorphic
-core.
-
-## Deferred Direction
-
-Whole-binding or whole-program constraint inference may later solve acyclic dependency groups
-and recursive SCCs for which a sound annotation discipline has been chosen. Eligible value
-bindings may receive controlled generalization. Polymorphic recursion, higher-rank types,
-exported interfaces, recursive type groups, and generative package boundaries keep their
-annotations until a later design gives them an explicit inference rule. The unresolved
-questions are whether closing should move from lexical blocks to whole binding groups, how
-constraint origins should be retained, the elaborated form of any generalized CBPV value, and
-the ownership syntax required before constructor or package-pattern synthesis can be
-considered.
+The formal rules live in `lang/statics/type-system.typ` alongside the implementation-derived CBPV calculus.

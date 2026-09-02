@@ -350,38 +350,33 @@ Named types, named kinds, and static projections are also compile-time-only and 
 Selective package patterns use the existing existential `SCons` plus value-pattern aliases,
 so they likewise add no runtime module representation.
 
-### Source Organization and Modules
+### Source Terms and Imports
 
-Every Zydeco source file contains exactly one complete term.
-Imports are typed metadata on holes, such as `@[import("library.zy")] _`, rather than namespace operations.
+Every Zydeco source file contains exactly one complete term. A file contributes no surrounding context:
+all names are bound by forms in the term itself. In particular, `param` and `param val` are ordinary term forms
+that construct abstractions; they do not declare file parameters.
+
+After its own imports and optional companion annotation have been assembled, a source root is resolved and type
+checked under an empty context and must synthesize its classifier. An expected classifier at an import site may be
+compared with that result, but it does not participate in elaborating the imported source.
+
+Imports are typed metadata on holes, such as `@[import("library.zy")] _`.
 Parenthesized metadata `@(meta)` abbreviates the bracket form whose payload is a hole,
-so `@(import("library.zy"))` names the same import.
-A compiler session discovers a file dependency graph, orders providers before their consumers,
-and substitutes a freshly cloned provider term at each import occurrence.
-Parsed templates are memoized by source input, while each assembled occurrence remains fresh.
-A source boundary around each clone prevents free names and mobile block bindings from crossing the file boundary.
+so `@(import("library.zy"))` names the same import. A compiler session discovers the file dependency graph,
+orders providers before their consumers, and substitutes a fresh, capture-avoiding copy of the independently
+checked provider term at each import occurrence. Parsed source templates are memoized, while each substituted
+occurrence remains fresh. A source boundary prevents free names and mobile block bindings from crossing
+between the two terms.
+
+An implementation source `foo.zy` may have an adjacent companion `foo.zyi`. The companion contains one ordinary
+type term and must itself synthesize a type. Source assembly treats the pair as the annotated term
+`(contents-of-foo.zy : contents-of-foo.zyi)`. Companion files participate in the same dependency graph,
+may use imports, and may themselves be imported as type terms. Companion discovery applies to reusable `.zy`
+sources only; `.zydeco` program roots remain unpaired.
+
 Text blocks attached to holes supply multi-line string values:
 `--| text` immediately above `@[literal] _` replaces the hole with the recovered text as a string literal,
 so embedded prose shares the attachment discipline of repository documentation.
-
-An implementation source `foo.zy` may have an adjacent signature source `foo.zyi`.
-The companion is optional; when it is absent, source inference and imports behave exactly as before.
-The signature contains one ordinary Zydeco term, and that root must synthesize a type.
-When the companion exists, source assembly elaborates the pair as
-though the complete implementation root were written `(implementation : signature)`; importing `foo.zy`
-therefore checks and exposes the ascribed type while retaining the implementation term for evaluation.
-Signature files participate in the same dependency graph, may use ordinary imports,
-and may themselves be checked or imported when a type expression is needed.
-They introduce no declaration language, namespace, or runtime module representation.
-Companion discovery applies to reusable `.zy` sources only; `.zydeco` program roots remain unpaired.
-Value-function sources participate in this mechanism without special treatment: their companions may state a
-`val pi` classifier, just as a computation-function companion may state a computation arrow.
-
-A companion is an annotation boundary, rather than the only place where its type may be written.
-Ordinary `.zy` sources whose roots are type terms remain independently importable,
-so reusable package schemas use the descriptive `.type.zy` suffix.
-A leaf `.zyi` and an aggregate type can import the same constructor and apply it to their shared type witnesses.
-This keeps each implementation pairing local without duplicating its public schema.
 
 Interactive sessions reuse that source model instead of maintaining a mutable declaration environment.
 The Ratatui REPL stores every submitted term as a session overlay with a nonzero input identity,

@@ -1,68 +1,23 @@
 # Uniform Term Composition
 
-Zydeco uses a common term language for kinds, types, values, and computations.
-Its former source language reserved a separate declaration sort for top-level definitions,
-which gave local terms and compilation units different rules for scope, dependency ordering, and abstraction.
-Uniform term composition removes this split by making context formation part of the term language.
-The guiding idea is that a term may contribute the binders it needs before their final nesting is known.
-Its central construct is `begin ... end`, a block that closes its body over binders contributed by nested terms.
-The forms `param`, `let`, and `def` contribute parameters, transparent bindings, and nominal definitions.
-With `in`, a binder keeps its lexical position and scope.
-With `that`, it belongs to the nearest block and becomes visible throughout that block.
-Together, these connectives let the programmer choose between local binding and block-level context formation.
-Once binders may arise in different parts of a term, however, textual order is no longer enough.
-The block resolves dependencies among these contributions and elaborates them into a heterogeneous telescope:
-an ordered sequence in which later binders may depend on earlier ones.
-Most contributions form an acyclic order. Recursive types are handled as strongly connected components,
-while value bindings remain acyclic and computation recursion remains explicit through `fix`.
-The scheduling stays within the static layer because movable right-hand sides are types
-or values, so the order of CBPV computations is preserved.
-An outer block can therefore represent a source unit, and libraries can use the same functions
-and existential packages that compose ordinary terms.
+Zydeco uses one term language for kinds, types, values, and computations.
+`param`, `let`, and `def` are ordinary term constructors for abstractions, transparent bindings,
+and nominal definitions. Their `in` forms establish binders at the written position, while their `that` forms
+contribute binders to the nearest `begin ... end` block. A block dependency-orders those contributions
+and elaborates them into an ordinary heterogeneous telescope.
 
-## 1. Motivation
+A source file stores one complete term. The file contributes no context, parameters, declarations,
+namespace, or runtime structure around that term. Every dependency must occur in the term itself,
+through an ordinary binder or an import that is replaced by another independently checked term.
 
-Zydeco already presents kinds, types, values, and computations through a shared term syntax.
-At the boundary of a source file, however, the programming model changes.
-A local binding participates in ordinary term structure, whereas a top-level definition enters a declaration context
-with its own rules for name resolution, dependency analysis, and linking.
-Moving a definition between these settings can therefore change more than indentation:
-it changes how the definition composes with its surroundings.
-The discrepancy is easy to overlook in a small file, but it becomes visible as soon as code is factored
-into local helpers, reusable components, and separate compilation units.
-
-At library scale, the same split affects the meaning of composition itself.
-Within a program, functions, products, and existential packages express abstraction and composition.
-Across source units, declarations instead produce environments for an external linker.
-Programmers therefore use one vocabulary to compose terms and another to compose programs.
-Uniform term composition extends the expression-oriented character of Zydeco to definitions and source units,
-so a library becomes a term with an explicit interface.
-
-Reaching that goal requires a term to describe more than its immediate result.
-It must also be able to describe the context in which that result becomes well formed.
-The proposal is organized around block closure.
-A subterm may contribute a parameter, type definition, or value definition to its nearest enclosing block,
-and the block arranges all such contributions into a dependency-correct telescope around its body.
-At the outermost level, the same operation closes a source file.
-From the programmer's perspective, a definition can remain near the expression that motivates it.
-The enclosing block later assembles the context needed by the whole term.
-Placement also determines visibility: a binder assigned to a block boundary receives the scope of that block.
-This connection makes mobility predictable from the syntax.
-
-The remaining concern is whether this assembly can change program behavior.
-Zydeco's phase distinction makes dependency-directed placement semantically stable.
-Types and values are effect-free at introduction, while computations carry and sequence effects through relative monads.
-Reordering the contributed binders can therefore change their nesting without changing computation order.
-This separation allows `that` to express binder mobility while computation syntax continues to express evaluation order.
-
-## 2. Blocks and Mobile Bindings
+## Blocks and Mobile Bindings
 
 In the grammar below, `e` ranges over a source term before sorting determines whether it is a kind,
 type, value, or computation.
 The common metavariable records the shared surface syntax while leaving the CBPV categories intact.
-The new constructs can therefore be stated once at the surface level and sorted according to their use.
+The constructs can therefore be stated once at the surface level and sorted according to their use.
 
-The surface language adds a block and three binding forms:
+The surface grammar includes a block and three binding forms:
 
 ```text
 e ::= ...
@@ -152,21 +107,15 @@ The block closes as
 fn a b c d => let x = a + c in d
 ```
 
-Here the four `param` forms declare the block's interface.
+Here the four `param` forms become parameters of the resulting abstraction.
 Reading the source from left to right orders the otherwise independent parameters as `a`, `b`, `c`, and `d`.
 Dependency edges may still interleave definitions when their types or bodies require it.
-The unused parameter `b` remains part of the result because `param` states an interface instead
-of asking the compiler to infer one from free variables.
-
-This freedom of placement is useful, although block-wide scope can occasionally outrun the visual cues of indentation.
-The compiler should warn when a reference relies on a binder moving beyond its syntactic continuation,
-especially across match arms or another abstraction.
-A diagnostic can suggest moving the binding to the block spine, choosing `in`, or introducing a nested block.
-The warning addresses readability while preserving the block-wide meaning of `that`.
+The unused parameter `b` remains part of the result because `param` constructs an explicit binder
+instead of asking the compiler to infer one from free variables.
 
 The examples above focus on placement. The other choice carried by a binding form concerns identity.
 The pairing of `def` and `let` is deliberate.
-`let` names a type or value transparently, so clients may use its defining equation.
+`let` names a type or value transparently, so the surrounding term may use its defining equation.
 `def` establishes an abstraction boundary by giving the source binder its own identity.
 This distinction concerns identity and equality.
 The connectives `in` and `that` separately determine placement and scope.
@@ -174,7 +123,7 @@ The connectives `in` and `that` separately determine placement and scope.
 These surface rules explain what a block means to the programmer.
 The next question is how the elaborator turns freely placed contributions into one well-scoped term.
 
-## 3. Dependency-Directed Elaboration
+## Dependency-Directed Elaboration
 
 Whole-block visibility separates the availability of a name from the eventual position of its binder.
 Elaboration therefore begins by assigning source identities to the binders in every block-wide pattern
@@ -213,8 +162,8 @@ The checker allocates the nominal identities for such a component together and t
 Parameters, values, and transparent type aliases follow acyclic dependency order.
 A cycle involving one of them receives a focused diagnostic.
 
-This account of recursive components also gives the existing named type forms a natural place in the design.
-The named `data` and `codata` forms formerly handled as declarations enter a block as specialized nominal definitions.
+This account of recursive components also gives the named type forms a natural place in the design.
+Named `data` and `codata` forms enter a block as specialized nominal definitions.
 A named `data` form elaborates to a nominal definition whose right-hand side abstracts its parameters
 over an anonymous `data ... end` term.
 The `codata` form supplies the computation-type dual.
@@ -224,7 +173,7 @@ Constructors and destructors remain arms of their respective type terms,
 and the enclosing type serves as the scheduling candidate.
 Anonymous `data ... end` and `codata ... end` remain ordinary terms.
 
-Type recursion is now accounted for by the block graph.
+Type recursion is accounted for by the block graph.
 Computation recursion continues to use the explicit introduction form already present in Zydeco.
 A value may suspend a computation that uses `fix`, while the value's static dependency component stays acyclic.
 This keeps recursive types, recursive computations, and dependency cycles as three distinct ideas in the language.
@@ -236,96 +185,41 @@ Mobile patterns should be irrefutable for the same reason that ordinary binding 
 forming a context should produce bindings directly.
 Refutable decomposition belongs in `match`, where the source program states its branches explicitly.
 
-Block elaboration has now supplied both a scope and an order for every contributed binder.
-The stable identities produced by this process become especially important when a block represents a library.
+Block elaboration supplies both a scope and an order for every contributed binder.
 
-## 4. Nominality and Existential Libraries
+## Nominal Identity
 
-Within a block, nominal identity distinguishes `def` from `let`.
-At a library boundary, the same distinction determines whether clients can observe a representation.
+Within a term, nominal identity distinguishes `def` from `let`.
 A type introduced by `def` is lexically generative: the source binder receives a stable abstract identity
-for the lifetime of the program.
-Repeated evaluation of the enclosing term reuses that identity.
+for the lifetime of that term occurrence. Repeated evaluation of the occurrence reuses the identity.
 For a recursive type component, the checker allocates all member identities together
-before checking any defining equation.
-By contrast, `let` preserves the defining equation and therefore supports transparent equality.
+before checking their defining equations. By contrast, `let` preserves its defining equation
+and therefore supports transparent equality.
 
-Lexical generativity is the appropriate default for source definitions.
-A future construct such as `fresh` could express dynamic generativity by creating a new identity
-at each runtime introduction.
-Giving that behavior its own term former would make the stronger lifetime discipline visible
-and provide a clear point at which generative package rules apply.
+Copying a term freshens its bound identities. Two copies of a term containing `def` consequently contain
+distinct nominal definitions, while two uses of one bound copy share the same definitions.
 
-The stable identity supplied by `def` is precisely what allows a package to hide an implementation type
-while sharing that type among all of its operations.
-Once a source unit denotes a term, external dependencies also acquire a language-level interface.
-The current `extern` form introduces a typed name whose implementation is supplied later by the linker.
-Under uniform term composition, an existential library collects those assumptions into one package.
-The provider chooses the package's abstract types and supplies values implementing the operations over them.
-The consumer unpacks the package with a pattern that brings both types and operations into its block context.
-The compiler or launcher can construct the package for built-in facilities, so every external requirement appears
-in the type of the consuming term.
+## Source Terms and Imports
 
-For an ordinary dependency, the package discipline has a familiar function shape.
-A reusable library may accept one package and return another:
+A source root is resolved and type checked under an empty context. After its own imports and optional companion
+annotation have been assembled, the complete root must synthesize its classifier. An expected classifier at a use
+site may be compared with that result, but it does not participate in elaborating the source root.
 
-```text
-Library D = D -> exists (T : K). API T
+An implementation source `foo.zy` may have a companion `foo.zyi`. The companion contains one type term,
+which must itself synthesize a type. The pair is elaborated as the ordinary annotated term
+`(contents-of-foo.zy : contents-of-foo.zyi)`. The companion supplies no declarations or context.
+
+An import is metadata on a hole:
+
+```zydeco
+@[import("library.zy")] _
 ```
 
-Here the existential witness `T` represents the implementation's central abstract type,
-and `API T` contains the operations that expose its permitted behavior.
+The spelling `@(import("library.zy"))` abbreviates the same term. Source assembly replaces the hole with a fresh,
+capture-avoiding copy of the independently checked source term. A source boundary prevents free names and mobile
+bindings from crossing between the two terms. Each occurrence is fresh; sharing requires binding one imported copy
+and using that binding more than once.
 
-This type explains how a library hides its representation.
-The consumer side becomes more interesting when its own result type must refer to the hidden witness.
-The host interface follows the same pattern.
-Suppose `Core` packages an abstract computation type `OS` together with the standard operations that use it:
-
-```text
-Core = exists (OS : CType). API OS
-binary : pi ((OS, api) : Core). OS
-```
-
-The package pattern binds the opaque `OS` witness directly, and the binary's result type refers to that witness.
-This dependency is represented in the statics language by `PackPi`, a computation-valued package-dependent arrow
-whose codomain may mention abstract types bound by its parameter pattern.
-A value-valued library instead has a `ValPi` classifier. Its value parameter retains the same witness telescope,
-and applying the function instantiates that telescope while remaining entirely in the value judgment.
-The function is an ordinary first-class value: it may be imported, stored, captured, and composed.
-The package value carries a stable witness identity wherever it is used.
-At launch, the compiler instantiates `Core`, passes the package to the binary,
-and executes the resulting computation while the witness remains in scope.
-The user sees an abstract interface.
-The launcher supplies its concrete implementation.
-
-The library account therefore follows directly from block elaboration:
-nominal binders provide stable abstract identities, existential packages collect them into interfaces,
-and computation `PackPi` or value `ValPi` keeps those identities in scope across the corresponding cut.
-
-## 5. Consequences and Open Work
-
-At the source level, the result is one composition discipline.
-Inside the compiler, declaration planning becomes an elaboration task with its own explicit structures.
-The elaborator can represent block plans, dependency graphs, recursive type components,
-and package interfaces as explicit intermediate structures.
-These structures now arise from ordinary terms and their block boundaries,
-while programmers use one composition language at every scale, from local definitions to source units.
-This division is deliberate: source programs gain a uniform language,
-while intermediate representations expose the graph and telescope that make elaboration precise.
-
-With that implementation boundary in place, the remaining work is chiefly formal.
-A formal account should make the elaboration invariants precise.
-Resolved identities and sorts must survive every permitted movement, and valid schedules
-that differ only in the order of independent candidates should be equivalent.
-Readability diagnostics must preserve the scope assigned by `that`, so a recommendation
-about layout leaves the meaning of a block-wide reference unchanged.
-Recursive type components need an explicit admissibility judgment, and `PackPi` needs an elimination rule
-that tracks the existential witness into the result type.
-
-These obligations give the organizing idea a precise metatheory.
-Uniform term composition extends Zydeco's expression-oriented design to binding structure.
-`in` gives a binder a lexical home. `that` assigns it to the surrounding block.
-The programmer may place a definition near the syntax that motivates it,
-while dependency analysis recovers the telescope required by the type system.
-At larger scales, the same mechanism turns a source unit into a closed artifact and expresses libraries
-through computation abstraction, first-class value functions and their cuts, and existential packaging.
+This operation is ordinary term substitution. Its stability claim concerns well-typed, scope-respecting
+substitutions: substitution preserves typing and freshens bound identities where necessary. It does not make
+duplicated computations execute once or make nominal definitions from distinct copies identical.
