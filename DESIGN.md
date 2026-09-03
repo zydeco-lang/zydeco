@@ -46,6 +46,9 @@ exit  : Thk (Int64 -> OS)
 not automatically a captured machine stack. An FFI must therefore return an `A` for `Ret A`, but select a
 successor or terminate for `OS`.
 
+The [returning C import proposal](docs/proposals/c-ffi.md) specifies the initial classifier-to-ABI mapping,
+its borrowed-buffer contract, and the call plan shared by the interpreter and native backend.
+
 ### Numeric Representations
 
 Zydeco exposes fixed-width numeric types whose runtime domains match Rust's primitive representations:

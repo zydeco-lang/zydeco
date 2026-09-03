@@ -5,6 +5,7 @@ begin
   let (/Bytes) = representations/bytes in
 
   (
-    @(ffi(c,library("xxhash"),symbol("XXH64"))) : Thk (Bytes -> UInt64 -> Ret UInt64)
+    #xxh64 = @(ffi(c, library("xxhash"), symbol("XXH64"))) : Thk (Bytes -> UInt64 -> Ret UInt64),
+    #xxh3_64bits = @(ffi(c, library("xxhash"), symbol("XXH3_64bits"))) : Thk (Bytes -> Ret UInt64)
   )
 end

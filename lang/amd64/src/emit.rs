@@ -438,37 +438,69 @@ impl<'e> Emitter<'e> {
 
     fn emit_foreign_call(&mut self, id: ProgId, import: &ForeignImport) {
         assert_eq!(import.target.abi, ForeignAbi::C);
-        assert_eq!(
-            import.signature.parameters.as_slice(),
-            [ForeignParameter::BorrowedBytes, ForeignParameter::UInt64]
-        );
-        assert_eq!(import.signature.result, ForeignResult::UInt64);
+        assert_eq!(import.signature.result(), ForeignResult::UInt64);
+        let arguments = import.signature.arguments().collect::<Vec<_>>();
+        let scratch_words = arguments.len();
+        let scratch_bytes =
+            i32::try_from(scratch_words * 8).expect("foreign scratch size overflow");
+        self.asm.text.push(Instr::Comment(format!(
+            "ffi: {} from -l{}",
+            import.target.symbol, import.target.library
+        )));
 
-        self.asm.text.extend([
-            Instr::Comment(format!(
-                "ffi: {} from -l{}",
-                import.target.symbol, import.target.library
-            )),
-            Instr::Pop(Loc::Reg(Reg::R12)),
-            Instr::Pop(Loc::Reg(Reg::R13)),
-            Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::R12))),
-        ]);
-        self.shift_stack_parity(-2);
-        self.emit_aligned_call(JmpArgs::Label("zydeco_ffi_borrow_bytes".to_string()));
-        self.asm.text.extend([
-            Instr::Mov(MovArgs::ToReg(Reg::R12, Arg64::Reg(Reg::Rax))),
-            Instr::Mov(MovArgs::ToReg(Reg::R14, Arg64::Reg(Reg::Rdx))),
-            Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::R13))),
-        ]);
-        self.emit_aligned_call(JmpArgs::Label("zydeco_ffi_decode_u64".to_string()));
-        self.asm.text.extend([
-            Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::R12))),
-            Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::R14))),
-            Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(Reg::Rax))),
-        ]);
+        // Keep source values above a scratch frame until the C call returns. Marshalling
+        // helpers never allocate, and the foreign contract forbids reentry into Zydeco:
+        // no collection can observe the raw pointers, lengths, or integers in this frame.
+        if scratch_words != 0 {
+            self.asm.text.push(Instr::Sub(BinArgs::ToReg(Reg::Rsp, Arg32::Signed(scratch_bytes))));
+            self.shift_stack_parity(scratch_words as i64);
+        }
+        for (index, parameter) in import.signature.parameters().iter().enumerate() {
+            self.asm.text.push(Instr::Mov(MovArgs::ToReg(
+                Reg::Rdi,
+                Arg64::Mem(MemRef { reg: Reg::Rsp, offset: scratch_bytes + (index * 8) as i32 }),
+            )));
+            let helper = match parameter {
+                | ForeignParameter::BorrowedBytes => "zydeco_ffi_borrow_bytes",
+                | ForeignParameter::UInt64 => "zydeco_ffi_decode_u64",
+            };
+            self.emit_aligned_call(JmpArgs::Label(helper.to_string()));
+            self.asm.text.extend(
+                arguments
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, argument)| argument.parameter == index)
+                    .map(|(slot, argument)| {
+                        let register = match argument.component {
+                            | ForeignComponent::BytesPointer | ForeignComponent::UInt64 => Reg::Rax,
+                            | ForeignComponent::BytesLength => Reg::Rdx,
+                        };
+                        Instr::Mov(MovArgs::ToMem(
+                            MemRef { reg: Reg::Rsp, offset: (slot * 8) as i32 },
+                            Reg32::Reg(register),
+                        ))
+                    }),
+            );
+        }
+        self.asm.text.extend(arguments.iter().enumerate().map(|(slot, _)| {
+            Instr::Mov(MovArgs::ToReg(
+                Self::argument_register(slot + 1),
+                Arg64::Mem(MemRef { reg: Reg::Rsp, offset: (slot * 8) as i32 }),
+            ))
+        }));
         self.emit_aligned_call(JmpArgs::Label(self.foreign_symbol(&import.target.symbol)));
         self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::R12, Arg64::Reg(Reg::Rax))));
 
+        // Discard all raw scratch words before the allocation safe point. R12 holds
+        // unboxed scalar bits, not a GC root, and is callee-saved across the allocation.
+        let consumed_words = scratch_words + import.signature.parameters().len();
+        if consumed_words != 0 {
+            self.asm.text.push(Instr::Add(BinArgs::ToReg(
+                Reg::Rsp,
+                Arg32::Signed((consumed_words * 8) as i32),
+            )));
+            self.shift_stack_parity(-(consumed_words as i64));
+        }
         let context_words = self.assembly.contexts[&id].iter().len();
         self.emit_alloc_call(1, AllocationKind::Opaque, context_words);
         self.asm.text.extend([

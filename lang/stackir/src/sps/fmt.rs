@@ -347,7 +347,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation<LetJoin> {
                         (function.as_str(), f.admin.builtins[function].arity)
                     }
                     | ExternalFunction::Foreign(import) => {
-                        (import.target.symbol.as_str(), import.signature.parameters.len())
+                        (import.target.symbol.as_str(), import.signature.parameters().len())
                     }
                 };
                 let fun_str = format!("<extern:{name}/{arity}>");

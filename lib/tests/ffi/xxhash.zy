@@ -5,14 +5,19 @@ begin
   let (/process) = system that
   let bytes = text/bytes that
   let (= UInt64, uint64) = numeric/uint64 that
-  let xxh64 = builtin |> make_xxhash in
+  let (/xxh64; /xxh3_64bits) = builtin |> make_xxhash in
 
   do input <- ! bytes/from_string "hello";
   do actual <- ! xxh64 input 0;
+  do unseeded <- ! xxh3_64bits input;
   ! uint64/eq
     OS
     actual
     2794345569481354659
-    { ! process/exit 0 }
+    {
+      ! uint64/eq OS unseeded 10760762337991515389
+        { ! process/exit 0 }
+        { ! process/exit 2 }
+    }
     { ! process/exit 1 }
 end

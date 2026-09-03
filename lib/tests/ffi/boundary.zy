@@ -1,0 +1,80 @@
+begin
+  param (/core; /representations; /text; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  let (/Thk; /Ret) = core that
+  let (/Bytes) = representations/bytes that
+  let (= UInt64, uint64) = numeric/uint64 that
+  let (/OS; /process) = system that
+  let bytes = text/bytes that
+  let zero = (@(ffi(c, library("zyffi_boundary"), symbol("zyffi_zero"))) : Thk (Ret UInt64)) that
+  let echo = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_echo"))) : Thk (UInt64 -> Ret UInt64)
+  ) that
+  let inspect = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_bytes"))) : Thk (Bytes -> Ret UInt64)
+  ) that
+  let mixed = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_mixed"))) : Thk (
+      UInt64 -> Bytes -> Bytes -> UInt64 -> Ret UInt64
+    )
+  ) that
+  let triple = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_three_bytes"))) : Thk (
+      Bytes -> Bytes -> Bytes -> Ret UInt64
+    )
+  ) that
+  let six = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_six"))) : Thk (
+      UInt64 -> UInt64 -> UInt64 -> UInt64 -> UInt64 -> UInt64 -> Ret UInt64
+    )
+  ) that
+  let ensure : Thk (UInt64 -> UInt64 -> Thk OS -> OS) = {
+    fn actual expected next =>
+      ! uint64/eq OS actual expected next { ! process/exit 1 }
+  } in
+  def fix churn (remaining : UInt64) (live : UInt64) (buffer : Bytes) : Ret UInt64 =
+    ! uint64/eq (Ret UInt64) remaining 0
+      {
+        do inspected <- ! inspect buffer;
+        ! uint64/eq (Ret UInt64) inspected 1389 { ret live } { ret 0 }
+      }
+      {
+        do live' <- ! echo live;
+        do remaining' <- ! uint64/sub remaining 1;
+        ! churn remaining' live' buffer
+      }
+  in
+
+  do padded <- ! bytes/from_string "..hello!!";
+  do hello <- ! bytes/slice (Ret Bytes) padded 2 5 { ! bytes/empty } { fn window => ret window };
+  do world <- ! bytes/from_string "world";
+  do empty <- ! bytes/slice (Ret Bytes) hello 5 0 { ret hello } { fn window => ret window };
+  do constant <- ! zero;
+  do maximum <- ! echo 18446744073709551615;
+  do high_bit <- ! echo 9223372036854775808;
+  do immediate <- ! echo 7;
+  do empty_result <- ! inspect empty;
+  do bytes_result <- ! inspect hello;
+  do ordered <- ! mixed 9223372036854775808 hello world 7;
+  do three_buffers <- ! triple hello empty world;
+  do all_registers <- ! six 1 2 3 4 5 6;
+  do after_gc <- ! churn 100000 maximum hello;
+  ! ensure constant 18446744073709551615 {
+    ! ensure maximum 18446744073709551615 {
+      ! ensure high_bit 9223372036854775808 {
+        ! ensure immediate 7 {
+          ! ensure empty_result 0 {
+            ! ensure bytes_result 1389 {
+              ! ensure ordered 9223378066988860778 {
+                ! ensure three_buffers 8409 {
+                  ! ensure all_registers 183 {
+                    ! ensure after_gc 18446744073709551615 { ! process/exit 0 }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+end

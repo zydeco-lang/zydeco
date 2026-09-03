@@ -308,7 +308,7 @@ impl<'rt> Eval<'rt> for Computation {
                 }
             }
             | Computation::Foreign(ForeignPrim { import }) => {
-                let arguments = (0..import.signature.parameters.len())
+                let arguments = (0..import.signature.parameters().len())
                     .map(|_| match runtime.pop_stack() {
                         | Some(SemCompu::App(argument)) => argument,
                         | _ => panic!("foreign call argument not at stack top"),

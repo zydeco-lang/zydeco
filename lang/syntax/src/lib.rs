@@ -810,6 +810,32 @@ pub enum ForeignParameter {
     UInt64,
 }
 
+impl ForeignParameter {
+    pub fn components(self) -> &'static [ForeignComponent] {
+        match self {
+            | Self::BorrowedBytes => {
+                &[ForeignComponent::BytesPointer, ForeignComponent::BytesLength]
+            }
+            | Self::UInt64 => &[ForeignComponent::UInt64],
+        }
+    }
+}
+
+/// A scalar C argument extracted from one source value, in declaration order.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+pub enum ForeignComponent {
+    BytesPointer,
+    BytesLength,
+    UInt64,
+}
+
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+pub struct ForeignArgument {
+    /// Zero-based source parameter index; a byte borrow contributes two C arguments.
+    pub parameter: usize,
+    pub component: ForeignComponent,
+}
+
 /// One source-level foreign result whose C representation is known to the compiler.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum ForeignResult {
@@ -819,8 +845,52 @@ pub enum ForeignResult {
 /// The marshalling protocol derived from a checked CBPV classifier.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ForeignSignature {
-    pub parameters: Vec<ForeignParameter>,
-    pub result: ForeignResult,
+    parameters: Vec<ForeignParameter>,
+    result: ForeignResult,
+}
+
+impl ForeignSignature {
+    /// The initial common subset fits the six integer/pointer argument registers on SysV AMD64.
+    pub const MAX_C_ARGUMENTS: usize = 6;
+
+    pub fn new(
+        parameters: Vec<ForeignParameter>, result: ForeignResult,
+    ) -> Result<Self, ForeignSignatureError> {
+        let signature = Self { parameters, result };
+        let found = signature.arguments().count();
+        if found > Self::MAX_C_ARGUMENTS {
+            return Err(ForeignSignatureError::TooManyArguments {
+                found,
+                maximum: Self::MAX_C_ARGUMENTS,
+            });
+        }
+        Ok(signature)
+    }
+
+    pub fn parameters(&self) -> &[ForeignParameter] {
+        &self.parameters
+    }
+
+    pub fn result(&self) -> ForeignResult {
+        self.result
+    }
+
+    pub fn arguments(&self) -> impl Iterator<Item = ForeignArgument> + '_ {
+        self.parameters.iter().enumerate().flat_map(|(parameter, representation)| {
+            representation
+                .components()
+                .iter()
+                .map(move |&component| ForeignArgument { parameter, component })
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum ForeignSignatureError {
+    #[error(
+        "C ffi supports at most {maximum} flattened C arguments, but this classifier needs {found}"
+    )]
+    TooManyArguments { found: usize, maximum: usize },
 }
 
 /// A validated foreign target paired with its source-to-C marshalling protocol.

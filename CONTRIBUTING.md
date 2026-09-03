@@ -13,6 +13,10 @@ cargo build --bin=zydeco --release
 
 The resulting binary is located at `target/release/zydeco`.
 
+On Unix, the interpreter's C FFI uses libffi, built by Cargo from its bundled C sources.
+Building it requires a C toolchain and `make`. The supported boundary is described in the
+[C FFI proposal](docs/proposals/c-ffi.md).
+
 ## Use the Interactive REPL
 
 Launch the Ratatui frontend through the main CLI:

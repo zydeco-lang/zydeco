@@ -22,5 +22,11 @@ pretty = { workspace = true }
 thiserror = { workspace = true }
 rand = { workspace = true }
 
+[target.'cfg(unix)'.dependencies]
+libffi = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [lib]
 doctest = false

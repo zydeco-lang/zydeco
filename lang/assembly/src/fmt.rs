@@ -323,7 +323,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Extern {
                 "<ffi:{}:{}/{}>",
                 import.target.abi,
                 import.target.symbol,
-                import.signature.parameters.len()
+                import.signature.parameters().len()
             )),
         }
     }
