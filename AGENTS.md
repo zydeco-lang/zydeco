@@ -230,6 +230,7 @@ Format: `prefix: lowercase description`
 
 No capitalization after the colon. No trailing period. One line.
 The description should say *what changed*, not *why* (the diff shows what; the description names it).
+For `feat`, name the capability directly; use a leading `add` only when it improves clarity.
 
 ## Prefix Vocabulary
 

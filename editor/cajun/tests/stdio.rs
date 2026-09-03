@@ -284,7 +284,7 @@ fn stdio_server_completes_incomplete_metadata_with_snippets() {
         initialize["result"]["capabilities"]["completionProvider"],
         json!({
             "resolveProvider": false,
-            "triggerCharacters": ["[", "(", ","],
+            "triggerCharacters": ["[", "(", ",", "\"", "/", "\\"],
         })
     );
     server.notify("initialized", json!({}));
@@ -322,6 +322,97 @@ fn stdio_server_completes_incomplete_metadata_with_snippets() {
         })
     );
 
+    server.finish();
+}
+
+#[test]
+fn stdio_server_completes_import_paths_while_typing() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("main.zy");
+    std::fs::write(&path, "()").unwrap();
+    std::fs::create_dir(directory.path().join("nested")).unwrap();
+    std::fs::write(directory.path().join("nested/library.zy"), "()").unwrap();
+    std::fs::write(directory.path().join("nested/notes.md"), "notes").unwrap();
+    let uri = Url::from_file_path(&path).unwrap().to_string();
+    let mut server = LspProcess::start();
+    server.request(
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": Url::from_file_path(directory.path()).unwrap(),
+            "capabilities": {},
+        }),
+    );
+    server.notify("initialized", json!({}));
+    server.notify(
+        "textDocument/didOpen",
+        json!({
+            "textDocument": { "uri": uri, "languageId": "zydeco", "version": 1, "text": "()" },
+        }),
+    );
+    server.notification("textDocument/publishDiagnostics");
+
+    for (version, source, context, label, start) in [
+        (2, r#"@[import(""#, json!({ "triggerKind": 2, "triggerCharacter": "\"" }), "nested/", 10),
+        (
+            3,
+            r#"@[import("nested/"#,
+            json!({ "triggerKind": 2, "triggerCharacter": "/" }),
+            "library.zy",
+            17,
+        ),
+        (4, r#"@[import("nested/li"#, json!({ "triggerKind": 3 }), "library.zy", 17),
+    ] {
+        server.notify(
+            "textDocument/didChange",
+            json!({
+                "textDocument": { "uri": uri, "version": version },
+                "contentChanges": [{ "text": source }],
+            }),
+        );
+        server.notification("textDocument/publishDiagnostics");
+        let response = server.request_without_notifications(
+            "textDocument/completion",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": 0, "character": source.len() },
+                "context": context,
+            }),
+        );
+        assert_eq!(response["result"]["isIncomplete"], true);
+        let [item] = response["result"]["items"].as_array().unwrap().as_slice() else {
+            panic!("one import path should match the current edit: {response}")
+        };
+        assert_eq!(item["label"], label);
+        assert_eq!(item["kind"], if label.ends_with('/') { 19 } else { 17 });
+        assert_eq!(item["textEdit"]["newText"], label);
+        assert_eq!(
+            item["textEdit"]["range"],
+            json!({
+                "start": { "line": 0, "character": start },
+                "end": { "line": 0, "character": source.len() },
+            })
+        );
+    }
+
+    let source = r#""nested/""#;
+    server.notify(
+        "textDocument/didChange",
+        json!({
+            "textDocument": { "uri": uri, "version": 5 },
+            "contentChanges": [{ "text": source }],
+        }),
+    );
+    server.notification("textDocument/publishDiagnostics");
+    let response = server.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": source.len() - 1 },
+            "context": { "triggerKind": 2, "triggerCharacter": "/" },
+        }),
+    );
+    assert!(response["result"].is_null(), "unrelated strings do not complete import paths");
     server.finish();
 }
 

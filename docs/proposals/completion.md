@@ -449,11 +449,25 @@ analytic annotations for that exact node and probes definition annotations throu
 variables. The session ranks equal definitions first and filters only rigid mismatches. Existing classifier
 presentation remains unchanged, and Cajun projects the compiler's order directly into LSP sort text.
 
-### Syntax, paths, and failed-revision resilience
+### Source-path completion — implemented
 
-Project typed parser expectations through the syntax-form catalog, implement `MetadataValue::Source` path candidates,
-and add a separate last-successful Cajun state with conservative fallback policy. These tasks should be split if parser
-recovery exposes enough independent review surface.
+Cajun recognizes quoted arguments through `MetadataValue::Source`, including strings without a closing quote.
+`CompilerSession::complete_source_paths` resolves the directory from the importer's canonical parent and merges
+fresh disk entries with active overlays. It offers directories and conventional `.zy`, `.zyi`, and `.zydeco` files,
+including directories implied by unsaved sources. Results are deduplicated and ordered with directories first,
+then by spelling. Direct self-imports and their symlink aliases are excluded; transitive cycles remain the source
+loader's responsibility.
+
+Replacement covers the current path component, preserving quotes, the written directory prefix, and any following
+components. Completed names use the source language's string escapes. Quotes and separators trigger LSP completion,
+and incomplete lists request fresh candidates as the path changes. Comments, unrelated strings, numbered imports,
+and cursors in unfinished escape sequences receive no path suggestions.
+
+### Syntax and failed-revision resilience
+
+Project typed parser expectations through the syntax-form catalog and add a separate last-successful Cajun state
+with conservative fallback policy. These tasks should be split if parser recovery exposes enough independent
+review surface.
 
 ### Structural and branch completion
 
@@ -499,6 +513,7 @@ These checks run with:
 cargo test -p zydeco-surface scoped::completion --lib
 cargo test -p zydeco-statics check::tests --lib
 cargo test -p zydeco-session source::query::completion --lib
+cargo test -p zydeco-session source::query::paths --lib
 cargo test -p cajun completion:: --lib
 cargo test -p cajun --test stdio stdio_server_completes
 ```

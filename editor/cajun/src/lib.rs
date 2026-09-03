@@ -49,12 +49,9 @@ struct ZydecoDocument;
 
 impl ZydecoDocument {
     fn accepts(uri: &Url) -> bool {
-        uri.to_file_path().ok().is_some_and(|path| {
-            matches!(
-                path.extension().and_then(|extension| extension.to_str()),
-                Some("zy") | Some("zyi") | Some("zydeco")
-            )
-        })
+        uri.to_file_path()
+            .ok()
+            .is_some_and(|path| zydeco_session::source::SourceKind::recognize(&path).is_some())
     }
 }
 
@@ -419,7 +416,9 @@ impl LanguageServer for Cajun {
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 completion_provider: Some(CompletionOptions {
                     resolve_provider: Some(false),
-                    trigger_characters: Some(vec!["[".to_owned(), "(".to_owned(), ",".to_owned()]),
+                    trigger_characters: Some(
+                        ["[", "(", ",", "\"", "/", "\\"].map(str::to_owned).to_vec(),
+                    ),
                     ..CompletionOptions::default()
                 }),
                 document_symbol_provider: Some(OneOf::Left(true)),

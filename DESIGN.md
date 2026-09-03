@@ -423,6 +423,12 @@ editor definition. Fieldless domains derive their ordered variant slice and sour
 with payload variants compose the derived unit-variant iterator with the payload type's derived domain. Unrecognized
 metadata remains structurally valid and receives no compiler-defined suggestions.
 
+For `MetadataValue::Source` strings, Cajun requests import candidates from `CompilerSession::complete_source_paths`.
+The session uses the importer's canonical parent directory, merges filesystem entries with active overlays,
+and offers directories followed by supported source files in spelling order. It excludes the importing file,
+including symlink aliases, without requiring the unfinished source to parse. Cajun replaces the current path
+component with escaped text and preserves quotes and any following components.
+
 An implementation source `foo.zy` may have an adjacent companion `foo.zyi`. The companion contains one ordinary
 type term and must itself synthesize a type. Source assembly treats the pair as the annotated term
 `(contents-of-foo.zy : contents-of-foo.zyi)`. Companion files participate in the same dependency graph,

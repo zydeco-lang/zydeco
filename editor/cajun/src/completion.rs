@@ -15,10 +15,13 @@ use zydeco_surface::{
 use zydeco_syntax::Pretty;
 use zydeco_utils::span::{FileMap, LineCol};
 
+mod paths;
+use paths::SourcePathCursor;
+
 #[cfg(test)]
 mod name_tests;
 
-/// Protocol presentation over current-source metadata and compiler-owned name facts.
+/// Protocol presentation over current-source metadata and compiler-owned completion facts.
 pub(crate) struct Completer {
     pub snippets: bool,
     pub label_details: bool,
@@ -33,6 +36,9 @@ impl Completer {
         let map = FileMap::local(source.as_str(), None);
         let offset =
             map.offset_utf16(LineCol { line: position.line, column: position.character })?;
+        if let Some(cursor) = SourcePathCursor::at(&source, offset) {
+            return cursor.complete(session, path, &map);
+        }
         match MetadataCursor::at(&source, offset) {
             | MetadataPosition::Active(cursor) => {
                 return MetadataCompleter::new(self.snippets).complete(&map, cursor?);
@@ -139,6 +145,7 @@ impl MetadataCompleter {
                 .filter(|identifier| identifier.starts_with(cursor.prefix.as_str()))
                 .map(|identifier| Self::identifier_item(identifier, range))
                 .collect(),
+            | CompletionScope::Source => return None,
         };
         Some(CompletionResponse::Array(items))
     }
@@ -185,6 +192,7 @@ impl MetadataCompleter {
 enum CompletionScope<'catalog> {
     Definitions(Vec<&'catalog MetadataDefinition>),
     Identifiers(Vec<&'catalog str>),
+    Source,
 }
 
 impl CompletionScope<'static> {
@@ -223,7 +231,8 @@ impl CompletionScope<'static> {
                 Some(Self::Identifiers(identifiers.iter().map(String::as_str).collect()))
             }
             | MetadataValue::Call(definition) => Some(Self::Definitions(vec![definition.as_ref()])),
-            | MetadataValue::String | MetadataValue::Integer | MetadataValue::Source => None,
+            | MetadataValue::Source => Some(Self::Source),
+            | MetadataValue::String | MetadataValue::Integer => None,
         }
     }
 }
@@ -442,7 +451,10 @@ impl MetadataCursor {
                     metadata.pending_name = None;
                     active = None;
                 }
-                | _ => metadata.pending_name = None,
+                | _ => {
+                    metadata.mark_started();
+                    metadata.pending_name = None;
+                }
             }
         }
 

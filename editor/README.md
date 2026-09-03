@@ -12,6 +12,11 @@ identifier domains such as intrinsic roles and formatting policies. These sugges
 language's metadata catalog, which is also used by the metadata decoders; Cajun does not maintain an editor-only
 list of annotations or option spellings. Completion remains available while the annotation is incomplete.
 
+Inside an import path, such as `@(import("../lib/"))`, completion suggests directories and `.zy`, `.zyi`, and
+`.zydeco` files relative to the importing source, including unsaved files open in the editor.
+Typing a quote or path separator triggers suggestions; accepting a directory appends `/` for continued navigation.
+Path edits preserve surrounding quotes and escape special characters in file names.
+
 Editor integrations live in:
 
 - [tree-sitter-zydeco](tree-sitter-zydeco), for the editor-oriented concrete syntax tree and its conformance checks;

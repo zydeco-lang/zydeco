@@ -24,6 +24,8 @@ use zydeco_utils::arena::ArenaAccess;
 
 mod completion;
 pub use completion::{CompletionAnalysis, CompletionError, CompletionSemantics};
+mod paths;
+pub use paths::{SourcePathCandidate, SourcePathCandidateKind};
 
 /// The recoverable type-checking state retained by a root analysis query.
 #[derive(Debug)]

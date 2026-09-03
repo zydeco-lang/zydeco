@@ -76,10 +76,16 @@ impl SourcePath {
 
 impl SourceKind {
     pub fn of(path: &Path) -> Self {
+        Self::recognize(path).unwrap_or(Self::Program)
+    }
+
+    /// Recognize the conventional source extensions used by editor tooling.
+    pub fn recognize(path: &Path) -> Option<Self> {
         match path.extension().and_then(OsStr::to_str) {
-            | Some("zy") => Self::Implementation,
-            | Some("zyi") => Self::Signature,
-            | _ => Self::Program,
+            | Some("zy") => Some(Self::Implementation),
+            | Some("zyi") => Some(Self::Signature),
+            | Some("zydeco") => Some(Self::Program),
+            | _ => None,
         }
     }
 
