@@ -1,5 +1,6 @@
 use super::*;
 use std::path::PathBuf;
+use zydeco_statics::check::AnnotationCompatibility;
 use zydeco_statics::fmt::{Formatter, Pretty};
 
 struct Fixture {
@@ -52,6 +53,17 @@ impl Fixture {
         annotation.pretty(&formatter).render_fmt(100, &mut rendered).ok()?;
         Some(rendered)
     }
+
+    fn compatibility(&self, name: &str) -> Option<AnnotationCompatibility> {
+        let completion = self.completion();
+        let semantics = completion.semantics.as_ref()?;
+        let definition = semantics
+            .scoped
+            .defs
+            .iter()
+            .find_map(|(definition, found)| (found.0 == name).then_some(*definition))?;
+        Some(semantics.compatibility(definition))
+    }
 }
 
 #[test]
@@ -74,7 +86,7 @@ fn sequential_bindees_and_annotations_exclude_the_new_binder() {
     for source in [
         "let earlier = 1 in let later = ¦ in later",
         "let earlier = 1 in fn (later : ¦) => later",
-        "do earlier <- ret 1; do later <- ¦; ret later",
+        "do earlier <- ret 1; do later <- ret ¦; ret later",
         "let earlier = 1 in exists (later as ¦) . later",
     ] {
         assert_eq!(Fixture::new(source).names(), ["earlier"], "{source}");
@@ -163,6 +175,120 @@ fn ordinary_definition_annotations_are_available_despite_the_completion_hole() {
         Fixture::new("let Number = @[intrinsic(i64)] _ in ¦").annotation("Number").as_deref(),
         Some("VType"),
     );
+}
+
+#[test]
+fn expected_annotations_rank_equal_names_and_filter_only_rigid_mismatches() {
+    let fixture = Fixture::new(
+        "let matching = 1 in let other = 'x' in val unknown => (_¦ : @[intrinsic(i64)] _)",
+    );
+    assert_eq!(fixture.names(), ["matching", "unknown"]);
+    assert_eq!(fixture.compatibility("matching"), Some(AnnotationCompatibility::Equal));
+    assert_eq!(fixture.compatibility("unknown"), Some(AnnotationCompatibility::Unknown));
+    assert_eq!(fixture.compatibility("other"), Some(AnnotationCompatibility::Mismatch));
+    assert!(matches!(
+        fixture.completion().semantics.as_ref().unwrap().typing.expectations(),
+        [AnnId::Type(_)]
+    ));
+}
+
+#[test]
+fn unresolved_expected_types_keep_values_unknown_but_reject_type_names() {
+    let fixture = Fixture::new(
+        "let Number = @[intrinsic(i64)] _ in let value = 1 in do result <- ret _¦; ret result",
+    );
+    assert_eq!(fixture.names(), ["value"]);
+    assert_eq!(fixture.compatibility("value"), Some(AnnotationCompatibility::Unknown));
+    assert_eq!(fixture.compatibility("Number"), Some(AnnotationCompatibility::Mismatch));
+    assert!(matches!(
+        fixture.completion().semantics.as_ref().unwrap().typing.expectations(),
+        [AnnId::Type(_)]
+    ));
+}
+
+#[test]
+fn rigid_candidate_evidence_agrees_with_checking_the_inserted_name() {
+    let mut fixture =
+        Fixture::new("let matching = 1 in let other = 'x' in (_¦ : @[intrinsic(i64)] _)");
+    let completion = fixture.completion();
+    assert_eq!(fixture.names(), ["matching"]);
+    for (candidate, accepted) in [("matching", true), ("other", false)] {
+        let mut source = completion.source.clone();
+        source.replace_range(completion.replacement.clone(), candidate);
+        fixture.session.set_overlay(&fixture.path, source).unwrap();
+        let analysis = fixture.session.analyze(&fixture.path).unwrap();
+        assert_eq!(analysis.outcome().root().is_some(), accepted);
+        if !accepted {
+            assert!(analysis.outcome().diagnostics().unwrap().iter().any(|diagnostic| {
+                diagnostic.code == zydeco_statics::TyckDiagnosticCode::TypeMismatch
+            }));
+        }
+    }
+}
+
+#[test]
+fn transparent_aliases_preserve_expected_annotation_equality() {
+    let fixture = Fixture::new(
+        "let Number = @[intrinsic(i64)] _ in let Alias = Number in let value = 1 in (_¦ : Alias)",
+    );
+    assert_eq!(fixture.names(), ["value"]);
+    assert_eq!(fixture.compatibility("value"), Some(AnnotationCompatibility::Equal));
+    assert_eq!(fixture.compatibility("Alias"), Some(AnnotationCompatibility::Mismatch));
+}
+
+#[test]
+fn cbpv_completion_checks_the_bare_name_without_implicit_return_or_force() {
+    let bare = Fixture::new("let value = 1 in (_¦ : (@[intrinsic(ret)] _) (@[intrinsic(i64)] _))");
+    assert!(bare.names().is_empty());
+    assert_eq!(bare.compatibility("value"), Some(AnnotationCompatibility::Mismatch));
+
+    let returned =
+        Fixture::new("let value = 1 in (ret _¦ : (@[intrinsic(ret)] _) (@[intrinsic(i64)] _))");
+    assert_eq!(returned.names(), ["value"]);
+    assert_eq!(returned.compatibility("value"), Some(AnnotationCompatibility::Equal));
+
+    let forced = Fixture::new(
+        "let suspended = { ret 1 } in (! _¦ : (@[intrinsic(ret)] _) (@[intrinsic(i64)] _))",
+    );
+    assert_eq!(forced.names(), ["suspended"]);
+    assert_eq!(forced.compatibility("suspended"), Some(AnnotationCompatibility::Equal));
+}
+
+#[test]
+fn changing_the_current_expected_type_changes_completion_evidence() {
+    let mut fixture =
+        Fixture::new("let number = 1 in let letter = 'x' in (_¦ : @[intrinsic(i64)] _)");
+    assert_eq!(fixture.names(), ["number"]);
+    fixture.edit("let number = 1 in let letter = 'x' in (_¦ : @[intrinsic(char)] _)");
+    assert_eq!(fixture.names(), ["letter"]);
+    assert_eq!(fixture.compatibility("number"), Some(AnnotationCompatibility::Mismatch));
+    assert_eq!(fixture.compatibility("letter"), Some(AnnotationCompatibility::Equal));
+}
+
+#[test]
+fn synthesis_sites_keep_every_visible_annotation_unknown() {
+    let fixture = Fixture::new("let matching = 1 in let other = 'x' in _¦");
+    assert_eq!(fixture.names(), ["other", "matching"]);
+    assert_eq!(fixture.compatibility("matching"), Some(AnnotationCompatibility::Unknown));
+    assert_eq!(fixture.compatibility("other"), Some(AnnotationCompatibility::Unknown));
+    assert!(fixture.completion().semantics.as_ref().unwrap().typing.expectations().is_empty());
+}
+
+#[test]
+fn exact_prefix_match_remains_primary_over_type_evidence() {
+    let fixture = Fixture::new("let item_equal = 1 in val item => (item¦ : @[intrinsic(i64)] _)");
+    assert_eq!(fixture.names(), ["item", "item_equal"]);
+    assert_eq!(fixture.compatibility("item"), Some(AnnotationCompatibility::Unknown));
+    assert_eq!(fixture.compatibility("item_equal"), Some(AnnotationCompatibility::Equal));
+}
+
+#[test]
+fn a_companion_signature_supplies_the_root_expectation() {
+    let fixture = Fixture::new("let matching = 1 in let other = 'x' in _¦")
+        .with_dependency("main.zyi", "@[intrinsic(i64)] _");
+    assert_eq!(fixture.names(), ["matching"]);
+    assert_eq!(fixture.compatibility("matching"), Some(AnnotationCompatibility::Equal));
+    assert_eq!(fixture.compatibility("other"), Some(AnnotationCompatibility::Mismatch));
 }
 
 #[test]

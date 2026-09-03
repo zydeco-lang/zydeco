@@ -1,6 +1,24 @@
 use crate::*;
 use derive_more::From;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+
+/// Evidence that a definition annotation satisfies an incoming completion constraint.
+#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+pub enum AnnotationCompatibility {
+    /// Reconciliation succeeded without encountering an unresolved inference variable.
+    Equal,
+    /// Missing facts, deferred inference, or another failure prevent a rigid decision.
+    #[default]
+    Unknown,
+    /// A rigid part of the annotation rejects equality, independently of deferred inference.
+    Mismatch,
+}
+
+#[derive(Default)]
+pub(super) struct LubProbe {
+    deferred: bool,
+    visiting_fills: HashSet<FillId>,
+}
 
 /// A type that can be joined with another type, producing their least upper bound.
 /// T \/ T ?~~> T'
@@ -17,6 +35,58 @@ pub trait Lub<Rhs = Self>: Sized {
     fn lub_inner(self, other: Rhs, tycker: &mut Tycker) -> Result<Self::Out>;
 }
 
+impl Tycker<'_> {
+    /// Apply the ordinary annotation relation without committing inference from the query.
+    pub(crate) fn annotation_compatibility(
+        &mut self, candidate: AnnId, expected: AnnId,
+    ) -> AnnotationCompatibility {
+        assert!(self.lub_probe.is_none(), "annotation compatibility probes cannot nest");
+        let errors = self.errors.len();
+        self.lub_probe = Some(LubProbe::default());
+        let result = candidate.lub(expected, self);
+        let probe = self.lub_probe.take().unwrap();
+        let emitted_error = self.errors.len() != errors;
+        self.errors.truncate(errors);
+
+        match result {
+            | Err(error)
+                if matches!(
+                    error.error,
+                    TyckError::SortMismatch
+                        | TyckError::KindMismatch
+                        | TyckError::TypeMismatch { .. }
+                        | TyckError::NamedLabelMismatch { .. }
+                ) =>
+            {
+                AnnotationCompatibility::Mismatch
+            }
+            | Ok(_) if !probe.deferred && !emitted_error => AnnotationCompatibility::Equal,
+            | Ok(_) | Err(_) => AnnotationCompatibility::Unknown,
+        }
+    }
+
+    fn reconcile_fill_for_lub(&mut self, fill: FillId, candidate: AnnId) -> Result<AnnId> {
+        let Some(probe) = self.lub_probe.as_mut() else {
+            return fill.fill(self, candidate);
+        };
+        if !probe.visiting_fills.insert(fill) {
+            probe.deferred = true;
+            return Ok(candidate);
+        }
+
+        let solution = self.statics.solus.get(&fill).copied();
+        let result = match solution {
+            | Some(solution) => solution.lub(candidate, self),
+            | None => {
+                self.lub_probe.as_mut().unwrap().deferred = true;
+                Ok(candidate)
+            }
+        };
+        self.lub_probe.as_mut().unwrap().visiting_fills.remove(&fill);
+        result
+    }
+}
+
 impl Lub for KindId {
     type Out = KindId;
 
@@ -31,7 +101,7 @@ impl Lub for KindId {
         let lhs = tycker.statics.kinds_pre[&self].clone();
         let rhs = tycker.statics.kinds_pre[&other].clone();
         fn fill_kd(tycker: &mut Tycker, fill: FillId, kd: KindId) -> Result<KindId> {
-            Ok(fill.fill(tycker, kd.into())?.as_kind())
+            Ok(tycker.reconcile_fill_for_lub(fill, kd.into())?.as_kind())
         }
         let res = match (lhs, rhs) {
             | (_, Fillable::Fill(rhs)) => fill_kd(tycker, rhs, self)?,
@@ -147,7 +217,7 @@ impl Debruijn {
         }
         let env = tycker.statics.env_at(lhs_id);
         fn fill_ty(tycker: &mut Tycker, fill: FillId, ty: TypeId) -> Result<TypeId> {
-            Ok(fill.fill(tycker, ty.into())?.as_type())
+            Ok(tycker.reconcile_fill_for_lub(fill, ty.into())?.as_type())
         }
         let res = match (lhs, rhs) {
             | (_, Fillable::Fill(rhs)) => fill_ty(tycker, rhs, lhs_id)?,

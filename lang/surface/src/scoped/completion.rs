@@ -16,16 +16,22 @@ pub struct ScopeSnapshot {
     pub definitions: Vec<VisibleDefinition>,
 }
 
+/// The resolved cursor node and the lexical environment captured at that node.
+pub struct CompletionSite {
+    pub target: TermId,
+    pub scope: ScopeSnapshot,
+}
+
 /// Tooling resolution keeps a captured scope even if another construct is rejected.
 pub struct CompletionResolution {
-    pub scope: Option<ScopeSnapshot>,
+    pub site: Option<CompletionSite>,
     pub unbound: Vec<super::ResolveError>,
     pub program: Result<ResolveSourceOut>,
 }
 
 pub(super) struct CompletionCapture {
     pub target: crate::textual::syntax::TermId,
-    pub scope: Option<ScopeSnapshot>,
+    pub site: Option<CompletionSite>,
     pub unbound: Vec<super::ResolveError>,
 }
 

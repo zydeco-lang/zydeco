@@ -3,7 +3,8 @@
 Zydeco completion should answer a source-language query rather than expose an editor-owned vocabulary.
 The parser knows which forms can occur at a position, name resolution knows which definitions are visible,
 the type checker knows what classifiers those definitions have, and the source session knows which files can be
-imported. Cajun should combine those facts, rank them, and translate them into Language Server Protocol items.
+imported. The compiler session combines and ranks those facts; Cajun translates the results into Language Server
+Protocol items.
 
 Metadata completion is the first instance of this model. The surface metadata catalog owns annotation names,
 argument shapes, descriptions, and closed identifier domains; Cajun owns cursor recovery, replacement ranges,
@@ -74,7 +75,7 @@ struct CompletionCandidate {
     label: String,
     class: CompletionClass,
     annotation: Option<CompletionAnnotation>,
-    compatibility: TypeCompatibility,
+    compatibility: AnnotationCompatibility,
 }
 ```
 
@@ -274,66 +275,90 @@ available in the initial result.
 
 ### Obtaining the expected classifier
 
-The completion token becomes a distinguished hole in recovered syntax. Bidirectional checking already encounters
-holes under synthesis or analysis and represents unresolved hole information with typed identities. Completion adds
-one compact editor-facing fact for the distinguished hole:
+The completion token becomes a distinguished hole in recovered syntax. The useful fact is the incoming checking
+judgment at that exact node, after the checker has prepared its annotation for the node's lexical environment.
+An unsolved incoming annotation still preserves its known classifier category when checking falls back to synthesis.
+Neither case uses the stand-in type later synthesized for the hole: treating that stand-in as an expectation would
+manufacture a constraint at a synthesis site and could rank whichever candidate happened to solve it first.
+
+The checker therefore retains the distinct analytic annotations it observes at the completion node:
 
 ```rust
-enum CompletionExpectation {
-    Set,
-    Type { kind: KindId },
-    Value { ty: TypeId },
-    Computation { ty: TypeId },
-    Unknown,
+struct CompletionTyping {
+    expectations: Vec<AnnId>,
+    compatibility: ArenaAssoc<DefId, AnnotationCompatibility>,
 }
 ```
 
-This fact records the expected sort and classifier after checking the recovered source as far as possible. It does
-not retain every checker `TyEnv`; those environments are intentionally stripped after checking because of their size.
-Visible `DefId`s come from the resolver scope, candidate annotations come from retained statics indexes, and only the
-completion site's expected classifier needs new retained storage.
+`AnnId` is already the canonical description of a checking constraint: `Set`, `Kind(KindId)`, or `Type(TypeId)`.
+Introducing another enum for kind, type, value, and computation expectations would duplicate this information. The
+kind of a `TypeId` supplies the CBPV value/computation distinction when the checker needs it.
 
-When current checking cannot reach the hole or its expectation still contains unresolved inference variables, the
-expectation is `Unknown`. Unknown information never removes a candidate.
+Most source nodes are checked once, but a resolved term can be revisited during recursive checking. Retaining every
+distinct analytic annotation makes completion satisfy all judgments that insertion at that shared node would face,
+rather than depending on which visit happened last. A synthesis visit contributes no expected annotation. An empty
+collection consequently means only that no usable analytic constraint was observed; it may reflect synthesis or an
+earlier failure, and both cases must leave candidates unfiltered.
+
+This fact does not retain every checker `TyEnv`; those environments are intentionally stripped after checking because
+of their size. Visible `DefId`s come from the resolver scope, candidate annotations come from the ordinary
+`annotations_var` table, and the incoming annotation has already been substituted and normalized by the term-checking
+entry point. An expectation of `Set` is captured before the hole reports that it cannot synthesize a kind, so that
+otherwise valid kind names are not lost with the rejected stand-in node.
 
 ### Compatibility and ranking
 
-Compatibility is a typed result, not a Boolean inferred from rendered types:
+Expected-type ranking predicts the literal edit represented by a candidate. An ordinary definition candidate inserts
+a bare variable reference, so its relevant judgment is the same one used by the variable rule:
+
+```text
+candidate annotation  Lub  expected annotation
+```
+
+Zydeco currently has no separate subtyping or implicit-coercion relation for this judgment. A successful rigid `Lub`
+is definitional equality as implemented by the checker, including normalization and alpha-equivalence. Splitting that
+one relation into `Exact` and `Compatible` would either make arena-ID equality semantically significant or duplicate
+the checker's rules. Completion instead records three evidence levels:
 
 ```rust
-enum TypeCompatibility {
-    Exact,
-    Compatible,
+enum AnnotationCompatibility {
+    Equal,
     Unknown,
-    Incompatible,
+    Mismatch,
 }
 ```
 
-`Exact` means the candidate and expectation have the same normalized classifier. `Compatible` means the checker can
-reconcile them without committing inference changes to the shared analysis. `Unknown` covers absent expectations,
-unresolved holes, or a comparison the checker cannot decide safely. `Incompatible` requires a definitive sort or
-classifier mismatch.
+`Equal` means every observed analytic annotation reconciles without inference. `Unknown` means there is no expected
+annotation, the definition has no annotation, reconciliation reaches an unsolved metavariable, or the probe encounters a
+failure that is not a rigid equality rejection. `Mismatch` means at least one required judgment produces a definite
+sort, kind, type, or label mismatch without relying on inference. Such a mismatch remains definitive when another
+part of the same classifier contains an unresolved metavariable; the metavariable cannot repair the rigid part.
 
-The compatibility query must be side-effect free. It may compare completed normalized annotations or run against a
-disposable checker snapshot; it must not fill metavariables in the cached project merely because an editor requested
-completion.
+The probe reuses `Lub`; it does not implement a second structural type comparator. A probe mode follows already-solved
+fills but defers an unsolved fill, marks the result unknown, and performs no solution or scope writes. It runs on the
+request-local completion checker before checker environments are stripped. Deferring inference makes the evidence
+independent of candidate enumeration order. Nodes allocated while exposing definitional equality belong to that
+disposable check; source facts, diagnostics, and inference state remain unchanged. This is observationally side-effect
+free for both strict project analysis and the semantic facts returned to the editor.
 
-Candidates are ordered by:
+Ordinary name candidates are ordered by:
 
-1. prefix match quality;
-2. type compatibility: exact, compatible, unknown, then incompatible;
-3. lexical proximity;
-4. semantic class appropriate to the syntax site; and
-5. deterministic source order and label.
+1. exact prefix matches, then other prefix matches;
+2. annotation evidence: equal, then unknown;
+3. lexical proximity; and
+4. label, for deterministic tie-breaking.
 
-Once both sides are complete and incompatibility is proven, completion omits the candidate. Automatic and manual
-invocation use the same semantic candidate set; their trigger only affects when the client asks for it. No candidate
-is filtered because inference failed, because a type was not materialized, or because its rendered type string
-differs textually.
+`Mismatch` candidates are omitted. `Unknown` candidates remain visible, including every candidate when checking does
+not reach an analytic context. Automatic and manual invocation use the same semantic candidate set; their trigger only
+affects when the client asks for it. No candidate is filtered because inference was needed, because a classifier was
+not materialized, or because two rendered type strings differ textually.
 
-The initial semantic milestone may implement presentation and the `Unknown` rank for every candidate before adding
-the compatibility query. This keeps the name-completion API stable while type-directed ordering arrives
-incrementally.
+This judgment deliberately does not search for adapted expressions. A value that would fit after `!`, `ret`, a thunk,
+or a type application is a future structured candidate with its own inserted form; the bare name is ranked according
+to its own classifier. `Equal` is classifier-fit evidence, not proof that replacing the hole makes the entire program
+valid. A surrounding construct may impose a further term-level condition, such as equality with a manifest package
+witness, and unrelated source errors can remain. Such conditions require their own typed completion facts before
+they can refine ranking.
 
 ## Candidate families
 
@@ -417,17 +442,18 @@ lookup. The session adds prefix filtering and deterministic ordering by exact ma
 Cajun supplies whole-token UTF-16 edits, compact type details, negotiated label details, and a plain detail-field fallback.
 Names remain available without type information, and metadata dispatch remains separate from ordinary-name completion.
 
+### Type-directed ranking — implemented
+
+The resolver returns the cursor identity and its scope as one optional `CompletionSite`. The checker retains incoming
+analytic annotations for that exact node and probes definition annotations through `Lub` without solving inference
+variables. The session ranks equal definitions first and filters only rigid mismatches. Existing classifier
+presentation remains unchanged, and Cajun projects the compiler's order directly into LSP sort text.
+
 ### Syntax, paths, and failed-revision resilience
 
 Project typed parser expectations through the syntax-form catalog, implement `MetadataValue::Source` path candidates,
 and add a separate last-successful Cajun state with conservative fallback policy. These tasks should be split if parser
 recovery exposes enough independent review surface.
-
-### Type-directed ranking
-
-Retain the completion expectation, implement a side-effect-free compatibility query, rank exact and compatible
-definitions first, and filter only proven mismatches. Extend the existing classifier-presentation tests to cover
-unknown expectations and comparison queries that leave inference state unchanged.
 
 ### Structural and branch completion
 
@@ -454,19 +480,24 @@ Each layer needs tests at the phase that owns its facts:
   insertion, recovery spans, and strict-versus-recovering outcomes;
 - resolver tests cover sequential binders, shadowing, branch-local patterns, mobile block bindings, recursion,
   and source-boundary isolation;
-- statics tests cover classifier display, exact and compatible ordering, unknown expectations, definitive filtering,
-  and comparisons that leave inference state unchanged;
-- session tests cover relative sources, directories, signatures, overlays, and import-cycle exclusions;
+- statics tests cover equality, unknown expectations, rigid mismatches, multiple incoming constraints, and
+  comparisons that leave inference state unchanged;
+- session tests cover ordering, filtering, relative sources, directories, signatures, overlays, and import-cycle exclusions;
 - Cajun unit tests cover LSP kinds, label details, snippets, deterministic sort text, and revision cancellation; and
 - stdio tests exercise completion during realistic edit sequences rather than only complete source snapshots.
 
 Scope-backed completion has resolver tests comparing enumeration with actual resolved references, session tests for
 scope and dependency isolation, and Cajun tests for whole-token edits, Unicode, metadata dispatch, and optional types.
 Stdio tests replace a previously successful document with unbound or syntactically incomplete source and require
-current names with both label-detail capabilities. These checks run with:
+current names with both label-detail capabilities. Ranking tests pair inferred candidates with unknown ones, check
+rigid rejection against actually inserting the candidate, and cover aliases, sealed identities, polymorphism, CBPV
+sorts, current-revision expectation changes, and companion signatures. Checker tests verify prepared annotations,
+multiple incoming constraints, unchanged solutions and scope constraints, and ordinary inference after a probe.
+These checks run with:
 
 ```sh
 cargo test -p zydeco-surface scoped::completion --lib
+cargo test -p zydeco-statics check::tests --lib
 cargo test -p zydeco-session source::query::completion --lib
 cargo test -p cajun completion:: --lib
 cargo test -p cajun --test stdio stdio_server_completes

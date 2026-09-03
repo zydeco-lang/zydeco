@@ -36,8 +36,10 @@ impl Fixture {
 #[test]
 fn enumeration_selects_the_same_definition_as_reference_resolution() {
     let completion = Fixture::new("let value = 1 in fn value => (value, ¦)").complete();
-    let scope = completion.scope.unwrap();
+    let site = completion.site.expect("the exact resolved hole is retained");
+    let scope = site.scope;
     let program = completion.program.unwrap();
+    assert!(matches!(program.arena.terms[&site.target], Term::Hole(_)));
     let [candidate] = scope.definitions.as_slice() else {
         panic!("only the inner name is visible")
     };
@@ -90,7 +92,7 @@ fn unbound_references_are_diagnosed_and_replaced_only_for_completion() {
     let source = "let value = 1 in (missing, _¦, absent)";
     let completion = Fixture::new(source).complete();
     let program = completion.program.unwrap();
-    assert_eq!(completion.scope.unwrap().definitions[0].name.0, "value");
+    assert_eq!(completion.site.unwrap().scope.definitions[0].name.0, "value");
     let unbound = completion
         .unbound
         .iter()
@@ -120,15 +122,16 @@ fn a_cursor_identity_from_another_parse_cannot_match_an_equal_span() {
     assert_ne!(old, current.target);
     let completion = Resolver::new(&current.spans, current.bitter.arena, current.bitter.prim)
         .run_completion(current.bitter.root, old);
-    assert!(completion.scope.is_none());
+    assert!(completion.site.is_none());
     assert!(completion.program.is_ok());
-    assert!(Fixture::new("fn value => ¦").complete().scope.is_some());
+    let completion = Fixture::new("fn value => ¦").complete();
+    assert!(completion.site.is_some());
 }
 
 #[test]
 fn fatal_resolution_errors_do_not_invent_an_unvisited_scope() {
     let completion = Fixture::new("(param invalid that invalid, fn value => ¦)").complete();
-    assert!(completion.scope.is_none());
+    assert!(completion.site.is_none());
     assert!(
         matches!(completion.program, Err(error) if matches!(*error, ResolveError::UnenclosedThat(_)))
     );

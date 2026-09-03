@@ -20,6 +20,9 @@ mod annotation;
 /// Least-upper-bound operations for kinds and types.
 pub mod lub;
 pub use lub::*;
+/// Request-local expected annotations and completion compatibility evidence.
+mod completion;
+pub use completion::CompletionTyping;
 /// Syntactic checks for annotations and seals.
 pub mod syntactic;
 pub use syntactic::*;
@@ -59,6 +62,8 @@ pub struct Tycker<'a> {
     pub metas: rpds::VectorSync<su::Meta>,
     /// Results of field-search materializations under the current inference state.
     field_materializations: DeferredEnvMaterializationCache,
+    completion: Option<completion::CompletionCapture>,
+    lub_probe: Option<lub::LubProbe>,
     /// a writer monad for error handling
     pub errors: Vec<TyckErrorEntry>,
     pub(crate) observations: Vec<TyckObservation>,
@@ -1734,6 +1739,8 @@ impl<'a> Tycker<'a> {
             checked_terms: CheckedTermRepository::default(),
             metas: rpds::VectorSync::new_sync(),
             field_materializations: DeferredEnvMaterializationCache::default(),
+            completion: None,
+            lub_probe: None,
             errors: Vec::new(),
             observations: Vec::new(),
             pending_foreign_imports: Vec::new(),
@@ -4769,34 +4776,42 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
             | Switch::Ana(ana) => match ana {
                 | AnnId::Set => {}
                 | AnnId::Kind(kd) => match tycker.statics.kinds_pre[&kd].to_owned() {
-                    | Fillable::Fill(fill) => match self.tyck_k(tycker, Action::syn())? {
-                        | TermAnnId::Type(ty, kd) => {
-                            let kd = fill.fill_k(tycker, kd.into())?.as_kind();
-                            return Ok(TermAnnId::Type(ty, kd));
+                    | Fillable::Fill(fill) => {
+                        tycker.observe_completion(self.inner, switch);
+                        match self.tyck_k(tycker, Action::syn())? {
+                            | TermAnnId::Type(ty, kd) => {
+                                let kd = fill.fill_k(tycker, kd.into())?.as_kind();
+                                return Ok(TermAnnId::Type(ty, kd));
+                            }
+                            | TermAnnId::Hole(_)
+                            | TermAnnId::Kind(_)
+                            | TermAnnId::Value(_, _)
+                            | TermAnnId::Compu(_, _) => tycker
+                                .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
                         }
-                        | TermAnnId::Hole(_)
-                        | TermAnnId::Kind(_)
-                        | TermAnnId::Value(_, _)
-                        | TermAnnId::Compu(_, _) => {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                        }
-                    },
+                    }
                     | _ => {}
                 },
                 | AnnId::Type(ty) => match tycker.statics.types_pre[&ty].to_owned() {
-                    | Fillable::Fill(fill) => match self.tyck_k(tycker, Action::syn())? {
-                        | TermAnnId::Value(v, ty) => {
-                            let ty = fill.fill_k(tycker, ty.into())?.as_type();
-                            return Ok(TermAnnId::Value(v, ty));
+                    | Fillable::Fill(fill) => {
+                        tycker.observe_completion(self.inner, switch);
+                        match self.tyck_k(tycker, Action::syn())? {
+                            | TermAnnId::Value(v, ty) => {
+                                let ty = fill.fill_k(tycker, ty.into())?.as_type();
+                                return Ok(TermAnnId::Value(v, ty));
+                            }
+                            | TermAnnId::Compu(c, ty) => {
+                                let ty = fill.fill_k(tycker, ty.into())?.as_type();
+                                return Ok(TermAnnId::Compu(c, ty));
+                            }
+                            | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Type(_, _) => {
+                                tycker.err_k(
+                                    TyckError::SortMismatch,
+                                    std::panic::Location::caller(),
+                                )?
+                            }
                         }
-                        | TermAnnId::Compu(c, ty) => {
-                            let ty = fill.fill_k(tycker, ty.into())?.as_type();
-                            return Ok(TermAnnId::Compu(c, ty));
-                        }
-                        | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Type(_, _) => {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                        }
-                    },
+                    }
                     | _ => {
                         let preparation_is_valid = prepared_environment
                             .as_ref()
@@ -4813,6 +4828,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
             },
         }
         // the switch should contain no unfilled from here on
+
+        tycker.observe_completion(self.inner, switch);
 
         use su::Term as Tm;
         let out_ann = match tycker.scoped.terms[&self.inner].to_owned() {
@@ -8501,7 +8518,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
 }
 
 #[cfg(test)]
-mod source_boundary_tests {
+mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
 
@@ -9138,5 +9155,256 @@ mod source_boundary_tests {
                 assert!(tycker.errors.is_empty());
             },
         );
+    }
+
+    #[test]
+    fn annotation_probe_uses_lub_for_rigid_equality_and_mismatch() {
+        with_empty_tycker(|tycker| {
+            let environment = TyEnv::new();
+            let vtype = ss::VType.build(tycker, &environment);
+            let unit = ss::UnitTy.build(tycker, &environment);
+            let other_unit: ss::TypeId = Alloc::alloc(tycker, ss::UnitTy, vtype, &environment);
+            let integer = ss::PrimitiveTy(ss::PrimitiveType::Integer(ss::IntegerType::Int64))
+                .build(tycker, &environment);
+
+            assert_ne!(unit, other_unit);
+            assert_eq!(
+                tycker.annotation_compatibility(unit.into(), other_unit.into()),
+                AnnotationCompatibility::Equal
+            );
+            assert_eq!(
+                tycker.annotation_compatibility(unit.into(), integer.into()),
+                AnnotationCompatibility::Mismatch
+            );
+            assert_eq!(
+                tycker.annotation_compatibility(vtype.into(), unit.into()),
+                AnnotationCompatibility::Mismatch
+            );
+            assert!(tycker.errors.is_empty());
+        });
+    }
+
+    #[test]
+    fn annotation_probe_defers_unsolved_fills_without_changing_inference() {
+        with_empty_tycker(|tycker| {
+            let environment = TyEnv::new();
+            let vtype = ss::VType.build(tycker, &environment);
+            let unit = ss::UnitTy.build(tycker, &environment);
+            let root = tycker.data.root(tycker.db);
+            let fill = Alloc::alloc(tycker, root, (), &());
+            let pending: ss::TypeId = Alloc::alloc(tycker, fill, vtype, &environment);
+            let scopes = tycker.statics.fill_scopes.iter().count();
+            let scope = tycker.statics.fill_scopes.get(&fill).cloned();
+            let errors = tycker.errors.len();
+
+            assert_eq!(
+                tycker.annotation_compatibility(pending.into(), unit.into()),
+                AnnotationCompatibility::Unknown
+            );
+            assert_eq!(
+                tycker.annotation_compatibility(pending.into(), pending.into()),
+                AnnotationCompatibility::Unknown
+            );
+            assert!(tycker.statics.solus.get(&fill).is_none());
+            assert_eq!(tycker.statics.fill_scopes.iter().count(), scopes);
+            assert_eq!(tycker.statics.fill_scopes.get(&fill).cloned(), scope);
+            assert_eq!(tycker.errors.len(), errors);
+
+            assert_eq!(pending.lub(unit, tycker).ok(), Some(unit));
+            assert_eq!(tycker.statics.solus.get(&fill), Some(&AnnId::Type(unit)));
+        });
+    }
+
+    #[test]
+    fn annotation_probe_keeps_a_rigid_mismatch_beside_deferred_fills() {
+        with_empty_tycker(|tycker| {
+            let environment = TyEnv::new();
+            let vtype = ss::VType.build(tycker, &environment);
+            let unit = ss::UnitTy.build(tycker, &environment);
+            let integer = ss::PrimitiveTy(ss::PrimitiveType::Integer(ss::IntegerType::Int64))
+                .build(tycker, &environment);
+            let root = tycker.data.root(tycker.db);
+            let fill = Alloc::alloc(tycker, root, (), &());
+            let pending: ss::TypeId = Alloc::alloc(tycker, fill, vtype, &environment);
+            let partly_unknown: ss::TypeId =
+                Alloc::alloc(tycker, ss::Prod(vec![pending, unit]), vtype, &environment);
+            let compatible: ss::TypeId =
+                Alloc::alloc(tycker, ss::Prod(vec![integer, unit]), vtype, &environment);
+            let mismatched: ss::TypeId =
+                Alloc::alloc(tycker, ss::Prod(vec![integer, integer]), vtype, &environment);
+
+            assert_eq!(
+                tycker.annotation_compatibility(partly_unknown.into(), compatible.into()),
+                AnnotationCompatibility::Unknown
+            );
+            assert_eq!(
+                tycker.annotation_compatibility(partly_unknown.into(), mismatched.into()),
+                AnnotationCompatibility::Mismatch
+            );
+            assert!(tycker.statics.solus.get(&fill).is_none());
+            assert!(tycker.errors.is_empty());
+        });
+    }
+
+    #[test]
+    fn annotation_probe_follows_existing_solutions_without_rewriting_them() {
+        with_empty_tycker(|tycker| {
+            let environment = TyEnv::new();
+            let vtype = ss::VType.build(tycker, &environment);
+            let unit = ss::UnitTy.build(tycker, &environment);
+            let root = tycker.data.root(tycker.db);
+            let fill = Alloc::alloc(tycker, root, (), &());
+            let pending: ss::TypeId = Alloc::alloc(tycker, fill, vtype, &environment);
+            tycker.statics.solus.insert_new(fill, unit.into());
+
+            assert_eq!(
+                tycker.annotation_compatibility(pending.into(), unit.into()),
+                AnnotationCompatibility::Equal
+            );
+            assert_eq!(tycker.statics.solus.get(&fill), Some(&AnnId::Type(unit)));
+            assert!(tycker.errors.is_empty());
+        });
+    }
+
+    #[test]
+    fn annotation_probe_preserves_lub_alpha_equivalence() {
+        with_empty_tycker(|tycker| {
+            let environment = TyEnv::new();
+            let vtype = ss::VType.build(tycker, &environment);
+            let ctype = ss::CType.build(tycker, &environment);
+            let ret = ss::RetTy.build(tycker, &environment);
+            let quantified = |tycker: &mut Tycker<'_>| {
+                let binder = anonymous_type_binder(tycker, vtype, &environment);
+                let witness = Alloc::alloc(tycker, binder.witness, vtype, &environment);
+                let body = Alloc::alloc(tycker, ss::App(ret, witness), ctype, &environment);
+                Alloc::alloc(tycker, ss::Forall(binder, body), ctype, &environment)
+            };
+            let left = quantified(tycker);
+            let right = quantified(tycker);
+
+            assert_ne!(left, right);
+            assert_eq!(
+                tycker.annotation_compatibility(left.into(), right.into()),
+                AnnotationCompatibility::Equal
+            );
+            let unit = ss::UnitTy.build(tycker, &environment);
+            let monomorphic: ss::TypeId =
+                Alloc::alloc(tycker, ss::App(ret, unit), ctype, &environment);
+            assert_eq!(
+                tycker.annotation_compatibility(left.into(), monomorphic.into()),
+                AnnotationCompatibility::Mismatch
+            );
+            assert!(tycker.errors.is_empty());
+        });
+    }
+
+    #[test]
+    fn annotation_probe_normalizes_applications_but_preserves_sealed_identity() {
+        with_empty_tycker(|tycker| {
+            let environment = TyEnv::new();
+            let vtype = ss::VType.build(tycker, &environment);
+            let unit = ss::UnitTy.build(tycker, &environment);
+            let binder = anonymous_type_binder(tycker, vtype, &environment);
+            let body = Alloc::alloc(tycker, binder.witness, vtype, &environment);
+            let kind = Alloc::alloc(tycker, ss::Arrow(vtype, vtype), (), &());
+            let identity =
+                Alloc::alloc(tycker, ss::TypeAbstraction { binder, body }, kind, &environment);
+            let applied: ss::TypeId =
+                Alloc::alloc(tycker, ss::App(identity, unit), vtype, &environment);
+            assert_eq!(
+                tycker.annotation_compatibility(applied.into(), unit.into()),
+                AnnotationCompatibility::Equal
+            );
+
+            let sealed = |tycker: &mut Tycker<'_>| {
+                let witness = Alloc::alloc(tycker, None::<ss::DefId>, vtype, &());
+                tycker.record_seal(witness, unit);
+                Alloc::alloc(tycker, witness, vtype, &environment)
+            };
+            let left: ss::TypeId = sealed(tycker);
+            let right: ss::TypeId = sealed(tycker);
+            assert_eq!(
+                tycker.annotation_compatibility(left.into(), left.into()),
+                AnnotationCompatibility::Equal
+            );
+            assert_eq!(
+                tycker.annotation_compatibility(left.into(), right.into()),
+                AnnotationCompatibility::Mismatch
+            );
+            assert!(tycker.errors.is_empty());
+        });
+    }
+
+    #[test]
+    fn completion_capture_keeps_distinct_analytic_constraints() {
+        with_empty_tycker(|tycker| {
+            let root = tycker.data.root(tycker.db);
+            tycker.set_completion_target(root);
+            let environment = TyEnv::new();
+            let vtype = ss::VType.build(tycker, &environment);
+
+            assert!(
+                TyEnvT::new(environment.clone(), root)
+                    .tyck_k(tycker, Action::ana(AnnId::Set))
+                    .is_err()
+            );
+            TyEnvT::new(environment.clone(), root)
+                .tyck_k(tycker, Action::ana(AnnId::Kind(vtype)))
+                .unwrap();
+            TyEnvT::new(environment, root).tyck_k(tycker, Action::ana(AnnId::Kind(vtype))).unwrap();
+
+            let candidate =
+                Alloc::alloc(tycker, ss::VarName("candidate".to_owned()), AnnId::Kind(vtype), &());
+            let typing = tycker.completion_typing(&[candidate]).unwrap();
+            assert_eq!(typing.expectations(), [AnnId::Set, AnnId::Kind(vtype)]);
+            assert_eq!(typing.compatibility(candidate), AnnotationCompatibility::Mismatch);
+        });
+    }
+
+    #[test]
+    fn completion_capture_uses_the_prepared_lexical_annotation() {
+        with_empty_tycker(|tycker| {
+            let root = tycker.data.root(tycker.db);
+            tycker.set_completion_target(root);
+            let empty = TyEnv::new();
+            let vtype = ss::VType.build(tycker, &empty);
+            let unit = ss::UnitTy.build(tycker, &empty);
+            let definition =
+                Alloc::alloc(tycker, ss::VarName("Alias".to_owned()), AnnId::Kind(vtype), &());
+            let alias: ss::TypeId = Alloc::alloc(tycker, definition, vtype, &empty);
+            let environment = empty + [(definition, AnnId::Type(unit))];
+            TyEnvT::new(environment, root).tyck_k(tycker, Action::ana(alias.into())).unwrap();
+
+            assert_eq!(tycker.completion_typing(&[]).unwrap().expectations(), [AnnId::Type(unit)]);
+        });
+    }
+
+    #[test]
+    fn completion_capture_preserves_an_unresolved_expected_type_category() {
+        with_empty_tycker(|tycker| {
+            let root = tycker.data.root(tycker.db);
+            tycker.set_completion_target(root);
+            let environment = TyEnv::new();
+            let vtype = ss::VType.build(tycker, &environment);
+            let unit = ss::UnitTy.build(tycker, &environment);
+            let fill = Alloc::alloc(tycker, root, (), &());
+            let pending: ss::TypeId = Alloc::alloc(tycker, fill, vtype, &environment);
+
+            assert!(
+                TyEnvT::new(environment, root).tyck_k(tycker, Action::ana(pending.into())).is_err()
+            );
+            let value =
+                Alloc::alloc(tycker, ss::VarName("value".to_owned()), AnnId::Type(unit), &());
+            let type_name =
+                Alloc::alloc(tycker, ss::VarName("TypeName".to_owned()), AnnId::Kind(vtype), &());
+            let errors = tycker.errors.len();
+            let typing = tycker.completion_typing(&[value, type_name]).unwrap();
+
+            assert_eq!(typing.expectations(), [AnnId::Type(pending)]);
+            assert_eq!(typing.compatibility(value), AnnotationCompatibility::Unknown);
+            assert_eq!(typing.compatibility(type_name), AnnotationCompatibility::Mismatch);
+            assert!(tycker.statics.solus.get(&fill).is_none());
+            assert_eq!(tycker.errors.len(), errors);
+        });
     }
 }

@@ -8,7 +8,9 @@
 
 use crate::TyEnv;
 use crate::alloc::QUERY_DERIVATION_TAG;
-use crate::check::{CheckedSource, KontFailure, RejectedSource, SourceCheckOutcome, Tycker};
+use crate::check::{
+    CheckedSource, CompletionTyping, KontFailure, RejectedSource, SourceCheckOutcome, Tycker,
+};
 use crate::surface_syntax as su;
 use crate::syntax as ss;
 use zydeco_surface::arena::ArenaId;
@@ -2251,6 +2253,24 @@ pub struct TyckOutput {
     pub outcome: SourceCheckOutcome,
 }
 
+/// Exact resolved cursor identity and definitions to compare in one disposable check.
+#[salsa::tracked]
+pub struct CompletionInput<'db> {
+    #[tracked]
+    #[returns(copy)]
+    pub target: su::TermId,
+    #[tracked]
+    #[returns(ref)]
+    pub definitions: Vec<su::DefId>,
+}
+
+/// Completion evidence and the source arenas owning every annotation it mentions.
+#[derive(Clone, Debug)]
+pub struct CompletionTyckOutput {
+    pub source: TyckOutput,
+    pub typing: CompletionTyping,
+}
+
 // The outcome owns its arenas and reports and contains no database-tied references.
 // The non-Update escape hatch stays until the judgment layer gains structural equality.
 //
@@ -2259,47 +2279,59 @@ pub struct TyckOutput {
 // session triggers LRU eviction between analyses. Judgments stay memoized separately.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values), lru = 1)]
 pub fn check_source<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> TyckOutput {
-    // One checker runs the whole pipeline within a single query. Splitting the
-    // phases into separate salsa queries required deep-copying the full statics
-    // arena across every boundary, which dominated check memory.
-    let scoped = std::sync::Arc::clone(data.scoped(db));
-    let (root, outcome);
-    {
+    SourceCheckRequest { data, completion: None }.run(db).0
+}
+
+/// Check current recovered syntax and compare names before transient environments are released.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values), lru = 1)]
+pub fn check_completion<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, completion: CompletionInput<'db>,
+) -> CompletionTyckOutput {
+    let (source, typing) = SourceCheckRequest { data, completion: Some(completion) }.run(db);
+    CompletionTyckOutput { source, typing: typing.expect("a completion request captures typing") }
+}
+
+struct SourceCheckRequest<'db> {
+    data: ScopedData<'db>,
+    completion: Option<CompletionInput<'db>>,
+}
+
+impl<'db> SourceCheckRequest<'db> {
+    fn run(self, db: &'db dyn TyckDb) -> (TyckOutput, Option<CompletionTyping>) {
+        // One checker runs the whole pipeline within a single query. Splitting the
+        // phases into separate salsa queries required deep-copying the full statics
+        // arena across every boundary, which dominated check memory.
+        let data = self.data;
+        let scoped = std::sync::Arc::clone(data.scoped(db));
         let mut tycker = Tycker::new(db, data, data.spans(db), data.prim(db), &scoped);
+        if let Some(completion) = self.completion {
+            tycker.set_completion_target(completion.target(db));
+        }
         crate::check::InternalTerm::fill_intrinsics(&mut tycker);
-        root = tycker.run_judgments_k(data.root(db)).ok();
+        let root = tycker.run_judgments_k(data.root(db)).ok();
         tycker.finish_judgments();
         tycker.resolve_holes_and_collect();
-        outcome = match root {
-            | None => {
-                let diagnostics = tycker.error_diagnostics();
-                tycker.strip_checker_state();
-                SourceCheckOutcome::Rejected(RejectedSource {
-                    statics: std::sync::Arc::new(tycker.statics),
-                    diagnostics,
-                    observations: tycker.observations,
-                })
-            }
-            | Some(root) => match tycker.normalize_and_validate_k() {
-                | Ok(()) => {
-                    tycker.strip_checker_state();
-                    SourceCheckOutcome::Checked(CheckedSource {
-                        statics: std::sync::Arc::new(tycker.statics),
-                        root,
-                        observations: tycker.observations,
-                    })
-                }
-                | Err(KontFailure) => {
-                    let diagnostics = tycker.error_diagnostics();
-                    tycker.strip_checker_state();
-                    SourceCheckOutcome::Rejected(RejectedSource {
-                        statics: std::sync::Arc::new(tycker.statics),
-                        diagnostics,
-                        observations: tycker.observations,
-                    })
-                }
-            },
+        let result = match root {
+            | None => Err(KontFailure),
+            | Some(root) => tycker.normalize_and_validate_k().map(|()| root),
         };
+        let diagnostics = result.is_err().then(|| tycker.error_diagnostics());
+        let completion =
+            self.completion.and_then(|request| tycker.completion_typing(request.definitions(db)));
+        tycker.strip_checker_state();
+        let statics = std::sync::Arc::new(tycker.statics);
+        let outcome = match result {
+            | Ok(root) => SourceCheckOutcome::Checked(CheckedSource {
+                statics,
+                root,
+                observations: tycker.observations,
+            }),
+            | Err(KontFailure) => SourceCheckOutcome::Rejected(RejectedSource {
+                statics,
+                diagnostics: diagnostics.unwrap(),
+                observations: tycker.observations,
+            }),
+        };
+        (TyckOutput { scoped, outcome }, completion)
     }
-    TyckOutput { scoped, outcome }
 }

@@ -108,6 +108,30 @@ fn sorting_preserves_compiler_order_and_shadowed_names_appear_once() {
 }
 
 #[test]
+fn expected_types_order_equal_names_and_omit_rigid_mismatches() {
+    let fixture = Fixture::new(
+        "let matching = 1 in let other = 'x' in val unknown => (_¦ : @[intrinsic(i64)] _)",
+    );
+    let items = fixture.items(true).unwrap();
+    assert_eq!(
+        items.iter().map(|item| item.label.as_str()).collect::<Vec<_>>(),
+        ["matching", "unknown"]
+    );
+    assert_eq!(items[0].detail.as_deref(), Some("Int64"));
+    assert!(items.windows(2).all(|pair| pair[0].sort_text < pair[1].sort_text));
+}
+
+#[test]
+fn exact_prefix_quality_precedes_expected_type_evidence() {
+    let fixture = Fixture::new("let item_equal = 1 in val item => (item¦ : @[intrinsic(i64)] _)");
+    let items = fixture.items(true).unwrap();
+    assert_eq!(
+        items.iter().map(|item| item.label.as_str()).collect::<Vec<_>>(),
+        ["item", "item_equal"]
+    );
+}
+
+#[test]
 fn metadata_owns_its_namespace_even_for_unsupported_arguments() {
     for source in [
         "let value = 1 in @[custom(val¦)] _",

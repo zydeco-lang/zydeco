@@ -392,11 +392,35 @@ fn stdio_server_completes_current_names_after_parse_errors_with_optional_type_la
             );
         }
 
-        let source = "let current = 1 in fn binder => current";
+        let source =
+            "let matching = 1 in let other = 'x' in val unknown => (_ : @[intrinsic(i64)] _)";
         server.notify(
             "textDocument/didChange",
             json!({
                 "textDocument": { "uri": uri, "version": 4 },
+                "contentChanges": [{ "text": source }],
+            }),
+        );
+        server.notification("textDocument/publishDiagnostics");
+        let response = server.request_without_notifications(
+            "textDocument/completion",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": source_position(source, "_ :"),
+            }),
+        );
+        let items = response["result"].as_array().unwrap();
+        assert_eq!(
+            items.iter().map(|item| item["label"].as_str().unwrap()).collect::<Vec<_>>(),
+            ["matching", "unknown"]
+        );
+        assert_eq!(items[0]["detail"], "Int64");
+
+        let source = "let current = 1 in fn binder => current";
+        server.notify(
+            "textDocument/didChange",
+            json!({
+                "textDocument": { "uri": uri, "version": 5 },
                 "contentChanges": [{ "text": source }],
             }),
         );

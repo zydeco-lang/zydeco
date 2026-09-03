@@ -149,21 +149,24 @@ impl<'a> Resolver<'a> {
     pub fn run_completion(
         mut self, root: TermId, target: crate::textual::syntax::TermId,
     ) -> CompletionResolution {
-        self.completion = Some(CompletionCapture { target, scope: None, unbound: Vec::new() });
+        self.completion = Some(CompletionCapture { target, site: None, unbound: Vec::new() });
         let resolved = root.resolve(&mut self, (Local::for_body(), &Global::default()));
-        let CompletionCapture { scope, unbound, .. } = self.completion.take().unwrap();
+        let CompletionCapture { site, unbound, .. } = self.completion.take().unwrap();
         let program = resolved.and_then(|()| {
             let ResolvedProgram { prim, arena } = self.finish()?;
             Ok(ResolveSourceOut { prim, arena: FrozenArena::new(arena), root })
         });
-        CompletionResolution { scope, unbound, program }
+        CompletionResolution { site, unbound, program }
     }
 
     fn capture_scope(&mut self, term: TermId, local: &Local, global: &Global) {
         if let Some(completion) = &mut self.completion
             && self.origins.source(&term.into()) == Some(completion.target.into())
         {
-            completion.scope = Some(NameScope { local, global }.snapshot());
+            completion.site = Some(CompletionSite {
+                target: term,
+                scope: NameScope { local, global }.snapshot(),
+            });
         }
     }
 

@@ -9,7 +9,8 @@ use std::{ops::Range, path::Path, sync::Arc};
 use thiserror::Error;
 use zydeco_statics::{
     arena::StaticsArena,
-    query::{ScopedData, check_source},
+    check::{AnnotationCompatibility, CompletionTyping},
+    query::{CompletionInput, CompletionTyckOutput, ScopedData, check_completion},
     syntax::{AnnId, DefId},
 };
 use zydeco_surface::{
@@ -35,11 +36,16 @@ pub struct CompletionAnalysis {
 pub struct CompletionSemantics {
     pub scoped: Arc<ScopedArena>,
     pub statics: Arc<StaticsArena>,
+    pub typing: CompletionTyping,
 }
 
 impl CompletionSemantics {
     pub fn annotation(&self, definition: DefId) -> Option<AnnId> {
         self.statics.annotations_var.get(&definition).copied()
+    }
+
+    pub fn compatibility(&self, definition: DefId) -> AnnotationCompatibility {
+        self.typing.compatibility(definition)
     }
 }
 
@@ -142,23 +148,17 @@ fn complete_source(
     let BitterProgram { spans, arena, prim, root } = program.desugar().map_err(|failure| {
         AnalysisError::Desugar { error: failure.error, spans: Arc::new(failure.spans.into_inner()) }
     })?;
-    let CompletionResolution { scope, program, .. } =
+    let CompletionResolution { site: resolved, program, .. } =
         Resolver::new(&spans, arena, prim).run_completion(root, target);
-    let Some(scope) = scope else {
+    let Some(resolved) = resolved else {
         return Ok(None);
     };
-    let mut candidates = scope
+    let mut candidates = resolved
+        .scope
         .definitions
         .into_iter()
         .filter(|definition| definition.name.0.starts_with(&prefix))
         .collect::<Vec<_>>();
-    candidates.sort_by(|left, right| {
-        (left.name.0 != prefix, left.distance, &left.name.0).cmp(&(
-            right.name.0 != prefix,
-            right.distance,
-            &right.name.0,
-        ))
-    });
     let semantics = program.ok().filter(|_| !candidates.is_empty()).map(|program| {
         let data = ScopedData::new(
             db,
@@ -167,8 +167,32 @@ fn complete_source(
             Arc::new(program.arena.into_inner()),
             program.root,
         );
-        let checked = check_source(db, data);
-        CompletionSemantics { scoped: checked.scoped, statics: checked.outcome.statics_arc() }
+        let request = CompletionInput::new(
+            db,
+            resolved.target,
+            candidates.iter().map(|candidate| candidate.definition).collect::<Vec<_>>(),
+        );
+        let CompletionTyckOutput { source, typing } = check_completion(db, data, request);
+        CompletionSemantics { scoped: source.scoped, statics: source.outcome.statics_arc(), typing }
+    });
+    candidates.retain(|candidate| {
+        !semantics.as_ref().is_some_and(|semantics| {
+            semantics.compatibility(candidate.definition) == AnnotationCompatibility::Mismatch
+        })
+    });
+    candidates.sort_by(|left, right| {
+        let compatibility = |candidate: &VisibleDefinition| {
+            semantics
+                .as_ref()
+                .map(|semantics| semantics.compatibility(candidate.definition))
+                .unwrap_or_default()
+        };
+        (left.name.0 != prefix, compatibility(left), left.distance, &left.name.0).cmp(&(
+            right.name.0 != prefix,
+            compatibility(right),
+            right.distance,
+            &right.name.0,
+        ))
     });
     Ok(Some(Arc::new(CompletionAnalysis {
         source,
