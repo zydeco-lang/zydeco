@@ -52,8 +52,8 @@ one translated root.
 - `normalize`: substitution, hole solving, scope support, and definitional normalization.
 - `elaborate::monadic`: the algebra translation and its specialized construction API.
 - `validate`: whole-program checks over typed syntax, including data/codata coverage and
-  exhaustiveness, plus the type lint that re-establishes the finished arena's
-  well-formedness invariants.
+  exhaustiveness, plus the type lint whose well-formedness pass re-establishes the finished
+  arena's structural invariants.
 - `fmt` and `source_span`: source-aware formatting and span lookup; the latter remains crate-private.
 
 The `check` module itself retains the checking rules, structured errors, least-upper-bound operations,

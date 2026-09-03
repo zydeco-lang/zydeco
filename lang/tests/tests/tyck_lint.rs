@@ -7,7 +7,7 @@
 
 use zydeco_statics::{
     arena::StaticsArena,
-    syntax::{Fillable, Hole, TermAnnId, Value},
+    syntax::{CompuId, Fillable, Hole, Kind, TermAnnId, Thunk, Value, ValueId},
     validate::{LintChecker, LintError, LintNode, LintSite, LintSort},
 };
 use zydeco_tests::utils::SourceCase;
@@ -178,4 +178,45 @@ fn turning_a_value_into_a_hole_is_reported() {
         root,
         |error| matches!(error, LintError::ResidualHoleValue { value: found } if *found == value),
     );
+}
+
+#[test]
+fn desynchronizing_a_thunk_shape_is_reported() {
+    let (mut statics, root) = linted_fixture();
+    // A suspension with a closed payload exercises a constructor-shape
+    // judgment: the recorded annotation must be `Thk` applied to exactly
+    // the payload computation's type.
+    let thunks: Vec<(ValueId, CompuId)> = statics
+        .values
+        .iter()
+        .filter_map(|(value, node)| match node {
+            | Value::Thunk(Thunk(body)) => Some((*value, *body)),
+            | _ => None,
+        })
+        .collect();
+    let Some((thunk, body)) = thunks.first().copied() else {
+        panic!("the fixture suspends a computation");
+    };
+    let wrong_ty = statics
+        .annotations_value
+        .iter()
+        .map(|(_, ty)| *ty)
+        .find(|ty| {
+            let Some(kind) = statics.type_kind_at(*ty) else {
+                return false;
+            };
+            matches!(statics.normalized_kind_at(kind), Some(Kind::VType(_)))
+                && *ty != statics.annotations_compu[&body]
+        })
+        .expect("the arena has a closed value type distinct from the payload");
+    statics.annotations_value.replace_existing(thunk, wrong_ty);
+    assert_reports(&statics, root, |error| {
+        matches!(
+            error,
+            LintError::TypeMismatch {
+                node: LintNode::Value(found),
+                ..
+            } if *found == thunk
+        )
+    });
 }

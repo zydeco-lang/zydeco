@@ -97,8 +97,8 @@ arena-wide well-formedness, and structural re-derivation from the annotation roo
 
 ## Arena-Wide Well-Formedness
 
-The well-formedness pass iterates the whole arena, orphaned nodes included, like the coverage validator
-iterates every computation.
+The well-formedness pass iterates the whole arena, orphaned nodes included, like the coverage
+validator iterates every computation.
 Each check is local to one node or one table row; no traversal, no equality up to
 normalization.
 
@@ -252,17 +252,39 @@ corrections, recorded in the well-formedness section above and in
 kind pairs must be compared through leaf-resolving normalized equivalence; witness kinds
 are not arena-wide table entries; and hole term nodes are legitimate as foreign-import
 placeholders.
-The re-derivation pass follows once the well-formedness pass has run clean over the
-test corpus for a while.
-Four questions remain open and are deliberately deferred to the re-derivation pass's
-implementation,
-where the first traversal attempt will answer them:
+The re-derivation pass has landed in `lang/statics/src/validate/rederive.rs` and runs as part of the same
+gate; its corpus run forced a substantial narrowing of the judgment inventory, and its
+coverage is deliberately partial:
 
-- **Skolem scope discipline.** Existential elimination introduces witnesses that are
-  recorded globally (`existential_skolems`) rather than through a structural binder.
-  Whether the final artifact always connects such a witness to an enclosing package
-  elimination — making escape structurally checkable — or whether some legitimate terms
-  keep skolem references the traversal cannot justify must be settled by experiment.
+- **Kinds, arena-wide.** Every allocated type node's co-located kind is re-derived from its
+  children, including child-sort judgments (arrow domains are value types, codomains are
+  computation types, and so on). This is the widest re-derivation check and it holds over the
+  entire corpus, orphaned nodes included.
+- **Constructor shapes.** `{C} : Thk B`, `ret V : Ret A`, named introduction, units, and
+  literals are re-derived whenever their single operand is free of abstract identities and
+  non-constructor type applications.
+- **Witness scope.** Every abstract-type witness reachable from the annotation roots must
+  be bound by an enclosing structural binder or be ambient. Ambient witnesses are sealed
+  types, existential skolems, definition-denoted identities, and named witnesses: recursive
+  type components allocate their identities together and package openings bind theirs
+  through the elaborated program, so neither lives under one structural binder.
+- **Deferred.** Equality-with-node judgments (tail agreement, abstraction codomains,
+  application results, projection results, pattern-versus-domain), product shapes, and
+  definition scoping do not judge. A shared node used at several instantiations of an
+  enclosing universal, or inside a package member elaborated per import, carries one
+  annotation that legitimately differs between recording sites, and the finished arena
+  cannot distinguish those from corruption; definition references likewise cross import
+  and alias boundaries whose context the arena does not record per reference. Existence
+  remains the well-formedness pass's check.
+
+The canonical scoping account is `docs/proposals/term.md`: a file is one term, blocks
+dependency-order mobile bindings into ordinary telescopes, and the elaborated form obeys
+strict lexical scope. An earlier draft of this proposal assumed a recursive top level;
+that assumption was wrong and has been removed.
+Questions that remain open:
+
+- **Skolem scope discipline.** Skolems are currently ambient, like every named witness;
+  whether a finer discipline is recoverable from the finished arena is open.
 - **`Label` payloads.** The design restricts named values to value types; whether every
   `Type::Label` in a finished arena accordingly wraps a `VType`-kinded payload (and never
   a computation type) should be asserted, but the invariant needs confirmation across
@@ -270,12 +292,9 @@ where the first traversal attempt will answer them:
 - **`ManifestKind` and `SCons` rules.** The precise kinded/typed shapes of manifest kind
   components and package witness prefixes are stated above at the level of confidence the
   current reading supports and will be pinned down rule-by-rule while implementing.
-- **Variable representation after normalization.** The corpus shows no `Type::Var` nodes
-  surviving in finished arenas of definition-heavy programs: bound type variables are
-  referenced through abstract witnesses, and definition-backed variables are substituted
-  away. Whether any legitimate finished arena retains `Type::Var`, and under what
-  circumstances, determines whether the re-derivation pass ever needs the `annotations_var` lookup for
-  kind synthesis or can treat a surviving `Var` as an immediate finding.
+- **Instantiation-resilient judgments.** The deferred judgments could return if the arena
+  ever recorded, per use site, which instantiation a shared node was checked under; whether
+  that bookkeeping is worth its cost is open.
 
 Related documents: the coverage pass this proposal sits beside is described in
 [`exhaustiveness.md`](exhaustiveness.md); the arena's retained/transient split in

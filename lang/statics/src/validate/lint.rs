@@ -15,6 +15,8 @@ use crate::syntax::*;
 use std::fmt;
 use zydeco_utils::arena::ArenaAccess;
 
+use super::rederive::{ExpectedKind, ExpectedType};
+
 /* -------------------------------- Diagnostics ------------------------------ */
 
 /// One typed node mentioned by a lint diagnostic.
@@ -94,7 +96,7 @@ impl fmt::Display for LintSite {
 }
 
 /// One violated lint invariant.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum LintError {
     /// A kind cell still awaiting its hole solution after a successful check.
     UnfilledKind { kind: KindId, fill: FillId },
@@ -125,6 +127,15 @@ pub enum LintError {
     AnnotationDisagreement { site: LintSite, recorded: TermAnnId, node: Option<TermAnnId> },
     /// A definition reference without any recorded annotation.
     UnresolvedDef { referenced_by: LintNode, def: DefId },
+    /// A recorded term annotation that bottom-up re-derivation cannot
+    /// reproduce, compared up to normalized equality.
+    TypeMismatch { node: LintNode, recorded: TypeId, expected: ExpectedType },
+    /// A co-located kind that structural re-derivation cannot reproduce.
+    KindMismatch { ty: TypeId, recorded: KindId, expected: ExpectedKind },
+    /// An abstract-type witness referenced outside its binding scope.
+    WitnessEscape { site: LintNode, witness: AbstId },
+    /// A definition referenced outside its binding scope.
+    DefEscape { site: LintNode, def: DefId },
 }
 
 impl fmt::Display for LintError {
@@ -177,6 +188,25 @@ impl fmt::Display for LintError {
                 "{referenced_by} references definition {}, which has no annotation",
                 def.concise(),
             ),
+            | Self::TypeMismatch { node, recorded, expected } => write!(
+                f,
+                "{node} is recorded as {}, but re-derivation expects {expected}",
+                recorded.concise(),
+            ),
+            | Self::KindMismatch { ty, recorded, expected } => write!(
+                f,
+                "type {} carries kind {}, but re-derivation expects {expected}",
+                ty.concise(),
+                recorded.concise(),
+            ),
+            | Self::WitnessEscape { site, witness } => write!(
+                f,
+                "{site} uses abstract type {} outside its binding scope",
+                witness.concise(),
+            ),
+            | Self::DefEscape { site, def } => {
+                write!(f, "{site} uses definition {} outside its binding scope", def.concise(),)
+            }
         }
     }
 }
@@ -193,7 +223,8 @@ impl<'a> LintChecker<'a> {
         Self { statics }
     }
 
-    /// Re-establish the arena-wide invariants of a successful check.
+    /// Re-establish the arena-wide invariants of a successful check and
+    /// re-derive every reachable annotation.
     pub fn validate(&self, root: TermAnnId) -> Vec<LintError> {
         [
             self.fill_closure(),
@@ -209,6 +240,7 @@ impl<'a> LintChecker<'a> {
         ]
         .into_iter()
         .flatten()
+        .chain(super::rederive::RederiveChecker::new(self.statics).validate(root))
         .collect()
     }
 
