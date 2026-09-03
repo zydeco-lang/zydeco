@@ -793,7 +793,7 @@ impl StaticsArena {
         self.terms.shrink_to_fit();
     }
 
-    /// Retain one normalized classifier for each distinct top annotation type.
+    /// Retain one normalized classifier for each distinct, resolved top annotation type.
     pub(crate) fn retain_normalized_annotations(&mut self) {
         let mut annotations: Vec<_> = self
             .term_facts
@@ -808,12 +808,18 @@ impl StaticsArena {
         annotations.sort_unstable();
         annotations.dedup();
 
-        let normalized = annotations
-            .iter()
-            .map(|annotation| {
-                self.normalized_at(*annotation).cloned().expect("top annotation was not normalized")
+        let (annotations, normalized) = annotations
+            .into_iter()
+            .filter_map(|annotation| match self.normalized_at(annotation) {
+                | Some(normalized) => Some((annotation, normalized.clone())),
+                // Incomplete terms can retain an unsolved classifier after normalization.
+                // Its absence is an ordinary missing editor fact, not a normalized type.
+                | None if matches!(self.types_pre.get(&annotation), Some(Fillable::Fill(_))) => {
+                    None
+                }
+                | None => panic!("top annotation was not normalized"),
             })
-            .collect();
+            .unzip();
         self.annotation_norms = NormalizedAnnotations::with_parallel(annotations, normalized);
     }
 
@@ -967,6 +973,43 @@ mod tests {
         assert!(matches!(statics.normalized_annotation_at(first_annotation), Some(Type::Unit(_))));
         assert!(matches!(statics.normalized_annotation_at(second_annotation), Some(Type::Thk(_))));
         assert_eq!(statics.annotation_norms.len(), 2);
+    }
+
+    #[test]
+    fn unresolved_annotation_facts_do_not_hide_resolved_classifiers() {
+        let mut surface = IdAllocator::<su::ScopedScope>::new();
+        let unresolved_term = surface.alloc();
+        let resolved_term = surface.alloc();
+        let mut allocator = IdAllocator::<StaticsScope>::new();
+        let kind: KindId = allocator.alloc();
+        let unresolved: TypeId = allocator.alloc();
+        let resolved: TypeId = allocator.alloc();
+        let fill: FillId = allocator.alloc();
+        let mut statics = StaticsArena::default();
+
+        statics.types_pre.insert_new(unresolved, Fillable::Fill(fill), kind);
+        statics.types_pre.insert_new(resolved, Fillable::Done(Type::Unit(UnitTy)), kind);
+        statics.record_term_annotation(unresolved_term, TermAnnId::Type(unresolved, kind));
+        statics.record_term_annotation(resolved_term, TermAnnId::Type(resolved, kind));
+        statics.retain_normalized_annotations();
+
+        assert!(statics.normalized_annotation_at(unresolved).is_none());
+        assert!(matches!(statics.normalized_annotation_at(resolved), Some(Type::Unit(_))));
+        assert_eq!(statics.annotation_norms.len(), 1);
+        assert!(matches!(statics.types_pre.get(&unresolved), Some(Fillable::Fill(_))));
+    }
+
+    #[test]
+    #[should_panic(expected = "top annotation was not normalized")]
+    fn missing_annotation_nodes_remain_an_invariant_violation() {
+        let mut surface = IdAllocator::<su::ScopedScope>::new();
+        let term = surface.alloc();
+        let mut allocator = IdAllocator::<StaticsScope>::new();
+        let kind: KindId = allocator.alloc();
+        let missing: TypeId = allocator.alloc();
+        let mut statics = StaticsArena::default();
+        statics.record_term_annotation(term, TermAnnId::Type(missing, kind));
+        statics.retain_normalized_annotations();
     }
 
     #[test]

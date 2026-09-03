@@ -285,6 +285,8 @@ fn completion_matches_an_explicit_hole_at_the_validated_replacement() {
         "fn <cursor> => body",
         "fn argument => <cursor>",
         "let value = pre<cursor>fix in value",
+        "let value = val<cursor> in value",
+        "let value = _<cursor> in value",
         "match value | +A <cursor> => 1 | +B b => b end",
         "@[tag(\"🦀\")] let value = <cursor> in value",
     ]
@@ -311,6 +313,25 @@ fn completion_matches_an_explicit_hole_at_the_validated_replacement() {
             "{marked:?}",
         );
     });
+}
+
+#[test]
+fn completion_cursor_retains_word_roles_and_only_the_typed_prefix() {
+    for (source, offset, prefix, kind) in [
+        ("value", 3, "val", LexicalTokenKind::LowerIdentifier),
+        ("val", 3, "val", LexicalTokenKind::Keyword),
+        ("_", 1, "_", LexicalTokenKind::Hole),
+        (".field", 3, ".fi", LexicalTokenKind::Destructor),
+    ] {
+        let cursor = CompletionCursor::at(source, offset).unwrap();
+        assert_eq!(cursor.replacement(), 0..source.len());
+        assert_eq!(cursor.prefix(), prefix);
+        assert_eq!(cursor.token_kind(), Some(kind));
+    }
+    let cursor = CompletionCursor::at("val ", 4).unwrap();
+    assert_eq!(cursor.replacement(), 4..4);
+    assert_eq!(cursor.prefix(), "");
+    assert_eq!(cursor.token_kind(), None);
 }
 
 #[test]

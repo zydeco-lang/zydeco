@@ -20,7 +20,14 @@ pub struct TextualProgram {
 
 impl SourceGraph {
     pub fn parse(&self) -> Result<TextualProgram, TextualProgramError> {
-        TextualProgramBuilder::new(self).build()
+        TextualProgramBuilder::new(self).build().map(|(program, _)| program)
+    }
+
+    /// Copy the root's cursor hole by identity into the merged program arena.
+    pub(super) fn parse_completion(
+        &self, target: t::TermId,
+    ) -> Result<(TextualProgram, Option<t::TermId>), TextualProgramError> {
+        TextualProgramBuilder::new(self).with_completion(target).build()
     }
 }
 
@@ -31,6 +38,12 @@ struct TextualProgramBuilder<'graph> {
     bases: HashMap<SourceId, BytePos>,
     /// Final root of every source already copied into the program DAG.
     roots: HashMap<SourceId, t::TermId>,
+    completion: Option<CompletionCopy>,
+}
+
+struct CompletionCopy {
+    target: t::TermId,
+    copied: Option<t::TermId>,
 }
 
 impl<'graph> TextualProgramBuilder<'graph> {
@@ -40,7 +53,13 @@ impl<'graph> TextualProgramBuilder<'graph> {
             parser: t::Parser::new(),
             bases: Self::assign_bases(graph),
             roots: HashMap::new(),
+            completion: None,
         }
+    }
+
+    fn with_completion(mut self, target: t::TermId) -> Self {
+        self.completion = Some(CompletionCopy { target, copied: None });
+        self
     }
 
     /// Give every reachable file a disjoint global offset range, starting
@@ -59,16 +78,18 @@ impl<'graph> TextualProgramBuilder<'graph> {
             .collect()
     }
 
-    fn build(mut self) -> Result<TextualProgram, TextualProgramError> {
+    fn build(mut self) -> Result<(TextualProgram, Option<t::TermId>), TextualProgramError> {
         let root = self.source(self.graph.root)?;
         let map = self.source_map();
+        let completion = self.completion.and_then(|completion| completion.copied);
         let (mut spans, arena) = self.parser.finish();
         spans.attach_map(Arc::new(map));
-        Ok(TextualProgram {
+        let program = TextualProgram {
             spans: FrozenArena::new(spans),
             arena: FrozenArena::new(arena),
             unit: t::SourceUnit { root },
-        })
+        };
+        Ok((program, completion))
     }
 
     /// The address space of this program: one entry per file, in base order.
@@ -438,7 +459,14 @@ impl<'graph> TextualProgramBuilder<'graph> {
             | t::Term::Proj(t::Proj(body, name)) => t::Proj(self.term(source, body)?, name).into(),
             | t::Term::Lit(literal) => literal.into(),
         };
-        Ok(self.parser.term(self.span(source, term.into()).make(syntax)))
+        let copied = self.parser.term(self.span(source, term.into()).make(syntax));
+        if let Some(completion) = &mut self.completion
+            && source == self.graph.root
+            && term == completion.target
+        {
+            completion.copied = Some(copied);
+        }
+        Ok(copied)
     }
 
     fn import(

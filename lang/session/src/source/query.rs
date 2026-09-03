@@ -22,6 +22,9 @@ use zydeco_surface::{
 };
 use zydeco_utils::arena::ArenaAccess;
 
+mod completion;
+pub use completion::{CompletionAnalysis, CompletionError, CompletionSemantics};
+
 /// The recoverable type-checking state retained by a root analysis query.
 #[derive(Debug)]
 pub enum AnalysisOutcome {
@@ -308,6 +311,12 @@ impl CompilerSession {
     pub fn graph(&self, root: impl AsRef<Path>) -> Result<Arc<SourceGraph>, Arc<SourceLoadError>> {
         let root = self.source_input(root.as_ref().to_path_buf()).map_err(Arc::new)?;
         source_graph(self, root)
+    }
+
+    /// Effective text from this snapshot, with editor overlays taking precedence.
+    pub fn source_text(&self, path: impl AsRef<Path>) -> Result<Option<String>, SourceLoadError> {
+        let input = self.source_input(path.as_ref().to_path_buf())?;
+        Ok(source_text(self, input))
     }
 
     /// Analyze one root through type checking, retaining partial facts after type errors.

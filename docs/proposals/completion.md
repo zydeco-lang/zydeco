@@ -211,17 +211,44 @@ The completed `ScopedArena` currently retains definitions and resolved uses but 
 source position. Reconstructing visibility from all definitions would mishandle binding order, shadowing, mobile
 block bindings, branch-local patterns, and the fresh environments at source boundaries.
 
-Resolution should therefore record a compact scope identity at textual sites relevant to tooling. A scope contains
-the visible mapping from `VarName` to `DefId`; its persistent representation may share structure between neighboring
-sites. The resolver records the environment on entry to a term and before or after a pattern according to the
-pattern's binding semantics. A completion hole then points directly to the correct scope.
+The implemented resolver captures a `ScopeSnapshot` when it visits the exact completion hole. Its ordinary `Local`
+environment is a persistent map, while the snapshot contains only the visible definitions needed by this request.
+Normal compilation does not retain environments at every syntax node. Pattern traversal determines when each
+binder enters that environment, including the sequential visibility of dependent parameter annotations.
 
-The visible-name query applies lexical shadowing before returning candidates. Two definitions with the same source
-name do not become duplicate options: only the definition selected by name resolution at that site is visible.
-Presentation may still rank definitions introduced in the nearest scope above equally compatible outer definitions.
+Name lookup and enumeration share one `NameScope` view over `Local` and `Global`. Enumeration looks up each distinct
+name through that view, so only the definition selected by reference resolution is offered.
+Each binder group records its introduction depth, allowing completion to prefer nearer bindings without using
+source offsets as a proxy for lexical scope. All names contributed by one block share an introduction depth.
 
 Scope snapshots contain identities, not types or rendered signatures. The checker remains the canonical source of
 each definition's annotation.
+
+### Current-source query and failure boundaries
+
+`CompilerSession::complete(root, byte_offset)` uses the same effective source text as `source_text(root)`.
+It recovers the root, assembles imports through the ordinary source provider, and remaps the root's completion
+`TermId` into the merged arena while copying syntax. Desugaring's textual origins then connect that exact identity
+to the resolver visit. Spans never substitute for node identity; an old parse's equal-position hole cannot match.
+Imported files and companion signatures retain strict parsing, their own source identities, and fresh name environments.
+
+The cursor identifies a whole word even when its current spelling is a keyword, such as `val` while typing `value`.
+An authored `_` is also replaced as a whole token and contributes no name prefix. A term-hole recovery alone does
+not prove that the original position admitted terms: recovery may have popped a restricted name position such as
+`record/field`. Ordinary-name completion also requires the parser's original typed expectations to admit `Hole`.
+Pattern holes, fields, constructors, destructors, and metadata arguments therefore do not receive general names.
+
+Completion-oriented resolution records unbound-reference errors and substitutes semantic holes for those references,
+allowing traversal to reach the cursor. Strict resolution remains fail-fast. A structural resolution error can still
+stop traversal; a scope already captured remains usable without types, while an unvisited cursor yields no result.
+Unrecoverable parsing, invalid source directives, failed dependency loading, and desugaring errors likewise provide
+no invented scope. No last-successful source or position-based fallback is used.
+
+The recovered program has its own type-checking identity. Available definition annotations come from that program's
+retained statics arena, including partial facts after type errors. Unsatisfied annotations remain optional information,
+and unresolved top classifiers are omitted from the normalized editor-fact index without changing checker diagnostics.
+The completion query retains only its most recent result, and neither installs a repaired overlay nor replaces a strict
+analysis. Cajun runs it on a disposable session snapshot and checks the document revision before returning edits.
 
 ## Type-directed candidates
 
@@ -230,9 +257,9 @@ turning a failed or incomplete inference into missing completion results.
 
 ### Showing types beside names
 
-For every `DefId` candidate, the checker already retains an `AnnId` in `annotations_var`. Cajun's hover path already
-renders these annotations with the statics formatter. Completion should reuse the same rendering policy and show a
-compact classifier beside the label:
+When checking reaches a definition, its classifier is retained as an `AnnId` in `annotations_var`.
+Cajun's hover path renders these annotations with the statics formatter. Completion reuses that formatter to show a
+compact classifier beside the label when the annotation is available:
 
 ```text
 map          : forall (A : VType) (B : VType) . (A -> B) -> List A -> List B
@@ -362,15 +389,15 @@ Consequently, last-successful memory is a resilience layer after recovering pars
 completion. It can also improve temporary hover or highlighting behavior later, under feature-specific stale-range
 rules.
 
-## Phased implementation
+## Implementation roadmap
 
-### Phase 0: completion-oriented parser recovery
+### Completion-oriented parser recovery — implemented
 
-Add a surface parser API with explicit strict and recovering outcomes. Insert a distinguished completion marker,
-introduce typed recovery identities, and add the smallest justified `!` recovery points for term and pattern atoms.
+The surface parser API exposes explicit strict and recovering outcomes. A distinguished completion marker and typed
+recovery identities connect the cursor to `!` recovery points at term and pattern atoms.
 Strict callers continue to reject every recovered source.
 
-This phase is successful when tests demonstrate all of the following:
+The parser tests demonstrate all of the following:
 
 - `let value = <cursor> in value` produces a term completion hole at the cursor;
 - `fn argument => <cursor>` preserves the binder and body scope;
@@ -380,28 +407,29 @@ This phase is successful when tests demonstrate all of the following:
 - strict parsing rejects every input accepted only through recovery; and
 - existing valid-source parse trees and spans remain unchanged.
 
-This phase establishes the parser behavior and public API used by the later semantic phases. It does not require a
+This establishes the parser behavior and public API used by semantic completion. It does not require a
 LALRPOP version upgrade because the pinned 0.23 release already provides the needed recovery primitive.
 
-### Phase 1: scope-backed definition completion
+### Scope-backed definition completion — implemented
 
-Record resolver scope identities at completion-relevant sites. Query visible definitions for the distinguished hole,
-deduplicate shadowed names, and expose source annotations. Cajun adds general completion items with exact replacement
-ranges and compact type details.
+The resolver captures visible definitions for the distinguished hole and deduplicates shadowed names through ordinary
+lookup. The session adds prefix filtering and deterministic ordering by exact match, binder proximity, and spelling.
+Cajun supplies whole-token UTF-16 edits, compact type details, negotiated label details, and a plain detail-field fallback.
+Names remain available without type information, and metadata dispatch remains separate from ordinary-name completion.
 
-### Phase 2: syntax, paths, and failed-revision resilience
+### Syntax, paths, and failed-revision resilience
 
 Project typed parser expectations through the syntax-form catalog, implement `MetadataValue::Source` path candidates,
-and add a separate last-successful Cajun state with conservative fallback policy. This phase should be split if parser
+and add a separate last-successful Cajun state with conservative fallback policy. These tasks should be split if parser
 recovery exposes enough independent review surface.
 
-### Phase 3: type-directed ranking
+### Type-directed ranking
 
 Retain the completion expectation, implement a side-effect-free compatibility query, rank exact and compatible
-definitions first, and filter only proven mismatches. Add client-capability tests for label details and detail-field
-fallback.
+definitions first, and filter only proven mismatches. Extend the existing classifier-presentation tests to cover
+unknown expectations and comparison queries that leave inference state unchanged.
 
-### Phase 4: structural and branch completion
+### Structural and branch completion
 
 Use checked data, codata, product, and existential structure to offer constructors, destructors, fields, and missing
 match or comatch arms. Generated arms reuse syntax-form snippets and the ordinary formatter.
@@ -432,13 +460,25 @@ Each layer needs tests at the phase that owns its facts:
 - Cajun unit tests cover LSP kinds, label details, snippets, deterministic sort text, and revision cancellation; and
 - stdio tests exercise completion during realistic edit sequences rather than only complete source snapshots.
 
+Scope-backed completion has resolver tests comparing enumeration with actual resolved references, session tests for
+scope and dependency isolation, and Cajun tests for whole-token edits, Unicode, metadata dispatch, and optional types.
+Stdio tests replace a previously successful document with unbound or syntactically incomplete source and require
+current names with both label-detail capabilities. These checks run with:
+
+```sh
+cargo test -p zydeco-surface scoped::completion --lib
+cargo test -p zydeco-session source::query::completion --lib
+cargo test -p cajun completion:: --lib
+cargo test -p cajun --test stdio stdio_server_completes
+```
+
 The broad regression property is that applying a non-resource completion edit at its advertised range produces the
 candidate's canonical spelling at that site. Snippet tests additionally strip placeholders to representative terms
 or patterns and parse them with the strict parser.
 
 ## Remaining uncertainty
 
-LALRPOP recovery chooses how many tokens to discard based on available recovery points. The Phase 0 tests show that
+LALRPOP recovery chooses how many tokens to discard based on available recovery points. The parser tests show that
 the term and pattern atom points preserve a following complete binding when an inner list item is malformed. New edit
 sequences may still justify a list or arm boundary. Each change should start with a retained-context regression and
 remain in the grammar; the current design does not add a separate recovery or repair-search implementation.

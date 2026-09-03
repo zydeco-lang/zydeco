@@ -267,9 +267,8 @@ impl BlockScope {
         // Names contributed by this block shadow names inherited from its
         // enclosing lexical scope. Apply them individually so that precedence
         // remains explicit.
-        local.var_to_def = binders.iter().fold(local.var_to_def, |scope, (name, definition)| {
-            scope.insert(name.clone(), *definition)
-        });
+        local =
+            local.bind_group(binders.iter().map(|(name, definition)| (name.clone(), *definition)));
         Ok(Self { local })
     }
 }

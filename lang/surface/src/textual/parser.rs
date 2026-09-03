@@ -359,6 +359,7 @@ pub struct CompletionCursor<'source> {
     source: &'source str,
     offset: usize,
     replacement: Range<usize>,
+    token_kind: Option<LexicalTokenKind>,
 }
 
 impl<'source> CompletionCursor<'source> {
@@ -376,7 +377,7 @@ impl<'source> CompletionCursor<'source> {
         if tokens.iter().any(|token| token.is_opaque_at(offset)) {
             return Err(CompletionCursorError::OpaqueSource { offset });
         }
-        let identifier = tokens
+        let word = tokens
             .iter()
             .filter(|token| {
                 matches!(
@@ -386,14 +387,17 @@ impl<'source> CompletionCursor<'source> {
                         | LexicalTokenKind::Constructor
                         | LexicalTokenKind::Destructor
                         | LexicalTokenKind::Field
+                        | LexicalTokenKind::Hole
+                        | LexicalTokenKind::Keyword
                 )
             })
             .find(|token| token.range.start <= offset && offset <= token.range.end)
             .map(|token| token.range.clone());
-        let replacement = identifier
-            .or_else(|| containing.map(|token| token.range.clone()))
-            .unwrap_or(offset..offset);
-        Ok(Self { source, offset, replacement })
+        let replacement =
+            word.or_else(|| containing.map(|token| token.range.clone())).unwrap_or(offset..offset);
+        let token_kind =
+            tokens.iter().find(|token| token.range == replacement).map(|token| token.kind);
+        Ok(Self { source, offset, replacement, token_kind })
     }
 
     pub fn offset(&self) -> usize {
@@ -402,6 +406,14 @@ impl<'source> CompletionCursor<'source> {
 
     pub fn replacement(&self) -> Range<usize> {
         self.replacement.clone()
+    }
+
+    pub fn prefix(&self) -> &'source str {
+        &self.source[self.replacement.start..self.offset]
+    }
+
+    pub fn token_kind(&self) -> Option<LexicalTokenKind> {
+        self.token_kind
     }
 }
 

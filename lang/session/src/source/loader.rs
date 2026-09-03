@@ -40,6 +40,13 @@ impl SourceTemplate {
                 message: error.to_string(),
             }
         })?;
+        Self::with_syntax(path, source, file, parser, unit)
+    }
+
+    /// Validate source directives identically for strict and completion parses.
+    pub(super) fn with_syntax(
+        path: PathBuf, source: String, file: FileMap, parser: t::Parser, unit: t::SourceUnit,
+    ) -> Result<Self, SourceParseError> {
         let documentation = unit.documentation(&parser.arena, &parser.spans);
         let warnings =
             unit.unattached_text(&parser.arena).into_iter().map(SourceWarning::from).collect();

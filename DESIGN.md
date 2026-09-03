@@ -397,6 +397,20 @@ The shared lexer retains malformed input as grammar-known error tokens, while ty
 fatal diagnostics. The [completion proposal](docs/proposals/completion.md#trust-boundary-and-recovery-contracts)
 describes the integration contracts and their regression tests.
 
+`CompilerSession::complete` analyzes the current source at a byte cursor without replacing strict analyses.
+Only the requested root uses recovering parsing; dependencies use the normal source provider and its overlays.
+Source assembly remaps the exact cursor-hole ID, and desugaring retains its textual origin.
+At that hole, the resolver snapshots its ordinary name environment. Lookup and enumeration share shadowing rules,
+so sequential parameters, block-wide bindings, branch-local names, and source boundaries behave as they do in compilation.
+Unbound references become holes only in this completion-specific resolution, with their errors retained separately.
+
+Cajun renders those visible definitions with optional kind or type details from the same recovered analysis.
+Missing annotations do not hide names, and type details never enter the inserted text.
+Candidates are ordered by exact prefix match, binder proximity, and spelling; expected-type ranking remains future work.
+Whole-word edits use the parser's replacement range, including keyword-shaped prefixes and authored holes,
+and are translated to UTF-16 for the client. Metadata keeps its own namespace, and a changed document revision
+invalidates an in-flight completion response.
+
 The textual arena gives every nested metadata value its own ID and span. Source diagnostics can therefore point
 to the invalid import target, number, or payload rather than the complete annotation. Before desugaring continues,
 the metadata tree is converted to the span-free structural representation shared by the later compiler phases.

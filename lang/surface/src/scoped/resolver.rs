@@ -1,3 +1,4 @@
+use super::completion::{CompletionCapture, NameScope};
 use crate::scoped::{syntax::*, *};
 use zydeco_utils::prelude::{ArenaAccess, DepGraph, FrozenArena};
 
@@ -16,6 +17,12 @@ pub(super) struct BindingSite {
     pub(super) id: BindingId,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(super) struct LocalDefinition {
+    pub(super) definition: DefId,
+    pub(super) depth: usize,
+}
+
 /// Local name environment built from pattern binders.
 #[derive(Clone, Debug)]
 pub struct Local {
@@ -23,7 +30,8 @@ pub struct Local {
     /// from outermost to innermost.
     pub(super) under: rpds::VectorSync<BindingSite>,
     /// map from variable names to their definitions
-    pub(super) var_to_def: rpds::HashTrieMapSync<VarName, DefId>,
+    pub(super) var_to_def: rpds::HashTrieMapSync<VarName, LocalDefinition>,
+    pub(super) depth: usize,
     /// Context candidates associated with block-wide definitions.
     pub(super) under_map: rpds::HashTrieMapSync<DefId, BindingSite>,
     /// The nearest block currently resolving its residual syntax.
@@ -35,9 +43,20 @@ impl Local {
         Self {
             under: rpds::VectorSync::new_sync(),
             var_to_def: rpds::HashTrieMapSync::new_sync(),
+            depth: 0,
             under_map: rpds::HashTrieMapSync::new_sync(),
             boundary: None,
         }
+    }
+
+    pub(super) fn bind_group(
+        mut self, binders: impl IntoIterator<Item = (VarName, DefId)>,
+    ) -> Self {
+        self.depth += 1;
+        self.var_to_def = binders.into_iter().fold(self.var_to_def, |scope, (name, definition)| {
+            scope.insert(name, LocalDefinition { definition, depth: self.depth })
+        });
+        self
     }
 }
 
@@ -57,6 +76,7 @@ pub struct Resolver<'a> {
 
     pub users: ArenaForth<DefId, TermId>,
     pub(super) block_deps: ArenaAssoc<TermId, DepGraph<BindingId>>,
+    completion: Option<CompletionCapture>,
 }
 
 /// Output of name resolution for one complete source term.
@@ -112,6 +132,7 @@ impl<'a> Resolver<'a> {
 
             users: ArenaForth::default(),
             block_deps: ArenaAssoc::default(),
+            completion: None,
         }
     }
 
@@ -120,6 +141,30 @@ impl<'a> Resolver<'a> {
         root.resolve(&mut self, (Local::for_body(), &Global::default()))?;
         let ResolvedProgram { prim, arena } = self.finish()?;
         Ok(ResolveSourceOut { prim, arena: FrozenArena::new(arena), root })
+    }
+
+    /// Resolve a recovered source while preserving the exact cursor's lexical scope.
+    /// Unbound references become semantic holes only in this request-local program;
+    /// the strict entry point continues to reject them.
+    pub fn run_completion(
+        mut self, root: TermId, target: crate::textual::syntax::TermId,
+    ) -> CompletionResolution {
+        self.completion = Some(CompletionCapture { target, scope: None, unbound: Vec::new() });
+        let resolved = root.resolve(&mut self, (Local::for_body(), &Global::default()));
+        let CompletionCapture { scope, unbound, .. } = self.completion.take().unwrap();
+        let program = resolved.and_then(|()| {
+            let ResolvedProgram { prim, arena } = self.finish()?;
+            Ok(ResolveSourceOut { prim, arena: FrozenArena::new(arena), root })
+        });
+        CompletionResolution { scope, unbound, program }
+    }
+
+    fn capture_scope(&mut self, term: TermId, local: &Local, global: &Global) {
+        if let Some(completion) = &mut self.completion
+            && self.origins.source(&term.into()) == Some(completion.target.into())
+        {
+            completion.scope = Some(NameScope { local, global }.snapshot());
+        }
     }
 
     fn finish(self) -> Result<ResolvedProgram> {
@@ -137,6 +182,7 @@ impl<'a> Resolver<'a> {
 
             users,
             block_deps,
+            completion: _,
         } = self;
         let _ = allocator;
         assert!(block_deps.iter().next().is_none(), "every block dependency graph must be closed");
@@ -157,23 +203,21 @@ impl<'a> Resolver<'a> {
 
     fn resolve_reference(
         &mut self, user: TermId, name: &VarName, local: &Local, global: &Global,
-    ) -> Result<DefId> {
-        let (definition, dependency) = local
-            .var_to_def
-            .get(name)
-            .map(|definition| (*definition, local.under_map.get(definition).copied()))
-            .or_else(|| {
-                global
-                    .var_to_def
-                    .get(name)
-                    .map(|definition| (*definition, Some(global.under_map[definition])))
-            })
-            .ok_or_else(|| ResolveError::UnboundVar(user.span(self).make(name.clone())))?;
+    ) -> Result<Option<DefId>> {
+        let Some(binding) = (NameScope { local, global }).lookup(name) else {
+            let error = ResolveError::UnboundVar(user.span(self).make(name.clone()));
+            if let Some(completion) = &mut self.completion {
+                completion.unbound.push(error);
+                return Ok(None);
+            }
+            return Err(error.into());
+        };
+        let definition = binding.definition;
         self.users.insert_new(definition, user);
-        if let Some(dependency) = dependency {
+        if let Some(dependency) = binding.dependency {
             self.add_dependency(local, dependency);
         }
-        Ok(definition)
+        Ok(Some(definition))
     }
 }
 
@@ -215,8 +259,7 @@ impl Resolve for PatId {
             | Pattern::Triv(Triv) => local,
             | Pattern::Var(def) => {
                 let () = def.resolve(resolver, ())?;
-                local.var_to_def.insert_mut(resolver.bitter.defs[def].clone(), *def);
-                local
+                local.bind_group([(resolver.bitter.defs[def].clone(), *def)])
             }
             | Pattern::Named(pat) => {
                 let Named(_name, inner) = pat;
@@ -299,12 +342,15 @@ impl Resolve for TermId {
                 term.into()
             }
             | Term::Hole(term) => {
+                resolver.capture_scope(*self, &local, global);
                 let Hole = &term;
                 term.into()
             }
             | Term::Var(var) => {
                 let definition = resolver.resolve_reference(*self, &var, &local, global)?;
-                resolver.terms.insert_new(*self, Term::Var(definition));
+                resolver
+                    .terms
+                    .insert_new(*self, definition.map(Term::Var).unwrap_or(Term::Hole(Hole)));
                 return Ok(());
             }
             | Term::Named(term) => {

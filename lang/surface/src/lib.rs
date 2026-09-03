@@ -95,6 +95,9 @@ pub mod scoped {
     pub use binders::*;
     /// Collection, dependency analysis, and elaboration of nested term blocks.
     mod blocks;
+    /// Visible definitions captured by completion-oriented resolution.
+    mod completion;
+    pub use completion::*;
     /// Name resolution driver.
     pub mod resolver;
     pub use resolver::*;

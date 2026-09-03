@@ -326,6 +326,94 @@ fn stdio_server_completes_incomplete_metadata_with_snippets() {
 }
 
 #[test]
+fn stdio_server_completes_current_names_after_parse_errors_with_optional_type_labels() {
+    for label_details in [true, false] {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("main.zy");
+        let original = "let old = 1 in old";
+        std::fs::write(&path, original).unwrap();
+        let uri = Url::from_file_path(&path).unwrap().to_string();
+        let mut server = LspProcess::start();
+        server.request(
+            "initialize",
+            json!({
+                "processId": null,
+                "rootUri": Url::from_file_path(directory.path()).unwrap(),
+                "capabilities": {
+                    "textDocument": {
+                        "completion": {
+                            "completionItem": { "labelDetailsSupport": label_details }
+                        }
+                    }
+                },
+            }),
+        );
+        server.notify("initialized", json!({}));
+        server.notify(
+            "textDocument/didOpen",
+            json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "zydeco",
+                    "version": 1,
+                    "text": original,
+                },
+            }),
+        );
+        server.notification("textDocument/publishDiagnostics");
+
+        for (version, source) in [(2, "let current = 1 in curr"), (3, "let current = 1 in ")] {
+            server.notify(
+                "textDocument/didChange",
+                json!({
+                    "textDocument": { "uri": uri, "version": version },
+                    "contentChanges": [{ "text": source }],
+                }),
+            );
+            let diagnostics = server.notification("textDocument/publishDiagnostics");
+            assert!(!diagnostics["params"]["diagnostics"].as_array().unwrap().is_empty());
+            let response = server.request_without_notifications(
+                "textDocument/completion",
+                json!({
+                    "textDocument": { "uri": uri },
+                    "position": { "line": 0, "character": source.len() },
+                }),
+            );
+            let [item] = response["result"].as_array().unwrap().as_slice() else {
+                panic!("the current source should have exactly one visible name: {response}")
+            };
+            assert_eq!(item["label"], "current");
+            assert_eq!(item["detail"], "Int64");
+            assert_eq!(item["textEdit"]["newText"], "current");
+            assert_eq!(item["filterText"], "current");
+            assert_eq!(
+                item["labelDetails"]["detail"],
+                if label_details { json!(" : Int64") } else { Value::Null }
+            );
+        }
+
+        let source = "let current = 1 in fn binder => current";
+        server.notify(
+            "textDocument/didChange",
+            json!({
+                "textDocument": { "uri": uri, "version": 4 },
+                "contentChanges": [{ "text": source }],
+            }),
+        );
+        server.notification("textDocument/publishDiagnostics");
+        let response = server.request(
+            "textDocument/completion",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": source_position(source, "binder"),
+            }),
+        );
+        assert!(response["result"].is_null(), "binder positions are not name references");
+        server.finish();
+    }
+}
+
+#[test]
 fn stdio_server_synchronizes_documents_and_answers_navigation_requests() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("main.zy");

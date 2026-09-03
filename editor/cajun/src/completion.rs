@@ -1,33 +1,132 @@
-use std::ops::Range as ByteRange;
+use crate::{hover::HoverLineWidth, semantic::NameClass};
+use std::{ops::Range as ByteRange, path::Path};
 use tower_lsp::lsp_types::{
-    CompletionItem, CompletionItemKind, CompletionResponse, CompletionTextEdit, Documentation,
-    InsertTextFormat, Position, Range, TextEdit,
+    CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionResponse,
+    CompletionTextEdit, Documentation, InsertTextFormat, Position, Range, TextEdit,
 };
+use zydeco_session::{CompilerSession, CompletionAnalysis, CompletionSemantics};
+use zydeco_statics::{fmt::Formatter, syntax::DefId};
 use zydeco_surface::{
     metadata::{
         MetadataArguments, MetadataCatalog, MetadataDefinition, MetadataParameter, MetadataValue,
     },
     textual::{Lexer, LexicalTokens, Tok},
 };
+use zydeco_syntax::Pretty;
 use zydeco_utils::span::{FileMap, LineCol};
+
+#[cfg(test)]
+mod name_tests;
+
+/// Protocol presentation over current-source metadata and compiler-owned name facts.
+pub(crate) struct Completer {
+    pub snippets: bool,
+    pub label_details: bool,
+    pub line_width: HoverLineWidth,
+}
+
+impl Completer {
+    pub(crate) fn complete(
+        &self, session: &CompilerSession, path: &Path, position: Position,
+    ) -> Option<CompletionResponse> {
+        let source = session.source_text(path).ok()??;
+        let map = FileMap::local(source.as_str(), None);
+        let offset =
+            map.offset_utf16(LineCol { line: position.line, column: position.character })?;
+        match MetadataCursor::at(&source, offset) {
+            | MetadataPosition::Active(cursor) => {
+                return MetadataCompleter::new(self.snippets).complete(&map, cursor?);
+            }
+            | MetadataPosition::Outside => {}
+        }
+        let analysis = session.complete(path, offset).ok()??;
+        self.names(&analysis)
+    }
+
+    fn names(&self, analysis: &CompletionAnalysis) -> Option<CompletionResponse> {
+        let map = FileMap::local(analysis.source.as_str(), None);
+        let range = CompletionEdit::range(&map, analysis.replacement.clone())?;
+        let semantics = analysis.semantics.as_ref();
+        let items = analysis
+            .candidates
+            .iter()
+            .enumerate()
+            .map(|(rank, candidate)| {
+                let name = &candidate.name.0;
+                let annotation = semantics
+                    .and_then(|semantics| self.annotation(semantics, candidate.definition));
+                let class = NameClass::of_definition(
+                    candidate.definition,
+                    name,
+                    semantics.map(|semantics| semantics.statics.as_ref()),
+                );
+                CompletionItem {
+                    label: name.clone(),
+                    label_details: annotation.as_ref().filter(|_| self.label_details).map(|ty| {
+                        CompletionItemLabelDetails {
+                            detail: Some(format!(" : {ty}")),
+                            description: None,
+                        }
+                    }),
+                    kind: Some(class.completion_kind()),
+                    detail: annotation,
+                    sort_text: Some(format!("{rank:08}")),
+                    filter_text: Some(name.clone()),
+                    text_edit: Some(CompletionTextEdit::Edit(TextEdit {
+                        range,
+                        new_text: name.clone(),
+                    })),
+                    ..CompletionItem::default()
+                }
+            })
+            .collect();
+        Some(CompletionResponse::Array(items))
+    }
+
+    fn annotation(&self, semantics: &CompletionSemantics, definition: DefId) -> Option<String> {
+        let annotation = semantics.annotation(definition)?;
+        let formatter = Formatter::new(&semantics.scoped, &semantics.statics);
+        let mut rendered = String::new();
+        annotation.pretty(&formatter).render_fmt(self.line_width.columns(), &mut rendered).ok()?;
+        Some(rendered.lines().map(str::trim).collect::<Vec<_>>().join(" "))
+    }
+}
+
+impl NameClass {
+    fn completion_kind(self) -> CompletionItemKind {
+        match self {
+            | Self::Kind => CompletionItemKind::TYPE_PARAMETER,
+            | Self::ValueType | Self::ComputationType | Self::Type => CompletionItemKind::CLASS,
+            | Self::Value | Self::Computation => CompletionItemKind::VARIABLE,
+        }
+    }
+}
+
+struct CompletionEdit;
+
+impl CompletionEdit {
+    fn range(map: &FileMap, range: ByteRange<usize>) -> Option<Range> {
+        let position = |offset| {
+            let LineCol { line, column } = map.line_col_utf16(offset)?;
+            Some(Position::new(line, column))
+        };
+        Some(Range::new(position(range.start)?, position(range.end)?))
+    }
+}
 
 /// Metadata completion projected from the surface language's canonical
 /// metadata catalog. Cajun owns cursor recovery and LSP conversion only.
-pub(crate) struct MetadataCompleter {
+struct MetadataCompleter {
     snippets: bool,
 }
 
 impl MetadataCompleter {
-    pub(crate) fn new(snippets: bool) -> Self {
+    fn new(snippets: bool) -> Self {
         Self { snippets }
     }
 
-    pub(crate) fn complete(&self, source: &str, position: Position) -> Option<CompletionResponse> {
-        let map = FileMap::local(source, None);
-        let offset =
-            map.offset_utf16(LineCol { line: position.line, column: position.character })?;
-        let cursor = MetadataCursor::at(source, offset)?;
-        let range = Self::range(&map, cursor.replacement.clone())?;
+    fn complete(&self, map: &FileMap, cursor: MetadataCursor) -> Option<CompletionResponse> {
+        let range = CompletionEdit::range(map, cursor.replacement.clone())?;
         let scope = CompletionScope::at_path(cursor.calls)?;
         let items = match scope {
             | CompletionScope::Definitions(definitions) => definitions
@@ -80,14 +179,6 @@ impl MetadataCompleter {
             })),
             ..CompletionItem::default()
         }
-    }
-
-    fn range(map: &FileMap, range: ByteRange<usize>) -> Option<Range> {
-        let position = |offset| {
-            let LineCol { line, column } = map.line_col_utf16(offset)?;
-            Some(Position::new(line, column))
-        };
-        Some(Range::new(position(range.start)?, position(range.end)?))
     }
 }
 
@@ -259,11 +350,19 @@ struct MetadataCursor {
     prefix: String,
 }
 
+enum MetadataPosition {
+    Outside,
+    /// An unsupported argument still belongs to metadata, not the term namespace.
+    Active(Option<MetadataCursor>),
+}
+
 impl MetadataCursor {
-    fn at(source: &str, offset: usize) -> Option<Self> {
-        let prefix_source = source.get(..offset)?;
+    fn at(source: &str, offset: usize) -> MetadataPosition {
+        let Some(prefix_source) = source.get(..offset) else {
+            return MetadataPosition::Outside;
+        };
         if LexicalTokens::new(source).any(|token| token.is_opaque_at(offset)) {
-            return None;
+            return MetadataPosition::Outside;
         }
 
         let mut active = None;
@@ -347,7 +446,9 @@ impl MetadataCursor {
             }
         }
 
-        let metadata = active?;
+        let Some(metadata) = active else {
+            return MetadataPosition::Outside;
+        };
         let current_started = metadata.current_started();
         let ActiveMetadata { calls, pending_name, .. } = metadata;
         let (replacement, prefix) = pending_name
@@ -358,9 +459,9 @@ impl MetadataCursor {
             })
             .unwrap_or_else(|| (offset..offset, String::new()));
         if prefix.is_empty() && current_started {
-            return None;
+            return MetadataPosition::Active(None);
         }
-        Some(Self { calls, replacement, prefix })
+        MetadataPosition::Active(Some(Self { calls, replacement, prefix }))
     }
 
     fn is_name(token: &Tok<'_>) -> bool {
@@ -422,7 +523,16 @@ mod tests {
         }
 
         fn items(&self) -> Option<Vec<CompletionItem>> {
-            let response = MetadataCompleter::new(true).complete(&self.source, self.position)?;
+            let map = FileMap::local(self.source.as_str(), None);
+            let offset = map.offset_utf16(LineCol {
+                line: self.position.line,
+                column: self.position.character,
+            })?;
+            let MetadataPosition::Active(Some(cursor)) = MetadataCursor::at(&self.source, offset)
+            else {
+                return None;
+            };
+            let response = MetadataCompleter::new(true).complete(&map, cursor)?;
             let CompletionResponse::Array(items) = response else { unreachable!() };
             Some(items)
         }

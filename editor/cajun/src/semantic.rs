@@ -8,7 +8,7 @@ use tower_lsp::lsp_types::{
 };
 use zydeco_statics::{
     arena::StaticsArena,
-    syntax::{AnnId, Kind, KindId},
+    syntax::{AnnId, Kind},
 };
 use zydeco_surface::{
     scoped::{
@@ -474,41 +474,13 @@ impl<'arena> NameClassifier<'arena> {
     }
 
     fn classify(&self, definition: DefId, name: &str) -> TokenStyle {
-        let class = self
-            .statics
-            .and_then(|statics| statics.annotations_var.get(&definition).copied())
-            .and_then(|annotation| self.classify_annotation(annotation))
-            .unwrap_or_else(|| NameClass::from_spelling(name));
+        let class = NameClass::of_definition(definition, name, self.statics);
         class.style(self.parameters.contains(&definition)).with(SemanticModifier::Readonly)
-    }
-
-    fn classify_annotation(&self, annotation: AnnId) -> Option<NameClass> {
-        let statics = self.statics?;
-        Some(match annotation {
-            | AnnId::Set => NameClass::Kind,
-            | AnnId::Kind(kind) => match self.kind(&kind)? {
-                | Kind::VType(_) => NameClass::ValueType,
-                | Kind::CType(_) => NameClass::ComputationType,
-                | Kind::Arrow(_) | Kind::Label(_) => NameClass::Type,
-            },
-            | AnnId::Type(r#type) => {
-                let kind = statics.type_kind_at(r#type)?;
-                match self.kind(&kind)? {
-                    | Kind::VType(_) => NameClass::Value,
-                    | Kind::CType(_) => NameClass::Computation,
-                    | Kind::Arrow(_) | Kind::Label(_) => NameClass::Value,
-                }
-            }
-        })
-    }
-
-    fn kind(&self, id: &KindId) -> Option<&Kind> {
-        self.statics?.normalized_kind_at(*id)
     }
 }
 
 #[derive(Copy, Clone)]
-enum NameClass {
+pub(crate) enum NameClass {
     Kind,
     ValueType,
     ComputationType,
@@ -518,6 +490,35 @@ enum NameClass {
 }
 
 impl NameClass {
+    pub(crate) fn of_definition(
+        definition: DefId, name: &str, statics: Option<&StaticsArena>,
+    ) -> Self {
+        statics
+            .and_then(|statics| {
+                Self::from_annotation(statics, *statics.annotations_var.get(&definition)?)
+            })
+            .unwrap_or_else(|| Self::from_spelling(name))
+    }
+
+    fn from_annotation(statics: &StaticsArena, annotation: AnnId) -> Option<Self> {
+        Some(match annotation {
+            | AnnId::Set => NameClass::Kind,
+            | AnnId::Kind(kind) => match statics.normalized_kind_at(kind)? {
+                | Kind::VType(_) => NameClass::ValueType,
+                | Kind::CType(_) => NameClass::ComputationType,
+                | Kind::Arrow(_) | Kind::Label(_) => NameClass::Type,
+            },
+            | AnnId::Type(r#type) => {
+                let kind = statics.type_kind_at(r#type)?;
+                match statics.normalized_kind_at(kind)? {
+                    | Kind::VType(_) => NameClass::Value,
+                    | Kind::CType(_) => NameClass::Computation,
+                    | Kind::Arrow(_) | Kind::Label(_) => NameClass::Value,
+                }
+            }
+        })
+    }
+
     fn from_spelling(name: &str) -> Self {
         if name.chars().next().is_some_and(char::is_uppercase) { Self::Type } else { Self::Value }
     }
