@@ -518,7 +518,13 @@ The mechanisms and their dependency are specified separately in
 [First-Class Value Functions with `ValPi`](docs/proposals/value-pi.md) and
 [Value Views](docs/proposals/value-views.md).
 
-The standard-library topics and their aggregate package use this value-function boundary.
+The standard library exposes its compiler-canonical kinds and types through `lib/std/prelude.zy`.
+This source is a package value with manifest kind and type fields, so a consumer can import and select
+`VType`, `CType`, `Thk`, `Ret`, and the fixed primitive types without a Builtin parameter.
+Repeated imports preserve their intrinsic identities. The aggregate standard package re-exports this same prelude;
+runtime capabilities and their operations continue to require explicit package parameters.
+
+The standard-library topics and their aggregate package use the value-function boundary.
 Importing `data/package.zy`, `text/package.zy`, `system/package.zy`, `numeric/package.zy`,
 or `std.zy` yields an ordinary value function; clients cut a Builtin package through it and open the resulting value.
 Builtin and the standard-package root are composition boundaries;

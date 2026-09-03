@@ -1,8 +1,5 @@
 begin
   param val (
-    /core;
-    /representations;
-    /numeric;
     /system = (/Reader; /Writer; /OS);
     builtin
   ) : @(import("builtin.zy")) that
@@ -10,27 +7,22 @@ begin
   let make_text = @(import("text/package.zy")) that
   let make_system = @(import("system/package.zy")) that
   let make_numeric = @(import("numeric/package.zy")) that
-  let Prelude = @(import("data/prelude.type.zy")) in
+  let prelude = @(import("prelude.zy")) in
   let Additive = @(import("numeric/additive.type.zy")) in
   let Multiplicative = @(import("numeric/multiplicative.type.zy")) in
   let PartialEquality = @(import("numeric/partial-equality.type.zy")) in
   let PartialOrder = @(import("numeric/partial-order.type.zy")) in
   let Numeric = @(import("numeric/numeric.type.zy")) in
 
-  let (/VType; /CType; /Thk; /Ret; /Unit) = core in
-  let (= Int8, int8) = numeric/int8 in
-  let (= Int16, int16) = numeric/int16 in
-  let (= Int32, int32) = numeric/int32 in
-  let (= Int64, int64) = numeric/int64 in
-  let (= UInt8, uint8) = numeric/uint8 in
-  let (= UInt16, uint16) = numeric/uint16 in
-  let (= UInt32, uint32) = numeric/uint32 in
-  let (= UInt64, uint64) = numeric/uint64 in
-  let (= Float32, float32) = numeric/float32 in
-  let (= Float64, float64) = numeric/float64 in
-  let (/Char) = representations/char in
-  let (/String) = representations/string in
-  let (/Bytes) = representations/bytes in
+  let (
+    /VType; /CType; /Thk; /Ret; /Unit;
+    /Int8; /Int16; /Int32; /Int64;
+    /UInt8; /UInt16; /UInt32; /UInt64;
+    /Float32; /Float64; /Char; /String; /Bytes
+  )
+  =
+    prelude
+  in
   let (/Bool; /Option; /Result; /List; /bool; /option; /result; /list; base) =
     builtin |> make_data
   in
@@ -56,12 +48,6 @@ begin
   =
     (builtin, base) |> make_numeric
   in
-  let prelude : Prelude = (
-    #Thunk = Thk,
-    #U = Thk,
-    #F = Ret,
-    ()
-  ) in
   pack
       (= Bool : VType) is Bool
       (= Option : VType -> VType) is Option

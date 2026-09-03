@@ -1,0 +1,47 @@
+begin
+  let (
+    /VType;
+    /CType;
+    /Thk;
+    /Ret;
+    /Unit;
+    /Int8;
+    /Int16;
+    /Int32;
+    /Int64;
+    /UInt8;
+    /UInt16;
+    /UInt32;
+    /UInt64;
+    /Float32;
+    /Float64;
+    /Char;
+    /String;
+    /Bytes
+  )
+  =
+    @(import("../../std/prelude.zy"))
+  that
+
+  let ! identity (A : VType) (value : A) : Ret A = ret value that
+  let ! force (B : CType) (computation : Thk B) : B = ! computation that
+  let ! bytes_identity (value : Bytes) : Ret Bytes = ret value that
+
+  do _ <- ! identity Int8 -128;
+  do _ <- ! identity Int16 -32768;
+  do _ <- ! identity Int32 -2147483648;
+  do _ <- ! identity Int64 -9223372036854775808;
+  do _ <- ! identity UInt8 255;
+  do _ <- ! identity UInt16 65535;
+  do _ <- ! identity UInt32 4294967295;
+  do _ <- ! identity UInt64 18446744073709551615;
+  do _ <- ! identity Float32 1.5;
+  do _ <- ! identity Float64 2.5;
+  do _ <- ! identity Char 'z';
+  do _ <- ! identity String "zydeco";
+
+  let (/Int64 = SameInt64) = @(import("../../std/prelude.zy")) in
+  do value <- ! identity Int64 42;
+  do _ <- ! identity SameInt64 value;
+  ! force (Ret Unit) { ret () }
+end

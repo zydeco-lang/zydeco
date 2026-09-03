@@ -1,10 +1,11 @@
 begin
+  let (/Ret; /Int64) = @(import("../../std/prelude.zy")) that
   let make_std = @(import("../../std/std.zy")) that
-  param (/representations; builtin) : @(import("../../std/builtin.zy")) that
-  let (/Int64 = _) = representations/i64 that
+  param (/core; builtin) : @(import("../../std/builtin.zy")) that
 
   let (/int64; /process) = builtin |> make_std in
-  do one <- ! int64/increment 0;
-  do status <- ! int64/sub one 1;
+  let ! square (value : Int64) : Ret Int64 = ! int64/mul value value in
+  do answer <- ! square 7;
+  do status <- ! int64/sub answer 49;
   ! process/exit status
 end

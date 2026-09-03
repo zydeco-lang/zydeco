@@ -186,6 +186,7 @@ The source tree mirrors those semantic boundaries:
 ```text
 lib/std/
   builtin.zy
+  prelude.zy
   builtin/
     core.zy
     representations.zy
@@ -193,7 +194,7 @@ lib/std/
     text/{char,string,bytes}.zy
     system/{io,fs,stdio,args,random,process}.zy
   data/package.zy
-  data/{package,bool,prelude}.type.zy
+  data/{package,bool}.type.zy
   numeric/{integer,float}.zy
   numeric/package.zy
   numeric/*.type.zy

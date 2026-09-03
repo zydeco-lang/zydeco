@@ -55,6 +55,16 @@ hello, world!
 
 Run `zydeco --help` for further usage information.
 
+Core kinds and types are available through one explicit prelude import, including in pure library functions:
+
+```zydeco
+let (/VType; /CType; /Ret; /Thk; /Int64; /Float32; /Float64) = @(import("lib/std/prelude.zy")) in
+fn (value : Int64) => (ret value : Ret Int64)
+```
+
+The [standard library guide](lib/std/README.md) lists every exported type and shows how to combine the prelude
+with explicit Builtin operations.
+
 ## Building WebAssembly
 
 Zydeco has two experimental WebAssembly lowering strategies. They can be built side by side:

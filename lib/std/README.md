@@ -1,6 +1,47 @@
 # Zydeco Standard Library
 
-The standard library has two boundaries.
+## Start with the types
+
+Import [`prelude.zy`](prelude.zy) to select the foundational types directly:
+
+```zydeco
+let (/VType; /CType; /Ret; /Thk; /Int64; /Float32; /Float64) = @(import("lib/std/prelude.zy")) in
+...
+```
+
+The path above is relative to a source file in the repository root.
+The prelude is an ordinary package value: importing it requires no Builtin argument or standard-library assembly.
+Its manifest fields disclose compiler-canonical types, so separate imports and runtime operations share the same
+type identities. A pure library function can therefore state its interface with just this import:
+
+```zydeco
+let (/Ret; /Int64) = @(import("lib/std/prelude.zy")) in
+fn (value : Int64) => (ret value : Ret Int64)
+```
+
+The available names are:
+
+| Family | Names |
+| --- | --- |
+| CBPV | `VType`, `CType`, `Thk`, `Ret`, `Unit` |
+| Signed integers | `Int8`, `Int16`, `Int32`, `Int64` |
+| Unsigned integers | `UInt8`, `UInt16`, `UInt32`, `UInt64` |
+| Floating point | `Float32`, `Float64` |
+| Text and bytes | `Char`, `String`, `Bytes` |
+| Alternate CBPV notation | `Thunk`, `U` for `Thk`; `F` for `Ret` |
+
+Host operations still come from an explicit Builtin parameter.
+The [integer example](../tests/std/minimal.zy) uses the prelude's `Int64` and `Ret` in a function signature,
+then uses `std` for arithmetic. An already assembled standard package also exports this same prelude:
+
+```zydeco
+let (/prelude = (/VType; /CType; /Ret; /Thk; /Int64); /int64; /process) = builtin |> make_std in
+...
+```
+
+## Library boundaries
+
+Runtime operations have two boundaries.
 [`builtin.zy`](builtin.zy) is the typed contract between Zydeco programs and the host runtime.
 Its operations expose representation-independent observations and effects,
 but never construct library-defined `Bool`, `Option`, `Result`, or `List` values.
@@ -24,11 +65,12 @@ and the derived operations in the topic packages remain ordinary Zydeco code.
 
 ## Source layout
 
-The files at the root of this directory are composition boundaries, not implementation buckets:
+The files at the root of this directory define the public entry points:
 
 ```text
 builtin.zy                 complete host ABI and shared system witness telescope
 std.zy                     wiring for the public package
+prelude.zy                 directly importable core and fixed-representation types
 
 builtin/core.zy            CBPV kinds and constructors
 builtin/representations.zy fixed representation packages
@@ -39,7 +81,6 @@ builtin/system/*.zy        I/O, filesystem, streams, arguments, randomness, proc
 data/package.zy            Bool, Option, Result, List, and every derived operation
 data/package.type.zy       DataPackage existential wrapper with the module telescopes
 data/bool.type.zy          BoolModule telescope shared with the numeric builders
-data/prelude.type.zy       thunk and return aliases re-exported by `std`
 
 numeric/{integer,float}.zy explicitly polymorphic derived numeric builders
 numeric/package.zy         the ten width modules, instances, and primitive groups
