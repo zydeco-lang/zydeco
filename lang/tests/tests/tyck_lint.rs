@@ -12,7 +12,7 @@
 
 use zydeco_statics::{
     arena::StaticsArena,
-    syntax::{CompuId, Fillable, Hole, Kind, TermAnnId, Thunk, Value, ValueId},
+    syntax::{Fillable, Hole, TermAnnId, Thunk, Type, Value},
     validate::{LintChecker, LintError, LintNode, LintSite, LintSort},
 };
 use zydeco_tests::utils::SourceCase;
@@ -193,29 +193,26 @@ fn desynchronizing_a_thunk_shape_is_reported() {
     // A suspension with a closed payload exercises a constructor-shape
     // judgment: the recorded annotation must be `Thk` applied to exactly
     // the payload computation's type.
-    let thunks: Vec<(ValueId, CompuId)> = statics
+    let thunk = statics
         .values
         .iter()
-        .filter_map(|(value, node)| match node {
-            | Value::Thunk(Thunk(body)) => Some((*value, *body)),
+        .find_map(|(value, node)| match node {
+            | Value::Thunk(Thunk(_)) => Some(*value),
             | _ => None,
         })
-        .collect();
-    let Some((thunk, body)) = thunks.first().copied() else {
-        panic!("the fixture suspends a computation");
-    };
+        .expect("the fixture suspends a computation");
+    // Pick a concrete non-thunk shape. Choosing an arbitrary value type can
+    // select this thunk's existing annotation and turn the mutation into a no-op.
     let wrong_ty = statics
         .annotations_value
         .iter()
         .map(|(_, ty)| *ty)
-        .find(|ty| {
-            let Some(kind) = statics.type_kind_at(*ty) else {
-                return false;
-            };
-            matches!(statics.normalized_kind_at(kind), Some(Kind::VType(_)))
-                && *ty != statics.annotations_compu[&body]
-        })
-        .expect("the arena has a closed value type distinct from the payload");
+        .find(|ty| matches!(statics.normalized_annotation_at(*ty), Some(Type::Unit(_))))
+        .expect("the arena has a unit type distinct from the thunk shape");
+    assert_ne!(
+        wrong_ty, statics.annotations_value[&thunk],
+        "the selected annotation must change the thunk's recorded shape"
+    );
     statics.annotations_value.replace_existing(thunk, wrong_ty);
     assert_reports(&statics, root, |error| {
         matches!(
