@@ -285,6 +285,57 @@ for the layout above.
   `exists` and keeps topic packages opaque inside their groups, while consumers still select
   `(/option; /process)` across the nesting unchanged.
 
+### Package annotations and companion files
+
+A package may need an expected type even when its interface belongs beside its implementation.
+The comma introduction uses that expectation to distinguish static witnesses from runtime fields.
+An inline annotation supplies it directly. A companion `.zyi` supplies the same annotation from another source:
+the loader treats the pair as `(implementation : signature)`.
+The need for an expected type therefore determines where checking needs an annotation;
+it does not determine how many source files the library needs.
+
+Prefer a self-contained `.zy` when `pack` can synthesize the interface from the witnesses and payload.
+Keep any remaining annotation local, and reuse a synthesized payload type with `@[typeof]` when appropriate.
+A `.zyi` is useful when the interface is intentionally authored and reviewed independently of the implementation.
+Repeating the implementation's inferred interface in a companion creates a second description to maintain.
+
+The prelude has a specific reason to retain a small inline annotation.
+`Int64` is a type of kind `VType`, while `VType` and `CType` are themselves kinds.
+The current `pack` checker accepts type-valued evidence and reports `tyck.sort-mismatch` for kind-valued evidence.
+For example, this introduction is currently rejected:
+
+```zydeco
+pack (VType as @(intrinsic(vtype))) where () end
+```
+
+The corresponding manifest kind field is supported in an `exists` type and in a tuple checked against that type.
+This allows the kind prefix to surround a package whose remaining fields are synthesized normally:
+
+```zydeco
+begin
+  let VType = @(intrinsic(vtype)) in
+  let CType = @(intrinsic(ctype)) in
+  let types = pack
+      (= Thk as @(intrinsic(thk)) : CType -> VType)
+      (= Ret as @(intrinsic(ret)) : VType -> CType)
+      (= Int64 as @(intrinsic(i64)) : VType)
+  where
+    ()
+  end in
+  (
+    (VType, CType, types) : exists (VType as @(intrinsic(vtype)))
+      (CType as @(intrinsic(ctype)))
+    .
+      @[typeof] types
+  )
+end
+```
+
+Only the two kind fields require this explicit prefix. `@[typeof] types` preserves the inferred manifest type fields,
+so adding a numeric type changes one witness list. The full implementation is
+[`lib/std/prelude.zy`](../../lib/std/prelude.zy).
+This pattern handles the current introduction limitation within one source file.
+
 ## Elaboration and runtime representation
 
 Selective package patterns elaborate to existing typed patterns.

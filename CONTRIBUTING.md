@@ -148,6 +148,20 @@ param (/system) : @[import("../std/builtin.zy")] _ in
 The launcher supplies the declared Builtin package when this term is run.
 No authored project configuration or distinguished `main` declaration is needed.
 
+### Package implementations and signatures
+
+Keep a package in one `.zy` file when its interface follows from its implementation.
+Use `pack` to declare type witnesses and synthesize the exported package type;
+use an inline annotation where an introduction needs an expected type.
+A companion `.zyi` is an optional, separately authored interface contract.
+Choose it when maintaining that contract independently is useful, rather than merely because an annotation is needed.
+
+The prelude illustrates the distinction. `pack` currently accepts type witnesses but rejects kind witnesses such as
+`VType` and `CType`. Its kind fields therefore use an annotated tuple prefix, while `@[typeof]` reuses the type of
+the remaining package without copying its fields into another signature.
+See [package annotations and companion files](docs/proposals/package-modularization.md#package-annotations-and-companion-files)
+for the complete pattern and the current checker limitation.
+
 ## Work on the Language Implementation
 
 The language pipeline is structured into phases (parsing, desugaring, name-resolution,

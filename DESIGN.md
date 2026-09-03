@@ -279,8 +279,8 @@ witness bindings to appear in the term. `pack` is that introduction form:
 pack (X as A : K) (Y : K) is B where c_1, c_2, ..., c_n end
 ```
 
-The telescope reuses existential parameters verbatim: every binder shape that `exists`
-accepts — abstract or manifest, named or plain, punned or not — is a `pack` parameter.
+For type witnesses, the telescope reuses existential parameter shapes:
+abstract or manifest, named or plain, punned or not.
 Each binder additionally carries its witness in the term. A manifest parameter keeps the
 type-level spelling `X as A` and discloses the witness in the synthesized type.
 An abstract parameter states its witness as sealed evidence after `is`; the synthesized
