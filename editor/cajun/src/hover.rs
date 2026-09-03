@@ -1,45 +1,60 @@
 use serde::Deserialize;
-use serde_json::Value;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, num::NonZeroUsize, ops::Range};
 use tower_lsp::lsp_types::{Position, Url};
 
-#[derive(Default, Deserialize)]
-struct CajunInitializationOptions {
-    #[serde(default)]
-    hover: HoverInitializationOptions,
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub(crate) struct HoverOptions {
+    pub(crate) line_width: HoverLineWidth,
+    #[serde(rename = "inclusiveEnd")]
+    pub(crate) range_end: RangeEnd,
 }
 
-#[derive(Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct HoverInitializationOptions {
-    line_width: Option<usize>,
+/// Position-query policy; source spans and returned LSP ranges retain their original endpoints.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(from = "bool")]
+pub(crate) enum RangeEnd {
+    #[default]
+    Exclusive,
+    Inclusive,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct HoverLineWidth(usize);
+impl From<bool> for RangeEnd {
+    fn from(inclusive: bool) -> Self {
+        if inclusive { Self::Inclusive } else { Self::Exclusive }
+    }
+}
+
+impl RangeEnd {
+    pub(crate) fn contains(&self, range: &Range<usize>, offset: usize) -> bool {
+        range.start <= offset
+            && match self {
+                | Self::Exclusive => offset < range.end,
+                | Self::Inclusive => offset <= range.end,
+            }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[serde(transparent)]
+pub(crate) struct HoverLineWidth(NonZeroUsize);
 
 impl HoverLineWidth {
-    pub(crate) const DEFAULT: Self = Self(100);
+    pub(crate) const DEFAULT: Self = Self::new(100).unwrap();
 
-    pub(crate) fn new(columns: usize) -> Option<Self> {
-        (columns > 0).then_some(Self(columns))
-    }
-
-    pub(crate) fn from_initialization_options(options: Option<&Value>) -> Self {
-        options
-            .cloned()
-            .and_then(|options| serde_json::from_value::<CajunInitializationOptions>(options).ok())
-            .and_then(|options| options.hover.line_width)
-            .and_then(Self::new)
-            .unwrap_or_default()
+    pub(crate) const fn new(columns: usize) -> Option<Self> {
+        match NonZeroUsize::new(columns) {
+            | Some(columns) => Some(Self(columns)),
+            | None => None,
+        }
     }
 
     pub(crate) fn columns(self) -> usize {
-        self.0
+        self.0.get()
     }
 
     fn after(self, occupied_columns: usize) -> usize {
-        self.0.saturating_sub(occupied_columns).max(1)
+        self.columns().saturating_sub(occupied_columns).max(1)
     }
 }
 
@@ -424,23 +439,5 @@ mod tests {
     fn hover_width_requires_a_positive_column_budget() {
         assert_eq!(HoverLineWidth::new(0), None);
         assert_eq!(HoverLineWidth::new(1).map(HoverLineWidth::columns), Some(1));
-    }
-
-    #[test]
-    fn hover_width_comes_from_typed_initialization_options() {
-        let options = serde_json::json!({
-            "hover": {
-                "lineWidth": 72
-            },
-            "unrelatedClientOption": true
-        });
-
-        assert_eq!(HoverLineWidth::from_initialization_options(Some(&options)).columns(), 72);
-        assert_eq!(
-            HoverLineWidth::from_initialization_options(Some(&serde_json::json!({
-                "hover": { "lineWidth": 0 }
-            }))),
-            HoverLineWidth::DEFAULT
-        );
     }
 }

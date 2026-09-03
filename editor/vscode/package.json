@@ -54,6 +54,19 @@
           "default": "",
           "description": "Path to the Cajun executable. Leave empty to find cajun on PATH."
         },
+        "cajun.hover.lineWidth": {
+          "type": "integer",
+          "scope": "window",
+          "default": 100,
+          "minimum": 1,
+          "description": "Column budget for hover signatures and completion type details. Changes apply to subsequent requests."
+        },
+        "cajun.hover.inclusiveEnd": {
+          "type": "boolean",
+          "scope": "window",
+          "default": false,
+          "description": "Include the right endpoint of names and terms when selecting hover information. Changes apply to subsequent requests."
+        },
         "cajun.trace.server": {
           "type": "string",
           "scope": "window",

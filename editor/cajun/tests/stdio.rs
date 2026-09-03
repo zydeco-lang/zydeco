@@ -85,6 +85,32 @@ impl LspProcess {
         request
     }
 
+    fn configure(&mut self, settings: Value) {
+        self.notify("workspace/didChangeConfiguration", json!({ "settings": settings }));
+    }
+
+    fn hover(&mut self, uri: &Url, position: Position) -> Value {
+        let response = self.request(
+            "textDocument/hover",
+            json!({ "textDocument": { "uri": uri }, "position": position }),
+        );
+        assert!(response.get("error").is_none(), "hover failed: {response}");
+        response["result"].clone()
+    }
+
+    fn configuration_request(&mut self) -> Value {
+        let request = self.message(|message| {
+            message.get("method") == Some(&json!("workspace/configuration"))
+                && message.get("id").is_some()
+        });
+        assert_eq!(request["params"], json!({ "items": [{ "section": "cajun" }] }));
+        request
+    }
+
+    fn respond(&mut self, request: &Value, result: Value) {
+        self.send(json!({ "jsonrpc": "2.0", "id": request["id"], "result": result }));
+    }
+
     fn finish(mut self) {
         let response = self.request("shutdown", Value::Null);
         assert!(response.get("error").is_none(), "shutdown failed: {response}");
@@ -1032,7 +1058,118 @@ fn stdio_hover_links_referenced_type_definitions() {
 }
 
 #[test]
-fn stdio_hover_uses_the_initialized_line_width() {
+fn stdio_hover_updates_endpoint_policy_without_restarting() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut server = LspProcess::start();
+    let initialized = server.request(
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": Url::from_file_path(directory.path()).unwrap(),
+            "capabilities": {},
+            // Runtime preferences are no longer read through this startup-only path.
+            "initializationOptions": { "hover": { "inclusiveEnd": true } },
+        }),
+    );
+    assert!(initialized.get("error").is_none(), "initialization failed: {initialized}");
+    server.notify("initialized", json!({}));
+
+    for name in ["x", "alpha"] {
+        let path = directory.path().join(format!("{name}.zy"));
+        let source =
+            format!("begin\r\n  let {name} = () that\r\n  /- 😀 -/ ({name} , {name})\r\nend\r\n");
+        std::fs::write(&path, &source).unwrap();
+        let uri = Url::from_file_path(&path).unwrap();
+        server.notify(
+            "textDocument/didOpen",
+            json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "zydeco",
+                    "version": 1,
+                    "text": source,
+                },
+            }),
+        );
+        let diagnostics = server.notification("textDocument/publishDiagnostics");
+        assert!(diagnostics["params"]["diagnostics"].as_array().unwrap().is_empty());
+
+        for (settings, inclusive_end) in [
+            (None, false),
+            (Some(json!({ "cajun": { "hover": { "inclusiveEnd": true } } })), true),
+            (Some(json!({ "cajun": { "hover": { "inclusiveEnd": false } } })), false),
+            (Some(json!({ "cajun": { "hover": { "inclusiveEnd": true } } })), true),
+            (Some(json!({ "cajun": { "hover": { "inclusiveEnd": "false" } } })), true),
+            (Some(Value::Null), true),
+            (Some(json!({})), false),
+        ] {
+            if let Some(settings) = settings {
+                server.configure(settings);
+            }
+            let pair = format!("({name} , {name})");
+            let pair_signature = format!("```zydeco\n({name}, {name}) : Unit * Unit\n```");
+            for (needle, length, signature) in [
+                (format!("{name} ="), name.len() as u32, format!("{name} : Unit")),
+                (format!("{name} ,"), name.len() as u32, format!("{name} : Unit")),
+                ("() that".to_owned(), 2, "() : Unit".to_owned()),
+                (pair.clone(), pair.len() as u32, format!("({name}, {name}) : Unit * Unit")),
+            ] {
+                let start = source_position(&source, &needle);
+                let end = Position::new(start.line, start.character + length);
+                let inside = server.request(
+                    "textDocument/hover",
+                    json!({ "textDocument": { "uri": uri }, "position": start }),
+                );
+                assert_eq!(
+                    inside["result"]["contents"]["value"],
+                    format!("```zydeco\n{signature}\n```")
+                );
+                assert_eq!(inside["result"]["range"], json!({ "start": start, "end": end }));
+                let at_end = server.request(
+                    "textDocument/hover",
+                    json!({ "textDocument": { "uri": uri }, "position": end }),
+                );
+                assert!(at_end.get("error").is_none(), "hover failed: {at_end}");
+                assert!(at_end["result"]["contents"]["value"].is_string());
+                if inclusive_end {
+                    assert_eq!(at_end["result"], inside["result"], "endpoint of {needle}");
+                } else {
+                    assert_ne!(at_end["result"], inside["result"], "endpoint of {needle}");
+                }
+            }
+
+            let use_start = source_position(&source, &format!("{name} ,"));
+            let use_end = Position::new(use_start.line, use_start.character + name.len() as u32);
+            let comma = Position::new(use_end.line, use_end.character + 1);
+            let beyond_end = server.request(
+                "textDocument/hover",
+                json!({ "textDocument": { "uri": uri }, "position": comma }),
+            );
+            assert_eq!(beyond_end["result"]["contents"]["value"], pair_signature);
+            for method in ["textDocument/definition", "textDocument/prepareRename"] {
+                let inside = server.request(
+                    method,
+                    json!({ "textDocument": { "uri": uri }, "position": use_start }),
+                );
+                assert!(!inside["result"].is_null());
+                let at_end = server.request(
+                    method,
+                    json!({ "textDocument": { "uri": uri }, "position": use_end }),
+                );
+                assert!(at_end["result"].is_null(), "{method} must retain exclusive endpoints");
+            }
+            let outside = server.request(
+                "textDocument/hover",
+                json!({ "textDocument": { "uri": uri }, "position": { "line": 4, "character": 0 } }),
+            );
+            assert!(outside["result"].is_null());
+        }
+    }
+    server.finish();
+}
+
+#[test]
+fn stdio_hover_updates_line_width_without_restarting() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../lib/std/data/package.zy")
         .canonicalize()
@@ -1048,9 +1185,6 @@ fn stdio_hover_uses_the_initialized_line_width() {
             "processId": null,
             "rootUri": Url::from_file_path(path.parent().unwrap()).unwrap(),
             "capabilities": {},
-            "initializationOptions": {
-                "hover": { "lineWidth": 32 }
-            }
         }),
     );
     server.notify("initialized", json!({}));
@@ -1068,6 +1202,8 @@ fn stdio_hover_uses_the_initialized_line_width() {
     let diagnostics = server.notification("textDocument/publishDiagnostics");
     assert!(diagnostics["params"]["diagnostics"].as_array().unwrap().is_empty());
 
+    let default = server.hover(&Url::parse(&uri).unwrap(), zip);
+    server.configure(json!({ "cajun": { "hover": { "lineWidth": 32 } } }));
     let hover = server.request(
         "textDocument/hover",
         json!({
@@ -1091,9 +1227,150 @@ fn stdio_hover_uses_the_initialized_line_width() {
             .iter()
             .flat_map(|source| source.lines())
             .all(|line| line.chars().count() <= 32),
-        "hover should honor the initialized line width:\n{markdown}"
+        "hover should honor the live line width:\n{markdown}"
     );
 
+    assert_ne!(default["contents"], hover["result"]["contents"]);
+    server.configure(json!({ "cajun": { "hover": { "lineWidth": 0 } } }));
+    assert_eq!(server.hover(&Url::parse(&uri).unwrap(), zip), hover["result"]);
+    server.configure(json!({ "cajun": { "hover": { "lineWidth": 100 } } }));
+    assert_eq!(server.hover(&Url::parse(&uri).unwrap(), zip), default);
+    server.configure(json!({ "cajun": { "hover": { "lineWidth": 32 } } }));
+    assert_eq!(server.hover(&Url::parse(&uri).unwrap(), zip), hover["result"]);
+    server.configure(json!({ "cajun": { "hover": {} } }));
+    assert_eq!(server.hover(&Url::parse(&uri).unwrap(), zip), default);
+
+    server.finish();
+}
+
+#[test]
+fn stdio_configuration_registers_and_pulls_live_settings() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("configuration.zy");
+    let source = "begin\n  let x = () that\n  (x , x)\nend\n";
+    std::fs::write(&path, source).unwrap();
+    let uri = Url::from_file_path(&path).unwrap();
+    let start = source_position(source, "x ,");
+    let end = Position::new(start.line, start.character + 1);
+    let mut server = LspProcess::start();
+    server.request(
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": Url::from_file_path(directory.path()).unwrap(),
+            "capabilities": {
+                "workspace": {
+                    "configuration": true,
+                    "didChangeConfiguration": { "dynamicRegistration": true }
+                }
+            }
+        }),
+    );
+    server.notify("initialized", json!({}));
+    let registration = server.acknowledge_server_request("client/registerCapability");
+    assert_eq!(
+        registration["params"]["registrations"],
+        json!([{
+            "id": "cajun-configuration",
+            "method": "workspace/didChangeConfiguration",
+            "registerOptions": { "section": "cajun" }
+        }])
+    );
+    let request = server.configuration_request();
+    server.respond(&request, json!([{ "hover": { "inclusiveEnd": true } }]));
+    assert_eq!(server.notification("window/logMessage")["params"]["message"], "Cajun initialized");
+    server.notify(
+        "textDocument/didOpen",
+        json!({
+            "textDocument": { "uri": uri, "languageId": "zydeco", "version": 1, "text": source }
+        }),
+    );
+    let diagnostics = server.notification("textDocument/publishDiagnostics");
+    assert!(diagnostics["params"]["diagnostics"].as_array().unwrap().is_empty());
+    let variable = server.hover(&uri, start);
+    assert_eq!(server.hover(&uri, end), variable, "initial settings must be fetched");
+
+    for (result, error) in [
+        (json!([]), "expected one workspace/configuration result"),
+        (json!([{}, {}]), "expected one workspace/configuration result"),
+        (json!([{ "hover": { "inclusiveEnd": "false" } }]), "invalid settings"),
+    ] {
+        server.configure(Value::Null);
+        let request = server.configuration_request();
+        server.respond(&request, result);
+        let warning = server.notification("window/logMessage");
+        assert_eq!(warning["params"]["type"], 2);
+        assert!(warning["params"]["message"].as_str().unwrap().contains(error));
+        assert_eq!(server.hover(&uri, end), variable, "failed pulls must retain the last settings");
+    }
+
+    server.configure(Value::Null);
+    let request = server.configuration_request();
+    server.send(json!({
+        "jsonrpc": "2.0", "id": request["id"],
+        "error": { "code": -32603, "message": "configuration unavailable" }
+    }));
+    let warning = server.notification("window/logMessage");
+    assert_eq!(warning["params"]["type"], 2);
+    assert!(
+        warning["params"]["message"].as_str().unwrap().contains("workspace/configuration failed")
+    );
+    assert_eq!(server.hover(&uri, end), variable);
+
+    for (result, inclusive) in [
+        (json!([{ "hover": { "inclusiveEnd": false } }]), false),
+        (json!([{ "hover": { "inclusiveEnd": true } }]), true),
+        (json!([null]), false),
+    ] {
+        server.configure(Value::Null);
+        let request = server.configuration_request();
+        server.respond(&request, result);
+        assert_eq!(server.hover(&uri, end) == variable, inclusive);
+    }
+    server.finish();
+}
+
+#[test]
+fn stdio_configuration_ignores_a_pull_superseded_by_a_push() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("configuration.zy");
+    let source = "begin\n  let x = () that\n  (x , x)\nend\n";
+    std::fs::write(&path, source).unwrap();
+    let uri = Url::from_file_path(&path).unwrap();
+    let start = source_position(source, "x ,");
+    let end = Position::new(start.line, start.character + 1);
+    let mut server = LspProcess::start();
+    server.request(
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": Url::from_file_path(directory.path()).unwrap(),
+            "capabilities": { "workspace": { "configuration": true } }
+        }),
+    );
+    server.notify("initialized", json!({}));
+    let delayed_request = server.configuration_request();
+    server.configure(json!({ "cajun": { "hover": { "inclusiveEnd": true } } }));
+    server.notify(
+        "textDocument/didOpen",
+        json!({
+            "textDocument": { "uri": uri, "languageId": "zydeco", "version": 1, "text": source }
+        }),
+    );
+    let diagnostics = server.notification("textDocument/publishDiagnostics");
+    assert!(diagnostics["params"]["diagnostics"].as_array().unwrap().is_empty());
+    let variable = server.hover(&uri, start);
+    assert_eq!(server.hover(&uri, end), variable);
+
+    server.respond(&delayed_request, json!([{ "hover": { "inclusiveEnd": false } }]));
+    assert_eq!(server.notification("window/logMessage")["params"]["message"], "Cajun initialized");
+    assert_eq!(server.hover(&uri, end), variable, "a delayed pull must not replace a newer push");
+    server.configure(json!({}));
+    assert_ne!(
+        server.hover(&uri, end),
+        variable,
+        "removing settings must still work after a stale pull"
+    );
     server.finish();
 }
 

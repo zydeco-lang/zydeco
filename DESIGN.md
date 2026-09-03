@@ -471,6 +471,16 @@ while the language server translates the same source spans to LSP ranges.
 Failures in earlier phases retain their primary file and byte range through the session for the same reason.
 Editor integrations convert those byte ranges to the client’s position encoding only at the LSP boundary.
 
+Cajun keeps negotiated client capabilities for the connection's lifetime and reads user preferences from a live,
+server-wide configuration snapshot. The LSP `cajun` section supplies typed settings through
+`workspace/configuration` requests or `workspace/didChangeConfiguration` notifications.
+Every valid update replaces the complete snapshot; omitted options return to defaults,
+while invalid updates preserve the last valid snapshot and produce a warning.
+Configuration revisions prevent delayed client responses from replacing newer settings.
+Hover and completion each read one snapshot per request, so presentation changes require neither a server restart
+nor compiler cache invalidation. The [editor configuration guide](editor/README.md#runtime-configuration)
+defines the settings and client integration contract.
+
 Libraries use first-class value functions, ordinary computation abstractions, and package types.
 Transparent definitions travel through products and manifest package signatures;
 abstract types travel through existential packages and computation package-dependent arrows.

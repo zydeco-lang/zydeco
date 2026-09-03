@@ -1,5 +1,6 @@
 mod analysis;
 mod completion;
+mod configuration;
 mod document_links;
 mod format;
 mod hover;
@@ -10,9 +11,9 @@ mod type_links;
 
 use analysis::{ProjectFailure, ProjectState};
 use completion::Completer;
+use configuration::Configuration;
 use document_links::ImportDocumentLinks;
 use format::{DocumentFormatter, FormattingOutcome};
-use hover::HoverLineWidth;
 use progress::{AnalysisProgressReporter, AnalysisProgressSession};
 use rename::RenameRejection;
 use semantic::SemanticHighlighter;
@@ -22,7 +23,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 use tokio::sync::{Mutex, RwLock};
@@ -30,12 +31,12 @@ use tower_lsp::{
     Client, LanguageServer,
     jsonrpc::Result,
     lsp_types::{
-        CompletionOptions, CompletionParams, CompletionResponse, DidChangeTextDocumentParams,
-        DidCloseTextDocumentParams, DidOpenTextDocumentParams, DidSaveTextDocumentParams,
-        DocumentFormattingParams, DocumentLink, DocumentLinkOptions, DocumentLinkParams,
-        DocumentSymbolParams, DocumentSymbolResponse, GotoDefinitionParams, GotoDefinitionResponse,
-        Hover, HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
-        InitializedParams, Location, MessageType, OneOf, PositionEncodingKind,
+        CompletionOptions, CompletionParams, CompletionResponse, DidChangeConfigurationParams,
+        DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
+        DidSaveTextDocumentParams, DocumentFormattingParams, DocumentLink, DocumentLinkOptions,
+        DocumentLinkParams, DocumentSymbolParams, DocumentSymbolResponse, GotoDefinitionParams,
+        GotoDefinitionResponse, Hover, HoverParams, HoverProviderCapability, InitializeParams,
+        InitializeResult, InitializedParams, Location, MessageType, OneOf, PositionEncodingKind,
         PrepareRenameResponse, ReferenceParams, RenameOptions, RenameParams, SemanticTokens,
         SemanticTokensFullOptions, SemanticTokensOptions, SemanticTokensParams,
         SemanticTokensResult, ServerCapabilities, ServerInfo, TextDocumentPositionParams,
@@ -147,7 +148,7 @@ pub struct Cajun {
     semantic_tokens_refresh: AtomicBool,
     completion_snippets: AtomicBool,
     completion_label_details: AtomicBool,
-    hover_line_width: AtomicUsize,
+    configuration: Configuration,
     next_progress_sequence: AtomicU64,
 }
 
@@ -161,7 +162,7 @@ impl Cajun {
             semantic_tokens_refresh: AtomicBool::new(false),
             completion_snippets: AtomicBool::new(false),
             completion_label_details: AtomicBool::new(false),
-            hover_line_width: AtomicUsize::new(HoverLineWidth::DEFAULT.columns()),
+            configuration: Configuration::default(),
             next_progress_sequence: AtomicU64::new(1),
         }
     }
@@ -328,10 +329,6 @@ impl Cajun {
         Some(AnalysisProgressSession::new(self.client.clone(), root, sequence))
     }
 
-    fn hover_line_width(&self) -> HoverLineWidth {
-        HoverLineWidth::new(self.hover_line_width.load(Ordering::Relaxed)).unwrap_or_default()
-    }
-
     async fn set_document(&self, uri: &Url, text: String) -> Option<PathBuf> {
         let path = Self::path(uri).ok()?;
         self.session.lock().await.set_document(&path, text).ok()?;
@@ -357,8 +354,7 @@ impl Cajun {
 #[tower_lsp::async_trait]
 impl LanguageServer for Cajun {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
-        let hover_line_width =
-            HoverLineWidth::from_initialization_options(params.initialization_options.as_ref());
+        self.configuration.set_client_capabilities(&params.capabilities);
         let work_done_progress = params
             .capabilities
             .window
@@ -386,7 +382,6 @@ impl LanguageServer for Cajun {
         self.semantic_tokens_refresh.store(semantic_tokens_refresh, Ordering::Relaxed);
         self.completion_snippets.store(completion_snippets, Ordering::Relaxed);
         self.completion_label_details.store(completion_label_details, Ordering::Relaxed);
-        self.hover_line_width.store(hover_line_width.columns(), Ordering::Relaxed);
         Ok(InitializeResult {
             server_info: Some(ServerInfo {
                 name: "Cajun".to_string(),
@@ -439,7 +434,12 @@ impl LanguageServer for Cajun {
     }
 
     async fn initialized(&self, _: InitializedParams) {
+        self.configuration.initialized(&self.client).await;
         self.client.log_message(MessageType::INFO, "Cajun initialized").await;
+    }
+
+    async fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
+        self.configuration.did_change(&self.client, params.settings).await;
     }
 
     async fn shutdown(&self) -> Result<()> {
@@ -587,11 +587,11 @@ impl LanguageServer for Cajun {
             | RefreshOutcome::Updated(path) => path,
             | RefreshOutcome::Failed(_) | RefreshOutcome::Superseded => return Ok(None),
         };
-        let line_width = self.hover_line_width();
+        let options = self.configuration.snapshot().await.hover;
         let session = self.session.lock().await;
         let projects = self.projects.read().await;
         Ok(projects.get(&path).and_then(|cached| {
-            cached.project.hover(&session.compiler, &path, target.position, line_width)
+            cached.project.hover(&session.compiler, &path, target.position, options)
         }))
     }
 
@@ -611,7 +611,7 @@ impl LanguageServer for Cajun {
         let completer = Completer {
             snippets: self.completion_snippets.load(Ordering::Relaxed),
             label_details: self.completion_label_details.load(Ordering::Relaxed),
-            line_width: self.hover_line_width(),
+            line_width: self.configuration.snapshot().await.hover.line_width,
         };
         let completion_path = path.clone();
         let completion = tokio::task::spawn_blocking(move || {

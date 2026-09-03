@@ -30,28 +30,39 @@ Cajun refines resolved binders and references with kind, value-type, computation
 value, and computation information when the corresponding compiler phases succeed,
 while Tree-sitter keeps lexical highlighting available while a file is incomplete.
 
-## Hover width
+## Hover settings
 
 Cajun returns hover signatures in `zydeco` Markdown code fences and pretty-prints them
 to the width supplied by the editor integration.
 Zed computes each popover's width locally from the current editor pane,
 but the LSP protocol does not report that live width to the server.
 The extension therefore uses a conservative 72-column budget by default.
-For consistently narrower panes, set a matching column budget in Zed settings:
+For consistently narrower panes, set a matching column budget in Zed settings.
+
+The optional `hover.inclusiveEnd` setting also accepts a name or term's right endpoint when selecting a hover.
+It defaults to `false`; enabling it can make short names easier to hover near their right edge.
+This example sets a narrower width and enables inclusive endpoints:
 
 ```json
 {
   "lsp": {
     "cajun": {
-      "initialization_options": {
+      "settings": {
         "hover": {
-          "lineWidth": 56
+          "lineWidth": 56,
+          "inclusiveEnd": true
         }
       }
     }
   }
 }
 ```
+
+Changes apply to subsequent hover and completion requests without restarting Cajun.
+Removing an override restores the defaults: 72 columns and exclusive hover endpoints.
+Invalid option values leave the last valid server settings in place.
+If you previously used `lsp.cajun.initialization_options.hover`, move that object to `lsp.cajun.settings.hover`
+when updating the server and extension. An already open popover may need to be dismissed and reopened.
 
 The repository contains the Tree-sitter grammar under `../tree-sitter-zydeco`
 and the Zed query files under `languages/zydeco`.

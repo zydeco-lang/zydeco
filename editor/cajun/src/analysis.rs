@@ -29,8 +29,8 @@ use zydeco_utils::{
 
 use crate::{
     hover::{
-        HoverLineWidth, HoverSignature, SealedTypeEquationPreview, TypeDefinitionLink,
-        TypeDefinitionPreview,
+        HoverLineWidth, HoverOptions, HoverSignature, RangeEnd, SealedTypeEquationPreview,
+        TypeDefinitionLink, TypeDefinitionPreview,
     },
     progress::{AnalysisProgress, SourceDiscovery},
     rename::{RenameRejection, Renamer},
@@ -212,14 +212,14 @@ impl ProjectState {
     }
 
     pub(crate) fn definition(&self, file_path: &Path, position: Position) -> Option<Location> {
-        let occurrence = self.symbol_at(file_path, position)?;
+        let occurrence = self.symbol_at(file_path, position, RangeEnd::Exclusive)?;
         self.definition_location(occurrence.definition)
     }
 
     pub(crate) fn references(
         &self, file_path: &Path, position: Position, include_declaration: bool,
     ) -> Option<Vec<Location>> {
-        let definition = self.symbol_at(file_path, position)?.definition;
+        let definition = self.symbol_at(file_path, position, RangeEnd::Exclusive)?.definition;
         let declaration =
             include_declaration.then(|| self.definition_location(definition)).into_iter().flatten();
         let uses = self
@@ -239,7 +239,7 @@ impl ProjectState {
     pub(crate) fn prepare_rename(
         &self, file_path: &Path, position: Position,
     ) -> Option<PrepareRenameResponse> {
-        let occurrence = self.symbol_at(file_path, position)?;
+        let occurrence = self.symbol_at(file_path, position, RangeEnd::Exclusive)?;
         self.definition_location(occurrence.definition)?;
         let placeholder = self.scoped().defs[&occurrence.definition].0.clone();
         Some(PrepareRenameResponse::RangeWithPlaceholder { range: occurrence.range, placeholder })
@@ -250,7 +250,9 @@ impl ProjectState {
     pub(crate) fn rename(
         &self, file_path: &Path, position: Position, new_name: &str,
     ) -> Result<WorkspaceEdit, RenameRejection> {
-        let occurrence = self.symbol_at(file_path, position).ok_or(RenameRejection::Unresolved)?;
+        let occurrence = self
+            .symbol_at(file_path, position, RangeEnd::Exclusive)
+            .ok_or(RenameRejection::Unresolved)?;
         let current = self.scoped().defs[&occurrence.definition].0.clone();
         let renamer = Renamer::adopt(&current, new_name)?;
         let declaration =
@@ -267,11 +269,11 @@ impl ProjectState {
 
     pub(crate) fn hover(
         &self, session: &CompilerSession, file_path: &Path, position: Position,
-        line_width: HoverLineWidth,
+        options: HoverOptions,
     ) -> Option<Hover> {
-        self.symbol_at(file_path, position)
-            .and_then(|occurrence| self.symbol_hover(session, &occurrence, line_width))
-            .or_else(|| self.term_hover(file_path, position, line_width))
+        self.symbol_at(file_path, position, options.range_end)
+            .and_then(|occurrence| self.symbol_hover(session, &occurrence, options.line_width))
+            .or_else(|| self.term_hover(file_path, position, options))
     }
 
     fn symbol_hover(
@@ -330,8 +332,9 @@ impl ProjectState {
     /// checker recorded for the term itself. Resolved symbols take precedence,
     /// so hovering a variable or definition still reports the definition.
     fn term_hover(
-        &self, file_path: &Path, position: Position, line_width: HoverLineWidth,
+        &self, file_path: &Path, position: Position, options: HoverOptions,
     ) -> Option<Hover> {
+        let HoverOptions { line_width, range_end } = options;
         let file_path = Self::normalize_path(file_path);
         let offset = self.offset(&file_path, position)?;
         let terms = self.scoped().terms.iter().filter_map(|(term, _)| {
@@ -340,7 +343,7 @@ impl ProjectState {
         });
         let (_, range, term) = terms
             .filter_map(|(term, span)| {
-                self.containing_range(&file_path, offset, span)
+                self.containing_range(&file_path, offset, span, range_end)
                     .map(|(length, range)| (length, range, term))
             })
             .min_by_key(|(length, _, _)| *length)?;
@@ -491,7 +494,9 @@ impl ProjectState {
         diagnostics
     }
 
-    fn symbol_at(&self, file_path: &Path, position: Position) -> Option<SymbolOccurrence> {
+    fn symbol_at(
+        &self, file_path: &Path, position: Position, range_end: RangeEnd,
+    ) -> Option<SymbolOccurrence> {
         let file_path = Self::normalize_path(file_path);
         let offset = self.offset(&file_path, position)?;
         let definitions = self.scoped().defs.iter().filter_map(|(definition, _)| {
@@ -508,31 +513,30 @@ impl ProjectState {
         definitions
             .chain(uses)
             .filter_map(|(definition, span)| {
-                self.containing_occurrence(&file_path, offset, definition, span)
+                self.containing_occurrence(&file_path, offset, definition, span, range_end)
             })
             .min_by_key(|(length, _)| *length)
             .map(|(_, occurrence)| occurrence)
     }
 
     fn containing_occurrence(
-        &self, file_path: &Path, offset: usize, definition: DefId, span: &Span,
+        &self, file_path: &Path, offset: usize, definition: DefId, span: &Span, range_end: RangeEnd,
     ) -> Option<(usize, SymbolOccurrence)> {
-        self.containing_range(file_path, offset, span)
+        self.containing_range(file_path, offset, span, range_end)
             .map(|(length, range)| (length, SymbolOccurrence { definition, range }))
     }
 
-    /// The LSP range of a span naming a token of `file_path` that contains the
-    /// byte `offset`, paired with its byte length so callers can prefer the
-    /// innermost enclosing entity.
+    /// The LSP range of a span in `file_path` that contains the byte `offset`
+    /// under the requested endpoint policy, paired with its byte length so
+    /// callers can prefer the innermost enclosing entity.
     fn containing_range(
-        &self, file_path: &Path, offset: usize, span: &Span,
+        &self, file_path: &Path, offset: usize, span: &Span, range_end: RangeEnd,
     ) -> Option<(usize, Range)> {
         let (_, bytes) = self.analysis.spans().source_map().and_then(|map| map.range(*span))?;
         (self.span_file(span) == Some(file_path.to_path_buf())
-            && bytes.start <= offset
-            && offset < bytes.end)
-            .then(|| self.span_range(span).map(|hit| (bytes.end.saturating_sub(bytes.start), hit)))
-            .flatten()
+            && range_end.contains(&bytes, offset))
+        .then(|| self.span_range(span).map(|hit| (bytes.end.saturating_sub(bytes.start), hit)))
+        .flatten()
     }
 
     fn definition_location(&self, definition: DefId) -> Option<Location> {
@@ -650,7 +654,7 @@ impl ProjectState {
 mod tests {
     use super::{ProjectFailure, ProjectState};
     use crate::{
-        hover::HoverLineWidth,
+        hover::{HoverLineWidth, HoverOptions},
         progress::{AnalysisProgress, SourceDiscovery},
         rename::{NameClass, RenameRejection},
         semantic::SemanticHighlighter,
@@ -809,7 +813,7 @@ mod tests {
         let uses = project.references(&library, Position::new(1, 7), false).unwrap();
         assert_eq!(uses.len(), 2);
         let hover = project
-            .hover(&session, &library, Position::new(2, 4), HoverLineWidth::default())
+            .hover(&session, &library, Position::new(2, 4), HoverOptions::default())
             .unwrap();
         assert_eq!(hover.range.unwrap().start, Position::new(2, 3));
         let HoverContents::Markup(contents) = hover.contents else {
@@ -939,7 +943,7 @@ mod tests {
         let source = std::fs::read_to_string(&path).unwrap();
         let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
         let value = source_position(&source, "value : A");
-        let hover = project.hover(&session, &path, value, HoverLineWidth::default()).unwrap();
+        let hover = project.hover(&session, &path, value, HoverOptions::default()).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
@@ -960,7 +964,7 @@ mod tests {
         let source = std::fs::read_to_string(&path).unwrap();
         let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
         let copy = source_position(&source, "copy : Number");
-        let hover = project.hover(&session, &path, copy, HoverLineWidth::default()).unwrap();
+        let hover = project.hover(&session, &path, copy, HoverOptions::default()).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
@@ -983,7 +987,7 @@ mod tests {
         let option = source_position(&source, "Option (A : VType)");
         let parameter = definition_url(&path, source_position(&source, "A : VType) ="));
 
-        let short = project.hover(&session, &path, option, HoverLineWidth::default()).unwrap();
+        let short = project.hover(&session, &path, option, HoverOptions::default()).unwrap();
         let HoverContents::Markup(short) = short.contents else {
             panic!("type hover should use markup content")
         };
@@ -1017,7 +1021,7 @@ mod tests {
                 &session,
                 &path,
                 source_position(&source, "OptionModule"),
-                HoverLineWidth::default(),
+                HoverOptions::default(),
             )
             .unwrap();
         let HoverContents::Markup(long) = long.contents else {
@@ -1039,7 +1043,12 @@ mod tests {
         let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
         let line_width = HoverLineWidth::new(32).unwrap();
         let hover = project
-            .hover(&session, &path, source_position(&source, "zip (A : VType)"), line_width)
+            .hover(
+                &session,
+                &path,
+                source_position(&source, "zip (A : VType)"),
+                HoverOptions { line_width, ..HoverOptions::default() },
+            )
             .unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
@@ -1090,7 +1099,12 @@ mod tests {
         let (project, session) = ProjectState::load(&path, &overrides).unwrap();
         let line_width = HoverLineWidth::new(72).unwrap();
         let hover = project
-            .hover(&session, &path, source_position(source, "ok (A : VType)"), line_width)
+            .hover(
+                &session,
+                &path,
+                source_position(source, "ok (A : VType)"),
+                HoverOptions { line_width, ..HoverOptions::default() },
+            )
             .unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
@@ -1123,7 +1137,7 @@ mod tests {
             .unwrap();
         let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
         let hover =
-            project.hover(&session, &path, Position::new(1, 7), HoverLineWidth::default()).unwrap();
+            project.hover(&session, &path, Position::new(1, 7), HoverOptions::default()).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
@@ -1150,9 +1164,8 @@ mod tests {
             .unwrap();
         let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
-        let hover = project
-            .hover(&session, &path, Position::new(13, 19), HoverLineWidth::default())
-            .unwrap();
+        let hover =
+            project.hover(&session, &path, Position::new(13, 19), HoverOptions::default()).unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
@@ -1191,7 +1204,7 @@ mod tests {
         let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
 
         let field = project
-            .hover(&session, &path, source_position(&source, "/exit"), HoverLineWidth::default())
+            .hover(&session, &path, source_position(&source, "/exit"), HoverOptions::default())
             .unwrap();
         let HoverContents::Markup(contents) = field.contents else {
             panic!("projection hover should use markup content")
@@ -1223,7 +1236,7 @@ mod tests {
                 &session,
                 &path,
                 source_position(&source, "process/exit"),
-                HoverLineWidth::default(),
+                HoverOptions::default(),
             )
             .unwrap();
         let HoverContents::Markup(head_contents) = head.contents else {
@@ -1246,7 +1259,7 @@ mod tests {
         let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
 
         let module = project
-            .hover(&session, &path, source_position(&source, "/i64"), HoverLineWidth::default())
+            .hover(&session, &path, source_position(&source, "/i64"), HoverOptions::default())
             .unwrap();
         let HoverContents::Markup(contents) = module.contents else {
             panic!("projection hover should use markup content")
@@ -1284,7 +1297,7 @@ mod tests {
         let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
 
         let application = project
-            .hover(&session, &path, source_position(&source, " Int64 0"), HoverLineWidth::default())
+            .hover(&session, &path, source_position(&source, " Int64 0"), HoverOptions::default())
             .unwrap();
         let HoverContents::Markup(contents) = application.contents else {
             panic!("term hover should use markup content")
@@ -1298,7 +1311,7 @@ mod tests {
         assert_eq!(application.range.unwrap().start, source_position(&source, "! id Int64"));
 
         let literal = project
-            .hover(&session, &path, source_position(&source, "0;"), HoverLineWidth::default())
+            .hover(&session, &path, source_position(&source, "0;"), HoverOptions::default())
             .unwrap();
         let HoverContents::Markup(contents) = literal.contents else {
             panic!("term hover should use markup content")
@@ -1311,7 +1324,7 @@ mod tests {
         );
 
         let block = project
-            .hover(&session, &path, source_position(&source, "end"), HoverLineWidth::default())
+            .hover(&session, &path, source_position(&source, "end"), HoverOptions::default())
             .unwrap();
         let HoverContents::Markup(contents) = block.contents else {
             panic!("term hover should use markup content")

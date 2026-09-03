@@ -21,24 +21,24 @@ impl ZydecoExtension {
         Ok((command, arguments))
     }
 
-    fn with_default_hover_line_width(
-        options: Option<zed::serde_json::Value>,
+    fn workspace_configuration(
+        settings: Option<zed::serde_json::Value>,
     ) -> zed::Result<zed::serde_json::Value> {
-        let mut options = options.unwrap_or_else(|| zed::serde_json::json!({}));
+        let mut settings = settings.unwrap_or_else(|| zed::serde_json::json!({}));
         {
-            let options = options.as_object_mut().ok_or_else(|| {
-                "`lsp.cajun.initialization_options` must be a JSON object".to_owned()
-            })?;
+            let settings = settings
+                .as_object_mut()
+                .ok_or_else(|| "`lsp.cajun.settings` must be a JSON object".to_owned())?;
             let hover =
-                options.entry("hover".to_owned()).or_insert_with(|| zed::serde_json::json!({}));
-            let hover = hover.as_object_mut().ok_or_else(|| {
-                "`lsp.cajun.initialization_options.hover` must be a JSON object".to_owned()
-            })?;
+                settings.entry("hover".to_owned()).or_insert_with(|| zed::serde_json::json!({}));
+            let hover = hover
+                .as_object_mut()
+                .ok_or_else(|| "`lsp.cajun.settings.hover` must be a JSON object".to_owned())?;
             hover
                 .entry("lineWidth".to_owned())
                 .or_insert_with(|| zed::serde_json::json!(ZED_HOVER_LINE_WIDTH));
         }
-        Ok(options)
+        Ok(zed::serde_json::json!({ "cajun": settings }))
     }
 }
 
@@ -54,12 +54,11 @@ impl zed::Extension for ZydecoExtension {
         Ok(zed::Command { command, args, env: worktree.shell_env() })
     }
 
-    fn language_server_initialization_options(
+    fn language_server_workspace_configuration(
         &mut self, _language_server_id: &zed::LanguageServerId, worktree: &zed::Worktree,
     ) -> zed::Result<Option<zed::serde_json::Value>> {
-        let configured =
-            LspSettings::for_worktree(LANGUAGE_SERVER_NAME, worktree)?.initialization_options;
-        Self::with_default_hover_line_width(configured).map(Some)
+        let configured = LspSettings::for_worktree(LANGUAGE_SERVER_NAME, worktree)?.settings;
+        Self::workspace_configuration(configured).map(Some)
     }
 }
 
@@ -73,21 +72,36 @@ mod tests {
     #[test]
     fn zed_hover_width_defaults_to_a_conservative_budget() {
         assert_eq!(
-            ZydecoExtension::with_default_hover_line_width(None).unwrap(),
-            json!({ "hover": { "lineWidth": 72 } })
+            ZydecoExtension::workspace_configuration(None).unwrap(),
+            json!({ "cajun": { "hover": { "lineWidth": 72 } } })
         );
     }
 
     #[test]
     fn configured_hover_width_and_unrelated_options_are_preserved() {
         let configured = json!({
-            "hover": { "lineWidth": 56, "extra": true },
+            "hover": { "lineWidth": 56, "inclusiveEnd": true },
             "unrelated": "option"
         });
 
         assert_eq!(
-            ZydecoExtension::with_default_hover_line_width(Some(configured.clone())).unwrap(),
-            configured
+            ZydecoExtension::workspace_configuration(Some(configured.clone())).unwrap(),
+            json!({ "cajun": configured })
         );
+    }
+
+    #[test]
+    fn hover_configuration_removal_reinstates_the_zed_default() {
+        let configured = json!({ "hover": { "inclusiveEnd": true } });
+        assert_eq!(
+            ZydecoExtension::workspace_configuration(Some(configured)).unwrap(),
+            json!({ "cajun": { "hover": { "lineWidth": 72, "inclusiveEnd": true } } })
+        );
+        assert_eq!(
+            ZydecoExtension::workspace_configuration(Some(json!({}))).unwrap(),
+            ZydecoExtension::workspace_configuration(None).unwrap()
+        );
+        assert!(ZydecoExtension::workspace_configuration(Some(json!(true))).is_err());
+        assert!(ZydecoExtension::workspace_configuration(Some(json!({ "hover": [] }))).is_err());
     }
 }

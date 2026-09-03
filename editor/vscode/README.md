@@ -30,6 +30,23 @@ The extension finds `cajun` on `PATH`.
 You can instead set `cajun.server.path` to an explicit executable path.
 If neither is available, the extension offers to run the Cargo command above.
 
+## Hover
+
+To include a name or term's right endpoint when selecting hover information and choose a narrower column budget:
+
+```json
+{
+  "cajun.hover.inclusiveEnd": true,
+  "cajun.hover.lineWidth": 72
+}
+```
+
+`cajun.hover.inclusiveEnd` defaults to `false`; enabling it can make short names easier to hover near their right edge.
+`cajun.hover.lineWidth` is a positive integer, defaults to 100, and also controls completion type details.
+Changes apply to subsequent requests without reloading the window or restarting Cajun.
+Removing an override restores its default, and invalid values leave the last valid server settings in place.
+An already open popover may need to be dismissed and reopened.
+
 ## Formatting
 
 Formatting policy comes from `@[format(...)]` annotations in the source, not from editor settings:
