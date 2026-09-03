@@ -4,6 +4,11 @@
 //! fact in a clone of the finished arena and asserts the lint reports the
 //! matching error variant. A lint that cannot be shown to catch a seeded
 //! defect has no credibility, per `docs/proposals/tyck-lint.md`.
+//!
+//! `DanglingReference` has no dedicated mutation: removing a node needs a
+//! `remove` on `ArenaSparse`, which the container does not expose, and
+//! identifiers cannot be fabricated through the public arena API. The variant
+//! is exercised indirectly whenever a reference target loses its row.
 
 use zydeco_statics::{
     arena::StaticsArena,
@@ -12,6 +17,8 @@ use zydeco_statics::{
 };
 use zydeco_tests::utils::SourceCase;
 
+// The `fn` parameters are annotated on purpose: an annotation-free parameter is
+// checked before its use sites and the check dies with `MissingSolution`.
 const FIXTURE: &str = r#"
 begin
   let Boolean =

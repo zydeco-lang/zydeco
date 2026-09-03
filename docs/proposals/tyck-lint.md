@@ -1,22 +1,28 @@
 # A Post-Check Type Lint for the Typed Arena
 
-Type checking is the last phase that reasons about the source program as a whole,
-and everything after it — linking, Stack IR, native and WebAssembly backends — consumes
-its output on faith.
-That output is not produced in one pass, however: the checker allocates typed nodes with
-provisional hole annotations, solves the holes in a finish phase, rewrites every kind and
-type by normalization in place, and type-directed elaborations (monadic blocks, generalized
-comatches) rebuild parts of the term through a separate construction API.
-A missed site in any of these mutations leaves an artifact that is internally inconsistent
-while every local judgment was individually correct.
+Type checking is the last phase that reasons about the source program as a whole, and
+everything after it — linking, Stack IR, native and WebAssembly backends — consumes its
+output on faith.
 
-This document proposes a *type lint*: an optional pass that re-validates the finished arena
-after checking succeeds.
+The artifact is built by staged mutation, and each stage can miss a site.
+Types and kinds are allocated as `Fillable` cells whose solutions are substituted only in
+the finish phase, after which normalization rewrites every kind and type in place;
+a fill or rewrite that misses a site leaves a stale neighbor.
+Type-directed elaborations — the monadic algebra translation, copattern elaboration —
+rebuild parts of the term through a separate construction API.
+The annotations themselves are split across node-keyed tables, surface-term-keyed facts,
+and co-located kind indexes, whose provenance entries rechecking and recursion retries
+overwrite.
+Every local judgment can be individually correct while the whole is incoherent.
+
+This document specifies the *type lint*: an optional pass that re-validates the finished
+arena after a successful check.
 The name follows GHC's `-dcore-lint`, which re-typechecks the compiler's internal Core
 language after every transforming pass and has been one of its most productive bug-finding
 tools.
-Zydeco's lint plays the same role for `StaticsArena`: it re-derives kinds and types
-bottom-up over the typed representation and compares them with the recorded annotations.
+The lint is two passes: an arena-wide well-formedness pass over the annotation tables,
+and a re-derivation pass that reconstructs kinds, constructor shapes, and witness scope
+from structure.
 
 ## What the Lint Can and Cannot Establish
 
@@ -32,39 +38,17 @@ that staged mutation can silently break.
 
 Concretely, the lint targets four bug classes:
 
-1. **Scope escape.** An abstract-type witness (`AbstId`) or definition (`DefId`) referenced
-   outside the binder that introduced it. With existentials, packages, and package-dependent
-   arrows, witness identity is the classic soundness-bug class in this language.
-2. **Stale or desynchronized annotations.** A recorded type that disagrees with a
-   bottom-up re-synthesis of the node's children — for example, a type that hole
-   resolution or normalization rewrote incompletely.
-3. **Structural well-formedness failures.** Unfilled holes surviving the finish phase,
-   annotations pointing at nodes of the wrong sort or at nothing, kinds that disagree
-   with the structure of their type.
+1. **Witness escape.** An abstract-type witness (`AbstId`) referenced outside the binder
+   that introduced it. With existentials, packages, and package-dependent arrows, witness
+   identity is the classic soundness-bug class in this language.
+2. **Stale or desynchronized annotations.** A recorded type that disagrees with the
+   structure of the node it describes — for example, a type that hole resolution or
+   normalization rewrote incompletely.
+3. **Well-formedness failures.** Unfilled holes surviving the finish phase, annotations
+   pointing at nodes of the wrong sort or at nothing, kinds that disagree with the
+   structure of their type.
 4. **Elaboration corruption.** Nodes rebuilt by the monadic algebra translation or
    copattern elaboration carrying annotations that no longer match their structure.
-
-## Why Staged Mutation Makes This Valuable Here
-
-Three properties of the current checker make internal inconsistency a realistic failure
-mode rather than a theoretical one:
-
-- **Holes are solved after the fact.** Types and kinds live as `Fillable` cells;
-  inference decisions are recorded as `FillId` solutions and only substituted during the
-  finish phase (`resolve_holes_and_collect`), after which every kind and type is
-  normalized in place (`normalize_and_validate_k` in
-  [`lang/statics/src/check/mod.rs`](../../lang/statics/src/check/mod.rs)).
-  A solved fill or rewrite that misses a site leaves a stale neighbor.
-- **Elaborations rebuild terms.** `elaborate::monadic` consumes checked-term handles and
-  reconstructs terms through `MonConstruct`; copattern elaboration generates matches and
-  abstractions. These are Zydeco's analogue of Core-to-Core passes.
-- **Annotations live in several side tables.** Node-keyed tables
-  (`annotations_value`, `annotations_compu`, `annotations_vpat`, `annotations_tpat`,
-  `annotations_abst`, `annotations_var`), surface-term-keyed facts (`term_facts`),
-  and co-located kind indexes on type nodes must all agree.
-  Rechecking and recursion retries replace provenance representatives
-  (see `docs/proposals/arena-gc.md` for the retained/transient split),
-  and nothing today re-establishes that the tables stayed in sync.
 
 ## The Shape of the Typed Artifact
 
@@ -72,9 +56,11 @@ The lint operates on the arena *after* the checker has finished and stripped its
 state (`strip_checker_state` drops the per-node typing environments), so it may rely only on:
 
 - the node stores `kinds_pre`, `kpats`, `tpats`, `types_pre`, `vpats`, `values`, `compus`;
-- the node-keyed annotation tables listed above, plus the co-located kind of each type node;
+- the node-keyed annotation tables (`annotations_value`, `annotations_compu`,
+  `annotations_vpat`, `annotations_tpat`, `annotations_abst`, `annotations_var`), plus the
+  co-located kind of each type node;
 - the definition tables (`datas`, `codatas`, `seals`, `type_definitions`, `value_aliases`,
-  `inlinables`, `generated_defs`, `annotations_var`);
+  `inlinables`, `generated_defs`);
 - the normalized forms recorded by the finish phase (`kinds_normalized`, `types_normalized`).
 
 Two facts about the artifact shape the design.
@@ -131,14 +117,14 @@ normalization.
   nodes; and every child reference inside an allocated kind, type, value, computation,
   or pattern resolves in its arena.
 
-The well-formedness pass needs no type-level equality reasoning — only the leaf-resolving kind
-equivalence above — and runs in one linear pass over the arena.
+The pass needs no type-level equality reasoning — only the leaf-resolving kind equivalence
+above — and runs in one linear pass over the arena.
 
 ## Structural Re-Derivation from the Roots
 
-The re-derivation pass reconstructs annotations the way the checker built them, but over the typed
-representation rather than the surface, and synthesizing only — bidirectional checking is
-irrelevant once every binder is explicit.
+The re-derivation pass reconstructs annotations the way the checker built them, but over
+the typed representation rather than the surface, and synthesizing only — bidirectional
+checking is irrelevant once every binder is explicit.
 The traversal starts from the annotation roots: the root `TermAnnId`, every recorded
 definition body (`value_aliases`, `inlinables`, `type_definitions`), every data and codata
 arm, and every sealed type.
@@ -149,8 +135,11 @@ Orphaned nodes are simply never visited, which is the correct treatment of retri
 Write `Ψ ⊢ A : K` for "type node `A` has co-located kind `K`, derivable from its
 children", where `Ψ` supplies kinds for type variables (`annotations_var`) and abstract
 witnesses (`annotations_abst`).
-All comparisons are between *normalized* forms (`normalized_at`, `normalized_kind_at`),
-because definitional equality, not syntactic equality, is what the checker guarantees.
+All comparisons are between *normalized* forms, because definitional equality, not
+syntactic equality, is what the checker guarantees.
+Every allocated type node is kinded this way, orphaned nodes included; child-sort
+violations (an arrow whose domain is not a value type, a product component that is not)
+report against the child.
 
 ```text
 Var(d)        : Ψ(d)
@@ -168,54 +157,72 @@ PackPi(...)   : CType, domain : VType, codomain : CType under its witnesses
 ValPi(b, C)   : VType, with Ψ, b ⊢ C : VType
 Prod(A*)      : VType, with each Ai : VType
 Exists(b, B)  : VType, with Ψ, b ⊢ B : VType
-Data(d), CoData(c) : the parameter arrow kind derived from the definition's telescope
 ```
 
 The binder of `Abs`, `Forall`, `Exists`, and `ValPi`'s type case is a `TypeBinder` that
 introduces both a pattern and an abstract witness; the witness receives the pattern's
 kind, and the body is kinded under both.
+Parameter telescopes of `Data` and `CoData` heads are deferred; their existence is the
+well-formedness pass's check.
 
-### Typing rules
+### Constructor shapes
 
-Write `Γ ⊢v V ⇓ A` and `Γ ⊢c C ⇓ B` for synthesis of the recorded annotation from the
-node's children.
-The core call-by-push-value rules, as verified against the checker:
+For terms, the pass judges constructor shapes — the judgments whose conclusion is a fixed
+type former around the node's single operand:
 
 ```text
 Γ ⊢c C ⇓ B                    Γ ⊢v V ⇓ A
 ─────────────────────         ─────────────────────
 Γ ⊢v {C} ⇓ Thk B              Γ ⊢c ret V ⇓ Ret A
 
-Γ ⊢v V ⇓ Thk B                Γ ⊢c C ⇓ A -> B     Γ ⊢v V ⇓ A
-──────────────────────        ─────────────────────────────────
-Γ ⊢c ! V ⇓ B                  Γ ⊢c C V ⇓ B
-
-Γ ⊢c C ⇓ Ret A    Γ, p : A ⊢c C' ⇓ B        Γ ⊢v V ⇓ A    Γ, p : A ⊢c C' ⇓ B
-────────────────────────────────────        ─────────────────────────────────
-Γ ⊢c do p <- C; C' ⇓ B                       Γ ⊢c let p = V in C' ⇓ B
+Γ ⊢v V ⇓ A                    Γ ⊢v () ⇓ Unit          Γ ⊢v lit ⇓ its primitive
+──────────────────────
+Γ ⊢v #f = V ⇓ #f :: A
 ```
 
-The remaining cases follow the same pattern: `TAbs`/`TApp` introduce and instantiate
-`Forall`; `VAbs` introduces `Arrow` (or `PackPi` for package-dependent abstractions);
-`Fix` types its body at the arrow being defined; `Match` arms share one branch type;
-`CoMatch` inhabits the codata type named by its hint, each arm agreeing with its
-destructor's declared result; `Dtor` selects that declared result; `Ctor` inhabits the
-data type owning the constructor, payload checked against the arm type; `VCons` builds
-`Prod` of the component types; `SCons` opens an `Exists` telescope with its static prefix.
-Value-level `ValAbs`/`ValApp` mirror the computation-level rules through `ValPi`.
+A shape judgment fires only when its operand is free of abstract identities and of type
+applications other than `Thk` and `Ret` themselves; the guard is stated below.
 
-The re-derivation pass checks, for every visited node, that the synthesized annotation equals the recorded
-one up to normalized equality, and that every `Var`/`Abst` reference is bound by an
-enclosing binder or is a global (a global definition, a sealed type, or an existential
-witness opened by an enclosing package elimination).
-Unbound and escaped references are reported even when the referenced table row exists,
-which is what distinguishes this from the well-formedness pass's existence check.
+### The deferral principle
+
+Every other typing judgment compares the recorded annotation of one node against the
+recorded annotation of another — tail against let, codomain against body, result against
+declaration, pattern against domain — and no such judgment can fire on this artifact.
+A shared node used at several instantiations of an enclosing universal, or inside a
+package member elaborated per import, carries a single annotation, and its recording
+sites legitimately disagree: generic against instantiated, labeled against plain.
+The finished arena cannot distinguish those from corruption, so these judgments are
+deferred rather than made noisy.
+Product shapes are deferred for the same reason — composite operands multiply the
+sensitivity — and definition *scoping* is deferred with them: references cross import and
+alias boundaries ("repeated imports share that root"), and the arena records no
+per-reference binding context.
+Definition existence remains the well-formedness pass's check.
+The deferred judgments could return only if the arena recorded, per use site, which
+instantiation a shared node was checked under.
+
+### Witness scope
+
+Every abstract-type witness reachable from the annotation roots must be bound by an
+enclosing structural binder or be ambient.
+Ambient witnesses are sealed types, existential skolems, definition-denoted identities,
+and named witnesses: recursive type components allocate their identities together, and
+package openings bind theirs through the elaborated program, so neither lives under one
+structural binder; a name makes a witness an exported identity rather than an accidental
+leak.
+Unbound witnesses are reported even when their table rows exist, which is what
+distinguishes this from the well-formedness pass's existence check.
+
+The scoping account this implements is `docs/proposals/term.md`: a file is one term,
+blocks dependency-order mobile bindings into ordinary telescopes, and the elaborated form
+obeys strict lexical scope.
+Computation recursion is the explicit `fix` form and stays structural.
 
 ## Failure Semantics and Gating
 
 A lint failure is a compiler bug, never a user diagnostic.
 The pass returns typed `LintError` values carrying the offending identifiers and both the
-recorded and re-derived forms; the gated entry point reports them as an internal compiler
+recorded and expected forms; the gated entry point reports them as an internal compiler
 error and aborts, the way `debug_assert` failures abort.
 
 The gate is a typed option, not a global flag: `CommandCompiler` grows a builder flag
@@ -227,79 +234,38 @@ unaffected unless they opt in.
 
 ## Testing the Verifier
 
-A lint that has never been shown to catch a seeded defect has no credibility, so mutation
-tests are part of the deliverable, paired with clean-program counterparts as the repo's
-testing principles require:
-
-1. Check a representative program, clone the finished arena, corrupt exactly one fact
-   (swap an annotation, detach a node, leave a fill unresolved, point a variable at a
-   binder that does not enclose it), and assert the lint reports the matching error
-   variant.
-2. Run the same corpus with the lint enabled and assert silence, which guards against
-   false positives — the property that makes the lint trustworthy enough to run in CI.
-
+A lint that has never been shown to catch a seeded defect has no credibility, so every
+check ships with mutation tests: check a program, clone the finished arena, corrupt
+exactly one fact, and assert the matching error variant fires.
+Clean-program counterparts assert silence over the corpus, which guards against false
+positives — the property that makes the lint trustworthy enough to run in CI.
 The corpus should exercise the elaboration-heavy paths (monadic blocks, generalized
 comatches, packages) because those rebuild the most structure after checking.
+The tests live in `lang/tests/tests/tyck_lint.rs`.
 
-## Phasing and Remaining Uncertainty
+## Status and Remaining Uncertainty
 
-The well-formedness pass has landed in `lang/statics/src/validate/lint.rs`, gated behind
-`CommandCompiler::with_lint_types` and the `--lint-types` CLI flag, with mutation tests in
-`lang/tests/tests/tyck_lint.rs`.
-Its first run over the whole `lib/` corpus produced zero findings after three invariant
-corrections, recorded in the well-formedness section above and in
-[`../logs/2026-09-02-tyck-lint.md`](../logs/2026-09-02-tyck-lint.md):
-kind pairs must be compared through leaf-resolving normalized equivalence; witness kinds
-are not arena-wide table entries; and hole term nodes are legitimate as foreign-import
-placeholders.
-The re-derivation pass has landed in `lang/statics/src/validate/rederive.rs` and runs as part of the same
-gate; its corpus run forced a substantial narrowing of the judgment inventory, and its
-coverage is deliberately partial:
+Both passes have landed: well-formedness in `lang/statics/src/validate/lint.rs`,
+re-derivation in `lang/statics/src/validate/rederive.rs`, gated behind
+`CommandCompiler::with_lint_types` and the `--lint-types` CLI flag.
+Every checkable program under `lib/` passes the gate with zero findings.
 
-- **Kinds, arena-wide.** Every allocated type node's co-located kind is re-derived from its
-  children, including child-sort judgments (arrow domains are value types, codomains are
-  computation types, and so on). This is the widest re-derivation check and it holds over the
-  entire corpus, orphaned nodes included.
-- **Constructor shapes.** `{C} : Thk B`, `ret V : Ret A`, named introduction, units, and
-  literals are re-derived whenever their single operand is free of abstract identities and
-  non-constructor type applications.
-- **Witness scope.** Every abstract-type witness reachable from the annotation roots must
-  be bound by an enclosing structural binder or be ambient. Ambient witnesses are sealed
-  types, existential skolems, definition-denoted identities, and named witnesses: recursive
-  type components allocate their identities together and package openings bind theirs
-  through the elaborated program, so neither lives under one structural binder.
-- **Deferred.** Equality-with-node judgments (tail agreement, abstraction codomains,
-  application results, projection results, pattern-versus-domain), product shapes, and
-  definition scoping do not judge. A shared node used at several instantiations of an
-  enclosing universal, or inside a package member elaborated per import, carries one
-  annotation that legitimately differs between recording sites, and the finished arena
-  cannot distinguish those from corruption; definition references likewise cross import
-  and alias boundaries whose context the arena does not record per reference. Existence
-  remains the well-formedness pass's check.
-
-The canonical scoping account is `docs/proposals/term.md`: a file is one term, blocks
-dependency-order mobile bindings into ordinary telescopes, and the elaborated form obeys
-strict lexical scope. An earlier draft of this proposal assumed a recursive top level;
-that assumption was wrong and has been removed.
 Questions that remain open:
 
 - **Skolem scope discipline.** Skolems are currently ambient, like every named witness;
   whether a finer discipline is recoverable from the finished arena is open.
 - **`Label` payloads.** The design restricts named values to value types; whether every
-  `Type::Label` in a finished arena accordingly wraps a `VType`-kinded payload (and never
-  a computation type) should be asserted, but the invariant needs confirmation across
-  the standard library first.
-- **`ManifestKind` and `SCons` rules.** The precise kinded/typed shapes of manifest kind
-  components and package witness prefixes are stated above at the level of confidence the
-  current reading supports and will be pinned down rule-by-rule while implementing.
-- **Instantiation-resilient judgments.** The deferred judgments could return if the arena
-  ever recorded, per use site, which instantiation a shared node was checked under; whether
-  that bookkeeping is worth its cost is open.
+  `Type::Label` in a finished arena accordingly wraps a `VType`-kinded payload should be
+  asserted, but the invariant needs confirmation across the standard library first.
+- **`ManifestKind` and `SCons` shapes.** The precise kinded/typed shapes of manifest kind
+  components and package witness prefixes remain to be pinned down.
+- **Surviving `Type::Var`.** Definition-heavy arenas contain none: bound type variables
+  are referenced through abstract witnesses, and definition-backed variables are
+  substituted during normalization. Whether any legitimate arena retains one is open;
+  if none does, a surviving `Var` can become an immediate finding.
 
 Related documents: the coverage pass this proposal sits beside is described in
 [`exhaustiveness.md`](exhaustiveness.md); the arena's retained/transient split in
 [`arena-gc.md`](arena-gc.md); query-owned intrinsics in
 [`query-owned-statics.md`](query-owned-statics.md); normalization in
-[`normalization.md`](normalization.md).
-Implementation worklogs should record mutation-test results and any rule corrections as
-they surface.
+[`normalization.md`](normalization.md); the scoping account in [`term.md`](term.md).

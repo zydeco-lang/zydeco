@@ -130,10 +130,11 @@ Each phase generally includes `syntax`, `arena`, `err`, `fmt`, and `span` module
   alternatives, and the principles by which a later decision should be judged.
 - Put stable design proposals in `docs/proposals/`. Explain the motivating problem, relevant constraints,
   chosen invariants, representative examples, and remaining uncertainty.
-- Put chronological implementation worklogs in `docs/logs/`. Record attempts, observations, failures,
-  measurements, decisions, and unresolved questions so later work can build on the evidence.
-- Cross-link a design proposal and its worklogs instead of duplicating their contents. Keep the stable design
-  account in the proposal or canonical architecture document, and keep the history of how it was reached in the worklog.
+- Worklogs under `docs/logs/` are optional scratch records for in-flight work, not durable artifacts.
+  The implementation and the stable docs must justify themselves: motivations, methods, and rules
+  belong in `docs/proposals/` or in code comments next to what they constrain. Once a worklog's
+  durable observations are folded into those places, delete it; a design history is not itself a
+  design account.
 - Keep doc examples consistent with CLI flags and scripts in the repo.
 - If you add new example projects under `lib/`, consider wiring them into `lang/tests`.
 
