@@ -10,7 +10,9 @@ use zydeco_dynamics::ProgKont;
 use zydeco_tui::{Repl, ReplError};
 
 fn main() {
-    let result = Application::default().run(Cli::parse().command);
+    let cli = Cli::parse();
+    let compiler = CommandCompiler::default().with_lint_types(cli.lint_types);
+    let result = Application { compiler }.run(cli.command);
     match result {
         | Ok(code) => std::process::exit(code),
         | Err(error) => {

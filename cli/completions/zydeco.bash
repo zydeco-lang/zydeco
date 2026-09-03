@@ -59,7 +59,7 @@ _zydeco() {
 
     case "${cmd}" in
         zydeco)
-            opts="-h -V --help --version fmt run check repl build help"
+            opts="-h -V --lint-types --help --version fmt run check repl build help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -73,7 +73,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__build)
-            opts="-t -b -r -x -h --target-os --target-arch --target --build-dir --runtime-dir --execute --help"
+            opts="-t -b -r -x -h --target-os --target-arch --target --build-dir --runtime-dir --execute --lint-types --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -119,7 +119,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__check)
-            opts="-h --help"
+            opts="-h --lint-types --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -133,7 +133,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__fmt)
-            opts="-h --check --help"
+            opts="-h --check --lint-types --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -245,7 +245,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__repl)
-            opts="-h --help"
+            opts="-h --lint-types --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -259,7 +259,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__run)
-            opts="-h --dry --help"
+            opts="-h --dry --lint-types --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0

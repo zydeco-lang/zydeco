@@ -52,6 +52,11 @@ impl TargetOs {
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 pub struct Cli {
+    /// Re-validate the finished typed arena after every successful check,
+    /// reporting internal compiler errors (debugging aid)
+    #[arg(long, global = true)]
+    pub lint_types: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }

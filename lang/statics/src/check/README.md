@@ -51,7 +51,9 @@ one translated root.
 - `alloc`, `construct`, and `destruct`: typed allocation, construction, and inspection APIs.
 - `normalize`: substitution, hole solving, scope support, and definitional normalization.
 - `elaborate::monadic`: the algebra translation and its specialized construction API.
-- `validate`: whole-program checks over typed syntax, including data/codata coverage and exhaustiveness.
+- `validate`: whole-program checks over typed syntax, including data/codata coverage and
+  exhaustiveness, plus the type lint that re-establishes the finished arena's
+  well-formedness invariants.
 - `fmt` and `source_span`: source-aware formatting and span lookup; the latter remains crate-private.
 
 The `check` module itself retains the checking rules, structured errors, least-upper-bound operations,

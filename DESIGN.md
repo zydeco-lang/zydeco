@@ -611,6 +611,11 @@ Generalized comatch clauses are first elaborated type-directly into shared argum
 after which the same pass checks argument coverage and missing destructors along every observation path.
 The [exhaustiveness design note](docs/proposals/exhaustiveness.md) explains matrix specialization,
 copattern elaboration, counterexample construction, and the invariants supplied by typed syntax.
+The same module also provides a type lint, an optional self-check of the finished arena
+behind the `--lint-types` flag; it re-establishes hole closure, annotation presence and sorts,
+paired-view agreement, and reference existence, and reports violations as internal compiler errors.
+The [type lint design note](docs/proposals/tyck-lint.md) records the invariant catalogue and the
+deferred structural re-derivation.
 This separation lets validation consume completed typed syntax without becoming more type-checking branches.
 
 ### WebAssembly backend

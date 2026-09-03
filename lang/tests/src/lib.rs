@@ -185,6 +185,39 @@ pub mod utils {
             })
         }
 
+        /// Check a source with the internal type lint enabled.
+        ///
+        /// The lint aborts on any internal inconsistency, so success here
+        /// asserts that the finished arena satisfies the lint's invariants.
+        pub fn check_linted(source: &str) -> Result<(), CaseError> {
+            Self::with_source(SourceCasePrelude::Core, source, |path| {
+                CommandCompiler::default()
+                    .with_lint_types(true)
+                    .analyze(path)
+                    .map(|_| ())
+                    .map_err(CaseError::Compile)
+            })
+        }
+
+        /// The cloned finished arena of a checked source, with its root annotation.
+        ///
+        /// Mutation tests corrupt the clone and re-run the lint directly.
+        pub fn checked_arena(
+            source: &str,
+        ) -> Result<
+            (zydeco_statics::arena::StaticsArena, zydeco_statics::syntax::TermAnnId),
+            CaseError,
+        > {
+            Self::with_source(SourceCasePrelude::Core, source, |path| {
+                let compiler = CommandCompiler::default();
+                let analysis = compiler.analyze(path).map_err(CaseError::Compile)?;
+                let checked = compiler
+                    .checked_program(&analysis)
+                    .expect("successful analysis must be checked");
+                Ok(((*checked.statics).clone(), checked.root))
+            })
+        }
+
         pub fn check_value(source: &str) -> Result<(), CaseError> {
             Self::check(&format!("ret ({source})"))
         }

@@ -15,6 +15,7 @@ _zydeco() {
 
     local context curcontext="$curcontext" state line
     _arguments "${_arguments_options[@]}" : \
+'--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
 '-h[Print help]' \
 '--help[Print help]' \
 '-V[Print version]' \
@@ -31,6 +32,7 @@ _zydeco() {
             (fmt)
 _arguments "${_arguments_options[@]}" : \
 '--check[Report files that would change without writing them, and exit unsuccessfully when at least one file would change]' \
+'--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
 '-h[Print help]' \
 '--help[Print help]' \
 '*::files -- Paths to the files to format:_files' \
@@ -39,6 +41,7 @@ _arguments "${_arguments_options[@]}" : \
 (run)
 _arguments "${_arguments_options[@]}" : \
 '--dry[Dry run (don'\''t execute)]' \
+'--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
 '-h[Print help]' \
 '--help[Print help]' \
 ':file -- Path to the file to run:_files' \
@@ -47,6 +50,7 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (check)
 _arguments "${_arguments_options[@]}" : \
+'--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
 '-h[Print help]' \
 '--help[Print help]' \
 ':file -- Path to the file to check:_files' \
@@ -54,6 +58,7 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (repl)
 _arguments "${_arguments_options[@]}" : \
+'--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -70,6 +75,7 @@ _arguments "${_arguments_options[@]}" : \
 '--runtime-dir=[Runtime directory]:RUNTIME_DIR:_files' \
 '-x[Run the program after building]' \
 '--execute[Run the program after building]' \
+'--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
 '-h[Print help]' \
 '--help[Print help]' \
 ':file -- Path to the file to compile:_files' \

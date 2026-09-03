@@ -18,6 +18,7 @@ set edit:completion:arg-completer[zydeco] = {|@words|
     }
     var completions = [
         &'zydeco'= {
+            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
             cand -h 'Print help'
             cand --help 'Print help'
             cand -V 'Print version'
@@ -31,19 +32,23 @@ set edit:completion:arg-completer[zydeco] = {|@words|
         }
         &'zydeco;fmt'= {
             cand --check 'Report files that would change without writing them, and exit unsuccessfully when at least one file would change'
+            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
             cand -h 'Print help'
             cand --help 'Print help'
         }
         &'zydeco;run'= {
             cand --dry 'Dry run (don''t execute)'
+            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
             cand -h 'Print help'
             cand --help 'Print help'
         }
         &'zydeco;check'= {
+            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
             cand -h 'Print help'
             cand --help 'Print help'
         }
         &'zydeco;repl'= {
+            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
             cand -h 'Print help'
             cand --help 'Print help'
         }
@@ -58,6 +63,7 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand --runtime-dir 'Runtime directory'
             cand -x 'Run the program after building'
             cand --execute 'Run the program after building'
+            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
             cand -h 'Print help'
             cand --help 'Print help'
         }

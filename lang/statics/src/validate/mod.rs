@@ -7,3 +7,7 @@
 /// Coverage and exhaustiveness validation for data matches and codata comatches.
 pub mod coverage;
 pub use coverage::*;
+
+/// Well-formedness lint over the finished arena.
+pub mod lint;
+pub use lint::*;

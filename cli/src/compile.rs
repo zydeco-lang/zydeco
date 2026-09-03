@@ -11,7 +11,7 @@ use zydeco_session::{
     ProgramAnalysis,
 };
 use zydeco_stackir::{BuiltinPackageLowerError, BuiltinRootLowerer, SpsLowPipeline, SpsLowProgram};
-use zydeco_statics::arena::StaticsArena;
+use zydeco_statics::{arena::StaticsArena, validate::LintChecker};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax::SpanArena};
 use zydeco_utils::pass::CompilerPass;
 
@@ -19,15 +19,43 @@ use zydeco_utils::pass::CompilerPass;
 #[derive(Default)]
 pub struct CommandCompiler {
     session: CompilerSession,
+    lint_types: bool,
 }
 
 impl CommandCompiler {
+    /// Re-validate the finished arena after every successful check.
+    ///
+    /// Lint failures are compiler bugs, so the gated entry point aborts with an
+    /// internal error report instead of returning a user diagnostic.
+    pub fn with_lint_types(mut self, enabled: bool) -> Self {
+        self.lint_types = enabled;
+        self
+    }
+
     pub fn analyze(&self, path: &Path) -> Result<Arc<ProgramAnalysis>, CompileError> {
         let analysis = self.session.analyze(path).map_err(CompileError::Analysis)?;
         match analysis.outcome() {
-            | AnalysisOutcome::Checked { .. } => Ok(analysis),
+            | AnalysisOutcome::Checked { .. } => {
+                if self.lint_types {
+                    self.lint_checked_program(&analysis);
+                }
+                Ok(analysis)
+            }
             | AnalysisOutcome::Rejected { .. } => Err(CompileError::Rejected(analysis)),
         }
+    }
+
+    fn lint_checked_program(&self, analysis: &Arc<ProgramAnalysis>) {
+        let Some(program) = self.checked_program(analysis) else {
+            unreachable!("a checked analysis materializes its program")
+        };
+        let errors = LintChecker::new(&program.statics).validate(program.root);
+        assert!(
+            errors.is_empty(),
+            "the type lint found {} internal error(s) after a successful check:\n{}",
+            errors.len(),
+            errors.iter().map(|error| format!("  - {error}")).collect::<Vec<_>>().join("\n"),
+        );
     }
 
     pub fn checked_program(

@@ -248,6 +248,13 @@ pub struct TermFacts {
     annotation: TermAnnId,
 }
 
+impl TermFacts {
+    /// The final annotation recorded for the source term.
+    pub fn annotation(&self) -> TermAnnId {
+        self.annotation
+    }
+}
+
 /// One-based index whose zero niche keeps optional source-term slots at four
 /// bytes while the wider facts remain densely packed.
 #[derive(Copy, Clone, Debug)]
