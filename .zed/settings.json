@@ -12,6 +12,11 @@
     "cajun": {
       "binary": {
         "path": "./target/debug/cajun"
+      },
+      "settings": {
+        "hover": {
+          "inclusiveEnd": true
+        }
       }
     }
   }
