@@ -6,6 +6,7 @@ pub use source::{
     AnalysisError, AnalysisOutcome, CheckedProgram, CompilerSession, CompletionAnalysis,
     CompletionError, CompletionSemantics, ExecutableError, ExecutableProgram, ProgramAnalysis,
     SourceCaches, SourceDiagnosticSite, SourceGraph, SourceId, SourceImportId, SourceLoadError,
+    TyckReport,
 };
 
 #[cfg(test)]
