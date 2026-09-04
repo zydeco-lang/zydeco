@@ -26,3 +26,45 @@ pub trait Ugly<'a, Fmter>: Pretty<'a, Fmter> {
 }
 
 impl<'a, F, T> Ugly<'a, F> for T where T: Pretty<'a, F> {}
+
+/// Flattening and rendering of destructor-view application spines.
+///
+/// A view pattern's head is an iterated application; debug formatters render it in the
+/// bracketed form `head[arg, ...]`, flattening the spine first and rendering second.
+pub struct ViewSpine;
+
+impl ViewSpine {
+    /// Flatten iterated applications into the head and its argument list.
+    ///
+    /// `decompose` peels one application node into its function and arguments,
+    /// or `None` for any other node.
+    pub fn parts<Id: Copy>(
+        view: Id, decompose: &impl Fn(Id) -> Option<(Id, Vec<Id>)>,
+    ) -> (Id, Vec<Id>) {
+        let Some((function, arguments)) = decompose(view) else {
+            return (view, Vec::new());
+        };
+        let (head, prefix) = Self::parts(function, decompose);
+        (head, prefix.into_iter().chain(arguments).collect())
+    }
+
+    /// The bracketed debug form `head[arg, ...]`.
+    pub fn bracketed<'a, Id, Fmter>(head: Id, arguments: Vec<Id>, fmter: &'a Fmter) -> RcDoc<'a>
+    where
+        Id: Pretty<'a, Fmter>,
+    {
+        if arguments.is_empty() {
+            head.pretty(fmter)
+        } else {
+            RcDoc::concat([
+                head.pretty(fmter),
+                RcDoc::text("["),
+                RcDoc::intersperse(
+                    arguments.into_iter().map(|argument| argument.pretty(fmter)),
+                    RcDoc::text(", "),
+                ),
+                RcDoc::text("]"),
+            ])
+        }
+    }
+}

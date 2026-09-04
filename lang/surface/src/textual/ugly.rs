@@ -1,6 +1,6 @@
 use super::syntax::*;
 
-pub use zydeco_syntax::{Pretty, Ugly};
+pub use zydeco_syntax::{Pretty, Ugly, ViewSpine};
 /// Formatter for textual syntax using the "ugly" surface form.
 pub struct Formatter<'arena> {
     // spans: SpanArenaTextual,
@@ -11,32 +11,14 @@ impl<'arena> Formatter<'arena> {
         Formatter { arena }
     }
 
-    fn view_pattern_head_parts(&self, view: TermId) -> (TermId, Vec<TermId>) {
-        let Term::App(Appli(terms)) = &self.arena.terms[&view] else {
-            return (view, Vec::new());
-        };
-        let Some((function, arguments)) = terms.split_first() else {
-            return (view, Vec::new());
-        };
-        let (head, prefix) = self.view_pattern_head_parts(*function);
-        (head, prefix.into_iter().chain(arguments.iter().copied()).collect())
-    }
-
     fn view_pattern_head(&'arena self, view: TermId) -> RcDoc<'arena> {
-        let (head, arguments) = self.view_pattern_head_parts(view);
-        if arguments.is_empty() {
-            head.pretty(self)
-        } else {
-            RcDoc::concat([
-                head.pretty(self),
-                RcDoc::text("["),
-                RcDoc::intersperse(
-                    arguments.into_iter().map(|argument| argument.pretty(self)),
-                    RcDoc::text(", "),
-                ),
-                RcDoc::text("]"),
-            ])
-        }
+        let (head, arguments) = ViewSpine::parts(view, &|view| {
+            let Term::App(Appli(terms)) = &self.arena.terms[&view] else {
+                return None;
+            };
+            terms.split_first().map(|(function, arguments)| (*function, arguments.to_vec()))
+        });
+        ViewSpine::bracketed(head, arguments, self)
     }
 }
 

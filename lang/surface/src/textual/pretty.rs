@@ -12,7 +12,7 @@ use context::{GrammarContext, PatternRequirement, TermPrecedence, TermRequiremen
 use pretty::{DocAllocator, RcAllocator, RcDoc};
 pub use punning::NamedTermPunningAudit;
 use punning::{PunnedPatternPayload, PunnedTermPayload, Punning};
-use zydeco_syntax::Pretty;
+use zydeco_syntax::{Pretty, ViewSpine};
 
 use crate::metadata::FormatMeta;
 
@@ -1205,19 +1205,13 @@ impl<'arena> PrettyFormatter<'arena> {
         self.pattern_with_requirement(pattern, PatternRequirement::Pattern)
     }
 
-    fn view_pattern_head_parts(&self, view: TermId) -> (TermId, Vec<TermId>) {
-        let Term::App(Appli(terms)) = &self.arena.terms[&view] else {
-            return (view, Vec::new());
-        };
-        let Some((function, arguments)) = terms.split_first() else {
-            return (view, Vec::new());
-        };
-        let (head, prefix) = self.view_pattern_head_parts(*function);
-        (head, prefix.into_iter().chain(arguments.iter().copied()).collect())
-    }
-
     fn view_pattern_head(&self, view: TermId) -> RcDoc<'arena> {
-        let (head, arguments) = self.view_pattern_head_parts(view);
+        let (head, arguments) = ViewSpine::parts(view, &|view| {
+            let Term::App(Appli(terms)) = &self.arena.terms[&view] else {
+                return None;
+            };
+            terms.split_first().map(|(function, arguments)| (*function, arguments.to_vec()))
+        });
         let head = self.term_through(head, TermPrecedence::Application);
         if arguments.is_empty() {
             head
