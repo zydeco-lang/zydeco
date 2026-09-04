@@ -14,9 +14,7 @@ use zydeco_assembly::{
         Terminator, VarId,
     },
 };
-use zydeco_syntax::{
-    BuiltinValueRole, FloatOperation, FloatType, IntegerLiteral, IntegerOperation, IntegerType,
-};
+use zydeco_syntax::{IntegerLiteral, SpareBox};
 
 /// Import namespace used by generated modules.
 ///
@@ -110,42 +108,6 @@ pub enum EmitError {
     UnsupportedIntrinsic { name: String, arity: usize },
     #[error("{what} ({value}) exceeds the wasm32 backend limit")]
     Limit { what: &'static str, value: usize },
-}
-
-#[derive(Clone, Copy)]
-enum SpareBox {
-    Opaque,
-    Unused,
-}
-
-impl SpareBox {
-    fn for_role(role: BuiltinValueRole) -> Option<Self> {
-        match role {
-            | BuiltinValueRole::Integer(
-                integer,
-                IntegerOperation::Add
-                | IntegerOperation::Sub
-                | IntegerOperation::Mul
-                | IntegerOperation::Div
-                | IntegerOperation::Mod,
-            ) => Some(if matches!(integer, IntegerType::Int64 | IntegerType::UInt64) {
-                Self::Opaque
-            } else {
-                Self::Unused
-            }),
-            | BuiltinValueRole::Float(
-                float,
-                FloatOperation::Add
-                | FloatOperation::Sub
-                | FloatOperation::Mul
-                | FloatOperation::Div,
-            ) => Some(if float == FloatType::Float64 { Self::Opaque } else { Self::Unused }),
-            | BuiltinValueRole::StrParseInt
-            | BuiltinValueRole::ReadLineAsInt
-            | BuiltinValueRole::RandomInt => Some(Self::Opaque),
-            | _ => None,
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -334,7 +296,7 @@ impl ModulePlan {
                     name: name.clone(),
                     arity: *arity,
                     mode: *mode,
-                    spare: SpareBox::for_role(*role),
+                    spare: role.spare_box(),
                 })
             })
             .collect::<Result<Vec<_>, EmitError>>()?;
@@ -861,7 +823,7 @@ impl<'a> CaseEncoder<'a> {
                 FIRST_ARGUMENT_LOCAL + Limits::u32(index, "host argument count")?,
             ));
         }
-        if let Some(spare) = SpareBox::for_role(*role) {
+        if let Some(spare) = role.spare_box() {
             match spare {
                 | SpareBox::Opaque => {
                     self.function.instruction(&WasmInstruction::I32Const(1));

@@ -87,47 +87,6 @@ impl TaggedValue {
     }
 }
 
-struct HostCall;
-
-#[derive(Clone, Copy)]
-enum SpareBox {
-    Unused,
-    Opaque,
-}
-
-impl HostCall {
-    /// Numeric arithmetic receives a hidden spare-box pointer after its source arguments.
-    fn spare_box(role: BuiltinValueRole) -> Option<SpareBox> {
-        match role {
-            | BuiltinValueRole::Integer(
-                integer,
-                IntegerOperation::Add
-                | IntegerOperation::Sub
-                | IntegerOperation::Mul
-                | IntegerOperation::Div
-                | IntegerOperation::Mod,
-            ) => Some(if matches!(integer, IntegerType::Int64 | IntegerType::UInt64) {
-                SpareBox::Opaque
-            } else {
-                SpareBox::Unused
-            }),
-            | BuiltinValueRole::Float(
-                float,
-                FloatOperation::Add
-                | FloatOperation::Sub
-                | FloatOperation::Mul
-                | FloatOperation::Div,
-            ) => {
-                Some(if float == FloatType::Float64 { SpareBox::Opaque } else { SpareBox::Unused })
-            }
-            | BuiltinValueRole::StrParseInt
-            | BuiltinValueRole::ReadLineAsInt
-            | BuiltinValueRole::RandomInt => Some(SpareBox::Opaque),
-            | _ => None,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TargetFormat {
     Elf,
@@ -831,7 +790,7 @@ impl<'a> Emit<'a> for Terminator {
                 em.asm.text.push(Instr::Comment(format!("extern: {}/{}", name, arity)));
 
                 let zydeco_extern_name = format!("zydeco_{}", name);
-                let spare_box = HostCall::spare_box(*role);
+                let spare_box = role.spare_box();
                 match spare_box {
                     | Some(SpareBox::Opaque) => {
                         let context_words = em.assembly.contexts[&id].iter().len();

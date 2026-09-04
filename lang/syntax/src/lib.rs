@@ -660,6 +660,48 @@ impl BuiltinValueRole {
             | Self::BytesSlice => 5,
         }
     }
+
+    /// The hidden spare-box argument this builtin receives after its source arguments.
+    ///
+    /// 64-bit integer and double-float arithmetic can overflow the tagged-word immediate
+    /// range, so the native and WebAssembly runtimes allocate a box for the result and
+    /// pass its spare pointer to the builtin. `None` means the builtin takes no spare.
+    pub fn spare_box(self) -> Option<SpareBox> {
+        match self {
+            | Self::Integer(
+                integer,
+                IntegerOperation::Add
+                | IntegerOperation::Sub
+                | IntegerOperation::Mul
+                | IntegerOperation::Div
+                | IntegerOperation::Mod,
+            ) => Some(if matches!(integer, IntegerType::Int64 | IntegerType::UInt64) {
+                SpareBox::Opaque
+            } else {
+                SpareBox::Unused
+            }),
+            | Self::Float(
+                float,
+                FloatOperation::Add
+                | FloatOperation::Sub
+                | FloatOperation::Mul
+                | FloatOperation::Div,
+            ) => {
+                Some(if float == FloatType::Float64 { SpareBox::Opaque } else { SpareBox::Unused })
+            }
+            | Self::StrParseInt | Self::ReadLineAsInt | Self::RandomInt => Some(SpareBox::Opaque),
+            | _ => None,
+        }
+    }
+}
+
+/// The kind of hidden spare-box argument a builtin receives for its result.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SpareBox {
+    /// A spare box pointer the builtin may fill with a boxed result.
+    Opaque,
+    /// A zero spare the builtin ignores; the result always fits an immediate.
+    Unused,
 }
 
 impl std::fmt::Display for BuiltinValueRole {
