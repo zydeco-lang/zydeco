@@ -9,6 +9,9 @@ pub mod metadata;
 /// Defines common syntax in the surface language
 pub mod syntax;
 
+/// Shared debug formatter for bitter and scoped syntax, generic over the phase arena.
+pub mod debug;
+
 #[doc = include_str!("textual/README.md")]
 pub mod textual {
     /// Author-selected layout attached to canonical textual IDs.
