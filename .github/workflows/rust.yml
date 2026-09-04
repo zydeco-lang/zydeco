@@ -58,6 +58,11 @@ jobs:
       run: cargo test-all --verbose
     - name: Run Doc Tests
       run: cargo test-doc-all --verbose
+    # `debug_assert!` disappears in release profiles; rerun the end-to-end suites
+    # with debug assertions disabled so assertion-guarded code paths are also
+    # tested in the configuration release builds actually use.
+    - name: Run Tests without Debug Assertions
+      run: RUSTFLAGS="-C debug-assertions=off" cargo test -p zydeco-tests --test compile --test exec --verbose
 
   tree-sitter:
 
