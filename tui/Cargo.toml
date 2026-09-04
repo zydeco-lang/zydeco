@@ -26,3 +26,6 @@ tempfile = { workspace = true }
 [[bin]]
 name = "zydeco-tui"
 path = "src/main.rs"
+
+[lints]
+workspace = true

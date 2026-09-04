@@ -22,3 +22,6 @@ strum = { workspace = true }
 [lib]
 doctest = false
 proc-macro = true
+
+[lints]
+workspace = true

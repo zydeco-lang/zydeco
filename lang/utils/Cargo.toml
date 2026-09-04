@@ -23,3 +23,6 @@ derive_more = { workspace = true, features = [
     "index",
     "into_iterator",
 ] }
+
+[lints]
+workspace = true

@@ -42,3 +42,6 @@ path = "src/main.rs"
 
 # [lib]
 # doctest = false
+
+[lints]
+workspace = true

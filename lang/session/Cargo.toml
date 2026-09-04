@@ -29,3 +29,6 @@ zydeco-dynamics = { workspace = true }
 zydeco-stackir = { workspace = true }
 zydeco-assembly = { workspace = true }
 zydeco-amd64 = { workspace = true }
+
+[lints]
+workspace = true

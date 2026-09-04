@@ -14,3 +14,6 @@ zydeco-syntax = { workspace = true }
 zydeco-assembly = { workspace = true }
 thiserror = { workspace = true }
 wasm-encoder = { workspace = true }
+
+[lints]
+workspace = true

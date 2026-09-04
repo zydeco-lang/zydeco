@@ -10,3 +10,6 @@ zydeco-cli = { path = "../../cli" }
 zydeco-stackir = { workspace = true }
 thiserror = { workspace = true }
 tempfile = { workspace = true }
+
+[lints]
+workspace = true

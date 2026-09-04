@@ -32,6 +32,11 @@ repository = "https://github.com/zydeco-lang/zydeco"
 license = "MIT"
 readme = "README.md"
 
+[workspace.lints.clippy]
+# `debug_assert!` is compiled out under release profiles, so a mutating call in
+# its argument changes behavior between debug and release builds.
+debug_assert_with_mut_call = "warn"
+
 [workspace.dependencies]
 # zydeco
 zydeco-utils = { path = "lang/utils" }

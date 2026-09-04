@@ -17,3 +17,6 @@ zydeco-statics = { workspace = true }
 zydeco-stackir = { workspace = true }
 zydeco-assembly = { workspace = true }
 derive_more = { workspace = true, features = ["as_ref", "display"] }
+
+[lints]
+workspace = true
