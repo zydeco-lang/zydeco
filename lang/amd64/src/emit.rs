@@ -445,14 +445,19 @@ impl<'e> CompilerPass for Emitter<'e> {
             Instr::Extern("zydeco_ffi_encode_u64".to_string()),
         ]);
 
-        // Emit the externs
-        for external in self.assembly.externs.iter() {
-            let label = match external {
+        // Emit the externs. The arena's extern order is not stable across runs, so
+        // sort the declarations to keep emitted assembly byte-reproducible.
+        let mut externs = self
+            .assembly
+            .externs
+            .iter()
+            .map(|external| match external {
                 | sa::Extern::Host { name, .. } => format!("zydeco_{name}"),
                 | sa::Extern::Foreign(import) => self.foreign_symbol(&import.target.symbol),
-            };
-            self.asm.text.push(Instr::Extern(label));
-        }
+            })
+            .collect::<Vec<_>>();
+        externs.sort();
+        self.asm.text.extend(externs.into_iter().map(Instr::Extern));
 
         // Emit host-to-Zydeco resumption bridges. Each bridge is entered by a
         // SysV call when Rust invokes it, so its entry parity is misaligned;
