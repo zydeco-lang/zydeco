@@ -2726,6 +2726,16 @@ dependencies = [
  "wasm-encoder",
  "zydeco-assembly",
  "zydeco-syntax",
+ "zydeco-wasm-common",
+]
+
+[[package]]
+name = "zydeco-wasm-common"
+version = "0.3.0"
+dependencies = [
+ "thiserror",
+ "wasm-encoder",
+ "zydeco-syntax",
 ]
 
 [[package]]
@@ -2737,4 +2747,5 @@ dependencies = [
  "wasmparser",
  "zydeco-stackir",
  "zydeco-syntax",
+ "zydeco-wasm-common",
 ]

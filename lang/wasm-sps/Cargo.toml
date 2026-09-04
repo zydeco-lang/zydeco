@@ -11,6 +11,7 @@ description = "Structured SPSLow-to-WebAssembly backend for Zydeco"
 
 [dependencies]
 zydeco-syntax = { workspace = true }
+zydeco-wasm-common = { workspace = true }
 zydeco-stackir = { workspace = true }
 thiserror = { workspace = true }
 wasm-encoder = { workspace = true }

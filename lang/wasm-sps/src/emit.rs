@@ -1,11 +1,9 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::collections::HashMap;
 
 use thiserror::Error;
 use wasm_encoder::{
-    BlockType, CodeSection, ConstExpr, DataSection, ElementSection, Elements, EntityType,
-    ExportKind, ExportSection, Function, FunctionSection, GlobalSection, GlobalType, ImportSection,
-    Instruction as WasmInstruction, MemArg, MemorySection, MemoryType, Module, NameMap,
-    NameSection, RefType, TableSection, TableType, TypeSection, ValType,
+    BlockType, CodeSection, ConstExpr, Function, FunctionSection, GlobalType, ImportSection,
+    Instruction as WasmInstruction, Module, NameMap, NameSection, TypeSection, ValType,
 };
 use zydeco_stackir::{
     SpsLowProgram,
@@ -14,15 +12,14 @@ use zydeco_stackir::{
         VPatId, ValueId, ValuePattern,
     },
 };
-use zydeco_syntax::{IntegerLiteral, Literal, SpareBox};
+use zydeco_syntax::Literal;
+use zydeco_wasm_common::{
+    AllocFunction, EncodedScalar, HostCallKind, HostImport, HostSections, Intrinsics, Limits,
+    PointerLocal, ProductFields, RuntimeWord, StaticString, StringTable, WASM_PAGE_BYTES,
+    WORD_BYTES, WORD_MEMORY, WasmEmitError, WasmSections, WordEmitter,
+};
 
-/// Import namespace shared with the abstract-machine WebAssembly backend.
-///
-/// Returning functions accept their SPS arguments as `i64` words and return
-/// one `i64`. Control functions return four `i64` words: argument count,
-/// closure, first argument, and second argument. Operations that can produce a
-/// boxed 64-bit scalar receive a trailing `i32` spare-box address.
-pub const HOST_MODULE: &str = "zydeco";
+pub use zydeco_wasm_common::{HOST_MODULE, WasmModule};
 
 const CASE_TYPE: u32 = 0;
 const ALLOC_TYPE: u32 = 1;
@@ -30,30 +27,9 @@ const PAIR_TYPE: u32 = 2;
 const ENTRY_TYPE: u32 = 3;
 const FIRST_IMPORT_TYPE: u32 = 4;
 
-const WASM_PAGE_BYTES: u32 = 64 * 1024;
-const WORD_BYTES: u32 = 8;
-
 const HEAP_POINTER_GLOBAL: u32 = 0;
 const PROGRAM_COUNTER_GLOBAL: u32 = 1;
 const AMBIENT_STACK_GLOBAL: u32 = 2;
-
-const WORD_MEMORY: MemArg = MemArg { offset: 0, align: 3, memory_index: 0 };
-
-/// An encoded core WebAssembly module.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct WasmModule {
-    bytes: Vec<u8>,
-}
-
-impl WasmModule {
-    pub fn as_bytes(&self) -> &[u8] {
-        &self.bytes
-    }
-
-    pub fn into_bytes(self) -> Vec<u8> {
-        self.bytes
-    }
-}
 
 /// Direct structured `SPS_l`-to-WebAssembly emitter.
 pub struct Emitter<'a> {
@@ -91,29 +67,12 @@ pub enum EmitError {
     OperatorCalledAsFunction(String),
     #[error("SPS WebAssembly backend cannot import native foreign symbol `{0}`")]
     UnsupportedForeignImport(String),
-    #[error("unresolved integer literal reached SPS WebAssembly emission")]
-    UnresolvedInteger,
     #[error("unsupported SPS intrinsic `{name}/{arity}` in the WebAssembly backend")]
     UnsupportedIntrinsic { name: String, arity: usize },
     #[error("invalid SPS coproduct match: constructor arms cannot be mixed with a catch-all arm")]
     InvalidCoprodMatch,
-    #[error("{what} ({value}) exceeds the wasm32 backend limit")]
-    Limit { what: &'static str, value: usize },
-}
-
-#[derive(Clone)]
-struct HostImport {
-    function: u32,
-    name: String,
-    arity: usize,
-    mode: HostCallMode,
-    spare: Option<SpareBox>,
-}
-
-#[derive(Clone, Copy)]
-struct StaticString {
-    offset: u32,
-    length: u32,
+    #[error(transparent)]
+    Common(#[from] WasmEmitError),
 }
 
 struct MemoryLayout {
@@ -125,32 +84,17 @@ impl MemoryLayout {
     fn new(static_bytes: usize) -> Result<Self, EmitError> {
         let static_bytes = Limits::u32(static_bytes, "static data size")?;
         let heap_base = Limits::align(
-            static_bytes.checked_add(WORD_BYTES).ok_or(EmitError::Limit {
+            static_bytes.checked_add(WORD_BYTES).ok_or(WasmEmitError::Limit {
                 what: "static data end",
                 value: static_bytes as usize,
             })?,
             WORD_BYTES,
         )?;
-        let initial_end = heap_base
-            .checked_add(WASM_PAGE_BYTES)
-            .ok_or(EmitError::Limit { what: "initial memory size", value: heap_base as usize })?;
+        let initial_end = heap_base.checked_add(WASM_PAGE_BYTES).ok_or(WasmEmitError::Limit {
+            what: "initial memory size",
+            value: heap_base as usize,
+        })?;
         Ok(Self { heap_base, initial_pages: u64::from(initial_end.div_ceil(WASM_PAGE_BYTES)) })
-    }
-}
-
-struct Limits;
-
-impl Limits {
-    fn u32(value: usize, what: &'static str) -> Result<u32, EmitError> {
-        u32::try_from(value).map_err(|_| EmitError::Limit { what, value })
-    }
-
-    fn align(value: u32, alignment: u32) -> Result<u32, EmitError> {
-        debug_assert!(alignment.is_power_of_two());
-        value
-            .checked_add(alignment - 1)
-            .map(|value| value & !(alignment - 1))
-            .ok_or(EmitError::Limit { what: "aligned memory address", value: value as usize })
     }
 }
 
@@ -243,7 +187,7 @@ impl LocalPlan {
 
     fn take(next: &mut u32, what: &'static str) -> Result<u32, EmitError> {
         let local = *next;
-        *next = next.checked_add(1).ok_or(EmitError::Limit { what, value: usize::MAX })?;
+        *next = next.checked_add(1).ok_or(WasmEmitError::Limit { what, value: usize::MAX })?;
         Ok(local)
     }
 
@@ -261,6 +205,11 @@ impl LocalPlan {
 
     fn pattern(&self, pattern: VPatId) -> Result<u32, EmitError> {
         self.patterns.get(&pattern).copied().ok_or(EmitError::MissingPattern(pattern))
+    }
+
+    /// The pointer temporary shared by the word-emission sequences.
+    fn pointer(&self) -> PointerLocal {
+        PointerLocal::I64(self.scratch_word)
     }
 }
 
@@ -313,17 +262,13 @@ impl ModulePlan {
             })
             .collect::<Vec<_>>();
         string_values.sort_unstable();
-        let mut static_data = vec![0; WORD_BYTES as usize];
-        let mut strings = HashMap::new();
-        for value in string_values {
+        let string_entries = string_values.into_iter().map(|value| {
             let sps::Value::Literal(Literal::String(string)) = &arena.inner.values[&value] else {
                 unreachable!("string value collection changed during planning")
             };
-            let offset = Limits::u32(static_data.len(), "static string offset")?;
-            let length = Limits::u32(string.byte_len(), "static string length")?;
-            static_data.extend_from_slice(string.as_bytes());
-            strings.insert(value, StaticString { offset, length });
-        }
+            (value, string.clone())
+        });
+        let (static_data, strings) = StringTable::build(string_entries)?;
 
         let layout = MemoryLayout::new(static_data.len())?;
         let string_literal_function = (!strings.is_empty()).then_some(0);
@@ -348,7 +293,10 @@ impl ModulePlan {
                     function: first_host_function + offset,
                     name: builtin.name.clone(),
                     arity: builtin.arity,
-                    mode,
+                    mode: match mode {
+                        | HostCallMode::Returning => HostCallKind::Returning,
+                        | HostCallMode::Control => HostCallKind::Control,
+                    },
                     spare: builtin.role.spare_box(),
                 })
             })
@@ -360,7 +308,7 @@ impl ModulePlan {
             .collect();
         let import_count = first_host_function
             .checked_add(Limits::u32(host_imports.len(), "host import count")?)
-            .ok_or(EmitError::Limit { what: "host import count", value: host_imports.len() })?;
+            .ok_or(WasmEmitError::Limit { what: "host import count", value: host_imports.len() })?;
         let locals = LocalPlan::new(arena)?;
 
         Ok(Self {
@@ -437,60 +385,28 @@ impl<'a> ModuleEncoder<'a> {
         module.section(&functions);
 
         let case_count = Limits::u32(self.plan.cases.len(), "SPS block count")?;
-        let mut tables = TableSection::new();
-        tables.table(TableType {
-            element_type: RefType::FUNCREF,
-            table64: false,
-            minimum: u64::from(case_count),
-            maximum: Some(u64::from(case_count)),
-            shared: false,
-        });
-        module.section(&tables);
-
-        let mut memories = MemorySection::new();
-        memories.memory(MemoryType {
-            minimum: self.plan.layout.initial_pages,
-            maximum: None,
-            memory64: false,
-            shared: false,
-            page_size_log2: None,
-        });
-        module.section(&memories);
-
-        let mut globals = GlobalSection::new();
-        globals.global(
-            GlobalType { val_type: ValType::I32, mutable: true, shared: false },
-            &ConstExpr::i32_const(self.plan.layout.heap_base as i32),
+        WasmSections::table(&mut module, case_count);
+        WasmSections::memory(&mut module, self.plan.layout.initial_pages);
+        let mutable_i32 = GlobalType { val_type: ValType::I32, mutable: true, shared: false };
+        let mutable_i64 = GlobalType { val_type: ValType::I64, mutable: true, shared: false };
+        WasmSections::globals(
+            &mut module,
+            vec![
+                (mutable_i32, ConstExpr::i32_const(self.plan.layout.heap_base as i32)),
+                (mutable_i32, ConstExpr::i32_const(0)),
+                (mutable_i64, ConstExpr::i64_const(0)),
+            ],
         );
-        globals.global(
-            GlobalType { val_type: ValType::I32, mutable: true, shared: false },
-            &ConstExpr::i32_const(0),
-        );
-        globals.global(
-            GlobalType { val_type: ValType::I64, mutable: true, shared: false },
-            &ConstExpr::i64_const(0),
-        );
-        module.section(&globals);
 
-        let mut exports = ExportSection::new();
-        exports.export("memory", ExportKind::Memory, 0);
         let entry = self.plan.entry_function()?;
-        exports.export("entry", ExportKind::Func, entry);
-        exports.export("_start", ExportKind::Func, entry);
-        module.section(&exports);
+        WasmSections::exports(&mut module, entry);
 
         let case_functions =
             (0..case_count).map(|index| self.plan.case_function(index)).collect::<Vec<_>>();
-        let mut elements = ElementSection::new();
-        elements.active(
-            None,
-            &ConstExpr::i32_const(0),
-            Elements::Functions(Cow::Owned(case_functions)),
-        );
-        module.section(&elements);
+        WasmSections::elements(&mut module, case_functions);
 
         let mut code = CodeSection::new();
-        code.function(&self.alloc_function());
+        code.function(&AllocFunction::new(HEAP_POINTER_GLOBAL).emit());
         code.function(&self.pair_function());
         for case in &self.plan.cases {
             code.function(&CaseEncoder::new(self.program, &self.plan).encode(case.body)?);
@@ -498,14 +414,10 @@ impl<'a> ModuleEncoder<'a> {
         code.function(&self.entry_function());
         module.section(&code);
 
-        if !self.plan.static_data.is_empty() {
-            let mut data = DataSection::new();
-            data.active(0, &ConstExpr::i32_const(0), self.plan.static_data.iter().copied());
-            module.section(&data);
-        }
+        WasmSections::data(&mut module, &self.plan.static_data);
         module.section(&self.name_section()?);
 
-        Ok(WasmModule { bytes: module.finish() })
+        Ok(WasmModule::from_module(module))
     }
 
     fn type_and_import_sections(&self) -> (TypeSection, ImportSection) {
@@ -516,61 +428,14 @@ impl<'a> ModuleEncoder<'a> {
         types.ty().function([], []);
 
         let mut imports = ImportSection::new();
-        let mut next_type = FIRST_IMPORT_TYPE;
-        if self.plan.string_literal_function.is_some() {
-            types.ty().function([ValType::I32, ValType::I32], [ValType::I64]);
-            imports.import(HOST_MODULE, "string_literal", EntityType::Function(next_type));
-            next_type += 1;
-        }
-        for import in &self.plan.host_imports {
-            let mut parameters = vec![ValType::I64; import.arity];
-            if import.spare.is_some() {
-                parameters.push(ValType::I32);
-            }
-            let results = match import.mode {
-                | HostCallMode::Returning => vec![ValType::I64],
-                | HostCallMode::Control => vec![ValType::I64; 4],
-            };
-            types.ty().function(parameters, results);
-            imports.import(HOST_MODULE, &import.name, EntityType::Function(next_type));
-            next_type += 1;
-        }
+        HostSections::append_imports(
+            &mut types,
+            &mut imports,
+            FIRST_IMPORT_TYPE,
+            self.plan.string_literal_function.is_some(),
+            &self.plan.host_imports,
+        );
         (types, imports)
-    }
-
-    fn alloc_function(&self) -> Function {
-        let mut function = Function::new([(2, ValType::I32)]);
-        function.instruction(&WasmInstruction::GlobalGet(HEAP_POINTER_GLOBAL));
-        function.instruction(&WasmInstruction::LocalTee(1));
-        function.instruction(&WasmInstruction::LocalGet(0));
-        function.instruction(&WasmInstruction::I32Const(3));
-        function.instruction(&WasmInstruction::I32Shl);
-        function.instruction(&WasmInstruction::I32Add);
-        function.instruction(&WasmInstruction::LocalTee(2));
-        function.instruction(&WasmInstruction::MemorySize(0));
-        function.instruction(&WasmInstruction::I32Const(16));
-        function.instruction(&WasmInstruction::I32Shl);
-        function.instruction(&WasmInstruction::I32GtU);
-        function.instruction(&WasmInstruction::If(BlockType::Empty));
-        function.instruction(&WasmInstruction::LocalGet(2));
-        function.instruction(&WasmInstruction::I32Const((WASM_PAGE_BYTES - 1) as i32));
-        function.instruction(&WasmInstruction::I32Add);
-        function.instruction(&WasmInstruction::I32Const(16));
-        function.instruction(&WasmInstruction::I32ShrU);
-        function.instruction(&WasmInstruction::MemorySize(0));
-        function.instruction(&WasmInstruction::I32Sub);
-        function.instruction(&WasmInstruction::MemoryGrow(0));
-        function.instruction(&WasmInstruction::I32Const(-1));
-        function.instruction(&WasmInstruction::I32Eq);
-        function.instruction(&WasmInstruction::If(BlockType::Empty));
-        function.instruction(&WasmInstruction::Unreachable);
-        function.instruction(&WasmInstruction::End);
-        function.instruction(&WasmInstruction::End);
-        function.instruction(&WasmInstruction::LocalGet(2));
-        function.instruction(&WasmInstruction::GlobalSet(HEAP_POINTER_GLOBAL));
-        function.instruction(&WasmInstruction::LocalGet(1));
-        function.instruction(&WasmInstruction::End);
-        function
     }
 
     fn pair_function(&self) -> Function {
@@ -582,7 +447,7 @@ impl<'a> ModuleEncoder<'a> {
         function.instruction(&WasmInstruction::I64Store(WORD_MEMORY));
         function.instruction(&WasmInstruction::LocalGet(2));
         function.instruction(&WasmInstruction::LocalGet(1));
-        function.instruction(&WasmInstruction::I64Store(Self::word_at_const(1)));
+        function.instruction(&WasmInstruction::I64Store(ProductFields::word_at_const(1)));
         function.instruction(&WasmInstruction::LocalGet(2));
         function.instruction(&WasmInstruction::I64ExtendI32U);
         function.instruction(&WasmInstruction::End);
@@ -612,12 +477,11 @@ impl<'a> ModuleEncoder<'a> {
         let mut names = NameSection::new();
         names.module("zydeco-sps");
         let mut functions = NameMap::new();
-        if let Some(function) = self.plan.string_literal_function {
-            functions.append(function, "zydeco.string_literal");
-        }
-        for import in &self.plan.host_imports {
-            functions.append(import.function, &format!("zydeco.{}", import.name));
-        }
+        HostSections::append_names(
+            &mut functions,
+            self.plan.string_literal_function,
+            &self.plan.host_imports,
+        );
         functions.append(self.plan.alloc_function(), "sps.alloc");
         functions.append(self.plan.pair_function(), "sps.pair");
         for case in &self.plan.cases {
@@ -629,10 +493,6 @@ impl<'a> ModuleEncoder<'a> {
         functions.append(self.plan.entry_function()?, "entry");
         names.functions(&functions);
         Ok(names)
-    }
-
-    fn word_at_const(index: u32) -> MemArg {
-        MemArg { offset: u64::from(index * WORD_BYTES), ..WORD_MEMORY }
     }
 }
 
@@ -868,14 +728,16 @@ impl<'a> CaseEncoder<'a> {
                     self.function.instruction(&WasmInstruction::LocalGet(target));
                     self.function.instruction(&WasmInstruction::I32WrapI64);
                     self.load_local_word(self.plan.locals.scratch_word, destination - index);
-                    self.function
-                        .instruction(&WasmInstruction::I64Store(Self::word_at(destination)?));
+                    self.function.instruction(&WasmInstruction::I64Store(ProductFields::word_at(
+                        destination,
+                    )?));
                 }
             } else {
                 self.function.instruction(&WasmInstruction::LocalGet(target));
                 self.function.instruction(&WasmInstruction::I32WrapI64);
                 self.emit_value(value)?;
-                self.function.instruction(&WasmInstruction::I64Store(Self::word_at(index)?));
+                self.function
+                    .instruction(&WasmInstruction::I64Store(ProductFields::word_at(index)?));
             }
         }
         self.function.instruction(&WasmInstruction::LocalGet(target));
@@ -914,14 +776,8 @@ impl<'a> CaseEncoder<'a> {
     }
 
     fn emit_boxed(&mut self, bits: u64) {
-        self.function.instruction(&WasmInstruction::I32Const(1));
-        self.function.instruction(&WasmInstruction::Call(self.plan.alloc_function()));
-        self.function.instruction(&WasmInstruction::I64ExtendI32U);
-        self.function.instruction(&WasmInstruction::LocalTee(self.plan.locals.scratch_word));
-        self.function.instruction(&WasmInstruction::I32WrapI64);
-        self.function.instruction(&WasmInstruction::I64Const(bits as i64));
-        self.function.instruction(&WasmInstruction::I64Store(WORD_MEMORY));
-        self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.scratch_word));
+        WordEmitter::new(&mut self.function, self.plan.alloc_function())
+            .boxed(bits, self.plan.locals.pointer());
     }
 
     fn emit_stack(&mut self, id: StackId) -> Result<(), EmitError> {
@@ -984,7 +840,7 @@ impl<'a> CaseEncoder<'a> {
                     if index + 1 == explicit && explicit < layout.arity {
                         self.function.instruction(&WasmInstruction::LocalGet(bindee));
                         self.function.instruction(&WasmInstruction::I64Const(i64::from(
-                            Self::byte_offset(index)?,
+                            ProductFields::byte_offset(index)?,
                         )));
                         self.function.instruction(&WasmInstruction::I64Add);
                     } else {
@@ -1009,21 +865,11 @@ impl<'a> CaseEncoder<'a> {
             self.load_local_word(self.plan.locals.scratch_stack, 1);
             self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.scratch_stack));
         }
-        if let Some(spare) = import.spare {
-            match spare {
-                | SpareBox::Opaque => {
-                    self.function.instruction(&WasmInstruction::I32Const(1));
-                    self.function.instruction(&WasmInstruction::Call(self.plan.alloc_function()));
-                }
-                | SpareBox::Unused => {
-                    self.function.instruction(&WasmInstruction::I32Const(0));
-                }
-            }
-        }
+        WordEmitter::new(&mut self.function, self.plan.alloc_function()).spare_box(import.spare);
         self.function.instruction(&WasmInstruction::Call(import.function));
         match import.mode {
-            | HostCallMode::Returning => self.resume_returning_call(),
-            | HostCallMode::Control => self.resume_control_call(),
+            | HostCallKind::Returning => self.resume_returning_call(),
+            | HostCallKind::Control => self.resume_control_call(),
         }
         Ok(())
     }
@@ -1094,143 +940,59 @@ impl<'a> CaseEncoder<'a> {
         self.function.instruction(&WasmInstruction::Drop);
         self.emit_value(operands[1])?;
         self.function.instruction(&WasmInstruction::Drop);
-        self.decode_signed_local(
+        WordEmitter::new(&mut self.function, self.plan.alloc_function()).decode_signed_local(
             self.plan.locals.value(operands[0])?,
             self.plan.locals.decoded_first,
         );
-        self.decode_signed_local(
+        WordEmitter::new(&mut self.function, self.plan.alloc_function()).decode_signed_local(
             self.plan.locals.value(operands[1])?,
             self.plan.locals.decoded_second,
         );
 
-        match name {
-            | "int_eq" | "int_lt" | "int_gt" => {
-                self.function
-                    .instruction(&WasmInstruction::LocalGet(self.plan.locals.decoded_first));
-                self.function
-                    .instruction(&WasmInstruction::LocalGet(self.plan.locals.decoded_second));
-                self.function.instruction(&match name {
-                    | "int_eq" => WasmInstruction::I64Eq,
-                    | "int_lt" => WasmInstruction::I64LtS,
-                    | "int_gt" => WasmInstruction::I64GtS,
-                    | _ => unreachable!(),
-                });
-                self.function.instruction(&WasmInstruction::I64ExtendI32U);
-                self.function.instruction(&WasmInstruction::I64Const(1));
-                self.function.instruction(&WasmInstruction::I64Shl);
-                self.function.instruction(&WasmInstruction::I64Const(1));
-                self.function.instruction(&WasmInstruction::I64Or);
-                self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.result));
-                // Intrinsic comparisons return the runtime pair `(encoded_bool, ())`.
-                self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.result));
-                self.function.instruction(&WasmInstruction::I64Const(RuntimeWord::index(0)?));
-                self.function.instruction(&WasmInstruction::Call(self.plan.pair_function()));
-            }
-            | "add" | "sub" | "mul" | "and" | "or" | "xor" => {
-                self.function
-                    .instruction(&WasmInstruction::LocalGet(self.plan.locals.decoded_first));
-                self.function
-                    .instruction(&WasmInstruction::LocalGet(self.plan.locals.decoded_second));
-                self.function.instruction(&match name {
-                    | "add" => WasmInstruction::I64Add,
-                    | "sub" => WasmInstruction::I64Sub,
-                    | "mul" => WasmInstruction::I64Mul,
-                    | "and" => WasmInstruction::I64And,
-                    | "or" => WasmInstruction::I64Or,
-                    | "xor" => WasmInstruction::I64Xor,
-                    | _ => unreachable!(),
-                });
-                self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.result));
-                self.encode_signed_local(self.plan.locals.result);
-            }
-            | "div" | "mod" => {
-                self.emit_wrapping_division(name == "mod");
-                self.encode_signed_local(self.plan.locals.result);
-            }
-            | _ => {
-                return Err(EmitError::UnsupportedIntrinsic {
-                    name: name.to_owned(),
-                    arity: operands.len(),
-                });
-            }
+        if let Some(operation) = Intrinsics::comparison(name) {
+            self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.decoded_first));
+            self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.decoded_second));
+            self.function.instruction(&operation);
+            self.function.instruction(&WasmInstruction::I64ExtendI32U);
+            self.function.instruction(&WasmInstruction::I64Const(1));
+            self.function.instruction(&WasmInstruction::I64Shl);
+            self.function.instruction(&WasmInstruction::I64Const(1));
+            self.function.instruction(&WasmInstruction::I64Or);
+            self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.result));
+            // Intrinsic comparisons return the runtime pair `(encoded_bool, ())`.
+            self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.result));
+            self.function.instruction(&WasmInstruction::I64Const(RuntimeWord::index(0)?));
+            self.function.instruction(&WasmInstruction::Call(self.plan.pair_function()));
+        } else if let Some(operation) = Intrinsics::arithmetic(name) {
+            self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.decoded_first));
+            self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.decoded_second));
+            self.function.instruction(&operation);
+            self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.result));
+            WordEmitter::new(&mut self.function, self.plan.alloc_function())
+                .encode_signed_local(self.plan.locals.result, self.plan.locals.pointer());
+        } else if let Some(remainder) = Intrinsics::division(name) {
+            WordEmitter::new(&mut self.function, self.plan.alloc_function()).wrapping_division(
+                self.plan.locals.decoded_first,
+                self.plan.locals.decoded_second,
+                self.plan.locals.result,
+                remainder,
+            );
+            WordEmitter::new(&mut self.function, self.plan.alloc_function())
+                .encode_signed_local(self.plan.locals.result, self.plan.locals.pointer());
+        } else {
+            return Err(EmitError::UnsupportedIntrinsic {
+                name: name.to_owned(),
+                arity: operands.len(),
+            });
         }
         Ok(())
-    }
-
-    fn decode_signed_local(&mut self, input: u32, output: u32) {
-        self.function.instruction(&WasmInstruction::LocalGet(input));
-        self.function.instruction(&WasmInstruction::I64Const(1));
-        self.function.instruction(&WasmInstruction::I64And);
-        self.function.instruction(&WasmInstruction::I64Eqz);
-        self.function.instruction(&WasmInstruction::If(BlockType::Result(ValType::I64)));
-        self.function.instruction(&WasmInstruction::LocalGet(input));
-        self.function.instruction(&WasmInstruction::I32WrapI64);
-        self.function.instruction(&WasmInstruction::I64Load(WORD_MEMORY));
-        self.function.instruction(&WasmInstruction::Else);
-        self.function.instruction(&WasmInstruction::LocalGet(input));
-        self.function.instruction(&WasmInstruction::I64Const(1));
-        self.function.instruction(&WasmInstruction::I64ShrS);
-        self.function.instruction(&WasmInstruction::End);
-        self.function.instruction(&WasmInstruction::LocalSet(output));
-    }
-
-    fn encode_signed_local(&mut self, input: u32) {
-        self.function.instruction(&WasmInstruction::LocalGet(input));
-        self.function.instruction(&WasmInstruction::I64Const(RuntimeWord::SIGNED_MIN));
-        self.function.instruction(&WasmInstruction::I64GeS);
-        self.function.instruction(&WasmInstruction::LocalGet(input));
-        self.function.instruction(&WasmInstruction::I64Const(RuntimeWord::SIGNED_MAX));
-        self.function.instruction(&WasmInstruction::I64LeS);
-        self.function.instruction(&WasmInstruction::I32And);
-        self.function.instruction(&WasmInstruction::If(BlockType::Result(ValType::I64)));
-        self.function.instruction(&WasmInstruction::LocalGet(input));
-        self.function.instruction(&WasmInstruction::I64Const(1));
-        self.function.instruction(&WasmInstruction::I64Shl);
-        self.function.instruction(&WasmInstruction::I64Const(1));
-        self.function.instruction(&WasmInstruction::I64Or);
-        self.function.instruction(&WasmInstruction::Else);
-        self.function.instruction(&WasmInstruction::I32Const(1));
-        self.function.instruction(&WasmInstruction::Call(self.plan.alloc_function()));
-        self.function.instruction(&WasmInstruction::I64ExtendI32U);
-        self.function.instruction(&WasmInstruction::LocalTee(self.plan.locals.scratch_word));
-        self.function.instruction(&WasmInstruction::I32WrapI64);
-        self.function.instruction(&WasmInstruction::LocalGet(input));
-        self.function.instruction(&WasmInstruction::I64Store(WORD_MEMORY));
-        self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.scratch_word));
-        self.function.instruction(&WasmInstruction::End);
-    }
-
-    fn emit_wrapping_division(&mut self, remainder: bool) {
-        self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.decoded_second));
-        self.function.instruction(&WasmInstruction::I64Eqz);
-        self.function.instruction(&WasmInstruction::If(BlockType::Empty));
-        self.function.instruction(&WasmInstruction::Unreachable);
-        self.function.instruction(&WasmInstruction::End);
-        self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.decoded_first));
-        self.function.instruction(&WasmInstruction::I64Const(i64::MIN));
-        self.function.instruction(&WasmInstruction::I64Eq);
-        self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.decoded_second));
-        self.function.instruction(&WasmInstruction::I64Const(-1));
-        self.function.instruction(&WasmInstruction::I64Eq);
-        self.function.instruction(&WasmInstruction::I32And);
-        self.function.instruction(&WasmInstruction::If(BlockType::Result(ValType::I64)));
-        self.function.instruction(&WasmInstruction::I64Const(if remainder { 0 } else { i64::MIN }));
-        self.function.instruction(&WasmInstruction::Else);
-        self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.decoded_first));
-        self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.decoded_second));
-        self.function.instruction(&if remainder {
-            WasmInstruction::I64RemS
-        } else {
-            WasmInstruction::I64DivS
-        });
-        self.function.instruction(&WasmInstruction::End);
-        self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.result));
     }
 
     fn load_local_word(&mut self, local: u32, index: usize) {
         self.function.instruction(&WasmInstruction::LocalGet(local));
         self.function.instruction(&WasmInstruction::I32WrapI64);
-        self.function.instruction(&WasmInstruction::I64Load(Self::word_at_const(index as u32)));
+        self.function
+            .instruction(&WasmInstruction::I64Load(ProductFields::word_at_const(index as u32)));
     }
 
     fn set_program_counter_from_code(&mut self) {
@@ -1239,79 +1001,6 @@ impl<'a> CaseEncoder<'a> {
         self.function.instruction(&WasmInstruction::I32WrapI64);
         self.function.instruction(&WasmInstruction::GlobalSet(PROGRAM_COUNTER_GLOBAL));
     }
-
-    fn byte_offset(index: usize) -> Result<u32, EmitError> {
-        Limits::u32(index, "product field index")?
-            .checked_mul(WORD_BYTES)
-            .ok_or(EmitError::Limit { what: "product field offset", value: index })
-    }
-
-    fn word_at(index: usize) -> Result<MemArg, EmitError> {
-        Ok(MemArg { offset: u64::from(Self::byte_offset(index)?), ..WORD_MEMORY })
-    }
-
-    fn word_at_const(index: u32) -> MemArg {
-        MemArg { offset: u64::from(index * WORD_BYTES), ..WORD_MEMORY }
-    }
-}
-
-enum EncodedScalar {
-    Immediate(u64),
-    Boxed(u64),
-}
-
-struct RuntimeWord;
-
-impl RuntimeWord {
-    const SIGNED_MIN: i64 = -(1_i64 << 62);
-    const SIGNED_MAX: i64 = (1_i64 << 62) - 1;
-    const UNSIGNED_MAX: u64 = u64::MAX >> 1;
-
-    fn unsigned(value: u64) -> Option<u64> {
-        (value <= Self::UNSIGNED_MAX).then_some((value << 1) | 1)
-    }
-
-    fn signed(value: i64) -> Option<u64> {
-        (Self::SIGNED_MIN..=Self::SIGNED_MAX).contains(&value).then_some(((value as u64) << 1) | 1)
-    }
-
-    fn integer(value: IntegerLiteral) -> Result<EncodedScalar, EmitError> {
-        use IntegerLiteral::*;
-        let immediate = match value {
-            | Int8(value) => Self::signed(value.into()),
-            | Int16(value) => Self::signed(value.into()),
-            | Int32(value) => Self::signed(value.into()),
-            | Int64(value) => Self::signed(value),
-            | UInt8(value) => Self::unsigned(value.into()),
-            | UInt16(value) => Self::unsigned(value.into()),
-            | UInt32(value) => Self::unsigned(value.into()),
-            | UInt64(value) => Self::unsigned(value),
-            | Unresolved(_) => return Err(EmitError::UnresolvedInteger),
-        };
-        Ok(immediate
-            .map_or_else(|| EncodedScalar::Boxed(value.to_word_bits()), EncodedScalar::Immediate))
-    }
-
-    fn float(value: zydeco_syntax::FloatLiteral) -> EncodedScalar {
-        match value {
-            | zydeco_syntax::FloatLiteral::Float32(bits) => EncodedScalar::Immediate(
-                Self::unsigned(bits.into()).expect("Float32 payload fits an immediate"),
-            ),
-            | zydeco_syntax::FloatLiteral::Float64(bits) => EncodedScalar::Boxed(bits),
-        }
-    }
-
-    fn code(index: u32) -> i64 {
-        (i64::from(index) << 1) | 1
-    }
-
-    fn index(value: usize) -> Result<i64, EmitError> {
-        let value = u64::try_from(value)
-            .map_err(|_| EmitError::Limit { what: "runtime tag index", value })?;
-        Self::unsigned(value)
-            .map(|word| word as i64)
-            .ok_or(EmitError::Limit { what: "runtime tag index", value: value as usize })
-    }
 }
 
 #[cfg(test)]
@@ -1319,6 +1008,7 @@ mod tests {
     use super::*;
     use wasmparser::{Parser, Payload, Validator};
     use zydeco_stackir::sps_low::{SpsLowArena, arena::Construct as _};
+    use zydeco_syntax::IntegerLiteral;
 
     struct Fixture {
         arena: SpsLowArena,
@@ -1387,16 +1077,5 @@ mod tests {
         let second = Emitter::new(&program).run().unwrap();
 
         assert_eq!(first, second);
-    }
-
-    #[test]
-    fn tagged_words_match_the_native_immediate_boundary() {
-        assert_eq!(RuntimeWord::index(0).unwrap(), 1);
-        assert_eq!(RuntimeWord::code(0), 1);
-        assert_eq!(RuntimeWord::code(1), 3);
-        assert_eq!(RuntimeWord::signed(RuntimeWord::SIGNED_MIN), Some(0x8000_0000_0000_0001));
-        assert_eq!(RuntimeWord::signed(RuntimeWord::SIGNED_MAX), Some(0x7fff_ffff_ffff_ffff));
-        assert_eq!(RuntimeWord::signed(RuntimeWord::SIGNED_MIN - 1), None);
-        assert_eq!(RuntimeWord::unsigned(RuntimeWord::UNSIGNED_MAX), Some(u64::MAX));
     }
 }
