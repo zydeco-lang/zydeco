@@ -70,15 +70,6 @@ impl<M, A> With<M, A> {
     {
         With { info: self.info.clone() + other, inner }
     }
-    pub fn mk_ext<B, Iter, Item>(&self, iter: Iter, inner: B) -> With<M, B>
-    where
-        M: Clone + Extend<Item>,
-        Iter: IntoIterator<Item = Item>,
-    {
-        let mut info = self.info.clone();
-        info.extend(iter);
-        With { info, inner }
-    }
 }
 
 impl<M, A> Borrow<A> for With<M, A> {
@@ -90,14 +81,4 @@ impl<M, A> BorrowMut<A> for With<M, A> {
     fn borrow_mut(&mut self) -> &mut A {
         &mut self.inner
     }
-}
-
-pub struct WithInfo<M>(pub M);
-
-pub trait Apply {
-    type On<A>;
-}
-
-impl<M> Apply for WithInfo<M> {
-    type On<A> = With<M, A>;
 }

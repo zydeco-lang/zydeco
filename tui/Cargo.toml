@@ -11,7 +11,6 @@ description = "Ratatui frontend for the Zydeco declaration-free REPL"
 
 [dependencies]
 ariadne = { workspace = true }
-lalrpop-util = { workspace = true }
 ratatui = { workspace = true }
 thiserror = { workspace = true }
 zydeco-dynamics = { workspace = true }

@@ -30,6 +30,3 @@ pub(crate) use syntax as ds;
 
 // Todo: generalize Rc/Arc using family trait
 // Reference: https://jedsek.xyz/posts/rust-typed-magic/gats/#family-trait
-
-/// Archived CPS transformation experiments.
-pub mod cps;

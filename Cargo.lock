@@ -2590,7 +2590,6 @@ dependencies = [
  "zydeco-statics",
  "zydeco-surface",
  "zydeco-syntax",
- "zydeco-utils",
 ]
 
 [[package]]
@@ -2699,7 +2698,6 @@ name = "zydeco-tui"
 version = "0.3.0"
 dependencies = [
  "ariadne",
- "lalrpop-util",
  "ratatui",
  "tempfile",
  "thiserror",
