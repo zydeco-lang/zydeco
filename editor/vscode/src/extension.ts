@@ -14,6 +14,7 @@ import {
   LanguageClientOptions,
   ServerOptions,
 } from "vscode-languageclient/node";
+import { DocumentationPanel } from "./documentation";
 
 const SERVER_NAME = "cajun";
 const INSTALL_REPOSITORY = "https://github.com/zydeco-lang/zydeco.git";
@@ -37,11 +38,14 @@ export async function activate(context: ExtensionContext): Promise<void> {
     run: executable,
     debug: executable,
   };
+  const sourceWatcher = workspace.createFileSystemWatcher("**/*.{zy,zyi,zydeco}");
+  context.subscriptions.push(sourceWatcher);
   const clientOptions: LanguageClientOptions = {
     documentSelector: [
       { scheme: "file", language: "zydeco" },
     ],
     traceOutputChannel: trace,
+    synchronize: { fileEvents: sourceWatcher },
   };
 
   client = new LanguageClient(
@@ -51,6 +55,12 @@ export async function activate(context: ExtensionContext): Promise<void> {
     clientOptions,
   );
   await client.start();
+  const documentation = new DocumentationPanel(client, context);
+  context.subscriptions.push(
+    sourceWatcher.onDidChange(uri => documentation.refresh(uri)),
+    sourceWatcher.onDidCreate(uri => documentation.refresh(uri)),
+    sourceWatcher.onDidDelete(uri => documentation.refresh(uri)),
+  );
 }
 
 export async function deactivate(): Promise<void> {

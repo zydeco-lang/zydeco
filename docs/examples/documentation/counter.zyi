@@ -1,0 +1,16 @@
+let Integer = @(intrinsic(i64)) in
+--| The current counter value, represented by an [integer](zydeco:name:Integer).
+--|
+--| Read this field to inspect the counter. The public interface describes its meaning;
+--| the implementation chooses its initial value.
+--|
+--| ```zydeco check
+--| let counter = @(import("counter.zy")) in counter/value
+--| ```
+--|
+--| Asking for an absent field is rejected at the indicated position:
+--|
+--| ```zydeco reject=tyck.missing-named-field at=1:15
+--| (#value = 42)/missing
+--| ```
+@[doc] (#value :: Integer)

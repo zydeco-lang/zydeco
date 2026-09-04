@@ -200,6 +200,10 @@ pub enum TyckDiagnosticCode {
 }
 
 impl TyckDiagnosticCode {
+    pub fn from_code(code: &str) -> Option<Self> {
+        code.parse().ok()
+    }
+
     /// The stable source-facing spelling of this code.
     pub fn as_str(self) -> &'static str {
         self.into()

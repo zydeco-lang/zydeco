@@ -23,12 +23,71 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand --help 'Print help'
             cand -V 'Print version'
             cand --version 'Print version'
+            cand __doc-example-worker '__doc-example-worker'
+            cand doc 'Read, search, generate, or verify project documentation'
             cand fmt 'Format Zydeco source files in place'
             cand run 'Run a zydeco program'
             cand check 'Check a zydeco program'
             cand repl 'Start the declaration-free terminal REPL'
             cand build 'build'
             cand help 'Print this message or the help of the given subcommand(s)'
+        }
+        &'zydeco;__doc-example-worker'= {
+            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
+            cand -h 'Print help'
+            cand --help 'Print help'
+        }
+        &'zydeco;doc'= {
+            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
+            cand -h 'Print help'
+            cand --help 'Print help'
+            cand show 'Show a public subject''s classifier and complete documentation'
+            cand search 'Search exposed names and documentation prose'
+            cand build 'Generate a self-contained searchable HTML reference without executing examples'
+            cand check 'Check links and explicitly verified examples in the entry and its dependencies'
+            cand help 'Print this message or the help of the given subcommand(s)'
+        }
+        &'zydeco;doc;show'= {
+            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
+            cand -h 'Print help'
+            cand --help 'Print help'
+        }
+        &'zydeco;doc;search'= {
+            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
+            cand -h 'Print help'
+            cand --help 'Print help'
+        }
+        &'zydeco;doc;build'= {
+            cand -o 'o'
+            cand --output 'output'
+            cand --title 'title'
+            cand --guide 'Explicit guide pages; public links use `zydeco:member:./field`'
+            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
+            cand -h 'Print help'
+            cand --help 'Print help'
+        }
+        &'zydeco;doc;check'= {
+            cand --guide 'guide'
+            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
+            cand -h 'Print help'
+            cand --help 'Print help'
+        }
+        &'zydeco;doc;help'= {
+            cand show 'Show a public subject''s classifier and complete documentation'
+            cand search 'Search exposed names and documentation prose'
+            cand build 'Generate a self-contained searchable HTML reference without executing examples'
+            cand check 'Check links and explicitly verified examples in the entry and its dependencies'
+            cand help 'Print this message or the help of the given subcommand(s)'
+        }
+        &'zydeco;doc;help;show'= {
+        }
+        &'zydeco;doc;help;search'= {
+        }
+        &'zydeco;doc;help;build'= {
+        }
+        &'zydeco;doc;help;check'= {
+        }
+        &'zydeco;doc;help;help'= {
         }
         &'zydeco;fmt'= {
             cand --check 'Report files that would change without writing them, and exit unsuccessfully when at least one file would change'
@@ -68,12 +127,30 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand --help 'Print help'
         }
         &'zydeco;help'= {
+            cand __doc-example-worker '__doc-example-worker'
+            cand doc 'Read, search, generate, or verify project documentation'
             cand fmt 'Format Zydeco source files in place'
             cand run 'Run a zydeco program'
             cand check 'Check a zydeco program'
             cand repl 'Start the declaration-free terminal REPL'
             cand build 'build'
             cand help 'Print this message or the help of the given subcommand(s)'
+        }
+        &'zydeco;help;__doc-example-worker'= {
+        }
+        &'zydeco;help;doc'= {
+            cand show 'Show a public subject''s classifier and complete documentation'
+            cand search 'Search exposed names and documentation prose'
+            cand build 'Generate a self-contained searchable HTML reference without executing examples'
+            cand check 'Check links and explicitly verified examples in the entry and its dependencies'
+        }
+        &'zydeco;help;doc;show'= {
+        }
+        &'zydeco;help;doc;search'= {
+        }
+        &'zydeco;help;doc;build'= {
+        }
+        &'zydeco;help;doc;check'= {
         }
         &'zydeco;help;fmt'= {
         }

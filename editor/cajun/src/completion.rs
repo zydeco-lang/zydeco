@@ -2,7 +2,8 @@ use crate::{hover::HoverLineWidth, semantic::NameClass};
 use std::{ops::Range as ByteRange, path::Path};
 use tower_lsp::lsp_types::{
     CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionResponse,
-    CompletionTextEdit, Documentation, InsertTextFormat, Position, Range, TextEdit,
+    CompletionTextEdit, Documentation, InsertTextFormat, MarkupContent, MarkupKind, Position,
+    Range, TextEdit,
 };
 use zydeco_session::{CompilerSession, CompletionAnalysis, CompletionSemantics};
 use zydeco_statics::{fmt::Formatter, syntax::DefId};
@@ -76,6 +77,21 @@ impl Completer {
                     }),
                     kind: Some(class.completion_kind()),
                     detail: annotation,
+                    documentation: semantics.and_then(|semantics| {
+                        let docs = semantics.documentation.for_definition(candidate.definition);
+                        let links = crate::documentation::DocumentationLinks {
+                            scoped: &semantics.scoped,
+                            spans: &semantics.spans,
+                        };
+                        (!docs.is_empty()).then(|| {
+                            Documentation::MarkupContent(MarkupContent {
+                                kind: MarkupKind::Markdown,
+                                value: docs.markdown_with_links(false, |target| {
+                                    links.url(target).map(Into::into)
+                                }),
+                            })
+                        })
+                    }),
                     sort_text: Some(format!("{rank:08}")),
                     filter_text: Some(name.clone()),
                     text_edit: Some(CompletionTextEdit::Edit(TextEdit {

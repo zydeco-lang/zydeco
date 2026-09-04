@@ -647,6 +647,22 @@ struct TypeFieldCandidate {
 struct FieldProjectionResolver;
 
 impl FieldProjectionResolver {
+    fn record_value_origin(
+        tycker: &mut Tycker<'_>, source: su::EntityId, candidate: &ValueFieldCandidate,
+    ) {
+        if let Some(ValueFieldStep::Named { whole, .. }) = candidate.route.last() {
+            tycker.statics.member_provenance.record_projection(source, (*whole).into());
+        }
+    }
+
+    fn record_type_origin(
+        tycker: &mut Tycker<'_>, source: su::EntityId, candidate: &TypeFieldCandidate,
+    ) {
+        if let Some(step) = candidate.path.last() {
+            tycker.statics.member_provenance.record_projection(source, step.whole.into());
+        }
+    }
+
     fn value_k(
         tycker: &mut Tycker<'_>, env: &ss::TyEnv, root: ss::TypeId, field: &FieldName,
     ) -> ResultKont<ValueFieldCandidate> {
@@ -1299,6 +1315,7 @@ impl ExistentialProjectionPattern {
                 }
                 | ([], [candidate]) => {
                     let candidate = candidate.clone().materialize_k(tycker)?;
+                    FieldProjectionResolver::record_value_origin(tycker, source.into(), &candidate);
                     let checked = TyEnvT::new(opening.env.clone(), payload).tyck_k(
                         tycker,
                         PatternAction::ana(candidate.projected.into())
@@ -3582,6 +3599,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                 }
                 | Switch::Ana(AnnId::Kind(expected)) => {
                     let candidate = FieldProjectionResolver::r#type(tycker, expected, &field)?;
+                    FieldProjectionResolver::record_type_origin(
+                        tycker,
+                        self.inner.into(),
+                        &candidate,
+                    );
                     let checked = self.mk(inner).tyck_k(
                         tycker,
                         PatternAction::ana(candidate.projected.into())
@@ -3614,6 +3636,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                     } else {
                         let candidate =
                             FieldProjectionResolver::value_k(tycker, &self.info, expected, &field)?;
+                        FieldProjectionResolver::record_value_origin(
+                            tycker,
+                            self.inner.into(),
+                            &candidate,
+                        );
                         let checked = self.mk(inner).tyck_k(
                             tycker,
                             PatternAction::ana(candidate.projected.into())
@@ -8359,6 +8386,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 match checked {
                     | TermAnnId::Type(head, head_kind) => {
                         let candidate = FieldProjectionResolver::r#type(tycker, head_kind, &name)?;
+                        FieldProjectionResolver::record_type_origin(
+                            tycker,
+                            self.inner.into(),
+                            &candidate,
+                        );
                         let payload_kind = match switch {
                             | Switch::Syn => candidate.projected,
                             | Switch::Ana(AnnId::Kind(expected)) => {
@@ -8378,6 +8410,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     | TermAnnId::Value(head, head_ty) => {
                         let candidate =
                             FieldProjectionResolver::value_k(tycker, &self.info, head_ty, &name)?;
+                        FieldProjectionResolver::record_value_origin(
+                            tycker,
+                            self.inner.into(),
+                            &candidate,
+                        );
                         let target = FieldProjectionResolver::value_target(&candidate);
                         let projected_ty = candidate.projected;
                         let projected_ty = match switch {
@@ -8557,6 +8594,21 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 }
             },
         };
+
+        let member_classifier = match (&tycker.scoped.terms[&self.inner], out_ann) {
+            | (Tm::Label(_), TermAnnId::Kind(kind)) => Some(AnnId::Kind(kind)),
+            | (Tm::Label(_), TermAnnId::Type(ty, _)) => Some(AnnId::Type(ty)),
+            | (Tm::Named(_), TermAnnId::Type(_, kind)) if matches!(switch, Switch::Syn) => {
+                Some(AnnId::Kind(kind))
+            }
+            | (Tm::Named(_), TermAnnId::Value(_, ty)) if matches!(switch, Switch::Syn) => {
+                Some(AnnId::Type(ty))
+            }
+            | _ => None,
+        };
+        if let Some(classifier) = member_classifier {
+            tycker.statics.member_provenance.record(classifier, self.inner);
+        }
 
         if let Some(out) = out_ann.as_term() {
             // Maintain one canonical back mapping for the materialized term.

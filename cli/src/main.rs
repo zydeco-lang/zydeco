@@ -3,8 +3,9 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 use zydeco_cli::{
     BackendProgram, BuildOptions, BuildTarget, Cli, CommandCompiler, Commands, CompileError,
-    DiagnosticRenderer, NativeError, SourceFormatError, SourceFormatOutcome, SourceFormatter,
-    TargetArchitecture, TargetOs, WasmBackendKind,
+    DiagnosticRenderer, DocumentationCommand, NativeError, SourceFormatError, SourceFormatOutcome,
+    SourceFormatter, TargetArchitecture, TargetOs, WasmBackendKind,
+    documentation::{DocumentationRenderError, DocumentationRenderer},
 };
 use zydeco_dynamics::ProgKont;
 use zydeco_tui::{Repl, ReplError};
@@ -30,6 +31,12 @@ struct Application {
 impl Application {
     fn run(&self, command: Commands) -> Result<i32, ApplicationError> {
         match command {
+            | Commands::DocumentationExampleWorker => {
+                zydeco_session::source::DocumentationExampleWorker::serve()
+                    .map_err(ApplicationError::DocumentationWorker)?;
+                Ok(0)
+            }
+            | Commands::Doc { command } => self.documentation(command),
             | Commands::Fmt { files, check } => self.format_sources(&files, check),
             | Commands::Run { file, dry, args } => self.run_source(&file, dry, &args),
             | Commands::Check { file } => self.check_source(&file),
@@ -58,6 +65,116 @@ impl Application {
                 execute,
             ),
         }
+    }
+
+    fn documentation(&self, command: DocumentationCommand) -> Result<i32, ApplicationError> {
+        use zydeco_session::source::DocumentationPath;
+        let file = match &command {
+            | DocumentationCommand::Show { file, .. }
+            | DocumentationCommand::Search { file, .. }
+            | DocumentationCommand::Build { file, .. }
+            | DocumentationCommand::Check { file, .. } => file,
+        };
+        self.analyze(file)?;
+        let reference = self.compiler.documentation_reference(file)?;
+        let renderer = DocumentationRenderer { reference: &reference };
+        match command {
+            | DocumentationCommand::Show { subject, .. } => {
+                println!("{}", renderer.show(&DocumentationPath::parse(&subject))?)
+            }
+            | DocumentationCommand::Search { query, .. } => println!("{}", renderer.search(&query)),
+            | DocumentationCommand::Build { output, title, guide, file } => {
+                let guides = renderer.guides(&guide)?;
+                let title = title.unwrap_or_else(|| {
+                    file.file_name().unwrap_or_default().to_string_lossy().into_owned()
+                });
+                renderer.write(&output, &title, &guides)?;
+                println!("{}", output.display());
+            }
+            | DocumentationCommand::Check { guide, .. } => {
+                let guides = renderer.guides(&guide)?;
+                renderer.check_links(&guides)?;
+                let examples = renderer.examples(&guides);
+                let executable =
+                    std::env::current_exe().map_err(ApplicationError::DocumentationWorker)?;
+                let failures = examples
+                    .iter()
+                    .filter_map(|example| {
+                        let request = match self.compiler.documentation_example_request(example) {
+                            | Ok(request) => request,
+                            | Err(error) => {
+                                return Some(format!("{}: {error}", example.path.display()));
+                            }
+                        };
+                        let verification =
+                            zydeco_session::source::DocumentationExampleWorker::verify(
+                                &executable,
+                                &["__doc-example-worker"],
+                                &request,
+                                std::time::Duration::from_secs(30),
+                            );
+                        if verification.status.is_passed() {
+                            return None;
+                        }
+                        let details = verification
+                            .diagnostics
+                            .iter()
+                            .map(|diagnostic| {
+                                let (path, range) =
+                                    if diagnostic.path.as_deref() == Some(request.path.as_path()) {
+                                        (
+                                            Some(example.path.as_path()),
+                                            diagnostic
+                                                .range
+                                                .clone()
+                                                .and_then(|range| example.source_range(range)),
+                                        )
+                                    } else {
+                                        (diagnostic.path.as_deref(), diagnostic.range.clone())
+                                    };
+                                let path = path.unwrap_or(&example.path);
+                                let source =
+                                    reference.analysis.source(path).map(str::to_owned).or_else(
+                                        || {
+                                            guides
+                                                .iter()
+                                                .find(|guide| guide.path == path)
+                                                .map(|guide| guide.markdown.clone())
+                                        },
+                                    );
+                                let position = source
+                                    .zip(range)
+                                    .map(|(source, range)| {
+                                        zydeco_utils::span::FileMap::local(source, None)
+                                            .line_col(range.start)
+                                            .to_string()
+                                    })
+                                    .unwrap_or_default();
+                                format!(
+                                    "{}:{position}: {}: {}",
+                                    path.display(),
+                                    diagnostic.code.as_deref().unwrap_or("source"),
+                                    diagnostic.message
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        Some(format!(
+                            "{}: {:?}\n{details}",
+                            example.path.display(),
+                            verification.status
+                        ))
+                    })
+                    .collect::<Vec<_>>();
+                if !failures.is_empty() {
+                    return Err(
+                        DocumentationRenderError::InvalidExamples(failures.join("\n")).into()
+                    );
+                }
+                println!("Documentation links and {} examples checked.", examples.len());
+            }
+        }
+        Ok(0)
     }
 
     fn format_sources(&self, paths: &[PathBuf], check: bool) -> Result<i32, ApplicationError> {
@@ -167,6 +284,12 @@ impl Application {
 
 #[derive(Debug, Error)]
 enum ApplicationError {
+    #[error("documentation worker failed: {0}")]
+    DocumentationWorker(std::io::Error),
+    #[error(transparent)]
+    Documentation(#[from] DocumentationRenderError),
+    #[error(transparent)]
+    DocumentationReference(#[from] zydeco_session::source::DocumentationReferenceError),
     #[error(transparent)]
     Format(#[from] SourceFormatError),
     #[error(transparent)]

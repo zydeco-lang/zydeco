@@ -11,6 +11,42 @@ pub struct TextBlock {
     pub range: Range<usize>,
 }
 
+impl TextBlock {
+    /// Map offsets in stripped prose back to the original comment lines.
+    /// A changed source block or an invalid UTF-8 boundary has no mapping.
+    pub fn source_range(&self, source: &str, range: Range<usize>) -> Option<Range<usize>> {
+        if range.start > range.end
+            || !self.text.is_char_boundary(range.start)
+            || !self.text.is_char_boundary(range.end)
+        {
+            return None;
+        }
+        let block = source.get(self.range.clone())?;
+        let comments = CommentBlocks::new(block);
+        let lines = LexicalTokens::new(block)
+            .filter(|token| token.kind == LexicalTokenKind::TextBlock)
+            .map(|token| comments.line_content_range(&token, "--|"))
+            .scan(0usize, |offset, source| {
+                let start = *offset;
+                *offset += source.len() + 1;
+                Some((start, source))
+            })
+            .collect::<Vec<_>>();
+        let reconstructed =
+            lines.iter().map(|(_, range)| &block[range.clone()]).collect::<Vec<_>>().join("\n");
+        if reconstructed != self.text.as_ref() {
+            return None;
+        }
+        let locate = |offset| {
+            lines.iter().find_map(|(start, source)| {
+                (*start <= offset && offset <= *start + source.len())
+                    .then(|| self.range.start + source.start + offset - start)
+            })
+        };
+        Some(locate(range.start)?..locate(range.end)?)
+    }
+}
+
 /// Text recovered from one contiguous block of ordinary `--` lines.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LineComment {
@@ -466,13 +502,19 @@ impl<'source> CommentBlocks<'source> {
     }
 
     fn line_text<'comment>(&'comment self, comment: &LexicalToken, marker: &str) -> &'comment str {
+        &self.source[self.line_content_range(comment, marker)]
+    }
+
+    fn line_content_range(&self, comment: &LexicalToken, marker: &str) -> Range<usize> {
         let line = &self.source[comment.range.clone()];
         let line = line.strip_suffix('\n').unwrap_or(line);
         let line = line.strip_suffix('\r').unwrap_or(line);
+        let end = comment.range.start + line.len();
         let line = line
             .strip_prefix(marker)
             .expect("line comment tokens begin with their classified marker");
-        line.strip_prefix(' ').unwrap_or(line)
+        let line = line.strip_prefix(' ').unwrap_or(line);
+        end - line.len()..end
     }
 
     fn block_text(&self, comment: &LexicalToken) -> Arc<str> {

@@ -4,6 +4,17 @@ use std::path::Path;
 use zydeco_surface::metadata::MetadataKind;
 use zydeco_surface::textual::{DocumentationSite, syntax as t};
 
+mod semantic;
+pub use semantic::*;
+mod exposure;
+pub use exposure::*;
+mod reference;
+pub use reference::*;
+mod guide;
+pub use guide::*;
+mod examples;
+pub use examples::*;
+
 /// One documentation attachment together with the source arena needed to
 /// interpret and eventually render its term.
 #[derive(Clone, Copy, Debug)]

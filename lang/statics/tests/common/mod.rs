@@ -50,6 +50,7 @@ impl TestFixture {
             origins: Default::default(),
             users: Default::default(),
             blocks: Default::default(),
+            documentation_scopes: Default::default(),
         };
         let db = TestDb::default();
         let root = IdAllocator::<zydeco_surface::scoped::arena::ScopedScope>::new().alloc();

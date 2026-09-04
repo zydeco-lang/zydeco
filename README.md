@@ -102,12 +102,15 @@ cargo install --path editor/cajun
 
 Cajun provides diagnostics, hover types, name and import completion, formatting,
 semantic tokens, and definition, reference, and rename support across imported files.
+Hovers and completions include `@[doc]` explanations; the VS Code client also offers a persistent documentation panel
+with example checking.
 Client setup is documented for [Visual Studio Code](editor/vscode/README.md) and [Zed](editor/zed/README.md).
 The [editor guide](editor/README.md) describes shared behavior and runtime configuration.
 
 ## Documentation and Examples
 
 - [Language guide](docs/tutorial/zydeco-guide.md): a source-level walkthrough.
+- [Project documentation](docs/documentation.md): `@[doc]`, editor interaction, references, and verified examples.
 - [DESIGN.md](DESIGN.md): semantics, implementation boundaries, and current limitations.
 - [CONTRIBUTING.md](CONTRIBUTING.md): build, test, formatting, and contribution workflows.
 - [Standard library](lib/std/README.md): types, capabilities, and library composition.

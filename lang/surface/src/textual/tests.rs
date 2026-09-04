@@ -407,6 +407,24 @@ fn source_unit_collects_documentation_for_arbitrary_annotated_terms() {
 }
 
 #[test]
+fn source_unit_ignores_documentation_outside_its_returned_tree() {
+    let mut parser = Parser::new();
+    let unit = StrictParser::source("(\n--| Documented.\n@[doc] 1, 2)", &mut parser).unwrap();
+    assert_eq!(unit.documentation(&parser.arena, &parser.spans).len(), 1);
+    let root = parser
+        .arena
+        .terms
+        .iter()
+        .find_map(|(term, syntax)| {
+            matches!(syntax, Term::Lit(Literal::Integer(value)) if value.value() == 2)
+                .then_some(*term)
+        })
+        .unwrap();
+    let retained = SourceUnit { root };
+    assert!(retained.documentation(&parser.arena, &parser.spans).is_empty());
+}
+
+#[test]
 fn documentation_annotation_does_not_reach_across_a_blank_or_ordinary_comment() {
     ["--| Detached\n\n@[doc] _", "--| Detached\n-- barrier\n@[doc] _"].into_iter().for_each(
         |source| {

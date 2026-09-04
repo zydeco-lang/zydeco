@@ -624,6 +624,20 @@ Unknown metadata stays structurally valid without compiler-defined suggestions.
 Import-path completion uses the importer's canonical parent, merges filesystem entries with active overlays,
 and offers directories and supported source files while excluding the importing file and its symlink aliases.
 
+The session's `DocumentationIndex` connects `@[doc]` attachments to resolved bindings, expressions, and named members
+through exact source origins; field provenance recorded during type checking survives normalization and substitution.
+Hover, completion, reference generation, and the VS Code documentation panel consume this shared model.
+The [project documentation proposal](docs/proposals/documentation.md) records the invariants,
+and the [authoring guide](docs/documentation.md) describes the workflow.
+
+`zydeco doc show`, `search`, and `build` present a selected root's exposed classifier rather
+than private source bindings: public paths distinguish named fields from function and computation results,
+reject ambiguous exposures, and never contain arena identifiers.
+`doc check` verifies explicitly opted-in examples in a bounded subprocess worker
+and maps diagnostics back to their code fences without interpreting them.
+Cajun versions documentation and example requests against a shared source revision,
+so editing an imported file also invalidates a consumer's cached documentation.
+
 Each parsed entity, including nested metadata, has its own source span.
 The assembled program uses a shared `SourceMap` to associate byte offsets with their files;
 compiler diagnostics retain a primary location, stable code, and optional semantic relationships or help.

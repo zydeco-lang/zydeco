@@ -20,6 +20,7 @@ salsa = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+pulldown-cmark = { workspace = true }
 tokio = { workspace = true }
 tower-lsp = { workspace = true }
 

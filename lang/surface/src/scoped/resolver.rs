@@ -77,6 +77,7 @@ pub struct Resolver<'a> {
     pub users: ArenaForth<DefId, TermId>,
     pub(super) block_deps: ArenaAssoc<TermId, DepGraph<BindingId>>,
     completion: Option<CompletionCapture>,
+    documentation_scopes: ArenaAssoc<TermId, ScopeSnapshot>,
 }
 
 /// Output of name resolution for one complete source term.
@@ -133,6 +134,7 @@ impl<'a> Resolver<'a> {
             users: ArenaForth::default(),
             block_deps: ArenaAssoc::default(),
             completion: None,
+            documentation_scopes: ArenaAssoc::default(),
         }
     }
 
@@ -186,13 +188,14 @@ impl<'a> Resolver<'a> {
             users,
             block_deps,
             completion: _,
+            documentation_scopes,
         } = self;
         let _ = allocator;
         assert!(block_deps.iter().next().is_none(), "every block dependency graph must be closed");
         let _ = bitter;
         Ok(ResolvedProgram {
             prim,
-            arena: ScopedArena { defs, pats, terms, origins, users, blocks },
+            arena: ScopedArena { defs, pats, terms, origins, users, blocks, documentation_scopes },
         })
     }
 
@@ -309,6 +312,11 @@ impl Resolve for TermId {
         let term = resolver.bitter.terms[self].clone();
         let res: Term<DefId> = match term {
             | Term::Meta(term) => {
+                if term.0.is(crate::metadata::MetadataKind::Doc.name()) {
+                    resolver
+                        .documentation_scopes
+                        .insert_new(*self, NameScope { local: &local, global }.snapshot());
+                }
                 let MetaT(_, inner) = *term;
                 let () = inner.resolve(resolver, (local, global))?;
                 term.into()

@@ -16,11 +16,17 @@ _zydeco() {
             ",$1")
                 cmd="zydeco"
                 ;;
+            zydeco,__doc-example-worker)
+                cmd="zydeco__subcmd____doc__subcmd__example__subcmd__worker"
+                ;;
             zydeco,build)
                 cmd="zydeco__subcmd__build"
                 ;;
             zydeco,check)
                 cmd="zydeco__subcmd__check"
+                ;;
+            zydeco,doc)
+                cmd="zydeco__subcmd__doc"
                 ;;
             zydeco,fmt)
                 cmd="zydeco__subcmd__fmt"
@@ -34,11 +40,47 @@ _zydeco() {
             zydeco,run)
                 cmd="zydeco__subcmd__run"
                 ;;
+            zydeco__subcmd__doc,build)
+                cmd="zydeco__subcmd__doc__subcmd__build"
+                ;;
+            zydeco__subcmd__doc,check)
+                cmd="zydeco__subcmd__doc__subcmd__check"
+                ;;
+            zydeco__subcmd__doc,help)
+                cmd="zydeco__subcmd__doc__subcmd__help"
+                ;;
+            zydeco__subcmd__doc,search)
+                cmd="zydeco__subcmd__doc__subcmd__search"
+                ;;
+            zydeco__subcmd__doc,show)
+                cmd="zydeco__subcmd__doc__subcmd__show"
+                ;;
+            zydeco__subcmd__doc__subcmd__help,build)
+                cmd="zydeco__subcmd__doc__subcmd__help__subcmd__build"
+                ;;
+            zydeco__subcmd__doc__subcmd__help,check)
+                cmd="zydeco__subcmd__doc__subcmd__help__subcmd__check"
+                ;;
+            zydeco__subcmd__doc__subcmd__help,help)
+                cmd="zydeco__subcmd__doc__subcmd__help__subcmd__help"
+                ;;
+            zydeco__subcmd__doc__subcmd__help,search)
+                cmd="zydeco__subcmd__doc__subcmd__help__subcmd__search"
+                ;;
+            zydeco__subcmd__doc__subcmd__help,show)
+                cmd="zydeco__subcmd__doc__subcmd__help__subcmd__show"
+                ;;
+            zydeco__subcmd__help,__doc-example-worker)
+                cmd="zydeco__subcmd__help__subcmd____doc__subcmd__example__subcmd__worker"
+                ;;
             zydeco__subcmd__help,build)
                 cmd="zydeco__subcmd__help__subcmd__build"
                 ;;
             zydeco__subcmd__help,check)
                 cmd="zydeco__subcmd__help__subcmd__check"
+                ;;
+            zydeco__subcmd__help,doc)
+                cmd="zydeco__subcmd__help__subcmd__doc"
                 ;;
             zydeco__subcmd__help,fmt)
                 cmd="zydeco__subcmd__help__subcmd__fmt"
@@ -52,6 +94,18 @@ _zydeco() {
             zydeco__subcmd__help,run)
                 cmd="zydeco__subcmd__help__subcmd__run"
                 ;;
+            zydeco__subcmd__help__subcmd__doc,build)
+                cmd="zydeco__subcmd__help__subcmd__doc__subcmd__build"
+                ;;
+            zydeco__subcmd__help__subcmd__doc,check)
+                cmd="zydeco__subcmd__help__subcmd__doc__subcmd__check"
+                ;;
+            zydeco__subcmd__help__subcmd__doc,search)
+                cmd="zydeco__subcmd__help__subcmd__doc__subcmd__search"
+                ;;
+            zydeco__subcmd__help__subcmd__doc,show)
+                cmd="zydeco__subcmd__help__subcmd__doc__subcmd__show"
+                ;;
             *)
                 ;;
         esac
@@ -59,8 +113,22 @@ _zydeco() {
 
     case "${cmd}" in
         zydeco)
-            opts="-h -V --lint-types --help --version fmt run check repl build help"
+            opts="-h -V --lint-types --help --version __doc-example-worker doc fmt run check repl build help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        zydeco__subcmd____doc__subcmd__example__subcmd__worker)
+            opts="-h --lint-types --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
@@ -132,6 +200,180 @@ _zydeco() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        zydeco__subcmd__doc)
+            opts="-h --lint-types --help show search build check help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        zydeco__subcmd__doc__subcmd__build)
+            opts="-o -h --output --title --guide --lint-types --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --output)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -o)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --title)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --guide)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        zydeco__subcmd__doc__subcmd__check)
+            opts="-h --guide --lint-types --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --guide)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        zydeco__subcmd__doc__subcmd__help)
+            opts="show search build check help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        zydeco__subcmd__doc__subcmd__help__subcmd__build)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        zydeco__subcmd__doc__subcmd__help__subcmd__check)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        zydeco__subcmd__doc__subcmd__help__subcmd__help)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        zydeco__subcmd__doc__subcmd__help__subcmd__search)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        zydeco__subcmd__doc__subcmd__help__subcmd__show)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        zydeco__subcmd__doc__subcmd__search)
+            opts="-h --lint-types --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        zydeco__subcmd__doc__subcmd__show)
+            opts="-h --lint-types --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         zydeco__subcmd__fmt)
             opts="-h --check --lint-types --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
@@ -147,8 +389,22 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__help)
-            opts="fmt run check repl build help"
+            opts="__doc-example-worker doc fmt run check repl build help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        zydeco__subcmd__help__subcmd____doc__subcmd__example__subcmd__worker)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
@@ -177,6 +433,76 @@ _zydeco() {
         zydeco__subcmd__help__subcmd__check)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        zydeco__subcmd__help__subcmd__doc)
+            opts="show search build check"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        zydeco__subcmd__help__subcmd__doc__subcmd__build)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        zydeco__subcmd__help__subcmd__doc__subcmd__check)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        zydeco__subcmd__help__subcmd__doc__subcmd__search)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        zydeco__subcmd__help__subcmd__doc__subcmd__show)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi

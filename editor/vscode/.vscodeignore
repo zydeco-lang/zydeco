@@ -3,6 +3,8 @@
 node_modules
 dist/**/*.map
 src
+tests
+dist/**/*.test.cjs
 tsconfig.json
 pnpm-lock.yaml
 pnpm-workspace.yaml

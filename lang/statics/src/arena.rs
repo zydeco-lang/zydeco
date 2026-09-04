@@ -242,6 +242,48 @@ impl Index<&KindId> for KindArena {
     }
 }
 
+/// Source declarations of named classifiers and resolved member uses.
+///
+/// Member provenance is retained separately from type equality: substituting a
+/// named classifier preserves its declaration, while equal classifiers from
+/// unrelated declarations do not acquire each other's documentation.
+#[derive(Clone, Debug, Default)]
+pub struct MemberProvenance {
+    declarations: std::collections::HashMap<AnnId, su::TermId>,
+    projections: std::collections::HashMap<su::EntityId, su::TermId>,
+}
+
+impl MemberProvenance {
+    pub fn record(&mut self, classifier: AnnId, declaration: su::TermId) {
+        self.declarations.insert(classifier, declaration);
+    }
+
+    pub fn transfer(&mut self, source: AnnId, target: AnnId) {
+        if let Some(declaration) = self.declarations.get(&source).copied() {
+            self.declarations.insert(target, declaration);
+        }
+    }
+
+    pub fn record_projection(&mut self, source: su::EntityId, classifier: AnnId) {
+        match self.declarations.get(&classifier).copied() {
+            | Some(declaration) => {
+                self.projections.insert(source, declaration);
+            }
+            | None => {
+                self.projections.remove(&source);
+            }
+        }
+    }
+
+    pub fn declaration(&self, projection: su::EntityId) -> Option<su::TermId> {
+        self.projections.get(&projection).copied()
+    }
+
+    pub fn classifier_declaration(&self, classifier: AnnId) -> Option<su::TermId> {
+        self.declarations.get(&classifier).copied()
+    }
+}
+
 /// Editor-facing facts keyed by one source term.
 #[derive(Clone, Debug)]
 pub struct TermFacts {
@@ -584,6 +626,8 @@ pub struct StaticsIndexes {
     pub terms: SourceProvenance<su::TermId, TermId>,
     /// Final annotation for each checked source term.
     pub term_facts: TermFactsArena,
+    /// Declaration identity of instantiated named classifiers and their uses.
+    pub member_provenance: MemberProvenance,
     /// Normalized classifier for each distinct top annotation type. Inner type
     /// nodes have no entry, and terms sharing one annotation ID share one clone.
     pub annotation_norms: NormalizedAnnotations,

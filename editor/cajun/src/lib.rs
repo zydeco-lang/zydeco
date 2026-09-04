@@ -2,6 +2,7 @@ mod analysis;
 mod completion;
 mod configuration;
 mod document_links;
+pub mod documentation;
 mod format;
 mod hover;
 mod progress;
@@ -13,6 +14,7 @@ use analysis::{ProjectFailure, ProjectState};
 use completion::Completer;
 use configuration::Configuration;
 use document_links::ImportDocumentLinks;
+use documentation::SourceDocumentationHover;
 use format::{DocumentFormatter, FormattingOutcome};
 use progress::{AnalysisProgressReporter, AnalysisProgressSession};
 use rename::RenameRejection;
@@ -74,12 +76,11 @@ impl<T> AnalysisTask<T> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct DocumentRevision(u64);
+struct SourceRevision(u64);
 
 #[derive(Clone)]
 struct OpenDocument {
     source: String,
-    revision: DocumentRevision,
 }
 
 struct SessionState {
@@ -99,24 +100,31 @@ impl Default for SessionState {
 }
 
 impl SessionState {
+    fn advance_revision(&mut self) {
+        self.next_document_revision =
+            self.next_document_revision.checked_add(1).expect("source revision counter overflowed");
+    }
+
+    fn refresh_disk(&mut self, path: &Path) {
+        let _ = self.compiler.refresh_disk(path);
+        self.advance_revision();
+    }
+
     fn set_document(&mut self, path: &Path, source: String) -> std::result::Result<(), String> {
         self.compiler.set_overlay(path, source.clone()).map_err(|error| error.to_string())?;
-        let revision = DocumentRevision(self.next_document_revision);
-        self.next_document_revision = self
-            .next_document_revision
-            .checked_add(1)
-            .expect("document revision counter overflowed");
-        self.open_documents.insert(path.to_path_buf(), OpenDocument { source, revision });
+        self.advance_revision();
+        self.open_documents.insert(path.to_path_buf(), OpenDocument { source });
         Ok(())
     }
 
     fn close_document(&mut self, path: &Path) {
         self.open_documents.remove(path);
         let _ = self.compiler.clear_overlay(path);
+        self.advance_revision();
     }
 
-    fn revision(&self, path: &Path) -> Option<DocumentRevision> {
-        self.open_documents.get(path).map(|document| document.revision)
+    fn revision(&self) -> SourceRevision {
+        SourceRevision(self.next_document_revision)
     }
 
     fn source(&self, path: &Path) -> Option<String> {
@@ -125,7 +133,7 @@ impl SessionState {
 }
 
 struct CachedProject {
-    revision: Option<DocumentRevision>,
+    revision: SourceRevision,
     project: ProjectState,
 }
 
@@ -150,6 +158,7 @@ pub struct Cajun {
     completion_label_details: AtomicBool,
     configuration: Configuration,
     next_progress_sequence: AtomicU64,
+    documentation_checks: tokio::sync::Semaphore,
 }
 
 impl Cajun {
@@ -164,6 +173,7 @@ impl Cajun {
             completion_label_details: AtomicBool::new(false),
             configuration: Configuration::default(),
             next_progress_sequence: AtomicU64::new(1),
+            documentation_checks: tokio::sync::Semaphore::new(1),
         }
     }
 
@@ -175,7 +185,7 @@ impl Cajun {
         let path = Self::path(uri).ok()?;
         let (revision, snapshot) = {
             let session = self.session.lock().await;
-            (session.revision(&path), session.compiler.snapshot())
+            (session.revision(), session.compiler.snapshot())
         };
         let graph_path = path.clone();
         let graph = tokio::task::spawn_blocking(move || {
@@ -186,7 +196,7 @@ impl Cajun {
         let AnalysisTask::Completed(Ok(graph)) = graph else {
             return None;
         };
-        if self.session.lock().await.revision(&path) != revision {
+        if self.session.lock().await.revision() != revision {
             return None;
         }
         Some((path, graph))
@@ -201,12 +211,13 @@ impl Cajun {
         };
         let revision = {
             let session = self.session.lock().await;
-            session.revision(&path)
+            session.revision()
         };
-        // Fast path: an unchanged open document reuses its cached analysis.
+        // Every root shares the source revision: an imported edit invalidates
+        // consumers too, including roots whose own editor buffer is unchanged.
         // Re-analyzing on every request would both waste the session's
         // memoized queries and replace the project editors are reading.
-        if revision.is_some() {
+        {
             let projects = self.projects.read().await;
             if let Some(cached) = projects.get(&path)
                 && cached.revision == revision
@@ -248,11 +259,11 @@ impl Cajun {
     }
 
     async fn commit_analysis(
-        &self, path: PathBuf, revision: Option<DocumentRevision>,
+        &self, path: PathBuf, revision: SourceRevision,
         result: std::result::Result<ProjectState, ProjectFailure>,
     ) -> RefreshOutcome {
         let session = self.session.lock().await;
-        if session.revision(&path) != revision {
+        if session.revision() != revision {
             return RefreshOutcome::Superseded;
         }
         let mut projects = self.projects.write().await;
@@ -340,6 +351,31 @@ impl Cajun {
         source.or_else(|| std::fs::read_to_string(path).ok())
     }
 
+    async fn source_documentation_hover(
+        &self, target: TextDocumentPositionParams,
+    ) -> Option<Hover> {
+        let path = Self::path(&target.text_document.uri).ok()?;
+        let (revision, snapshot) = {
+            let session = self.session.lock().await;
+            (session.revision(), session.compiler.snapshot())
+        };
+        let source_path = path.clone();
+        let hover = tokio::task::spawn_blocking(move || {
+            AnalysisTask::run(move || {
+                SourceDocumentationHover::at(&snapshot, &source_path, target.position)
+            })
+        })
+        .await
+        .ok()?;
+        if self.session.lock().await.revision() != revision {
+            return None;
+        }
+        match hover {
+            | AnalysisTask::Completed(hover) => hover,
+            | AnalysisTask::Cancelled => None,
+        }
+    }
+
     fn path(uri: &Url) -> std::result::Result<PathBuf, String> {
         uri.to_file_path()
             .map(|path| Self::normalize_path(&path))
@@ -388,6 +424,9 @@ impl LanguageServer for Cajun {
                 version: Some(env!("CARGO_PKG_VERSION").to_string()),
             }),
             capabilities: ServerCapabilities {
+                experimental: Some(serde_json::json!({
+                    "zydecoDocumentation": { "version": 1, "checkExamples": true }
+                })),
                 position_encoding: Some(PositionEncodingKind::UTF16),
                 text_document_sync: Some(TextDocumentSyncCapability::Options(
                     TextDocumentSyncOptions {
@@ -480,8 +519,23 @@ impl LanguageServer for Cajun {
         }
         if let Some(text) = params.text {
             self.set_document(&params.text_document.uri, text).await;
+        } else if let Ok(path) = Self::path(&params.text_document.uri) {
+            self.session.lock().await.refresh_disk(&path);
         }
         self.analyze_and_publish(params.text_document.uri, None, None).await;
+    }
+
+    async fn did_change_watched_files(
+        &self, params: tower_lsp::lsp_types::DidChangeWatchedFilesParams,
+    ) {
+        let mut session = self.session.lock().await;
+        for change in params.changes {
+            if ZydecoDocument::accepts(&change.uri)
+                && let Ok(path) = Self::path(&change.uri)
+            {
+                session.refresh_disk(&path);
+            }
+        }
     }
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
@@ -519,6 +573,14 @@ impl LanguageServer for Cajun {
         let uri = params.text_document.uri;
         if !ZydecoDocument::accepts(&uri) {
             return Ok(None);
+        }
+        match self.refresh(&uri).await {
+            | RefreshOutcome::Updated(path) => {
+                let projects = self.projects.read().await;
+                return Ok(projects.get(&path).map(|cached| cached.project.document_links(&path)));
+            }
+            | RefreshOutcome::Superseded => return Ok(None),
+            | RefreshOutcome::Failed(_) => {}
         }
         let Some((path, graph)) = self.source_graph(&uri).await else {
             return Ok(None);
@@ -585,7 +647,10 @@ impl LanguageServer for Cajun {
         }
         let path = match self.refresh(&target.text_document.uri).await {
             | RefreshOutcome::Updated(path) => path,
-            | RefreshOutcome::Failed(_) | RefreshOutcome::Superseded => return Ok(None),
+            | RefreshOutcome::Failed(_) => {
+                return Ok(self.source_documentation_hover(target).await);
+            }
+            | RefreshOutcome::Superseded => return Ok(None),
         };
         let options = self.configuration.snapshot().await.hover;
         let session = self.session.lock().await;
@@ -606,7 +671,7 @@ impl LanguageServer for Cajun {
         };
         let (revision, snapshot) = {
             let session = self.session.lock().await;
-            (session.revision(&path), session.compiler.snapshot())
+            (session.revision(), session.compiler.snapshot())
         };
         let completer = Completer {
             snippets: self.completion_snippets.load(Ordering::Relaxed),
@@ -620,7 +685,7 @@ impl LanguageServer for Cajun {
             })
         })
         .await;
-        if self.session.lock().await.revision(&path) != revision {
+        if self.session.lock().await.revision() != revision {
             return Ok(None);
         }
         Ok(match completion {
@@ -688,7 +753,7 @@ impl LanguageServer for Cajun {
         };
         let (revision, source) = {
             let session = self.session.lock().await;
-            (session.revision(&path), session.source(&path))
+            (session.revision(), session.source(&path))
         };
         let refined = self
             .projects

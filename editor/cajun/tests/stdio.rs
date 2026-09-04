@@ -6,6 +6,9 @@ use std::{
 };
 use tower_lsp::lsp_types::{Position, Url};
 
+#[path = "stdio/documentation.rs"]
+mod documentation;
+
 /// Locate a needle's UTF-16 line-and-column in a source string, so test
 /// positions survive source reformatting.
 fn source_position(source: &str, needle: &str) -> Position {

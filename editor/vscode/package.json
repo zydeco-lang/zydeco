@@ -22,6 +22,22 @@
   },
   "main": "./dist/extension.js",
   "contributes": {
+    "commands": [
+      {
+        "command": "zydeco.showDocumentation",
+        "title": "Zydeco: Show Documentation",
+        "enablement": "editorLangId == zydeco"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "zydeco.showDocumentation",
+          "when": "editorLangId == zydeco",
+          "group": "navigation"
+        }
+      ]
+    },
     "languages": [
       {
         "id": "zydeco",
@@ -82,6 +98,7 @@
     }
   },
   "scripts": {
+    "test": "esbuild tests/documentation-target.test.ts --bundle --platform=node --outfile=dist/documentation-target.test.cjs && node --test dist/documentation-target.test.cjs",
     "bundle": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
     "check": "tsc --noEmit",
     "compile": "npm run check && npm run bundle -- --sourcemap",

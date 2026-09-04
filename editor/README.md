@@ -6,6 +6,9 @@ and definition and reference lookup across imported source files.
 Renaming a resolved symbol rewrites its definition and every resolved use across the same files,
 preserving the name's lexical class and refusing words reserved by the grammar.
 Hovering over a resolved name shows its inferred kind or type, with source links for referenced type names.
+Hover also includes an `@[doc]` summary; completion presents full prose, and semantic Markdown links resolve
+in their authoring scope. VS Code adds a persistent documentation panel with pinning, type views, and explicit
+example checking. See [project documentation](../docs/documentation.md) for authoring and CLI reference generation.
 Cajun also provides semantic tokens whose name classes are refined by Zydeco's resolver and CBPV type checker.
 Inside `@[...]` and `@(...)`, Cajun completes compiler-recognized metadata names, nested options, and closed
 identifier domains such as intrinsic roles and formatting policies. These suggestions come from the surface

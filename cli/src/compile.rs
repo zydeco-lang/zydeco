@@ -33,6 +33,24 @@ pub struct TestInteraction {
 }
 
 impl CommandCompiler {
+    pub fn documentation_example_request(
+        &self, example: &zydeco_session::source::DocumentationExample,
+    ) -> Result<
+        zydeco_session::source::DocumentationExampleRequest,
+        zydeco_session::source::DocumentationExampleError,
+    > {
+        example.request(&self.session)
+    }
+
+    pub fn documentation_reference(
+        &self, path: &Path,
+    ) -> Result<
+        zydeco_session::source::DocumentationReference,
+        zydeco_session::source::DocumentationReferenceError,
+    > {
+        self.session.documentation_reference(path)
+    }
+
     /// Re-validate the finished arena after every successful check.
     ///
     /// Lint failures are compiler bugs, so the gated entry point aborts with an

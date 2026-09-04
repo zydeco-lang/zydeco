@@ -23,6 +23,7 @@ use zydeco_surface::{
 use zydeco_utils::arena::ArenaAccess;
 
 mod completion;
+mod documentation;
 pub use completion::{CompletionAnalysis, CompletionError, CompletionSemantics};
 mod paths;
 pub use paths::{SourcePathCandidate, SourcePathCandidateKind};
@@ -59,9 +60,19 @@ pub struct ProgramAnalysis {
     statics: StaticsArena,
     outcome: AnalysisOutcome,
     observations: Vec<TyckObservation>,
+    documentation: crate::source::DocumentationIndex,
+    scoped_root: zydeco_surface::scoped::syntax::TermId,
 }
 
 impl ProgramAnalysis {
+    pub fn scoped_root(&self) -> zydeco_surface::scoped::syntax::TermId {
+        self.scoped_root
+    }
+
+    pub fn documentation(&self) -> &crate::source::DocumentationIndex {
+        &self.documentation
+    }
+
     pub fn graph(&self) -> &SourceGraph {
         &self.graph
     }
@@ -594,6 +605,8 @@ fn analyze_source(
     let graph = source_graph(db, root).map_err(|error| AnalysisError::Source { error })?;
     let (spans, zydeco_statics::query::TyckOutput { scoped, outcome: checked }) =
         rechecked(db, root)?;
+    let documentation =
+        crate::source::DocumentationIndex::new(&graph, &spans, &scoped, &checked.statics_arc());
     let (statics, outcome, observations) = match checked {
         | zydeco_statics::SourceCheckOutcome::Checked(CheckedSource {
             statics,
@@ -608,7 +621,17 @@ fn analyze_source(
             (statics.clone_keyed_indexes(), AnalysisOutcome::Rejected { diagnostics }, observations)
         }
     };
-    Ok(Arc::new(ProgramAnalysis { graph, spans, scoped, statics, outcome, observations }))
+    let scoped_root = resolved_data(db, root)?.root(db);
+    Ok(Arc::new(ProgramAnalysis {
+        graph,
+        spans,
+        scoped,
+        statics,
+        outcome,
+        observations,
+        documentation,
+        scoped_root,
+    }))
 }
 
 /// The type-check diagnostics recorded for one analyzed root, computed on demand.

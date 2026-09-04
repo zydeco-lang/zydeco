@@ -362,6 +362,7 @@ impl TypeId {
                             .builtin_roles
                             .transfer_value(*self, target)
                             .expect("a fresh substituted label cannot have a conflicting role");
+                        tycker.statics.member_provenance.transfer((*self).into(), target.into());
                         target
                     }
                 }
@@ -615,6 +616,7 @@ impl TypeId {
                             .builtin_roles
                             .transfer_value(*self, target)
                             .expect("a fresh substituted label cannot have a conflicting role");
+                        tycker.statics.member_provenance.transfer((*self).into(), target.into());
                         target
                     }
                 }
@@ -1451,6 +1453,7 @@ impl TypeId {
                             .builtin_roles
                             .transfer_value(res, target)
                             .expect("a fresh resolved label cannot have a conflicting role");
+                        tycker.statics.member_provenance.transfer(res.into(), target.into());
                         target
                     }
                 }
@@ -1808,7 +1811,9 @@ impl KindId {
                     if inner_norm == inner {
                         self
                     } else {
-                        Alloc::alloc(tycker, Label(name, inner_norm), (), &())
+                        let target: KindId = Alloc::alloc(tycker, Label(name, inner_norm), (), &());
+                        tycker.statics.member_provenance.transfer(self.into(), target.into());
+                        target
                     }
                 }
             },
@@ -1934,6 +1939,7 @@ impl TypeId {
                             .builtin_roles
                             .transfer_value(self, target)
                             .expect("a fresh normalized label cannot have a conflicting role");
+                        tycker.statics.member_provenance.transfer(self.into(), target.into());
                         target
                     }
                 }

@@ -239,10 +239,11 @@ impl SourceUnit {
     /// provides the durable attachment point, and only an uninterrupted block
     /// of `--|` lines immediately above that annotation becomes its text.
     pub fn documentation(&self, arena: &TextArena, spans: &SpanArena) -> Vec<DocumentationSite> {
-        let _root = &arena.terms[&self.root];
+        let reachable = arena.reachable_from(self.root.into());
         let mut sites = arena
             .terms
             .iter()
+            .filter(|(term, _)| reachable.contains(&(**term).into()))
             .filter_map(|(term, syntax)| match syntax {
                 | Term::Meta(MetaTerm(meta, payload)) => {
                     DocumentationSite::decode(*term, *meta, *payload, arena, spans)

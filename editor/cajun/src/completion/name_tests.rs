@@ -67,6 +67,30 @@ fn types_are_label_details_and_plain_detail_fallbacks_not_inserted_text() {
 }
 
 #[test]
+fn documentation_uses_current_semantics_and_stays_out_of_inserted_text() {
+    let fixture = Fixture::new(
+        "--| The answer.\n--|\n--| Longer explanation.\n@[doc] let value = 42 in val¦ue",
+    );
+    let items = fixture.items(true).unwrap();
+    let [item] = items.as_slice() else { panic!("one completion") };
+    let Some(Documentation::MarkupContent(docs)) = &item.documentation else {
+        panic!("Markdown documentation")
+    };
+    assert_eq!(docs.kind, MarkupKind::Markdown);
+    assert_eq!(docs.value, "The answer.\n\nLonger explanation.");
+    assert!(fixture.apply(item).ends_with("in value"));
+}
+
+#[test]
+fn completion_does_not_reuse_shadowed_documentation() {
+    let fixture =
+        Fixture::new("--| Outer value.\n@[doc] let value = 42 in let value = 0 in val¦ue");
+    let items = fixture.items(true).unwrap();
+    let [item] = items.as_slice() else { panic!("one completion") };
+    assert!(item.documentation.is_none());
+}
+
+#[test]
 fn type_definitions_share_classification_with_semantic_highlighting() {
     let fixture = Fixture::new("let Number = @[intrinsic(i64)] _ in Nu¦mber");
     let items = fixture.items(true).unwrap();

@@ -34,9 +34,11 @@ pub struct CompletionAnalysis {
 /// The arenas owning completion annotations, never an older strict analysis's IDs.
 #[derive(Debug)]
 pub struct CompletionSemantics {
+    pub spans: Arc<zydeco_surface::textual::syntax::SpanArena>,
     pub scoped: Arc<ScopedArena>,
     pub statics: Arc<StaticsArena>,
     pub typing: CompletionTyping,
+    pub documentation: crate::source::DocumentationIndex,
 }
 
 impl CompletionSemantics {
@@ -173,7 +175,20 @@ fn complete_source(
             candidates.iter().map(|candidate| candidate.definition).collect::<Vec<_>>(),
         );
         let CompletionTyckOutput { source, typing } = check_completion(db, data, request);
-        CompletionSemantics { scoped: source.scoped, statics: source.outcome.statics_arc(), typing }
+        let statics = source.outcome.statics_arc();
+        let documentation = crate::source::DocumentationIndex::new(
+            &graph,
+            data.spans(db),
+            &source.scoped,
+            &statics,
+        );
+        CompletionSemantics {
+            spans: Arc::clone(data.spans(db)),
+            scoped: source.scoped,
+            statics,
+            typing,
+            documentation,
+        }
     });
     candidates.retain(|candidate| {
         !semantics.as_ref().is_some_and(|semantics| {
