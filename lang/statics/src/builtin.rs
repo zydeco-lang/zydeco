@@ -105,6 +105,7 @@ impl BuiltinOperationAbi {
         use BuiltinValueRole as Role;
 
         let int64 = Atom::Integer(IntegerType::Int64);
+        let uint8 = Atom::Integer(IntegerType::UInt8);
         let classifier = match role {
             | Role::Integer(integer, operation) => {
                 let atom = Atom::Integer(integer);
@@ -148,6 +149,10 @@ impl BuiltinOperationAbi {
             | Role::BytesAppend => Self::pure([Atom::Bytes, Atom::Bytes], Atom::Bytes),
             | Role::BytesFromStr => Self::pure([Atom::String], Atom::Bytes),
             | Role::BytesToStr => Self::optional([Atom::Bytes], Atom::String),
+            | Role::BytesGet => Self::optional([Atom::Bytes, int64], uint8),
+            | Role::BytesSlice => Self::optional([Atom::Bytes, int64, int64], Atom::Bytes),
+            | Role::BytesSingleton => Self::pure([uint8], Atom::Bytes),
+            | Role::BytesEq | Role::BytesLt => Self::branch([Atom::Bytes, Atom::Bytes]),
             | Role::Stdin => Self::pure([], Atom::Reader),
             | Role::Stdout | Role::Stderr => Self::pure([], Atom::Writer),
             | Role::IoRead => Self::io_effect(

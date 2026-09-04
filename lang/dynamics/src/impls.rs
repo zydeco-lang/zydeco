@@ -1,5 +1,5 @@
 use crate::{
-    host::{HostIoErrorKind, HostRuntime, HostValue, ReaderHandle, WriterHandle},
+    host::{HostIoErrorKind, HostRuntime, HostValue, ReaderHandle, SharedBytes, WriterHandle},
     syntax::*,
 };
 use std::{
@@ -525,15 +525,19 @@ pub fn str_parse_int_branch(
 struct HostBytes;
 
 impl HostBytes {
-    fn value(bytes: impl Into<Rc<[u8]>>) -> ZValue {
+    fn value(bytes: impl Into<SharedBytes>) -> ZValue {
         HostValue::Bytes(bytes.into()).into()
     }
 
-    fn borrow(value: &ZValue) -> &[u8] {
+    fn shared(value: &ZValue) -> &SharedBytes {
         match value {
             | ZValue::Host(HostValue::Bytes(bytes)) => bytes,
             | _ => unreachable!("expected host byte buffer"),
         }
+    }
+
+    fn borrow(value: &ZValue) -> &[u8] {
+        HostBytes::shared(value).as_slice()
     }
 }
 
@@ -592,6 +596,91 @@ pub fn bytes_to_str_branch(
                 .ok()
                 .map(|string| Literal::String(string.into()).into());
             OptionalValueBranch::select(value, when_invalid, when_valid)
+        }
+        | _ => unreachable!(""),
+    }
+}
+
+/// Safely index a byte buffer and select a continuation with the octet.
+pub fn bytes_get_branch(
+    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
+) -> Result<ZCompute, i32> {
+    match args.as_slice() {
+        | [
+            bytes,
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(index))),
+            when_none @ ZValue::Thunk(_),
+            when_some @ ZValue::Thunk(_),
+        ] => {
+            let octet = usize::try_from(*index)
+                .ok()
+                .and_then(|index| HostBytes::borrow(bytes).get(index).copied())
+                .map(|octet| Literal::Integer(IntegerLiteral::UInt8(octet)).into());
+            OptionalValueBranch::select(octet, when_none, when_some)
+        }
+        | _ => unreachable!(""),
+    }
+}
+
+/// Return the checked `[start, start + length)` window of a byte buffer.
+pub fn bytes_slice_branch(
+    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
+) -> Result<ZCompute, i32> {
+    match args.as_slice() {
+        | [
+            bytes,
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(start))),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(length))),
+            when_none @ ZValue::Thunk(_),
+            when_some @ ZValue::Thunk(_),
+        ] => {
+            let window = usize::try_from(*start)
+                .ok()
+                .and_then(|start| {
+                    usize::try_from(*length).ok().and_then(|length| {
+                        HostBytes::shared(bytes).slice(start, length).map(HostValue::Bytes)
+                    })
+                })
+                .map(ZValue::from);
+            OptionalValueBranch::select(window, when_none, when_some)
+        }
+        | _ => unreachable!(""),
+    }
+}
+
+/// Build a one-octet buffer; every `UInt8` is a valid octet, so the input needs no check.
+pub fn bytes_singleton(
+    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
+) -> Result<ZCompute, i32> {
+    match args.as_slice() {
+        | [ZValue::Literal(Literal::Integer(IntegerLiteral::UInt8(octet)))] => {
+            ret(HostBytes::value(vec![*octet]))
+        }
+        | _ => unreachable!(""),
+    }
+}
+
+/// Select a computation according to byte-wise structural equality.
+pub fn bytes_eq_branch(
+    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
+) -> Result<ZCompute, i32> {
+    match args.as_slice() {
+        | [first, second, when_true @ ZValue::Thunk(_), when_false @ ZValue::Thunk(_)] => {
+            let equal = HostBytes::borrow(first) == HostBytes::borrow(second);
+            Branch::select(equal, when_true, when_false)
+        }
+        | _ => unreachable!(""),
+    }
+}
+
+/// Select a computation according to lexicographic byte order.
+pub fn bytes_lt_branch(
+    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
+) -> Result<ZCompute, i32> {
+    match args.as_slice() {
+        | [first, second, when_true @ ZValue::Thunk(_), when_false @ ZValue::Thunk(_)] => {
+            let less = HostBytes::borrow(first) < HostBytes::borrow(second);
+            Branch::select(less, when_true, when_false)
         }
         | _ => unreachable!(""),
     }

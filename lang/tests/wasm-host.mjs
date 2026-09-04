@@ -12,6 +12,16 @@ class ExitSignal extends Error {
   }
 }
 
+function compareBytes(first, second) {
+  const shared = Math.min(first.length, second.length);
+  for (let index = 0; index < shared; index += 1) {
+    if (first[index] !== second[index]) {
+      return first[index] < second[index] ? -1 : 1;
+    }
+  }
+  return Math.sign(first.length - second.length);
+}
+
 class RuntimeWords {
   constructor(memory) {
     this.memory = memory;
@@ -535,6 +545,47 @@ class ZydecoHost {
         throw error;
       }
     });
+    functions.set("bytes_get_branch", (bytes, index, whenNone, whenSome) => {
+      const view = this.values.getBytes(bytes);
+      const decoded = this.words.decodeSigned(index, 64);
+      if (decoded < 0n || decoded >= BigInt(view.length)) {
+        return Transfers.withoutArguments(whenNone);
+      }
+      return Transfers.withOneArgument(
+        whenSome,
+        RuntimeWords.immediateUnsigned(BigInt(view[Number(decoded)])),
+      );
+    });
+    functions.set("bytes_slice_branch", (bytes, start, length, whenNone, whenSome) => {
+      const view = this.values.getBytes(bytes);
+      const from = this.words.decodeSigned(start, 64);
+      const span = this.words.decodeSigned(length, 64);
+      if (from < 0n || span < 0n || from + span > BigInt(view.length)) {
+        return Transfers.withoutArguments(whenNone);
+      }
+      const offset = Number(from);
+      return Transfers.withOneArgument(
+        whenSome,
+        this.values.bytes(view.subarray(offset, offset + Number(span))),
+      );
+    });
+    functions.set("bytes_singleton", (octet) =>
+      this.values.bytes([Number(RuntimeWords.decodeImmediateUnsigned(octet))]),
+    );
+    functions.set("bytes_eq_branch", (first, second, whenTrue, whenFalse) =>
+      Transfers.withoutArguments(
+        compareBytes(this.values.getBytes(first), this.values.getBytes(second)) === 0
+          ? whenTrue
+          : whenFalse,
+      ),
+    );
+    functions.set("bytes_lt_branch", (first, second, whenTrue, whenFalse) =>
+      Transfers.withoutArguments(
+        compareBytes(this.values.getBytes(first), this.values.getBytes(second)) < 0
+          ? whenTrue
+          : whenFalse,
+      ),
+    );
   }
 
   installIo(functions) {

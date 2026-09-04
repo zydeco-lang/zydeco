@@ -8,9 +8,68 @@ use std::{
 /// Opaque values whose representation belongs to the interpreter runtime.
 #[derive(Clone, Debug)]
 pub enum HostValue {
-    Bytes(Rc<[u8]>),
+    Bytes(SharedBytes),
     Reader(ReaderHandle),
     Writer(WriterHandle),
+}
+
+/// Immutable octet sequence backed by one shared allocation.
+///
+/// `slice` re-windows the same buffer instead of copying, so derived buffers
+/// share memory with their source; `as_slice` is always contiguous, which keeps
+/// foreign calls a plain pointer-and-length borrow.
+#[derive(Clone, Debug)]
+pub struct SharedBytes {
+    buffer: Rc<[u8]>,
+    start: usize,
+    len: usize,
+}
+
+impl SharedBytes {
+    pub fn from_buffer(buffer: Rc<[u8]>) -> Self {
+        let len = buffer.len();
+        Self { buffer, start: 0, len }
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        &self.buffer[self.start..self.start + self.len]
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Checked sub-window `[start, start + len)` of this buffer.
+    pub fn slice(&self, start: usize, len: usize) -> Option<Self> {
+        let end = start.checked_add(len)?;
+        if start <= self.len && end <= self.len {
+            Some(Self { buffer: self.buffer.clone(), start: self.start + start, len })
+        } else {
+            None
+        }
+    }
+}
+
+impl From<Vec<u8>> for SharedBytes {
+    fn from(bytes: Vec<u8>) -> Self {
+        Self::from_buffer(bytes.into())
+    }
+}
+
+impl PartialEq for SharedBytes {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_slice() == other.as_slice()
+    }
+}
+
+impl PartialOrd for SharedBytes {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.as_slice().cmp(other.as_slice()))
+    }
 }
 
 /// Identifier for a readable runtime capability.

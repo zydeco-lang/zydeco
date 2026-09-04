@@ -4,15 +4,46 @@ begin
   let Ret = @(intrinsic(ret)) in
   let Bytes = @(intrinsic(bytes)) in
   let Int64 = @(intrinsic(i64)) in
+  let UInt8 = @(intrinsic(u8)) in
   let String = @(intrinsic(string)) in
     (@[builtin(bytes_empty)] (#empty :: Thk (Ret Bytes)))
   * (@[builtin(bytes_length)] (#length :: Thk (Bytes -> Ret Int64)))
   * (@[builtin(bytes_append)] (#append :: Thk (Bytes -> Bytes -> Ret Bytes)))
   * (@[builtin(bytes_from_str)] (#from_string :: Thk (String -> Ret Bytes)))
+  * (@[builtin(bytes_singleton)] (#singleton :: Thk (UInt8 -> Ret Bytes)))
   * (
       @[builtin(bytes_to_str)] (
         #to_string :: Thk (
           forall (R : CType) . Bytes -> Thk R -> Thk (String -> R) -> R
+        )
+      )
+    )
+  * (
+      @[builtin(bytes_get)] (
+        #get :: Thk (
+          forall (R : CType) . Bytes -> Int64 -> Thk R -> Thk (UInt8 -> R) -> R
+        )
+      )
+    )
+  * (
+      @[builtin(bytes_slice)] (
+        #slice :: Thk (
+          forall (R : CType) .
+            Bytes -> Int64 -> Int64 -> Thk R -> Thk (Bytes -> R) -> R
+        )
+      )
+    )
+  * (
+      @[builtin(bytes_eq)] (
+        #eq :: Thk (
+          forall (R : CType) . Bytes -> Bytes -> Thk R -> Thk R -> R
+        )
+      )
+    )
+  * (
+      @[builtin(bytes_lt)] (
+        #lt :: Thk (
+          forall (R : CType) . Bytes -> Bytes -> Thk R -> Thk R -> R
         )
       )
     )

@@ -7,6 +7,7 @@ begin
   let (/Char) = representations/char in
   let (/String) = representations/string in
   let (/Bytes) = representations/bytes in
+  let (/UInt8) = representations/u8 in
   let (= Int64, int64) = numeric/int64 in
   let (/char; /string; /bytes) = text in
   let ! compare (A : VType)
@@ -25,6 +26,7 @@ begin
       { ret bool/false }
   in
   let ! int64_eq (left : Int64) (right : Int64) : Ret Bool = ! compare Int64 int64/eq left right in
+  let ! int64_lt (left : Int64) (right : Int64) : Ret Bool = ! compare Int64 int64/lt left right in
   let ! str_eq (left : String) (right : String) : Ret Bool = ! compare String string/eq left right
   in
   let ! str_split_once (value : String)
@@ -133,6 +135,122 @@ begin
     {
       fn string => ! option/some String string
     } in
+  let ! bytes_get (value : Bytes) (index : Int64) : Ret (Option UInt8) = ! bytes/get
+    (Ret (Option UInt8))
+    value
+    index
+    { ! option/none UInt8 }
+    {
+      fn octet => ! option/some UInt8 octet
+    } in
+  let ! bytes_slice (value : Bytes)
+    (start : Int64)
+    (length : Int64)
+  : Ret (Option Bytes) = ! bytes/slice
+      (Ret (Option Bytes))
+      value
+      start
+      length
+      { ! option/none Bytes }
+      {
+        fn window => ! option/some Bytes window
+      }
+  in
+  let ! bytes_singleton (octet : UInt8) : Ret Bytes = ! bytes/singleton octet in
+  let ! bytes_eq (left : Bytes) (right : Bytes) : Ret Bool = ! compare Bytes bytes/eq left right in
+  let ! bytes_lt (left : Bytes) (right : Bytes) : Ret Bool = ! compare Bytes bytes/lt left right in
+  let ! bytes_gt (left : Bytes) (right : Bytes) : Ret Bool = ! compare Bytes bytes/lt right left in
+  let ! bytes_le (left : Bytes) (right : Bytes) : Ret Bool =
+    do greater <- ! bytes_gt left right;
+    ! bool/not greater
+  in
+  let ! bytes_ge (left : Bytes) (right : Bytes) : Ret Bool =
+    do less <- ! bytes_lt left right;
+    ! bool/not less
+  in
+  let ! bytes_is_empty (value : Bytes) : Ret Bool =
+    do length <- ! bytes/length value;
+    ! int64_eq length 0
+  in
+  let fix bytes_to_list_from (value : Bytes) (index : Int64) : Ret (List UInt8) =
+    do octet <- ! bytes_get value index;
+    ! option/fold
+      UInt8
+      (Ret (List UInt8))
+      octet
+      { ! list/nil UInt8 }
+      {
+        fn head =>
+          do successor <- ! int64/add index 1;
+          do tail <- ! bytes_to_list_from value successor;
+          ! list/cons UInt8 head tail
+      }
+  in
+  let ! bytes_to_list (value : Bytes) : Ret (List UInt8) = ! bytes_to_list_from value 0 in
+  let ! bytes_from_list (octets : List UInt8) : Ret Bytes = ! list/fold
+    UInt8
+    (Ret Bytes)
+    octets
+    { ! bytes/empty }
+    {
+      fn octet rest =>
+        do tail <- ! rest;
+        do one <- ! bytes_singleton octet;
+        ! bytes/append one tail
+    } in
+  let ! bytes_concat (buffers : List Bytes) : Ret Bytes = ! list/fold
+    Bytes
+    (Ret Bytes)
+    buffers
+    { ! bytes/empty }
+    {
+      fn head tail =>
+        do rest <- ! tail;
+        ! bytes/append head rest
+    } in
+  let ! bytes_starts_with (value : Bytes) (prefix : Bytes) : Ret Bool =
+    do value_length <- ! bytes/length value;
+    do prefix_length <- ! bytes/length prefix;
+    do too_short <- ! int64_lt value_length prefix_length;
+    do fits <- ! bool/not too_short;
+    ! bool/if
+      (Ret Bool)
+      fits
+      {
+        do window <- ! bytes_slice value 0 prefix_length;
+        ! option/fold
+          Bytes
+          (Ret Bool)
+          window
+          { ret bool/false }
+          {
+            fn candidate => ! bytes_eq candidate prefix
+          }
+      }
+      { ret bool/false }
+  in
+  let ! bytes_ends_with (value : Bytes) (suffix : Bytes) : Ret Bool =
+    do value_length <- ! bytes/length value;
+    do suffix_length <- ! bytes/length suffix;
+    do too_short <- ! int64_lt value_length suffix_length;
+    do fits <- ! bool/not too_short;
+    ! bool/if
+      (Ret Bool)
+      fits
+      {
+        do offset <- ! int64/sub value_length suffix_length;
+        do window <- ! bytes_slice value offset suffix_length;
+        ! option/fold
+          Bytes
+          (Ret Bool)
+          window
+          { ret bool/false }
+          {
+            fn candidate => ! bytes_eq candidate suffix
+          }
+      }
+      { ret bool/false }
+  in
   (
     #char = (
       #to_string = char/to_string,
@@ -159,9 +277,23 @@ begin
     #bytes = (
       #empty = bytes/empty,
       #length = bytes/length,
+      #is_empty = bytes_is_empty,
       #append = bytes/append,
+      #concat = bytes_concat,
+      #get = bytes_get,
+      #slice = bytes_slice,
+      #singleton = bytes_singleton,
+      #from_list = bytes_from_list,
+      #to_list = bytes_to_list,
+      #eq = bytes_eq,
+      #lt = bytes_lt,
+      #gt = bytes_gt,
+      #le = bytes_le,
+      #ge = bytes_ge,
       #from_string = bytes/from_string,
-      #to_string = bytes_to_string
+      #to_string = bytes_to_string,
+      #starts_with = bytes_starts_with,
+      #ends_with = bytes_ends_with
     )
   )
 end

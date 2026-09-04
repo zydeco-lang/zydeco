@@ -53,8 +53,9 @@ impl ForeignRuntime {
         else {
             return Err(ForeignRuntimeError::InvalidArguments(import.target.symbol.clone()));
         };
+        let view = bytes.as_slice();
         let function = self.function(&import.target)?;
-        let result = unsafe { function(bytes.as_ptr(), bytes.len(), *seed) };
+        let result = unsafe { function(view.as_ptr(), view.len(), *seed) };
         Ok(ds::Computation::Ret(Return(Rc::new(ds::Value::Lit(Literal::Integer(
             IntegerLiteral::UInt64(result),
         ))))))

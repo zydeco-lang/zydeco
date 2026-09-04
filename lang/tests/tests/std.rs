@@ -3,6 +3,7 @@ use zydeco_tests::utils::{SourceProgram, TestBackend};
 
 e2e_sources!({
     utf8 => "tests/std/utf8.zy",
+    bytes => "tests/std/bytes.zy",
     collections => "tests/std/collections.zy",
     float => "tests/std/float.zy",
     numeric_capabilities => "tests/std/numeric-capabilities.zy",

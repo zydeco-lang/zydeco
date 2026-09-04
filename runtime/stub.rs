@@ -1056,6 +1056,64 @@ extern "sysv64" fn zydeco_bytes_to_str_branch(
     }
 }
 
+#[unsafe(export_name = "\x01zydeco_bytes_get_branch")]
+extern "sysv64" fn zydeco_bytes_get_branch(
+    bytes: Word, index: Word, when_none: Word, when_some: Word,
+) -> Word {
+    let index = <i64 as RuntimeInteger>::decode(index);
+    let octet = usize::try_from(index)
+        .ok()
+        .and_then(|index| unsafe { HostBytes::borrow(bytes) }.get(index).copied());
+    match octet {
+        | None => Continuation::without_arguments(when_none),
+        | Some(octet) => Continuation::with_one_argument(
+            when_some,
+            <u8 as RuntimeInteger>::encode(octet, std::ptr::null_mut()),
+        ),
+    }
+}
+
+#[unsafe(export_name = "\x01zydeco_bytes_slice_branch")]
+extern "sysv64" fn zydeco_bytes_slice_branch(
+    bytes: Word, start: Word, length: Word, when_none: Word, when_some: Word,
+) -> Word {
+    let start = <i64 as RuntimeInteger>::decode(start);
+    let length = <i64 as RuntimeInteger>::decode(length);
+    let window = usize::try_from(start)
+        .ok()
+        .and_then(|start| usize::try_from(length).ok().and_then(|length| {
+            let end = start.checked_add(length)?;
+            let source = unsafe { HostBytes::borrow(bytes) };
+            (end <= source.len()).then(|| source[start..end].to_vec())
+        }));
+    match window {
+        | None => Continuation::without_arguments(when_none),
+        | Some(window) => Continuation::with_one_argument(when_some, HostBytes::leak(window)),
+    }
+}
+
+/// Build a one-octet buffer; every `UInt8` word is a valid octet, so no branch is needed.
+#[unsafe(export_name = "\x01zydeco_bytes_singleton")]
+extern "sysv64" fn zydeco_bytes_singleton(octet: Word) -> Word {
+    HostBytes::leak(vec![<u8 as RuntimeInteger>::decode(octet)])
+}
+
+#[unsafe(export_name = "\x01zydeco_bytes_eq_branch")]
+extern "sysv64" fn zydeco_bytes_eq_branch(
+    first: Word, second: Word, when_true: Word, when_false: Word,
+) -> Word {
+    let condition = unsafe { HostBytes::borrow(first) } == unsafe { HostBytes::borrow(second) };
+    Branch::select(condition, when_true, when_false)
+}
+
+#[unsafe(export_name = "\x01zydeco_bytes_lt_branch")]
+extern "sysv64" fn zydeco_bytes_lt_branch(
+    first: Word, second: Word, when_true: Word, when_false: Word,
+) -> Word {
+    let condition = unsafe { HostBytes::borrow(first) } < unsafe { HostBytes::borrow(second) };
+    Branch::select(condition, when_true, when_false)
+}
+
 /* -------------------------------- Branches -------------------------------- */
 
 #[unsafe(export_name = "\x01zydeco_str_eq_branch")]

@@ -69,6 +69,10 @@ impl Builtin {
             | BuiltinValueRole::CharFromCodepoint
             | BuiltinValueRole::StrParseInt
             | BuiltinValueRole::BytesToStr
+            | BuiltinValueRole::BytesGet
+            | BuiltinValueRole::BytesSlice
+            | BuiltinValueRole::BytesEq
+            | BuiltinValueRole::BytesLt
             | BuiltinValueRole::IoRead
             | BuiltinValueRole::IoReadLine
             | BuiltinValueRole::IoReadAll

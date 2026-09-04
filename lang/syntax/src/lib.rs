@@ -497,6 +497,11 @@ pub enum BuiltinValueRole {
     BytesAppend,
     BytesFromStr,
     BytesToStr,
+    BytesGet,
+    BytesSlice,
+    BytesSingleton,
+    BytesEq,
+    BytesLt,
     Stdin,
     Stdout,
     Stderr,
@@ -599,6 +604,10 @@ impl BuiltinValueRole {
             | Self::CharFromCodepoint => "char_from_codepoint_branch".to_owned(),
             | Self::StrParseInt => "str_parse_int_branch".to_owned(),
             | Self::BytesToStr => "bytes_to_str_branch".to_owned(),
+            | Self::BytesGet => "bytes_get_branch".to_owned(),
+            | Self::BytesSlice => "bytes_slice_branch".to_owned(),
+            | Self::BytesEq => "bytes_eq_branch".to_owned(),
+            | Self::BytesLt => "bytes_lt_branch".to_owned(),
             | Self::ReadLineAsInt => "read_line_as_int_branch".to_owned(),
             | Self::ArgList => "arg_fold".to_owned(),
             | role => role.source_name(),
@@ -616,6 +625,7 @@ impl BuiltinValueRole {
             | Self::CharCodepoint
             | Self::BytesLength
             | Self::BytesFromStr
+            | Self::BytesSingleton
             | Self::ReadLine
             | Self::ReadTillEof
             | Self::RandomInt
@@ -641,9 +651,13 @@ impl BuiltinValueRole {
             | Self::StrSplitAt
             | Self::StrEq
             | Self::StrGet
+            | Self::BytesGet
+            | Self::BytesEq
+            | Self::BytesLt
             | Self::IoRead
             | Self::IoReadLine
             | Self::IoWriteAll => 4,
+            | Self::BytesSlice => 5,
         }
     }
 }

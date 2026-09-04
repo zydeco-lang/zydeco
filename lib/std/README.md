@@ -136,6 +136,15 @@ A `Char` is one Unicode scalar value.
 `char/codepoint` returns its integer value, and `char/from_codepoint` rejects negative numbers,
 surrogate code points, and values above the Unicode range with `none`.
 
+`Bytes` is an immutable sequence of octets with no encoding attached.
+Positions and lengths count octets, not scalars, and `bytes/get` reports one octet as a `UInt8`.
+`bytes/slice value start length` returns the window `[start, start + length)` sharing storage
+with `value` where the backend supports it, so decomposing a buffer does not copy it.
+Two buffers are equal exactly when their octet sequences are equal;
+`bytes/lt` compares buffers lexicographically octet by octet.
+Construction from single octets goes through `bytes/singleton`, which is total because
+every `UInt8` is a valid octet; the byte-level FFI contract treats borrowed buffers as read-only.
+
 Unicode scalar values are deliberately different from user-perceived grapheme clusters.
 For example, a combining mark occupies its own position.
 Grapheme segmentation and normalization should be added as a separate text layer rather than changing the meaning
@@ -150,8 +159,19 @@ string/get          : String -> Int64 -> Ret (Option Char)
 string/split_at     : String -> Int64 -> Ret (Option (String * String))
 string/parse_int    : String -> Ret (Option Int64)
 char/from_codepoint : Int64 -> Ret (Option Char)
+bytes/get           : Bytes -> Int64 -> Ret (Option UInt8)
+bytes/slice         : Bytes -> Int64 -> Int64 -> Ret (Option Bytes)
 list/get            : forall (A : VType) . List A -> Int64 -> Ret (Option A)
 ```
+
+`bytes/get` returns the octet at a position as a `UInt8`, the type an octet already is.
+`bytes/singleton` is the dual construction and stays total: its `UInt8` parameter makes
+every input valid, so no branch is needed.
+`bytes/slice` takes a start and a length rather than two indices,
+so a window names the same things a pointer-and-length foreign call would.
+An empty window at the end of a buffer is valid; negative components, overlong windows,
+and positions past the end report `none`.
+Backends may back slices by shared storage, and structural equality never observes that sharing.
 
 The Builtin forms implement these results as computation-polymorphic branches.
 The public library reifies a successful branch with `option/some` and a failed branch with `option/none`.
@@ -194,7 +214,9 @@ Its comparisons select one of two computation continuations directly, avoiding a
 - `float32` and `float64`: IEEE-754 arithmetic, comparisons, negation, and string rendering.
 - `char`: UTF-8 text rendering and checked Unicode codepoint conversion.
 - `string`: scalar-aware observation, safe decomposition, character-list conversion, concatenation, and parsing.
-- `bytes`: immutable octet buffers, concatenation, length, UTF-8 encoding, and checked UTF-8 decoding.
+- `bytes`: immutable octet buffers with indexed access, sharing slices, singleton construction,
+  structural equality, lexicographic order, list conversion, concatenation,
+  UTF-8 encoding, and checked UTF-8 decoding.
 - `io`: shared byte-stream reads and writes, flushing, closing, and structured I/O errors.
 - `fs`: typed paths, file-backed capabilities, and whole-file byte and UTF-8 text operations.
 - `stdio`: standard stream capabilities and UTF-8 terminal conveniences built from `io` operations.

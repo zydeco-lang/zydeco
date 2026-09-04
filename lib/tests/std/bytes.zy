@@ -1,0 +1,228 @@
+begin
+  let make_std = @(import("../../std/std.zy")) that
+  param (/core; /representations; builtin) : @(import("../../std/builtin.zy")) that
+  let (/Ret) = core that
+  let (/Int64) = representations/i64 that
+  let (/String) = representations/string that
+  let (/Bytes) = representations/bytes that
+  let (/UInt8) = representations/u8 that
+
+  let (/Bool; /Option; /List; /bool; /option; /list; /int64; /uint8; /bytes; /string; /process) =
+    builtin |> make_std
+  in
+  let ! status (condition : Bool) : Ret Int64 = ! bool/if
+    (Ret Int64)
+    condition
+    { ret 0 }
+    {
+      ret 1
+    } in
+  let ! octet_status (found : Option UInt8) (expected : UInt8) : Ret Int64 = ! option/fold
+    UInt8
+    (Ret Int64)
+    found
+    { ret 1 }
+    {
+      fn octet =>
+        do correct <- ! uint8/eq octet expected;
+        ! status correct
+    } in
+  let ! window_status (found : Option Bytes) (expected : Bytes) : Ret Int64 = ! option/fold
+    Bytes
+    (Ret Int64)
+    found
+    { ret 1 }
+    {
+      fn window =>
+        do correct <- ! bytes/eq window expected;
+        ! status correct
+    } in
+
+  do empty <- ! bytes/empty;
+  do hello <- ! bytes/from_string "hello";
+  do world <- ! bytes/from_string "world";
+  do a <- ! bytes/from_string "a";
+  do b <- ! bytes/from_string "b";
+  do ab <- ! bytes/from_string "ab";
+  do abb <- ! bytes/from_string "abb";
+  do ell <- ! bytes/from_string "ell";
+  do llo <- ! bytes/from_string "llo";
+  do hi <- ! bytes/from_string "hi";
+  do abcd <- ! bytes/from_string "abcd";
+
+  -- indexed access observes octets and rejects invalid positions
+  do first <- ! bytes/get hello 0;
+  do first_status <- ! octet_status first 104;
+  do last <- ! bytes/get hello 4;
+  do last_status <- ! octet_status last 111;
+  do past_end <- ! bytes/get hello 5;
+  do past_end_ok <- ! option/is_none UInt8 past_end;
+  do past_end_status <- ! status past_end_ok;
+  do negative_index <- ! bytes/get hello -1;
+  do negative_index_ok <- ! option/is_none UInt8 negative_index;
+  do negative_index_status <- ! status negative_index_ok;
+
+  -- slicing returns the checked window and rejects out-of-range requests
+  do middle <- ! bytes/slice hello 1 3;
+  do middle_status <- ! window_status middle ell;
+  do whole <- ! bytes/slice hello 0 5;
+  do whole_status <- ! window_status whole hello;
+  do empty_tail <- ! bytes/slice hello 5 0;
+  do empty_tail_status <- ! window_status empty_tail empty;
+  do too_long <- ! bytes/slice hello 0 6;
+  do too_long_ok <- ! option/is_none Bytes too_long;
+  do too_long_status <- ! status too_long_ok;
+  do off_end <- ! bytes/slice hello 3 3;
+  do off_end_ok <- ! option/is_none Bytes off_end;
+  do off_end_status <- ! status off_end_ok;
+  do bad_start <- ! bytes/slice hello -1 2;
+  do bad_start_ok <- ! option/is_none Bytes bad_start;
+  do bad_start_status <- ! status bad_start_ok;
+  do bad_length <- ! bytes/slice hello 0 -1;
+  do bad_length_ok <- ! option/is_none Bytes bad_length;
+  do bad_length_status <- ! status bad_length_ok;
+
+  -- equality is structural, so windows rebuilt through sharing stay equal
+  do head_part <- ! bytes/slice hello 0 2;
+  do tail_part <- ! bytes/slice hello 2 3;
+  do joined <- ! option/and_then
+    Bytes
+    Bytes
+    head_part
+    {
+      fn head_buffer =>
+        ! option/map
+          Bytes
+          Bytes
+          tail_part
+          {
+            fn tail_buffer => ! bytes/append head_buffer tail_buffer
+          }
+    };
+  do joined_status <- ! window_status joined hello;
+  do differs <- ! bytes/eq hello world;
+  do differs_correct <- ! bool/not differs;
+  do differs_status <- ! status differs_correct;
+
+  -- lexicographic byte order and its derivatives
+  do empty_first <- ! bytes/lt empty a;
+  do empty_first_status <- ! status empty_first;
+  do prefix_first <- ! bytes/lt ab abb;
+  do prefix_first_status <- ! status prefix_first;
+  do longer_not_less <- ! bytes/lt abb ab;
+  do longer_correct <- ! bool/not longer_not_less;
+  do longer_status <- ! status longer_correct;
+  do byte_order <- ! bytes/lt b a;
+  do byte_order_correct <- ! bool/not byte_order;
+  do byte_order_status <- ! status byte_order_correct;
+  do world_greater <- ! bytes/gt world hello;
+  do world_greater_status <- ! status world_greater;
+  do self_ge <- ! bytes/ge hello hello;
+  do self_ge_status <- ! status self_ge;
+  do self_le <- ! bytes/le hello hello;
+  do self_le_status <- ! status self_le;
+
+  -- singleton builds one octet; every UInt8 is valid, so construction is total
+  do upper_a <- ! bytes/from_string "A";
+  do capital <- ! bytes/singleton 65;
+  do capital_equal <- ! bytes/eq capital upper_a;
+  do capital_status <- ! status capital_equal;
+  do top_buffer <- ! bytes/singleton 255;
+  do top_octet <- ! bytes/get top_buffer 0;
+  do top_octet_status <- ! octet_status top_octet 255;
+
+  -- the list bridge round-trips octets without revalidation
+  do no_octets <- ! list/nil UInt8;
+  do octets <- ! bytes/to_list hi;
+  do rebuilt <- ! bytes/from_list octets;
+  do rebuilt_equal <- ! bytes/eq rebuilt hi;
+  do rebuilt_status <- ! status rebuilt_equal;
+  do empty_rebuilt <- ! bytes/from_list no_octets;
+  do empty_rebuilt_equal <- ! bytes/eq empty_rebuilt empty;
+  do empty_rebuilt_status <- ! status empty_rebuilt_equal;
+
+  -- concatenation of a list of buffers preserves content
+  do cd <- ! bytes/from_string "cd";
+  do no_buffers <- ! list/nil Bytes;
+  do with_cd <- ! list/cons Bytes cd no_buffers;
+  do pieces <- ! list/cons Bytes ab with_cd;
+  do combined <- ! bytes/concat pieces;
+  do combined_equal <- ! bytes/eq combined abcd;
+  do combined_status <- ! status combined_equal;
+
+  -- prefix and suffix tests reuse slicing and equality
+  do he <- ! bytes/from_string "he";
+  do starts_prefix <- ! bytes/starts_with hello he;
+  do starts_status <- ! status starts_prefix;
+  do starts_wrong <- ! bytes/starts_with hello ell;
+  do starts_wrong_ok <- ! bool/not starts_wrong;
+  do starts_wrong_status <- ! status starts_wrong_ok;
+  do ends_suffix <- ! bytes/ends_with hello llo;
+  do ends_status <- ! status ends_suffix;
+  do ends_wrong <- ! bytes/ends_with hello ell;
+  do ends_wrong_ok <- ! bool/not ends_wrong;
+  do ends_wrong_status <- ! status ends_wrong_ok;
+  do starts_empty <- ! bytes/starts_with hello empty;
+  do starts_empty_status <- ! status starts_empty;
+  do ends_too_long <- ! bytes/ends_with a hello;
+  do ends_too_long_ok <- ! bool/not ends_too_long;
+  do ends_too_long_status <- ! status ends_too_long_ok;
+
+  -- emptiness observation and checked UTF-8 decoding
+  do empty_is_empty <- ! bytes/is_empty empty;
+  do empty_is_empty_status <- ! status empty_is_empty;
+  do a_not_empty <- ! bytes/is_empty a;
+  do a_not_empty_ok <- ! bool/not a_not_empty;
+  do a_not_empty_status <- ! status a_not_empty_ok;
+  do rejected <- ! bytes/to_string top_buffer;
+  do rejected_ok <- ! option/is_none String rejected;
+  do rejected_status <- ! status rejected_ok;
+  do encoded <- ! bytes/from_string "é";
+  do decoded <- ! bytes/to_string encoded;
+  do decoded_status <- ! option/fold
+    String
+    (Ret Int64)
+    decoded
+    { ret 1 }
+    {
+      fn text =>
+        do same <- ! string/eq text "é";
+        ! status same
+    };
+
+  do total_1 <- ! int64/add first_status last_status;
+  do total_2 <- ! int64/add total_1 past_end_status;
+  do total_3 <- ! int64/add total_2 negative_index_status;
+  do total_4 <- ! int64/add total_3 middle_status;
+  do total_5 <- ! int64/add total_4 whole_status;
+  do total_6 <- ! int64/add total_5 empty_tail_status;
+  do total_7 <- ! int64/add total_6 too_long_status;
+  do total_8 <- ! int64/add total_7 off_end_status;
+  do total_9 <- ! int64/add total_8 bad_start_status;
+  do total_10 <- ! int64/add total_9 bad_length_status;
+  do total_11 <- ! int64/add total_10 joined_status;
+  do total_12 <- ! int64/add total_11 differs_status;
+  do total_13 <- ! int64/add total_12 empty_first_status;
+  do total_14 <- ! int64/add total_13 prefix_first_status;
+  do total_15 <- ! int64/add total_14 longer_status;
+  do total_16 <- ! int64/add total_15 byte_order_status;
+  do total_17 <- ! int64/add total_16 world_greater_status;
+  do total_18 <- ! int64/add total_17 self_ge_status;
+  do total_19 <- ! int64/add total_18 self_le_status;
+  do total_20 <- ! int64/add total_19 capital_status;
+  do total_21 <- ! int64/add total_20 top_octet_status;
+  do total_22 <- ! int64/add total_21 rebuilt_status;
+  do total_23 <- ! int64/add total_22 empty_rebuilt_status;
+  do total_24 <- ! int64/add total_23 combined_status;
+  do total_25 <- ! int64/add total_24 starts_status;
+  do total_26 <- ! int64/add total_25 starts_wrong_status;
+  do total_27 <- ! int64/add total_26 ends_status;
+  do total_28 <- ! int64/add total_27 ends_wrong_status;
+  do total_29 <- ! int64/add total_28 starts_empty_status;
+  do total_30 <- ! int64/add total_29 ends_too_long_status;
+  do total_31 <- ! int64/add total_30 empty_is_empty_status;
+  do total_32 <- ! int64/add total_31 a_not_empty_status;
+  do total_33 <- ! int64/add total_32 rejected_status;
+  do total_34 <- ! int64/add total_33 decoded_status;
+  ! process/exit total_34
+end
