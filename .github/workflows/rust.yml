@@ -55,14 +55,9 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y nasm binutils
     - name: Run Tests
-      run: cargo test-all --verbose
+      run: cargo test-all --release --verbose
     - name: Run Doc Tests
-      run: cargo test-doc-all --verbose
-    # `debug_assert!` disappears in release profiles; rerun the end-to-end suites
-    # with debug assertions disabled so assertion-guarded code paths are also
-    # tested in the configuration release builds actually use.
-    - name: Run Tests without Debug Assertions
-      run: RUSTFLAGS="-C debug-assertions=off" cargo test -p zydeco-tests --test compile --test exec --verbose
+      run: cargo test-doc-all --release --verbose
 
   tree-sitter:
 

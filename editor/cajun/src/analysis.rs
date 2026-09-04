@@ -979,7 +979,7 @@ mod tests {
     #[test]
     fn type_hover_expands_short_definitions_and_collapses_long_ones() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/std/data/package.zy")
+            .join("../../lib/std/data/option.zy")
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
