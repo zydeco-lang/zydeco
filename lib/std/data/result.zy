@@ -1,0 +1,10 @@
+begin
+  let VType = @(intrinsic(vtype)) in
+  let Result (A : VType) (E : VType) =
+    data
+    | +Ok : A
+    | +Err : E
+    end
+  in
+  Result
+end

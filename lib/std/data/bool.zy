@@ -1,0 +1,10 @@
+begin
+  let Unit = @(intrinsic(unit)) in
+  let Bool =
+    data
+    | +False : Unit
+    | +True : Unit
+    end
+  in
+  Bool
+end

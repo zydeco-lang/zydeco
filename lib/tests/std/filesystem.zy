@@ -9,7 +9,7 @@ begin
 
   let (
     /Bool; /Result; /Path; /IoError;
-    /bool; /option; /result = results; /list;
+    /bool; /option; /list;
     /int64; /string; /bytes; /io; /fs; /stdio; /process
   )
   =
@@ -18,13 +18,11 @@ begin
   let ! expect_ok (A : VType)
     (result : Result A IoError)
     (continuation : Thk (A -> OS))
-  : OS = ! results/fold
-      A
-      IoError
-      OS
-      result
-      continuation
-      { fn _ => ! process/exit 1 }
+  : OS =
+      match result
+      | +Ok(value) => ! continuation value
+      | +Err(_) => ! process/exit 1
+      end
   in
   let ! require (condition : Bool) (continuation : Thk OS) : OS = ! bool/if
     OS
@@ -33,26 +31,25 @@ begin
     {
       ! process/exit 2
     } in
-  let ! verify_stdio : OS = ! stdio/write "" {
-    fn written => ! expect_ok Unit written { fn _ => ! process/exit 0 }
-  } in
+  let ! verify_stdio : OS =
+    let successful : Result Unit IoError = +Ok() in
+    ! expect_ok Unit successful {
+      fn _ =>
+        ! stdio/write "" { fn written => ! expect_ok Unit written { fn _ => ! process/exit 0 } }
+    }
+  in
   let ! verify_missing (path_string : String) : OS =
     do missing_string <- ! string/append path_string ".missing";
     do missing_path <- ! fs/path missing_string;
     ! fs/read_bytes missing_path {
       fn result =>
-        ! results/fold
-          Bytes
-          IoError
-          OS
-          result
-          { fn _ => ! process/exit 3 }
-          {
-            fn error =>
-              do kind <- ! io/error_kind error;
-              do correct <- ! io/kind_eq kind io/not_found;
-              ! require correct { ! verify_stdio }
-          }
+        match result
+        | +Ok(_) => ! process/exit 3
+        | +Err(error) =>
+          do kind <- ! io/error_kind error;
+          do correct <- ! io/kind_eq kind io/not_found;
+          ! require correct { ! verify_stdio }
+        end
     }
   in
   let ! verify_invalid_utf8 (path_string : String) : OS =
@@ -60,18 +57,13 @@ begin
     do invalid_path <- ! fs/path invalid_string;
     ! fs/read_text invalid_path {
       fn result =>
-        ! results/fold
-          String
-          IoError
-          OS
-          result
-          { fn _ => ! process/exit 6 }
-          {
-            fn error =>
-              do kind <- ! io/error_kind error;
-              do correct <- ! io/kind_eq kind io/invalid_data;
-              ! require correct { ! verify_missing path_string }
-          }
+        match result
+        | +Ok(_) => ! process/exit 6
+        | +Err(error) =>
+          do kind <- ! io/error_kind error;
+          do correct <- ! io/kind_eq kind io/invalid_data;
+          ! require correct { ! verify_missing path_string }
+        end
     }
   in
   let ! verify_contents (path : Path) (path_string : String) : OS = ! fs/read_text path {
@@ -97,18 +89,13 @@ begin
     (writer : Writer)
   : OS = ! io/close_writer writer {
       fn closed_again =>
-        ! results/fold
-          Unit
-          IoError
-          OS
-          closed_again
-          { fn _ => ! process/exit 4 }
-          {
-            fn error =>
-              do kind <- ! io/error_kind error;
-              do correct <- ! io/kind_eq kind io/closed;
-              ! require correct { ! verify_contents path path_string }
-          }
+        match closed_again
+        | +Ok(_) => ! process/exit 4
+        | +Err(error) =>
+          do kind <- ! io/error_kind error;
+          do correct <- ! io/kind_eq kind io/closed;
+          ! require correct { ! verify_contents path path_string }
+        end
     }
   in
   let ! append_marker (path : Path) (path_string : String) : OS = ! fs/append_writer path {

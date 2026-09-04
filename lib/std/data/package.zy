@@ -5,13 +5,10 @@ val
 =>
   let (/VType; /CType; /Thk; /Ret; /Unit) = core in
   let (= Int64, int64) = numeric/int64 in
+  let Bool = @(import("bool.zy")) in
+  let Option = @(import("option.zy")) in
+  let Result = @(import("result.zy")) in
   begin
-    def Bool =
-      data
-      | +False : Unit
-      | +True : Unit
-      end
-    that
     def true : Bool = +True() that
     def false : Bool = +False() that
     def ! not (value : Bool) : Ret Bool =
@@ -59,12 +56,6 @@ val
       end
     that
 
-    def Option (A : VType) =
-      data
-      | +None : Unit
-      | +Some : A
-      end
-    that
     def ! none (A : VType) : Ret (Option A) = ret +None() that
     def ! some (A : VType) (value : A) : Ret (Option A) = ret +Some(value) that
     def ! option_fold (A : VType)
@@ -142,12 +133,6 @@ val
       ! not present
     that
 
-    def Result (A : VType) (E : VType) =
-      data
-      | +Ok : A
-      | +Err : E
-      end
-    that
     def ! ok (A : VType) (E : VType) (value : A) : Ret (Result A E) = ret +Ok(value) that
     def ! err (A : VType) (E : VType) (error : E) : Ret (Result A E) = ret +Err(error) that
     def ! result_fold (A : VType)
@@ -368,9 +353,9 @@ val
     that
 
     pack
-        (= Bool : VType) is Bool
-        (= Option : VType -> VType) is Option
-        (= Result : VType -> VType -> VType) is Result
+        (= Bool as Bool : VType)
+        (= Option as Option : VType -> VType)
+        (= Result as Result : VType -> VType -> VType)
         (= List : VType -> VType) is List
     where
       #bool = (

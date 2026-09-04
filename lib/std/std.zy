@@ -49,9 +49,9 @@ begin
     (builtin, base) |> make_numeric
   in
   pack
-      (= Bool : VType) is Bool
-      (= Option : VType -> VType) is Option
-      (= Result : VType -> VType -> VType) is Result
+      (= Bool as Bool : VType)
+      (= Option as Option : VType -> VType)
+      (= Result as Result : VType -> VType -> VType)
       (= List : VType -> VType) is List
       (= Int8 as Int8 : VType)
       (= Int16 as Int16 : VType)

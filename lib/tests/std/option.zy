@@ -4,14 +4,14 @@ begin
   let (/Int64) = representations/i64 that
   let (/OS) = system that
 
-  let (/option; /process) = builtin |> make_std in
-  do value <- ! option/some Int64 0;
-  ! option/fold
+  let (/Option; /option; /process) = builtin |> make_std in
+  do value <- ! option/map
     Int64
-    OS
-    value
-    { ! process/exit 1 }
-    {
-      fn status => ! process/exit status
-    }
+    Int64
+    (+Some(0) : Option Int64)
+    { fn status => ret status };
+  match value
+  | +None() => ! process/exit 1
+  | +Some(status) => ! process/exit status
+  end
 end

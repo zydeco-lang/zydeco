@@ -5,6 +5,9 @@ begin
   let Ret = @(intrinsic(ret)) in
   let Unit = @(intrinsic(unit)) in
   let Int64 = @(intrinsic(i64)) in
+  let Bool = @(import("bool.zy")) in
+  let Option = @(import("option.zy")) in
+  let Result = @(import("result.zy")) in
   let BoolModule = @(import("bool.type.zy")) in
 
   let OptionModule
@@ -147,9 +150,9 @@ begin
   in
 
   exists
-    (= Bool : VType)
-    (= Option : VType -> VType)
-    (= Result : VType -> VType -> VType)
+    (= Bool as Bool : VType)
+    (= Option as Option : VType -> VType)
+    (= Result as Result : VType -> VType -> VType)
     (= List : VType -> VType)
   .
       (#bool :: BoolModule Bool)

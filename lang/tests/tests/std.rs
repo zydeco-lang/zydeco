@@ -2,6 +2,8 @@ use zydeco_tests::e2e_sources;
 use zydeco_tests::utils::{SourceProgram, TestBackend};
 
 e2e_sources!({
+    bool => "tests/std/bool.zy",
+    option => "tests/std/option.zy",
     utf8 => "tests/std/utf8.zy",
     bytes => "tests/std/bytes.zy",
     collections => "tests/std/collections.zy",

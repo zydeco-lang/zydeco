@@ -3,11 +3,10 @@ begin
   param (/system; builtin) : @(import("../../std/builtin.zy")) that
   let (/OS) = system that
 
-  let (/bool; /process) = builtin |> make_std in
-  do result <- ! bool/not bool/false;
-  ! bool/if
-    OS
-    result
-    { ! process/exit 0 }
-    { ! process/exit 1 }
+  let (/Bool; /bool; /process) = builtin |> make_std in
+  do result <- ! bool/not (+False() : Bool);
+  match result
+  | +False() => ! process/exit 1
+  | +True() => ! process/exit 0
+  end
 end
