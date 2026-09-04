@@ -16,7 +16,7 @@ use zydeco_syntax::Literal;
 use zydeco_wasm_common::{
     AllocFunction, EncodedScalar, HostCallKind, HostImport, HostSections, Intrinsics, Limits,
     PointerLocal, ProductFields, RuntimeWord, StaticString, StringTable, WASM_PAGE_BYTES,
-    WORD_BYTES, WORD_MEMORY, WasmEmitError, WasmSections, WordEmitter,
+    WORD_BYTES, WORD_MEMORY, WasmEmitError, WasmSections, WordEmitter, WordError,
 };
 
 pub use zydeco_wasm_common::{HOST_MODULE, WasmModule};
@@ -73,6 +73,12 @@ pub enum EmitError {
     InvalidCoprodMatch,
     #[error(transparent)]
     Common(#[from] WasmEmitError),
+}
+
+impl From<WordError> for EmitError {
+    fn from(error: WordError) -> Self {
+        Self::Common(WasmEmitError::from(error))
+    }
 }
 
 struct MemoryLayout {
@@ -573,7 +579,9 @@ impl<'a> CaseEncoder<'a> {
                         self.function
                             .instruction(&WasmInstruction::LocalGet(self.plan.locals.scratch_word));
                         self.function
-                            .instruction(&WasmInstruction::I64Const(RuntimeWord::index(dtor.idx)?));
+                            .instruction(&WasmInstruction::I64Const(
+                                RuntimeWord::index(dtor.idx)? as i64
+                            ));
                         self.function.instruction(&WasmInstruction::I64Eq);
                         self.function.instruction(&WasmInstruction::If(BlockType::Empty));
                         self.emit_compu(tail)?;
@@ -643,7 +651,7 @@ impl<'a> CaseEncoder<'a> {
                 };
                 self.load_local_word(scrut_local, 0);
                 self.function
-                    .instruction(&WasmInstruction::I64Const(RuntimeWord::index(ctor.idx)?));
+                    .instruction(&WasmInstruction::I64Const(RuntimeWord::index(ctor.idx)? as i64));
                 self.function.instruction(&WasmInstruction::I64Eq);
                 self.function.instruction(&WasmInstruction::If(BlockType::Empty));
                 self.load_local_word(scrut_local, 1);
@@ -672,7 +680,7 @@ impl<'a> CaseEncoder<'a> {
             | sps::Value::Var(def) => {
                 if let Some(index) = self.plan.labels.get(&def) {
                     self.function
-                        .instruction(&WasmInstruction::I64Const(RuntimeWord::code(*index)));
+                        .instruction(&WasmInstruction::I64Const(RuntimeWord::code(*index) as i64));
                 } else {
                     self.function
                         .instruction(&WasmInstruction::LocalGet(self.plan.locals.variable(def)?));
@@ -681,7 +689,7 @@ impl<'a> CaseEncoder<'a> {
             | sps::Value::Block(Block { label, body: _ }) => {
                 self.function.instruction(&WasmInstruction::I64Const(RuntimeWord::code(
                     self.plan.label(label)?,
-                )));
+                ) as i64));
             }
             | sps::Value::ClosurePackage(sps::ClosurePackage { environment, code }) => {
                 self.emit_value(environment)?;
@@ -690,12 +698,13 @@ impl<'a> CaseEncoder<'a> {
             }
             | sps::Value::Ctor(sps::Ctor(ctor, body)) => {
                 self.function
-                    .instruction(&WasmInstruction::I64Const(RuntimeWord::index(ctor.idx)?));
+                    .instruction(&WasmInstruction::I64Const(RuntimeWord::index(ctor.idx)? as i64));
                 self.emit_value(body)?;
                 self.function.instruction(&WasmInstruction::Call(self.plan.pair_function()));
             }
             | sps::Value::Triv(_) => {
-                self.function.instruction(&WasmInstruction::I64Const(RuntimeWord::index(0)?));
+                self.function
+                    .instruction(&WasmInstruction::I64Const(RuntimeWord::index(0)? as i64));
             }
             | sps::Value::VCons(sps::VCons { items, layout }) => {
                 self.emit_product(target, items, layout)?;
@@ -769,7 +778,7 @@ impl<'a> CaseEncoder<'a> {
             | Literal::Char(character) => {
                 self.function.instruction(&WasmInstruction::I64Const(RuntimeWord::index(
                     character as usize,
-                )?));
+                )? as i64));
             }
         }
         Ok(())
@@ -793,7 +802,7 @@ impl<'a> CaseEncoder<'a> {
             }
             | sps::Stack::Tag(sps::Cons(dtor, stack)) => {
                 self.function
-                    .instruction(&WasmInstruction::I64Const(RuntimeWord::index(dtor.idx)?));
+                    .instruction(&WasmInstruction::I64Const(RuntimeWord::index(dtor.idx)? as i64));
                 self.emit_stack(stack)?;
                 self.function.instruction(&WasmInstruction::Call(self.plan.pair_function()));
             }
@@ -820,7 +829,7 @@ impl<'a> CaseEncoder<'a> {
             | ValuePattern::Ctor(sps::Ctor(ctor, body)) => {
                 self.load_local_word(bindee, 0);
                 self.function
-                    .instruction(&WasmInstruction::I64Const(RuntimeWord::index(ctor.idx)?));
+                    .instruction(&WasmInstruction::I64Const(RuntimeWord::index(ctor.idx)? as i64));
                 self.function.instruction(&WasmInstruction::I64Ne);
                 self.function.instruction(&WasmInstruction::If(BlockType::Empty));
                 self.function.instruction(&WasmInstruction::Unreachable);
@@ -961,7 +970,7 @@ impl<'a> CaseEncoder<'a> {
             self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.result));
             // Intrinsic comparisons return the runtime pair `(encoded_bool, ())`.
             self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.result));
-            self.function.instruction(&WasmInstruction::I64Const(RuntimeWord::index(0)?));
+            self.function.instruction(&WasmInstruction::I64Const(RuntimeWord::index(0)? as i64));
             self.function.instruction(&WasmInstruction::Call(self.plan.pair_function()));
         } else if let Some(operation) = Intrinsics::arithmetic(name) {
             self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.decoded_first));

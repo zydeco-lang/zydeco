@@ -15,7 +15,7 @@ use zydeco_assembly::{
 use zydeco_wasm_common::{
     AllocFunction, EncodedScalar, HostCallKind, HostImport, HostSections, Intrinsics, Limits,
     PointerLocal, ProductFields, RuntimeWord, StaticString, StringTable, WASM_PAGE_BYTES,
-    WORD_BYTES, WORD_MEMORY, WasmEmitError, WasmSections, WordEmitter,
+    WORD_BYTES, WORD_MEMORY, WasmEmitError, WasmSections, WordEmitter, WordError,
 };
 
 pub use zydeco_wasm_common::{HOST_MODULE, WasmModule};
@@ -85,6 +85,12 @@ pub enum EmitError {
     UnsupportedIntrinsic { name: String, arity: usize },
     #[error(transparent)]
     Common(#[from] WasmEmitError),
+}
+
+impl From<WordError> for EmitError {
+    fn from(error: WordError) -> Self {
+        Self::Common(WasmEmitError::from(error))
+    }
 }
 
 struct MemoryLayout {
@@ -535,7 +541,7 @@ impl<'a> CaseEncoder<'a> {
                 self.function.instruction(&WasmInstruction::I64Store(WORD_MEMORY));
             }
             | Instruction::PushTag(zasm::Push(tag)) => {
-                self.push_constant(RuntimeWord::index(tag.idx)?);
+                self.push_constant(RuntimeWord::index(tag.idx)? as i64);
             }
             | Instruction::Intrinsic(intrinsic) => self.emit_intrinsic(intrinsic)?,
             | Instruction::Clear(context) => {
@@ -563,7 +569,9 @@ impl<'a> CaseEncoder<'a> {
                 for (tag, target) in arms {
                     self.function.instruction(&WasmInstruction::LocalGet(TAG_LOCAL));
                     self.function
-                        .instruction(&WasmInstruction::I64Const(RuntimeWord::index(tag.idx)?));
+                        .instruction(&WasmInstruction::I64Const(
+                            RuntimeWord::index(tag.idx)? as i64
+                        ));
                     self.function.instruction(&WasmInstruction::I64Eq);
                     self.function.instruction(&WasmInstruction::If(BlockType::Empty));
                     self.set_program_counter(*target)?;
@@ -662,7 +670,7 @@ impl<'a> CaseEncoder<'a> {
 
     fn emit_immediate(&mut self, immediate: &Imm) -> Result<(), EmitError> {
         match immediate {
-            | Imm::Triv(_) => self.push_constant(RuntimeWord::index(0)?),
+            | Imm::Triv(_) => self.push_constant(RuntimeWord::index(0)? as i64),
             | Imm::Integer(integer) => match RuntimeWord::integer(*integer)? {
                 | EncodedScalar::Immediate(word) => self.push_constant(word as i64),
                 | EncodedScalar::Boxed(bits) => self.push_boxed(bits),
@@ -671,7 +679,9 @@ impl<'a> CaseEncoder<'a> {
                 | EncodedScalar::Immediate(word) => self.push_constant(word as i64),
                 | EncodedScalar::Boxed(bits) => self.push_boxed(bits),
             },
-            | Imm::Char(character) => self.push_constant(RuntimeWord::index(*character as usize)?),
+            | Imm::Char(character) => {
+                self.push_constant(RuntimeWord::index(*character as usize)? as i64)
+            }
         }
         Ok(())
     }

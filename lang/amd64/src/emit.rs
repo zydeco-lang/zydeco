@@ -12,11 +12,6 @@ use zydeco_utils::pass::CompilerPass;
 
 pub const ENV_REG: Reg = Reg::Rbp;
 
-const IMMEDIATE_TAG: u64 = 1;
-const IMMEDIATE_UNSIGNED_MAX: u64 = u64::MAX >> 1;
-const IMMEDIATE_SIGNED_MIN: i64 = -(1_i64 << 62);
-const IMMEDIATE_SIGNED_MAX: i64 = (1_i64 << 62) - 1;
-
 #[derive(Clone, Copy)]
 enum AllocationKind {
     Scanned,
@@ -29,61 +24,6 @@ impl AllocationKind {
             | Self::Scanned => "zydeco_alloc_scanned",
             | Self::Opaque => "zydeco_alloc_opaque",
         }
-    }
-}
-
-enum EncodedLiteral {
-    Immediate(u64),
-    Boxed(u64),
-}
-
-/// The one-word value convention shared with the native runtime.
-///
-/// Odd words are immediates. Even words are pointer-shaped values; the collector
-/// only moves those that point into its active semispace. Wide scalars that cannot
-/// surrender one tag bit use one-word opaque heap blocks.
-struct TaggedValue;
-
-impl TaggedValue {
-    fn unsigned(value: u64) -> Option<u64> {
-        (value <= IMMEDIATE_UNSIGNED_MAX).then_some((value << 1) | IMMEDIATE_TAG)
-    }
-
-    fn signed(value: i64) -> Option<u64> {
-        (IMMEDIATE_SIGNED_MIN..=IMMEDIATE_SIGNED_MAX)
-            .contains(&value)
-            .then_some(((value as u64) << 1) | IMMEDIATE_TAG)
-    }
-
-    fn integer(value: IntegerLiteral) -> EncodedLiteral {
-        use IntegerLiteral::*;
-        let immediate = match value {
-            | Int8(value) => Self::signed(value.into()),
-            | Int16(value) => Self::signed(value.into()),
-            | Int32(value) => Self::signed(value.into()),
-            | Int64(value) => Self::signed(value),
-            | UInt8(value) => Self::unsigned(value.into()),
-            | UInt16(value) => Self::unsigned(value.into()),
-            | UInt32(value) => Self::unsigned(value.into()),
-            | UInt64(value) => Self::unsigned(value),
-            | Unresolved(_) => panic!("unresolved integer literal reached emission"),
-        };
-        immediate
-            .map_or_else(|| EncodedLiteral::Boxed(value.to_word_bits()), EncodedLiteral::Immediate)
-    }
-
-    fn float(value: FloatLiteral) -> EncodedLiteral {
-        match value {
-            | FloatLiteral::Float32(bits) => EncodedLiteral::Immediate(
-                Self::unsigned(bits.into()).expect("Float32 payload fits an immediate"),
-            ),
-            | FloatLiteral::Float64(bits) => EncodedLiteral::Boxed(bits),
-        }
-    }
-
-    fn index(value: usize) -> u64 {
-        Self::unsigned(u64::try_from(value).expect("runtime tag index overflow"))
-            .expect("runtime tag index does not fit an immediate")
     }
 }
 
@@ -1007,8 +947,11 @@ impl<'a> Emit<'a> for Instruction {
                     Instr::Comment(format!("push_tag {}", tag.idx)),
                     // push tag to stack
                     Instr::Push(Arg32::Unsigned(
-                        u32::try_from(TaggedValue::index(tag.idx))
-                            .expect("runtime tag does not fit a push immediate"),
+                        u32::try_from(
+                            RuntimeWord::index(tag.idx)
+                                .expect("runtime tag index does not fit an immediate"),
+                        )
+                        .expect("runtime tag does not fit a push immediate"),
                     )),
                 ]);
                 em.shift_stack_parity(1);
@@ -1100,21 +1043,27 @@ impl<'a> Emit<'a> for Atom {
                 | sa::Imm::Triv(Triv) => {
                     em.asm.text.push(Instr::Comment("push_imm_triv".to_string()));
                     em.asm.text.push(Instr::Push(Arg32::Unsigned(
-                        u32::try_from(TaggedValue::index(0)).unwrap(),
+                        u32::try_from(
+                            RuntimeWord::index(0)
+                                .expect("runtime tag index does not fit an immediate"),
+                        )
+                        .unwrap(),
                     )));
                     em.shift_stack_parity(1);
                 }
                 | sa::Imm::Integer(i) => {
                     em.asm.text.push(Instr::Comment(format!("push_imm_integer {:?}", i)));
-                    match TaggedValue::integer(i) {
-                        | EncodedLiteral::Immediate(word) => {
+                    match RuntimeWord::integer(i)
+                        .expect("unresolved integer literal reached emission")
+                    {
+                        | EncodedScalar::Immediate(word) => {
                             em.asm.text.extend([
                                 Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(word))),
                                 Instr::Push(Arg32::Reg(Reg::Rax)),
                             ]);
                             em.shift_stack_parity(1);
                         }
-                        | EncodedLiteral::Boxed(bits) => {
+                        | EncodedScalar::Boxed(bits) => {
                             let context_words = em.assembly.contexts[&id].iter().len();
                             em.emit_boxed_bits(bits, context_words);
                         }
@@ -1122,15 +1071,15 @@ impl<'a> Emit<'a> for Atom {
                 }
                 | sa::Imm::Float(value) => {
                     em.asm.text.push(Instr::Comment(format!("push_imm_float {:?}", value)));
-                    match TaggedValue::float(value) {
-                        | EncodedLiteral::Immediate(word) => {
+                    match RuntimeWord::float(value) {
+                        | EncodedScalar::Immediate(word) => {
                             em.asm.text.extend([
                                 Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(word))),
                                 Instr::Push(Arg32::Reg(Reg::Rax)),
                             ]);
                             em.shift_stack_parity(1);
                         }
-                        | EncodedLiteral::Boxed(bits) => {
+                        | EncodedScalar::Boxed(bits) => {
                             let context_words = em.assembly.contexts[&id].iter().len();
                             em.emit_boxed_bits(bits, context_words);
                         }
@@ -1139,8 +1088,11 @@ impl<'a> Emit<'a> for Atom {
                 | sa::Imm::Char(c) => {
                     em.asm.text.push(Instr::Comment(format!("push_imm_char {:?}", c)));
                     em.asm.text.push(Instr::Push(Arg32::Unsigned(
-                        u32::try_from(TaggedValue::index(c as usize))
-                            .expect("tagged character does not fit a push immediate"),
+                        u32::try_from(
+                            RuntimeWord::index(c as usize)
+                                .expect("runtime tag index does not fit an immediate"),
+                        )
+                        .expect("tagged character does not fit a push immediate"),
                     )));
                     em.shift_stack_parity(1);
                 }
@@ -1181,7 +1133,7 @@ impl<'a> Emit<'a> for Intrinsic {
                     )),
                     Instr::Mov(MovArgs::ToMem(
                         MemRef { reg: Reg::Rdx, offset: 8 },
-                        Reg32::Imm(IMMEDIATE_TAG as i32),
+                        Reg32::Imm(RuntimeWord::TAG as i32),
                     )),
                     Instr::Push(Arg32::Reg(Reg::Rdx)),
                 ]);

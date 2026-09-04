@@ -7,6 +7,9 @@ pub use span::*;
 pub mod text;
 pub use text::*;
 
+pub mod word;
+pub use word::*;
+
 mod impls;
 use derive_more::From;
 use strum::{IntoEnumIterator, VariantArray as _};

@@ -10,9 +10,9 @@ use std::{
 
 type Word = usize;
 
-const IMMEDIATE_UNSIGNED_MAX: Word = Word::MAX >> 1;
-const IMMEDIATE_SIGNED_MIN: i64 = -(1_i64 << 62);
-const IMMEDIATE_SIGNED_MAX: i64 = (1_i64 << 62) - 1;
+const IMMEDIATE_UNSIGNED_MAX: Word = 0x7fff_ffff_ffff_ffff;
+const IMMEDIATE_SIGNED_MIN: i64 = -0x4000_0000_0000_0000;
+const IMMEDIATE_SIGNED_MAX: i64 = 0x3fff_ffff_ffff_ffff;
 
 /// Odd immediate values in the native one-word representation.
 struct Immediate;

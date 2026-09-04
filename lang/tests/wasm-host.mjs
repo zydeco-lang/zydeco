@@ -1,9 +1,9 @@
 import fs from "node:fs";
 
 const WORD_BITS = 64;
-const IMMEDIATE_SIGNED_MIN = -(1n << 62n);
-const IMMEDIATE_SIGNED_MAX = (1n << 62n) - 1n;
-const IMMEDIATE_UNSIGNED_MAX = (1n << 63n) - 1n;
+const IMMEDIATE_SIGNED_MIN = -(0x4000_0000_0000_0000n);
+const IMMEDIATE_SIGNED_MAX = 0x3fff_ffff_ffff_ffffn;
+const IMMEDIATE_UNSIGNED_MAX = 0x7fff_ffff_ffff_ffffn;
 
 class ExitSignal extends Error {
   constructor(code) {

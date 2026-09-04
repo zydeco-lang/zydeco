@@ -1,79 +1,17 @@
-//! The tagged runtime-word representation and the instruction sequences over it.
+//! The instruction sequences over the shared tagged runtime-word representation.
 //!
-//! A runtime word is an `i64`. Values below the immediate boundary carry their payload
-//! shifted left with the low tag bit set; everything else is a pointer to a boxed word.
-//! Signed payloads use the inclusive range `[-2^62, 2^62-1]`, unsigned payloads
-//! `[0, 2^63-1]`; the boundary matches the native runtime's `Immediate` classification
-//! so both backends agree with the garbage collector on what is boxed.
+//! The word encoding itself — the immediate boundary, the integer and float
+//! classification — lives in [`zydeco_syntax::word`], which every backend and the
+//! external boundary pins share. This module adds the WebAssembly function bodies
+//! that decode, encode, box, and divide tagged words.
 
 use wasm_encoder::{Function, Instruction as WasmInstruction};
 
-use zydeco_syntax::{FloatLiteral, IntegerLiteral, SpareBox};
+use zydeco_syntax::SpareBox;
+
+pub use zydeco_syntax::word::{EncodedScalar, RuntimeWord, WordError};
 
 use crate::{Limits, WORD_BYTES, WORD_MEMORY, WasmEmitError};
-
-/// A scalar constant as either an immediate word or the bits of a boxed word.
-pub enum EncodedScalar {
-    Immediate(u64),
-    Boxed(u64),
-}
-
-/// The tagged runtime-word encoding shared by the WebAssembly backends.
-pub struct RuntimeWord;
-
-impl RuntimeWord {
-    pub const SIGNED_MIN: i64 = -(1_i64 << 62);
-    pub const SIGNED_MAX: i64 = (1_i64 << 62) - 1;
-    pub const UNSIGNED_MAX: u64 = u64::MAX >> 1;
-
-    pub fn unsigned(value: u64) -> Option<u64> {
-        (value <= Self::UNSIGNED_MAX).then_some((value << 1) | 1)
-    }
-
-    pub fn signed(value: i64) -> Option<u64> {
-        (Self::SIGNED_MIN..=Self::SIGNED_MAX).contains(&value).then_some(((value as u64) << 1) | 1)
-    }
-
-    pub fn integer(value: IntegerLiteral) -> Result<EncodedScalar, WasmEmitError> {
-        use IntegerLiteral::*;
-        let immediate = match value {
-            | Int8(value) => Self::signed(value.into()),
-            | Int16(value) => Self::signed(value.into()),
-            | Int32(value) => Self::signed(value.into()),
-            | Int64(value) => Self::signed(value),
-            | UInt8(value) => Self::unsigned(value.into()),
-            | UInt16(value) => Self::unsigned(value.into()),
-            | UInt32(value) => Self::unsigned(value.into()),
-            | UInt64(value) => Self::unsigned(value),
-            | Unresolved(_) => return Err(WasmEmitError::UnresolvedInteger),
-        };
-        Ok(immediate
-            .map_or_else(|| EncodedScalar::Boxed(value.to_word_bits()), EncodedScalar::Immediate))
-    }
-
-    pub fn float(value: FloatLiteral) -> EncodedScalar {
-        match value {
-            | FloatLiteral::Float32(bits) => EncodedScalar::Immediate(
-                Self::unsigned(bits.into()).expect("Float32 payload fits an immediate"),
-            ),
-            | FloatLiteral::Float64(bits) => EncodedScalar::Boxed(bits),
-        }
-    }
-
-    /// The immediate word of a runtime tag or constructor index.
-    pub fn index(value: usize) -> Result<i64, WasmEmitError> {
-        let value = u64::try_from(value)
-            .map_err(|_| WasmEmitError::Limit { what: "runtime tag index", value })?;
-        Self::unsigned(value)
-            .map(|word| word as i64)
-            .ok_or(WasmEmitError::Limit { what: "runtime tag index", value: value as usize })
-    }
-
-    /// The immediate word of a case-table code index.
-    pub fn code(index: u32) -> i64 {
-        (i64::from(index) << 1) | 1
-    }
-}
 
 /// A pointer temporary's local index and the word representation it holds.
 ///

@@ -12,7 +12,9 @@ pub mod word;
 
 pub use host::{HostCallKind, HostImport, HostSections, StaticString, StringTable};
 pub use module::{AllocFunction, WasmModule, WasmSections};
-pub use word::{EncodedScalar, Intrinsics, PointerLocal, ProductFields, RuntimeWord, WordEmitter};
+pub use word::{
+    EncodedScalar, Intrinsics, PointerLocal, ProductFields, RuntimeWord, WordEmitter, WordError,
+};
 
 use thiserror::Error;
 use wasm_encoder::MemArg;
@@ -43,6 +45,15 @@ pub enum WasmEmitError {
     Limit { what: &'static str, value: usize },
 }
 
+impl From<WordError> for WasmEmitError {
+    fn from(error: WordError) -> Self {
+        match error {
+            | WordError::UnresolvedInteger => Self::UnresolvedInteger,
+            | WordError::TagIndex(value) => Self::Limit { what: "runtime tag index", value },
+        }
+    }
+}
+
 /// Checked conversions for wasm32-sized values.
 pub struct Limits;
 
@@ -57,21 +68,5 @@ impl Limits {
             .checked_add(alignment - 1)
             .map(|value| value & !(alignment - 1))
             .ok_or(WasmEmitError::Limit { what: "aligned memory address", value: value as usize })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn tagged_words_match_the_native_immediate_boundary() {
-        assert_eq!(RuntimeWord::index(0).unwrap(), 1);
-        assert_eq!(RuntimeWord::code(0), 1);
-        assert_eq!(RuntimeWord::code(1), 3);
-        assert_eq!(RuntimeWord::signed(RuntimeWord::SIGNED_MIN), Some(0x8000_0000_0000_0001));
-        assert_eq!(RuntimeWord::signed(RuntimeWord::SIGNED_MAX), Some(0x7fff_ffff_ffff_ffff));
-        assert_eq!(RuntimeWord::signed(RuntimeWord::SIGNED_MIN - 1), None);
-        assert_eq!(RuntimeWord::unsigned(RuntimeWord::UNSIGNED_MAX), Some(u64::MAX));
     }
 }
