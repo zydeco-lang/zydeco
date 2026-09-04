@@ -25,7 +25,8 @@ impl Layout {
     fn pop_control_id(&mut self) -> Option<SlotId> {
         let slot = self.control.last().copied();
         if slot.is_some() {
-            debug_assert!(self.control.drop_last_mut());
+            let dropped = self.control.drop_last_mut();
+            debug_assert!(dropped);
         }
         slot
     }

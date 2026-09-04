@@ -50,7 +50,8 @@ impl<'rt> Runtime<'rt> {
     fn pop_stack(&mut self) -> Option<SemCompu> {
         let frame = self.stack.last().cloned();
         if frame.is_some() {
-            debug_assert!(self.stack.drop_last_mut());
+            let dropped = self.stack.drop_last_mut();
+            debug_assert!(dropped);
         }
         frame
     }
