@@ -1,245 +1,139 @@
 # AGENTS
 
-This file is guidance for automated assistants working in this repository.
+Guidance for automated assistants working in this repository.
+`Prefer` and `consider` mark defaults that allow task-specific judgment; other directives are requirements
+within their stated scope.
+
+Zydeco is a call-by-push-value language prototype implemented as a Rust workspace under `lang/`.
+Libraries and reusable examples live under `lib/`; regression and end-to-end projects live under `lib/tests/`.
 
 ## Language and Terminology
 
-Use English for identifiers and repository prose, including code comments and documentation.
-Communicate with users in their preferred language;
-when no preference is stated, follow the language of the current conversation.
+Use English for identifiers and repository prose, including comments and documentation.
+Communicate in the user's preferred language, following the current conversation when none is stated.
 Keep established technical terms in English when that preserves precision and searchability,
-unless the user asks for translated or localized terminology.
+unless the user requests localization.
+
+## Project References
+
+Read the relevant sections for the task:
+
+- [README.md](README.md) for usage and quick start.
+- [DESIGN.md](DESIGN.md) for language semantics, architecture, pipeline, and repository layout.
+- [CONTRIBUTING.md](CONTRIBUTING.md) for build, formatting, test, and contribution workflows.
+- [OOPSLA artifact overview](lib/tests/oopsla/README.md) when working on those examples.
+
+When changing architecture or workflows, prefer updating `DESIGN.md` or `CONTRIBUTING.md`, respectively.
+Keep documentation examples consistent with the repository's CLI flags and scripts.
 
 ## Working Principles
 
-### Extract reusable rules
+- When recurring cases support a shared rule, state it and suggest the abstraction or convention that follows.
+  Distinguish evidence from inference, and favor connections that simplify future decisions.
+  Do not invent abstractions merely to claim novelty.
+- When replacing a design, update its callers and remove the superseded path in the same change.
+  Retain compatibility layers only when the user explicitly requests a compatibility boundary;
+  state its scope and intended removal condition.
+- When changing validation or behavior with rejection cases, pair valid inputs with rejected counterparts.
+  Assert the intended error and relevant failure invariants.
+  Retain bug reproducers as regression tests.
+- When adding example projects under `lib/`, consider wiring them into `lang/tests`.
 
-Look for recurring shapes in syntax, architecture, failures, and design decisions while working.
-When several observations support one explanation, state the shared rule
-and suggest the abstraction or convention that follows from it.
-Distinguish evidence from inference, and prefer connections that simplify future decisions.
-A genuinely surprising observation is valuable when it compresses several facts into one useful principle;
-do not manufacture novelty for its own sake.
+## Rust Conventions
 
-### Preserve a reviewable design record
+Register every Rust dependency in the root `Cargo.toml` under `[workspace.dependencies]`;
+crates refer to it with `dependency = { workspace = true }`.
 
-As substantial exploratory or design-heavy work converges,
-propose formalizing it as a Markdown or Typst review document under `docs/proposals/`.
-The proposal should identify the questions that the document would make easier to review, such as the problem,
-constraints, alternatives, chosen invariants, representative examples, and remaining uncertainty.
-Propose this artifact rather than creating it automatically, and skip the suggestion for small routine changes.
+Represent semantic states, internal messages, and errors with domain types.
+Parse external text into structured data early; use strings when the data itself is textual.
+Introduce types as needed. Before using a string map, distinguish text storage or interning
+from structured data better modeled with structs or traits.
 
-### Prefer direct transitions
+Prefer iterator transformations such as `map`, fallible `collect`, `unzip`, and `fold` over mutable accumulators.
+Keep mutation for essential sequential state or when a functional rewrite would materially harm clarity or performance.
 
-Treat a clean transition to the intended design as the default.
-When replacing a design, update its callers and remove the superseded path in the same change.
-Do not retain deprecated APIs, adapters, dual representations, migration parsers,
-or other compatibility layers unless the user explicitly requests a compatibility boundary.
-When compatibility is required, make its scope and intended removal condition explicit.
+Group functions on structs as methods or associated functions.
+Use free functions only when required by the language, a macro, or an external interface.
+Use `self` when consuming a value, `&self` or `&mut self` when borrowing it, and associated functions
+when the struct serves as a namespace.
 
-### Test acceptance and rejection
+Prefer direct struct construction unless a constructor performs additional work or establishes a visibility boundary.
+Do not add a lone `new` method that merely repackages a struct literal.
+Name general constructors `new` and constructors indicating how a value is created `with_*`.
 
-Include negative tests alongside positive cases, checking the intended error and relevant failure invariants.
-Pair rejected inputs with valid counterparts, and retain bug reproducers as regression tests.
+Give builders an associated entry point `fn new(required, ...)`.
+Choose receivers according to whether `build` or `finish` moves owned fields:
 
-## Adding a Dependency
+- For consuming builders, use `fn build(self) -> T` and setters `fn with_*(mut self, ...) -> Self`.
+- For builders that can borrow, prefer `fn build(&self) -> T` and setters `fn set_*(&mut self, ...) -> &mut Self`.
 
-All Rust dependencies are managed in the top-level `Cargo.toml` file, under `[workspace.dependencies]`.
-All crates then use `dependency = { workspace = true }` to refer to
-the workspace-registered dependencies in their own `Cargo.toml`.
+Use `with_*` and `set_*` consistently for optional configuration.
+Prefer `derive` and `derive_more` when generated behavior exactly matches the intended semantics;
+write manual implementations only when additional invariants require them.
 
-## Project Snapshot
-
-- Zydeco is a proof-of-concept programming language based on call-by-push-value.
-- The implementation is a Rust workspace with multiple crates under `lang/`.
-- The standard library and reusable examples live under `lib/`;
-  regression and end-to-end projects live under `lib/tests/`.
-
-## Key Docs
-
-- `README.md`: top-level usage and quick start.
-- `DESIGN.md`: language model, translation pipeline, and limitations.
-- `CONTRIBUTING.md`: build/test workflows and contribution notes.
-- `lib/tests/oopsla/README.md`: artifact overview and detailed examples.
-
-## Common Workflows
-
-Build the CLI:
-```sh
-cargo build --bin=zydeco --release
-```
-
-Format the codebase:
-```sh
-cargo fmt --all
-git ls-files -z '*.zy' '*.zyi' '*.zydeco' | xargs -0 cargo run --quiet --bin zydeco -- fmt
-```
-`cargo fmt` does not format Zydeco embedded in Rust string literals, and `zydeco fmt` only processes
-explicitly supplied source files. After a repository-wide Zydeco formatting pass, run the affected Rust tests
-to catch and update embedded source fixtures and expected output snapshots.
-
-Lint the codebase:
-```sh
-cargo clippy-all
-```
-
-Run a Zydeco program:
-```sh
-zydeco run path/to/main.zy
-```
+## Validation and Formatting
 
 Run focused tests for the affected crate or test target while iterating.
-Do not run `cargo test-all` as a routine verification step: it is CPU-intensive,
-and its native end-to-end tests may also fetch runtime dependencies from crates.io.
-Run the full workspace suite only when the user explicitly requests it:
+Run the full workspace suite (`cargo test-all`, including flag variants) only when the user explicitly requests it:
+it is CPU-intensive, and native end-to-end tests may fetch runtime dependencies from crates.io.
+`--all-targets` excludes doctests; when changing doctests, run them separately with `cargo test-doc-all`.
+
+Format Rust with `cargo fmt --all`; lint with `cargo clippy-all`.
+For a repository-wide Zydeco formatting pass, supply all tracked source files explicitly:
+
 ```sh
-cargo test-all
-```
-`--all-targets` excludes doctests by design (see `cargo test --help`); run the
-documentation tests separately when they were touched:
-```sh
-cargo test-doc-all
+git ls-files -z '*.zy' '*.zyi' '*.zydeco' | xargs -0 cargo run --quiet --bin zydeco -- fmt
 ```
 
-## Repository Layout
+`cargo fmt` does not format Zydeco embedded in Rust string literals;
+`zydeco fmt` only processes explicitly supplied files.
+After a repository-wide Zydeco formatting pass, run the affected Rust tests and update embedded source fixtures
+and expected output snapshots as needed.
 
-- `lang/`: parser, type checker, analysis session, interpreter, backends, and tests.
-- `lib/`: standard library, example programs, and test projects under `lib/tests/`.
-- `cli/`: command-line interface.
-- `docs/`: literate Zydeco tutorial material (see `docs/spell`).
-- `editor/`: editor integrations (TextMate grammar and VSCode extension).
-- `web/`: web interface.
+## Design Records
 
-## Language Pipeline (High-Level)
+When substantial design or exploratory work converges, propose a review document under `docs/proposals/`.
+Use Markdown or Typst and explain what it would make easier to review: the problem, constraints,
+alternatives, chosen invariants, representative examples, and remaining uncertainty.
+Suggest the artifact rather than creating it automatically; skip this for small routine changes.
 
-The core phases are:
-
-1. parsing (`lang/surface/src/textual`)
-2. desugaring (`lang/surface/src/bitter`)
-3. name resolution (`lang/surface/src/scoped`)
-4. type checking (`lang/statics/src`)
-5. linking (`lang/dynamics/src`)
-6. evaluation (`lang/dynamics/src`)
-
-Each phase generally includes `syntax`, `arena`, `err`, `fmt`, and `span` modules.
-
-## Notes for Changes
-
-- Prefer updating `DESIGN.md` or `CONTRIBUTING.md` when modifying architecture or workflows.
-- Put exploratory design notes in `docs/ideas/`. Explain the motivating problem, relevant constraints,
-  alternatives, and the principles by which a later decision should be judged.
-- Put stable design proposals in `docs/proposals/`. Explain the motivating problem, relevant constraints,
-  chosen invariants, representative examples, and remaining uncertainty.
-- Worklogs under `docs/logs/` are optional scratch records for in-flight work, not durable artifacts.
-  The implementation and the stable docs must justify themselves: motivations, methods, and rules
-  belong in `docs/proposals/` or in code comments next to what they constrain. Once a worklog's
-  durable observations are folded into those places, delete it; a design history is not itself a
-  design account.
-- Keep doc examples consistent with CLI flags and scripts in the repo.
-- If you add new example projects under `lib/`, consider wiring them into `lang/tests`.
+- Put exploratory notes in `docs/ideas/`: explain the problem, constraints, alternatives, and decision criteria.
+- Put stable proposals in `docs/proposals/`: explain the problem, constraints, chosen invariants, examples,
+  and remaining uncertainty.
+- Use `docs/logs/` only for optional scratch records.
+  Fold durable motivations and rules into proposals or adjacent code comments, then delete the worklog.
+  The implementation and stable docs must justify themselves.
 
 ## Documentation Style
 
-Wrap prose to approximately 90~120 characters per line.
-Treat sentences and substantial clauses as natural layout units rather than requiring one sentence per line.
-Keep a complete sentence on one line when it fits naturally,
-but do not force every sentence to begin or end at a line boundary.
-When a sentence spans lines, prefer breaks after punctuation—including commas, semicolons, colons,
-and periods—or before connective words.
-A comma that closes a substantial clause is an ordinary break point,
-not a fallback used only when no period is available.
-Allow the final clause or sentence of a paragraph to be shorter than the target
-instead of moving a break into the middle of a phrase merely to balance line widths.
-Preserve the formatting of code blocks and other structurally significant Markdown.
+Establish motivation and context before introducing machinery; explain which question each mechanism answers.
+Introduce concepts before relying on them, and let information density rise gradually.
+Connect paragraphs with reasoning that explains the next step, especially before increasing technical detail.
+Use programming-languages terminology where precise, explaining specialized terms at first use
+with source-level intuition or a concrete example.
 
-Write for a reader encountering the design in sequence.
-Establish the motivation and relevant context before introducing machinery,
-and make clear which question each mechanism answers.
-Reveal the argument gradually instead of presenting every consequence at once.
-Use connective sentences to explain why one paragraph or section leads to the next,
-especially before increasing the level of technical detail.
-These connections should carry reasoning rather than serve as generic transitions.
+Prefer positive explanations; use contrast when the distinction matters.
+Let paragraph and sentence lengths follow the argument, avoiding formulaic rhythms and repeated contrastive phrasing.
+Use parallel construction when it clarifies a comparison, enumeration, or invariant.
+After revising, read the document from beginning to end to check its progression and concept order.
 
-Use programming-languages terminology when it adds precision,
-but explain specialized terms at first use and relate them to source-level intuition or a concrete example.
-Prefer positive accounts of what a construct provides.
-Use definition by contrast or negation when the distinction itself matters,
-but avoid making repeated "not X, but Y" formulations the main mode of explanation.
+Wrap prose around 90–120 characters, breaking after sentence or clause punctuation, or before connectives.
+Treat commas as ordinary clause boundaries. Do not enforce one sentence per line.
+Keep complete sentences together when they fit; allow short final lines instead of splitting phrases to balance widths.
+Preserve code blocks and other structural Markdown.
+Reflow edited Markdown with `python3 docs/scripts/reflow-markdown.py path/to/document.md`; reflow Typst manually.
 
-Let paragraph and sentence length follow the needs of the argument.
-Avoid formulaic prose in which every paragraph has the same rhythm or structure.
-Use parallel construction sparingly. Keep repeated grammatical patterns only when they clarify a comparison,
-an enumeration, or a formal invariant rather than using them as a default rhetorical style.
-After revising documentation, read it from beginning to end and check that the storyline unfolds naturally,
-the information density rises gradually, and no paragraph depends on concepts introduced only later.
+## Commit Messages
 
-## Rust Code Style Guideline
-
-Always prefer typed data structures over strings + parsers;
-Never be afraid of defining too many types.
-For examples,
-- Include specific types of errors when creating an error type, not just strings.
-- User input should be parsed to be structured data as soon as possible.
-- Never use strings to represent states in the software's state machine.
-- Never pass strings between internal components when the message could be typed.
-- Whenever a hashmap of strings is created, think twice.
-  Is it really relying on string deduplication?
-  Or it's actually a "dynamic object", that might be concluded by a few traits?
-
-Prefer a functional programming style whenever suitable.
-Use iterator transformations instead of manual loops with mutable accumulators.
-In particular, avoid mutable `Vec`s and repeated `push` calls when the same result
-can be expressed clearly with operations such as `map`, fallible `collect`, `unzip`, or `fold`.
-Keep mutation when it represents essential sequential state,
-or when a functional rewrite would materially harm clarity or performance.
-
-Prefer to use structs to pack a group of useful functions; prefer methods over functions.
-Rust structs have better namespace-ish features than Rust modules.
-Never write plain functions that are not wrapped in a struct with your best effort
-unless there's no way around otherwise.
-When wrapping the functions, abide by the following rules:
-- Mention `self` in the signature if the methods are built around the struct type.
-  - Take ownership (`self`) if being the elimination form of the struct type,
-    namely consuming the struct.
-  - Take reference (`&self` or `&mut self`) if the struct only needs to be borrowed.
-- Use associated functions (similar to static methods) when the struct is purely a namespace;
-  specifically, write `fn new` for "constructors" with no perspective,
-  and `fn with_*` for "constructors" that hints how the struct is created.
-- Avoid an `fn new` wrapper when it would be the struct's only method
-  and merely repackages a struct literal.
-- Prefer direct construction unless the constructor performs additional work
-  or establishes an intentional visibility boundary for the fields.
-
-For builder patterns, pick receivers based on whether the finalizer must move owned fields out.
-If build/finish consumes,
-- Use `fn build(self) -> T` for the builder.
-- Make all setter methods take and return self `fn with_*(mut self, ...) -> Self` for easy chaining.
-If build can borrow,
-- Prefer setters `fn set_*(&mut self, ...) -> &mut Self`, and
-- Prefer a finalizer `fn build(&self) -> T` so the builder can be reused.
-Expose an associated entry point `fn new(required, ...)`,
-and use `with_*/set_*` names consistently for optional configuration.
-
-Prefer `derive` and `derive_more` over manual implementations
-when their generated behavior exactly matches the intended semantics;
-write a manual implementation only when it must enforce additional invariants.
-
-## Commit Message Convention
-
-Format: `prefix: lowercase description`
-
-No capitalization after the colon. No trailing period. One line.
-The description should say *what changed*, not *why* (the diff shows what; the description names it).
-For `feat`, name the capability directly; use a leading `add` only when it improves clarity.
-
-## Prefix Vocabulary
+Use `prefix: lowercase description`, on one line with no trailing period.
+Describe what changed. For `feat`, name the capability directly; use a leading `add` only when it improves clarity.
 
 | Prefix | When to use |
 |--------|-------------|
-| `feat`  | A user-visible capability that did not exist before. |
-| `incr`  | Incremental progress on an existing feature: bug fixes, polish, tuning, small additions. |
-| `sisy`  | Mechanical changes: formatting, linting, renaming passes, internal restructuring with no behavior change. |
-| `vibe`  | Exploratory, prototype-quality work. Expect rough edges; may be revised or replaced. |
-| `repo`  | Repository housekeeping: migrations, dependency changes, formatter config, file reorganization, one-off maintenance. |
-| `docs`  | Documentation-only changes (AGENTS.md, README, inline Rust docs/comments). |
-| `test`  | Adding or updating tests without changing production code. |
+| `feat` | A new user-visible capability. |
+| `incr` | Incremental progress: fixes, polish, tuning, or small feature additions. |
+| `sisy` | Mechanical changes or internal restructuring with no behavior change. |
+| `vibe` | Exploratory or prototype work that may be revised or replaced. |
+| `repo` | Repository housekeeping, dependencies, migrations, or file reorganization. |
+| `docs` | Documentation-only changes, including Rust docs and comments. |
+| `test` | Test changes without production code changes. |
