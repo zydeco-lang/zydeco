@@ -22,6 +22,7 @@ serde = { workspace = true }
 serde_plain = { workspace = true }
 indexmap = { workspace = true }
 thiserror = { workspace = true }
+ariadne = { workspace = true }
 
 [lints]
 workspace = true

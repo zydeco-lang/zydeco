@@ -2615,6 +2615,7 @@ dependencies = [
 name = "zydeco-stackir"
 version = "0.3.0"
 dependencies = [
+ "ariadne",
  "derive_more",
  "indexmap",
  "pretty",

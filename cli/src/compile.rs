@@ -10,7 +10,10 @@ use zydeco_session::{
     AnalysisError, AnalysisOutcome, CompilerSession, ExecutableError, ExecutableProgram,
     ProgramAnalysis,
 };
-use zydeco_stackir::{BuiltinPackageLowerError, BuiltinRootLowerer, SpsLowPipeline, SpsLowProgram};
+use zydeco_stackir::{
+    BuiltinPackageLowerError, BuiltinRootLowerError, BuiltinRootLowerer, SpsLowPipeline,
+    SpsLowProgram, SpsLowerError,
+};
 use zydeco_statics::{arena::StaticsArena, validate::LintChecker};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax::SpanArena};
 use zydeco_utils::pass::CompilerPass;
@@ -137,12 +140,49 @@ pub struct BackendProgram {
     assembly: OnceLock<AssemblyProgram>,
 }
 
+/// One source-level SPS lowering failure with the provenance its reports need.
+pub struct SpsLowerFailure {
+    pub errors: Vec<SpsLowerError>,
+    pub spans: Arc<SpanArena>,
+    pub scoped: Arc<ScopedArena>,
+    pub statics: Arc<StaticsArena>,
+}
+
+impl std::fmt::Display for SpsLowerFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Some(first) = self.errors.first() else { return Ok(()) };
+        write!(f, "{first}")?;
+        if self.errors.len() > 1 {
+            write!(f, " (and {} more)", self.errors.len() - 1)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::fmt::Debug for SpsLowerFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SpsLowerFailure").field("errors", &self.errors).finish()
+    }
+}
+
 impl BackendProgram {
     pub fn lower(executable: ExecutableProgram) -> Result<Self, CompileError> {
         let ExecutableProgram { spans, scoped, statics, root, signature } = executable;
-        let stackir = BuiltinRootLowerer::new(&spans, &scoped, &statics, root, signature)
-            .run()
-            .map_err(CompileError::BuiltinLower)?;
+        let stackir =
+            match BuiltinRootLowerer::new(&spans, &scoped, &statics, root, signature).run() {
+                | Ok(stackir) => stackir,
+                | Err(BuiltinRootLowerError::Package(error)) => {
+                    return Err(CompileError::BuiltinLower(error));
+                }
+                | Err(BuiltinRootLowerError::Sps(errors)) => {
+                    return Err(CompileError::SpsLower(SpsLowerFailure {
+                        errors,
+                        spans,
+                        scoped,
+                        statics,
+                    }));
+                }
+            };
         let sps_low = SpsLowPipeline::new(&scoped, &statics).run(stackir);
         Ok(Self { spans, scoped, statics, sps_low, assembly: OnceLock::new() })
     }
@@ -331,6 +371,8 @@ pub enum CompileError {
     BuiltinLink(BuiltinPackageError),
     #[error(transparent)]
     BuiltinLower(BuiltinPackageLowerError),
+    #[error("{0}")]
+    SpsLower(SpsLowerFailure),
     #[error(transparent)]
     Runtime(zydeco_dynamics::syntax::RuntimeError),
     #[error(transparent)]

@@ -24,6 +24,14 @@ impl DiagnosticRenderer {
                 Self::graph_warnings(graph);
                 let _ = error.to_report(spans).eprint(SourceCaches::graph(graph));
             }
+            | CompileError::SpsLower(failure) => {
+                let mut cache = SourceCaches::span_arena(&failure.spans);
+                for error in &failure.errors {
+                    let _ = error
+                        .to_report(&failure.spans, &failure.scoped, &failure.statics)
+                        .eprint(&mut cache);
+                }
+            }
             | _ => eprintln!("{error}"),
         }
     }

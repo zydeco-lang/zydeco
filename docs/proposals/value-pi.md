@@ -244,7 +244,10 @@ and ambient capture resolves lexically where the body is spliced, so no environm
 The reference interpreter still evaluates abstractions as closures.
 Extending an environment is extensionally equal to unfolding, because value application is total
 and allocation identity is unobservable.
-The compiled program contains no closure, environment tuple, or indirect call for a value function.
+The compiled program contains no closure, environment tuple, or indirect call for a value function:
+when an application does not statically resolve or an abstraction is reached outside its definition,
+lowering reports a source error — a diagnostic naming the offending application
+or abstraction at its span — instead of emitting a closure.
 `function ~> pattern` applies its named function to the subject by the same unfolding before the nested pattern matches.
 
 A source file that exports a package transformation is consequently an ordinary value term:

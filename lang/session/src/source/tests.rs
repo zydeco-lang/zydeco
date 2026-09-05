@@ -55,7 +55,7 @@ enum TestPipelineError {
     #[error(transparent)]
     Dynamic(zydeco_dynamics::BuiltinPackageError),
     #[error(transparent)]
-    Stack(zydeco_stackir::BuiltinPackageLowerError),
+    Stack(zydeco_stackir::BuiltinRootLowerError),
 }
 
 impl ScopedProgram {
@@ -122,11 +122,11 @@ impl SourceChecked {
             }));
         };
         let Self { spans, scoped, statics, root: _ } = self;
-        let stackir = match zydeco_stackir::RootLowerer::new(&spans, &scoped, &statics, root).run()
-        {
-            | Ok(stackir) => stackir,
-            | Err(never) => match never {},
-        };
+        let stackir = zydeco_stackir::RootLowerer::new(&spans, &scoped, &statics, root)
+            .run()
+            .map_err(|errors| {
+                TestPipelineError::Stack(zydeco_stackir::BuiltinRootLowerError::Sps(errors))
+            })?;
         Ok(SourceStack { spans, scoped, statics, stackir })
     }
 

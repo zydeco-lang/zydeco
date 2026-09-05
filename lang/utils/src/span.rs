@@ -234,6 +234,10 @@ impl SourceMap {
             .collect();
         SourceMap { files }
     }
+    /// The files contributing to this map, in address order.
+    pub fn files(&self) -> &[FileMap] {
+        &self.files
+    }
     /// The file containing a global byte offset, if it falls in a real file.
     pub fn file_of(&self, offset: usize) -> Option<&FileMap> {
         let offset = u32::try_from(offset).ok()?;

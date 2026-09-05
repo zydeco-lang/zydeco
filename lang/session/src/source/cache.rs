@@ -47,6 +47,28 @@ impl SourceCaches {
         )
     }
 
+    /// Source texts of a merged span arena's attached source map, keyed by
+    /// display path. Files without a path are skipped.
+    pub fn span_arena(
+        spans: &zydeco_surface::textual::syntax::SpanArena,
+    ) -> FnCache<
+        PathDisplay,
+        impl FnMut(&PathDisplay) -> Result<String, Box<dyn std::fmt::Debug>>,
+        String,
+    > {
+        let sources = spans
+            .source_map()
+            .map(|map| {
+                map.files()
+                    .iter()
+                    .filter(|file| !file.path().as_os_str().is_empty())
+                    .map(|file| (file.path(), file.source().to_owned()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        Self::from_sources(sources)
+    }
+
     fn from_sources(
         sources: HashMap<PathBuf, String>,
     ) -> FnCache<

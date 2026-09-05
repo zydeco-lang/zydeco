@@ -252,6 +252,14 @@ pub mod utils {
             })
         }
 
+        /// Lower an inline source through the compiled-backend entry point,
+        /// which keeps value functions second-class through SPS lowering.
+        pub fn lower(source: &str) -> Result<(), CaseError> {
+            Self::with_source(SourceCasePrelude::Core, source, |path| {
+                CommandCompiler::default().lower(path).map(|_| ()).map_err(CaseError::Compile)
+            })
+        }
+
         fn with_source<T>(
             prelude: SourceCasePrelude, source: &str,
             action: impl FnOnce(&std::path::Path) -> Result<T, CaseError>,

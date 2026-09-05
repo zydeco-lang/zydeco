@@ -38,5 +38,5 @@ pub mod sps {
 pub use sps::{
     arena::*,
     check::{BranchJoinError, BranchJoinProgram},
-    lower::{BuiltinRootLowerer, Lowerer, RootLowerer},
+    lower::{BuiltinRootLowerError, BuiltinRootLowerer, Lowerer, RootLowerer, SpsLowerError},
 };

@@ -176,6 +176,25 @@ end
 }
 
 #[test]
+fn let_wrapped_value_function_bodies_still_unfold() {
+    // A lexical `let` in the right-hand side must not block unfolding: the
+    // elaborated definition stays reducible and lowering succeeds.
+    SourceCase::lower(
+        r#"
+begin
+  let wrapped : val pi (value : Unit) . Unit =
+    let ignored : Unit = () in
+    param val (value : Unit) in value
+  that
+  let recovered : Unit = () |> wrapped that
+  ! exit 0
+end
+"#,
+    )
+    .expect("the let-wrapped definition must lower");
+}
+
+#[test]
 fn value_function_bodies_reject_computations() {
     ValuePiCase::assert_type_error(
         r#"
