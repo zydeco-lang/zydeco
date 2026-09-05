@@ -1,0 +1,8 @@
+-- expect: reject(tyck.type-expected)
+
+begin
+  match ()
+  | 0 => ret ()
+  | _ => ret ()
+  end
+end

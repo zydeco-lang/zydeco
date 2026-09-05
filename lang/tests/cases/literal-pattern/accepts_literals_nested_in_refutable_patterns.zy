@@ -1,0 +1,14 @@
+begin
+  let Tagged =
+    data
+    | +Tagged : Int64
+    | +Other : Unit
+    end
+  that
+  let value : Tagged = +Tagged(0) that
+  match value
+  | +Tagged(0) => ret ()
+  | +Tagged(_) => ret ()
+  | +Other(_) => ret ()
+  end
+end

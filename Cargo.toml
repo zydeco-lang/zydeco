@@ -66,6 +66,8 @@ strum = { version = "0.28", features = ["derive"] }
 rand = "0.10"
 pretty_assertions = "1.4"
 tempfile = "3.27"
+libtest-mimic = "0.8"
+walkdir = "2"
 libffi = "5"
 # data structures
 la-arena = "0.3.1"

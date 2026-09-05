@@ -1,0 +1,9 @@
+-- expect: reject(tyck.expressivity)
+
+begin
+  let n : Int64 = 0 that
+  match n
+  | 1.5 => ret ()
+  | _ => ret ()
+  end
+end

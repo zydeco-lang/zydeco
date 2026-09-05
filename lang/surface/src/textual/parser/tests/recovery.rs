@@ -245,9 +245,21 @@ impl ParserContract {
 
 #[test]
 fn repository_sources_agree_with_strict_parsing_in_shape_values_and_spans() {
+    // Collect every file that fails strict parsing so one violation does not
+    // hide the rest; contract checks below stop at their own first panic,
+    // which already names the offending construct.
+    let mut unparsed = Vec::new();
+    let mut sources = Vec::new();
     ZydecoCorpus::files().into_iter().for_each(|path| {
         let source = fs::read_to_string(&path).unwrap();
-        assert!(StrictParser::source(&source, &mut Parser::new()).is_ok(), "{}", path.display());
+        if StrictParser::source(&source, &mut Parser::new()).is_ok() {
+            sources.push(source);
+        } else {
+            unparsed.push(path.display().to_string());
+        }
+    });
+    assert!(unparsed.is_empty(), "strict parsing failed for:\n{}", unparsed.join("\n"));
+    sources.into_iter().for_each(|source| {
         ParserContract { entry: EntryPoint::Source }.check(&source);
         ParserContract { entry: EntryPoint::Term }.check(&source);
     });

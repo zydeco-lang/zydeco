@@ -1,0 +1,6 @@
+-- expect: resolve-error
+
+begin
+  param A : A that
+  A
+end

@@ -1,0 +1,9 @@
+-- expect: reject(tyck.coverage)
+
+begin
+  let n : Int64 = 0 that
+  match n
+  | 0 => ret ()
+  | 1 => ret ()
+  end
+end

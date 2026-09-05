@@ -1,0 +1,8 @@
+begin
+  let n : Int64 = 3 that
+  match n
+  | 0 => ret ()
+  | -7 => ret ()
+  | _ => ret ()
+  end
+end

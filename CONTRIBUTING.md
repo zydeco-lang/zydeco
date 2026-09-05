@@ -190,6 +190,22 @@ The source harness in [lang/tests/src/lib.rs](lang/tests/src/lib.rs) provides th
 | `runtime_source!` | Interpreter and both WebAssembly backends. |
 | `e2e_sources!` | Interpreter, AMD64, and both WebAssembly backends. |
 
+Source-level cases can also be data-driven: a `.zy` fixture under [lang/tests/cases/](lang/tests/cases) becomes one test
+with no Rust change.
+Leading `--` comment lines state the pipeline stage, the prelude, and the expected outcome;
+a fixture without directives must check against the core prelude and be accepted.
+Filter trials by topic:
+
+```sh
+cargo test -p zydeco-tests --test cases
+cargo test -p zydeco-tests --test cases -- literal-pattern/
+```
+
+The [cases README](lang/tests/cases/README.md) holds the directive reference;
+[docs/proposals/data-driven-cases.md](docs/proposals/data-driven-cases.md) records the design.
+Fixtures join the repository Zydeco corpus, so the parser and formatter law tests
+in `zydeco-surface` cover them as well.
+
 Run only the WebAssembly cases when working on those backends:
 
 ```sh

@@ -1,0 +1,6 @@
+-- expect: reject(tyck.pattern-alias-requires-value)
+
+begin
+  let (First; Second) : VType = Int64 in
+  ()
+end

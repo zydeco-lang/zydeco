@@ -1,0 +1,8 @@
+-- prelude: monadic
+-- expect: reject(tyck.type-mismatch)
+
+begin
+  do value <- ret 0;
+  let wrong : String = 0 that
+  ret ()
+end

@@ -1,0 +1,9 @@
+-- stage: run
+
+begin
+  let val keep (A : VType) (value : A) : A = value that
+  let unit : Unit = () |> keep Unit that
+  let keep[Unit] ~> recovered = unit that
+  let _ : Unit = recovered that
+  ! exit 0
+end

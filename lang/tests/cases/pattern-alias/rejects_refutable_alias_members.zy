@@ -1,0 +1,15 @@
+-- expect: reject(tyck.refutable-pattern-alias)
+
+begin
+  def Bool : VType =
+    data
+    | +True : Unit
+    | +False : Unit
+    end
+  that
+  def truth : Bool = +True() that
+  match truth
+  | (whole; +True()) => ret ()
+  | +False() => ret ()
+  end
+end

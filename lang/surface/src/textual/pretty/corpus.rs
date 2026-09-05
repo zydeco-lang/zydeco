@@ -18,11 +18,11 @@ struct ParsedSource {
 }
 
 impl ParsedSource {
-    fn new(source: &str, name: &str) -> Self {
+    /// Parse strictly, mapping a parse failure onto `None`.
+    fn try_new(source: &str) -> Option<Self> {
         let mut parser = Parser::new();
-        let unit = StrictParser::source(source, &mut parser)
-            .unwrap_or_else(|error| panic!("failed to parse {name}: {error:?}"));
-        Self { unit, parser, source: source.to_owned() }
+        let unit = StrictParser::source(source, &mut parser).ok()?;
+        Some(Self { unit, parser, source: source.to_owned() })
     }
 
     fn format(&self) -> String {
@@ -63,24 +63,30 @@ impl Comments {
 
 #[test]
 fn repository_programs_preserve_formatter_laws() {
+    let mut violations = Vec::new();
     ZydecoCorpus::files().into_iter().for_each(|path| {
         let name = path.display().to_string();
         let source = fs::read_to_string(&path)
             .unwrap_or_else(|error| panic!("cannot read formatter corpus source {name}: {error}"));
-        let original = ParsedSource::new(&source, &name);
+        let Some(original) = ParsedSource::try_new(&source) else {
+            violations.push(format!("{name}: does not strictly parse"));
+            return;
+        };
         let formatted = original.format();
-        let reparsed = ParsedSource::new(&formatted, &name);
+        let Some(reparsed) = ParsedSource::try_new(&formatted) else {
+            violations.push(format!("{name}: formatted output does not strictly parse"));
+            return;
+        };
 
-        assert_eq!(
-            original.desugared_shape(),
-            reparsed.desugared_shape(),
-            "formatter changed the desugared structure of {name}",
-        );
-        assert_eq!(formatted, reparsed.format(), "formatter is not idempotent for {name}");
-        assert_eq!(
-            Comments::retained(&source),
-            Comments::retained(&formatted),
-            "formatter changed comments in {name}",
-        );
+        if original.desugared_shape() != reparsed.desugared_shape() {
+            violations.push(format!("formatter changed the desugared structure of {name}"));
+        }
+        if formatted != reparsed.format() {
+            violations.push(format!("formatter is not idempotent for {name}"));
+        }
+        if Comments::retained(&source) != Comments::retained(&formatted) {
+            violations.push(format!("formatter changed comments in {name}"));
+        }
     });
+    assert!(violations.is_empty(), "formatter law violations:\n{}", violations.join("\n"));
 }

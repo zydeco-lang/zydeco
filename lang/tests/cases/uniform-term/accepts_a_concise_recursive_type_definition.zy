@@ -1,0 +1,10 @@
+begin
+  def List (A : VType) : VType =
+    data
+    | +Nil : Unit
+    | +Cons : A * List A
+    end
+  that
+  let nil : List Unit = +Nil() that
+  ret ()
+end

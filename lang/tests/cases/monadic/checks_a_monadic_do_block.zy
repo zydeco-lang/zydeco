@@ -1,0 +1,6 @@
+-- prelude: monadic
+
+begin
+  do value <- ret 0;
+  ret value
+end

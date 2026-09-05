@@ -1,0 +1,6 @@
+-- expect: reject(tyck.sort-mismatch)
+
+begin
+  def value : Int64 = value that
+  ret ()
+end

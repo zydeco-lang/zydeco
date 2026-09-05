@@ -824,7 +824,7 @@ but the embedding must supply the imports before invoking either function.
 
 | Path | Role |
 | --- | --- |
-| `lang/` | Compiler phases, interpreter, emitters, utilities, and test harnesses. |
+| `lang/` | Compiler phases, interpreter, emitters, utilities, test harnesses, and data-driven case fixtures under `lang/tests/cases/`. |
 | `lib/` | Standard library, reusable examples, and regression projects under `lib/tests/`. |
 | `cli/` | Source checking, interpreter launch, formatting, and compilation commands. |
 | `runtime/` | Runtime sources copied into native executable builds. |

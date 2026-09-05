@@ -10,6 +10,14 @@ zydeco-cli = { path = "../../cli" }
 zydeco-stackir = { workspace = true }
 thiserror = { workspace = true }
 tempfile = { workspace = true }
+walkdir = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+libtest-mimic = { workspace = true }
+
+[[test]]
+name = "cases"
+harness = false

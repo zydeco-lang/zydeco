@@ -1,0 +1,6 @@
+-- expect: reject(tyck.expressivity)
+
+begin
+  let val zero (0 : Int64) : Int64 = 0 that
+  ret (0 |> zero)
+end

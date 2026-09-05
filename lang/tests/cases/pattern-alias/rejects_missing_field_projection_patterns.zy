@@ -1,0 +1,8 @@
+-- expect: reject(tyck.missing-named-field)
+
+begin
+  let Point = (#x :: Int64) * (#y :: Int64) that
+  def point : Point = (#x = 1, #y = 2) that
+  let (/z = missing) = point in
+  missing
+end

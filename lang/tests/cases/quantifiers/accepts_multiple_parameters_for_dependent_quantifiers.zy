@@ -1,0 +1,38 @@
+-- stage: check-value
+
+begin
+  let ExplicitFunction :
+    CType =
+      pi (A : VType) (value : A) .
+        Ret A
+  that
+  let Universal :
+    CType =
+      forall (A : VType) (value : A) .
+        Ret A
+  that
+  let ExplicitPair :
+    VType =
+      sigma (X : VType) (value : X) .
+        X
+  that
+  let Existential :
+    VType =
+      exists (X : VType) (value : X) .
+        X
+  that
+  let MixedPackage :
+    VType =
+      exists
+        (X : VType)
+        (Alias as X : VType)
+        (value : Alias)
+      .
+        X
+  that
+
+  let Export =
+    exists (MixedPackageType as MixedPackage : VType) . Unit
+  that
+  (MixedPackage, ()) : Export
+end

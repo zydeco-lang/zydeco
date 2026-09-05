@@ -1,0 +1,9 @@
+-- expect: reject(tyck.integer-literal-out-of-range)
+
+begin
+  let n : Int8 = 0 that
+  match n
+  | 300 => ret ()
+  | _ => ret ()
+  end
+end

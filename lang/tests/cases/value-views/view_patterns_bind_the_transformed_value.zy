@@ -1,0 +1,7 @@
+-- stage: run
+
+begin
+  let val second ((_, value) : Unit * Int64) : Int64 = value that
+  let second ~> status = ((), 0) that
+  ! exit status
+end

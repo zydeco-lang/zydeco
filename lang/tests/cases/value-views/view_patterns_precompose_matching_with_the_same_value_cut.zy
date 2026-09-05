@@ -1,0 +1,17 @@
+-- stage: run
+
+begin
+  let Tagged =
+    data
+    | +Tagged : Int64
+    | +Other : Unit
+    end
+  that
+  let val tag (value : Int64) : Tagged = +Tagged(value) that
+  let val other (_ : Int64) : Tagged = +Other(()) that
+  match 0
+  | other ~> +Tagged(_) => ! exit 1
+  | tag ~> +Tagged(status) => ! exit status
+  | _ => ! exit 1
+  end
+end

@@ -1,6 +1,11 @@
 pub mod utils {
-    use std::{path::PathBuf, process::Stdio};
+    use std::{
+        collections::BTreeSet,
+        path::{Path, PathBuf},
+        process::Stdio,
+    };
     use thiserror::Error;
+    use walkdir::WalkDir;
     use zydeco_cli::{
         BuildOptions, CommandCompiler, CompileError, DiagnosticRenderer, NativeError,
         TargetArchitecture, TargetOs, WasmBackendKind,
@@ -165,8 +170,10 @@ pub mod utils {
         }
     }
 
-    #[derive(Clone, Copy)]
-    enum SourceCasePrelude {
+    /// The standard-library basis a case source is wrapped with.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub enum SourceCasePrelude {
+        #[default]
         Core,
         Monadic,
     }
@@ -379,6 +386,224 @@ let triv : Thk Top = {{ comatch end }} in
             )
         }
     }
+    /// The pipeline stage a case fixture exercises.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub enum CaseStage {
+        /// Analyze the source; the default.
+        #[default]
+        Check,
+        /// Analyze the source wrapped in a value binding.
+        CheckValue,
+        /// Execute the source on the reference interpreter.
+        Run,
+        /// Lower the source through the compiled-backend entry point.
+        Lower,
+    }
+
+    /// The outcome a case fixture asserts.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum CaseExpectation {
+        /// The directed stage accepts the source; the default.
+        Accepted,
+        /// Checking rejects the source with this diagnostic code.
+        Rejected(TyckDiagnosticCode),
+        /// Resolution fails before checking runs.
+        ResolveError,
+    }
+
+    /// Directives parsed from the leading `--` comment lines of a case fixture.
+    ///
+    /// A fixture with no directives is checked against the core prelude and must
+    /// be accepted. Malformed directives are errors, never silently skipped:
+    /// a test whose stated expectation cannot be honored has no value.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct CaseDirective {
+        pub stage: CaseStage,
+        pub prelude: SourceCasePrelude,
+        pub expectation: CaseExpectation,
+    }
+
+    /// A case fixture whose directives cannot be honored as written.
+    #[derive(Debug, Error, PartialEq, Eq)]
+    pub enum CaseDirectiveError {
+        #[error("`{line}` is not a directive; the leading comment block must hold only directives")]
+        NotADirective { line: String },
+        #[error("duplicate directive `{key}`")]
+        Duplicate { key: &'static str },
+        #[error("unknown directive key `{key}`; expected `stage`, `prelude`, or `expect`")]
+        UnknownKey { key: String },
+        #[error("unknown `{key}` spelling `{value}`; expected one of {expected}")]
+        UnknownValue { key: &'static str, value: String, expected: &'static str },
+        #[error("malformed rejection `{text}`; expected `reject(<diagnostic code>)`")]
+        MalformedRejection { text: String },
+        #[error("unknown diagnostic code in `{text}`")]
+        UnknownDiagnosticCode { text: String },
+        #[error("stage `lower` supports only the core prelude")]
+        LowerRequiresCore,
+    }
+
+    impl CaseDirective {
+        /// Parse the leading directive block of a fixture source.
+        ///
+        /// Scanning skips blank lines, then consumes consecutive `--` lines.
+        /// A `--|` documentation line or any source line ends the block, so
+        /// directives must come first; every consumed line must be a directive.
+        pub fn parse(source: &str) -> Result<Self, CaseDirectiveError> {
+            let mut stage: Option<CaseStage> = None;
+            let mut prelude: Option<SourceCasePrelude> = None;
+            let mut expectation: Option<CaseExpectation> = None;
+
+            for line in source.lines() {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                let Some(directive) = trimmed.strip_prefix("-- ") else { break };
+                if directive.starts_with("|") {
+                    break;
+                }
+                let (key, value) = directive
+                    .split_once(':')
+                    .ok_or_else(|| CaseDirectiveError::NotADirective { line: line.to_owned() })?;
+                let key = key.trim();
+                let value = value.trim();
+                match key {
+                    | "stage" => {
+                        duplicate(stage.is_none(), "stage")?;
+                        stage = Some(match value {
+                            | "check" => CaseStage::Check,
+                            | "check-value" => CaseStage::CheckValue,
+                            | "run" => CaseStage::Run,
+                            | "lower" => CaseStage::Lower,
+                            | _ => {
+                                return Err(CaseDirectiveError::UnknownValue {
+                                    key: "stage",
+                                    value: value.to_owned(),
+                                    expected: "`check`, `check-value`, `run`, or `lower`",
+                                });
+                            }
+                        });
+                    }
+                    | "prelude" => {
+                        duplicate(prelude.is_none(), "prelude")?;
+                        prelude = Some(match value {
+                            | "core" => SourceCasePrelude::Core,
+                            | "monadic" => SourceCasePrelude::Monadic,
+                            | _ => {
+                                return Err(CaseDirectiveError::UnknownValue {
+                                    key: "prelude",
+                                    value: value.to_owned(),
+                                    expected: "`core` or `monadic`",
+                                });
+                            }
+                        });
+                    }
+                    | "expect" => {
+                        duplicate(expectation.is_none(), "expect")?;
+                        expectation = Some(match value {
+                            | "accepted" => CaseExpectation::Accepted,
+                            | "resolve-error" => CaseExpectation::ResolveError,
+                            | rejection if rejection.starts_with("reject(") => {
+                                let code = rejection
+                                    .strip_prefix("reject(")
+                                    .and_then(|inner| inner.strip_suffix(')'))
+                                    .ok_or_else(|| CaseDirectiveError::MalformedRejection {
+                                        text: value.to_owned(),
+                                    })?;
+                                CaseExpectation::Rejected(code.parse().map_err(|_| {
+                                    CaseDirectiveError::UnknownDiagnosticCode {
+                                        text: value.to_owned(),
+                                    }
+                                })?)
+                            }
+                            | _ => {
+                                return Err(CaseDirectiveError::UnknownValue {
+                                    key: "expect",
+                                    value: value.to_owned(),
+                                    expected: "`accepted`, `resolve-error`, or `reject(<code>)`",
+                                });
+                            }
+                        });
+                    }
+                    | _ => {
+                        return Err(CaseDirectiveError::UnknownKey { key: key.to_owned() });
+                    }
+                }
+            }
+
+            let directive = Self {
+                stage: stage.unwrap_or_default(),
+                prelude: prelude.unwrap_or_default(),
+                expectation: expectation.unwrap_or(CaseExpectation::Accepted),
+            };
+            if directive.stage == CaseStage::Lower
+                && directive.prelude == SourceCasePrelude::Monadic
+            {
+                return Err(CaseDirectiveError::LowerRequiresCore);
+            }
+            Ok(directive)
+        }
+
+        /// Run the fixture source through the directed pipeline stage.
+        pub fn run(self, source: &str) -> Result<(), CaseError> {
+            match (self.stage, self.prelude) {
+                | (CaseStage::Check, SourceCasePrelude::Core) => SourceCase::check(source),
+                | (CaseStage::Check, SourceCasePrelude::Monadic) => {
+                    SourceCase::check_monadic(source)
+                }
+                | (CaseStage::CheckValue, SourceCasePrelude::Core) => {
+                    SourceCase::check_value(source)
+                }
+                | (CaseStage::CheckValue, SourceCasePrelude::Monadic) => {
+                    SourceCase::check_monadic_value(source)
+                }
+                | (CaseStage::Run, SourceCasePrelude::Core) => SourceCase::run(source),
+                | (CaseStage::Run, SourceCasePrelude::Monadic) => SourceCase::run_monadic(source),
+                | (CaseStage::Lower, SourceCasePrelude::Core) => SourceCase::lower(source),
+                | (CaseStage::Lower, SourceCasePrelude::Monadic) => {
+                    unreachable!("directive parsing rejects the monadic prelude for `lower`")
+                }
+            }
+        }
+
+        /// Assert the directed outcome of running the fixture source.
+        pub fn assert(self, result: Result<(), CaseError>) {
+            match self.expectation {
+                | CaseExpectation::Accepted => SourceCase::assert_accepted(result),
+                | CaseExpectation::Rejected(code) => SourceCase::assert_rejected(result, code),
+                | CaseExpectation::ResolveError => SourceCase::assert_resolve_error(result),
+            }
+        }
+    }
+
+    fn duplicate(fresh: bool, key: &'static str) -> Result<(), CaseDirectiveError> {
+        fresh.then_some(()).ok_or(CaseDirectiveError::Duplicate { key })
+    }
+
+    /// Every `.zy` case fixture under `lang/tests/cases`, sorted by path.
+    ///
+    /// Discovery is dynamic: dropping a fixture file into the tree registers a
+    /// test without any Rust change. Non-`.zy` files (such as a topic README)
+    /// are ignored.
+    pub fn case_fixtures() -> BTreeSet<PathBuf> {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("cases");
+        let files = zy_files_below(&root);
+        assert!(!files.is_empty(), "case fixture directory {} is empty", root.display());
+        files
+    }
+
+    fn zy_files_below(root: &Path) -> BTreeSet<PathBuf> {
+        WalkDir::new(root)
+            .into_iter()
+            .map(|entry| {
+                entry.unwrap_or_else(|error| {
+                    panic!("cannot walk case fixtures below {}: {error}", root.display())
+                })
+            })
+            .filter(|entry| entry.path().extension().is_some_and(|extension| extension == "zy"))
+            .map(|entry| entry.path().to_path_buf())
+            .collect()
+    }
 }
 
 #[macro_export]
@@ -456,4 +681,95 @@ macro_rules! e2e_sources {
             )*
         }
     };
+}
+
+#[cfg(test)]
+mod directive_tests {
+    use crate::utils::{
+        CaseDirective, CaseDirectiveError, CaseExpectation, CaseStage, SourceCasePrelude,
+    };
+    use zydeco_statics::TyckDiagnosticCode;
+
+    fn parse(lines: &[&str]) -> Result<CaseDirective, CaseDirectiveError> {
+        CaseDirective::parse(&lines.join("\n"))
+    }
+
+    #[test]
+    fn sources_without_directives_default_to_core_check_acceptance() {
+        let directive = parse(&["ret ()"]).unwrap();
+        assert_eq!(directive.stage, CaseStage::Check);
+        assert_eq!(directive.prelude, SourceCasePrelude::Core);
+        assert_eq!(directive.expectation, CaseExpectation::Accepted);
+    }
+
+    #[test]
+    fn parses_every_directive_and_stops_at_source() {
+        let directive = parse(&[
+            "-- stage: run",
+            "-- prelude: monadic",
+            "",
+            "--| attached documentation",
+            "do value <- ret 0;",
+        ])
+        .unwrap();
+        assert_eq!(directive.stage, CaseStage::Run);
+        assert_eq!(directive.prelude, SourceCasePrelude::Monadic);
+        assert_eq!(directive.expectation, CaseExpectation::Accepted);
+    }
+
+    #[test]
+    fn parses_rejections_with_their_diagnostic_code() {
+        let directive = parse(&["-- expect: reject(tyck.coverage)", "match value end"]).unwrap();
+        assert_eq!(directive.expectation, CaseExpectation::Rejected(TyckDiagnosticCode::Coverage));
+    }
+
+    #[test]
+    fn rejects_malformed_leading_comment_lines() {
+        assert_eq!(
+            parse(&["-- a prose header", "-- stage: run"]),
+            Err(CaseDirectiveError::NotADirective { line: "-- a prose header".into() })
+        );
+        assert_eq!(
+            parse(&["-- stage: fly"]),
+            Err(CaseDirectiveError::UnknownValue {
+                key: "stage",
+                value: "fly".into(),
+                expected: "`check`, `check-value`, `run`, or `lower`",
+            })
+        );
+        assert_eq!(
+            parse(&["-- tempo: fast"]),
+            Err(CaseDirectiveError::UnknownKey { key: "tempo".into() })
+        );
+        assert_eq!(
+            parse(&["-- stage: run", "-- stage: check"]),
+            Err(CaseDirectiveError::Duplicate { key: "stage" })
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_or_malformed_rejection_codes() {
+        assert_eq!(
+            parse(&["-- expect: reject(tyck.nonexistent)"]),
+            Err(CaseDirectiveError::UnknownDiagnosticCode {
+                text: "reject(tyck.nonexistent)".into()
+            })
+        );
+        assert_eq!(
+            parse(&["-- expect: reject coverage"]),
+            Err(CaseDirectiveError::UnknownValue {
+                key: "expect",
+                value: "reject coverage".into(),
+                expected: "`accepted`, `resolve-error`, or `reject(<code>)`",
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_the_monadic_prelude_for_lowering() {
+        assert_eq!(
+            parse(&["-- stage: lower", "-- prelude: monadic"]),
+            Err(CaseDirectiveError::LowerRequiresCore)
+        );
+    }
 }

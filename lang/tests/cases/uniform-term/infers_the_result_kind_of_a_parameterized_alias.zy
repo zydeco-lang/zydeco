@@ -1,0 +1,10 @@
+begin
+  let Option (A : VType) =
+    data
+    | +None : Unit
+    | +Some : A
+    end
+  that
+  let none : Option Int64 = +None() that
+  ret ()
+end

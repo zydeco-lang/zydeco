@@ -36,6 +36,9 @@ derive_more = { workspace = true, features = [
 [build-dependencies]
 lalrpop = { workspace = true }
 
+[dev-dependencies]
+walkdir = { workspace = true }
+
 [lib]
 doctest = false
 

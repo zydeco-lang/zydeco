@@ -1,0 +1,16 @@
+-- expect: reject(tyck.refutable-field-projection-pattern)
+
+begin
+  def Maybe : VType =
+    data
+    | +Some : Int64
+    | +None : Unit
+    end
+  that
+  let Box = (#value :: Maybe) that
+  def boxed : Box = (#value = +Some(1)) that
+  match boxed
+  | (/value = +Some(payload)) => ret payload
+  | (/value = +None()) => ret 0
+  end
+end
