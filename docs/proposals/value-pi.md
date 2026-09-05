@@ -126,23 +126,25 @@ An unannotated result may be synthesized when the ordinary value checker can inf
 
 ## Elimination and Pipelines
 
-Ordinary juxtaposition applies either a type argument or a value argument according to the next telescope binder.
-Pipelines are directional spellings of value application:
+Application is one thing: juxtaposition, both pipelines, and the view pattern are spellings of the same value-level cut.
 
 ```text
-V |> f  ==  f V  ==  f <| V
+V |> f  ==  f V  ==  f <| V          let f ~> p = V in N  ==  let p = (V |> f) in N
 ```
 
-`|>` associates to the left and `<|` associates to the right.
-Hence
+Evaluating the cut rewrites complex values no further than their memory representation: projections,
+constructions, and trivial fills — never a closure, an indirect call, or an effect.
+A value function is a derivation `x : A |-v W : B`; its cut is performed entirely at the value level,
+and the spellings differ only in reading direction.
+`|>` associates to the left and `<|` to the right, so
 
 ```zydeco
 input |> first |> second
 second <| first <| input
 ```
 
-both apply `first` before `second`. Either side may itself be a partial instantiation,
-so an application can consume type arguments and value arguments across several steps:
+both apply `first` before `second`. An application consumes type arguments and value arguments in telescope order,
+so either side may be a partial instantiation:
 
 ```zydeco
 let val keep (A : VType) (value : A) : A = value that
@@ -150,14 +152,9 @@ let keep_unit : val pi (value : Unit) . Unit = keep Unit that
 let recovered : Unit = () |> keep_unit that
 ```
 
-What no application can do is make the function itself a value that flows onward:
-a pipeline side must be a function standing at its own application, never a computed function stored
+No spelling can make the function itself a value that flows onward:
+a pipeline side is a function standing at its own application, never a computed function stored
 in data (see [Second-Class Occurrences](#second-class-occurrences)).
-
-This fit with CBPV is semantic rather than merely stylistic.
-A value function represents a derivation `x : A |-v W : B`; applying it performs value-level cut.
-The pipeline places the incoming derivation on the open side of that cut and makes a chain of cuts read
-in data-flow order.
 
 ## Equational Theory
 
