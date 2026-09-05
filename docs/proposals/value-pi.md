@@ -232,6 +232,10 @@ Passing a function *through* a polymorphic value function remains legal, because
 `(A : VType)`-abstract code that returns its argument unchanged elaborates to lexical rebinding when applied.
 Storage inside such code is still rejected at the storing position.
 
+Existential packages obey the same discipline through a sibling rule — a package never crosses a computation boundary —
+specified with its own positions and error code in [Package modularization](package-modularization.md);
+the two checkers run together after ordinary checking.
+
 ## Runtime and Compilation
 
 Value functions have no runtime representation.

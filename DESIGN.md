@@ -9,9 +9,10 @@ and the [language guide](docs/tutorial/zydeco-guide.md) provides a longer source
 
 ## Language Model
 
-Zydeco separates values from computations.
-Values include variables, thunks, units, products, constructors, literals, and total value functions;
-the latter are second-class, bound and applied but never stored or passed as runtime values.
+Zydeco separates values from computations. Values include variables, thunks, units,
+products, constructors, literals, total value functions, and existential packages;
+value functions and packages are second-class, bound and consumed by statically resolved projections,
+openings, and applications, but never stored or returned as first-class runtime values.
 Computations may perform effects and include forcing thunks, computation-function application,
 do-bindings, and returning values.
 
@@ -113,6 +114,16 @@ constructor and destructor spines, and grouping.
 Products group values. Existential packages also carry type witnesses on which later components may depend,
 allowing a package to expose operations while hiding their representation types.
 A telescope is an ordered sequence of binders in which later classifiers may refer to earlier bindings.
+
+Packages are second-class, like value functions: a package is introduced by `pack`,
+bound by a definition, opened by a pattern, nested in products, named components, and other packages,
+and applied to package-dependent or value arrows whose patterns open it.
+Each of those consumers is resolved statically.
+A package never crosses a computation boundary: storing one in a constructor payload,
+passing one to a computation under a plain arrow, or returning one from a computation is rejected
+with `tyck.first-class-package`, and the escape hatch for dynamic needs is a product of thunks.
+[Package modularization](docs/proposals/package-modularization.md) specifies the occurrence rule
+and its consequences for the standard library.
 
 Parenthesized comma sequences are preserved by the surface `Cons` variant over a flat component vector.
 The type checker interprets them as value products or existential packages from the expected type,
@@ -407,6 +418,8 @@ in [Value Functions with `ValPi`](docs/proposals/value-pi.md) and [Value Views](
 Package parameters may open existential witnesses used by the result classifier.
 Both computation package-dependent arrows (`PackPi`) and value-function classifiers (`ValPi`) retain those witnesses;
 `ValPi` also records the structural route through the parameter pattern by which application recovers them.
+A binder that opens abstract witnesses elaborates to a package-dependent arrow on its own, so applying one stays
+within the second-class package rule; a package under a plain computation arrow is rejected instead.
 These are static dependencies on type identities, rather than dependencies on arbitrary runtime values.
 Libraries compose through these functions and packages without an additional module or namespace sort.
 
@@ -830,6 +843,10 @@ but the embedding must supply the imports before invoking either function.
   with the unfolded program, dominated by multiply-instantiated library functors.
   The workspace raises its test-stack minimum accordingly; compiling each definition once remains future work recorded
   in [Value Functions with `ValPi`](docs/proposals/value-pi.md).
+- Packages are second-class and rejected in first-class positions (constructor payloads,
+  plain-arrow domains and arguments, computation returns), while package-dependent arrows remain user-writable.
+  Whether the latter restrict to the executable host boundary, with module functors migrating to value functions,
+  is an open design decision recorded in [Package modularization](docs/proposals/package-modularization.md).
 - The standard native test path is AMD64 on Linux or macOS.
   The CLI defaults to the host architecture, so an ARM host needs explicit AMD64 target selection
   and appropriate tools for native execution.

@@ -2,7 +2,7 @@
 
 A capability dictionary such as `Numeric Bool A` gives a direct dictionary encoding
 of a typeclass-like constraint when the carrier `A` is already known.
-Libraries also need a first-class value that packages a carrier with its dictionary
+Libraries also need a module value that packages a carrier with its dictionary
 while preserving a disclosed concrete representation.
 Manifest existential fields provide precisely that equality.
 
@@ -14,17 +14,16 @@ exists (= Int64 as @(intrinsic(i64)) : VType) .
   Numeric Bool Int64
 ```
 
-A single generic family `NumericInstance Bool Representation` would force one role label onto every carrier,
-reintroducing the renaming step at each open, so the family was dissolved into per-width instance packages
-introduced inline in `numeric/package.zy`.
+A single generic family `NumericInstance Bool Representation` would force one role label
+onto every carrier, reintroducing the renaming step at each open, so the family was dissolved
+into per-width instance packages introduced inline in `numeric/package.zy`.
 
 An integer instance therefore packages one manifest field `Int64`, defined as the primitive `i64` intrinsic,
 with the dictionary as the package body, checked at `Numeric Bool Int64`.
-The floating-point instance similarly discloses `Float64`.
-The manifest binder is a pun on the field name, so no intermediate role variable stands between the field
-and its public name.
-Opening the package substitutes the manifest definition, so results at the bound name remain definitionally
-equal to the concrete representation:
+The floating-point instance similarly discloses `Float64`. The manifest binder is a pun on the field name,
+so no intermediate role variable stands between the field and its public name.
+Opening the package substitutes the manifest definition, so results at the bound name remain definitionally equal
+to the concrete representation:
 
 ```zydeco
 let (= Int64, operations) = numeric/int64_instance in
@@ -33,13 +32,12 @@ let (= Int64, operations) = numeric/int64_instance in
 
 The manifest field is erased.
 Only the dictionary value remains at runtime, and its nested projections lower through the ordinary product machinery.
-This makes an instance package a first-class module with a transparent carrier,
-rather than a new runtime object or a new form of type evidence.
+This makes an instance package a second-class module with a transparent carrier — nested in products and opened
+by static projection, never stored or returned — rather than a new runtime object or a new form of type evidence.
 
 Instance selection remains explicit.
-The `numeric` module gives the packages globally distinct field names such as `int64_instance`,
-`uint8_instance`, and `float32_instance`,
-and a generic function receives the selected dictionary as an ordinary parameter.
+The `numeric` module gives the packages globally distinct field names such as `int64_instance`, `uint8_instance`,
+and `float32_instance`, and a generic function receives the selected dictionary as an ordinary parameter.
 The longer names also avoid ambiguity because unchained projection searches recursively through nested packages.
 Manifest normalization establishes type equality after selection; it does not search the lexical environment,
 choose among overlapping dictionaries, or enforce laws.

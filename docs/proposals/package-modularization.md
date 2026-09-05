@@ -1,7 +1,8 @@
 # Package modularization with projection patterns
 
-Zydeco represents libraries with first-class value functions, computation functions, products, and existential packages,
-following the account in [Uniform Term Composition](term.md) and [Compile-Time Normalization](normalization.md).
+Zydeco represents libraries with second-class value functions, computation functions,
+products, and existential packages, following the account in [Uniform Term Composition](term.md)
+and [Compile-Time Normalization](normalization.md).
 This gives libraries a precise term-level meaning,
 but a positional package pattern makes every consumer repeat the provider's complete public telescope.
 Adding one standard-library type or module then changes programs that never use it.
@@ -29,8 +30,9 @@ No `use`, `open`, module declaration, or import-specific binding form is added.
 
 ## The problem with complete unpacking
 
-The canonical Builtin signature contains manifest core and representation packages plus one existential
-capability telescope. Compiler-canonical intrinsics establish the identities of all fixed-width numeric types,
+The canonical Builtin signature contains manifest core
+and representation packages plus one existential capability telescope.
+Compiler-canonical intrinsics establish the identities of all fixed-width numeric types,
 `Char`, `String`, and `Bytes`; only `Reader`, `Writer`, and `OS` receive fresh provider witnesses.
 Later operation fields refer to those identities.
 The standard library adds another telescope for `Bool`, `Option`, `Result`, `List`, `Path`, and the I/O error types,
@@ -175,11 +177,11 @@ text:             char string bytes
 system:           Reader Writer OS io fs stdio args random process
 ```
 
-Each representation child is a manifest package whose field carries the public name of its type. Each numeric
-child discloses its carrier under that same name beside its arithmetic and comparison operations. Text owns
-operations crossing
-`Char`, `String`, `Bytes`, and `Int64`; system keeps the generative capabilities and their operations in one
-opening. The full rationale is in [Modular primitive packages](primitive-packages.md).
+Each representation child is a manifest package whose field carries the public name of its type.
+Each numeric child discloses its carrier under that same name beside its arithmetic and comparison operations.
+Text owns operations crossing `Char`, `String`, `Bytes`, and `Int64`;
+system keeps the generative capabilities and their operations in one opening.
+The full rationale is in [Modular primitive packages](primitive-packages.md).
 
 The source tree mirrors those semantic boundaries:
 
@@ -204,28 +206,31 @@ lib/std/
   std.zy
 ```
 
-`builtin.zy` and `std.zy` are deliberately thin composition roots. The first closes the complete host ABI and
-introduces the shared generative system witnesses; the second applies the topic packages and constructs the
-public package. Each topic implementation carries its parameter annotations in place, ends in a sealed `pack`
-introduction whose existential type the checker synthesizes, and defines its data types, operations, and
-derived operations in one dependency-scheduled block, so no per-module contract split remains.
-The data topic's `package.type.zy` names the shared base type, stating its existential witnesses and module
-telescopes in one declaration that the dependent implementations import for their base parameter.
-The composition root synthesizes its public type from its own final `pack`, so locality does not require
-copying a contract.
+`builtin.zy` and `std.zy` are deliberately thin composition roots.
+The first closes the complete host ABI and introduces the shared generative system witnesses;
+the second applies the topic packages and constructs the public package.
+Each topic implementation carries its parameter annotations in place, ends in a sealed `pack` introduction
+whose existential type the checker synthesizes, and defines its data types, operations,
+and derived operations in one dependency-scheduled block, so no per-module contract split remains.
+The data topic's `package.type.zy` names the shared base type, stating its existential witnesses
+and module telescopes in one declaration that the dependent implementations import for their base parameter.
+The composition root synthesizes its public type from its own final `pack`,
+so locality does not require copying a contract.
 A topic depends on a selected package boundary rather than on names inherited from a monolithic source file.
 
-The derived integer and floating-point builders share algorithms across the fixed-width representations through
-explicitly annotated `forall` parameters. Their result types retain the input `Bool`, scalar, and `String`
-identities, and the numeric assembly wraps each returned dictionary in an instance package whose manifest field
-carries the carrier's public name, such as `Int64` in `int64_instance`.
-The public system implementation remains one assembly package because `Reader`, `Writer`, and `OS` are abstract
-provider identities shared by `io`, `fs`, and `stdio`. Its host-facing operation contracts are nevertheless split
-into topic leaves, which is the modular boundary that does not duplicate those witnesses.
+The derived integer and floating-point builders share algorithms across the fixed-width representations
+through explicitly annotated `forall` parameters.
+Their result types retain the input `Bool`, scalar, and `String` identities,
+and the numeric assembly wraps each returned dictionary in an instance package
+whose manifest field carries the carrier's public name, such as `Int64` in `int64_instance`.
+The public system implementation remains one assembly package because `Reader`, `Writer`,
+and `OS` are abstract provider identities shared by `io`, `fs`, and `stdio`.
+Its host-facing operation contracts are nevertheless split into topic leaves,
+which is the modular boundary that does not duplicate those witnesses.
 
-A source selects only the groups needed for its annotations and calls. Individual operations stay qualified,
-such as `int64/eq`, `string/append`, and `fs/open_reader`; this prevents generic names such as `eq`, `read`,
-and `write` from occupying every consumer's scope.
+A source selects only the groups needed for its annotations and calls.
+Individual operations stay qualified, such as `int64/eq`, `string/append`, and `fs/open_reader`;
+this prevents generic names such as `eq`, `read`, and `write` from occupying every consumer's scope.
 
 The public standard package builds on that boundary.
 It exposes shared type identities once and groups its own operations into named module values:
@@ -261,29 +266,28 @@ The complete nested product remains only in the provider representation and host
 
 ## Checker constraints on the topic layout
 
-Four checker facts determine how far the modularization can fold, and each one is load-bearing
-for the layout above.
+Four checker facts determine how far the modularization can fold, and each one is load-bearing for the layout above.
 
 - A bare record literal has no principal type, so a package-producing source needs a synthesizing final form.
-  Every standard-library package function now ends in a synthesizing `pack` introduction and carries an annotated
-  value parameter. Within a synthesized telescope, disclosure follows the
-  payload: a witness the payload types apply, such as the control modules' `State` under
-  `Monad (State S)`, is disclosed with `as`, since a transparent type function has no
-  abstraction left for `is` to seal and the body would otherwise stay concrete while the
-  opening binds the seal; a generative data type the payload never applies, such as the
-  public package's `Bool`, seals with `is`.
-- A `def`-bound data type cannot cross a file boundary by disclosure, because an annotation can
-  only name a definition through an import and only compiler intrinsics are canonical importable
-  terms. Existential witnesses therefore remain the only cross-file naming device for library
-  data types, which is why each topic seals its body behind `exists` witnesses, either through
-  the shared `package.type.zy` wrapper or through the pack introduction itself.
-- A type-level application of a transparent `let` function reduces during analysis, so a
-  declared record may apply each module telescope directly to the existential witnesses
+  Every standard-library package function now ends in a synthesizing `pack` introduction
+  and carries an annotated value parameter.
+  Within a synthesized telescope, disclosure follows the payload: a witness the payload types apply,
+  such as the control modules' `State` under `Monad (State S)`, is disclosed with `as`,
+  since a transparent type function has no abstraction left for `is` to seal and the body would
+  otherwise stay concrete while the opening binds the seal; a generative data type the payload never applies,
+  such as the public package's `Bool`, seals with `is`.
+- A `def`-bound data type cannot cross a file boundary by disclosure, because an annotation can only name a definition
+  through an import and only compiler intrinsics are canonical importable terms.
+  Existential witnesses therefore remain the only cross-file naming device for library data types,
+  which is why each topic seals its body behind `exists` witnesses, either through the shared `package.type.zy` wrapper
+  or through the pack introduction itself.
+- A type-level application of a transparent `let` function reduces during analysis,
+  so a declared record may apply each module telescope directly to the existential witnesses
   without new checker support, and the nested shape is what the projection resolver walks.
-- Structural projection searches nested named products but never descends into an unopened
-  existential package. The public package therefore reintroduces the shared witnesses in one
-  `exists` and keeps topic packages opaque inside their groups, while consumers still select
-  `(/option; /process)` across the nesting unchanged.
+- Structural projection searches nested named products but never descends into an unopened existential package.
+  The public package therefore reintroduces the shared witnesses in one `exists`
+  and keeps topic packages opaque inside their groups, while consumers still select `(/option; /process)`
+  across the nesting unchanged.
 
 ### Package annotations and companion files
 
@@ -331,10 +335,59 @@ begin
 end
 ```
 
-Only the two kind fields require this explicit prefix. `@[typeof] types` preserves the inferred manifest type fields,
-so adding a numeric type changes one witness list. The full implementation is
-[`lib/std/prelude.zy`](../../lib/std/prelude.zy).
+Only the two kind fields require this explicit prefix.
+`@[typeof] types` preserves the inferred manifest type fields, so adding a numeric type changes one witness list.
+The full implementation is [`lib/std/prelude.zy`](../../lib/std/prelude.zy).
 This pattern handles the current introduction limitation within one source file.
+
+## Second-class packages
+
+Packages are the module language, and a module never crosses a computation boundary.
+Every package's consumer chain — the projection, opening, or fusion that consumes it —
+is resolved statically, so pack and open are elaboration-time events
+and the runtime holds only the package's data components alongside computations and inert values.
+The occurrence checker enforces this after ordinary checking, mirroring the second-class rule
+for value functions ([Value Functions with `ValPi`](value-pi.md)).
+
+A package may be introduced by `pack`, bound by a definition, opened by a pattern
+(including a single-arm exhaustive match, which coverage already treats as one constructor),
+nested inside a product, a named component, or another package, passed as the argument of a value function,
+and applied to a package-dependent arrow whose parameter pattern opens it.
+Every other position would store the package as a first-class value, and the checker rejects it
+with `tyck.first-class-package`:
+
+- a data-constructor payload, and a data or codata declaration payload type;
+- an argument to a computation under a plain arrow, and a plain arrow's domain;
+- the value returned by a computation, and the payload of a returning computation type.
+
+The dynamic escape hatch is a product of thunks: when a consumer genuinely cannot name its package supplier,
+it receives suspended operations instead of a sealed module.
+
+Two elaboration facts make the rule precise about arrows.
+A binder pattern that opens abstract witnesses turns its abstraction into a package-dependent arrow automatically,
+whether written as `fn (pattern : Package) => M` or as a `def` parameter; each application then opens
+that argument's witnesses statically, which is why such applications stay legal.
+A manifest-only package opens nothing — its witnesses are transparent — so a function over it elaborates
+to a plain computation arrow and is rejected: the package would sit in the arrow's domain as a sealed first-class value.
+A consumer of a manifest package opens it where it is used instead.
+An explicitly written `pi (pattern : Package) . C` always names a package-dependent arrow
+and remains the spelling for annotating one.
+
+### Open decision: package-dependent arrows at the host boundary
+
+Every executable root is itself a package-dependent arrow over the Builtin package;
+that host boundary is not in question.
+What remains open is whether user-written package-dependent arrows stay user-facing
+or restrict to the host boundary, with module functors migrating to value functions.
+The occurrence rule above is independent of that call: it admits package-dependent arrows either way,
+and restricting them would remove formation sites rather than change the checker.
+
+### Fusion of pack into open
+
+Lowering still materializes a package as a product and unpacks it at each opening.
+Demand analysis already trims unobserved positions of the host package, so fusing a `pack` into the pattern
+that immediately opens it — binding the components directly and skipping the intermediate product —
+is an optimization to measure before adopting, not a semantic requirement.
 
 ## Elaboration and runtime representation
 
