@@ -1,0 +1,16 @@
+begin
+  param (/core; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  let (/Ret) = core that
+  let (= Int64, int64) = numeric/int64 in
+  let (/process) = system in
+
+  let fix helper (x : Int64) : Ret Int64 =
+    do one <- ret 1;
+    ! int64/add x one
+  in
+  let fix dead_plain (x : Int64) : Ret Int64 = ! int64/mul x 7 in
+  let fix dead_loop (x : Int64) : Ret Int64 = ! dead_loop x in
+
+  do z <- ! helper -1;
+  ! process/exit z
+end
