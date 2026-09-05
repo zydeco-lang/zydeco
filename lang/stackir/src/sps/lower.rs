@@ -1190,12 +1190,12 @@ mod tests {
             statics.values.insert_new(triv, ss::Triv.into());
             statics.vpats.insert_new(ignored_pat, ss::ValuePattern::Triv(ss::Triv));
             let param_def: ss::DefId = defs.alloc();
-            statics.vpats.insert_new(param_pat, ss::ValuePattern::Var(param_def).into());
+            statics.vpats.insert_new(param_pat, ss::ValuePattern::Var(param_def));
             scoped.insert_def(param_def, VarName("value".to_owned()));
             let binder_def: ss::DefId = defs.alloc();
-            statics.vpats.insert_new(binder_pat, ss::ValuePattern::Var(binder_def).into());
+            statics.vpats.insert_new(binder_pat, ss::ValuePattern::Var(binder_def));
             scoped.insert_def(binder_def, VarName("wrapped".to_owned()));
-            statics.values.insert_new(head, ss::Value::Var(binder_def).into());
+            statics.values.insert_new(head, ss::Value::Var(binder_def));
 
             statics
                 .values
