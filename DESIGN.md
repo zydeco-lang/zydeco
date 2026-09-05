@@ -10,7 +10,8 @@ and the [language guide](docs/tutorial/zydeco-guide.md) provides a longer source
 ## Language Model
 
 Zydeco separates values from computations.
-Values include variables, thunks, units, products, constructors, literals, and total value functions.
+Values include variables, thunks, units, products, constructors, literals, and total value functions;
+the latter are second-class, bound and applied but never stored or passed as runtime values.
 Computations may perform effects and include forcing thunks, computation-function application,
 do-bindings, and returning values.
 
@@ -393,11 +394,13 @@ Plain `param` continues to introduce type functions and computations.
 `let val` is ordinary non-recursive binding sugar.
 Juxtaposition eliminates a value function, while `value |> function`
 and `function <| value` are directional spellings of the same value-level cut.
-Because these functions are values, they may be captured, stored, selected, and passed to other value functions.
+Value functions are second-class: a function may be bound as a definition (including partial type instantiation)
+and applied, directly or through a view pattern, but storing, passing, or returning one is rejected;
+first-class function values remain suspended computations behind `Thk`.
 The separate pattern form `function ~> pattern` applies the same cut before matching;
 only the nested pattern contributes bindings and refutability.
 The mechanisms and their dependency are specified separately
-in [First-Class Value Functions with `ValPi`](docs/proposals/value-pi.md)
+in [Value Functions with `ValPi`](docs/proposals/value-pi.md)
 and [Value Views](docs/proposals/value-views.md).
 
 Package parameters may open existential witnesses used by the result classifier.

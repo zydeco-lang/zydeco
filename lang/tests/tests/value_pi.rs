@@ -1,4 +1,5 @@
-use zydeco_tests::utils::SourceCase;
+use zydeco_cli::compile::CompileError;
+use zydeco_tests::utils::{CaseError, SourceCase};
 
 struct ValuePiCase;
 
@@ -12,6 +13,30 @@ impl ValuePiCase {
             | Err(error) if error.is_type_error() => {}
             | Ok(()) => panic!("expected a type error, but the program was accepted"),
             | Err(error) => panic!("expected a type error, found: {error:?}"),
+        }
+    }
+
+    fn assert_first_class_error(source: &str) {
+        match SourceCase::check(source) {
+            | Err(CaseError::Compile(CompileError::Rejected(analysis))) => {
+                let diagnostics = analysis
+                    .outcome()
+                    .diagnostics()
+                    .expect("a rejected analysis carries diagnostics");
+                assert!(
+                    diagnostics.iter().any(|diagnostic| {
+                        diagnostic.code.as_str() == "tyck.first-class-value-function"
+                    }),
+                    "expected a second-class value-function rejection, found: {:?}",
+                    diagnostics.iter().map(|diagnostic| &diagnostic.message).collect::<Vec<_>>()
+                );
+            }
+            | Err(error) => {
+                panic!("expected a first-class value-function error, found: {error:?}")
+            }
+            | Ok(()) => {
+                panic!("expected a first-class value-function error, but the program was accepted")
+            }
         }
     }
 }
@@ -78,8 +103,22 @@ end
 }
 
 #[test]
-fn value_functions_are_first_class_and_partially_applicable() {
+fn value_functions_apply_through_partial_type_instantiation() {
     ValuePiCase::run(
+        r#"
+begin
+  let val keep (A : VType) (value : A) : A = value that
+  let keep_unit : val pi (value : Unit) . Unit = keep Unit that
+  let recovered : Unit = () |> keep_unit that
+  ! exit 0
+end
+"#,
+    );
+}
+
+#[test]
+fn value_functions_reject_storage_in_products() {
+    ValuePiCase::assert_first_class_error(
         r#"
 begin
   let val keep (A : VType) (value : A) : A = value that
@@ -87,6 +126,49 @@ begin
   let functions = (keep_unit, ()) that
   let (stored, _) = functions that
   let recovered : Unit = () |> stored that
+  ! exit 0
+end
+"#,
+    );
+}
+
+#[test]
+fn value_functions_reject_being_returned_by_computations() {
+    ValuePiCase::assert_first_class_error(
+        r#"
+begin
+  let val keep (value : Unit) : Unit = value that
+  do escaped <- ret keep;
+  ! exit 0
+end
+"#,
+    );
+}
+
+#[test]
+fn value_functions_reject_higher_order_domains() {
+    ValuePiCase::assert_first_class_error(
+        r#"
+begin
+  let val apply_twice (function : val pi (_ : Unit) . Unit) : Unit =
+    () |> function
+  that
+  ! exit 0
+end
+"#,
+    );
+}
+
+#[test]
+fn value_functions_reject_constructor_payload_types() {
+    ValuePiCase::assert_first_class_error(
+        r#"
+begin
+  let Stored =
+    data
+    | +Wrap : (val pi (_ : Unit) . Unit)
+    end
+  that
   ! exit 0
 end
 "#,

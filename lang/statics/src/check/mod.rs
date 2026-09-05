@@ -7,7 +7,7 @@ use {
         *,
     },
     crate::surface_syntax::{PrimDefs, ScopedArena, SpanArena, TermContexts},
-    crate::validate::CoverageChecker,
+    crate::validate::{CoverageChecker, ValueFunctionChecker},
     zydeco_surface::metadata::{BuiltinMeta, FfiMeta, MetadataKind},
     zydeco_utils::prelude::ArenaAccess,
 };
@@ -1936,6 +1936,15 @@ impl<'a> Tycker<'a> {
             self.statics.coverage_errors = coverage.clone();
             self.errors.extend(coverage.into_iter().map(|error| TyckErrorEntry {
                 error: TyckError::Coverage(error),
+                blame,
+                stack: rpds::VectorSync::new_sync(),
+            }));
+        }
+        if self.errors.is_empty() {
+            let blame = std::panic::Location::caller();
+            let first_class = ValueFunctionChecker::new(&self.statics).validate();
+            self.errors.extend(first_class.into_iter().map(|error| TyckErrorEntry {
+                error: TyckError::FirstClassValueFunction(error),
                 blame,
                 stack: rpds::VectorSync::new_sync(),
             }));

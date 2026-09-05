@@ -1,6 +1,6 @@
 //! Source-directed type-checking diagnostics and internal checker traces.
 
-use crate::validate::CoverageError;
+use crate::validate::{CoverageError, ValueFunctionError};
 use crate::*;
 use zydeco_utils::span::Span;
 
@@ -71,6 +71,7 @@ pub enum TyckError {
     MultiplePackPiCopatternClauses,
     NonExhaustiveCopattern { expected: TypeId },
     Coverage(CoverageError),
+    FirstClassValueFunction(ValueFunctionError),
     PackageWitnessesUnavailable { package: ValueId },
     PackageWitnessArityMismatch { expected: usize, found: usize },
     EscapingExistential { witnesses: Vec<AbstId>, result: TypeId },
@@ -122,6 +123,7 @@ pub enum TyckDiagnosticCode {
     MultiplePackPiCopatternClauses,
     NonExhaustiveCopattern,
     Coverage,
+    FirstClassValueFunction,
     PackageWitnessesUnavailable,
     PackageWitnessArityMismatch,
     EscapingExistential,
@@ -170,6 +172,7 @@ impl TyckDiagnosticCode {
             | Self::MultiplePackPiCopatternClauses => "tyck.multiple-pack-pi-copattern-clauses",
             | Self::NonExhaustiveCopattern => "tyck.non-exhaustive-copattern",
             | Self::Coverage => "tyck.coverage",
+            | Self::FirstClassValueFunction => "tyck.first-class-value-function",
             | Self::PackageWitnessesUnavailable => "tyck.package-witnesses-unavailable",
             | Self::PackageWitnessArityMismatch => "tyck.package-witness-arity-mismatch",
             | Self::EscapingExistential => "tyck.escaping-existential",
@@ -226,6 +229,7 @@ impl From<&TyckError> for TyckDiagnosticCode {
             | TyckError::MultiplePackPiCopatternClauses => Self::MultiplePackPiCopatternClauses,
             | TyckError::NonExhaustiveCopattern { .. } => Self::NonExhaustiveCopattern,
             | TyckError::Coverage(_) => Self::Coverage,
+            | TyckError::FirstClassValueFunction(_) => Self::FirstClassValueFunction,
             | TyckError::PackageWitnessesUnavailable { .. } => Self::PackageWitnessesUnavailable,
             | TyckError::PackageWitnessArityMismatch { .. } => Self::PackageWitnessArityMismatch,
             | TyckError::EscapingExistential { .. } => Self::EscapingExistential,
@@ -412,6 +416,12 @@ impl<'a> Tycker<'a> {
                 self.pretty_statics_nested(expected, "\t")
             ),
             | TyckError::Coverage(error) => error.to_string(),
+            | TyckError::FirstClassValueFunction(error) => match error {
+                | ValueFunctionError::FirstClassValue { position, .. }
+                | ValueFunctionError::FirstClassType { position, .. } => {
+                    format!("Value functions are second-class and cannot be {position}")
+                }
+            },
             | TyckError::PackageWitnessesUnavailable { package } => {
                 format!(
                     "Package-dependent application requires manifest existential witnesses, \
@@ -650,6 +660,9 @@ impl<'a> Tycker<'a> {
             | TyckError::Coverage(error) => {
                 self.statics_term_source_span(error.computation().into())
             }
+            | TyckError::FirstClassValueFunction(error) => {
+                self.statics_term_source_span(error.term())
+            }
             | _ => None,
         }
     }
@@ -758,6 +771,12 @@ impl<'a> Tycker<'a> {
                 self.pretty_statics_nested(*expected, "")
             ),
             | TyckError::Coverage(error) => error.to_string(),
+            | TyckError::FirstClassValueFunction(error) => match error {
+                | ValueFunctionError::FirstClassValue { position, .. }
+                | ValueFunctionError::FirstClassType { position, .. } => {
+                    format!("Value functions are second-class and cannot be {position}")
+                }
+            },
             | TyckError::PackageWitnessesUnavailable { package } => format!(
                 "Package-dependent application requires manifest existential witnesses, \
                  but they are hidden by {}",
@@ -882,6 +901,12 @@ impl<'a> Tycker<'a> {
             | TyckError::KindMismatch => "this type has the wrong kind",
             | TyckError::SortMismatch => "this term has the wrong sort",
             | TyckError::Coverage(_) => "this match is not exhaustive",
+            | TyckError::FirstClassValueFunction(ValueFunctionError::FirstClassValue {
+                ..
+            }) => "this value function can only be applied",
+            | TyckError::FirstClassValueFunction(ValueFunctionError::FirstClassType { .. }) => {
+                "this classifier admits stored value functions"
+            }
             | _ => "error occurs here",
         }
     }
@@ -926,6 +951,13 @@ impl<'a> Tycker<'a> {
             | TyckError::TypeOfKind => {
                 vec!["apply `@[typeof]` to a value, computation, or type".to_owned()]
             }
+            | TyckError::FirstClassValueFunction(_) => {
+                vec![
+                    "apply the function directly where it is used, or store the \
+                     computation behind `Thk` instead"
+                        .to_owned(),
+                ]
+            }
             | _ => Vec::new(),
         }
     }
@@ -937,13 +969,15 @@ impl<'a> Tycker<'a> {
         let error_span = self.error_source_span(&error).filter(|span| !span.is_dummy());
         let task_span = self.task_source_span(&stack).filter(|span| !span.is_dummy());
         let primary_span = match error {
-            // Inference and coverage errors carry source entities whose spans are more precise
-            // than their enclosing checking task. Ordinary type ids may be interned or
-            // normalized, so their representative source span is not a reliable blame site.
+            // Inference, coverage, and occurrence-validation errors carry source
+            // entities whose spans are more precise than their enclosing checking
+            // task. Ordinary type ids may be interned or normalized, so their
+            // representative source span is not a reliable blame site.
             | TyckError::MissingSolution(_)
             | TyckError::UnconstrainedInference(_)
             | TyckError::OccursCheck(_)
-            | TyckError::Coverage(_) => error_span.or(task_span),
+            | TyckError::Coverage(_)
+            | TyckError::FirstClassValueFunction(_) => error_span.or(task_span),
             | _ => task_span.or(error_span),
         };
         let primary = primary_span.map(|span| TyckDiagnosticLabel {
