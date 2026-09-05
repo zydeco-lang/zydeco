@@ -8,10 +8,8 @@ begin
     Int64,
     42
   ) that
+  let val reveal ((Representation, value) : Transparent) : Int64 = value that
 
-  match packed
-  | (Representation, value) =>
-    do status <- ! int64/sub value 42;
-    ! process/exit status
-  end
+  do status <- ! int64/sub (reveal packed) 42;
+  ! process/exit status
 end

@@ -54,13 +54,9 @@ begin
     exists (X as Int64 : VType) . X
   that
   def packed : Transparent = (Int64, 42) that
-  def disclosed : Thk (Ret Int64) = {
-    match packed
-    | (X, value) => ret value
-    end
-  } that
+  let val disclose ((X, value) : Transparent) : Int64 = value that
 
-  disclosed
+  disclose packed
 end
 "#,
     )
@@ -96,13 +92,9 @@ begin
     #Counter = Int64,
     #zero = 0,
   ) that
-  def disclosed : Thk (Ret Int64) = {
-    match library
-    | ((= Counter, = zero)) => ret zero
-    end
-  } that
+  let val disclose ((= Counter, = zero) : CounterLibrary) : Int64 = zero that
 
-  disclosed
+  disclose library
 end
 "#,
     )
@@ -325,13 +317,13 @@ begin
     0,
     { fn (x : Int64) => ret x },
   ) that
+  let val run_box ((X, value, consume) : Box) : Thk (Ret Int64) = {
+    ! consume value
+  } that
 
   {
-    match boxed
-    | (X, value, consume) =>
-      do status <- ! consume value;
-      ret status
-    end
+    do status <- ! (boxed |> run_box);
+    ret status
   }
 end
 "#,
@@ -440,13 +432,10 @@ begin
     exists (X as Int64 : VType) . X
   that
 
+  let val disclose ((X, value) : Transparent) : Int64 = value that
+
   let packed = pack (X as Int64 : VType) where (42 : X) end in
-  let disclosed : Thk (Ret Int64) = {
-    match packed
-    | (X, value) => ret value
-    end
-  } in
-  disclosed
+  disclose packed
 end
 "#,
     )
@@ -461,14 +450,10 @@ begin
   let Transparent =
     exists (X as Int64 : VType) . X
   that
+  let val disclose ((X, value) : Transparent) : Int64 = value that
 
   let packed = pack (X as Int64) where (42 : X) end in
-  let disclosed : Thk (Ret Int64) = {
-    match packed
-    | (X, value) => ret value
-    end
-  } in
-  disclosed
+  disclose packed
 end
 "#,
     )
@@ -483,14 +468,10 @@ begin
   let Degenerate =
     exists (X as Int64 : VType) . Int64
   that
+  let val disclose ((X, value) : Degenerate) : Int64 = value that
 
   let packed = pack (X as Int64 : VType) where 42 end in
-  let disclosed : Thk (Ret Int64) = {
-    match packed
-    | (X, value) => ret value
-    end
-  } in
-  disclosed
+  disclose packed
 end
 "#,
     )
@@ -507,14 +488,10 @@ begin
     exists (Y as Char : VType) .
       X
   that
+  let val disclose ((X, Y, value) : Mixed) : Int64 = value that
 
   let mixed = pack (X as Int64 : VType) (Y as Char : VType) where (7 : X), end in
-  let disclosed : Thk (Ret Int64) = {
-    match mixed
-    | (X, Y, value) => ret value
-    end
-  } in
-  disclosed
+  disclose mixed
 end
 "#,
     )
@@ -530,17 +507,13 @@ begin
     exists (#Counter = ((Representation as Int64) : VType)) .
       (#zero :: Representation)
   that
+  let val disclose ((= Counter, = zero) : CounterLibrary) : Int64 = zero that
 
   let library =
     pack (#Counter = ((Representation as Int64) : VType))
     where #zero = (0 : Representation) end
   in
-  let disclosed : Thk (Ret Int64) = {
-    match library
-    | ((= Counter, = zero)) => ret zero
-    end
-  } in
-  disclosed
+  disclose library
 end
 "#,
     )
@@ -556,13 +529,9 @@ begin
     exists (X as Int64 : VType) . X
   that
   def packed : Transparent = pack (X as Int64 : VType) where (42 : X) end that
-  def disclosed : Thk (Ret Int64) = {
-    match packed
-    | (X, value) => ret value
-    end
-  } that
+  let val disclose ((X, value) : Transparent) : Int64 = value that
 
-  disclosed
+  disclose packed
 end
 "#,
     )

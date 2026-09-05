@@ -20,10 +20,13 @@ begin
       fn (value : Int64) => ! int64/add value 1
     }
   ) that
-  match counter
-  | ((= Counter, = zero, = increment)) =>
-    do value <- ! increment zero;
-    do status <- ! int64/sub value 1;
-    ! process/exit status
-  end
+  let val use_counter
+    ((= Counter, = zero, = increment) : CounterLibrary)
+    : Thk (Ret Int64) =
+    { ! increment zero }
+  that
+
+  do value <- ! (counter |> use_counter);
+  do status <- ! int64/sub value 1;
+  ! process/exit status
 end
