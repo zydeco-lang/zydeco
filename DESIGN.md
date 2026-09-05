@@ -843,10 +843,9 @@ but the embedding must supply the imports before invoking either function.
   with the unfolded program, dominated by multiply-instantiated library functors.
   The workspace raises its test-stack minimum accordingly; compiling each definition once remains future work recorded
   in [Value Functions with `ValPi`](docs/proposals/value-pi.md).
-- Packages are second-class and rejected in first-class positions (constructor payloads,
-  plain-arrow domains and arguments, computation returns), while package-dependent arrows remain user-writable.
-  Whether the latter restrict to the executable host boundary, with module functors migrating to value functions,
-  is an open design decision recorded in [Package modularization](docs/proposals/package-modularization.md).
+- Packages are second-class; module functors remain user-writable as value functors or package-dependent arrows.
+  Demand does not yet flow through package-dependent applications,
+  so functor arguments materialize whole ([Package modularization](docs/proposals/package-modularization.md)).
 - The standard native test path is AMD64 on Linux or macOS.
   The CLI defaults to the host architecture, so an ARM host needs explicit AMD64 target selection
   and appropriate tools for native execution.

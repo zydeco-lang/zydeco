@@ -342,11 +342,10 @@ This pattern handles the current introduction limitation within one source file.
 
 ## Second-class packages
 
-Packages are the module language, and a module never crosses a computation boundary.
-Every package's consumer chain — the projection, opening, or fusion that consumes it —
-is resolved statically, so pack and open are elaboration-time events
-and the runtime holds only the package's data components alongside computations and inert values.
-The occurrence checker enforces this after ordinary checking, mirroring the second-class rule
+Packages are the module language.
+A package crosses a computation boundary only through an arrow whose parameter pattern opens it;
+every other consumer is resolved statically, so pack and open are elaboration-time events.
+The occurrence checker enforces this after checking, mirroring the rule
 for value functions ([Value Functions with `ValPi`](value-pi.md)).
 
 A package may be introduced by `pack`, bound by a definition, opened by a pattern
@@ -373,21 +372,23 @@ A consumer of a manifest package opens it where it is used instead.
 An explicitly written `pi (pattern : Package) . C` always names a package-dependent arrow
 and remains the spelling for annotating one.
 
-### Open decision: package-dependent arrows at the host boundary
+### Module functors
 
-Every executable root is itself a package-dependent arrow over the Builtin package;
-that host boundary is not in question.
-What remains open is whether user-written package-dependent arrows stay user-facing
-or restrict to the host boundary, with module functors migrating to value functions.
-The occurrence rule above is independent of that call: it admits package-dependent arrows either way,
-and restricting them would remove formation sites rather than change the checker.
+Module functors stay user-writable; restricting package-dependent arrows
+to the host boundary was considered and declined.
+A *value functor* is a `val pi` from a package to a package — the standard library's `builtin |> make_data` shape.
+Application unfolds lexically with caller demand flowing through.
+A *computation functor* is a package-dependent arrow `pi (pattern : Sig) . C`,
+written explicitly or synthesized from any `fn` whose pattern opens abstract witnesses.
+Its effectful body lowers as a closure, but each application still opens the argument's witnesses statically.
+A manifest-only signature opens nothing abstract, so a binder over it elaborates to a plain arrow and is rejected;
+a manifest signature is transparent, so the consumer opens it where it is used instead.
 
-### Fusion of pack into open
+### Lowering follow-ups
 
-Lowering still materializes a package as a product and unpacks it at each opening.
-Demand analysis already trims unobserved positions of the host package, so fusing a `pack` into the pattern
-that immediately opens it — binding the components directly and skipping the intermediate product —
-is an optimization to measure before adopting, not a semantic requirement.
+Two optimizations remain to measure: fusing a `pack` into the pattern that immediately opens it,
+and flowing demand through package-dependent applications, whose arguments are currently demanded whole.
+Neither is required by the rule.
 
 ## Elaboration and runtime representation
 
