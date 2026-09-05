@@ -1,16 +1,8 @@
 use zydeco_tests::utils::SourceCase;
 
-struct ValueViewCase;
-
-impl ValueViewCase {
-    fn run(source: &str) {
-        SourceCase::run(source).unwrap();
-    }
-}
-
 #[test]
 fn view_patterns_precompose_matching_with_the_same_value_cut() {
-    ValueViewCase::run(
+    SourceCase::assert_accepted(SourceCase::run(
         r#"
 begin
   let Tagged =
@@ -28,12 +20,12 @@ begin
   end
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn view_patterns_bind_the_transformed_value() {
-    ValueViewCase::run(
+    SourceCase::assert_accepted(SourceCase::run(
         r#"
 begin
   let val second ((_, value) : Unit * Int64) : Int64 = value that
@@ -41,12 +33,12 @@ begin
   ! exit status
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn view_patterns_may_use_functions_with_erased_type_parameters() {
-    ValueViewCase::run(
+    SourceCase::assert_accepted(SourceCase::run(
         r#"
 begin
   let val keep (A : VType) (value : A) : A = value that
@@ -56,5 +48,5 @@ begin
   ! exit 0
 end
 "#,
-    );
+    ));
 }

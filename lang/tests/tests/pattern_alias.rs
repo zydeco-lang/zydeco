@@ -1,21 +1,11 @@
+use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::utils::SourceCase;
-
-struct PatternAliasCase;
-
-impl PatternAliasCase {
-    fn assert_type_error(source: &str) {
-        match SourceCase::check(source) {
-            | Err(error) if error.is_type_error() => {}
-            | Ok(()) => panic!("expected a type error, but the program was accepted"),
-            | Err(error) => panic!("expected a type error, found: {error:?}"),
-        }
-    }
-}
 
 #[test]
 fn rejects_refutable_alias_members() {
-    PatternAliasCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   def Bool : VType =
     data
@@ -30,25 +20,31 @@ begin
   end
 end
 "#,
+        ),
+        TyckDiagnosticCode::RefutablePatternAlias,
     );
 }
 
 #[test]
 fn rejects_static_pattern_aliases() {
-    PatternAliasCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let (First; Second) : VType = Int64 in
   ()
 end
 "#,
+        ),
+        TyckDiagnosticCode::PatternAliasRequiresValue,
     );
 }
 
 #[test]
 fn rejects_missing_field_projection_patterns() {
-    PatternAliasCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let Point = (#x :: Int64) * (#y :: Int64) that
   def point : Point = (#x = 1, #y = 2) that
@@ -56,13 +52,16 @@ begin
   missing
 end
 "#,
+        ),
+        TyckDiagnosticCode::MissingNamedField,
     );
 }
 
 #[test]
 fn rejects_ambiguous_field_projection_patterns() {
-    PatternAliasCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let Ambiguous = (#left :: (#x :: Int64)) * (#right :: (#x :: Int64)) that
   def ambiguous : Ambiguous = (#left = #x = 1, #right = #x = 2) that
@@ -70,13 +69,16 @@ begin
   duplicate
 end
 "#,
+        ),
+        TyckDiagnosticCode::DuplicateNamedField,
     );
 }
 
 #[test]
 fn rejects_refutable_field_projection_payloads() {
-    PatternAliasCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   def Maybe : VType =
     data
@@ -92,5 +94,7 @@ begin
   end
 end
 "#,
+        ),
+        TyckDiagnosticCode::RefutableFieldProjectionPattern,
     );
 }

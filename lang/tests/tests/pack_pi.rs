@@ -1,3 +1,4 @@
+use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::utils::{CaseError, SourceCase};
 
 struct PackPiCase;
@@ -26,19 +27,11 @@ def mo_ret : Thk (Monad Ret) = {
     fn run(source: &str) -> Result<(), CaseError> {
         SourceCase::run_monadic(&format!("begin\n{}\n{}\nend", Self::RET_MONAD, source))
     }
-
-    fn assert_type_error(source: &str) {
-        match Self::check(source) {
-            | Err(error) if error.is_type_error() => {}
-            | Ok(()) => panic!("expected a type error, but the program was accepted"),
-            | Err(error) => panic!("expected a type error, found: {error:?}"),
-        }
-    }
 }
 
 #[test]
 fn synthesizes_a_package_dependent_arrow() {
-    PackPiCase::check(
+    SourceCase::assert_accepted(PackPiCase::check(
         r#"
 begin
   let Core =
@@ -55,13 +48,12 @@ begin
   (Binary, ()) : Export
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn analyzes_a_package_dependent_arrow_as_ctype() {
-    PackPiCase::check(
+    SourceCase::assert_accepted(PackPiCase::check(
         r#"
 begin
   let Core =
@@ -78,13 +70,12 @@ begin
   (Binary, ()) : Export
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn scopes_multiple_package_witnesses_over_the_codomain() {
-    PackPiCase::check(
+    SourceCase::assert_accepted(PackPiCase::check(
         r#"
 begin
   let Core =
@@ -103,14 +94,14 @@ begin
   (Binary, ()) : Export
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn rejects_dependency_on_the_package_payload() {
-    PackPiCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        PackPiCase::check(
+            r#"
 begin
   let Core =
     exists (OS : CType) . Int64
@@ -123,12 +114,14 @@ begin
   ()
 end
 "#,
+        ),
+        TyckDiagnosticCode::SortMismatch,
     );
 }
 
 #[test]
 fn checks_and_applies_a_package_dependent_abstraction() {
-    PackPiCase::check(
+    SourceCase::assert_accepted(PackPiCase::check(
         r#"
 begin
   let Box =
@@ -148,13 +141,12 @@ begin
   { ! unbox boxed }
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn synthesizes_a_package_dependent_abstraction() {
-    PackPiCase::check(
+    SourceCase::assert_accepted(PackPiCase::check(
         r#"
 begin
   let Box =
@@ -170,13 +162,12 @@ begin
   { ! unbox boxed }
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn instantiates_multiple_package_witnesses() {
-    PackPiCase::check(
+    SourceCase::assert_accepted(PackPiCase::check(
         r#"
 begin
   let PairBox =
@@ -198,13 +189,12 @@ begin
   { ! unbox_pair boxed }
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn preserves_an_opened_witness_across_applications() {
-    PackPiCase::check(
+    SourceCase::assert_accepted(PackPiCase::check(
         r#"
 begin
   let Box =
@@ -236,13 +226,12 @@ begin
   { ! consume_twice boxed }
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn checks_selective_package_patterns_against_canonical_witnesses() {
-    PackPiCase::check(
+    SourceCase::assert_accepted(PackPiCase::check(
         r#"
 begin
   let Box =
@@ -265,13 +254,12 @@ begin
   forward
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn selective_builtin_parameters_open_modular_groups() {
-    PackPiCase::check(
+    SourceCase::assert_accepted(PackPiCase::check(
         r#"
 begin
   def selective = {
@@ -291,13 +279,12 @@ begin
   selective
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn infers_a_hole_in_the_package_dependent_codomain() {
-    PackPiCase::check(
+    SourceCase::assert_accepted(PackPiCase::check(
         r#"
 begin
   let Box =
@@ -317,14 +304,14 @@ begin
   { ! unbox boxed }
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn rejects_application_to_a_package_with_hidden_witnesses() {
-    PackPiCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        PackPiCase::check(
+            r#"
 begin
   let Box =
     exists (X : VType) . X
@@ -347,12 +334,14 @@ begin
   hidden
 end
 "#,
+        ),
+        TyckDiagnosticCode::PackageWitnessesUnavailable,
     );
 }
 
 #[test]
 fn translates_package_dependent_functions_in_monadic_blocks() {
-    PackPiCase::check_monadic(
+    SourceCase::assert_accepted(PackPiCase::check_monadic(
         r#"
 begin
   let Box =
@@ -372,13 +361,12 @@ begin
   translated
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn translates_multiple_package_witnesses_and_their_structures() {
-    PackPiCase::check_monadic(
+    SourceCase::assert_accepted(PackPiCase::check_monadic(
         r#"
 begin
   let Core =
@@ -406,13 +394,12 @@ begin
   translated
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn runs_package_dependent_destructors_after_a_monadic_bind() {
-    PackPiCase::run(
+    SourceCase::assert_accepted(PackPiCase::run(
         r#"
 begin
   let Box =
@@ -440,13 +427,12 @@ begin
   ! exit status
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn runs_package_dependent_destructors_with_an_abstract_computation_witness() {
-    PackPiCase::run(
+    SourceCase::assert_accepted(PackPiCase::run(
         r#"
 begin
   let Core =
@@ -489,13 +475,12 @@ begin
   ! exit status
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn translates_only_the_existential_prefix_opened_by_a_package_arrow() {
-    PackPiCase::check_monadic(
+    SourceCase::assert_accepted(PackPiCase::check_monadic(
         r#"
 begin
   let Inner =
@@ -519,13 +504,12 @@ begin
   translated
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn translates_a_manifest_component_before_a_pack_pi_witness() {
-    PackPiCase::check_monadic(
+    SourceCase::assert_accepted(PackPiCase::check_monadic(
         r#"
 begin
   let Mixed =
@@ -548,13 +532,12 @@ begin
   translated
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn preserves_an_opened_witness_across_monadic_applications() {
-    PackPiCase::check_monadic(
+    SourceCase::assert_accepted(PackPiCase::check_monadic(
         r#"
 begin
   let Box =
@@ -576,13 +559,12 @@ begin
   translated
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn runs_package_dependent_destructors_from_monadic_blocks() {
-    PackPiCase::run(
+    SourceCase::assert_accepted(PackPiCase::run(
         r#"
 begin
   let Box =
@@ -609,13 +591,12 @@ begin
   ! exit status
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn runs_multiple_package_witnesses_and_their_structures() {
-    PackPiCase::run(
+    SourceCase::assert_accepted(PackPiCase::run(
         r#"
 begin
   let Core =
@@ -644,14 +625,13 @@ begin
   ! exit status
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 #[ignore = "n-ary products: the monadic translation of a package payload literal needs realignment"]
 fn runs_with_an_unopened_existential_package_in_the_payload() {
-    PackPiCase::run(
+    SourceCase::assert_accepted(PackPiCase::run(
         r#"
 begin
   let Inner =
@@ -679,13 +659,12 @@ begin
   ! exit status
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn runs_repeated_package_applications_with_one_opened_witness() {
-    PackPiCase::run(
+    SourceCase::assert_accepted(PackPiCase::run(
         r#"
 begin
   let Box =
@@ -709,6 +688,5 @@ begin
   ! exit status
 end
 "#,
-    )
-    .unwrap();
+    ));
 }

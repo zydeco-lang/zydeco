@@ -1,44 +1,12 @@
-use zydeco_cli::{CompileError, DiagnosticRenderer};
 use zydeco_session::{
     AnalysisError, AnalysisOutcome, CompilerSession, SourceLoadError, source::SourceDependencyKind,
 };
 use zydeco_statics::{TyckDiagnosticCode, syntax::TermAnnId};
-use zydeco_tests::utils::{CaseError, SourceCase};
-
-struct TypeOfCase;
-
-impl TypeOfCase {
-    fn check(source: &str) {
-        Self::check_result(SourceCase::check(source));
-    }
-
-    fn check_result(result: Result<(), CaseError>) {
-        if let Err(CaseError::Compile(error)) = &result {
-            DiagnosticRenderer::error(error);
-        }
-        result.unwrap_or_else(|error| panic!("{error}"));
-    }
-
-    fn reject(source: &str, expected: TyckDiagnosticCode) {
-        Self::reject_result(SourceCase::check(source), expected);
-    }
-
-    fn reject_result(result: Result<(), CaseError>, expected: TyckDiagnosticCode) {
-        let Err(CaseError::Compile(CompileError::Rejected(analysis))) = result else {
-            panic!("expected {expected:?}, found {result:?}")
-        };
-        let diagnostics = analysis.outcome().diagnostics().unwrap();
-        assert!(
-            diagnostics.iter().any(|diagnostic| diagnostic.code == expected),
-            "expected {expected:?}, found {diagnostics:?}",
-        );
-        assert!(diagnostics.iter().all(|diagnostic| diagnostic.primary.is_some()));
-    }
-}
+use zydeco_tests::utils::SourceCase;
 
 #[test]
 fn typeof_distinguishes_value_computation_and_thunk_types() {
-    TypeOfCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let Value = @[typeof] 1 that
@@ -52,7 +20,7 @@ begin
   ! exact
 end
 "#,
-    );
+    ));
 }
 
 #[test]
@@ -68,7 +36,7 @@ fn typeof_returns_types_as_source_roots_and_kinds_of_type_operands() {
         assert_eq!(matches!(root, TermAnnId::Type(_, _)), source == "@[typeof] 1");
         assert_eq!(matches!(root, TermAnnId::Kind(_)), source != "@[typeof] 1");
     });
-    TypeOfCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let ValueKind = @[typeof] Int64 that
@@ -82,25 +50,27 @@ begin
   ! computation
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn typeof_respects_operand_ascriptions_and_literal_defaults() {
-    TypeOfCase::check("let value : (@[typeof] (1 : Int8)) = (2 : Int8) in ret value");
-    TypeOfCase::reject(
-        "let value : (@[typeof] 1) = (2 : Int8) in ret value",
+    SourceCase::assert_accepted(SourceCase::check(
+        "let value : (@[typeof] (1 : Int8)) = (2 : Int8) in ret value",
+    ));
+    SourceCase::assert_rejected(
+        SourceCase::check("let value : (@[typeof] 1) = (2 : Int8) in ret value"),
         TyckDiagnosticCode::TypeMismatch,
     );
-    TypeOfCase::reject(
-        "let Wrong : CType = @[typeof] 1 in ret ()",
+    SourceCase::assert_rejected(
+        SourceCase::check("let Wrong : CType = @[typeof] 1 in ret ()"),
         TyckDiagnosticCode::KindMismatch,
     );
 }
 
 #[test]
 fn typeof_preserves_polymorphism_and_named_projection_types() {
-    TypeOfCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let api = (
@@ -114,16 +84,16 @@ begin
   ! replacement Int64 field/count
 end
 "#,
-    );
-    TypeOfCase::reject(
-        "let value : (@[typeof] (#count = 1)) = (#other = 2) in ret value",
+    ));
+    SourceCase::assert_rejected(
+        SourceCase::check("let value : (@[typeof] (#count = 1)) = (#other = 2) in ret value"),
         TyckDiagnosticCode::NamedLabelMismatch,
     );
 }
 
 #[test]
 fn typeof_allows_erased_value_references_in_pi_val_pi_and_sigma() {
-    TypeOfCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let Call : CType = pi (x : Int64) . (@[typeof] ret x) that
@@ -136,7 +106,7 @@ begin
   ! call (value_call 0)
 end
 "#,
-    );
+    ));
     [
         "let Bad = pi (x : Int64) . x in ret ()",
         "let Bad = val pi (x : Int64) . x in ret ()",
@@ -144,12 +114,14 @@ end
         "let Bad = @[typeof] (pi (x : Int64) . x) in ret ()",
     ]
     .into_iter()
-    .for_each(|source| TypeOfCase::reject(source, TyckDiagnosticCode::SortMismatch));
+    .for_each(|source| {
+        SourceCase::assert_rejected(SourceCase::check(source), TyckDiagnosticCode::SortMismatch)
+    });
 }
 
 #[test]
 fn typeof_allows_erased_type_references_in_kind_arrows() {
-    TypeOfCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let ConstructorKind = pi (A : VType) . (@[typeof] A) that
@@ -158,7 +130,7 @@ begin
   ret value
 end
 "#,
-    );
+    ));
 }
 
 #[test]
@@ -182,23 +154,25 @@ end
 "#,
     ]
     .into_iter()
-    .for_each(TypeOfCase::check);
-    TypeOfCase::reject(
-        "let Signature = @[typeof] (fn value => ret value) in ret ()",
+    .for_each(|source| SourceCase::assert_accepted(SourceCase::check(source)));
+    SourceCase::assert_rejected(
+        SourceCase::check("let Signature = @[typeof] (fn value => ret value) in ret ()"),
         TyckDiagnosticCode::UnconstrainedInference,
     );
 }
 
 #[test]
 fn typeof_retains_occurs_checks() {
-    TypeOfCase::reject(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let identity = { fn value => ret value } that
   let Impossible = @[typeof] (! identity identity) that
   ret ()
 end
 "#,
+        ),
         TyckDiagnosticCode::OccursCheck,
     );
 }
@@ -211,25 +185,32 @@ fn typeof_rejects_unannotated_holes_and_kind_operands() {
         "let T = @(typeof) in ret ()",
     ]
     .into_iter()
-    .for_each(|source| TypeOfCase::reject(source, TyckDiagnosticCode::MissingAnnotation));
+    .for_each(|source| {
+        SourceCase::assert_rejected(
+            SourceCase::check(source),
+            TyckDiagnosticCode::MissingAnnotation,
+        )
+    });
     [
         "let K = @[typeof] VType in ret ()",
         "let K = @[typeof] CType in ret ()",
         "let K = @[typeof] (VType -> CType) in ret ()",
     ]
     .into_iter()
-    .for_each(|source| TypeOfCase::reject(source, TyckDiagnosticCode::TypeOfKind));
-    TypeOfCase::check("let T = @[typeof] (_ : Int64) in ret (0 : T)");
+    .for_each(|source| {
+        SourceCase::assert_rejected(SourceCase::check(source), TyckDiagnosticCode::TypeOfKind)
+    });
+    SourceCase::assert_accepted(SourceCase::check("let T = @[typeof] (_ : Int64) in ret (0 : T)"));
 }
 
 #[test]
 fn typeof_keeps_constructor_synthesis_annotation_directed() {
     let prefix = "let Choice = data | +Here : Unit | +There : Unit end in\n";
-    TypeOfCase::check(&format!(
+    SourceCase::assert_accepted(SourceCase::check(&format!(
         "{prefix}let T = @[typeof] (+Here() : Choice) in ret (+There() : T)"
-    ));
-    TypeOfCase::reject(
-        &format!("{prefix}let T = @[typeof] +Here() in ret ()"),
+    )));
+    SourceCase::assert_rejected(
+        SourceCase::check(&format!("{prefix}let T = @[typeof] +Here() in ret ()")),
         TyckDiagnosticCode::MissingAnnotation,
     );
 }
@@ -237,36 +218,42 @@ fn typeof_keeps_constructor_synthesis_annotation_directed() {
 #[test]
 fn typeof_checks_coverage_in_erased_operands() {
     let prefix = "let Choice = data | +Here : Unit | +There : Unit end in\n";
-    TypeOfCase::check(&format!(
+    SourceCase::assert_accepted(SourceCase::check(&format!(
         "{prefix}let T = @[typeof] (match (+Here() : Choice) | +Here(_) => ret 0 | +There(_) => ret 1 end) in ret ()"
-    ));
-    TypeOfCase::reject(
-        &format!(
+    )));
+    SourceCase::assert_rejected(
+        SourceCase::check(&format!(
             "{prefix}let T = @[typeof] (match (+Here() : Choice) | +Here(_) => ret 0 end) in ret ()"
-        ),
+        )),
         TyckDiagnosticCode::Coverage,
     );
 }
 
 #[test]
 fn typeof_resolves_names_in_erased_operands() {
-    let error = SourceCase::check("let T = @[typeof] undefined_value in ret ()").unwrap_err();
-    assert!(error.is_resolve_error(), "{error:?}");
+    SourceCase::assert_resolve_error(SourceCase::check(
+        "let T = @[typeof] undefined_value in ret ()",
+    ));
 }
 
 #[test]
 fn typeof_preserves_value_let_and_runtime_sort_boundaries() {
-    TypeOfCase::check("let T = @[typeof] (let x = 1 in x) in ret (0 : T)");
-    TypeOfCase::reject(
-        "let T = (let x = 1 in @[typeof] x) in ret ()",
+    SourceCase::assert_accepted(SourceCase::check(
+        "let T = @[typeof] (let x = 1 in x) in ret (0 : T)",
+    ));
+    SourceCase::assert_rejected(
+        SourceCase::check("let T = (let x = 1 in @[typeof] x) in ret ()"),
         TyckDiagnosticCode::SortMismatch,
     );
-    TypeOfCase::reject("ret (@[typeof] 1)", TyckDiagnosticCode::SortMismatch);
+    SourceCase::assert_rejected(
+        SourceCase::check("ret (@[typeof] 1)"),
+        TyckDiagnosticCode::SortMismatch,
+    );
 }
 
 #[test]
 fn typeof_reuses_abstract_witnesses_within_one_opening() {
-    TypeOfCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let Box = exists (X : VType) . X that
@@ -278,9 +265,10 @@ begin
   ret ()
 end
 "#,
-    );
-    TypeOfCase::reject(
-        r#"
+    ));
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let Box = exists (X : VType) . X that
   let boxed : Box = (Int64, 0) that
@@ -290,13 +278,14 @@ begin
   ret ()
 end
 "#,
+        ),
         TyckDiagnosticCode::TypeMismatch,
     );
 }
 
 #[test]
 fn typeof_preserves_nominal_types() {
-    TypeOfCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   def Token : VType = data | +Token : Unit end that
@@ -307,9 +296,10 @@ begin
   ret original
 end
 "#,
-    );
-    TypeOfCase::reject(
-        r#"
+    ));
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   def Token : VType = data | +Token : Unit end that
   def Other : VType = data | +Token : Unit end that
@@ -319,26 +309,28 @@ begin
   ret wrong
 end
 "#,
+        ),
         TyckDiagnosticCode::TypeMismatch,
     );
 }
 
 #[test]
 fn typeof_kind_queries_can_annotate_recursive_types() {
-    TypeOfCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   def Node : (@[typeof] Int64) = data | +End : Unit | +Next : Node end that
   ret (+End() : Node)
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn typeof_cannot_extract_an_escaping_existential_witness() {
-    TypeOfCase::reject(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let Box = exists (X : VType) . X that
   let boxed : Box = (Int64, 0) that
@@ -346,23 +338,26 @@ begin
   ret ()
 end
 "#,
+        ),
         TyckDiagnosticCode::EscapingExistential,
     );
-    TypeOfCase::reject(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let Box = exists (X : VType) . X that
   let Leaked = sigma ((X, value) : Box) . (@[typeof] value) that
   ret ()
 end
 "#,
+        ),
         TyckDiagnosticCode::EscapingExistential,
     );
 }
 
 #[test]
 fn typeof_keeps_package_witness_dependencies_in_pi() {
-    TypeOfCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let Box = exists (X : VType) . X that
@@ -372,7 +367,7 @@ begin
   ! result
 end
 "#,
-    );
+    ));
 }
 
 #[test]
@@ -390,7 +385,7 @@ ret (make 0)
 
 #[test]
 fn typeof_does_not_infer_across_import_boundaries() {
-    TypeOfCase::reject_result(
+    SourceCase::assert_rejected(
         SourceCase::check_with_import(
             r#"
 let Signature = @[typeof] @(import("imported.zy")) in
@@ -430,7 +425,7 @@ fn typeof_in_companion_signatures_retains_source_dependencies() {
 
 #[test]
 fn typeof_composes_with_monadic_elaboration() {
-    TypeOfCase::check_result(SourceCase::check_monadic(
+    SourceCase::assert_accepted(SourceCase::check_monadic(
         r#"
 begin
   let translated = { @[monadic] fn (value : Int64) => ret (value : (@[typeof] value)) } that

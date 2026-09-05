@@ -1,49 +1,9 @@
-use zydeco_cli::compile::CompileError;
-use zydeco_tests::utils::{CaseError, SourceCase};
-
-struct ValuePiCase;
-
-impl ValuePiCase {
-    fn run(source: &str) {
-        SourceCase::run(source).unwrap();
-    }
-
-    fn assert_type_error(source: &str) {
-        match SourceCase::check(source) {
-            | Err(error) if error.is_type_error() => {}
-            | Ok(()) => panic!("expected a type error, but the program was accepted"),
-            | Err(error) => panic!("expected a type error, found: {error:?}"),
-        }
-    }
-
-    fn assert_first_class_error(source: &str) {
-        match SourceCase::check(source) {
-            | Err(CaseError::Compile(CompileError::Rejected(analysis))) => {
-                let diagnostics = analysis
-                    .outcome()
-                    .diagnostics()
-                    .expect("a rejected analysis carries diagnostics");
-                assert!(
-                    diagnostics.iter().any(|diagnostic| {
-                        diagnostic.code.as_str() == "tyck.first-class-value-function"
-                    }),
-                    "expected a second-class value-function rejection, found: {:?}",
-                    diagnostics.iter().map(|diagnostic| &diagnostic.message).collect::<Vec<_>>()
-                );
-            }
-            | Err(error) => {
-                panic!("expected a first-class value-function error, found: {error:?}")
-            }
-            | Ok(()) => {
-                panic!("expected a first-class value-function error, but the program was accepted")
-            }
-        }
-    }
-}
+use zydeco_statics::TyckDiagnosticCode;
+use zydeco_tests::utils::SourceCase;
 
 #[test]
 fn pipelines_apply_value_functions_in_both_directions() {
-    ValuePiCase::run(
+    SourceCase::assert_accepted(SourceCase::run(
         r#"
 begin
   let val keep (A : VType) (value : A) : A = value that
@@ -52,12 +12,12 @@ begin
   ! exit backward
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn explicit_value_pi_classifies_a_value_abstraction() {
-    ValuePiCase::run(
+    SourceCase::assert_accepted(SourceCase::run(
         r#"
 begin
   let identity : val pi (A : VType) (value : A) . A =
@@ -67,12 +27,12 @@ begin
   ! exit 0
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn param_val_introduces_lexical_and_block_value_functions() {
-    ValuePiCase::run(
+    SourceCase::assert_accepted(SourceCase::run(
         r#"
 begin
   let lexical : val pi (value : Unit) . Unit =
@@ -87,24 +47,27 @@ begin
   ! exit 0
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn plain_param_does_not_infer_a_value_function() {
-    ValuePiCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let invalid = param (value : Unit) in value that
   ! exit 0
 end
 "#,
+        ),
+        TyckDiagnosticCode::Expressivity,
     );
 }
 
 #[test]
 fn value_functions_apply_through_partial_type_instantiation() {
-    ValuePiCase::run(
+    SourceCase::assert_accepted(SourceCase::run(
         r#"
 begin
   let val keep (A : VType) (value : A) : A = value that
@@ -113,13 +76,14 @@ begin
   ! exit 0
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn value_functions_reject_storage_in_products() {
-    ValuePiCase::assert_first_class_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let val keep (A : VType) (value : A) : A = value that
   let keep_unit : val pi (value : Unit) . Unit = keep Unit that
@@ -129,26 +93,32 @@ begin
   ! exit 0
 end
 "#,
+        ),
+        TyckDiagnosticCode::FirstClassValueFunction,
     );
 }
 
 #[test]
 fn value_functions_reject_being_returned_by_computations() {
-    ValuePiCase::assert_first_class_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let val keep (value : Unit) : Unit = value that
   do escaped <- ret keep;
   ! exit 0
 end
 "#,
+        ),
+        TyckDiagnosticCode::FirstClassValueFunction,
     );
 }
 
 #[test]
 fn value_functions_reject_higher_order_domains() {
-    ValuePiCase::assert_first_class_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let val apply_twice (function : val pi (_ : Unit) . Unit) : Unit =
     () |> function
@@ -156,13 +126,16 @@ begin
   ! exit 0
 end
 "#,
+        ),
+        TyckDiagnosticCode::FirstClassValueFunction,
     );
 }
 
 #[test]
 fn value_functions_reject_constructor_payload_types() {
-    ValuePiCase::assert_first_class_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let Stored =
     data
@@ -172,6 +145,8 @@ begin
   ! exit 0
 end
 "#,
+        ),
+        TyckDiagnosticCode::FirstClassValueFunction,
     );
 }
 
@@ -196,8 +171,9 @@ end
 
 #[test]
 fn value_function_bodies_reject_computations() {
-    ValuePiCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let invalid : val pi (_ : Unit) . Unit =
     val (_ : Unit) => ret ()
@@ -205,12 +181,14 @@ begin
   ! exit 0
 end
 "#,
+        ),
+        TyckDiagnosticCode::TypeMismatch,
     );
 }
 
 #[test]
 fn package_witness_instantiation_follows_the_parameter_pattern() {
-    ValuePiCase::run(
+    SourceCase::assert_accepted(SourceCase::run(
         r#"
 begin
   let Box = exists (A : VType) . A that
@@ -223,12 +201,12 @@ begin
   ! exit status
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn value_pi_composes_multiple_package_openings_in_product_order() {
-    ValuePiCase::run(
+    SourceCase::assert_accepted(SourceCase::run(
         r#"
 begin
   let Box = exists (A : VType) . A that
@@ -243,12 +221,12 @@ begin
   ! exit status
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn value_functions_capture_runtime_values() {
-    ValuePiCase::run(
+    SourceCase::assert_accepted(SourceCase::run(
         r#"
 begin
   do captured <- ret 0;
@@ -257,12 +235,12 @@ begin
   ! exit status
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn value_functions_share_the_value_namespace() {
-    ValuePiCase::run(
+    SourceCase::assert_accepted(SourceCase::run(
         r#"
 begin
   let val keep (value : Int64) : Int64 = value in
@@ -273,25 +251,29 @@ begin
   ! exit transformed
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn value_function_bindings_are_non_recursive() {
-    ValuePiCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let val loop (value : Unit) : Unit = value |> loop that
   ! exit 0
 end
 "#,
+        ),
+        TyckDiagnosticCode::MissingSeal,
     );
 }
 
 #[test]
 fn value_function_parameters_must_be_irrefutable() {
-    ValuePiCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let Maybe =
     data
@@ -303,30 +285,38 @@ begin
   ! exit 0
 end
 "#,
+        ),
+        TyckDiagnosticCode::Expressivity,
     );
 }
 
 #[test]
 fn pipelines_respect_curried_binder_order() {
-    ValuePiCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let val keep (A : VType) (value : A) : A = value that
   let invalid = () |> keep that
   ! exit 0
 end
 "#,
+        ),
+        TyckDiagnosticCode::SortMismatch,
     );
 }
 
 #[test]
 fn computation_abstraction_does_not_stand_in_for_val() {
-    ValuePiCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let identity = fn (value : Unit) => value that
   ! exit 0
 end
 "#,
+        ),
+        TyckDiagnosticCode::Expressivity,
     );
 }

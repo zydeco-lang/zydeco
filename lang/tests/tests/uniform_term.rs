@@ -1,32 +1,9 @@
-use zydeco_tests::utils::{CaseError, SourceCase};
-
-struct UniformTermCase;
-
-impl UniformTermCase {
-    fn check(source: &str) -> Result<(), CaseError> {
-        SourceCase::check(source)
-    }
-
-    fn assert_resolve_error(source: &str) {
-        match Self::check(source) {
-            | Err(error) if error.is_resolve_error() => {}
-            | Ok(()) => panic!("expected a resolution error, but the program was accepted"),
-            | Err(error) => panic!("expected a resolution error, found: {error:?}"),
-        }
-    }
-
-    fn assert_type_error(source: &str) {
-        match Self::check(source) {
-            | Err(error) if error.is_type_error() => {}
-            | Ok(()) => panic!("expected a type error, but the program was accepted"),
-            | Err(error) => panic!("expected a type error, found: {error:?}"),
-        }
-    }
-}
+use zydeco_statics::TyckDiagnosticCode;
+use zydeco_tests::utils::SourceCase;
 
 #[test]
 fn infers_the_result_kind_of_a_parameterized_alias() {
-    UniformTermCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let Option (A : VType) =
@@ -39,13 +16,12 @@ begin
   ret ()
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn accepts_a_concise_recursive_type_definition() {
-    UniformTermCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   def List (A : VType) : VType =
@@ -58,39 +34,41 @@ begin
   ret ()
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn rejects_that_without_an_enclosing_block() {
-    UniformTermCase::assert_resolve_error(
+    SourceCase::assert_resolve_error(SourceCase::check(
         r#"
 param A that A
 "#,
-    );
+    ));
 }
 
 #[test]
 fn rejects_a_recursive_parameter_component() {
-    UniformTermCase::assert_resolve_error(
+    SourceCase::assert_resolve_error(SourceCase::check(
         r#"
 begin
   param (A : A) that
   A
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn rejects_a_recursive_value_definition() {
-    UniformTermCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   def value : Int64 = value that
   ret ()
 end
 "#,
+        ),
+        TyckDiagnosticCode::SortMismatch,
     );
 }

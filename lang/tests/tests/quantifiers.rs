@@ -1,16 +1,8 @@
 use zydeco_tests::utils::SourceCase;
 
-struct QuantifierCase;
-
-impl QuantifierCase {
-    fn check(source: &str) {
-        SourceCase::check_value(source).unwrap();
-    }
-}
-
 #[test]
 fn accepts_multiple_parameters_for_dependent_quantifiers() {
-    QuantifierCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let ExplicitFunction :
@@ -49,5 +41,5 @@ begin
   (MixedPackage, ()) : Export
 end
 "#,
-    );
+    ));
 }

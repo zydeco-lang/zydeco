@@ -1,53 +1,10 @@
-use zydeco_cli::compile::CompileError;
-use zydeco_tests::utils::{CaseError, SourceCase};
-
-struct ExistentialCase;
-
-impl ExistentialCase {
-    fn check(source: &str) -> Result<(), CaseError> {
-        SourceCase::check_value(source)
-    }
-
-    fn run(source: &str) -> Result<(), CaseError> {
-        SourceCase::run(source)
-    }
-
-    fn assert_type_error(source: &str) {
-        match Self::check(source) {
-            | Err(error) if error.is_type_error() => {}
-            | Ok(()) => panic!("expected a type error, but the program was accepted"),
-            | Err(error) => panic!("expected a type error, found: {error:?}"),
-        }
-    }
-
-    fn assert_first_class_error(source: &str) {
-        match SourceCase::check(source) {
-            | Err(CaseError::Compile(CompileError::Rejected(analysis))) => {
-                let diagnostics = analysis
-                    .outcome()
-                    .diagnostics()
-                    .expect("a rejected analysis carries diagnostics");
-                assert!(
-                    diagnostics
-                        .iter()
-                        .any(|diagnostic| diagnostic.code.as_str() == "tyck.first-class-package"),
-                    "expected a second-class package rejection, found: {:?}",
-                    diagnostics.iter().map(|diagnostic| &diagnostic.message).collect::<Vec<_>>()
-                );
-            }
-            | Err(error) => {
-                panic!("expected a first-class package error, found: {error:?}")
-            }
-            | Ok(()) => {
-                panic!("expected a first-class package error, but the program was accepted")
-            }
-        }
-    }
-}
+use zydeco_session::DesugarError;
+use zydeco_statics::TyckDiagnosticCode;
+use zydeco_tests::utils::SourceCase;
 
 #[test]
 fn opens_a_manifest_witness_as_its_disclosed_type() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let Transparent =
@@ -59,14 +16,14 @@ begin
   disclose packed
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn rejects_a_witness_that_disagrees_with_the_manifest_definition() {
-    ExistentialCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check_value(
+            r#"
 begin
   let Transparent =
     exists (X as Int64 : VType) . X
@@ -76,12 +33,14 @@ begin
   packed
 end
 "#,
+        ),
+        TyckDiagnosticCode::TypeMismatch,
     );
 }
 
 #[test]
 fn composes_manifest_existentials_with_named_package_fields() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let CounterLibrary =
@@ -97,13 +56,12 @@ begin
   disclose library
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn projection_patterns_select_types_and_values_from_one_package_opening() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let Box =
@@ -123,13 +81,12 @@ begin
   }
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn projection_patterns_treat_plain_existential_binders_as_punned_fields() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let Box =
@@ -143,13 +100,12 @@ begin
   ()
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn projection_patterns_can_name_one_type_field_twice() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let Box =
@@ -164,14 +120,14 @@ begin
   ()
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn projection_patterns_reject_a_missing_package_field() {
-    ExistentialCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check_value(
+            r#"
 begin
   let Box =
     exists (Item : VType) .
@@ -183,13 +139,16 @@ begin
   ()
 end
 "#,
+        ),
+        TyckDiagnosticCode::MissingNamedField,
     );
 }
 
 #[test]
 fn projection_patterns_reject_an_ambiguous_static_and_value_field() {
-    ExistentialCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check_value(
+            r#"
 begin
   let Box =
     exists (Item : VType) .
@@ -201,12 +160,14 @@ begin
   ()
 end
 "#,
+        ),
+        TyckDiagnosticCode::DuplicateNamedField,
     );
 }
 
 #[test]
 fn substitutes_an_outer_abstract_witness_through_a_manifest_definition() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let Mixed =
@@ -222,13 +183,12 @@ begin
   { ! unpack packed }
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn skips_a_leading_manifest_component_when_instantiating_pack_pi() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let Mixed =
@@ -244,13 +204,12 @@ begin
   { ! unpack packed }
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn accepts_payload_at_its_fresh_witness() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let Box =
@@ -271,13 +230,12 @@ begin
   }
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn scopes_opened_witnesses_over_let_and_function_bodies() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let Box =
@@ -300,13 +258,12 @@ begin
   }
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn scopes_an_opened_witness_over_a_do_tail() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let Box =
@@ -327,14 +284,14 @@ begin
   }
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn rejects_mixing_payloads_from_distinct_openings() {
-    ExistentialCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check_value(
+            r#"
 begin
   let Box =
     exists (X : VType) . X * Thk (X -> Ret Int64)
@@ -362,13 +319,16 @@ begin
   }
 end
 "#,
+        ),
+        TyckDiagnosticCode::TypeMismatch,
     );
 }
 
 #[test]
 fn rejects_an_opened_witness_in_the_result_type() {
-    ExistentialCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check_value(
+            r#"
 begin
   let Box =
     exists (X : VType) . X
@@ -383,12 +343,14 @@ begin
   leak
 end
 "#,
+        ),
+        TyckDiagnosticCode::EscapingExistential,
     );
 }
 
 #[test]
 fn synthesizes_a_package_dependent_function_result() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let Box =
@@ -401,13 +363,12 @@ begin
   unpack
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn allows_repacking_an_opened_witness() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let Box =
@@ -419,13 +380,12 @@ begin
   boxed |> repack
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn pack_synthesizes_a_manifest_existential_package() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let Transparent =
@@ -438,13 +398,12 @@ begin
   disclose packed
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn pack_infers_the_witness_classifier_from_the_definition() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let Transparent =
@@ -456,13 +415,12 @@ begin
   disclose packed
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn pack_takes_the_payload_type_verbatim() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let Degenerate =
@@ -474,13 +432,12 @@ begin
   disclose packed
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn pack_supports_witness_telescopes() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let Mixed =
@@ -494,13 +451,12 @@ begin
   disclose mixed
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn pack_composes_named_witness_fields() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let CounterLibrary =
@@ -516,13 +472,12 @@ begin
   disclose library
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn pack_checks_against_an_expected_existential() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let Transparent =
@@ -534,13 +489,12 @@ begin
   disclose packed
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn pack_elaborates_to_a_runtime_package() {
-    ExistentialCase::run(
+    SourceCase::assert_accepted(SourceCase::run(
         r#"
 begin
   let Box = exists (X as Int64 : VType) . X that
@@ -550,43 +504,42 @@ begin
   ! exit result
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn rejects_a_pack_parameter_without_evidence() {
-    match ExistentialCase::check(
-        r#"
+    SourceCase::assert_desugar_error(
+        SourceCase::check_value(
+            r#"
 begin
   let packed = pack (X : VType) where (42 : X) end in
   packed
 end
 "#,
-    ) {
-        | Err(_) => {}
-        | Ok(()) => panic!("expected an error, but the program was accepted"),
-    }
+        ),
+        |error| matches!(error, DesugarError::PackParameterNeedsEvidence(_)),
+    );
 }
 
 #[test]
 fn rejects_redundant_evidence_on_a_manifest_parameter() {
-    match ExistentialCase::check(
-        r#"
+    SourceCase::assert_desugar_error(
+        SourceCase::check_value(
+            r#"
 begin
   let packed = pack (X as Int64 : VType) is Char where (42 : X) end in
   packed
 end
 "#,
-    ) {
-        | Err(_) => {}
-        | Ok(()) => panic!("expected an error, but the program was accepted"),
-    }
+        ),
+        |error| matches!(error, DesugarError::PackParameterRedundantEvidence(_)),
+    );
 }
 
 #[test]
 fn pack_synthesizes_a_sealed_dependent_existential_package() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   def Switch =
@@ -606,13 +559,12 @@ begin
   library |> repack
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn sealed_pack_elaborates_to_a_runtime_package() {
-    ExistentialCase::run(
+    SourceCase::assert_accepted(SourceCase::run(
         r#"
 begin
   let Sealed = exists (X : VType) . Int64 that
@@ -622,13 +574,12 @@ begin
   end
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn sealed_pack_composes_with_a_disclosed_telescope() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let Mixed =
@@ -641,13 +592,12 @@ begin
   packed
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn sealed_pack_composes_named_witness_fields() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   def Switch =
@@ -667,13 +617,12 @@ begin
   library
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn sealed_pack_takes_a_dependent_payload_annotation() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   def Switch =
@@ -692,25 +641,27 @@ begin
   library
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn rejects_a_computation_payload() {
-    ExistentialCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check_value(
+            r#"
 begin
   let packed = pack (X as Int64 : VType) where ret 42 end in
   packed
 end
 "#,
+        ),
+        TyckDiagnosticCode::Expressivity,
     );
 }
 
 #[test]
 fn nests_packages_in_products_and_named_components() {
-    ExistentialCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let Box =
@@ -723,14 +674,14 @@ begin
   module
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn rejects_a_plain_computation_arrow_over_a_package_domain() {
-    ExistentialCase::assert_first_class_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let Box =
     exists (X : VType) . X
@@ -742,13 +693,16 @@ begin
   ! exit value
 end
 "#,
+        ),
+        TyckDiagnosticCode::FirstClassPackage,
     );
 }
 
 #[test]
 fn rejects_returning_a_package_from_a_computation() {
-    ExistentialCase::assert_first_class_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let Box =
     exists (X : VType) . X
@@ -760,13 +714,16 @@ begin
   ! exit 0
 end
 "#,
+        ),
+        TyckDiagnosticCode::FirstClassPackage,
     );
 }
 
 #[test]
 fn rejects_a_package_in_a_constructor_payload() {
-    ExistentialCase::assert_first_class_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let Box =
     exists (X : VType) . X
@@ -776,5 +733,7 @@ begin
   ! exit 0
 end
 "#,
+        ),
+        TyckDiagnosticCode::FirstClassPackage,
     );
 }

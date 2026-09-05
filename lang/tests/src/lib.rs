@@ -2,11 +2,11 @@ pub mod utils {
     use std::{path::PathBuf, process::Stdio};
     use thiserror::Error;
     use zydeco_cli::{
-        BuildOptions, CommandCompiler, CompileError, NativeError, TargetArchitecture, TargetOs,
-        WasmBackendKind,
+        BuildOptions, CommandCompiler, CompileError, DiagnosticRenderer, NativeError,
+        TargetArchitecture, TargetOs, WasmBackendKind,
     };
-    use zydeco_session::AnalysisError;
-    use zydeco_statics::syntax::TermAnnId;
+    use zydeco_session::{AnalysisError, DesugarError};
+    use zydeco_statics::{TyckDiagnosticCode, syntax::TermAnnId};
 
     #[derive(Debug, Error)]
     pub enum CaseError {
@@ -36,10 +36,6 @@ pub mod utils {
     }
 
     impl CaseError {
-        pub fn is_type_error(&self) -> bool {
-            matches!(self, Self::Compile(CompileError::Rejected(_)))
-        }
-
         pub fn is_resolve_error(&self) -> bool {
             matches!(self, Self::Compile(CompileError::Analysis(AnalysisError::Resolve { .. })))
         }
@@ -258,6 +254,65 @@ pub mod utils {
             Self::with_source(SourceCasePrelude::Core, source, |path| {
                 CommandCompiler::default().lower(path).map(|_| ()).map_err(CaseError::Compile)
             })
+        }
+
+        /// Assert an accepted case, rendering its diagnostic on failure.
+        pub fn assert_accepted(result: Result<(), CaseError>) {
+            if let Err(CaseError::Compile(error)) = &result {
+                DiagnosticRenderer::error(error);
+            }
+            result
+                .unwrap_or_else(|error| panic!("expected the case to be accepted, found: {error}"));
+        }
+
+        /// Assert a rejected case carrying `expected` among its diagnostics.
+        ///
+        /// A rejection is only actionable when the expected code appears on a
+        /// diagnostic that points into the source. Companion diagnostics may
+        /// elaborate without a span of their own.
+        pub fn assert_rejected(result: Result<(), CaseError>, expected: TyckDiagnosticCode) {
+            let Err(CaseError::Compile(CompileError::Rejected(analysis))) = &result else {
+                panic!("expected a rejection with `{expected}`, found: {result:?}")
+            };
+            let diagnostics = analysis.outcome().diagnostics().unwrap();
+            let found = diagnostics
+                .iter()
+                .map(|diagnostic| format!("`{}`: {}", diagnostic.code, diagnostic.message))
+                .collect::<Vec<_>>()
+                .join(", ");
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.code == expected && diagnostic.primary.is_some()),
+                "expected `{expected}` with a primary span, found: {found}"
+            );
+        }
+
+        /// Assert a case rejected during desugaring, before checking runs.
+        ///
+        /// The predicate identifies the expected desugaring error variant;
+        /// structural rejections from the surface phase have no diagnostic
+        /// codes to match on.
+        pub fn assert_desugar_error(
+            result: Result<(), CaseError>, expected: impl FnOnce(&DesugarError) -> bool,
+        ) {
+            let Err(CaseError::Compile(CompileError::Analysis(AnalysisError::Desugar {
+                error,
+                ..
+            }))) = &result
+            else {
+                panic!("expected a desugaring rejection, found: {result:?}")
+            };
+            assert!(expected(error.as_ref()), "unexpected desugaring rejection: {error:?}");
+        }
+
+        /// Assert a case that fails during resolution rather than checking.
+        pub fn assert_resolve_error(result: Result<(), CaseError>) {
+            match &result {
+                | Err(error) if error.is_resolve_error() => {}
+                | Ok(()) => panic!("expected a resolution error, but the program was accepted"),
+                | Err(error) => panic!("expected a resolution error, found: {error:?}"),
+            }
         }
 
         fn with_source<T>(

@@ -1,28 +1,9 @@
-use zydeco_tests::utils::{CaseError, SourceCase};
-
-struct NamedCase;
-
-impl NamedCase {
-    fn check(source: &str) -> Result<(), CaseError> {
-        SourceCase::check_value(source)
-    }
-
-    fn check_monadic(source: &str) -> Result<(), CaseError> {
-        SourceCase::check_monadic_value(source)
-    }
-
-    fn assert_type_error(source: &str) {
-        match Self::check(source) {
-            | Err(error) if error.is_type_error() => {}
-            | Ok(()) => panic!("expected a type error, but the program was accepted"),
-            | Err(error) => panic!("expected a type error, found: {error:?}"),
-        }
-    }
-}
+use zydeco_statics::TyckDiagnosticCode;
+use zydeco_tests::utils::SourceCase;
 
 #[test]
 fn accepts_named_types_named_kinds_and_static_projection() {
-    NamedCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let Identity :
@@ -122,13 +103,12 @@ begin
   )
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn accepts_named_type_patterns_in_polymorphic_functions() {
-    NamedCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   def named_identity : Thk (
@@ -143,13 +123,12 @@ begin
   { ! named_identity (#item = Int64) 0 }
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn translates_named_type_applications_in_monadic_blocks() {
-    NamedCase::check_monadic(
+    SourceCase::assert_accepted(SourceCase::check_monadic_value(
         r#"
 begin
   def mo_ret : Thk (Monad Ret) = {
@@ -194,13 +173,12 @@ begin
   )
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn distinguishes_payload_and_whole_named_existential_binders() {
-    NamedCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let PayloadBox =
@@ -225,13 +203,12 @@ begin
   (payload_box, whole_box)
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn instantiates_package_dependent_results_from_named_witnesses() {
-    NamedCase::check(
+    SourceCase::assert_accepted(SourceCase::check_value(
         r#"
 begin
   let Box =
@@ -254,39 +231,45 @@ begin
   { ! reveal boxed }
 end
 "#,
-    )
-    .unwrap();
+    ));
 }
 
 #[test]
 fn rejects_named_term_with_mismatched_label() {
-    NamedCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check_value(
+            r#"
 begin
   def bad : (#x :: Int64) = (#y = 0) that
   bad
 end
 "#,
+        ),
+        TyckDiagnosticCode::NamedLabelMismatch,
     );
 }
 
 #[test]
 fn rejects_named_pattern_with_mismatched_label() {
-    NamedCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check_value(
+            r#"
 begin
   def value : (#x :: Int64) = (#x = 0) that
   let (#y = inner) = value in
   inner
 end
 "#,
+        ),
+        TyckDiagnosticCode::NamedLabelMismatch,
     );
 }
 
 #[test]
 fn rejects_named_pattern_on_unnamed_mixed_component() {
-    NamedCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check_value(
+            r#"
 begin
   let Mixed = (#left :: Int64) * (Int64 * (#right :: Int64)) that
   def value : Mixed = (#left = 1, 2, #right = 3) that
@@ -298,13 +281,16 @@ begin
   (left, middle, right)
 end
 "#,
+        ),
+        TyckDiagnosticCode::TypeExpected,
     );
 }
 
 #[test]
 fn rejects_mismatched_named_pattern_in_nested_mixed_product() {
-    NamedCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check_value(
+            r#"
 begin
   let Nested = ((#left :: Int64) * Int64) * (#right :: Int64) that
   def value : Nested = ((#left = 1, 2), #right = 3) that
@@ -315,13 +301,16 @@ begin
   (left, middle, right)
 end
 "#,
+        ),
+        TyckDiagnosticCode::NamedLabelMismatch,
     );
 }
 
 #[test]
 fn rejects_incompatible_named_payload_annotation_in_mixed_pattern() {
-    NamedCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check_value(
+            r#"
 begin
   let Mixed = (#left :: Int64) * (Int64 * (#right :: Int64)) that
   def value : Mixed = (#left = 1, 2, #right = 3) that
@@ -333,13 +322,16 @@ begin
   (left, middle, right)
 end
 "#,
+        ),
+        TyckDiagnosticCode::TypeExpected,
     );
 }
 
 #[test]
 fn rejects_mismatched_named_type_label() {
-    NamedCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check_value(
+            r#"
 begin
   let InvalidNamedType : (#operation :: CType) =
     (#other = OS)
@@ -347,13 +339,16 @@ begin
   ()
 end
 "#,
+        ),
+        TyckDiagnosticCode::NamedLabelMismatch,
     );
 }
 
 #[test]
 fn rejects_named_computation_classifiers_without_named_computations() {
-    NamedCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check_value(
+            r#"
 begin
   let InvalidNamedComputation : CType =
     (#operation :: OS)
@@ -361,13 +356,16 @@ begin
   ()
 end
 "#,
+        ),
+        TyckDiagnosticCode::KindMismatch,
     );
 }
 
 #[test]
 fn rejects_missing_named_type_projection() {
-    NamedCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check_value(
+            r#"
 begin
   let NamedInt : (#item :: VType) =
     (#item = Int64)
@@ -378,52 +376,64 @@ begin
   ()
 end
 "#,
+        ),
+        TyckDiagnosticCode::MissingNamedTypeField,
     );
 }
 
 #[test]
 fn rejects_missing_named_projection() {
-    NamedCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check_value(
+            r#"
 begin
   let Point = (#x :: Int64) * (#y :: Int64) that
   def point : Point = (#x = 0, #y = 1) that
   point/z
 end
 "#,
+        ),
+        TyckDiagnosticCode::MissingNamedField,
     );
 }
 
 #[test]
 fn rejects_ambiguous_named_projection() {
-    NamedCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check_value(
+            r#"
 begin
   let DuplicateFields = (#x :: Int64) * (#x :: Int64) that
   def duplicate : DuplicateFields = (#x = 0, #x = 1) that
   duplicate/x
 end
 "#,
+        ),
+        TyckDiagnosticCode::DuplicateNamedField,
     );
 }
 
 #[test]
 fn rejects_ambiguous_nested_named_projection() {
-    NamedCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check_value(
+            r#"
 begin
   let DuplicateFields = ((#x :: Int64) * Int64) * (#outer :: (#x :: Int64)) that
   def duplicate : DuplicateFields = ((#x = 0, 1), #outer = #x = 2) that
   duplicate/x
 end
 "#,
+        ),
+        TyckDiagnosticCode::DuplicateNamedField,
     );
 }
 
 #[test]
 fn rejects_ambiguous_nested_named_type_projection() {
-    NamedCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check_value(
+            r#"
 begin
   let DuplicateFields : (#x :: (#x :: VType)) =
     (#x = (#x = Int64))
@@ -432,5 +442,7 @@ begin
   ()
 end
 "#,
+        ),
+        TyckDiagnosticCode::AmbiguousNamedTypeField,
     );
 }

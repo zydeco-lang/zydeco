@@ -19,5 +19,7 @@ pub use query::*;
 pub use report::*;
 pub use warning::*;
 
+pub use zydeco_surface::bitter::DesugarError;
+
 #[cfg(test)]
 mod tests;

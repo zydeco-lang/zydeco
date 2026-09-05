@@ -1,24 +1,5 @@
+use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::utils::SourceCase;
-
-struct CoverageCase;
-
-impl CoverageCase {
-    fn check(source: &str) {
-        SourceCase::check(source).unwrap();
-    }
-
-    fn run(source: &str) {
-        SourceCase::run(source).unwrap();
-    }
-
-    fn assert_type_error(source: &str) {
-        match SourceCase::check(source) {
-            | Err(error) if error.is_type_error() => {}
-            | Ok(()) => panic!("expected a coverage error, but the program was accepted"),
-            | Err(error) => panic!("expected a coverage error, found: {error:?}"),
-        }
-    }
-}
 
 const BOOL_DECLARATION: &str = r#"
 let Bool =
@@ -31,7 +12,7 @@ that
 
 #[test]
 fn accepts_an_exhaustive_data_match() {
-    CoverageCase::check(&format!(
+    SourceCase::assert_accepted(SourceCase::check(&format!(
         r#"
 begin
   {BOOL_DECLARATION}
@@ -42,13 +23,14 @@ begin
   end
 end
 "#,
-    ));
+    )));
 }
 
 #[test]
 fn rejects_a_data_match_with_a_missing_constructor() {
-    CoverageCase::assert_type_error(&format!(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(&format!(
+            r#"
 begin
   {BOOL_DECLARATION}
   let value : Bool = +True() that
@@ -57,12 +39,14 @@ begin
   end
 end
 "#,
-    ));
+        )),
+        TyckDiagnosticCode::Coverage,
+    );
 }
 
 #[test]
 fn accepts_a_wildcard_data_match() {
-    CoverageCase::check(&format!(
+    SourceCase::assert_accepted(SourceCase::check(&format!(
         r#"
 begin
   {BOOL_DECLARATION}
@@ -72,12 +56,12 @@ begin
   end
 end
 "#,
-    ));
+    )));
 }
 
 #[test]
 fn accepts_nested_constructor_coverage() {
-    CoverageCase::check(&format!(
+    SourceCase::assert_accepted(SourceCase::check(&format!(
         r#"
 begin
   {BOOL_DECLARATION}
@@ -89,12 +73,12 @@ begin
   end
 end
 "#,
-    ));
+    )));
 }
 
 #[test]
 fn covers_flat_and_nested_product_patterns_at_matching_arities() {
-    CoverageCase::check(&format!(
+    SourceCase::assert_accepted(SourceCase::check(&format!(
         r#"
 begin
   {BOOL_DECLARATION}
@@ -106,13 +90,14 @@ begin
   end
 end
 "#,
-    ));
+    )));
 }
 
 #[test]
 fn rejects_a_correlated_gap_in_nested_product_patterns() {
-    CoverageCase::assert_type_error(&format!(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(&format!(
+            r#"
 begin
   {BOOL_DECLARATION}
   let Pair = data | +Pair : Bool * Bool end that
@@ -123,12 +108,14 @@ begin
   end
 end
 "#,
-    ));
+        )),
+        TyckDiagnosticCode::Coverage,
+    );
 }
 
 #[test]
 fn accepts_elimination_from_an_empty_data_type() {
-    CoverageCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let Void = data end that
@@ -138,12 +125,12 @@ begin
   ret ()
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn accepts_an_exhaustive_codata_comatch() {
-    CoverageCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let Choice =
@@ -158,13 +145,14 @@ begin
   end : Choice)
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn rejects_a_codata_comatch_with_a_missing_destructor() {
-    CoverageCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let Choice =
     codata
@@ -177,13 +165,16 @@ begin
   end : Choice)
 end
 "#,
+        ),
+        TyckDiagnosticCode::Coverage,
     );
 }
 
 #[test]
 fn rejects_duplicate_codata_destructor_arms() {
-    CoverageCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let Choice =
     codata
@@ -198,12 +189,14 @@ begin
   end : Choice)
 end
 "#,
+        ),
+        TyckDiagnosticCode::OverlappingCopatternClauses,
     );
 }
 
 #[test]
 fn accepts_function_copattern_clauses() {
-    CoverageCase::check(&format!(
+    SourceCase::assert_accepted(SourceCase::check(&format!(
         r#"
 begin
   {BOOL_DECLARATION}
@@ -213,33 +206,36 @@ begin
   end : Bool -> Ret Unit)
 end
 "#,
-    ));
+    )));
 }
 
 #[test]
 fn checks_empty_function_comatches_against_their_argument_type() {
-    CoverageCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let Void = data end that
   (comatch end : Void -> Ret Unit)
 end
 "#,
-    );
+    ));
 
-    CoverageCase::assert_type_error(&format!(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(&format!(
+            r#"
 begin
   {BOOL_DECLARATION}
   (comatch end : Bool -> Ret Unit)
 end
 "#,
-    ));
+        )),
+        TyckDiagnosticCode::Coverage,
+    );
 }
 
 #[test]
 fn accepts_repeated_destructors_split_by_argument_patterns() {
-    CoverageCase::check(&format!(
+    SourceCase::assert_accepted(SourceCase::check(&format!(
         r#"
 begin
   {BOOL_DECLARATION}
@@ -256,13 +252,14 @@ begin
   end : Observer)
 end
 "#,
-    ));
+    )));
 }
 
 #[test]
 fn rejects_a_missing_argument_case_below_a_destructor() {
-    CoverageCase::assert_type_error(&format!(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(&format!(
+            r#"
 begin
   {BOOL_DECLARATION}
   let Observer =
@@ -275,12 +272,14 @@ begin
   end : Observer)
 end
 "#,
-    ));
+        )),
+        TyckDiagnosticCode::Coverage,
+    );
 }
 
 #[test]
 fn accepts_nested_destructor_copatterns() {
-    CoverageCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let Inner =
@@ -300,13 +299,14 @@ begin
   end : Outer)
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn rejects_a_missing_nested_destructor_copattern() {
-    CoverageCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let Inner =
     codata
@@ -324,12 +324,14 @@ begin
   end : Outer)
 end
 "#,
+        ),
+        TyckDiagnosticCode::Coverage,
     );
 }
 
 #[test]
 fn checks_correlated_coverage_across_multiple_arguments() {
-    CoverageCase::check(&format!(
+    SourceCase::assert_accepted(SourceCase::check(&format!(
         r#"
 begin
   {BOOL_DECLARATION}
@@ -344,10 +346,11 @@ begin
   end : Observer)
 end
 "#,
-    ));
+    )));
 
-    CoverageCase::assert_type_error(&format!(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(&format!(
+            r#"
 begin
   {BOOL_DECLARATION}
   let Observer =
@@ -361,12 +364,14 @@ begin
   end : Observer)
 end
 "#,
-    ));
+        )),
+        TyckDiagnosticCode::Coverage,
+    );
 }
 
 #[test]
 fn accepts_type_arguments_mixed_with_value_and_destructor_copatterns() {
-    CoverageCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let Inner (A : VType) =
@@ -386,12 +391,12 @@ begin
   end : Poly)
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn carries_argument_coverage_through_a_later_type_abstraction() {
-    CoverageCase::run(&format!(
+    SourceCase::assert_accepted(SourceCase::run(&format!(
         r#"
 begin
   {BOOL_DECLARATION}
@@ -408,12 +413,12 @@ begin
   ! api/exit 0
 end
 "#,
-    ));
+    )));
 }
 
 #[test]
 fn accepts_a_package_dependent_pattern_in_a_copattern_spine() {
-    CoverageCase::run(
+    SourceCase::assert_accepted(SourceCase::run(
         r#"
 begin
   let Box =
@@ -431,13 +436,14 @@ begin
   ! api/exit status
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn rejects_a_refutable_package_dependent_copattern() {
-    CoverageCase::assert_type_error(&format!(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(&format!(
+            r#"
 begin
   {BOOL_DECLARATION}
   let Box =
@@ -453,12 +459,14 @@ begin
   end : Service)
 end
 "#,
-    ));
+        )),
+        TyckDiagnosticCode::Coverage,
+    );
 }
 
 #[test]
 fn executes_a_mixed_copattern_observation_path() {
-    CoverageCase::run(
+    SourceCase::assert_accepted(SourceCase::run(
         r#"
 begin
   let Input =
@@ -488,5 +496,5 @@ begin
   ! api/exit status
 end
 "#,
-    );
+    ));
 }

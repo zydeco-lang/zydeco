@@ -1,40 +1,21 @@
-use zydeco_tests::utils::{CaseError, SourceCase};
-
-struct InferenceCase;
-
-impl InferenceCase {
-    fn check(source: &str) {
-        SourceCase::check(source).unwrap();
-    }
-
-    fn assert_type_error(source: &str) {
-        Self::assert_type_result(SourceCase::check(source));
-    }
-
-    fn assert_type_result(result: Result<(), CaseError>) {
-        match result {
-            | Err(error) if error.is_type_error() => {}
-            | Ok(()) => panic!("expected a type error, but the program was accepted"),
-            | Err(error) => panic!("expected a type error, found: {error:?}"),
-        }
-    }
-}
+use zydeco_statics::TyckDiagnosticCode;
+use zydeco_tests::utils::SourceCase;
 
 #[test]
 fn infers_an_unannotated_parameter_from_its_body() {
-    InferenceCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let consume = { fn value => ! exit value } that
   ret ()
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn accepts_compatible_constraints_from_several_body_uses() {
-    InferenceCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let duplicate = { fn value => ret (value, value) } that
@@ -42,13 +23,14 @@ begin
   ret ()
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn rejects_incompatible_constraints_from_the_body() {
-    InferenceCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let impossible = {
     fn value =>
@@ -58,12 +40,14 @@ begin
   ret ()
 end
 "#,
+        ),
+        TyckDiagnosticCode::TypeMismatch,
     );
 }
 
 #[test]
 fn infers_an_unannotated_parameter_from_a_call_site() {
-    InferenceCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let identity = { fn value => ret value } that
@@ -71,12 +55,12 @@ begin
   ret result
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn accepts_compatible_call_site_constraints() {
-    InferenceCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let identity = { fn value => ret value } that
@@ -85,13 +69,14 @@ begin
   ret result
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn rejects_incompatible_call_site_constraints() {
-    InferenceCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let identity = { fn value => ret value } that
   do _ <- ! identity ();
@@ -99,12 +84,14 @@ begin
   ret ()
 end
 "#,
+        ),
+        TyckDiagnosticCode::TypeMismatch,
     );
 }
 
 #[test]
 fn synthesizes_ordinary_tuple_patterns_componentwise() {
-    InferenceCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let swap = { fn (first, second) => ret (second, first) } that
@@ -112,12 +99,12 @@ begin
   ret ()
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn synthesizes_named_patterns_from_their_payload() {
-    InferenceCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let unwrap = { fn (#field = value) => ret value } that
@@ -125,12 +112,12 @@ begin
   ret result
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn refines_an_inferred_parameter_through_thunk_and_return_shapes() {
-    InferenceCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let run = {
@@ -142,12 +129,12 @@ begin
   ret result
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn refines_an_inferred_computation_into_an_arrow() {
-    InferenceCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let apply = { fn thunk => ! thunk () } that
@@ -155,12 +142,12 @@ begin
   ret result
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn refines_an_inferred_value_into_a_product() {
-    InferenceCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let first = {
@@ -172,12 +159,12 @@ begin
   ret result
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn permits_an_inner_inference_variable_to_alias_an_outer_one() {
-    InferenceCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let outer = {
@@ -191,13 +178,14 @@ begin
   ret ()
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn rejects_call_site_inference_across_a_block_boundary() {
-    InferenceCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 let identity =
   begin
     { fn value => ret value }
@@ -205,48 +193,57 @@ let identity =
 in
 ! identity ()
 "#,
+        ),
+        TyckDiagnosticCode::UnconstrainedInference,
     );
 }
 
 #[test]
 fn rejects_call_site_inference_across_an_imported_source_boundary() {
-    InferenceCase::assert_type_result(SourceCase::check_with_import(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check_with_import(
+            r#"
 let identity = @[import("imported.zy")] _ in
 ! identity ()
 "#,
-        r#"{ fn value => ret value }"#,
-    ));
+            r#"{ fn value => ret value }"#,
+        ),
+        TyckDiagnosticCode::UnconstrainedInference,
+    );
 }
 
 #[test]
 fn rejects_an_unconstrained_parameter_at_its_block_boundary() {
-    InferenceCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let ignore = { fn value => ret () } that
   ret ()
 end
 "#,
+        ),
+        TyckDiagnosticCode::UnconstrainedInference,
     );
 }
 
 #[test]
 fn retains_explicit_parameter_annotations() {
-    InferenceCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let ignore = { fn (value : Unit) => ret () } that
   ret ()
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn keeps_constructor_patterns_annotation_directed() {
-    InferenceCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let Optional =
     data
@@ -258,25 +255,31 @@ begin
   ret ()
 end
 "#,
+        ),
+        TyckDiagnosticCode::MissingAnnotation,
     );
 }
 
 #[test]
 fn rejects_self_application_during_the_occurs_check() {
-    InferenceCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let identity = { fn value => ret value } that
   ! identity identity
 end
 "#,
+        ),
+        TyckDiagnosticCode::OccursCheck,
     );
 }
 
 #[test]
 fn rejects_an_existential_witness_escaping_through_an_inferred_domain() {
-    InferenceCase::assert_type_error(
-        r#"
+    SourceCase::assert_rejected(
+        SourceCase::check(
+            r#"
 begin
   let Box = exists (X : VType) . X that
   def boxed : Box = (Int64, 0) that
@@ -287,12 +290,14 @@ begin
   end
 end
 "#,
+        ),
+        TyckDiagnosticCode::EscapingExistential,
     );
 }
 
 #[test]
 fn checks_literals_in_each_rust_numeric_domain() {
-    InferenceCase::check(
+    SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let int8_value : Int8 = -128 that
@@ -312,20 +317,29 @@ begin
   )
 end
 "#,
-    );
+    ));
 }
 
 #[test]
 fn rejects_signed_literals_outside_the_selected_rust_domain() {
-    InferenceCase::assert_type_error("let value : Int8 = 128 in ret value");
+    SourceCase::assert_rejected(
+        SourceCase::check("let value : Int8 = 128 in ret value"),
+        TyckDiagnosticCode::IntegerLiteralOutOfRange,
+    );
 }
 
 #[test]
 fn rejects_negative_literals_in_unsigned_rust_domains() {
-    InferenceCase::assert_type_error("let value : UInt8 = -1 in ret value");
+    SourceCase::assert_rejected(
+        SourceCase::check("let value : UInt8 = -1 in ret value"),
+        TyckDiagnosticCode::IntegerLiteralOutOfRange,
+    );
 }
 
 #[test]
 fn rejects_finite_literals_that_overflow_float32() {
-    InferenceCase::assert_type_error("let value : Float32 = 3.5e38 in ret value");
+    SourceCase::assert_rejected(
+        SourceCase::check("let value : Float32 = 3.5e38 in ret value"),
+        TyckDiagnosticCode::FloatLiteralOutOfRange,
+    );
 }
