@@ -345,6 +345,68 @@ end
           name: (lower_identifier))))))
 
 ==================
+Literal patterns
+==================
+
+begin
+  do classified <-
+    match n
+    | 0 => ret 1
+    | -7 => ret 2
+    | +Tagged(42) => ret 3
+    | (0, _) => ret 4
+    | _ => ret 5
+    end;
+  let 5 = classified in ret classified
+end
+
+---
+
+(source_file
+  (block_expression
+    (do_expression
+      (variable_pattern
+        (lower_identifier))
+      (match_expression
+        (variable
+          (lower_identifier))
+        (match_arm
+          (integer_literal)
+          (return_expression
+            (integer_literal)))
+        (match_arm
+          (integer_literal)
+          (return_expression
+            (integer_literal)))
+        (match_arm
+          (constructor_pattern
+            (constructor_identifier)
+            (parenthesized_pattern
+              (integer_literal)))
+          (return_expression
+            (integer_literal)))
+        (match_arm
+          (parenthesized_pattern
+            (integer_literal)
+            (hole_pattern))
+          (return_expression
+            (integer_literal)))
+        (match_arm
+          (hole_pattern)
+          (return_expression
+            (integer_literal))))
+      (context_binding
+        (binding_kind)
+        (general_binding
+          (integer_literal)
+          (variable
+            (lower_identifier)))
+        (placement)
+        (return_expression
+          (variable
+            (lower_identifier)))))))
+
+==================
 Named terms and existential parameters
 ==================
 

@@ -475,10 +475,14 @@ module.exports = grammar({
       field('value', $._term_item),
     )),
 
+    // The compiler parser accepts every literal syntactically; its checker
+    // rejects float, string, and character literal patterns, which editors
+    // surface as diagnostics rather than syntax errors.
     _pattern: $ => choice(
       $.hole_pattern,
       $.variable_pattern,
       $.constructor_pattern,
+      $._literal,
       $.manifest_pattern,
       $.alias_pattern,
       $.parenthesized_pattern,

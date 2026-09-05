@@ -26,6 +26,10 @@
     "named": true,
     "subtypes": [
       {
+        "type": "_literal",
+        "named": true
+      },
+      {
         "type": "alias_pattern",
         "named": true
       },
