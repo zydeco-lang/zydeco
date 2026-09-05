@@ -500,8 +500,11 @@ ZASM makes the control-flow graph explicit for assembly-derived backends.
 
 Before lowering into SPS, a demand analysis over the checked root records how each binding's value is consumed:
 not at all, at specific product positions, or whole.
-The lowering skips absent bindings, and the host Builtin package materializes only demanded operations,
-so emitted programs contain the operations a program calls rather than the whole standard-library signature.
+Because value-function applications statically resolve to definitions, a caller's demand flows
+through an application into the callee's body, and an argument is demanded by the parameter pattern it binds.
+The lowering skips absent bindings and fills unobserved product positions with trivial values,
+and the host Builtin package materializes only demanded operations, so emitted programs contain the operations
+and package components a program uses rather than the whole standard-library assembly.
 The interpreter shares none of this; it links the complete program as the reference semantics.
 `docs/proposals/demand-analysis.md` develops the traversal rules and their soundness invariants.
 

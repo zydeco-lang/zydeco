@@ -3,6 +3,8 @@ use zydeco_statics::{arena::StaticsArena, syntax as ss};
 use zydeco_syntax::{Alias, ConsN, Ctor, Named};
 use zydeco_utils::prelude::ArenaAccess;
 
+use super::value_functions as definitions;
+
 /// How live code consumes the value bound by one definition.
 ///
 /// The analysis reads the checked program backwards from the root: a binding
@@ -16,7 +18,10 @@ pub enum Demand {
     #[default]
     Absent,
     /// Only the listed product positions are ever projected; other positions
-    /// are never observed and may hold trivial values instead.
+    /// are never observed and may hold trivial values instead. An empty map
+    /// still observes the product's shape — a pattern that unpacks the
+    /// product needs a real product in that position, with every position
+    /// itself trivial.
     Fields(BTreeMap<usize, Demand>),
     /// The value flows into an unknown context and must be kept whole.
     Used,
@@ -24,11 +29,7 @@ pub enum Demand {
 
 impl Demand {
     pub fn is_absent(&self) -> bool {
-        match self {
-            | Self::Absent => true,
-            | Self::Fields(fields) => fields.is_empty(),
-            | Self::Used => false,
-        }
+        matches!(self, Self::Absent)
     }
 
     /// Join two demands for the same binding: keep the union of what either
@@ -74,14 +75,67 @@ impl Demand {
 /// which plain `Let` bindings cannot express.
 pub struct DefinitionDemand {
     demands: HashMap<ss::DefId, Demand>,
+    /// Value-function definitions seen so far, used to resolve application
+    /// heads so caller demand can reach callee bodies.
+    value_functions: definitions::Definitions,
+    /// The joined demand each visited value node was analyzed under, so
+    /// lowering can skip product positions nothing projects.
+    contexts: HashMap<ss::ValueId, Demand>,
 }
 
 impl DefinitionDemand {
     /// Analyze one checked root. The root's own result is demanded whole.
+    ///
+    /// The traversal repeats until its demand tables stop growing: an
+    /// application site demands its argument through the parameter pattern of
+    /// the callee, whose definitions are only complete once the callee body
+    /// has been visited, and joins only grow, so successive rounds converge.
     pub fn new(statics: &StaticsArena, root: ss::CompuId) -> Self {
-        let mut analysis = Self { demands: HashMap::new() };
-        analysis.visit_compu(statics, &root, Demand::Used);
+        let mut analysis = Self {
+            demands: HashMap::new(),
+            value_functions: HashMap::new(),
+            contexts: HashMap::new(),
+        };
+        loop {
+            let previous = (analysis.demands.clone(), analysis.contexts.clone());
+            analysis.visit_compu(statics, &root, Demand::Used);
+            if analysis.demands == previous.0 && analysis.contexts == previous.1 {
+                break;
+            }
+        }
         analysis
+    }
+
+    /// The demand one visited value node was analyzed under. Unvisited nodes
+    /// report whole-value demand, matching lowering without trimming.
+    pub fn value_demand(&self, node: ss::ValueId) -> Demand {
+        self.contexts.get(&node).cloned().unwrap_or(Demand::Used)
+    }
+
+    /// Print every definition's final demand, for debugging trimming.
+    pub fn trace(
+        &self, statics: &StaticsArena, scoped: &zydeco_surface::scoped::arena::ScopedArena,
+    ) {
+        use std::fmt::Write as _;
+        let mut names: Vec<_> = self
+            .demands
+            .iter()
+            .map(|(def, demand)| {
+                let name = statics.def_name(scoped, def).0.clone();
+                let mut described = String::new();
+                match demand {
+                    | Demand::Absent => write!(described, "absent"),
+                    | Demand::Used => write!(described, "used"),
+                    | Demand::Fields(fields) => {
+                        write!(described, "fields {:?}", fields.keys().collect::<Vec<_>>())
+                    }
+                }
+                .unwrap();
+                (name, described)
+            })
+            .collect();
+        names.sort();
+        names.into_iter().for_each(|(name, described)| eprintln!("{name}: {described}"));
     }
 
     /// Whether none of the definitions bound by `binder` is demanded.
@@ -170,6 +224,7 @@ impl DefinitionDemand {
                 self.visit_compu(statics, &bindee, binder_demand);
             }
             | ss::Computation::Let(ss::Let { binder, bindee, tail }) => {
+                definitions::record_binding(statics, &mut self.value_functions, binder, bindee);
                 self.visit_compu(statics, &tail, ctx);
                 let binder_demand = self.pattern_demand(statics, &binder);
                 if !binder_demand.is_absent() {
@@ -209,11 +264,17 @@ impl DefinitionDemand {
         if statics.foreign_imports.get(value).is_some() {
             return;
         }
+        let joined = match self.contexts.remove(value) {
+            | Some(earlier) => earlier.join(ctx.clone()),
+            | None => ctx.clone(),
+        };
+        self.contexts.insert(*value, joined);
         match statics.values[value].clone() {
             | ss::Value::Hole(_) | ss::Value::Triv(_) | ss::Value::Lit(_) => {}
             | ss::Value::Var(def) => self.join_def(def, ctx),
             | ss::Value::Named(Named(_, inner)) => self.visit_value(statics, &inner, ctx),
             | ss::Value::Let(ss::Let { binder, bindee, tail }) => {
+                definitions::record_binding(statics, &mut self.value_functions, binder, bindee);
                 self.visit_value(statics, &tail, ctx);
                 let binder_demand = self.pattern_demand(statics, &binder);
                 if !binder_demand.is_absent() {
@@ -226,13 +287,45 @@ impl DefinitionDemand {
                     if let ss::ValBinder::Value(param) = param {
                         self.visit_pattern(statics, &param);
                     }
-                    self.visit_value(statics, &body, Demand::Used);
+                    // The abstraction's result is consumed only at its
+                    // applications, so the caller's demand is the demand of
+                    // its body.
+                    self.visit_value(statics, &body, ctx);
                 }
             }
-            | ss::Value::ValApp(ss::App(head, argument)) => {
-                self.visit_value(statics, &head, Demand::Used);
-                if let ss::ValArgument::Value(argument) = argument {
-                    self.visit_value(statics, &argument, Demand::Used);
+            | ss::Value::ValApp(ss::App(function, argument)) => {
+                // Applying a value function unfolds its definition: a runtime
+                // argument is demanded like a let bindee, against the
+                // parameter pattern its cut binds, and the caller's demand
+                // reaches the callee's body through the head's definition
+                // binding.
+                let reduction = definitions::reduce_application(
+                    statics,
+                    &self.value_functions,
+                    function,
+                    &argument,
+                );
+                match argument {
+                    | ss::ValArgument::Type(_) => self.visit_value(statics, &function, ctx),
+                    | ss::ValArgument::Value(argument) => {
+                        match reduction {
+                            | Some((parameters, _)) => {
+                                let argument_demand = parameters
+                                    .last()
+                                    .map(|parameter| self.pattern_demand(statics, parameter))
+                                    .unwrap_or(Demand::Used);
+                                self.visit_value(statics, &argument, argument_demand);
+                                self.visit_value(statics, &function, ctx);
+                            }
+                            | None => {
+                                // Statically unresolved heads do not occur in
+                                // checked programs; stay conservative when
+                                // they do.
+                                self.visit_value(statics, &function, Demand::Used);
+                                self.visit_value(statics, &argument, Demand::Used);
+                            }
+                        }
+                    }
                 }
             }
             // The thunk's suspended body produces the demanded result.
@@ -258,6 +351,11 @@ impl DefinitionDemand {
             | ss::Value::SCons(ConsN(_, body)) => self.visit_value(statics, &body, ctx),
             | ss::Value::Proj(ss::Proj(head, field)) => {
                 let head_demand = ctx.through_projections(&field.target.products);
+                if std::env::var_os("ZYDECO_TRACE_TRIMMING").is_some() {
+                    let positions: Vec<_> =
+                        field.target.products.iter().map(|step| step.position).collect();
+                    eprintln!("proj /{} steps {:?}", field.name, positions);
+                }
                 self.visit_value(statics, &head, head_demand);
             }
         }

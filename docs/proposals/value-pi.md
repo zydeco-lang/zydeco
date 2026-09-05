@@ -267,10 +267,11 @@ let std = builtin |> make_std in
 
 Inlining duplicates a body at each application, so emitted size and compiler recursion depth grow
 with the unfolded program; the workspace test configuration raises its minimum stack accordingly.
-Two tiers remain future work and are enabled by the same static resolution: compiling each definition once
-as a block reached by a direct jump — an unboxed closure whose call site the occurrence rule proves static —
-and propagating a caller's demand through an application into the callee's body,
-which is now a local rather than an interprocedural question.
+Static resolution also lets a caller's demand flow through an application into the callee's body,
+so unused components of an instantiated package become ordinary dead bindings;
+the demand analysis records this alongside its binding decisions.
+One tier remains future work: compiling each definition once as a block reached by a direct jump —
+an unboxed closure whose call site the occurrence rule proves static.
 
 ## Implementation Boundary
 

@@ -2,6 +2,7 @@ use super::{
     check::BranchJoinProgram,
     demand::{DefinitionDemand, Demand},
     syntax::*,
+    value_functions as definitions,
 };
 use ariadne::{Label, Report, ReportKind};
 use derive_more::{AsMut, AsRef};
@@ -570,95 +571,7 @@ impl<'a> Lowerer<'a> {
 
     /// Whether the recorded classifier of one typed value is a `val pi`.
     fn is_value_function_value(&self, value: ss::ValueId) -> bool {
-        self.statics
-            .annotations_value
-            .get(&value)
-            .and_then(|ty| self.statics.normalized_at(*ty))
-            .is_some_and(|ty| matches!(ty, ss::Type::ValPi(_)))
-    }
-
-    /// The next runtime binder of a value function, after chasing elided
-    /// bindings, aliases, erased type binders, and erased type arguments.
-    fn next_abstraction(&self, node: ss::ValueId) -> Option<(ss::VPatId, ss::ValueId)> {
-        match &self.statics.values[&node] {
-            | ss::Value::ValAbs(Abs(ss::ValBinder::Value(param), body)) => Some((*param, *body)),
-            | ss::Value::ValAbs(Abs(ss::ValBinder::Type(_), body)) => self.next_abstraction(*body),
-            | ss::Value::ValApp(App(function, ss::ValArgument::Type(_))) => {
-                self.next_abstraction(*function)
-            }
-            | ss::Value::Var(def) => {
-                self.value_functions.get(def).and_then(|rhs| self.next_abstraction(*rhs))
-            }
-            | _ => None,
-        }
-    }
-
-    /// Split an application into its runtime arguments and its head, chasing
-    /// elided definitions so a bound partial application contributes its own
-    /// arguments. Arguments come back in application order.
-    fn application_spine(&self, node: ss::ValueId) -> (Vec<ss::ValueId>, ss::ValueId) {
-        let mut arguments = Vec::new();
-        let mut head = node;
-        loop {
-            match &self.statics.values[&head] {
-                | ss::Value::ValApp(App(function, ss::ValArgument::Value(argument))) => {
-                    arguments.push(*argument);
-                    head = *function;
-                }
-                | ss::Value::Var(def) => match self.value_functions.get(def) {
-                    | Some(rhs) => head = *rhs,
-                    | None => break,
-                },
-                | _ => break,
-            }
-        }
-        arguments.reverse();
-        (arguments, head)
-    }
-
-    /// Whether reducing one application spine against the abstractions under
-    /// `head` never gets stuck before the arguments are consumed.
-    fn spine_reduces(&self, head: ss::ValueId, arguments: &[ss::ValueId]) -> bool {
-        let mut cursor = head;
-        for _ in arguments {
-            let Some((_, body)) = self.next_abstraction(cursor) else { return false };
-            cursor = body;
-        }
-        true
-    }
-
-    /// Whether applications of `bindee` unfold to lexical bindings. A binding
-    /// that cannot be elided materializes normally, and lowering its
-    /// right-hand side reports the node that cannot unfold.
-    fn is_unfoldable_definition(&self, bindee: ss::ValueId) -> bool {
-        if self.next_abstraction(bindee).is_some() {
-            return true;
-        }
-        if matches!(
-            &self.statics.values[&bindee],
-            ss::Value::ValApp(App(_, ss::ValArgument::Value(_)))
-        ) {
-            let (arguments, head) = self.application_spine(bindee);
-            return self.spine_reduces(head, &arguments);
-        }
-        false
-    }
-
-    /// The definitions a pattern binds, when every one of them is a plain
-    /// variable or wildcard position.
-    fn bound_definitions(&self, pattern: ss::VPatId) -> Option<Vec<ss::DefId>> {
-        match self.statics.vpats[&pattern].clone() {
-            | ss::ValuePattern::Var(def) => Some(vec![def]),
-            | ss::ValuePattern::Hole(_) => Some(Vec::new()),
-            | ss::ValuePattern::Alias(Alias(patterns)) => {
-                let mut definitions = Vec::new();
-                for pattern in patterns.iter() {
-                    definitions.extend(self.bound_definitions(*pattern)?);
-                }
-                Some(definitions)
-            }
-            | _ => None,
-        }
+        definitions::is_value_function(self.statics, value)
     }
 
     /// Elide the lowering of one value-function definition binding, recording
@@ -667,12 +580,14 @@ impl<'a> Lowerer<'a> {
     /// unfold materializes, and lowering its right-hand side reports the node
     /// that cannot be applied through.
     fn record_value_function_binding(&mut self, binder: ss::VPatId, bindee: ss::ValueId) -> bool {
-        if !self.is_value_function_value(bindee) || !self.is_unfoldable_definition(bindee) {
+        if !self.is_value_function_value(bindee)
+            || !definitions::is_unfoldable_definition(self.statics, &self.value_functions, bindee)
+        {
             return false;
         }
-        match self.bound_definitions(binder) {
-            | Some(definitions) => {
-                definitions.into_iter().for_each(|def| {
+        match definitions::bound_definitions(self.statics, binder) {
+            | Some(bound) => {
+                bound.into_iter().for_each(|def| {
                     self.value_functions.insert(def, bindee);
                 });
                 true
@@ -691,14 +606,17 @@ impl<'a> Lowerer<'a> {
         &mut self, function: ss::ValueId, outer_argument: ValuePlan<ValueId>,
         site: Option<ss::TermId>,
     ) -> ValuePlan<ValueId> {
-        let (arguments, head) = self.application_spine(function);
+        let (arguments, head) =
+            definitions::application_spine(self.statics, &self.value_functions, function);
         let mut steps: Vec<ValueStep> = Vec::new();
         let mut cursor = head;
         let mut pending: Vec<ValuePlan<ValueId>> =
             arguments.into_iter().map(|argument| argument.lower(self, ())).collect();
         pending.push(outer_argument);
         for argument in pending {
-            let Some((param, body)) = self.next_abstraction(cursor) else {
+            let Some((param, body)) =
+                definitions::next_abstraction(self.statics, &self.value_functions, cursor)
+            else {
                 self.lower_errors.push(SpsLowerError::UnresolvedApplication { function });
                 return ValuePlan::pure(Hole.build(self, site));
             };
@@ -925,7 +843,27 @@ impl Lower for ss::ValueId {
             | ss::Value::Triv(Triv) => ValuePlan::pure(Triv.build(lo, site)),
             | ss::Value::VCons(items) => {
                 let layout = lo.product_layout(lo.statics.annotations_value[self]);
-                let items = items.lower(lo, ());
+                // Positions nothing projects are never observed; filling them
+                // with trivial values keeps the layout while skipping the
+                // bindings and operations only they would demand.
+                let fields = match lo.demand.value_demand(*self) {
+                    | Demand::Fields(fields) => Some(fields),
+                    | Demand::Absent | Demand::Used => None,
+                };
+                let items = items
+                    .iter()
+                    .enumerate()
+                    .map(|(position, item)| {
+                        let demanded =
+                            fields.as_ref().is_none_or(|fields| fields.get(&position).is_some());
+                        if demanded {
+                            item.lower(lo, ())
+                        } else {
+                            ValuePlan::pure(Triv.build(lo, site))
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                let items = ValuePlan::sequence(items);
                 items.map(|items| VCons::new(items, layout).build(lo, site))
             }
             | ss::Value::SCons(ss::ConsN(_witnesses, inner)) => {
