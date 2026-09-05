@@ -10,7 +10,6 @@ members = [
     "lang/stackir",
     "lang/assembly",
     "lang/amd64",
-    "lang/llvm",
     "lang/wasm-common",
     "lang/wasm-am",
     "lang/wasm-sps",
@@ -47,7 +46,6 @@ zydeco-surface = { path = "lang/surface" }
 zydeco-statics = { path = "lang/statics" }
 zydeco-dynamics = { path = "lang/dynamics" }
 zydeco-amd64 = { path = "lang/amd64" }
-zydeco-llvm = { path = "lang/llvm" }
 zydeco-wasm-common = { path = "lang/wasm-common" }
 zydeco-wasm-am = { path = "lang/wasm-am" }
 zydeco-wasm-sps = { path = "lang/wasm-sps" }

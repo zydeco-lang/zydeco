@@ -1,4 +1,4 @@
-use crate::{TargetArchitecture, TargetOs};
+use crate::TargetOs;
 use std::{
     path::Path,
     sync::{Arc, OnceLock},
@@ -250,34 +250,6 @@ impl BackendProgram {
             .collect()
     }
 
-    pub fn emit_llvm(
-        &self, architecture: TargetArchitecture, operating_system: TargetOs,
-    ) -> Result<String, CompileError> {
-        let assembly = self.assembly();
-        Self::validate_no_foreign_imports(assembly, "LLVM")?;
-        Self::validate_llvm_locals(assembly)?;
-        let target = match (architecture, operating_system) {
-            | (TargetArchitecture::X86_64, TargetOs::Linux) => {
-                zydeco_llvm::TargetTriple::X86_64Linux
-            }
-            | (TargetArchitecture::X86_64, TargetOs::Macos) => {
-                zydeco_llvm::TargetTriple::X86_64MacOS
-            }
-            | (TargetArchitecture::Aarch64, TargetOs::Linux) => {
-                zydeco_llvm::TargetTriple::Aarch64Linux
-            }
-            | (TargetArchitecture::Aarch64, TargetOs::Macos) => {
-                zydeco_llvm::TargetTriple::Aarch64MacOS
-            }
-        };
-        match zydeco_llvm::Emitter::new(&self.spans, &self.scoped, &self.statics, assembly, target)
-            .run()
-        {
-            | Ok(module) => Ok(module.to_string()),
-            | Err(never) => match never {},
-        }
-    }
-
     pub fn emit_wasm_am(&self) -> Result<Vec<u8>, CompileError> {
         zydeco_wasm_am::Emitter::new(self.assembly())
             .run()
@@ -296,33 +268,6 @@ impl BackendProgram {
         self.assembly.get_or_init(|| {
             LoweringPipeline::new(&self.spans, &self.scoped, &self.statics, &self.sps_low).run()
         })
-    }
-
-    fn validate_llvm_locals(assembly: &AssemblyProgram) -> Result<(), CompileError> {
-        use zydeco_assembly::syntax::{Atom, Instruction, Program};
-
-        assembly
-            .arena()
-            .programs
-            .iter()
-            .find_map(|(program, body)| {
-                let variable = match body {
-                    | Program::Instruction(
-                        Instruction::PopArg(zydeco_assembly::syntax::Pop(variable)),
-                        _,
-                    ) => Some(*variable),
-                    | Program::Instruction(
-                        Instruction::PushArg(zydeco_assembly::syntax::Push(Atom::Var(variable))),
-                        _,
-                    ) => Some(*variable),
-                    | _ => None,
-                }?;
-                (!assembly.arena().contexts[program].iter().any(|local| local == &variable))
-                    .then_some((*program, variable))
-            })
-            .map_or(Ok(()), |(program, variable)| {
-                Err(CompileError::LlvmUnsupportedLocal { program, variable })
-            })
     }
 
     fn validate_no_foreign_imports(
@@ -383,11 +328,6 @@ pub enum CompileError {
     WasmSps(zydeco_wasm_sps::EmitError),
     #[error("source test expected exit code 0, got {0:?}")]
     TestFailure(ProgKont),
-    #[error("LLVM emitter cannot represent local {variable:?} at assembly program {program:?}")]
-    LlvmUnsupportedLocal {
-        program: zydeco_assembly::syntax::ProgId,
-        variable: zydeco_assembly::syntax::VarId,
-    },
     #[error("{backend} backend cannot import native foreign symbol `{symbol}`")]
     ForeignImportUnsupported { backend: &'static str, symbol: zydeco_syntax::ForeignSymbolName },
 }

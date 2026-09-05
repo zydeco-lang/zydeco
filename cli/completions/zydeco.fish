@@ -50,11 +50,9 @@ aarch64\t''"
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s t -l target -d 'Target backend' -r -f -a "zir\t''
 zasm\t''
 asm\t''
-llvm\t''
 wasm-am\t''
 wasm-sps\t''
-exe\t''
-llvm-exe\t''"
+exe\t''"
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s b -l build-dir -d 'Build Directory' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s r -l runtime-dir -d 'Runtime directory' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s x -l execute -d 'Run the program after building'

@@ -114,38 +114,6 @@ impl BuildOptions {
         Ok(())
     }
 
-    pub fn link_llvm(&self, artifact: &str, ir: &str) -> Result<Executable, NativeError> {
-        self.prepare()?;
-        let target = match (self.architecture, self.operating_system) {
-            | (TargetArchitecture::X86_64, TargetOs::Linux) => "x86_64-linux-gnu",
-            | (TargetArchitecture::X86_64, TargetOs::Macos) => "x86_64-apple-darwin",
-            | (TargetArchitecture::Aarch64, TargetOs::Linux) => "aarch64-linux-gnu",
-            | (TargetArchitecture::Aarch64, TargetOs::Macos) => "aarch64-apple-darwin",
-        };
-        let ir_path = self.build_dir.join(format!("{artifact}.ll"));
-        let object_path = self.build_dir.join(format!("{artifact}.o"));
-        let executable_path = self.build_dir.join(format!("{artifact}.exe"));
-        std::fs::write(&ir_path, ir).map_err(NativeError::WriteBackendOutput)?;
-        NativeTool::Clang.run(
-            Command::new("clang")
-                .arg("-target")
-                .arg(target)
-                .arg("-c")
-                .arg(&ir_path)
-                .arg("-o")
-                .arg(&object_path),
-        )?;
-        NativeTool::Clang.run(
-            Command::new("clang")
-                .arg("-target")
-                .arg(target)
-                .arg("-o")
-                .arg(&executable_path)
-                .arg(&object_path),
-        )?;
-        Ok(Executable { path: executable_path })
-    }
-
     pub fn write_wasm(
         &self, artifact: &str, backend: WasmBackendKind, module: &[u8],
     ) -> Result<WasmArtifact, NativeError> {
@@ -233,7 +201,6 @@ pub enum NativeTool {
     Nasm,
     Archive,
     Cargo,
-    Clang,
 }
 
 impl NativeTool {
@@ -258,7 +225,6 @@ impl Display for NativeTool {
             | Self::Nasm => "nasm",
             | Self::Archive => "ar",
             | Self::Cargo => "cargo",
-            | Self::Clang => "clang",
         })
     }
 }

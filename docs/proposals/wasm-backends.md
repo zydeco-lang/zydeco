@@ -34,7 +34,7 @@ all source-language lowering through SPSLow and diverge only at the backend stra
 surface -> statics -> dynamics -> high SPS -> SPSLow -> wasm-sps
                                                 |
                                                 +-> ZASM -> wasm-am
-                                                         -> AMD64 / LLVM
+                                                         -> AMD64
 ```
 
 This fork is a real pipeline distinction rather than two renderers over the same assembly. `BackendProgram`

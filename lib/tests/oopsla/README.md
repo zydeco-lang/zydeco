@@ -695,8 +695,8 @@ The packages documented are listed below:
 
 The following are some limitations of the artifact:
 
-+ The native backends remain experimental.
-  The AMD64 path is covered by end-to-end tests, while the LLVM emitter has more limited coverage.
++ The native backend remains experimental.
+  The AMD64 path is covered by end-to-end tests.
 + Whole-program source imports currently provide composition rather than separate compilation;
   incremental artifacts, registries, and generated lock files remain future work.
 + Packages are expressed by ordinary product and existential types.

@@ -125,9 +125,6 @@ impl Application {
                 }
                 println!("{}", backend.emit_amd64(options.operating_system));
             }
-            | BuildTarget::Llvm => {
-                println!("{}", backend.emit_llvm(options.architecture, options.operating_system)?)
-            }
             | BuildTarget::WasmAm => {
                 if execute {
                     return Err(NativeError::WasmExecutionRequiresHost.into());
@@ -152,14 +149,6 @@ impl Application {
                 let assembly = backend.emit_amd64(options.operating_system);
                 let foreign_libraries = backend.foreign_libraries();
                 let executable = options.link_amd64(&artifact, &assembly, &foreign_libraries)?;
-                if execute {
-                    return Ok(executable.run(&[])?.code().unwrap_or(0));
-                }
-            }
-            | BuildTarget::LlvmExe => {
-                let artifact = Self::artifact_name(path)?;
-                let ir = backend.emit_llvm(options.architecture, options.operating_system)?;
-                let executable = options.link_llvm(&artifact, &ir)?;
                 if execute {
                     return Ok(executable.run(&[])?.code().unwrap_or(0));
                 }

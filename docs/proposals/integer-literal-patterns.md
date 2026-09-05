@@ -65,5 +65,3 @@ No intermediate representation gains a pattern or instruction; demand analysis k
 
 - Float literal patterns are excluded pending a decision between IEEE equality and bitwise matching.
 - Duplicate literal arms are not yet redundancy-checked; a later arm shadowed by an equal earlier literal is accepted.
-- The amd64 and LLVM native paths are unexercised here; LLVM emission already rejects some local-variable layouts
-  before this feature.

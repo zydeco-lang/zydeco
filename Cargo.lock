@@ -2539,7 +2539,6 @@ dependencies = [
  "zydeco-amd64",
  "zydeco-assembly",
  "zydeco-dynamics",
- "zydeco-llvm",
  "zydeco-session",
  "zydeco-stackir",
  "zydeco-statics",
@@ -2578,18 +2577,6 @@ dependencies = [
  "zydeco-surface",
  "zydeco-syntax",
  "zydeco-utils",
-]
-
-[[package]]
-name = "zydeco-llvm"
-version = "0.3.0"
-dependencies = [
- "derive_more",
- "zydeco-assembly",
- "zydeco-stackir",
- "zydeco-statics",
- "zydeco-surface",
- "zydeco-syntax",
 ]
 
 [[package]]

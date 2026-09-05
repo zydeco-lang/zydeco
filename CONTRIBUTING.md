@@ -76,9 +76,7 @@ explains the prelude's annotated kind prefix and its use of `@[typeof]` to reuse
 | `zir` | Print first-order SPSLow to stdout. |
 | `zasm` | Print ZASM to stdout; `--execute` instead runs the ZASM interpreter. |
 | `asm` | Print AMD64 assembly to stdout. |
-| `llvm` | Print experimental LLVM IR to stdout. |
 | `exe` (default) | Assemble and link an AMD64 executable. |
-| `llvm-exe` | Attempt an experimental LLVM executable build with `clang`. |
 | `wasm-am`, `wasm-sps` | Write a WebAssembly module using the selected strategy. |
 
 For AMD64 on Linux or macOS, with the corresponding toolchain installed:
@@ -95,7 +93,6 @@ Selecting `--target-os` or `--target-arch` does not install a cross-compilation 
 The default build and runtime directories are `build/` and `runtime/`, relative to the command's working directory.
 AMD64 linking copies runtime sources into the build directory and invokes Cargo there,
 which may fetch runtime dependencies.
-LLVM emission and linking remain experimental and are outside the standard source-test backend matrix.
 
 Build both WebAssembly variants with:
 

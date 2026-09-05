@@ -502,7 +502,6 @@ flowchart TD
     low --> structured[Structured WebAssembly]
     low --> zasm[ZASM lowering and analysis]
     zasm --> amd64[AMD64]
-    zasm --> llvm[Experimental LLVM]
     zasm --> machine[Abstract-machine WebAssembly]
 ```
 
@@ -528,7 +527,7 @@ The interpreter shares none of this; it links the complete program as the refere
 | Linking and interpretation | `lang/dynamics/src` |
 | High SPS and closure conversion | `lang/stackir/src/{sps,sps_low}` |
 | ZASM lowering and allocation analysis | `lang/assembly/src` |
-| Code emission | `lang/{amd64,llvm,wasm-am,wasm-sps}/src` |
+| Code emission | `lang/{amd64,wasm-am,wasm-sps}/src` |
 
 Every completed representation after type checking carries exactly one top-level expression or program root.
 `DynamicsProgram`, `BranchJoinProgram`, `SpsLowProgram`, and `AssemblyProgram` pair
@@ -759,7 +758,7 @@ with each argument either `UInt64` or `Bytes`.
 A byte buffer expands into a borrowed pointer and length, and the flattened C call admits at most six arguments.
 The checker records one typed call plan used by the Unix interpreter's libffi path and the AMD64 emitter.
 Checking a declaration does not load its library or validate the real C symbol's signature.
-LLVM, both WebAssembly backends, and the ZASM interpreter reject native foreign imports.
+Both WebAssembly backends and the ZASM interpreter reject native foreign imports.
 The [returning C import design](docs/proposals/c-ffi.md) specifies the supported ABI, borrowing obligations,
 loader behavior, and acceptance and rejection tests.
 
@@ -848,7 +847,6 @@ but the embedding must supply the imports before invoking either function.
 - The standard native test path is AMD64 on Linux or macOS.
   The CLI defaults to the host architecture, so an ARM host needs explicit AMD64 target selection
   and appropriate tools for native execution.
-  LLVM emission and linking remain experimental, and the CLI rejects some unsupported local-variable layouts.
 - WebAssembly requires a `zydeco` host embedding.
   Both variants have growing, non-collecting heaps.
   The abstract-machine variant has a fixed one-megabyte operand/control stack;

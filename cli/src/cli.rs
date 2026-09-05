@@ -6,12 +6,10 @@ pub enum BuildTarget {
     Zir,
     Zasm,
     Asm,
-    Llvm,
     WasmAm,
     WasmSps,
     #[default]
     Exe,
-    LlvmExe,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]

@@ -8,7 +8,7 @@ and records the resulting annotations in a `StaticsArena`.
 
 ```markdown
 textual -> bitter -> scoped -> check -> validate -+-> dynamics
-                                                  +-> stackir -> assembly -> amd64 / llvm
+                                                  +-> stackir -> assembly -> amd64
 ```
 
 The type checker is the first phase that separates term categories and assigns explicit kinds and types.

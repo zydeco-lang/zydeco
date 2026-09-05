@@ -69,7 +69,7 @@ Finally the bridge consumes the `Ret UInt64` continuation and resumes it with th
 
 Native linking adds `-l<library>`; the interpreter searches for `lib<library>.so` or `lib<library>.dylib`.
 Library installation and platform linker/loader search paths remain the caller's responsibility.
-WebAssembly and LLVM emission currently reject native imports explicitly.
+WebAssembly emission currently rejects native imports explicitly.
 
 ## Examples and checks
 

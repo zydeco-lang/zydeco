@@ -74,10 +74,6 @@ fn xxhash_binding_reaches_the_native_c_call_boundary() {
 fn unsupported_backends_report_the_native_import() {
     let backend = CommandCompiler::default().lower(&FfiCase::path("xxhash.zy")).unwrap();
 
-    assert!(matches!(
-        backend.emit_llvm(TargetArchitecture::Aarch64, TargetOs::Macos),
-        Err(CompileError::ForeignImportUnsupported { backend: "LLVM", .. })
-    ));
     let abstract_machine = backend.emit_wasm_am().unwrap_err();
     assert!(abstract_machine.to_string().contains("XXH"));
     assert!(matches!(abstract_machine, CompileError::WasmAm(_)));
