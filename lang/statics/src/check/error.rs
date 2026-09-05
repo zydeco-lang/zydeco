@@ -95,104 +95,114 @@ pub enum TyckError {
 ///
 /// The checker keeps the payload-rich [`TyckError`] internally. Frontends use
 /// this payload-free category as a diagnostic code.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    PartialEq,
+    strum::EnumString,
+    strum::IntoStaticStr,
+    strum::VariantArray,
+)]
 pub enum TyckDiagnosticCode {
+    #[strum(serialize = "tyck.missing-annotation")]
     MissingAnnotation,
+    #[strum(serialize = "tyck.missing-seal")]
     MissingSeal,
+    #[strum(serialize = "tyck.missing-solution")]
     MissingSolution,
+    #[strum(serialize = "tyck.unconstrained-inference")]
     UnconstrainedInference,
+    #[strum(serialize = "tyck.occurs-check")]
     OccursCheck,
+    #[strum(serialize = "tyck.missing-structure")]
     MissingStructure,
+    #[strum(serialize = "tyck.sort-mismatch")]
     SortMismatch,
+    #[strum(serialize = "tyck.signature-not-type")]
     SignatureNotType,
+    #[strum(serialize = "tyck.typeof-kind")]
     TypeOfKind,
+    #[strum(serialize = "tyck.kind-mismatch")]
     KindMismatch,
+    #[strum(serialize = "tyck.type-mismatch")]
     TypeMismatch,
+    #[strum(serialize = "tyck.type-expected")]
     TypeExpected,
+    #[strum(serialize = "tyck.named-label-mismatch")]
     NamedLabelMismatch,
+    #[strum(serialize = "tyck.missing-named-type-field")]
     MissingNamedTypeField,
+    #[strum(serialize = "tyck.ambiguous-named-type-field")]
     AmbiguousNamedTypeField,
+    #[strum(serialize = "tyck.missing-named-field")]
     MissingNamedField,
+    #[strum(serialize = "tyck.duplicate-named-field")]
     DuplicateNamedField,
+    #[strum(serialize = "tyck.pattern-alias-requires-value")]
     PatternAliasRequiresValue,
+    #[strum(serialize = "tyck.refutable-pattern-alias")]
     RefutablePatternAlias,
+    #[strum(serialize = "tyck.refutable-field-projection-pattern")]
     RefutableFieldProjectionPattern,
+    #[strum(serialize = "tyck.unknown-data-constructor")]
     UnknownDataConstructor,
+    #[strum(serialize = "tyck.unknown-codata-destructor")]
     UnknownCoDataDestructor,
+    #[strum(serialize = "tyck.copattern-step-mismatch")]
     CopatternStepMismatch,
+    #[strum(serialize = "tyck.overlapping-copattern-clauses")]
     OverlappingCopatternClauses,
+    #[strum(serialize = "tyck.multiple-pack-pi-copattern-clauses")]
     MultiplePackPiCopatternClauses,
+    #[strum(serialize = "tyck.non-exhaustive-copattern")]
     NonExhaustiveCopattern,
+    #[strum(serialize = "tyck.coverage")]
     Coverage,
+    #[strum(serialize = "tyck.first-class-value-function")]
     FirstClassValueFunction,
+    #[strum(serialize = "tyck.first-class-package")]
     FirstClassPackage,
+    #[strum(serialize = "tyck.package-witnesses-unavailable")]
     PackageWitnessesUnavailable,
+    #[strum(serialize = "tyck.package-witness-arity-mismatch")]
     PackageWitnessArityMismatch,
+    #[strum(serialize = "tyck.escaping-existential")]
     EscapingExistential,
+    #[strum(serialize = "tyck.invalid-builtin-attachment")]
     InvalidBuiltinAttachment,
+    #[strum(serialize = "tyck.invalid-builtin-signature")]
     InvalidBuiltinSignature,
+    #[strum(serialize = "tyck.conflicting-builtin-role")]
     ConflictingBuiltinRole,
+    #[strum(serialize = "tyck.invalid-foreign-attachment")]
     InvalidForeignAttachment,
+    #[strum(serialize = "tyck.invalid-foreign-classifier")]
     InvalidForeignClassifier,
+    #[strum(serialize = "tyck.conflicting-foreign-import")]
     ConflictingForeignImport,
+    #[strum(serialize = "tyck.missing-builtin-type-role")]
     MissingBuiltinTypeRole,
+    #[strum(serialize = "tyck.ambiguous-builtin-type-role")]
     AmbiguousBuiltinTypeRole,
+    #[strum(serialize = "tyck.integer-literal-out-of-range")]
     IntegerLiteralOutOfRange,
+    #[strum(serialize = "tyck.float-literal-out-of-range")]
     FloatLiteralOutOfRange,
+    #[strum(serialize = "tyck.expressivity")]
     Expressivity,
+    #[strum(serialize = "tyck.not-inlinable")]
     NotInlinable,
+    #[strum(serialize = "tyck.not-inlinable-seal")]
     NotInlinableSeal,
 }
 
 impl TyckDiagnosticCode {
+    /// The stable source-facing spelling of this code.
     pub fn as_str(self) -> &'static str {
-        match self {
-            | Self::MissingAnnotation => "tyck.missing-annotation",
-            | Self::MissingSeal => "tyck.missing-seal",
-            | Self::MissingSolution => "tyck.missing-solution",
-            | Self::UnconstrainedInference => "tyck.unconstrained-inference",
-            | Self::OccursCheck => "tyck.occurs-check",
-            | Self::MissingStructure => "tyck.missing-structure",
-            | Self::SortMismatch => "tyck.sort-mismatch",
-            | Self::SignatureNotType => "tyck.signature-not-type",
-            | Self::TypeOfKind => "tyck.typeof-kind",
-            | Self::KindMismatch => "tyck.kind-mismatch",
-            | Self::TypeMismatch => "tyck.type-mismatch",
-            | Self::TypeExpected => "tyck.type-expected",
-            | Self::NamedLabelMismatch => "tyck.named-label-mismatch",
-            | Self::MissingNamedTypeField => "tyck.missing-named-type-field",
-            | Self::AmbiguousNamedTypeField => "tyck.ambiguous-named-type-field",
-            | Self::MissingNamedField => "tyck.missing-named-field",
-            | Self::DuplicateNamedField => "tyck.duplicate-named-field",
-            | Self::PatternAliasRequiresValue => "tyck.pattern-alias-requires-value",
-            | Self::RefutablePatternAlias => "tyck.refutable-pattern-alias",
-            | Self::RefutableFieldProjectionPattern => "tyck.refutable-field-projection-pattern",
-            | Self::UnknownDataConstructor => "tyck.unknown-data-constructor",
-            | Self::UnknownCoDataDestructor => "tyck.unknown-codata-destructor",
-            | Self::CopatternStepMismatch => "tyck.copattern-step-mismatch",
-            | Self::OverlappingCopatternClauses => "tyck.overlapping-copattern-clauses",
-            | Self::MultiplePackPiCopatternClauses => "tyck.multiple-pack-pi-copattern-clauses",
-            | Self::NonExhaustiveCopattern => "tyck.non-exhaustive-copattern",
-            | Self::Coverage => "tyck.coverage",
-            | Self::FirstClassValueFunction => "tyck.first-class-value-function",
-            | Self::FirstClassPackage => "tyck.first-class-package",
-            | Self::PackageWitnessesUnavailable => "tyck.package-witnesses-unavailable",
-            | Self::PackageWitnessArityMismatch => "tyck.package-witness-arity-mismatch",
-            | Self::EscapingExistential => "tyck.escaping-existential",
-            | Self::InvalidBuiltinAttachment => "tyck.invalid-builtin-attachment",
-            | Self::InvalidBuiltinSignature => "tyck.invalid-builtin-signature",
-            | Self::ConflictingBuiltinRole => "tyck.conflicting-builtin-role",
-            | Self::InvalidForeignAttachment => "tyck.invalid-foreign-attachment",
-            | Self::InvalidForeignClassifier => "tyck.invalid-foreign-classifier",
-            | Self::ConflictingForeignImport => "tyck.conflicting-foreign-import",
-            | Self::MissingBuiltinTypeRole => "tyck.missing-builtin-type-role",
-            | Self::AmbiguousBuiltinTypeRole => "tyck.ambiguous-builtin-type-role",
-            | Self::IntegerLiteralOutOfRange => "tyck.integer-literal-out-of-range",
-            | Self::FloatLiteralOutOfRange => "tyck.float-literal-out-of-range",
-            | Self::Expressivity => "tyck.expressivity",
-            | Self::NotInlinable => "tyck.not-inlinable",
-            | Self::NotInlinableSeal => "tyck.not-inlinable-seal",
-        }
+        self.into()
     }
 }
 
@@ -1059,3 +1069,21 @@ impl<'a> Tycker<'a> {
 }
 
 pub type Result<T> = std::result::Result<T, Box<TyckErrorEntry>>;
+
+#[cfg(test)]
+mod code_tests {
+    use super::*;
+    use strum::VariantArray as _;
+
+    #[test]
+    fn code_spellings_round_trip_through_their_strings() {
+        TyckDiagnosticCode::VARIANTS.iter().for_each(|code| {
+            let parsed = code
+                .as_str()
+                .parse::<TyckDiagnosticCode>()
+                .unwrap_or_else(|error| panic!("{code:?} does not parse: {error}"));
+            assert_eq!(parsed, *code);
+        });
+        assert!("tyck.nonexistent".parse::<TyckDiagnosticCode>().is_err());
+    }
+}
