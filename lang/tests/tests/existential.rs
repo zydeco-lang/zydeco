@@ -1,3 +1,4 @@
+use zydeco_cli::compile::CompileError;
 use zydeco_tests::utils::{CaseError, SourceCase};
 
 struct ExistentialCase;
@@ -18,6 +19,30 @@ impl ExistentialCase {
             | Err(error) => panic!("expected a type error, found: {error:?}"),
         }
     }
+
+    fn assert_first_class_error(source: &str) {
+        match SourceCase::check(source) {
+            | Err(CaseError::Compile(CompileError::Rejected(analysis))) => {
+                let diagnostics = analysis
+                    .outcome()
+                    .diagnostics()
+                    .expect("a rejected analysis carries diagnostics");
+                assert!(
+                    diagnostics
+                        .iter()
+                        .any(|diagnostic| diagnostic.code.as_str() == "tyck.first-class-package"),
+                    "expected a second-class package rejection, found: {:?}",
+                    diagnostics.iter().map(|diagnostic| &diagnostic.message).collect::<Vec<_>>()
+                );
+            }
+            | Err(error) => {
+                panic!("expected a first-class package error, found: {error:?}")
+            }
+            | Ok(()) => {
+                panic!("expected a first-class package error, but the program was accepted")
+            }
+        }
+    }
 }
 
 #[test]
@@ -29,11 +54,13 @@ begin
     exists (X as Int64 : VType) . X
   that
   def packed : Transparent = (Int64, 42) that
-  def consume : Thk (Transparent -> Ret Int64) = {
-    fn ((X, value) : Transparent) => ret value
+  def disclosed : Thk (Ret Int64) = {
+    match packed
+    | (X, value) => ret value
+    end
   } that
 
-  { ! consume packed }
+  disclosed
 end
 "#,
     )
@@ -69,11 +96,13 @@ begin
     #Counter = Int64,
     #zero = 0,
   ) that
-  def consume : Thk (CounterLibrary -> Ret Int64) = {
-    fn ((= Counter, = zero) : CounterLibrary) => ret zero
+  def disclosed : Thk (Ret Int64) = {
+    match library
+    | ((= Counter, = zero)) => ret zero
+    end
   } that
 
-  { ! consume library }
+  disclosed
 end
 "#,
     )
@@ -267,7 +296,7 @@ begin
     0,
     { fn (x : Int64) => ret x },
   ) that
-  def consume_box : Thk (Box -> Ret Int64) = {
+  def consume_box = {
     fn ((X, value, consume) : Box) => ! consume value
   } that
 
@@ -296,14 +325,13 @@ begin
     0,
     { fn (x : Int64) => ret x },
   ) that
-  def yield_box : Thk (Ret Box) = {
-    ret boxed
-  } that
 
   {
-    do (X, value, consume) <- ! yield_box;
-    do status <- ! consume value;
-    ret status
+    match boxed
+    | (X, value, consume) =>
+      do status <- ! consume value;
+      ret status
+    end
   }
 end
 "#,
@@ -393,14 +421,10 @@ begin
   let Box =
     exists (X : VType) . X
   that
-  def repack : Thk (Box -> Ret Box) = {
-    fn (boxed : Box) =>
-      match boxed
-      | (X, value) => ret (X, value)
-      end
-  } that
+  def boxed : Box = (Int64, 0) that
+  let val repack ((X, value) : Box) : Box = (X, value) that
 
-  repack
+  boxed |> repack
 end
 "#,
     )
@@ -415,12 +439,14 @@ begin
   let Transparent =
     exists (X as Int64 : VType) . X
   that
-  def consume : Thk (Transparent -> Ret Int64) = {
-    fn ((X, value) : Transparent) => ret value
-  } that
 
   let packed = pack (X as Int64 : VType) where (42 : X) end in
-  { ! consume packed }
+  let disclosed : Thk (Ret Int64) = {
+    match packed
+    | (X, value) => ret value
+    end
+  } in
+  disclosed
 end
 "#,
     )
@@ -435,12 +461,14 @@ begin
   let Transparent =
     exists (X as Int64 : VType) . X
   that
-  def consume : Thk (Transparent -> Ret Int64) = {
-    fn ((X, value) : Transparent) => ret value
-  } that
 
   let packed = pack (X as Int64) where (42 : X) end in
-  { ! consume packed }
+  let disclosed : Thk (Ret Int64) = {
+    match packed
+    | (X, value) => ret value
+    end
+  } in
+  disclosed
 end
 "#,
     )
@@ -455,12 +483,14 @@ begin
   let Degenerate =
     exists (X as Int64 : VType) . Int64
   that
-  def consume : Thk (Degenerate -> Ret Int64) = {
-    fn ((X, value) : Degenerate) => ret value
-  } that
 
   let packed = pack (X as Int64 : VType) where 42 end in
-  { ! consume packed }
+  let disclosed : Thk (Ret Int64) = {
+    match packed
+    | (X, value) => ret value
+    end
+  } in
+  disclosed
 end
 "#,
     )
@@ -477,12 +507,14 @@ begin
     exists (Y as Char : VType) .
       X
   that
-  def unpack : Thk (Mixed -> Ret Int64) = {
-    fn ((X, Y, value) : Mixed) => ret value
-  } that
 
   let mixed = pack (X as Int64 : VType) (Y as Char : VType) where (7 : X), end in
-  { ! unpack mixed }
+  let disclosed : Thk (Ret Int64) = {
+    match mixed
+    | (X, Y, value) => ret value
+    end
+  } in
+  disclosed
 end
 "#,
     )
@@ -498,15 +530,17 @@ begin
     exists (#Counter = ((Representation as Int64) : VType)) .
       (#zero :: Representation)
   that
-  def consume : Thk (CounterLibrary -> Ret Int64) = {
-    fn ((= Counter, = zero) : CounterLibrary) => ret zero
-  } that
 
   let library =
     pack (#Counter = ((Representation as Int64) : VType))
     where #zero = (0 : Representation) end
   in
-  { ! consume library }
+  let disclosed : Thk (Ret Int64) = {
+    match library
+    | ((= Counter, = zero)) => ret zero
+    end
+  } in
+  disclosed
 end
 "#,
     )
@@ -522,11 +556,13 @@ begin
     exists (X as Int64 : VType) . X
   that
   def packed : Transparent = pack (X as Int64 : VType) where (42 : X) end that
-  def consume : Thk (Transparent -> Ret Int64) = {
-    fn ((X, value) : Transparent) => ret value
+  def disclosed : Thk (Ret Int64) = {
+    match packed
+    | (X, value) => ret value
+    end
   } that
 
-  { ! consume packed }
+  disclosed
 end
 "#,
     )
@@ -593,14 +629,12 @@ begin
   let Library =
     exists (S : VType) . (#state :: S)
   that
-  def repack : Thk (Library -> Ret Library) = {
-    fn ((S, state) : Library) => ret (S, state)
-  } that
+  let val repack ((S, state) : Library) : Library = (S, state) that
 
   let library =
     pack (S : VType) is Switch where #state = (+On () : Switch) end
   in
-  { ! repack library }
+  library |> repack
 end
 "#,
     )
@@ -700,6 +734,77 @@ fn rejects_a_computation_payload() {
 begin
   let packed = pack (X as Int64 : VType) where ret 42 end in
   packed
+end
+"#,
+    );
+}
+
+#[test]
+fn nests_packages_in_products_and_named_components() {
+    ExistentialCase::check(
+        r#"
+begin
+  let Box =
+    exists (X : VType) . X
+  that
+  def boxed : Box = (Int64, 0) that
+  let Module = exists (M : VType) . (Box * Int64) * (#peer :: Box) that
+  def module : Module = ((Int64, (boxed, 0), #peer = boxed)) that
+
+  module
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn rejects_a_plain_computation_arrow_over_a_package_domain() {
+    ExistentialCase::assert_first_class_error(
+        r#"
+begin
+  let Box =
+    exists (X : VType) . X
+  that
+  def consume : Thk (Box -> Ret Int64) = {
+    fn (boxed : Box) => ret 0
+  } that
+  do value <- ! consume (Int64, 0);
+  ! exit value
+end
+"#,
+    );
+}
+
+#[test]
+fn rejects_returning_a_package_from_a_computation() {
+    ExistentialCase::assert_first_class_error(
+        r#"
+begin
+  let Box =
+    exists (X : VType) . X
+  that
+  def boxed : Box = (Int64, 0) that
+  def producer : Thk (Ret Box) = {
+    ret boxed
+  } that
+  ! exit 0
+end
+"#,
+    );
+}
+
+#[test]
+fn rejects_a_package_in_a_constructor_payload() {
+    ExistentialCase::assert_first_class_error(
+        r#"
+begin
+  let Box =
+    exists (X : VType) . X
+  that
+  def boxed : Box = (Int64, 0) that
+  def Holder = data | +Hold : Box end that
+  ! exit 0
 end
 "#,
     );

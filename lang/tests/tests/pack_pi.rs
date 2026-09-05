@@ -220,7 +220,7 @@ begin
     fn ((X, value, _) : Box) => ret value
   } that
 
-  def consume_twice : Thk (Box -> Ret Int64) = {
+  def consume_twice = {
     fn ((X, value, consume) : Box) =>
       do first <- ! reveal (X, value, consume);
       do second <- ! reveal (X, first, consume);

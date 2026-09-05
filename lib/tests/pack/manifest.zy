@@ -8,9 +8,10 @@ begin
     Int64,
     42
   ) that
-  def ! reveal ((Representation, value) : Transparent) : Ret Int64 = ret value that
 
-  do value <- ! reveal packed;
-  do status <- ! int64/sub value 42;
-  ! process/exit status
+  match packed
+  | (Representation, value) =>
+    do status <- ! int64/sub value 42;
+    ! process/exit status
+  end
 end

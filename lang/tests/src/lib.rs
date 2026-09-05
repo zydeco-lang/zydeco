@@ -219,7 +219,7 @@ pub mod utils {
         }
 
         pub fn check_value(source: &str) -> Result<(), CaseError> {
-            Self::check(&format!("ret ({source})"))
+            Self::check(&format!("let case_value = ({source}) in ret ()"))
         }
 
         pub fn check_monadic(source: &str) -> Result<(), CaseError> {
@@ -229,7 +229,7 @@ pub mod utils {
         }
 
         pub fn check_monadic_value(source: &str) -> Result<(), CaseError> {
-            Self::check_monadic(&format!("ret ({source})"))
+            Self::check_monadic(&format!("let case_value = ({source}) in ret ()"))
         }
 
         pub fn check_with_import(source: &str, imported: &str) -> Result<(), CaseError> {
