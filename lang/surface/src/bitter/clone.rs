@@ -54,6 +54,7 @@ impl DeepClone for b::PatId {
                 let pat = pat.deep_clone(desugarer);
                 b::Ctor(name.clone(), pat).into()
             }
+            | b::Pattern::Lit(literal) => b::Pattern::Lit(literal.clone()),
             | b::Pattern::Project(b::ProjectionPattern(field, pattern)) => {
                 b::ProjectionPattern(field.clone(), pattern.deep_clone(desugarer)).into()
             }

@@ -583,6 +583,8 @@ pub enum ValuePattern {
     Var(DefId),
     Named(Named<FieldName, VPatId>),
     Ctor(Ctor<CtorName, VPatId>),
+    /// A refutable numeric-equality pattern on a primitive integer type.
+    Lit(Literal),
     Alias(Alias<VPatId>),
     Triv(Triv),
     VCons(Vec<VPatId>),

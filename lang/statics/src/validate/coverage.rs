@@ -286,6 +286,7 @@ impl MatrixPattern {
                 let nested = Self::from_typed(view.pattern, statics);
                 if matches!(nested, Self::Wildcard) { Self::Wildcard } else { Self::Opaque }
             }
+            | ValuePattern::Lit(_) => Self::Opaque,
         }
     }
 

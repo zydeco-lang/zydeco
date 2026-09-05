@@ -36,6 +36,7 @@ pub enum Pattern {
     Var(DefId),
     Named(Named<FieldName, PatId>),
     Ctor(Ctor<CtorName, PatId>),
+    Lit(Literal),
     Project(ProjectionPattern<FieldName, PatId>),
     View(ViewPattern),
     Alias(Alias<PatId>),

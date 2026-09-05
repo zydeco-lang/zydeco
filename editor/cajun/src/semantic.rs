@@ -443,7 +443,7 @@ impl<'arena> ParameterDefinitions<'arena> {
     fn collect_pattern(&self, pattern: &PatId, definitions: &mut HashSet<DefId>) {
         match &self.scoped.pats[pattern] {
             | Pattern::Ann(Ann { tm, ty: _ }) => self.collect_pattern(tm, definitions),
-            | Pattern::Hole(_) | Pattern::Triv(_) => {}
+            | Pattern::Hole(_) | Pattern::Triv(_) | Pattern::Lit(_) => {}
             | Pattern::Var(definition) => {
                 definitions.insert(*definition);
             }

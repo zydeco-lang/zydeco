@@ -77,7 +77,10 @@ impl<'a> BlockCandidateCollector<'a> {
             | b::Pattern::Cons(patterns) => {
                 patterns.iter().flat_map(|pattern| self.pattern(*pattern)).collect()
             }
-            | b::Pattern::Hole(_) | b::Pattern::Var(_) | b::Pattern::Triv(_) => Vec::new(),
+            | b::Pattern::Hole(_)
+            | b::Pattern::Var(_)
+            | b::Pattern::Lit(_)
+            | b::Pattern::Triv(_) => Vec::new(),
         }
     }
 

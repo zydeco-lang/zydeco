@@ -589,6 +589,7 @@ impl PackPiPatternTranslation {
             | ValuePattern::Hole(_)
             | ValuePattern::Var(_)
             | ValuePattern::Ctor(_)
+            | ValuePattern::Lit(_)
             | ValuePattern::Alias(_)
             | ValuePattern::Triv(_)
             | ValuePattern::VCons(_)
@@ -1401,6 +1402,10 @@ fn value_pattern_translation(
             (env, pattern)
         }
         | VPat::Triv(Triv) => Triv.mbuild(tycker, env)?,
+        | VPat::Lit(literal) => {
+            let pattern = Alloc::alloc(tycker, ValuePattern::Lit(literal), ty_, &env.ty);
+            (env, pattern)
+        }
         | VPat::VCons(components) => {
             let mut items =
                 components.into_iter().map(|tm| cs::TermLift { tm }).collect::<Vec<_>>();

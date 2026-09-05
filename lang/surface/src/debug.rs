@@ -75,6 +75,7 @@ impl<'a, P: DebugArena> Pretty<'a, Formatter<'a, P>> for PatId {
             | Pattern::Var(p) => f.arena.pattern_var(f, *p),
             | Pattern::Named(p) => p.pretty(f),
             | Pattern::Ctor(p) => p.pretty(f),
+            | Pattern::Lit(p) => p.pretty(f),
             | Pattern::Project(p) => p.pretty(f),
             | Pattern::View(p) => p.pretty(f),
             | Pattern::Alias(p) => p.pretty(f),

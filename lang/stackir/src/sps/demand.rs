@@ -164,6 +164,8 @@ impl DefinitionDemand {
             | ss::ValuePattern::Ctor(_) => Demand::Used,
             // The view's function result is matched structurally; keep it whole.
             | ss::ValuePattern::View(_) => Demand::Used,
+            // Comparing against a literal reads the scrutinee whole.
+            | ss::ValuePattern::Lit(_) => Demand::Used,
             | ss::ValuePattern::Hole(_) | ss::ValuePattern::Triv(_) => Demand::Absent,
         }
     }
@@ -382,6 +384,7 @@ impl DefinitionDemand {
                 self.visit_value(statics, &view.function, Demand::Used);
                 self.visit_pattern(statics, &view.pattern);
             }
+            | ss::ValuePattern::Lit(_) => {}
         }
     }
 }

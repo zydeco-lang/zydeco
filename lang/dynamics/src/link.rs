@@ -153,6 +153,7 @@ impl Link for ss::VPatId {
                 let pat = pat.link(statics);
                 Ctor(ctor, pat).into()
             }
+            | VPat::Lit(literal) => ds::ValuePattern::Lit(literal.clone()),
             | VPat::Alias(Alias(patterns)) => {
                 let patterns = patterns.iter().map(|pattern| pattern.link(statics)).collect();
                 Alias(ds::ConsN::from_vec(patterns).unwrap()).into()

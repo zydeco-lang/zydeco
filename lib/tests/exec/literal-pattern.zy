@@ -1,0 +1,107 @@
+-- Integer literal patterns select match arms by numeric equality.
+begin
+  let make_std = @(import("../../std/std.zy")) that
+  param (/core; /representations; builtin) : @(import("../../std/builtin.zy")) that
+  let (/VType; /Unit; /Ret) = core that
+  let (/Int64) = representations/i64 that
+  let (/Int8) = representations/i8 that
+  let (/int64; /process) = builtin |> make_std that
+
+  let Tagged =
+    data
+    | +Tagged : Int64
+    | +Other : Unit
+    end
+  that
+
+  def ! classify64 (n : Int64) : Ret Int64 =
+    match n
+    | 0 => ret 1
+    | 1 => ret 2
+    | 42 => ret 3
+    | -7 => ret 4
+    | _ => ret 5
+    end
+  that
+
+  def ! classify8 (n : Int8) : Ret Int64 =
+    match n
+    | 0 => ret 1
+    | 127 => ret 2
+    | _ => ret 3
+    end
+  that
+
+  def ! classifyTagged (tagged : Tagged) : Ret Int64 =
+    match tagged
+    | +Tagged(0) => ret 1
+    | +Tagged(_) => ret 2
+    | +Other(_) => ret 3
+    end
+  that
+
+  def ! classifyPair (pair : Int64 * Int64) : Ret Int64 =
+    match pair
+    | (0, 1) => ret 1
+    | (0, _) => ret 2
+    | _ => ret 3
+    end
+  that
+
+  def ! mismatch (expected : Int64) (found : Int64) : Ret Int64 =
+    do equal <- ! int64/eq expected found;
+    match equal
+    | +True() => ret 0
+    | +False() => ret 1
+    end
+  that
+
+  do a <- ! classify64 0;
+  do b <- ! classify64 1;
+  do c <- ! classify64 42;
+  do d <- ! classify64 -7;
+  do e <- ! classify64 9;
+  do f <- ! classify8 0;
+  do g <- ! classify8 127;
+  do h <- ! classify8 -1;
+  do i <- ! classifyTagged +Tagged(0);
+  do j <- ! classifyTagged +Tagged(5);
+  do k <- ! classifyTagged +Other(());
+  do l <- ! classifyPair (0, 1);
+  do m <- ! classifyPair (0, 2);
+  do n <- ! classifyPair (7, 7);
+  let five : Int64 = 5 that
+  do bound <-
+    let 5 = five in
+    ret 0;
+  do s1 <- ! mismatch 1 a;
+  do s2 <- ! mismatch 2 b;
+  do s3 <- ! mismatch 3 c;
+  do s4 <- ! mismatch 4 d;
+  do s5 <- ! mismatch 5 e;
+  do s6 <- ! mismatch 1 f;
+  do s7 <- ! mismatch 2 g;
+  do s8 <- ! mismatch 3 h;
+  do s9 <- ! mismatch 1 i;
+  do s10 <- ! mismatch 2 j;
+  do s11 <- ! mismatch 3 k;
+  do s12 <- ! mismatch 1 l;
+  do s13 <- ! mismatch 2 m;
+  do s14 <- ! mismatch 3 n;
+  do s15 <- ! mismatch 0 bound;
+  do t1 <- ! int64/add s1 s2;
+  do t2 <- ! int64/add t1 s3;
+  do t3 <- ! int64/add t2 s4;
+  do t4 <- ! int64/add t3 s5;
+  do t5 <- ! int64/add t4 s6;
+  do t6 <- ! int64/add t5 s7;
+  do t7 <- ! int64/add t6 s8;
+  do t8 <- ! int64/add t7 s9;
+  do t9 <- ! int64/add t8 s10;
+  do t10 <- ! int64/add t9 s11;
+  do t11 <- ! int64/add t10 s12;
+  do t12 <- ! int64/add t11 s13;
+  do t13 <- ! int64/add t12 s14;
+  do status <- ! int64/add t13 s15;
+  ! process/exit status
+end

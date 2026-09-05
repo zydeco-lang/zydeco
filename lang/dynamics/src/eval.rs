@@ -91,6 +91,21 @@ impl<'rt> Eval<'rt> for Assign<RcVPat, SemValue> {
                 | SemValue::Literal(_)
                 | SemValue::Host(_) => unreachable!(),
             },
+            | VPat::Lit(pattern) => match sem {
+                | SemValue::Literal(found) => {
+                    if found != *pattern {
+                        return Step::Done(Err(()));
+                    }
+                }
+                // A value of another shape can never equal a literal, so the
+                // arm simply fails rather than reporting an impossible state.
+                | SemValue::Closure(_)
+                | SemValue::Thunk(_)
+                | SemValue::Ctor(_)
+                | SemValue::Triv(_)
+                | SemValue::VCons(_)
+                | SemValue::Host(_) => return Step::Done(Err(())),
+            },
             | VPat::Alias(Alias(patterns)) => {
                 for pattern in patterns {
                     match Assign(pattern.to_owned(), sem.clone()).eval(runtime) {

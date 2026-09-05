@@ -362,6 +362,7 @@ impl Desugar for t::PatId {
                 let pat = pat.desugar(desugarer)?;
                 Alloc::alloc(desugarer, b::Ctor(name, pat).into(), self.into())
             }
+            | Pat::Lit(literal) => Alloc::alloc(desugarer, b::Pattern::Lit(literal), self.into()),
             | Pat::Project(t::ProjectionPattern(field, pattern)) => {
                 let pattern = pattern.desugar(desugarer)?;
                 Alloc::alloc(desugarer, b::ProjectionPattern(field, pattern).into(), self.into())

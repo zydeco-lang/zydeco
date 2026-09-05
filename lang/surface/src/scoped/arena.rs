@@ -289,6 +289,10 @@ impl LocalFoldScoped<()> for ContextCollector<'_> {
                 self.ctxs_pat_local.insert_new(pat, Context::new());
                 self.coctxs_pat_local.insert_new(pat, CoContext::new());
             }
+            | Pattern::Lit(_) => {
+                self.ctxs_pat_local.insert_new(pat, Context::new());
+                self.coctxs_pat_local.insert_new(pat, CoContext::new());
+            }
             | Pattern::Var(inner) => {
                 let def = inner;
                 self.ctxs_pat_local.insert_new(pat, Context::singleton(def));
@@ -661,6 +665,7 @@ mod impl_obverse_local_post {
                 | Pattern::Hole(inner) => {
                     let Hole = inner;
                 }
+                | Pattern::Lit(_) => {}
                 | Pattern::Var(inner) => {
                     let def = inner;
                     def.obverse_local_post(f, ctx);

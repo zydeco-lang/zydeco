@@ -60,7 +60,7 @@ impl TextArena {
                 }
             },
             | EntityId::Pat(pattern) => match &self.pats[&pattern] {
-                | Pattern::Hole(_) => Vec::new(),
+                | Pattern::Hole(_) | Pattern::Lit(_) => Vec::new(),
                 | Pattern::Var(definition) => vec![(*definition).into()],
                 | Pattern::Ann(Ann { tm, ty }) => vec![(*tm).into(), (*ty).into()],
                 | Pattern::Manifest(ManifestPattern { binder, definition }) => {

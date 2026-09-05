@@ -834,6 +834,7 @@ impl<'a> LintChecker<'a> {
                 .filter_map(|alias| self.require(referenced_by, LintNode::VPat(*alias)))
                 .collect(),
             | ValuePattern::Triv(_) => Vec::new(),
+            | ValuePattern::Lit(_) => Vec::new(),
             | ValuePattern::VCons(components) => components
                 .iter()
                 .filter_map(|component| self.require(referenced_by, LintNode::VPat(*component)))

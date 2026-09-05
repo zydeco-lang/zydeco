@@ -395,6 +395,7 @@ impl VPatId {
             | VPat::Var(def) => (Some(def), ty),
             | VPat::Named(_) => (None, ty),
             | VPat::Ctor(_) => (None, ty),
+            | VPat::Lit(_) => (None, ty),
             | VPat::Alias(_) => (None, ty),
             | VPat::Triv(_) => (None, ty),
             | VPat::VCons(_) => (None, ty),
@@ -430,6 +431,7 @@ impl VPatId {
                 | ValuePattern::Hole(_)
                 | ValuePattern::Var(_)
                 | ValuePattern::Ctor(_)
+                | ValuePattern::Lit(_)
                 | ValuePattern::Triv(_) => return None,
                 | ValuePattern::View(_) => return None,
             }
@@ -451,6 +453,7 @@ impl VPatId {
                 Alloc::alloc(tycker, Named(name, inner), ty, &env)
             }
             | VPat::Triv(Triv) => Alloc::alloc(tycker, Triv, ty, &env),
+            | VPat::Lit(literal) => Alloc::alloc(tycker, literal, ty, &env),
             | VPat::Ctor(vpat) => {
                 let Ctor(ctor, vpat) = vpat;
                 let vpat_ = vpat.reify(tycker);

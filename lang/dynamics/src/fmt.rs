@@ -41,6 +41,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for ValuePattern {
             | VPat::Hole(Hole) => RcDoc::text("_"),
             | VPat::Var(def) => def.pretty(f),
             | VPat::Ctor(vpat) => vpat.pretty(f),
+            | VPat::Lit(literal) => literal.pretty(f),
             | VPat::Alias(Alias(patterns)) => RcDoc::concat([
                 RcDoc::text("("),
                 RcDoc::intersperse(

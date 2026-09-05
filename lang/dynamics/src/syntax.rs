@@ -29,6 +29,8 @@ pub enum ValuePattern {
     Hole(Hole),
     Var(DefId),
     Ctor(Ctor<CtorName, RcVPat>),
+    /// A refutable numeric-equality pattern on a primitive integer type.
+    Lit(Literal),
     Alias(Alias<RcVPat>),
     Triv(Triv),
     VCons(Vec<RcVPat>),

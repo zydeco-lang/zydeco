@@ -276,6 +276,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
             | VPat::Var(vpat) => vpat.pretty(f),
             | VPat::Named(vpat) => vpat.pretty(f),
             | VPat::Ctor(vpat) => vpat.pretty(f),
+            | VPat::Lit(literal) => literal.pretty(f),
             | VPat::Alias(vpat) => vpat.pretty(f),
             | VPat::Triv(vpat) => vpat.pretty(f),
             | VPat::VCons(vpat) => vpat.pretty(f),

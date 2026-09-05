@@ -77,6 +77,7 @@ impl<'arena> GrammarContext<'arena> {
             | Pattern::Hole(_)
             | Pattern::Var(_)
             | Pattern::Ctor(_)
+            | Pattern::Lit(_)
             | Pattern::View(_)
             | Pattern::Alias(_)
             | Pattern::Paren(_) => RenderedPatternClass::Pattern,

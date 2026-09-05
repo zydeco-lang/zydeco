@@ -259,6 +259,7 @@ impl Resolve for PatId {
                 let Hole = pat;
                 local
             }
+            | Pattern::Lit(_) => local,
             | Pattern::Triv(Triv) => local,
             | Pattern::Var(def) => {
                 let () = def.resolve(resolver, ())?;

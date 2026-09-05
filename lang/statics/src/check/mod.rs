@@ -1379,6 +1379,7 @@ impl ExistentialProjectionPattern {
             | ss::ValuePattern::Named(ss::Named(_, inner)) => Self::whole_definition(tycker, inner),
             | ss::ValuePattern::Hole(_)
             | ss::ValuePattern::Ctor(_)
+            | ss::ValuePattern::Lit(_)
             | ss::ValuePattern::Alias(_)
             | ss::ValuePattern::Triv(_)
             | ss::ValuePattern::VCons(_)
@@ -1400,6 +1401,7 @@ impl ValuePatternShape {
             }
             | ss::ValuePattern::Named(ss::Named(_, inner)) => Self::is_irrefutable(tycker, *inner),
             | ss::ValuePattern::Ctor(_) => false,
+            | ss::ValuePattern::Lit(_) => false,
             | ss::ValuePattern::Alias(ss::Alias(patterns)) => {
                 patterns.iter().all(|pattern| Self::is_irrefutable(tycker, *pattern))
             }
@@ -1413,6 +1415,24 @@ impl ValuePatternShape {
 }
 
 impl Tycker<'_> {
+    /// Peel named wrappers and inference fills to a primitive type, if the
+    /// type resolves to one.
+    fn primitive_type_of(&self, ty: ss::TypeId) -> Option<ss::PrimitiveType> {
+        match self.statics.types_pre.get(&ty)?.to_owned() {
+            | ss::Fillable::Fill(fill) => match self.statics.solus.get(&fill) {
+                | Some(ss::AnnId::Type(solution)) => self.primitive_type_of(*solution),
+                | _ => None,
+            },
+            | ss::Fillable::Done(ss::Type::Primitive(ss::PrimitiveTy(primitive))) => {
+                Some(primitive)
+            }
+            | ss::Fillable::Done(ss::Type::Named(ss::Named(_, inner))) => {
+                self.primitive_type_of(inner)
+            }
+            | ss::Fillable::Done(_) => None,
+        }
+    }
+
     /// The product over the components remaining after a prefix has been
     /// consumed: no components is `Unit`, one component is itself, and
     /// several rejoin as one product.
@@ -1448,6 +1468,7 @@ impl Tycker<'_> {
             | su::Pattern::Hole(_)
             | su::Pattern::Var(_)
             | su::Pattern::Ctor(_)
+            | su::Pattern::Lit(_)
             | su::Pattern::Triv(_)
             | su::Pattern::Cons(_) => false,
         }
@@ -1695,6 +1716,7 @@ impl PackageWitnessProjectionBuilder {
             | ss::ValuePattern::Hole(_)
             | ss::ValuePattern::Var(_)
             | ss::ValuePattern::Ctor(_)
+            | ss::ValuePattern::Lit(_)
             | ss::ValuePattern::Triv(_)
             | ss::ValuePattern::View(_) => ss::PackageWitnessProjection::Ignore,
         }
@@ -2921,6 +2943,7 @@ impl PackPiPatternSkolems {
             | su::Pattern::Hole(_)
             | su::Pattern::Var(_)
             | su::Pattern::Ctor(_)
+            | su::Pattern::Lit(_)
             | su::Pattern::Alias(_)
             | su::Pattern::Triv(_) => tycker.err_k(
                 TyckError::PackageWitnessArityMismatch {
@@ -3750,6 +3773,52 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                     tycker.statics.env_vpat.insert_new(outcome.id, self.info.clone());
                     tycker.statics.data_pat_hints.insert_new(outcome.id, data_id.to_owned());
                     args_out_ann.with_annotation(PatAnnId::Value(outcome.id, outcome.ann))
+                }
+            },
+            | Pat::Lit(literal) => match switch {
+                | Switch::Syn => {
+                    tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
+                }
+                | Switch::Ana(ann) => {
+                    let AnnId::Type(expected) = ann else {
+                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                    };
+                    let expected_unroll =
+                        expected.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
+                    match tycker.primitive_type_of(expected_unroll) {
+                        | Some(ss::PrimitiveType::Integer(integer_type)) => {
+                            use zydeco_syntax::Literal;
+                            let Literal::Integer(i) = literal else {
+                                tycker.err_k(
+                                    TyckError::Expressivity(
+                                        "literal patterns support integer literals only",
+                                    ),
+                                    std::panic::Location::caller(),
+                                )?
+                            };
+                            let value = i.value();
+                            let Some(i) = i.with_type(integer_type) else {
+                                tycker.err_k(
+                                    TyckError::IntegerLiteralOutOfRange { value, integer_type },
+                                    std::panic::Location::caller(),
+                                )?
+                            };
+                            let lit = Alloc::alloc(
+                                tycker,
+                                ss::ValuePattern::Lit(Literal::Integer(i)),
+                                expected,
+                                &self.info,
+                            );
+                            self.mk(PatternCheck::new(PatAnnId::Value(lit, expected)))
+                        }
+                        | Some(_) | None => tycker.err_k(
+                            TyckError::TypeExpected {
+                                expected: "an integer primitive type".to_string(),
+                                found: expected_unroll,
+                            },
+                            std::panic::Location::caller(),
+                        )?,
+                    }
                 }
             },
             | Pat::Alias(su::Alias(patterns)) => match switch {
@@ -8377,26 +8446,6 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 }
                 | Switch::Ana(annotation) => {
                     let switch = Switch::Ana(annotation);
-                    fn primitive_type(
-                        tycker: &Tycker<'_>, ty: ss::TypeId,
-                    ) -> Option<ss::PrimitiveType> {
-                        match tycker.statics.types_pre.get(&ty)?.to_owned() {
-                            | ss::Fillable::Fill(fill) => match tycker.statics.solus.get(&fill) {
-                                | Some(ss::AnnId::Type(solution)) => {
-                                    primitive_type(tycker, *solution)
-                                }
-                                | _ => None,
-                            },
-                            | ss::Fillable::Done(ss::Type::Primitive(ss::PrimitiveTy(
-                                primitive,
-                            ))) => Some(primitive),
-                            | ss::Fillable::Done(ss::Type::Named(ss::Named(_, inner))) => {
-                                primitive_type(tycker, inner)
-                            }
-                            | ss::Fillable::Done(_) => None,
-                        }
-                    }
-
                     fn literal_type_k(
                         tycker: &mut Tycker<'_>, env: &ss::TyEnv, switch: Switch<AnnId>,
                         primitive: ss::PrimitiveType,
@@ -8421,7 +8470,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             let (ty, integer_type) = match switch {
                                 | Switch::Syn => unreachable!("the synth path is query-produced"),
                                 | Switch::Ana(AnnId::Type(ty)) => {
-                                    match primitive_type(tycker, ty) {
+                                    match tycker.primitive_type_of(ty) {
                                         | Some(ss::PrimitiveType::Integer(integer_type)) => {
                                             (ty, integer_type)
                                         }
@@ -8453,7 +8502,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             let (ty, float_type) = match switch {
                                 | Switch::Syn => unreachable!("the synth path is query-produced"),
                                 | Switch::Ana(AnnId::Type(ty)) => {
-                                    match primitive_type(tycker, ty) {
+                                    match tycker.primitive_type_of(ty) {
                                         | Some(ss::PrimitiveType::Float(float_type)) => {
                                             (ty, float_type)
                                         }

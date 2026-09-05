@@ -181,6 +181,7 @@ impl<'graph> TextualProgramBuilder<'graph> {
                 .into()
             }
             | t::Pattern::Hole(_) => t::Hole.into(),
+            | t::Pattern::Lit(literal) => t::Pattern::Lit(literal),
             | t::Pattern::Var(definition) => self.definition(source, definition).into(),
             | t::Pattern::Named(t::Named(name, inner)) => {
                 t::Named(name, self.pattern(source, inner)?).into()

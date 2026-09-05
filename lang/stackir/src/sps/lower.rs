@@ -258,19 +258,22 @@ impl<'a> Lowerer<'a> {
         def
     }
 
-    fn pattern_contains_view(&self, pattern: ss::VPatId) -> bool {
+    /// Whether a pattern must be lowered through the match-plan machinery
+    /// instead of a structural binder: it contains a view application or a
+    /// refutable literal row, possibly nested under other patterns.
+    fn pattern_needs_match_plan(&self, pattern: ss::VPatId) -> bool {
         match &self.statics.vpats[&pattern] {
-            | ss::ValuePattern::View(_) => true,
+            | ss::ValuePattern::View(_) | ss::ValuePattern::Lit(_) => true,
             | ss::ValuePattern::Named(Named(_, pattern))
             | ss::ValuePattern::Ctor(Ctor(_, pattern))
             | ss::ValuePattern::SCons(ss::ConsN(_, pattern)) => {
-                self.pattern_contains_view(*pattern)
+                self.pattern_needs_match_plan(*pattern)
             }
             | ss::ValuePattern::Alias(Alias(patterns)) => {
-                patterns.iter().any(|pattern| self.pattern_contains_view(*pattern))
+                patterns.iter().any(|pattern| self.pattern_needs_match_plan(*pattern))
             }
             | ss::ValuePattern::VCons(patterns) => {
-                patterns.iter().any(|pattern| self.pattern_contains_view(*pattern))
+                patterns.iter().any(|pattern| self.pattern_needs_match_plan(*pattern))
             }
             | ss::ValuePattern::Hole(_) | ss::ValuePattern::Var(_) | ss::ValuePattern::Triv(_) => {
                 false
@@ -283,7 +286,7 @@ impl<'a> Lowerer<'a> {
     fn lower_value_pattern_bindings(
         &mut self, pattern: ss::VPatId, bindee: ValueId, site: Option<ss::TermId>,
     ) -> Vec<ValueStep> {
-        if !self.pattern_contains_view(pattern) {
+        if !self.pattern_needs_match_plan(pattern) {
             return vec![ValueStep::Bind(ValueBinding {
                 binder: pattern.lower(self, ()),
                 bindee,
@@ -354,6 +357,9 @@ impl<'a> Lowerer<'a> {
             }
             | ss::ValuePattern::Hole(_) | ss::ValuePattern::Var(_) | ss::ValuePattern::Triv(_) => {
                 unreachable!("a view-free pattern is lowered by the structural fast path")
+            }
+            | ss::ValuePattern::Lit(_) => {
+                unreachable!("a literal pattern is refutable and cannot bind a value")
             }
         }
     }
@@ -506,12 +512,48 @@ impl<'a> Lowerer<'a> {
                         };
                         self.lower_match_plan(transformed, stack, site)
                     }
+                    | ss::ValuePattern::Lit(literal) => {
+                        let ss::Literal::Integer(integer) = literal else {
+                            unreachable!("a checked literal pattern carries an integer literal")
+                        };
+                        let integer_type = integer
+                            .integer_type()
+                            .expect("a checked integer literal carries its integer type");
+                        let role = zydeco_syntax::BuiltinValueRole::Integer(
+                            integer_type,
+                            zydeco_syntax::IntegerOperation::Eq,
+                        );
+                        let builtin = Builtin::for_role(&self.arena.admin.builtins, role)
+                            .expect("the equality operator is a known builtin");
+                        // The same host-function closure the Builtin package
+                        // materializes for `eq`: the raw branch primitive
+                        // `int64_eq_branch(a, b, then, else)`. Force it with
+                        // the scrutinee and literal as operands and the two
+                        // plans as continuations.
+                        let operator = builtin.make_function(self);
+                        let success_stack = Bullet.build(self, site);
+                        let success_body = self.lower_match_plan(*success, success_stack, site);
+                        let then = Closure { stack: Bullet, body: success_body }.build(self, site);
+                        let failure_stack = Bullet.build(self, site);
+                        let failure_body =
+                            self.lower_match_plan((*failure).clone(), failure_stack, site);
+                        let otherwise =
+                            Closure { stack: Bullet, body: failure_body }.build(self, site);
+                        let scrut: ValueId = scrutinee.build(self, site);
+                        let literal_value: ValueId =
+                            zydeco_syntax::Literal::Integer(integer).build(self, site);
+                        let stack = Cons(otherwise, stack).build(self, site);
+                        let stack = Cons(then, stack).build(self, site);
+                        let stack = Cons(literal_value, stack).build(self, site);
+                        let stack = Cons(scrut, stack).build(self, site);
+                        SForce { thunk: operator, stack }.build(self, site)
+                    }
                 }
             }
         }
     }
 
-    fn lower_view_match(
+    fn lower_plan_match(
         &mut self, scrut: ValueId, arms: &[Matcher<ss::VPatId, ss::CompuId>], stack: StackId,
         site: Option<ss::TermId>,
     ) -> CompuId {
@@ -533,6 +575,7 @@ impl<'a> Lowerer<'a> {
             | ss::ValuePattern::View(view) => self.is_coprod_pattern(view.pattern),
             | ss::ValuePattern::Hole(_)
             | ss::ValuePattern::Var(_)
+            | ss::ValuePattern::Lit(_)
             | ss::ValuePattern::Triv(_)
             | ss::ValuePattern::VCons(_) => false,
         }
@@ -777,6 +820,11 @@ impl Lower for ss::VPatId {
             | SSVPat::View(_) => {
                 unreachable!("view patterns must be expanded before structural Stack IR lowering")
             }
+            | SSVPat::Lit(_) => {
+                unreachable!(
+                    "literal patterns must be expanded before structural Stack IR lowering"
+                )
+            }
         };
         // Create new VPatId in stack arena and store the mapping
         stack_vpat.build(lo, Some(ss_pat_id))
@@ -904,7 +952,7 @@ impl Lower for ss::CompuId {
             | Compu::Hole(Hole) => SHole(stack).build(lo, site),
             | Compu::VAbs(Abs(param, body)) => {
                 let body_stack = Bullet.build(lo, site);
-                let (param_vpat, body_compu) = if lo.pattern_contains_view(param) {
+                let (param_vpat, body_compu) = if lo.pattern_needs_match_plan(param) {
                     let argument = lo.alloc_admin_def("__view_argument__");
                     let param_vpat = argument.build(lo, None);
                     let plan = MatchPlan::Pattern {
@@ -960,7 +1008,7 @@ impl Lower for ss::CompuId {
                 body.lower_into(lo, move |value, lo| SReturn { stack, value }.build(lo, site))
             }
             | Compu::Do(Bind { binder, bindee, tail }) => {
-                let (binder_vpat, tail_compu) = if lo.pattern_contains_view(binder) {
+                let (binder_vpat, tail_compu) = if lo.pattern_needs_match_plan(binder) {
                     let returned = lo.alloc_admin_def("__view_returned__");
                     let binder_vpat = returned.build(lo, None);
                     let plan = MatchPlan::Pattern {
@@ -986,7 +1034,7 @@ impl Lower for ss::CompuId {
                 }
                 let bindee = bindee.lower(lo, ());
                 bindee.lower_into(lo, move |bindee, lo| {
-                    if lo.pattern_contains_view(binder) {
+                    if lo.pattern_needs_match_plan(binder) {
                         let scrutinee = lo.alloc_admin_def("__view_let__");
                         let binder_vpat = scrutinee.build(lo, None);
                         let plan = MatchPlan::Pattern {
@@ -1005,12 +1053,12 @@ impl Lower for ss::CompuId {
                 })
             }
             | Compu::Match(Match { scrut, arms }) => {
-                let has_view = arms.iter().any(|arm| lo.pattern_contains_view(arm.binder));
-                let is_coprod = !has_view && lo.is_coprod_match(&arms);
+                let needs_plan = arms.iter().any(|arm| lo.pattern_needs_match_plan(arm.binder));
+                let is_coprod = !needs_plan && lo.is_coprod_match(&arms);
                 let scrut = scrut.lower(lo, ());
                 scrut.lower_into(lo, move |scrut, lo| {
-                    if has_view {
-                        lo.lower_view_match(scrut, &arms, stack, site)
+                    if needs_plan {
+                        lo.lower_plan_match(scrut, &arms, stack, site)
                     } else if is_coprod {
                         let lowered_arms = arms
                             .iter()

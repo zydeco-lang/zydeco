@@ -30,6 +30,7 @@ runtime_source!(interpreter, "tests/exec/interpreter.zydeco");
 runtime_source!(list, "tests/exec/list.zydeco");
 runtime_source!(listm, "tests/exec/listm.zydeco");
 runtime_source!(literal, "tests/exec/literal.zy");
+runtime_source!(literal_pattern, "tests/exec/literal-pattern.zy");
 runtime_source!(loop_, "tests/exec/loop.zydeco");
 runtime_source!(loopy, "tests/exec/loopy.zy");
 runtime_source!(named_tuple, "tests/exec/named-tuple.zy");

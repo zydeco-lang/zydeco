@@ -19,6 +19,7 @@ impl Binders for PatId {
                 let Hole = pat;
                 rpds::HashTrieMapSync::new_sync()
             }
+            | Pattern::Lit(_) => rpds::HashTrieMapSync::new_sync(),
             | Pattern::Triv(Triv) => rpds::HashTrieMapSync::new_sync(),
             | Pattern::Var(pat) => {
                 let def = pat;

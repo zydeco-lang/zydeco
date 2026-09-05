@@ -1270,6 +1270,7 @@ impl<'arena> PrettyFormatter<'arena> {
             | Pattern::Ctor(Ctor(name, inner)) => {
                 self.constructor(name).append(self.pattern_constructor_argument(*inner))
             }
+            | Pattern::Lit(literal) => self.literal(literal),
             | Pattern::Project(ProjectionPattern(field, inner)) => {
                 self.projection_pattern(pattern, field, *inner)
             }

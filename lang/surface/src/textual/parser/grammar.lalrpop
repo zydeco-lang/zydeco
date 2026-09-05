@@ -255,6 +255,7 @@ Pattern: ParsedNode<Pattern> = {
     <Hole> => ParsedNode::Syntax(<>.into()),
     <DefId> => ParsedNode::Syntax(<>.into()),
     <ctor:CtorName> <pat:PatId> => ParsedNode::Syntax(Ctor(<>).into()),
+    <Literal> => ParsedNode::Syntax(Pattern::Lit(<>).into()),
     "(" <binder:PatternAnnId> "as" <definition:TermId> ")" => {
         ParsedNode::Syntax(ManifestPattern { binder, definition }.into())
     },
