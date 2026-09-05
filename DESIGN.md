@@ -494,6 +494,13 @@ SPS is stack-passing style: calls and continuations become explicit in the inter
 High SPS uses lexical branch-join syntax; closure conversion produces first-order SPSLow with code labels.
 ZASM makes the control-flow graph explicit for assembly-derived backends.
 
+Before lowering into SPS, a demand analysis over the checked root records how each binding's value
+is consumed: not at all, at specific product positions, or whole. The lowering skips absent bindings,
+and the host Builtin package materializes only demanded operations, so emitted programs contain the
+operations a program calls rather than the whole standard-library signature. The interpreter shares
+none of this; it links the complete program as the reference semantics.
+`docs/proposals/demand-analysis.md` develops the traversal rules and their soundness invariants.
+
 | Responsibility | Implementation |
 | --- | --- |
 | Source graph, overlays, and shared analysis | `lang/session/src/source` |
