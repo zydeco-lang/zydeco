@@ -1,5 +1,7 @@
 [env]
-RUST_MIN_STACK = "4194304"
+# Raised for unfolded value-function programs; see docs/proposals/value-pi.md.
+# Temporary until definitions compile once instead of inlining per application.
+RUST_MIN_STACK = "16777216"
 
 [target.wasm32-unknown-unknown]
 rustflags = ['--cfg', 'getrandom_backend="wasm_js"']

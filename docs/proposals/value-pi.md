@@ -234,14 +234,18 @@ Storage inside such code is still rejected at the storing position.
 
 ## Runtime and Compilation
 
-At runtime, a value abstraction over a value binder is a closure containing its body and lexical environment.
-Application extends that environment by matching the argument against the irrefutable parameter pattern.
-Abstraction and application at type binders erase after their static substitutions have been recorded.
+Value functions have no runtime representation.
+Lowering treats the beta law as the definition of application: it resolves the applied head —
+through elided definition bindings, aliases, erased type arguments, and residual instantiations —
+to its abstraction, and lowers each cut as a lexical pattern binding at the application site.
+A definition binding never materializes; its body lowers once per application,
+and ambient capture resolves lexically where the body is spliced, so no environment is built.
 
-A compiler may beta-reduce a known abstraction to a complex-value `let`, inline a closed function, or fuse a pipeline.
-Dynamic application remains a closure call.
-These are representation choices for the same typed term; no static function identity is observable
-and no special source artifact is needed for imported modules.
+The reference interpreter still evaluates abstractions as closures.
+Extending an environment is extensionally equal to unfolding, because value application is total
+and allocation identity is unobservable.
+The compiled program contains no closure, environment tuple, or indirect call for a value function.
+`function ~> pattern` applies its named function to the subject by the same unfolding before the nested pattern matches.
 
 A source file that exports a package transformation is consequently an ordinary value term:
 
@@ -250,13 +254,20 @@ val (builtin : Builtin) =>
   pack (Api : VType) where ... end
 ```
 
-Importing it produces a first-class value, which can be named and applied normally:
+Importing it binds a definition, which can be named and applied normally:
 
 ```zydeco
 let make_std = @(import("std.zy")) that
 let std = builtin |> make_std in
 ...
 ```
+
+Inlining duplicates a body at each application, so emitted size and compiler recursion depth grow
+with the unfolded program; the workspace test configuration raises its minimum stack accordingly.
+Two tiers remain future work and are enabled by the same static resolution: compiling each definition once
+as a block reached by a direct jump — an unboxed closure whose call site the occurrence rule proves static —
+and propagating a caller's demand through an application into the callee's body,
+which is now a local rather than an interprocedural question.
 
 ## Implementation Boundary
 

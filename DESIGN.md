@@ -387,7 +387,9 @@ so they likewise add no runtime module representation.
 ## Value Functions
 
 `val P => V` introduces a total value function and `val pi P . A` classifies it.
-Type parameters erase; runtime parameters form lexical closures and must be irrefutable.
+Type parameters erase; runtime parameters must be irrefutable, and lowering unfolds an application
+by resolving its head to the abstraction and binding the argument as a lexical pattern,
+so no closure or environment is built for a value function.
 `param val P in V` is the lexical block-form introduction,
 while its `that` variant contributes the same value parameter to the nearest `begin` context.
 Plain `param` continues to introduce type functions and computations.
@@ -400,8 +402,7 @@ first-class function values remain suspended computations behind `Thk`.
 The separate pattern form `function ~> pattern` applies the same cut before matching;
 only the nested pattern contributes bindings and refutability.
 The mechanisms and their dependency are specified separately
-in [Value Functions with `ValPi`](docs/proposals/value-pi.md)
-and [Value Views](docs/proposals/value-views.md).
+in [Value Functions with `ValPi`](docs/proposals/value-pi.md) and [Value Views](docs/proposals/value-views.md).
 
 Package parameters may open existential witnesses used by the result classifier.
 Both computation package-dependent arrows (`PackPi`) and value-function classifiers (`ValPi`) retain those witnesses;
@@ -497,11 +498,11 @@ SPS is stack-passing style: calls and continuations become explicit in the inter
 High SPS uses lexical branch-join syntax; closure conversion produces first-order SPSLow with code labels.
 ZASM makes the control-flow graph explicit for assembly-derived backends.
 
-Before lowering into SPS, a demand analysis over the checked root records how each binding's value
-is consumed: not at all, at specific product positions, or whole. The lowering skips absent bindings,
-and the host Builtin package materializes only demanded operations, so emitted programs contain the
-operations a program calls rather than the whole standard-library signature. The interpreter shares
-none of this; it links the complete program as the reference semantics.
+Before lowering into SPS, a demand analysis over the checked root records how each binding's value is consumed:
+not at all, at specific product positions, or whole.
+The lowering skips absent bindings, and the host Builtin package materializes only demanded operations,
+so emitted programs contain the operations a program calls rather than the whole standard-library signature.
+The interpreter shares none of this; it links the complete program as the reference semantics.
 `docs/proposals/demand-analysis.md` develops the traversal rules and their soundness invariants.
 
 | Responsibility | Implementation |
@@ -822,6 +823,10 @@ but the embedding must supply the imports before invoking either function.
 
 ## Current Limitations
 
+- Value-function application inlines each body at its use, so emitted code and compiler recursion depth grow
+  with the unfolded program, dominated by multiply-instantiated library functors.
+  The workspace raises its test-stack minimum accordingly; compiling each definition once remains future work recorded
+  in [Value Functions with `ValPi`](docs/proposals/value-pi.md).
 - The standard native test path is AMD64 on Linux or macOS.
   The CLI defaults to the host architecture, so an ARM host needs explicit AMD64 target selection
   and appropriate tools for native execution.
