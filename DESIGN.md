@@ -405,9 +405,9 @@ so no closure or environment is built for a value function.
 while its `that` variant contributes the same value parameter to the nearest `begin` context.
 Plain `param` continues to introduce type functions and computations.
 `let val` is ordinary non-recursive binding sugar.
-Juxtaposition, `value |> function`, `function <| value`, and the view pattern `function ~> pattern` are spellings
-of one value-level cut, which rewrites complex values no further than their memory representation;
-only the nested pattern of a view contributes bindings and refutability.
+Juxtaposition, `value |> function`, `function <| value`, and the view pattern `function ~> pattern` are one operation;
+evaluating it does no more than move value data into its memory representation.
+Only the nested pattern of a view contributes bindings and refutability.
 Value functions are second-class: a function may be bound as a definition (including partial type instantiation)
 and applied, directly or through a view pattern, but storing, passing, or returning one is rejected;
 first-class function values remain suspended computations behind `Thk`.

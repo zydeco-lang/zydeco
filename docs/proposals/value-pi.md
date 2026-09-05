@@ -126,15 +126,15 @@ An unannotated result may be synthesized when the ordinary value checker can inf
 
 ## Elimination and Pipelines
 
-Application is one thing: juxtaposition, both pipelines, and the view pattern are spellings of the same value-level cut.
+Application is one operation, spelled four ways: juxtaposition, `V |> f`, `f <| V`, and the view pattern.
 
 ```text
 V |> f  ==  f V  ==  f <| V          let f ~> p = V in N  ==  let p = (V |> f) in N
 ```
 
-Evaluating the cut rewrites complex values no further than their memory representation: projections,
+Evaluating it does no more than move value data into its memory representation: projections,
 constructions, and trivial fills — never a closure, an indirect call, or an effect.
-A value function is a derivation `x : A |-v W : B`; its cut is performed entirely at the value level,
+A value function is a derivation `x : A |-v W : B`; the cut happens entirely at the value level,
 and the spellings differ only in reading direction.
 `|>` associates to the left and `<|` to the right, so
 
