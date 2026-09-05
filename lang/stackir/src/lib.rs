@@ -27,6 +27,8 @@ pub mod sps {
     pub mod fmt;
     /// Lowering from typed syntax into stack IR.
     pub mod lower;
+    /// Demand analysis that decides which checked bindings survive lowering.
+    pub mod demand;
     /// Double check the stack IR is well-formed. For debugging purposes only.
     pub mod check;
     /// Free-variable analysis for stack IR.
