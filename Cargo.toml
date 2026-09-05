@@ -123,6 +123,11 @@ web-sys = { version = "0.3", features = [
 # lsp
 tower-lsp = { version = "0.20", features = ["proposed"] }
 
+# Line tables keep backtrace line numbers without full variable debuginfo,
+# cutting the size of deps/ and incremental/ artifacts.
+[profile.dev]
+debug = "line-tables-only"
+
 [profile.dev.package."*"]
 opt-level = 2
 
