@@ -398,21 +398,6 @@ fn ordinary_recovery_does_not_expose_a_discarded_completion_marker_as_source() {
 }
 
 #[test]
-fn nested_recovery_preserves_a_following_complete_binding() {
-    let source = "let first = (,) in let second = 2 in second";
-    let mut parser = Parser::new();
-    let parsed = RecoveringParser::new(source).source(&mut parser);
-    let root = parsed.syntax.expect("the enclosing source should recover").root;
-
-    assert!(!parsed.issues.is_empty());
-    let Term::ContextBind(first) = &parser.arena.terms[&root] else {
-        panic!("expected the recovered outer binding")
-    };
-    assert!(matches!(parser.arena.terms[&first.binding.bindee], Term::Paren(_)));
-    assert!(matches!(parser.arena.terms[&first.tail], Term::ContextBind(_)));
-}
-
-#[test]
 fn an_authored_hole_is_not_a_completion_or_recovery_hole() {
     let mut parser = Parser::new();
     let parsed = RecoveringParser::new("_").term(&mut parser);

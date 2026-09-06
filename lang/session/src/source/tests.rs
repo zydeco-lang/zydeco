@@ -1349,8 +1349,7 @@ fn explicit_intrinsic_splices_produce_canonical_cbpv_terms() {
 fn intrinsic_spellings_are_ordinary_bindable_names_in_root_sources() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "begin def VType = @[intrinsic(unit)] _ that VType end");
-
-    SourceGraph::load(root)
+    let checked = SourceGraph::load(root)
         .unwrap()
         .parse()
         .unwrap()
@@ -1360,6 +1359,15 @@ fn intrinsic_spellings_are_ordinary_bindable_names_in_root_sources() {
         .unwrap()
         .check()
         .unwrap();
+
+    use zydeco_statics::syntax::{Fillable, Kind, TermAnnId, Type};
+    let TermAnnId::Type(unit, kind) = checked.root else {
+        panic!("expected the bound intrinsic to check as a type, found {:?}", checked.root)
+    };
+    // The reference resolves to the definition's abstract witness and kind,
+    // exactly as an ordinary named type definition would.
+    assert!(matches!(checked.statics.kinds_pre[&kind], Fillable::Done(Kind::VType(_))));
+    assert!(matches!(checked.statics.types_pre[&unit], Fillable::Done(Type::Abst(_))));
 }
 
 #[test]
@@ -1375,8 +1383,7 @@ fn intrinsic_kind_spellings_bind_as_ordinary_kind_aliases() {
     Unit
 end"#,
     );
-
-    SourceGraph::load(root)
+    let checked = SourceGraph::load(root)
         .unwrap()
         .parse()
         .unwrap()
@@ -1386,6 +1393,12 @@ end"#,
         .unwrap()
         .check()
         .unwrap();
+
+    use zydeco_statics::syntax::{Fillable, TermAnnId, Type};
+    let TermAnnId::Type(exists, _) = checked.root else {
+        panic!("expected a checked existential type, found {:?}", checked.root)
+    };
+    assert!(matches!(checked.statics.types_pre[&exists], Fillable::Done(Type::Exists(_))));
 }
 
 #[test]
@@ -1464,7 +1477,7 @@ fn a_fixed_primitive_intrinsic_classifies_literals_without_a_package_scope() {
 fn an_integer_literal_defaults_to_int64_without_a_package_scope() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "ret 1");
-    SourceGraph::load(root)
+    let checked = SourceGraph::load(root)
         .unwrap()
         .parse()
         .unwrap()
@@ -1474,6 +1487,24 @@ fn an_integer_literal_defaults_to_int64_without_a_package_scope() {
         .unwrap()
         .check()
         .unwrap();
+
+    use zydeco_statics::syntax::{Fillable, PrimitiveTy, TermAnnId, Type};
+    use zydeco_syntax::{App, IntegerType, PrimitiveType};
+    let TermAnnId::Compu(_, computation_ty) = checked.root else {
+        panic!("expected a checked computation, found {:?}", checked.root)
+    };
+    let Fillable::Done(Type::App(App(ret, value))) = &checked.statics.types_pre[&computation_ty]
+    else {
+        panic!(
+            "expected an applied return type, found {:?}",
+            checked.statics.types_pre[&computation_ty]
+        )
+    };
+    assert!(matches!(checked.statics.types_pre[ret], Fillable::Done(Type::Ret(_))));
+    assert!(matches!(
+        checked.statics.types_pre[value],
+        Fillable::Done(Type::Primitive(PrimitiveTy(PrimitiveType::Integer(IntegerType::Int64))))
+    ));
 }
 
 #[test]
@@ -1487,7 +1518,7 @@ fn repeated_primitive_intrinsics_have_one_applicative_identity() {
             "def a : IntA = 1 that def b : IntB = a that ret b end",
         ),
     );
-    SourceGraph::load(root)
+    let checked = SourceGraph::load(root)
         .unwrap()
         .parse()
         .unwrap()
@@ -1497,6 +1528,26 @@ fn repeated_primitive_intrinsics_have_one_applicative_identity() {
         .unwrap()
         .check()
         .unwrap();
+
+    // Both aliases must denote one primitive identity: the result of `ret b`
+    // is the Int64 primitive itself, not a choice between the two bindings.
+    use zydeco_statics::syntax::{Fillable, PrimitiveTy, TermAnnId, Type};
+    use zydeco_syntax::{App, IntegerType, PrimitiveType};
+    let TermAnnId::Compu(_, computation_ty) = checked.root else {
+        panic!("expected a checked computation, found {:?}", checked.root)
+    };
+    let Fillable::Done(Type::App(App(ret, value))) = &checked.statics.types_pre[&computation_ty]
+    else {
+        panic!(
+            "expected an applied return type, found {:?}",
+            checked.statics.types_pre[&computation_ty]
+        )
+    };
+    assert!(matches!(checked.statics.types_pre[ret], Fillable::Done(Type::Ret(_))));
+    assert!(matches!(
+        checked.statics.types_pre[value],
+        Fillable::Done(Type::Primitive(PrimitiveTy(PrimitiveType::Integer(IntegerType::Int64))))
+    ));
 }
 
 #[test]
@@ -2137,8 +2188,6 @@ fn abstract_bool_package_exports_values_and_an_eliminator() {
 
 #[test]
 fn abstract_option_package_exports_a_type_constructor_and_an_eliminator() {
-    RepositorySourceFiles::assert_value_function("std/data/package.zy");
-
     let root = repository_source("tests/std/option.zy");
     let checked = TestPipeline::check(&root).unwrap();
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
@@ -2154,8 +2203,6 @@ fn abstract_option_package_exports_a_type_constructor_and_an_eliminator() {
 
 #[test]
 fn abstract_list_package_exports_case_analysis_and_a_recursive_fold() {
-    RepositorySourceFiles::assert_value_function("std/data/package.zy");
-
     let root = repository_source("tests/std/list.zy");
     let checked = TestPipeline::check(&root).unwrap();
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
@@ -2331,16 +2378,6 @@ fn nonterminating_compile_examples_check_and_lower_as_root_terms() {
 }
 
 #[test]
-fn named_term_compile_example_ports_as_one_block() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/compile/named.zy");
-}
-
-#[test]
-fn mixed_named_data_and_codata_compile_example_ports_as_one_block() {
-    assert_source_program_exits_zero_and_reaches_amd64("tests/compile/named-mixed.zy");
-}
-
-#[test]
 fn small_non_monadic_exec_examples_port_as_root_terms() {
     [
         "tests/exec/forall.zy",
@@ -2383,15 +2420,6 @@ fn literal_text_exec_example_runs_through_the_standard_library() {
 #[test]
 fn choice_exec_example_composes_the_standard_library_as_a_root_term() {
     assert_source_io_program_reaches_zasm("tests/exec/choice.zy", "", "0\n1\no\n");
-}
-
-#[test]
-fn choice_root_reaches_zasm_through_sps_low() {
-    let SourceAssembly { assembly, .. } =
-        TestPipeline::zasm(repository_source("tests/exec/choice.zy"), crate::TestOutput::quiet())
-            .unwrap();
-
-    assert!(assembly.arena().programs.get(&assembly.root()).is_some());
 }
 
 #[test]

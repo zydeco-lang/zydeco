@@ -91,25 +91,35 @@ fn incompatible_constraints_preserve_the_previous_solution() {
 
 #[test]
 fn metavariable_aliases_unify_in_either_order() {
-    TestFixture::run(|tycker| {
-        let (vtype, _) = TestFixture::kinds(tycker);
-        let env = TyEnv::new();
-        let first: zydeco_statics::syntax::FillId = Alloc::alloc(
-            tycker,
-            zydeco_statics::syntax::InferenceSite::Term(source_site()),
-            (),
-            &(),
-        );
-        let second: zydeco_statics::syntax::FillId = Alloc::alloc(
-            tycker,
-            zydeco_statics::syntax::InferenceSite::Term(source_site()),
-            (),
-            &(),
-        );
-        let first_hole: TypeId = Alloc::alloc(tycker, first, vtype, &env);
-        let second_hole: TypeId = Alloc::alloc(tycker, second, vtype, &env);
+    fn aliased_holes_unify(reverse: bool) {
+        TestFixture::run(|tycker| {
+            let (vtype, _) = TestFixture::kinds(tycker);
+            let env = TyEnv::new();
+            let first: zydeco_statics::syntax::FillId = Alloc::alloc(
+                tycker,
+                zydeco_statics::syntax::InferenceSite::Term(source_site()),
+                (),
+                &(),
+            );
+            let second: zydeco_statics::syntax::FillId = Alloc::alloc(
+                tycker,
+                zydeco_statics::syntax::InferenceSite::Term(source_site()),
+                (),
+                &(),
+            );
+            let first_hole: TypeId = Alloc::alloc(tycker, first, vtype, &env);
+            let second_hole: TypeId = Alloc::alloc(tycker, second, vtype, &env);
 
-        assert!(first.fill(tycker, second_hole.into()).is_ok());
-        assert!(second.fill(tycker, first_hole.into()).is_ok());
-    });
+            let mut aliases = [(first, second_hole), (second, first_hole)];
+            if reverse {
+                aliases.reverse();
+            }
+            for (fill, hole) in aliases {
+                assert!(fill.fill(tycker, hole.into()).is_ok());
+            }
+        });
+    }
+
+    aliased_holes_unify(false);
+    aliased_holes_unify(true);
 }

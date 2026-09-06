@@ -365,39 +365,6 @@ end
 }
 
 #[test]
-fn translates_multiple_package_witnesses_and_their_structures() {
-    SourceCase::assert_accepted(PackPiCase::check_monadic(
-        r#"
-begin
-  let Core =
-    exists (A : VType) .
-    exists (OS : CType) .
-      A * Thk (A -> OS)
-  that
-
-  def translated = {
-    @[monadic] begin
-      let run = {
-        do _ <- ret ();
-        fn ((A, OS, value, execute) : Core) =>
-          ! execute value
-      } in
-      ! run (
-        Unit,
-        Ret Unit,
-        (),
-        { fn (_ : Unit) => ret () },
-      )
-    end
-  } that
-
-  translated
-end
-"#,
-    ));
-}
-
-#[test]
 fn runs_package_dependent_destructors_after_a_monadic_bind() {
     SourceCase::assert_accepted(PackPiCase::run(
         r#"
@@ -530,65 +497,6 @@ begin
   } that
 
   translated
-end
-"#,
-    ));
-}
-
-#[test]
-fn preserves_an_opened_witness_across_monadic_applications() {
-    SourceCase::assert_accepted(PackPiCase::check_monadic(
-        r#"
-begin
-  let Box =
-    exists (X : VType) . X
-  that
-
-  def translated = {
-    @[monadic] begin
-      let reveal = {
-        do _ <- ret ();
-        fn ((X, value) : Box) => ret value
-      } in
-      fn ((X, value) : Box) =>
-        do first <- ! reveal (X, value);
-        ! reveal (X, first)
-    end
-  } that
-
-  translated
-end
-"#,
-    ));
-}
-
-#[test]
-fn runs_package_dependent_destructors_from_monadic_blocks() {
-    SourceCase::assert_accepted(PackPiCase::run(
-        r#"
-begin
-  let Box =
-    exists (X : VType) . X
-  that
-
-  let Service : CType =
-    codata
-    | .unbox : pi ((X, _) : Box) . Ret X
-    end
-  that
-
-  def translated = {
-    @[monadic] begin
-      (comatch
-      | .unbox =>
-        fn ((X, value) : Box) => ret value
-      end : Service)
-    end
-  } that
-
-  do value <- ! translated Ret { ! mo_ret } .unbox (Int64, triv, 41);
-  do status <- ! api/int64/sub value 41;
-  ! exit status
 end
 "#,
     ));

@@ -148,13 +148,20 @@ fn the_same_role_may_appear_once_in_distinct_package_signatures() {
         let (vtype, _) = TestFixture::kinds(tycker);
         let first = TestFixture::abstract_type(tycker, vtype);
         let second = TestFixture::abstract_type(tycker, vtype);
+        let unrelated = TestFixture::abstract_type(tycker, vtype);
         let unit = Alloc::alloc(tycker, UnitTy, vtype, &TyEnv::new());
         tycker.statics.builtin_roles.attach_type(first, BuiltinTypeRole::Reader).unwrap();
         tycker.statics.builtin_roles.attach_type(second, BuiltinTypeRole::Reader).unwrap();
         let first_signature =
             PackPi { domain: unit, witnesses: PackTelescope::singleton(first), codomain: unit };
-        let second_signature =
-            PackPi { domain: unit, witnesses: PackTelescope::singleton(second), codomain: unit };
+        // The second signature is structurally distinct: the shared role sits
+        // behind a role-less witness, so validating it is not a replay of the
+        // first validation.
+        let second_signature = PackPi {
+            domain: unit,
+            witnesses: PackTelescope::new(unrelated, [second]),
+            codomain: unit,
+        };
 
         assert!(BuiltinSignatureValidator::new(&tycker.statics).validate(&first_signature).is_ok());
         assert!(

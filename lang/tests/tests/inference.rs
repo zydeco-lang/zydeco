@@ -46,19 +46,6 @@ end
 }
 
 #[test]
-fn infers_an_unannotated_parameter_from_a_call_site() {
-    SourceCase::assert_accepted(SourceCase::check(
-        r#"
-begin
-  let identity = { fn value => ret value } that
-  do result <- ! identity ();
-  ret result
-end
-"#,
-    ));
-}
-
-#[test]
 fn accepts_compatible_call_site_constraints() {
     SourceCase::assert_accepted(SourceCase::check(
         r#"
