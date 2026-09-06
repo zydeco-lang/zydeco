@@ -37,6 +37,23 @@ Use it directly or install it with `cargo install --path cli`.
 While iterating, use `cargo run --bin zydeco -- <command>` to build and invoke the development binary.
 Examples below use `zydeco` to mean the installed CLI.
 
+## Keep the Target Directory Small
+
+Debug builds accumulate incremental compilation sessions under `target/debug/incremental`.
+Each unit fingerprint gets its own session, and an edit to an upstream crate strands fresh sessions
+for every crate downstream of it, so the directory can grow to many gigabytes
+during active development before Cargo garbage-collects the stale ones.
+The profile overrides in [Cargo.toml](Cargo.toml) disable incremental compilation
+for crates whose own edit rate is too low to earn that disk back; `zydeco-surface` keeps it
+because reusing the generated parser's code is measurably faster.
+To reclaim the space at the cost of one full recompile of workspace members, remove the sessions:
+
+```sh
+rm -rf target/debug/incremental
+```
+
+Registry dependencies keep their artifacts in `target/debug/deps` and are unaffected.
+
 ## Check and Run Source Terms
 
 Check a reusable source independently, or run an executable source with optional program arguments:

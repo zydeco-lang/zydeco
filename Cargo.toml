@@ -138,6 +138,33 @@ incremental = false
 [profile.dev.package.zydeco-surface]
 opt-level = 1
 
+# Incremental sessions fork per unit fingerprint, so any upstream edit strands
+# fresh sessions for every downstream crate. Crates whose own edit rate is low
+# never earn that disk back through same-crate reuse.
+[profile.dev.package.zydeco-session]
+incremental = false
+
+[profile.dev.package.zydeco-stackir]
+incremental = false
+
+[profile.dev.package.zydeco-assembly]
+incremental = false
+
+[profile.dev.package.zydeco-dynamics]
+incremental = false
+
+[profile.dev.package.zydeco-amd64]
+incremental = false
+
+[profile.dev.package.zydeco-cli]
+incremental = false
+
+[profile.dev.package.zydeco-tui]
+incremental = false
+
+[profile.dev.package.cajun]
+incremental = false
+
 # Deeply nested programs exercise recursive surface, static, and assembly passes;
 # optimizing these crates keeps their test stack frames small
 # without changing the whole profile.
@@ -150,6 +177,28 @@ opt-level = 1
 
 [profile.test.package.zydeco-assembly]
 opt-level = 1
+incremental = false
+
+[profile.test.package.zydeco-session]
+incremental = false
+
+[profile.test.package.zydeco-stackir]
+incremental = false
+
+[profile.test.package.zydeco-dynamics]
+incremental = false
+
+[profile.test.package.zydeco-amd64]
+incremental = false
+
+[profile.test.package.zydeco-cli]
+incremental = false
+
+[profile.test.package.zydeco-tui]
+incremental = false
+
+[profile.test.package.cajun]
+incremental = false
 
 [profile.release]
 lto = "thin"
