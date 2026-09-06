@@ -25,6 +25,13 @@ pub struct CommandCompiler {
     lint_types: bool,
 }
 
+/// The interaction of a checked source run: its output and exit status.
+#[derive(Clone, Debug)]
+pub struct TestInteraction {
+    pub output: String,
+    pub code: i32,
+}
+
 impl CommandCompiler {
     /// Re-validate the finished arena after every successful check.
     ///
@@ -120,6 +127,30 @@ impl CommandCompiler {
         let mut output = std::io::sink();
         match Runtime::new(&mut input, &mut output, arguments, dynamics).run() {
             | ProgKont::ExitCode(0) => Ok(()),
+            | ProgKont::Error(error) => Err(CompileError::Runtime(error)),
+            | result => Err(CompileError::TestFailure(result)),
+        }
+    }
+
+    /// Check a source against fed input, observing the output and exit status.
+    pub fn test_io(
+        &self, path: &Path, arguments: &[String], input: &str,
+    ) -> Result<TestInteraction, CompileError> {
+        let executable = self.executable(path)?;
+        let dynamics = BuiltinRootLinker {
+            scoped: executable.scoped,
+            statics: executable.statics,
+            root: executable.root,
+            signature: executable.signature,
+        }
+        .run()
+        .map_err(CompileError::BuiltinLink)?;
+        let mut input = input.as_bytes();
+        let mut output = Vec::new();
+        match Runtime::new(&mut input, &mut output, arguments, dynamics).run() {
+            | ProgKont::ExitCode(code) => {
+                Ok(TestInteraction { output: String::from_utf8_lossy(&output).into_owned(), code })
+            }
             | ProgKont::Error(error) => Err(CompileError::Runtime(error)),
             | result => Err(CompileError::TestFailure(result)),
         }

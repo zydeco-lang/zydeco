@@ -1,3 +1,4 @@
+use zydeco_tests::e2e_io_source;
 use zydeco_tests::e2e_sources;
 
 e2e_sources!({
@@ -5,7 +6,6 @@ e2e_sources!({
     abort => "tests/demos/abort.zy",
     abort_variadic => "tests/demos/abort-variadic.zydeco",
     add => "tests/demos/add.zy",
-    algebra => "tests/demos/algebra.zydeco",
     alias => "tests/demos/alias.zy",
     avl_hash => "tests/demos/avl-hash.zy",
     backtrace => "tests/demos/backtrace.zydeco",
@@ -14,7 +14,6 @@ e2e_sources!({
     comment => "tests/demos/comment.zy",
     defunctionalization => "tests/demos/defunctionalization.zydeco",
     deterministic_pushdown_automaton => "tests/demos/deterministic-pushdown-automaton.zydeco",
-    echo_sum => "tests/demos/echo_sum.zydeco",
     even_odd_codata => "tests/demos/even-odd-codata.zy",
     even_odd_data => "tests/demos/even-odd-data.zy",
     even_odd_fix => "tests/demos/even-odd-fix.zy",
@@ -34,3 +33,21 @@ e2e_sources!({
     unit => "tests/demos/unit.zy",
     variadic => "tests/demos/variadic.zy",
 });
+
+// `algebra` and `echo_sum` read stdin in a loop, so they declare their input
+// and assert the exact interaction on every backend.
+e2e_io_source!(echo_sum, "tests/demos/echo_sum.zydeco", "1\n2\n3\n", "1 = sum\n3 = sum\n6 = sum\n");
+e2e_io_source!(
+    algebra_accumulates,
+    "tests/demos/algebra.zydeco",
+    "10\n20\n",
+    "10 = sum\n30 = sum\n"
+);
+// The exception transformer's failure branch fires once the sum reaches 256.
+e2e_io_source!(
+    algebra_rejects_the_threshold,
+    "tests/demos/algebra.zydeco",
+    "100\n200\n",
+    "100 = sum\nsum >= 256\n",
+    1
+);

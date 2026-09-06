@@ -189,6 +189,7 @@ The source harness in [lang/tests/src/lib.rs](lang/tests/src/lib.rs) provides th
 | `check_source!` | Check the source without executing it. |
 | `runtime_source!` | Interpreter and both WebAssembly backends. |
 | `e2e_sources!` | Interpreter, AMD64, and both WebAssembly backends. |
+| `e2e_io_source!` | Every backend, with declared stdin and asserted output and exit status. |
 
 Fixture categories under `lib/tests/` mirror the registration files in `lang/tests/tests/`.
 A category names either the capability it vouches for (`builtin`, `core`, `delimcc`, `demand`, `effects`,
@@ -199,9 +200,11 @@ A single-behavior fragment belongs in a data-driven case fixture rather than a n
 
 Whole-program fixtures run on every backend by default: `e2e_sources!` covers the interpreter,
 AMD64, and both WebAssembly backends.
+Test programs never inherit the developer's terminal: undeclared standard input is EOF
+and output is captured on every backend, and a program that reads input declares it with `with_stdin`,
+asserting the exact output and exit status through `test_io`.
 A program that cannot run under a backend keeps a narrower registration that names the reason —
 nonterminating programs are only checked and lowered, `iota` exports a value rather than exiting,
-stdin-feeding programs stay on the interpreter until the WebAssembly host can supply input,
 and programs needing an installed foreign library stay ignored.
 
 Source-level cases can also be data-driven: a `.zy` fixture under [lang/tests/cases/](lang/tests/cases) becomes one test

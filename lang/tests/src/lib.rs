@@ -21,22 +21,11 @@ pub mod utils {
         Native(#[from] NativeError),
         #[error(transparent)]
         Io(#[from] std::io::Error),
-        #[error("native source test exited with {0}")]
-        NativeExit(std::process::ExitStatus),
         #[error("failed to start WebAssembly test host `{}`: {source}", executable.display())]
         WasmHostStart {
             executable: PathBuf,
             #[source]
             source: std::io::Error,
-        },
-        #[error(
-            "{backend:?} WebAssembly source test exited with {status}\nstdout:\n{stdout}\nstderr:\n{stderr}"
-        )]
-        WasmExit {
-            backend: WasmBackendKind,
-            status: std::process::ExitStatus,
-            stdout: String,
-            stderr: String,
         },
     }
 
@@ -57,6 +46,7 @@ pub mod utils {
     pub struct SourceProgram {
         path: PathBuf,
         arguments: Vec<String>,
+        standard_input: Option<String>,
     }
 
     /// A source fixture whose root is checked without imposing the executable contract.
@@ -84,10 +74,27 @@ pub mod utils {
         }
     }
 
+    /// One executed program: the streams it produced and its exit status.
+    struct TestRun {
+        stdout: String,
+        stderr: String,
+        code: i32,
+    }
+
+    impl TestRun {
+        fn from_output(output: std::process::Output) -> Self {
+            Self {
+                stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+                stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+                code: output.status.code().unwrap_or(-1),
+            }
+        }
+    }
+
     impl SourceProgram {
         pub fn setup(relative: impl Into<PathBuf>) -> Self {
             let path = Self::resolve(relative.into());
-            Self { path, arguments: Vec::new() }
+            Self { path, arguments: Vec::new(), standard_input: None }
         }
 
         fn resolve(relative: PathBuf) -> PathBuf {
@@ -105,21 +112,80 @@ pub mod utils {
             self
         }
 
+        /// Feed the program this standard input instead of immediate EOF.
+        pub fn with_stdin(mut self, input: impl Into<String>) -> Self {
+            self.standard_input = Some(input.into());
+            self
+        }
+
+        /// Run the program, requiring a zero exit status.
         pub fn test(self, backend: TestBackend) {
-            let result = match backend {
-                | TestBackend::Interpreter => CommandCompiler::default()
-                    .test(&self.path, &self.arguments)
-                    .map_err(CaseError::Compile),
-                | TestBackend::Amd64 => self.test_amd64(),
-                | TestBackend::WasmAm => self.test_wasm(WasmBackendKind::AbstractMachine),
-                | TestBackend::WasmSps => self.test_wasm(WasmBackendKind::SpsLow),
-            };
-            if let Err(error) = result {
-                panic!("Error running source {} with {backend:?}: {error}", self.path.display());
+            self.assert_interaction(backend, None);
+        }
+
+        /// Run the program, asserting the exact output and exit status.
+        pub fn test_io(self, backend: TestBackend, expected_output: &str, expected_code: i32) {
+            self.assert_interaction(backend, Some((expected_output, expected_code)));
+        }
+
+        fn assert_interaction(self, backend: TestBackend, expected: Option<(&str, i32)>) {
+            let fixture = self.path.display().to_string();
+            let run = self.run(backend).unwrap_or_else(|error| {
+                panic!("Error running source {fixture} with {backend:?}: {error}")
+            });
+            match expected {
+                | None => assert_eq!(
+                    run.code, 0,
+                    "source {fixture} with {backend:?} exited with {}:\nstdout:\n{}\nstderr:\n{}",
+                    run.code, run.stdout, run.stderr
+                ),
+                | Some((expected_output, expected_code)) => assert_eq!(
+                    (&*run.stdout, run.code),
+                    (expected_output, expected_code),
+                    "source {fixture} with {backend:?} interacted unexpectedly:\nstderr:\n{}",
+                    run.stderr
+                ),
             }
         }
 
-        fn test_amd64(&self) -> Result<(), CaseError> {
+        fn run(&self, backend: TestBackend) -> Result<TestRun, CaseError> {
+            match backend {
+                | TestBackend::Interpreter => {
+                    let stdin = self.standard_input.as_deref().unwrap_or("");
+                    let interaction = CommandCompiler::default()
+                        .test_io(&self.path, &self.arguments, stdin)
+                        .map_err(CaseError::Compile)?;
+                    Ok(TestRun {
+                        stdout: interaction.output,
+                        stderr: String::new(),
+                        code: interaction.code,
+                    })
+                }
+                | TestBackend::Amd64 => self.run_amd64(),
+                | TestBackend::WasmAm => self.run_wasm(WasmBackendKind::AbstractMachine),
+                | TestBackend::WasmSps => self.run_wasm(WasmBackendKind::SpsLow),
+            }
+        }
+
+        /// Spawn a test child with EOF-or-declared stdin and captured streams;
+        /// a test program never inherits the developer's terminal.
+        fn execute(
+            &self, mut command: std::process::Command,
+        ) -> std::io::Result<std::process::Output> {
+            use std::io::Write;
+            command
+                .stdin(if self.standard_input.is_some() { Stdio::piped() } else { Stdio::null() })
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+            let mut child = command.spawn()?;
+            if let Some(input) = &self.standard_input {
+                let mut stdin = child.stdin.take().expect("stdin was configured piped");
+                stdin.write_all(input.as_bytes())?;
+            }
+            child.wait_with_output()
+        }
+
+        fn run_amd64(&self) -> Result<TestRun, CaseError> {
             let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
             let build_directory = tempfile::tempdir()?;
             let operating_system =
@@ -134,11 +200,13 @@ pub mod utils {
             let assembly = backend.emit_amd64(operating_system);
             let foreign_libraries = backend.foreign_libraries();
             let executable = options.link_amd64("test", &assembly, &foreign_libraries)?;
-            let status = executable.run(&self.arguments)?;
-            if status.success() { Ok(()) } else { Err(CaseError::NativeExit(status)) }
+            let mut command = std::process::Command::new(executable.path());
+            command.args(&self.arguments);
+            let output = self.execute(command).map_err(CaseError::Io)?;
+            Ok(TestRun::from_output(output))
         }
 
-        fn test_wasm(&self, backend_kind: WasmBackendKind) -> Result<(), CaseError> {
+        fn run_wasm(&self, backend_kind: WasmBackendKind) -> Result<TestRun, CaseError> {
             let build_directory = tempfile::tempdir()?;
             let backend = CommandCompiler::default().lower(&self.path)?;
             let module = match backend_kind {
@@ -150,23 +218,12 @@ pub mod utils {
 
             let host = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("wasm-host.mjs");
             let node = PathBuf::from(std::env::var_os("NODE").unwrap_or_else(|| "node".into()));
-            let output = std::process::Command::new(&node)
-                .arg(host)
-                .arg(module_path)
-                .args(&self.arguments)
-                .stdin(Stdio::null())
-                .output()
+            let mut command = std::process::Command::new(&node);
+            command.arg(host).arg(&module_path).args(&self.arguments);
+            let output = self
+                .execute(command)
                 .map_err(|source| CaseError::WasmHostStart { executable: node, source })?;
-            if output.status.success() {
-                Ok(())
-            } else {
-                Err(CaseError::WasmExit {
-                    backend: backend_kind,
-                    status: output.status,
-                    stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-                    stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
-                })
-            }
+            Ok(TestRun::from_output(output))
         }
     }
 
@@ -679,6 +736,48 @@ macro_rules! e2e_sources {
                     $crate::utils::TestBackend::WasmSps
                 );
             )*
+        }
+    };
+}
+
+/// Register one whole program that reads standard input on every backend,
+/// asserting the exact output and exit status; the status defaults to 0.
+#[macro_export]
+macro_rules! e2e_io_source {
+    ($name:ident, $source:expr, $stdin:expr, $output:expr $(, $code:expr)?) => {
+        mod $name {
+            $crate::__source_io_test!(
+                interpreter, $source, $stdin, $output $(, $code)?,
+                $crate::utils::TestBackend::Interpreter
+            );
+            $crate::__source_io_test!(
+                amd64, $source, $stdin, $output $(, $code)?,
+                $crate::utils::TestBackend::Amd64
+            );
+            $crate::__source_io_test!(
+                wasm_am, $source, $stdin, $output $(, $code)?,
+                $crate::utils::TestBackend::WasmAm
+            );
+            $crate::__source_io_test!(
+                wasm_sps, $source, $stdin, $output $(, $code)?,
+                $crate::utils::TestBackend::WasmSps
+            );
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __source_io_test {
+    ($name:ident, $source:expr, $stdin:expr, $output:expr, $backend:expr) => {
+        $crate::__source_io_test!($name, $source, $stdin, $output, 0, $backend);
+    };
+    ($name:ident, $source:expr, $stdin:expr, $output:expr, $code:expr, $backend:expr) => {
+        #[test]
+        fn $name() {
+            $crate::utils::SourceProgram::setup($source)
+                .with_stdin($stdin)
+                .test_io($backend, $output, $code);
         }
     };
 }

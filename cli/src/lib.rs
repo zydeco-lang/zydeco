@@ -9,7 +9,7 @@ pub mod native;
 
 pub use crate::{
     cli::{BuildTarget, Cli, Commands, TargetArchitecture, TargetOs},
-    compile::{AssemblyOutcome, BackendProgram, CommandCompiler, CompileError},
+    compile::{AssemblyOutcome, BackendProgram, CommandCompiler, CompileError, TestInteraction},
     diagnostics::DiagnosticRenderer,
     format::{SourceFormatError, SourceFormatOutcome, SourceFormatter},
     native::{BuildOptions, Executable, NativeError, WasmArtifact, WasmBackendKind},

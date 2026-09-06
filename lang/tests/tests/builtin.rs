@@ -13,8 +13,8 @@ e2e_sources!({
 });
 
 // `exit.zy` is driven by the CLI build test and the TUI engine; the `echo*`
-// programs feed on stdin, which the WebAssembly host cannot supply yet, so
-// the session crate runs them on the interpreter with exact-output checks.
+// programs are run by the session crate with exact-output checks on the
+// interpreter.
 
 mod host_arguments {
     use super::*;
