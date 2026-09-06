@@ -165,7 +165,7 @@ impl LspProcess {
 fn stdio_server_invalidates_semantic_tokens_during_reanalysis_and_requests_refresh() {
     let repository =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
-    let path = repository.join("lib/examples/algebra.zydeco").canonicalize().unwrap();
+    let path = repository.join("lib/tests/demos/algebra.zydeco").canonicalize().unwrap();
     let changed = std::fs::read_to_string(&path).unwrap();
     let original = "begin\n  let old = () that\n  old\nend\n";
     let uri = Url::from_file_path(&path).unwrap().to_string();
@@ -1003,7 +1003,7 @@ fn stdio_server_warns_about_ineffective_text_blocks() {
 #[test]
 fn stdio_hover_links_referenced_type_definitions() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../lib/tests/exec/forall.zy")
+        .join("../../lib/tests/demos/forall.zy")
         .canonicalize()
         .unwrap();
     let source = std::fs::read_to_string(&path).unwrap();

@@ -18,7 +18,7 @@ fi
 
 files=(
     lib/std/std.zy
-    lib/tests/compile-more/core.zy
+    lib/tests/oopsla/migrated/core.zy
     lib/tests/monadic/shadow.zy
     lib/tests/delimcc/try-catch.zy
 )

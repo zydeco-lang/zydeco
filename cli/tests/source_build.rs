@@ -20,7 +20,7 @@ fn a_root_term_builds_without_project_configuration() {
 
 #[test]
 fn the_wasm_targets_write_distinct_valid_core_modules() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib/tests/compile/fact.zy");
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib/tests/core/fact.zy");
     let build = tempfile::tempdir().unwrap();
     let build_target = |target: &str, filename: &str| {
         let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
@@ -59,7 +59,8 @@ fn the_wasm_targets_write_distinct_valid_core_modules() {
 
 #[test]
 fn a_rejected_root_returns_a_failure_status_with_source_diagnostics() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib/tests/fail/annotation.zy");
+    let root =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib/tests/core/fail-annotation.zy");
     let output =
         Command::new(env!("CARGO_BIN_EXE_zydeco")).arg("check").arg(root).output().unwrap();
 
@@ -76,7 +77,7 @@ fn a_rejected_root_returns_a_failure_status_with_source_diagnostics() {
 #[test]
 fn an_unattached_text_block_emits_a_non_fatal_warning() {
     let root =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib/tests/warn/unattached-text.zy");
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib/tests/core/warn-unattached-text.zy");
     let output =
         Command::new(env!("CARGO_BIN_EXE_zydeco")).arg("check").arg(root).output().unwrap();
 

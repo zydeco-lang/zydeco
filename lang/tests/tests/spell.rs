@@ -10,3 +10,17 @@ e2e_sources!({
     cps => "spell/6-cps.zy",
     optics => "spell/8-lense-prism-optics.zy",
 });
+
+// The call-by-need chapter's cache library has no builtin implementation, so
+// the term cannot execute; unlike a library source, the chapter exports a
+// computation rather than a value, so it is only analyzed.
+#[test]
+fn call_by_need_checks() {
+    use zydeco_cli::CommandCompiler;
+
+    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../lib/spell/7-call-by-need.zy");
+    CommandCompiler::default()
+        .analyze(&path)
+        .unwrap_or_else(|error| panic!("Error checking source {}: {error}", path.display()));
+}

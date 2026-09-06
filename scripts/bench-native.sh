@@ -23,11 +23,11 @@ shift || true
 
 if [[ $# -eq 0 ]]; then
     files=(
-        lib/tests/compile/direct-tuple.zy
-        lib/tests/compile/direct-closure.zy
-        lib/tests/compile/tuple.zy
-        lib/tests/compile/triple.zy
-        lib/tests/compile/fact.zy
+        lib/tests/core/direct-tuple.zy
+        lib/tests/core/direct-closure.zy
+        lib/tests/core/tuple.zy
+        lib/tests/core/triple.zy
+        lib/tests/core/fact.zy
     )
 else
     files=("$@")

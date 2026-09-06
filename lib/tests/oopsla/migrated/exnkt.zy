@@ -4,9 +4,9 @@
 --| for `ExnK`, which is the church encoded version of the `Exn` monad.
 --|
 --| Check `exnt.zydeco` for detailed explanation.
-let monadic_basis = @(import("../../std/control/monad.zy")) in
+let monadic_basis = @(import("../../../std/control/monad.zy")) in
 begin
-  param val (/core; builtin) : @(import("../../std/builtin.zy")) that
+  param val (/core; builtin) : @(import("../../../std/builtin.zy")) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
   begin

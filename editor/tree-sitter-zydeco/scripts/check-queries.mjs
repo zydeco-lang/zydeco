@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 const grammarRoot = fileURLToPath(new URL('..', import.meta.url));
 const repositoryRoot = resolve(grammarRoot, '../..');
 const queryRoot = resolve(repositoryRoot, 'editor/zed/languages/zydeco');
-const fixture = resolve(repositoryRoot, 'lib/examples/algebra.zydeco');
+const fixture = resolve(repositoryRoot, 'lib/tests/demos/algebra.zydeco');
 const configPath = resolve(grammarRoot, 'tree-sitter-config.json');
 const executable = resolve(
   grammarRoot,

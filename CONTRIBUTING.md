@@ -190,6 +190,20 @@ The source harness in [lang/tests/src/lib.rs](lang/tests/src/lib.rs) provides th
 | `runtime_source!` | Interpreter and both WebAssembly backends. |
 | `e2e_sources!` | Interpreter, AMD64, and both WebAssembly backends. |
 
+Fixture categories under `lib/tests/` mirror the registration files in `lang/tests/tests/`.
+A category names either the capability it vouches for (`builtin`, `core`, `delimcc`, `demand`, `effects`,
+`ffi`, `monadic`, `pack`, `std`) or the provenance of its corpus (`oopsla` with its `migrated/` declaration twins,
+`spell`, and `demos` for whole-program showcases); it never names an implementation mechanism or a pipeline stage.
+Negative and warning fixtures live inside the category they exercise, named `fail-*` or `warn-*`.
+A single-behavior fragment belongs in a data-driven case fixture rather than a new category.
+
+Whole-program fixtures run on every backend by default: `e2e_sources!` covers the interpreter,
+AMD64, and both WebAssembly backends.
+A program that cannot run under a backend keeps a narrower registration that names the reason —
+nonterminating programs are only checked and lowered, `iota` exports a value rather than exiting,
+stdin-feeding programs stay on the interpreter until the WebAssembly host can supply input,
+and programs needing an installed foreign library stay ignored.
+
 Source-level cases can also be data-driven: a `.zy` fixture under [lang/tests/cases/](lang/tests/cases) becomes one test
 with no Rust change.
 Leading `--` comment lines state the pipeline stage, the prelude, and the expected outcome;

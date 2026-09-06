@@ -54,7 +54,7 @@ read
 echo "Running algebra.zydeco"
 echo "Expected output: exits with code 0"
 echo "Actual output:"
-zydeco run lib/examples/algebra.zydeco
+zydeco run lib/tests/demos/algebra.zydeco
 echo "Program exited with code $?"
 echo "Press Enter to continue"
 read

@@ -937,7 +937,7 @@ mod tests {
     #[test]
     fn type_hover_uses_source_names_for_polymorphic_types() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/tests/exec/forall.zy")
+            .join("../../lib/tests/demos/forall.zy")
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
@@ -958,7 +958,7 @@ mod tests {
     #[test]
     fn type_hover_links_through_context_reordered_type_aliases() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/tests/compile/uniform.zy")
+            .join("../../lib/tests/core/uniform.zy")
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
@@ -1197,7 +1197,7 @@ mod tests {
     #[test]
     fn term_hover_reports_the_projected_type_of_field_projections() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/tests/exec/forall.zy")
+            .join("../../lib/tests/demos/forall.zy")
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
@@ -1252,7 +1252,7 @@ mod tests {
     #[test]
     fn term_hover_links_type_definitions_of_module_projections() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/tests/exec/forall.zy")
+            .join("../../lib/tests/demos/forall.zy")
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
@@ -1290,7 +1290,7 @@ mod tests {
     #[test]
     fn term_hover_reports_types_of_subexpressions_under_the_cursor() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/tests/exec/forall.zy")
+            .join("../../lib/tests/demos/forall.zy")
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
@@ -1339,7 +1339,7 @@ mod tests {
     #[test]
     fn semantic_tokens_refine_resolved_names_with_cbpv_classes() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/tests/exec/forall.zy")
+            .join("../../lib/tests/demos/forall.zy")
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
@@ -1371,7 +1371,7 @@ mod tests {
     #[test]
     fn semantic_tokens_mark_value_pi_and_value_abstraction_binders_as_parameters() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/tests/compile/value-views.zy")
+            .join("../../lib/tests/core/value-views.zy")
             .canonicalize()
             .unwrap();
         let source = concat!(
@@ -1409,7 +1409,7 @@ mod tests {
     #[test]
     fn type_errors_surface_as_error_diagnostics() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/tests/exec/forall.zy")
+            .join("../../lib/tests/demos/forall.zy")
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
@@ -1441,7 +1441,7 @@ mod tests {
     #[test]
     fn missing_annotation_diagnostics_use_the_innermost_source_span() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/tests/fail/annotation.zy")
+            .join("../../lib/tests/core/fail-annotation.zy")
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
@@ -1464,7 +1464,7 @@ mod tests {
     #[test]
     fn semantic_tokens_retain_established_static_classes_after_type_errors() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/tests/exec/forall.zy")
+            .join("../../lib/tests/demos/forall.zy")
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();

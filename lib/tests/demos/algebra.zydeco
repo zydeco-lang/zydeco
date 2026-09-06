@@ -6,8 +6,8 @@
 --     Thunk (M A) -> Thunk (A -> R) -> R
 -- end
 begin
-  let monadic_basis = @(import("../std/control/monad.zy")) that
-  param (/core; /representations; /numeric; /system; builtin) : @(import("../std/builtin.zy")) that
+  let monadic_basis = @(import("../../std/control/monad.zy")) that
+  param (/core; /representations; /numeric; /system; builtin) : @(import("../../std/builtin.zy")) that
   let (/VType; /CType; /Thk; /Ret) = core that
   let (= Int64, int64) = numeric/int64 that
   let (/String) = representations/string that

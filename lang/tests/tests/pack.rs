@@ -1,7 +1,10 @@
-use zydeco_tests::runtime_source;
+use zydeco_tests::e2e_sources;
 
-runtime_source!(manifest, "tests/pack/manifest.zy");
-runtime_source!(interleaved, "tests/pack/interleaved.zy");
-runtime_source!(named, "tests/pack/named.zy");
-runtime_source!(monadic, "tests/pack/monadic.zy");
-runtime_source!(uniform, "tests/pack/uniform.zy");
+e2e_sources!({
+    exists => "tests/pack/exists.zy",
+    manifest => "tests/pack/manifest.zy",
+    interleaved => "tests/pack/interleaved.zy",
+    named => "tests/pack/named.zy",
+    monadic => "tests/pack/monadic.zy",
+    uniform => "tests/pack/uniform.zy",
+});
