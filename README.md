@@ -22,9 +22,8 @@ cargo install --path cli
 Create `hello-world.zy` in the repository root:
 
 ```zydeco
-param (/system) : @[import("lib/std/builtin.zy")] _ in
-  let (/stdio; /process) = system in
-  ! (stdio/write_line) "hello, world!" { ! (process/exit) 0 }
+param (/stdio; /process) : @(import("lib/std/builtin.zy")) in
+! (stdio/write_line) "hello, world!" { ! (process/exit) 0 }
 ```
 
 Check and run it:
@@ -50,10 +49,10 @@ there is no implicit prelude, distinguished `main` declaration, or authored proj
 The example above explicitly accepts the host's Builtin package and selects the operations it needs.
 The launcher supplies that package when running the program.
 
-Pure library terms can import just the foundational kinds and types:
+Pure library terms select the foundational kinds and types directly from the Builtin contract:
 
 ```zydeco
-let (/Ret; /Int64) = @(import("lib/std/prelude.zy")) in
+param (/Ret; /Int64) : @(import("lib/std/builtin.zy")) in
 fn (value : Int64) => (ret value : Ret Int64)
 ```
 
@@ -61,7 +60,8 @@ fn (value : Int64) => (ret value : Ret Int64)
 `zydeco check` accepts library terms as well as executable programs.
 `zydeco run` requires a computation accepting the Builtin package and ending in its `OS` protocol;
 a pure function or `ret 1` can pass checking without being a runnable file root.
-The [standard library guide](lib/std/README.md) describes the prelude, package assembly, and available operations.
+The [standard library guide](lib/std/README.md) describes the package boundary, library assembly,
+and available operations.
 
 ## Interactive REPL
 

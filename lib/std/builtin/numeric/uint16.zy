@@ -9,16 +9,14 @@ begin
     forall (R : CType) . A -> A -> Thk R -> Thk R -> R
   ) in
   let Render (A : VType) = Thk (A -> Ret String) in
-  exists
-    (= UInt16 as @(intrinsic(u16)) : VType)
-  .
-      (@[builtin(uint16_add)] (#add :: Binary UInt16))
-    * (@[builtin(uint16_sub)] (#sub :: Binary UInt16))
-    * (@[builtin(uint16_mul)] (#mul :: Binary UInt16))
-    * (@[builtin(uint16_div)] (#div :: Binary UInt16))
-    * (@[builtin(uint16_mod)] (#mod :: Binary UInt16))
-    * (@[builtin(uint16_eq)] (#eq :: Branch UInt16))
-    * (@[builtin(uint16_lt)] (#lt :: Branch UInt16))
-    * (@[builtin(uint16_gt)] (#gt :: Branch UInt16))
-    * (@[builtin(uint16_to_string)] (#to_string :: Render UInt16))
+  let UInt16 = @(intrinsic(u16)) in
+    (@[builtin(uint16_add)] (#add :: Binary UInt16))
+  * (@[builtin(uint16_sub)] (#sub :: Binary UInt16))
+  * (@[builtin(uint16_mul)] (#mul :: Binary UInt16))
+  * (@[builtin(uint16_div)] (#div :: Binary UInt16))
+  * (@[builtin(uint16_mod)] (#mod :: Binary UInt16))
+  * (@[builtin(uint16_eq)] (#eq :: Branch UInt16))
+  * (@[builtin(uint16_lt)] (#lt :: Branch UInt16))
+  * (@[builtin(uint16_gt)] (#gt :: Branch UInt16))
+  * (@[builtin(uint16_to_string)] (#to_string :: Render UInt16))
 end

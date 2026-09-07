@@ -1,9 +1,6 @@
 begin
-  param (/core; /numeric; /system) : @(import("../../std/builtin.zy")) that
-  let (/Ret) = core that
-  let (= Int64, int64) = numeric/int64 in
-  let (/process) = system in
-
+  param (/Ret; /process; /Int64; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  let int64 = numeric/int64 in
   let fix helper (x : Int64) : Ret Int64 =
     do one <- ret 1;
     ! int64/add x one

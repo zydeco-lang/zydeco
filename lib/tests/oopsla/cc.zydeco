@@ -2,11 +2,10 @@
 
 --| Funciton Type (A -> B)
 begin
-  param (/core; /numeric; /system) : @(import("../../std/builtin.zy")) that
-  let (/VType; /CType; /Thk; /Ret) = core that
-  let (= Int64, int64) = numeric/int64 that
-  let (/process) = system that
-
+  param (/VType; /CType; /Thk; /Ret; /process; /Int64; /numeric; /system) : @(import(
+    "../../std/builtin.zy"
+  )) that
+  let int64 = numeric/int64 that
   def Fn (A : VType) (B : CType) =
     codata
     | .push : A -> B

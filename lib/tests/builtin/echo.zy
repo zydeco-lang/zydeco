@@ -1,8 +1,5 @@
 begin
-  param (/core; /system) : @(import("../../std/builtin.zy")) that
-  let (/Thk) = core that
-  let (/OS; /stdio) = system that
-
+  param (/Thk; /OS; /stdio; /system) : @(import("../../std/builtin.zy")) that
   fix (loop : Thk OS) =>
     ! stdio/read_line {
       fn line => ! stdio/write_line line loop

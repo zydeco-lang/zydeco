@@ -1,7 +1,4 @@
 begin
-  param (/core; /system) : @(import("../../std/builtin.zy")) that
-  let (/Thk) = core that
-  let (/OS) = system that
-
+  param (/Thk; /OS; /system) : @(import("../../std/builtin.zy")) that
   fix (loop : Thk OS) => ! loop
 end

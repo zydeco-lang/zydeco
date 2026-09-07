@@ -1,8 +1,5 @@
 begin
-  param (/core; /representations; /system) : @(import("../../std/builtin.zy")) that
-  let (/VType; /CType; /Thk; /Ret) = core that
-  let (/Int64) = representations/i64 that
-  let (/process) = system that
+  param (/VType; /CType; /Thk; /Ret; /process; /Int64; /system) : @(import("../../std/builtin.zy")) that
   def ! apply (A : VType) (B : CType) (f : Thk (A -> B)) (x : A) : B = ! f x that
 
   do x <- ! apply Int64 (Ret Int64) { fn x => ret x } 0;

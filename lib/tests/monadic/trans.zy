@@ -1,8 +1,7 @@
 begin
   let monadic_basis = @(import("../../std/control/monad.zy")) that
-  param (/core; /system; builtin) : @(import("../../std/builtin.zy")) that
-  let (/VType; /CType; /Thk; /Unit) = core that
-  let (/process) = system that
+  param (/system; /VType; /CType; /Thk; /Unit; /process; builtin) :
+  @(import("../../std/builtin.zy")) that
   let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
   begin
 

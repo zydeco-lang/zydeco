@@ -1,9 +1,6 @@
 begin
   let make_std = @(import("../../std/std.zy")) that
-  param (/core; /representations; builtin) : @(import("../../std/builtin.zy")) that
-  let (/Ret) = core that
-  let (/Int64) = representations/i64 that
-
+  param (/Ret; /Int64; builtin) : @(import("../../std/builtin.zy")) that
   let (/Bool; /bool; /option; /list; /int64; /process) = builtin |> make_std in
   let ! status (condition : Bool) : Ret Int64 = ! bool/if
     (Ret Int64)

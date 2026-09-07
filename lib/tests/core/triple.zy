@@ -1,8 +1,5 @@
 begin
-  param (/core; /representations; /system) : @(import("../../std/builtin.zy")) that
-  let (/VType) = core that
-  let (/Int64) = representations/i64 that
-  let (/process) = system that
+  param (/VType; /process; /Int64; /system) : @(import("../../std/builtin.zy")) that
   def packed :
     exists (X : VType) (Y : VType) . X * Y * Int64 =
       (Int64, Int64, 10, 20, 0)

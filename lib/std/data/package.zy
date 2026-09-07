@@ -1,10 +1,9 @@
 val
   (
-    (/core; /numeric) : @(import("../builtin.zy"))
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /numeric) : @(import("../builtin.zy"))
   )
 =>
-  let (/VType; /CType; /Thk; /Ret; /Unit) = core in
-  let (= Int64, int64) = numeric/int64 in
+  let int64 = numeric/int64 in
   let Bool = @(import("bool.zy")) in
   let Option = @(import("option.zy")) in
   let Result = @(import("result.zy")) in

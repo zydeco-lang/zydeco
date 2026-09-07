@@ -1,8 +1,7 @@
 begin
-  param (/core; /numeric; /system) : @(import("../../std/builtin.zy")) that
-  let (/VType; /Thk; /Ret) = core that
-  let (= Int64, int64) = numeric/int64 that
-  let (/process) = system that
+  param (/VType; /Thk; /Ret; /process; /Int64; /numeric; /system) :
+  @(import("../../std/builtin.zy")) that
+  let int64 = numeric/int64 that
   let CounterLibrary = exists
     (
       #Counter = Representation as Int64 :
@@ -22,8 +21,8 @@ begin
   ) that
   let val use_counter
     ((= Counter, = zero, = increment) : CounterLibrary)
-    : Thk (Ret Int64) =
-    { ! increment zero }
+  : Thk (Ret Int64) =
+      { ! increment zero }
   that
 
   do value <- ! (counter |> use_counter);

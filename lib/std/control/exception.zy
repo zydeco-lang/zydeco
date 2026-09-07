@@ -1,10 +1,9 @@
 -- The Exception effect, packaged as a pure library over the Builtin signature.
 val
   (
-    (/core; builtin) : @(import("../builtin.zy"))
+    (/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))
   )
 =>
-  let (/VType; /CType; /Thk; /Ret; /Unit) = core in
   begin
     let monadic_basis = @(import("monad.zy")) that
     let (= Monad, = Algebra, ()) = builtin |> monadic_basis in

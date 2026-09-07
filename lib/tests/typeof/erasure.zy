@@ -1,6 +1,4 @@
-param (/core; /system) : @(import("../../std/builtin.zy")) in
-let (/VType; /Thk; /Ret) = core in
-let (/OS; /process) = system in
+param (/VType; /Thk; /Ret; /OS; /process; /system) : @(import("../../std/builtin.zy")) in
 let Int64 = @(intrinsic(i64)) in
 begin
   let Exit = @[typeof] ! process/exit 73 that

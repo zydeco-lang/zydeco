@@ -184,11 +184,11 @@ This complete example, saved in the repository root, checks `42` against a type 
 and applying the named constructor:
 
 ```zydeco
-let (/VType; /Int64) = @(import("lib/std/prelude.zy")) in
+param (/Ret; /VType; /Int64) : @(import("lib/std/builtin.zy")) in
 let Identity : VType -> VType = fn (X : VType) => X in
 let NamedIdentity : (#constructor :: (VType -> VType)) = (#constructor = Identity) in
 let IntAgain = NamedIdentity/constructor Int64 in
-(42 : IntAgain)
+ret (42 : IntAgain)
 ```
 
 `Set` remains the meta-level classifier of kinds.
@@ -274,10 +274,16 @@ while opening one package telescope.
 Irrefutable whole-value members retain that package for forwarding; general constructor aliases
 and arbitrary static aliases remain future extensions.
 
-Named projection recursively searches transparent named classifiers and product components.
-It requires exactly one matching field across the complete structure and exposes the payload beneath `Named`;
-missing and ambiguous matches are distinct static errors.
-Other type constructors, including unopened existential packages, are opacity boundaries for term projection.
+Named projection recursively searches transparent named classifiers, product components,
+and the telescopes of nested existential packages.
+Kind, manifest, and abstract binders contribute their public field names on the same terms
+as `#field = value` components, so one field-name universe spans the package system and named values.
+It requires exactly one matching field across the complete structure and exposes the payload beneath `Named`; missing
+and ambiguous matches are distinct static errors, and matches at different depths or of different sorts still collide.
+Other type constructors are opacity boundaries for term projection.
+Manifest packages are transparent to it, while a package with abstract witnesses is sealed:
+its fields count for uniqueness, but opening it changes identity and scope,
+so only a projection pattern, which is an elimination form, selects through it.
 An explicit chain performs a fresh search at each slash, so `term/outer/inner` can state or disambiguate a path.
 Type projection is the static counterpart over nested named kinds: if `T : (#field :: K)`, then `T/field : K`.
 A concrete projection `(#field = A)/field` reduces to `A`.
@@ -298,6 +304,9 @@ Unselected abstract fields receive anonymous witnesses,
 while checking a package-dependent abstraction reuses the canonical witnesses of its arrow.
 Selected static payloads bind those same witnesses or manifest definitions; the checker substitutes the opening
 through the package body and resolves selected dynamic fields structurally.
+The same search continues into nested packages: a selection may name a field
+of a package sitting inside a product component, each distinct nested package occurrence receives one shared opening,
+and selections through the same occurrence agree on its witnesses.
 Thus `let (/Item; /value; /consume) = package in ...` gives all three selections one package identity
 without naming every intervening field.
 A whole-value member in the group retains the opened witness prefix, allowing the package
@@ -444,12 +453,11 @@ erasure, and import rules and their acceptance and rejection cases.
 
 ## Standard Library and Host Boundary
 
-The standard library exposes compiler-canonical kinds and fixed-representation types through `lib/std/prelude.zy`.
-It is an ordinary package value with manifest fields, so importing `Int64`, `Thk`, or `Ret` needs no host argument.
-Repeated imports preserve the same intrinsic identities.
-
-Runtime capabilities enter through `lib/std/builtin.zy`, the launcher-supplied package contract.
-Its structural groups are `core`, `representations`, `numeric`, `text`, and `system`.
+Compiler-canonical kinds and fixed-representation types are manifest fields on the surface
+of `lib/std/builtin.zy`, the launcher-supplied package contract, so selecting `Int64`,
+`Thk`, or `Ret` is one field search and every selection shares one intrinsic identity.
+Its operation groups are `numeric`, `text`, and `system`, and the field search descends through them,
+so a source selects `(/stdio; /process)` without naming the enclosing group.
 Fixed-width numbers, `Char`, `String`, and `Bytes` are compiler-canonical types.
 `Reader`, `Writer`, and `OS` are abstract provider capabilities whose uses share one generative opening.
 This separates stable data representations from runtime ownership.
@@ -458,7 +466,7 @@ The [primitive package design](docs/proposals/primitive-packages.md) explains th
 `lib/std/std.zy` is a value function that assembles the public library from a Builtin argument.
 The `data`, `numeric`, `text`, and `system` topic packages are also value functions;
 topics that depend on the shared algebraic base accept that package alongside Builtin.
-The aggregate re-exports the prelude and the topics' types and operations.
+The aggregate carries the library-defined types and modules; host types stay on the Builtin contract.
 Package functions are values, while effectful operations inside the resulting packages retain computation types.
 See the [standard library guide](lib/std/README.md) for current entry points and package shapes.
 

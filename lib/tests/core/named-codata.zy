@@ -1,11 +1,8 @@
 -- Codata destructors remain dot eliminations. Their arguments and results may
 -- use named value types, and slash can project from a returned named value.
 begin
-  param (/core; /numeric; /system) : @(import("../../std/builtin.zy")) that
-  let (/Thk; /Ret) = core that
-  let (= Int64, int64) = numeric/int64 that
-  let (/process) = system that
-
+  param (/Thk; /Ret; /process; /Int64; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  let int64 = numeric/int64 that
   def Gauge =
     codata
     | .read : Ret ((#reading :: Int64) * Int64)

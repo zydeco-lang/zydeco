@@ -1,3 +1,2 @@
-param (/system) : @(import("../../std/builtin.zy")) in
-let (/process) = system in
+param (/process; /system) : @(import("../../std/builtin.zy")) in
 ! process/exit 0

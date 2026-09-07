@@ -6,8 +6,7 @@
 -- and make it an explicit parameter of this term.
 
 begin
-  param (/core) : @(import("../../lib/std/builtin.zy")) that
-  let (/VType; /Thk; /Ret; /Unit) = core that
+  param (/VType; /Thk; /Ret; /Unit) : @(import("../../lib/std/builtin.zy")) that
   def Option (A : VType) =
     data
     | +None : Unit

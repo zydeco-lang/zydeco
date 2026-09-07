@@ -1,9 +1,6 @@
 begin
-  param (/core; /numeric; /system) : @(import("../../std/builtin.zy")) that
-  let (/Ret) = core that
-  let (= Int64, int64) = numeric/int64 that
-  let (/process) = system that
-
+  param (/Ret; /process; /Int64; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  let int64 = numeric/int64 that
   def ! poly (x : Int64) : Ret Int64 =
     -- f(x) = x^2 + x + 10
     do s <- ! int64/mul x x;

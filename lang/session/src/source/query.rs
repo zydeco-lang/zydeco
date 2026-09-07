@@ -963,23 +963,14 @@ mod tests {
         let builtin = library.join("builtin.zy").canonicalize().unwrap();
         let source = format!(
             r#"let Builtin = @[import("{builtin}")] _ in
-param (/core; /representations; /numeric; /system; builtin) : Builtin in
-let (/VType; /CType; /Thk; /Ret; /Unit) = core in
-let (/Int8) = representations/i8 in
-let (/Int16) = representations/i16 in
-let (/Int32) = representations/i32 in
-let (/Int64) = representations/i64 in
-let (/UInt8) = representations/u8 in
-let (/UInt16) = representations/u16 in
-let (/UInt32) = representations/u32 in
-let (/UInt64) = representations/u64 in
-let (/Float32) = representations/f32 in
-let (/Float64) = representations/f64 in
-let (/Char) = representations/char in
-let (/String) = representations/string in
-let (/Bytes) = representations/bytes in
-let (#Int64 = NumericInt64, int64) = numeric/int64 in
-let (/Reader; /Writer; /OS; /process) = system in
+param (
+  /VType; /CType; /Thk; /Ret; /Unit;
+  /Int8; /Int16; /Int32; /Int64;
+  /UInt8; /UInt16; /UInt32; /UInt64;
+  /Float32; /Float64; /Char; /String; /Bytes;
+  /Reader; /Writer; /OS; /numeric; /process; builtin
+) : Builtin in
+let int64 = numeric/int64 in
 let Thunk = Thk in
 let U = Thk in
 let F = Ret in

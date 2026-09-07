@@ -17,7 +17,7 @@ begin
     (Scalar : VType)
     (String : VType)
     (
-      _ : @(import("../builtin/core.zy")),
+      (/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy")),
       _ : BoolModule Bool,
       _ : PrimitiveFloatModule Scalar String,
       _ : Scalar,

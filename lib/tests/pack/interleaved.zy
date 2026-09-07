@@ -1,9 +1,8 @@
 begin
-  param (/core; /representations; /numeric; /system) : @(import("../../std/builtin.zy")) that
-  let (/VType; /Ret; /Unit) = core that
-  let (= Int64, int64) = numeric/int64 that
-  let (/Char) = representations/char that
-  let (/process) = system that
+  param (/VType; /Ret; /Unit; /process; /Char; /Int64; /numeric; /system) : @(import(
+    "../../std/builtin.zy"
+  )) that
+  let int64 = numeric/int64 that
   let Interleaved = exists (Leading as Unit : VType)
     (X : VType)
     (AliasX as X : VType)

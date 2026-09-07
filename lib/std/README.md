@@ -2,24 +2,24 @@
 
 ## Start with the types
 
-Import [`prelude.zy`](prelude.zy) to select the foundational types directly:
+Select the foundational kinds and types directly from the Builtin contract:
 
 ```zydeco
-let (/VType; /CType; /Ret; /Thk; /Int64; /Float32; /Float64) = @(import("lib/std/prelude.zy")) in
+param (/VType; /CType; /Ret; /Thk; /Int64; /Float32; /Float64) : @[import("lib/std/builtin.zy")] _ in
 ...
 ```
 
 The path above is relative to a source file in the repository root.
-The prelude is an ordinary package value: importing it requires no Builtin argument or standard-library assembly.
-Its manifest fields disclose compiler-canonical types, so separate imports and runtime operations share the same
-type identities. A pure library function can therefore state its interface with just this import:
+The contract's surface carries the compiler-canonical kinds and types as manifest fields,
+so one field search reaches every public name and every selection shares one type identity.
+A pure library function states its interface with just this parameter:
 
 ```zydeco
-let (/Ret; /Int64) = @(import("lib/std/prelude.zy")) in
+param (/Ret; /Int64) : @[import("lib/std/builtin.zy")] _ in
 fn (value : Int64) => (ret value : Ret Int64)
 ```
 
-The available names are:
+The available surface names are:
 
 | Family | Names |
 | --- | --- |
@@ -28,16 +28,13 @@ The available names are:
 | Unsigned integers | `UInt8`, `UInt16`, `UInt32`, `UInt64` |
 | Floating point | `Float32`, `Float64` |
 | Text and bytes | `Char`, `String`, `Bytes` |
-| Alternate CBPV notation | `Thunk`, `U` for `Thk`; `F` for `Ret` |
+| Capabilities | `Reader`, `Writer`, `OS` |
 
-Host operations still come from an explicit Builtin parameter.
-The [integer example](../tests/std/minimal.zy) uses the prelude's `Int64` and `Ret` in a function signature,
-then uses `std` for arithmetic. An already assembled standard package also exports this same prelude:
-
-```zydeco
-let (/prelude = (/VType; /CType; /Ret; /Thk; /Int64); /int64; /process) = builtin |> make_std in
-...
-```
+Host operations live in the same contract under the `numeric`, `text`, and `system` groups, and the search descends
+through them: `param (/stdio; /process) : @[import("lib/std/builtin.zy")] _ in` selects two operations
+from the `system` group without naming it.
+The [integer example](../tests/std/minimal.zy) selects `Int64` and `Ret` this way,
+then uses the assembled standard package for arithmetic.
 
 ## Library boundaries
 
@@ -48,32 +45,29 @@ but never construct library-defined `Bool`, `Option`, `Result`, or `List` values
 [`std.zy`](std.zy) applies the topic packages in this directory and assembles the public package,
 whose sealed type its final `pack` introduction synthesizes.
 
-Each topic owns exactly one implementation: `data`, `text`, `system`, and `numeric` each provide
-`package.zy`, sealed by a final `pack` introduction whose existential type the checker synthesizes,
+Each topic owns exactly one implementation: `data`, `text`, `system`, and `numeric` each provide `package.zy`,
+sealed by a final `pack` introduction whose existential type the checker synthesizes,
 so importers splice the implementation without a companion annotation.
-Implementations annotate their parameters in place:
-the Builtin group through `builtin.zy`, and the shared algebraic base through `data/package.type.zy`.
+Implementations annotate their parameters in place: the Builtin group through `builtin.zy`,
+and the shared algebraic base through `data/package.type.zy`.
 The implementation defines its topic's data types and operations in one dependency-scheduled block,
 so derived operations sit next to the types they observe and no per-module contract split remains.
-`data/package.type.zy` names that shared base type directly,
-carrying the data topic's existential witnesses and module telescopes in one declaration.
+`data/package.type.zy` names that shared base type directly, carrying the data topic's existential witnesses
+and module telescopes in one declaration.
 Type files bind `VType` and `CType` once at the top of the file and use those aliases in every classifier below.
 
 This separation keeps algebraic data in the language.
-The interpreter and native runtime only need to agree on the small Builtin ABI, while the files under `data/`
-and the derived operations in the topic packages remain ordinary Zydeco code.
+The interpreter and native runtime only need to agree on the small Builtin ABI,
+while the files under `data/` and the derived operations in the topic packages remain ordinary Zydeco code.
 
 ## Source layout
 
 The files at the root of this directory define the public entry points:
 
 ```text
-builtin.zy                 complete host ABI and shared system witness telescope
+builtin.zy                 complete host ABI: surface kinds and types, operation groups
 std.zy                     wiring for the public package
-prelude.zy                 directly importable core and fixed-representation types
 
-builtin/core.zy            CBPV kinds and constructors
-builtin/representations.zy fixed representation packages
 builtin/numeric/*.zy       exact-width primitive operations
 builtin/text/*.zy          Char, String, and Bytes host operations
 builtin/system/*.zy        I/O, filesystem, streams, arguments, randomness, process
@@ -83,7 +77,7 @@ data/package.type.zy       DataPackage existential wrapper with the module teles
 data/bool.type.zy          BoolModule telescope shared with the numeric builders
 
 numeric/{integer,float}.zy explicitly polymorphic derived numeric builders
-numeric/package.zy         the ten width modules, instances, and primitive groups
+numeric/package.zy         the ten width modules and their capability dictionaries
 
 text/package.zy            cross-representation text operations
 
@@ -94,32 +88,35 @@ control/*.zy               monadic basis, State, Exception, and their combinatio
 **/*.type.zy               reusable type terms imported by implementations and companions
 ```
 
-Topic implementations are independently checkable package functions. The public package keeps one opening for
-`Reader`, `Writer`, and `OS`; splitting that opening would give related I/O operations incompatible abstract types.
+Topic implementations are independently checkable package functions.
+The public package keeps one opening for `Reader`, `Writer`, and `OS`; splitting
+that opening would give related I/O operations incompatible abstract types.
 No compatibility forwarding files remain at the old flat paths.
 
 ## Builtin packages
 
-The host contract is one launcher-supplied value divided into structural dependency groups:
+The host contract is one launcher-supplied value.
+Its complete leading telescope carries every public static name as a manifest field — the CBPV kinds,
+constructors, and fixed-representation types — followed by the three generative system capabilities,
+and its body groups the runtime operations:
 
-- `core`: `VType`, `CType`, `Thk`, `Ret`, and `Unit`.
-- `representations`: manifest packages for `i8` through `i64`, `u8` through `u64`, `f32`, `f64`,
-  `char`, `string`, and `bytes`, each field carrying its public type name.
-- `numeric`: exact-width arithmetic, branch comparisons, and rendering, each package disclosing its carrier
-  under that carrier's name, such as `#Int64`.
+- Surface: `VType`, `CType`, `Thk`, `Ret`, `Unit`, the ten fixed-width numeric types, `Char`, `String`,
+  and `Bytes`, then abstract `Reader`, `Writer`, and `OS`.
+- `numeric`: exact-width arithmetic, branch comparisons, and rendering, one plain operation module per representation.
 - `text`: operations crossing `Char`, `String`, `Bytes`, and `Int64`.
-- `system`: abstract `Reader`, `Writer`, and `OS` capabilities plus I/O, filesystem, standard stream,
-  argument, randomness, and process operations.
+- `system`: the re-exposed capabilities plus I/O, filesystem, standard stream, argument,
+  randomness, and process operations.
 
-Fixed representations are compiler-canonical intrinsics, so independent packages that select `i64` share one
-`Int64` identity. Only the runtime-owned system capabilities are generative existential types. Consumers first
-project the groups they need and then open those narrower packages; the composition root retains the complete
-Builtin value when it must pass the dependency onward. See
-[Modular primitive packages](../../docs/proposals/primitive-packages.md) for the design and usage examples.
+Each public name is unique across the complete package, so one field search reaches kinds, types,
+operations, and capabilities alike, and every selection shares the contract's identities.
+Fixed representations are compiler-canonical intrinsics, so independent selections share one `Int64` identity.
+Only the runtime-owned system capabilities are generative existential types.
+A composition root that must pass the dependency onward keeps the whole-alias `builtin` beside its selections.
+See [Modular primitive packages](../../docs/proposals/primitive-packages.md) for the design and usage examples.
 Compiler intrinsics are spliced inline as `@(intrinsic(name))` wherever a contract needs the canonical term,
 so no one-line indirection files sit between type expressions and the compiler metadata they name.
-Builtin leaves bind the intrinsic kinds and constructors they use at the top of the file, so their classifiers
-read as ordinary type expressions.
+Builtin leaves bind the intrinsic kinds and constructors they use at the top of the file,
+so their classifiers read as ordinary type expressions.
 
 ## Text model
 
@@ -142,8 +139,8 @@ Positions and lengths count octets, not scalars, and `bytes/get` reports one oct
 with `value` where the backend supports it, so decomposing a buffer does not copy it.
 Two buffers are equal exactly when their octet sequences are equal;
 `bytes/lt` compares buffers lexicographically octet by octet.
-Construction from single octets goes through `bytes/singleton`, which is total because
-every `UInt8` is a valid octet; the byte-level FFI contract treats borrowed buffers as read-only.
+Construction from single octets goes through `bytes/singleton`, which is total because every `UInt8` is a valid octet;
+the byte-level FFI contract treats borrowed buffers as read-only.
 
 Unicode scalar values are deliberately different from user-perceived grapheme clusters.
 For example, a combining mark occupies its own position.
@@ -165,8 +162,8 @@ list/get            : forall (A : VType) . List A -> Int64 -> Ret (Option A)
 ```
 
 `bytes/get` returns the octet at a position as a `UInt8`, the type an octet already is.
-`bytes/singleton` is the dual construction and stays total: its `UInt8` parameter makes
-every input valid, so no branch is needed.
+`bytes/singleton` is the dual construction and stays total: its `UInt8` parameter makes every input valid,
+so no branch is needed.
 `bytes/slice` takes a start and a length rather than two indices,
 so a window names the same things a pointer-and-length foreign call would.
 An empty window at the end of a buffer is valid; negative components, overlong windows,
@@ -178,8 +175,8 @@ The public library reifies a successful branch with `option/some` and a failed b
 Neither backend has a hidden sentinel, and malformed input does not panic the host runtime.
 
 The integer types are `Int8`, `Int16`, `Int32`, `Int64`, `UInt8`, `UInt16`, `UInt32`, and `UInt64`.
-Their representations and arithmetic domains correspond directly to Rust's `i8` through `i64` and `u8` through
-`u64`; arithmetic wraps at the selected width, and signed and unsigned comparisons remain distinct.
+Their representations and arithmetic domains correspond directly to Rust's `i8` through `i64` and `u8` through `u64`;
+arithmetic wraps at the selected width, and signed and unsigned comparisons remain distinct.
 Integer division and remainder are not yet wrapped in checked operations.
 The generic numeric capability layer deliberately excludes them;
 a future checked-arithmetic capability should make their failure behavior explicit.
@@ -190,16 +187,16 @@ The float modules provide arithmetic, comparisons, negation, and shortest round-
 Division by zero, infinities, signed zero, and NaN follow IEEE-754 behavior.
 In particular, every ordered comparison with NaN is false, while `float32/ne` and `float64/ne` report true.
 
-The `numeric` module contains one explicit dictionary for each fixed-width numeric representation.
-Each instance discloses its carrier through a manifest field named after that carrier and nests additive,
-multiplicative, equality, and ordering capabilities.
+The `dictionaries` module contains one explicit capability dictionary for each fixed-width numeric representation,
+naming it after its width, such as `int64_dictionary`.
+Each dictionary nests additive, multiplicative, equality, and ordering capabilities.
 Generic functions accept these dictionaries as ordinary arguments;
 the standard library does not perform implicit instance search.
 
-The `primitives` module exposes the exact host-facing operations for low-level code under the corresponding Rust
-representation names: `i8` through `i64`, `u8` through `u64`, `f32`, and `f64`.
-Its comparisons select one of two computation continuations directly, avoiding a dependency on the library's
-`Bool` representation. The width-specific top-level modules reify those branches as `Bool` and add derived helpers.
+The exact host-facing operations live directly in the Builtin contract's `numeric` group, one module per width.
+Their comparisons select one of two computation continuations directly,
+avoiding a dependency on the library's `Bool` representation.
+The width-specific modules in the public package reify those branches as `Bool` and add derived helpers.
 
 ## Public modules
 
@@ -207,16 +204,14 @@ Its comparisons select one of two computation continuations directly, avoiding a
 - `option`: construction, elimination, mapping, chaining, defaults, and zipping.
 - `result`: successful and failed results, elimination, mapping, chaining, defaults, and predicates.
 - `list`: construction, right and left folds, append, map, reverse, length, safe indexing, head, and tail.
-- `numeric`: manifest instances for all ten numeric representations and explicitly passed capability dictionaries.
-- `primitives`: exact-width arithmetic, branch comparisons, and rendering under Rust representation names.
+- `dictionaries`: one explicitly passed capability dictionary per numeric representation.
 - `int8` through `int64` and `uint8` through `uint64`: arithmetic, complete comparisons,
   successor/predecessor, wrapping negation, extrema, and string rendering.
 - `float32` and `float64`: IEEE-754 arithmetic, comparisons, negation, and string rendering.
 - `char`: UTF-8 text rendering and checked Unicode codepoint conversion.
 - `string`: scalar-aware observation, safe decomposition, character-list conversion, concatenation, and parsing.
 - `bytes`: immutable octet buffers with indexed access, sharing slices, singleton construction,
-  structural equality, lexicographic order, list conversion, concatenation,
-  UTF-8 encoding, and checked UTF-8 decoding.
+  structural equality, lexicographic order, list conversion, concatenation, UTF-8 encoding, and checked UTF-8 decoding.
 - `io`: shared byte-stream reads and writes, flushing, closing, and structured I/O errors.
 - `fs`: typed paths, file-backed capabilities, and whole-file byte and UTF-8 text operations.
 - `stdio`: standard stream capabilities and UTF-8 terminal conveniences built from `io` operations.
@@ -229,9 +224,10 @@ The full rationale and lifecycle contract are documented
 in [`docs/proposals/filesystem.md`](../../docs/proposals/filesystem.md).
 
 The topic files are independently importable value functions.
-`std.zy` is the composition root used by most programs and re-exports their abstract type witnesses in one package.
-Its public record nests one sub-record per topic, and its sealed type is synthesized from the final
-`pack` introduction, so no restated contract sits between the implementation and its consumers.
-Consumers still select individual modules and types directly, such as
-`let make_std ~> (/option; /process) = builtin in`, because slash projection searches the nested structure.
+`std.zy` is the composition root used by most programs; its public package carries the library-defined types
+and modules, while the Builtin contract remains the home of every host type and capability.
+Its public record nests one sub-record per topic, and its sealed type is synthesized from the final `pack` introduction,
+so no restated contract sits between the implementation and its consumers.
+Consumers still select individual modules and types directly,
+such as `let make_std ~> (/option; /process) = builtin in`, because slash projection searches the nested structure.
 Here `~>` is a view pattern over the imported value function; the function itself is an ordinary value.

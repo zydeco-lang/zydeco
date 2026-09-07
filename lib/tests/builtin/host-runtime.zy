@@ -1,12 +1,10 @@
 begin
-  param (/core; /representations; /numeric; /text; /system) : @(import("../../std/builtin.zy")) that
-  let (/Ret) = core that
-  let (= Int64, int64) = numeric/int64 that
-  let (/Char) = representations/char that
+  param (/Ret; /OS; /args; /process; /Char; /Int64; /numeric; /text; /system) : @(import(
+    "../../std/builtin.zy"
+  )) that
+  let int64 = numeric/int64 that
   let char = text/char that
   let string = text/string that
-  let (/OS; /args; /process) = system that
-
   do twelve <- ! int64/to_string 12;
   do combined <- ! string/append twelve twelve;
   do length <- ! string/length combined;

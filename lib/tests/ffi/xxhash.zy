@@ -1,10 +1,10 @@
 begin
   let make_xxhash = @(import("../../ffi/xxhash.zy")) that
-  param (/core; /text; /numeric; /system; builtin) : @(import("../../std/builtin.zy")) that
-  let (/OS) = system that
-  let (/process) = system that
+  param (/text; /numeric; /system; /OS; /process; /UInt64; builtin) : @(import(
+    "../../std/builtin.zy"
+  )) that
   let bytes = text/bytes that
-  let (= UInt64, uint64) = numeric/uint64 that
+  let uint64 = numeric/uint64 that
   let (/xxh64; /xxh3_64bits) = builtin |> make_xxhash in
 
   do input <- ! bytes/from_string "hello";

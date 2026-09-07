@@ -1,8 +1,5 @@
 begin
-  param (/representations; /system) : @(import("../../std/builtin.zy")) that
-  let (/Int64) = representations/i64 that
-  let (/OS; /stdio; /process) = system that
-
+  param (/OS; /stdio; /process; /Int64; /system) : @(import("../../std/builtin.zy")) that
   ! stdio/read_line {
     fn line =>
       let ! f (z : Int64) : OS =

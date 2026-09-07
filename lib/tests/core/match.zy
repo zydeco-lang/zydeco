@@ -5,10 +5,7 @@ begin
     | +True : Unit
     end
   that
-  param (/core; /system) : @(import("../../std/builtin.zy")) that
-  let (/Unit) = core that
-  let (/process) = system that
-
+  param (/Unit; /process; /system) : @(import("../../std/builtin.zy")) that
   let x : Bool = +False() in
   match x
   | +True(_) => ! process/exit 10

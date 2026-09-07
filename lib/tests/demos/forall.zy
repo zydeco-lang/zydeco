@@ -1,9 +1,7 @@
 begin
-  param (/core; /representations; /system) : @(import("../../std/builtin.zy")) that
-  let (/VType; /CType; /Thk; /Ret) = core that
-  let (/Int64) = representations/i64 that
-  let (/OS; /process) = system that
-
+  param (/VType; /CType; /Thk; /Ret; /OS; /process; /Int64; /system) : @(import(
+    "../../std/builtin.zy"
+  )) that
   def ! id (A : VType) (value : A) : Ret A = ret value that
   def ! id~ (B : CType) (b : Thk B) : B = ! b that
 

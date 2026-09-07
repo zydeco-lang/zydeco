@@ -1,8 +1,5 @@
 begin
-  param (/core; /system) : @(import("../../std/builtin.zy")) that
-  let (/VType; /CType; /Thk) = core that
-  let (/OS; /process) = system that
-
+  param (/VType; /CType; /Thk; /OS; /process; /system) : @(import("../../std/builtin.zy")) that
   def Kont (A : VType) (B : CType) =
     data
     | +Running : Thk B

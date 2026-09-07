@@ -1,8 +1,6 @@
 begin
-  param (/numeric; /system) : @(import("../../std/builtin.zy")) that
-  let (= Int64, int64) = numeric/int64 that
-  let (/process) = system that
-
+  param (/process; /Int64; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  let int64 = numeric/int64 that
   do quotient <- ! int64/div -7 3;
   do remainder <- ! int64/mod -7 3;
   do quotient_error <- ! int64/sub quotient -2;

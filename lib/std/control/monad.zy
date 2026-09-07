@@ -1,9 +1,8 @@
 val
   (
-    (/core; builtin) : @(import("../builtin.zy"))
+    (/VType; /CType; /Thk; /Unit; builtin) : @(import("../builtin.zy"))
   )
 =>
-  let (/VType; /CType; /Thk; /Unit) = core in
   begin
     -- Shared Monad and algebra type constructors.
     let Monad = @(import("monad.type.zy")) that

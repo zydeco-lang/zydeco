@@ -1,18 +1,32 @@
 begin
-  param (/numeric; /text; /system) : @(import("../../std/builtin.zy")) that
-  let (= Int8, int8) = numeric/int8 that
-  let (= Int16, int16) = numeric/int16 that
-  let (= Int32, int32) = numeric/int32 that
-  let (= Int64, int64) = numeric/int64 that
-  let (= UInt8, uint8) = numeric/uint8 that
-  let (= UInt16, uint16) = numeric/uint16 that
-  let (= UInt32, uint32) = numeric/uint32 that
-  let (= UInt64, uint64) = numeric/uint64 that
-  let (= Float32, float32) = numeric/float32 that
-  let (= Float64, float64) = numeric/float64 that
+  param (
+    /OS;
+    /process;
+    /Int8;
+    /Int16;
+    /Int32;
+    /Int64;
+    /UInt8;
+    /UInt16;
+    /UInt32;
+    /UInt64;
+    /Float32;
+    /Float64;
+    /numeric;
+    /text;
+    /system
+  ) : @(import("../../std/builtin.zy")) that
+  let int8 = numeric/int8 that
+  let int16 = numeric/int16 that
+  let int32 = numeric/int32 that
+  let int64 = numeric/int64 that
+  let uint8 = numeric/uint8 that
+  let uint16 = numeric/uint16 that
+  let uint32 = numeric/uint32 that
+  let uint64 = numeric/uint64 that
+  let float32 = numeric/float32 that
+  let float64 = numeric/float64 that
   let string = text/string that
-  let (/OS; /process) = system that
-
   do int8_value <- ! int8/add 127 1;
   ! int8/eq OS int8_value -128 {
     do int16_value <- ! int16/sub -32768 1;

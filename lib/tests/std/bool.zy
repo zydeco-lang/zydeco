@@ -1,8 +1,6 @@
 begin
   let make_std = @(import("../../std/std.zy")) that
-  param (/system; builtin) : @(import("../../std/builtin.zy")) that
-  let (/OS) = system that
-
+  param (/system; /OS; builtin) : @(import("../../std/builtin.zy")) that
   let (/Bool; /bool; /process) = builtin |> make_std in
   do result <- ! bool/not (+False() : Bool);
   match result

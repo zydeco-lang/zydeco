@@ -1,9 +1,6 @@
 begin
-  param (/core; /numeric; /system) : @(import("../../std/builtin.zy")) that
-  let (/Ret; /Unit) = core that
-  let (= Int64, int64) = numeric/int64 that
-  let (/process) = system that
-
+  param (/Ret; /Unit; /process; /Int64; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  let int64 = numeric/int64 that
   def Bool =
     data
     | +True : Unit

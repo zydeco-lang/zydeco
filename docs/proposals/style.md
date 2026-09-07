@@ -18,10 +18,7 @@ before producing a computation or package:
 ```zydeco
 begin
   let make_std = @[import("../std/std.zy")] _ that
-  param (/core; /representations; /system; builtin) : @[import("../std/builtin.zy")] _ that
-  let (/VType; /Thk) = core that
-  let (/String) = representations/string that
-  let (/OS) = system that
+  param (/VType; /Thk; /String; /OS; builtin) : @[import("../std/builtin.zy")] _ that
 
   ...
 end
@@ -47,7 +44,8 @@ ret pair
 ```
 
 When the file itself is a parameterized term, write its parameters as leading `param` or `param val` binders,
-according to the result judgment, instead of naming a wrapper function and returning it. For a type family:
+according to the result judgment, instead of naming a wrapper function and returning it.
+For a type family:
 
 ```zydeco
 param Bool : VType in
@@ -55,12 +53,12 @@ exists (= Int64 as @(intrinsic(i64)) : VType) .
   Numeric Bool Int64
 ```
 
-The importing file binds the result under whatever name it chooses,
-so a wrapper name that is only returned once adds no information.
+The importing file binds the result under whatever name it chooses, so a wrapper name
+that is only returned once adds no information.
 Keep an ordinary `let` when the body references the binding more than once.
 
-When a value function's implementation is itself a block, make the block the outer term and contribute its
-parameters with `param val`:
+When a value function's implementation is itself a block, make the block the outer term
+and contribute its parameters with `param val`:
 
 ```zydeco
 begin
@@ -134,9 +132,9 @@ that
 Give exported components, type parameters, and informative patterns explicit annotations.
 Expected-type inference keeps small local bindings concise.
 The useful annotation is the one that states a boundary a reader would otherwise have to reconstruct.
-Keep the annotation on its pattern's final line. When the pattern expands across lines,
-attach `: classifier` to its closing delimiter; a source break alone does not justify a singleton wrapper
-or force the classifier onto another line.
+Keep the annotation on its pattern's final line.
+When the pattern expands across lines, attach `: classifier` to its closing delimiter;
+a source break alone does not justify a singleton wrapper or force the classifier onto another line.
 
 ## Showing the CBPV Boundary
 
@@ -176,8 +174,7 @@ so a projected operation needs no parentheses at a forcing site:
 
 Parenthesize the prefix expression when projecting from its result, as in `(! thunk)/field`.
 
-New code uses `Thk` and `Ret`, the names supplied by the builtin package.
-`Thunk`, `U`, and `F` remain available through the standard prelude for sources that use the earlier vocabulary.
+New code uses `Thk` and `Ret`, the names supplied by the builtin package's surface.
 
 ## Names
 
@@ -205,9 +202,9 @@ Longer-lived APIs benefit from descriptive words instead of chains of primes.
 Named components use one spelling for the classifier and another for the payload.
 `#field :: A` classifies a named payload, while `#field = value` introduces or patterns against it.
 The `#` marker appears exactly where a field name stands on the left of `=` or `::`,
-the positions where a bare identifier would read as a variable or binder;
-announced positions carry no marker, so `term/field` projects, `/field = pattern` searches,
-and `= field` is the concise field pun when field and variable share a name.
+the positions where a bare identifier would read as a variable or binder; announced positions carry no marker,
+so `term/field` projects, `/field = pattern` searches, and `= field` is the concise field pun when field
+and variable share a name.
 
 Parentheses make the extent of a named component explicit:
 
@@ -221,11 +218,11 @@ and value components use `lower_snake_case`.
 Place an abstract type component before the values whose classifiers mention it.
 A manifest existential records a representation equation as part of the interface;
 an ordinary existential publishes the abstract identity alone.
-Write signature binders with the field pun, as in `exists (= Bool : VType)` or
-`exists (= Int64 as @(intrinsic(i64)) : VType)`,
-so the public field name and the payload binder coincide and the body refers to the public name directly.
-The explicit `exists (#Int64 = Hidden : VType)` form is reserved for a provider whose local binder
-genuinely needs a different name.
+Write signature binders with the field pun, as in `exists (= Bool : VType)`
+or `exists (= Int64 as @(intrinsic(i64)) : VType)`, so the public field name
+and the payload binder coincide and the body refers to the public name directly.
+The explicit `exists (#Int64 = Hidden : VType)` form is reserved for a provider
+whose local binder genuinely needs a different name.
 The order of these components forms a telescope and remains significant.
 
 Library packages are easiest to use when their components are named.
@@ -255,20 +252,19 @@ At a package boundary, use one projection-pattern group to open the existential 
 and bind only the public types and module values the consumer needs:
 
 ```zydeco
-param (/core; /representations; builtin) : @[import("../std/builtin.zy")] _ in
-let (/VType; /Thk) = core in
-let (/String) = representations/string in
+param (/VType; /Thk; /String; builtin) : @[import("../std/builtin.zy")] _ in
 let (/int64; /process) = builtin |> make_std in
 ...
 ```
 
-Selected outer groups share the same Builtin value. Open each selected group once, place manifest type fields
-before value modules, and retain their interface order when it makes the list easier to compare with the provider.
-A representation discloses its type under that type's public name, so the ordinary pun binds it directly, as in
-`let (/Int64) = representations/i64 in`.
+One selection group shares the same Builtin value, and its field search reaches every public name:
+the surface's kinds and types, the nested operation groups, and the system capabilities alike.
+Place manifest type fields before value modules, and retain the provider's order
+when it makes the list easier to compare with the contract.
+The surface discloses each fixed representation under its public name,
+so the ordinary pun binds it directly, as in `/Int64` inside the group.
 Use an explicit rename only when the consumer has a clearer role name.
-Select Builtin operations as module values and keep individual calls qualified,
-such as `int64/add` and `process/exit`.
+Select Builtin operations as module values and keep individual calls qualified, such as `int64/add` and `process/exit`.
 A final ordinary pattern such as `builtin` retains the complete package for forwarding,
 while the preceding projections introduce only the requested local names.
 Omit that alias when the consumer does not forward the package.
@@ -276,15 +272,13 @@ This projection-pattern idiom serves the role of package `use` without adding a 
 
 The canonical builtin package is the single source of `@[builtin(...)]` host-capability metadata.
 Compiler intrinsics, in contrast, are canonical importable terms in their own right:
-a source splices `@[intrinsic(i64)] _` directly where the term is needed,
-while host operations are acquired by importing the builtin package and projecting only the required
-dependencies, which keeps the names subject to ordinary language-level resolution
-without repeating the complete host interface.
+a source splices `@[intrinsic(i64)] _` directly where the term is needed, while host operations are acquired
+by importing the builtin package and projecting only the required dependencies,
+which keeps the names subject to ordinary language-level resolution without repeating the complete host interface.
 
-Within that signature, fixed representations use canonical primitive intrinsics such as
-`@[intrinsic(i64)] _` and are re-exported through manifest packages whose fields carry the public type names.
-Host-type roles are reserved for abstract capability patterns,
-as in `exists @[builtin(reader)] (Reader : VType) . ...`.
+Within that signature, fixed representations use canonical primitive intrinsics such as `@[intrinsic(i64)] _`
+and are re-exported through manifest packages whose fields carry the public type names.
+Host-type roles are reserved for abstract capability patterns, as in `exists @[builtin(reader)] (Reader : VType) . ...`.
 This keeps generative resource identities beside the provider boundary that owns them.
 Host-operation roles are accepted only on term classifiers,
 where they should annotate the corresponding labeled classifier.

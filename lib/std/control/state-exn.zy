@@ -1,10 +1,9 @@
 -- A combined State + Exception stack, built from the two effect interfaces.
 val
   (
-    (/core; builtin) : @(import("../builtin.zy"))
+    (/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))
   )
 =>
-  let (/VType; /CType; /Thk; /Ret; /Unit) = core in
   begin
     let monadic_basis = @(import("monad.zy")) that
     let state_basis = @(import("state.zy")) that

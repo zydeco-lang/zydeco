@@ -1,6 +1,5 @@
-param (/numeric; /system) : @(import("../../std/builtin.zy")) in
-let (= Int64, int64) = numeric/int64 in
-let (/OS; /stdio; /process) = system in
+param (/OS; /stdio; /process; /Int64; /numeric; /system) : @(import("../../std/builtin.zy")) in
+let int64 = numeric/int64 in
 ! stdio/read_int
   { ! process/exit 1 }
   {

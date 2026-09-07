@@ -1,10 +1,7 @@
 -- Integer literal patterns select match arms by numeric equality.
 begin
   let make_std = @(import("../../std/std.zy")) that
-  param (/core; /representations; builtin) : @(import("../../std/builtin.zy")) that
-  let (/VType; /Unit; /Ret) = core that
-  let (/Int64) = representations/i64 that
-  let (/Int8) = representations/i8 that
+  param (/VType; /Unit; /Ret; /Int64; /Int8; builtin) : @(import("../../std/builtin.zy")) that
   let (/int64; /process) = builtin |> make_std that
 
   let Tagged =

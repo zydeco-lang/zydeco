@@ -3,12 +3,10 @@
 -- As it is a CBPV language, our syntax distinguishes between values
 -- and computations
 begin
-  param (/core; /representations; /text; /system) : @(import("../../std/builtin.zy")) that
-  let (/VType; /CType; /Thk; /Ret; /Unit) = core that
-  let (/String) = representations/string that
+  param (/VType; /CType; /Thk; /Ret; /Unit; /stdio; /process; /String; /text; /system) : @(import(
+    "../../std/builtin.zy"
+  )) that
   let string = text/string that
-  let (/stdio; /process) = system that
-
   def SynVal : VType =
     data
     | +Var : String

@@ -3,66 +3,79 @@ exists
   -- the rest of the signature.
   (VType as @(intrinsic(vtype)))
   (CType as @(intrinsic(ctype)))
+  -- Compiler-canonical types are manifest components on the surface: every
+  -- public name is unique across the complete package, so consumers select
+  -- kinds, types, operations, and capabilities by direct field search.
+  (
+    = Thk as @(intrinsic(thk)) : CType -> VType)
+  (= Ret as @(intrinsic(ret)) : VType -> CType)
+  (= Unit as @(intrinsic(unit)) : VType)
+  (= Int8 as @(intrinsic(i8)) : VType)
+  (= Int16 as @(intrinsic(i16)) : VType)
+  (= Int32 as @(intrinsic(i32)) : VType)
+  (= Int64 as @(intrinsic(i64)) : VType)
+  (= UInt8 as @(intrinsic(u8)) : VType)
+  (= UInt16 as @(intrinsic(u16)) : VType)
+  (= UInt32 as @(intrinsic(u32)) : VType)
+  (= UInt64 as @(intrinsic(u64)) : VType)
+  (= Float32 as @(intrinsic(f32)) : VType)
+  (= Float64 as @(intrinsic(f64)) : VType)
+  (= Char as @(intrinsic(char)) : VType)
+  (= String as @(intrinsic(string)) : VType)
+  (= Bytes as @(intrinsic(bytes)) : VType)
+  -- Effect capabilities remain generative at the provider boundary.
+  @[builtin(reader)]
+  (SystemReader : VType)
+  @[builtin(writer)] (SystemWriter : VType)
+  @[builtin(os)] (SystemOS : CType)
 .
   begin
     let BuiltinUnit = @(intrinsic(unit)) that
 
-    -- Effect capabilities remain generative at the provider boundary.
-    exists
-      @[builtin(reader)] (SystemReader : VType)
-      @[builtin(writer)] (SystemWriter : VType)
-      @[builtin(os)] (SystemOS : CType)
-    .
-        (
-          #core :: @(import("builtin/core.zy"))
-        )
-      * (
-          #representations :: @(import("builtin/representations.zy"))
-        )
-      * (
-          #numeric ::
-            (#int8 :: @(import("builtin/numeric/int8.zy")))
-          * (#int16 :: @(import("builtin/numeric/int16.zy")))
-          * (#int32 :: @(import("builtin/numeric/int32.zy")))
-          * (#int64 :: @(import("builtin/numeric/int64.zy")))
-          * (#uint8 :: @(import("builtin/numeric/uint8.zy")))
-          * (#uint16 :: @(import("builtin/numeric/uint16.zy")))
-          * (#uint32 :: @(import("builtin/numeric/uint32.zy")))
-          * (#uint64 :: @(import("builtin/numeric/uint64.zy")))
-          * (#float32 :: @(import("builtin/numeric/float32.zy")))
-          * (#float64 :: @(import("builtin/numeric/float64.zy")))
+      (
+        #numeric ::
+          (#int8 :: @(import("builtin/numeric/int8.zy")))
+        * (#int16 :: @(import("builtin/numeric/int16.zy")))
+        * (#int32 :: @(import("builtin/numeric/int32.zy")))
+        * (#int64 :: @(import("builtin/numeric/int64.zy")))
+        * (#uint8 :: @(import("builtin/numeric/uint8.zy")))
+        * (#uint16 :: @(import("builtin/numeric/uint16.zy")))
+        * (#uint32 :: @(import("builtin/numeric/uint32.zy")))
+        * (#uint64 :: @(import("builtin/numeric/uint64.zy")))
+        * (#float32 :: @(import("builtin/numeric/float32.zy")))
+        * (#float64 :: @(import("builtin/numeric/float64.zy")))
+        * BuiltinUnit
+      )
+    * (
+        #text ::
+          (#char :: @(import("builtin/text/char.zy")))
+        * (#string :: @(import("builtin/text/string.zy")))
+        * (#bytes :: @(import("builtin/text/bytes.zy")))
+        * BuiltinUnit
+      )
+    * (
+        #system ::
+        exists (= Reader as SystemReader : VType)
+          (= Writer as SystemWriter : VType)
+          (= OS as SystemOS : CType)
+        .
+            (
+              #io ::
+              (@(import("builtin/system/io.zy"))) SystemReader SystemWriter SystemOS
+            )
+          * (
+              #fs ::
+              (@(import("builtin/system/fs.zy"))) SystemReader SystemWriter SystemOS
+            )
+          * (
+              #stdio ::
+              (@(import("builtin/system/stdio.zy"))) SystemReader SystemWriter SystemOS
+            )
+          * (#args :: @(import("builtin/system/args.zy")))
+          * (#random :: (@(import("builtin/system/random.zy"))) SystemOS)
+          * (#process :: (@(import("builtin/system/process.zy"))) SystemOS)
           * BuiltinUnit
-        )
-      * (
-          #text ::
-            (#char :: @(import("builtin/text/char.zy")))
-          * (#string :: @(import("builtin/text/string.zy")))
-          * (#bytes :: @(import("builtin/text/bytes.zy")))
-          * BuiltinUnit
-        )
-      * (
-          #system ::
-          exists (= Reader as SystemReader : VType)
-            (= Writer as SystemWriter : VType)
-            (= OS as SystemOS : CType)
-          .
-              (
-                #io ::
-                (@(import("builtin/system/io.zy"))) SystemReader SystemWriter SystemOS
-              )
-            * (
-                #fs ::
-                (@(import("builtin/system/fs.zy"))) SystemReader SystemWriter SystemOS
-              )
-            * (
-                #stdio ::
-                (@(import("builtin/system/stdio.zy"))) SystemReader SystemWriter SystemOS
-              )
-            * (#args :: @(import("builtin/system/args.zy")))
-            * (#random :: (@(import("builtin/system/random.zy"))) SystemOS)
-            * (#process :: (@(import("builtin/system/process.zy"))) SystemOS)
-            * BuiltinUnit
-        )
-      * BuiltinUnit
+      )
+    * BuiltinUnit
   end
 -- end module Builtin

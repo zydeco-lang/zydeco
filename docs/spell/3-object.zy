@@ -5,12 +5,10 @@
 -- methods, while a comatch supplies their implementations.
 
 begin
-  param (/core; /representations; /numeric; /system) : @(import("../../lib/std/builtin.zy")) that
-  let (/CType; /Thk; /Ret) = core that
-  let (/String) = representations/string that
-  let (= Int64, int64) = numeric/int64 that
-  let (/stdio; /process) = system that
-
+  param (/CType; /Thk; /Ret; /stdio; /process; /String; /Int64; /numeric; /system) : @(import(
+    "../../lib/std/builtin.zy"
+  )) that
+  let int64 = numeric/int64 that
   def Counter : CType =
     codata
     | .number : Ret Int64

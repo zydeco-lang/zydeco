@@ -1,5 +1,4 @@
-param (/system) : @(import("../../std/builtin.zy")) in
-let (/stdio; /process) = system in
+param (/stdio; /process; /system) : @(import("../../std/builtin.zy")) in
 ! stdio/read_line {
   fn _ => ! process/exit 0
 }

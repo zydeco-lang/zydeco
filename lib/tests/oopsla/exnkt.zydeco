@@ -5,9 +5,8 @@
 --|
 --| Check `exnt.zydeco` for detailed explanation.
 begin
-  param val (/core; builtin) : @(import("../../std/builtin.zy")) that
+  param val (/VType; /CType; /Thk; /Ret; builtin) : @(import("../../std/builtin.zy")) that
   let monadic_basis = @(import("../../std/control/monad.zy")) that
-  let (/VType; /CType; /Thk; /Ret) = core that
   let (= Monad, = Algebra, ()) =
     builtin |> monadic_basis
   in

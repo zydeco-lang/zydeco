@@ -1,9 +1,8 @@
 begin
-  param (/core; /representations; /text; /numeric; /system) : @(import("../../std/builtin.zy")) that
-  let (/Thk; /Ret) = core that
-  let (/Bytes) = representations/bytes that
-  let (= UInt64, uint64) = numeric/uint64 that
-  let (/OS; /process) = system that
+  param (/Thk; /Ret; /OS; /process; /Bytes; /UInt64; /text; /numeric; /system) : @(import(
+    "../../std/builtin.zy"
+  )) that
+  let uint64 = numeric/uint64 that
   let bytes = text/bytes that
   let zero = (@(ffi(c, library("zyffi_boundary"), symbol("zyffi_zero"))) : Thk (Ret UInt64)) that
   let echo = (

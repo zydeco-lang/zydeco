@@ -9,16 +9,14 @@ begin
     forall (R : CType) . A -> A -> Thk R -> Thk R -> R
   ) in
   let Render (A : VType) = Thk (A -> Ret String) in
-  exists
-    (= UInt8 as @(intrinsic(u8)) : VType)
-  .
-      (@[builtin(uint8_add)] (#add :: Binary UInt8))
-    * (@[builtin(uint8_sub)] (#sub :: Binary UInt8))
-    * (@[builtin(uint8_mul)] (#mul :: Binary UInt8))
-    * (@[builtin(uint8_div)] (#div :: Binary UInt8))
-    * (@[builtin(uint8_mod)] (#mod :: Binary UInt8))
-    * (@[builtin(uint8_eq)] (#eq :: Branch UInt8))
-    * (@[builtin(uint8_lt)] (#lt :: Branch UInt8))
-    * (@[builtin(uint8_gt)] (#gt :: Branch UInt8))
-    * (@[builtin(uint8_to_string)] (#to_string :: Render UInt8))
+  let UInt8 = @(intrinsic(u8)) in
+    (@[builtin(uint8_add)] (#add :: Binary UInt8))
+  * (@[builtin(uint8_sub)] (#sub :: Binary UInt8))
+  * (@[builtin(uint8_mul)] (#mul :: Binary UInt8))
+  * (@[builtin(uint8_div)] (#div :: Binary UInt8))
+  * (@[builtin(uint8_mod)] (#mod :: Binary UInt8))
+  * (@[builtin(uint8_eq)] (#eq :: Branch UInt8))
+  * (@[builtin(uint8_lt)] (#lt :: Branch UInt8))
+  * (@[builtin(uint8_gt)] (#gt :: Branch UInt8))
+  * (@[builtin(uint8_to_string)] (#to_string :: Render UInt8))
 end

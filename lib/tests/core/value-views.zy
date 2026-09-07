@@ -1,9 +1,5 @@
 begin
-  param (/core; /representations; /system) : @(import("../../std/builtin.zy")) that
-  let (/VType; /Unit) = core that
-  let (/Int64) = representations/i64 that
-  let (/process) = system that
-
+  param (/VType; /Unit; /process; /Int64; /system) : @(import("../../std/builtin.zy")) that
   let Tagged =
     data
     | +Tagged : Int64

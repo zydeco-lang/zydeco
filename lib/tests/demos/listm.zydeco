@@ -1,9 +1,8 @@
 begin
   let make_std = @(import("../../std/std.zy")) that
-  param (/core; /representations; /system; builtin) : @(import("../../std/builtin.zy")) that
-  let (/VType; /CType; /Thk; /Ret; /Unit) = core that
-  let (/Int64) = representations/i64 that
-  let (/OS) = system that
+  param (/system; /VType; /CType; /Thk; /Ret; /Unit; /OS; /Int64; builtin) : @(import(
+    "../../std/builtin.zy"
+  )) that
   def List~ (A : VType) : VType =
     data
     | +Nil : Unit

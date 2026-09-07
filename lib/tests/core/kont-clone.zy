@@ -5,10 +5,7 @@ begin
     | +True : Unit
     end
   that
-  param (/core; /representations; /system) : @(import("../../std/builtin.zy")) that
-  let (/Thk; /Unit) = core that
-  let (/Int64) = representations/i64 that
-  let (/OS; /process) = system that
+  param (/Thk; /Unit; /OS; /process; /Int64; /system) : @(import("../../std/builtin.zy")) that
   def ! f : Bool -> Thk (Int64 -> OS) -> OS = fn (b : Bool) (k : Thk (Int64 -> OS)) =>
     -- k might be large
     match b

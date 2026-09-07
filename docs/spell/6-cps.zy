@@ -5,11 +5,9 @@
 -- action completes. This is continuation-passing style at the source level.
 
 begin
-  param (/core; /representations; /system) : @(import("../../lib/std/builtin.zy")) that
-  let (/VType; /Thk; /Unit) = core that
-  let (/String) = representations/string that
-  let (/OS; /stdio; /process) = system that
-
+  param (/VType; /Thk; /Unit; /OS; /stdio; /process; /String; /system) : @(import(
+    "../../lib/std/builtin.zy"
+  )) that
   def List (A : VType) : VType =
     data
     | +Nil : Unit

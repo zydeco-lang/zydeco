@@ -1,12 +1,10 @@
 -- We can do good old object-oriented programming in here
 -- e.g. define a Counter that can incr and project out Int64 or String
 begin
-  param (/core; /representations; /numeric; /system) : @(import("../../std/builtin.zy")) that
-  let (/CType; /Thk; /Ret) = core that
-  let (= Int64, int64) = numeric/int64 that
-  let (/String) = representations/string that
-  let (/stdio; /process) = system that
-
+  param (/CType; /Thk; /Ret; /stdio; /process; /String; /Int64; /numeric; /system) : @(import(
+    "../../std/builtin.zy"
+  )) that
+  let int64 = numeric/int64 that
   def Counter : CType =
     codata
     | .num : Ret Int64

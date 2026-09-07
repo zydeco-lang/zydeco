@@ -1,8 +1,5 @@
 begin
-  param (/core; /system) : @(import("../../std/builtin.zy")) that
-  let (/VType; /Ret; /Unit) = core that
-  let (/process) = system that
-
+  param (/VType; /Ret; /Unit; /process; /system) : @(import("../../std/builtin.zy")) that
   def Nat : VType =
     data
     | +Z : Unit

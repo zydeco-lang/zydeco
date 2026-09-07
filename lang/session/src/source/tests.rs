@@ -1825,6 +1825,7 @@ fn canonical_builtin_signature_keeps_only_system_capabilities_abstract() {
     enum ExpectedField {
         VType,
         CType,
+        ManifestType,
         Abstract(BuiltinTypeRole),
     }
 
@@ -1839,6 +1840,22 @@ fn canonical_builtin_signature_keeps_only_system_capabilities_abstract() {
     let fields = [
         ExpectedField::VType,
         ExpectedField::CType,
+        ExpectedField::ManifestType,
+        ExpectedField::ManifestType,
+        ExpectedField::ManifestType,
+        ExpectedField::ManifestType,
+        ExpectedField::ManifestType,
+        ExpectedField::ManifestType,
+        ExpectedField::ManifestType,
+        ExpectedField::ManifestType,
+        ExpectedField::ManifestType,
+        ExpectedField::ManifestType,
+        ExpectedField::ManifestType,
+        ExpectedField::ManifestType,
+        ExpectedField::ManifestType,
+        ExpectedField::ManifestType,
+        ExpectedField::ManifestType,
+        ExpectedField::ManifestType,
         ExpectedField::Abstract(BuiltinTypeRole::Reader),
         ExpectedField::Abstract(BuiltinTypeRole::Writer),
         ExpectedField::Abstract(BuiltinTypeRole::OS),
@@ -1868,6 +1885,10 @@ fn canonical_builtin_signature_keeps_only_system_capabilities_abstract() {
                     Fillable::Done(Kind::CType(_))
                 ));
                 (body, abstract_witnesses)
+            }
+            | (ExpectedField::ManifestType, Fillable::Done(Type::Exists(exists))) => {
+                assert!(matches!(exists.mode, ExistsMode::Manifest(_)));
+                (exists.body, abstract_witnesses)
             }
             | (ExpectedField::Abstract(role), Fillable::Done(Type::Exists(exists))) => {
                 assert!(matches!(exists.mode, ExistsMode::Abstract));
@@ -2045,7 +2066,7 @@ fn legacy_alias_example_ports_to_uniform_term_composition() {
 }
 
 #[test]
-fn standard_prelude_exports_core_types_and_cbpv_aliases() {
+fn builtin_surface_selection_replaces_the_old_prelude_usage() {
     let root = repository_source("tests/std/identity.zy");
     let checked = TestPipeline::check(&root).unwrap();
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
@@ -2060,33 +2081,15 @@ fn standard_prelude_exports_core_types_and_cbpv_aliases() {
 }
 
 #[test]
-fn standalone_prelude_types_work_without_a_builtin_parameter() {
-    let checked = TestPipeline::check(repository_source("tests/std/prelude.zy")).unwrap();
-    let dynamics = checked.dynamics().unwrap().program;
-    let mut input = std::io::empty();
-    let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
-
-    assert!(matches!(
-        result,
-        zydeco_dynamics::ProgKont::Ret(zydeco_dynamics::syntax::SemValue::Triv(
-            zydeco_syntax::Triv
-        ))
-    ));
-    assert!(output.is_empty());
-}
-
-#[test]
-fn standalone_prelude_preserves_numeric_widths_and_cbpv_kinds() {
+fn builtin_selection_preserves_numeric_widths_and_cbpv_kinds() {
     use zydeco_statics::TyckDiagnosticCode;
 
-    let prelude = repository_source("std/prelude.zy");
+    let builtin = repository_source("std/builtin.zy");
     let fixture = SourceFixture::new();
     let session = CompilerSession::default();
     let prefix = format!(
-        "let (/VType; /CType; /Thk; /Ret; /Int8; /Int16; /Int64) = \
-         @(import({:?})) in\n",
-        prelude.to_string_lossy(),
+        "param (/VType; /CType; /Thk; /Ret; /Int8; /Int16; /Int64) : @(import({:?})) in\n",
+        builtin.to_string_lossy(),
     );
     let cases = [
         (
@@ -2097,14 +2100,14 @@ fn standalone_prelude_preserves_numeric_widths_and_cbpv_kinds() {
         ),
         (
             "thunk",
-            "let Callback : VType = Thk (Ret Int64) in ()",
+            "let Callback : VType = Thk (Ret Int64) in ret ()",
             "let Callback : VType = Thk Int64 in ()",
             TyckDiagnosticCode::KindMismatch,
         ),
         (
             "return",
-            "let Answer : CType = Ret Int64 in ()",
-            "let Answer : CType = Ret (Ret Int64) in ()",
+            "let Answer : CType = Ret Int64 in ret ()",
+            "let Answer : CType = Ret (Ret Int64) in ret ()",
             TyckDiagnosticCode::KindMismatch,
         ),
     ];

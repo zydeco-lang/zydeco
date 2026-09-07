@@ -1,9 +1,7 @@
 begin
-  param (/numeric; /system) : @(import("../../std/builtin.zy")) that
-  let (= Int64, int64) = numeric/int64 that
-  let (= UInt64, uint64) = numeric/uint64 that
-  let (/OS; /process) = system that
-
+  param (/OS; /process; /Int64; /UInt64; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  let int64 = numeric/int64 that
+  let uint64 = numeric/uint64 that
   do positive_box <- ! int64/add 4611686018427387903 1;
   ! int64/eq OS positive_box 4611686018427387904 {
     do negative_box <- ! int64/sub -4611686018427387904 1;

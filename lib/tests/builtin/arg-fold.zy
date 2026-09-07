@@ -1,10 +1,6 @@
 begin
-  param (/core; /representations; /text; /system) : @(import("../../std/builtin.zy")) that
-  let (/Ret) = core that
-  let (/String) = representations/string that
+  param (/Ret; /OS; /args; /process; /String; /text; /system) : @(import("../../std/builtin.zy")) that
   let string = text/string that
-  let (/OS; /args; /process) = system that
-
   do joined <- ! args/fold
     (Ret String)
     { ret "" }

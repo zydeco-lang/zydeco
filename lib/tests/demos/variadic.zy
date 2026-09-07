@@ -1,9 +1,7 @@
 begin
-  param (/core; /representations; /system) : @(import("../../std/builtin.zy")) that
-  let (/VType; /CType; /Thk; /Unit) = core that
-  let (/String) = representations/string that
-  let (/OS; /stdio; /process) = system that
-
+  param (/VType; /CType; /Thk; /Unit; /OS; /stdio; /process; /String; /system) : @(import(
+    "../../std/builtin.zy"
+  )) that
   def List (A : VType) : VType =
     data
     | +Nil : Unit

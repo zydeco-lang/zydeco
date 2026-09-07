@@ -1,8 +1,5 @@
 begin
-  param (/core; /representations; /system) : @(import("../../std/builtin.zy")) that
-  let (/VType; /Ret) = core that
-  let (/Int64) = representations/i64 that
-  let (/process) = system that
+  param (/VType; /Ret; /process; /Int64; /system) : @(import("../../std/builtin.zy")) that
   let x = 100 that
   def ! const (A : VType) (A' : VType) (a : A) (_ : A') : Ret A =
     let _ = x in

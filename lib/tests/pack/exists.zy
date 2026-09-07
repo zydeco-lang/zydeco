@@ -1,10 +1,5 @@
 begin
-  param (/core; /representations; /system) : @(import("../../std/builtin.zy")) that
-  let (/VType; /Thk; /Ret) = core that
-  let (/Int64) = representations/i64 that
-  let (/Char) = representations/char that
-  let (/process) = system that
-
+  param (/VType; /Thk; /Ret; /process; /Int64; /Char; /system) : @(import("../../std/builtin.zy")) that
   def Seal (X : VType) (A : VType) =
     data
     | +Seal : Thk (A -> Ret X) * Thk (X -> Ret A)

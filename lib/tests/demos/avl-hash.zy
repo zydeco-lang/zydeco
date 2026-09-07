@@ -1,11 +1,8 @@
 begin
   let make_std = @(import("../../std/std.zy")) that
-  param (/core; /representations; /system; builtin) : @(import("../../std/builtin.zy")) that
-  let (/VType; /Thk; /Ret; /Unit) = core that
-  let (/Int64) = representations/i64 that
-  let (/String) = representations/string that
-  let (/OS) = system that
-
+  param (/system; /VType; /Thk; /Ret; /Unit; /OS; /Int64; /String; builtin) : @(import(
+    "../../std/builtin.zy"
+  )) that
   let (/Bool; /Option; /bool; /option; /int64; /string; /stdio; /process) = builtin |> make_std in
   begin
     let Cmp (A : VType) = Thk (A -> A -> Ret Bool) that

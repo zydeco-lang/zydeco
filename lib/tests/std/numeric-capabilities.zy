@@ -1,12 +1,8 @@
 begin
   let make_std = @(import("../../std/std.zy")) that
-  param (/core; /representations; /system; builtin) : @(import("../../std/builtin.zy")) that
-  let (/VType; /Ret) = core that
-  let (/Int64) = representations/i64 that
-  let (/Float64) = representations/f64 that
-  let (/OS) = system that
-
-  let (/Bool; /Numeric; /numeric; /primitives; /bool; /process) = builtin |> make_std in
+  param (/VType; /Ret; /OS; /Int64; /Float64; /numeric; builtin) : @(import("../../std/builtin.zy")) that
+  let (/Bool; /Numeric; /bool; /int64; /float64; /process; dictionaries) = builtin |> make_std in
+  let int64_raw = numeric/int64 in
   let ! multiply_add_equal (A : VType)
     (dictionary : Numeric Bool A)
     (left : A)
@@ -24,8 +20,9 @@ begin
     (right : A)
   : Ret Bool = ! dictionary/order/lt left right in
 
-  let (#Int64 = IntScalar, int_dictionary) = numeric/int64_instance in
-  do primitive_total <- ! primitives/i64/add 40 2;
+  let IntScalar = Int64 in
+  let (/int64_dictionary = int_dictionary) = dictionaries in
+  do primitive_total <- ! int64_raw/add 40 2;
   do primitive_ok <- ! int_dictionary/order/equality/eq primitive_total 42;
   do int_arithmetic <- ! multiply_add_equal
     IntScalar int_dictionary 6 7 0 42;
@@ -33,7 +30,8 @@ begin
   do int_operations_ok <- ! bool/and int_arithmetic int_order;
   do int_ok <- ! bool/and primitive_ok int_operations_ok;
 
-  let (#Float64 = FloatScalar, float_dictionary) = numeric/float64_instance in
+  let FloatScalar = Float64 in
+  let (/float64_dictionary = float_dictionary) = dictionaries in
   do float_arithmetic <- ! multiply_add_equal
     FloatScalar float_dictionary 1.5 2.0 0.5 3.5;
   do float_order <- ! strictly_less

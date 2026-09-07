@@ -1,12 +1,6 @@
 begin
   let make_std = @(import("../../std/std.zy")) that
-  param (/core; /representations; builtin) : @(import("../../std/builtin.zy")) that
-  let (/Ret) = core that
-  let (/Int64) = representations/i64 that
-  let (/String) = representations/string that
-  let (/Bytes) = representations/bytes that
-  let (/UInt8) = representations/u8 that
-
+  param (/Ret; /Int64; /String; /Bytes; /UInt8; builtin) : @(import("../../std/builtin.zy")) that
   let (/Bool; /Option; /List; /bool; /option; /list; /int64; /uint8; /bytes; /string; /process) =
     builtin |> make_std
   in

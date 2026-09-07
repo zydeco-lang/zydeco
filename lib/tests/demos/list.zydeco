@@ -1,10 +1,6 @@
 begin
   let make_std = @(import("../../std/std.zy")) that
-  param (/core; /representations; builtin) : @(import("../../std/builtin.zy")) that
-  let (/Ret) = core that
-  let (/Int64) = representations/i64 that
-  let (/String) = representations/string that
-
+  param (/Ret; /Int64; /String; builtin) : @(import("../../std/builtin.zy")) that
   let (/List; /list; /int64; /string; /stdio; /process) = builtin |> make_std in
   def fix foldl (xs : List String) (i : Int64) : Ret Int64 =
     ! list/case

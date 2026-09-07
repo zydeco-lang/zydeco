@@ -9,15 +9,13 @@ begin
     forall (R : CType) . A -> A -> Thk R -> Thk R -> R
   ) in
   let Render (A : VType) = Thk (A -> Ret String) in
-  exists
-    (= Float64 as @(intrinsic(f64)) : VType)
-  .
-      (@[builtin(float64_add)] (#add :: Binary Float64))
-    * (@[builtin(float64_sub)] (#sub :: Binary Float64))
-    * (@[builtin(float64_mul)] (#mul :: Binary Float64))
-    * (@[builtin(float64_div)] (#div :: Binary Float64))
-    * (@[builtin(float64_eq)] (#eq :: Branch Float64))
-    * (@[builtin(float64_lt)] (#lt :: Branch Float64))
-    * (@[builtin(float64_gt)] (#gt :: Branch Float64))
-    * (@[builtin(float64_to_string)] (#to_string :: Render Float64))
+  let Float64 = @(intrinsic(f64)) in
+    (@[builtin(float64_add)] (#add :: Binary Float64))
+  * (@[builtin(float64_sub)] (#sub :: Binary Float64))
+  * (@[builtin(float64_mul)] (#mul :: Binary Float64))
+  * (@[builtin(float64_div)] (#div :: Binary Float64))
+  * (@[builtin(float64_eq)] (#eq :: Branch Float64))
+  * (@[builtin(float64_lt)] (#lt :: Branch Float64))
+  * (@[builtin(float64_gt)] (#gt :: Branch Float64))
+  * (@[builtin(float64_to_string)] (#to_string :: Render Float64))
 end

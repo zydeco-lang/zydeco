@@ -1,10 +1,6 @@
 begin
   let make_std = @(import("../../std/std.zy")) that
-  param (/core; /representations; builtin) : @(import("../../std/builtin.zy")) that
-  let (/Ret) = core that
-  let (/Int64) = representations/i64 that
-  let (/String) = representations/string that
-
+  param (/Ret; /Int64; /String; builtin) : @(import("../../std/builtin.zy")) that
   let (/option; /int64; /string; /process) = builtin |> make_std in
   do present <- ! string/split_once "left:right" ':';
   do present_status <- ! option/fold

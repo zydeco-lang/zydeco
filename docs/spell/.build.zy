@@ -1,11 +1,21 @@
 begin
-  param (/core; /representations; /numeric; /text; /system) : @(import("../../lib/std/builtin.zy")) that
-  let (/VType; /CType; /Thk; /Ret; /Unit) = core that
-  let (= Int64, int64) = numeric/int64 that
-  let (/String) = representations/string that
-  let (/string) = text that
-  let (/OS; /stdio; /process) = system that
-
+  param (
+    /VType;
+    /CType;
+    /Thk;
+    /Ret;
+    /Unit;
+    /OS;
+    /stdio;
+    /process;
+    /string;
+    /String;
+    /Int64;
+    /numeric;
+    /text;
+    /system
+  ) : @(import("../../lib/std/builtin.zy")) that
+  let int64 = numeric/int64 that
   def Bool : VType =
     data
     | +True : Unit

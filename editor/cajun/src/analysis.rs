@@ -1183,11 +1183,10 @@ mod tests {
             .unwrap();
         let source = concat!(
             "param (\n",
-            "  (/core) :\n",
+            "  (/VType; /CType; /Thk; /Ret) :\n",
             "  @[import(\"../builtin.zy\")] _\n",
             ") in\n",
             "begin\n",
-            "  let (/VType; /CType; /Thk; /Ret) = core that\n",
             "  def Result (A : VType) (E : VType) =\n",
             "    data\n",
             "    | +Ok : A\n",
@@ -1357,38 +1356,59 @@ mod tests {
     #[test]
     fn term_hover_links_type_definitions_of_module_projections() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/tests/demos/forall.zy")
+            .join("../../lib/tests/pack/deep-selection.zy")
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
         let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
 
         let module = project
-            .hover(&session, &path, source_position(&source, "/i64"), HoverOptions::default())
+            .hover(
+                &session,
+                &path,
+                source_position(&source, "stdio/write_line"),
+                HoverOptions::default(),
+            )
             .unwrap();
         let HoverContents::Markup(contents) = module.contents else {
             panic!("projection hover should use markup content")
         };
-        let representations = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/std/builtin/representations.zy")
+        let builtin = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../lib/std/builtin.zy")
             .canonicalize()
             .unwrap();
-        let representations_source = std::fs::read_to_string(&representations).unwrap();
-        let definition =
-            definition_url(&representations, source_position(&representations_source, "Int64 as"));
+        let builtin_source = std::fs::read_to_string(&builtin).unwrap();
+        let reader_definition =
+            definition_url(&builtin, source_position(&builtin_source, "(SystemReader :"));
+        let writer_definition =
+            definition_url(&builtin, source_position(&builtin_source, "(SystemWriter :"));
+        let os_definition =
+            definition_url(&builtin, source_position(&builtin_source, "(SystemOS :"));
 
-        assert_eq!(
-            contents.value,
-            format!(
-                concat!(
-                    "```zydeco\n",
-                    "representations/i64 : exists (= Int64 as Int64 : VType) . Unit\n",
-                    "```\n\n",
-                    "Types:\n\n",
-                    "- [`Int64` ↗](<{definition}>)"
-                ),
-                definition = definition
-            )
+        assert!(
+            contents.value.starts_with("```zydeco\nstdio :"),
+            "unexpected hover:\n{}",
+            contents.value
+        );
+        assert!(
+            contents.value.contains("#write_line"),
+            "the module hover should list its operations:\n{}",
+            contents.value
+        );
+        assert!(
+            contents.value.contains("[`SystemReader` ↗]"),
+            "the module hover should link its capability definitions:\n{}",
+            contents.value
+        );
+        assert!(
+            contents.value.contains("[`SystemWriter` ↗]"),
+            "the module hover should link its capability definitions:\n{}",
+            contents.value
+        );
+        assert!(
+            contents.value.contains("[`SystemOS` ↗]"),
+            "the module hover should link its capability definitions:\n{}",
+            contents.value
         );
     }
 
@@ -1459,12 +1479,12 @@ mod tests {
             })
         };
 
-        assert!(has("VType", "type", "kind"));
+        assert!(has("VType", "typeParameter", "kind"));
         assert!(has("A", "typeParameter", "valueType"));
-        assert!(has("Int64", "type", "valueType"));
-        assert!(has("OS", "type", "computationType"));
+        assert!(has("Int64", "typeParameter", "valueType"));
+        assert!(has("OS", "typeParameter", "computationType"));
         assert!(has("x", "variable", "value"));
-        assert!(has("process", "variable", "value"));
+        assert!(has("process", "parameter", "value"));
         assert!(
             decoded.iter().any(|token| { token.text == "exit" && token.token_type == "property" })
         );
@@ -1482,11 +1502,9 @@ mod tests {
         let source = concat!(
             "begin\n",
             "  param (\n",
-            "    (/core; /system) :\n",
+            "    (/VType; /process) :\n",
             "    @(import(\"../../std/builtin.zy\"))\n",
             "  ) that\n",
-            "  let (/VType) = core that\n",
-            "  let (/process) = system that\n",
             "  let identity : val pi (A : VType) (value : A) . A =\n",
             "    val (B : VType) (item : B) => item\n",
             "  that\n",

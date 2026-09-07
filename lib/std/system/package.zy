@@ -1,21 +1,18 @@
 begin
   param val (
     (
-      /core;
-      /representations;
-      /numeric;
-      /text;
-      /system = (/Reader; /Writer; /OS; /io; /fs; /stdio; /args; /random; /process);
+      /VType; /CType; /Thk; /Ret; /Unit;
+      /Int64; /String; /Bytes;
+      /Reader; /Writer; /OS;
+      /io; /fs; /stdio; /args; /random; /process;
+      /int64;
+      /bytes;
       builtin
     ) : @(import("../builtin.zy")),
-    (/Bool; /Option; /Result; /List; /bool; /option; /result; /list) :
-    @(import("../data/package.type.zy"))
+    (/Bool; /Option; /Result; /List; /bool; /option; /result; /list) : @(import(
+      "../data/package.type.zy"
+    ))
   ) that
-  let (/VType; /CType; /Thk; /Ret; /Unit) = core in
-  let (= Int64, int64) = numeric/int64 in
-  let (/String) = representations/string in
-  let (/Bytes) = representations/bytes in
-  let (/bytes) = text in
   begin
     def IoErrorKind =
       data

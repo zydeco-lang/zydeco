@@ -264,14 +264,11 @@ fn selective_builtin_parameters_open_modular_groups() {
 begin
   def selective = {
     fn ((
-      /core;
-      /representations;
-      /text;
+      /VType = SelectedVType;
+      /Bytes = SelectedBytes;
+      /bytes;
       builtin
     ) : Builtin) =>
-      let (/VType = SelectedVType) = core in
-      let (/Bytes = SelectedBytes) = representations/bytes in
-      let bytes = text/bytes in
       let Selected : SelectedVType = SelectedBytes in
       ! bytes/empty
   } that

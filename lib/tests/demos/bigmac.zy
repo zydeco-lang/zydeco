@@ -1,7 +1,5 @@
 begin
-  param (/system) : @(import("../../std/builtin.zy")) that
-  let (/process) = system that
-
+  param (/process; /system) : @(import("../../std/builtin.zy")) that
   let a = 0 in
   do a <- ret a;
   do a <- ret a;

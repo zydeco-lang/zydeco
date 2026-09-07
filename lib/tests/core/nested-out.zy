@@ -1,6 +1,5 @@
-param (/numeric; /system) : @(import("../../std/builtin.zy")) in
-let (= Int64, int64) = numeric/int64 in
-let (/process) = system in
+param (/process; /Int64; /numeric; /system) : @(import("../../std/builtin.zy")) in
+let int64 = numeric/int64 in
 do x <- ret 40;
 do y <- ret 30;
 do z <-

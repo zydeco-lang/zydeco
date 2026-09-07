@@ -2,12 +2,9 @@
 
 --| As it is a CBV language, our syntax only contains expressions.
 begin
-  param (/core; /representations; /text; /system) : @(import("../../std/builtin.zy")) that
-  let (/VType; /CType; /Thk; /Ret; /Unit) = core that
-  let (/String) = representations/string that
+  param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /stdio; /process; /String; /text; /system) :
+  @(import("../../std/builtin.zy")) that
   let string = text/string that
-  let (/OS; /stdio; /process) = system that
-
   def Bool =
     data
     | +True : Unit

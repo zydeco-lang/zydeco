@@ -1,7 +1,5 @@
 begin
-  param (/representations; /system) : @(import("../../std/builtin.zy")) that
-  let (/Int64) = representations/i64 that
-  let (/OS; /process) = system that
+  param (/OS; /process; /Int64; /system) : @(import("../../std/builtin.zy")) that
   def Choice =
     codata
     | .left : OS

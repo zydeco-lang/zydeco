@@ -1,15 +1,15 @@
 begin
   param val (
-    (/core; /representations; /numeric; /text; builtin) : @(import("../builtin.zy")),
+    (
+      /VType; /CType; /Thk; /Ret; /Unit;
+      /Char; /String; /Bytes; /UInt8; /Int64;
+      /numeric;
+      /char; /string; /bytes;
+      builtin
+    ) : @(import("../builtin.zy")),
     (/Bool; /Option; /List; /bool; /option; /list) : @(import("../data/package.type.zy"))
   ) that
-  let (/VType; /CType; /Thk; /Ret; /Unit) = core in
-  let (/Char) = representations/char in
-  let (/String) = representations/string in
-  let (/Bytes) = representations/bytes in
-  let (/UInt8) = representations/u8 in
-  let (= Int64, int64) = numeric/int64 in
-  let (/char; /string; /bytes) = text in
+  let int64 = numeric/int64 in
   let ! compare (A : VType)
     (
       predicate : Thk (

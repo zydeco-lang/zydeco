@@ -13,10 +13,7 @@ A consumer can open one package and select only the type identities and module v
 ```zydeco
 begin
   let make_std = @[import("../../std/std.zy")] _ that
-  param (/core; /representations; /system; builtin) : @[import("../../std/builtin.zy")] _ in
-  let (/VType; /Thk) = core in
-  let (/String) = representations/string in
-  let (/OS) = system in
+  param (/VType; /Thk; /String; /OS; builtin) : @[import("../../std/builtin.zy")] _ in
   let (/Result; /Path; /IoError; /result; /fs; /stdio; /process) = builtin |> make_std in
 
   ...
@@ -95,13 +92,11 @@ This is the important case for Builtin, because a source can state its capabilit
 without copying the complete host ABI:
 
 ```zydeco
-param (/representations; /system; builtin) : @[import("builtin.zy")] _ in
-let (/Bytes) = representations/bytes in
-let (/Reader; /io) = system in
+param (/Bytes; /Reader; /io; builtin) : @[import("builtin.zy")] _ in
 ...
 ```
 
-`/representations` and `/system` are the only local bindings introduced from the outer package;
+`/Bytes` and `/io` are the only local bindings introduced from the outer package;
 the following patterns select `Bytes`, `Reader`, and `io` from those narrower structural groups.
 Operations remain qualified, so this source calls `io/read` rather than introducing a generic `read` binding.
 The final `builtin` is an ordinary same-bindee alias for the complete package value.
@@ -131,6 +126,8 @@ An explicitly named binder such as `exists (#Item = Hidden : VType) . Body` is s
 Selection is structural rather than positional.
 Adding or reordering an unselected package member does not alter a consumer pattern.
 A missing field is rejected, and a name that matches more than one selectable field is ambiguous.
+The search also descends into nested packages, so a capability such as the `OS` protocol can be selected
+from the root contract even though only the `system` group re-exposes it.
 The same rules already govern projection from named products.
 
 ## One opening, shared identities
@@ -167,20 +164,22 @@ Repeating elimination on independently produced package values retains the ordin
 
 ## Standard-library organization
 
-Builtin groups the host boundary by stability and purpose:
+Builtin puts every public static name on its leading telescope and groups only runtime operations:
 
 ```text
-core:             VType CType Thk Ret Unit
-representations:  i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char string bytes
-numeric:          int8 int16 int32 int64 uint8 uint16 uint32 uint64 float32 float64
-text:             char string bytes
-system:           Reader Writer OS io fs stdio args random process
+surface:  VType CType Thk Ret Unit
+          Int8 Int16 Int32 Int64 UInt8 UInt16 UInt32 UInt64 Float32 Float64 Char String Bytes
+          Reader Writer OS
+numeric:  int8 int16 int32 int64 uint8 uint16 uint32 uint64 float32 float64
+text:     char string bytes
+system:   Reader Writer OS io fs stdio args random process
 ```
 
-Each representation child is a manifest package whose field carries the public name of its type.
-Each numeric child discloses its carrier under that same name beside its arithmetic and comparison operations.
+Every name is unique across the complete package, so one field search reaches kinds,
+types, operations, and capabilities alike.
+Each numeric child is a plain operation module over the surface's carrier types.
 Text owns operations crossing `Char`, `String`, `Bytes`, and `Int64`;
-system keeps the generative capabilities and their operations in one opening.
+system re-exposes the generative capabilities beside their operations in one opening.
 The full rationale is in [Modular primitive packages](primitive-packages.md).
 
 The source tree mirrors those semantic boundaries:
@@ -188,10 +187,7 @@ The source tree mirrors those semantic boundaries:
 ```text
 lib/std/
   builtin.zy
-  prelude.zy
   builtin/
-    core.zy
-    representations.zy
     numeric/{int8,...,uint64,float32,float64}.zy
     text/{char,string,bytes}.zy
     system/{io,fs,stdio,args,random,process}.zy
@@ -221,8 +217,8 @@ A topic depends on a selected package boundary rather than on names inherited fr
 The derived integer and floating-point builders share algorithms across the fixed-width representations
 through explicitly annotated `forall` parameters.
 Their result types retain the input `Bool`, scalar, and `String` identities,
-and the numeric assembly wraps each returned dictionary in an instance package
-whose manifest field carries the carrier's public name, such as `Int64` in `int64_instance`.
+and the numeric assembly returns each width's operation module beside its capability dictionary,
+grouped once more under `dictionaries` for explicitly passing those dictionaries around.
 The public system implementation remains one assembly package because `Reader`, `Writer`,
 and `OS` are abstract provider identities shared by `io`, `fs`, and `stdio`.
 Its host-facing operation contracts are nevertheless split into topic leaves,
@@ -233,13 +229,14 @@ Individual operations stay qualified, such as `int64/eq`, `string/append`, and `
 this prevents generic names such as `eq`, `read`, and `write` from occupying every consumer's scope.
 
 The public standard package builds on that boundary.
-It exposes shared type identities once and groups its own operations into named module values:
+It carries the library-defined types and groups its own operations into named module values;
+host types and capabilities stay on the Builtin contract, selected directly:
 
 ```text
-types:   Bool Option Result List Int8 Int16 Int32 Int64 UInt8 UInt16 UInt32 UInt64
-         Float32 Float64 Char String Bytes Reader Writer Path IoErrorKind IoError OS
+types:   Bool Option Result List Path IoErrorKind IoError
+         Additive Multiplicative PartialEquality PartialOrder Numeric
 
-modules: prelude bool option result list numeric primitives int8 ... uint64 float32 float64
+modules: bool option result list dictionaries int8 ... uint64 float32 float64
          char string bytes io fs stdio process
 ```
 
@@ -284,10 +281,13 @@ Four checker facts determine how far the modularization can fold, and each one i
 - A type-level application of a transparent `let` function reduces during analysis,
   so a declared record may apply each module telescope directly to the existential witnesses
   without new checker support, and the nested shape is what the projection resolver walks.
-- Structural projection searches nested named products but never descends into an unopened existential package.
+- Structural projection searches nested named products and descends through nested package telescopes,
+  opening sealed packages only in patterns and crossing manifest ones everywhere.
   The public package therefore reintroduces the shared witnesses in one `exists`
   and keeps topic packages opaque inside their groups, while consumers still select `(/option; /process)`
   across the nesting unchanged.
+  A public name that a nested group repeats, such as the root contract's `VType` inside `core`,
+  becomes ambiguous from the outermost receiver and is selected from the narrower group instead.
 
 ### Package annotations and companion files
 
@@ -303,7 +303,7 @@ Keep any remaining annotation local, and reuse a synthesized payload type with `
 A `.zyi` is useful when the interface is intentionally authored and reviewed independently of the implementation.
 Repeating the implementation's inferred interface in a companion creates a second description to maintain.
 
-The prelude has a specific reason to retain a small inline annotation.
+A package that must carry kind fields still needs a small inline annotation.
 `Int64` is a type of kind `VType`, while `VType` and `CType` are themselves kinds.
 The current `pack` checker accepts type-valued evidence and reports `tyck.sort-mismatch` for kind-valued evidence.
 For example, this introduction is currently rejected:
@@ -337,8 +337,9 @@ end
 
 Only the two kind fields require this explicit prefix.
 `@[typeof] types` preserves the inferred manifest type fields, so adding a numeric type changes one witness list.
-The full implementation is [`lib/std/prelude.zy`](../../lib/std/prelude.zy).
 This pattern handles the current introduction limitation within one source file.
+The Builtin contract uses the same annotated-spine form for its surface, with every fixed-representation type
+as a manifest entry beside the two kinds.
 
 ## Second-class packages
 
@@ -403,10 +404,15 @@ Value projections lower to ordinary tuple patterns with resolved physical paths.
 The Builtin materializer recursively follows the same nested product shape in the interpreter and Stack IR.
 No module object, field table, or new calling convention is required.
 
-Term projection deliberately retains its existing boundary: `package/fs` does not search
-through an unopened existential package.
-Opening changes type identity and scope, so the source must show it with a pattern.
+Term projection crosses manifest packages but not sealed ones: `builtin/fs` resolves
+through the manifest `system` group, while a field that only a package
+with abstract witnesses exposes is reported as present but not term-projectable.
+Opening such a package changes type identity and scope, so the source must show it with a pattern.
 This keeps ordinary `value/field` lookup simple and makes the one generative opening visible at the dependency boundary.
+Projection patterns do open nested packages: a group such
+as `let (/OS; /fs) = builtin in ...` gives both the abstract witness selected
+through `system` and the module value selected from its body one shared opening,
+exactly as surface selections share the leading telescope.
 
 At a package-dependent `param`, the checker maps the domain's abstract witnesses
 to the canonical witness telescope of the expected arrow.

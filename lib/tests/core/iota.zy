@@ -1,9 +1,7 @@
 begin
-  param val (/core; /representations; /numeric; /system) : @(import("../../std/builtin.zy")) that
-  let (/VType; /Thk; /Ret; /Unit) = core that
-  let (= Int64, int64) = numeric/int64 that
-  let (/String) = representations/string that
-  let (/OS; /stdio; /process) = system that
+  param (/VType; /Thk; /Ret; /Unit; /OS; /stdio; /process; /String; /Int64; /numeric; /system) :
+  @(import("../../std/builtin.zy")) that
+  let int64 = numeric/int64 that
   let U = Thk that
   let F = Ret that
   def Bool =

@@ -1,9 +1,5 @@
 begin
-  param (/core; /representations; /system) : @(import("../../std/builtin.zy")) that
-  let (/VType; /CType; /Ret) = core that
-  let (/Int64) = representations/i64 that
-  let (/process) = system that
-
+  param (/VType; /CType; /Ret; /process; /Int64; /system) : @(import("../../std/builtin.zy")) that
   def Stack (A : VType) : CType =
     codata
     | .app : A -> Stack A

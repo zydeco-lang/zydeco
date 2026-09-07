@@ -1,11 +1,6 @@
 begin
   let make_std = @(import("../../std/std.zy")) that
-  param (/core; /representations; /system; builtin) : @(import("../../std/builtin.zy")) that
-  let (/Thk) = core that
-  let (/Int64) = representations/i64 that
-  let (/String) = representations/string that
-  let (/OS) = system that
-
+  param (/system; /Thk; /OS; /Int64; /String; builtin) : @(import("../../std/builtin.zy")) that
   let (/Option; /IoError; /option; /result; /string; /stdio; /process) = builtin |> make_std in
   let ! read_int (continuation : Thk (Option Int64 -> OS)) : OS = ! stdio/read_line {
     fn read =>
