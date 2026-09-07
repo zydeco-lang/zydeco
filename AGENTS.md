@@ -92,10 +92,12 @@ and expected output snapshots as needed.
 
 ## Design Records
 
-When substantial design or exploratory work converges, propose a review document under `docs/proposals/`.
+When substantial design or exploratory work converges, revise the existing proposal that owns the topic.
+Propose a new review document under `docs/proposals/` only for an independently reviewable topic
+that does not fit an existing proposal.
 Use Markdown or Typst and explain what it would make easier to review: the problem, constraints,
 alternatives, chosen invariants, representative examples, and remaining uncertainty.
-Suggest the artifact rather than creating it automatically; skip this for small routine changes.
+Suggest a new artifact rather than creating it automatically; skip this for small routine changes.
 
 - Put exploratory notes in `docs/ideas/`: explain the problem, constraints, alternatives, and decision criteria.
 - Put stable proposals in `docs/proposals/`: explain the problem, constraints, chosen invariants, examples,
@@ -103,6 +105,18 @@ Suggest the artifact rather than creating it automatically; skip this for small 
 - Use `docs/logs/` only for optional scratch records.
   Fold durable motivations and rules into proposals or adjacent code comments, then delete the worklog.
   The implementation and stable docs must justify themselves.
+
+Maintain **one home per semantic rule**: the proposal or design section that owns a mechanism
+or invariant is authoritative for its rules.
+Define shared phase, typing, erasure, and representation rules once at their common semantic boundary.
+Other documents may summarize a rule to establish context, but must link to its owning section;
+keep their detailed treatment to local applications, examples, and consequences.
+
+When changing a rule, update its authoritative home and audit dependent summaries,
+examples, and references in the same change.
+Consolidate proposals that only restate the same rule or describe another use of the same mechanism;
+retain separate proposals for independently reviewable mechanisms or design questions.
+When moving or merging content, remove superseded sections or files and update incoming links in the same change.
 
 ## Documentation Style
 

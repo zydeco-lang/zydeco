@@ -1,4 +1,4 @@
-# Value Functions with `ValPi`
+# Value Functions and Views with `ValPi`
 
 ## Abstract
 
@@ -9,8 +9,8 @@ val pi (A : VType) (value : A) . A
 ```
 
 Its direct introduction form is `val`, its block-form introduction is `param val`,
-its ordinary binding sugar is `let val`, and its elimination forms are application
-and the pipeline operators `|>` and `<|`.
+its ordinary binding sugar is `let val`, and its elimination forms are application,
+the pipeline operators `|>` and `<|`, and the value-view pattern `f ~> p`.
 
 ```zydeco
 let val id (A : VType) (value : A) : A = value that
@@ -18,12 +18,17 @@ let answer = 42 |> id Int64 in
 ...
 ```
 
-`ValPi` internalises a derivation of the CBPV value judgment as a definitional function:
-one that is bound, applied, and unfolded, but never stored or passed as a runtime value.
+`ValPi` internalises a derivation of the CBPV value judgment as a definitional function.
+Its requirement is static elimination: functions may be passed, returned, and collected in intermediate structures,
+provided their composition normalizes before executable code is emitted.
 It is distinct from the existing computation arrow: `A -> C` classifies a computation accepting `A`,
 while `val pi (x : A) . B` classifies a total, effect-free transformation producing a value.
-This distinction makes value-level cut available both dynamically and inside patterns
-without introducing a separate class of named views.
+The resulting runtime data construction may depend on runtime inputs, but the value-function abstraction
+and application themselves have no runtime representation.
+The same transformation is available inside patterns without introducing a separate class of named views.
+
+This proposal specifies the replacement for the implementation's second-class occurrence restrictions.
+The remaining implementation work is recorded under [Implementation Boundary](#implementation-boundary).
 
 ## One Classifier
 
@@ -36,11 +41,15 @@ ValPiBinder ::= TypeBinder | ValueBinder(domain, package-witnesses?)
 ValPi       ::= val pi ValPiBinder . Type
 ```
 
-A type binder replaces value-level universal quantification:
+A type binder expresses polymorphism within the statically eliminated value-function space:
 
 ```zydeco
 val pi (A : VType) . A
 ```
+
+Computation-level `forall` remains available independently:
+`Thk (forall (A : VType) . A -> Ret A)` classifies a runtime polymorphic function whose type arguments erase
+but whose callable code may remain.
 
 A value binder without package witnesses is the ordinary value function space:
 
@@ -77,7 +86,7 @@ val (A : VType) (value : A) => value
 ```
 
 Parameters are curried from left to right.
-Type parameters erase during lowering; value parameters construct lexical closures.
+Type parameters erase during lowering; value parameters extend the lexical environment used for static reduction.
 Runtime parameter patterns must be irrefutable because applying a value function is total.
 
 The corresponding block-form introduction is `param val`:
@@ -126,14 +135,16 @@ An unannotated result may be synthesized when the ordinary value checker can inf
 
 ## Elimination and Pipelines
 
-Application is one operation, spelled four ways: juxtaposition, `V |> f`, `f <| V`, and the view pattern.
+Application has three term spellings: juxtaposition, `V |> f`, and `f <| V`.
+The [value-view pattern](#value-views) applies the same operation before matching its result.
 
 ```text
-V |> f  ==  f V  ==  f <| V          let f ~> p = V in N  ==  let p = (V |> f) in N
+V |> f  ==  f V  ==  f <| V
 ```
 
-Evaluating it does no more than move value data into its memory representation: projections,
-constructions, and trivial fills — never a closure, an indirect call, or an effect.
+After static elimination, the remaining work consists of value projections and constructions,
+including explicitly authored thunks.
+The application itself needs no value-function closure or indirect call and performs no effect.
 A value function is a derivation `x : A |-v W : B`; the cut happens entirely at the value level,
 and the spellings differ only in reading direction.
 `|>` associates to the left and `<|` to the right, so
@@ -152,9 +163,9 @@ let keep_unit : val pi (value : Unit) . Unit = keep Unit that
 let recovered : Unit = () |> keep_unit that
 ```
 
-No spelling can make the function itself a value that flows onward:
-a pipeline side is a function standing at its own application, never a computed function stored
-in data (see [Second-Class Occurrences](#second-class-occurrences)).
+The function side may itself be computed by a value function or selected from a statically known structure.
+Partial applications and function-valued results follow the same [static elimination requirement](#static-elimination),
+independently of the application spelling.
 
 ## Equational Theory
 
@@ -187,75 +198,174 @@ Type abstraction and application satisfy the analogous beta and eta laws modulo 
 Package-witness binders substitute the disclosed static identities into the codomain
 while passing the package representation at runtime.
 
+## Value Views
+
+A value view observes a value through a total value function before matching it.
+If `f` has classifier `val pi (_ : A) . B` and `p` is a pattern for `B`, then `f ~> p` is a pattern for `A`:
+
+```zydeco
+let val first ((left, _) : A * B) : A = left that
+let first ~> selected = pair in
+...
+```
+
+This is an active pattern in a deliberately narrow sense: it precomposes an existing pattern
+with a statically eliminated, effect-free map.
+The function is an ordinary `ValPi` value, so views introduce no declaration class or namespace.
+
+### Pattern Formation
+
+The surface extension is
+
+```text
+p ::= ... | f ~> p
+```
+
+where `f` ranges semantically over checked value terms.
+The current surface grammar accepts a value variable followed by optional bracketed type arguments;
+this keeps erased application visibly separate from the nested pattern.
+The operator associates to the right, so
+
+```zydeco
+let first_view ~> second_view ~> result = input in ...
+```
+
+applies `first_view`, then `second_view`, and finally matches `result`.
+Naming a statically computed function before the pattern permits higher-order static selection
+and lexical capture without making the pattern grammar ambiguous.
+The current occurrence checker still rejects some such compositions, as described
+under [Implementation Boundary](#implementation-boundary).
+
+The typing rule is ordinary value-function elimination followed by pattern checking:
+
+```text
+Delta; Gamma |-v f : val pi (_ : A) . B
+Delta; Gamma |-p p <= B -| Gamma'
+------------------------------------------------ VIEW
+Delta; Gamma |-p f ~> p <= A -| Gamma'
+```
+
+Only the nested pattern contributes binders.
+The function expression is checked in the lexical environment at the pattern site,
+so a view may use a statically selected function that closes over ambient runtime values.
+Its head follows the same [static elimination requirement](#static-elimination) as a term application.
+
+The initial rule requires a single runtime value binder.
+A polymorphic function must be instantiated before it is used as a view:
+
+```zydeco
+let val first (A : VType) (B : VType) ((left, _) : A * B) : A = left that
+let first[Int64, String] ~> selected = pair in
+...
+```
+
+Square brackets are pattern syntax for erased type application.
+They make the boundary between static arguments and the nested pattern explicit;
+the term-level spelling remains ordinary value application.
+
+### Meaning
+
+A view pattern is defined by expansion through a fresh intermediate value:
+
+```text
+let f ~> p = V in N  ==  let p = (V |> f) in N
+```
+
+Here `==` is a source-language equation.
+Equivalently, if a pattern denotes a partial binding map, then
+
+```text
+match_(f ~> p) = match_p o F_f
+```
+
+where `F_f : Value(A) -> Value(B)` is the total map denoted by `f`.
+The view changes how a value is presented to a pattern while preserving the function's ordinary meaning.
+For a fresh variable `result`, term and pattern uses agree:
+
+```text
+V |> f  ==  let f ~> result = V in result
+```
+
+This coherence condition ensures that a value function has one meaning whether its result is retained
+as a term or immediately decomposed by a pattern.
+
+### Refutability and Coverage
+
+Refutability belongs to the result pattern:
+
+```text
+irrefutable(f ~> p) iff irrefutable(p)
+```
+
+Applying `f` cannot fail, diverge, or perform effects.
+A partial observation must expose failure in its result type, for example by returning `Option B`,
+and the nested pattern may then choose which result to accept.
+
+Coverage is necessarily conservative for arbitrary functions.
+Arms that use the same syntactic function and the same static arguments may be analysed as patterns over its codomain.
+Exhaustiveness over that codomain implies exhaustiveness over the domain,
+although the converse need not hold when the function is not surjective.
+Arms with unrelated functions require an ordinary exhaustive fallback.
+
+### Elaboration and Sharing
+
+The elaborated pattern stores a checked value expression and its nested pattern.
+Static elaboration eliminates the function application by the same rules as `|>`;
+runtime matching observes its residual value construction and continues with the nested pattern.
+
+An implementation may share a transformed result between adjacent arms after proving
+that their function expressions are equivalent and pure.
+Such sharing is an optimisation, not part of name resolution or the source semantics.
+A later elaborator could expose a typed equivalence key for this purpose.
+Whether to admit arbitrary value terms directly as view heads remains a pattern-syntax question;
+the variable-plus-type-arguments restriction does not require a separate function namespace.
+
 ## CBPV Boundary
 
 The proposal adds a positive function space; it does not reinterpret the computation arrow.
-A body containing `force`, computation application, effects, or general recursion cannot check
-in the value judgment and therefore cannot inhabit `ValPi`.
-Such behaviour retains the CBPV shape `A -> C`, commonly `A -> F B`, and must be thunked
+A value function cannot execute `force`, computation application, effects, or general recursion in the value judgment.
+It may construct a thunk containing such computations, whose execution remains suspended.
+Such behaviour retains the CBPV shape `A -> C`, commonly `A -> Ret B`, and must be thunked
 when a computation function itself is stored as a value.
 
-Value functions are second-class. A body may close over ambient values — the capture is resolved lexically
-when the function is applied — but the function itself may not be selected from data,
-passed to another value function, returned as a value, or stored in any payload.
-The first-class function space of the value category is instead `Thk B`:
-suspending a computation keeps higher-order programming on the computation side,
-where effects and its runtime representation already live.
-The [value-view proposal](value-views.md) keeps its patterns: a view applies a named value function to its subject
-and then matches the nested pattern, so it consumes the function at its application rather than storing it.
+An explicit adapter can use a statically supplied value function inside a thunked computation.
+The value application is eliminated when compiling the thunk body, while the authored thunk remains a runtime value.
+The [runtime contract account](package-modularization.md#explicit-runtime-contracts) describes the computation
+interfaces available at that boundary, including package-dependent `pi` and its `forall` adapters.
 
-## Second-Class Occurrences
+## Static Elimination
 
-The checker confines `val pi` to definition and application sites with one occurrence rule:
-a `ValPi`-typed value may occur only as the right-hand side of its own binding (including partial type instantiation,
-which leaves a residual function bound to a name) or as the head of an application;
-a `val pi` classifier may occur only as the classifier of such a binding.
-Every other position would materialize a function at runtime and is rejected:
+The shared [static elimination contract](normalization.md#static-elimination-and-residual-code) governs
+higher-order `ValPi` composition, lexical capture, and residual runtime data.
+For value functions, this admits transport through intermediate products, constructors,
+named components, and packages, as well as function-valued parameters and results.
+For example, the revised design accepts this composition, which the current occurrence checker rejects:
 
 ```zydeco
-let val keep (A : VType) (value : A) : A = value that
-let functions = (keep Unit, ()) that        -- rejected: stored in a product
+let Endomorphism = val pi (_ : Unit) . Unit that
+let val keep (value : Unit) : Unit = value that
+let val apply (function : Endomorphism) (value : Unit) : Unit = function value that
+let functions = (keep, ()) that
+let (stored, _) = functions that
+let recovered : Unit = apply stored () that
 ```
 
-The rejected positions are, on the term side, product components, constructor payloads, package payloads,
-named components, computation arguments, returned values, and match scrutinees; on the type side, product components,
-computation-arrow domains, `ValPi` runtime domains (higher-order value functions), existential package bodies,
-named payload types, `Ret` payloads, package-dependent arrow domains, and data or codata declaration payloads.
-The rule is enforced after checking by validating every occurrence against its recorded classifier,
-so a function reaches storage under any path — through a variable, an import, or instantiation of an abstract domain —
-the occurrence is still found at the point where it would be stored.
+The product projection and higher-order application reduce to the same value as `keep ()`.
+Returning `keep` from another value function or carrying it in a static package is governed by the same rule.
+There is no special exemption for polymorphic identity functions: direct and polymorphic transport use one reducer.
 
-Passing a function *through* a polymorphic value function remains legal, because the function is never stored:
-`(A : VType)`-abstract code that returns its argument unchanged elaborates to lexical rebinding when applied.
-Storage inside such code is still rejected at the storing position.
-
-Existential packages obey the same discipline through a sibling rule — a package never crosses a computation boundary —
-specified with its own positions and error code in [Package modularization](package-modularization.md);
-the two checkers run together after ordinary checking.
+A residual runtime product containing a `ValPi` value fails that contract,
+as does an application whose function remains unavailable to static reduction.
+Term application and view patterns therefore share the same acceptance boundary.
 
 ## Runtime and Compilation
 
-Value functions have no runtime representation.
-Lowering treats the beta law as the definition of application: it resolves the applied head —
-through elided definition bindings, aliases, erased type arguments, and residual instantiations —
-to its abstraction, and lowers each cut as a lexical pattern binding at the application site.
-A definition binding never materializes; its body lowers once per application,
-and ambient capture resolves lexically where the body is spliced, so no environment is built.
-
-The reference interpreter still evaluates abstractions as closures.
-Extending an environment is extensionally equal to unfolding, because value application is total
-and allocation identity is unobservable.
-The compiled program contains no closure, environment tuple, or indirect call for a value function:
-when an application does not statically resolve or an abstraction is reached outside its definition,
-lowering reports a source error — a diagnostic naming the offending application
-or abstraction at its span — instead of emitting a closure.
-`function ~> pattern` applies its named function to the subject by the same unfolding before the nested pattern matches.
-
-A source file that exports a package transformation is consequently an ordinary value term:
+A source file may export an unapplied package transformation as an ordinary value term,
+with its static parameters discharged by a consumer:
 
 ```zydeco
 val (builtin : Builtin) =>
-  pack (Api : VType) where ... end
+  pack (Api : VType) is ... where ... end
 ```
 
 Importing it binds a definition, which can be named and applied normally:
@@ -271,20 +381,32 @@ with the unfolded program; the workspace test configuration raises its minimum s
 Static resolution also lets a caller's demand flow through an application into the callee's body,
 so unused components of an instantiated package become ordinary dead bindings;
 the demand analysis records this alongside its binding decisions.
-One tier remains future work: compiling each definition once as a block reached by a direct jump —
-an unboxed closure whose call site the occurrence rule proves static.
+Factoring repeated residual code into direct blocks remains a backend optimization after static elimination.
+It must preserve specialization by static arguments and cannot reintroduce runtime `ValPi` values.
 
 ## Implementation Boundary
 
-The implementation should represent the telescope with typed binder and argument variants rather
-than three parallel type constructors.
+The implemented `ValPi` representation uses typed binder and argument variants for one telescope.
 Formation, introduction, elimination, substitution, formatting,
-and package-witness recovery then follow the same structural recursion.
+and package-witness recovery follow the same structural recursion.
 A runtime binder stores its optional package-witness telescope together with a typed projection route (`ignore`,
 `package`, or component-wise `product`); this route is internal static evidence and erases before dynamics.
 
-The direct transition removes `VArrow`, `VForall`, and `VPackPi` in favour of `ValPi`,
-and removes every static-view artifact (`ViewId`, view signatures, view namespaces,
-expansion plans, and view-specific source loading).
+This representation replaces `VArrow`, `VForall`, and `VPackPi` with `ValPi`.
+View patterns use checked function values without a `ViewId`, view signature, namespace,
+dependency graph, expansion plan, or view-specific source loading.
 `val` and `let val` produce ordinary values. Pipelines elaborate to ordinary `ValPi` application.
-Only `f ~> p` remains as new pattern machinery, specified independently by the value-view proposal.
+The `f ~> p` pattern retains only the machinery described under [Value Views](#value-views).
+
+The unified `ValPi` representation is implemented, but general static composition is not.
+`ValueFunctionChecker` still rejects products and higher-order domains with `tyck.first-class-value-function`,
+and SPS resolution follows a restricted set of definition bindings and application spines.
+Replacing these occurrence bans must follow the [shared normalization boundary](normalization.md#implementation-status),
+updating demand analysis and execution entry points together.
+
+Regression cases must pair accepted static transport through products, packages, partial applications,
+and higher-order parameters and results with rejected unresolved runtime transport.
+They must cover lexical capture of runtime data, preserved sharing, and the same acceptance outcome
+across checking, interpretation, and compiled lowering.
+Existing tests that intentionally reject reducible products and higher-order domains describe the superseded requirement
+and must change with that implementation.

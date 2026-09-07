@@ -10,9 +10,12 @@ and the [language guide](docs/tutorial/zydeco-guide.md) provides a longer source
 ## Language Model
 
 Zydeco separates values from computations. Values include variables, thunks, units,
-products, constructors, literals, total value functions, and existential packages;
-value functions and packages are second-class, bound and consumed by statically resolved projections,
-openings, and applications, but never stored or returned as first-class runtime values.
+products, constructors, literals, total value functions, and existential packages.
+The compiler currently restricts occurrences of value functions and packages to support static resolution.
+The revised [value-function](docs/proposals/value-pi.md#static-elimination)
+and [package](docs/proposals/package-modularization.md#static-package-composition) proposals replace those
+second-class restrictions with static elimination and explicit thunked runtime contracts;
+general higher-order static composition remains to be implemented.
 Computations may perform effects and include forcing thunks, computation-function application,
 do-bindings, and returning values.
 
@@ -115,15 +118,17 @@ Products group values. Existential packages also carry type witnesses on which l
 allowing a package to expose operations while hiding their representation types.
 A telescope is an ordered sequence of binders in which later classifiers may refer to earlier bindings.
 
-Packages are second-class, like value functions: a package is introduced by `pack`,
-bound by a definition, opened by a pattern, nested in products, named components, and other packages,
-and applied to package-dependent or value arrows whose patterns open it.
-Each of those consumers is resolved statically.
-A package never crosses a computation boundary: storing one in a constructor payload,
-passing one to a computation under a plain arrow, or returning one from a computation is rejected
-with `tyck.first-class-package`, and the escape hatch for dynamic needs is a product of thunks.
-[Package modularization](docs/proposals/package-modularization.md) specifies the occurrence rule
-and its consequences for the standard library.
+The current package checker permits a package to be introduced by `pack`, bound by a definition,
+opened by a pattern, nested in products, named components, and other packages,
+and supplied to package-dependent or value arrows whose patterns open it.
+Their package-witness bindings and structural projection routes are resolved statically.
+Storing a package in a constructor payload, passing one under a plain computation arrow,
+or returning one from a computation is currently rejected with `tyck.first-class-package`.
+These are implementation limitations relative to the revised static elimination requirement:
+source package transport should be accepted when its static components disappear and its residual data is representable.
+[Package modularization](docs/proposals/package-modularization.md#explicit-runtime-contracts) distinguishes
+this static composition from explicit runtime contracts, which may use products of thunks or thunked arrows,
+`forall`, codata, and package-dependent computation `pi`.
 
 Parenthesized comma sequences are preserved by the surface `Cons` variant over a flat component vector.
 The type checker interprets them as value products or existential packages from the expected type,
@@ -417,19 +422,32 @@ Plain `param` continues to introduce type functions and computations.
 Juxtaposition, `value |> function`, `function <| value`, and the view pattern `function ~> pattern` are one operation;
 evaluating it does no more than move value data into its memory representation.
 Only the nested pattern of a view contributes bindings and refutability.
-Value functions are second-class: a function may be bound as a definition (including partial type instantiation)
-and applied, directly or through a view pattern, but storing, passing, or returning one is rejected;
-first-class function values remain suspended computations behind `Thk`.
-The mechanisms and their dependency are specified separately
-in [Value Functions with `ValPi`](docs/proposals/value-pi.md) and [Value Views](docs/proposals/value-views.md).
+The current occurrence checker admits definition bindings, including partial type instantiation, and applications,
+directly or through a view pattern, but rejects storage and higher-order domains.
+The revised design admits such composition when static elaboration eliminates every runtime `ValPi` occurrence.
+Runtime callable values remain explicit suspended computations behind `Thk`;
+failed static elimination does not implicitly construct one.
+The intended behavior and remaining implementation work are specified together
+in [Value Functions and Views with `ValPi`](docs/proposals/value-pi.md), with the pattern rules
+under [Value Views](docs/proposals/value-pi.md#value-views).
 
 Package parameters may open existential witnesses used by the result classifier.
 Both computation package-dependent arrows (`PackPi`) and value-function classifiers (`ValPi`) retain those witnesses;
 `ValPi` also records the structural route through the parameter pattern by which application recovers them.
-A binder that opens abstract witnesses elaborates to a package-dependent arrow on its own, so applying one stays
-within the second-class package rule; a package under a plain computation arrow is rejected instead.
+A binder that opens abstract witnesses elaborates to a package-dependent arrow on its own.
+A thunk of that arrow may be passed or selected at runtime: its signature supplies the static witness dependency,
+so the callee implementation need not be statically known.
+A package under a plain computation arrow is still rejected by the occurrence checker, including manifest-only domains;
+the revised proposal removes that asymmetry when the residual payload is representable.
 These are static dependencies on type identities, rather than dependencies on arbitrary runtime values.
 Libraries compose through these functions and packages without an additional module or namespace sort.
+
+For a package `exists (X : K). A X`, the interfaces `pi ((X, x) : Package). C X`
+and `forall (X : K). A X -> C X` admit explicit packaging and unpackaging adapters.
+Their thunked implementations may remain runtime values, and `C X` may itself be a codata protocol.
+This correspondence preserves witness scope; it does not make the two classifiers definitionally equal.
+The [runtime contract account](docs/proposals/package-modularization.md#package-dependent-runtime-contracts)
+includes the adapters and the distinction between polymorphism and a provider's hidden representation type.
 
 ## Classifier Extraction
 
@@ -862,8 +880,10 @@ but the embedding must supply the imports before invoking either function.
 - Value-function application inlines each body at its use, so emitted code and compiler recursion depth grow
   with the unfolded program, dominated by multiply-instantiated library functors.
   The workspace raises its test-stack minimum accordingly; compiling each definition once remains future work recorded
-  in [Value Functions with `ValPi`](docs/proposals/value-pi.md).
-- Packages are second-class; module functors remain user-writable as value functors or package-dependent arrows.
+  in [Value Functions and Views with `ValPi`](docs/proposals/value-pi.md).
+- Value-function and package occurrence bans still reject some statically eliminable compositions.
+  Shared static elaboration remains to replace them; thunked `forall`, codata,
+  and package-dependent computation arrows already provide runtime contracts.
   Demand does not yet flow through package-dependent applications,
   so functor arguments materialize whole ([Package modularization](docs/proposals/package-modularization.md)).
 - The standard native test path is AMD64 on Linux or macOS.

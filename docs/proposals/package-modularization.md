@@ -1,8 +1,7 @@
 # Package modularization with projection patterns
 
-Zydeco represents libraries with second-class value functions, computation functions,
-products, and existential packages, following the account in [Uniform Term Composition](term.md)
-and [Compile-Time Normalization](normalization.md).
+Zydeco represents libraries with total value functions, computation functions, products, and existential packages,
+following the account in [Uniform Term Composition](term.md) and [Compile-Time Normalization](normalization.md).
 This gives libraries a precise term-level meaning,
 but a positional package pattern makes every consumer repeat the provider's complete public telescope.
 Adding one standard-library type or module then changes programs that never use it.
@@ -219,6 +218,8 @@ through explicitly annotated `forall` parameters.
 Their result types retain the input `Bool`, scalar, and `String` identities,
 and the numeric assembly returns each width's operation module beside its capability dictionary,
 grouped once more under `dictionaries` for explicitly passing those dictionaries around.
+The [numeric capability proposal](numeric-capabilities.md) describes dictionary composition, explicit selection,
+and manifest wrappers for carrying a disclosed representation with its operations.
 The public system implementation remains one assembly package because `Reader`, `Writer`,
 and `OS` are abstract provider identities shared by `io`, `fs`, and `stdio`.
 Its host-facing operation contracts are nevertheless split into topic leaves,
@@ -341,55 +342,188 @@ This pattern handles the current introduction limitation within one source file.
 The Builtin contract uses the same annotated-spine form for its surface, with every fixed-representation type
 as a manifest entry beside the two kinds.
 
-## Second-class packages
+## Static package composition
 
-Packages are the module language.
-A package crosses a computation boundary only through an arrow whose parameter pattern opens it;
-every other consumer is resolved statically, so pack and open are elaboration-time events.
-The occurrence checker enforces this after checking, mirroring the rule
-for value functions ([Value Functions with `ValPi`](value-pi.md)).
+Packages are the module language
+and follow the shared [static elimination contract](normalization.md#static-elimination-and-residual-code).
+For packages, elaboration resolves type identities, named selections, and static function components,
+while retaining ordinary payload data and explicitly authored computations.
+Passing, returning, and nesting packages, including packages carrying [value functions](value-pi.md#static-elimination),
+are governed by this residual requirement.
+Current implementation restrictions are recorded [below](#current-implementation-and-validation).
 
-A package may be introduced by `pack`, bound by a definition, opened by a pattern
-(including a single-arm exhaustive match, which coverage already treats as one constructor),
-nested inside a product, a named component, or another package, passed as the argument of a value function,
-and applied to a package-dependent arrow whose parameter pattern opens it.
-Every other position would store the package as a first-class value, and the checker rejects it
-with `tyck.first-class-package`:
+## Explicit runtime contracts
 
-- a data-constructor payload, and a data or codata declaration payload type;
-- an argument to a computation under a plain arrow, and a plain arrow's domain;
-- the value returned by a computation, and the payload of a returning computation type.
+A computation type describes the operations a runtime implementation supports,
+and `Thk` makes that implementation a value that can be stored, passed, returned, and selected dynamically.
+Runtime contracts may use ordinary computation arrows, `forall`, `codata`, and package-dependent computation `pi`.
+For example, a codata contract can group a polymorphic operation and an ordinary observation:
 
-The dynamic escape hatch is a product of thunks: when a consumer genuinely cannot name its package supplier,
-it receives suspended operations instead of a sealed module.
+```zydeco
+let Contract = codata
+  | .identity : forall (A : VType) . A -> Ret A
+  | .status : Ret Int64
+end that
+```
 
-Two elaboration facts make the rule precise about arrows.
-A binder pattern that opens abstract witnesses turns its abstraction into a package-dependent arrow automatically,
-whether written as `fn (pattern : Package) => M` or as a `def` parameter; each application then opens
-that argument's witnesses statically, which is why such applications stay legal.
-A manifest-only package opens nothing — its witnesses are transparent — so a function over it elaborates
-to a plain computation arrow and is rejected: the package would sit in the arrow's domain as a sealed first-class value.
-A consumer of a manifest package opens it where it is used instead.
-An explicitly written `pi (pattern : Package) . C` always names a package-dependent arrow
-and remains the spelling for annotating one.
+An implementation has type `Thk Contract`.
+Its type abstractions and applications erase, but its method bodies and dynamic dispatch remain.
+The standard library's `Monad` contract already uses `forall` inside codata in this way.
+Thus a polymorphic runtime function is distinct from a `ValPi` function whose abstraction
+and applications must themselves be eliminated.
+
+An explicit adapter from a static package to `Thk Contract` is the runtime boundary.
+The adapter resolves static package selections and value functions while compiling the thunk body;
+the resulting thunk captures any required runtime data or operations.
+The runtime contract must expose representable arguments and results: a static-only `ValPi` component must be consumed
+during adaptation or given an explicitly thunked operation interface.
+A product of thunks remains a valid contract representation, but it is not the only one.
+These existing forms supply the semantics without requiring a new `dyn` primitive.
+
+A vtable is one implementation of such a contract.
+Current SPS lowering uses a closure with a destructor-tag dispatcher for thunked codata.
+A backend may instead split a shared environment from a table of method entry points,
+preserving captures, polymorphic calling conventions, and effect order.
+The source-level contract does not require either physical layout, nor does static type erasure promise
+that every runtime method call is direct.
+
+### Package-dependent runtime contracts
+
+A computation `pi` accepting a package is also a runtime contract.
+Its implementation may be stored as a thunk and selected dynamically; only its signature
+and the type evidence needed to instantiate that signature must be available during checking.
+Resolving an argument's static witnesses does not require resolving the called implementation's body.
+
+For a type witness `X : K`, a value-type family `A`, and a computation-type family `C`, the correspondence is:
+
+```text
+Sig = exists (X : K). A X
+
+pi ((X, x) : Sig). C X
+    <--> forall (X : K). A X -> C X
+```
+
+The left interface receives a witness and payload grouped as one package;
+the right receives the same witness and payload separately.
+`C X` may depend on the type witness but not on the arbitrary runtime value `x`.
+This grouping uses the witness-exposing elimination of `PackPi`; it does not add an unrestricted dependent projection
+from an ordinary sealed existential value. This is the type-witness instance of
+[dependent currying](https://leanprover-community.github.io/mathlib4_docs/Mathlib/Logic/Equiv/Basic.html#Equiv.piCurry).
+Manifest components substitute their disclosed definitions before this correspondence is applied;
+multiple abstract witnesses extend it in telescope order, preserving their shared identities.
+
+The following concrete interfaces and adapters also permit codata as the residual contract:
+
+```zydeco
+let Box = exists (X : VType) . X that
+let Methods (X : VType) = codata
+  | .get : Ret X
+  | .replace : X -> Ret X
+end that
+let Curried = forall (X : VType) . X -> Methods X that
+let Packaged = pi ((X, _) : Box) . Methods X that
+
+def curried : Thk Curried = {
+  fn (X : VType) (value : X) =>
+    comatch
+    | .get => ret value
+    | .replace replacement => ret replacement
+    end
+} that
+def packaged : Thk Packaged = {
+  fn ((X, value) : Box) => ! curried X value
+} that
+def restored : Thk Curried = {
+  fn (X : VType) (value : X) => ! packaged ((X, value) : Box)
+} that
+```
+
+Both adapters type-check with the current implementation.
+This proposal allows both interfaces through explicit adapters; it does not make `PackPi`
+and `Forall` definitionally equal or require their current argument layouts to coincide.
+The general correspondence is not a theorem identifying arbitrary effectful computations merely from their types.
+Any stronger observational equation must account for partial consumption of a computation protocol and effect order.
+
+Codata supplies the method alternatives; package `pi` supplies a grouped parameter telescope.
+A `pi` outside codata opens the package once for the residual protocol, as above.
+A `pi` inside a codata arm instead accepts a package for that particular observation.
+Both are allowed, but moving binders across method boundaries changes where witnesses and payloads are shared
+and is not an implicit conversion.
+
+An opening pattern that introduces abstract witnesses continues to synthesize a package-dependent arrow.
+A manifest-only domain introduces no abstract witnesses and may elaborate to a plain computation arrow.
+After its manifest fields erase, that arrow is admissible when its residual payload is representable;
+the absence of abstract witnesses is not a reason to reject it.
+An explicitly annotated `pi (pattern : Sig). C` remains available in either case.
+
+### Hidden types and scoped opening
+
+Runtime dispatch does not recover concrete types from runtime data.
+A call to `pi ((X, x) : Sig). C X` needs a witness identity available in its static scope to instantiate `C X`.
+An abstract identity obtained by an explicit package opening is sufficient;
+its concrete representation need not be known.
+A hidden witness must not escape that scope or be equated with an unrelated concrete type.
+When the provider chooses a private type at a dynamic boundary, the consumer needs scoped existential elimination,
+rather than a universal interface that lets the consumer choose that type.
+
+Private state can remain captured in a thunk when its type does not occur in the public contract.
+If the consumer must use a private type across several operations,
+a polymorphic callback can expose it within one opening.
+For example:
+
+```zydeco
+let Hidden = codata
+  | .open : forall (R : CType) .
+      Thk (forall (X : VType) . X -> Thk (X -> Ret Int64) -> R) -> R
+end that
+```
+
+The provider supplies its chosen `X`, a value, and an operation on that value.
+The callback must work for arbitrary `X`, and `R` is chosen outside its scope.
+The callback can invoke the supplied operation but cannot return the value
+as `Int64` solely by inspecting its abstract type.
+Package `pi` can also group this callback's witness and payload:
+
+```zydeco
+let Entry = exists (X : VType) . X * Thk (X -> Ret Int64) that
+let HiddenByPackage = codata
+  | .open : forall (R : CType) .
+      Thk (pi ((X, _, _) : Entry) . R) -> R
+end that
+```
+
+The provider calls the callback with an `Entry`, and the callback opens it once
+to use the value and operation at their shared abstract `X`.
+Both forms are supported runtime interfaces through explicit adapters.
+They are continuation interfaces for existential elimination;
+in an effectful language their types alone do not promise a pure package or a single callback invocation.
 
 ### Module functors
 
-Module functors stay user-writable; restricting package-dependent arrows
-to the host boundary was considered and declined.
-A *value functor* is a `val pi` from a package to a package — the standard library's `builtin |> make_data` shape.
-Application unfolds lexically with caller demand flowing through.
-A *computation functor* is a package-dependent arrow `pi (pattern : Sig) . C`,
-written explicitly or synthesized from any `fn` whose pattern opens abstract witnesses.
-Its effectful body lowers as a closure, but each application still opens the argument's witnesses statically.
-A manifest-only signature opens nothing abstract, so a binder over it elaborates to a plain arrow and is rejected;
-a manifest signature is transparent, so the consumer opens it where it is used instead.
+A *value functor* is a `val pi` from a package to a package, such as `builtin |> make_data`.
+Its application undergoes static elimination, including higher-order composition through package fields.
+A *computation functor* has a package-dependent computation arrow `pi (pattern : Sig). C`.
+It may have effects, and its thunk may remain a runtime callable just like a thunk
+of the corresponding `forall` interface.
+It is not restricted to the host boundary or to a statically known callee.
 
-### Lowering follow-ups
+### Current implementation and validation
 
-Two optimizations remain to measure: fusing a `pack` into the pattern that immediately opens it,
-and flowing demand through package-dependent applications, whose arguments are currently demanded whole.
-Neither is required by the rule.
+The compiler already checks and executes thunked `forall` and codata contracts and the package-`pi` adapters above.
+It still runs `PackageChecker`, which rejects source package returns, constructor payloads, and plain-arrow domains
+with `tyck.first-class-package`; `ValueFunctionChecker` independently rejects value functions carried in packages.
+Those occurrence bans are implementation gaps relative to static elimination and explicit runtime contracts.
+Their replacement must preserve witness-scope checks
+while satisfying the [shared residual validation](normalization.md#residual-validation-and-execution).
+
+Validation must cover static packages carrying value functions, manifest-only domains,
+and dynamically passed thunks of package `pi`, including both directions of the explicit `forall` adapters.
+Pair these accepted cases with unavailable witness evidence, abstract-type escape or false disclosure,
+and a value function that remains in a runtime payload.
+
+Fusing a `pack` into its opening and flowing demand through package-dependent applications remain optimizations
+to measure; the latter currently demand their arguments whole.
+Neither optimization may determine whether an otherwise supported static composition is accepted.
 
 ## Elaboration and runtime representation
 
@@ -402,7 +536,9 @@ Internal patterns occupy unselected static positions without introducing source 
 Static witnesses and manifest equations erase as before.
 Value projections lower to ordinary tuple patterns with resolved physical paths.
 The Builtin materializer recursively follows the same nested product shape in the interpreter and Stack IR.
-No module object, field table, or new calling convention is required.
+Static composition requires no module object, field table, or new calling convention.
+Explicit runtime contracts retain their thunk or dictionary representation as described above;
+their implementation may be dynamic even though these package witnesses and projection paths are static.
 
 Term projection crosses manifest packages but not sealed ones: `builtin/fs` resolves
 through the manifest `system` group, while a field that only a package
