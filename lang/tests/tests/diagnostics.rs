@@ -3,6 +3,46 @@ use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::utils::{CaseError, SourceCase};
 
 #[test]
+fn incomplete_type_diagnostics_keep_independent_holes_without_cascades() {
+    for (body, primary) in [
+        ("let x : Int64 = { _ } in ret x", TyckDiagnosticCode::TypeMismatch),
+        ("fn x => ret x", TyckDiagnosticCode::UnconstrainedInference),
+        ("ret _", TyckDiagnosticCode::SortMismatch),
+        ("let x = { ret _ } in ret x", TyckDiagnosticCode::SortMismatch),
+    ] {
+        let result = SourceCase::check(body);
+        let Err(CaseError::Compile(CompileError::Rejected(analysis))) = result else {
+            panic!("expected a type error for {body}: {result:?}");
+        };
+        let errors = analysis.outcome().diagnostics().unwrap();
+        assert_eq!(errors.len(), 1, "{body}: {errors:?}");
+        let error = errors.iter().next().unwrap();
+        assert_eq!(error.code, primary, "{body}: {error:?}");
+        assert!(error.primary.is_some());
+        assert!(!error.message.contains("fill-"), "{body}: {}", error.message);
+        if primary == TyckDiagnosticCode::TypeMismatch {
+            assert!(error.message.contains("Thk _"), "{}", error.message);
+        }
+    }
+    let body = "let waiting = { ! _ } in let wrong : Int64 = { _ } in ret 0";
+    let result = SourceCase::check(body);
+    let Err(CaseError::Compile(CompileError::Rejected(analysis))) = result else {
+        panic!("expected a type error for {body}: {result:?}");
+    };
+    let errors = analysis.outcome().diagnostics().unwrap();
+    assert_eq!(errors.len(), 2, "{errors:?}");
+    assert!(errors.iter().any(|error| error.code == TyckDiagnosticCode::TypeMismatch));
+    let missing =
+        errors.iter().find(|error| error.code == TyckDiagnosticCode::MissingSolution).unwrap();
+    let span = missing.primary.as_ref().unwrap().span;
+    let (file, range) = analysis.spans().source_map().unwrap().range(span).unwrap();
+    assert_eq!(&file.source()[range], "_");
+    assert!(missing.related.is_empty(), "the failed expression's hole must be omitted");
+    SourceCase::assert_rejected(SourceCase::check("! _"), TyckDiagnosticCode::MissingSolution);
+    SourceCase::assert_accepted(SourceCase::check("let x : Int64 = 0 in ret x"));
+}
+
+#[test]
 fn malformed_monadic_operation_contracts_are_diagnosed() {
     for (definition, code) in [
         ("OS", TyckDiagnosticCode::TypeExpected),

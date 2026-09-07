@@ -150,7 +150,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for KindId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let kd = &f.statics.kinds_pre[self];
         match kd {
-            | Fillable::Fill(fill) => RcDoc::text(format!("[fill-kd {}]", fill.concise_inner())),
+            | Fillable::Fill(_) => RcDoc::text("_"),
             | Fillable::Done(kind) => match kind {
                 | Kind::VType(VType) => RcDoc::text("VType"),
                 | Kind::CType(CType) => RcDoc::text("CType"),
@@ -199,7 +199,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for TypeId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let ty = &f.statics.types_pre[self];
         match ty {
-            | Fillable::Fill(fill) => RcDoc::text(format!("[fill-ty {}]", fill.concise_inner())),
+            | Fillable::Fill(_) => RcDoc::text("_"),
             | Fillable::Done(ty) => match ty {
                 | Type::Var(def) => def.pretty(f),
                 | Type::Abst(abst) => abst.pretty(f),

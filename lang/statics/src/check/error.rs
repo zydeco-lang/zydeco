@@ -325,7 +325,7 @@ impl<'a> Tycker<'a> {
         self.statics.terms.source(&term).map(|term| *term.span(self))
     }
 
-    fn inference_site_source_span(&self, site: InferenceSite) -> Span {
+    pub(super) fn inference_site_source_span(&self, site: InferenceSite) -> Span {
         match site {
             | InferenceSite::Term(term) => *term.span(self),
             | InferenceSite::Pattern(pattern) => *pattern.span(self),

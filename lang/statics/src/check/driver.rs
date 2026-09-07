@@ -228,12 +228,49 @@ impl<'a> Tycker<'a> {
     pub(crate) fn error_diagnostics(&self) -> TyckDiagnostics {
         use std::collections::HashSet;
 
-        let mut seen = HashSet::new();
-        let diagnostics = self
+        let primary = self
             .errors
             .iter()
+            .filter(|entry| !matches!(entry.error, TyckError::MissingSolution(_)))
             .cloned()
             .map(|entry| self.error_entry_diagnostic(entry))
+            .collect::<Vec<_>>();
+        let rejected = primary
+            .iter()
+            .flat_map(|diagnostic| {
+                diagnostic.primary.iter().chain(
+                    diagnostic
+                        .related
+                        .iter()
+                        .filter(|_| diagnostic.code == TyckDiagnosticCode::UnconstrainedInference),
+                )
+            })
+            .map(|label| label.span)
+            .collect::<Vec<_>>();
+        let missing = self.errors.iter().filter_map(|entry| {
+            let TyckError::MissingSolution(fills) = &entry.error else { return None };
+            let fills = fills
+                .iter()
+                .copied()
+                .filter(|fill| {
+                    let owner = self.inference_site_source_span(self.statics.fills[fill]);
+                    // The classifier of a failed expression cannot be inferred reliably.
+                    // Keep holes belonging to independent expressions in the same source.
+                    !rejected.iter().any(|span| owner.lo() <= span.lo() && span.hi() <= owner.hi())
+                })
+                .collect::<Vec<_>>();
+            (!fills.is_empty()).then(|| {
+                self.error_entry_diagnostic(TyckErrorEntry {
+                    error: TyckError::MissingSolution(fills),
+                    blame: entry.blame,
+                    stack: entry.stack.clone(),
+                })
+            })
+        });
+        let mut seen = HashSet::new();
+        let diagnostics = primary
+            .into_iter()
+            .chain(missing)
             .filter(|diagnostic| seen.insert(diagnostic.clone()))
             .collect::<Vec<_>>();
         TyckDiagnostics { diagnostics: std::sync::Arc::from(diagnostics) }

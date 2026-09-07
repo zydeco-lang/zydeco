@@ -691,6 +691,9 @@ so editing an imported file also invalidates a consumer's cached documentation.
 Each parsed entity, including nested metadata, has its own source span.
 The assembled program uses a shared `SourceMap` to associate byte offsets with their files;
 compiler diagnostics retain a primary location, stable code, and optional semantic relationships or help.
+Unsolved classifiers render as `_`.
+A primary error suppresses follow-on missing-solution messages for its failed expression
+and enclosing inferred classifiers; unrelated holes remain visible.
 The checker task stack remains an internal trace. CLI and TUI render the diagnostics with Ariadne,
 while Cajun converts byte spans to the client's UTF-16 positions at the LSP boundary.
 Document revisions invalidate stale completion responses.
