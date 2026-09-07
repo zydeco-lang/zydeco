@@ -430,7 +430,9 @@ fn assert_source_program_exits_zero_and_reaches_amd64(relative: impl AsRef<Path>
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let native =
         TestPipeline::amd64_from_checked(root, checked, crate::TestOutput::quiet()).unwrap();
 
@@ -444,7 +446,9 @@ fn assert_source_io_program(relative: impl AsRef<Path>, source_input: &str, expe
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::Cursor::new(source_input);
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let native =
         TestPipeline::amd64_from_checked(root, checked, crate::TestOutput::quiet()).unwrap();
 
@@ -461,7 +465,9 @@ fn assert_source_io_program_reaches_zasm(
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::Cursor::new(source_input);
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let SourceAssembly { assembly, .. } =
         TestPipeline::zasm_from_checked(checked, crate::TestOutput::quiet()).unwrap();
 
@@ -476,7 +482,9 @@ fn assert_source_program_exits_zero_and_reaches_zasm(relative: impl AsRef<Path>)
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let SourceAssembly { assembly, .. } =
         TestPipeline::zasm_from_checked(checked, crate::TestOutput::quiet()).unwrap();
 
@@ -1424,7 +1432,8 @@ fn a_zero_dependency_source_program_checks_and_runs_as_one_term() {
     let SourceDynamics { program: arena, .. } = checked.dynamics().unwrap();
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], arena).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], arena).run();
 
     assert!(matches!(
         result,
@@ -1677,7 +1686,8 @@ fn the_interpreter_constructs_and_applies_a_typed_builtin_package() {
     let SourceDynamics { program: arena, .. } = checked.dynamics_with_builtin().unwrap();
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], arena).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], arena).run();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(3)));
 }
@@ -1708,7 +1718,9 @@ end
     let dynamics = TestPipeline::check(root).unwrap().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
 
     assert_eq!(output, b"7");
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
@@ -1795,7 +1807,9 @@ fn canonical_builtin_signature_imports_into_interpreter_and_native_compilation()
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let native =
         TestPipeline::amd64_from_checked(root, checked, crate::TestOutput::quiet()).unwrap();
 
@@ -1934,7 +1948,9 @@ fn foundational_comparison_selects_a_computation_without_constructing_bool() {
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let native =
         TestPipeline::amd64_from_checked(root, checked, crate::TestOutput::quiet()).unwrap();
 
@@ -1949,7 +1965,9 @@ fn foundational_line_parser_selects_a_continuation_without_constructing_option()
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::Cursor::new("42\nnot-an-integer\n");
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let native =
         TestPipeline::amd64_from_checked(root, checked, crate::TestOutput::quiet()).unwrap();
 
@@ -1965,7 +1983,14 @@ fn foundational_argument_fold_preserves_sequence_without_constructing_list() {
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let arguments = ["alpha".to_string(), "beta".to_string()];
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &arguments, dynamics).run();
+    let result = zydeco_dynamics::Runtime::new(
+        &mut input,
+        &mut output,
+        &mut Vec::new(),
+        &arguments,
+        dynamics,
+    )
+    .run();
     let SourceAssembly { assembly, .. } =
         TestPipeline::zasm_from_checked(checked, crate::TestOutput::quiet()).unwrap();
 
@@ -1982,7 +2007,9 @@ fn standard_library_package_composes_as_an_imported_value_function() {
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let native =
         TestPipeline::amd64_from_checked(root, checked, crate::TestOutput::quiet()).unwrap();
 
@@ -1997,7 +2024,9 @@ fn standard_library_reifies_foundational_comparisons_as_abstract_bool() {
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let SourceAssembly { assembly, .. } =
         TestPipeline::zasm_from_checked(checked, crate::TestOutput::quiet()).unwrap();
 
@@ -2012,7 +2041,9 @@ fn standard_library_reifies_foundational_splits_as_abstract_option() {
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let SourceAssembly { assembly, .. } =
         TestPipeline::zasm_from_checked(checked, crate::TestOutput::quiet()).unwrap();
 
@@ -2027,7 +2058,9 @@ fn standard_library_reifies_foundational_line_parsing_as_abstract_option() {
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::Cursor::new("42\nnot-an-integer\n");
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let SourceAssembly { assembly, .. } =
         TestPipeline::zasm_from_checked(checked, crate::TestOutput::quiet()).unwrap();
 
@@ -2043,7 +2076,14 @@ fn standard_library_reifies_foundational_argument_fold_as_abstract_list() {
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let arguments = ["alpha".to_string(), "beta".to_string()];
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &arguments, dynamics).run();
+    let result = zydeco_dynamics::Runtime::new(
+        &mut input,
+        &mut output,
+        &mut Vec::new(),
+        &arguments,
+        dynamics,
+    )
+    .run();
     let SourceAssembly { assembly, .. } =
         TestPipeline::zasm_from_checked(checked, crate::TestOutput::quiet()).unwrap();
 
@@ -2058,7 +2098,9 @@ fn legacy_alias_example_ports_to_uniform_term_composition() {
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let native =
         TestPipeline::amd64_from_checked(root, checked, crate::TestOutput::quiet()).unwrap();
 
@@ -2073,7 +2115,9 @@ fn builtin_surface_selection_replaces_the_old_prelude_usage() {
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let native =
         TestPipeline::amd64_from_checked(root, checked, crate::TestOutput::quiet()).unwrap();
 
@@ -2136,7 +2180,9 @@ fn legacy_tuple_example_ports_to_uniform_term_composition() {
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let native =
         TestPipeline::amd64_from_checked(root, checked, crate::TestOutput::quiet()).unwrap();
 
@@ -2151,7 +2197,9 @@ fn exact_signed_arithmetic_agrees_through_interpretation_and_native_emission() {
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let native =
         TestPipeline::amd64_from_checked(root, checked, crate::TestOutput::quiet()).unwrap();
 
@@ -2167,7 +2215,9 @@ fn recursive_nominal_types_port_to_a_declaration_free_block() {
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let native =
         TestPipeline::amd64_from_checked(root, checked, crate::TestOutput::quiet()).unwrap();
 
@@ -2184,7 +2234,9 @@ fn abstract_bool_package_exports_values_and_an_eliminator() {
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let native =
         TestPipeline::amd64_from_checked(root, checked, crate::TestOutput::quiet()).unwrap();
 
@@ -2199,7 +2251,9 @@ fn abstract_option_package_exports_a_type_constructor_and_an_eliminator() {
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let native =
         TestPipeline::amd64_from_checked(root, checked, crate::TestOutput::quiet()).unwrap();
 
@@ -2214,7 +2268,9 @@ fn abstract_list_package_exports_case_analysis_and_a_recursive_fold() {
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let native =
         TestPipeline::amd64_from_checked(root, checked, crate::TestOutput::quiet()).unwrap();
 
@@ -2229,7 +2285,9 @@ fn named_manifest_package_example_ports_without_declarations() {
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let native =
         TestPipeline::amd64_from_checked(root, checked, crate::TestOutput::quiet()).unwrap();
 
@@ -2244,7 +2302,9 @@ fn interleaved_pack_pi_example_ports_without_declarations() {
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let native =
         TestPipeline::amd64_from_checked(root, checked, crate::TestOutput::quiet()).unwrap();
 
@@ -2259,7 +2319,9 @@ fn legacy_match_example_ports_without_declarations() {
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let native =
         TestPipeline::amd64_from_checked(root, checked, crate::TestOutput::quiet()).unwrap();
 
@@ -2274,7 +2336,9 @@ fn legacy_comatch_example_ports_without_declarations() {
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let native =
         TestPipeline::amd64_from_checked(root, checked, crate::TestOutput::quiet()).unwrap();
 
@@ -2289,7 +2353,9 @@ fn legacy_continuation_clone_example_ports_without_declarations() {
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let native =
         TestPipeline::amd64_from_checked(root, checked, crate::TestOutput::quiet()).unwrap();
 
@@ -2304,7 +2370,9 @@ fn legacy_factorial_example_ports_through_foundational_comparison() {
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let native =
         TestPipeline::amd64_from_checked(root, checked, crate::TestOutput::quiet()).unwrap();
 
@@ -2593,7 +2661,9 @@ fn playground_is_a_configuration_free_root_program() {
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = std::io::sink();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], dynamics).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
+            .run();
     let native =
         TestPipeline::amd64_from_checked(root, checked, crate::TestOutput::quiet()).unwrap();
 
@@ -2668,7 +2738,8 @@ fn checked_computation_roots_link_directly_to_dynamics() {
     let SourceDynamics { program: arena, .. } = checked_trivial_computation().dynamics().unwrap();
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result = zydeco_dynamics::Runtime::new(&mut input, &mut output, &[], arena).run();
+    let result =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], arena).run();
 
     assert!(matches!(
         result,

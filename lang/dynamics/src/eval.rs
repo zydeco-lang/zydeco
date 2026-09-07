@@ -27,12 +27,13 @@ pub enum Step<T, Out> {
 impl<'rt> Runtime<'rt> {
     /// Construct a new runtime with empty environment and stack.
     pub fn new(
-        input: &'rt mut dyn BufRead, output: &'rt mut dyn Write, args: &'rt [String],
-        program: DynamicsProgram,
+        input: &'rt mut dyn BufRead, output: &'rt mut dyn Write, stderr: &'rt mut dyn Write,
+        args: &'rt [String], program: DynamicsProgram,
     ) -> Self {
         Runtime {
             input,
             output,
+            stderr,
             args,
             host: crate::host::HostRuntime::new(),
             foreign: crate::foreign::ForeignRuntime::new(),
@@ -314,6 +315,7 @@ impl<'rt> Eval<'rt> for Computation {
                     args,
                     runtime.input,
                     runtime.output,
+                    runtime.stderr,
                     runtime.args,
                     &mut runtime.host,
                 ) {

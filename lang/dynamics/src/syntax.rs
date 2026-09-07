@@ -165,6 +165,7 @@ pub enum SemCompu {
 pub struct Runtime<'rt> {
     pub input: &'rt mut dyn BufRead,
     pub output: &'rt mut dyn Write,
+    pub stderr: &'rt mut dyn Write,
     pub args: &'rt [String],
     pub(crate) host: HostRuntime,
     pub(crate) foreign: crate::foreign::ForeignRuntime,

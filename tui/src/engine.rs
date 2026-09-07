@@ -199,8 +199,9 @@ impl ReplEngine {
     ) -> Result<String, String> {
         let mut input = std::io::empty();
         let mut output = Vec::new();
+        let mut stderr = Vec::new();
         let arguments: [String; 0] = [];
-        let mut runtime = Runtime::new(&mut input, &mut output, &arguments, dynamics);
+        let mut runtime = Runtime::new(&mut input, &mut output, &mut stderr, &arguments, dynamics);
         let result = runtime.run();
         let formatter = DynamicFormatter::new(&runtime.program);
         let result = match result {
@@ -212,7 +213,14 @@ impl ReplEngine {
             | ProgKont::Error(error) => format!("Runtime error: {error}"),
             | ProgKont::Dry => unreachable!("the REPL never asks the runtime for a dry run"),
         };
-        let output = String::from_utf8_lossy(&output);
+        let mut output = String::from_utf8_lossy(&output).into_owned();
+        if !stderr.is_empty() {
+            if !output.is_empty() && !output.ends_with('\n') {
+                output.push('\n');
+            }
+            output.push_str("[stderr]\n");
+            output.push_str(&String::from_utf8_lossy(&stderr));
+        }
         if output.is_empty() { Ok(result) } else { Ok(format!("{}\n{result}", output.trim_end())) }
     }
 

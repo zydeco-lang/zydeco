@@ -25,10 +25,11 @@ pub struct CommandCompiler {
     lint_types: bool,
 }
 
-/// The interaction of a checked source run: its output and exit status.
+/// The interaction of a checked source run: its standard output, standard error, and exit status.
 #[derive(Clone, Debug)]
 pub struct TestInteraction {
     pub output: String,
+    pub stderr: String,
     pub code: i32,
 }
 
@@ -125,7 +126,8 @@ impl CommandCompiler {
         .map_err(CompileError::BuiltinLink)?;
         let mut input = std::io::stdin().lock();
         let mut output = std::io::stdout();
-        match Runtime::new(&mut input, &mut output, arguments, dynamics).run() {
+        let mut stderr = std::io::stderr();
+        match Runtime::new(&mut input, &mut output, &mut stderr, arguments, dynamics).run() {
             | ProgKont::Error(error) => Err(CompileError::Runtime(error)),
             | result => Ok(result),
         }
@@ -143,7 +145,8 @@ impl CommandCompiler {
         .map_err(CompileError::BuiltinLink)?;
         let mut input = std::io::empty();
         let mut output = std::io::sink();
-        match Runtime::new(&mut input, &mut output, arguments, dynamics).run() {
+        let mut stderr = std::io::sink();
+        match Runtime::new(&mut input, &mut output, &mut stderr, arguments, dynamics).run() {
             | ProgKont::ExitCode(0) => Ok(()),
             | ProgKont::Error(error) => Err(CompileError::Runtime(error)),
             | result => Err(CompileError::TestFailure(result)),
@@ -165,10 +168,13 @@ impl CommandCompiler {
         .map_err(CompileError::BuiltinLink)?;
         let mut input = input.as_bytes();
         let mut output = Vec::new();
-        match Runtime::new(&mut input, &mut output, arguments, dynamics).run() {
-            | ProgKont::ExitCode(code) => {
-                Ok(TestInteraction { output: String::from_utf8_lossy(&output).into_owned(), code })
-            }
+        let mut stderr = Vec::new();
+        match Runtime::new(&mut input, &mut output, &mut stderr, arguments, dynamics).run() {
+            | ProgKont::ExitCode(code) => Ok(TestInteraction {
+                output: String::from_utf8_lossy(&output).into_owned(),
+                stderr: String::from_utf8_lossy(&stderr).into_owned(),
+                code,
+            }),
             | ProgKont::Error(error) => Err(CompileError::Runtime(error)),
             | result => Err(CompileError::TestFailure(result)),
         }

@@ -149,7 +149,8 @@ The REPL accepts one complete term per numbered input.
 
 Without a command, the REPL inspects kinds and types and evaluates values or directly returning computations.
 Use `@[run]` for computations requiring the host package; arbitrary unapplied functions still need arguments.
-REPL evaluation captures output and supplies empty stdin and an empty argument list.
+REPL evaluation captures stdout and stderr separately, labels stderr in the result,
+and supplies empty stdin and an empty argument list.
 
 Enter submits complete syntax and adds a line for incomplete syntax.
 Alt+Enter always inserts a newline; Ctrl+Enter submits even incomplete text for diagnostics.

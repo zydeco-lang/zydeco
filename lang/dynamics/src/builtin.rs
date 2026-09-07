@@ -21,7 +21,8 @@ impl BuiltinRuntime {
 
     pub fn invoke(
         role: BuiltinValueRole, args: Vec<SemValue>, input: &mut dyn BufRead,
-        output: &mut dyn Write, argv: &[String], host: &mut HostRuntime,
+        output: &mut dyn Write, error_output: &mut dyn Write, argv: &[String],
+        host: &mut HostRuntime,
     ) -> Result<Computation, BuiltinFailure> {
         use crate::impls::*;
         use BuiltinValueRole as Role;
@@ -80,10 +81,10 @@ impl BuiltinRuntime {
             | Role::IoRead => io_read(args, input, output, argv, host),
             | Role::IoReadLine => io_read_line(args, input, output, argv, host),
             | Role::IoReadAll => io_read_all(args, input, output, argv, host),
-            | Role::IoWriteAll => io_write_all(args, input, output, argv, host),
-            | Role::IoFlush => io_flush(args, input, output, argv, host),
+            | Role::IoWriteAll => io_write_all(args, input, output, error_output, argv, host),
+            | Role::IoFlush => io_flush(args, input, output, error_output, argv, host),
             | Role::IoCloseReader => io_close_reader(args, input, output, argv, host),
-            | Role::IoCloseWriter => io_close_writer(args, input, output, argv, host),
+            | Role::IoCloseWriter => io_close_writer(args, input, output, error_output, argv, host),
             | Role::FsOpenReader => fs_open_reader(args, input, output, argv, host),
             | Role::FsCreateWriter => fs_create_writer(args, input, output, argv, host),
             | Role::FsAppendWriter => fs_append_writer(args, input, output, argv, host),

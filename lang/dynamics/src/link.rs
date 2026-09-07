@@ -357,7 +357,7 @@ mod tests {
         .run();
         let mut input = std::io::empty();
         let mut output = Vec::new();
-        let result = ds::Runtime::new(&mut input, &mut output, &[], arena).run();
+        let result = ds::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], arena).run();
 
         assert!(matches!(result, ds::ProgKont::Ret(ds::SemValue::Triv(ss::Triv))));
     }

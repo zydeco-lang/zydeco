@@ -22,7 +22,7 @@ impl RuntimeFixture {
         std::fs::write(
             &source,
             format!(
-            "param (/OS; /Ret; /Int64; /numeric; /process; /system) : @(import(\"{}\")) in {body}\n",
+            "param (/OS; /Ret; /Int64; /String; /numeric; /process; /system; /text) : @(import(\"{}\")) in {body}\n",
                 self.workspace.join("lib/std/builtin.zy").display(),
             ),
         )
@@ -57,6 +57,36 @@ impl RuntimeFixture {
         assert!(!diagnostic.contains("panicked"), "{context}: {diagnostic}");
         assert!(output.stdout.is_empty(), "{context}: must not produce stdout");
     }
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn standard_error_uses_its_own_injected_stream() {
+    let fixture = RuntimeFixture::new();
+    let body = r#"
+do writer <- ! system/stdio/stderr;
+do bytes <- ! text/bytes/from_string "stderr only\n";
+let failed = { fn (_ : Int64) (_ : String) => ! process/exit 42 } in
+! system/io/write_all writer bytes failed {
+  ! system/io/flush writer failed {
+    ! system/io/close_writer writer failed {
+      ! system/stdio/write "stdout only\n" { ! process/exit 0 }
+    }
+  }
+}
+"#;
+    for backend in ["interpreter", "exe", "wasm-am", "wasm-sps"] {
+        let output = fixture.run(body, backend);
+        assert!(output.status.success(), "{backend}: {}", String::from_utf8_lossy(&output.stderr));
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "stdout only\n", "{backend}");
+        assert_eq!(String::from_utf8_lossy(&output.stderr), "stderr only\n", "{backend}");
+    }
+    let captured = zydeco_cli::CommandCompiler::default()
+        .test_io(&fixture.directory.path().join("runtime.zy"), &[], "")
+        .unwrap();
+    assert_eq!(captured.code, 0);
+    assert_eq!(captured.output, "stdout only\n");
+    assert_eq!(captured.stderr, "stderr only\n");
 }
 
 #[test]

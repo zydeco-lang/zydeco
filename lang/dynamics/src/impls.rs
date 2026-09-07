@@ -736,11 +736,12 @@ struct WriterIo;
 
 impl WriterIo {
     fn run<T>(
-        handle: WriterHandle, output: &mut dyn Write, host: &mut HostRuntime,
-        operation: impl FnOnce(&mut dyn Write) -> io::Result<T>,
+        handle: WriterHandle, output: &mut dyn Write, stderr: &mut dyn Write,
+        host: &mut HostRuntime, operation: impl FnOnce(&mut dyn Write) -> io::Result<T>,
     ) -> io::Result<T> {
         match handle {
-            | WriterHandle::STDOUT | WriterHandle::STDERR => operation(output),
+            | WriterHandle::STDOUT => operation(output),
+            | WriterHandle::STDERR => operation(stderr),
             | handle => operation(host.writer(handle)?),
         }
     }
@@ -867,8 +868,8 @@ pub fn io_read_all(
 
 /// Write an entire byte buffer to a capability.
 pub fn io_write_all(
-    args: Vec<ZValue>, _: &mut dyn BufRead, output: &mut dyn Write, _: &[String],
-    host: &mut HostRuntime,
+    args: Vec<ZValue>, _: &mut dyn BufRead, output: &mut dyn Write, stderr: &mut dyn Write,
+    _: &[String], host: &mut HostRuntime,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
@@ -876,7 +877,7 @@ pub fn io_write_all(
             bytes,
             when_error @ ZValue::Thunk(_),
             when_success @ ZValue::Thunk(_),
-        ] => match WriterIo::run(*writer, output, host, |writer| {
+        ] => match WriterIo::run(*writer, output, stderr, host, |writer| {
             writer.write_all(HostBytes::borrow(bytes))
         }) {
             | Ok(()) => Ok(HostContinuation::force(when_success)),
@@ -888,15 +889,15 @@ pub fn io_write_all(
 
 /// Flush buffered data through a writable capability.
 pub fn io_flush(
-    args: Vec<ZValue>, _: &mut dyn BufRead, output: &mut dyn Write, _: &[String],
-    host: &mut HostRuntime,
+    args: Vec<ZValue>, _: &mut dyn BufRead, output: &mut dyn Write, stderr: &mut dyn Write,
+    _: &[String], host: &mut HostRuntime,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
             ZValue::Host(HostValue::Writer(writer)),
             when_error @ ZValue::Thunk(_),
             when_success @ ZValue::Thunk(_),
-        ] => match WriterIo::run(*writer, output, host, |writer| writer.flush()) {
+        ] => match WriterIo::run(*writer, output, stderr, host, |writer| writer.flush()) {
             | Ok(()) => Ok(HostContinuation::force(when_success)),
             | Err(error) => HostContinuation::io_error(when_error, error),
         },
@@ -923,8 +924,8 @@ pub fn io_close_reader(
 
 /// Close a writable capability after flushing it.
 pub fn io_close_writer(
-    args: Vec<ZValue>, _: &mut dyn BufRead, output: &mut dyn Write, _: &[String],
-    host: &mut HostRuntime,
+    args: Vec<ZValue>, _: &mut dyn BufRead, output: &mut dyn Write, stderr: &mut dyn Write,
+    _: &[String], host: &mut HostRuntime,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
@@ -933,7 +934,7 @@ pub fn io_close_writer(
             when_success @ ZValue::Thunk(_),
         ] => {
             let result = if matches!(*writer, WriterHandle::STDOUT | WriterHandle::STDERR) {
-                WriterIo::run(*writer, output, host, |writer| writer.flush())
+                WriterIo::run(*writer, output, stderr, host, |writer| writer.flush())
             } else {
                 host.close_writer(*writer)
             };
@@ -1003,15 +1004,14 @@ pub fn fs_append_writer(
 /// Write a string to output and then force the provided continuation.
 pub fn write_str(
     args: Vec<ZValue>, _r: &mut dyn BufRead, output: &mut dyn Write, _: &[String],
-    host: &mut HostRuntime,
+    _host: &mut HostRuntime,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::String(s)), e @ ZValue::Thunk(..)] => {
-            WriterIo::run(WriterHandle::STDOUT, output, host, |writer| {
-                writer.write_all(s.as_str().as_bytes())?;
-                writer.flush()
-            })
-            .expect("legacy standard-output write failed");
+            output
+                .write_all(s.as_str().as_bytes())
+                .and_then(|_| output.flush())
+                .expect("legacy standard-output write failed");
             Ok(Force(mk_rc(e.clone().into())).into())
         }
         | _ => unreachable!(""),
@@ -1021,15 +1021,13 @@ pub fn write_str(
 /// Write an integer to output and then force the provided continuation.
 pub fn write_int(
     args: Vec<ZValue>, _r: &mut dyn BufRead, output: &mut dyn Write, _: &[String],
-    host: &mut HostRuntime,
+    _host: &mut HostRuntime,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(i))), e @ ZValue::Thunk(..)] => {
-            WriterIo::run(WriterHandle::STDOUT, output, host, |writer| {
-                write!(writer, "{i}")?;
-                writer.flush()
-            })
-            .expect("legacy standard-output write failed");
+            write!(output, "{i}")
+                .and_then(|_| output.flush())
+                .expect("legacy standard-output write failed");
             Ok(Force(mk_rc(e.clone().into())).into())
         }
         | _ => unreachable!(""),
@@ -1039,15 +1037,13 @@ pub fn write_int(
 /// Write a string and newline to output, then force the continuation.
 pub fn write_line(
     args: Vec<ZValue>, _r: &mut dyn BufRead, output: &mut dyn Write, _: &[String],
-    host: &mut HostRuntime,
+    _host: &mut HostRuntime,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::String(line)), e @ ZValue::Thunk(..)] => {
-            WriterIo::run(WriterHandle::STDOUT, output, host, |writer| {
-                writeln!(writer, "{line}")?;
-                writer.flush()
-            })
-            .expect("legacy standard-output write failed");
+            writeln!(output, "{line}")
+                .and_then(|_| output.flush())
+                .expect("legacy standard-output write failed");
             Ok(Force(mk_rc(e.clone().into())).into())
         }
         | _ => unreachable!(""),
