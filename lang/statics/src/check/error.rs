@@ -61,6 +61,8 @@ pub enum TyckError {
     AmbiguousNamedTypeField { field: FieldName, found: KindId },
     MissingNamedField { field: FieldName, found: TypeId },
     DuplicateNamedField { field: FieldName, found: TypeId },
+    SealedNamedField { field: FieldName, found: TypeId },
+    StaticNamedField { field: FieldName, found: TypeId },
     PatternAliasRequiresValue,
     RefutablePatternAlias,
     RefutableFieldProjectionPattern,
@@ -141,6 +143,10 @@ pub enum TyckDiagnosticCode {
     MissingNamedField,
     #[strum(serialize = "tyck.duplicate-named-field")]
     DuplicateNamedField,
+    #[strum(serialize = "tyck.sealed-named-field")]
+    SealedNamedField,
+    #[strum(serialize = "tyck.static-named-field")]
+    StaticNamedField,
     #[strum(serialize = "tyck.pattern-alias-requires-value")]
     PatternAliasRequiresValue,
     #[strum(serialize = "tyck.refutable-pattern-alias")]
@@ -236,6 +242,8 @@ impl From<&TyckError> for TyckDiagnosticCode {
             | TyckError::AmbiguousNamedTypeField { .. } => Self::AmbiguousNamedTypeField,
             | TyckError::MissingNamedField { .. } => Self::MissingNamedField,
             | TyckError::DuplicateNamedField { .. } => Self::DuplicateNamedField,
+            | TyckError::SealedNamedField { .. } => Self::SealedNamedField,
+            | TyckError::StaticNamedField { .. } => Self::StaticNamedField,
             | TyckError::PatternAliasRequiresValue => Self::PatternAliasRequiresValue,
             | TyckError::RefutablePatternAlias => Self::RefutablePatternAlias,
             | TyckError::RefutableFieldProjectionPattern => Self::RefutableFieldProjectionPattern,
@@ -402,6 +410,20 @@ impl<'a> Tycker<'a> {
             | TyckError::DuplicateNamedField { field, found } => {
                 format!(
                     "Ambiguous named field `{field}` in {}",
+                    self.pretty_statics_nested(found, "\t")
+                )
+            }
+            | TyckError::SealedNamedField { field, found } => {
+                format!(
+                    "Named field `{field}` is sealed behind an abstract package witness in {}; \
+                     open the package with a projection pattern",
+                    self.pretty_statics_nested(found, "\t")
+                )
+            }
+            | TyckError::StaticNamedField { field, found } => {
+                format!(
+                    "Named field `{field}` names a package witness in {} rather than a value \
+                     component; select it with a projection pattern",
                     self.pretty_statics_nested(found, "\t")
                 )
             }
@@ -764,6 +786,20 @@ impl<'a> Tycker<'a> {
             | TyckError::DuplicateNamedField { field, found } => {
                 format!(
                     "Ambiguous named field `{field}` in {}",
+                    self.pretty_statics_nested(*found, "")
+                )
+            }
+            | TyckError::SealedNamedField { field, found } => {
+                format!(
+                    "Named field `{field}` is sealed behind an abstract package witness in {}; \
+                     open the package with a projection pattern",
+                    self.pretty_statics_nested(*found, "")
+                )
+            }
+            | TyckError::StaticNamedField { field, found } => {
+                format!(
+                    "Named field `{field}` names a package witness in {} rather than a value \
+                     component; select it with a projection pattern",
                     self.pretty_statics_nested(*found, "")
                 )
             }

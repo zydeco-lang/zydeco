@@ -1,0 +1,8 @@
+-- stage: check
+
+let Package =
+  exists (Item : VType) .
+    (#inner :: exists (= Token as Item : VType) . (#content :: Token))
+in
+param (/Item; /Token; /content) : Package in
+fn (value : Item) (text : Token) => ret (value, content)

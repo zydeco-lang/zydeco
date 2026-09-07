@@ -3,8 +3,9 @@
 Named components provide a useful interface only when clients can ask for a field
 without reproducing the receiver's product layout.
 Slash projection therefore behaves as a built-in structural `Has` operation.
-Given `value/field`, the type checker searches the receiver's transparent named and product structure
-for occurrences of `#field :: Payload` and returns the payload of the unique occurrence.
+Given `value/field`, the type checker searches the receiver's complete transparent structure
+for occurrences of the field name and returns the payload of the unique occurrence.
+The searched structure covers named classifiers, product components, and the telescopes of nested existential packages.
 
 For example, neither the left-hand product nesting nor the outer named wrapper must be repeated at a use site:
 
@@ -17,17 +18,29 @@ nested/x
 wrapped/inner
 ```
 
-The search descends through named classifiers and through every component of a product.
-Other type constructors are opacity boundaries: term lookup does not inspect function arguments,
-thunk results, data constructor payloads, or unopened existential packages.
-Thus structural lookup exposes declared record-like structure without turning `/`
-into an unrestricted search through every type reachable from the receiver.
-A projection pattern can explicitly open an existential package, as described below;
-ordinary `package/field` term projection does not do so implicitly.
+The search descends through named classifiers, through every component of a product,
+and through the leading telescopes of nested existential packages.
+A package telescope contributes one candidate per binder that carries a public field name:
+plain binders contribute their punned binder name, and explicitly named binders contribute their label.
+Kind entries and manifest type entries participate on the same terms as value fields,
+so one field-name universe covers existential and manifest names together with `#field = value` components.
+Other type constructors are opacity boundaries: lookup does not inspect function arguments,
+thunk results, or data constructor payloads.
+Thus structural lookup exposes declared record-like structure without turning `/` into an unrestricted search
+through every type reachable from the receiver.
+
+Manifest packages are transparent: their disclosed definitions are substituted while descending,
+so both pattern projection and ordinary `value/field` term projection may cross them.
+A package with abstract witnesses is sealed from term projection,
+because opening such a package allocates fresh identities and changes scope;
+only a projection pattern, which is an elimination form, may select through it.
+Sealed fields still count for the uniqueness rule: a name that occurs both outside
+and inside a sealed package is ambiguous, and a name that occurs only inside one is reported as present
+but not term-projectable, which directs the source to open the package with a pattern.
 
 Lookup succeeds only when the complete search has exactly one match.
 No matches produce a missing-field static error, while two or more matches produce an ambiguity static error even
-when the matches occur at different depths.
+when the matches occur at different depths or in different sorts, such as one manifest entry and one named value.
 An explicit chain performs a new search at each slash, so `value/outer/inner` remains available both
 to document an intended path and to disambiguate a larger receiver.
 
@@ -101,9 +114,11 @@ let (/Item; /value; /consume) = package in
 
 The type checker opens the complete leading telescope once, using anonymous witnesses for unselected abstract fields.
 `/Item` selects the named existential field and binds its payload pattern to that opening's witness.
-After substituting every opened field through the package body,
-`/value` and `/consume` use the ordinary structural value resolver.
-The selected types and values consequently refer to one shared package introduction.
+After substituting every opened field through the package body, `/value` and `/consume` use the structural resolver
+over the complete remaining structure: a selection may also name a field of a package nested inside a product component.
+The selected types and values consequently refer to one shared package introduction,
+and each distinct nested package occurrence receives its own shared opening, so selections that reach
+through the same nested package agree on its witnesses.
 
 A plain binder such as `exists (= Item : VType) . Body` supplies the punned field name `Item`.
 For an explicitly named binder such as `exists (#Item = Hidden : VType) . Body`, selection uses the public label `Item`.

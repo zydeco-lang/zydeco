@@ -1,0 +1,10 @@
+begin
+  param (/Thk; /String; /OS; /stdio; /process; builtin) : @(import("../../std/builtin.zy")) that
+  let deep =
+    val ((/OS; /stdio; /process; _) : @(import("../../std/builtin.zy"))) =>
+      (stdio/write_line, process/exit)
+  that
+  let (write, exit) = builtin |> deep that
+  def speak : Thk (String -> Thk OS -> OS) = write that
+  ! speak "deep selection works" { ! exit 0 }
+end

@@ -1,0 +1,10 @@
+-- stage: run
+
+let package =
+  pack (= Tag as Int64 : VType)
+  where
+    #inner = pack (= Mark as String : VType) where #text = "ok" end
+  end
+in
+do text <- ret package/text;
+! exit 0

@@ -1,0 +1,10 @@
+-- prelude: monadic
+
+let Package =
+  exists (Item : VType) .
+    (#box :: exists (Token : VType) . (#value :: Token))
+in
+begin
+  def ! deep = @[monadic] fn ((/Item; /Token; /value) : Package) => ret value that
+  ret ()
+end

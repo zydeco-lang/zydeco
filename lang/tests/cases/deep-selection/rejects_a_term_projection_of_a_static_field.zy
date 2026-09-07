@@ -1,0 +1,4 @@
+-- expect: reject(tyck.static-named-field)
+
+let package = pack (= Carrier as Int64 : VType) where () end in
+ret package/Carrier

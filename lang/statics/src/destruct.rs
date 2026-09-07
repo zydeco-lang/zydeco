@@ -409,13 +409,18 @@ impl VPatId {
     ///
     /// Named wrappers are transparent. Products concatenate the witness
     /// boundaries of their components in source order, matching the order in
-    /// which product-pattern checking opens their skolems.
+    /// which product-pattern checking opens their skolems. A package pattern
+    /// counts its own telescope entries plus the openings nested in its body,
+    /// so selections that reach through nested packages recover every witness.
     pub fn package_witness_arity(&self, tycker: &Tycker<'_>) -> Option<usize> {
         let mut pattern = *self;
         loop {
             match tycker.statics.vpats[&pattern].to_owned() {
                 | ValuePattern::Named(Named(_, inner)) => pattern = inner,
-                | ValuePattern::SCons(ConsN(witnesses, _)) => return Some(witnesses.len()),
+                | ValuePattern::SCons(ConsN(witnesses, body)) => {
+                    let nested = body.package_witness_arity(tycker).unwrap_or_default();
+                    return Some(witnesses.len() + nested);
+                }
                 | ValuePattern::Alias(Alias(patterns)) => {
                     return patterns
                         .iter()

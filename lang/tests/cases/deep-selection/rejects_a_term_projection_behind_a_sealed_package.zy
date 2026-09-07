@@ -1,0 +1,8 @@
+-- expect: reject(tyck.sealed-named-field)
+
+let Package =
+  exists (Seal : VType) .
+    (#box :: exists (Hidden : VType) . (#value :: Hidden))
+in
+param whole : Package in
+ret whole/box/value

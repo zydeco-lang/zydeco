@@ -1,7 +1,0 @@
-exists (VType as @(intrinsic(vtype)))
-  (CType as @(intrinsic(ctype)))
-  (= Thk as @(intrinsic(thk)) : CType -> VType)
-  (= Ret as @(intrinsic(ret)) : VType -> CType)
-  (= Unit as @(intrinsic(unit)) : VType)
-.
-  @(intrinsic(unit))

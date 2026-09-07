@@ -7,4 +7,5 @@ e2e_sources!({
     named => "tests/pack/named.zy",
     monadic => "tests/pack/monadic.zy",
     uniform => "tests/pack/uniform.zy",
+    deep_selection => "tests/pack/deep-selection.zy",
 });

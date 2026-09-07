@@ -1,0 +1,12 @@
+-- stage: check
+
+let box =
+  (
+    (#inner = pack (= Token as Unit : VType) where #content = () end) : (
+      #inner :: exists (= Token as Unit : VType) . (#content :: Unit)
+    ),
+    ()
+  )
+in
+let (/Token; /content) = box in
+ret content
