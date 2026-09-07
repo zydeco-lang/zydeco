@@ -309,6 +309,26 @@ fn runtime_boundaries_reject_static_requirements_consistently() {
 }
 
 #[test]
+fn exponentially_composed_value_functions_reach_the_static_reduction_limit() {
+    for depth in [10, 16, 20] {
+        let mut source = "let val g0 (x : Int64) : Int64 = x in\n".to_owned();
+        source.extend((1..=depth).map(|level| {
+            let previous = level - 1;
+            format!("let val g{level} (x : Int64) : Int64 = g{previous} (g{previous} x) in\n")
+        }));
+        source += &format!("let result = g{depth} 0 in ! exit result");
+        if depth == 10 {
+            SourceCase::assert_accepted(SourceCase::lower(&source));
+        } else {
+            SourceCase::assert_rejected(
+                SourceCase::lower(&source),
+                TyckDiagnosticCode::StaticElimination,
+            );
+        }
+    }
+}
+
+#[test]
 fn self_application_reports_a_static_reduction_limit() {
     let definition = r#"
       begin
