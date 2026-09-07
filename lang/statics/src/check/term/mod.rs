@@ -160,7 +160,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 };
                 let ann = match switch {
                     | Switch::Syn => ty_ann,
-                    | Switch::Ana(ty_ana) => Lub::lub_k(ty_ann, ty_ana, tycker)?,
+                    | Switch::Ana(ty_ana) => Lub::lub_k(ty_ana, ty_ann, tycker)?,
                 };
 
                 self.mk(tm).tyck_k(tycker, Action::ana_prepared(ann, &self.info))?

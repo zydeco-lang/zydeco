@@ -32,7 +32,7 @@ impl TermChecker<'_> {
                         match switch {
                             | Switch::Syn => kd_out,
                             | Switch::Ana(ana) => match ana {
-                                | AnnId::Kind(kd_ana) => Lub::lub_k(kd_out, kd_ana, tycker)?,
+                                | AnnId::Kind(kd_ana) => Lub::lub_k(kd_ana, kd_out, tycker)?,
                                 | AnnId::Set | AnnId::Type(_) => tycker.err_k(
                                     TyckError::SortMismatch,
                                     std::panic::Location::caller(),
@@ -104,7 +104,7 @@ impl TermChecker<'_> {
                     let result = match switch {
                         | Switch::Syn => result,
                         | Switch::Ana(AnnId::Type(expected)) => {
-                            Lub::lub_k(result, expected, tycker)?
+                            Lub::lub_k(expected, result, tycker)?
                         }
                         | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
                             tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
@@ -154,7 +154,7 @@ impl TermChecker<'_> {
                                     | Switch::Syn => ty_out,
                                     | Switch::Ana(ana) => match ana {
                                         | AnnId::Type(ty_ana) => {
-                                            Lub::lub_k(ty_out, ty_ana, tycker)?
+                                            Lub::lub_k(ty_ana, ty_out, tycker)?
                                         }
                                         | AnnId::Set | AnnId::Kind(_) => tycker.err_k(
                                             TyckError::SortMismatch,
@@ -212,7 +212,7 @@ impl TermChecker<'_> {
                                     | Switch::Syn => body_ty_subst,
                                     | Switch::Ana(ana) => match ana {
                                         | AnnId::Type(ty_ana) => {
-                                            Lub::lub_k(body_ty_subst, ty_ana, tycker)?
+                                            Lub::lub_k(ty_ana, body_ty_subst, tycker)?
                                         }
                                         | AnnId::Set | AnnId::Kind(_) => tycker.err_k(
                                             TyckError::SortMismatch,

@@ -428,7 +428,7 @@ impl TermChecker<'_> {
                     let AnnId::Type(ana_ty) = ana else {
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     };
-                    let whole_ty = Lub::lub_k(whole_ty, ana_ty, tycker)?;
+                    let whole_ty = Lub::lub_k(ana_ty, whole_ty, tycker)?;
                     let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                     let input =
                         crate::query::InternedDtorInput::new(tycker.db, body, dtor, whole_ty);

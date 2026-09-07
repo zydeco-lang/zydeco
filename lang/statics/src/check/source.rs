@@ -136,7 +136,7 @@ impl CheckedTerm {
                 return tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller());
             }
         };
-        Lub::lub_k(synthesized, expected, tycker)?;
+        Lub::lub_k(expected, synthesized, tycker)?;
         Ok(self.0)
     }
 }

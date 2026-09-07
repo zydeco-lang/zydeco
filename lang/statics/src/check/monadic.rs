@@ -43,7 +43,7 @@ impl<'a> MonadicBasisElaboration<'a> {
         &self, tycker: &mut Tycker<'_>, ty: ss::TypeId, expected: ss::KindId,
     ) -> ResultKont<()> {
         let actual = tycker.statics.type_kind(ty);
-        Lub::lub_k(actual, expected, tycker)?;
+        Lub::lub_k(expected, actual, tycker)?;
         Ok(())
     }
 }

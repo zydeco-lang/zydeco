@@ -529,7 +529,7 @@ impl TermChecker<'_> {
                     let payload_kind = match switch {
                         | Switch::Syn => candidate.projected,
                         | Switch::Ana(AnnId::Kind(expected)) => {
-                            Lub::lub_k(candidate.projected, expected, tycker)?
+                            Lub::lub_k(expected, candidate.projected, tycker)?
                         }
                         | Switch::Ana(AnnId::Set | AnnId::Type(_)) => {
                             tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
@@ -556,7 +556,7 @@ impl TermChecker<'_> {
                     let projected_ty = match switch {
                         | Switch::Syn => projected_ty,
                         | Switch::Ana(AnnId::Type(expected)) => {
-                            Lub::lub_k(projected_ty, expected, tycker)?
+                            Lub::lub_k(expected, projected_ty, tycker)?
                         }
                         | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
                             tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?

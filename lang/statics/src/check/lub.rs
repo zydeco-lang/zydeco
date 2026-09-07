@@ -22,6 +22,10 @@ pub(super) struct LubProbe {
 
 /// A type that can be joined with another type, producing their least upper bound.
 /// T \/ T ?~~> T'
+///
+/// At a checking boundary, pass the expected classifier on the left and the
+/// synthesized classifier on the right. The relation is symmetric, but its
+/// mismatch diagnostic preserves this direction, including within type components.
 pub trait Lub<Rhs = Self>: Sized {
     type Out;
     fn lub_k(self, other: Rhs, tycker: &mut Tycker) -> ResultKont<Self::Out> {

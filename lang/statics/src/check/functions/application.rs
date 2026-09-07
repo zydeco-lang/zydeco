@@ -326,7 +326,7 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiElimination> {
         codomain.constrain_to_scope_k(tycker, self.info.skolem_scope())?;
         let codomain = match switch {
             | Switch::Syn => codomain,
-            | Switch::Ana(AnnId::Type(expected)) => Lub::lub_k(codomain, expected, tycker)?,
+            | Switch::Ana(AnnId::Type(expected)) => Lub::lub_k(expected, codomain, tycker)?,
             | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
                 tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
             }

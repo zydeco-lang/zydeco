@@ -175,7 +175,7 @@ impl InternalTerm {
         };
         let annotation = match switch {
             | Switch::Syn => annotation,
-            | Switch::Ana(expected) => Lub::lub_k(annotation, expected, tycker)?,
+            | Switch::Ana(expected) => Lub::lub_k(expected, annotation, tycker)?,
         };
 
         match (synthesized, annotation) {
@@ -206,7 +206,7 @@ impl BuiltinAttachment {
                     | ss::BuiltinTypeUniverse::Value => ss::VType.build(tycker, env),
                     | ss::BuiltinTypeUniverse::Computation => ss::CType.build(tycker, env),
                 };
-                Lub::lub_k(kind, expected_kind, tycker)?;
+                Lub::lub_k(expected_kind, kind, tycker)?;
                 tycker.statics.builtin_roles.attach_type(witness, role).map_err(|existing| {
                     tycker.errors.push(TyckErrorEntry {
                         error: TyckError::ConflictingBuiltinRole { existing, found: self.role },

@@ -26,7 +26,7 @@ impl PatternChecker<'_> {
                     .mk(tm)
                     .tyck_k(tycker, PatternAction::ana(ty_tm).with_skolems(skolems.clone()))?,
                 | Switch::Ana(ty_ana) => {
-                    let ty = Lub::lub_k(ty_tm, ty_ana, tycker)?;
+                    let ty = Lub::lub_k(ty_ana, ty_tm, tycker)?;
 
                     self.mk(tm)
                         .tyck_k(tycker, PatternAction::ana(ty).with_skolems(skolems.clone()))?
@@ -74,7 +74,7 @@ impl PatternChecker<'_> {
                 }
             };
             if let Some(ann_) = tycker.statics.annotations_var.insert_or_get(def, ann) {
-                let ann = Lub::lub_k(ann_, ann, tycker)?;
+                let ann = Lub::lub_k(ann, ann_, tycker)?;
                 tycker.statics.annotations_var.replace_existing(def, ann);
             }
 
@@ -119,7 +119,7 @@ impl PatternChecker<'_> {
             let domain = match switch {
                 | Switch::Syn => parameter.domain,
                 | Switch::Ana(AnnId::Type(expected)) => {
-                    Lub::lub_k(parameter.domain, expected, tycker)?
+                    Lub::lub_k(expected, parameter.domain, tycker)?
                 }
                 | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
                     tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
@@ -177,7 +177,7 @@ impl PatternChecker<'_> {
             }
             | Switch::Ana(AnnId::Type(ana)) => {
                 let unit = ss::UnitTy.build(tycker, &self.info);
-                let ann = Lub::lub_k(unit, ana, tycker)?;
+                let ann = Lub::lub_k(ana, unit, tycker)?;
                 let triv = Alloc::alloc(tycker, ss::Triv, ann, &self.info);
                 self.mk(PatternCheck::new(PatAnnId::Value(triv, ann)))
             }

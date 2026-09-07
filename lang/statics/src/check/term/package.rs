@@ -419,7 +419,7 @@ impl TermChecker<'_> {
                         TyckError::SortMismatch,
                         std::panic::Location::caller(),
                     )?;
-                    let ty = Lub::lub_k(ty, expected, tycker)?;
+                    let ty = Lub::lub_k(expected, ty, tycker)?;
                     TermAnnId::Value(cons, ty)
                 }
                 | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {

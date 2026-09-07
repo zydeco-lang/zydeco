@@ -144,7 +144,7 @@ impl TermChecker<'_> {
             let ann = {
                 match switch {
                     | Switch::Syn => annotation,
-                    | Switch::Ana(ana) => Lub::lub_k(annotation, ana, tycker)?,
+                    | Switch::Ana(ana) => Lub::lub_k(ana, annotation, tycker)?,
                 }
             };
             match ann {
@@ -223,7 +223,7 @@ impl TermChecker<'_> {
             }
             | Switch::Ana(AnnId::Type(ana)) => {
                 let unit = ss::UnitTy.build(tycker, &self.info);
-                let ann = Lub::lub_k(unit, ana, tycker)?;
+                let ann = Lub::lub_k(ana, unit, tycker)?;
                 let triv = Alloc::alloc(tycker, ss::Triv, ann, &self.info);
                 TermAnnId::Value(triv, ann)
             }
@@ -275,7 +275,7 @@ impl TermChecker<'_> {
                                     std::panic::Location::caller(),
                                 )?
                             };
-                            Lub::lub_k(literal_ty, ty, tycker)
+                            Lub::lub_k(ty, literal_ty, tycker)
                         }
                     }
                 }
@@ -293,7 +293,7 @@ impl TermChecker<'_> {
                                         ss::IntegerType::Int64,
                                     ))
                                     .build(tycker, &self.info);
-                                    let ty = Lub::lub_k(default, ty, tycker)?;
+                                    let ty = Lub::lub_k(ty, default, tycker)?;
                                     (ty, ss::IntegerType::Int64)
                                 }
                             },
@@ -319,7 +319,7 @@ impl TermChecker<'_> {
                                         ss::FloatType::Float64,
                                     ))
                                     .build(tycker, &self.info);
-                                    let ty = Lub::lub_k(default, ty, tycker)?;
+                                    let ty = Lub::lub_k(ty, default, tycker)?;
                                     (ty, ss::FloatType::Float64)
                                 }
                             },
