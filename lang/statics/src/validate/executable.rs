@@ -2,6 +2,7 @@
 
 use crate::{arena::StaticsArena, syntax::*};
 use std::collections::HashSet;
+use zydeco_utils::arena::ArenaAccess;
 
 /// A hole left in code or data that can reach execution.
 #[derive(Clone, Debug, thiserror::Error)]
@@ -30,6 +31,8 @@ impl ExecutionReadiness {
                 continue;
             }
             match term {
+                // A checked foreign import supplies this value's implementation.
+                | TermId::Value(value) if statics.foreign_imports.get(&value).is_some() => {}
                 | TermId::Value(value) => match &statics.values[&value] {
                     | Value::Hole(_) => return Err(ExecutableHole { term }),
                     | Value::Named(Named(_, body))

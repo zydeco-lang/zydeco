@@ -51,6 +51,34 @@ let foreign = (
 }
 
 #[test]
+fn foreign_imports_supply_only_their_own_implementation_holes() {
+    let foreign = "@(ffi(c, library(\"zyffi_boundary\"), symbol(\"zyffi_echo\")))";
+    for (implementation, argument, executable) in
+        [(foreign, "0", true), ("_", "0", false), (foreign, "_", false)]
+    {
+        let source = format!(
+            "let foreign : Thk (UInt64 -> Ret UInt64) = {implementation} in \
+             do _ <- ! foreign {argument}; ! exit 0"
+        );
+        SourceCase::check(&source).unwrap();
+        let result = SourceCase::lower(&source);
+        if executable {
+            result.unwrap();
+        } else {
+            assert!(
+                matches!(
+                    result,
+                    Err(CaseError::Compile(CompileError::Executable(
+                        zydeco_session::ExecutableError::Hole(_)
+                    )))
+                ),
+                "{source}: {result:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn xxhash_binding_reaches_the_native_c_call_boundary() {
     let backend = CommandCompiler::default().lower(&FfiCase::path("xxhash.zy")).unwrap();
 
