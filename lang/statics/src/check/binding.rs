@@ -7,6 +7,34 @@ use crate::check::pattern::{PatternAction, ValuePatternShape};
 pub struct Assign<Br, Be>(pub Br, pub Be);
 pub struct FixPoint<T>(pub T);
 
+struct BindingCycle;
+
+impl BindingCycle {
+    /// Recognize value introductions before checking a recursive header whose
+    /// annotations may themselves refer to not-yet-established group members.
+    fn has_value_body(tycker: &Tycker<'_>, mut term: su::TermId) -> bool {
+        loop {
+            term = match &tycker.scoped.terms[&term] {
+                | su::Term::Ann(su::Ann { tm, .. })
+                | su::Term::Sealed(su::Sealed(tm))
+                | su::Term::Block(su::Block(tm))
+                | su::Term::Residual(su::Residual(tm))
+                | su::Term::SourceBoundary(su::SourceBoundary(tm))
+                | su::Term::SignatureBoundary(su::SignatureBoundary(tm)) => *tm,
+                | su::Term::Meta(meta) => meta.1,
+                | su::Term::Thunk(_)
+                | su::Term::ValAbs(_)
+                | su::Term::Ctor(_)
+                | su::Term::Triv(_)
+                | su::Term::Cons(_)
+                | su::Term::Pack(_)
+                | su::Term::Lit(_) => return true,
+                | _ => return false,
+            };
+        }
+    }
+}
+
 /// Type check one acyclic context binding.
 impl<'a> Tyck<'a> for TyEnvT<su::Binding> {
     type Out = TyEnvT<()>;
@@ -129,19 +157,41 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
             else {
                 unreachable!("recursive groups contain definitions")
             };
-            // the bindee must be sealed
-            let Some(bindee) = bindee.syntactically_sealed(tycker) else {
-                tycker.err_k(TyckError::MissingSeal, std::panic::Location::caller())?
-            };
+            if BindingCycle::has_value_body(tycker, bindee) {
+                tycker.err_k(
+                    TyckError::InvalidBindingCycle(binder),
+                    std::panic::Location::caller(),
+                )?;
+            }
+            let sealed = bindee.syntactically_sealed(tycker);
+            let bindee = sealed.unwrap_or(bindee);
             // the type definition is self referencing, need to get the annotation
             let Some(syn_ann) = bindee.syntactically_annotated(tycker) else {
-                tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
+                tycker
+                    .err_k(TyckError::InvalidBindingCycle(binder), std::panic::Location::caller())?
             };
+            if matches!(tycker.scoped.terms[&syn_ann], su::Term::Hole(_))
+                || tycker
+                    .source_free_variables(&syn_ann)
+                    .iter()
+                    .any(|definition| tycker.statics.annotations_var.get(definition).is_none())
+            {
+                tycker.err_k(
+                    TyckError::InvalidBindingCycle(binder),
+                    std::panic::Location::caller(),
+                )?;
+            }
             // try synthesizing the kind
             let ann = env.mk(syn_ann).tyck_k(tycker, Action::syn())?;
             // the binder should be a type; register it before analyzing the bindee
-            let kd =
-                ann.try_as_kind(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+            let kd = ann.try_as_kind(
+                tycker,
+                TyckError::InvalidBindingCycle(binder),
+                std::panic::Location::caller(),
+            )?;
+            if sealed.is_none() {
+                tycker.err_k(TyckError::MissingSeal, std::panic::Location::caller())?;
+            }
             let binder = env.mk(binder).tyck_k(tycker, PatternAction::ana(kd.into()))?;
             let (binder, _kd) = binder.as_type();
             binder_map.insert(id, binder);

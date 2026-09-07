@@ -256,7 +256,7 @@ begin
 end
 "#,
         ),
-        TyckDiagnosticCode::MissingSeal,
+        TyckDiagnosticCode::InvalidBindingCycle,
     );
 }
 

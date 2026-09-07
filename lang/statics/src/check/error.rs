@@ -47,6 +47,7 @@ impl std::fmt::Display for CopatternStep {
 pub enum TyckError {
     MissingAnnotation,
     MissingSeal,
+    InvalidBindingCycle(su::PatId),
     MissingSolution(Vec<FillId>),
     UnconstrainedInference(Vec<FillId>),
     OccursCheck(FillId),
@@ -114,6 +115,8 @@ pub enum TyckDiagnosticCode {
     MissingAnnotation,
     #[strum(serialize = "tyck.missing-seal")]
     MissingSeal,
+    #[strum(serialize = "tyck.invalid-binding-cycle")]
+    InvalidBindingCycle,
     #[strum(serialize = "tyck.missing-solution")]
     MissingSolution,
     #[strum(serialize = "tyck.unconstrained-inference")]
@@ -228,6 +231,7 @@ impl From<&TyckError> for TyckDiagnosticCode {
         match error {
             | TyckError::MissingAnnotation => Self::MissingAnnotation,
             | TyckError::MissingSeal => Self::MissingSeal,
+            | TyckError::InvalidBindingCycle(_) => Self::InvalidBindingCycle,
             | TyckError::MissingSolution(_) => Self::MissingSolution,
             | TyckError::UnconstrainedInference(_) => Self::UnconstrainedInference,
             | TyckError::OccursCheck(_) => Self::OccursCheck,
@@ -343,6 +347,7 @@ impl<'a> Tycker<'a> {
         match error {
             | TyckError::MissingAnnotation => "Missing annotation".to_string(),
             | TyckError::MissingSeal => "Missing seal".to_string(),
+            | TyckError::InvalidBindingCycle(_) => "Only nominal types with known kinds may form binding cycles; use `fix` inside a computation for value recursion".to_owned(),
             | TyckError::MissingSolution(fills) => {
                 let mut s = String::new();
                 s += "Missing solution for:";
@@ -682,7 +687,9 @@ impl<'a> Tycker<'a> {
     /// Get the source span carried directly by an error payload.
     fn error_source_span(&self, error: &TyckError) -> Option<Span> {
         match error {
-            | TyckError::RefutableBinding(pattern) => Some(*pattern.span(self)),
+            | TyckError::RefutableBinding(pattern) | TyckError::InvalidBindingCycle(pattern) => {
+                Some(*pattern.span(self))
+            }
             | TyckError::PackageWitnessesUnavailable { package } => {
                 self.statics_term_source_span((*package).into())
             }
@@ -723,6 +730,7 @@ impl<'a> Tycker<'a> {
         match error {
             | TyckError::MissingAnnotation => "Missing annotation".to_string(),
             | TyckError::MissingSeal => "Missing seal".to_string(),
+            | TyckError::InvalidBindingCycle(_) => "Only nominal types with known kinds may form binding cycles; use `fix` inside a computation for value recursion".to_owned(),
             | TyckError::MissingSolution(fills) => {
                 format!("Missing solution for {} hole(s)", fills.len())
             }

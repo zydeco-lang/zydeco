@@ -1,4 +1,4 @@
--- expect: reject(tyck.sort-mismatch)
+-- expect: reject(tyck.invalid-binding-cycle)
 
 begin
   def value : Int64 = value that

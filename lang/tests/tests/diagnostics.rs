@@ -3,6 +3,26 @@ use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::utils::{CaseError, SourceCase};
 
 #[test]
+fn binding_cycles_fail_before_dependent_annotations_are_checked() {
+    for body in [
+        "begin def ! (M : VType) (x : M) : Ret M = ret x that ! exit 0 end",
+        "begin let x : Int64 = y that let y : Int64 = x that ! exit 0 end",
+        "begin let x = y that let y = x that ! exit 0 end",
+        "begin def ! loop (x : Int64) : Ret Int64 = ! loop x that ! exit 0 end",
+    ] {
+        let result = SourceCase::check(body);
+        SourceCase::assert_rejected(result, TyckDiagnosticCode::InvalidBindingCycle);
+    }
+    for body in [
+        "begin def ! identity (M : VType) (x : M) : Ret M = ret x that ! exit 0 end",
+        "begin def ! _ (M : VType) (x : M) : Ret M = ret x that ! exit 0 end",
+        "begin def fix loop (x : Int64) : Ret Int64 = ! loop x that ! exit 0 end",
+    ] {
+        SourceCase::assert_accepted(SourceCase::check_linted(body));
+    }
+}
+
+#[test]
 fn type_mismatches_preserve_expected_and_found_direction() {
     for (body, expected, found) in [
         ("let x : Int64 = \"s\" in ret x", "Int64", "String"),
