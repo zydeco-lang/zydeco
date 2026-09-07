@@ -381,7 +381,10 @@ struct ArmPrefix {
 #[derive(Copy, Clone)]
 struct ExistentialPrefix {
     parameter: PatId,
+    /// Byte offset where the whole parameter begins, before its annotations.
     start: usize,
+    /// Byte offset of the grammar-owned `(` that opens the binder.
+    open: usize,
 }
 
 #[derive(Copy, Clone)]
@@ -482,10 +485,11 @@ impl Parser {
     ) {
         self.arm_prefixes.push(ArmPrefix { first: first.into(), payload: payload.into(), start });
     }
-    /// Record the first token of an existential parameter, whose surrounding
-    /// parentheses are grammar-owned rather than represented by its binder.
-    pub fn existential_prefix(&mut self, parameter: PatId, start: usize) {
-        self.existential_prefixes.push(ExistentialPrefix { parameter, start });
+    /// Record the first token of an existential parameter together with its
+    /// grammar-owned open delimiter, neither of which is represented by the
+    /// binder.
+    pub fn existential_prefix(&mut self, parameter: PatId, start: usize, open: usize) {
+        self.existential_prefixes.push(ExistentialPrefix { parameter, start, open });
     }
     /// Record the `@` that prefixes standalone metadata attached to a pattern.
     pub fn metadata_prefix(&mut self, metadata: MetaId, start: usize) {
@@ -529,6 +533,9 @@ impl Parser {
             .with_arm_prefixes(arm_prefixes.iter().map(|prefix| (prefix.first, prefix.start)))
             .with_metadata_prefixes(
                 metadata_prefixes.iter().map(|prefix| (prefix.metadata, prefix.start)),
+            )
+            .with_existential_prefixes(
+                existential_prefixes.iter().map(|prefix| (prefix.parameter, prefix.open)),
             );
         let layouts = entities
             .iter()
@@ -553,7 +560,7 @@ impl Parser {
                 let (payload_start, payload_end) = (payload.start, payload.end);
                 source.get(payload_start..payload_end)?;
                 let prefix_line = SourceLine(file_map.line_col(prefix.start).line as usize);
-                let presentation_start = comments.arm_payload_start(prefix.payload, payload_start);
+                let presentation_start = comments.payload_start(prefix.payload, payload_start);
                 let presentation_line =
                     SourceLine(file_map.line_col(presentation_start).line as usize);
                 Some((prefix.payload, prefix_line, presentation_line))
@@ -571,12 +578,27 @@ impl Parser {
                 Some((prefix.parameter, SourceLine(file_map.line_col(prefix_start).line as usize)))
             })
             .collect::<Vec<_>>();
+        let existential_open_layouts = existential_prefixes
+            .iter()
+            .filter_map(|prefix| {
+                let parameter = self.spans[&EntityId::Pat(prefix.parameter)].range();
+                let (parameter_start, parameter_end) = (parameter.start, parameter.end);
+                source.get(parameter_start..parameter_end)?;
+                let open_line = SourceLine(file_map.line_col(prefix.open).line as usize);
+                let presentation_start =
+                    comments.payload_start(prefix.parameter.into(), parameter_start);
+                let presentation_line =
+                    SourceLine(file_map.line_col(presentation_start).line as usize);
+                Some((prefix.parameter, open_line, presentation_line))
+            })
+            .collect::<Vec<_>>();
         self.arena.intentions.record_source_layout(
             source,
             comments.layout_exclusions(),
             layouts,
             arm_layouts,
             existential_layouts,
+            existential_open_layouts,
         );
         self.arena.trivia.record_comments(comments);
     }

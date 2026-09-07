@@ -41,6 +41,7 @@ pub enum LayoutBoundary {
     Between { before: EntityId, after: EntityId },
     AfterStart { enclosing: EntityId, first: EntityId },
     AfterArmPrefix { payload: EntityId },
+    AfterExistentialOpen { parameter: PatId },
     BeforeExistentialParameter { enclosing: EntityId, parameter: PatId },
     BeforeEnd { last: EntityId, enclosing: EntityId },
 }
@@ -56,6 +57,10 @@ impl LayoutBoundary {
 
     pub fn after_arm_prefix(payload: impl Into<EntityId>) -> Self {
         Self::AfterArmPrefix { payload: payload.into() }
+    }
+
+    pub fn after_existential_open(parameter: PatId) -> Self {
+        Self::AfterExistentialOpen { parameter }
     }
 
     pub fn before_existential_parameter(enclosing: impl Into<EntityId>, parameter: PatId) -> Self {
@@ -126,6 +131,7 @@ pub struct SurfaceIntentions {
     line_extents: ArenaAssoc<EntityId, LineExtent>,
     presentation_start_overrides: ArenaAssoc<EntityId, SourceLine>,
     arm_prefix_breaks: ArenaAssoc<EntityId, BreakIntent>,
+    existential_open_breaks: ArenaAssoc<PatId, BreakIntent>,
     existential_parameter_starts: ArenaAssoc<PatId, SourceLine>,
     entity_sources: ArenaAssoc<EntityId, SourceLayoutId>,
     source_layouts: Vec<SourceLayout>,
@@ -147,6 +153,7 @@ impl SurfaceIntentions {
         layouts: impl IntoIterator<Item = (EntityId, LineExtent, SourceLine)>,
         arm_layouts: impl IntoIterator<Item = (EntityId, SourceLine, SourceLine)>,
         existential_layouts: impl IntoIterator<Item = (PatId, SourceLine)>,
+        existential_open_layouts: impl IntoIterator<Item = (PatId, SourceLine, SourceLine)>,
     ) {
         let source_id = SourceLayoutId(self.source_layouts.len());
         self.source_layouts.push(SourceLayout::new(source, trivia_owned_ranges));
@@ -165,6 +172,12 @@ impl SurfaceIntentions {
         });
         existential_layouts.into_iter().for_each(|(parameter, start)| {
             self.existential_parameter_starts.insert_new(parameter, start);
+        });
+        existential_open_layouts.into_iter().for_each(|(parameter, open, payload)| {
+            let contains_blank_line =
+                self.source_layouts[source_id.0].contains_blank_line_between(open, payload);
+            let intent = BreakIntent::between(open, payload, contains_blank_line);
+            self.existential_open_breaks.insert_new(parameter, intent);
         });
     }
 
@@ -204,6 +217,9 @@ impl SurfaceIntentions {
             }
             | LayoutBoundary::AfterArmPrefix { payload } => {
                 self.arm_prefix_breaks.get(&payload).copied()
+            }
+            | LayoutBoundary::AfterExistentialOpen { parameter } => {
+                self.existential_open_breaks.get(&parameter).copied()
             }
             | LayoutBoundary::BeforeExistentialParameter { enclosing, parameter } => {
                 let enclosing_extent = self.line_extent(enclosing)?;

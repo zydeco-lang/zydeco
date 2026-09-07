@@ -103,6 +103,8 @@ boundary algebra, and canonical layout families.
 Line comments are canonicalized as `--` or `--|` lines, nested block comments retain their delimiters
 and relative indentation, and all comment kinds are always printed.
 Arm-boundary anchors keep comments on the intended side of `|` and its header.
+Parameter-boundary anchors likewise keep a comment written before an existential parameter's grammar-owned `(`
+outside its delimiters, while a comment after the `(` stays with the binder.
 Recorded blank separators remain blank separators after formatting.
 Only an uninterrupted adjacent `--|` block attaches to a following annotation: `@[doc]` renders the block
 as repository prose, while `@[literal]` replaces its hole payload with the block text as a string literal.

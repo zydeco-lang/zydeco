@@ -98,6 +98,10 @@ impl BoundaryIntent {
         Self::Preserve(LayoutBoundary::after_arm_prefix(payload))
     }
 
+    fn after_existential_open(parameter: PatId) -> Self {
+        Self::Preserve(LayoutBoundary::after_existential_open(parameter))
+    }
+
     fn before_existential_parameter(enclosing: impl Into<EntityId>, parameter: PatId) -> Self {
         Self::Preserve(LayoutBoundary::before_existential_parameter(enclosing, parameter))
     }
@@ -438,6 +442,12 @@ impl<'arena> PrettyFormatter<'arena> {
         &self, entity: EntityId, document: RcDoc<'arena>,
     ) -> RcDoc<'arena> {
         self.with_comments(self.arena.trivia.before_metadata_comments(entity), document)
+    }
+
+    fn with_before_existential_comments(
+        &self, entity: EntityId, document: RcDoc<'arena>,
+    ) -> RcDoc<'arena> {
+        self.with_comments(self.arena.trivia.before_existential_comments(entity), document)
     }
 
     fn with_comments(
@@ -1127,7 +1137,17 @@ impl<'arena> PrettyFormatter<'arena> {
         };
         let item_layout = self.separated_group_layout(&items, separator);
         let after_open = entity.map_or(BoundaryIntent::Canonical, |entity| {
-            BoundaryIntent::after_start(entity, anchors.first)
+            // A group whose content anchor is the entity itself spans no
+            // source gap, because the open delimiter is grammar-owned: the
+            // retained break comes from the delimiter boundary recorded for
+            // an existential binder instead.
+            if entity == anchors.first
+                && let EntityId::Pat(parameter) = entity
+            {
+                BoundaryIntent::after_existential_open(parameter)
+            } else {
+                BoundaryIntent::after_start(entity, anchors.first)
+            }
         });
         let before_close = entity.map_or(BoundaryIntent::Canonical, |entity| {
             BoundaryIntent::before_end(anchors.last, entity)
@@ -2028,6 +2048,7 @@ impl<'arena> PrettyFormatter<'arena> {
                     ")",
                 ),
             });
+        let binder = self.with_before_existential_comments(parameter.binder.into(), binder);
         LayoutFragment::entity(
             parameter.binder.into(),
             RcDoc::intersperse(annotations.chain(std::iter::once(binder)), RcDoc::line()).group(),
@@ -4138,6 +4159,100 @@ mod tests {
 
         let reparsed = ParsedSource::new(&formatted);
         assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+    }
+
+    #[test]
+    fn keeps_commented_manifest_parameters_on_their_written_line() {
+        [
+            concat!(
+                "exists\n",
+                "  -- Compiler-canonical type constructors.\n",
+                "  (= Thk as @(intrinsic(thk)) : CType -> VType)\n",
+                "  (= Ret as @(intrinsic(ret)) : VType -> CType)\n",
+                ".\n",
+                "  _",
+            ),
+            concat!(
+                "exists\n",
+                "  -- A named manifest field.\n",
+                "  (#num = n as @(intrinsic(thk)) : CType -> VType)\n",
+                ".\n",
+                "  _",
+            ),
+            concat!(
+                "exists\n",
+                "  -- A plain annotated binder.\n",
+                "  (value : Type)\n",
+                ".\n",
+                "  value",
+            ),
+        ]
+        .into_iter()
+        .for_each(|source| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+
+            assert_eq!(formatted, format!("{source}\n"));
+            assert_eq!(parsed.desugared_shape(), ParsedSource::new(&formatted).desugared_shape());
+        });
+    }
+
+    #[test]
+    fn retains_a_line_break_after_a_manifest_parameter_open_delimiter() {
+        [
+            concat!(
+                "exists\n",
+                "  (\n",
+                "    = Thk as @(intrinsic(thk)) : CType -> VType)\n",
+                ".\n",
+                "  _",
+            ),
+            concat!(
+                "exists\n",
+                "  -- A comment above the open delimiter.\n",
+                "  (\n",
+                "    = Thk as @(intrinsic(thk)) : CType -> VType)\n",
+                ".\n",
+                "  _",
+            ),
+        ]
+        .into_iter()
+        .for_each(|source| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+
+            assert_eq!(formatted, format!("{source}\n"));
+            assert_eq!(parsed.desugared_shape(), ParsedSource::new(&formatted).desugared_shape());
+        });
+    }
+
+    #[test]
+    fn keeps_commented_telescope_rows_on_separate_lines() {
+        let source = concat!(
+            "exists\n",
+            "  (VType as @(intrinsic(vtype)))\n",
+            "  -- Kind of value types.\n",
+            "\n",
+            "  (= Unit as @(intrinsic(unit)) : VType)\n",
+            ".\n",
+            "  _",
+        );
+        let parsed = ParsedSource::new(source);
+        let formatted = parsed.render(LayoutIntentions::Preserve);
+
+        assert_eq!(
+            formatted,
+            concat!(
+                "exists\n",
+                "  (VType as @(intrinsic(vtype)))\n",
+                "  -- Kind of value types.\n",
+                "\n",
+                "  (= Unit as @(intrinsic(unit)) : VType)\n",
+                ".\n",
+                "  _\n",
+            )
+        );
+        assert_eq!(parsed.desugared_shape(), ParsedSource::new(&formatted).desugared_shape());
     }
 
     #[test]

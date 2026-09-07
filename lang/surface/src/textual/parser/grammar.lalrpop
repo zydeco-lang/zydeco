@@ -292,14 +292,14 @@ CoPatternAtom: CoPattern = {
 };
 
 ExistentialParameter: ExistentialParameter = {
-    <start:@L> <annotations:MetaAnnotation*> "(" <binder:PatternAnnId> "as" <definition:TermId>
-        <classifier:(":" <TermId>)?> <r:@R> ")" => {
+    <start:@L> <annotations:MetaAnnotation*> <open:@L> "(" <binder:PatternAnnId> "as"
+    <definition:TermId> <classifier:(":" <TermId>)?> <r:@R> ")" => {
         let binder = parser.manifest_pattern(binder, definition, classifier, r);
-        parser.existential_prefix(binder, start);
+        parser.existential_prefix(binder, start, open);
         ExistentialParameter { annotations, binder }
     },
-    <start:@L> <annotations:MetaAnnotation*> "(" <binder:PatternAnnId> ")" => {
-        parser.existential_prefix(binder, start);
+    <start:@L> <annotations:MetaAnnotation*> <open:@L> "(" <binder:PatternAnnId> ")" => {
+        parser.existential_prefix(binder, start, open);
         ExistentialParameter { annotations, binder }
     },
 };

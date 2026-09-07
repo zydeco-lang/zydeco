@@ -1,6 +1,6 @@
 use super::super::{
     lexer::{LexicalToken, LexicalTokenKind, LexicalTokens},
-    syntax::{EntityId, MetaId},
+    syntax::{EntityId, MetaId, PatId},
 };
 use std::{cmp::Reverse, collections::BTreeMap, ops::Range, sync::Arc};
 
@@ -247,6 +247,7 @@ pub(crate) struct CommentCapture {
     pub(super) leading: Vec<(EntityId, LeadingComment)>,
     pub(super) before_arms: Vec<(EntityId, LeadingComment)>,
     pub(super) before_metadata: Vec<(EntityId, LeadingComment)>,
+    pub(super) before_existentials: Vec<(EntityId, LeadingComment)>,
     pub(super) trailing: Vec<(EntityId, TrailingComment)>,
     pub(super) layout_exclusions: Vec<Range<usize>>,
 }
@@ -314,6 +315,7 @@ impl CommentCapture {
             leading,
             before_arms: Vec::new(),
             before_metadata: Vec::new(),
+            before_existentials: Vec::new(),
             trailing,
             layout_exclusions,
         }
@@ -351,6 +353,25 @@ impl CommentCapture {
         self
     }
 
+    /// Keep comments written before an existential parameter's grammar-owned
+    /// `(` outside its binder. Comments after the delimiter remain leading
+    /// trivia of the binder and count as its payload.
+    pub(crate) fn with_existential_prefixes(
+        mut self, prefixes: impl IntoIterator<Item = (PatId, usize)>,
+    ) -> Self {
+        let prefixes = prefixes
+            .into_iter()
+            .map(|(parameter, open)| (EntityId::Pat(parameter), open))
+            .collect::<BTreeMap<_, _>>();
+        let (before_existentials, leading) =
+            self.leading.into_iter().partition(|(entity, comment)| {
+                prefixes.get(entity).is_some_and(|open| comment.comment().range().start < *open)
+            });
+        self.leading = leading;
+        self.before_existentials = before_existentials;
+        self
+    }
+
     /// Byte ranges whose vertical whitespace is already represented by the
     /// captured comment separations.
     pub(crate) fn layout_exclusions(&self) -> &[Range<usize>] {
@@ -364,15 +385,17 @@ impl CommentCapture {
             .iter()
             .chain(self.before_arms.iter())
             .chain(self.before_metadata.iter())
+            .chain(self.before_existentials.iter())
             .filter(|(anchor, _)| *anchor == entity)
             .map(|(_, comment)| comment.comment().range().start)
             .min()
             .unwrap_or(syntax_start)
     }
 
-    /// Start of the entity payload including comments written after an arm
-    /// marker, but excluding comments that precede the whole arm.
-    pub(crate) fn arm_payload_start(&self, entity: EntityId, syntax_start: usize) -> usize {
+    /// Start of the entity payload including comments written after a
+    /// structural prefix such as an arm marker or an existential parameter's
+    /// grammar-owned `(`, but excluding comments that precede the structure.
+    pub(crate) fn payload_start(&self, entity: EntityId, syntax_start: usize) -> usize {
         self.leading
             .iter()
             .filter(|(anchor, _)| *anchor == entity)

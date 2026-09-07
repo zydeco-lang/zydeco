@@ -148,6 +148,8 @@ to either child in isolation.
 - `Between` lies between consecutive entities.
 - `AfterStart` lies between an enclosing construct and its first child.
 - `AfterArmPrefix` lies between an arm header and its payload.
+- `AfterExistentialOpen` lies just inside a grammar-owned parameter delimiter,
+  between the `(` and its binder.
 - `BeforeExistentialParameter` lies before a grammar-owned parameter delimiter that is not part of its binder.
 - `BeforeEnd` lies between the final child and its closing delimiter.
 
@@ -195,6 +197,11 @@ Most constructs use one of these families:
 Each grammatical group makes one width decision for the boundaries it owns.
 If a delimited row overflows, the delimiters and item separators enter their expanded layout together;
 boundaries inside each item remain independent.
+A grammar-owned parameter delimiter carries no syntax entity of its own, so a delimited group whose
+content anchor is its own entity spans no source gap after its opener: the group reads its retained
+break from the recorded `AfterExistentialOpen` boundary instead of an anchor pair.
+A comment written before the `(` anchors at the parameter boundary and stays outside the delimiters,
+while a comment after the `(` belongs to the binder payload and keeps its line for that boundary.
 Staged bindings follow one nesting discipline. A joined stage boundary never nests its continuation:
 the continuation's own layout families measure from the binding's indentation,
 so a delimited type hangs its contents one level below the binding and returns its closer to the binding.
@@ -303,6 +310,6 @@ A new primitive is warranted only when those choices introduce a new invariant.
 `NamedTermPunningAudit` is intentionally temporary.
 It records explicit term fields that canonical formatting can shorten and should disappear
 after the standard library is migrated.
-Comments use entity anchors, typed arm boundaries, and exclusion ranges.
+Comments use entity anchors, typed arm and delimiter boundaries, and exclusion ranges.
 If future syntax permits truly floating comments, the model should add another typed trivia boundary instead
 of retaining raw whitespace or a second token tree.
