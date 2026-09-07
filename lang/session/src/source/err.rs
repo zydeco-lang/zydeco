@@ -11,7 +11,7 @@ use thiserror::Error;
 use zydeco_statics::syntax::TermAnnId;
 use zydeco_surface::textual::{
     BuiltinDirectiveError, ImportDirectiveError, IntrinsicDirectiveError, LiteralDirectiveError,
-    SourceNumber, syntax::SpanArena,
+    ParseError, SourceNumber, syntax::SpanArena,
 };
 use zydeco_utils::span::Span;
 
@@ -44,8 +44,11 @@ impl SourceDiagnosticSite {
 /// A deterministic source-template error suitable for memoized parsing.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum SourceParseError {
-    #[error("cannot parse source `{}`: {message}", path.display())]
-    Parse { path: PathBuf, range: Option<Range<usize>>, message: String },
+    #[error("cannot parse source: {error}")]
+    Parse {
+        #[source]
+        error: Box<ParseError>,
+    },
     #[error("invalid source directive in `{}`: {error}", path.display())]
     Directive {
         path: PathBuf,
@@ -75,7 +78,12 @@ pub enum SourceParseError {
 impl SourceParseError {
     pub fn diagnostic_site(&self) -> Option<SourceDiagnosticSite> {
         let (path, range) = match self {
-            | Self::Parse { path, range, .. } => (path, range.clone()?),
+            | Self::Parse { error } => {
+                return Some(SourceDiagnosticSite::new(
+                    error.file_map.path(),
+                    error.source_range()?,
+                ));
+            }
             | Self::Directive { path, error } => (path, error.span().range()),
             | Self::BuiltinDirective { path, error } => (path, error.span().range()),
             | Self::IntrinsicDirective { path, error } => (path, error.span().range()),

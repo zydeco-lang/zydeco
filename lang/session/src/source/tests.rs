@@ -779,6 +779,25 @@ fn source_graph_rejects_sources_that_only_parse_with_recovery() {
 }
 
 #[test]
+fn parser_failures_retain_the_rejected_overlay_snapshot() {
+    let fixture = SourceFixture::new();
+    let root = fixture.write("main.zy", "ret 42");
+    let mut session = CompilerSession::default();
+    let rejected = "let value = in value";
+    session.set_overlay(&root, rejected.to_owned()).unwrap();
+    let error = session.analyze(&root).unwrap_err();
+    session.set_overlay(&root, "ret 0".to_owned()).unwrap();
+    assert!(session.analyze(&root).is_ok());
+    let AnalysisError::Source { error } = error else { panic!("expected a source error") };
+    let SourceLoadError::Parse(SourceParseError::Parse { error }) = error.as_ref() else {
+        panic!("expected a parse error")
+    };
+    assert_eq!(error.file_map.source(), rejected);
+    assert_eq!(error.source_range(), Some(12..14));
+    assert_eq!(std::fs::read_to_string(root).unwrap(), "ret 42");
+}
+
+#[test]
 fn parser_failures_retain_the_rejected_token_range() {
     let fixture = SourceFixture::new();
     let source = "begin ?";

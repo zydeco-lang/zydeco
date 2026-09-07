@@ -649,6 +649,8 @@ The CLI owns native tool invocation, runtime packaging, and process policy; diag
 Interactive tooling also needs answers for unfinished programs.
 Strict and recovering parser entry points share one LALRPOP grammar and the Logos token definitions.
 Recovery retains partial syntax and typed diagnostics; strict compilation rejects any parse issues.
+Strict parse failures retain their structured issues and the rejected source snapshot through loading and formatting,
+so diagnostics can render byte-accurate snippets even after an editor buffer changes.
 Completion only uses a recovered cursor hole when it is reachable from the returned root
 and a hole was legal at the original cursor position.
 

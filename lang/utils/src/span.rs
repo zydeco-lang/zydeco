@@ -102,7 +102,7 @@ impl<T: Display> Display for Sp<T> {
 }
 
 /// One file's contribution to a program's address space.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FileMap {
     path: Option<Arc<PathBuf>>,
     source: Arc<str>,

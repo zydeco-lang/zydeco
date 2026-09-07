@@ -320,6 +320,7 @@ impl ApplicationError {
     fn render(&self) {
         match self {
             | Self::Compile(error) => DiagnosticRenderer::error(error),
+            | Self::Format(error) => DiagnosticRenderer::format_error(error),
             | _ => eprintln!("{self}"),
         }
     }

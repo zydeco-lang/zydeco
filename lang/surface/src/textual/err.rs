@@ -1,15 +1,22 @@
 use super::{DiagnosticToken, ParseFailure, ParseIssueKind, TokenKind};
-use ariadne::{Label, Report, ReportKind};
+use ariadne::{Config, IndexType, Label, Report, ReportKind};
 use std::{fmt::Display, ops::Range};
 use zydeco_utils::span::{FileMap, PathDisplay};
 
-/// Wrapper around an owned strict parse failure with file context.
-pub struct ParseError<'input> {
+/// A strict parse failure together with the exact source snapshot that failed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ParseError {
     pub error: ParseFailure,
-    pub file_map: &'input FileMap,
+    pub file_map: FileMap,
 }
 
-impl ParseError<'_> {
+impl std::error::Error for ParseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
+    }
+}
+
+impl ParseError {
     /// File-relative byte range identified by the primary parser issue.
     pub fn source_range(&self) -> Option<Range<usize>> {
         self.error.primary().range.clone()
@@ -22,18 +29,16 @@ impl ParseError<'_> {
         let file_path = PathDisplay::from(info.path());
         let range = issue.range.clone().unwrap_or(0..0);
         let note = ParseErrorNote::new(issue.expected(), error.issue_count());
+        let report = Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
+            .with_config(Config::default().with_index_type(IndexType::Byte));
 
         match &issue.kind {
             | ParseIssueKind::Literal { .. }
             | ParseIssueKind::UnrecognizedToken { token: DiagnosticToken::Invalid(_), .. }
             | ParseIssueKind::ExtraToken { token: DiagnosticToken::Invalid(_) } => {
-                let mut report =
-                    Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
-                        .with_message("Parse error")
-                        .with_label(
-                            Label::new((file_path.clone(), range.clone()))
-                                .with_message(issue.to_string()),
-                        );
+                let mut report = report.with_message("Parse error").with_label(
+                    Label::new((file_path.clone(), range.clone())).with_message(issue.to_string()),
+                );
                 if let Some(note) = note.render() {
                     report = report.with_note(note);
                 }
@@ -42,13 +47,10 @@ impl ParseError<'_> {
             | ParseIssueKind::InvalidToken => {
                 let location = range.start;
                 let location_str = info.line_col(location);
-                let mut report =
-                    Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
-                        .with_message("Invalid token")
-                        .with_label(
-                            Label::new((file_path.clone(), range.clone()))
-                                .with_message(format!("invalid token at {location_str}")),
-                        );
+                let mut report = report.with_message("Invalid token").with_label(
+                    Label::new((file_path.clone(), range.clone()))
+                        .with_message(format!("invalid token at {location_str}")),
+                );
                 if let Some(note) = note.render() {
                     report = report.with_note(note);
                 }
@@ -57,13 +59,10 @@ impl ParseError<'_> {
             | ParseIssueKind::UnrecognizedEof { .. } => {
                 let location = range.start;
                 let location_str = info.line_col(location);
-                let mut report =
-                    Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
-                        .with_message("Unrecognized EOF")
-                        .with_label(
-                            Label::new((file_path.clone(), range.clone()))
-                                .with_message(format!("unexpected end of file at {location_str}")),
-                        );
+                let mut report = report.with_message("Unrecognized EOF").with_label(
+                    Label::new((file_path.clone(), range.clone()))
+                        .with_message(format!("unexpected end of file at {location_str}")),
+                );
                 if let Some(note) = note.render() {
                     report = report.with_note(note);
                 }
@@ -72,14 +71,11 @@ impl ParseError<'_> {
             | ParseIssueKind::UnrecognizedToken { token, .. } => {
                 let start_str = info.line_col(range.start);
                 let end_str = info.line_col(range.end);
-                let mut report =
-                    Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
-                        .with_message(format!("Unrecognized token `{token}`"))
-                        .with_label(Label::new((file_path.clone(), range.clone())).with_message(
-                            format!(
-                                "unrecognized token `{token}` found at {start_str} - {end_str}"
-                            ),
-                        ));
+                let mut report = report
+                    .with_message(format!("Unrecognized token `{token}`"))
+                    .with_label(Label::new((file_path.clone(), range.clone())).with_message(
+                        format!("unrecognized token `{token}` found at {start_str} - {end_str}"),
+                    ));
                 if let Some(note) = note.render() {
                     report = report.with_note(note);
                 }
@@ -88,12 +84,11 @@ impl ParseError<'_> {
             | ParseIssueKind::ExtraToken { token } => {
                 let start_str = info.line_col(range.start);
                 let end_str = info.line_col(range.end);
-                let mut report =
-                    Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
-                        .with_message(format!("Extra token `{token}`"))
-                        .with_label(Label::new((file_path.clone(), range.clone())).with_message(
-                            format!("extra token `{token}` found at {start_str} - {end_str}"),
-                        ));
+                let mut report = report.with_message(format!("Extra token `{token}`")).with_label(
+                    Label::new((file_path.clone(), range.clone())).with_message(format!(
+                        "extra token `{token}` found at {start_str} - {end_str}"
+                    )),
+                );
                 if let Some(note) = note.render() {
                     report = report.with_note(note);
                 }
@@ -103,7 +98,7 @@ impl ParseError<'_> {
     }
 }
 
-impl Display for ParseError<'_> {
+impl Display for ParseError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let ParseError { error, file_map: info } = self;
         let issue = error.primary();

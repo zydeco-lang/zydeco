@@ -1,5 +1,6 @@
-use crate::CompileError;
+use crate::{CompileError, SourceFormatError};
 use ariadne::{Label, Report, ReportKind};
+use zydeco_session::source::{SourceLoadError, SourceParseError};
 use zydeco_session::{AnalysisError, ProgramAnalysis, SourceCaches, SourceGraph, TyckReport};
 use zydeco_statics::{TyckObservation, arena::StaticsArena, fmt as static_fmt, syntax as ss};
 use zydeco_syntax::{Pretty, SpanView, Ugly};
@@ -11,6 +12,10 @@ pub struct DiagnosticRenderer;
 impl DiagnosticRenderer {
     pub fn error(error: &CompileError) {
         match error {
+            | CompileError::Analysis(AnalysisError::Source { error }) => match error.as_ref() {
+                | SourceLoadError::Parse(SourceParseError::Parse { error }) => Self::parse(error),
+                | _ => eprintln!("{error}"),
+            },
             | CompileError::Rejected(analysis) => {
                 Self::warnings(analysis);
                 if let Some(diagnostics) = analysis.outcome().diagnostics() {
@@ -34,6 +39,19 @@ impl DiagnosticRenderer {
             }
             | _ => eprintln!("{error}"),
         }
+    }
+
+    pub fn format_error(error: &SourceFormatError) {
+        match error {
+            | SourceFormatError::Parse(error) => Self::parse(error),
+            | _ => eprintln!("{error}"),
+        }
+    }
+
+    fn parse(error: &zydeco_surface::textual::ParseError) {
+        let file = &error.file_map;
+        let cache = (PathDisplay::from(file.path()), ariadne::Source::from(file.source()));
+        let _ = error.to_report().eprint(cache);
     }
 
     pub fn warnings(analysis: &ProgramAnalysis) {

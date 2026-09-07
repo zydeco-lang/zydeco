@@ -210,7 +210,8 @@ fn fmt_rejects_invalid_syntax_without_overwriting_it() {
 
             assert!(!output.status.success(), "source: {invalid:?}, check: {check}");
             let diagnostic = String::from_utf8_lossy(&output.stderr);
-            assert!(diagnostic.contains("cannot format source"), "{invalid:?}: {diagnostic}");
+            assert!(diagnostic.contains("Error:"), "{invalid:?}: {diagnostic}");
+            assert!(diagnostic.contains("invalid.zy:"), "{invalid:?}: {diagnostic}");
             assert!(!diagnostic.contains("panicked"), "{invalid:?}: {diagnostic}");
             assert_eq!(fs::read_to_string(&source).unwrap(), invalid);
         });

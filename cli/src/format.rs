@@ -23,8 +23,8 @@ pub enum SourceFormatError {
         #[source]
         source: io::Error,
     },
-    #[error("cannot format source `{}`: {message}", path.display())]
-    Parse { path: PathBuf, message: String },
+    #[error("cannot format source: {0}")]
+    Parse(#[source] Box<ParseError>),
     #[error("cannot write formatted source `{}`: {source}", path.display())]
     Write {
         path: PathBuf,
@@ -68,10 +68,7 @@ impl SourceFormatter {
         let file = FileMap::local(source, Some(Arc::new(path.to_path_buf())));
         let mut parser = Parser::new();
         let unit = StrictParser::source(source, &mut parser).map_err(|error| {
-            SourceFormatError::Parse {
-                path: path.to_path_buf(),
-                message: ParseError { error, file_map: &file }.to_string(),
-            }
+            SourceFormatError::Parse(Box::new(ParseError { error, file_map: file }))
         })?;
         Ok(PrettyFormatter::with_source(&parser.arena, &parser.spans, source).render_unit(unit))
     }

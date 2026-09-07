@@ -33,11 +33,8 @@ impl SourceTemplate {
         let file = FileMap::local(source.as_str(), Some(Arc::new(path.clone())));
         let mut parser = t::Parser::new();
         let unit = StrictParser::source(&source, &mut parser).map_err(|error| {
-            let error = ParseError { error, file_map: &file };
             SourceParseError::Parse {
-                path: path.clone(),
-                range: error.source_range(),
-                message: error.to_string(),
+                error: Box::new(ParseError { error, file_map: file.clone() }),
             }
         })?;
         Self::with_syntax(path, source, file, parser, unit)
